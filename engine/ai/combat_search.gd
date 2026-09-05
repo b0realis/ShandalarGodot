@@ -36,7 +36,10 @@ extends RefCounted
 ##   4. OUR blocks (min, theirs) — enumerated over the bodies this attack
 ##      would leave us: our untapped creatures that did NOT attack, plus
 ##      the vigilant ones that did. Searched rather than assumed, and this
-##      is the half both rejected approximations got wrong.
+##      is the half both rejected approximations got wrong. Since
+##      2026-09-05 a body may join a GANG on one attacker rather than
+##      taking it alone ([method resolve_block]), which is the half of the
+##      one-blocker-per-attacker ledger row that measured its way out.
 ##
 ## The leaf is the position DELTA in [AiPlayer]'s own currency — the
 ## clock-scaled face damage of `_face_damage_value` plus
@@ -56,20 +59,42 @@ extends RefCounted
 ## — so a seeded duel replays identically and `results.json` cannot move
 ## with `--jobs`.
 ##
-## WHY A MODEL RATHER THAN `MtgGame.make_mark()`. The undo journal
-## (`engine/undo_log.gd`) makes a search node cheap — 21x a `GameSnapshot`
-## — but its documented boundary is the TURN MACHINERY: `_advance_step`,
-## the untap sweep and combat damage journal nothing, "so a search must
-## not cross a step boundary until they do". This search crosses two step
-## boundaries and a turn boundary by construction, so the journal cannot
-## carry it today. What it CAN carry is a search inside one step, which is
-## the next increment and is recorded as such in docs/ROADMAP.md.
+## WHY A MODEL RATHER THAN `MtgGame.make_mark()`, and the answer is no
+## longer the one this file was written with. The journal's boundary WAS
+## the turn machinery; since 2026-09-05 it covers that too
+## (`MtgGame._rec_turn`), and a search node may cross a step boundary. It
+## still cannot carry THIS search, and the reason is a cost rather than a
+## gap: the journal is proportional to the MOVE, and this search's move is
+## a whole turn — our combat, their untap, their combat. Measured
+## (`tools/bench_undo.gd` section I): ONE boundary is 11-19x cheaper than
+## a `GameSnapshot`, a whole TURN is 0.8-1.1x, i.e. no cheaper at all,
+## because untap writes seven fields on every permanent and cleanup
+## twenty-six. At ~4 ms a node a 3,000-node budget would be twelve seconds
+## per declaration. So the model stays, and what the journal opened is a
+## search whose node is one step or a few (docs/ROADMAP.md, "The journal
+## across a step boundary").
 ##
-## SIMPLIFIED (docs/ROADMAP.md, "The crack-back search"): one blocker per
-## attacker on both sides of both combats, and neither player's hand is
-## modelled — the same two simplifications the rest of the combat maths
-## carries, measured at 4.5% of combats for gang blocks and deliberate for
-## the hand (the AI does not look at cards it may not see).
+## SIMPLIFIED (docs/ROADMAP.md, "the AI's combat maths blocks ONE creature
+## per attacker"), NARROWED 2026-09-05: the model now lets US put several
+## bodies on one of their attackers when it answers the crack-back (ply 4,
+## [method resolve_block] and `gang_defence`). What is still flat is the
+## FORWARD combat — ply 2 here, and `AiPlayer._cohort_value` /
+## `_damage_through_blocks` before it — where the defender still answers
+## one blocker per attacker. That half was built and rejected on
+## measurement rather than left undone; the numbers are in the ledger row
+## and in docs/ROADMAP.md, "The gang block".
+##
+## SIMPLIFIED (docs/ROADMAP.md, "The crack-back search"): neither player's
+## hand is modelled. Deliberate, and it is a fairness rule rather than a
+## shortcut — the AI does not look at cards it may not see. What the
+## search DOES read is the model in [method AiPlayer._build_combat_model]
+## and nothing else: both battlefields, both life totals, which permanents
+## are tapped, and the engine's own predicates over those. Pinned from
+## both ends by `tests/ai/test_ai_crack_back_2026_09_05.gd` — replace every
+## card in the opponent's hand, or reverse their whole library, and the
+## declaration does not move by a body; and every field of this class is a
+## flat array of numbers sized one per creature or one per pair, so there
+## is nowhere in it to put a card nobody has seen.
 
 ## The value of losing the game, in stat points. Large enough to dominate
 ## any board, small enough that arithmetic on it stays exact in a float.
@@ -89,6 +114,36 @@ const DEFAULT_BUDGET := 3000
 ## are: a slice too thin to see the crack-back at all would compare two
 ## moves on noise.
 const MIN_SLICE := 96
+
+## GANG BLOCKS (2026-09-05). How many bodies may be put on one attacker.
+## [method AiPlayer.order_blockers]' own note — the agent that announces
+## the damage order for the live game — says a gang block is two or three
+## bodies; three is where the enumeration stops.
+const GANG_LIMIT := 3
+
+## ...and a gang is only ever formed out of the best few blockers on the
+## board, so a wide board cannot make the move list exponential. The
+## blocker list is already sorted best-first, and a SINGLE block is still
+## considered for every legal body — only the gangs are drawn from the
+## head of it.
+const GANG_POOL := 6
+
+
+## Does OUR side get to put several bodies on one of THEIR attackers when
+## it answers the crack-back (ply 4)? `false` is the model as it stood
+## before 2026-09-05 — one blocker per attacker — and it is how
+## `tests/ai/test_ai_gang_blocks_2026_09_05.gd` states the change and how
+## the Deck Lab's null arm was run.
+##
+## THE OTHER HALF IS NOT HERE, and that is a measurement rather than an
+## omission (docs/ROADMAP.md, "The gang block"). Widening the DEFENDER's
+## answer to our forward attack — ply 2 — was built and measured on the
+## same instrument: it changed 19.0% of searched declarations against this
+## half's 15.1%, but it changed them the wrong way (120 narrower against
+## 92 wider, where this half is 134 wider against 47), which is the
+## pessimism the 2026-09-04 attack audit had just spent a pass removing.
+## Both measured +0.1 on the win rate, so the direction is what decides.
+var gang_defence := true
 
 
 # ------------------------------------------------------------- the model --
@@ -122,6 +177,31 @@ var d_free: PackedByteArray = PackedByteArray()
 var d_can_attack: PackedByteArray = PackedByteArray()
 var d_trample: PackedByteArray = PackedByteArray()
 var d_soak: PackedInt32Array = PackedInt32Array()
+
+# --- the GANG-BLOCK arithmetic (2026-09-05) --------------------------------
+#
+# A gang divides one attacker's power between several blockers, so the two
+# pair matrices below are not enough on their own: `we_kill` asks "does a
+# kill d with its WHOLE power", and inside a gang it rarely gets to spend
+# all of it on one body. These carry the pieces the division needs — the
+# raw damage each side lands (prevention applied,
+# [method AiPlayer._damage_after_prevention]), who strikes first, and who
+# cannot be killed by damage at all — and [method resolve_block] puts them
+# back together. For a gang of ONE the answer it gives is `we_kill` /
+# `they_kill` exactly, which is what pins it to the engine's own
+# [method AiPlayer._dies_to].
+
+## Our creature has first strike (CR 510.4).
+var a_first: PackedByteArray = PackedByteArray()
+var d_first: PackedByteArray = PackedByteArray()
+## Damage cannot finish this creature: indestructible, or a regeneration
+## shield its controller can still pay for.
+var a_immune: PackedByteArray = PackedByteArray()
+var d_immune: PackedByteArray = PackedByteArray()
+## What their d lands on our a, and our a on their d, if it strikes at all
+## (row a, column d).
+var hit_ours: PackedInt32Array = PackedInt32Array()
+var hit_theirs: PackedInt32Array = PackedInt32Array()
 
 ## d blocks a legally, this turn (row a, column d).
 var block_ours: PackedByteArray = PackedByteArray()
@@ -159,6 +239,162 @@ func size_theirs() -> int:
 func seal() -> void:
 	_n = a_pow.size()
 	_m = d_pow.size()
+
+
+# ------------------------------------------------------- one blocked body --
+
+## ONE ATTACKER against the whole GANG blocking it, resolved the way the
+## live game resolves it (CR 509.2 damage order, CR 510.1c lethal-first
+## assignment, CR 702.19b trample spill). Returns
+## `[attacker dies, bitmask of blockers that die, damage that gets past]`.
+##
+## THE ORDER IS [method AiPlayer.order_blockers]' OWN, restated over the
+## model: the attacking player announces it, and that agent picks the
+## max-WORTH subset of blockers whose lethal damage fits inside the power
+## on offer, puts those first (worth-descending) and the rest after. A
+## body nothing can be gained from — one damage cannot kill — is worth
+## zero and sorts to the back, so damage is never spent burying something
+## that gets up again. Modelling any other order would be modelling an
+## attacker this AI does not play.
+##
+## [param attacker] indexes OUR side and [param blockers] THEIRS when
+## [param ours_attacks] is true; the two sides are mirror images, so the
+## same routine serves our combat and their crack-back.
+func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
+	var atk_pow := a_pow[attacker] if ours_attacks else d_pow[attacker]
+	var atk_soak := a_soak[attacker] if ours_attacks else d_soak[attacker]
+	var atk_first := a_first[attacker] if ours_attacks else d_first[attacker]
+	var atk_immune := a_immune[attacker] if ours_attacks else d_immune[attacker]
+	var atk_trample := a_trample[attacker] if ours_attacks else d_trample[attacker]
+	if blockers.is_empty():
+		return [false, 0, atk_pow]
+	# --- 1. does the attacker even live to strike? A blocker with first
+	# strike that it does not share kills it before it assigns anything
+	# (CR 510.4), which is exactly what `_damage_from`'s own first clause
+	# says for a gang of one.
+	var pre := 0
+	var total := 0
+	for b in blockers:
+		var raw := _raw_onto(attacker, b, ours_attacks)
+		total += raw
+		if _blocker_first(b, ours_attacks) != 0 and atk_first == 0:
+			pre += raw
+	var struck_down := atk_immune == 0 and pre > 0 and pre >= atk_soak
+	if struck_down:
+		return [true, 0, 0]
+	# --- 2. the damage order, then lethal-first down it (CR 510.1c).
+	var order := _damage_order(attacker, blockers, atk_pow, ours_attacks)
+	var remaining := atk_pow
+	var dead := 0
+	for b in order:
+		var need: int = _soak_of(b, ours_attacks)
+		var give := mini(remaining, maxi(need, 0))
+		remaining -= give
+		if _immune_of(b, ours_attacks) != 0:
+			continue
+		if _raw_onto_blocker(attacker, b, ours_attacks) <= 0:
+			continue      # protection or a prevention shield: the damage lands as 0
+		if give >= maxi(need, 1):
+			dead |= 1 << b
+	# --- 3. what the blockers land back. One killed by first strike never
+	# strikes at all.
+	var back := 0
+	for b in blockers:
+		if atk_first != 0 and _blocker_first(b, ours_attacks) == 0 \
+				and (dead & (1 << b)) != 0:
+			continue
+		back += _raw_onto(attacker, b, ours_attacks)
+	var atk_dies := atk_immune == 0 and back > 0 and back >= atk_soak
+	# --- 4. trample: only what is left after EVERY blocker has been
+	# assigned lethal damage spills to the face (CR 702.19b).
+	var through := remaining if atk_trample != 0 else 0
+	return [atk_dies, dead, through]
+
+
+## The CR 509.2 damage-assignment order for one gang — see
+## [method resolve_block], and [method AiPlayer.order_blockers] for the
+## agent whose answer this restates. Ties break on model index, which is
+## battlefield order (CONTRIBUTING.md rule 7: no RNG anywhere in here).
+func _damage_order(attacker: int, blockers: Array, budget: int,
+		ours_attacks: bool) -> Array[int]:
+	var entries: Array[int] = []
+	for b in blockers:
+		entries.append(b)
+	if entries.size() == 1:
+		return entries
+	var worth := {}
+	for b in entries:
+		var w := _value_of(b, ours_attacks)
+		if _soak_of(b, ours_attacks) <= 0 or _immune_of(b, ours_attacks) != 0 \
+				or _raw_onto_blocker(attacker, b, ours_attacks) <= 0:
+			w = 0.0
+		worth[b] = w
+	var best_mask := 0
+	var best_worth := -1.0
+	var best_cost := 0
+	if entries.size() <= 6:
+		for mask in 1 << entries.size():
+			var cost := 0
+			var sum := 0.0
+			for i in entries.size():
+				if (mask & (1 << i)) != 0:
+					cost += maxi(_soak_of(entries[i], ours_attacks), 0)
+					sum += float(worth[entries[i]])
+			if cost > budget:
+				continue
+			if sum > best_worth + 1e-9 \
+					or (absf(sum - best_worth) <= 1e-9 and cost < best_cost):
+				best_worth = sum
+				best_mask = mask
+				best_cost = cost
+	var head: Array[int] = []
+	var tail: Array[int] = []
+	for i in entries.size():
+		if (best_mask & (1 << i)) != 0:
+			head.append(entries[i])
+		else:
+			tail.append(entries[i])
+	var by_worth := func(x: int, y: int) -> bool:
+		var wx := float(worth[x])
+		var wy := float(worth[y])
+		if absf(wx - wy) > 1e-9:
+			return wx > wy
+		return x < y
+	head.sort_custom(by_worth)
+	tail.sort_custom(by_worth)
+	head.append_array(tail)
+	return head
+
+
+# The six accessors the mirror needs. `ours_attacks` picks the side, and
+# nothing else in `resolve_block` has to know which combat it is in.
+
+func _raw_onto(attacker: int, blocker: int, ours_attacks: bool) -> int:
+	# damage the BLOCKER lands on the attacker
+	return hit_ours[attacker * _m + blocker] if ours_attacks \
+		else hit_theirs[blocker * _m + attacker]
+
+
+func _raw_onto_blocker(attacker: int, blocker: int, ours_attacks: bool) -> int:
+	# damage the ATTACKER lands on that blocker
+	return hit_theirs[attacker * _m + blocker] if ours_attacks \
+		else hit_ours[blocker * _m + attacker]
+
+
+func _soak_of(blocker: int, ours_attacks: bool) -> int:
+	return d_soak[blocker] if ours_attacks else a_soak[blocker]
+
+
+func _immune_of(blocker: int, ours_attacks: bool) -> int:
+	return d_immune[blocker] if ours_attacks else a_immune[blocker]
+
+
+func _blocker_first(blocker: int, ours_attacks: bool) -> int:
+	return d_first[blocker] if ours_attacks else a_first[blocker]
+
+
+func _value_of(blocker: int, ours_attacks: bool) -> float:
+	return d_val[blocker] if ours_attacks else a_val[blocker]
 
 
 # ------------------------------------------------------------- the entry --
@@ -280,7 +516,7 @@ func _after_our_attack(attack_mask: int, slice: int) -> float:
 		if absf(float(x[0]) - float(y[0])) > 1e-6:
 			return float(x[0]) > float(y[0])
 		return int(x[1]) * 64 + int(x[2]) < int(y[1]) * 64 + int(y[2]))
-	var blocked_by: Dictionary = {}   # our index -> their index
+	var blocked_by: Dictionary = {}   # our index -> Array[int] of theirs
 	var spent: Dictionary = {}
 	for pair in pairs:
 		var a: int = pair[1]
@@ -288,7 +524,11 @@ func _after_our_attack(attack_mask: int, slice: int) -> float:
 		if spent.has(d) or blocked_by.has(a):
 			continue
 		spent[d] = true
-		blocked_by[a] = d
+		var solo: Array[int] = [d]
+		blocked_by[a] = solo
+	# ONE BLOCKER PER ATTACKER, still, on this side of the table — see
+	# `gang_defence` for the measurement that keeps it here and
+	# docs/ROADMAP.md's ledger row for what lifting it would take.
 	# --- resolve our combat on the model.
 	var value := 0.0
 	var through := 0
@@ -300,15 +540,17 @@ func _after_our_attack(attack_mask: int, slice: int) -> float:
 		if not blocked_by.has(a):
 			through += a_pow[a]
 			continue
-		var d: int = blocked_by[a]
-		if a_trample[a] != 0:
-			through += maxi(a_pow[a] - maxi(d_soak[d], 0), 0)
-		if they_kill[a * _m + d] != 0:
+		var gang: Array = blocked_by[a]
+		var outcome := resolve_block(a, gang, true)
+		if bool(outcome[0]):
 			value -= a_val[a]
 			my_dead |= 1 << a
-		if we_kill[a * _m + d] != 0:
-			value += d_val[d]
-			their_dead |= 1 << d
+		var dead: int = outcome[1]
+		for d in gang:
+			if (dead & (1 << d)) != 0:
+				value += d_val[d]
+				their_dead |= 1 << d
+		through += int(outcome[2])
 	value += _fdv(through, their_life)
 	if through >= their_life:
 		return LOSS     # they are dead before the crack-back happens
@@ -404,11 +646,18 @@ func _our_best_defence(swing: Array, my_mask: int, cutoff: float,
 
 
 ## Recursive block assignment: attacker [param index] of [param swing] is
-## blocked by one of the free bodies not in [param used], or by nobody.
-## Returns the best value WE can get from here; [param acc] is the value
-## already committed and [param damage] the face damage already let
-## through. Cut as soon as the running best beats [param cutoff], which is
-## a value THEY would never choose.
+## met by nobody, by one free body, or — since 2026-09-05 — by a GANG of
+## up to [constant GANG_LIMIT] of them. Returns the best value WE can get
+## from here; [param acc] is the value already committed and
+## [param damage] the face damage already let through. Cut as soon as the
+## running best beats [param cutoff], which is a value THEY would never
+## choose.
+##
+## THE MOVE ORDER IS NONE, THEN SINGLES, THEN GANGS, and that is
+## load-bearing twice over. Alpha-beta wants its bound from the move the
+## shipped policy would make, and a truncated line (the budget ran out
+## mid-way) then degrades to exactly the one-blocker-per-attacker answer
+## this used to give rather than to something arbitrary.
 func _assign(swing: Array, index: int, free: Array, used: int,
 		acc: float, damage: int, cutoff: float, slice: int) -> float:
 	if index >= swing.size():
@@ -433,29 +682,58 @@ func _assign(swing: Array, index: int, free: Array, used: int,
 		cutoff, slice)
 	if best > cutoff:
 		return best
-	# Option 2: each free body that may legally block it.
+	# Options 2..n: every legal block of it, narrowest first.
+	var legal: Array[int] = []
 	for entry in free:
 		var a: int = entry
-		var bit := 1 << a
-		if (used & bit) != 0:
+		if (used & (1 << a)) != 0:
 			continue
 		if block_theirs[a * _m + d] == 0:
 			continue
+		legal.append(a)
+	for gang in _gangs_of(legal):
+		var mask := 0
+		for a in gang:
+			mask |= 1 << a
+		var outcome := resolve_block(d, gang, false)
 		var value := acc
-		var spill := 0
-		if d_trample[d] != 0:
-			spill = maxi(d_pow[d] - maxi(a_soak[a], 0), 0)
-		if they_kill[a * _m + d] != 0:
-			value -= a_val[a]
-		if we_kill[a * _m + d] != 0:
-			value += d_val[d]
-		var score := _assign(swing, index + 1, free, used | bit, value,
-			damage + spill, cutoff, slice)
+		if bool(outcome[0]):
+			value += d_val[d]           # the attacker dies to the block
+		var dead: int = outcome[1]
+		for a in gang:
+			if (dead & (1 << a)) != 0:
+				value -= a_val[a]
+		var score := _assign(swing, index + 1, free, used | mask, value,
+			damage + int(outcome[2]), cutoff, slice)
 		if score > best:
 			best = score
 		if best > cutoff:
 			return best
 	return best
+
+
+## Every block that may be declared against one attacker, given the bodies
+## [param legal] that could legally take it: each ONE of them first (which
+## is the whole of the pre-2026-09-05 move list), then the gangs, smallest
+## first. Deterministic — the pool is already in a fixed order and the
+## masks are walked ascending.
+func _gangs_of(legal: Array[int]) -> Array:
+	var out: Array = []
+	for a in legal:
+		var one: Array[int] = [a]
+		out.append(one)
+	if not gang_defence or legal.size() < 2:
+		return out
+	var pool: Array[int] = legal.slice(0, mini(legal.size(), GANG_POOL))
+	for size in range(2, mini(GANG_LIMIT, pool.size()) + 1):
+		for combo in 1 << pool.size():
+			var members: Array[int] = []
+			for i in pool.size():
+				if (combo & (1 << i)) != 0:
+					members.append(pool[i])
+			if members.size() == size:
+				out.append(members)
+	return out
 
 
 # ------------------------------------------------------------------ leaf --

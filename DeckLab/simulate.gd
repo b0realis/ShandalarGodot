@@ -43,6 +43,15 @@ extends SceneTree
 ## before it existed, because the determinism check — same seed, same
 ## win/loss split, byte-identical matchups.csv — is how this project proves
 ## an engine change was safe, and a moved default silently invalidates it.
+##
+## AND THE OUTPUT HAS TWO CHANNELS, for the same reason. stdout is the
+## INSTRUMENT: the report, and byte for byte the text that lands in
+## report.txt. stderr is the HUMAN: the banner, the progress bar, warnings
+## and hints, decorated only when stderr is a terminal (deck_lab.sh finds
+## out and passes DECK_LAB_TTY; see [LabConsole]). So `deck_lab.sh ... >
+## run.log 2>&1` — what a script or a measuring agent writes — contains no
+## artwork, no bar and no escape code, and nobody has to remember a flag
+## for that to be true. The section at the foot of this file holds it.
 
 ## `--format` values -> [DeckFormat]'s own names. Short spellings because
 ## `--format "Tournament (Type 1.5)"` on a command line is a punishment;
@@ -79,26 +88,44 @@ const GROUP_FLAGS := {
 	"user": DeckGroups.USER,
 }
 
-const HELP := """
-Deck Lab — headless AI-vs-AI deck testing for Shandalar
+const HELP := """Deck Lab — headless AI-vs-AI deck testing for Shandalar
 ========================================================
+Plays whole duels with no graphics, on every core the machine has, and
+reports each win rate with the interval that says how much of it to
+believe. The long-form manual is DeckLab/README.md.
 
 USAGE
-  DeckLab/deck_lab.sh --deck-a DECK --deck-b DECK [options]        (duel mode)
-  DeckLab/deck_lab.sh --deck-a DECK --deck-b random [options]      (vs the field)
-  DeckLab/deck_lab.sh --deck-a DECK --gauntlet LIST|DIR [options]  (gauntlet mode)
-  DeckLab/deck_lab.sh --matrix LIST|DIR [options]                  (matrix mode)
+  DeckLab/deck_lab.sh --deck-a DECK --deck-b DECK       [options]  (duel)
+  DeckLab/deck_lab.sh --deck-a DECK --deck-b random     [options]  (vs the field)
+  DeckLab/deck_lab.sh --deck-a DECK --gauntlet LIST|DIR [options]  (gauntlet)
+  DeckLab/deck_lab.sh --matrix LIST|DIR                 [options]  (matrix)
   DeckLab/deck_lab.sh -h | --help
 
-DECK ARGUMENTS
+QUICK START — copy one of these
+  # my brew against one known deck, two minutes, nothing recorded
+  DeckLab/deck_lab.sh --deck-a decks/my_brew.deck \\
+                      --deck-b decks/big_green.deck --games 200 --no-elo
+
+  # my brew against the five shipped styles, one number per opponent
+  DeckLab/deck_lab.sh --deck-a decks/my_brew.deck --gauntlet decks/ --games 1000
+
+  # the whole shipped gauntlet against itself, with a heatmap
+  DeckLab/deck_lab.sh --matrix decks/ --games 2000
+
+DECK ARGUMENTS ARE PATHS, NOT DECK NAMES
+  `--deck-a decks/big_green.deck`, not `--deck-a "Big Green"`. A path is
+  tried as typed and then under decks/, so `--deck-a big_green.deck`
+  works too; a name that matches no file is refused with a list of the
+  decks it looked most like. `ls decks/` is the shipped five.
+
   DECK is a .deck/.dec file — the community (Dojo/Apprentice) format:
   '4 Lightning Bolt' lines, '//' comments, '4x' counts, 'SB:' sideboard
   lines — or an ORIGINAL MicroProse .dck file (used interchangeably;
   convert between them with ./deck_convert.sh). Sideboards parse and
   validate; the AI only SWAPS with them in a best-of-N match with
-  `--sideboard on` (see DUEL SETTINGS). Paths are
-  tried as given, then under decks/. LIST is comma-separated deck files;
-  DIR is a directory whose *.deck/*.dec/*.dck files become the pool.
+  `--sideboard on` (see DUEL SETTINGS). LIST is comma-separated deck
+  files; DIR is a directory whose *.deck/*.dec/*.dck files become the
+  pool (see --group for the 300+ decks filed in its subfolders).
 
   The literal word `random` may be given instead of a path, for either
   side. It is the setup screen's own `<random deck>` entry: a REAL deck
@@ -109,9 +136,11 @@ DECK ARGUMENTS
 
 MODES
   duel      A vs B, --games N.
-  gauntlet  A vs each opponent deck, --games N per matchup.
+  gauntlet  A vs each opponent deck, --games N per matchup, plus A's
+            record across the whole gauntlet.
   matrix    every deck vs every other deck (round robin), --games N per
-            pair, with a win-rate heatmap (matrix.svg).
+            pair, plus a standings table and a win-rate heatmap
+            (matrix.svg).
 
 OPTIONS
   --deck-a DECK       The deck under test (duel/gauntlet modes).
@@ -121,16 +150,39 @@ OPTIONS
                       deck under test is excluded, and --group narrows it
                       the same way it narrows --gauntlet.
   --matrix LIST|DIR   Round-robin pool of >= 2 decks (matrix mode).
-  --games N           Games per matchup (default 1000). 10000 gives
-                      roughly a ±1% Wilson CI at even winrates.
+  --games N           Games per matchup (default 1000). See HOW MANY
+                      GAMES DO I NEED below — it is the flag that decides
+                      whether the answer means anything.
   --seed N            Base RNG seed (default 1). Same seed + same decks =
-                      identical results, regardless of --jobs.
-  --jobs N            Worker threads (default: all CPU cores).
+                      identical results, regardless of --jobs. Quote it
+                      whenever you quote a number.
+  --jobs N            Worker threads INSIDE one process (default 4).
+                      More is not faster: measured on 22 idle cores, one
+                      duel runs at 12 games/s on 1 thread, 18 on 4, and
+                      4.4 on 22. --jobs 0 means every core, and is slower.
+  --procs N           Separate worker PROCESSES (default 8 once a run is
+                      big enough to pay for starting them; 1 turns it
+                      off). This is where the speed is: the same
+                      1,000-game duel takes 19.0s in one process and 8.7s
+                      across eight, and writes the same matchups.csv
+                      byte for byte. Each process is a whole engine
+                      holding the card pool, about 235 MB, so the default
+                      stops at eight; raise it if you have the RAM.
   --profile-a NAME    AI skill piloting deck A / the row deck:
   --profile-b NAME    apprentice|magician|sorcerer|wizard (default wizard
                       both — skill-neutral deck comparison).
-  --out DIR           Output directory (default DeckLab/results/run_<stamp>).
+  --out DIR           Output directory (default DeckLab/results/run_<stamp>,
+                      printed before the run starts).
   --no-svg            Skip chart generation.
+  --no-elo            Do NOT update the Elo ledger. Use it for every rerun
+                      and experiment: a repeated seed re-counts the same
+                      games into a deck's lifetime record.
+  --elo-file PATH     Ledger location (default decks/ratings.txt).
+  --quiet             No banner, no progress bar — errors only. (Both are
+                      already silent when stderr is not a terminal.)
+  --no-banner         Keep the progress bar, drop the artwork. Or export
+                      DECK_LAB_NO_BANNER=1 once and forget it.
+  -h, --help          This text.
 
 DUEL SETTINGS (everything the battle-setup screen can choose)
   --lives A,B         Starting life per seat (default 20,20). One number
@@ -181,21 +233,50 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
                       tapped_artifacts_stop, life_checked_at_phase_end,
                       pool_empties_on_attack, damage_prevention_window,
                       free_damage_assignment.
-  --no-elo            Do NOT update the Elo ledger (use for reruns and
-                      experiments that shouldn't count).
-  --elo-file PATH     Ledger location (default decks/ratings.txt).
-  -h, --help          This text.
 
-OUTPUT FILES (in --out)
-  report.txt, results.json, matchups.csv — always.
-  winrates.svg, turns.svg               — duel/gauntlet (unless --no-svg).
-  matrix.svg                            — matrix mode (unless --no-svg).
-  The Elo ledger itself lives at --elo-file and persists across runs.
+HOW MANY GAMES DO I NEED
+  Every win rate is printed with its Wilson 95% interval, and THE
+  INTERVAL, NOT THE PERCENTAGE, is what you may quote. At an even win
+  rate, per matchup:
 
-STATISTICS (methodology in DeckLab/README.md)
-  Win rates carry Wilson 95% confidence intervals. Games alternate who is
-  on the play; the play/draw split is reported separately. Elo: K=8 per
-  game, start 1500, zero-sum, interleaved order-stable updates.
+       games      95% interval     the smallest edge it can see
+         100        +-9.6 points     60/40
+         200        +-6.9 points     57/43
+         500        +-4.4 points     54/46
+       1,000        +-3.1 points     53/47
+      10,000        +-1.0 point      51/49
+
+  So a 200-game run reading 44.0% has NOT found a worse deck: 50% is
+  inside [37.3%, 50.9%]. Each run says in words how many of its matchups
+  are DECIDED (interval clear of 50%) and how many are still even —
+  believe that line rather than the headline percentage. Comparing two
+  runs means the same --seed, decks, profiles, duel settings and engine;
+  anything else is a different experiment.
+
+WHAT GOES WHERE
+  stdout   the run's plan, the report (byte for byte the text that lands
+           in report.txt) and the line naming the files written. Never
+           anything decorative, and never an escape code.
+  stderr   the banner, the progress bar, warnings, errors and hints —
+           and the first two not at all when stderr is not a terminal.
+           So `deck_lab.sh ... > run.log` keeps the log clean with the
+           banner still on screen, and `... > run.log 2>&1`, which is
+           what a script writes, gets no decoration anywhere.
+  --out    report.txt, results.json, matchups.csv — always.
+           winrates.svg, turns.svg — duel/gauntlet (unless --no-svg).
+           matrix.svg             — matrix mode (unless --no-svg).
+           The Elo ledger lives at --elo-file and persists across runs.
+
+EXIT CODES
+  0  the run finished and every output file was written
+  1  the run broke (a worker thread stopped, a file could not be written)
+  2  the command line was wrong (bad flag, missing or illegal deck)
+  3  no Godot binary (deck_lab.sh; set GODOT=/path/to/godot)
+
+ENVIRONMENT
+  GODOT               Which Godot to run (default ../tools/godot, then PATH).
+  NO_COLOR            Set to anything: never colour the output.
+  DECK_LAB_NO_BANNER  Set to 1: never print the banner.
 
 EXAMPLES
   DeckLab/deck_lab.sh --deck-a white_knights.deck --deck-b big_green.deck --games 10000
@@ -270,6 +351,17 @@ static func field_caption(field_is_row: bool, against: String) -> String:
 
 var _tasks: Array = []      # per-game work orders
 var _results: Array = []    # per-game records, index-matched to _tasks
+## Games finished, for the progress bar. Written by every worker thread
+## under [member _progress_lock] and read by the main thread — the run's
+## only shared mutable state besides the results array, and deliberately
+## something no result is computed from.
+var _games_done := 0
+var _progress_lock := Mutex.new()
+## Terminal chrome (see the section at the foot of this file).
+var _quiet := false
+var _banner_wanted := true
+var _progress_open := false
+var _last_logged := 0.0
 ## The duel settings, resolved once and READ ONLY by the worker threads
 ## (which write nothing but their own results slot, so this stays as
 ## lock-free as the rest of the run).
@@ -304,13 +396,31 @@ static func missing_records(results: Array) -> int:
 
 
 func _main(argv: PackedStringArray) -> int:
+	# THE WORKER ENTRY, first and silent. A fanned-out run re-invokes this
+	# same script once per slice; the child reads a task list, plays it,
+	# writes the records back and exits. It never parses the real options,
+	# never prints and never writes a report — the PARENT still does all
+	# of the aggregation, which is what keeps a fanned-out run identical
+	# to an in-process one.
+	if argv.size() >= 3 and argv[0] == WORKER_FLAG:
+		return _run_worker(argv[1], argv[2])
 	var opts := _parse_args(argv)
+	_quiet = bool(opts.get("quiet", false))
+	_banner_wanted = not bool(opts.get("no_banner", false)) \
+		and OS.get_environment(LabConsole.NO_BANNER_ENV) != "1"
 	if opts.has("help"):
+		_banner()
+		# THE HELP GOES TO stdout, the banner to stderr: `deck_lab.sh
+		# --help | less` is then the switch reference and nothing else.
 		print(HELP)
 		return 0
 	if opts.has("error"):
-		printerr("deck_lab: %s (try --help)" % opts.error)
+		# NO ARTWORK ON A FAILURE. Somebody who mistyped a flag wants the
+		# refusal and the way out of it, on the first line, not a logo.
+		printerr("deck_lab: %s" % opts.error)
+		_usage_hint(argv.is_empty())
 		return 2
+	_banner()
 
 	CardRegistry.ensure_loaded()
 	# ---- load the deck pool and build the pair list per mode ----
@@ -385,14 +495,50 @@ func _main(argv: PackedStringArray) -> int:
 			for j in range(i + 1, decks.size()):
 				pairs.append([i, j])
 
-	var jobs: int = opts.jobs if opts.jobs > 0 else OS.get_processor_count()
+	# THE DEFAULT IS NOT EVERY CORE, and that is a measurement rather than
+	# a preference. On a 22-core idle machine (load 0.52), the same 40-game
+	# duel runs at 12.1 games/s on ONE job, peaks at 18.1 from two to four,
+	# and collapses to 4.4 at twenty-two — a third of the speed of a single
+	# thread (2026-09-05). Every long measurement this project has made was
+	# paying that, because `--jobs 0` meant `get_processor_count()`.
+	#
+	# The cause is not this loop: the curve is identical on the unmodified
+	# script, so it is the engine or the pool oversubscribing. Until that is
+	# understood, the default is the measured plateau and `--jobs 0` still
+	# means every core for anyone who wants it. Determinism is unaffected —
+	# `matchups.csv` is byte-identical at every job count, which is what
+	# made it safe to move.
+	var jobs: int = opts.jobs if opts.jobs > 0 else mini(4, OS.get_processor_count())
 	var mode := "matrix" if not opts.matrix_pool.is_empty() \
 		else ("gauntlet" if pairs.size() > 1 else "duel")
-	print("Deck Lab (%s): %d deck(s), %d matchup(s) x %d games, seed %d, %d thread(s)"
-		% [mode, decks.size(), pairs.size(), opts.games, opts.seed, jobs])
+	# WHERE THE RUN IS WRITING, DECIDED BEFORE IT STARTS — printed with
+	# the plan, so a sweep interrupted after forty minutes still says
+	# where its half of a result was going, and a bad --out fails now
+	# rather than after the games.
+	var out_dir: String = opts.out
+	if out_dir == "":
+		out_dir = "DeckLab/results/run_%d" % int(Time.get_unix_time_from_system())
+	var made := DirAccess.make_dir_recursive_absolute(
+		ProjectSettings.globalize_path(out_dir))
+	if made != OK and not DirAccess.dir_exists_absolute(
+			ProjectSettings.globalize_path(out_dir)):
+		printerr("deck_lab: cannot create the output directory '%s' (error %d)"
+			% [out_dir, made])
+		printerr("  --out takes a directory this user may write to.")
+		return 1
+	_keep_the_importer_out(out_dir)
+	var unit := "games" if opts.best_of == MatchState.FREE_PLAY else "matches"
+	print("Deck Lab (%s): %d deck(s), %d matchup(s) x %d %s, seed %d, %d thread(s)"
+		% [mode, decks.size(), pairs.size(), opts.games, unit, opts.seed, jobs])
+	# WHICH DECKS, BY NAME. "5 deck(s)" is not enough to know that the
+	# folder expanded to what was meant — a --group typo that finds four
+	# decks instead of forty-eight looks identical otherwise.
+	print("decks: %s" % _deck_summary(decks))
 	if random_index >= 0:
 		print("field: %d deck(s) — %s" % [field.size(),
 			", ".join(_deck_names(field))])
+	print("total: %s %s   out: %s" % [
+		LabConsole.commas(pairs.size() * opts.games), unit, out_dir])
 	_duel_opts = {
 		"lives": opts.lives, "ante": opts.ante, "names": opts.names,
 		"mulligan": opts.mulligan, "rules": opts.rules,
@@ -452,9 +598,36 @@ func _main(argv: PackedStringArray) -> int:
 
 	# ---- run, in parallel ----
 	var started_at := Time.get_ticks_msec()
-	var group := WorkerThreadPool.add_group_task(
-		_run_one_game, _tasks.size(), jobs, true, "deck_lab")
-	WorkerThreadPool.wait_for_group_task_completion(group)
+	# ---- fan out across PROCESSES when that is faster, which is nearly
+	# always. Measured on an idle 22-core machine, 240 games: the thread
+	# pool peaks at 18.1 games/s (four threads) and falls to 4.4 at
+	# twenty-two, while four separate single-threaded PROCESSES do 61.3
+	# and twenty do 155.5 — 8.6x the pool, still climbing. Whatever
+	# serialises the work (the VM, the allocator, the pool itself) is
+	# inside one process, and separate processes step around it.
+	#
+	# SAFE BECAUSE THE TASK LIST IS ALREADY DECIDED. Every seed is
+	# computed above, before any game runs, so a slice played in another
+	# process is the same game with the same rolls — proven rather than
+	# assumed: a matchup run on its own writes a byte-identical
+	# `matchups.csv` row to the same matchup inside a `--matrix` sweep.
+	#
+	# FALLS BACK RATHER THAN FAILING. If a child cannot be spawned (a
+	# sandbox, no executable path, a full disk for the slice files), the
+	# in-process pool below runs the same work and the only cost is time.
+	var procs := _process_count(opts, _tasks.size())
+	var fanned := procs > 1 and _fan_out(procs, unit, started_at)
+	if not fanned:
+		var group := WorkerThreadPool.add_group_task(
+			_run_one_game, _tasks.size(), jobs, true, "deck_lab")
+		# WAITED ON IN A POLLING LOOP RATHER THAN ONE BLOCKING CALL, so the
+		# run can say how far along it is. A 10,000-game matchup is ten
+		# minutes and a matrix sweep an hour; before this the tool printed a
+		# header and then nothing at all, which is indistinguishable from a
+		# hang — and this project has lost hours to exactly that ambiguity.
+		# The wait itself is unchanged (the pool's own threads do the work,
+		# and `wait_for_group_task_completion` still frees the group).
+		_watch(group, _tasks.size(), unit, started_at)
 	var elapsed := (Time.get_ticks_msec() - started_at) / 1000.0
 	var missing := missing_records(_results)
 	if missing > 0:
@@ -543,19 +716,13 @@ func _main(argv: PackedStringArray) -> int:
 			elo_lines.append("  %-24s %7.1f -> %7.1f  (%+.1f)" % [
 				deck.deck_name, old, new, new - old])
 
-	# ---- report ----
-	var out_dir: String = opts.out
-	if out_dir == "":
-		out_dir = "DeckLab/results/run_%d" % int(Time.get_unix_time_from_system())
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out_dir))
-	_keep_the_importer_out(out_dir)
+	# ---- report ---- (out_dir was resolved and created with the plan)
 	var report := PackedStringArray()
 	report.append("Deck Lab report (%s mode)" % mode)
 	# THE NOUN FOLLOWS `--best-of`: with a match length set, every figure
 	# in this report is a MATCH figure and calling them games would be a
 	# lie. The default spelling is untouched, which is what keeps a
 	# default run's report.txt reading as it always has.
-	var unit := "games" if opts.best_of == MatchState.FREE_PLAY else "matches"
 	report.append("%s/matchup: %d   seed: %d   pilots: %s vs %s   %.1fs (%.0f %s/s)"
 		% [unit, opts.games, opts.seed, opts.profile_a, opts.profile_b,
 			elapsed, _tasks.size() / maxf(elapsed, 0.001), unit])
@@ -608,6 +775,12 @@ func _main(argv: PackedStringArray) -> int:
 		json_stats["deck_a"] = row_name
 		json_stats["deck_b"] = col_name
 		json_matchups.append(json_stats)
+	# THE READING OF THE MATCHUPS, not more matchups: the standings or
+	# the gauntlet aggregate, and what a sample this size can see.
+	# report.txt only — results.json and matchups.csv are read by other
+	# tooling and their shape does not move.
+	report.append_array(_reading_block(mode, opts, decks, pairs,
+		per_pair_stats, unit))
 	if not field_rows.is_empty():
 		report.append("")
 		var against: String = decks[1 if random_index == 0 else 0].deck_name
@@ -625,6 +798,7 @@ func _main(argv: PackedStringArray) -> int:
 		report.append_array(elo_lines)
 	var report_text := "\n".join(report)
 	print("\n" + report_text)
+	_stall_warning(per_pair_stats, opts, unit)
 
 	# ---- files ----
 	var wrote_all := true
@@ -689,15 +863,180 @@ func _main(argv: PackedStringArray) -> int:
 	return 0
 
 
-## One work order, run on a worker thread. Writes ONLY _results[index].
-## In free play that is one duel; with `--best-of` it is a whole MATCH,
-## and every figure in the record is then a match figure.
+## One work order, run on a worker thread. Writes ONLY _results[index] and
+## the shared finished-game counter (one lock, for the progress bar — see
+## THE TERMINAL at the foot of this file). In free play the order is one
+## duel; with `--best-of` it is a whole MATCH, and every figure in the
+## record is then a match figure.
 func _run_one_game(index: int) -> void:
-	var task: Dictionary = _tasks[index]
+	_results[index] = _play_task(_tasks[index])
+	# THE ONLY LOCK IN THE RUN, held for one increment per game — and a
+	# game is a tenth of a second of work, so the contention is nil. It
+	# exists so the main thread can draw a progress bar; it touches
+	# nothing any result is computed from, which is why a seeded run is
+	# byte-for-byte what it was before the bar existed.
+	_progress_lock.lock()
+	_games_done += 1
+	_progress_lock.unlock()
+
+
+
+# ------------------------------------------------- the process fan-out --
+
+## The hidden flag that turns this script into a worker. Not in `--help`
+## and not in the flag tables: it is an implementation detail of a run,
+## not something to type.
+const WORKER_FLAG := "--worker"
+
+## How many processes to fan out over when nobody says.
+##
+## EIGHT, and both halves of that are measured. Throughput keeps climbing
+## past it (16 processes 145 games/s, 20 gives 155), but each process is
+## a whole Godot holding the card pool — 235 MB, measured — so eight is
+## about 1.9 GB, which fits on a machine that also has a browser open.
+## Somebody with the RAM and the cores should pass `--procs 16`; that is
+## what the flag is for.
+const AUTO_PROCS := 8
+
+## Below this there is nothing to gain: a process costs ~1.5 s to start
+## and import, so a short run finishes in-process before a fan-out has
+## even begun playing.
+const FAN_OUT_FLOOR := 40
+
+
+## How many worker processes this run should use. `--procs 1` turns the
+## fan-out off; `--procs 0` (the default) decides from the size of the run.
+func _process_count(opts: Dictionary, task_count: int) -> int:
+	var asked := int(opts.get("procs", 0))
+	if asked > 0:
+		return asked
+	if task_count < FAN_OUT_FLOOR:
+		return 1
+	return mini(AUTO_PROCS, maxi(1, OS.get_processor_count()))
+
+
+## Play [member _tasks] in [param procs] child processes. Returns false if
+## the fan-out could not start, in which case the caller runs the work
+## in-process instead and nothing is lost but time.
+func _fan_out(procs: int, unit: String, started_at: int) -> bool:
+	var exe := OS.get_executable_path()
+	if exe == "":
+		return false
+	var root := ProjectSettings.globalize_path("res://")
+	var dir := OS.get_user_data_dir().path_join("deck_lab_fan_%d" % Time.get_ticks_usec())
+	if DirAccess.make_dir_recursive_absolute(dir) != OK:
+		return false
+	# Contiguous slices, so a child's own indices are its slice offset plus
+	# its position — the parent puts each record back exactly where the
+	# in-process run would have.
+	var per := int(ceil(float(_tasks.size()) / float(procs)))
+	var slices: Array = []
+	var pids: Array = []
+	for p in procs:
+		var lo := p * per
+		if lo >= _tasks.size():
+			break
+		var hi := mini(lo + per, _tasks.size())
+		var in_path := dir.path_join("slice_%d.json" % p)
+		var out_path := dir.path_join("done_%d.json" % p)
+		var payload := {"offset": lo, "duel": _duel_opts,
+			"tasks": _tasks.slice(lo, hi)}
+		var f := FileAccess.open(in_path, FileAccess.WRITE)
+		if f == null:
+			_clean_fan(dir, pids)
+			return false
+		f.store_string(JSON.stringify(payload))
+		f.close()
+		# `--no-header` on every child: without it each one greets the
+		# terminal with Godot's version line and a fanned-out run opens
+		# with eight identical banners (caught by running it, 2026-09-05).
+		# The shell already passes it for the parent.
+		var pid := OS.create_process(exe, ["--headless", "--no-header",
+			"--path", root, "--script", "res://DeckLab/simulate.gd", "--",
+			WORKER_FLAG, in_path, out_path])
+		if pid <= 0:
+			_clean_fan(dir, pids)
+			return false
+		pids.append(pid)
+		slices.append({"lo": lo, "hi": hi, "out": out_path})
+
+	# Wait, reporting as the slices land. A child writes its file once, at
+	# the end, so progress is per SLICE rather than per game — coarser
+	# than the in-process bar and honest about it.
+	var done := 0
+	while done < slices.size():
+		done = 0
+		for slice in slices:
+			if FileAccess.file_exists(String(slice["out"])):
+				done += 1
+		if done < slices.size():
+			_progress(done * per, _tasks.size(),
+				(Time.get_ticks_msec() - started_at) / 1000.0, unit, procs)
+			OS.delay_msec(200)
+	for pid in pids:
+		if OS.is_process_running(int(pid)):
+			OS.kill(int(pid))
+
+	# Read the records back into the places their tasks came from.
+	for slice in slices:
+		var text := FileAccess.get_file_as_string(String(slice["out"]))
+		var parsed: Variant = JSON.parse_string(text)
+		if not (parsed is Array):
+			_clean_fan(dir, [])
+			return false
+		var lo := int(slice["lo"])
+		for i in (parsed as Array).size():
+			_results[lo + i] = (parsed as Array)[i]
+	_games_done = _tasks.size()
+	_clean_fan(dir, [])
+	return true
+
+
+## Stop any children still running and remove the slice directory.
+func _clean_fan(dir: String, pids: Array) -> void:
+	for pid in pids:
+		if OS.is_process_running(int(pid)):
+			OS.kill(int(pid))
+	var d := DirAccess.open(dir)
+	if d != null:
+		for file_name in d.get_files():
+			d.remove(file_name)
+	DirAccess.remove_absolute(dir)
+
+
+## THE CHILD. Plays a slice and writes its records; says nothing, decides
+## nothing, and never touches the report.
+func _run_worker(in_path: String, out_path: String) -> int:
+	var text := FileAccess.get_file_as_string(in_path)
+	var parsed: Variant = JSON.parse_string(text)
+	if not (parsed is Dictionary):
+		printerr("deck_lab worker: cannot read %s" % in_path)
+		return 1
+	var payload: Dictionary = parsed
+	_duel_opts = payload.get("duel", {})
+	_tasks = payload.get("tasks", [])
+	_results.resize(_tasks.size())
+	for i in _tasks.size():
+		var record := _play_task(_tasks[i])
+		# `rng` is a RandomNumberGenerator — used inside a MATCH and never
+		# read again afterwards, and not a thing JSON can carry.
+		record.erase("rng")
+		_results[i] = record
+	var f := FileAccess.open(out_path, FileAccess.WRITE)
+	if f == null:
+		printerr("deck_lab worker: cannot write %s" % out_path)
+		return 1
+	f.store_string(JSON.stringify(_results))
+	f.close()
+	return 0
+
+## The work order itself: one duel in free play, one whole MATCH with
+## `--best-of`. Split out of [method _run_one_game] so that counting a
+## finished game has exactly one place to happen.
+func _play_task(task: Dictionary) -> Dictionary:
 	if int(_duel_opts.get("best_of", MatchState.FREE_PLAY)) \
 			!= MatchState.FREE_PLAY:
-		_results[index] = _run_one_match(task)
-		return
+		return _run_one_match(task)
 	# Seat 0 always starts; alternate which DECK sits there for play/draw
 	# fairness, then map the winner back to deck A (the pair's row deck).
 	var a_seat: int = 0 if task.a_on_play else 1
@@ -712,7 +1051,7 @@ func _run_one_game(index: int) -> void:
 	# existed SimStats read the game as a win for deck B and the Elo
 	# ledger charged deck A a loss for it. Rare but real: 1 game in 600 of
 	# the shipped gauntlet, measured 2026-09-01.
-	_results[index] = {
+	return {
 		"a_won": duel["finished"] and int(duel["winner"]) == a_seat,
 		"a_on_play": task.a_on_play,
 		"turns": duel["turns"],
@@ -921,14 +1260,194 @@ func _load_deck(path: String, format := "") -> DeckList:
 			printerr("deck_lab: problems in '%s':" % candidate)
 			for problem in deck.errors:
 				printerr("  " + problem)
+			# WHAT TO DO ABOUT IT. A card the pool does not implement yet
+			# is the usual cause, and it is not the same complaint as a
+			# typo — one is fixed by editing the list, the other by
+			# waiting for the card. Neither is obvious from "unknown
+			# card", and the converter is deliberately lenient.
+			printerr("  the Lab plays IMPLEMENTED cards only, so a deck may parse")
+			printerr("  everywhere else and still be refused here. ./deck_convert.sh")
+			printerr("  converts such a deck without complaint; editing the list is")
+			printerr("  the fix for a misspelling (names must be exact and printed).")
 			return null
-	printerr("deck_lab: deck file not found: '%s' (tried %s)" % [path, ", ".join(tries)])
+	_deck_not_found(path, tries)
 	return null
+
+
+## THE SINGLE MOST COMMON MISTAKE THIS TOOL SEES, and until now it was
+## answered with a list of three paths that did not exist. A deck
+## argument is a PATH (`decks/big_green.deck`), not a deck's name, and the
+## three things a reader needs are: that fact, the nearest real files, and
+## what a folder does instead. All three are here.
+func _deck_not_found(path: String, tried: Array) -> void:
+	printerr("deck_lab: deck file not found: '%s'" % path)
+	printerr("  looked for: %s" % ", ".join(PackedStringArray(tried)))
+	var pool := _every_shipped_deck()
+	var near := suggest_decks(path, pool)
+	if not near.is_empty():
+		printerr("  did you mean:")
+		for candidate in near:
+			printerr("      %s" % candidate)
+	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(path)):
+		printerr("  '%s' is a FOLDER: a folder is a pool, not a deck —" % path)
+		printerr("      --gauntlet %s   (deck A against each of them)" % path)
+		printerr("      --matrix %s     (every deck against every other)" % path)
+		return
+	printerr("  deck arguments are PATHS to a deck file, not deck names:")
+	printerr("      --deck-a decks/big_green.deck      yes")
+	printerr("      --deck-a \"Big Green\"               no")
+	var shipped := 0
+	for candidate in pool:
+		if not candidate.trim_prefix("decks/").contains("/"):
+			shipped += 1
+	printerr("  `ls decks/` lists the %d decks in the folder itself; %d more are in"
+		% [shipped, pool.size() - shipped])
+	printerr("  its subfolders, reached with --group (see --help).")
+
+
+## THE "DID YOU MEAN" behind a bad deck path, as a pure function of what
+## was typed and what exists — so a test can pin it.
+##
+## Matching is on the FILE NAME without its extension, with spaces,
+## dashes and underscores treated alike: `"Big Green"`, `big-green`,
+## `big_green` and `BIG_GREEN.DECK` all find `decks/big_green.deck`.
+## That is not indulgence — the name a person has to type is the one they
+## last saw in a REPORT, where it is spelled `Big Green`.
+static func suggest_decks(typed: String, pool: PackedStringArray,
+		limit := 3) -> PackedStringArray:
+	var by_key := {}
+	var keys := PackedStringArray()
+	for candidate in pool:
+		var key := deck_key(String(candidate))
+		if not by_key.has(key):
+			by_key[key] = []
+			keys.append(key)
+		(by_key[key] as Array).append(String(candidate))
+	var out := PackedStringArray()
+	for key in LabConsole.closest(deck_key(typed), keys, limit):
+		for candidate in by_key[key]:
+			if out.size() < limit:
+				out.append(String(candidate))
+	return out
+
+
+## A deck path reduced to the thing worth comparing: its file name, no
+## extension, no case, and no difference between a space, a dash and an
+## underscore.
+static func deck_key(path: String) -> String:
+	return path.get_file().get_basename().to_lower() \
+		.replace("_", " ").replace("-", " ").strip_edges()
+
+
+## Every deck file the project ships, for the "did you mean" above. Read
+## from disk rather than a list, so a deck added tomorrow is suggested
+## tomorrow. Sorted, so the suggestion order is stable.
+func _every_shipped_deck() -> PackedStringArray:
+	var found: Array = []
+	# The subfolders too: `decks/1997/<group>/` and the community folders
+	# hold 300+ decks, and a name typed from one of those is exactly the
+	# case where a suggestion earns its keep.
+	_collect_deck_paths("res://decks", found)
+	found.sort()
+	var out := PackedStringArray()
+	for entry in found:
+		out.append(String(entry).replace("res://", ""))
+	return out
+
+
+func _collect_deck_paths(dir_path: String, found: Array) -> void:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		var full := dir_path.path_join(entry)
+		if dir.current_is_dir():
+			if not entry.begins_with("."):
+				_collect_deck_paths(full, found)
+		elif entry.ends_with(".deck") or entry.ends_with(".dec") \
+				or entry.ends_with(".dck"):
+			found.append(full)
+		entry = dir.get_next()
+
+
+## EVERY FLAG THAT TAKES A VALUE, and one line each saying what the value
+## is. This table IS the parser's list — an argument that is not a key
+## here is an unknown option — and it is what a refusal quotes, so
+## `--games` with nothing after it answers its own question instead of
+## sending the reader to --help:
+##
+##     deck_lab: --games needs a value  (--games N: games per matchup,
+##     default 1000)
+##
+## `test_every_flag_is_documented` pins every key to a line in HELP, so a
+## flag cannot be added quietly.
+const FLAG_HINTS := {
+	"--deck-a": "--deck-a PATH: the deck under test, e.g. decks/big_green.deck",
+	"--deck-b": "--deck-b PATH: one opponent deck, or the word `random`",
+	"--gauntlet": "--gauntlet LIST|DIR: opponents, comma-separated or a folder",
+	"--matrix": "--matrix LIST|DIR: >= 2 decks to play a round robin",
+	"--deck-pool": "--deck-pool LIST|DIR: what `random` draws from (default decks/)",
+	"--games": "--games N: games per matchup, default 1000",
+	"--seed": "--seed N: base RNG seed, default 1 — the same seed replays a run",
+	"--jobs": "--jobs N: worker threads INSIDE one process, default 4 (0 = every core, which is slower — see --procs)",
+	"--procs": "--procs N: separate worker processes, default 8 when the run is big enough (1 = none). Each is ~235 MB and about 8x the speed of threads",
+	"--profile-a": "--profile-a NAME: apprentice|magician|sorcerer|wizard, default wizard",
+	"--profile-b": "--profile-b NAME: apprentice|magician|sorcerer|wizard, default wizard",
+	"--out": "--out DIR: where report.txt/results.json/matchups.csv are written",
+	"--elo-file": "--elo-file PATH: the Elo ledger, default " + EloLedger.DEFAULT_PATH,
+	"--lives": "--lives N or A,B: starting life per seat, default 20,20",
+	"--ante": "--ante N: cards staked per seat before the deal, default 0",
+	"--names": "--names A,B: the two seat names, default SeatZero,SeatOne",
+	"--format": "--format NAME: unrestricted|wild|type1|type1.5|highlander",
+	"--group": "--group NAME: keep one deck group when a folder is expanded",
+	"--mulligan": "--mulligan on|off: offer the Shandalar mulligan, default off",
+	"--rules": "--rules fifth|modern: which ruleset, default modern",
+	"--rule": "--rule KEY=on|off: override one rules fork; repeatable",
+	"--best-of": "--best-of N: play matches of 1, 3 or 5 duels instead of single duels",
+	"--sideboard": "--sideboard on|off: AI sideboards between duels; needs --best-of 3 or 5",
+}
+
+## The flags that take no value. Same contract as [constant FLAG_HINTS]:
+## the parser reads this table, --help must name each key, and a refusal
+## can quote the line.
+const TOGGLE_HINTS := {
+	"-h": "-h: this help",
+	"--help": "--help: this help",
+	"--no-svg": "--no-svg: skip the SVG charts",
+	"--no-elo": "--no-elo: do not touch the Elo ledger (use it for reruns)",
+	"--quiet": "--quiet: no banner and no progress bar — errors only",
+	"--no-banner": "--no-banner: keep the progress bar, drop the artwork",
+}
+
+
+## "unknown option '--gmaes'" is true but unhelpful when the shell has
+## already eaten the typo. The refusal names the nearest flags instead —
+## one mistyped letter is a bigram score around 0.8, so the suggestion is
+## almost always the flag that was meant.
+static func unknown_option(arg: String) -> String:
+	var flags := PackedStringArray()
+	for flag in FLAG_HINTS:
+		flags.append(String(flag))
+	for flag in TOGGLE_HINTS:
+		flags.append(String(flag))
+	# MEASURED, not guessed (Godot's `String.similarity` is a bigram
+	# score): `--gamez` is 0.83 against `--games`, `--rulz` 0.80 against
+	# `--rule`, `--gmaes` 0.50 against `--games`, `--jbos` 0.40 against
+	# `--jobs` — and `--wat`, which means nothing, is 0.36 against its
+	# nearest flag. So the floor sits at 0.40, and the 0.05 spread keeps
+	# the answer to the flags actually in contention (a tie like
+	# `--deck_a` between `--deck-a` and `--deck-b` shows both).
+	var near := LabConsole.closest(arg, flags, 2, 0.40, 0.05)
+	if near.is_empty():
+		return "unknown option '%s'" % arg
+	return "unknown option '%s' — did you mean %s?" % [arg, " or ".join(near)]
 
 
 ## The flags whose value must be a whole number. `String.to_int()` is
 ## silent about "abc" (it is 0), so `_parse_args` refuses these up front.
-const WHOLE_NUMBER_FLAGS := ["--games", "--seed", "--jobs", "--ante", "--best-of"]
+const WHOLE_NUMBER_FLAGS := ["--games", "--seed", "--jobs", "--procs", "--ante", "--best-of"]
 
 
 func _parse_args(argv: PackedStringArray) -> Dictionary:
@@ -936,9 +1455,13 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		"deck_a": "", "opponents": [], "gauntlets": [], "matrix_pool": [],
 		"deck_pool": "",
 		"games": 1000,
-		"seed": 1, "jobs": 0, "profile_a": "wizard", "profile_b": "wizard",
+		"seed": 1, "jobs": 0, "procs": 0,
+		"profile_a": "wizard", "profile_b": "wizard",
 		"out": "", "no_svg": false, "no_elo": false,
 		"elo_file": EloLedger.DEFAULT_PATH,
+		# TERMINAL CHROME, not a duel setting: neither reaches a game, and
+		# both are already off when stderr is not a terminal.
+		"quiet": false, "no_banner": false,
 		# The duel settings. Every default here is what this script did
 		# before the flag existed — see the class doc.
 		"lives": [20, 20], "ante": 0, "names": ["SeatZero", "SeatOne"],
@@ -960,132 +1483,145 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	var i := 0
 	while i < argv.size():
 		var arg := argv[i]
+		# THE TWO FLAG TABLES ARE THE PARSER'S OWN LIST, so a flag cannot
+		# exist without a one-line explanation for --help to check and for
+		# an error message to quote (test_every_flag_is_documented).
+		if TOGGLE_HINTS.has(arg):
+			match arg:
+				"-h", "--help":
+					return {"help": true}
+				"--no-svg":
+					opts.no_svg = true
+				"--no-elo":
+					opts.no_elo = true
+				"--quiet":
+					opts.quiet = true
+					opts.no_banner = true
+				"--no-banner":
+					opts.no_banner = true
+			i += 1
+			continue
+		if not FLAG_HINTS.has(arg):
+			return {"error": unknown_option(arg)}
+		i += 1
+		# A FLAG WITH NO VALUE SAYS WHAT THE VALUE WOULD HAVE BEEN. "--games
+		# needs a value" leaves the reader to go and look it up; the hint
+		# table already holds the sentence, so it is quoted here.
+		if i >= argv.size():
+			return {"error": "%s needs a value  (%s)" % [arg, FLAG_HINTS[arg]]}
+		var value := argv[i]
+		# `to_int()` READS "abc" AS 0 — so `--seed abc` used to run
+		# seed 0, `--jobs abc` every core and `--best-of abc` free
+		# play, all silently. (`--lives` checks its own N or A,B.)
+		if WHOLE_NUMBER_FLAGS.has(arg) and not value.is_valid_int():
+			return {"error": "%s takes a whole number, not '%s'  (%s)"
+				% [arg, value, FLAG_HINTS[arg]]}
 		match arg:
-			"-h", "--help":
-				return {"help": true}
-			"--no-svg":
-				opts.no_svg = true
-			"--no-elo":
-				opts.no_elo = true
-			"--deck-a", "--deck-b", "--gauntlet", "--matrix", "--deck-pool", \
-			"--games", \
-			"--seed", "--jobs", "--profile-a", "--profile-b", "--out", \
-			"--elo-file", "--lives", "--ante", "--names", "--format", \
-			"--group", "--mulligan", "--rules", "--rule", "--best-of", \
+			"--deck-a": opts.deck_a = value
+			"--deck-b": opts.opponents.append(value)
+			# EXPANDED AFTER THE LOOP, not here: a DIR excludes the
+			# deck under test, and `--gauntlet` may be typed before
+			# `--deck-a` — expanded inline, that order put the deck
+			# under test in its own gauntlet (until 2026-09-02).
+			"--gauntlet": opts.gauntlets.append(value)
+			# Likewise, and for the same reason.
+			"--deck-pool": opts.deck_pool = value
+			"--matrix":
+				var pool := _expand_pool(value, "")
+				if pool.size() < 2:
+					return {"error": "--matrix needs at least 2 decks in '%s'" % value}
+				opts.matrix_pool = pool
+			"--games":
+				opts.games = value.to_int()
+				if opts.games < 1:
+					return {"error": "--games must be >= 1"}
+			"--seed": opts.seed = value.to_int()
+			"--procs":
+					if value.to_int() < 0:
+						return {"error": "--procs must be >= 0 (0 = decide from the size of the run)"}
+					opts.procs = value.to_int()
+			"--jobs":
+				opts.jobs = value.to_int()
+				if opts.jobs < 0:
+					return {"error": "--jobs must be >= 0 (0 = every core)"}
+			"--profile-a", "--profile-b":
+				if not PROFILES.has(value.to_lower()):
+					return {"error": "unknown profile '%s'" % value}
+				opts["profile_a" if arg == "--profile-a" else "profile_b"] = value.to_lower()
+			"--out": opts.out = value
+			"--elo-file": opts.elo_file = value
+			"--lives":
+				var parts := value.split(",", false)
+				if parts.size() == 1:
+					opts.lives = [parts[0].to_int(), parts[0].to_int()]
+				elif parts.size() == 2:
+					opts.lives = [parts[0].to_int(), parts[1].to_int()]
+				else:
+					return {"error": "--lives takes N or A,B"}
+				for part in parts:
+					if not part.is_valid_int():
+						return {"error": "--lives takes whole numbers, not '%s'" % part}
+				for life in opts.lives:
+					if life < 1:
+						return {"error": "--lives must be >= 1"}
+			"--ante":
+				opts.ante = value.to_int()
+				if opts.ante < 0:
+					return {"error": "--ante must be >= 0"}
+			"--names":
+				var who := value.split(",", false)
+				if who.size() != 2:
+					return {"error": "--names takes A,B"}
+				opts.names = [who[0], who[1]]
+			"--format":
+				var format: String = FORMAT_FLAGS.get(value.to_lower(), "")
+				if format == "":
+					return {"error": "unknown format '%s' (try %s)" % [
+						value, ", ".join(FORMAT_FLAGS.keys())]}
+				opts.format = format
+			"--group":
+				var group: String = GROUP_FLAGS.get(value.to_lower(), "")
+				if group == "":
+					return {"error": "unknown deck group '%s' (try %s)" % [
+						value, ", ".join(GROUP_FLAGS.keys())]}
+				opts.group = group
+			"--mulligan":
+				if not ["on", "off"].has(value.to_lower()):
+					return {"error": "--mulligan takes on or off"}
+				opts.mulligan = value.to_lower() == "on"
+			# [MatchState.LENGTHS] AND NOTHING ELSE — 1, 3
+			# or 5, for that class's own reasons:
+			# `@DIALOG_ENDEXP1DUEL_MATCHPROGRESS` ships exactly
+			# two record sentences, one per length, with the
+			# number written into the sentence (so 3 and 5 and
+			# never 7), and `@DIALOG_GAUNTLETOPTIONS` adds the
+			# gauntlet's `Best of &One`.
+			"--best-of":
+				opts.best_of = value.to_int()
+				if not MatchState.LENGTHS.has(opts.best_of):
+					return {"error": "--best-of takes one of %s"
+						% str(MatchState.LENGTHS)}
 			"--sideboard":
-				i += 1
-				if i >= argv.size():
-					return {"error": "%s needs a value" % arg}
-				var value := argv[i]
-				# `to_int()` READS "abc" AS 0 — so `--seed abc` used to run
-				# seed 0, `--jobs abc` every core and `--best-of abc` free
-				# play, all silently. (`--lives` checks its own N or A,B.)
-				if WHOLE_NUMBER_FLAGS.has(arg) and not value.is_valid_int():
-					return {"error": "%s takes a whole number, not '%s'" % [arg, value]}
-				match arg:
-					"--deck-a": opts.deck_a = value
-					"--deck-b": opts.opponents.append(value)
-					# EXPANDED AFTER THE LOOP, not here: a DIR excludes the
-					# deck under test, and `--gauntlet` may be typed before
-					# `--deck-a` — expanded inline, that order put the deck
-					# under test in its own gauntlet (until 2026-09-02).
-					"--gauntlet": opts.gauntlets.append(value)
-					# Likewise, and for the same reason.
-					"--deck-pool": opts.deck_pool = value
-					"--matrix":
-						var pool := _expand_pool(value, "")
-						if pool.size() < 2:
-							return {"error": "--matrix needs at least 2 decks in '%s'" % value}
-						opts.matrix_pool = pool
-					"--games":
-						opts.games = value.to_int()
-						if opts.games < 1:
-							return {"error": "--games must be >= 1"}
-					"--seed": opts.seed = value.to_int()
-					"--jobs":
-						opts.jobs = value.to_int()
-						if opts.jobs < 0:
-							return {"error": "--jobs must be >= 0 (0 = every core)"}
-					"--profile-a", "--profile-b":
-						if not PROFILES.has(value.to_lower()):
-							return {"error": "unknown profile '%s'" % value}
-						opts["profile_a" if arg == "--profile-a" else "profile_b"] = value.to_lower()
-					"--out": opts.out = value
-					"--elo-file": opts.elo_file = value
-					"--lives":
-						var parts := value.split(",", false)
-						if parts.size() == 1:
-							opts.lives = [parts[0].to_int(), parts[0].to_int()]
-						elif parts.size() == 2:
-							opts.lives = [parts[0].to_int(), parts[1].to_int()]
-						else:
-							return {"error": "--lives takes N or A,B"}
-						for part in parts:
-							if not part.is_valid_int():
-								return {"error": "--lives takes whole numbers, not '%s'" % part}
-						for life in opts.lives:
-							if life < 1:
-								return {"error": "--lives must be >= 1"}
-					"--ante":
-						opts.ante = value.to_int()
-						if opts.ante < 0:
-							return {"error": "--ante must be >= 0"}
-					"--names":
-						var who := value.split(",", false)
-						if who.size() != 2:
-							return {"error": "--names takes A,B"}
-						opts.names = [who[0], who[1]]
-					"--format":
-						var format: String = FORMAT_FLAGS.get(value.to_lower(), "")
-						if format == "":
-							return {"error": "unknown format '%s' (try %s)" % [
-								value, ", ".join(FORMAT_FLAGS.keys())]}
-						opts.format = format
-					"--group":
-						var group: String = GROUP_FLAGS.get(value.to_lower(), "")
-						if group == "":
-							return {"error": "unknown deck group '%s' (try %s)" % [
-								value, ", ".join(GROUP_FLAGS.keys())]}
-						opts.group = group
-					"--mulligan":
-						if not ["on", "off"].has(value.to_lower()):
-							return {"error": "--mulligan takes on or off"}
-						opts.mulligan = value.to_lower() == "on"
-					# [MatchState.LENGTHS] AND NOTHING ELSE — 1, 3
-					# or 5, for that class's own reasons:
-					# `@DIALOG_ENDEXP1DUEL_MATCHPROGRESS` ships exactly
-					# two record sentences, one per length, with the
-					# number written into the sentence (so 3 and 5 and
-					# never 7), and `@DIALOG_GAUNTLETOPTIONS` adds the
-					# gauntlet's `Best of &One`.
-					"--best-of":
-						opts.best_of = value.to_int()
-						if not MatchState.LENGTHS.has(opts.best_of):
-							return {"error": "--best-of takes one of %s"
-								% str(MatchState.LENGTHS)}
-					"--sideboard":
-						if not ["on", "off"].has(value.to_lower()):
-							return {"error": "--sideboard takes on or off"}
-						opts.sideboard = value.to_lower() == "on"
-					"--rules":
-						if not ["fifth", "modern"].has(value.to_lower()):
-							return {"error": "--rules takes fifth or modern"}
-						opts.rules = value.to_lower()
-					"--rule":
-						var split := value.split("=", false)
-						if split.size() != 2 or not ["on", "off"].has(
-								split[1].to_lower()):
-							return {"error": "--rule takes KEY=on or KEY=off"}
-						var known := false
-						for fork in RulesOptions.FORKS:
-							if fork["key"] == split[0]:
-								known = true
-								break
-						if not known:
-							return {"error": "unknown rules fork '%s'" % split[0]}
-						opts.rule_overrides[split[0]] = split[1].to_lower() == "on"
-			_:
-				return {"error": "unknown option '%s'" % arg}
+				if not ["on", "off"].has(value.to_lower()):
+					return {"error": "--sideboard takes on or off"}
+				opts.sideboard = value.to_lower() == "on"
+			"--rules":
+				if not ["fifth", "modern"].has(value.to_lower()):
+					return {"error": "--rules takes fifth or modern"}
+				opts.rules = value.to_lower()
+			"--rule":
+				var split := value.split("=", false)
+				if split.size() != 2 or not ["on", "off"].has(
+						split[1].to_lower()):
+					return {"error": "--rule takes KEY=on or KEY=off"}
+				var known := false
+				for fork in RulesOptions.FORKS:
+					if fork["key"] == split[0]:
+						known = true
+						break
+				if not known:
+					return {"error": "unknown rules fork '%s'" % split[0]}
+				opts.rule_overrides[split[0]] = split[1].to_lower() == "on"
 		i += 1
 	# `--gauntlet`, now that `--deck-a` is known whichever side it was on.
 	for value in opts.gauntlets:
@@ -1268,3 +1804,197 @@ func _write(path: String, content: String) -> bool:
 		return false
 	file.store_string(content)
 	return true
+
+
+# ============================================================ THE TERMINAL ==
+#
+# THE RULE, AND IT IS THE ONE THIS SECTION EXISTS TO KEEP: stdout is the
+# INSTRUMENT — the report, and byte for byte the text that lands in
+# report.txt. stderr is the HUMAN — banner, progress, warnings, hints —
+# and it is decorated only when stderr is a terminal, which
+# `DeckLab/deck_lab.sh` finds out (`[ -t 2 ]`) and passes in
+# DECK_LAB_TTY. So a run redirected into a log a script parses
+# (`... > run.log 2>&1`) carries no artwork, no bar and no escape codes,
+# without anyone having to remember a flag. See [LabConsole].
+
+## How often the main thread looks at the counter while the pool works.
+const PROGRESS_TICK_MS := 250
+## A run shorter than this never says anything: a 20-game smoke should
+## print its report and nothing else.
+const PROGRESS_QUIET_SECONDS := 2.0
+## The heartbeat when stderr is NOT a terminal — a log file wants to show
+## that a long run is alive, not to be filled with bars.
+const PROGRESS_LOG_SECONDS := 60.0
+
+
+## The banner, once, on stderr. Off for `--quiet` / `--no-banner` /
+## DECK_LAB_NO_BANNER=1, and off by itself when stderr is not a terminal.
+func _banner() -> void:
+	if _quiet or not _banner_wanted or not LabConsole.is_terminal():
+		return
+	printerr(LabConsole.banner(LabConsole.use_colour()))
+	printerr("")
+
+
+## WHAT TO TYPE INSTEAD, after a refusal. A message that only says what
+## was wrong leaves the reader to go and find the manual; two copyable
+## command lines are usually the whole fix. Printed after the error, so
+## the error is still the first line.
+func _usage_hint(no_arguments: bool) -> void:
+	if no_arguments:
+		printerr("")
+		printerr("The Deck Lab plays AI-vs-AI duels headless and reports honest win rates.")
+	printerr("")
+	printerr("  DeckLab/deck_lab.sh --deck-a decks/big_green.deck \\")
+	printerr("                      --deck-b decks/blue_skies.deck --games 200")
+	printerr("  DeckLab/deck_lab.sh --matrix decks/ --games 200")
+	printerr("  DeckLab/deck_lab.sh --help      # every switch, with examples")
+
+
+## Wait for the pool, saying how far along it is. Polling rather than one
+## blocking call is the whole difference between "this is working" and
+## "this might be hung" on a run that takes an hour; the pool's own
+## threads do the games either way, and the group is still freed by
+## `wait_for_group_task_completion`.
+func _watch(group: int, total: int, unit: String, started_at: int) -> void:
+	while not WorkerThreadPool.is_group_task_completed(group):
+		OS.delay_msec(PROGRESS_TICK_MS)
+		_progress(_done_so_far(), total,
+			(Time.get_ticks_msec() - started_at) / 1000.0, unit, false)
+	WorkerThreadPool.wait_for_group_task_completion(group)
+	_progress(total, total, (Time.get_ticks_msec() - started_at) / 1000.0,
+		unit, true)
+
+
+func _done_so_far() -> int:
+	_progress_lock.lock()
+	var done := _games_done
+	_progress_lock.unlock()
+	return done
+
+
+## One progress update. On a terminal it rewrites its own line (and is
+## erased when the run finishes, so the report starts on a clean screen);
+## in a log it is a heartbeat once a minute.
+func _progress(done: int, total: int, elapsed: float, unit: String,
+		finished: bool) -> void:
+	if _quiet:
+		return
+	if finished:
+		if _progress_open:
+			printerr(LabConsole.LINE_UP)
+			_progress_open = false
+		return
+	if elapsed < PROGRESS_QUIET_SECONDS:
+		return
+	if LabConsole.is_terminal():
+		# One column short of the width: a line that WRAPS cannot be
+		# redrawn, because the cursor can only be sent up one row.
+		var line := LabConsole.progress_line(done, total, elapsed, unit,
+			LabConsole.width() - 1)
+		printerr((LabConsole.LINE_UP if _progress_open else "")
+			+ LabConsole.paint(line, LabConsole.DIM, LabConsole.use_colour()))
+		_progress_open = true
+		return
+	if elapsed - _last_logged < PROGRESS_LOG_SECONDS:
+		return
+	_last_logged = elapsed
+	printerr("deck_lab: %s" % LabConsole.progress_line(
+		done, total, elapsed, unit, 78).strip_edges())
+
+
+## The decks by name, capped so a 48-deck group does not fill the screen.
+func _deck_summary(decks: Array[DeckList]) -> String:
+	var names := _deck_names(decks)
+	if names.size() <= 6:
+		return ", ".join(names)
+	var head := PackedStringArray()
+	for i in 5:
+		head.append(names[i])
+	return "%s, ... (%d more)" % [", ".join(head), names.size() - 5]
+
+
+## WHAT THE RUN IS ENTITLED TO CLAIM — the standings (matrix) or deck A's
+## record across the whole gauntlet, and then, for every mode, the
+## sentence that says how much of the headline percentage is real.
+##
+## THE LESSON THIS BLOCK EXISTS FOR: a win rate over a couple of hundred
+## games is read as a fact, and "44.0%" has three times been taken for
+## "this change made the deck worse" when 50% sat inside the interval all
+## along. The interval was already printed; nobody compared it to 0.5 by
+## eye. So the report now does that comparison itself, in words, and says
+## what a sample this size can and cannot see.
+func _reading_block(mode: String, opts: Dictionary, decks: Array[DeckList],
+		pairs: Array, per_pair_stats: Array, unit: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	if mode == "matrix":
+		var names: Array = []
+		for deck in decks:
+			names.append(deck.deck_name)
+		out.append("")
+		out.append("standings: win rate across the whole matrix, best first")
+		for row in SimStats.standings(names, pairs, per_pair_stats):
+			var wr: Dictionary = row["winrate"]
+			out.append("  %-24s %s  CI [%s..%s]  (%d-%d)" % [
+				row["name"], SimStats.percent(wr.mid),
+				SimStats.percent(wr.low).strip_edges(),
+				SimStats.percent(wr.high).strip_edges(),
+				row["wins"], row["losses"]])
+	elif pairs.size() > 1:
+		# THE GAUNTLET'S OWN NUMBER. Five per-opponent rows do not add up
+		# to "how did the deck do" in anybody's head, and the aggregate
+		# is the question the mode was run to answer — with its own
+		# interval, which is tighter than any single row's.
+		var wins := 0
+		var losses := 0
+		for stats in per_pair_stats:
+			wins += int(stats["a_wins"])
+			losses += int(stats["b_wins"])
+		var overall := SimStats.wilson_interval(wins, wins + losses)
+		out.append("")
+		# Padded exactly as the matchup rows above are, so the aggregate
+		# lines up under the column it aggregates.
+		out.append("%-24s vs %-24s %s  CI [%s..%s]  (%d-%d)" % [
+			decks[0].deck_name, "the gauntlet", SimStats.percent(overall.mid),
+			SimStats.percent(overall.low).strip_edges(),
+			SimStats.percent(overall.high).strip_edges(), wins, losses])
+	var decided := 0
+	for stats in per_pair_stats:
+		if SimStats.is_decided(stats["winrate"]):
+			decided += 1
+	var margin := SimStats.margin_at(opts.games)
+	var matchups := pairs.size()
+	out.append("")
+	out.append("reading these numbers:")
+	out.append("  %s %s per matchup: the 95%% interval is +-%.1f points at an even"
+		% [LabConsole.commas(opts.games), unit, margin * 100.0])
+	out.append("  win rate, so no edge smaller than %.0f/%.0f is visible at this size."
+		% [50.0 + margin * 100.0, 50.0 - margin * 100.0])
+	out.append("  decided: %d of %d matchup%s (interval clear of 50%%); %d still even."
+		% [decided, matchups, "" if matchups == 1 else "s", matchups - decided])
+	if decided < matchups:
+		out.append("  a +-3.0 point interval needs %s %s per matchup; +-1.0 needs %s."
+			% [LabConsole.commas(SimStats.games_for_margin(0.03)), unit,
+				LabConsole.commas(SimStats.games_for_margin(0.01))])
+	return out
+
+
+## A STALL IS A BUG, NOT A STATISTIC — the AI driver gave up on a game
+## that never ended. The count has always been in the report; what was
+## missing is that it is nobody's win rate, that it is reproducible, and
+## that it should be reported rather than averaged over.
+func _stall_warning(per_pair_stats: Array, opts: Dictionary,
+		unit: String) -> void:
+	var stalled := 0
+	for stats in per_pair_stats:
+		stalled += int(stats["stalled"])
+	if stalled == 0:
+		return
+	printerr("")
+	printerr("deck_lab: WARNING — %d %s stalled (the AI driver bailed out of them)."
+		% [stalled, unit])
+	printerr("  A stall is a bug in the engine or the AI, not a property of the decks;")
+	printerr("  those games are excluded from every win rate above rather than given")
+	printerr("  to either side. Please report it — `--seed %d` with these decks and"
+		% int(opts.seed))
+	printerr("  these settings reproduces it exactly.")

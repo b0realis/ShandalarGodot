@@ -408,8 +408,10 @@ var _probing := false
 ## — see `engine/undo_log.gd` for why that is the whole difference between
 ## a rewind and a fork, and for WHAT IS COVERED AND THE BOUNDARY: the
 ## helper surface, departures and resolutions as whole objects, the
-## floating lists; NOT the turn machinery. `tests/ai/test_undo_log.gd`
-## pins the coverage move by move against [GameSnapshot].
+## floating lists, and — since 2026-09-05, through [method _rec_turn] —
+## the turn machinery, so a node may cross a step boundary.
+## `tests/ai/test_undo_log.gd` pins the coverage move by move against
+## [GameSnapshot].
 ##
 ## THE CONTRACT IS A PAIR: [method make_mark] opens a node,
 ## [method unmake_to] closes it, and [method end_search] hands the game
@@ -535,6 +537,106 @@ const PLAYER_RESOLUTION_FIELDS: Array[StringName] = [
 	&"damage_replacements", &"damage_prevention", &"poison",
 	&"untapped_lands_at_turn_start",
 ]
+
+
+## THE TURN MACHINERY'S OWN STATE (2026-09-05) — what [method _advance_step],
+## [method _enter_step], [method _next_turn] and the turn-based actions they
+## run write DIRECTLY, outside the mutation helpers. Recorded whole by
+## [method _rec_turn] at every step boundary, which is what lets a search
+## node CROSS one: until this list existed the journal's documented
+## boundary was the turn machinery, and `engine/ai/combat_search.gd` had to
+## run over a flat model instead of over the engine itself.
+##
+## HAND-LISTED rather than taken with [method UndoLog.record_object],
+## which is what a departure and a resolution use. [MtgGame] also carries
+## the three things a per-boundary record must NOT copy — `log_lines`
+## (thousands of strings by turn 20), `_instances`, and the battlefield
+## caches — and `record_object` would duplicate all of them every time a
+## step changed. Everything on this list is a scalar or a small container.
+##
+## What is deliberately NOT here, because something else already covers it:
+## the zone arrays and `life` (their helpers record them), `_instances` and
+## `_battlefield_order` ([method _rec_departure]), the mana pools and
+## `rng.state` ([method make_mark]), `cur_*` and the player-level static
+## flags (rebuilt by [method ContinuousEffects.recalculate] — see
+## `engine/undo_log.gd`, PRIMARY STATE ONLY), and the per-turn pools of
+## [constant RESOLUTION_TABLES], which [method _rec_turn] records as well.
+const TURN_FIELDS: Array[StringName] = [
+	# where the turn is
+	&"_step_index", &"turn_number", &"active_player", &"priority_player",
+	&"_passes", &"_skip_first_draw",
+	# the steps that hold themselves open
+	&"awaiting_attackers", &"awaiting_blockers", &"awaiting_discard",
+	&"discard_count",
+	# the combat damage step's own bookkeeping
+	&"_first_strike_ids", &"_damage_requests", &"_damage_splits",
+	&"_damage_cursor", &"_wave_assigned", &"awaiting_damage_assignment",
+	&"awaiting_damage_prevention", &"awaiting_regeneration",
+	&"regeneration_candidates", &"damage_pending",
+	# the per-turn tallies CLEANUP empties wholesale — each is journaled
+	# at its own write site as well, but nothing else records the wipe
+	&"damage_dealt_this_turn", &"creatures_died_this_turn",
+	&"spells_cast_this_turn",
+	# a turn-based action can end the duel (the 1997 phase-end life check)
+	&"game_over", &"winner", &"is_draw",
+	# and the question machinery a turn-based action may open
+	&"awaiting_choice", &"unanswered_choices", &"_resolving_choices",
+	&"choice_log", &"choice_history", &"_pending_action", &"_held_answered",
+	&"_turn_source", &"_cost_answers", &"_cost_asked", &"_cost_values",
+	&"_replaying_cost", &"_cost_source", &"_announced_tops",
+	&"_defer_state_based_actions", &"_defer_depth",
+]
+
+## The [MtgPlayer] fields the turn machinery writes on top of
+## [constant PLAYER_RESOLUTION_FIELDS] — the untap sweep's counters, the
+## draw step's per-step tally, and the per-turn flags cleanup wipes.
+const TURN_PLAYER_FIELDS: Array[StringName] = [
+	&"draws_this_step", &"lands_played_this_turn", &"attacked_this_turn",
+	&"acted_this_turn", &"acted_last_turn", &"artifact_damage_this_turn",
+	&"damage_taken_this_turn", &"drawn_this_turn", &"has_lost",
+	&"mana_substitutions", &"damage_caps",
+]
+
+## The [CardInstance] fields the UNTAP STEP writes on every permanent
+## (CR 502.2-502.3) plus the per-turn combat flags it clears for both
+## seats. `tapped` is recorded at its own site, where the step already
+## knows which permanents actually change.
+const UNTAP_INSTANCE_FIELDS: Array[StringName] = [
+	&"skip_next_untap", &"skip_untaps", &"summoning_sick",
+	&"cant_attack_this_turn", &"cant_attack_next_turn",
+	&"attacked_this_turn", &"could_attack_this_turn",
+]
+
+
+## Note the whole turn machinery's state before a step boundary changes it.
+##
+## Called at the top of [method _advance_step] and of [method _enter_step]
+## — both, because either can be entered on its own ([method answer_choice]
+## re-runs a held step, [method _next_turn] enters step 0 directly) and a
+## duplicate record is free: [method UndoLog.undo_to] replays backwards, so
+## the older value is written last and wins.
+##
+## COST, measured on the same workload as `engine/undo_log.gd`'s own
+## figures: about 90 records, ~12 us — against the ~3.4 ms a
+## [GameSnapshot] of the same board costs. Paid only while a search is
+## running; a normal duel pays one null test.
+func _rec_turn() -> void:
+	if undo_log == null:
+		return
+	for field in TURN_FIELDS:
+		undo_log.record(self, field, get(field))
+	for field in RESOLUTION_TABLES:
+		undo_log.record(self, field, get(field))
+	for p in players:
+		for field in PLAYER_RESOLUTION_FIELDS:
+			undo_log.record(p, field, p.get(field))
+		for field in TURN_PLAYER_FIELDS:
+			undo_log.record(p, field, p.get(field))
+	# Combat is emptied wholesale at the top of declare-attackers and again
+	# as the combat phase ends, and the floating effects expire at three
+	# different boundaries; both are small and both record themselves whole.
+	undo_log.record_object(combat)
+	continuous.record_all()
 
 
 ## Open a search node. Returns the mark [method unmake_to] takes back; the
@@ -8076,6 +8178,7 @@ func _open_priority() -> void:
 ## Advance to the next step; runs turn-based actions and grants priority
 ## (or auto-advances for steps that have none — untap, cleanup).
 func _advance_step() -> void:
+	_rec_turn()   # the search journal, if one is running (see TURN_FIELDS)
 	# Mana pools empty at the end of each STEP (CR 500.4) — or, under the
 	# 1997 ruleset, at the end of each PHASE, combat counting as one phase
 	# that empties only when it is over (RulesOptions.pool_empties_on_attack;
@@ -8351,6 +8454,13 @@ func _untap_step() -> bool:
 					chosen_of[other] = int(chosen_of.get(other, 0)) + 1
 	# ---- 3. commit ----------------------------------------------------
 	var just_untapped: Array[CardInstance] = []
+	if undo_log != null:
+		# The sweep writes seven fields on every permanent on the table —
+		# both seats', because "attacked this turn" is per-TURN state that
+		# expires for everyone (below).
+		for inst in all_battlefield():
+			for field in UNTAP_INSTANCE_FIELDS:
+				undo_log.record(inst, field, inst.get(field))
 	for inst in mine:
 		if inst.skip_next_untap:       # Barl's Cage one-shots
 			inst.skip_next_untap = false
@@ -8389,6 +8499,7 @@ func _untap_step() -> bool:
 
 
 func _enter_step(index: int) -> void:
+	_rec_turn()   # the search journal, if one is running (see TURN_FIELDS)
 	_step_index = index
 	var step := current_step()
 	# "The first card they draw in each of their draw steps" counts per
@@ -9036,6 +9147,14 @@ func discard_to_hand_size(pid: int, cards: Array) -> String:
 ## Everything cleanup does AFTER the discard: damage wears off, the
 ## until-end-of-turn ledgers empty, and the turn passes (CR 514.2).
 func _finish_cleanup() -> void:
+	if undo_log != null:
+		# CLEANUP writes twenty-six fields per permanent, so the whole
+		# object goes down rather than a list that would rot the next time
+		# a this-turn flag is added below (`engine/undo_log.gd`,
+		# [method UndoLog.record_object]). It is the one boundary whose
+		# record is linear in the board, and it is once a turn.
+		for inst in all_battlefield():
+			undo_log.record_object(inst)
 	for inst in all_battlefield():
 		inst.damage = 0
 		inst.damaged_by_this_turn.clear()

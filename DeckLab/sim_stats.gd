@@ -101,3 +101,87 @@ static func turn_histogram(records: Array) -> Dictionary:
 
 static func percent(fraction: float) -> String:
 	return "%5.1f%%" % (fraction * 100.0)
+
+
+## Is this win rate DIFFERENT FROM EVEN at 95%? — i.e. does its interval
+## clear 50% entirely?
+##
+## THE LESSON THIS ENCODES: a raw percentage over a couple of hundred
+## games invites a conclusion the sample cannot support, and reading
+## "44.0%" as "this deck is worse" has cost this project three separate AI
+## passes. 200 games is +-6.9 points at an even win rate, so 44.0% and
+## 50.0% are the same measurement. The report says so in words rather than
+## leaving the reader to compare the interval against 0.5 by eye.
+static func is_decided(interval: Dictionary) -> bool:
+	return float(interval["low"]) > 0.5 or float(interval["high"]) < 0.5
+
+
+## The half-width of the Wilson 95% interval at an even win rate over
+## [param games] games, as a FRACTION — "how big an edge does this many
+## games even let me see?". Same formula as [method wilson_interval] with
+## p = 0.5.
+static func margin_at(games: int) -> float:
+	if games <= 0:
+		return 0.5
+	var z := 1.96
+	var z2 := z * z
+	return (z * sqrt(0.25 / games + z2 / (4.0 * games * games))) / (1.0 + z2 / games)
+
+
+## The other direction, which is the one people ask out loud: the fewest
+## games whose interval is no wider than +-[param margin] at an even win
+## rate. Binary search on [method margin_at], which is monotone.
+static func games_for_margin(margin: float) -> int:
+	if margin <= 0.0:
+		return 0
+	var low := 1
+	var high := 2
+	while margin_at(high) > margin and high < 100000000:
+		high *= 2
+	while low < high:
+		var mid := (low + high) / 2
+		if margin_at(mid) > margin:
+			low = mid + 1
+		else:
+			high = mid
+	return low
+
+
+## EVERY DECK'S RECORD ACROSS A WHOLE RUN, best first — the table a
+## gauntlet or a matrix is actually read for, and the one the Deck Lab's
+## own README used to have to work out by hand from the per-pair rows.
+##
+## [param pairs] is the run's [row_index, col_index] list and
+## [param per_pair_stats] its summaries, index-matched; the tally is kept
+## BY INDEX because two deck files may carry the same name. A deck's wins
+## are its own whichever side of the pairing it sat on.
+static func standings(names: Array, pairs: Array, per_pair_stats: Array) -> Array:
+	var wins := []
+	var losses := []
+	wins.resize(names.size())
+	losses.resize(names.size())
+	wins.fill(0)
+	losses.fill(0)
+	for index in pairs.size():
+		var stats: Dictionary = per_pair_stats[index]
+		var row: int = pairs[index][0]
+		var col: int = pairs[index][1]
+		wins[row] = int(wins[row]) + int(stats["a_wins"])
+		losses[row] = int(losses[row]) + int(stats["b_wins"])
+		wins[col] = int(wins[col]) + int(stats["b_wins"])
+		losses[col] = int(losses[col]) + int(stats["a_wins"])
+	var table: Array = []
+	for i in names.size():
+		var decided: int = int(wins[i]) + int(losses[i])
+		table.append({
+			"name": String(names[i]),
+			"wins": int(wins[i]), "losses": int(losses[i]),
+			"games": decided,
+			"winrate": wilson_interval(int(wins[i]), decided),
+		})
+	# Best first, ties by name so the table is stable run to run.
+	table.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(a["winrate"]["mid"], b["winrate"]["mid"]):
+			return String(a["name"]) < String(b["name"])
+		return float(a["winrate"]["mid"]) > float(b["winrate"]["mid"]))
+	return table

@@ -55,16 +55,26 @@ extends RefCounted
 ## - the floating until-end-of-turn lists in [ContinuousEffects], which
 ##   card scripts append to directly and which therefore record themselves
 ##   (see its `journal`);
-## - `rng.state`, the probe flag and the mana pools, at every mark.
+## - `rng.state`, the probe flag and the mana pools, at every mark;
+## - the TURN MACHINERY, since 2026-09-05: `_advance_step`, `_enter_step`,
+##   the untap sweep, the draw step, both combat damage steps, the end
+##   step, cleanup and the turn boundary itself, through
+##   [method MtgGame._rec_turn] and its three field lists. A search node
+##   may therefore CROSS a step boundary, which is what the crack-back
+##   search needed and could not have (docs/ROADMAP.md, "The journal
+##   across a step boundary"). What it costs is the honest half of that
+##   entry: ONE boundary is 11-19x cheaper than a [GameSnapshot] of the
+##   same board (264 records, 198-527 us against 3.7-6.0 ms;
+##   `tools/bench_undo.gd` section I), but a WHOLE TURN is at parity with
+##   one — 0.8-1.1x — because the journal is proportional to the move and
+##   untap and cleanup between them write every permanent on the table.
 ##
-## NOT covered, and a search must not cross it: the TURN MACHINERY —
-## `_advance_step`, untap, draw step, cleanup, combat damage — is not
-## instrumented, so a node ends where the priority pass that would change
-## step begins. And a card script that writes a primary field onto a THIRD
-## object during resolution — neither its own card nor a target (an
-## aura's host, "each creature you control" written by hand instead of
-## through a helper) — is outside the journal until that write moves onto
-## a helper. Both are recorded in docs/ROADMAP.md (M4 phase 3).
+## NOT covered, and a search must not cross it: a card script that writes
+## a primary field onto a THIRD object during resolution — neither its own
+## card nor a target (an aura's host, "each creature you control" written
+## by hand instead of through a helper) — is outside the journal until
+## that write moves onto a helper. Recorded in docs/ROADMAP.md (M4
+## phase 3).
 
 var _obj: Array[Object] = []
 var _prop: Array[StringName] = []

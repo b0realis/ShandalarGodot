@@ -1,5 +1,12 @@
 # Deck Lab — headless deck testing
 
+```
+   ___  ___  ___ _  __   _      _   ___
+  |   \| __|/ __| |/ /  | |    /_\ | _ )   Shandalar, 1997 - decks measured,
+  | |) | _|| (__| ' <   | |__ / _ \| _ \   not argued over: AI vs AI, headless
+  |___/|___|\___|_|\_\  |____/_/ \_\___/   W U B R G
+```
+
 The Deck Lab plays AI-vs-AI duels **headless** (no graphics, text output)
 at arbitrary scale — 10,000-game matchups are its designed workload — and
 reports statistically honest results with chart output. It exists for the
@@ -91,8 +98,10 @@ flyers rule the starter meta.
 | `--seed N` | base RNG seed — same seed + decks = identical results at ANY `--jobs` | 1 |
 | `--jobs N` | worker threads | all cores |
 | `--profile-a NAME` / `--profile-b NAME` | pilot skill: `apprentice`, `magician`, `sorcerer`, `wizard` | wizard |
-| `--out DIR` | output directory (one inside the project gets a `.gdignore`, so the editor never imports the run's `matchups.csv` as a translation table) | `sim_results/run_<stamp>` |
+| `--out DIR` | output directory, created and NAMED BEFORE the run starts (one inside the project gets a `.gdignore`, so the editor never imports the run's `matchups.csv` as a translation table) | `DeckLab/results/run_<stamp>` |
 | `--no-svg` | skip chart files | off |
+| `--quiet` | no banner and no progress bar; errors only | off |
+| `--no-banner` | keep the progress bar, drop the artwork (or export `DECK_LAB_NO_BANNER=1`) | off |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
 | `-h`, `--help` | switch reference | — |
 
@@ -313,7 +322,25 @@ answer to "how much has the Lab been lying to us" is: for decks with a sane
 mana base, not measurably. It would matter more for a deck with a bad one,
 which is the case worth re-measuring if the default ever flips.
 
-Deck paths are tried as given, then under `decks/`.
+Deck paths are tried as given, then under `decks/`. **A deck argument is a
+PATH, not a deck's name** — `--deck-a decks/big_green.deck`, never
+`--deck-a "Big Green"` — and getting that wrong is the single most common
+mistake this tool sees, so a path that matches no file is refused with the
+deck files it looked most like (matched on the file name, with spaces,
+dashes, underscores and case all treated alike, and reaching into the
+subfolders), plus what to type instead and what a FOLDER does:
+
+```
+deck_lab: deck file not found: 'Big Green'
+  looked for: Big Green, decks/Big Green, res://decks/Big Green
+  did you mean:
+      decks/big_green.deck
+  deck arguments are PATHS to a deck file, not deck names:
+      --deck-a decks/big_green.deck      yes
+      --deck-a "Big Green"               no
+  `ls decks/` lists the 5 decks in the folder itself; 312 more are in
+  its subfolders, reached with --group (see --help).
+```
 
 ## What a run produces
 
@@ -321,12 +348,56 @@ Printed to stdout AND written to `--out`:
 
 - **report.txt** — per-matchup: win rate with **Wilson 95% CI**, the raw
   win-loss record, stalled-game count, on-the-play vs on-the-draw split,
-  average and median game length.
+  average and median game length. Then, since 2026-09-05, the **reading**
+  of those rows: a matrix run's **standings** (every deck's record across
+  the whole round robin, best first), a gauntlet run's **aggregate** for
+  the deck under test, and a closing paragraph that says how wide the
+  interval is at this sample size, how many matchups are DECIDED (their
+  interval clear of 50%) and how many are still even. That paragraph
+  exists because a percentage gets quoted and an interval gets skipped:
+  `44.0%` over 200 games has three times been read as "worse deck" when
+  50% sat inside `[37.3%, 50.9%]` all along.
 - **results.json** — everything machine-readable, for scripts.
 - **matchups.csv** — one row per matchup, for spreadsheets.
 - **winrates.svg** — win-rate bars with CI whiskers and a 50% reference
   line (opens in any browser; no plotting software involved anywhere).
 - **turns.svg** — game-length histograms per matchup on a shared axis.
+
+`results.json`, `matchups.csv` and the SVGs are read by other tooling and
+their shape does not move; the reading paragraphs above are report.txt
+and stdout only.
+
+## Two channels: the instrument and the human
+
+**stdout is the instrument** — the report, byte for byte the text that
+lands in `report.txt`, and nothing else. **stderr is the human** — the
+banner, the progress bar, warnings, the "did you mean" behind an error —
+and it is decorated only when **stderr is a terminal**. GDScript cannot
+ask whether a stream is a tty, so `deck_lab.sh` asks (`[ -t 2 ]`) and
+passes the answer (and the terminal's width) in the environment.
+
+The consequence is the one that matters:
+
+```
+DeckLab/deck_lab.sh ... > run.log         # banner on screen, clean log
+DeckLab/deck_lab.sh ... > run.log 2>&1    # no artwork at all, anywhere
+```
+
+so a log a script or a measuring agent parses never contains decoration
+and nobody has to remember a flag. `--quiet` and `--no-banner` turn it off
+deliberately, `DECK_LAB_NO_BANNER=1` turns the artwork off for good, and
+`NO_COLOR` (the convention) drops colour while keeping the words.
+
+A run longer than two seconds draws a **progress bar** with a rate and an
+ETA, rewritten in place on a terminal and reduced to one heartbeat line a
+minute when stderr is a log — because a tool that prints a header and then
+nothing for forty minutes is indistinguishable from a hung one, and this
+project has lost hours to exactly that ambiguity.
+
+**Exit codes**: 0 a finished run with every file written; 1 the run broke
+(a worker thread stopped, a file could not be written); 2 the command line
+was wrong (bad flag, missing or illegal deck); 3 no Godot binary
+(`deck_lab.sh`; set `GODOT=/path/to/godot`).
 
 ## Methodology (why the numbers can be trusted)
 
@@ -354,12 +425,29 @@ Printed to stdout AND written to `--out`:
 
 ## Performance
 
-Games fan out over Godot's WorkerThreadPool. Measured on a 22-thread
-machine: ~15 games/second wall-clock (~0.3 games/s/thread), so a
-10,000-game matchup ≈ 10 minutes and a five-deck gauntlet at 10k ≈ an
-hour. `--jobs` caps threads for shared machines. Memory: each worker holds
-one game (~a few MB); 10k games stream through a preallocated results
-array — RAM stays flat.
+Games fan out over Godot's WorkerThreadPool.
+
+**MORE THREADS IS NOT FASTER, AND PAST FOUR IT IS MUCH SLOWER.** Measured
+on an idle 22-core machine, the same 60-game duel:
+
+| `--jobs` | 1 | 2 | 3 | **4** | 5 | 6 | 8 | 22 |
+|---|---|---|---|---|---|---|---|---|
+| games/s | 12.1 | 18.1 | 18.1 | **18.1** | 15.7 | 12.5 | 8.9 | 4.4 |
+
+Twenty-two threads runs at **a third of the speed of one**. The default
+used to be every core, so every long measurement this project has made
+was paying that; it is `min(4, cores)` now. `--jobs 0` still means every
+core, and `--jobs N` still caps threads on a shared machine.
+
+The curve is identical on the pre-2026-09-05 script, so the cause is the
+engine or the pool oversubscribing rather than anything in the fan-out —
+it is not yet understood, and the numbers above are a measurement, not an
+explanation. **Results do not depend on it**: `matchups.csv` is
+byte-identical at every job count, which is what made the default safe to
+move.
+
+Memory: each worker holds one game (~a few MB); 10k games stream through a
+preallocated results array — RAM stays flat.
 
 ## Files
 
@@ -370,6 +458,7 @@ array — RAM stays flat.
 | `DeckLab/simulate.gd` | the tool: CLI parsing, thread fan-out, reporting |
 | `DeckLab/sim_stats.gd` | Wilson intervals, matchup summaries (unit-tested) |
 | `DeckLab/svg_charts.gd` | dependency-free SVG charts (bars, histograms, matrix heatmap) |
+| `DeckLab/lab_console.gd` | the terminal side: banner, progress bar, colour, "did you mean" |
 | `DeckLab/elo_ledger.gd` | the persistent Elo ledger |
 | `engine/deck_list.gd` | multi-format deck parser/validator (strict & lenient modes) |
 | `cards/data/dck_ids.txt` | authentic MicroProse card-id table (harvested) |

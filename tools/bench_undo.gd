@@ -80,7 +80,68 @@ func _initialize() -> void:
 	print("")
 	print("=== H. HOW WIDE IS A REAL MAIN PHASE? (branching factor) ===")
 	_branching()
+	print("")
+	print("=== I. CROSSING A STEP BOUNDARY (2026-09-05) ===")
+	print("The journal's old limit was the turn machinery. `MtgGame._rec_turn`")
+	print("records it; these are the two questions that decide it — what a")
+	print("boundary costs against a snapshot of the same board, and whether")
+	print("it is SOUND (anything but CLEAN is a mutation nothing records).")
+	print("boundary                    board  objs  snap-node  undo-node   records  speed-up")
+	print("--------------------------- -----  ----  ---------  ---------   -------  --------")
+	for per_seat in BOARDS:
+		_measure_boundary(per_seat, "one step (main 1 -> combat)", _apply_step)
+	for per_seat in BOARDS:
+		_measure_boundary(per_seat, "a whole turn (14 steps)", _apply_turn)
+	print("")
+	for per_seat in [5, 20]:
+		_verify(per_seat, "one step boundary", _apply_step)
+		_verify(per_seat, "a whole turn", _apply_turn)
 	quit()
+
+
+## One step boundary, and a whole turn: the two crossings a crack-back
+## search makes. Same shape as [method _measure_undo_node] — a
+## [GameSnapshot] round trip against a make/unmake of the same move — so
+## the two tables read against each other.
+func _measure_boundary(per_seat: int, label: String, mover: Callable) -> void:
+	var game := _build(per_seat)
+	var probe := GameSnapshot.take(game)
+	var n := probe.object_count()
+	probe.restore()
+
+	var t := Time.get_ticks_usec()
+	for _i in MOVE_REPS:
+		var snap := GameSnapshot.take(game)
+		mover.call(game)
+		snap.restore()
+	var snap_us := float(Time.get_ticks_usec() - t) / MOVE_REPS
+
+	var w := game.make_mark()      # warm
+	mover.call(game)
+	game.unmake_to(w)
+	var records := 0
+	t = Time.get_ticks_usec()
+	for _i in MOVE_REPS:
+		var mark := game.make_mark()
+		mover.call(game)
+		records = game.undo_log.size() - mark
+		game.unmake_to(mark)
+	var undo_us := float(Time.get_ticks_usec() - t) / MOVE_REPS
+	game.end_search()
+	print("%-27s %3d  %4d  %9.0f  %9.0f   %7d  %7.1fx" % [
+		label, per_seat * 2, n, snap_us, undo_us, records,
+		snap_us / maxf(undo_us, 0.001)])
+
+
+func _apply_step(game: MtgGame) -> void:
+	game._advance_step()
+
+
+func _apply_turn(game: MtgGame) -> void:
+	for _i in 14:
+		if game.game_over:
+			return
+		game._advance_step()
 
 
 ## Make a move with the journal on, unmake it, and compare EVERY captured
@@ -109,7 +170,7 @@ func _verify(per_seat: int, label: String, mover: Callable) -> void:
 				bad.append("%s.%s" % [cls, name])
 			k += 1
 		for name in pr[1]:
-			if name == &"undo_log":
+			if name == &"undo_log" or name == &"journal":
 				k += 1
 				continue      # the instrument, not the state
 			if not _same(obj.get(name), old[k]):
@@ -117,7 +178,7 @@ func _verify(per_seat: int, label: String, mover: Callable) -> void:
 			k += 1
 	var rng_ok: bool = game.rng.state == snap._rng_state
 	snap.restore()
-	print("  %-23s board=%-3d  %s%s" % [label, per_seat * 2,
+	print("  %-27s board=%-3d  %s%s" % [label, per_seat * 2,
 		"CLEAN" if bad.is_empty() and rng_ok else "LEAKS: " + ", ".join(bad),
 		"" if rng_ok else "  + rng.state"])
 

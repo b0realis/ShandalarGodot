@@ -2808,14 +2808,43 @@ func _open_stats() -> void:
 		return
 	var dialog := OriginalDialog.create("Stats (%d cards)" % deck.total(),
 		Vector2(620, 660))
+	# [QoL] PAGES. The 1997 window is one screen of numbers and it answers
+	# "what is in here". The owner asked for the other questions —
+	# *"chance predictions on one/two/three/four/five/six lands in hand,
+	# any specific anti-colour cards, speed"* (2026-09-05) — and they do
+	# not fit on that screen, nor should they crowd it: a player opening
+	# Stats to check a card count should not have to scroll past a
+	# probability table to find it. So the era's page stays FIRST and
+	# unchanged, and the new ones sit behind named buttons beside it.
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 4)
+	dialog.body().add_child(tabs)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(560, 520)
+	scroll.custom_minimum_size = Vector2(560, 490)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var page := VBoxContainer.new()
 	page.add_theme_constant_override("separation", 6)
 	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(page)
 	dialog.body().add_child(scroll)
+	_stats_pages = page
+	for i in STATS_PAGES.size():
+		var tab := OriginalDialog.button(String(STATS_PAGES[i]), Vector2(96, 24))
+		tab.toggle_mode = true
+		tab.button_pressed = i == 0
+		tab.pressed.connect(_show_stats_page.bind(i, tabs))
+		tabs.add_child(tab)
+	_stats_page_deck(page)
+	dialog.add_button("OK").pressed.connect(dialog.dismiss)
+	_show_dialog(dialog)
+
+
+
+## [QoL] PAGE ONE: the era's own window, unchanged. Extracted from
+## [method _open_stats] when the pages went in (2026-09-05) and not
+## otherwise touched — this is the screen a 1997 player would recognise
+## and it stays first and complete.
+func _stats_page_deck(page: VBoxContainer) -> void:
 	var grid := GridContainer.new()
 	grid.columns = DeckModel.STAT_COLUMNS.size() + 2
 	grid.add_theme_constant_override("h_separation", 12)
@@ -2942,8 +2971,240 @@ func _open_stats() -> void:
 		warn.custom_minimum_size.x = 500
 		warn.add_theme_color_override("font_color", Color8(232, 176, 96))
 		page.add_child(warn)
-	dialog.add_button("OK").pressed.connect(dialog.dismiss)
-	_show_dialog(dialog)
+
+## [QoL] The pages the Stats window carries. The first is the era's own
+## and is built by [method _open_stats] itself; the rest are this
+## project's, and every number on them comes from [DeckStats], which is
+## pure and tested so the window stays a view.
+const STATS_PAGES: Array[String] = ["Deck", "Draws", "Mana", "Speed", "Matchups"]
+
+## The Stats window's page holder, while it is open.
+var _stats_pages: VBoxContainer = null
+
+
+## Swap to page [param index], and let the tab row show which one it is.
+func _show_stats_page(index: int, tabs: HBoxContainer) -> void:
+	if _stats_pages == null or not is_instance_valid(_stats_pages):
+		return
+	for i in tabs.get_child_count():
+		var tab := tabs.get_child(i) as Button
+		if tab != null:
+			tab.set_pressed_no_signal(i == index)
+	for child in _stats_pages.get_children():
+		child.queue_free()
+	match index:
+		0: _stats_page_deck(_stats_pages)
+		1: _stats_page_draws(_stats_pages)
+		2: _stats_page_mana(_stats_pages)
+		3: _stats_page_speed(_stats_pages)
+		4: _stats_page_matchups(_stats_pages)
+
+
+## A heading inside a page.
+func _stats_head(text: String) -> Label:
+	var head := OriginalDialog.label(text, 14, true)
+	head.add_theme_color_override("font_color", OriginalDialog.HIGHLIGHT)
+	return head
+
+
+## One `label ....... value` line, which is most of what these pages are.
+func _stats_line(text: String, value: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var left := OriginalDialog.label(text, 13)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(left)
+	row.add_child(OriginalDialog.label(value, 13, true))
+	return row
+
+
+## A percentage, written the way a player reads one.
+static func _pct(p: float) -> String:
+	return "%.1f%%" % (p * 100.0)
+
+
+
+## [QoL] PAGE TWO: the opening hand, exactly.
+##
+## *"Chance predictions on the one/two/three/four/five/six lands in
+## hand"* — the owner's own list, and the reason this page leads with the
+## whole row rather than a summary. Every figure is a hypergeometric
+## computed in [DeckStats], not a simulation: two builds differing by one
+## Forest must differ in the second decimal because the DECK differs, not
+## because the dice did.
+func _stats_page_draws(page: VBoxContainer) -> void:
+	if deck.total() == 0:
+		page.add_child(OriginalDialog.label("Add some cards first.", 13))
+		return
+	page.add_child(_stats_head("Lands in your opening seven"))
+	var odds := DeckStats.land_odds(deck)
+	for k in odds.size():
+		var row := _bar_row("%d land%s" % [k, "" if k == 1 else "s"],
+			int(round(odds[k] * 1000.0)), 1000,
+			Color8(196, 176, 120) if k >= 2 and k <= 5 else Color8(150, 120, 110),
+			_pct(odds[k]), false)
+		page.add_child(row)
+	page.add_child(_stats_line("Keepable (2-5 lands)",
+		_pct(DeckStats.keepable(deck))))
+	# The two ways a hand fails, named rather than left as arithmetic.
+	page.add_child(_stats_line("   too few (0-1)",
+		_pct(odds[0] + odds[1])))
+	var flooded := 0.0
+	for k in range(6, odds.size()):
+		flooded += odds[k]
+	page.add_child(_stats_line("   too many (6-7)", _pct(flooded)))
+
+	page.add_child(_stats_head("Making every land drop"))
+	page.add_child(OriginalDialog.label(
+		"The chance you have seen enough land by that turn.", 12))
+	for turn in range(1, DeckStats.HORIZON + 1):
+		page.add_child(_stats_line("   by turn %d" % turn,
+			"%s on the play,  %s on the draw" % [
+				_pct(DeckStats.land_drop_odds(deck, turn, true)),
+				_pct(DeckStats.land_drop_odds(deck, turn, false))]))
+
+
+## [QoL] PAGE THREE: whether the mana can actually cast the deck.
+##
+## Colour counts say what is in the deck; PIPS say what it asks for, and
+## the two come apart badly in a deck whose splash is double-costed.
+func _stats_page_mana(page: VBoxContainer) -> void:
+	if deck.total() == 0:
+		page.add_child(OriginalDialog.label("Add some cards first.", 13))
+		return
+	var pips := DeckStats.color_pips(deck)
+	var sources := deck.mana_sources()
+	page.add_child(_stats_head("What the deck asks for, and what it has"))
+	page.add_child(OriginalDialog.label(
+		"Pips are mana SYMBOLS in costs: {B}{B} asks twice.", 12))
+	for column in DeckModel.STAT_COLUMNS:
+		var color := int(column[1])
+		var pip := int(pips.get(color, 0))
+		var src := int(sources.get(color, 0))
+		if pip == 0 and src == 0:
+			continue
+		page.add_child(_stats_line("   %s" % String(column[0]),
+			"%d pip%s from %d source%s" % [pip, "" if pip == 1 else "s",
+				src, "" if src == 1 else "s"]))
+
+	page.add_child(_stats_head("Having the colour when you need it"))
+	for column in DeckModel.STAT_COLUMNS:
+		var color := int(column[1])
+		if int(pips.get(color, 0)) == 0:
+			continue
+		var by := PackedStringArray()
+		for turn in range(1, 4):
+			by.append("T%d %s" % [turn, _pct(DeckStats.color_by_turn(deck, color, turn))])
+		page.add_child(_stats_line("   %s" % String(column[0]), "   ".join(by)))
+
+	var worst := DeckStats.hardest_cast(deck)
+	if not worst.is_empty():
+		page.add_child(_stats_head("The hardest thing to cast"))
+		page.add_child(_stats_line("   %s" % String(worst["card"]),
+			"%d pips of one colour, mana value %d" % [
+				int(worst["pips"]), int(worst["cost"])]))
+
+
+## [QoL] PAGE FOUR: how fast the deck actually does something.
+##
+## Creature cost and spell cost are reported APART — they answer "when
+## does the board start" and "when can I answer something", and an
+## average over both hides both.
+func _stats_page_speed(page: VBoxContainer) -> void:
+	if deck.total() == 0:
+		page.add_child(OriginalDialog.label("Add some cards first.", 13))
+		return
+	var s := DeckStats.speed(deck)
+	# [QoL] RARITY, because in Shandalar a rare is something you have to go
+	# and win rather than something you buy. A deck leaning on four of them
+	# is a deck you may not be able to build yet, and that is a fact about
+	# the deck worth knowing beside its speed.
+	var rarity := DeckStats.rarity_counts(deck)
+	if not rarity.is_empty():
+		page.add_child(_stats_head("Rarity"))
+		for key in ["common", "uncommon", "rare", "special", "unknown"]:
+			var n := int(rarity.get(key, 0))
+			if n > 0:
+				page.add_child(_stats_line("   %s" % key, "%d" % n))
+
+	page.add_child(_stats_head("Cost"))
+	page.add_child(_stats_line("   average creature", "%.2f" % float(s["creature_cost"])))
+	page.add_child(_stats_line("   average other spell", "%.2f" % float(s["spell_cost"])))
+	page.add_child(_stats_line("   cheapest creature", "%d" % int(s["cheapest_creature"])))
+	page.add_child(_stats_line("   average power", "%.2f" % float(s["average_power"])))
+
+	page.add_child(_stats_head("A creature in hand you can cast"))
+	for turn in range(1, DeckStats.HORIZON + 1):
+		page.add_child(_stats_line("   by turn %d" % turn,
+			_pct(DeckStats.creature_by_turn(deck, turn))))
+
+	var evasive := DeckStats.evasion(deck)
+	page.add_child(_stats_head("Creatures a blocker struggles with"))
+	if evasive.is_empty():
+		page.add_child(OriginalDialog.label(
+			"   None — this deck attacks into whatever is there.", 12))
+	else:
+		for key in evasive:
+			page.add_child(_stats_line("   %s" % _evasion_name(key),
+				"%d" % int(evasive[key])))
+
+
+## The player's word for each way past a blocker.
+func _evasion_name(key: Variant) -> String:
+	if key is String:
+		return "landwalk" if key == "landwalk" else "cannot be blocked"
+	match int(key):
+		Mtg.Keyword.FLYING: return "flying"
+		Mtg.Keyword.TRAMPLE: return "trample"
+		Mtg.Keyword.FEAR: return "fear"
+	return "evasion"
+
+
+## [QoL] PAGE FIVE: which colours this deck is built to punish.
+##
+## THE 1997 POOL IS FULL OF COLOUR HATE and the opponents in this game
+## have known colours, so "what does this beat" is a real build question
+## rather than a curiosity. Read off the oracle text — including the
+## cards that name a BASIC LAND rather than a colour, which is how the
+## era usually wrote it (Karma says Swamps, not black).
+func _stats_page_matchups(page: VBoxContainer) -> void:
+	if deck.total() == 0:
+		page.add_child(OriginalDialog.label("Add some cards first.", 13))
+		return
+	var hate := DeckStats.color_hate(deck)
+	page.add_child(_stats_head("Cards that name a colour"))
+	if hate.is_empty():
+		page.add_child(OriginalDialog.label(
+			"   None. This deck plays the same against every colour.", 12))
+	else:
+		# Which colours the deck cares about at all, first — that is the
+		# one-line answer, and the list underneath is the evidence.
+		var by_color := {}
+		for row in hate:
+			for color in (row["colors"] as Array):
+				by_color[int(color)] = int(by_color.get(int(color), 0)) + int(row["count"])
+		var summary := PackedStringArray()
+		for column in DeckModel.STAT_COLUMNS:
+			var n := int(by_color.get(int(column[1]), 0))
+			if n > 0:
+				summary.append("%s %d" % [String(column[0]), n])
+		page.add_child(_stats_line("   cards aimed at", "   ".join(summary)))
+		for row in hate:
+			var names := PackedStringArray()
+			for color in (row["colors"] as Array):
+				for column in DeckModel.STAT_COLUMNS:
+					if int(column[1]) == int(color):
+						names.append(String(column[0]))
+			page.add_child(_stats_line("      %d %s" % [int(row["count"]),
+				String(row["card"])], "   ".join(names)))
+
+	var ante := DeckStats.ante_cards(deck)
+	if not ante.is_empty():
+		page.add_child(_stats_head("Played for the ante"))
+		page.add_child(OriginalDialog.label(
+			"   Duels here are played for a card; these change what a loss costs.", 12))
+		for row in ante:
+			page.add_child(_stats_line("      %d %s" % [int(row["count"]),
+				String(row["card"])], ""))
 
 
 ## [QoL] The mana palette the bars are drawn in — the duel's own colours
@@ -2963,8 +3224,13 @@ const MANA_BAR := {
 ## the era's own sunken rule, the same one the search box wears — so a
 ## graph on this screen is built out of the same furniture as everything
 ## else and not out of a charting widget.
+## [param show_value] draws the raw count beside the bar. The counting
+## graphs want it; the PROBABILITY graphs do not, because their "value" is
+## a per-mille integer that exists only to size the bar and printing it
+## next to the percentage gives the reader two numbers for one fact
+## (13 and 1.3%, which invites the question of what 13 counts).
 func _bar_row(name: String, value: int, total: int, color: Color,
-		note := "") -> Control:
+		note := "", show_value := true) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	var caption := OriginalDialog.label(name, 12)
@@ -2981,10 +3247,11 @@ func _bar_row(name: String, value: int, total: int, color: Color,
 	fill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	track.add_child(fill)
 	row.add_child(track)
-	var number := OriginalDialog.label(str(value), 12)
-	number.custom_minimum_size.x = 34
-	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(number)
+	if show_value:
+		var number := OriginalDialog.label(str(value), 12)
+		number.custom_minimum_size.x = 34
+		number.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(number)
 	if note != "":
 		row.add_child(OriginalDialog.label(note, 11))
 	return row

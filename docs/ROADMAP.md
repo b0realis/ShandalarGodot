@@ -1454,11 +1454,347 @@ roughly nine combats in ten. For comparison, `cast_refusal` cost 6%.
   over the engine itself. Instrumenting the untap sweep, the draw step,
   cleanup and combat damage is the next increment, and it is what would
   let a search make its moves through the same helpers a real duel makes
-  them through.
+  them through. **CLOSED 2026-09-05** — see "The journal across a step
+  boundary", which also answers the question this bullet did not think to
+  ask: a boundary crossing is 11-19x cheaper than a snapshot, but a whole
+  TURN — which is what a crack-back node is — is at parity, so THIS
+  search stays on its model whatever the journal covers.
 * **One blocker per attacker**, on both sides of both combats — the
   engine-wide ledger row above, with the 4.5% that keeps it there.
+  **REOPENED AND MEASURED 2026-09-05** — see "The gang block".
 * **Neither player's hand is modelled.** Unchanged and deliberate: the AI
-  does not look at cards it may not see.
+  does not look at cards it may not see. What 2026-09-05 added is the
+  PROOF rather than the model: three tests that change only the hidden
+  zones and pin that the declaration does not move (same section).
+
+## The journal across a step boundary (2026-09-05)
+
+The crack-back search of the same day runs over a FLAT MODEL rather than
+over the engine, and said in as many words why: `engine/undo_log.gd`'s
+documented boundary was the TURN MACHINERY — *"a search must not cross a
+step boundary until they do"* — because `_advance_step` and `_enter_step`
+journalled nothing. This closes that. It is a capability, not a policy
+change: nothing in the shipped AI calls it yet, and a duel that never
+searches still pays one null test per instrumented write.
+
+### What it took, and why the shape
+
+`MtgGame._rec_turn`, called at the top of BOTH `_advance_step` and
+`_enter_step`, plus per-permanent records at the two boundaries that
+write every permanent on the table. Four field lists:
+
+| list | what it covers |
+| --- | --- |
+| `TURN_FIELDS` (41) | where the turn is (`_step_index`, `turn_number`, `active_player`, `priority_player`, `_passes`, `_skip_first_draw`), the four steps that hold themselves open, the combat damage step's own bookkeeping (`_first_strike_ids`, the request/split arrays, the three `awaiting_*` damage flags), the per-turn tallies cleanup empties, the 1997 phase-end life check's `game_over`/`winner`/`is_draw`, and the question machinery a turn-based action can open |
+| `TURN_PLAYER_FIELDS` (11) | the untap sweep's counters, the draw step's per-step tally, the per-turn player flags cleanup wipes |
+| `UNTAP_INSTANCE_FIELDS` (7) | what the untap sweep writes on every permanent on the table — both seats', because "attacked this turn" expires for everyone |
+| — | cleanup takes each permanent WHOLE (`UndoLog.record_object`), because `_finish_cleanup` writes twenty-six fields each and a hand list would rot the next time a this-turn flag was added |
+
+Plus `record_object(combat)` and `continuous.record_all()` at every
+boundary, for the wholesale `combat.clear()` at declare-attackers and at
+the end of the combat phase, and the three different expiries
+`_advance_step` runs.
+
+**Hand-listed rather than `record_object(self)`,** which is what a
+departure and a resolution use, because `MtgGame` also carries the three
+things a per-boundary record must not copy: `log_lines` (thousands of
+strings by turn 20), `_instances`, and the battlefield caches.
+
+**The list was not written from reading the code; it was DIFFED into
+existence.** `tests/ai/test_undo_log.gd`'s differ takes a `GameSnapshot`,
+makes the move with the journal on, unmakes it and names every field that
+moved. The first run of it over a step boundary named exactly one
+(`_step_index`); over a whole turn, eight. After the lists went in it
+found one more — `damage_dealt_this_turn`, journalled at its own write
+site but not at the wholesale wipe cleanup does — and then nothing.
+
+### Measured: what a boundary costs
+
+`tools/bench_undo.gd` section I, added for this. A `GameSnapshot` round
+trip against a `make_mark`/`unmake_to` of the same move, mean of 100:
+
+| crossing | board | snapshot | journal | records | speed-up |
+| --- | --- | --- | --- | --- | --- |
+| one step (main 1 → combat) | 10 | 3717 us | **198 us** | 264 | **18.7x** |
+| one step | 20 | 4059 us | 232 us | 264 | 17.5x |
+| one step | 40 | 4699 us | 309 us | 264 | 15.2x |
+| one step | 80 | 5981 us | 527 us | 264 | 11.4x |
+| a whole TURN (14 steps) | 10 | 4233 us | 3924 us | 5924 | **1.1x** |
+| a whole turn | 20 | 4846 us | 4940 us | 7334 | 1.0x |
+| a whole turn | 40 | 6108 us | 7142 us | 10154 | 0.9x |
+| a whole turn | 80 | 9349 us | 12399 us | 15794 | 0.8x |
+
+(One run. `tools/bench_undo.gd`'s own header says the absolute
+microseconds move 10-20% between runs on a shared box and the ratios are
+the robust reading; a second run of the same table gave 18.1x / 17.4x /
+15.0x / 11.2x and 1.1 / 1.0 / 0.8 / 0.8.)
+
+**And the second half of that table is the finding.** The journal is
+proportional to the MOVE, and a whole turn is not a small move: untap
+writes seven fields on every permanent, cleanup writes twenty-six, and
+fourteen boundaries pay for the machinery each. At a turn's width the
+journal is at PARITY with a snapshot — it is 0.8x on a wide board, i.e.
+worse.
+
+**The consequence, stated plainly, because it is the opposite of what the
+crack-back pass expected.** A crack-back node is our combat, their untap
+and their combat — a whole turn — so at ~4 ms a node a 3,000-node budget
+would be twelve seconds per declaration. **The crack-back search cannot
+move onto the real engine, and not because of the boundary: because of
+the size of its move.** What the boundary buys is a search whose node is
+ONE step or a few — a combat resolved to end of combat, a main phase, a
+block assignment — and there it is 11-19x, which is the number M4
+phase 3's design note asked for.
+
+### Pinned
+
+Ten new round trips in `tests/ai/test_undo_log.gd`, each ending in
+`end_search()` (a journal left armed keeps recording, and the records
+hold the game — the leak the file's own header already warns about):
+one step; **every step of a turn, one mark per boundary**, so a gap names
+the step it lives in; the untap sweep with a tapped board, a Barl's Cage
+one-shot and a Wall of Dust ban outstanding; cleanup with marked damage,
+a regeneration shield and an until-end-of-turn pump; a whole turn
+including the draw, with the opponent's library checked back into order;
+both combat damage steps under first strike; a 1997 phase boundary that
+burns mana and checks for a dead player; an upkeep trigger crossed and
+resolved (Juzám Djinn's own damage, made and unmade); and — the one that
+states what the capability IS — **a search that plays our combat, their
+untap and their crack-back through the real `declare_attackers` /
+`declare_blockers` / `_advance_step`, watches a creature die and both
+life totals fall, and rewinds all of it to nothing.**
+
+### Still open
+
+* **Nothing uses it yet.** The journal is a capability; `CombatSearch`
+  still runs over its flat model, and for the reason above that is the
+  right call for THAT search. The first search whose node is one step —
+  a block assignment played through `declare_blockers`, a main phase
+  played through `cast_spell` — is where the 11-19x is collected.
+* **The whole-turn record is not as small as it could be.** `_rec_turn`
+  runs at the top of BOTH `_advance_step` and `_enter_step`, which
+  double-records ~124 fields per boundary (264 of the 5,924 a turn costs,
+  times fourteen). Deliberate: either method can be entered on its own
+  (`answer_choice` re-runs a held step, `_next_turn` enters step 0
+  directly) and a duplicate record is free to UNMAKE — the log replays
+  backwards, so the older value wins. Halving it would take a guard whose
+  failure mode is a silent search bug, and it would not change the
+  conclusion above: a turn would still be ~2 ms against a snapshot's ~4.
+* **The one thing still outside the journal** is a card script writing a
+  primary field onto a THIRD object during resolution — not its own card
+  and not a target. Unchanged, and recorded in `engine/undo_log.gd`.
+
+## The gang block: the AI reads more than one blocker on an attacker (2026-09-05)
+
+The engine-wide ledger row *"the AI's combat maths blocks ONE creature per
+attacker"*, reopened. The ENGINE has always implemented gang blocks fully
+and the AI itself declares them — the block audit's own instrument counted
+**46 gang blocks in 1,022 logged combats (4.5%)**. What was flat was the
+AI's MODEL of a combat: every one of them assigned at most one blocker to
+an attacker, so the AI could not see a counter-swing that two of its
+bodies could hold between them.
+
+### The arithmetic, and why it is not a second rules model
+
+`CombatSearch.resolve_block(attacker, blockers, ours_attacks)` returns
+`[attacker dies, bitmask of blockers that die, damage past]` for one
+attacker against a whole gang, and every rule in it is the engine's own:
+
+* **the damage order is `AiPlayer.order_blockers`' own** — the agent that
+  announces it for the live game (CR 509.2) — restated over the model: the
+  max-WORTH subset of blockers whose lethal totals fit inside the power on
+  offer goes first, worth-descending, the rest after, and a body nothing
+  can be gained from (indestructible, a regenerator with its mana open,
+  one the attacker's damage is prevented against) is worth zero and sorts
+  to the back;
+* **lethal-first down that order** (CR 510.1c), which is what
+  `MtgGame.default_damage_split` does;
+* **trample spills only what is left after every blocker has been
+  assigned lethal damage** (CR 702.19b);
+* **first strike is decided per ASSIGNMENT, not per pair** (CR 510.4).
+  That is what forced `AiPlayer._damage_from` to be split in two:
+  its first-strike clause asks whether the victim's power reaches the
+  hitter's whole toughness, which is right when they are alone together
+  and wrong inside a gang, because an attacker facing three blockers
+  divides its power between them. `_damage_after_prevention` is the half
+  the model takes raw.
+
+**And the pin that keeps it honest: for a gang of ONE it must give exactly
+what `AiPlayer._dies_to` gives**, pair by pair, over a board built out of
+the awkward cases — first strike both ways, protection from a colour, a
+regenerator with its mana open, a trampler, a 0/8 wall.
+`tests/ai/test_ai_gang_blocks_2026_09_05.gd` checks all twenty pairs of
+it. **The Deck Lab then checked the same thing end to end**: the null arm
+below is the new resolver with `gang_defence` off, and it is
+**byte-identical to a run of the code as it stood before this pass** —
+1,000 Big Green games and 1,000 Black-Red Raiders games, game for game.
+So the null really is the shipped AI and not a near-miss of it.
+
+### Two halves, measured apart, because they pull opposite ways
+
+* **OUR blocks of THEIR crack-back (ply 4).** Knowing two bodies can hold
+  an attacker one cannot makes the search BRAVER: fewer attackers have to
+  stay home as insurance.
+* **THEIR blocks of OUR attack (ply 2).** Knowing they can gang up on
+  what we send makes the forward attack more CAUTIOUS — which is the
+  exact fault the 2026-09-04 attack audit spent a pass removing.
+
+Measured on the same instrument at once: at every declaration the search
+reached, answer it three ways and count the disagreements. Five starter
+decks, 200 mirror games each, **1,323 searched declarations**.
+
+| | declarations changed | wider (more attackers) | narrower |
+| --- | --- | --- | --- |
+| gangs on OUR defence (ply 4) | **200 of 1,323 (15.1%)** | **134** | 47 |
+| gangs on both sides | 252 of 1,323 (19.0%) | 92 | **120** |
+
+The second row is the whole argument. Adding ply 2 fires MORE often and
+turns the change from a 2.9:1 lean towards attacking into a 1.3:1 lean
+away from it.
+
+### Measured: the win rate, asymmetrically, against a null
+
+The block audit's instrument: candidate on SEAT 0, shipped policy on
+seat 1, mirror matchups, 1,000 games each, against a null run of the
+identical shipped AI at the same seed (20260905). The figure is seat 0's
+win rate. Seat 1 wins these mirrors by two to three points whatever is
+running, which is why the null column is the only one worth reading
+against.
+
+| deck (mirror) | ply 4 only | both plies | null | Δ (ply 4) |
+| --- | --- | --- | --- | --- |
+| Big Green | 44.0% (440-560) | 43.9% | 44.1% (441-559) | **-0.1** |
+| Blue Skies | 47.5% (475-525) | 47.9% | 47.4% (474-526) | **+0.1** |
+| White Knights | 49.8% (498-502) | 49.8% | 49.6% (496-504) | **+0.2** |
+| Mountain Artillery | 49.4% (494-506) | 49.3% | 49.4% (494-506) | **0.0** |
+| Black-Red Raiders | 46.7% (467-533) | 46.6% | 46.7% (467-533) | **+0.0** |
+| **all five, 5,000 games each arm** | **47.5%** (2374-2626) | **47.5%** (2375-2625) | **47.4%** (2372-2628) | **+0.1** |
+
+95% CI on the aggregate delta: ±2.0 points. **The win rate does not
+decide this and is not claimed to**, exactly as `order_blockers`' +0.4 did
+not decide that one.
+
+**Black-Red Raiders is the row the change cannot move, and it lands on
+the null with a BYTE-IDENTICAL `matchups.csv` — 467-533 both ways, both
+halves of the seat split, the turn averages to two decimals.** It is not
+quite the same 1,000 games: `results.json` carries `avg_turns` to three
+decimals and it moves, 16.036 to 16.039. That is the most precise
+statement available and it is a better one than "identical" would have
+been — **the change fires in this deck and never once changes who wins.**
+The census says how often it fires: over 219 searched declarations in that
+deck the defensive widening changed **6** of them. It is a fifteen-
+creature aggro mirror that ends on turn 16 with small boards, so the two
+idle bodies a gang needs are rarely both there while the search's gate is
+open.
+
+### Verdict, and what it rests on
+
+**KEPT: gangs on our own defence.** The case is not the win rate — it is
+that the change fires in 15.1% of searched declarations, moves the play
+2.9:1 in the direction the last two audits established as the right one,
+costs **+0.9% of game time** (1,162.5 s against the null's 1,151.9 s over
+5,000 games), and makes the model agree with a rule the engine implements
+and this same AI already plays 4.5% of the time.
+
+**NOT KEPT: gangs on their side of our forward combat**, and it was built,
+measured and then deleted rather than left behind a flag. Three reasons,
+in order of weight: it moves 120 declarations the narrow way against 92
+wide; it costs +2.0% of game time against +0.9%; and it would make ply 2
+disagree with `AiPlayer._cohort_value`, which chose the cohort under the
+one-blocker model and still does — the search would then systematically
+price attacks below the analysis that proposed them. Lifting that half
+means moving `_cohort_value`, `_damage_through_blocks` and ply 2
+together, which is one change, not three, and it is what the narrowed
+ledger row now says.
+
+### One pinned board changed, and the reason is worth reading
+
+The crack-back pass's own table ended with *"2 Grizzly Bears vs a tapped
+Craw Wurm, at 5 life: 1 attacker — the row a threshold cannot produce"*,
+justified as *"one Bears has to stay home to block the Wurm, and the other
+is still four free damage."* **It now declares 0, and the old
+justification was an artefact of the simplification it was measured
+under**: the reason the second bear's attack was "free" is that whichever
+bear stayed home was going to die to the Wurm anyway. Two bears TOGETHER
+kill a 6/4, so the counter-swing becomes a swing the opponent does not
+make, and holding both is worth more than two points of face damage and a
+dead bear. `tests/ai/test_ai_crack_back_2026_09_05.gd` carries the
+paragraph next to the assertion.
+
+### Cost, and the one thing to watch
+
+Gang enumeration multiplies ply 4's branching factor: the move list for
+one attacker goes from `1 + blockers` to `1 + blockers + pairs + triples`,
+capped at [constant CombatSearch.GANG_LIMIT] = 3 bodies drawn from the
+best [constant CombatSearch.GANG_POOL] = 6. The node budget is unchanged,
+so a wide board now truncates sooner. Two things keep that safe and both
+are deliberate: the move list is **none, then singles, then gangs**, so
+alpha-beta still gets its bound from the move the shipped policy would
+make and a truncated line degrades to exactly the old one-blocker answer;
+and the budget was already shared out per candidate attack. If a later
+pass widens the search, this is the first constant to re-measure.
+
+### Still open after the gang block
+
+* **The forward half of the same row** — `_attack_risk`,
+  `_cohort_value`, `_damage_through_blocks` and ply 2 — measured and left
+  out above, and the ledger row now says what lifting it would take.
+* **A blocker dividing its damage among several attackers** (`cur_extra_blocks`
+  — Two-Headed Giant of Foriys, Blaze of Glory) is still outside every
+  model: `resolve_block` takes one attacker and its gang, not the other
+  way round. Same for defensive banding's `free_order`, which the block
+  audit already recorded as too rare for a measurement to resolve.
+* **`GANG_LIMIT` = 3 and `GANG_POOL` = 6 are unmeasured constants.** They
+  come from `order_blockers`' own note that a gang block is two or three
+  bodies, not from a census of gang WIDTH. If the search is ever widened,
+  measure them.
+
+## What the search is allowed to see — and what it still is not (2026-09-05)
+
+The third of the three items this pass was given, and **it is reported
+undone on purpose.** The brief was to model the opponent's hand honestly —
+what a player at the table could know — with the hard constraint that the
+AI must never read the actual cards. Nothing was built. What was built
+instead is the PROOF of the boundary as it stands, because the constraint
+is worth more than the feature and a claim like this should be pinned
+rather than asserted.
+
+**What the search reads, in full.** `AiPlayer._build_combat_model` is the
+whole list, and after it the tree indexes flat arrays and nothing else:
+
+| read | zone | public? |
+| --- | --- | --- |
+| every creature on BOTH battlefields — power, toughness, damage marked, keywords, colours, protection and prevention, indestructibility, whether a regeneration shield is affordable | battlefield | yes |
+| whether each of their permanents is tapped | battlefield | yes |
+| both life totals | — | yes |
+| `CombatState.block_illegality` and `attack_illegality`'s durable half over those creatures | battlefield | yes |
+| which of OUR creatures the cohort chose to attack with, and whether a pump in OUR hand was counted | our own hand | ours to read |
+
+Not read, at all: their hand, their library, their graveyard, their deck
+list, `AiMatchMemory`. **Three tests pin it**
+(`tests/ai/test_ai_crack_back_2026_09_05.gd`):
+
+* replace every card in the opponent's hand — seven Giant Growths, seven
+  Mountains, seven Shivan Dragons — and the declaration does not move by
+  a body;
+* reverse their whole library and it does not move;
+* and the structural half, which fails loudly if somebody adds a hand term
+  later: every field of `CombatSearch` is a flat array of numbers sized
+  one per creature or one per pair, so there is nowhere in it to put a
+  card nobody has seen.
+
+**Why nothing was built.** An honest hand model is a distribution over
+what their deck could still hold, conditioned on what has been revealed —
+and the only thing the combat search could do with it is fear a trick,
+which means holding attackers home. Every version of "hold attackers home
+because something might be there" that this project has measured has lost:
+the heuristic brake (Mountain Artillery -2.3), the one-ply lookahead (Big
+Green -1.1), and now the forward half of the gang block (120 declarations
+the narrow way). A hand model would be a fourth, and it would arrive with
+a bigger surface and a fairness risk attached. The honest order is: build
+it where it can make the AI CAST something it is not casting (the block
+audit's class 1, "only castable in our own main phase"), not where its
+only output is caution.
 
 ## Where we are — M1: engine core (DONE, v0.1)
 
@@ -1989,7 +2325,7 @@ picker before tutor casts).
 | The CR 613 layer passes have no DEPENDENCY analysis (CR 613.8); layer-4 statics run twice when two share the board, which resolves one level | Real dependency ordering |
 | ~~No POTENTIAL-mana query~~ **HALF-LIFTED 2026-09-03** — `MtgGame.could_afford(pid, data, excluded)` walks the untapped sources through the shared [ManaPlanner] and prices them with `can_afford`'s own modifiers, restricted-mana keys and `spell_payment` arithmetic, so a plan and a payment cannot disagree. The **castable highlight** now uses it, which is what makes the yellow name mean what `Duel.hlp` says it means (*"you must have enough mana available"*, topic **Hands**) and what the click-then-tap flow and the auto-cast both promise. **STILL OWED:** `DuelScreen._has_affordable_fast_effect` — the Done order's third condition — is deliberately left on the FLOATING pool, so Done and the opponent's-turn auto-pass stop only for a fast effect the player has actually floated for; its own `SIMPLIFIED` marker still says so. Moving it to `could_afford` would make both stop at every phase you hold an instant, which is the clicking the 2026-09-03 playtest was about | Point `_has_affordable_fast_effect` at `could_afford` when (and only when) the player asks for the stricter 1997 Done |
 | **SIMPLIFIED — `could_afford` under-reports for two cards** (`mtg_game.gd`): colour SUBSTITUTIONS (Sunglasses of Urza) and North Star's any-type charge widen only the FLOATING half of the answer, because `can_afford` is asked first and [ManaPlanner] models neither. It never over-reports, which is the safe direction for a highlight and for an auto-tapper | Teach the planner substitutions and the wildcard, or price the potential pool through `ManaPool.can_pay` once it can take a source list |
-| **SIMPLIFIED — the AI's combat maths blocks ONE creature per attacker** (`ai/combat_search.gd`, and `ai_player.gd`'s `_cohort_value` / `_damage_through_blocks` before it, which is why it is the same row): every model of a combat this AI runs — its own attack, the defender's answer, and since 2026-09-05 the opponent's crack-back and our answer to that — assigns at most one blocker to an attacker. The ENGINE implements gang blocks fully; it is the AI's reading of them that is flat. Measured before it was kept: the defender gang-blocks in **46 of 1,022 logged combats (4.5%)**, and teaching the maths to fear a double block would make it pessimistic about something that happens once every twenty-two combats — which is the fault the 2026-09-04 attack audit had just fixed. The two sides of the table use the same model, so it stays consistent | Enumerate multi-blocker assignments in `CombatSearch._assign` (it is already a recursive assignment; the change is letting a blocker be spent on an attacker that already has one) and price the same widening in `_cohort_value`, then measure whether the pessimism costs more than the accuracy buys |
+| **SIMPLIFIED — the AI's combat maths blocks ONE creature per attacker in the FORWARD combat** (`ai_player.gd`'s `_attack_risk` / `_cohort_value` / `_damage_through_blocks`, and ply 2 of `ai/combat_search.gd`): when the AI prices its own attack, the defender's answer still puts at most one body on each attacker. **NARROWED 2026-09-05** — the DEFENSIVE half is lifted: `CombatSearch.resolve_block` puts one attacker against a whole gang (CR 509.2's damage order as `AiPlayer.order_blockers` announces it, 510.1c lethal-first down it, 702.19b trample spill, 510.4 first strike decided per assignment), and ply 4 of the crack-back search enumerates gangs, so the AI knows two bodies can hold a counter-swing one cannot. Pinned by `tests/ai/test_ai_gang_blocks_2026_09_05.gd`, including that a gang of ONE answers exactly what `_dies_to` answers. The forward half was BUILT AND MEASURED TOO and left out on the numbers: it changed 19.0% of searched declarations against the defensive half's 15.1%, but 120 of those the narrow way against 92 the wide way (the defensive half is 134 wide against 47 narrow), which is the pessimism the 2026-09-04 attack audit had just removed. Both arms measured +0.1 ± 2.0 on the win rate, so direction decided it. The 4.5% that kept the whole row until now stands: the defender gang-blocks in 46 of 1,022 logged combats | Price the same widening in `_cohort_value` and `_damage_through_blocks` — but not before the pessimism it adds is worth something a measurement can see, and not without `_cohort_value` and ply 2 moving together (they price the same board and would otherwise disagree) |
 Card-level simplifications are tracked separately in
 **docs/simplified-cards.md** — one row per card that deviates from its
 printed behavior, so future passes can lift them one by one.

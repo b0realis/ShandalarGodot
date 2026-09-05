@@ -103,16 +103,26 @@ func test_the_gate_leaves_a_safe_board_to_the_cohort() -> void:
 
 
 ## A partial hold-back: at 5 life against a tapped 6/4, two Grizzly Bears.
-## One has to stay home to block; the other is four free damage.
-func test_it_holds_back_only_what_the_block_needs() -> void:
+##
+## THIS ROW CHANGED ON 2026-09-05 and the reason is worth the paragraph.
+## It used to read 1 — "one Bears blocks the Wurm, the other is four free
+## damage" — and that sentence was only true because the model could put
+## just ONE body on an attacker: whichever bear stayed home was going to
+## die to the Wurm, so sending the other one cost nothing extra. With gang
+## blocks (docs/ROADMAP.md, "The gang block") BOTH bears together kill the
+## Wurm, which makes the counter-swing a swing the opponent simply does
+## not make — so holding both is worth 0 and attacking with one is worth a
+## bear against 2.2 points of face damage. The old row's justification was
+## an artefact of the simplification it was measured under.
+func test_it_holds_back_the_pair_that_can_eat_the_wurm_between_them() -> void:
 	var ai := _wizard()
 	for _i in 2:
 		put_battlefield(0, "Grizzly Bears")
 	var wurm := put_battlefield(1, "Craw Wurm")
 	wurm.tapped = true
 	_set_life(0, 5)
-	assert_eq(_attack_count(ai), 1,
-		"one Bears blocks the Wurm, the other still swings")
+	assert_eq(_attack_count(ai), 0,
+		"two bears eat a 6/4 between them; that threat is worth more than 2 damage")
 
 
 # ------------------------------------------------------- the guarantees --
@@ -237,3 +247,102 @@ func test_the_node_budget_is_a_hard_stop() -> void:
 	var first := ai._search_hold_back(g, _creatures(0), ids, 1)
 	var second := ai._search_hold_back(g, _creatures(0), ids, 1)
 	assert_eq(first, second, "the same board gives the same answer twice")
+
+
+# --------------------------------------- WHAT THE SEARCH IS ALLOWED TO SEE --
+#
+# THE FAIRNESS RULE (docs/ROADMAP.md, M4 phase 3's design note): a search
+# must not read the opponent's hand or library. The original does not
+# cheat and neither may we, and a win rate bought by peeking would look
+# exactly like a win rate bought by playing well.
+#
+# The two tests below are the PROOF, and they prove it by observation
+# rather than by reading the code: change ONLY what seat 0 may not see —
+# every card in the opponent's hand, and the whole order of their library
+# — leave every public fact identical, and the declaration must not move
+# by a single body. A search that read a hidden card could not pass them.
+#
+# What the search DOES read, in full, is the list in
+# `AiPlayer._build_combat_model`: both battlefields (public), both life
+# totals (public), whose creatures are tapped (public), and the engine's
+# own predicates over those. Nothing else reaches it — the model is a
+# handful of flat arrays and the tree indexes those and nothing else.
+
+func _fill_hand(pid: int, card_name: String, count: int) -> void:
+	g.players[pid].hand.clear()
+	for _i in count:
+		give_hand(pid, card_name)
+
+
+func test_the_declaration_does_not_move_when_their_hand_is_replaced() -> void:
+	# Seven Giant Growths in hand against seven Mountains: the same board,
+	# the same public facts, two hands that could not be more different.
+	var giant_ids: Array = []
+	var counts: Array = []
+	for hand_card in ["Giant Growth", "Mountain", "Shivan Dragon"]:
+		before_each()
+		var ai := _wizard()
+		var giant := put_battlefield(0, "Hill Giant")
+		put_battlefield(0, "Grizzly Bears")
+		var wurm := put_battlefield(1, "Craw Wurm")
+		wurm.tapped = true
+		put_battlefield(1, "Mountain")
+		put_battlefield(1, "Mountain")
+		_set_life(0, 5)
+		_fill_hand(1, hand_card, 7)
+		giant_ids.append(giant.id)
+		counts.append(_attack_count(ai))
+	assert_eq(counts[0], counts[1],
+		"a hand of pump spells must decide nothing the search can see")
+	assert_eq(counts[1], counts[2],
+		"nor a hand of fatties")
+
+
+func test_the_declaration_does_not_move_when_their_library_is_reordered() -> void:
+	# The other hidden zone. Same board, the library reversed.
+	var counts: Array = []
+	for reversed in [false, true]:
+		before_each()
+		var ai := _wizard()
+		put_battlefield(0, "Hill Giant")
+		put_battlefield(0, "Grizzly Bears")
+		var wurm := put_battlefield(1, "Craw Wurm")
+		wurm.tapped = true
+		_set_life(0, 5)
+		if reversed:
+			g.players[1].library.reverse()
+		counts.append(_attack_count(ai))
+	assert_eq(counts[0], counts[1],
+		"the order of a library nobody has seen must not decide an attack")
+
+
+func test_the_model_carries_no_field_that_could_hold_a_hidden_card() -> void:
+	# The structural half of the same promise, and the one that fails
+	# LOUDLY if somebody adds a hand term later: every field of the model
+	# the tree runs over is a flat array of numbers, one entry per
+	# creature on one of the two BATTLEFIELDS, plus the two life totals.
+	# There is nowhere in it to put a card nobody has seen.
+	var ai := _wizard()
+	put_battlefield(0, "Hill Giant")
+	put_battlefield(1, "Craw Wurm")
+	give_hand(1, "Giant Growth")
+	var mine: Array[CardInstance] = _creatures(0)
+	var theirs: Array[CardInstance] = _creatures(1)
+	var model := ai._build_combat_model(g, mine, theirs, mine, 1)
+	var scalars := {"my_life": true, "their_life": true, "nodes": true,
+		"budget": true, "total_nodes": true, "gang_defence": true}
+	for p in model.get_property_list():
+		if (int(p["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
+			continue
+		var name: StringName = p["name"]
+		if String(name).begins_with("_") or scalars.has(String(name)):
+			continue
+		var value: Variant = model.get(name)
+		var t := typeof(value)
+		assert_true(t >= TYPE_PACKED_BYTE_ARRAY,
+			"CombatSearch.%s is not a flat array of numbers" % name)
+		var size: int = value.size()
+		assert_true(size == mine.size() or size == theirs.size()
+			or size == mine.size() * theirs.size(),
+			"CombatSearch.%s is sized %d — not one entry per creature or pair"
+				% [name, size])

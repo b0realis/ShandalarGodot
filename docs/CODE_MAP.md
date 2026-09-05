@@ -960,7 +960,18 @@ shandalar/
 │   │                          board, 5x on a wide one (docs/ROADMAP.md M4
 │   │                          phase 3); pinned by tests/ai/test_undo_log.gd
 │   │                          diffing a make/unmake round trip against
-│   │                          GameSnapshot itself
+│   │                          GameSnapshot itself. SINCE 2026-09-05 it
+│   │                          also covers the TURN MACHINERY
+│   │                          (MtgGame._rec_turn + TURN_FIELDS /
+│   │                          TURN_PLAYER_FIELDS / UNTAP_INSTANCE_FIELDS,
+│   │                          and cleanup takes each permanent whole), so
+│   │                          a node may CROSS a step boundary: 11-19x a
+│   │                          snapshot for one boundary, but only
+│   │                          0.8-1.1x for a whole TURN, because the
+│   │                          journal is proportional to the move and
+│   │                          untap+cleanup write every permanent
+│   │                          (docs/ROADMAP.md, "The journal across a
+│   │                          step boundary")
 │   ├── ai/                  THE AI OPPONENT (pure engine, headless)
 │   │   ├── ai_profile.gd    class AiProfile — the difficulty surface:
 │   │   │                      mistake_chance / aggression / the PANIC LINE
@@ -1051,7 +1062,19 @@ shandalar/
 │   │   │                      information — and the budget is shared out
 │   │   │                      per candidate attack, so a truncated search
 │   │   │                      cannot quietly favour the widest one.
-│   │   │                      tests/ai/test_ai_crack_back_2026_09_05.gd
+│   │   │                      GANG BLOCKS (2026-09-05): resolve_block()
+│   │   │                      puts one attacker against a whole gang the
+│   │   │                      way the live game does — order_blockers'
+│   │   │                      own knapsack for CR 509.2's damage order,
+│   │   │                      lethal-first down it (510.1c), trample
+│   │   │                      spill after every blocker is covered
+│   │   │                      (702.19b), first strike decided per
+│   │   │                      assignment — and for a gang of ONE it
+│   │   │                      answers exactly what _dies_to answers,
+│   │   │                      which is the pin that keeps it from being a
+│   │   │                      second rules model.
+│   │   │                      tests/ai/test_ai_crack_back_2026_09_05.gd,
+│   │   │                      tests/ai/test_ai_gang_blocks_2026_09_05.gd
 │   │   └── ai_player.gd     class AiPlayer extends DecisionAgent — one
 │   │                          act() per call through the PUBLIC API:
 │   │                          colour-aware land drops, mana tap planning
@@ -1345,16 +1368,9 @@ shandalar/
 │   │                          offline build of set + bundle archives and
 │   │                          index.json. Run: python3 -m unittest
 │   │                          discover -s tools -p 'test_*.py'
-│   ├── simulate.gd          THE DECK LAB (SceneTree script) — headless
-│   │                          AI-vs-AI deck testing: duel & gauntlet
-│   │                          modes, WorkerThreadPool parallelism,
-│   │                          report/JSON/CSV/SVG output. Entry point:
-│   │                          DeckLab/deck_lab.sh; manual: DeckLab/README.md
 │   ├── deck_convert.gd      Deck-format converter (community .deck/.dec ⇄
 │   │                          the original MicroProse .dck); entry point
 │   │                          ./deck_convert.sh
-│   ├── elo_ledger.gd        class EloLedger — decks/ratings.txt, the Deck
-│   │                          Lab's running Elo (K=8 per matchup)
 │   ├── bench_probe.gd       THE PROBE COST CURVE (SceneTree script) —
 │   │                          GameSnapshot take/restore and a whole
 │   │                          MtgGame._preflight timed against board size,
@@ -1372,21 +1388,51 @@ shandalar/
 │   │                          nodes/second journal vs snapshot, and the
 │   │                          REAL branching factor of a main phase, an
 │   │                          attack and a block measured over gauntlet
-│   │                          duels. Run: ../tools/godot --headless
-│   │                          --path . -s res://tools/bench_undo.gd
+│   │                          duels. Section I (2026-09-05) prices
+│   │                          CROSSING A STEP BOUNDARY: 11-19x a snapshot
+│   │                          for one step, 0.8-1.1x for a whole turn,
+│   │                          and CLEAN both ways. Run: ../tools/godot
+│   │                          --headless --path . -s res://tools/bench_undo.gd
 │   ├── screenshot_tour.gd   Screenshot tour of the UI (main session's tool;
 │   │   screenshot_tour.tscn   off limits to engine passes)
-│   ├── duel_soak.gd         THE DUEL SOAK — whole duels through the LIVE
-│   │                          DuelScreen under Xvfb (AI vs AI, and a human
-│   │                          seat fuzzed by its HumanClicker), Godot's
-│   │                          errors counted; `--rules fifth|modern` instead
-│   │                          of user://settings.cfg; run via ./duel_soak.sh
+│   └── duel_soak.gd         THE DUEL SOAK — whole duels through the LIVE
+│                              DuelScreen under Xvfb (AI vs AI, and a human
+│                              seat fuzzed by its HumanClicker), Godot's
+│                              errors counted; `--rules fifth|modern` instead
+│                              of user://settings.cfg; run via ./duel_soak.sh
+├── DeckLab/                 ← THE DECK LAB (moved here 2026-09-05: CLI,
+│                              manual and results in one folder)
+│   ├── deck_lab.sh          Entry point (see --help). Finds Godot, tells
+│   │                          the tool whether stderr is a TERMINAL
+│   │                          (DECK_LAB_TTY, so a redirected log carries
+│   │                          no banner), warms the import cache only
+│   │                          when a script is newer than it, and exits
+│   │                          3 when there is no engine to run
+│   ├── simulate.gd          THE DECK LAB (SceneTree script) — headless
+│   │                          AI-vs-AI deck testing: duel, gauntlet,
+│   │                          matrix and `random` (the field) modes,
+│   │                          WorkerThreadPool parallelism,
+│   │                          report/JSON/CSV/SVG output. stdout is the
+│   │                          report; stderr is banner/progress/hints.
+│   │                          Manual: DeckLab/README.md
+│   ├── lab_console.gd       class LabConsole — the terminal side of the
+│   │                          Lab: the banner, the in-place progress bar
+│   │                          with its ETA, colour that degrades to plain
+│   │                          text off a tty, and the "did you mean"
+│   │                          behind a mistyped flag or deck path
 │   ├── sim_stats.gd         class SimStats — Wilson 95% CIs, matchup
-│   │                          summaries, play/draw splits (unit-tested)
-│   └── svg_charts.gd        class SvgCharts — dependency-free SVG charts
-│                              (win-rate bars + CI whiskers, turn
-│                              histograms)
-├── deck_lab.sh              Deck Lab entry point (see --help)
+│   │                          summaries, play/draw splits, whether a
+│   │                          matchup is DECIDED, the interval a sample
+│   │                          size buys, and the standings of a matrix
+│   │                          (unit-tested)
+│   ├── svg_charts.gd        class SvgCharts — dependency-free SVG charts
+│   │                          (win-rate bars + CI whiskers, turn
+│   │                          histograms, matrix heatmap)
+│   ├── elo_ledger.gd        class EloLedger — decks/ratings.txt, the Deck
+│   │                          Lab's running Elo (K=8 per game)
+│   ├── README.md            The manual (methodology, every switch, the
+│   │                          measured experiments)
+│   └── results/             Where a run writes unless --out says otherwise
 ├── duel_soak.sh             Duel-soak entry point: wraps tools/duel_soak.gd
 │                              in the safe Xvfb recipe and FAILS on any
 │                              ERROR/WARNING/STALL line; exit 2 stall, 3 bad
@@ -2045,7 +2091,26 @@ shandalar/
 │    the three guarantees the Deck Lab rests on — the ladder (Apprentice
 │    and Magician do not search at all, and the budget is monotone up
 │    the four profiles), no draw from game.rng, and no mutation at all,
-│    checked with test_undo_log.gd's own whole-state differ;
+│    checked with test_undo_log.gd's own whole-state differ. Plus, since
+│    2026-09-05, WHAT THE SEARCH IS ALLOWED TO SEE: change only what seat
+│    0 may not see — every card in the opponent's hand, the whole order of
+│    their library — and the declaration must not move by a body; and the
+│    structural half, that every field of the model is a flat array of
+│    numbers sized one per creature or one per pair, so there is nowhere
+│    in it to put a card nobody has seen;
+│    tests/ai/test_ai_gang_blocks_2026_09_05.gd — THE GANG BLOCK, the
+│    engine-wide ledger row "the AI's combat maths blocks ONE creature per
+│    attacker" reopened. Two halves: that the arithmetic is the ENGINE's
+│    (CombatSearch.resolve_block on a gang of ONE gives exactly what
+│    AiPlayer._dies_to gives, checked pair by pair over a board built out
+│    of the awkward cases — first strike both ways, protection from a
+│    colour, a regenerator with its mana open, a trampler, a 0/8 wall),
+│    and the boards it changes: two 2/2s kill a 3/3 and only one of them
+│    dies, the damage order is the one order_blockers announces rather
+│    than declaration order, a trampler gets 2 past two blockers where it
+│    got 4 past one, first strike inside a gang is decided by the
+│    assignment, and the search holds one body back where the flat model
+│    read every line as lethal and sent the whole team;
 │    tests/unit/test_fifth_edition.gd — THE 1997 RULESET AS A WHOLE
 │    (`rules.set_edition("fifth")` and nothing else, the 2026-09-02
 │    audit): mana burn killing on the boundary it is charged on (the

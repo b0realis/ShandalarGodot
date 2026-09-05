@@ -21,7 +21,13 @@ extends GameTest
 ## not here: the journal is OFF unless something turns it on, so a normal
 ## duel pays one null test per instrumented write and nothing else.
 ##
-## THE MOVE MENU at the bottom is promise 1 taken seriously: one round trip
+## AND THE THIRD SECTION, added 2026-09-05: ACROSS A STEP BOUNDARY. The
+## journal's documented limit used to be the turn machinery, which is why
+## `engine/ai/combat_search.gd` runs over a flat model rather than over
+## the engine. `MtgGame._rec_turn` closes it and the round trips at the
+## bottom of this file are what "closes" means, boundary by boundary.
+##
+## THE MOVE MENU is promise 1 taken seriously: one round trip
 ## per KIND of move a search can make — pump, burn that kills and burn
 ## that does not, burn to the face, a ping, X spells, bounce, exile,
 ## destroy, an enchantment leaving, a land leaving, mana rituals, a
@@ -520,3 +526,236 @@ func test_making_a_token_round_trips() -> void:
 		assert_ok(g.activate_ability(0, hive, 0, []))
 		_resolve_all(), "the hive")
 	assert_null(g.find_on_battlefield(0, "Wasp"), "the token is unmade with the move")
+
+
+# ------------------------------------------------- across a STEP boundary --
+#
+# Until 2026-09-05 the journal's documented boundary was the TURN MACHINERY:
+# `_advance_step` and `_enter_step` recorded nothing, so a search node had
+# to end where the priority pass that changes step begins — which is why
+# `engine/ai/combat_search.gd` runs over a flat model built from the
+# engine's predicates instead of making its moves through the real helpers.
+# `MtgGame._rec_turn` (and its three field lists) closes that, and the
+# round trips below are what "closes" means: the same differ, over the
+# boundaries a combat search has to cross.
+
+func _rich_board() -> void:
+	# Deliberately not a clean board: statics that recalculate, permanents
+	# on both seats, cards in hand and library to draw from.
+	put_battlefield(0, "Grizzly Bears")
+	put_battlefield(0, "Craw Wurm")
+	put_battlefield(0, "Forest")
+	put_battlefield(0, "Bad Moon")
+	put_battlefield(1, "Savannah Lions")
+	put_battlefield(1, "Hill Giant")
+	put_battlefield(1, "Plains")
+	give_hand(0, "Grizzly Bears")
+	give_hand(1, "Plains")
+
+
+func test_one_step_boundary_round_trips() -> void:
+	_rich_board()
+	advance_to_step(Mtg.Step.MAIN1)
+	_round_trips(func() -> void:
+		g._advance_step(), "advancing one step")
+	g.end_search()
+
+
+func test_every_step_of_a_turn_round_trips_on_its_own() -> void:
+	# One mark per boundary, all the way round: the untap sweep, the draw,
+	# both combat damage steps, the end step and cleanup each get their own
+	# make/unmake so a gap names the step it lives in.
+	_rich_board()
+	advance_to_step(Mtg.Step.MAIN1)
+	for _i in 14:
+		if g.game_over:
+			break
+		var label := "boundary out of step %d" % g._step_index
+		_round_trips(func() -> void: g._advance_step(), label)
+		g._advance_step()
+	g.end_search()
+
+
+func test_the_untap_sweep_round_trips() -> void:
+	# The sweep writes seven fields on every permanent on the table and
+	# four on the player, and it is the boundary a crack-back search has to
+	# cross to reach the opponent's combat at all.
+	_rich_board()
+	var bear := g.find_on_battlefield(0, "Grizzly Bears")
+	var lions := g.find_on_battlefield(1, "Savannah Lions")
+	g.tap_permanent(bear)
+	g.tap_permanent(lions)
+	bear.cant_attack_next_turn = true
+	lions.skip_next_untap = true
+	lions.summoning_sick = true
+	advance_to_step(Mtg.Step.END)
+	_round_trips(func() -> void:
+		for _i in 4:
+			g._advance_step(), "cleanup, the turn boundary and the untap sweep")
+	assert_true(bear.tapped, "the bear is tapped again")
+	assert_true(lions.skip_next_untap, "Barl's Cage one-shot is back")
+	g.end_search()
+
+
+func test_cleanup_round_trips_damage_and_the_this_turn_flags() -> void:
+	# `_finish_cleanup` wipes twenty-six fields per permanent. Marked
+	# damage, a regeneration shield and an until-end-of-turn pump are three
+	# of them, and all three have to come back.
+	_rich_board()
+	advance_to_step(Mtg.Step.MAIN1)
+	var wurm := g.find_on_battlefield(0, "Craw Wurm")
+	g.deal_damage(g.find_on_battlefield(1, "Hill Giant"), TargetRef.card(wurm), 3, false)
+	wurm.regeneration_shields = 1
+	g.continuous.add_until_eot_pump(wurm.id, 2, 2)
+	g.recalculate()
+	assert_eq(wurm.cur_power, 8, "the pump is on before the boundary")
+	advance_to_step(Mtg.Step.END)
+	_round_trips(func() -> void:
+		g._advance_step()
+		g._advance_step(), "the cleanup step")
+	assert_eq(wurm.damage, 3, "the marked damage is back")
+	assert_eq(wurm.regeneration_shields, 1, "the shield is back")
+	assert_eq(wurm.cur_power, 8, "the until-end-of-turn pump is back")
+	g.end_search()
+
+
+func test_a_whole_turn_round_trips_including_the_draw() -> void:
+	# The library is the state a draw step moves that nothing else does:
+	# unwinding a crossed draw step has to put the card back on top, in
+	# order, or the search would deal the real duel a different card.
+	_rich_board()
+	advance_to_step(Mtg.Step.MAIN1)
+	var top: Array = []
+	for card in g.players[1].library.slice(0, 5):
+		top.append(card.data.card_name)
+	_round_trips(func() -> void:
+		for _i in 14:
+			if g.game_over:
+				break
+			g._advance_step(), "a whole turn, into the opponent's")
+	var after: Array = []
+	for card in g.players[1].library.slice(0, 5):
+		after.append(card.data.card_name)
+	assert_eq(after, top, "the opponent's library is where it was")
+	g.end_search()
+
+
+func test_a_search_can_play_both_combats_through_the_real_engine() -> void:
+	# THE ENABLER, stated as the thing it enables (docs/ROADMAP.md, "The
+	# journal across a step boundary"): the crack-back question is our
+	# combat, their untap, their combat and our blocks — two step
+	# boundaries and a turn boundary — played through the SAME helpers a
+	# real duel plays them through, and rewound to nothing.
+	_rich_board()
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	var bear := g.find_on_battlefield(0, "Grizzly Bears")
+	var wurm := g.find_on_battlefield(0, "Craw Wurm")
+	var giant := g.find_on_battlefield(1, "Hill Giant")
+	var lions := g.find_on_battlefield(1, "Savannah Lions")
+	var before := _capture()
+	var mark := g.make_mark()
+	# --- our combat: swing with both, they block the bear with the giant.
+	assert_ok(g.declare_attackers(0, [bear.id, wurm.id]))
+	g._advance_step()                       # -> declare blockers
+	assert_ok(g.declare_blockers(1, {giant.id: bear.id}))
+	while g.current_step() != Mtg.Step.END and not g.game_over:
+		g._advance_step()                   # damage, end of combat, main 2
+	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD, "the bear died in the search")
+	assert_lt(g.players[1].life, 20, "the wurm connected in the search")
+	# --- their turn: they untap and swing back at what we left home.
+	while g.active_player != 1 and not g.game_over:
+		g._advance_step()
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_false(giant.tapped, "their giant untapped inside the search")
+	assert_ok(g.declare_attackers(1, [giant.id, lions.id]))
+	g._advance_step()
+	assert_ok(g.declare_blockers(0, {}))
+	while g.current_step() != Mtg.Step.COMBAT_END and not g.game_over:
+		g._advance_step()
+	assert_lt(g.players[0].life, 20, "we took the crack-back in the search")
+	# --- and none of it happened.
+	g.unmake_to(mark)
+	assert_eq(_drift(before), [], "two combats and a turn boundary left state behind")
+	assert_eq(g.players[0].life, 20)
+	assert_eq(g.players[1].life, 20)
+	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD, "the bear is alive again")
+	assert_eq(g.current_step(), Mtg.Step.DECLARE_ATTACKERS)
+	assert_eq(g.active_player, 0)
+	g.end_search()
+
+
+func test_crossing_a_turn_boundary_does_not_move_the_random_stream() -> void:
+	# A turn boundary rolls: Time Vault's one-in-five is rolled in
+	# `_begin_turn`, and any upkeep trigger may roll again. CONTRIBUTING.md
+	# rule 7 says the real duel must not notice.
+	_rich_board()
+	put_battlefield(0, "Time Vault")
+	g.tap_permanent(g.find_on_battlefield(0, "Time Vault"))
+	advance_to_step(Mtg.Step.MAIN1)
+	var state_before := g.rng.state
+	var mark := g.make_mark()
+	for _i in 14:
+		if g.game_over:
+			break
+		g._advance_step()
+	g.unmake_to(mark)
+	assert_eq(g.rng.state, state_before,
+		"crossing a turn boundary must leave game.rng where it found it")
+	g.end_search()
+
+
+func test_the_first_strike_damage_step_round_trips() -> void:
+	# CR 510.5 inserts a whole extra step when someone in combat has first
+	# strike, and `_first_strike_ids` is frozen as it begins — a boundary
+	# with state of its own.
+	put_battlefield(0, "White Knight")     # first strike
+	put_battlefield(1, "Grizzly Bears")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	var knight := g.find_on_battlefield(0, "White Knight")
+	var bear := g.find_on_battlefield(1, "Grizzly Bears")
+	assert_ok(g.declare_attackers(0, [knight.id]))
+	g._advance_step()
+	assert_ok(g.declare_blockers(1, {bear.id: knight.id}))
+	_round_trips(func() -> void:
+		while g.current_step() != Mtg.Step.COMBAT_END and not g.game_over:
+			g._advance_step(), "both combat damage steps")
+	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD, "the bear is alive again")
+	g.end_search()
+
+
+func test_the_1997_phase_boundary_round_trips_its_mana_burn() -> void:
+	# Under the 1997 forks a phase boundary empties the pool, CHARGES the
+	# unspent mana as life loss and then checks for a dead player — three
+	# writes `_advance_step` makes by hand.
+	g.rules.mana_burn = true
+	g.rules.pool_empties_on_attack = true
+	g.rules.life_checked_at_phase_end = true
+	put_battlefield(0, "Forest")
+	advance_to_step(Mtg.Step.MAIN1)
+	_round_trips(func() -> void:
+		add_mana(0, Mtg.ManaColor.G, 3)
+		g._advance_step(), "a 1997 phase boundary with mana floating")
+	assert_eq(g.players[0].life, 20, "the burn is unmade")
+	g.end_search()
+
+
+func test_an_upkeep_trigger_crossed_by_the_search_round_trips() -> void:
+	# The upkeep step puts a trigger on the stack and resolving it is a
+	# card script writing whatever it likes — the boundary and the
+	# resolution have to compose.
+	put_battlefield(0, "Juzám Djinn")      # "at the beginning of your upkeep"
+	advance_to_next_turn()                 # ...so their upkeep is the next one
+	advance_to_step(Mtg.Step.END)
+	assert_eq(g.players[0].life, 20)
+	_round_trips(func() -> void:
+		for _i in 3:
+			if g.game_over:
+				break
+			g._advance_step()
+		while not g.stack.is_empty():
+			g._resolve_top()
+		assert_eq(g.players[0].life, 19,
+			"the upkeep trigger really did fire inside the search"),
+		"an upkeep trigger across the turn boundary")
+	assert_eq(g.players[0].life, 20, "and it is unmade")
+	g.end_search()

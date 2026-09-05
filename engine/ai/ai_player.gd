@@ -1550,6 +1550,25 @@ func _damage_from(hitter: CardInstance, victim: CardInstance,
 			and victim.cur_power + victim_bonus.x \
 				>= hitter.cur_toughness + hitter_bonus.y - hitter.damage:
 		return 0
+	return _damage_after_prevention(hitter, victim, hitter_bonus)
+
+
+## The PREVENTION half of [method _damage_from], without its first-strike
+## clause: what [param hitter] would land on [param victim] if it gets to
+## strike at all.
+##
+## Split out for the GANG-BLOCK maths (2026-09-05). The first-strike
+## clause above asks whether the victim's power reaches the hitter's whole
+## toughness, which is the right question when they are alone together and
+## the WRONG one inside a gang: an attacker facing three blockers divides
+## its power between them, so which of them it kills before they strike
+## depends on the assignment, not on the pair. [CombatSearch] therefore
+## takes the raw number here and applies first strike per assignment —
+## and for a gang of one the two agree by construction, which
+## `tests/ai/test_ai_gang_blocks_2026_09_05.gd` pins against
+## [method _dies_to] itself.
+func _damage_after_prevention(hitter: CardInstance, victim: CardInstance,
+		hitter_bonus := Vector2i.ZERO) -> int:
 	# PREVENTION the engine applies to every combat hit (its deal_damage
 	# gates, in the same order): protection from the hitter's colour (CR
 	# 702.16e), "prevent all damage dealt to this creature by creatures"
@@ -2431,6 +2450,8 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	search.a_vigilant.resize(n)
 	search.a_trample.resize(n)
 	search.a_soak.resize(n)
+	search.a_first.resize(n)
+	search.a_immune.resize(n)
 	for i in n:
 		var inst := mine[i]
 		search.a_pow[i] = maxi(inst.cur_power, 0)
@@ -2442,12 +2463,17 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.a_vigilant[i] = 1 if inst.has_keyword(Mtg.Keyword.VIGILANCE) else 0
 		search.a_trample[i] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
 		search.a_soak[i] = maxi(inst.cur_toughness - inst.damage, 0)
+		search.a_first[i] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
+		search.a_immune[i] = 1 if (inst.cur_indestructible
+			or _shieldable(game, inst)) else 0
 	search.d_pow.resize(m)
 	search.d_val.resize(m)
 	search.d_free.resize(m)
 	search.d_can_attack.resize(m)
 	search.d_trample.resize(m)
 	search.d_soak.resize(m)
+	search.d_first.resize(m)
+	search.d_immune.resize(m)
 	for j in m:
 		var inst := theirs[j]
 		search.d_pow[j] = maxi(inst.cur_power, 0)
@@ -2456,11 +2482,16 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_can_attack[j] = 1 if _could_attack_next_turn(game, inst) else 0
 		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
 		search.d_soak[j] = maxi(inst.cur_toughness - inst.damage, 0)
+		search.d_first[j] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
+		search.d_immune[j] = 1 if (inst.cur_indestructible
+			or _shieldable(game, inst)) else 0
 	var cells := n * m
 	search.block_ours.resize(cells)
 	search.block_theirs.resize(cells)
 	search.we_kill.resize(cells)
 	search.they_kill.resize(cells)
+	search.hit_ours.resize(cells)
+	search.hit_theirs.resize(cells)
 	for i in n:
 		for j in m:
 			var cell := i * m + j
@@ -2470,6 +2501,11 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 				game, mine[i], theirs[j], pid) == "" else 0
 			search.we_kill[cell] = 1 if _dies_to(game, theirs[j], mine[i]) else 0
 			search.they_kill[cell] = 1 if _dies_to(game, mine[i], theirs[j]) else 0
+			# The GANG half (2026-09-05): the raw damage each side lands,
+			# without the first-strike clause a gang has to decide per
+			# assignment — see [method _damage_after_prevention].
+			search.hit_ours[cell] = _damage_after_prevention(theirs[j], mine[i])
+			search.hit_theirs[cell] = _damage_after_prevention(mine[i], theirs[j])
 	search.seal()
 	return search
 

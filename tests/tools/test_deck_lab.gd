@@ -678,3 +678,354 @@ func test_a_machine_with_no_settings_file_still_has_none_afterwards() -> void:
 	_soak().restore_settings(real)
 	assert_eq(FileAccess.file_exists(Settings.PATH), existed)
 	assert_eq(_soak().snapshot_settings(), real)
+
+
+# ================================================= what the tool SAYS ==
+#
+# THE RULE THESE PIN: the Deck Lab is a measuring instrument first, so
+# stdout carries the report and nothing else, every piece of decoration is
+# stderr-and-a-terminal only, and the report says in words what its sample
+# size can and cannot see. A number nobody can act on, or a banner in a
+# log a script parses, is a bug here like any other.
+
+
+func test_the_banner_is_short_and_degrades_to_plain_text() -> void:
+	# Somebody runs a hundred sweeps in an afternoon: a banner that has to
+	# be scrolled past is a banner that gets switched off.
+	var plain := LabConsole.banner_lines(false)
+	assert_between(plain.size(), 1, 5, "at most five lines of artwork")
+	for line in plain:
+		assert_false(line.contains(LabConsole.ESC),
+			"no escape codes when colour is off: " + line)
+		assert_lte(line.length(), 78, "fits an 80-column terminal: " + line)
+	var coloured := LabConsole.banner_lines(true)
+	assert_eq(coloured.size(), plain.size())
+	var joined := "\n".join(coloured)
+	assert_gt(joined.count(LabConsole.ESC), 0, "colour when it is asked for")
+	# THE STRONG FORM of "degrades to plain text": strip every SGR code
+	# from the coloured banner and the plain one is what is left, so
+	# colour can never change a glyph. And nothing is left open at the end
+	# of a line — a terminal left amber is a bug in a tool, not a style.
+	var sgr := RegEx.create_from_string(LabConsole.ESC + "\\[[0-9;]*m")
+	assert_eq(sgr.sub(joined, "", true), "\n".join(plain))
+	for line in coloured:
+		if line.contains(LabConsole.ESC):
+			assert_true(line.ends_with(LabConsole.RESET),
+				"a coloured line closes its colour: " + line.replace(
+					LabConsole.ESC, "<ESC>"))
+
+
+func test_paint_is_the_only_place_colour_can_leak_from() -> void:
+	assert_eq(LabConsole.paint("x", LabConsole.AMBER, false), "x",
+		"colour off is the identical string")
+	assert_eq(LabConsole.paint("x", "", true), "x", "no code, no wrapping")
+	assert_eq(LabConsole.paint("x", LabConsole.AMBER, true),
+		LabConsole.AMBER + "x" + LabConsole.RESET)
+
+
+func test_the_terminal_switches_come_from_the_environment() -> void:
+	# GDScript cannot ask whether a stream is a tty; deck_lab.sh asks
+	# (`[ -t 2 ]`) and answers here. This is what makes `... > log 2>&1`
+	# undecorated without anyone having to pass a flag.
+	var tty := OS.get_environment(LabConsole.TTY_ENV)
+	var no_colour := OS.get_environment("NO_COLOR")
+	OS.set_environment(LabConsole.TTY_ENV, "0")
+	assert_false(LabConsole.is_terminal(), "a redirected stderr is not a terminal")
+	assert_false(LabConsole.use_colour())
+	OS.set_environment(LabConsole.TTY_ENV, "1")
+	OS.set_environment("NO_COLOR", "")
+	assert_true(LabConsole.is_terminal())
+	assert_true(LabConsole.use_colour())
+	OS.set_environment("NO_COLOR", "1")
+	assert_false(LabConsole.use_colour(), "NO_COLOR wins over the terminal")
+	OS.set_environment("NO_COLOR", no_colour)
+	OS.set_environment(LabConsole.TTY_ENV, tty)
+
+
+func test_the_width_is_clamped_to_something_a_bar_fits_in() -> void:
+	# A progress line that WRAPS cannot be redrawn - the cursor can only be
+	# sent up one row - so the width it is drawn to is never trusted raw.
+	var columns := OS.get_environment(LabConsole.WIDTH_ENV)
+	OS.set_environment(LabConsole.WIDTH_ENV, "")
+	assert_eq(LabConsole.width(), LabConsole.DEFAULT_WIDTH, "no answer: 80")
+	OS.set_environment(LabConsole.WIDTH_ENV, "12")
+	assert_eq(LabConsole.width(), 40, "absurdly narrow clamps up")
+	OS.set_environment(LabConsole.WIDTH_ENV, "400")
+	assert_eq(LabConsole.width(), 120, "and absurdly wide clamps down")
+	OS.set_environment(LabConsole.WIDTH_ENV, columns)
+
+
+func test_the_progress_line_fits_its_terminal() -> void:
+	for columns in [40, 60, 80, 120]:
+		var narrow := LabConsole.progress_line(37, 200, 12.0, "games", columns)
+		assert_lte(narrow.length(), columns,
+			"a line longer than the terminal wraps, and a wrapped line cannot"
+			+ " be redrawn (columns=%d): %s" % [columns, narrow])
+	# The bar keeps ONE length for the whole run: a bar that breathes in
+	# and out as the numbers grow is unreadable at four redraws a second.
+	var early := LabConsole.progress_line(7, 2000, 3.0, "games", 80)
+	var late := LabConsole.progress_line(1999, 2000, 300.0, "games", 80)
+	assert_eq(early.length(), late.length(),
+		"%s\n%s" % [early, late])
+	var line := LabConsole.progress_line(50, 200, 10.0, "games", 80)
+	assert_string_contains(line, "25%")
+	assert_string_contains(line, "50/200 games")
+	assert_string_contains(line, "eta", "how much longer, not just how far")
+	# Nothing to divide by: no crash, no nan, no promise.
+	var empty := LabConsole.progress_line(0, 0, 0.0, "games", 80)
+	assert_false(empty.to_lower().contains("nan"), empty)
+	assert_false(empty.contains("eta"), "no rate yet, so no estimate")
+	# Finished: the elapsed time replaces the estimate of it.
+	var done := LabConsole.progress_line(200, 200, 20.0, "games", 80)
+	assert_string_contains(done, "100%")
+	assert_false(done.contains("eta"))
+
+
+func test_durations_and_counts_read_like_english() -> void:
+	assert_eq(LabConsole.duration(8.4), "8.4s")
+	assert_eq(LabConsole.duration(64.0), "1m 04s")
+	assert_eq(LabConsole.duration(3600.0 + 660.0), "1h 11m")
+	assert_eq(LabConsole.commas(10000), "10,000")
+	assert_eq(LabConsole.commas(999), "999")
+	assert_eq(LabConsole.commas(1234567), "1,234,567")
+	assert_eq(LabConsole.commas(0), "0")
+
+
+func test_closest_finds_the_typo_and_refuses_nonsense() -> void:
+	var flags := PackedStringArray(["--games", "--gauntlet", "--seed", "--jobs"])
+	assert_eq(LabConsole.closest("--gmaes", flags, 1)[0], "--games",
+		"one transposition is still the flag that was meant")
+	assert_true(LabConsole.closest("--zzzzzz", flags).is_empty(),
+		"a suggestion nobody meant is worse than none")
+	# The spread drops a distant runner-up: `--gamez` is 0.83 against
+	# `--games` and 0.50 against `--names`, and offering both makes the
+	# right answer look like a guess.
+	assert_eq(LabConsole.closest("--gamez", flags, 2, 0.4, 0.05).size(), 1)
+	assert_eq(LabConsole.closest("--gamez", flags, 2, 0.4, 1.0).size(), 2,
+		"and without a spread both are still there")
+
+
+# -------------------------------------------- reading a win rate honestly --
+
+
+func test_an_interval_that_spans_50_percent_is_not_a_result() -> void:
+	# THE LESSON THIS ENCODES: 88-112 over 200 games reads as "this deck is
+	# worse" and is not - 50% is inside its interval. Three AI passes have
+	# been argued from a percentage whose interval said nothing.
+	var even := SimStats.wilson_interval(88, 200)
+	assert_almost_eq(even.mid, 0.44, 0.001)
+	assert_false(SimStats.is_decided(even), "44% over 200 games is still even")
+	assert_true(SimStats.is_decided(SimStats.wilson_interval(880, 2000)),
+		"the same win rate over 2000 games IS decided")
+	assert_true(SimStats.is_decided(SimStats.wilson_interval(337, 400)))
+
+
+func test_the_interval_width_a_sample_size_buys() -> void:
+	# The table --help prints, and the sentence every report now ends with.
+	assert_almost_eq(SimStats.margin_at(200), 0.0686, 0.0005)
+	assert_almost_eq(SimStats.margin_at(10000), 0.0098, 0.0005)
+	assert_lt(SimStats.margin_at(1000), SimStats.margin_at(100),
+		"more games, tighter interval")
+	assert_eq(SimStats.margin_at(0), 0.5, "no games: anything at all")
+	# ...and the same question asked the way people ask it out loud.
+	var needed := SimStats.games_for_margin(0.03)
+	assert_between(needed, 900, 1200, "about a thousand games for +-3 points")
+	assert_lte(SimStats.margin_at(needed), 0.03, "the answer really is enough")
+	assert_gt(SimStats.margin_at(needed - 1), 0.03, "and it is the SMALLEST one")
+
+
+func test_standings_count_a_decks_wins_from_both_sides_of_the_pairing() -> void:
+	# THE BUG THIS WOULD CATCH: a matrix reports pair rows only, and a deck
+	# is the ROW of some pairs and the COLUMN of others. Reading a_wins
+	# alone would credit half of every deck's record to its opponents.
+	# (The DeckLab README's own sideboard table was worked out by hand from
+	# the pair rows for want of this.)
+	var names := ["A", "B", "C"]
+	var pairs := [[0, 1], [0, 2], [1, 2]]
+	var stats := [
+		{"a_wins": 60, "b_wins": 40},   # A beats B
+		{"a_wins": 70, "b_wins": 30},   # A beats C
+		{"a_wins": 55, "b_wins": 45},   # B beats C
+	]
+	var table := SimStats.standings(names, pairs, stats)
+	assert_eq(table.size(), 3)
+	assert_eq(table[0]["name"], "A", "best first")
+	assert_eq(table[0]["wins"], 130)
+	assert_eq(table[0]["losses"], 70)
+	assert_eq(table[1]["name"], "B", "B is 95-115 across the matrix")
+	assert_eq(table[1]["wins"], 95, "40 as B's column, 55 as its row")
+	assert_eq(table[1]["losses"], 105)
+	assert_eq(table[2]["name"], "C")
+	assert_eq(table[2]["wins"], 75)
+	assert_almost_eq(float(table[0]["winrate"]["mid"]), 0.65, 0.001)
+
+
+func test_the_report_says_in_words_what_the_sample_can_see() -> void:
+	var lab := _lab()
+	var deck := DeckList.new()
+	deck.deck_name = "Big Green"
+	var decks: Array[DeckList] = [deck]
+	var even := SimStats.summarize(_records(88, 112))
+	var block: PackedStringArray = lab._reading_block("duel",
+		{"games": 200}, decks, [[0, 1]], [even], "games")
+	var text := "\n".join(block)
+	assert_string_contains(text, "+-6.9 points")
+	assert_string_contains(text, "decided: 0 of 1 matchup")
+	assert_string_contains(text, "1 still even")
+	assert_string_contains(text, "a +-3.0 point interval needs 1,064 games",
+		"and what it would take to settle the question")
+	# A decided matchup says so, and stops offering the sample-size advice.
+	var lopsided := SimStats.summarize(_records(160, 40))
+	var decided: PackedStringArray = lab._reading_block("duel",
+		{"games": 200}, decks, [[0, 1]], [lopsided], "games")
+	assert_string_contains("\n".join(decided), "decided: 1 of 1 matchup")
+	assert_false("\n".join(decided).contains("needs"),
+		"nothing to advise when the run answered its question")
+	# report.txt has always been pure ASCII, and other tooling reads it.
+	for line in block:
+		assert_eq(line.to_utf8_buffer().size(), line.length(),
+			"report.txt stays ASCII: " + line)
+
+
+## `wins` wins and `losses` losses, alternating who was on the play, in
+## the record shape [method SimStats.summarize] reads.
+func _records(wins: int, losses: int) -> Array:
+	var records: Array = []
+	for i in wins + losses:
+		records.append({"a_won": i < wins, "a_on_play": i % 2 == 0,
+			"turns": 17, "stalled": false, "drawn": false})
+	return records
+
+
+# -------------------------------------------------- errors worth reading --
+
+
+func test_a_deck_name_finds_the_deck_file_it_meant() -> void:
+	# THE SINGLE MOST COMMON MISTAKE THIS TOOL SEES: a deck argument is a
+	# PATH, and the name a person has to type is the one they last saw in a
+	# REPORT, where it is spelled "Big Green".
+	var lab := _lab()
+	var pool := PackedStringArray(["decks/big_green.deck",
+		"decks/blue_skies.deck", "decks/1997/originals/coral_reef.dck"])
+	assert_eq(lab.suggest_decks("Big Green", pool, 1),
+		PackedStringArray(["decks/big_green.deck"]))
+	assert_eq(lab.suggest_decks("big-green", pool, 1),
+		PackedStringArray(["decks/big_green.deck"]), "dashes read as spaces")
+	assert_eq(lab.suggest_decks("BIG_GREEN.DECK", pool, 1),
+		PackedStringArray(["decks/big_green.deck"]), "case is not a mistake")
+	assert_eq(lab.suggest_decks("coral reef", pool, 1),
+		PackedStringArray(["decks/1997/originals/coral_reef.dck"]),
+		"and it reaches into the subfolders, where 300 decks live")
+	assert_true(lab.suggest_decks("qwertyuiop", pool).is_empty(),
+		"a suggestion nobody meant is worse than none")
+
+
+func test_an_unknown_flag_names_the_flag_that_was_meant() -> void:
+	var lab := _lab()
+	assert_eq(lab.unknown_option("--gamez"),
+		"unknown option '--gamez' — did you mean --games?",
+		"the confident match is not diluted by a runner-up")
+	assert_string_contains(lab.unknown_option("--gmaes"), "--games")
+	assert_string_contains(lab.unknown_option("--jbos"), "--jobs",
+		"0.40 is still a typo worth naming")
+	assert_string_contains(lab.unknown_option("--deck_a"), "--deck-a")
+	assert_eq(lab.unknown_option("--wat"), "unknown option '--wat'",
+		"nothing close: say so and stop guessing")
+	var opts := _parse(BASE + ["--gmaes", "10"])
+	assert_true(opts.has("error"))
+	assert_string_contains(str(opts.error), "did you mean --games?")
+
+
+func test_a_flag_with_no_value_says_what_the_value_would_have_been() -> void:
+	var opts := _parse(["--deck-a", "x.deck", "--deck-b", "y.deck", "--games"])
+	assert_true(opts.has("error"))
+	assert_string_contains(str(opts.error), "--games needs a value")
+	assert_string_contains(str(opts.error), "games per matchup",
+		"the hint table answers the question the error raises")
+	assert_string_contains(str(_parse(BASE + ["--seed", "abc"]).error),
+		"base RNG seed", "and a wrong value gets the same courtesy")
+
+
+func test_every_flag_is_documented_and_the_tables_are_the_parsers_own() -> void:
+	# A flag --help does not mention is a flag nobody can use, and the two
+	# hint tables ARE the parser's list of flags - so this pins every
+	# switch to a line of the manual, in both directions.
+	var lab := _lab()
+	var help: String = lab.HELP
+	for flag in lab.FLAG_HINTS:
+		assert_true(help.contains(String(flag)), "--help documents %s" % flag)
+		assert_true(String(lab.FLAG_HINTS[flag]).begins_with(String(flag)),
+			"the hint for %s starts by naming it" % flag)
+	for flag in lab.TOGGLE_HINTS:
+		assert_true(help.contains(String(flag)), "--help documents %s" % flag)
+	# Every value-taking flag really is accepted by the parser.
+	for flag in lab.FLAG_HINTS:
+		var missing := _parse([String(flag)])
+		assert_true(missing.has("error"), String(flag))
+		assert_string_contains(str(missing.error), "needs a value",
+			"%s is in the table, so the parser takes a value for it" % flag)
+
+
+func test_the_quiet_switches_are_chrome_and_never_reach_a_duel() -> void:
+	# They must not be able to change a result - a run is the same run
+	# whether or not anybody was watching it.
+	var loud := _parse(BASE)
+	assert_false(loud.quiet)
+	assert_false(loud.no_banner)
+	assert_true(_parse(BASE + ["--no-banner"]).no_banner)
+	var quiet := _parse(BASE + ["--quiet"])
+	assert_true(quiet.quiet)
+	assert_true(quiet.no_banner, "--quiet implies --no-banner")
+	for key in ["lives", "ante", "names", "format", "mulligan", "rules",
+			"rule_overrides", "best_of", "sideboard", "games", "seed"]:
+		assert_eq(quiet[key], loud[key], key)
+
+
+# ------------------------------------------------- the process fan-out --
+#
+# Games are played in separate PROCESSES, not just separate threads,
+# because the thread pool stops scaling at four and gets worse after
+# that. Measured on an idle 22-core machine, one 1,000-game duel:
+# in-process 52.6 games/s, eight processes 114.7 — and `matchups.csv`
+# byte-identical between them, which is the only reason it is allowed.
+#
+# The spawning itself is not unit-tested (a test that starts eight Godots
+# belongs in a benchmark, not in a suite that runs in four minutes); what
+# is tested is the decision of how many to start, which is where a
+# mistake would silently change every measurement's cost.
+
+
+## The constants, read off the script rather than through a `class_name`
+## the file does not have. `_lab()` above is the instance accessor and it
+## already handles the SceneTree-leaks-a-Window problem.
+func _sim_const(name: String) -> Variant:
+	return load("res://DeckLab/simulate.gd").get_script_constant_map()[name]
+
+
+func test_a_short_run_stays_in_process() -> void:
+	# A process costs ~1.5 s to start and import; a run shorter than the
+	# floor finishes before a fan-out would have begun playing.
+	assert_eq(_lab()._process_count({}, 8), 1,
+		"eight games is not worth a fan-out")
+	assert_eq(_lab()._process_count({}, int(_sim_const("FAN_OUT_FLOOR")) - 1), 1)
+
+
+func test_a_real_run_fans_out() -> void:
+	var n: int = _lab()._process_count({}, 1000)
+	assert_gt(n, 1, "a thousand games fans out")
+	assert_lte(n, int(_sim_const("AUTO_PROCS")), "…but never past the auto ceiling")
+	assert_lte(n, OS.get_processor_count(), "…nor past the cores")
+
+
+func test_the_flag_wins_over_the_guess() -> void:
+	assert_eq(_lab()._process_count({"procs": 1}, 10000), 1,
+		"--procs 1 turns it off, however big the run")
+	assert_eq(_lab()._process_count({"procs": 32}, 10000), 32,
+		"…and a number is taken at its word: the machine is the user's")
+
+
+func test_the_ceiling_is_a_memory_decision_and_says_so() -> void:
+	# Throughput still climbs past eight (16 processes measured 145
+	# games/s in a 240-game run); the ceiling is RAM, at ~235 MB a
+	# process. If someone raises it they should be raising it knowingly.
+	assert_eq(int(_sim_const("AUTO_PROCS")), 8)
