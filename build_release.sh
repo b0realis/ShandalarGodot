@@ -119,6 +119,29 @@ if [ "$PACKAGE" = 1 ]; then
 	# player fills those paths, so they travel WITH it rather than being
 	# a link in it. All three are read-only text next to the binary.
 	cp -p docs/setup.txt "$STAGE/setup.txt"
+	# THE DECK LAB, SHIPPED. The scripts ride inside the .pck (the export
+	# preset no longer excludes DeckLab/), and the game binary hosts them
+	# through its own `--deck-lab` flag — a release template ignores
+	# `--script`, so that is the only way in. This launcher is the same
+	# one-liner the repo's DeckLab/deck_lab.sh wraps, minus everything
+	# that only makes sense in a checkout.
+	cp -p DeckLab/README.md "$STAGE/DECKLAB.md"
+	cat > "$STAGE/deck_lab.sh" <<'LAB'
+#!/usr/bin/env bash
+# Deck Lab — headless AI-vs-AI deck testing, run by the game itself.
+#
+#   ./deck_lab.sh --help
+#   ./deck_lab.sh --deck-a res://decks/big_green.deck \
+#                 --deck-b res://decks/blue_skies.deck --games 200
+#
+# The 317 shipped decks live inside the game and are addressed as
+# `res://decks/...`; your own are ordinary paths. DECKLAB.md is the manual.
+set -euo pipefail
+cd "$(dirname "$0")"
+[ -t 2 ] && export DECK_LAB_TTY=1 || export DECK_LAB_TTY=0
+exec ./Shandalar.x86_64 --headless --no-header -- --deck-lab "$@"
+LAB
+	chmod +x "$STAGE/deck_lab.sh"
 	cp -p tools/mtg_assets.py tools/import_original.py \
 	      tools/fetch_card_art.py "$STAGE/"
 	echo "packaging art..."

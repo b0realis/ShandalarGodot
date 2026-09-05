@@ -95,7 +95,30 @@ const MENU_BEDS: Array[String] = [
 var _music: MusicPlayer
 
 
+## The flag that turns the shipped game into the Deck Lab.
+##
+## THE EXPORTED BINARY WILL NOT RUN `--script`. That flag is honoured by
+## the editor and by a debug template; a release template ignores it and
+## launches the game instead (measured 2026-09-05: the process simply ran
+## the title screen until the timeout killed it). So the lab cannot be
+## reached from outside — it has to be let in from the inside, and the
+## title screen is the first of our code that runs.
+##
+## The cost is one string comparison before anything is built, and the
+## gain is that a player who downloaded a 296 MB zip has the same
+## thousand-game deck tester the developers use, against the same engine
+## that just played their duel. `DeckLab/README.md` is its manual and
+## ships beside the binary.
+const DECK_LAB_FLAG := "--deck-lab"
+
+
 func _ready() -> void:
+	# BEFORE THE SCREEN IS BUILT, and before the card pool is loaded: the
+	# lab loads its own and the shell has nothing to contribute to a
+	# headless run.
+	if OS.get_cmdline_user_args().has(DECK_LAB_FLAG):
+		_run_deck_lab()
+		return
 	CardRegistry.ensure_loaded()
 	var title_bg := GameSkin.texture("title_background")
 	if title_bg != null:
@@ -335,6 +358,28 @@ func _apply_music_switch() -> void:
 func _exit_tree() -> void:
 	if is_instance_valid(_music):
 		_music.stop_music()
+
+
+## Hand the rest of the command line to the Deck Lab and quit with its
+## exit code.
+##
+## `simulate.gd` extends [SceneTree] because it is normally the whole
+## program; constructed here it is an ordinary Object that happens to
+## build a root window, so it is freed explicitly rather than left to a
+## queue it never reaches. Nothing of the shell is touched — this
+## function does not return.
+func _run_deck_lab() -> void:
+	var args := OS.get_cmdline_user_args()
+	var forwarded := PackedStringArray()
+	for arg in args:
+		if arg != DECK_LAB_FLAG:
+			forwarded.append(arg)
+	var lab: Object = load("res://DeckLab/simulate.gd").new()
+	var code := 1
+	if lab.has_method("_main"):
+		code = int(lab.call("_main", forwarded))
+	lab.free()
+	get_tree().quit(code)
 
 
 ## One shell button, at this screen's size.

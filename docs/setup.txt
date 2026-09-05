@@ -27,6 +27,8 @@ your home directory.
     Shandalar.pck        its code, the 897 cards' rules, and 317 decks
     skin/                the 1997 art
     run.sh               a launcher that sets the working directory
+    deck_lab.sh          headless deck testing (section 6)
+    DECKLAB.md           its manual
     setup.txt            this file
 
 The .pck holds no art of any kind. Art is read off the filesystem at
@@ -117,7 +119,34 @@ that is fine — every asset is independent.
 
 
 ---------------------------------------------------------------------
-6. THE COIN TOSS
+6. TESTING DECKS — THE DECK LAB
+---------------------------------------------------------------------
+
+The same headless simulator the game's own AI was tuned with ships here.
+It plays whole duels with no graphics and reports each win rate with the
+interval that says how much of it to believe.
+
+    ./deck_lab.sh --help
+    ./deck_lab.sh --deck-a res://decks/big_green.deck \
+                  --deck-b res://decks/blue_skies.deck --games 200
+    ./deck_lab.sh --matrix res://decks/ --games 200
+
+The 317 decks that shipped with the game live inside it and are addressed
+as `res://decks/...`; a deck of your own is an ordinary path. Results go
+to a folder you name with --out: a readable report.txt, a results.json, a
+matchups.csv and two SVG charts.
+
+It is the game binary doing the work — same engine, same rules, same AI
+that just played your duel — so a number it gives you is a number about
+the game you are actually playing. DECKLAB.md beside this file is the
+full manual.
+
+A word about how many games: 200 tells you very little. The tool says so
+in words at the end of every run, and `--help` has the table.
+
+
+---------------------------------------------------------------------
+7. THE COIN TOSS
 ---------------------------------------------------------------------
 
 The duel opens on a tossed coin, and in 1997 that was a movie:
@@ -141,7 +170,7 @@ Without any of it the toss plays a coin the game draws itself.
 
 
 ---------------------------------------------------------------------
-7. IF SOMETHING LOOKS WRONG
+8. IF SOMETHING LOOKS WRONG
 ---------------------------------------------------------------------
 
 Unreadable text on a panel, a missing picture, a card with no frame: the

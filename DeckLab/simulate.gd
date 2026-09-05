@@ -951,9 +951,23 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 		# terminal with Godot's version line and a fanned-out run opens
 		# with eight identical banners (caught by running it, 2026-09-05).
 		# The shell already passes it for the parent.
-		var pid := OS.create_process(exe, ["--headless", "--no-header",
-			"--path", root, "--script", "res://DeckLab/simulate.gd", "--",
-			WORKER_FLAG, in_path, out_path])
+		# TWO WAYS IN, because there are two kinds of binary. From a
+		# checkout the child is `--script simulate.gd`, the route the
+		# shell uses. From the SHIPPED GAME that flag does nothing: a
+		# release export template ignores `--script` and launches the
+		# title screen instead (measured 2026-09-05 — the children ran
+		# the game, never wrote a slice, and the parent polled until the
+		# run was killed). There the way in is the game's own
+		# `--deck-lab`, which `MainScreen._ready` intercepts.
+		var child_args := PackedStringArray(["--headless", "--no-header"])
+		if OS.has_feature("template"):
+			child_args.append_array(PackedStringArray(["--", "--deck-lab",
+				WORKER_FLAG, in_path, out_path]))
+		else:
+			child_args.append_array(PackedStringArray(["--path", root,
+				"--script", "res://DeckLab/simulate.gd", "--",
+				WORKER_FLAG, in_path, out_path]))
+		var pid := OS.create_process(exe, child_args)
 		if pid <= 0:
 			_clean_fan(dir, pids)
 			return false
@@ -969,10 +983,25 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 		for slice in slices:
 			if FileAccess.file_exists(String(slice["out"])):
 				done += 1
-		if done < slices.size():
-			_progress(done * per, _tasks.size(),
-				(Time.get_ticks_msec() - started_at) / 1000.0, unit, procs)
-			OS.delay_msec(200)
+		if done == slices.size():
+			break
+		# A CHILD THAT DIED CANNOT BE WAITED FOR. If every process has
+		# exited and a slice is still missing, the work is not coming —
+		# polling on is a hang, and this project has lost hours to a wait
+		# that could never end. Give up; the caller plays the games
+		# in-process instead and the only cost is time.
+		var alive := false
+		for pid in pids:
+			if OS.is_process_running(int(pid)):
+				alive = true
+				break
+		if not alive:
+			printerr("deck_lab: a worker exited without writing its slice — running in-process instead")
+			_clean_fan(dir, pids)
+			return false
+		_progress(done * per, _tasks.size(),
+			(Time.get_ticks_msec() - started_at) / 1000.0, unit, procs)
+		OS.delay_msec(200)
 	for pid in pids:
 		if OS.is_process_running(int(pid)):
 			OS.kill(int(pid))
