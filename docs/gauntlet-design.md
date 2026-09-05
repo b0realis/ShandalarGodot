@@ -598,7 +598,7 @@ The honest headline: **we already have the inner two thirds of this mode.**
   loader, a `DeckList` parser that round-trips `SB:` sideboards, and
   `DeckFormat` legality.
 - **`--gauntlet` in the Deck Lab is a different thing and must not be
-  confused with this.** `tools/simulate.gd` uses the word for "deck A vs
+  confused with this.** `DeckLab/simulate.gd` uses the word for "deck A vs
   each of a pool, N games per matchup" — a round-robin measurement, not a
   survival run. It keeps its name; this mode is the game one.
 
@@ -948,7 +948,7 @@ the 1997 gauntlet's round counter is a real, addressable game global, and
 a mode built on it is the natural extension. If this project ever wants a
 scripted ladder, this is where it hangs.
 
-**Our own Deck Lab `--gauntlet`** (`tools/simulate.gd`, `docs/deck-lab.md`)
+**Our own Deck Lab `--gauntlet`** (`DeckLab/simulate.gd`, `DeckLab/README.md`)
 is a round-robin measurement harness and shares nothing with this but the
 word. It keeps its name.
 

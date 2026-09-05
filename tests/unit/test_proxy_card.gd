@@ -213,7 +213,7 @@ func test_the_deck_lab_refuses_a_proxy_deck_naming_the_cards() -> void:
 	file.close()
 	# autofree: simulate.gd extends SceneTree, whose constructor builds a
 	# root Window — an orphan node for the rest of the run without this.
-	var lab: Object = autofree(load("res://tools/simulate.gd").new())
+	var lab: Object = autofree(load("res://DeckLab/simulate.gd").new())
 	assert_null(lab._load_deck(path), "the Lab will not load it")
 	# ...and it accepts the same deck once the proxy is gone.
 	var clean := "user://decks/proxy_lab_clean.deck"

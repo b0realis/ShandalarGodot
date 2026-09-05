@@ -1295,7 +1295,7 @@ shandalar/
 │   │                          AI-vs-AI deck testing: duel & gauntlet
 │   │                          modes, WorkerThreadPool parallelism,
 │   │                          report/JSON/CSV/SVG output. Entry point:
-│   │                          ./deck_lab.sh; manual: docs/deck-lab.md
+│   │                          DeckLab/deck_lab.sh; manual: DeckLab/README.md
 │   ├── deck_convert.gd      Deck-format converter (community .deck/.dec ⇄
 │   │                          the original MicroProse .dck); entry point
 │   │                          ./deck_convert.sh
@@ -1345,7 +1345,7 @@ shandalar/
 │                              exported build looks like a dev checkout).
 │                              Default output ../shandalar-build/linux64/
 ├── decks/                   Shipped five-style gauntlet (.deck files —
-│   │                          format in docs/deck-lab.md); a CI test
+│   │                          format in DeckLab/README.md); a CI test
 │   │                          keeps every deck valid vs the card pool.
 │   │                          The Deck Builder writes to user://decks/
 │   │                          instead (res:// is read-only in an export);
@@ -1385,7 +1385,7 @@ shandalar/
 │   │                          lists (2014-18) and two Reanimator lists
 │   │                          that lean on cards outside the pool; one
 │   │                          proxy-free
-│   └── ratings.txt          The Deck Lab's Elo ledger (tools/elo_ledger.gd)
+│   └── ratings.txt          The Deck Lab's Elo ledger (DeckLab/elo_ledger.gd)
 ├── sim_results/             Deck Lab output, run_<stamp>/ per run; not
 │                              source. Carries a .gdignore (and the tool
 │                              writes one into any run directory inside

@@ -494,7 +494,7 @@ func _expand_label() -> String:
 
 func _flip_expand() -> void:
 	var on := not CardPreview.expand_wanted()
-	Settings.set_value(CardPreview.EXPAND_SETTING, on)
+	CardPreview.set_expand(on)
 	expand_button.button_pressed = on
 	expand_button.text = _expand_label()
 	expand_toggled.emit(on)

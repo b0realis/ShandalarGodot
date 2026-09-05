@@ -176,7 +176,7 @@ beside the binary so players read the same file you edit.
 | [docs/mechanics.md](docs/mechanics.md) | Every mechanic the engine implements, its CR rule and the class behind it |
 | [Provenance.md](Provenance.md) | Every source, which outranks which, and the traps in reading them |
 | [docs/simplified-cards.md](docs/simplified-cards.md) | The fidelity ledger: every card that deviates from its printed text |
-| [docs/deck-lab.md](docs/deck-lab.md) | The headless AI-vs-AI deck testing harness |
+| [DeckLab/README.md](DeckLab/README.md) | The headless AI-vs-AI deck testing harness |
 
 A taste of what a card looks like (`cards/sets/2ed/lightning_bolt.gd`):
 

@@ -536,9 +536,28 @@ var _text_expanded := false
 ## it defaulted to, so this is our choice and is labelled as one.
 const EXPAND_SETTING := "ExpandTextBoxOnBigCard"
 
-
+## Whether the Showcase's text box should grow when the text needs it.
+##
+## FALSE, because the framing is the 1997 one. The box the original draws
+## is part of how a card looks, and a build that quietly grew it for two
+## hundred cards would be showing the player something MicroProse never
+## did. The toggle is the answer instead — and the real defect the
+## 2026-09-05 playtest found was not the default, it was that the Deck
+## Builder never read this setting at all and that the only door to it was
+## an undiscoverable right-click.
+##
+## What "off" costs is measured, not guessed: 209 of 897 cards drop a font
+## step to fit and seven clip even then. One click on the Showcase's
+## toggle takes all of them whole (`tests/ui/test_card_preview.gd`).
 static func expand_wanted() -> bool:
-	return bool(Settings.get_value(EXPAND_SETTING, true))
+	return bool(Settings.get_value(EXPAND_SETTING, false))
+
+
+## Write the player's choice. ONE WRITER for both doors — the duel's
+## `@MENU_FULLCARD` entry and the Deck Builder's toggle — so the two can
+## never disagree about which key they mean.
+static func set_expand(on: bool) -> void:
+	Settings.set_value(EXPAND_SETTING, on)
 
 
 func set_text_expanded(on: bool) -> void:

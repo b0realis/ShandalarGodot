@@ -51,7 +51,7 @@ its own section below.
   and trample on both sides. A/B against the old pilot over 1000 games:
   **65.5% as Wizard, 55.9% as Apprentice**, profiles still ordered, 0
   stalls; 35 tests in `tests/ai/test_ai_capabilities.gd`, one per fixed
-  weakness (docs/deck-lab.md has the before/after matrix). The switches
+  weakness (DeckLab/README.md has the before/after matrix). The switches
   were already wired end to end (setup screen `AI difficulty:` picker and
   `Sideboard between duels` box, Lab `--profile-a/-b` and `--sideboard
   on|off`); they explain themselves on hover now and the Lab's help no
@@ -1904,7 +1904,7 @@ damage taken per COLOUR) and `engine/ai/ai_sideboard.gd` (the swap).
 Magician 2, Sorcerer 3, Wizard 4) and `mistake_chance` fumbles individual
 swaps, so there is no second difficulty concept. `game/match_screen.gd`
 sideboards its AI seats the moment a duel is recorded — no window, because
-an AI seat has no use for one — and `tools/simulate.gd` grew `--best-of`
+an AI seat has no use for one — and `DeckLab/simulate.gd` grew `--best-of`
 and `--sideboard`, where one unit of work is now a MATCH.
 
 **The three invariants each have a test** (`tests/ai/test_ai_sideboard.gd`,
@@ -1927,7 +1927,7 @@ the largest single move is Black-Red Raiders vs Blue Skies, **18.3% →
 Blue Skies, the best deck in the field, is the deck sideboarding costs
 most — what happens to the best deck when everyone else gets answers to
 it. Determinism holds: identical output across runs and across `--jobs`.
-Full table in `docs/deck-lab.md`.
+Full table in `DeckLab/README.md`.
 
 **What was deliberately NOT built.** "Score every main-deck card for how
 little it DID" is answered as "how little it can do in THIS matchup",
@@ -1951,7 +1951,7 @@ only missing piece is the seat that cannot use it.
 AI opponent is currently a match in which only one side adapts, which is
 worse than not offering the step at all. And the Deck Lab is AI vs AI, so
 `--sideboard on|off` there would change nothing whatever — which is why
-that flag and `--best-of` are still absent from the CLI (docs/deck-lab.md).
+that flag and `--best-of` are still absent from the CLI (DeckLab/README.md).
 Both land the moment this does.
 
 **What the AI actually knows.** Not the opponent's decklist — knowing it
@@ -2305,10 +2305,10 @@ names.
 
 ## Deck Lab (SHIPPED 2026-08-30)
 
-Headless AI-vs-AI deck testing at 10k-game scale: `./deck_lab.sh` — duel
+Headless AI-vs-AI deck testing at 10k-game scale: `DeckLab/deck_lab.sh` — duel
 and gauntlet modes, Wilson-CI statistics with play/draw splits, JSON/CSV/
 SVG output, WorkerThreadPool parallelism with seed-stable determinism at
-any thread count. Manual: docs/deck-lab.md. Owed next: a stall/bug
+any thread count. Manual: DeckLab/README.md. Owed next: a stall/bug
 auto-report bundle (seed + decks + log on any stalled game), matchup
 matrices (every deck vs every deck), and Elo-style gauntlet ladders.
 
@@ -2451,7 +2451,7 @@ Recorded here rather than half-wired, per the pass's own brief.
   exactly why they could land: with AI sideboarding the decks are no
   longer fixed, so a best-of-N is no longer N independent duels and its
   match win rate is no longer a closed-form function of the duel win rate.
-  `--best-of` and `--sideboard` are in `tools/simulate.gd`; the experiment
+  `--best-of` and `--sideboard` are in `DeckLab/simulate.gd`; the experiment
   they were added for is above.
 - **`<random deck>` in the Deck Lab.** The Lab is told which decks to
   compare; choosing one at random is the opposite of the question it

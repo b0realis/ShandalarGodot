@@ -21,7 +21,7 @@ labelled as such and were not "fixed". Suite at the end of the pass:
 GUT reported **63 orphans** at the end of every run. Every one of them was a
 `Window`, and the listing named the tests: `tests/tools/test_deck_lab.gd`
 (62) and `tests/unit/test_proxy_card.gd` (1). Both reach the Deck Lab's
-argument parser through `load("res://tools/simulate.gd").new()`.
+argument parser through `load("res://DeckLab/simulate.gd").new()`.
 
 `simulate.gd` extends `SceneTree`. A `SceneTree` is a plain `Object` — not
 `RefCounted` — and it builds a root `Window` the moment it is constructed.
@@ -48,7 +48,7 @@ artefact of asserting synchronously after a rebuild.
 
 | Area | Issue | Severity | Pinned by |
 |---|---|---|---|
-| `CardRegistry` (thread safety) | The card-name → first-printing index and the illustrator index were each built **lazily**, and each set its `_loaded` flag **before** filling its dictionary. `originally_printed_in` is asked from inside a game (City in a Bottle, Golgothian Sylex) and `tools/simulate.gd` fans games out over a `WorkerThreadPool`. An 8-thread probe on a cold index measured **7 of 8 threads answering `false` for a card that is an Arabian Nights original**, and the process **segfaulted within ten cold starts** — two threads writing one `Dictionary`. Both indexes now come from ONE pass that `ensure_loaded()` runs, so no worker ever finds it cold, and the build fills locals and publishes them before flipping the flag. | HIGH | `test_the_printing_index_is_built_before_a_worker_thread_can_ask` |
+| `CardRegistry` (thread safety) | The card-name → first-printing index and the illustrator index were each built **lazily**, and each set its `_loaded` flag **before** filling its dictionary. `originally_printed_in` is asked from inside a game (City in a Bottle, Golgothian Sylex) and `DeckLab/simulate.gd` fans games out over a `WorkerThreadPool`. An 8-thread probe on a cold index measured **7 of 8 threads answering `false` for a card that is an Arabian Nights original**, and the process **segfaulted within ten cold starts** — two threads writing one `Dictionary`. Both indexes now come from ONE pass that `ensure_loaded()` runs, so no worker ever finds it cold, and the build fills locals and publishes them before flipping the flag. | HIGH | `test_the_printing_index_is_built_before_a_worker_thread_can_ask` |
 | Text changes (CR 613 layer 3) | A `land_type` text change **replaced the whole live mana-ability list** with a single ability for the new type. A land has one intrinsic mana ability per basic land type it carries (CR 305.6), so Magical Hack on a **Tundra** (`island` → `swamp`) left a permanent whose type line still read Plains Swamp but which tapped only for {B}. Rewriting a type onto one the land already had also duplicated the subtype. | HIGH | `test_hacking_one_half_of_a_dual_land_keeps_the_other_half`, `..._does_not_double_it` |
 | Combat / CR 708.2 | `cant_be_blocked_by`, `cant_block_power_ge` and `cant_be_blocked_by_power_ge` were the last combat characteristics with **no live mirror**, so `CombatState.block_illegality` read them off the printed `CardData` (CONTRIBUTING.md rule 5). A **Juggernaut** put onto the battlefield face down by Illusionary Mask — a nameless 2/2 with no abilities — still refused a Wall block; a masked Ironclaw Orcs still refused to block, a masked Amrou Kithkin still refused big blockers. Three `cur_*` fields, reset from print and cleared by the face-down branch. | HIGH | `test_a_masked_juggernaut_can_be_blocked_by_a_wall` (+2) |
 | Battle setup (`game/setup_screen.gd`) | `_start_battle` loaded each deck strictly and **never looked at `deck.errors`**. A deck deleted between the scan and Go!, or `<random deck>` with an empty playable pool (which resolves to the path `""`), handed the seat `cards == []` and started the duel with an **empty library**. Neither existing gate catches it: `ProxyCard.refusal_for([], [])` is `""` and no format has a minimum deck size. | HIGH | `test_go_refuses_a_deck_the_parser_could_not_read`, `test_go_refuses_a_seat_with_no_deck_file_at_all` |
@@ -66,7 +66,7 @@ artefact of asserting synchronously after a rebuild.
 
 ### Output-format note for the Deck Lab
 
-`tools/simulate.gd`'s determinism check compares `report.txt`, `results.json`
+`DeckLab/simulate.gd`'s determinism check compares `report.txt`, `results.json`
 and `matchups.csv` byte for byte, so the draw fix follows the file's own
 existing rule (the `"field"` key's comment): the draw count appears in
 `report.txt` and `results.json` **only when there is one**, and
@@ -94,7 +94,7 @@ byte-identical files, and **no default moved**.
 
 ### Checked and found clean
 
-`tools/simulate.gd`'s threading contract holds: `_run_one_game` reads only
+`DeckLab/simulate.gd`'s threading contract holds: `_run_one_game` reads only
 `_tasks[index]` and the immutable `_duel_opts`, and writes only
 `_results[index]`; every deck is loaded and validated on the main thread
 before `add_group_task`. The only shared mutable state a worker could touch

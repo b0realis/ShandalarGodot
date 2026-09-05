@@ -858,7 +858,7 @@ func test_the_type_ahead_can_reach_into_card_text() -> void:
 
 func test_the_count_line_says_where_in_the_list_you_are() -> void:
 	assert_string_contains(screen._count_label.text, "cards are in the list")
-	assert_string_contains(screen._count_label.text, "(1-",
+	assert_string_contains(screen._count_label.text, "showing 1-",
 		"[QoL] one row of nine is eighty-eight pages; say which one")
 
 
@@ -1410,11 +1410,11 @@ func test_the_count_line_follows_a_resize() -> void:
 	screen.size = Vector2(1280, 800)
 	await get_tree().process_frame
 	assert_string_contains(screen._count_label.text,
-		"(1-%d)" % screen._inventory.page_size(), "the range at 1280")
+		"showing 1-%d" % screen._inventory.page_size(), "the range at 1280")
 	screen.size = Vector2(1024, 600)
 	await get_tree().process_frame
 	assert_string_contains(screen._count_label.text,
-		"(1-%d)" % screen._inventory.page_size(),
+		"showing 1-%d" % screen._inventory.page_size(),
 		"and the range after the window narrows")
 
 
@@ -2232,7 +2232,7 @@ func test_the_corner_count_is_the_whole_list_and_not_the_page() -> void:
 	# so a hard-coded "(10-" pins the arrow width by accident.
 	assert_gt(screen._inventory.offset(), 0, "the row really paged")
 	assert_string_contains(screen._count_label.text,
-		"(%d-" % (screen._inventory.offset() + 1),
+		"showing %d-" % (screen._inventory.offset() + 1),
 		"the PAGE is the other line's job, and it did move")
 
 
@@ -2412,9 +2412,20 @@ func test_the_showcase_starts_in_the_setting_it_was_given() -> void:
 		"res://game/deck_builder/deck_builder_screen.tscn").instantiate()
 	add_child_autofree(fresh)
 	await get_tree().process_frame
-	assert_true(fresh._showcase.text_is_expanded(),
+	assert_false(fresh._showcase.text_is_expanded(),
+		"a fresh profile gets the 1997 framing")
+	# THE HALF THAT WAS ACTUALLY BROKEN: it is not that the box should
+	# start grown, it is that this screen never read the setting at all,
+	# so turning Expand on in the duel left the Deck Builder clipping.
+	Settings.set_value(CardPreview.EXPAND_SETTING, true)
+	var on: DeckBuilderScreen = load(
+		"res://game/deck_builder/deck_builder_screen.tscn").instantiate()
+	add_child_autofree(on)
+	await get_tree().process_frame
+	assert_true(on._showcase.text_is_expanded(),
 		"the Deck Builder's Showcase honours Expand — it did not until "
 		+ "2026-09-05, so a long card clipped here with no way to fix it")
+	Settings.clear_value(CardPreview.EXPAND_SETTING)
 
 
 func test_the_filter_bar_carries_a_visible_expand_toggle() -> void:

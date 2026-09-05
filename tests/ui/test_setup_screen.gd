@@ -626,7 +626,7 @@ func test_the_difficulty_and_sideboard_switches_explain_themselves() -> void:
 	# A player finds out what the four levels DO, and that the sideboard
 	# box governs the AI seats too, without leaving the screen — and the
 	# tooltips name the Deck Lab flags that are the same switches, so a
-	# tester reads one description (docs/deck-lab.md, "The switches").
+	# tester reads one description (DeckLab/README.md, "The switches").
 	var tip: String = screen._difficulty_options[1].tooltip_text
 	for level in SetupScreen.DIFFICULTIES:
 		assert_true(tip.contains(level + ":"), "the tooltip explains %s" % level)

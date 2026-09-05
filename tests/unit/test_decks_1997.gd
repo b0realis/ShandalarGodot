@@ -434,7 +434,7 @@ func test_the_deck_lab_reaches_a_group_only_when_asked_for_it() -> void:
 	# and a DIR deck that holds proxies is skipped rather than failing the
 	# whole pool — so a non-MicroProse group honestly yields only its
 	# proxy-free decks.
-	var lab: Object = autofree(load("res://tools/simulate.gd").new())
+	var lab: Object = autofree(load("res://DeckLab/simulate.gd").new())
 	assert_eq(lab._expand_pool("decks/", "").size(), 5, "the default field")
 	lab._group_filter = DeckGroups.ORIGINALS
 	assert_eq(lab._expand_pool("decks/", "").size(), 55)

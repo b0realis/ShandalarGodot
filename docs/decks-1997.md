@@ -765,7 +765,7 @@ Proxy-free (the gauntlet deals these): `os_workshop_aggro_menendian.deck`.
   1996 (Erhnamgeddon)"*) and the list shows the title.
   `game/deck_builder/deck_store.gd` ("provenance: the shipped decks"),
   pinned by `tests/ui/test_deck_provenance.gd`.
-- **Deck Lab** (`tools/simulate.gd`, `docs/deck-lab.md`): `--group` takes
+- **Deck Lab** (`DeckLab/simulate.gd`, `DeckLab/README.md`): `--group` takes
   all eleven headings (`tournament`, `community`, `extended_community`
   among them); with `--group` a DIR is walked into its subfolders
   (`--gauntlet decks/ --group originals` is the 55, `--group community`

@@ -263,7 +263,7 @@ static var _artists: Dictionary = {}
 ## THREAD SAFETY, and the bug that put this comment here. This was two
 ## lazy builders, each of which set its "loaded" flag BEFORE filling its
 ## dictionary. Two worker threads reaching one at the same time is a real
-## Deck Lab shape (`tools/simulate.gd` fans games out over a
+## Deck Lab shape (`DeckLab/simulate.gd` fans games out over a
 ## WorkerThreadPool, and City in a Bottle / Golgothian Sylex ask
 ## `originally_printed_in` mid-game), and the second thread sailed past
 ## the flag and read an EMPTY index. Measured 2026-09-01 with an 8-thread

@@ -280,7 +280,7 @@ func test_turns_chart_handles_empty_histograms() -> void:
 ## `free()` after the test (free, not queue_free: a SceneTree is not a Node
 ## and never reaches the frame's delete queue).
 func _lab() -> Object:
-	return autofree(load("res://tools/simulate.gd").new())
+	return autofree(load("res://DeckLab/simulate.gd").new())
 
 
 func _parse(args: Array) -> Dictionary:
@@ -637,7 +637,7 @@ func test_a_crashed_run_is_not_exit_zero() -> void:
 
 ## `tools/duel_soak.gd` is a SceneTree with no class_name, so its statics
 ## are reached through the script itself — the same way this file already
-## reaches `tools/simulate.gd`.
+## reaches `DeckLab/simulate.gd`.
 func _soak() -> GDScript:
 	return load("res://tools/duel_soak.gd") as GDScript
 

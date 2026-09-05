@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deck Convert — translate between the community .deck/.dec format and the
 # original MicroProse .dck format. `./deck_convert.sh --help` for usage;
-# long-form docs in docs/deck-lab.md ("Deck formats").
+# long-form docs in DeckLab/README.md ("Deck formats").
 set -euo pipefail
 cd "$(dirname "$0")"
 

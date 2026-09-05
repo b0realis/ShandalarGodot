@@ -16,7 +16,7 @@ extends RefCounted
 ## to the gap its winrate implies (67% ≈ +123 Elo) and further identical
 ## runs move ratings only marginally — but re-running the SAME seed does
 ## re-count those games in the win/loss tallies, so give experimental
-## reruns --no-elo or a scratch --elo-file (documented in docs/deck-lab.md).
+## reruns --no-elo or a scratch --elo-file (documented in DeckLab/README.md).
 
 const DEFAULT_PATH := "decks/ratings.txt"
 const STARTING_ELO := 1500.0
@@ -55,7 +55,7 @@ func save() -> void:
 	if file == null:
 		push_error("EloLedger: cannot write %s" % path)
 		return
-	file.store_line("# Shandalar Deck Lab — Elo ledger (see docs/deck-lab.md)")
+	file.store_line("# Shandalar Deck Lab — Elo ledger (see DeckLab/README.md)")
 	file.store_line("# Standard Elo, K=%d per game, start %d. Safe to hand-edit." % [
 		int(K), int(STARTING_ELO)])
 	file.store_line("# deck | elo | games | wins | losses | updated")

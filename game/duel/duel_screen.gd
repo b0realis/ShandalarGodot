@@ -4968,7 +4968,7 @@ func _on_full_card_menu_chosen(id: int) -> void:
 	if id != 0:
 		return
 	var on := not CardPreview.expand_wanted()
-	Settings.set_value(CardPreview.EXPAND_SETTING, on)
+	CardPreview.set_expand(on)
 	if _card_preview != null:
 		_card_preview.set_text_expanded(on)
 

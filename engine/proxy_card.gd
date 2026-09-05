@@ -44,7 +44,7 @@ extends RefCounted
 ##  2. **EVERY DOOR INTO A DUEL ASKS [method refusal_for] FIRST** — the
 ##     battle-setup screen's live legality note and its `Go!` gate
 ##     (`game/setup_screen.gd`), and the Deck Lab at parse time
-##     (`tools/simulate.gd`), which is where `--format` already refuses.
+##     (`DeckLab/simulate.gd`), which is where `--format` already refuses.
 ##  3. **[method DeckList.load_file]'s STRICT MODE is the floor under both
 ##     of them**: an unknown name is an error there, it always was, and
 ##     that must not change. Import needs the LENIENT path, which is the

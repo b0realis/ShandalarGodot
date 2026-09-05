@@ -180,16 +180,17 @@ func test_expand_text_box_grows_the_showcases_text_area() -> void:
 	assert_false(screen._card_preview.text_is_expanded(), "and toggles off")
 
 
-func test_the_text_box_expands_by_default() -> void:
-	# [QoL], 2026-09-05. The original shipped the toggle
-	# (`@MENU_FULLCARD` entry 1) but we do not know what it defaulted to,
-	# so ON is our choice — and it costs the cards that already fit
-	# nothing, because the box grows only when necessary and by exactly
-	# the overflow. With it off, 209 cards drop a font step to fit and
-	# seven clip anyway; with it on, none do.
+func test_the_text_box_does_not_expand_by_default() -> void:
+	# THE 1997 FRAMING IS THE DEFAULT. The box the original draws is part
+	# of how a card looks, so a build that grew it unasked would be
+	# showing the player something MicroProse never did. What "off" costs
+	# is measured: 209 of 897 cards drop a font step and seven clip even
+	# then — and one click on the Showcase's toggle takes all of them
+	# whole. The defect the 2026-09-05 playtest found was the missing
+	# DOOR, not the default.
 	Settings.clear_value(CardPreview.EXPAND_SETTING)
-	assert_true(CardPreview.expand_wanted(),
-		"absence of the key means expanded")
+	assert_false(CardPreview.expand_wanted(),
+		"absence of the key means the original's own framing")
 	assert_eq(CardPreview.EXPAND_SETTING, "ExpandTextBoxOnBigCard",
 		"and it is the 1997 executable's own key, so a player's file "
 		+ "written by either door means the same thing")

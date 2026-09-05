@@ -1,7 +1,7 @@
 extends SceneTree
-## THE DECK LAB — headless AI-vs-AI deck testing. Run via ./deck_lab.sh
+## THE DECK LAB — headless AI-vs-AI deck testing. Run via DeckLab/deck_lab.sh
 ## (which forwards everything after itself to this script); full manual in
-## docs/deck-lab.md. Text output only; charts land as SVG files.
+## DeckLab/README.md. Text output only; charts land as SVG files.
 ##
 ## Three modes:
 ##   duel      --deck-a X --deck-b Y           one matchup, N games
@@ -84,11 +84,11 @@ Deck Lab — headless AI-vs-AI deck testing for Shandalar
 ========================================================
 
 USAGE
-  ./deck_lab.sh --deck-a DECK --deck-b DECK [options]        (duel mode)
-  ./deck_lab.sh --deck-a DECK --deck-b random [options]      (vs the field)
-  ./deck_lab.sh --deck-a DECK --gauntlet LIST|DIR [options]  (gauntlet mode)
-  ./deck_lab.sh --matrix LIST|DIR [options]                  (matrix mode)
-  ./deck_lab.sh -h | --help
+  DeckLab/deck_lab.sh --deck-a DECK --deck-b DECK [options]        (duel mode)
+  DeckLab/deck_lab.sh --deck-a DECK --deck-b random [options]      (vs the field)
+  DeckLab/deck_lab.sh --deck-a DECK --gauntlet LIST|DIR [options]  (gauntlet mode)
+  DeckLab/deck_lab.sh --matrix LIST|DIR [options]                  (matrix mode)
+  DeckLab/deck_lab.sh -h | --help
 
 DECK ARGUMENTS
   DECK is a .deck/.dec file — the community (Dojo/Apprentice) format:
@@ -129,7 +129,7 @@ OPTIONS
   --profile-a NAME    AI skill piloting deck A / the row deck:
   --profile-b NAME    apprentice|magician|sorcerer|wizard (default wizard
                       both — skill-neutral deck comparison).
-  --out DIR           Output directory (default sim_results/run_<stamp>).
+  --out DIR           Output directory (default DeckLab/results/run_<stamp>).
   --no-svg            Skip chart generation.
 
 DUEL SETTINGS (everything the battle-setup screen can choose)
@@ -155,7 +155,7 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
                       stderr (a named file is never skipped).
   --mulligan on|off   Offer the Shandalar mulligan before turn 1 — a hand
                       with no land or all land, plus the courtesy offer
-                      (default OFF; see docs/deck-lab.md for why, and for
+                      (default OFF; see DeckLab/README.md for why, and for
                       the measured cost of leaving it off).
   --best-of N         The original's `&Best of:` — play MATCHES of up to N
                       duels instead of single duels, N = 1, 3 or 5
@@ -192,25 +192,25 @@ OUTPUT FILES (in --out)
   matrix.svg                            — matrix mode (unless --no-svg).
   The Elo ledger itself lives at --elo-file and persists across runs.
 
-STATISTICS (methodology in docs/deck-lab.md)
+STATISTICS (methodology in DeckLab/README.md)
   Win rates carry Wilson 95% confidence intervals. Games alternate who is
   on the play; the play/draw split is reported separately. Elo: K=8 per
   game, start 1500, zero-sum, interleaved order-stable updates.
 
 EXAMPLES
-  ./deck_lab.sh --deck-a white_knights.deck --deck-b big_green.deck --games 10000
-  ./deck_lab.sh --deck-a my_brew.deck --gauntlet decks/ --games 10000 --jobs 8
-  ./deck_lab.sh --deck-a my_brew.deck --gauntlet decks/ --group originals --games 1000
-  ./deck_lab.sh --matrix decks/ --games 2000
-  ./deck_lab.sh --deck-a a.deck --deck-b b.deck --profile-b apprentice --no-elo
-  ./deck_lab.sh --deck-a my_brew.deck --deck-b random --games 2000
-  ./deck_lab.sh --deck-a my_brew.deck --deck-b random --deck-pool tier1/ --games 2000
-  ./deck_lab.sh --deck-a a.deck --deck-b b.deck --best-of 3 --sideboard on --no-elo
+  DeckLab/deck_lab.sh --deck-a white_knights.deck --deck-b big_green.deck --games 10000
+  DeckLab/deck_lab.sh --deck-a my_brew.deck --gauntlet decks/ --games 10000 --jobs 8
+  DeckLab/deck_lab.sh --deck-a my_brew.deck --gauntlet decks/ --group originals --games 1000
+  DeckLab/deck_lab.sh --matrix decks/ --games 2000
+  DeckLab/deck_lab.sh --deck-a a.deck --deck-b b.deck --profile-b apprentice --no-elo
+  DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --games 2000
+  DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --deck-pool tier1/ --games 2000
+  DeckLab/deck_lab.sh --deck-a a.deck --deck-b b.deck --best-of 3 --sideboard on --no-elo
 """
 
 const PROFILES := ["apprentice", "magician", "sorcerer", "wizard"]
 
-## THE FIELD — `--deck-b random` (docs/deck-lab.md). The setup screen's
+## THE FIELD — `--deck-b random` (DeckLab/README.md). The setup screen's
 ## `<random deck>` row is the same idea in the GUI, and this is
 ## deliberately the same MECHANISM and not a second one: the pick runs
 ## through [method SetupScreen.random_deck_path], which is static and
@@ -546,7 +546,7 @@ func _main(argv: PackedStringArray) -> int:
 	# ---- report ----
 	var out_dir: String = opts.out
 	if out_dir == "":
-		out_dir = "sim_results/run_%d" % int(Time.get_unix_time_from_system())
+		out_dir = "DeckLab/results/run_%d" % int(Time.get_unix_time_from_system())
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out_dir))
 	_keep_the_importer_out(out_dir)
 	var report := PackedStringArray()

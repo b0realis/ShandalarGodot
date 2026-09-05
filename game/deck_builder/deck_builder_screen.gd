@@ -127,7 +127,7 @@ extends Control
 ## anything else it might say: [method _refresh_legality] leads with
 ## [method DeckModel.proxy_problem], naming every card that has to be
 ## replaced. The refusal that MATTERS is not here, though — it is at the
-## duel's own doors (`game/setup_screen.gd`, `tools/simulate.gd`), and
+## duel's own doors (`game/setup_screen.gd`, `DeckLab/simulate.gd`), and
 ## [ProxyCard]'s class doc lists all of them.
 
 ## `@DECKSURFACE_STANDALONE` (`s30/assets/text/Menus.txt:169`) — the deck
@@ -720,8 +720,28 @@ func _build_showcase() -> void:
 	# screenshot's bar is the same pale speckle as the command buttons, and
 	# `bar_style` put a salmon slab down the left of the first capture.
 	var bar := PanelContainer.new()
-	bar.add_theme_stylebox_override("panel",
-		OriginalDialog.panel_style("button_normal", 4.0))
+	# A WELL, NOT A BUTTON. This strip carries the game's line TO the
+	# player — how long the filtered list is, and the screen's last word —
+	# and it wore `button_normal`, the original's raised button face. Two
+	# things followed from that, both reported on 2026-09-05: tiled across
+	# a strip four times the 131px source the centre repeated and the
+	# seams read as *"two buttons under with text over"*, and even seamless
+	# a RAISED BEVEL READS AS CLICKABLE. It is not clickable, and a control
+	# that does nothing when pressed is worse than a plain panel.
+	#
+	# So it is inset instead: raised means press me, sunken means read me,
+	# which is the same distinction the era drew when it carved the
+	# end-of-duel window IN rather than raising it
+	# ([constant OriginalDialog.PANELS] `panel_end_duel`). Flat colour
+	# rather than art, because there is no 1997 sprite for "a well" and
+	# inventing one out of a button's pixels is how this started.
+	var bar_style := StyleBoxFlat.new()
+	bar_style.bg_color = Color(0.06, 0.07, 0.10, 0.55)
+	bar_style.border_color = Color(0.62, 0.66, 0.72, 0.45)
+	bar_style.set_border_width_all(1)
+	bar_style.set_corner_radius_all(2)
+	bar_style.set_content_margin_all(6.0)
+	bar.add_theme_stylebox_override("panel", bar_style)
 	bar.custom_minimum_size = Vector2(LEFT_W, 42)
 	var lines := VBoxContainer.new()
 	lines.add_theme_constant_override("separation", 0)
@@ -1271,7 +1291,7 @@ func _update_count_line() -> void:
 	var last: int = mini(_inventory.offset() + _inventory.page_size(), total)
 	_count_label.text = "%d cards are in the list" % total
 	if total > _inventory.page_size():
-		_count_label.text += "  (%d-%d)" % [first, last]
+		_count_label.text += " — showing %d-%d" % [first, last]
 	_inventory.tally = "%d card%s" % [total, "" if total == 1 else "s"]
 
 
