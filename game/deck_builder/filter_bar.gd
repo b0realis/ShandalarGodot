@@ -63,6 +63,10 @@ signal changed
 ## against a number, `amount` / `set_amount`.
 signal menu_requested(request: Dictionary)
 
+## The Showcase's `Expand` toggle was flipped. The bar does not own the
+## Showcase, so it says so and the screen re-applies it.
+signal expand_toggled(on: bool)
+
 const CELL := 40
 ## Displayed medallion size. 34 rather than the art's 40: eighteen
 ## medallions, four group gaps and the [QoL] tail have to fit the 1280
@@ -216,6 +220,8 @@ var filter: DeckFilter
 ## [QoL] The type-ahead box and the Sort button, both live on this row.
 var search_field: LineEdit
 var sort_button: Button
+## The Showcase's `Expand` toggle — see `_flip_expand`.
+var expand_button: Button
 
 var _buttons: Array[Button] = []
 ## Group name -> its buttons, so [method group_names] can prove the
@@ -462,7 +468,36 @@ func _search_group() -> Control:
 	sort_button.pressed.connect(_open_sort_menu)
 	sort_button.tooltip_text = "[QoL] the order the Inventory is listed in"
 	strip.add_child(sort_button)
+
+	# THE EXPAND TOGGLE, GIVEN A DOOR YOU CAN SEE. The 1997 game put it
+	# behind a right-click on the Showcase's text area (`@MENU_FULLCARD`
+	# entry 1, `Duel.hlp`: *"Right-click on the text area, then click on
+	# the Expand toggle"*) — a gesture nobody finds, which is why the
+	# 2026-09-05 playtest reported long card text clipping rather than
+	# reporting a toggle that was off. Same setting, same behaviour;
+	# this is a second door, not a second feature, and it shows its state
+	# so the Showcase's mode is readable at a glance.
+	expand_button = OriginalDialog.button(_expand_label(), Vector2(104, ICON_SIZE.y))
+	expand_button.toggle_mode = true
+	expand_button.button_pressed = CardPreview.expand_wanted()
+	expand_button.pressed.connect(_flip_expand)
+	expand_button.tooltip_text = "[QoL] grow a card's text box when the " \
+		+ "text does not fit — the original's own Expand toggle"
+	strip.add_child(expand_button)
 	return strip
+
+
+## The Showcase's `Expand` state, as a label that says which way it is.
+func _expand_label() -> String:
+	return "Text: full" if CardPreview.expand_wanted() else "Text: 1997"
+
+
+func _flip_expand() -> void:
+	var on := not CardPreview.expand_wanted()
+	Settings.set_value(CardPreview.EXPAND_SETTING, on)
+	expand_button.button_pressed = on
+	expand_button.text = _expand_label()
+	expand_toggled.emit(on)
 
 
 func _sort_label() -> String:

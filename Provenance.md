@@ -23,7 +23,7 @@ it that this project learned the hard way.
 > All the best to the players, and to the community for its help with the
 > development. Good luck and good health to all!
 >
-> — M
+> — b0realis
 
 That paragraph is the design brief, and it settles arguments this codebase
 actually has. **The limitation is the feature.** A closed pool of roughly

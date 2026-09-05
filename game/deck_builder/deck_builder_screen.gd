@@ -660,6 +660,13 @@ func _build_showcase() -> void:
 	_showcase = CardPreview.new()
 	_showcase.docked = true
 	_showcase.scale = Vector2(SHOWCASE_SCALE, SHOWCASE_SCALE)
+	# THE EXPAND TOGGLE REACHES THIS SHOWCASE TOO. It did not until
+	# 2026-09-05: the duel screen restored `ExpandTextBoxOnBigCard` onto
+	# its own preview and this one had no reader at all, so a long card
+	# clipped here with nothing the player could do about it — which is
+	# where the playtest saw it, since this is the Showcase you sit in
+	# front of while building. Same widget, same setting, same answer.
+	_showcase.set_text_expanded(CardPreview.expand_wanted())
 	_showcase.show_back()
 	add_child(_showcase)
 	# [QoL] THE SHOWCASE'S OTHER FACE. *"Whatever card the mouse cursor is
@@ -816,6 +823,8 @@ func _build_filters() -> void:
 	_filter_bar.sound = _audio
 	_filter_bar.changed.connect(_refresh_inventory)
 	_filter_bar.menu_requested.connect(_open_filter_menu)
+	_filter_bar.expand_toggled.connect(func(on: bool) -> void:
+		_showcase.set_text_expanded(on))
 	add_child(_filter_bar)
 
 

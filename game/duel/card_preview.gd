@@ -519,6 +519,28 @@ const PLATE_BOTTOM := 0.915
 var _text_expanded := false
 
 
+## The setting's key and its default, in ONE place. The three call sites
+## in `duel_screen.gd` each carried their own `false`, and the Deck
+## Builder's Showcase carried no reader at all — which is why a long card
+## clipped there and nothing the player could reach would fix it
+## (2026-09-05 playtest).
+##
+## THE DEFAULT IS NOW ON, and that costs the cards that already fit
+## nothing: the box grows *when necessary* and by exactly the overflow
+## (see [constant TEXT_TOP_EXPANDED]), so a Forest is framed identically
+## either way. What changes is the 209 cards that had to drop a font step
+## to fit and the seven that clipped anyway — the pool sweep reads 688
+## cards at full ported size unexpanded and 812 expanded, with ZERO
+## losing a line (`tests/ui/test_card_preview.gd`). `[QoL]`: the original
+## shipped the toggle (`@MENU_FULLCARD` entry 1) but we do not know what
+## it defaulted to, so this is our choice and is labelled as one.
+const EXPAND_SETTING := "ExpandTextBoxOnBigCard"
+
+
+static func expand_wanted() -> bool:
+	return bool(Settings.get_value(EXPAND_SETTING, true))
+
+
 func set_text_expanded(on: bool) -> void:
 	_text_expanded = on
 	# Re-lay-out the card ON SHOW: the player toggles this from the

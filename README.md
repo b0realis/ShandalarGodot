@@ -1,4 +1,20 @@
-# Shandalar
+# ShandalarGodot
+
+> This project is a love letter to MicroProse MTG: to preserve that special
+> 90s Shandalar feeling — the feel of playing early Magic, up to Fourth
+> Edition, Alliances, and maybe Fifth — while still going for
+> quality-of-life improvements, a modern spin on the gameplay, and the
+> tools to go with it.
+>
+> The key is in the limitations. A specific, finite spell library is
+> something you can get creative with, instead of losing time to an
+> ever-widening card pool and its obsolescence. It can be fun, it can be
+> creative, and — would you believe it? — it can even be relaxing. :)
+>
+> All the best to the players, and to the community for its help with the
+> development. Good luck and good health to all!
+>
+> — b0realis
 
 An open-source, from-scratch remake of MicroProse's 1997 *Magic: The
 Gathering* ("Shandalar") in **GDScript** on the latest stable **Godot 4.7** —
@@ -10,6 +26,11 @@ in its own documented file** so new cards and whole sets can be added without
 touching engine code.
 
 ## Philosophy
+
+The paragraph above is the brief, and **the limitation is the feature**: a
+closed pool of about 900 early cards is not a shortfall to grow out of, it
+is the thing being preserved. Everything below is how the brief becomes
+code.
 
 **Port, don't invent.** Where the 1997 game made a decision, that decision
 wins. Its own string tables, its manual, its help file and its data files are

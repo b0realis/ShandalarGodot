@@ -165,14 +165,34 @@ func test_show_full_card_docks_the_card_in_the_showcase() -> void:
 
 
 func test_expand_text_box_grows_the_showcases_text_area() -> void:
-	assert_false(screen._card_preview.text_is_expanded())
+	# FROM AN EXPLICIT STATE, not from the default. `before_each` writes
+	# the setting false, but the Showcase read it when the screen was
+	# BUILT — a line above — so what the widget holds and what the file
+	# holds can differ at this point. The toggle is what is under test;
+	# the default has its own test below.
+	screen._card_preview.set_text_expanded(false)
 	screen._open_full_card_menu(Vector2.ZERO)
 	screen._on_full_card_menu_chosen(0)
 	assert_true(screen._card_preview.text_is_expanded())
-	assert_true(bool(Settings.get_value("ExpandTextBoxOnBigCard", false)),
+	assert_true(CardPreview.expand_wanted(),
 		"and it is remembered — 'These settings are retained'")
 	screen._on_full_card_menu_chosen(0)
 	assert_false(screen._card_preview.text_is_expanded(), "and toggles off")
+
+
+func test_the_text_box_expands_by_default() -> void:
+	# [QoL], 2026-09-05. The original shipped the toggle
+	# (`@MENU_FULLCARD` entry 1) but we do not know what it defaulted to,
+	# so ON is our choice — and it costs the cards that already fit
+	# nothing, because the box grows only when necessary and by exactly
+	# the overflow. With it off, 209 cards drop a font step to fit and
+	# seven clip anyway; with it on, none do.
+	Settings.clear_value(CardPreview.EXPAND_SETTING)
+	assert_true(CardPreview.expand_wanted(),
+		"absence of the key means expanded")
+	assert_eq(CardPreview.EXPAND_SETTING, "ExpandTextBoxOnBigCard",
+		"and it is the 1997 executable's own key, so a player's file "
+		+ "written by either door means the same thing")
 
 
 # ------------------------------------------------- the three display toggles --

@@ -2392,3 +2392,53 @@ func test_an_empty_file_is_refused_with_a_reason_as_well() -> void:
 	screen._load_from_disk(path)
 	assert_eq(screen.open_dialogs().size(), 1, "not silence")
 	_drop_file(path)
+
+
+# ------------------------------------- the Showcase's Expand, given a door --
+#
+# *"Sometimes the text that needs to be in the card text box is larger and
+# cannot fit on the card."* (playtest, 2026-09-05)
+#
+# The capability already existed — it is the original's own `Expand`
+# (`@MENU_FULLCARD` entry 1) — but it reached only the DUEL screen's
+# Showcase, and only through a right-click on the text area. This screen's
+# Showcase, the one you sit in front of while building a deck, had no
+# reader for the setting at all.
+
+
+func test_the_showcase_starts_in_the_setting_it_was_given() -> void:
+	Settings.clear_value(CardPreview.EXPAND_SETTING)
+	var fresh: DeckBuilderScreen = load(
+		"res://game/deck_builder/deck_builder_screen.tscn").instantiate()
+	add_child_autofree(fresh)
+	await get_tree().process_frame
+	assert_true(fresh._showcase.text_is_expanded(),
+		"the Deck Builder's Showcase honours Expand — it did not until "
+		+ "2026-09-05, so a long card clipped here with no way to fix it")
+
+
+func test_the_filter_bar_carries_a_visible_expand_toggle() -> void:
+	var bar := screen._filter_bar
+	assert_not_null(bar.expand_button, "a door you can see, beside Sort")
+	assert_true(bar.expand_button.toggle_mode, "…that shows its state")
+	assert_eq(bar.expand_button.button_pressed, CardPreview.expand_wanted(),
+		"…and starts on the state the setting holds")
+
+
+func test_the_toggle_moves_the_setting_and_the_showcase_together() -> void:
+	var bar := screen._filter_bar
+	var before := CardPreview.expand_wanted()
+	bar._flip_expand()
+	assert_eq(CardPreview.expand_wanted(), not before, "the setting moved")
+	assert_eq(screen._showcase.text_is_expanded(), not before,
+		"…and the Showcase moved with it, in the same gesture")
+	assert_eq(bar.expand_button.text, bar._expand_label(),
+		"…and the button says which way it now is")
+	bar._flip_expand()
+	assert_eq(CardPreview.expand_wanted(), before, "and back")
+
+
+func test_the_toggle_is_the_1997_key_so_both_doors_agree() -> void:
+	# The duel screen's right-click menu and this button write the SAME
+	# key, so flipping either one is visible from the other.
+	assert_eq(CardPreview.EXPAND_SETTING, "ExpandTextBoxOnBigCard")

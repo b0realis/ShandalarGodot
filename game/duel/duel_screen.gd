@@ -4960,15 +4960,15 @@ func _open_full_card_menu(at: Vector2) -> void:
 	var at_index := _full_card_menu.get_item_index(0)
 	_full_card_menu.set_item_as_checkable(at_index, true)
 	_full_card_menu.set_item_checked(at_index,
-		bool(Settings.get_value("ExpandTextBoxOnBigCard", false)))
+		CardPreview.expand_wanted())
 	_popup_menu_at(_full_card_menu, at)
 
 
 func _on_full_card_menu_chosen(id: int) -> void:
 	if id != 0:
 		return
-	var on := not bool(Settings.get_value("ExpandTextBoxOnBigCard", false))
-	Settings.set_value("ExpandTextBoxOnBigCard", on)
+	var on := not CardPreview.expand_wanted()
+	Settings.set_value(CardPreview.EXPAND_SETTING, on)
 	if _card_preview != null:
 		_card_preview.set_text_expanded(on)
 
@@ -6791,7 +6791,7 @@ func _build_ui() -> void:
 	_card_preview.mouse_filter = Control.MOUSE_FILTER_STOP
 	_card_preview.gui_input.connect(_on_showcase_input)
 	_card_preview.set_text_expanded(
-		bool(Settings.get_value("ExpandTextBoxOnBigCard", false)))
+		CardPreview.expand_wanted())
 	if _hand_rows[1] is StackHand:
 		_hand_rows[1].preview = _card_preview
 	# `@MENU_HAND` (§6.12) on both hand windows. The 1997 table has one
