@@ -300,12 +300,48 @@ func _try_cast_best(game: MtgGame) -> String:
 			game.tap_for_mana(pid, step[0], step[1])
 	var err := game.cast_spell(pid, best, best_targets, best_x, best_mode)
 	if err != "":
+		if _wait_out(game, best):
+			return "holds %s until the stack clears" % best.data.card_name
 		# A plan/engine disagreement is an AI bug worth hearing about, but
 		# never worth crashing a duel: log, remember, fall through to pass.
 		game.log_line("(AI cast of %s refused: %s)" % [best.data.card_name, err])
 		_refused[str(best.id)] = true
 		return ""
 	return "cast %s" % best.data.card_name
+
+
+## THE REFUSAL THE PLANNER CAN WAIT OUT — and the whole reason the memo
+## needs to tell one from the other (docs/ROADMAP.md, "The tap-trigger
+## refusal", 2026-09-05).
+##
+## `cast_refusal` cleared this exact cast a few lines above, with the
+## stack EMPTY, because [method act] only reaches the main-phase planner
+## with an empty stack. So if the stack is no longer empty the only thing
+## that can have filled it is OUR OWN TAPS: a tap-triggered ability —
+## Manabarbs, Psychic Venom, Blight — went on the stack in the middle of
+## paying, and CR 601.2a's sorcery timing then refuses the spell it was
+## being paid for. Nothing about the DECISION was wrong and nothing about
+## it will be wrong one priority round from now: the mana stays in the
+## pool until the step ends (CR 500.4), the trigger resolves, and the
+## same cast is made from the floating mana without tapping a second
+## land ([method ManaPlanner.sources] sorts the pool first, so the retry
+## has nothing left to tap for).
+##
+## Memoing it is what threw the turn away — 1,143 of the 1,271 refused
+## casts in the X-seam pass's 258-deck census, and every one of them cost
+## the AI both the card and the life the trigger charged for it.
+##
+## STRUCTURAL, not a string match: the test is "did the stack fill up
+## while we were paying", which is a fact about the game rather than
+## about the wording of a message, and it cannot mistake a refusal that
+## really does stand — a retry with an empty stack IS memoed, because
+## this returns false there.
+func _wait_out(game: MtgGame, inst: CardInstance) -> bool:
+	if game.stack.is_empty():
+		return false
+	game.log_line("(AI holds %s: the stack filled up while it was paying)"
+		% inst.data.card_name)
+	return true
 
 
 ## The engine's own pre-cast gates the planner can read WITHOUT paying:
@@ -2131,6 +2167,17 @@ func _declare_attacks(game: MtgGame) -> String:
 					extra = inst
 			if extra != null:
 				attackers.append(extra.id)
+	# THE CRACK-BACK (M4 phase 3, 2026-09-05). Everything above prices
+	# THIS combat; an attacker is tapped through the opponent's whole turn,
+	# so the swing that wins the exchange can still lose the game.
+	# [CombatSearch] takes the declaration as it now stands and searches
+	# whether some SUBSET of it survives their counter-swing better — it
+	# can only ever hold a body back, never send one the analysis above
+	# rejected, and it runs after the pump rider so the body that rider
+	# added is on the table it searches. A lethal push never reaches here:
+	# a swing that wins the game has no next turn to survive.
+	if not lethal_push:
+		attackers = _search_hold_back(game, candidates, attackers, defender)
 	# Must-attackers are non-optional whatever the analysis said — the
 	# printed "attacks each combat if able" (Juggernaut) and the ORDER of
 	# the turn (Nettling Imp, Siren's Call — `must_attack_this_turn`).
@@ -2295,6 +2342,150 @@ func _attack_risk(game: MtgGame, inst: CardInstance,
 			var trade := my_value - Evaluator.permanent_value(blocker)
 			worst_loss = maxf(worst_loss, maxf(trade, 0.0))  # trade-down risk
 	return worst_loss
+
+
+## THE CRACK-BACK SEARCH's entry from the attack declaration
+## (docs/ROADMAP.md, "The crack-back search", 2026-09-05).
+##
+## [param chosen] is the cohort's declaration. Returns it unchanged, or
+## the SUBSET of it that survives the opponent's counter-swing best. Two
+## prior approximations of this were built and rejected on measurement,
+## and both went wrong the same way — they held bodies home on a
+## pessimistic reading of a swing the opponent might not even make. The
+## search enumerates instead: their swing is a choice they take only if it
+## pays them, and our blocks are a choice we make as well as we can.
+##
+## THE GATE, and it is exact rather than a tuning constant: if every
+## creature they control connecting still leaves us alive, no attack we
+## could declare loses the game to the counter-swing, so there is nothing
+## here for this search to find and the cohort's answer stands untouched.
+## That is what keeps the cost off the combats this is not for — measured
+## at [i]docs/ROADMAP.md[/i]'s cost table.
+func _search_hold_back(game: MtgGame, candidates: Array[CardInstance],
+		chosen: Array, defender: int) -> Array:
+	if profile.combat_search_nodes <= 0:
+		return chosen        # a capability the bottom of the ladder does not have
+	if chosen.is_empty():
+		return chosen
+	var reach := 0
+	for inst in game.players[defender].battlefield:
+		if inst.is_creature() and not inst.has_keyword(Mtg.Keyword.DEFENDER):
+			reach += maxi(inst.cur_power, 0)
+	if reach < game.players[pid].life:
+		return chosen
+	var mine: Array[CardInstance] = []
+	for inst in game.players[pid].battlefield:
+		if inst.is_creature() and not inst.tapped:
+			mine.append(inst)   # tapped bodies neither attack now nor block later
+	var theirs: Array[CardInstance] = []
+	for inst in game.players[defender].battlefield:
+		if inst.is_creature():
+			theirs.append(inst)   # ALL of them: they untap before they swing
+	if mine.is_empty() or theirs.is_empty() \
+			or mine.size() > 24 or theirs.size() > 24:
+		return chosen        # the move mask is a 64-bit int; keep it honest
+	var search := _build_combat_model(game, mine, theirs, candidates, defender)
+	search.budget = profile.combat_search_nodes
+	var cohort_mask := 0
+	for i in mine.size():
+		if chosen.has(mine[i].id):
+			cohort_mask |= 1 << i
+	var mask := search.best_attack(cohort_mask)
+	if mask == cohort_mask:
+		return chosen
+	var out: Array = []
+	for i in mine.size():
+		if (mask & (1 << i)) != 0:
+			out.append(mine[i].id)
+	return out
+
+
+## Fill a [CombatSearch] from the engine's OWN predicates — nothing here
+## is a second rules model. Every block legality is
+## [method CombatState.block_illegality] and every kill is
+## [method _dies_to], the two the rest of this file's combat maths already
+## share, precomputed into matrices so the tree can index them instead of
+## re-asking the engine at every node.
+##
+## The one place a predicate is decomposed rather than called:
+## [method CombatState.attack_illegality] refuses a TAPPED or
+## SUMMONING-SICK creature, and by their turn neither is true any more, so
+## [member CombatSearch.d_can_attack] asks only its durable half —
+## Defender, "can't attack", and the "unless the defending player controls
+## a ..." rider. Over-including there is the SAFE direction for a
+## defensive read.
+func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
+		theirs: Array[CardInstance], candidates: Array[CardInstance],
+		defender: int) -> CombatSearch:
+	var search := CombatSearch.new()
+	var n := mine.size()
+	var m := theirs.size()
+	search.my_life = game.players[pid].life
+	search.their_life = game.players[defender].life
+	search.a_pow.resize(n)
+	search.a_val.resize(n)
+	search.a_id.resize(n)
+	search.a_can_attack.resize(n)
+	search.a_forced.resize(n)
+	search.a_free.resize(n)
+	search.a_vigilant.resize(n)
+	search.a_trample.resize(n)
+	search.a_soak.resize(n)
+	for i in n:
+		var inst := mine[i]
+		search.a_pow[i] = maxi(inst.cur_power, 0)
+		search.a_val[i] = Evaluator.permanent_value(inst)
+		search.a_id[i] = inst.id
+		search.a_can_attack[i] = 1 if candidates.has(inst) else 0
+		search.a_forced[i] = 1 if (candidates.has(inst) and _must_attack(inst)) else 0
+		search.a_free[i] = 1
+		search.a_vigilant[i] = 1 if inst.has_keyword(Mtg.Keyword.VIGILANCE) else 0
+		search.a_trample[i] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
+		search.a_soak[i] = maxi(inst.cur_toughness - inst.damage, 0)
+	search.d_pow.resize(m)
+	search.d_val.resize(m)
+	search.d_free.resize(m)
+	search.d_can_attack.resize(m)
+	search.d_trample.resize(m)
+	search.d_soak.resize(m)
+	for j in m:
+		var inst := theirs[j]
+		search.d_pow[j] = maxi(inst.cur_power, 0)
+		search.d_val[j] = Evaluator.permanent_value(inst)
+		search.d_free[j] = 0 if inst.tapped else 1
+		search.d_can_attack[j] = 1 if _could_attack_next_turn(game, inst) else 0
+		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
+		search.d_soak[j] = maxi(inst.cur_toughness - inst.damage, 0)
+	var cells := n * m
+	search.block_ours.resize(cells)
+	search.block_theirs.resize(cells)
+	search.we_kill.resize(cells)
+	search.they_kill.resize(cells)
+	for i in n:
+		for j in m:
+			var cell := i * m + j
+			search.block_ours[cell] = 1 if CombatState.block_illegality(
+				game, theirs[j], mine[i], defender) == "" else 0
+			search.block_theirs[cell] = 1 if CombatState.block_illegality(
+				game, mine[i], theirs[j], pid) == "" else 0
+			search.we_kill[cell] = 1 if _dies_to(game, theirs[j], mine[i]) else 0
+			search.they_kill[cell] = 1 if _dies_to(game, mine[i], theirs[j]) else 0
+	search.seal()
+	return search
+
+
+## The durable half of [method CombatState.attack_illegality]: could
+## [param inst] attack us on THEIR next turn, once it has untapped and
+## shed its summoning sickness and this turn's bans have expired?
+func _could_attack_next_turn(game: MtgGame, inst: CardInstance) -> bool:
+	if not inst.is_creature():
+		return false
+	if inst.has_keyword(Mtg.Keyword.DEFENDER) or inst.cur_cant_attack:
+		return false
+	var needs := inst.data.attack_needs_defender_land
+	if needs != "" and not CombatState._controls_land_of_type(game, pid, needs):
+		return false
+	return true
 
 
 ## The profile's appetite for a bad exchange, in stat points. Aggression

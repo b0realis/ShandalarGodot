@@ -1104,7 +1104,7 @@ cast to cast for the kill should look like.
 work: the candidate arm ran 195s per 1,000 games against the null's 184s,
 about **6% slower**, which is the price of asking before paying.
 
-And the bigger residue this pass NAMED but did not close: **1,143 of the
+And the bigger residue this pass NAMED but did not close — **CLOSED 2026-09-05**, see "The tap-trigger refusal, and the crack-back search" below:
 1,271 refused casts in that 1,026-game census are
 `… can only be cast in your main phase with an empty stack`**, and they
 have nothing to do with targets. The planner taps its lands, a
@@ -1129,8 +1129,336 @@ refusal memo — and it wants its own measurement.
   class-1 card as well as a class-4 one: this pass stopped it leaking, and
   it will stay uncast until class 1 lands.
 * **Jump, and the `_find_pump_instant` split** (see class 6 above).
-* **The tap-trigger refusal**, above.
+* ~~**The tap-trigger refusal**, above.~~ **CLOSED 2026-09-05** — the
+  refusal memo now tells a refusal that stands from one the planner can
+  wait out; 1,199 refused casts over 1,296 games became 0.
 
+
+## The tap-trigger refusal, and the crack-back search (2026-09-05)
+
+Two items, both NAMED and left open by the passes of the day before, and
+they are opposite in shape. The first is 1,143 of 1,271 refused casts and
+the fix is one comparison; the second is one board in one playtest, and
+it had already been attempted twice and rejected twice.
+
+### Item 1 — a refusal the planner can WAIT OUT is not a refusal
+
+**The mechanism, restated from the census that found it.** `AiPlayer`
+taps its lands and THEN announces the spell they pay for. So a
+TAP-TRIGGERED ability goes on the stack in the middle of paying, and
+CR 601.2a's sorcery timing then refuses the spell it was being paid for
+— the stack is no longer empty. `cast_refusal`, the dry run the X-seam
+pass added the day before, cannot see this coming: the stack genuinely IS
+empty when it is asked.
+
+The card then went into the REFUSAL MEMO, which is keyed by step, so it
+was skipped for the rest of the main phase. Reproduced exactly, on four
+Mountains with a Hill Giant in hand and a Manabarbs across the table:
+
+```
+Trigger: Manabarbs — ... deals 1 damage to that player.   (x4)
+(AI cast of Hill Giant refused: Hill Giant can only be cast in your
+ main phase with an empty stack)
+Manabarbs deals 1 damage to P0 (life 19) ... (life 16)
+P0 declares no attackers
+```
+
+Four life paid, four Mountains spent, the pool emptied at the step
+boundary and the Giant still in hand. The seat then passed with four red
+mana floating and a castable creature it had already decided to cast.
+
+**The fix is one distinction, and it is structural rather than a string
+match.** `_wait_out` asks whether the STACK FILLED UP WHILE WE WERE
+PAYING. It can only have been our own taps: `act()` reaches the
+main-phase planner only with an empty stack, and `cast_refusal` cleared
+this exact cast a few lines earlier. Everything that follows is then
+already true — the mana stays in the pool until the step ends
+(CR 500.4), the trigger resolves one priority round later, and
+`ManaPlanner.sources` sorts the floating pool FIRST, so the retry pays
+from the pool without tapping a second land and the trigger is not
+charged twice. With an empty stack `_wait_out` returns false and the memo
+takes the refusal exactly as before, which is what still stops the
+planner tapping twice for a cast that really is refused. The same board
+now reads:
+
+```
+(AI holds Hill Giant: the stack filled up while it was paying)
+Manabarbs deals 1 damage to P0 (life 19) ... (life 16)
+P0 casts Hill Giant
+```
+
+#### Measured: the census, before and after
+
+The X-seam pass's instrument, rebuilt: every playable shipped deck file
+(**216 of 317** — the rest hold proxies or fail a strict load), six
+mirror games each, Wizard on both seats, **1,296 games**, every
+`(AI ... refused: ...)` line counted and bucketed by REASON. (It is a
+slightly wider run than the census that NAMED this — 1,296 games against
+1,026 — so the shipped column reads 1,199 where that one read 1,143. Same
+rate, same single cause.)
+
+| | shipped | with the wait-out |
+| --- | --- | --- |
+| `… can only be cast in your main phase with an empty stack` | **1,199** | **0** |
+| a cast HELD for one priority round and then made | — | 811 |
+| every other refusal | 0 | 0 |
+| spells that reached the stack | 37,665 (29.06/game) | **38,087 (29.39/game)** |
+| seconds for the 1,296 games | 428.0 | 426.0 |
+
+The bucket is gone entirely, 422 more spells reach the table, and it
+costs nothing measurable — there is no extra work, only one fewer entry
+in a Dictionary.
+
+**The biggest contributor is not one of the three cards the census's own
+note named.** Manabarbs, Psychic Venom and Blight are all in the class,
+but the deck files that lose most to it run **City of Brass**
+(*"Whenever City of Brass becomes tapped, it deals 1 damage to you"* —
+four copies in The Deck (Weissman), in Arzakon, in Whim) and **Kudzu**,
+whose *"when enchanted land becomes tapped"* is the same shape on our own
+land. The fix names no card, which is why they were all in it already.
+
+#### Measured: the win rate, asymmetrically, against a null
+
+The block audit's instrument: the candidate on ONE seat, the shipped
+policy on the other, mirror matchups, 1,000 games each, against a NULL
+run of the identical shipped AI at the same seed. The figure is SEAT 0's
+win rate, because seat 0 is the seat the candidate is on.
+
+| deck (mirror) | what it holds | wait-out | null | Δ |
+| --- | --- | --- | --- | --- |
+| Sorcerer | 4 City of Brass | 70.1% (701-299) | 51.5% (515-485) | **+18.6** |
+| Whim | 4 City of Brass, 4 Psychic Venom | 68.0% (680-320) | 51.1% (511-489) | **+16.9** |
+| Arzakon | 4 City of Brass | 63.0% (630-370) | 52.4% (524-476) | **+10.6** |
+| Fungus Master | 2 Kudzu | 60.1% (601-399) | 51.3% (513-487) | **+8.8** |
+| Big Green (control) | **nothing** | 49.3% (493-507) | 49.3% (493-507) | **+0.0** |
+| **all 5, 5,000 games each arm** | | **62.1%** | **51.1%** | **+11.0** |
+
+95% CI on the aggregate delta: ±2.0 points. Every row that CAN move moves
+the right way, and the smallest of them is four times the interval.
+
+**Big Green is the control row and it lands on the null exactly: 493-507
+in both arms, with a BYTE-IDENTICAL `matchups.csv` — 1,000 games, game
+for game.** It holds no tap-triggered permanent, so the change cannot
+fire in it, and the null figure is also the X-seam pass's own Big Green
+null to the game. That is the harness saying it is the same instrument.
+
+Two further notes on the size. Fungus Master's +8.8 comes from **two**
+Kudzu, which is how cheap this bug was to hit: any permanent that
+triggers on a tap taxes every sorcery-speed cast the deck makes for the
+rest of the turn. And the fix applies to every profile on purpose — a
+refused action is not a DECISION, so this is not a difficulty knob.
+
+### Item 2 — the crack-back, third attempt: a real search
+
+**What was standing.** At 3 life behind one untapped 3/3, facing a TAPPED
+Craw Wurm, the AI swings the 3/3 and dies to the counter-swing: an
+attacker is tapped through the opponent's whole turn. Two answers were
+built and both were rejected ON MEASUREMENT — a heuristic brake (50.9%
+against a 50.5% null over 1,500 games, Mountain Artillery **2.3 points
+worse**), and a one-ply lookahead running `_damage_through_blocks` with
+the roles swapped (+0.3 over 5,000 games, Big Green **1.1 points
+worse**). The standing conclusion was that the gap is not the
+approximation's fault, so the next attempt is search.
+
+**Both failed the same way, and naming it is what shaped this attempt:
+they are PESSIMISTIC.** They assume the opponent swings with everything;
+they assume we block it greedily; and they test the result against a
+threshold ("is the counter-swing lethal?") rather than pricing it against
+what the attack was worth. Every one of those errs in the same direction
+— hold the body home — which is why the deck that wants to attack is the
+deck that pays.
+
+#### What the undo journal could carry, and what it could not
+
+The obvious shape was the one the phase-3 note points at: make the moves
+in the ENGINE and unmake them through `engine/undo_log.gd`, which is 21x
+a `GameSnapshot` and exists for exactly this. **It does not reach, and
+the journal's own doc says why**: its documented boundary is the TURN
+MACHINERY — *"a search must not cross a step boundary until they do"* —
+and a crack-back search crosses two step boundaries and a turn boundary
+by construction (our combat damage, their untap step, their combat).
+Instrumenting `_advance_step` / `_enter_step` is the next increment and
+a real one; it is not a rider on this.
+
+What the search does NOT need is a second rules model. `CombatSearch`
+runs over a flat MODEL built once per decision out of the engine's own
+predicates — `CombatState.block_illegality` for every legality,
+`AiPlayer._dies_to` for every kill, both precomputed into matrices — so
+the tree indexes arrays instead of re-asking the engine, and no rule is
+written twice. The one predicate decomposed rather than called is
+`attack_illegality`, whose TAPPED and SUMMONING-SICK arms are false by
+the time the crack-back happens; only its durable half is asked, and
+over-including there is the safe direction for a defensive read.
+
+#### The search
+
+Four decision layers, three of them enumerated and backed up through an
+alpha-beta minimax:
+
+1. **OUR attack (max)** — every subset of the declaration the cohort and
+   the pump rider have already made: the powerset while the optional
+   bodies are five or fewer, the best-defender-first chain above that.
+   The search can therefore only ever hold a body BACK, never send one
+   the 2026-09-04 attack audit's maths rejected, so that audit's +2.5 on
+   Big Green cannot be undone by this one.
+2. **THEIR blocks (min)** — NOT searched, deliberately: the shipped
+   one-blocker-per-attacker greedy model, the same one `_cohort_value`
+   and `_damage_through_blocks` use. The job here is the crack-back, and
+   a search that re-litigated the FORWARD combat with a second model
+   would be two changes measured as one.
+3. **THEIR crack-back attack (max, theirs)** — over their survivors, all
+   of them, because they untap first, which is the whole premise.
+   **Declining is on their list and is worth exactly nothing**, so it is
+   the starting alpha-beta bound rather than a move: a swing that costs
+   them more than it gains is one they simply do not make. That line is
+   the first of the two pessimisms gone.
+4. **OUR blocks (min, theirs)** — a recursive assignment over the bodies
+   this attack would leave us: our untapped creatures that stayed home,
+   plus the vigilant ones that did not. Searched, not assumed. That is
+   the second pessimism gone.
+
+The leaf is the position DELTA in `AiPlayer`'s own currency —
+`_face_damage_value`'s clock-scaled face damage plus
+`Evaluator.permanent_value` for every body that dies on either side — so
+what the search backs up is comparable with what `_cohort_value`
+produced, and a creature held home is PRICED against the attack it
+forgoes instead of tested against a threshold. Our own death is a large
+negative and theirs a large positive, which is what makes "survive"
+dominate without a special case.
+
+**The gate is exact, not tuned.** If every creature they control
+connecting still leaves us alive, no attack we could declare loses the
+game to the counter-swing, and the cohort's answer stands untouched. The
+search runs in about **1.3 declarations per game** because of it.
+
+**Determinism, which is load-bearing.** The tree reads the board and
+writes nothing: no `MtgGame` mutation, no `game.rng` draw, no card the
+seat may not see (pinned by two tests, one of them
+`tests/ai/test_undo_log.gd`'s own whole-state differ). Ties keep the
+widest attack and every sort falls back to battlefield order. The node
+budget is SHARED OUT per candidate attack rather than spent first-come —
+a global counter would hand the widest attack the whole tree and leave
+the narrow ones truncated, which is a bias in favour of attacking
+dressed up as a result. `--matrix decks/ --games 6 --seed 4242` is
+byte-identical at `--jobs 1`, `4` and `22`.
+
+**The ladder is gated by capability, the way `holds_instants` is.**
+`AiProfile.combat_search_nodes`: Apprentice 0, Magician 0, Sorcerer
+1,500, Wizard 3,000. The bottom two do not look past their own combat at
+all.
+
+#### It closes the reproduced board
+
+`tests/ai/test_ai_crack_back_2026_09_05.gd` states the boards rather than
+the win rate, the way the attack audit's own file does:
+
+| board (ours vs theirs) | before | with the search |
+| --- | --- | --- |
+| Hill Giant vs a TAPPED Craw Wurm, **at 3 life** | 1 attacker, and it loses | **0** |
+| the same board **at 20 life** | 1 | 1 |
+| Hill Giant vs **two** tapped Craw Wurms at 3 life (dead whatever we do) | 1 | 1 |
+| 3 Hill Giants vs a tapped Craw Wurm, them at 6 (a lethal push) | 3 | 3 |
+| 4 Grizzly Bears vs a tapped Craw Wurm at 20 life (the gate) | 4 | 4 |
+| 2 Grizzly Bears vs a tapped Craw Wurm, **at 5 life** | 2 | **1** |
+
+The last row is the one a threshold cannot produce: one Bears has to stay
+home to block the Wurm, and the other is still four free damage.
+
+#### Measured: the win rate, asymmetrically, against a null
+
+Same instrument, same five starter decks both rejected attempts were
+measured on, so the three are directly comparable. The null is the
+shipped AI (with item 1 in it) on both seats at the same seed.
+
+| deck (mirror) | the search | null | Δ |
+| --- | --- | --- | --- |
+| Blue Skies | 51.9% (519-481) | 49.1% (491-509) | **+2.8** |
+| Black-Red Raiders | 52.5% (525-475) | 50.9% (509-491) | **+1.6** |
+| White Knights | 48.9% (489-511) | 47.6% (476-524) | **+1.3** |
+| Mountain Artillery | 48.0% (480-520) | 48.3% (483-517) | **-0.3** |
+| Big Green | 48.8% (488-512) | 49.3% (493-507) | **-0.5** |
+| **all 5, 5,000 games each arm** | **50.0%** (2501-2499) | **49.0%** (2452-2548) | **+1.0** |
+
+95% CI on the aggregate delta: ±2.0 points. Decks moving the right way:
+3 of 5 (sign test p=0.500).
+
+**Set against its two predecessors, on the same decks and the same
+instrument:**
+
+| | aggregate | worst deck |
+| --- | --- | --- |
+| the heuristic brake (rejected) | +0.4 | Mountain Artillery **-2.3** |
+| the one-ply lookahead (rejected) | +0.3 | Big Green **-1.1** |
+| **the search** | **+1.0** | Big Green **-0.5** |
+
+Both rejections were left out for one stated reason: *an unmeasurable
+gain that costs a matchup is a tuning liability.* This one costs no
+matchup — -0.5 and -0.3 are inside a single deck's own ±3.1 interval —
+and Big Green, the deck that punished both approximations for being
+pessimistic, is now essentially flat.
+
+#### Measured on BEHAVIOUR, which is what decides it
+
+The win-rate delta is not decisive on its own (+1.0 against ±2.0), and
+neither was `order_blockers`' +0.4. What decides it is the number the
+change was made for, counted the same way the block audit counted its
+own: over the 216-deck census, **1,296 games**, with the search on SEAT 0
+and the shipped policy on SEAT 1 as an in-run control. A CRACK-BACK
+DEATH is a seat losing on the OPPONENT's turn having attacked on its own
+turn immediately before.
+
+| | crack-back deaths, seat 0 | seat 1 (the control seat) | seat 0 wins |
+| --- | --- | --- | --- |
+| search off, both seats | 245 | 308 | 721 |
+| **search on seat 0 only** | **181** | 317 | **738** |
+
+**The searching seat dies to a counter-swing 26% less often, and the
+control seat moves the other way** — which is the harness saying it is
+not drifting on its own. Both figures reproduced exactly on a second
+interleaved pass.
+
+#### What it costs
+
+Two readings, and they agree once the confound is named. Over the five
+starter decks at 1,000 games each the two arms are **1,097.8 s against
+1,094.2 s — no measurable difference at all**. Over the whole 216-deck
+census the candidate arm is about **5% slower** (453.3 s against 475.0 s,
+means of two interleaved passes), and **2.3 points of that 5 is longer
+GAMES rather than slower ones**: the search holds attackers home, so
+turns go 22.79 → 23.31 and spells cast go 29.39 → 30.60. The search's own
+cost is what is left, which is small because the gate keeps it off
+roughly nine combats in ten. For comparison, `cast_refusal` cost 6%.
+
+### Tried and NOT kept
+
+* **A global node budget.** The first version spent one budget across the
+  whole decision, first-come. That hands the WIDEST attack the entire
+  tree — it is enumerated first — and leaves the narrow ones truncated,
+  which is a systematic bias towards attacking that would have looked
+  like a result. Replaced before any measurement by a per-candidate
+  slice, and recorded here because the bug is invisible in the output.
+* **Searching the opponent's blocks (ply 2) as well.** Left as the
+  shipped greedy model on purpose, not for cost: it would change how the
+  AI prices its FORWARD combat, which is the 2026-09-04 attack audit's
+  measured +2.5, and the two would then be one experiment instead of two.
+* **The chain that drops the WORST defender first.** The >5-body fallback
+  move list originally narrowed from the wrong end. Fixed before
+  measurement; the powerset covers every board of five optional bodies or
+  fewer, which the phase-3 note's own census (attack subsets mean 2,
+  max 16) says is nearly all of them.
+
+### Still open
+
+* **The journal across a step boundary.** `_advance_step` / `_enter_step`
+  journal nothing, which is why this search runs over a model rather than
+  over the engine itself. Instrumenting the untap sweep, the draw step,
+  cleanup and combat damage is the next increment, and it is what would
+  let a search make its moves through the same helpers a real duel makes
+  them through.
+* **One blocker per attacker**, on both sides of both combats — the
+  engine-wide ledger row above, with the 4.5% that keeps it there.
+* **Neither player's hand is modelled.** Unchanged and deliberate: the AI
+  does not look at cards it may not see.
 
 ## Where we are — M1: engine core (DONE, v0.1)
 
@@ -1661,6 +1989,7 @@ picker before tutor casts).
 | The CR 613 layer passes have no DEPENDENCY analysis (CR 613.8); layer-4 statics run twice when two share the board, which resolves one level | Real dependency ordering |
 | ~~No POTENTIAL-mana query~~ **HALF-LIFTED 2026-09-03** — `MtgGame.could_afford(pid, data, excluded)` walks the untapped sources through the shared [ManaPlanner] and prices them with `can_afford`'s own modifiers, restricted-mana keys and `spell_payment` arithmetic, so a plan and a payment cannot disagree. The **castable highlight** now uses it, which is what makes the yellow name mean what `Duel.hlp` says it means (*"you must have enough mana available"*, topic **Hands**) and what the click-then-tap flow and the auto-cast both promise. **STILL OWED:** `DuelScreen._has_affordable_fast_effect` — the Done order's third condition — is deliberately left on the FLOATING pool, so Done and the opponent's-turn auto-pass stop only for a fast effect the player has actually floated for; its own `SIMPLIFIED` marker still says so. Moving it to `could_afford` would make both stop at every phase you hold an instant, which is the clicking the 2026-09-03 playtest was about | Point `_has_affordable_fast_effect` at `could_afford` when (and only when) the player asks for the stricter 1997 Done |
 | **SIMPLIFIED — `could_afford` under-reports for two cards** (`mtg_game.gd`): colour SUBSTITUTIONS (Sunglasses of Urza) and North Star's any-type charge widen only the FLOATING half of the answer, because `can_afford` is asked first and [ManaPlanner] models neither. It never over-reports, which is the safe direction for a highlight and for an auto-tapper | Teach the planner substitutions and the wildcard, or price the potential pool through `ManaPool.can_pay` once it can take a source list |
+| **SIMPLIFIED — the AI's combat maths blocks ONE creature per attacker** (`ai/combat_search.gd`, and `ai_player.gd`'s `_cohort_value` / `_damage_through_blocks` before it, which is why it is the same row): every model of a combat this AI runs — its own attack, the defender's answer, and since 2026-09-05 the opponent's crack-back and our answer to that — assigns at most one blocker to an attacker. The ENGINE implements gang blocks fully; it is the AI's reading of them that is flat. Measured before it was kept: the defender gang-blocks in **46 of 1,022 logged combats (4.5%)**, and teaching the maths to fear a double block would make it pessimistic about something that happens once every twenty-two combats — which is the fault the 2026-09-04 attack audit had just fixed. The two sides of the table use the same model, so it stays consistent | Enumerate multi-blocker assignments in `CombatSearch._assign` (it is already a recursive assignment; the change is letting a blocker be spent on an attacker that already has one) and price the same widening in `_cohort_value`, then measure whether the pessimism costs more than the accuracy buys |
 Card-level simplifications are tracked separately in
 **docs/simplified-cards.md** — one row per card that deviates from its
 printed behavior, so future passes can lift them one by one.
@@ -1892,6 +2221,12 @@ tables — mage-go's `interactive/ai/search/` is the working reference; it
 plugs in behind the same act() surface. **A design note is below** (M4
 phase 3): NOT started, and the note exists because the first thing phase 3
 needs is a measurement, not a search.
+
+**The first search LANDED 2026-09-05** — `engine/ai/combat_search.gd`,
+an alpha-beta minimax over the crack-back, kept on a −26% fall in the
+deaths it exists to prevent. It runs over a MODEL rather than over the
+engine, and the reason is the journal's own boundary: see "The
+tap-trigger refusal, and the crack-back search (2026-09-05)" above.
 
 ### Phase 2.x — AI SIDEBOARDING (SHIPPED 2026-09-02)
 
@@ -2177,6 +2512,14 @@ its own card, not a target, not a player, not a table in the two lists —
 is outside the journal. Nothing in the pool does that today (the move
 menu would have named the field); a card that starts to gets its own
 `_rec` or a row in `RESOLUTION_TABLES`.
+
+**And that boundary is what shaped the first search that landed.** The
+crack-back search of 2026-09-05 crosses two step boundaries and a turn
+boundary by construction, so it could not use the journal at all; it
+runs over a flat model built out of the engine's own predicates
+instead. Instrumenting `_advance_step` / `_enter_step` is therefore not
+an optimisation — it is the thing that decides whether the NEXT search
+can make its moves through the same helpers a duel makes them through.
 
 DERIVED STATE IS REBUILT, NOT JOURNALED, and that is the simplification
 that made the instrumentation small: `cur_*` (37 of CardInstance's 93

@@ -74,10 +74,23 @@ var counter_threshold := 5.0
 ## deliberately no second difficulty concept for sideboarding.
 var sideboard_swaps := 0
 
+## THE CRACK-BACK SEARCH's budget in leaf evaluations, or 0 for a profile
+## that does not look past its own combat ([CombatSearch], M4 phase 3).
+##
+## A CAPABILITY, like [member holds_instants] and
+## [member sideboard_swaps] — not a second difficulty concept. Reading the
+## opponent's counter-swing before committing an attacker is a whole layer
+## of play, and the bottom two difficulties not having it at all is the
+## same honest weakness as the Apprentice never holding an instant. The
+## Sorcerer gets half the Wizard's budget, so its search truncates on the
+## wide boards the Wizard still resolves; the ladder therefore stays
+## monotone in this knob as it does in every other.
+var combat_search_nodes := 0
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
-		p_sideboard_swaps := 0) -> void:
+		p_sideboard_swaps := 0, p_search_nodes := 0) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -85,28 +98,29 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	holds_instants = p_holds
 	counter_threshold = p_counter_threshold
 	sideboard_swaps = p_sideboard_swaps
+	combat_search_nodes = p_search_nodes
 
 
 ## Lowest difficulty: fumbles a third of its actions, swings recklessly, and
 ## never holds up instants — sorcery-speed Magic, which is the honest way to
 ## be weak without cheating the rules.
 static func apprentice() -> AiProfile:
-	return AiProfile.new("Apprentice", 0.35, 0.75, 3, false, 5.0, 0)
+	return AiProfile.new("Apprentice", 0.35, 0.75, 3, false, 5.0, 0, 0)
 
 ## Second difficulty: reactive play switches on, but the high counter
 ## threshold means it only answers the biggest threats and lets the rest
 ## resolve.
 static func magician() -> AiProfile:
-	return AiProfile.new("Magician", 0.20, 0.60, 4, true, 7.0, 2)
+	return AiProfile.new("Magician", 0.20, 0.60, 4, true, 7.0, 2, 0)
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000)
 
 
 func _to_string() -> String:

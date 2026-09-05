@@ -974,6 +974,11 @@ shandalar/
 │   │   │                      here. sideboard_swaps says how many cards a
 │   │   │                      profile may move between duels (Apprentice
 │   │   │                      0 — it does not sideboard at all).
+│   │                      combat_search_nodes is the CRACK-BACK SEARCH's
+│   │                      leaf budget, 0 for a profile that does not look
+│   │                      past its own combat (Apprentice and Magician 0,
+│   │                      Sorcerer 1500, Wizard 3000) — a CAPABILITY, the
+│   │                      way holds_instants is.
 │   │   ├── ai_match_memory.gd
 │   │   │                    class AiMatchMemory — WHAT ONE SEAT SAW, and
 │   │   │                      the only thing AiSideboard may read. Watches
@@ -1022,6 +1027,31 @@ shandalar/
 │   │   │                      grants protection), then the 28-name
 │   │   │                      hostile set, friendly by default, the
 │   │   │                      whole pool pinned by a coverage test
+│   │   ├── combat_search.gd
+│   │   │                    class CombatSearch — THE CRACK-BACK SEARCH
+│   │   │                      (M4 phase 3's first landing, 2026-09-05):
+│   │   │                      an alpha-beta minimax over the two combats
+│   │   │                      that decide whether an attack kills us.
+│   │   │                      Four decision layers — OUR attack
+│   │   │                      (enumerated over the cohort's subsets, so
+│   │   │                      it can only ever hold a body BACK), THEIR
+│   │   │                      blocks (the shipped greedy one-per-attacker
+│   │   │                      model, deliberately NOT searched so the
+│   │   │                      forward combat is priced exactly as
+│   │   │                      _cohort_value prices it), THEIR crack-back
+│   │   │                      attack over the survivors they will UNTAP,
+│   │   │                      and OUR blocks with the bodies the attack
+│   │   │                      left us. Leaf = the position delta in
+│   │   │                      AiPlayer's own currency (clock-scaled face
+│   │   │                      damage + Evaluator.permanent_value per
+│   │   │                      death), our own death −LOSS. Runs over a
+│   │   │                      MODEL built once per decision out of the
+│   │   │                      engine's own predicates (block_illegality,
+│   │   │                      _dies_to): no mutation, no RNG, no hidden
+│   │   │                      information — and the budget is shared out
+│   │   │                      per candidate attack, so a truncated search
+│   │   │                      cannot quietly favour the widest one.
+│   │   │                      tests/ai/test_ai_crack_back_2026_09_05.gd
 │   │   └── ai_player.gd     class AiPlayer extends DecisionAgent — one
 │   │                          act() per call through the PUBLIC API:
 │   │                          colour-aware land drops, mana tap planning
@@ -1125,6 +1155,30 @@ shandalar/
 │   │                          callers all read a fixed power/toughness)
 │   │                          and offered only when the swing is lethal,
 │   │                          for X = the shortfall exactly.
+│   │                          A REFUSAL THE PLANNER CAN WAIT OUT IS NOT A
+│   │                          REFUSAL (_wait_out, 2026-09-05): the taps
+│   │                          come before the announcement, so a
+│   │                          TAP-TRIGGERED ability (City of Brass,
+│   │                          Manabarbs, Psychic Venom, Kudzu) reaches the
+│   │                          stack mid-payment and CR 601.2a's sorcery
+│   │                          timing then refuses the very spell it was
+│   │                          paying for. cast_refusal cannot see it — the
+│   │                          stack IS empty when it is asked — so the
+│   │                          MEMO is taught the difference instead, and
+│   │                          structurally: a stack that filled up while we
+│   │                          paid is our OWN taps, the mana survives the
+│   │                          step (CR 500.4), and the cast is made from
+│   │                          the floating mana one priority round later
+│   │                          without tapping a second land.
+│   │                          THE CRACK-BACK (_search_hold_back,
+│   │                          _build_combat_model, _could_attack_next_turn,
+│   │                          2026-09-05): once the cohort and the pump
+│   │                          rider have chosen, [CombatSearch] is asked
+│   │                          whether some SUBSET of that attack survives
+│   │                          the opponent's counter-swing better — gated
+│   │                          on "everything they control connecting could
+│   │                          kill us", which is exact rather than tuned,
+│   │                          and never asked of a lethal push.
 │   │                          Upgrade path: cloning + minimax
 │   │                          (mage-go search/) behind the same act()
 │   ├── card_script.gd       class CardScript — base for card files; override
@@ -1968,6 +2022,30 @@ shandalar/
 │    wants, Spell Blast sized to the spell it answers, Howl from Beyond
 │    fired as a finisher for the shortfall exactly — with the Apprentice
 │    still never countering, so the ladder is untouched;
+│    tests/ai/test_ai_tap_trigger_2026_09_05.gd — THE TAP-TRIGGER
+│    REFUSAL, the residue the X-seam pass named and did not close. The
+│    planner taps BEFORE it announces, so a tap-triggered ability lands
+│    on the stack mid-payment and CR 601.2a refuses the spell it was
+│    paying for — 1,199 refused casts in a 1,296-game census of the
+│    whole deck pool, every one of them this. The file states the board
+│    (four Mountains, a Hill Giant, a Manabarbs across the table; and
+│    Psychic Venom on our own Forest) and what the seat must END UP
+│    doing: the card reaches the table on the same turn, held exactly
+│    once, with the retry spending the FLOATING mana so the trigger is
+│    not paid twice — plus the two controls, that an empty stack still
+│    memos the refusal and that a board without the trigger casts on the
+│    first action;
+│    tests/ai/test_ai_crack_back_2026_09_05.gd — THE CRACK-BACK SEARCH
+│    ([CombatSearch]). The attack audit's own reproduced board (at 3
+│    life behind one untapped 3/3, facing a TAPPED Craw Wurm) now
+│    declares no attackers, and every case where holding back buys
+│    nothing still swings: the same board at 20 life, a counter-swing
+│    that is lethal whatever we do, a lethal push, and the GATE (their
+│    whole board cannot reach our life, so the search never runs). Plus
+│    the three guarantees the Deck Lab rests on — the ladder (Apprentice
+│    and Magician do not search at all, and the budget is monotone up
+│    the four profiles), no draw from game.rng, and no mutation at all,
+│    checked with test_undo_log.gd's own whole-state differ;
 │    tests/unit/test_fifth_edition.gd — THE 1997 RULESET AS A WHOLE
 │    (`rules.set_edition("fifth")` and nothing else, the 2026-09-02
 │    audit): mana burn killing on the boundary it is charged on (the
