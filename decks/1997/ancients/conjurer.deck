@@ -1,0 +1,24 @@
+# Conjurer — a Typical enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Conjurer (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0260.dck "Conjurer (Ub, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Conjurer (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Conjurer (Spells of the Ancients)
+23 Island
+4 Prodigal Sorcerer
+4 Pirate Ship
+4 Wall of Air
+4 Counterspell
+2 Steal Artifact
+1 Copy Artifact
+4 Unsummon
+4 Rod of Ruin
+2 Aladdin's Ring
+4 Weakstone
+4 Fellwar Stone

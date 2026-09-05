@@ -1,0 +1,30 @@
+# Tropical Depression — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: U/G
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane ["Tropical
+#   Depression"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Tropical Depression"
+#   [Tier-web — agrees card for card]
+# group: Kevin Bane's decks
+name: Tropical Depression
+1 Force of Nature
+4 Merfolk Assassin
+4 Merfolk of the Pearl Trident
+4 Lord of Atlantis
+1 Moss Monster
+4 Whirling Dervish
+1 Berserk
+1 Fog
+4 Giant Growth
+2 Stream of Life
+1 Black Lotus
+1 Mox Emerald
+1 Mox Sapphire
+3 War Barge
+2 Aspect of Wolf
+2 Invisibility
+4 Phantasmal Terrain
+10 Island
+10 Forest

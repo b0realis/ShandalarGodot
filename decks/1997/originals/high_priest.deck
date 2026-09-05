@@ -1,0 +1,31 @@
+# High Priest — one of the Henchmen of the 1997 game, the deck as the original shipped it.
+# tier: 10/12 The Henchmen — up to 27 life, can't be bribed
+# enemy: High Priest (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0203.dck "High Priest (W, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 14 maindeck lines are the 1997 deck, the 15 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/high_priest.toml (main_cards, sideboard_cards, level 10)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/high_priest.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Henchmen) — "High Priest" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: High Priest
+22 Plains
+4 Armageddon
+3 Dingus Egg
+4 Healing Salve
+4 Mesa Pegasus
+4 Savannah Lions
+2 Fellwar Stone
+2 Holy Strength
+1 Balance
+2 White Mana Battery
+4 White Knight
+4 Tundra Wolves
+2 Disenchant
+3 Righteousness
+# The 1997 file has no .v colour sections: this enemy played the same 61 cards against everyone.

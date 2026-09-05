@@ -1,0 +1,23 @@
+# Elvish Magi — an Aggro enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Elvish Magi (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0076.dck "Elvish Magi (Gr, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Elvish Magi (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Elvish Magi (Spells of the Ancients)
+22 Forest
+4 Llanowar Elves
+4 Elvish Archers
+4 Elven Riders
+4 Tranquility
+3 Giant Growth
+3 Stream of Life
+3 Hurricane
+2 Winter Blast
+4 Untamed Wilds
+3 Singing Tree

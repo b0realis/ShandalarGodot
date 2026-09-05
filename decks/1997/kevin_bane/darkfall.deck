@@ -1,0 +1,26 @@
+# Darkfall — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: B
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane
+#   ["Darkfall"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Darkfall" [Tier-web
+#   — agrees card for card]
+# cross-check: a screenshot of the original .DCK file is on the wiki page (files.mtg.wiki Darkfall_duels_of_the_planeswalkers.png)
+# group: Kevin Bane's decks
+name: Darkfall
+4 Black Knight
+4 Bog Rats
+2 Fallen Angel
+2 Headless Horseman
+4 Hypnotic Specter
+2 Infernal Medusa
+2 Walking Dead
+4 Dark Ritual
+4 Darkness
+2 Animate Dead
+4 Bad Moon
+2 Paralyze
+4 Unholy Strength
+20 Swamp

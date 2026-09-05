@@ -1,0 +1,33 @@
+# Druid (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Druid deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-03-25).
+# archetype: the Shandalar enemy "Druid" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/druid.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-278-shandalar-green-decks/
+#   — The Kitchen Table #278 - Shandalar Green Decks — "Modified Druid" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/druid.deck [Tier 3 — his "Initial" (unmodified) list differs
+#   from the shipped 1997 original by 5 cards (his transcription, or the later Manalink file);
+#   the Modified list is shipped as he printed it]
+# group: Community decks
+name: Druid (Sargent, 2009)
+18 Forest
+2 Desert
+1 Oasis
+4 Mishra's Factory
+4 Ley Druid
+2 Citanul Druid
+3 Llanowar Elves
+2 Wall of Wood
+2 Nafs Asp
+2 Giant Spider
+2 Craw Wurm
+2 Ironroot Treefolk
+2 Killer Bees
+2 Durkwood Boars
+3 Instill Energy
+4 Giant Growth
+4 Wooden Sphere

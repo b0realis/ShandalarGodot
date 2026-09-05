@@ -1,0 +1,24 @@
+# Nether Fiend — a Strong enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Nether Fiend (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Nether Fiend (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Nether Fiend (Duels of the Planeswalkers)
+4 Black Knight
+3 Erg Raiders
+2 Frozen Shade
+2 Junún Efreet
+4 Lord of the Pit
+4 Nether Shadow
+3 Xenic Poltergeist
+2 Kormus Bell
+2 Soul Net
+4 The Hive
+4 Animate Dead
+21 Swamp
+4 Mishra's Factory

@@ -1,0 +1,32 @@
+# Sainted One (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Sainted One deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-06-10).
+# archetype: the Shandalar enemy "Sainted One" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/sainted_one.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-289-white-shandalar-decks/
+#   — The Kitchen Table #289 - White Shandalar Decks — "Modified Sainted One" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/sainted_one.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Sainted One (Sargent, 2009)
+22 Plains
+1 Library of Alexandria
+1 Mishra's Workshop
+1 Ivory Tower
+4 Serra Angel
+3 White Knight
+3 Rainbow Knights
+3 Martyrs of Korlis
+3 Circle of Protection: Artifacts
+1 Balance
+4 Swords to Plowshares
+2 Disenchant
+1 Mox Pearl
+1 Sol Ring
+1 Black Lotus
+3 Copper Tablet
+3 Armageddon Clock

@@ -1,0 +1,61 @@
+{
+ "_source": "Name, date, type and printed size are the Scryfall set object, taken from the local card packs built by tools/build_card_packs.py (../shandalar-packs/<code>/set.json, read 2026-09-03). The prose is set history, not a game source — see Provenance.md for what outranks what. Card counts for THIS pool are counted at runtime from the CardRegistry, never stored here.",
+ "sets": {
+  "2ed": {
+   "name": "Unlimited Edition",
+   "released": "1993-12-01",
+   "kind": "core",
+   "printed": 302,
+   "lore": "The base game reprinted for a world that could not find the first printing — same 302 cards, white borders, December 1993. It carries the Power Nine and the ten dual lands, and it is the backbone of this pool: most of what an enemy plays and nearly every effect the rules engine had to learn first."
+  },
+  "arn": {
+   "name": "Arabian Nights",
+   "released": "1993-12-17",
+   "kind": "expansion",
+   "printed": 78,
+   "lore": "Magic's first expansion, and the first set to stamp a symbol on its cards — the scimitar you see here. Richard Garfield built it from the Thousand and One Nights: djinns, efreets, flying carpets, and Library of Alexandria. Only 78 cards, and the game's oddest corners are still made of them."
+  },
+  "atq": {
+   "name": "Antiquities",
+   "released": "1994-03-04",
+   "kind": "expansion",
+   "printed": 100,
+   "lore": "The Brothers' War, told as a card set: Urza and Mishra tearing Terisiare apart. It made artifacts a strategy rather than a curiosity — Mishra's Workshop, the Factory, the Strip Mine — and its symbol is Mishra's anvil."
+  },
+  "leg": {
+   "name": "Legends",
+   "released": "1994-06-01",
+   "kind": "expansion",
+   "printed": 310,
+   "lore": "The largest set of the era at 310 cards, and the one that invented the legendary creature and the gold multicolour card. The Elder Dragons live here, so do the banding lands, and its symbol is a pillar. Rare, expensive and strange even in 1994."
+  },
+  "drk": {
+   "name": "The Dark",
+   "released": "1994-08-01",
+   "kind": "expansion",
+   "printed": 119,
+   "lore": "119 cards of after-the-war gloom: cheap, grim, punishing spells for a world picking over the ruins. Famous for being underpowered and beloved anyway. A crescent moon marks it."
+  },
+  "4ed": {
+   "name": "Fourth Edition",
+   "released": "1995-04-01",
+   "kind": "core",
+   "printed": 378,
+   "lore": "The 1995 core set, 378 cards, and the printing this game's pool is really cut from — it is what a 1997 player had on the shelf. The last core set to wear no expansion symbol at all, which is why it letters itself here."
+  },
+  "past": {
+   "name": "Astral Cards",
+   "released": "1997-04-01",
+   "kind": "box",
+   "printed": 12,
+   "lore": "This game's OWN set. Twelve cards MicroProse wrote for the 1997 Shandalar and nowhere else — Aswan Jaguar, Pandora's Box, Whimsy, Power Struggle — and most of them cannot be played on a table at all, because they ask the computer to roll dice or pick at random. Every one of the twelve is implemented here."
+  },
+  "phpr": {
+   "name": "HarperPrism Book Promos",
+   "released": "1994-09-01",
+   "kind": "promo",
+   "printed": 6,
+   "lore": "The six cards that came tucked into the HarperPrism Magic novels and their conventions: Arena, Giant Badger, Mana Crypt, Nalathni Dragon, Sewers of Estark and Windseeker Centaur. Never in a booster pack, and all six are in this pool."
+  }
+ }
+}

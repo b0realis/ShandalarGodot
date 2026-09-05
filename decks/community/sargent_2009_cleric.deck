@@ -1,0 +1,30 @@
+# Cleric (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Cleric deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-06-10).
+# archetype: the Shandalar enemy "Cleric" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/cleric.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-289-white-shandalar-decks/
+#   — The Kitchen Table #289 - White Shandalar Decks — "Modified Cleric" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/cleric.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 2 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Cleric (Sargent, 2009)
+21 Plains
+4 Benalish Hero
+4 Mesa Pegasus
+2 Samite Healer
+2 Savannah Lions
+4 Amrou Kithkin
+2 Pikemen
+2 Holy Strength
+3 Keepers of the Faith
+3 Blessing
+4 Swords to Plowshares
+2 Disenchant
+3 Meekstone
+4 Tawnos's Weaponry

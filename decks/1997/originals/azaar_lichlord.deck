@@ -1,0 +1,34 @@
+# Azaar - Lichlord — one of the five Guildlords of the 1997 game, the deck as the original shipped it.
+# tier: 11/12 The Guildlords — 35 to 45 life, can't be bribed
+# enemy: Greater Lich — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Azaar - Lichlord"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0141.dck "Azaar - Lichlord (B, 4th)" [Tier 3 —
+#   Manalink 3 file dated 2016-02-15; its first 17 maindeck lines are the 1997 deck, the 14
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/azaar_lichlord.toml (main_cards, sideboard_cards, level
+#   11) [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/azaar_lichlord.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Guildlords) — "Azaar - Lichlord"
+#   (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Azaar - Lichlord
+22 Swamp
+4 Dark Ritual
+1 Sol Ring
+1 Mox Jet
+1 Black Lotus
+1 Black Vise
+1 Mind Twist
+4 Drain Life
+4 Hypnotic Specter
+4 Sengir Vampire
+3 Tetravus
+2 Lord of the Pit
+2 Greed
+3 Will-o'-the-Wisp
+1 Gloom
+3 Bog Imp
+4 Howl from Beyond
+# The 1997 file has no .v colour sections: this enemy played the same 61 cards against everyone.

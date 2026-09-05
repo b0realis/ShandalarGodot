@@ -1,0 +1,28 @@
+# Godot 4 generated cache/config
+.godot/
+*.import
+
+# Test artifacts
+sim_results/
+.gut_editor_config.json
+user://
+
+# OS noise
+.DS_Store
+Thumbs.db
+assets/original/
+assets/cardart/
+
+# Card packs (tools/build_card_packs.py --out packs): Scryfall art, never
+# committed. The default output is the sibling ../shandalar-packs/.
+packs/
+
+# Export presets name an export TEMPLATE by absolute path, because the
+# installed templates are 4.7.stable while the pinned engine is 4.7.2 —
+# so the preset is machine-specific by nature. Copy the example, put your
+# own path in it, and keep it out of the history.
+export_presets.cfg
+
+# Local pointer to CONTRIBUTING.md, for tooling that looks for this name.
+# The house rules themselves are in CONTRIBUTING.md, which IS committed.
+CLAUDE.md

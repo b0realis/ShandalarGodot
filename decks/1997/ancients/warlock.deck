@@ -1,0 +1,25 @@
+# Warlock — a Typical enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Warlock (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0055.dck "Warlock (Bl, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Warlock (Spells of the
+#   Ancients)" [Tier-web — DIFFERS — the local file lists "4 Fear" twice (64 cards) where the
+#   wiki lists it once (60); the local file wins]
+# group: Spells of the Ancients
+name: Warlock (Spells of the Ancients)
+23 Swamp
+2 Dark Ritual
+4 Drain Life
+8 Fear
+4 Howl from Beyond
+4 Hypnotic Specter
+4 El-Hajjâj
+4 Erg Raiders
+4 Murk Dwellers
+4 Pit Scorpion
+3 Tawnos's Wand
+# NOTE: the source file lists Fear on two separate "4" lines (8 copies, 64 cards); kept as the file has it.

@@ -1,0 +1,50 @@
+# Preston Poulter — semifinalist, Pro Tour New York (Pro Tour 1), February 1996 — Standard (Erhnamgeddon (G/W))
+# TOURNAMENT DECK — not a MicroProse deck. Pro Tour Collector Set (1996): Preston Poulter's
+#   semifinalist deck from Pro Tour New York, February 1996 — Erhnamgeddon (G/W).
+# archetype: Erhnamgeddon (G/W)
+# pilot: Preston Poulter
+# event: Pro Tour New York (Pro Tour 1), February 1996 — Standard
+# year: 1996
+# place: semifinalist
+# caveat: Pro Tour Collector Set (1996) printing of the Top 8 deck
+# source: https://mtg.wiki/page/Pro_Tour_Collector_Set — Pro Tour Collector Set — "Preston
+#   Poulter, Semifinalist" [Tier-web — no local 1997/s30/Manalink copy exists]
+# cross-check: ../mage-go/data/preconstructed_decks.yaml pro_tour_collector_set.decks["Preston
+#   Poulter, Semifinalist"] [Tier 3 — agrees card for card]
+# group: Tournament decks
+name: Poulter — PT New York 1996 semifinalist
+4 Brushland
+4 Forest
+2 Havenwood Battleground
+4 Mishra's Factory
+8 Plains
+1 Ruins of Trokair
+2 Strip Mine
+2 Aeolipile
+2 Fellwar Stone
+2 Icy Manipulator
+1 Nevinyrral's Disk
+1 Zuran Orb
+2 Autumn Willow
+3 Elvish Archers
+4 Erhnam Djinn
+1 Spectral Bears
+2 Armageddon
+1 Balance
+3 Disenchant
+3 Land Tax
+4 Swords to Plowshares
+1 Wrath of God
+2 Hurricane
+1 Sylvan Library
+SB: 1 Fellwar Stone
+SB: 1 Ivory Tower
+SB: 1 Serrated Arrows
+SB: 1 Armageddon
+SB: 1 Disenchant
+SB: 2 Divine Offering
+SB: 2 Karma
+SB: 1 Land Tax
+SB: 2 Reverse Damage
+SB: 1 Autumn Willow
+SB: 2 Essence Filter

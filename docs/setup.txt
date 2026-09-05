@@ -1,0 +1,155 @@
+SHANDALAR — SETUP
+=================
+
+A remake of MicroProse's Magic: The Gathering (1997), built in Godot.
+
+The game runs the moment you unzip it. Everything below is about making
+it LOOK like 1997 — which is optional, in the strict sense that with no
+art at all every panel, button, card and portrait falls back to a drawn
+equivalent of the same size, and nothing is unreachable.
+
+
+---------------------------------------------------------------------
+1. RUN IT
+---------------------------------------------------------------------
+
+    ./run.sh                 (or: ./Shandalar.x86_64)
+
+Linux, 64-bit. No installer, no dependencies, nothing written outside
+your home directory.
+
+
+---------------------------------------------------------------------
+2. WHAT IS IN THIS FOLDER
+---------------------------------------------------------------------
+
+    Shandalar.x86_64     the game
+    Shandalar.pck        its code, the 897 cards' rules, and 317 decks
+    skin/                the 1997 art
+    run.sh               a launcher that sets the working directory
+    setup.txt            this file
+
+The .pck holds no art of any kind. Art is read off the filesystem at
+runtime, which is what makes `skin/` swappable and what lets you drop
+your own files in beside the game's.
+
+
+---------------------------------------------------------------------
+3. EVERY PATH THE GAME READS OR WRITES
+---------------------------------------------------------------------
+
+Your own files live in Godot's user directory. On Linux that is:
+
+    ~/.local/share/godot/app_userdata/Shandalar/
+
+and inside it:
+
+    settings.cfg              every option you change
+    decks/                    decks you save        (*.deck)
+    decks/export/             decks exported for the 1997 program (*.dck)
+    portraits/                your own portraits    (*.png, *.jpg)
+    music/                    your own music        (*.wav, *.ogg, *.mp3)
+    original_skin/            an imported 1997 skin
+    logs/                     crash and error logs
+
+ART IS SEARCHED IN THREE PLACES, FIRST MATCH WINS:
+
+    1. ~/.local/share/godot/app_userdata/Shandalar/original_skin/
+    2. <this folder>/skin/                      <- what shipped with it
+    3. (a development checkout's assets/original/, not present here)
+
+So anything you put in (1) overrides what shipped in (2). Portraits and
+music are searched slightly differently, because your own come first:
+
+    portraits:  user portraits/ -> original_skin/portraits/ -> skin/portraits/
+    music:      user music/     -> original_skin/           -> skin/
+
+CARD ART sits in a `cardart/` subfolder of any of those, as
+<card_name_in_snake_case>.jpg or .png:
+
+    <this folder>/skin/cardart/serra_angel.jpg
+
+DECKS the game shipped are read-only, and a deck of yours may not take
+one of their names. That is the 1997 manual's own rule (p.148): "If you
+load and change one of the creature decks used in the full game, you must
+save your version of the deck under a new name." Saving over one turns
+into Save As, with the new name already filled in.
+
+
+---------------------------------------------------------------------
+4. CARD ART — THE ONE THING YOU COLLECT YOURSELF
+---------------------------------------------------------------------
+
+897 cards. The art is not in the 1997 install in any usable form, so it
+is downloaded from Scryfall by a script that ships beside this file:
+
+    python3 fetch_card_art.py --out skin/cardart/
+
+Needs Python 3 and a network connection, nothing else. It takes a few
+minutes (it is deliberately polite to the API — about eight requests a
+second), it SKIPS what it already has, so an interrupted run just carries
+on where it stopped, and it prints what it could not fetch rather than
+stopping.
+
+Without it, cards draw with a clean placeholder and are perfectly
+playable — every name, cost, type, rules text and picture frame is there,
+only the illustration is missing.
+
+
+---------------------------------------------------------------------
+5. BUILDING THE ART ARCHIVE FROM YOUR OWN 1997 DISC
+---------------------------------------------------------------------
+
+If you own the original and would rather import it yourself than use the
+`skin/` folder that shipped here:
+
+    python3 mtg_assets.py                          explains what it needs
+    python3 mtg_assets.py --check   /path/to/game  looks, reports, writes nothing
+    python3 mtg_assets.py --install /path/to/game  imports, writes a zip
+
+It reads your install and never writes to it. The zip it produces has a
+`skin/` folder inside, so:
+
+    unzip -o shandalar-art.zip -d <this folder>/
+
+replaces the art in place. A partial install makes a partial archive and
+that is fine — every asset is independent.
+
+
+---------------------------------------------------------------------
+6. THE COIN TOSS
+---------------------------------------------------------------------
+
+The duel opens on a tossed coin, and in 1997 that was a movie:
+COINTOSS_Heads.AVI and COINTOSS_Tails.AVI, 61 frames each at 320x240.
+They are Microsoft Video 1 (CRAM) — not the Indeo they were long taken
+for — and neither Python nor Godot can play them, so they are converted
+into sprite sheets when the art is imported.
+
+Both halves ship in `skin/`: the finished sheets, and the two original
+AVIs in `skin/movies/` beside them. Carrying the source matters, because
+a conversion without its source is a dead end — if you installed the art
+on a machine with no decoder and have since installed ffmpeg:
+
+    python3 mtg_assets.py --transcode-movies skin/
+
+rebuilds the sheets from the movies already there, with no 1997 disc
+needed. Building your own archive keeps the movies too; --no-bundle-movies
+leaves them out if you would rather save the 4.5 MB.
+
+Without any of it the toss plays a coin the game draws itself.
+
+
+---------------------------------------------------------------------
+7. IF SOMETHING LOOKS WRONG
+---------------------------------------------------------------------
+
+Unreadable text on a panel, a missing picture, a card with no frame: the
+game is almost certainly finding SOME of the art and not the rest. Run
+
+    python3 mtg_assets.py --check /path/to/your/1997/install
+
+which reports on seven groups of files separately, and re-import.
+
+To go back to the drawn look entirely, rename `skin/` to `skin.off/`.
+Nothing breaks; the game is tested that way.

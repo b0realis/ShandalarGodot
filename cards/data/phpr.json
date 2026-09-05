@@ -1,0 +1,102 @@
+[
+ {
+  "name": "Arena",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{3}, {T}: Tap target creature you control and target creature of an opponent's choice they control. Those creatures fight each other. (Each deals damage equal to its power to the other.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Fight"
+  ],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "1",
+  "artist": "Rob Alexander",
+  "set": "phpr"
+ },
+ {
+  "name": "Sewers of Estark",
+  "mana_cost": "{2}{B}{B}",
+  "type_line": "Instant",
+  "oracle_text": "Choose target creature. If it's attacking, it can't be blocked this turn. If it's blocking, prevent all combat damage that would be dealt this combat by it and each creature it's blocking.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "2",
+  "artist": "Melissa A. Benson",
+  "set": "phpr"
+ },
+ {
+  "name": "Windseeker Centaur",
+  "mana_cost": "{1}{R}{R}",
+  "type_line": "Creature — Centaur",
+  "oracle_text": "Vigilance",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "Vigilance"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "3",
+  "artist": "Anson Maddocks",
+  "set": "phpr"
+ },
+ {
+  "name": "Giant Badger",
+  "mana_cost": "{1}{G}{G}",
+  "type_line": "Creature — Badger",
+  "oracle_text": "Whenever this creature blocks, it gets +2/+2 until end of turn.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "4",
+  "artist": "Liz Danforth",
+  "set": "phpr"
+ },
+ {
+  "name": "Mana Crypt",
+  "mana_cost": "{0}",
+  "type_line": "Artifact",
+  "oracle_text": "At the beginning of your upkeep, flip a coin. If you lose the flip, this artifact deals 3 damage to you.\n{T}: Add {C}{C}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "5",
+  "artist": "Mark Tedin",
+  "set": "phpr"
+ },
+ {
+  "name": "Nalathni Dragon",
+  "mana_cost": "{2}{R}{R}",
+  "type_line": "Creature — Dragon",
+  "oracle_text": "Flying; banding (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)\n{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Flying",
+   "Banding"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "1",
+  "artist": "Michael Whelan",
+  "set": "phpr",
+  "printed_in": "pdrc"
+ }
+]

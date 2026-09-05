@@ -1,0 +1,24 @@
+# Merfolk Shaman — an Aggro enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Merfolk Shaman (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Merfolk Shaman (Spells of the
+#   Ancients)" (Spells of the Ancients) [Tier-web — the only surviving copy:
+#   Program/decks/0150.DCK is a Manalink replacement deck (Tundra, Triton Shorestalker, Master
+#   of the Pearl Trident...) — the Spells of the Ancients list comes from the wiki]
+# group: Spells of the Ancients
+name: Merfolk Shaman (Spells of the Ancients)
+3 Dandân
+4 Lord of Atlantis
+3 Merchant Ship
+4 Merfolk of the Pearl Trident
+2 Island Fish Jasconius
+3 Pirate Ship
+3 Sea Serpent
+2 Power Sink
+4 Sandals of Abdallah
+2 Deep Water
+4 Phantasmal Terrain
+4 Unstable Mutation
+22 Island

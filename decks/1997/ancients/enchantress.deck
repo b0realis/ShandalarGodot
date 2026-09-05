@@ -1,0 +1,33 @@
+# Enchantress — a Typical enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Enchantress (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0262.dck "Enchantress (Gr, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Enchantress (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Enchantress (Spells of the Ancients)
+22 Forest
+1 Mox Emerald
+1 Sol Ring
+4 Llanowar Elves
+4 Verduran Enchantress
+2 Cockatrice
+2 Thicket Basilisk
+2 Brass Man
+2 Scryb Sprites
+1 Jayemdae Tome
+1 Library of Leng
+1 Ivory Tower
+2 Jade Statue
+3 Lure
+3 Web
+3 Regeneration
+1 Drop of Honey
+4 Living Artifact
+2 Aspect of Wolf
+4 Wild Growth
+1 Fastbond

@@ -1,0 +1,24 @@
+# Swamp Thing — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Coyote Tex, MicroProse designer/producer (precon page, ref. 3); the .dck files are dated 19 September 1996
+# colours: B
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.coyote_tex ["Swamp
+#   Thing"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Coyote_Tex) — "Swamp Thing"
+#   [Tier-web — agrees card for card]
+# group: Coyote Tex's decks
+name: Swamp Thing
+4 Bog Wraith
+4 Lost Soul
+4 Scathe Zombies
+2 Will-o'-the-Wisp
+4 Zombie Master
+2 Raise Dead
+2 Ashes to Ashes
+2 Drain Life
+4 Black Vise
+4 Bad Moon
+4 Blight
+4 Evil Presence
+22 Swamp

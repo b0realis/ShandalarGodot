@@ -1,0 +1,36 @@
+# Morgane (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Morgane deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-03-25).
+# archetype: the Shandalar enemy "Morgane" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/great_druid.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-278-shandalar-green-decks/
+#   — The Kitchen Table #278 - Shandalar Green Decks — "Modified Morgane" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/great_druid.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 8 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Morgane (Sargent, 2009)
+22 Forest
+1 Sol Ring
+1 Mox Emerald
+4 Llanowar Elves
+3 Gaea's Liege
+2 Aswan Jaguar
+1 Faerie Dragon
+4 Killer Bees
+2 Cockatrice
+2 Triskelion
+2 Force of Nature
+1 Regrowth
+2 Desert Twister
+2 Sandstorm
+1 Ivory Tower
+2 Island of Wak-Wak
+3 Untamed Wilds
+2 Ifh-Bíff Efreet
+1 Berserk
+2 Jayemdae Tome

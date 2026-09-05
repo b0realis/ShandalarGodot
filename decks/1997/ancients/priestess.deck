@@ -1,0 +1,23 @@
+# Priestess — an Aggro enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Priestess (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0204.dck "Priestess (Wh, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Priestess (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Priestess (Spells of the Ancients)
+23 Plains
+4 Animate Wall
+4 Healing Salve
+4 Copper Tablet
+4 Wall of Swords
+4 Wall of Spears
+4 Fortified Area
+2 Living Wall
+3 Martyrs of Korlis
+4 Bottle of Suleiman
+4 Spirit Link

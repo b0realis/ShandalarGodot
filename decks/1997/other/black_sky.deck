@@ -1,0 +1,32 @@
+# Black Sky — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Jim Crawley (MicroProse, largely the Quality Assurance team — precon page)
+# colours: B
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.other ["Black Sky"]
+#   [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Other) — "Black Sky" [Tier-web —
+#   agrees card for card]
+# group: Other MicroProse decks
+name: Black Sky
+1 Banshee
+2 Bog Imp
+2 Fallen Angel
+3 Hypnotic Specter
+2 Nightmare
+3 Sengir Vampire
+2 Vampire Bats
+2 Will-o'-the-Wisp
+1 Darkness
+4 Dark Ritual
+1 Hell Swarm
+2 Drain Life
+1 Alchor's Tomb
+1 Black Lotus
+1 Bone Flute
+1 Life Chisel
+2 Serpent Generator
+4 Bad Moon
+4 Unholy Strength
+2 Weakness
+19 Swamp

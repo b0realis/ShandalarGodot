@@ -1,0 +1,42 @@
+# Kyzz'n (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Kyzz'n deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-01).
+# archetype: the Shandalar enemy "Kyzz'n" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/kzzy_n_the_dragon_lord.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-279-red-shandalar-decks/
+#   — The Kitchen Table #279 - Red Shandalar Decks — "Modified Kyzz'n" [Tier-web — Abe Sargent's
+#   "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/kzzy_n_the_dragon_lord.deck [Tier 3 — his "Initial"
+#   (unmodified) list agrees with the shipped 1997 original]
+# group: Community decks
+name: Kyzz'n (Sargent, 2009)
+10 Mountain
+1 Plains
+1 Forest
+4 Plateau
+2 City of Brass
+4 Taiga
+4 Savannah
+1 Sol Ring
+1 Mox Pearl
+1 Mox Ruby
+1 Mox Emerald
+1 Regrowth
+1 Balance
+1 Wheel of Fortune
+3 Disenchant
+2 Prismatic Dragon
+2 Elder Land Wurm
+1 Nalathni Dragon
+4 Shivan Dragon
+4 Dragon Whelp
+2 Winds of Change
+4 Lightning Bolt
+2 Faerie Dragon
+2 Craw Wurm
+2 Dragon Engine
+2 Fireball
+1 Ivory Tower

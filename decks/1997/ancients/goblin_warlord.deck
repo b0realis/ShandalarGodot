@@ -1,0 +1,25 @@
+# Goblin Warlord — an Intermediate enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 5/12 Intermediate enemies — 18 life, bribe 80 gold
+# enemy: Goblin Lord — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Goblin Warlord"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0102.dck "Goblin Warlord (Re, Type 1)" [Tier 1 — the
+#   1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Intermediate) — "Goblin Warlord
+#   (Spells of the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Goblin Warlord (Spells of the Ancients)
+21 Mountain
+1 Wheel of Fortune
+4 Orcish Oriflamme
+2 Helm of Chatzuk
+4 Iron Star
+4 Goblin King
+4 Goblin Balloon Brigade
+4 Mons's Goblin Raiders
+4 Keldon Warlord
+4 Goblin Polka Band
+4 Goblin Artisans
+2 Fireball
+2 Giant Strength

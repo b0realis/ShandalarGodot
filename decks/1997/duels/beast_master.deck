@@ -1,0 +1,25 @@
+# Beast Master — a Strong enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Beastmaster — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Beast Master"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Beast Master (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Beast Master (Duels of the Planeswalkers)
+4 Aswan Jaguar
+2 Birds of Paradise
+2 Durkwood Boars
+2 Giant Spider
+4 Grizzly Bears
+2 Killer Bees
+4 Nafs Asp
+4 Timber Wolves
+4 Giant Growth
+3 Stream of Life
+2 Untamed Wilds
+4 Aspect of Wolf
+2 Web
+21 Forest

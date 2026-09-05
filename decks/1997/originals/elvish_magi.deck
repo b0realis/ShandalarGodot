@@ -1,0 +1,43 @@
+# Elvish Magi — an Aggro enemy of the 1997 game, the deck as the original shipped it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Elvish Magi (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0076.dck "Elvish Magi (G, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 11 maindeck lines are the 1997 deck, the 12 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/elvish_magi.toml (main_cards, sideboard_cards, level 2)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/elvish_magi.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Elvish Magi" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Elvish Magi
+22 Forest
+4 Elvish Archers
+4 Giant Spider
+4 Elven Riders
+4 Llanowar Elves
+2 Jayemdae Tome
+4 War Mammoth
+4 Winter Blast
+4 Hurricane
+4 Stream of Life
+4 Untamed Wilds
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Untamed Wilds
+#   .vBlack  2 Untamed Wilds, 1 Whirling Dervish
+#   .vBlue   2 Untamed Wilds, 1 Web
+#   .vGreen  2 Untamed Wilds, 1 Wall of Brambles
+#   .vRed    2 Untamed Wilds, 1 Living Artifact
+#   .vWhite  2 Untamed Wilds, 1 Tranquility
+SB: 1 Whirling Dervish
+SB: 1 Web
+SB: 1 Wall of Brambles
+SB: 1 Living Artifact
+SB: 1 Tranquility

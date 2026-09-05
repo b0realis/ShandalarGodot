@@ -1,0 +1,45 @@
+# Druid — a Weak enemy of the 1997 game, the deck as the original shipped it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Druid (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0139.dck "Druid (G, 4th)" [Tier 3 — Manalink 3 file
+#   dated 2016-02-15; its first 16 maindeck lines are the 1997 deck, the 13 lines (60 cards)
+#   after them are the modern deck Manalink appended and are NOT shipped; its .vNone/.v<Colour>
+#   sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/druid.toml (main_cards, sideboard_cards, level 1) [Tier 3
+#   — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/druid.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Druid" (Original) [Tier-web
+#   — maindeck agrees]
+# group: 1997 originals
+name: Druid
+20 Forest
+4 Mishra's Factory
+3 Ley Druid
+3 Llanowar Elves
+2 Oasis
+3 Wooden Sphere
+4 Giant Growth
+3 Wanderlust
+2 Wall of Wood
+2 Nafs Asp
+2 Giant Spider
+2 Craw Wurm
+2 Ironroot Treefolk
+3 Instill Energy
+2 Killer Bees
+2 Durkwood Boars
+3 Grizzly Bears
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Grizzly Bears
+#   .vBlack  3 Grizzly Bears
+#   .vBlue   3 Grizzly Bears
+#   .vGreen  3 Shanodin Dryads
+#   .vRed    3 Grizzly Bears
+#   .vWhite  3 Grizzly Bears
+SB: 3 Shanodin Dryads

@@ -1,0 +1,1500 @@
+[
+ {
+  "name": "Argivian Archaeologist",
+  "mana_cost": "{1}{W}{W}",
+  "type_line": "Creature — Human Artificer",
+  "oracle_text": "{W}{W}, {T}: Return target artifact card from your graveyard to your hand.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "1",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Argivian Blacksmith",
+  "mana_cost": "{1}{W}{W}",
+  "type_line": "Creature — Human Artificer",
+  "oracle_text": "{T}: Prevent the next 2 damage that would be dealt to target artifact creature this turn.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "2",
+  "artist": "Kerstin Kaman",
+  "set": "atq"
+ },
+ {
+  "name": "Artifact Ward",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature can't be blocked by artifact creatures.\nPrevent all damage that would be dealt to enchanted creature by artifact sources.\nEnchanted creature can't be the target of abilities from artifact sources.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "3",
+  "artist": "Douglas Shuler",
+  "set": "atq"
+ },
+ {
+  "name": "Circle of Protection: Artifacts",
+  "mana_cost": "{1}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "{2}: The next time an artifact source of your choice would deal damage to you this turn, prevent that damage.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "4",
+  "artist": "Pete Venters",
+  "set": "atq"
+ },
+ {
+  "name": "Damping Field",
+  "mana_cost": "{2}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "Players can't untap more than one artifact during their untap steps.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "5",
+  "artist": "Justin Hampton",
+  "set": "atq"
+ },
+ {
+  "name": "Martyrs of Korlis",
+  "mana_cost": "{3}{W}{W}",
+  "type_line": "Creature — Human",
+  "oracle_text": "As long as this creature is untapped, all damage that would be dealt to you by artifacts is dealt to this creature instead.",
+  "power": "1",
+  "toughness": "6",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "6",
+  "artist": "Margaret Organ-Kean",
+  "set": "atq"
+ },
+ {
+  "name": "Reverse Polarity",
+  "mana_cost": "{W}{W}",
+  "type_line": "Instant",
+  "oracle_text": "You gain X life, where X is twice the damage dealt to you so far this turn by artifacts.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "7",
+  "artist": "Justin Hampton",
+  "set": "atq"
+ },
+ {
+  "name": "Drafna's Restoration",
+  "mana_cost": "{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Put any number of target artifact cards from target player's graveyard on top of their library in any order.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "8",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Energy Flux",
+  "mana_cost": "{2}{U}",
+  "type_line": "Enchantment",
+  "oracle_text": "All artifacts have \"At the beginning of your upkeep, sacrifice this artifact unless you pay {2}.\"",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "9",
+  "artist": "Kaja Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Hurkyl's Recall",
+  "mana_cost": "{1}{U}",
+  "type_line": "Instant",
+  "oracle_text": "Return all artifacts target player owns to their hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "10",
+  "artist": "NéNé Thomas",
+  "set": "atq"
+ },
+ {
+  "name": "Power Artifact",
+  "mana_cost": "{U}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant artifact\nEnchanted artifact's activated abilities cost {2} less to activate. This effect can't reduce the mana in that cost to less than one mana.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "11",
+  "artist": "Douglas Shuler",
+  "set": "atq"
+ },
+ {
+  "name": "Reconstruction",
+  "mana_cost": "{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Return target artifact card from your graveyard to your hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "12",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Sage of Lat-Nam",
+  "mana_cost": "{1}{U}",
+  "type_line": "Creature — Human Artificer",
+  "oracle_text": "{T}, Sacrifice an artifact: Draw a card.",
+  "power": "1",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "13",
+  "artist": "Pete Venters",
+  "set": "atq"
+ },
+ {
+  "name": "Transmute Artifact",
+  "mana_cost": "{U}{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Sacrifice an artifact. If you do, search your library for an artifact card. If that card's mana value is less than or equal to the sacrificed artifact's mana value, put it onto the battlefield. If it's greater, you may pay {X}, where X is the difference. If you do, put it onto the battlefield. If you don't, put it into its owner's graveyard. Then shuffle.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "14",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Artifact Possession",
+  "mana_cost": "{2}{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant artifact\nWhenever enchanted artifact becomes tapped or a player activates an ability of enchanted artifact without {T} in its activation cost, this Aura deals 2 damage to that artifact's controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "15",
+  "artist": "Christopher Rush",
+  "set": "atq"
+ },
+ {
+  "name": "Gate to Phyrexia",
+  "mana_cost": "{B}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "Sacrifice a creature: Destroy target artifact. Activate only during your upkeep and only once each turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "16",
+  "artist": "Sandra Everingham",
+  "set": "atq"
+ },
+ {
+  "name": "Haunting Wind",
+  "mana_cost": "{3}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "Whenever an artifact becomes tapped or a player activates an artifact's ability without {T} in its activation cost, this enchantment deals 1 damage to that artifact's controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "17",
+  "artist": "Jeff A. Menges",
+  "set": "atq"
+ },
+ {
+  "name": "Phyrexian Gremlins",
+  "mana_cost": "{2}{B}",
+  "type_line": "Creature — Phyrexian Gremlin",
+  "oracle_text": "You may choose not to untap this creature during your untap step.\n{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "18",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Priest of Yawgmoth",
+  "mana_cost": "{1}{B}",
+  "type_line": "Creature — Phyrexian Human Cleric",
+  "oracle_text": "{T}, Sacrifice an artifact: Add an amount of {B} equal to the sacrificed artifact's mana value.",
+  "power": "1",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "19",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "Xenic Poltergeist",
+  "mana_cost": "{1}{B}{B}",
+  "type_line": "Creature — Spirit",
+  "oracle_text": "{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "20",
+  "artist": "Dan Frazier",
+  "set": "atq"
+ },
+ {
+  "name": "Yawgmoth Demon",
+  "mana_cost": "{4}{B}{B}",
+  "type_line": "Creature — Phyrexian Demon",
+  "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\nFirst strike (This creature deals combat damage before creatures without first strike.)\nAt the beginning of your upkeep, you may sacrifice an artifact. If you don't, tap this creature and it deals 2 damage to you.",
+  "power": "6",
+  "toughness": "6",
+  "keywords": [
+   "Flying",
+   "First strike"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "21",
+  "artist": "Sandra Everingham",
+  "set": "atq"
+ },
+ {
+  "name": "Artifact Blast",
+  "mana_cost": "{R}",
+  "type_line": "Instant",
+  "oracle_text": "Counter target artifact spell.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "22",
+  "artist": "Mark Poole",
+  "set": "atq"
+ },
+ {
+  "name": "Atog",
+  "mana_cost": "{1}{R}",
+  "type_line": "Creature — Atog",
+  "oracle_text": "Sacrifice an artifact: This creature gets +2/+2 until end of turn.",
+  "power": "1",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "23",
+  "artist": "Jesper Myrfors",
+  "set": "atq"
+ },
+ {
+  "name": "Detonate",
+  "mana_cost": "{X}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy target artifact with mana value X. It can't be regenerated. Detonate deals X damage to that artifact's controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "24",
+  "artist": "Randy Asplund-Faith",
+  "set": "atq"
+ },
+ {
+  "name": "Dwarven Weaponsmith",
+  "mana_cost": "{1}{R}",
+  "type_line": "Creature — Dwarf Artificer",
+  "oracle_text": "{T}, Sacrifice an artifact: Put a +1/+1 counter on target creature. Activate only during your upkeep.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "25",
+  "artist": "Mark Poole",
+  "set": "atq"
+ },
+ {
+  "name": "Goblin Artisans",
+  "mana_cost": "{R}",
+  "type_line": "Creature — Goblin Artificer",
+  "oracle_text": "{T}: Flip a coin. If you win the flip, draw a card. If you lose the flip, counter target artifact spell you control that isn't the target of an ability from another creature named Goblin Artisans.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "26",
+  "artist": "Julie Baroh",
+  "set": "atq"
+ },
+ {
+  "name": "Orcish Mechanics",
+  "mana_cost": "{2}{R}",
+  "type_line": "Creature — Orc",
+  "oracle_text": "{T}, Sacrifice an artifact: This creature deals 2 damage to any target.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "27",
+  "artist": "Pete Venters",
+  "set": "atq"
+ },
+ {
+  "name": "Shatterstorm",
+  "mana_cost": "{2}{R}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy all artifacts. They can't be regenerated.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "28",
+  "artist": "Dan Frazier",
+  "set": "atq"
+ },
+ {
+  "name": "Argothian Pixies",
+  "mana_cost": "{1}{G}",
+  "type_line": "Creature — Faerie",
+  "oracle_text": "This creature can't be blocked by artifact creatures.\nPrevent all damage that would be dealt to this creature by artifact creatures.",
+  "power": "2",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "29",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Argothian Treefolk",
+  "mana_cost": "{3}{G}{G}",
+  "type_line": "Creature — Treefolk",
+  "oracle_text": "Prevent all damage that would be dealt to this creature by artifact sources.",
+  "power": "3",
+  "toughness": "5",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "30",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Citanul Druid",
+  "mana_cost": "{1}{G}",
+  "type_line": "Creature — Human Druid",
+  "oracle_text": "Whenever an opponent casts an artifact spell, put a +1/+1 counter on this creature.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "31",
+  "artist": "Jeff A. Menges",
+  "set": "atq"
+ },
+ {
+  "name": "Crumble",
+  "mana_cost": "{G}",
+  "type_line": "Instant",
+  "oracle_text": "Destroy target artifact. It can't be regenerated. That artifact's controller gains life equal to its mana value.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "32",
+  "artist": "Jesper Myrfors",
+  "set": "atq"
+ },
+ {
+  "name": "Gaea's Avenger",
+  "mana_cost": "{1}{G}{G}",
+  "type_line": "Creature — Treefolk",
+  "oracle_text": "Gaea's Avenger's power and toughness are each equal to 1 plus the number of artifacts your opponents control.",
+  "power": "1+*",
+  "toughness": "1+*",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "33",
+  "artist": "Pete Venters",
+  "set": "atq"
+ },
+ {
+  "name": "Powerleech",
+  "mana_cost": "{G}{G}",
+  "type_line": "Enchantment",
+  "oracle_text": "Whenever an artifact an opponent controls becomes tapped or an opponent activates an artifact's ability without {T} in its activation cost, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "34",
+  "artist": "Christopher Rush",
+  "set": "atq"
+ },
+ {
+  "name": "Titania's Song",
+  "mana_cost": "{3}{G}",
+  "type_line": "Enchantment",
+  "oracle_text": "Each noncreature artifact loses all abilities and becomes an artifact creature with power and toughness each equal to its mana value. If this enchantment leaves the battlefield, this effect continues until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "35",
+  "artist": "Kerstin Kaman",
+  "set": "atq"
+ },
+ {
+  "name": "Amulet of Kroog",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}, {T}: Prevent the next 1 damage that would be dealt to any target this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "36",
+  "artist": "Margaret Organ-Kean",
+  "set": "atq"
+ },
+ {
+  "name": "Armageddon Clock",
+  "mana_cost": "{6}",
+  "type_line": "Artifact",
+  "oracle_text": "At the beginning of your upkeep, put a doom counter on this artifact.\nAt the beginning of your draw step, this artifact deals damage equal to the number of doom counters on it to each player.\n{4}: Remove a doom counter from this artifact. Any player may activate this ability but only during any upkeep step.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "37",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Ashnod's Altar",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "Sacrifice a creature: Add {C}{C}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "38",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Ashnod's Battle Gear",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "You may choose not to untap this artifact during your untap step.\n{2}, {T}: Target creature you control gets +2/-2 for as long as this artifact remains tapped.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "39",
+  "artist": "Mark Poole",
+  "set": "atq"
+ },
+ {
+  "name": "Ashnod's Transmogrant",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "40",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "Battering Ram",
+  "mana_cost": "{2}",
+  "type_line": "Artifact Creature — Construct",
+  "oracle_text": "At the beginning of combat on your turn, this creature gains banding until end of combat. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's blocking.)\nWhenever this creature becomes blocked by a Wall, destroy that Wall at end of combat.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "41",
+  "artist": "Jeff A. Menges",
+  "set": "atq"
+ },
+ {
+  "name": "Bronze Tablet",
+  "mana_cost": "{6}",
+  "type_line": "Artifact",
+  "oracle_text": "Remove this card from your deck before playing if you're not playing for ante.\nThis artifact enters tapped.\n{4}, {T}: Exile this artifact and target nontoken permanent an opponent owns. That player may pay 10 life. If they do, put this card into its owner's graveyard. Otherwise, that player owns this card and you own the other exiled card.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "42",
+  "artist": "Tom Wänerstrand",
+  "set": "atq"
+ },
+ {
+  "name": "Candelabra of Tawnos",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "{X}, {T}: Untap X target lands.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "43",
+  "artist": "Douglas Shuler",
+  "set": "atq"
+ },
+ {
+  "name": "Clay Statue",
+  "mana_cost": "{4}",
+  "type_line": "Artifact Creature — Golem",
+  "oracle_text": "{2}: Regenerate this creature.",
+  "power": "3",
+  "toughness": "1",
+  "keywords": [
+   "Regenerate"
+  ],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "44",
+  "artist": "Jesper Myrfors",
+  "set": "atq"
+ },
+ {
+  "name": "Clockwork Avian",
+  "mana_cost": "{5}",
+  "type_line": "Artifact Creature — Bird",
+  "oracle_text": "Flying\nThis creature enters with four +1/+0 counters on it.\nAt end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.\n{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.",
+  "power": "0",
+  "toughness": "4",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "45",
+  "artist": "Randy Asplund-Faith",
+  "set": "atq"
+ },
+ {
+  "name": "Colossus of Sardia",
+  "mana_cost": "{9}",
+  "type_line": "Artifact Creature — Golem",
+  "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nThis creature doesn't untap during your untap step.\n{9}: Untap this creature. Activate only during your upkeep.",
+  "power": "9",
+  "toughness": "9",
+  "keywords": [
+   "Trample"
+  ],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "46",
+  "artist": "Jesper Myrfors",
+  "set": "atq"
+ },
+ {
+  "name": "Coral Helm",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "{3}, Discard a card at random: Target creature gets +2/+2 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "47",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Cursed Rack",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "As this artifact enters, choose an opponent.\nThe chosen player's maximum hand size is four.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "48",
+  "artist": "Richard Thomas",
+  "set": "atq"
+ },
+ {
+  "name": "Dragon Engine",
+  "mana_cost": "{3}",
+  "type_line": "Artifact Creature — Construct",
+  "oracle_text": "{2}: This creature gets +1/+0 until end of turn.",
+  "power": "1",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "49",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Feldon's Cane",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}, Exile this artifact: Shuffle your graveyard into your library.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "50",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "Golgothian Sylex",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{1}, {T}: Each nontoken permanent with a name originally printed in the Antiquities expansion is sacrificed by its controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "51",
+  "artist": "Kerstin Kaman",
+  "set": "atq"
+ },
+ {
+  "name": "Grapeshot Catapult",
+  "mana_cost": "{4}",
+  "type_line": "Artifact Creature — Construct",
+  "oracle_text": "{T}: This creature deals 1 damage to target creature with flying.",
+  "power": "2",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "52",
+  "artist": "Dan Frazier",
+  "set": "atq"
+ },
+ {
+  "name": "Ivory Tower",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "At the beginning of your upkeep, you gain X life, where X is the number of cards in your hand minus 4.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "53",
+  "artist": "Margaret Organ-Kean",
+  "set": "atq"
+ },
+ {
+  "name": "Jalum Tome",
+  "mana_cost": "{3}",
+  "type_line": "Artifact — Book",
+  "oracle_text": "{2}, {T}: Draw a card, then discard a card.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "54",
+  "artist": "Tom Wänerstrand",
+  "set": "atq"
+ },
+ {
+  "name": "Mightstone",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "Attacking creatures get +1/+0.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "55",
+  "artist": "Pete Venters",
+  "set": "atq"
+ },
+ {
+  "name": "Millstone",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}, {T}: Target player mills two cards.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Mill"
+  ],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "56",
+  "artist": "Kaja Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Mishra's War Machine",
+  "mana_cost": "{7}",
+  "type_line": "Artifact Creature — Juggernaut",
+  "oracle_text": "Banding (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)\nAt the beginning of your upkeep, this creature deals 3 damage to you unless you discard a card. If it deals damage to you this way, tap it.",
+  "power": "5",
+  "toughness": "5",
+  "keywords": [
+   "Banding"
+  ],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "57",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Obelisk of Undoing",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "{6}, {T}: Return target permanent you both own and control to your hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "58",
+  "artist": "Tom Wänerstrand",
+  "set": "atq"
+ },
+ {
+  "name": "Onulet",
+  "mana_cost": "{3}",
+  "type_line": "Artifact Creature — Construct",
+  "oracle_text": "When this creature dies, you gain 2 life.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "59",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Ornithopter",
+  "mana_cost": "{0}",
+  "type_line": "Artifact Creature — Thopter",
+  "oracle_text": "Flying",
+  "power": "0",
+  "toughness": "2",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "60",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Primal Clay",
+  "mana_cost": "{4}",
+  "type_line": "Artifact Creature — Shapeshifter",
+  "oracle_text": "As this creature enters, it becomes your choice of a 3/3 artifact creature, a 2/2 artifact creature with flying, or a 1/6 Wall artifact creature with defender in addition to its other types. (A creature with defender can't attack.)",
+  "power": "*",
+  "toughness": "*",
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "61",
+  "artist": "Kaja Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Rakalite",
+  "mana_cost": "{6}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}: Prevent the next 1 damage that would be dealt to any target this turn. Return this artifact to its owner's hand at the beginning of the next end step.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "62",
+  "artist": "Christopher Rush",
+  "set": "atq"
+ },
+ {
+  "name": "Rocket Launcher",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}: This artifact deals 1 damage to any target. Destroy this artifact at the beginning of the next end step. Activate only if you've controlled this artifact continuously since the beginning of your most recent turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "63",
+  "artist": "Pete Venters",
+  "set": "atq"
+ },
+ {
+  "name": "Shapeshifter",
+  "mana_cost": "{6}",
+  "type_line": "Artifact Creature — Shapeshifter",
+  "oracle_text": "As this creature enters, choose a number between 0 and 7.\nAt the beginning of your upkeep, you may choose a number between 0 and 7.\nShapeshifter's power is equal to the last chosen number and its toughness is equal to 7 minus that number.",
+  "power": "*",
+  "toughness": "7-*",
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "64",
+  "artist": "Dan Frazier",
+  "set": "atq"
+ },
+ {
+  "name": "Staff of Zegon",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{3}, {T}: Target creature gets -2/-0 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "65",
+  "artist": "Mark Poole",
+  "set": "atq"
+ },
+ {
+  "name": "Su-Chi",
+  "mana_cost": "{4}",
+  "type_line": "Artifact Creature — Construct",
+  "oracle_text": "When this creature dies, add {C}{C}{C}{C}.",
+  "power": "4",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "66",
+  "artist": "Christopher Rush",
+  "set": "atq"
+ },
+ {
+  "name": "Tablet of Epityr",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever an artifact you control is put into a graveyard from the battlefield, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "67",
+  "artist": "Christopher Rush",
+  "set": "atq"
+ },
+ {
+  "name": "Tawnos's Coffin",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "You may choose not to untap this artifact during your untap step.\n{3}, {T}: Exile target creature and all Auras attached to it. Note the number and kind of counters that were on that creature. When this artifact leaves the battlefield or becomes untapped, return that exiled card to the battlefield under its owner's control tapped with the noted number and kind of counters on it. If you do, return the other exiled cards to the battlefield under their owner's control attached to that permanent.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "68",
+  "artist": "Christopher Rush",
+  "set": "atq"
+ },
+ {
+  "name": "Tawnos's Wand",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}, {T}: Target creature with power 2 or less can't be blocked this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "69",
+  "artist": "Douglas Shuler",
+  "set": "atq"
+ },
+ {
+  "name": "Tawnos's Weaponry",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "You may choose not to untap this artifact during your untap step.\n{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "70",
+  "artist": "Dan Frazier",
+  "set": "atq"
+ },
+ {
+  "name": "Tetravus",
+  "mana_cost": "{6}",
+  "type_line": "Artifact Creature — Construct",
+  "oracle_text": "Flying\nThis creature enters with three +1/+1 counters on it.\nAt the beginning of your upkeep, you may remove any number of +1/+1 counters from this creature. If you do, create that many 1/1 colorless Tetravite artifact creature tokens. They each have flying and \"This token can't be enchanted.\"\nAt the beginning of your upkeep, you may exile any number of tokens created with this creature. If you do, put that many +1/+1 counters on this creature.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "71",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "The Rack",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "As this artifact enters, choose an opponent.\nAt the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is 3 minus the number of cards in their hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "72",
+  "artist": "Richard Thomas",
+  "set": "atq"
+ },
+ {
+  "name": "Triskelion",
+  "mana_cost": "{6}",
+  "type_line": "Artifact Creature — Construct",
+  "oracle_text": "This creature enters with three +1/+1 counters on it.\nRemove a +1/+1 counter from this creature: It deals 1 damage to any target.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "73",
+  "artist": "Douglas Shuler",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Avenger",
+  "mana_cost": "{6}",
+  "type_line": "Artifact Creature — Shapeshifter",
+  "oracle_text": "{0}: This creature gets -1/-1 and gains your choice of banding, flying, first strike, or trample until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)",
+  "power": "4",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "74",
+  "artist": "Amy Weber",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Chalice",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a player casts an artifact spell, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "75",
+  "artist": "Jeff A. Menges",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Miter",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever an artifact you control is put into a graveyard from the battlefield, if it wasn't sacrificed, you may pay {3}. If you do, draw a card.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "76",
+  "artist": "Randy Asplund-Faith",
+  "set": "atq"
+ },
+ {
+  "name": "Wall of Spears",
+  "mana_cost": "{3}",
+  "type_line": "Artifact Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)\nFirst strike",
+  "power": "2",
+  "toughness": "3",
+  "keywords": [
+   "First strike",
+   "Defender"
+  ],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "77",
+  "artist": "Sandra Everingham",
+  "set": "atq"
+ },
+ {
+  "name": "Weakstone",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "Attacking creatures get -1/-0.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "78",
+  "artist": "Justin Hampton",
+  "set": "atq"
+ },
+ {
+  "name": "Yotian Soldier",
+  "mana_cost": "{3}",
+  "type_line": "Artifact Creature — Soldier",
+  "oracle_text": "Vigilance",
+  "power": "1",
+  "toughness": "4",
+  "keywords": [
+   "Vigilance"
+  ],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "79",
+  "artist": "Christopher Rush",
+  "set": "atq"
+ },
+ {
+  "name": "Mishra's Factory",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.\n{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "80a",
+  "artist": "Kaja Foglio & Phil Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Mishra's Factory",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.\n{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "80b",
+  "artist": "Kaja Foglio & Phil Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Mishra's Factory",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.\n{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "80c",
+  "artist": "Kaja Foglio & Phil Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Mishra's Factory",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.\n{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "80d",
+  "artist": "Kaja Foglio & Phil Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Mishra's Workshop",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}{C}{C}. Spend this mana only to cast artifact spells.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "81",
+  "artist": "Kaja Foglio",
+  "set": "atq"
+ },
+ {
+  "name": "Strip Mine",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{T}, Sacrifice this land: Destroy target land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "82a",
+  "artist": "Daniel Gelon",
+  "set": "atq"
+ },
+ {
+  "name": "Strip Mine",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{T}, Sacrifice this land: Destroy target land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "82b",
+  "artist": "Daniel Gelon",
+  "set": "atq"
+ },
+ {
+  "name": "Strip Mine",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{T}, Sacrifice this land: Destroy target land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "82c",
+  "artist": "Daniel Gelon",
+  "set": "atq"
+ },
+ {
+  "name": "Strip Mine",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "{T}: Add {C}.\n{T}, Sacrifice this land: Destroy target land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "82d",
+  "artist": "Daniel Gelon",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Mine",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Mine",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "83a",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Mine",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Mine",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "83b",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Mine",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Mine",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "83c",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Mine",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Mine",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "83d",
+  "artist": "Anson Maddocks",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Power Plant",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Power-Plant",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "84a",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Power Plant",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Power-Plant",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "84b",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Power Plant",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Power-Plant",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "84c",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Power Plant",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Power-Plant",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "84d",
+  "artist": "Mark Tedin",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Tower",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Tower",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "85a",
+  "artist": "Mark Poole",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Tower",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Tower",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "85b",
+  "artist": "Mark Poole",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Tower",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Tower",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "85c",
+  "artist": "Mark Poole",
+  "set": "atq"
+ },
+ {
+  "name": "Urza's Tower",
+  "mana_cost": "",
+  "type_line": "Land — Urza's Tower",
+  "oracle_text": "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "85d",
+  "artist": "Mark Poole",
+  "set": "atq"
+ }
+]

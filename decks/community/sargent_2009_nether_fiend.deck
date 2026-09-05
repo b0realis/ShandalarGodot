@@ -1,0 +1,29 @@
+# Nether Fiend (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Nether Fiend deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-09).
+# archetype: the Shandalar enemy "Nether Fiend" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/nether_fiend.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-280-black-shandalar-decks/
+#   — The Kitchen Table #280 - Black Shandalar Decks — "Modified Nether Fiend" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/nether_fiend.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 5 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Nether Fiend (Sargent, 2009)
+21 Swamp
+4 Mishra's Factory
+4 Nether Shadow
+4 Lord of the Pit
+4 Erg Raiders
+4 Black Knight
+2 Tetravus
+3 Terror
+2 Necropolis of Azar
+4 Animate Dead
+2 Soul Net
+4 The Hive
+2 Khabál Ghoul

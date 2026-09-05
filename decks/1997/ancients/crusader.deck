@@ -1,0 +1,25 @@
+# Crusader — a Typical enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Crusader (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0283.dck "Crusader (Wh, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Crusader (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Crusader (Spells of the Ancients)
+24 Plains
+4 Crusade
+4 Army of Allah
+4 Jihad
+2 Disenchant
+4 White Knight
+3 Moorish Cavalry
+3 War Elephant
+2 Repentant Blacksmith
+2 Swords to Plowshares
+4 Pikemen
+2 Rainbow Knights
+2 Benalish Hero

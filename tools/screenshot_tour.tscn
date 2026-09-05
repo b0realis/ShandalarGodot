@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tools/screenshot_tour.gd" id="1"]
+
+[node name="ScreenshotTour" type="Node"]
+script = ExtResource("1")

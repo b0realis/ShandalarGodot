@@ -1,0 +1,85 @@
+; Shandalar — open-source remake of MicroProse's 1997 Magic: The Gathering.
+; Engine target: Godot 4.7 (latest stable line). GDScript only.
+;
+; Layout (see docs/CODE_MAP.md for the full map):
+;   engine/  — pure, headless MTG rules engine (no Node/scene dependencies)
+;   cards/   — one file per card, organized by set (see docs/adding-cards.md)
+;   game/    — Godot presentation layer (scenes, UI, adventure mode)
+;   tests/   — GUT test suite (run via ./run_tests.sh)
+
+config_version=5
+
+[autoload]
+
+Lifecycle="*res://game/lifecycle.gd"
+
+[application]
+
+config/name="Shandalar"
+config/version="0.8.0-dev"
+config/description="Open-source remake of MicroProse's 1997 Magic: The Gathering (Shandalar), with a modular GDScript MTG rules engine."
+run/main_scene="res://game/main.tscn"
+; OUR OWN SPLASH, not Godot's. The boot image is shown before a single
+; line of the game runs, so it has to live in the .pck — which is why it
+; is here in game/ and not in assets/ (art is never packed, see
+; docs/player-files.md) and why it is OURS rather than taken from the 1997
+; files: those are the player's own copy and never redistributed.
+;
+; The picture is the owner's own (supplied 2026-09-03, 1920x1080), fitted
+; to 1152x648 because a boot splash is drawn at NATIVE size and centred —
+; anything wider than the window gets cropped, and the window ships at
+; 1280x800. The background is the black the artwork already sits on, so
+; there is no seam around it at any window size.
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/image="res://game/boot_splash.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=true
+; HOW LONG THE PICTURE STAYS UP — the owner's playtest of 2026-09-04:
+; "Splash screen could be a bit longer."
+;
+; Godot draws the boot image only while the engine is still loading, so
+; on a fast machine the owner's artwork flashes past. Godot 4.7 has a
+; setting for exactly that — `application/boot_splash/minimum_display_time`,
+; an int in MILLISECONDS (hint `0,100,1,or_greater,suffix:ms`), default 0
+; — so this is ONE KEY AND NO CODE. No splash scene ahead of
+; `run/main_scene`, so the title screen is still the first thing that
+; runs and everything that assumes so (tools/screenshot_tour.gd, the
+; --quit-after smoke in build_release.sh) is untouched.
+;
+; MEASURED, because the number matters (Xvfb, `--quit-after 3`, this
+; project): the wait is ADDED to the load, not overlapped with it —
+; total time to the title screen is about 1.0 s of engine start plus
+; this value.
+;     0 ms -> 1.5 s     1000 ms -> 2.0 s     1500 ms -> 2.5 s
+;            2000 ms -> 3.0 s
+; The owner asked not to make the game slower to reach than about two
+; seconds, so 1000 ms is the largest value that fits: it DOUBLES the time
+; the picture is up (~0.5 s -> ~1.0 s) and holds the total at 2.0 s. It
+; also makes that second deterministic — on a machine faster than this
+; one the load shrinks and the splash would otherwise shrink with it.
+;
+; ONE LINE TO CHANGE if the owner wants more or less of it, and it costs
+; a headless run the same wait (the engine holds even with no window),
+; which is 0.6 s on the test suite and the soak, once per process.
+boot_splash/minimum_display_time=1000
+config/features=PackedStringArray("4.7")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+; Compatibility (OpenGL) renderer — a deliberate platform decision, see
+; docs/duel-screen-design.md: it is what makes Raspberry Pi (and the
+; broadest range of old/weak hardware) a first-class target. This is a 2D
+; card game; nothing here needs Vulkan.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

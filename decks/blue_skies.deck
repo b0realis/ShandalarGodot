@@ -1,0 +1,22 @@
+# Blue tempo: evasive flyers, bounce, and card advantage.
+# group: Starter decks
+name: Blue Skies
+4 Merfolk of the Pearl Trident
+4 Phantom Monster
+3 Air Elemental
+2 Mahamoti Djinn
+2 Unsummon
+3 Psionic Blast
+1 Ancestral Recall
+1 Braingeyser
+2 Counterspell
+18 Island
+
+# The sideboard — `SB:` lines, the shape DeckList has always parsed.
+# Swapped in between the duels of a match (`Side&board between duels`,
+# Program/Text.res:2863).
+SB: 4 Blue Elemental Blast
+SB: 2 Counterspell
+SB: 4 Power Sink
+SB: 3 Feedback
+SB: 2 Energy Flux

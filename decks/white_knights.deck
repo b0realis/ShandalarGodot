@@ -1,0 +1,24 @@
+# White weenie with protection tech — the aggressive white archetype.
+# group: Starter decks
+name: White Knights
+4 Savannah Lions
+4 White Knight
+2 Benalish Hero
+2 Mesa Pegasus
+2 Serra Angel
+3 Holy Strength
+2 Swords to Plowshares
+2 Disenchant
+1 Crusade
+1 Wrath of God
+17 Plains
+
+# The sideboard — `SB:` lines, the shape DeckList has always parsed.
+# Swapped in between the duels of a match (`Side&board between duels`,
+# Program/Text.res:2863).
+SB: 3 Circle of Protection: Red
+SB: 3 Circle of Protection: Black
+SB: 2 Disenchant
+SB: 3 Karma
+SB: 2 Wrath of God
+SB: 2 Serra Angel

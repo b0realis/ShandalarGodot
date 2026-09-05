@@ -1,0 +1,48 @@
+# Prismat — one of the Dragons of the 1997 game, the deck as the original shipped it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Prismat (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0992.dck "Prismat (R/G/W,  4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 21 maindeck lines are the 1997 deck, the 21 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/prismat.toml (main_cards, sideboard_cards, level 9) [Tier
+#   3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/prismat.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Prismat" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Prismat
+7 Mountain
+6 Plains
+6 Forest
+1 Mox Emerald
+1 Mox Pearl
+1 Mox Ruby
+2 Fellwar Stone
+1 Black Lotus
+1 Sol Ring
+2 Wrath of God
+4 Hurricane
+4 Earthquake
+4 Inferno
+4 Healing Salve
+3 Stream of Life
+2 Disenchant
+2 Detonate
+4 Living Artifact
+2 Reverse Damage
+4 Onulet
+1 Ivory Tower
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   (empty)
+#   .vBlack  (empty)
+#   .vBlue   (empty)
+#   .vGreen  (empty)
+#   .vRed    (empty)
+#   .vWhite  (empty)

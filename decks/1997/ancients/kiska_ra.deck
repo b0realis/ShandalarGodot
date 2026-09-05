@@ -1,0 +1,41 @@
+# Kiska-Ra — one of the Dragons, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Kiska-Ra (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# note: the expansion file names this deck "Kiska Ra"
+# source: ../shandalar-src/Program/decks/0994.dck "Kiska Ra (W/G/U, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Kiska Ra (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Kiska Ra (Spells of the Ancients)
+1 Mox Pearl
+3 Holy Strength
+2 Savannah Lions
+1 Mox Emerald
+1 Mox Sapphire
+2 Giant Tortoise
+2 Elvish Archers
+2 Scryb Sprites
+2 Zephyr Falcon
+2 Tundra Wolves
+2 Timber Wolves
+2 Samite Healer
+2 Birds of Paradise
+2 Pikemen
+3 Unstable Mutation
+3 Giant Growth
+4 Tawnos's Weaponry
+2 Control Magic
+2 Desert Twister
+1 Ancestral Recall
+1 Time Walk
+1 Timetwister
+1 Braingeyser
+1 Regrowth
+4 Tundra
+4 Savannah
+4 Tropical Island
+4 City of Brass

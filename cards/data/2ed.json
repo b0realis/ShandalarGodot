@@ -1,0 +1,4854 @@
+[
+ {
+  "name": "Animate Wall",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant Wall\nEnchanted Wall can attack as though it didn't have defender.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "1",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Armageddon",
+  "mana_cost": "{3}{W}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy all lands.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "2",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Balance",
+  "mana_cost": "{1}{W}",
+  "type_line": "Sorcery",
+  "oracle_text": "Each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest, then sacrifices the rest. Players discard cards and sacrifice creatures the same way.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "3",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Benalish Hero",
+  "mana_cost": "{W}",
+  "type_line": "Creature — Human Soldier",
+  "oracle_text": "Banding (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Banding"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "4",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Black Ward",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has protection from black. This effect doesn't remove this Aura.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "5",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Blaze of Glory",
+  "mana_cost": "{W}",
+  "type_line": "Instant",
+  "oracle_text": "Cast this spell only during combat before blockers are declared.\nTarget creature defending player controls can block any number of creatures this turn. It blocks each attacking creature this turn if able.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "6",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Blessing",
+  "mana_cost": "{W}{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\n{W}: Enchanted creature gets +1/+1 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "7",
+  "artist": "Julie Baroh",
+  "set": "2ed"
+ },
+ {
+  "name": "Blue Ward",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has protection from blue. This effect doesn't remove this Aura.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "8",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Castle",
+  "mana_cost": "{3}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "Untapped creatures you control get +0/+2.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "9",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Circle of Protection: Black",
+  "mana_cost": "{1}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "{1}: The next time a black source of your choice would deal damage to you this turn, prevent that damage.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "10",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Circle of Protection: Blue",
+  "mana_cost": "{1}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "{1}: The next time a blue source of your choice would deal damage to you this turn, prevent that damage.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "11",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Circle of Protection: Green",
+  "mana_cost": "{1}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "{1}: The next time a green source of your choice would deal damage to you this turn, prevent that damage.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "12",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Circle of Protection: Red",
+  "mana_cost": "{1}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "{1}: The next time a red source of your choice would deal damage to you this turn, prevent that damage.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "13",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Circle of Protection: White",
+  "mana_cost": "{1}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "14",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Consecrate Land",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nEnchanted land has indestructible and can't be enchanted by other Auras.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "15",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Conversion",
+  "mana_cost": "{2}{W}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.\nAll Mountains are Plains.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "16",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Crusade",
+  "mana_cost": "{W}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "White creatures get +1/+1.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "17",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Death Ward",
+  "mana_cost": "{W}",
+  "type_line": "Instant",
+  "oracle_text": "Regenerate target creature.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Regenerate"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "18",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Disenchant",
+  "mana_cost": "{1}{W}",
+  "type_line": "Instant",
+  "oracle_text": "Destroy target artifact or enchantment.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "19",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Farmstead",
+  "mana_cost": "{W}{W}{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nEnchanted land has \"At the beginning of your upkeep, you may pay {W}{W}. If you do, you gain 1 life.\"",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "20",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Green Ward",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has protection from green. This effect doesn't remove this Aura.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "21",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Guardian Angel",
+  "mana_cost": "{X}{W}",
+  "type_line": "Instant",
+  "oracle_text": "Prevent the next X damage that would be dealt to any target this turn. Until end of turn, you may pay {1} any time you could cast an instant. If you do, prevent the next 1 damage that would be dealt to that permanent or player this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "22",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Healing Salve",
+  "mana_cost": "{W}",
+  "type_line": "Instant",
+  "oracle_text": "Choose one —\n• Target player gains 3 life.\n• Prevent the next 3 damage that would be dealt to any target this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "23",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Holy Armor",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature gets +0/+2.\n{W}: Enchanted creature gets +0/+1 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "24",
+  "artist": "Melissa A. Benson",
+  "set": "2ed"
+ },
+ {
+  "name": "Holy Strength",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature gets +1/+2.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "25",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Island Sanctuary",
+  "mana_cost": "{1}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "If you would draw a card during your draw step, instead you may skip that draw. If you do, until your next turn, you can't be attacked except by creatures with flying and/or islandwalk.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "26",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Karma",
+  "mana_cost": "{2}{W}{W}",
+  "type_line": "Enchantment",
+  "oracle_text": "At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "27",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Lance",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has first strike.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "28",
+  "artist": "Rob Alexander",
+  "set": "2ed"
+ },
+ {
+  "name": "Mesa Pegasus",
+  "mana_cost": "{1}{W}",
+  "type_line": "Creature — Pegasus",
+  "oracle_text": "Flying; banding (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Flying",
+   "Banding"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "29",
+  "artist": "Melissa A. Benson",
+  "set": "2ed"
+ },
+ {
+  "name": "Northern Paladin",
+  "mana_cost": "{2}{W}{W}",
+  "type_line": "Creature — Human Knight",
+  "oracle_text": "{W}{W}, {T}: Destroy target black permanent.",
+  "power": "3",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "30",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Pearled Unicorn",
+  "mana_cost": "{2}{W}",
+  "type_line": "Creature — Unicorn",
+  "oracle_text": "",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "31",
+  "artist": "Cornelius Brudi",
+  "set": "2ed"
+ },
+ {
+  "name": "Personal Incarnation",
+  "mana_cost": "{3}{W}{W}{W}",
+  "type_line": "Creature — Avatar Incarnation",
+  "oracle_text": "{0}: The next 1 damage that would be dealt to this creature this turn is dealt to its owner instead. Only this creatures owner may activate this ability.\nWhen this creature dies, its owner loses half their life, rounded up.",
+  "power": "6",
+  "toughness": "6",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "32",
+  "artist": "Kev Brockschmidt",
+  "set": "2ed"
+ },
+ {
+  "name": "Purelace",
+  "mana_cost": "{W}",
+  "type_line": "Instant",
+  "oracle_text": "Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "33",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Red Ward",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has protection from red. This effect doesn't remove this Aura.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "34",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Resurrection",
+  "mana_cost": "{2}{W}{W}",
+  "type_line": "Sorcery",
+  "oracle_text": "Return target creature card from your graveyard to the battlefield.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "35",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Reverse Damage",
+  "mana_cost": "{1}{W}{W}",
+  "type_line": "Instant",
+  "oracle_text": "The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "36",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Righteousness",
+  "mana_cost": "{W}",
+  "type_line": "Instant",
+  "oracle_text": "Target blocking creature gets +7/+7 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "37",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Samite Healer",
+  "mana_cost": "{1}{W}",
+  "type_line": "Creature — Human Cleric",
+  "oracle_text": "{T}: Prevent the next 1 damage that would be dealt to any target this turn.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "38",
+  "artist": "Tom Wänerstrand",
+  "set": "2ed"
+ },
+ {
+  "name": "Savannah Lions",
+  "mana_cost": "{W}",
+  "type_line": "Creature — Cat",
+  "oracle_text": "",
+  "power": "2",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "39",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Serra Angel",
+  "mana_cost": "{3}{W}{W}",
+  "type_line": "Creature — Angel",
+  "oracle_text": "Flying\nVigilance (Attacking doesn't cause this creature to tap.)",
+  "power": "4",
+  "toughness": "4",
+  "keywords": [
+   "Flying",
+   "Vigilance"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "40",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Swords to Plowshares",
+  "mana_cost": "{W}",
+  "type_line": "Instant",
+  "oracle_text": "Exile target creature. Its controller gains life equal to its power.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "41",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Veteran Bodyguard",
+  "mana_cost": "{3}{W}{W}",
+  "type_line": "Creature — Human",
+  "oracle_text": "As long as this creature is untapped, all damage that would be dealt to you by unblocked creatures is dealt to this creature instead.",
+  "power": "2",
+  "toughness": "5",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "42",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Swords",
+  "mana_cost": "{3}{W}",
+  "type_line": "Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)\nFlying",
+  "power": "3",
+  "toughness": "5",
+  "keywords": [
+   "Flying",
+   "Defender"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "43",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "White Knight",
+  "mana_cost": "{W}{W}",
+  "type_line": "Creature — Human Knight",
+  "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)\nProtection from black (This creature can't be blocked, targeted, dealt damage, or enchanted by anything black.)",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "First strike",
+   "Protection"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "44",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "White Ward",
+  "mana_cost": "{W}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has protection from white. This effect doesn't remove this Aura.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "45",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Wrath of God",
+  "mana_cost": "{2}{W}{W}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy all creatures. They can't be regenerated.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "rare",
+  "collector_number": "46",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Air Elemental",
+  "mana_cost": "{3}{U}{U}",
+  "type_line": "Creature — Elemental",
+  "oracle_text": "Flying",
+  "power": "4",
+  "toughness": "4",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "47",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Ancestral Recall",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Target player draws three cards.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "48",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Animate Artifact",
+  "mana_cost": "{3}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant artifact\nAs long as enchanted artifact isn't a creature, it's an artifact creature with power and toughness each equal to its mana value.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "49",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Blue Elemental Blast",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Choose one —\n• Counter target red spell.\n• Destroy target red permanent.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "50",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Braingeyser",
+  "mana_cost": "{X}{U}{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Target player draws X cards.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "51",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Clone",
+  "mana_cost": "{3}{U}",
+  "type_line": "Creature — Shapeshifter",
+  "oracle_text": "You may have this creature enter as a copy of any creature on the battlefield.",
+  "power": "0",
+  "toughness": "0",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "52",
+  "artist": "Julie Baroh",
+  "set": "2ed"
+ },
+ {
+  "name": "Control Magic",
+  "mana_cost": "{2}{U}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nYou control enchanted creature.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "53",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Copy Artifact",
+  "mana_cost": "{1}{U}",
+  "type_line": "Enchantment",
+  "oracle_text": "You may have this enchantment enter as a copy of any artifact on the battlefield, except it's an enchantment in addition to its other types.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "54",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Counterspell",
+  "mana_cost": "{U}{U}",
+  "type_line": "Instant",
+  "oracle_text": "Counter target spell.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "55",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Creature Bond",
+  "mana_cost": "{1}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nWhen enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "56",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Drain Power",
+  "mana_cost": "{U}{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Target player activates a mana ability of each land they control. Then that player loses all unspent mana and you add the mana lost this way.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "57",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Feedback",
+  "mana_cost": "{2}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant enchantment\nAt the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "58",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Flight",
+  "mana_cost": "{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has flying.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "59",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Invisibility",
+  "mana_cost": "{U}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature can't be blocked except by Walls.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "60",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Jump",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Target creature gains flying until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "61",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Lifetap",
+  "mana_cost": "{U}{U}",
+  "type_line": "Enchantment",
+  "oracle_text": "Whenever a Forest an opponent controls becomes tapped, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "62",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Lord of Atlantis",
+  "mana_cost": "{U}{U}",
+  "type_line": "Creature — Merfolk",
+  "oracle_text": "Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "63",
+  "artist": "Melissa A. Benson",
+  "set": "2ed"
+ },
+ {
+  "name": "Magical Hack",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Change the text of target spell or permanent by replacing all instances of one basic land type with another. (For example, you may change \"swampwalk\" to \"plainswalk.\" This effect lasts indefinitely.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "64",
+  "artist": "Julie Baroh",
+  "set": "2ed"
+ },
+ {
+  "name": "Mahamoti Djinn",
+  "mana_cost": "{4}{U}{U}",
+  "type_line": "Creature — Djinn",
+  "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)",
+  "power": "5",
+  "toughness": "6",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "65",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Mana Short",
+  "mana_cost": "{2}{U}",
+  "type_line": "Instant",
+  "oracle_text": "Tap all lands target player controls and that player loses all unspent mana.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "66",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Merfolk of the Pearl Trident",
+  "mana_cost": "{U}",
+  "type_line": "Creature — Merfolk",
+  "oracle_text": "",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "67",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Phantasmal Forces",
+  "mana_cost": "{3}{U}",
+  "type_line": "Creature — Illusion",
+  "oracle_text": "Flying\nAt the beginning of your upkeep, sacrifice this creature unless you pay {U}.",
+  "power": "4",
+  "toughness": "1",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "68",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Phantasmal Terrain",
+  "mana_cost": "{U}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nAs this Aura enters, choose a basic land type.\nEnchanted land is the chosen type.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "69",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Phantom Monster",
+  "mana_cost": "{3}{U}",
+  "type_line": "Creature — Illusion",
+  "oracle_text": "Flying",
+  "power": "3",
+  "toughness": "3",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "70",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Pirate Ship",
+  "mana_cost": "{4}{U}",
+  "type_line": "Creature — Human Pirate",
+  "oracle_text": "This creature can't attack unless defending player controls an Island.\n{T}: This creature deals 1 damage to any target.\nWhen you control no Islands, sacrifice this creature.",
+  "power": "4",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "71",
+  "artist": "Tom Wänerstrand",
+  "set": "2ed"
+ },
+ {
+  "name": "Power Leak",
+  "mana_cost": "{1}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant enchantment\nAt the beginning of the upkeep of enchanted enchantment's controller, that player may pay any amount of mana. This Aura deals 2 damage to that player. Prevent X of that damage, where X is the amount of mana that player paid this way.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "72",
+  "artist": "Drew Tucker",
+  "set": "2ed"
+ },
+ {
+  "name": "Power Sink",
+  "mana_cost": "{X}{U}",
+  "type_line": "Instant",
+  "oracle_text": "Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "73",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Prodigal Sorcerer",
+  "mana_cost": "{2}{U}",
+  "type_line": "Creature — Human Wizard Sorcerer",
+  "oracle_text": "{T}: This creature deals 1 damage to any target.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "74",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Psionic Blast",
+  "mana_cost": "{2}{U}",
+  "type_line": "Instant",
+  "oracle_text": "Psionic Blast deals 4 damage to any target and 2 damage to you.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "75",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Psychic Venom",
+  "mana_cost": "{1}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nWhenever enchanted land becomes tapped, this Aura deals 2 damage to that land's controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "76",
+  "artist": "Brian Snõddy",
+  "set": "2ed"
+ },
+ {
+  "name": "Sea Serpent",
+  "mana_cost": "{5}{U}",
+  "type_line": "Creature — Serpent",
+  "oracle_text": "This creature can't attack unless defending player controls an Island.\nWhen you control no Islands, sacrifice this creature.",
+  "power": "5",
+  "toughness": "5",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "77",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Siren's Call",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Cast this spell only during an opponent's turn, before attackers are declared.\nCreatures the active player controls attack this turn if able.\nAt the beginning of the next end step, destroy all non-Wall creatures that player controls that didn't attack this turn. Ignore this effect for each creature the player didn't control continuously since the beginning of the turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "78",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Sleight of Mind",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change \"target black spell\" to \"target blue spell.\" This effect lasts indefinitely.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "79",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Spell Blast",
+  "mana_cost": "{X}{U}",
+  "type_line": "Instant",
+  "oracle_text": "Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "80",
+  "artist": "Brian Snõddy",
+  "set": "2ed"
+ },
+ {
+  "name": "Stasis",
+  "mana_cost": "{1}{U}",
+  "type_line": "Enchantment",
+  "oracle_text": "Players skip their untap steps.\nAt the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "81",
+  "artist": "Fay Jones",
+  "set": "2ed"
+ },
+ {
+  "name": "Steal Artifact",
+  "mana_cost": "{2}{U}{U}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant artifact\nYou control enchanted artifact.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "82",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Thoughtlace",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "83",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Time Walk",
+  "mana_cost": "{1}{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Take an extra turn after this one.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "84",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Timetwister",
+  "mana_cost": "{2}{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Each player shuffles their hand and graveyard into their library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "85",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Twiddle",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "You may tap or untap target artifact, creature, or land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "86",
+  "artist": "Rob Alexander",
+  "set": "2ed"
+ },
+ {
+  "name": "Unsummon",
+  "mana_cost": "{U}",
+  "type_line": "Instant",
+  "oracle_text": "Return target creature to its owner's hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "87",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Vesuvan Doppelganger",
+  "mana_cost": "{3}{U}{U}",
+  "type_line": "Creature — Shapeshifter",
+  "oracle_text": "You may have this creature enter as a copy of any creature on the battlefield, except it doesn't copy that creature's color and it has \"At the beginning of your upkeep, you may have this creature become a copy of target creature, except it doesn't copy that creature's color and it has this ability.\"",
+  "power": "0",
+  "toughness": "0",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "88",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Volcanic Eruption",
+  "mana_cost": "{X}{U}{U}{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "rare",
+  "collector_number": "89",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Air",
+  "mana_cost": "{1}{U}{U}",
+  "type_line": "Creature — Wall",
+  "oracle_text": "Defender, flying (This creature can't attack, and it can block creatures with flying.)",
+  "power": "1",
+  "toughness": "5",
+  "keywords": [
+   "Flying",
+   "Defender"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "90",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Water",
+  "mana_cost": "{1}{U}{U}",
+  "type_line": "Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)\n{U}: This creature gets +1/+0 until end of turn.",
+  "power": "0",
+  "toughness": "5",
+  "keywords": [
+   "Defender"
+  ],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "91",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Water Elemental",
+  "mana_cost": "{3}{U}{U}",
+  "type_line": "Creature — Elemental",
+  "oracle_text": "",
+  "power": "5",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "92",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Animate Dead",
+  "mana_cost": "{1}{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature card in a graveyard\nWhen this Aura enters, if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with this Aura.\" Return enchanted creature card to the battlefield under your control and attach this Aura to it. When this Aura leaves the battlefield, that creature's controller sacrifices it.\nEnchanted creature gets -1/-0.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "93",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Bad Moon",
+  "mana_cost": "{1}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "Black creatures get +1/+1.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "94",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Black Knight",
+  "mana_cost": "{B}{B}",
+  "type_line": "Creature — Human Knight",
+  "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)\nProtection from white (This creature can't be blocked, targeted, dealt damage, or enchanted by anything white.)",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "First strike",
+   "Protection"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "95",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Bog Wraith",
+  "mana_cost": "{3}{B}",
+  "type_line": "Creature — Wraith",
+  "oracle_text": "Swampwalk (This creature can't be blocked as long as defending player controls a Swamp.)",
+  "power": "3",
+  "toughness": "3",
+  "keywords": [
+   "Landwalk",
+   "Swampwalk"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "96",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Contract from Below",
+  "mana_cost": "{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Remove this card from your deck before playing if you're not playing for ante.\nDiscard your hand, ante the top card of your library, then draw seven cards.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "97",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Cursed Land",
+  "mana_cost": "{2}{B}{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nAt the beginning of the upkeep of enchanted land's controller, this Aura deals 1 damage to that player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "98",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Dark Ritual",
+  "mana_cost": "{B}",
+  "type_line": "Instant",
+  "oracle_text": "Add {B}{B}{B}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "99",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Darkpact",
+  "mana_cost": "{B}{B}{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Remove this card from your deck before playing if you're not playing for ante.\nYou own target card in the ante. Exchange that card with the top card of your library.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "100",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Deathgrip",
+  "mana_cost": "{B}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "{B}{B}: Counter target green spell.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "101",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Deathlace",
+  "mana_cost": "{B}",
+  "type_line": "Instant",
+  "oracle_text": "Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "102",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Demonic Attorney",
+  "mana_cost": "{1}{B}{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Remove this card from your deck before playing if you're not playing for ante.\nEach player antes the top card of their library.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "103",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Demonic Hordes",
+  "mana_cost": "{3}{B}{B}{B}",
+  "type_line": "Creature — Demon",
+  "oracle_text": "{T}: Destroy target land.\nAt the beginning of your upkeep, unless you pay {B}{B}{B}, tap this creature and sacrifice a land of an opponent's choice.",
+  "power": "5",
+  "toughness": "5",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "104",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Demonic Tutor",
+  "mana_cost": "{1}{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Search your library for a card, put that card into your hand, then shuffle.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "105",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Drain Life",
+  "mana_cost": "{X}{1}{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Spend only black mana on X.\nDrain Life deals X damage to any target. You gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "106",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Drudge Skeletons",
+  "mana_cost": "{1}{B}",
+  "type_line": "Creature — Skeleton",
+  "oracle_text": "{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Heal",
+   "Regenerate"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "107",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Evil Presence",
+  "mana_cost": "{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nEnchanted land is a Swamp.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "108",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Fear",
+  "mana_cost": "{B}{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature (Target a creature as you cast this. This card enters attached to that creature.)\nEnchanted creature has fear. (It can't be blocked except by artifact creatures and/or black creatures.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "109",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Frozen Shade",
+  "mana_cost": "{2}{B}",
+  "type_line": "Creature — Shade",
+  "oracle_text": "{B}: This creature gets +1/+1 until end of turn.",
+  "power": "0",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "110",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Gloom",
+  "mana_cost": "{2}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "White spells cost {3} more to cast.\nActivated abilities of white enchantments cost {3} more to activate.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "111",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Howl from Beyond",
+  "mana_cost": "{X}{B}",
+  "type_line": "Instant",
+  "oracle_text": "Target creature gets +X/+0 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "112",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Hypnotic Specter",
+  "mana_cost": "{1}{B}{B}",
+  "type_line": "Creature — Specter",
+  "oracle_text": "Flying\nWhenever this creature deals damage to an opponent, that player discards a card at random.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "113",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Lich",
+  "mana_cost": "{B}{B}{B}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "As this enchantment enters, you lose life equal to your life total.\nYou don't lose the game for having 0 or less life.\nIf you would gain life, draw that many cards instead.\nWhenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.\nWhen this enchantment is put into a graveyard from the battlefield, you lose the game.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "114",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Lord of the Pit",
+  "mana_cost": "{4}{B}{B}{B}",
+  "type_line": "Creature — Demon",
+  "oracle_text": "Flying, trample\nAt the beginning of your upkeep, sacrifice a creature other than this creature. If you can't, this creature deals 7 damage to you.",
+  "power": "7",
+  "toughness": "7",
+  "keywords": [
+   "Flying",
+   "Trample"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "115",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Mind Twist",
+  "mana_cost": "{X}{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Target player discards X cards at random.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "116",
+  "artist": "Julie Baroh",
+  "set": "2ed"
+ },
+ {
+  "name": "Nether Shadow",
+  "mana_cost": "{B}{B}",
+  "type_line": "Creature — Spirit",
+  "oracle_text": "Haste\nAt the beginning of your upkeep, if this card is in your graveyard with three or more creature cards above it, you may put this card onto the battlefield.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Haste"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "117",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Nettling Imp",
+  "mana_cost": "{2}{B}",
+  "type_line": "Creature — Imp",
+  "oracle_text": "{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only during an opponent's turn, before attackers are declared.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "118",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Nightmare",
+  "mana_cost": "{5}{B}",
+  "type_line": "Creature — Nightmare Horse",
+  "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\nNightmare's power and toughness are each equal to the number of Swamps you control.",
+  "power": "*",
+  "toughness": "*",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "119",
+  "artist": "Melissa A. Benson",
+  "set": "2ed"
+ },
+ {
+  "name": "Paralyze",
+  "mana_cost": "{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nWhen this Aura enters, tap enchanted creature.\nEnchanted creature doesn't untap during its controller's untap step.\nAt the beginning of the upkeep of enchanted creature's controller, that player may pay {4}. If the player does, untap the creature.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "120",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Pestilence",
+  "mana_cost": "{2}{B}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.\n{B}: This enchantment deals 1 damage to each creature and each player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "121",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Plague Rats",
+  "mana_cost": "{2}{B}",
+  "type_line": "Creature — Rat",
+  "oracle_text": "Plague Rats's power and toughness are each equal to the number of creatures named Plague Rats on the battlefield.",
+  "power": "*",
+  "toughness": "*",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "122",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Raise Dead",
+  "mana_cost": "{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Return target creature card from your graveyard to your hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "123",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Royal Assassin",
+  "mana_cost": "{1}{B}{B}",
+  "type_line": "Creature — Human Assassin",
+  "oracle_text": "{T}: Destroy target tapped creature.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "124",
+  "artist": "Tom Wänerstrand",
+  "set": "2ed"
+ },
+ {
+  "name": "Sacrifice",
+  "mana_cost": "{B}",
+  "type_line": "Instant",
+  "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nAdd an amount of {B} equal to the sacrificed creature's mana value.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "125",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Scathe Zombies",
+  "mana_cost": "{2}{B}",
+  "type_line": "Creature — Zombie",
+  "oracle_text": "",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "126",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Scavenging Ghoul",
+  "mana_cost": "{3}{B}",
+  "type_line": "Creature — Zombie",
+  "oracle_text": "At the beginning of each end step, put a corpse counter on this creature for each creature that died this turn.\nRemove a corpse counter from this creature: Regenerate this creature.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "Regenerate"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "127",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Sengir Vampire",
+  "mana_cost": "{3}{B}{B}",
+  "type_line": "Creature — Vampire",
+  "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\nWhenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.",
+  "power": "4",
+  "toughness": "4",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "128",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Simulacrum",
+  "mana_cost": "{1}{B}",
+  "type_line": "Instant",
+  "oracle_text": "You gain life equal to the damage dealt to you this turn. Simulacrum deals damage to target creature you control equal to the damage dealt to you this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "129",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Sinkhole",
+  "mana_cost": "{B}{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy target land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "130",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Terror",
+  "mana_cost": "{1}{B}",
+  "type_line": "Instant",
+  "oracle_text": "Destroy target nonartifact, nonblack creature. It can't be regenerated.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "131",
+  "artist": "Ron Spencer",
+  "set": "2ed"
+ },
+ {
+  "name": "Unholy Strength",
+  "mana_cost": "{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature gets +2/+1.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "132",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Bone",
+  "mana_cost": "{2}{B}",
+  "type_line": "Creature — Skeleton Wall",
+  "oracle_text": "Defender (This creature can't attack.)\n{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)",
+  "power": "1",
+  "toughness": "4",
+  "keywords": [
+   "Heal",
+   "Regenerate",
+   "Defender"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "133",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Warp Artifact",
+  "mana_cost": "{B}{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant artifact\nAt the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "134",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Weakness",
+  "mana_cost": "{B}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature gets -2/-1.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "135",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Will-o'-the-Wisp",
+  "mana_cost": "{B}",
+  "type_line": "Creature — Spirit",
+  "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\n{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)",
+  "power": "0",
+  "toughness": "1",
+  "keywords": [
+   "Flying",
+   "Heal",
+   "Regenerate"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "136",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Zombie Master",
+  "mana_cost": "{1}{B}{B}",
+  "type_line": "Creature — Zombie",
+  "oracle_text": "Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)\nOther Zombies have \"{B}: Regenerate this permanent.\"",
+  "power": "2",
+  "toughness": "3",
+  "keywords": [
+   "Regenerate"
+  ],
+  "colors": [
+   "B"
+  ],
+  "rarity": "rare",
+  "collector_number": "138",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Burrowing",
+  "mana_cost": "{R}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature has mountainwalk. (It can't be blocked as long as defending player controls a Mountain.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "139",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Chaoslace",
+  "mana_cost": "{R}",
+  "type_line": "Instant",
+  "oracle_text": "Target spell or permanent becomes red. (Its mana symbols remain unchanged.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "140",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Disintegrate",
+  "mana_cost": "{X}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "141",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Dragon Whelp",
+  "mana_cost": "{2}{R}{R}",
+  "type_line": "Creature — Dragon",
+  "oracle_text": "Flying\n{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.",
+  "power": "2",
+  "toughness": "3",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "142",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Dwarven Demolition Team",
+  "mana_cost": "{2}{R}",
+  "type_line": "Creature — Dwarf",
+  "oracle_text": "{T}: Destroy target Wall.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "143",
+  "artist": "Kev Brockschmidt",
+  "set": "2ed"
+ },
+ {
+  "name": "Dwarven Warriors",
+  "mana_cost": "{2}{R}",
+  "type_line": "Creature — Dwarf Warrior",
+  "oracle_text": "{T}: Target creature with power 2 or less can't be blocked this turn.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "144",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Earth Elemental",
+  "mana_cost": "{3}{R}{R}",
+  "type_line": "Creature — Elemental",
+  "oracle_text": "",
+  "power": "4",
+  "toughness": "5",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "145",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Earthbind",
+  "mana_cost": "{R}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nWhen this Aura enters, if enchanted creature has flying, this Aura deals 2 damage to that creature and this Aura gains \"Enchanted creature loses flying.\"",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "146",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Earthquake",
+  "mana_cost": "{X}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "Earthquake deals X damage to each creature without flying and each player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "147",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "False Orders",
+  "mana_cost": "{R}",
+  "type_line": "Instant",
+  "oracle_text": "Cast this spell only during the declare blockers step.\nRemove target creature defending player controls from combat. Creatures it was blocking that had become blocked by only that creature this combat become unblocked. You may have it block an attacking creature of your choice.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "148",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Fire Elemental",
+  "mana_cost": "{3}{R}{R}",
+  "type_line": "Creature — Elemental",
+  "oracle_text": "",
+  "power": "5",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "149",
+  "artist": "Melissa A. Benson",
+  "set": "2ed"
+ },
+ {
+  "name": "Fireball",
+  "mana_cost": "{X}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "This spell costs {1} more to cast for each target beyond the first.\nFireball deals X damage divided evenly, rounded down, among any number of targets.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "150",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Firebreathing",
+  "mana_cost": "{R}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\n{R}: Enchanted creature gets +1/+0 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "151",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Flashfires",
+  "mana_cost": "{3}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy all Plains.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "152",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Fork",
+  "mana_cost": "{R}{R}",
+  "type_line": "Instant",
+  "oracle_text": "Copy target instant or sorcery spell, except that the copy is red. You may choose new targets for the copy.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "153",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Goblin Balloon Brigade",
+  "mana_cost": "{R}",
+  "type_line": "Creature — Goblin Warrior",
+  "oracle_text": "{R}: This creature gains flying until end of turn.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "154",
+  "artist": "Andi Rusu",
+  "set": "2ed"
+ },
+ {
+  "name": "Goblin King",
+  "mana_cost": "{1}{R}{R}",
+  "type_line": "Creature — Goblin",
+  "oracle_text": "Other Goblins get +1/+1 and have mountainwalk.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "155",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Granite Gargoyle",
+  "mana_cost": "{2}{R}",
+  "type_line": "Creature — Gargoyle",
+  "oracle_text": "Flying\n{R}: This creature gets +0/+1 until end of turn.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "156",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Gray Ogre",
+  "mana_cost": "{2}{R}",
+  "type_line": "Creature — Ogre",
+  "oracle_text": "",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "157",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Hill Giant",
+  "mana_cost": "{3}{R}",
+  "type_line": "Creature — Giant",
+  "oracle_text": "",
+  "power": "3",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "158",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Hurloon Minotaur",
+  "mana_cost": "{1}{R}{R}",
+  "type_line": "Creature — Minotaur",
+  "oracle_text": "",
+  "power": "2",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "159",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Ironclaw Orcs",
+  "mana_cost": "{1}{R}",
+  "type_line": "Creature — Orc",
+  "oracle_text": "This creature can't block creatures with power 2 or greater.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "160",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Keldon Warlord",
+  "mana_cost": "{2}{R}{R}",
+  "type_line": "Creature — Human Barbarian",
+  "oracle_text": "Keldon Warlord's power and toughness are each equal to the number of non-Wall creatures you control.",
+  "power": "*",
+  "toughness": "*",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "161",
+  "artist": "Kev Brockschmidt",
+  "set": "2ed"
+ },
+ {
+  "name": "Lightning Bolt",
+  "mana_cost": "{R}",
+  "type_line": "Instant",
+  "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "162",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Mana Flare",
+  "mana_cost": "{2}{R}",
+  "type_line": "Enchantment",
+  "oracle_text": "Whenever a player taps a land for mana, that player adds one mana of any type that land produced.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "163",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Manabarbs",
+  "mana_cost": "{3}{R}",
+  "type_line": "Enchantment",
+  "oracle_text": "Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "164",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Mons's Goblin Raiders",
+  "mana_cost": "{R}",
+  "type_line": "Creature — Goblin",
+  "oracle_text": "",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "165",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Orcish Artillery",
+  "mana_cost": "{1}{R}{R}",
+  "type_line": "Creature — Orc Warrior",
+  "oracle_text": "{T}: This creature deals 2 damage to any target and 3 damage to you.",
+  "power": "1",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "166",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Orcish Oriflamme",
+  "mana_cost": "{3}{R}",
+  "type_line": "Enchantment",
+  "oracle_text": "Attacking creatures you control get +1/+0.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "167",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Power Surge",
+  "mana_cost": "{R}{R}",
+  "type_line": "Enchantment",
+  "oracle_text": "At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "168",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Raging River",
+  "mana_cost": "{R}{R}",
+  "type_line": "Enchantment",
+  "oracle_text": "Whenever one or more creatures you control attack, each defending player divides all creatures without flying they control into a \"left\" pile and a \"right\" pile. Then, for each attacking creature you control, choose \"left\" or \"right.\" That creature can't be blocked this combat except by creatures with flying and creatures in a pile with the chosen label.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "169",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Red Elemental Blast",
+  "mana_cost": "{R}",
+  "type_line": "Instant",
+  "oracle_text": "Choose one —\n• Counter target blue spell.\n• Destroy target blue permanent.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "170",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Roc of Kher Ridges",
+  "mana_cost": "{3}{R}",
+  "type_line": "Creature — Bird",
+  "oracle_text": "Flying",
+  "power": "3",
+  "toughness": "3",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "171",
+  "artist": "Andi Rusu",
+  "set": "2ed"
+ },
+ {
+  "name": "Rock Hydra",
+  "mana_cost": "{X}{R}{R}",
+  "type_line": "Creature — Hydra",
+  "oracle_text": "This creature enters with X +1/+1 counters on it.\nFor each 1 damage that would be dealt to this creature, if it has a +1/+1 counter on it, remove a +1/+1 counter from it and prevent that 1 damage.\n{R}: Prevent the next 1 damage that would be dealt to this creature this turn.\n{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.",
+  "power": "0",
+  "toughness": "0",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "172",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Sedge Troll",
+  "mana_cost": "{2}{R}",
+  "type_line": "Creature — Troll",
+  "oracle_text": "This creature gets +1/+1 as long as you control a Swamp.\n{B}: Regenerate this creature.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "Regenerate"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "173",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Shatter",
+  "mana_cost": "{1}{R}",
+  "type_line": "Instant",
+  "oracle_text": "Destroy target artifact.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "174",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Shivan Dragon",
+  "mana_cost": "{4}{R}{R}",
+  "type_line": "Creature — Dragon",
+  "oracle_text": "Flying\n{R}: This creature gets +1/+0 until end of turn.",
+  "power": "5",
+  "toughness": "5",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "175",
+  "artist": "Melissa A. Benson",
+  "set": "2ed"
+ },
+ {
+  "name": "Smoke",
+  "mana_cost": "{R}{R}",
+  "type_line": "Enchantment",
+  "oracle_text": "Players can't untap more than one creature during their untap steps.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "176",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Stone Giant",
+  "mana_cost": "{2}{R}{R}",
+  "type_line": "Creature — Giant",
+  "oracle_text": "{T}: Target creature you control with toughness less than this creature's power gains flying until end of turn. Destroy that creature at the beginning of the next end step.",
+  "power": "3",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "177",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Stone Rain",
+  "mana_cost": "{2}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy target land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "178",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Tunnel",
+  "mana_cost": "{R}",
+  "type_line": "Instant",
+  "oracle_text": "Destroy target Wall. It can't be regenerated.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "179",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Two-Headed Giant of Foriys",
+  "mana_cost": "{4}{R}",
+  "type_line": "Creature — Giant",
+  "oracle_text": "Trample\nThis creature can block an additional creature each combat.",
+  "power": "4",
+  "toughness": "4",
+  "keywords": [
+   "Trample"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "180",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Uthden Troll",
+  "mana_cost": "{2}{R}",
+  "type_line": "Creature — Troll",
+  "oracle_text": "{R}: Regenerate this creature.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [
+   "Regenerate"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "181",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Fire",
+  "mana_cost": "{1}{R}{R}",
+  "type_line": "Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)\n{R}: This creature gets +1/+0 until end of turn.",
+  "power": "0",
+  "toughness": "5",
+  "keywords": [
+   "Defender"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "182",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Stone",
+  "mana_cost": "{1}{R}{R}",
+  "type_line": "Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)",
+  "power": "0",
+  "toughness": "8",
+  "keywords": [
+   "Defender"
+  ],
+  "colors": [
+   "R"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "183",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Wheel of Fortune",
+  "mana_cost": "{2}{R}",
+  "type_line": "Sorcery",
+  "oracle_text": "Each player discards their hand, then draws seven cards.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "rare",
+  "collector_number": "184",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Aspect of Wolf",
+  "mana_cost": "{1}{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature gets +X/+Y, where X is half the number of Forests you control, rounded down, and Y is half the number of Forests you control, rounded up.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "185",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Berserk",
+  "mana_cost": "{G}",
+  "type_line": "Instant",
+  "oracle_text": "Cast this spell only before the combat damage step.\nTarget creature gains trample and gets +X/+0 until end of turn, where X is its power. At the beginning of the next end step, destroy that creature if it attacked this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "186",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Birds of Paradise",
+  "mana_cost": "{G}",
+  "type_line": "Creature — Bird",
+  "oracle_text": "Flying\n{T}: Add one mana of any color.",
+  "power": "0",
+  "toughness": "1",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "187",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Camouflage",
+  "mana_cost": "{G}",
+  "type_line": "Instant",
+  "oracle_text": "Cast this spell only during your declare attackers step.\nThis turn, instead of declaring blockers, each defending player chooses any number of creatures they control and divides them into a number of piles equal to the number of attacking creatures for whom that player is the defending player. Creatures those players control that can block additional creatures may likewise be put into additional piles. Assign each pile to a different one of those attacking creatures at random. Each creature in a pile that can block the creature that pile is assigned to does so. (Piles can be empty.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "188",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Channel",
+  "mana_cost": "{G}{G}",
+  "type_line": "Sorcery",
+  "oracle_text": "Until end of turn, any time you could activate a mana ability, you may pay 1 life. If you do, add {C}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "189",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Cockatrice",
+  "mana_cost": "{3}{G}{G}",
+  "type_line": "Creature — Cockatrice",
+  "oracle_text": "Flying\nWhenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.",
+  "power": "2",
+  "toughness": "4",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "190",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Craw Wurm",
+  "mana_cost": "{4}{G}{G}",
+  "type_line": "Creature — Wurm",
+  "oracle_text": "",
+  "power": "6",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "191",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Elvish Archers",
+  "mana_cost": "{1}{G}",
+  "type_line": "Creature — Elf Archer",
+  "oracle_text": "First strike",
+  "power": "2",
+  "toughness": "1",
+  "keywords": [
+   "First strike"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "192",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Fastbond",
+  "mana_cost": "{G}",
+  "type_line": "Enchantment",
+  "oracle_text": "You may play any number of lands on each of your turns.\nWhenever you play a land, if it wasn't the first land you played this turn, this enchantment deals 1 damage to you.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "193",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Fog",
+  "mana_cost": "{G}",
+  "type_line": "Instant",
+  "oracle_text": "Prevent all combat damage that would be dealt this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "194",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Force of Nature",
+  "mana_cost": "{2}{G}{G}{G}{G}",
+  "type_line": "Creature — Elemental",
+  "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nAt the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.",
+  "power": "8",
+  "toughness": "8",
+  "keywords": [
+   "Trample"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "195",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Fungusaur",
+  "mana_cost": "{3}{G}",
+  "type_line": "Creature — Fungus Dinosaur",
+  "oracle_text": "Whenever this creature is dealt damage, put a +1/+1 counter on it.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "196",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Gaea's Liege",
+  "mana_cost": "{3}{G}{G}{G}",
+  "type_line": "Creature — Avatar",
+  "oracle_text": "As long as Gaea's Liege isn't attacking, its power and toughness are each equal to the number of Forests you control. As long as Gaea's Liege is attacking, its power and toughness are each equal to the number of Forests defending player controls.\n{T}: Target land becomes a Forest until this creature leaves the battlefield.",
+  "power": "*",
+  "toughness": "*",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "197",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Giant Growth",
+  "mana_cost": "{G}",
+  "type_line": "Instant",
+  "oracle_text": "Target creature gets +3/+3 until end of turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "198",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Giant Spider",
+  "mana_cost": "{3}{G}",
+  "type_line": "Creature — Spider",
+  "oracle_text": "Reach (This creature can block creatures with flying.)",
+  "power": "2",
+  "toughness": "4",
+  "keywords": [
+   "Reach"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "199",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Grizzly Bears",
+  "mana_cost": "{1}{G}",
+  "type_line": "Creature — Bear",
+  "oracle_text": "",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "200",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Hurricane",
+  "mana_cost": "{X}{G}",
+  "type_line": "Sorcery",
+  "oracle_text": "Hurricane deals X damage to each creature with flying and each player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "201",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Ice Storm",
+  "mana_cost": "{2}{G}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy target land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "202",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Instill Energy",
+  "mana_cost": "{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nEnchanted creature can attack as though it had haste.\n{0}: Untap enchanted creature. Activate only during your turn and only once each turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "203",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Ironroot Treefolk",
+  "mana_cost": "{4}{G}",
+  "type_line": "Creature — Treefolk",
+  "oracle_text": "",
+  "power": "3",
+  "toughness": "5",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "204",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Kudzu",
+  "mana_cost": "{1}{G}{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nWhen enchanted land becomes tapped, destroy it. That land's controller may attach this Aura to a land of their choice.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "205",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Ley Druid",
+  "mana_cost": "{2}{G}",
+  "type_line": "Creature — Human Druid",
+  "oracle_text": "{T}: Untap target land.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "206",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Lifeforce",
+  "mana_cost": "{G}{G}",
+  "type_line": "Enchantment",
+  "oracle_text": "{G}{G}: Counter target black spell.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "207",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Lifelace",
+  "mana_cost": "{G}",
+  "type_line": "Instant",
+  "oracle_text": "Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "208",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Living Artifact",
+  "mana_cost": "{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant artifact\nWhenever you're dealt damage, put that many vitality counters on this Aura.\nAt the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "209",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Living Lands",
+  "mana_cost": "{3}{G}",
+  "type_line": "Enchantment",
+  "oracle_text": "All Forests are 1/1 creatures that are still lands.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "210",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Llanowar Elves",
+  "mana_cost": "{G}",
+  "type_line": "Creature — Elf Druid",
+  "oracle_text": "{T}: Add {G}.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "211",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Lure",
+  "mana_cost": "{1}{G}{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nAll creatures able to block enchanted creature do so.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "212",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Natural Selection",
+  "mana_cost": "{G}",
+  "type_line": "Instant",
+  "oracle_text": "Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "213",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Regeneration",
+  "mana_cost": "{1}{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature (Target a creature as you cast this. This card enters attached to that creature.)\n{G}: Regenerate enchanted creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Heal",
+   "Regenerate",
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "214",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Regrowth",
+  "mana_cost": "{1}{G}",
+  "type_line": "Sorcery",
+  "oracle_text": "Return target card from your graveyard to your hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "215",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Scryb Sprites",
+  "mana_cost": "{G}",
+  "type_line": "Creature — Faerie",
+  "oracle_text": "Flying",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "216",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Shanodin Dryads",
+  "mana_cost": "{G}",
+  "type_line": "Creature — Nymph Dryad",
+  "oracle_text": "Forestwalk (This creature can't be blocked as long as defending player controls a Forest.)",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Landwalk",
+   "Forestwalk"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "217",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Stream of Life",
+  "mana_cost": "{X}{G}",
+  "type_line": "Sorcery",
+  "oracle_text": "Target player gains X life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "218",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Thicket Basilisk",
+  "mana_cost": "{3}{G}{G}",
+  "type_line": "Creature — Basilisk",
+  "oracle_text": "Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.",
+  "power": "2",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "219",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Timber Wolves",
+  "mana_cost": "{G}",
+  "type_line": "Creature — Wolf",
+  "oracle_text": "Banding (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [
+   "Banding"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "220",
+  "artist": "Melissa A. Benson",
+  "set": "2ed"
+ },
+ {
+  "name": "Tranquility",
+  "mana_cost": "{2}{G}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy all enchantments.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "221",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Tsunami",
+  "mana_cost": "{3}{G}",
+  "type_line": "Sorcery",
+  "oracle_text": "Destroy all Islands.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "222",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Verduran Enchantress",
+  "mana_cost": "{1}{G}{G}",
+  "type_line": "Creature — Human Druid",
+  "oracle_text": "Whenever you cast an enchantment spell, you may draw a card.",
+  "power": "0",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "223",
+  "artist": "Kev Brockschmidt",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Brambles",
+  "mana_cost": "{2}{G}",
+  "type_line": "Creature — Plant Wall",
+  "oracle_text": "Defender (This creature can't attack.)\n{G}: Regenerate this creature.",
+  "power": "2",
+  "toughness": "3",
+  "keywords": [
+   "Regenerate",
+   "Defender"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "224",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Ice",
+  "mana_cost": "{2}{G}",
+  "type_line": "Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)",
+  "power": "0",
+  "toughness": "7",
+  "keywords": [
+   "Defender"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "225",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Wall of Wood",
+  "mana_cost": "{G}",
+  "type_line": "Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)",
+  "power": "0",
+  "toughness": "3",
+  "keywords": [
+   "Defender"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "226",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Wanderlust",
+  "mana_cost": "{2}{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature\nAt the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "uncommon",
+  "collector_number": "227",
+  "artist": "Cornelius Brudi",
+  "set": "2ed"
+ },
+ {
+  "name": "War Mammoth",
+  "mana_cost": "{3}{G}",
+  "type_line": "Creature — Elephant",
+  "oracle_text": "Trample",
+  "power": "3",
+  "toughness": "3",
+  "keywords": [
+   "Trample"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "228",
+  "artist": "Jeff A. Menges",
+  "set": "2ed"
+ },
+ {
+  "name": "Web",
+  "mana_cost": "{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant creature (Target a creature as you cast this. This card enters attached to that creature.)\nEnchanted creature gets +0/+2 and has reach. (It can block creatures with flying.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "rare",
+  "collector_number": "229",
+  "artist": "Rob Alexander",
+  "set": "2ed"
+ },
+ {
+  "name": "Wild Growth",
+  "mana_cost": "{G}",
+  "type_line": "Enchantment — Aura",
+  "oracle_text": "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds an additional {G}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [
+   "Enchant"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "230",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Ankh of Mishra",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a land enters, this artifact deals 2 damage to that land's controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "231",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Basalt Monolith",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "This artifact doesn't untap during your untap step.\n{T}: Add {C}{C}{C}.\n{3}: Untap this artifact.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "232",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Black Lotus",
+  "mana_cost": "{0}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}, Sacrifice this artifact: Add three mana of any one color.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "233",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Black Vise",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "As this artifact enters, choose an opponent.\nAt the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "234",
+  "artist": "Richard Thomas",
+  "set": "2ed"
+ },
+ {
+  "name": "Celestial Prism",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}, {T}: Add one mana of any color.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "235",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Clockwork Beast",
+  "mana_cost": "{6}",
+  "type_line": "Artifact Creature — Beast",
+  "oracle_text": "This creature enters with seven +1/+0 counters on it.\nAt end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.\n{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.",
+  "power": "0",
+  "toughness": "4",
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "237",
+  "artist": "Drew Tucker",
+  "set": "2ed"
+ },
+ {
+  "name": "Conservator",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "238",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Copper Tablet",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "At the beginning of each player's upkeep, this artifact deals 1 damage to that player.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "239",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Crystal Rod",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "240",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Cyclopean Tomb",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}, {T}: Put a mire counter on target non-Swamp land. That land is a Swamp for as long as it has a mire counter on it. Activate only during your upkeep.\nWhen this artifact is put into a graveyard from the battlefield, at the beginning of each of your upkeeps for the rest of the game, remove all mire counters from a land that a mire counter was put onto with this artifact but that a mire counter has not been removed from with this artifact.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "241",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Dingus Egg",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "242",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Disrupting Scepter",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "{3}, {T}: Target player discards a card. Activate only during your turn.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "243",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Forcefield",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "{1}: The next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "244",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Gauntlet of Might",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "Red creatures get +1/+1.\nWhenever a Mountain is tapped for mana, its controller adds an additional {R}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "245",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Glasses of Urza",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Look at target player's hand.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "246",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Helm of Chatzuk",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "247",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Howling Mine",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "At the beginning of each player's draw step, if this artifact is untapped, that player draws an additional card.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "248",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Icy Manipulator",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{1}, {T}: Tap target artifact, creature, or land.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "249",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Illusionary Mask",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "{X}: You may choose a creature card in your hand whose mana cost could be paid by some amount of, or all of, the mana you spent on {X}. If you do, you may cast that card face down as a 2/2 creature spell without paying its mana cost. If the creature that spell becomes as it resolves has not been turned face up and would assign or deal damage, be dealt damage, or become tapped, instead it's turned face up and assigns or deals damage, is dealt damage, or becomes tapped. Activate only as a sorcery.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "250",
+  "artist": "Amy Weber",
+  "set": "2ed"
+ },
+ {
+  "name": "Iron Star",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "251",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Ivory Cup",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "252",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Jade Monolith",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{1}: The next time a source of your choice would deal damage to target creature this turn, that source deals that damage to you instead.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "253",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Jade Statue",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{2}: This artifact becomes a 3/6 Golem artifact creature until end of combat. Activate only during combat.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "254",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Jayemdae Tome",
+  "mana_cost": "{4}",
+  "type_line": "Artifact — Book",
+  "oracle_text": "{4}, {T}: Draw a card.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "255",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Juggernaut",
+  "mana_cost": "{4}",
+  "type_line": "Artifact Creature — Juggernaut",
+  "oracle_text": "This creature attacks each combat if able.\nThis creature can't be blocked by Walls.",
+  "power": "5",
+  "toughness": "3",
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "256",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Kormus Bell",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "All Swamps are 1/1 black creatures that are still lands.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "257",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Library of Leng",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "You have no maximum hand size.\nIf an effect causes you to discard a card, discard it, but you may put it on top of your library instead of into your graveyard.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "258",
+  "artist": "Daniel Gelon",
+  "set": "2ed"
+ },
+ {
+  "name": "Living Wall",
+  "mana_cost": "{4}",
+  "type_line": "Artifact Creature — Wall",
+  "oracle_text": "Defender (This creature can't attack.)\n{1}: Regenerate this creature.",
+  "power": "0",
+  "toughness": "6",
+  "keywords": [
+   "Regenerate",
+   "Defender"
+  ],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "259",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Mana Vault",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "This artifact doesn't untap during your untap step.\nAt the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.\nAt the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.\n{T}: Add {C}{C}{C}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "260",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Meekstone",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Creatures with power 3 or greater don't untap during their controllers' untap steps.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "261",
+  "artist": "Quinton Hoover",
+  "set": "2ed"
+ },
+ {
+  "name": "Mox Emerald",
+  "mana_cost": "{0}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Add {G}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "262",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Mox Jet",
+  "mana_cost": "{0}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Add {B}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "263",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Mox Pearl",
+  "mana_cost": "{0}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Add {W}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "264",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Mox Ruby",
+  "mana_cost": "{0}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Add {R}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "265",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Mox Sapphire",
+  "mana_cost": "{0}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Add {U}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "266",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Nevinyrral's Disk",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "This artifact enters tapped.\n{1}, {T}: Destroy all artifacts, creatures, and enchantments.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "267",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Obsianus Golem",
+  "mana_cost": "{6}",
+  "type_line": "Artifact Creature — Golem",
+  "oracle_text": "",
+  "power": "4",
+  "toughness": "6",
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "268",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Rod of Ruin",
+  "mana_cost": "{4}",
+  "type_line": "Artifact",
+  "oracle_text": "{3}, {T}: This artifact deals 1 damage to any target.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "269",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Sol Ring",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "{T}: Add {C}{C}.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "270",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Soul Net",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "271",
+  "artist": "Dameon Willich",
+  "set": "2ed"
+ },
+ {
+  "name": "Sunglasses of Urza",
+  "mana_cost": "{3}",
+  "type_line": "Artifact",
+  "oracle_text": "You may spend white mana as though it were red mana.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "272",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "The Hive",
+  "mana_cost": "{5}",
+  "type_line": "Artifact",
+  "oracle_text": "{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "273",
+  "artist": "Sandra Everingham",
+  "set": "2ed"
+ },
+ {
+  "name": "Throne of Bone",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a player casts a black spell, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "274",
+  "artist": "Anson Maddocks",
+  "set": "2ed"
+ },
+ {
+  "name": "Time Vault",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "This artifact enters tapped.\nThis artifact doesn't untap during your untap step.\nIf you would begin your turn while this artifact is tapped, you may skip that turn instead. If you do, untap this artifact.\n{T}: Take an extra turn after this one.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "275",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Winter Orb",
+  "mana_cost": "{2}",
+  "type_line": "Artifact",
+  "oracle_text": "As long as this artifact is untapped, players can't untap more than one land during their untap steps.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "276",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Wooden Sphere",
+  "mana_cost": "{1}",
+  "type_line": "Artifact",
+  "oracle_text": "Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "uncommon",
+  "collector_number": "277",
+  "artist": "Mark Tedin",
+  "set": "2ed"
+ },
+ {
+  "name": "Badlands",
+  "mana_cost": "",
+  "type_line": "Land — Swamp Mountain",
+  "oracle_text": "({T}: Add {B} or {R}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "278",
+  "artist": "Rob Alexander",
+  "set": "2ed"
+ },
+ {
+  "name": "Bayou",
+  "mana_cost": "",
+  "type_line": "Land — Swamp Forest",
+  "oracle_text": "({T}: Add {B} or {G}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "279",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Plateau",
+  "mana_cost": "",
+  "type_line": "Land — Mountain Plains",
+  "oracle_text": "({T}: Add {R} or {W}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "280",
+  "artist": "Drew Tucker",
+  "set": "2ed"
+ },
+ {
+  "name": "Savannah",
+  "mana_cost": "",
+  "type_line": "Land — Forest Plains",
+  "oracle_text": "({T}: Add {G} or {W}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "281",
+  "artist": "Rob Alexander",
+  "set": "2ed"
+ },
+ {
+  "name": "Scrubland",
+  "mana_cost": "",
+  "type_line": "Land — Plains Swamp",
+  "oracle_text": "({T}: Add {W} or {B}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "282",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Taiga",
+  "mana_cost": "",
+  "type_line": "Land — Mountain Forest",
+  "oracle_text": "({T}: Add {R} or {G}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "283",
+  "artist": "Rob Alexander",
+  "set": "2ed"
+ },
+ {
+  "name": "Tropical Island",
+  "mana_cost": "",
+  "type_line": "Land — Forest Island",
+  "oracle_text": "({T}: Add {G} or {U}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "284",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Tundra",
+  "mana_cost": "",
+  "type_line": "Land — Plains Island",
+  "oracle_text": "({T}: Add {W} or {U}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "285",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Underground Sea",
+  "mana_cost": "",
+  "type_line": "Land — Island Swamp",
+  "oracle_text": "({T}: Add {U} or {B}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "286",
+  "artist": "Rob Alexander",
+  "set": "2ed"
+ },
+ {
+  "name": "Volcanic Island",
+  "mana_cost": "",
+  "type_line": "Land — Island Mountain",
+  "oracle_text": "({T}: Add {U} or {R}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "rare",
+  "collector_number": "287",
+  "artist": "Brian Snõddy",
+  "set": "2ed"
+ },
+ {
+  "name": "Plains",
+  "mana_cost": "",
+  "type_line": "Basic Land — Plains",
+  "oracle_text": "({T}: Add {W}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "288",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Plains",
+  "mana_cost": "",
+  "type_line": "Basic Land — Plains",
+  "oracle_text": "({T}: Add {W}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "289",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Plains",
+  "mana_cost": "",
+  "type_line": "Basic Land — Plains",
+  "oracle_text": "({T}: Add {W}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "290",
+  "artist": "Jesper Myrfors",
+  "set": "2ed"
+ },
+ {
+  "name": "Island",
+  "mana_cost": "",
+  "type_line": "Basic Land — Island",
+  "oracle_text": "({T}: Add {U}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "291",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Island",
+  "mana_cost": "",
+  "type_line": "Basic Land — Island",
+  "oracle_text": "({T}: Add {U}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "292",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Island",
+  "mana_cost": "",
+  "type_line": "Basic Land — Island",
+  "oracle_text": "({T}: Add {U}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "293",
+  "artist": "Mark Poole",
+  "set": "2ed"
+ },
+ {
+  "name": "Swamp",
+  "mana_cost": "",
+  "type_line": "Basic Land — Swamp",
+  "oracle_text": "({T}: Add {B}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "294",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Swamp",
+  "mana_cost": "",
+  "type_line": "Basic Land — Swamp",
+  "oracle_text": "({T}: Add {B}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "295",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Swamp",
+  "mana_cost": "",
+  "type_line": "Basic Land — Swamp",
+  "oracle_text": "({T}: Add {B}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "296",
+  "artist": "Dan Frazier",
+  "set": "2ed"
+ },
+ {
+  "name": "Mountain",
+  "mana_cost": "",
+  "type_line": "Basic Land — Mountain",
+  "oracle_text": "({T}: Add {R}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "297",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Mountain",
+  "mana_cost": "",
+  "type_line": "Basic Land — Mountain",
+  "oracle_text": "({T}: Add {R}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "298",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Mountain",
+  "mana_cost": "",
+  "type_line": "Basic Land — Mountain",
+  "oracle_text": "({T}: Add {R}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "299",
+  "artist": "Douglas Shuler",
+  "set": "2ed"
+ },
+ {
+  "name": "Forest",
+  "mana_cost": "",
+  "type_line": "Basic Land — Forest",
+  "oracle_text": "({T}: Add {G}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "300",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Forest",
+  "mana_cost": "",
+  "type_line": "Basic Land — Forest",
+  "oracle_text": "({T}: Add {G}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "301",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ },
+ {
+  "name": "Forest",
+  "mana_cost": "",
+  "type_line": "Basic Land — Forest",
+  "oracle_text": "({T}: Add {G}.)",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "302",
+  "artist": "Christopher Rush",
+  "set": "2ed"
+ }
+]

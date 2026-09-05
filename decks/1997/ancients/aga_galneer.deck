@@ -1,0 +1,32 @@
+# Aga Galneer — one of the Genies, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 6/12 The Genies — 19 life, bribe 80 gold
+# enemy: Aga Galneer (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0434.dck "Aga Galneer (Bl/Gr/Wh, Type 1)" [Tier 1 — the
+#   1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Genies) — "Aga Galneer (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Aga Galneer (Spells of the Ancients)
+4 Junún Efreet
+4 Juzám Djinn
+5 Swamp
+4 City of Brass
+1 Mox Jet
+4 Bayou
+4 Scrubland
+4 Drain Life
+4 Savannah
+4 Ifh-Bíff Efreet
+2 Circle of Protection: Black
+2 Circle of Protection: Green
+1 Mox Emerald
+1 Mox Pearl
+2 Ashes to Ashes
+4 Spirit Link
+2 Greed
+2 Pestilence
+4 Sengir Vampire
+2 Terror

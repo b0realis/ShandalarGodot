@@ -1,0 +1,27 @@
+# Kobold Madness — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: R
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane ["Kobold
+#   Madness"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Kobold Madness"
+#   [Tier-web — agrees card for card]
+# group: Kevin Bane's decks
+name: Kobold Madness
+4 Crimson Kobolds
+4 Crookshank Kobolds
+2 Keldon Warlord
+3 Kobold Drill Sergeant
+3 Kobold Overlord
+3 Kobold Taskmaster
+4 Kobolds of Kher Keep
+1 Fork
+3 Lightning Bolt
+1 Fireball
+1 Black Lotus
+1 Mox Ruby
+3 Orcish Oriflamme
+4 Giant Strength
+3 Firebreathing
+20 Mountain

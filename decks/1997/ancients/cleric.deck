@@ -1,0 +1,25 @@
+# Cleric — a Weak enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Cleric (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0211.dck "Cleric (Wh, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Cleric (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Cleric (Spells of the Ancients)
+21 Plains
+2 Disenchant
+4 Holy Armor
+4 Meekstone
+4 Benalish Hero
+2 Samite Healer
+4 Savannah Lions
+2 Repentant Blacksmith
+4 Icy Manipulator
+2 Kismet
+4 Pikemen
+4 Tawnos's Weaponry
+3 Amrou Kithkin

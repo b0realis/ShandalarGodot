@@ -1,0 +1,51 @@
+# Alt-A-Kesh — one of the Genies of the 1997 game, the deck as the original shipped it.
+# tier: 6/12 The Genies — 19 life, bribe 80 gold
+# enemy: Alt-A-Kesh (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0426.dck "Alt-A-Kesh (G/U/B, 4th)" [Tier 3 — Manalink
+#   3 file dated 2016-02-15; its first 24 maindeck lines are the 1997 deck, the 19 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/alt_a_kesh.toml (main_cards, sideboard_cards, level 6)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/alt_a_kesh.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Genies) — "Alt-a-Kesh" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Alt-A-Kesh
+7 Forest
+7 Swamp
+7 Island
+4 Gem Bazaar
+2 Untamed Wilds
+2 Wall of Ice
+2 Wall of Bone
+2 Wall of Air
+2 Birds of Paradise
+2 Bog Imp
+2 Cockatrice
+2 Mahamoti Djinn
+2 Phantasmal Forces
+2 Scryb Sprites
+2 Vampire Bats
+2 Zephyr Falcon
+2 Phantom Monster
+2 Junún Efreet
+2 Lord of the Pit
+2 Energy Flux
+2 Stream of Life
+1 Ancestral Recall
+1 Time Walk
+1 Timetwister
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   (empty)
+#   .vBlack  (empty)
+#   .vBlue   (empty)
+#   .vGreen  (empty)
+#   .vRed    (empty)
+#   .vWhite  (empty)

@@ -1,0 +1,47 @@
+# Enchantress — a Typical enemy of the 1997 game, the deck as the original shipped it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Enchantress (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0262.dck "Enchantress (Gr, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 15 maindeck lines are the 1997 deck, the 12 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/enchantress.toml (main_cards, sideboard_cards, level 3)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/enchantress.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Enchantress" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Enchantress
+22 Forest
+4 Llanowar Elves
+3 Verduran Enchantress
+3 Cockatrice
+3 Thicket Basilisk
+2 Durkwood Boars
+1 Ivory Tower
+3 Lure
+2 Web
+3 Regeneration
+3 Living Artifact
+4 Aspect of Wolf
+2 Wild Growth
+2 Coral Helm
+2 Instill Energy
+2 Desert Twister
+1 Library of Leng
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   2 Desert Twister, 1 Library of Leng
+#   .vBlack  2 Kormus Bell, 1 Desert Twister
+#   .vBlue   2 Desert Twister, 1 Library of Leng
+#   .vGreen  2 Living Lands, 1 Desert Twister
+#   .vRed    2 Desert Twister, 1 Library of Leng
+#   .vWhite  2 Primal Clay, 1 Desert Twister
+SB: 2 Kormus Bell
+SB: 2 Living Lands
+SB: 2 Primal Clay

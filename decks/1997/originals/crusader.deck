@@ -1,0 +1,45 @@
+# Crusader — a Typical enemy of the 1997 game, the deck as the original shipped it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Crusader (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0283.dck "Crusader (Wh, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 13 maindeck lines are the 1997 deck, the 14 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/crusader.toml (main_cards, sideboard_cards, level 3)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/crusader.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Crusader" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Crusader
+22 Plains
+4 Crusade
+4 Castle
+2 Disenchant
+4 White Knight
+4 Eye for an Eye
+2 Morale
+4 Pikemen
+4 Rainbow Knights
+2 Battering Ram
+2 Dancing Scimitar
+4 Benalish Hero
+4 Swords to Plowshares
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Swords to Plowshares
+#   .vBlack  2 Black Ward, 1 Swords to Plowshares
+#   .vBlue   2 Blue Ward, 1 Swords to Plowshares
+#   .vGreen  2 Green Ward, 1 Swords to Plowshares
+#   .vRed    2 Red Ward, 1 Swords to Plowshares
+#   .vWhite  2 White Ward, 1 Swords to Plowshares
+SB: 2 Black Ward
+SB: 2 Blue Ward
+SB: 2 Green Ward
+SB: 2 Red Ward
+SB: 2 White Ward

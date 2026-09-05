@@ -1,0 +1,371 @@
+# MicroProse .dck numeric card IDs, harvested from an original
+# game copy's deck files by tools/deck_convert. name|id
+Air Elemental|0
+Alabaster Potion|560
+Aladdin's Ring|396
+Ali Baba|394
+Amrou Kithkin|563
+Amulet of Kroog|466
+Ancestral Recall|1
+Angry Mob|293
+Animate Artifact|2
+Animate Dead|3
+Animate Wall|4
+Apprentice Wizard|300
+Armageddon|6
+Armageddon Clock|471
+Ashes to Ashes|294
+Aspect of Wolf|7
+Aswan Jaguar|868
+Backfire|575
+Bad Moon|8
+Balance|10
+Ball Lightning|295
+Battering Ram|478
+Benalish Hero|13
+Berserk|14
+Bird Maiden|399
+Birds of Paradise|15
+Black Knight|16
+Black Lotus|17
+Black Mana Battery|580
+Black Vise|18
+Black Ward|19
+Blessing|21
+Blight|582
+Blood Lust|583
+Blue Elemental Blast|22
+Blue Mana Battery|584
+Blue Ward|23
+Bog Imp|336
+Bog Wraith|24
+Bottle of Suleiman|400
+Braingeyser|25
+Brass Man|930
+Burrowing|26
+Call from the Grave|860
+Candelabra of Tawnos|480
+Carnivorous Plant|305
+Carrion Ants|589
+Castle|28
+Cave People|306
+Celestial Prism|29
+Channel|30
+Circle of Protection Black|33
+Circle of Protection Blue|34
+Circle of Protection Green|35
+Circle of Protection Red|36
+Circle of Protection White|37
+Circle of Protection from Artifacts|481
+Circle of Protection: Artifacts|481
+Circle of Protection: Black|33
+Circle of Protection: Blue|34
+Circle of Protection: Green|35
+Circle of Protection: Red|36
+Circle of Protection: White|37
+Clay Statue|483
+Clockwork Avian|484
+Clockwork Beast|38
+Cockatrice|40
+Colossus of Sardia|485
+Conservator|42
+Control Magic|44
+Conversion|45
+Copy Artifact|47
+Coral Helm|486
+Coral Merfolk|3732
+Cosmic Horror|600
+Counterspell|48
+Craw Wurm|49
+Creature Bond|50
+Crimson Manticore|604
+Crumble|487
+Crusade|51
+Crystal Rod|52
+Cursed Land|53
+Cyclopean Mummy|606
+Dancing Scimitar|931
+Dark Ritual|55
+Deathgrip|58
+Desert Twister|409
+Detonate|490
+Diabolic Machine|376
+Dingus Egg|63
+Disenchant|64
+Disintegrate|65
+Disrupting Scepter|66
+Divine Transformation|616
+Dragon Engine|492
+Dragon Whelp|67
+Drain Life|68
+Drain Power|69
+Drudge Skeletons|70
+Durkwood Boars|618
+Dwarven Warriors|72
+Earth Elemental|73
+Earthquake|75
+El-Hajjaj|413
+Elder Land Wurm|620
+Elven Riders|622
+Elvish Archers|76
+Energy Flux|494
+Erg Raiders|415
+Eternal Warrior|628
+Evil Presence|77
+Eye for an Eye|417
+Faerie Dragon|865
+Fear|81
+Feedback|82
+Fellwar Stone|318
+Fire Elemental|83
+Fireball|84
+Firebreathing|85
+Fissure|321
+Flashfires|86
+Flying Carpet|419
+Fog|88
+Force of Nature|89
+Forest|91
+Fortified Area|642
+Frozen Shade|93
+Fungusaur|94
+Gaea's Liege|95
+Gem Bazaar|870
+Ghost Ship|326
+Giant Growth|97
+Giant Spider|98
+Giant Strength|649
+Giant Tortoise|422
+Gloom|100
+Goblin Balloon Brigade|101
+Goblin King|102
+Goblin Polka Band|866
+Goblin Rock Sled|937
+Grapeshot Catapult|500
+Gray Ogre|104
+Greed|661
+Green Mana Battery|662
+Green Ward|105
+Grizzly Bears|106
+Healing Salve|108
+Helm of Chatzuk|109
+Hill Giant|110
+Holy Armor|111
+Holy Strength|112
+Howl from Beyond|113
+Howling Mine|114
+Hurkyl's Recall|502
+Hurloon Minotaur|115
+Hurr Jackal|425
+Hurricane|116
+Hypnotic Specter|117
+Immolation|679
+Inferno|337
+Instill Energy|121
+Iron Star|123
+Ironclaw Orcs|124
+Ironroot Treefolk|125
+Island|126
+Island Fish Jasconius|427
+Island Sanctuary|127
+Ivory Cup|128
+Ivory Tower|503
+Jade Monolith|129
+Jayemdae Tome|131
+Jump|133
+Junun Efreet|433
+Karma|134
+Keldon Warlord|135
+Killer Bees|698
+Kismet|699
+Knights of the Rainbow Vale|862
+Kormus Bell|136
+Land Tax|710
+Leviathan|340
+Ley Druid|139
+Library of Leng|140
+Lifeforce|142
+Lifelace|143
+Lifetap|144
+Lightning Bolt|145
+Living Artifact|146
+Living Lands|147
+Llanowar Elves|149
+Lord of Atlantis|150
+Lord of the Pit|151
+Lost Soul|719
+Lure|152
+Magical Hack|153
+Magnetic Mountain|439
+Mahamoti Djinn|154
+Mana Short|156
+Mana Vault|157
+Manabarbs|158
+Manaflare|155
+Marsh Gas|365
+Master of the Pearl Trident|12591
+Meekstone|159
+Merfolk Sovereign|10445
+Merfolk of the Pearl Trident|160
+Mesa Pegasus|161
+Mind Twist|162
+Mishra's Factory|508
+Mishra's Workshop|510
+Mons Goblin Raiders|163
+Morale|347
+Mountain|164
+Mox Emerald|165
+Mox Jet|166
+Mox Pearl|167
+Mox Ruby|168
+Mox Sapphire|169
+Murk Dwellers|371
+Naf's Asp|444
+Necropolis of Azaar|871
+Nether Shadow|171
+Nevinyrral's Disk|173
+Nightmare|174
+Northern Paladin|175
+Oasis|445
+Obsianus Golem|176
+Onulet|512
+Orcish Oriflamme|178
+Ornithopter|514
+Osai Vultures|736
+Paralyze|179
+Pearled Unicorn|180
+Personal Incarnation|181
+Pestilence|182
+Phantasmal Forces|183
+Phantasmal Terrain|184
+Phantom Monster|185
+Pikemen|942
+Pirate Ship|186
+Pit Scorpion|742
+Plains|188
+Power Leak|190
+Power Sink|191
+Power Struggle|867
+Power Surge|192
+Primal Clay|519
+Prismatic Dragon|861
+Prodigal Sorcerer|193
+Psionic Entity|749
+Psychic Venom|195
+Pyrotechnics|752
+Radjan Spirit|756
+Ragman|943
+Raise Dead|198
+Red Elemental Blast|199
+Red Mana Battery|765
+Red Ward|200
+Regeneration|201
+Regrowth|202
+Reverse Damage|204
+Righteousness|205
+Rod of Ruin|208
+Royal Assassin|209
+Samite Healer|211
+Sandstorm|454
+Savannah Lions|213
+Scathe Zombies|214
+Scavenging Ghoul|215
+Scryb Sprites|217
+Sea Serpent|218
+Segovian Leviathan|782
+Sejiri Merfolk|10828
+Sengir Vampire|220
+Serra Angel|221
+Shanodin Dryads|222
+Shapeshifter|525
+Shatter|223
+Shivan Dragon|224
+Simulacrum|225
+Sindbad|458
+Siren's Call|227
+Sisters of the Flame|360
+Sleight of Mind|228
+Smoke|229
+Sol Ring|230
+Sorceress Queen|460
+Soul Net|231
+Spell Blast|232
+Spirit Link|794
+Spirit Shackle|795
+Stasis|233
+Steal Artifact|234
+Stone Giant|235
+Stone Rain|236
+Stream of Life|237
+Strip Mine|528
+Stripmine|528
+Sunglasses of Urza|238
+Swamp|239
+Swords to Plowshares|240
+Tawnos' Wand|532
+Tawnos' Weaponry|533
+Tawnos's Weaponry|533
+Terror|242
+Tetravus|534
+The Brute|813
+The Hive|243
+Thicket Basilisk|244
+Throne of Bone|246
+Timber Wolves|247
+Time Elemental|817
+Time Walk|249
+Timetwister|250
+Tranquility|251
+Triskelion|538
+Triton Shorestalker|14000
+Tsunami|253
+Tundra|254
+Tundra Wolves|826
+Twiddle|256
+Uncle Istvan|382
+Unholy Strength|259
+Unstable Mutation|462
+Unsummon|260
+Untamed Wilds|831
+Urza's Avenger|539
+Uthden Troll|261
+Vampire Bats|835
+Verduran Enchantress|262
+Volcanic Eruption|265
+Wall of Air|267
+Wall of Bone|268
+Wall of Brambles|269
+Wall of Dust|841
+Wall of Fire|270
+Wall of Ice|271
+Wall of Spears|545
+Wall of Stone|272
+Wall of Swords|273
+Wall of Water|274
+Wall of Wood|275
+Wanderlust|276
+War Mammoth|277
+Warp Artifact|278
+Water Elemental|279
+Weakness|280
+Web|281
+Wheel of Fortune|282
+Whimsy|864
+Whirling Dervish|851
+White Knight|283
+White Mana Battery|852
+White Ward|284
+Wild Growth|285
+Will-O'-The-Wisp|286
+Will-O-The-Wisp|286
+Winds of Change|854
+Winter Blast|855
+Winter Orb|287
+Wooden Sphere|288
+Word of Binding|388
+Wrath of God|290
+Xenic Poltergeist|547
+Yotian Soldiers|550
+Zephyr Falcon|859
+Zephyr Falcons|859
+Zombie Master|291

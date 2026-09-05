@@ -1,0 +1,47 @@
+# Shawn "Hammer" Regnier — quarterfinalist, Pro Tour New York (Pro Tour 1), February 1996 — Standard (U/W Millstone control)
+# TOURNAMENT DECK — not a MicroProse deck. Pro Tour Collector Set (1996): Shawn "Hammer"
+#   Regnier's quarterfinalist deck from Pro Tour New York, February 1996 — U/W Millstone
+#   control.
+# archetype: U/W Millstone control
+# pilot: Shawn "Hammer" Regnier
+# event: Pro Tour New York (Pro Tour 1), February 1996 — Standard
+# year: 1996
+# place: quarterfinalist
+# caveat: Pro Tour Collector Set (1996) printing of the Top 8 deck
+# source: https://mtg.wiki/page/Pro_Tour_Collector_Set — Pro Tour Collector Set — "Shawn
+#   ''Hammer'' Regnier, Quarterfinalist" [Tier-web — no local 1997/s30/Manalink copy exists]
+# cross-check: ../mage-go/data/preconstructed_decks.yaml pro_tour_collector_set.decks["Shawn
+#   'Hammer' Regnier, Quarterfinalist"] [Tier 3 — agrees card for card]
+# group: Tournament decks
+name: Regnier — PT New York 1996 quarterfinalist
+4 Adarkar Wastes
+1 City of Brass
+4 Island
+3 Mishra's Factory
+6 Plains
+1 Ruins of Trokair
+4 Svyelunite Temple
+3 Icy Manipulator
+1 Ivory Tower
+3 Millstone
+1 Zuran Orb
+1 Balance
+4 Disenchant
+3 Land Tax
+4 Swords to Plowshares
+4 Wrath of God
+4 Counterspell
+4 Power Sink
+1 Recall
+4 Spell Blast
+SB: 1 Feldon's Cane
+SB: 1 Fountain of Youth
+SB: 1 Abbey Gargoyles
+SB: 1 Arenson's Aura
+SB: 2 Circle of Protection: Black
+SB: 2 Circle of Protection: Red
+SB: 1 Divine Offering
+SB: 1 Truce
+SB: 2 Memory Lapse
+SB: 1 Sea Sprite
+SB: 2 Steal Artifact

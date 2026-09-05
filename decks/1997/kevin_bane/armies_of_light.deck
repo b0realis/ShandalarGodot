@@ -1,0 +1,27 @@
+# Armies of Light — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: W
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane ["Armies
+#   of Light"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Armies of Light"
+#   [Tier-web — agrees card for card]
+# cross-check: a screenshot of the original .DCK file is on the wiki page (files.mtg.wiki Armies_of_light.png)
+# group: Kevin Bane's decks
+name: Armies of Light
+4 Rainbow Knights
+4 Savannah Lions
+4 Thunder Spirit
+4 Tundra Wolves
+4 White Knight
+2 Disenchant
+4 Swords to Plowshares
+4 Armageddon
+1 Balance
+1 Black Lotus
+1 Black Vise
+1 Mox Pearl
+4 Land Tax
+4 Spirit Link
+18 Plains

@@ -1,0 +1,28 @@
+# Undead Knight — an Aggro enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Undead Knight (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Undead Knight (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Undead Knight (Duels of the Planeswalkers)
+4 Black Knight
+2 Drudge Skeletons
+3 El-Hajjâj
+2 Frozen Shade
+2 Lost Soul
+2 Nightmare
+1 Obsianus Golem
+2 Scathe Zombies
+3 Howl from Beyond
+2 Marsh Gas
+2 Terror
+2 Flying Carpet
+4 Bad Moon
+2 Fear
+2 Spirit Shackle
+3 Unholy Strength
+22 Swamp

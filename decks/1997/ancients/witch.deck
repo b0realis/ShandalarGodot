@@ -1,0 +1,25 @@
+# Witch — a Weak enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Witch (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0056.dck "Witch (Bl, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Witch (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Witch (Spells of the Ancients)
+24 Swamp
+3 Throne of Bone
+4 Nevinyrral's Disk
+2 Wall of Bone
+4 Drudge Skeletons
+4 Will-o'-the-Wisp
+4 Clay Statue
+3 Diabolic Machine
+3 Scavenging Ghoul
+2 Khabál Ghoul
+4 Mightstone
+1 Mox Jet
+2 Fellwar Stone

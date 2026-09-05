@@ -1,0 +1,194 @@
+[
+ {
+  "name": "Aswan Jaguar",
+  "mana_cost": "{1}{G}{G}",
+  "type_line": "Summon Jaguar",
+  "oracle_text": "When Aswan Jaguar comes into play, choose a random creature type from those in target opponent's deck.\n{G}{G}, {T}: Bury target creature of the chosen type.",
+  "power": "2",
+  "toughness": "2",
+  "keywords": [],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "1",
+  "artist": "Pat Lewis",
+  "set": "past"
+ },
+ {
+  "name": "Call from the Grave",
+  "mana_cost": "{2}{B}",
+  "type_line": "Sorcery",
+  "oracle_text": "Put a random creature from a random graveyard into play under your control. Call from the Grave deals to you an amount of damage equal to that creature's casting cost.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "2",
+  "artist": "Quinton Hoover",
+  "set": "past"
+ },
+ {
+  "name": "Faerie Dragon",
+  "mana_cost": "{2}{G}{G}",
+  "type_line": "Summon Dragon",
+  "oracle_text": "Flying\n{1}{G}{G}: Play a random effect.",
+  "power": "1",
+  "toughness": "3",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "G"
+  ],
+  "rarity": "common",
+  "collector_number": "3",
+  "artist": "NéNé Thomas",
+  "set": "past"
+ },
+ {
+  "name": "Goblin Polka Band",
+  "mana_cost": "{R}{R}",
+  "type_line": "Summon Goblin",
+  "oracle_text": "{2}, {T}, Pay {R} for each target: Tap any number of random target creatures. Goblins tapped in this way do not untap during their controllers' next untap phases.",
+  "power": "1",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "4",
+  "artist": "Quinton Hoover",
+  "set": "past"
+ },
+ {
+  "name": "Necropolis of Azar",
+  "mana_cost": "{2}{B}{B}",
+  "type_line": "Enchantment",
+  "oracle_text": "Whenever a non-black creature is put into any graveyard from play, put a husk counter on Necropolis of Azar.\n{5}, Remove a husk counter from Necropolis of Azar: Put a Spawn of Azar token into play. Treat this token as a black creature with a random power and toughness, each no less than 1 and no greater than 3, that has swampwalk.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "B"
+  ],
+  "rarity": "common",
+  "collector_number": "5",
+  "artist": "Rob Alexander",
+  "set": "past"
+ },
+ {
+  "name": "Orcish Catapult",
+  "mana_cost": "{X}{R}{R}",
+  "type_line": "Instant",
+  "oracle_text": "Randomly distribute X -0/-1 counters among a random number of random target creatures.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "R"
+  ],
+  "rarity": "common",
+  "collector_number": "6",
+  "artist": "Melissa A. Benson",
+  "set": "past"
+ },
+ {
+  "name": "Power Struggle",
+  "mana_cost": "{2}{U}{U}{U}",
+  "type_line": "Enchantment",
+  "oracle_text": "During each player's upkeep, that player exchanges control of random target artifact, creature or land he or she controls, for control of random target permanent of the same type that a random opponent controls.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "7",
+  "artist": "Mark Tedin",
+  "set": "past"
+ },
+ {
+  "name": "Prismatic Dragon",
+  "mana_cost": "{2}{W}{W}",
+  "type_line": "Summon Dragon",
+  "oracle_text": "Flying\nDuring your upkeep, Prismatic Dragon becomes a random color permanently.\n{2}: Prismatic Dragon becomes a random color permanently.",
+  "power": "2",
+  "toughness": "3",
+  "keywords": [
+   "Flying"
+  ],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "8",
+  "artist": "Amy Weber",
+  "set": "past"
+ },
+ {
+  "name": "Rainbow Knights",
+  "mana_cost": "{W}{W}",
+  "type_line": "Summon Knights",
+  "oracle_text": "When Rainbow Knights comes into play, it gains protection from a random color permanently.\n{1}: First strike until end of turn.\n{W}{W}: +0/+0, +1/+0 or +2/+0 until end of turn chosen at random.",
+  "power": "2",
+  "toughness": "1",
+  "keywords": [],
+  "colors": [
+   "W"
+  ],
+  "rarity": "common",
+  "collector_number": "9",
+  "artist": "Douglas Shuler",
+  "set": "past"
+ },
+ {
+  "name": "Whimsy",
+  "mana_cost": "{X}{U}{U}",
+  "type_line": "Sorcery",
+  "oracle_text": "Play X random fast effects.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [
+   "U"
+  ],
+  "rarity": "common",
+  "collector_number": "10",
+  "artist": "Anson Maddocks",
+  "set": "past"
+ },
+ {
+  "name": "Pandora's Box",
+  "mana_cost": "{5}",
+  "type_line": "Artifact",
+  "oracle_text": "{3}, {T}: Choose a random summon card from all players' decks. For each player, flip a coin. If the flip ends up heads, put a token creature into play and treat it as though an exact copy of the chosen summon card were just played.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "11",
+  "artist": "Amy Weber",
+  "set": "past"
+ },
+ {
+  "name": "Gem Bazaar",
+  "mana_cost": "",
+  "type_line": "Land",
+  "oracle_text": "When Gem Bazaar comes into play, choose a random color.\n{T}: Add to your mana pool one mana of the color last chosen. Then choose a random color.",
+  "power": null,
+  "toughness": null,
+  "keywords": [],
+  "colors": [],
+  "rarity": "common",
+  "collector_number": "12",
+  "artist": "Liz Danforth",
+  "set": "past"
+ }
+]

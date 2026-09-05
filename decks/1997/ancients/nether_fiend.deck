@@ -1,0 +1,27 @@
+# Nether Fiend — a Strong enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Nether Fiend (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0151.dck "Nether Fiend (Bl, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Nether Fiend (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Nether Fiend (Spells of the Ancients)
+22 Swamp
+1 Mox Jet
+4 The Hive
+1 Demonic Tutor
+4 Animate Dead
+2 Khabál Ghoul
+4 Nether Shadow
+4 Lord of the Pit
+2 Erg Raiders
+2 Black Knight
+2 Frozen Shade
+4 Mishra's Factory
+4 Terror
+2 Bazaar of Baghdad
+2 Kormus Bell

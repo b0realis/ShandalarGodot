@@ -1,0 +1,29 @@
+# Seer (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Seer deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-15).
+# archetype: the Shandalar enemy "Seer" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/seer.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-281-blue-shandalar-decks/
+#   — The Kitchen Table #281 - Blue Shandalar Decks — "Modified Seer" [Tier-web — Abe Sargent's
+#   "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/seer.deck [Tier 3 — his "Initial" (unmodified) list agrees
+#   with the shipped 1997 original]
+# group: Community decks
+name: Seer (Sargent, 2009)
+22 Island
+4 Zephyr Falcon
+4 Ghost Ship
+2 Time Elemental
+2 Unstable Mutation
+2 Psionic Blast
+3 Drain Power
+2 Counterspell
+4 Unsummon
+2 Hurkyl's Recall
+4 Crystal Rod
+3 Tetravus
+3 Triskelion
+3 Ornithopter

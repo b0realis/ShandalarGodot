@@ -1,0 +1,32 @@
+# Guardian of the Tusk — a Two-color Lesser enemy of the 1997 game, the deck as the original shipped it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Tusk Guardian — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Guardian of the Tusk"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0414.dck "Guardian of the Tusk (Wh/Gr, 4th)" [Tier 3
+#   — Manalink 3 file dated 2016-02-15; its first 15 maindeck lines are the 1997 deck, the 15
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/guardian_of_the_tusk.toml (main_cards, sideboard_cards,
+#   level 4) [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/guardian_of_the_tusk.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Tusk Guardian" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Guardian of the Tusk
+12 Forest
+12 Plains
+4 Birds of Paradise
+4 Giant Growth
+4 Holy Strength
+2 Desert Twister
+4 War Mammoth
+3 Savannah Lions
+2 Elder Land Wurm
+3 Tundra Wolves
+3 Timber Wolves
+2 Force of Nature
+2 Divine Transformation
+2 Colossus of Sardia
+1 Berserk
+# The 1997 file has no .v colour sections: this enemy played the same 60 cards against everyone.

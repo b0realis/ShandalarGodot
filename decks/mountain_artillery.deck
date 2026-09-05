@@ -1,0 +1,24 @@
+# Red burn with artifact support — direct damage from every angle.
+# group: Starter decks
+name: Mountain Artillery
+4 Lightning Bolt
+2 Fireball
+1 Earthquake
+3 Gray Ogre
+3 Hill Giant
+3 Granite Gargoyle
+2 Orcish Artillery
+1 Shivan Dragon
+2 Rod of Ruin
+2 Icy Manipulator
+1 Sol Ring
+16 Mountain
+
+# The sideboard — `SB:` lines, the shape DeckList has always parsed.
+# Swapped in between the duels of a match (`Side&board between duels`,
+# Program/Text.res:2863).
+SB: 4 Red Elemental Blast
+SB: 4 Shatter
+SB: 3 Flashfires
+SB: 2 Earthquake
+SB: 2 Dust to Dust

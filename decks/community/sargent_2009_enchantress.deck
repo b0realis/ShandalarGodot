@@ -1,0 +1,31 @@
+# Enchantress (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Enchantress deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-03-25).
+# archetype: the Shandalar enemy "Enchantress" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/enchantress.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-278-shandalar-green-decks/
+#   — The Kitchen Table #278 - Shandalar Green Decks — "Modified Enchantress" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/enchantress.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Enchantress (Sargent, 2009)
+22 Forest
+4 Llanowar Elves
+4 Verduran Enchantress
+3 Cockatrice
+3 Thicket Basilisk
+4 Rabid Wombat
+4 Lure
+2 Web
+3 Regeneration
+2 Living Artifact
+4 Aspect of Wolf
+2 Wild Growth
+2 Desert Twister
+1 Sylvan Library
+1 Ivory Tower
+1 Library of Leng

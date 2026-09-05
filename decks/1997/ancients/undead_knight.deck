@@ -1,0 +1,27 @@
+# Undead Knight — an Aggro enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Undead Knight (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0016.dck "Undead Knight (Bl, Type 1)" [Tier 1 — the
+#   1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Undead Knight (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Undead Knight (Spells of the Ancients)
+22 Swamp
+4 Black Knight
+4 Howl from Beyond
+4 Unholy Strength
+4 Bad Moon
+4 Oubliette
+2 Drudge Skeletons
+2 Scathe Zombies
+2 Frozen Shade
+2 Lost Soul
+2 Nightmare
+2 Bog Wraith
+2 Animate Dead
+2 Marsh Gas
+2 Fear

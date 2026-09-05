@@ -1,0 +1,41 @@
+# Vampire Lord — an Intermediate enemy of the 1997 game, the deck as the original shipped it.
+# tier: 5/12 Intermediate enemies — 18 life, bribe 80 gold
+# enemy: Vampire Lord (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0220.dck "Vampire Lord (B, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 11 maindeck lines are the 1997 deck, the 11 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/vampire_lord.toml (main_cards, sideboard_cards, level 5)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/vampire_lord.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Intermediate) — "Vampire Lord"
+#   (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Vampire Lord
+22 Swamp
+4 Dark Ritual
+3 Mana Vault
+4 Animate Dead
+4 Weakness
+4 Sengir Vampire
+4 Sorceress Queen
+4 Carrion Ants
+4 Vampire Bats
+2 Uncle Istvan
+2 Terror
+3 Howling Mine
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Howling Mine
+#   .vBlack  3 Howling Mine
+#   .vBlue   3 Howling Mine
+#   .vGreen  3 Black Knight
+#   .vRed    3 Winter Orb
+#   .vWhite  3 Black Knight
+SB: 3 Black Knight
+SB: 3 Winter Orb

@@ -1,0 +1,24 @@
+# Dante — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Coyote Tex, MicroProse designer/producer (precon page, ref. 3); the .dck files are dated 19 September 1996
+# colours: R
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.coyote_tex ["Dante"]
+#   [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Coyote_Tex) — "Dante" [Tier-web —
+#   agrees card for card]
+# group: Coyote Tex's decks
+name: Dante
+4 Dragon Whelp
+2 Shivan Dragon
+4 Wall of Stone
+4 Lightning Bolt
+4 Inferno
+2 Shatter
+3 Disintegrate
+3 Earthquake
+3 Fireball
+2 The Hive
+4 Iron Star
+4 Mana Flare
+21 Mountain

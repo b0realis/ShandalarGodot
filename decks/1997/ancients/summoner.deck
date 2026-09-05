@@ -1,0 +1,26 @@
+# Summoner — one of the Henchmen, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 10/12 The Henchmen — up to 27 life, can't be bribed
+# enemy: Summoner (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0030.dck "Summoner (Gr, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Henchmen) — "Summoner (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Summoner (Spells of the Ancients)
+20 Forest
+4 Savannah
+4 Birds of Paradise
+3 Force of Nature
+4 War Mammoth
+4 Hurricane
+3 Circle of Protection: Green
+2 Cyclone
+1 Berserk
+4 Wild Growth
+4 Lifelace
+4 Radjan Spirit
+2 Colossus of Sardia
+3 Giant Growth

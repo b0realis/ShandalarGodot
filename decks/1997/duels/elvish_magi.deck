@@ -1,0 +1,23 @@
+# Elvish Magi — an Aggro enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Elvish Magi (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Elvish Magi (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Elvish Magi (Duels of the Planeswalkers)
+4 Elven Riders
+4 Elvish Archers
+4 Giant Spider
+4 Llanowar Elves
+4 War Mammoth
+4 Hurricane
+4 Stream of Life
+2 Tranquility
+4 Winter Blast
+2 Green Mana Battery
+2 Jayemdae Tome
+22 Forest

@@ -1,0 +1,24 @@
+# Troll Shaman — a Typical enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Troll Shaman (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0261.dck "Troll Shaman (Re, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Troll Shaman (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Troll Shaman (Spells of the Ancients)
+18 Mountain
+2 Conservator
+4 Stone Giant
+4 Hill Giant
+4 Gray Ogre
+4 Two-Headed Giant of Foriys
+4 Sedge Troll
+4 Badlands
+4 The Brute
+4 Giant Strength
+4 Immolation
+4 Fireball

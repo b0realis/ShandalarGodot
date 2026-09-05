@@ -1,0 +1,23 @@
+# Goblin Warlord — an Intermediate enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 5/12 Intermediate enemies — 18 life, bribe 80 gold
+# enemy: Goblin Lord — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Goblin Warlord"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Intermediate) — "Goblin Warlord (Duels of
+#   the Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Goblin Warlord (Duels of the Planeswalkers)
+4 Goblin Balloon Brigade
+4 Goblin King
+4 Goblin Polka Band
+4 Keldon Warlord
+4 Mons's Goblin Raiders
+4 Helm of Chatzuk
+2 Tawnos's Weaponry
+4 Giant Strength
+2 Immolation
+3 Manabarbs
+4 Orcish Oriflamme
+21 Mountain

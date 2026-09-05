@@ -1,0 +1,28 @@
+# Dark and Poison Elf — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Steve T. 'Raven' Purdie (MicroProse, largely the Quality Assurance team — precon page)
+# colours: B/G
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.other ["Dark and
+#   Poison Elf"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Other) — "Dark and Poison Elf"
+#   [Tier-web — agrees card for card]
+# group: Other MicroProse decks
+name: Dark and Poison Elf
+4 Elves of Deep Shadow
+4 Hornet Cobra
+3 Hypnotic Specter
+4 Marsh Viper
+4 Pit Scorpion
+1 Berserk
+3 Dark Ritual
+2 Storm Seeker
+3 Winter Blast
+2 Fellwar Stone
+2 Flying Carpet
+3 Serpent Generator
+1 Sol Ring
+3 Tawnos's Wand
+3 Fear
+10 Swamp
+12 Forest

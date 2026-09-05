@@ -1,0 +1,23 @@
+# Sorceress — a Weak enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Sorceress (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Sorceress (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Sorceress (Duels of the Planeswalkers)
+4 Ball Lightning
+4 Bird Maiden
+2 Dragon Whelp
+4 Dwarven Warriors
+2 Hurloon Minotaur
+4 Hurr Jackal
+4 Blood Lust
+3 Iron Star
+3 Meekstone
+4 Firebreathing
+3 The Brute
+23 Mountain

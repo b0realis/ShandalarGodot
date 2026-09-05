@@ -1,0 +1,45 @@
+# Leon Lindback — semifinalist, Pro Tour New York (Pro Tour 1), February 1996 — Standard (Necropotence (mono-black))
+# TOURNAMENT DECK — not a MicroProse deck. Pro Tour Collector Set (1996): Leon Lindback's
+#   semifinalist deck from Pro Tour New York, February 1996 — Necropotence (mono-black).
+# archetype: Necropotence (mono-black)
+# pilot: Leon Lindback
+# event: Pro Tour New York (Pro Tour 1), February 1996 — Standard
+# year: 1996
+# place: semifinalist
+# caveat: Pro Tour Collector Set (1996) printing of the Top 8 deck
+# source: https://mtg.wiki/page/Pro_Tour_Collector_Set — Pro Tour Collector Set — "Leon
+#   Lindback, Semifinalist" [Tier-web — no local 1997/s30/Manalink copy exists]
+# cross-check: ../mage-go/data/preconstructed_decks.yaml pro_tour_collector_set.decks["Leon
+#   Lindback, Semifinalist"] [Tier 3 — agrees card for card]
+# group: Tournament decks
+name: Lindback — PT New York 1996 semifinalist
+2 Ebon Stronghold
+4 Strip Mine
+17 Swamp
+1 Ivory Tower
+1 Jalum Tome
+2 Nevinyrral's Disk
+2 Serrated Arrows
+1 Zuran Orb
+4 Hypnotic Specter
+3 Knight of Stromgald
+4 Order of the Ebon Hand
+1 Dance of the Dead
+1 Dark Banishing
+4 Dark Ritual
+4 Drain Life
+4 Hymn to Tourach
+4 Necropotence
+1 Soul Burn
+SB: 1 City of Brass
+SB: 1 Safe Haven
+SB: 1 Apocalypse Chime
+SB: 1 Feldon's Cane
+SB: 1 Jalum Tome
+SB: 1 Meekstone
+SB: 2 Nevinyrral's Disk
+SB: 3 The Rack
+SB: 1 Serrated Arrows
+SB: 1 Ashes to Ashes
+SB: 1 Stromgald Cabal
+SB: 1 Torture

@@ -1,0 +1,26 @@
+# Arch Angel — a Strong enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Arch Angel (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0221.dck "Arch Angel (Wh, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Arch Angel (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Arch Angel (Spells of the Ancients)
+22 Plains
+1 Sol Ring
+1 Mox Pearl
+4 Wrath of God
+4 Resurrection
+4 Mesa Pegasus
+4 Moorish Cavalry
+2 Swords to Plowshares
+2 Disenchant
+4 Onulet
+4 Mishra's Factory
+2 Guardian Angel
+2 The Hive
+4 Howling Mine

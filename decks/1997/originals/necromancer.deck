@@ -1,0 +1,44 @@
+# Necromancer — one of the Henchmen of the 1997 game, the deck as the original shipped it.
+# tier: 10/12 The Henchmen — up to 27 life, can't be bribed
+# enemy: Necromancer (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0291.dck "Necromancer (Bl, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 15 maindeck lines are the 1997 deck, the 13 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/necromancer.toml (main_cards, sideboard_cards, level 10)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/necromancer.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Henchmen) — "Necromancer" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Necromancer
+22 Swamp
+2 Dark Ritual
+4 Evil Presence
+2 Unholy Strength
+2 Drain Life
+4 Scathe Zombies
+4 Zombie Master
+4 Bog Wraith
+2 Wall of Bone
+4 Lost Soul
+2 Bad Moon
+2 Raise Dead
+2 Necropolis of Azar
+2 Animate Dead
+2 Cosmic Horror
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Evil Presence
+#   .vBlack  2 Paralyze, 1 Throne of Bone
+#   .vBlue   3 Evil Presence
+#   .vGreen  3 Evil Presence
+#   .vRed    3 Evil Presence
+#   .vWhite  3 Evil Presence
+SB: 2 Paralyze
+SB: 1 Throne of Bone

@@ -1,0 +1,28 @@
+# Centaur Warchief — a Two-color greater enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 7/12 Two-color greater enemies — 20 life, bribe 100 gold
+# enemy: Centaur Warchief (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Greater) — "Centaur Warchief (Duels of
+#   the Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Centaur Warchief (Duels of the Planeswalkers)
+2 Ali Baba
+2 Cave People
+2 Colossus of Sardia
+3 Dragon Whelp
+2 Savannah Lions
+4 Serra Angel
+2 Wall of Swords
+4 Yotian Soldier
+2 Healing Salve
+2 Lightning Bolt
+2 Swords to Plowshares
+2 Eternal Warrior
+3 Kismet
+1 Land Tax
+3 Smoke
+12 Plains
+12 Mountain

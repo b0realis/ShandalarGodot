@@ -1,0 +1,29 @@
+# Queltosh — one of the Genies, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 6/12 The Genies — 19 life, bribe 80 gold
+# enemy: Queltosh (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0442.dck "Queltosh (Re/Gr, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Genies) — "Queltosh (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Queltosh (Spells of the Ancients)
+4 Mijae Djinn
+6 Mountain
+2 Earthquake
+4 Tundra
+4 City of Brass
+4 Ball Lightning
+4 Volcanic Island
+4 Plateau
+4 Serendib Djinn
+4 Resurrection
+4 Unsummon
+2 Circle of Protection: Blue
+2 Circle of Protection: Red
+4 Orcish Artillery
+4 Psionic Blast
+2 Mahamoti Djinn
+2 Spirit Link

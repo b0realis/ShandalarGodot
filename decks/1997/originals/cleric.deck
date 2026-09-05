@@ -1,0 +1,43 @@
+# Cleric — a Weak enemy of the 1997 game, the deck as the original shipped it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Cleric (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0211.dck "Cleric (W, 4th)" [Tier 3 — Manalink 3 file
+#   dated 2016-02-15; its first 13 maindeck lines are the 1997 deck, the 14 lines (60 cards)
+#   after them are the modern deck Manalink appended and are NOT shipped; its .vNone/.v<Colour>
+#   sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/cleric.toml (main_cards, sideboard_cards, level 1) [Tier
+#   3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/cleric.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Cleric" (Original)
+#   [Tier-web — maindeck agrees]
+# cross-check: a screenshot of the 1997 .DCK file is on the wiki (files.mtg.wiki Cleric_dck_screen.jpg)
+# group: 1997 originals
+name: Cleric
+21 Plains
+4 Swords to Plowshares
+3 Disenchant
+4 Holy Strength
+3 Holy Armor
+3 Meekstone
+4 Benalish Hero
+4 Mesa Pegasus
+2 Samite Healer
+2 Savannah Lions
+4 Amrou Kithkin
+2 Pikemen
+4 Tawnos's Weaponry
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   2 Swords to Plowshares, 1 Disenchant
+#   .vBlack  2 Swords to Plowshares, 1 Karma
+#   .vBlue   2 Swords to Plowshares, 1 Disenchant
+#   .vGreen  2 Swords to Plowshares, 1 Disenchant
+#   .vRed    2 Swords to Plowshares, 1 Conversion
+#   .vWhite  2 Swords to Plowshares, 1 Disenchant
+SB: 1 Karma
+SB: 1 Conversion

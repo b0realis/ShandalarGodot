@@ -1,0 +1,37 @@
+# Prismat — one of the Dragons, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Prismat (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0992.dck "Prismat (R/G/W,  Type 1, B.R.)" [Tier 1 — the
+#   1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Prismat (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Prismat (Spells of the Ancients)
+1 Black Lotus
+1 Mox Ruby
+1 Mox Emerald
+1 Mox Pearl
+1 City of Brass
+4 Taiga
+4 Plateau
+4 Savannah
+7 Mountain
+4 Atog
+4 Ornithopter
+1 Black Vise
+3 Howling Mine
+1 Wheel of Fortune
+1 Berserk
+2 Disenchant
+4 Fireball
+2 Instill Energy
+2 Tetravus
+1 Gauntlet of Might
+2 Dwarven Warriors
+2 Swords to Plowshares
+2 Giant Growth
+2 Orcish Oriflamme
+3 Mana Crypt

@@ -1,0 +1,8 @@
+# Shandalar Deck Lab — Elo ledger (see docs/deck-lab.md)
+# Standard Elo, K=8 per game, start 1500. Safe to hand-edit.
+# deck | elo | games | wins | losses | updated
+Blue Skies | 1670.6 | 6660 | 4924 | 1736 | 2026-09-01
+Black-Red Raiders | 1519.2 | 20172 | 10787 | 9385 | 2026-09-02
+White Knights | 1485.7 | 8760 | 4695 | 4065 | 2026-09-01
+Big Green | 1472.4 | 22272 | 10273 | 11999 | 2026-09-02
+Mountain Artillery | 1352.2 | 7360 | 1933 | 5427 | 2026-09-01

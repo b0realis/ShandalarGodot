@@ -1,0 +1,26 @@
+# Sorceress — a Weak enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Sorceress (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0074.dck "Sorceress (Re, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Sorceress (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Sorceress (Spells of the Ancients)
+20 Mountain
+4 Desert
+2 Iron Star
+4 Firebreathing
+2 Hurr Jackal
+3 Bird Maiden
+2 Dwarven Demolition Team
+3 Dwarven Warriors
+2 Hurloon Minotaur
+3 Dragon Whelp
+4 Meekstone
+4 Blood Lust
+4 Ball Lightning
+2 Granite Gargoyle

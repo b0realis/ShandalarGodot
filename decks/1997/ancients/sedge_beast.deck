@@ -1,0 +1,25 @@
+# Sedge Beast — a Two-color Lesser enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Sedge Beast (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0219.dck "Sedge Beast (Re/Bl, Type 1)" [Tier 1 — the
+#   1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Sedge Beast (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Sedge Beast (Spells of the Ancients)
+10 Mountain
+10 Swamp
+4 Badlands
+4 Sedge Troll
+4 Uthden Troll
+4 Disintegrate
+4 Sinkhole
+4 Stone Rain
+4 Fissure
+2 Demonic Hordes
+4 Will-o'-the-Wisp
+4 Unholy Strength
+2 Immolation

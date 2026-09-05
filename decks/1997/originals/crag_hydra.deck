@@ -1,0 +1,41 @@
+# Crag Hydra — a Strong enemy of the 1997 game, the deck as the original shipped it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Hydra — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Crag Hydra"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0207.dck "Crag Hydra (R, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 12 maindeck lines are the 1997 deck, the 13 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/crag_hydra.toml (main_cards, sideboard_cards, level 8)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/crag_hydra.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Crag Hydra" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Crag Hydra
+22 Mountain
+4 Mana Flare
+4 Power Surge
+4 Fireball
+2 Lightning Bolt
+4 Inferno
+4 Onulet
+4 Wall of Fire
+4 Disintegrate
+1 Detonate
+2 Soul Net
+2 Shivan Dragon
+3 The Hive
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 The Hive
+#   .vBlack  3 The Hive
+#   .vBlue   1 Red Elemental Blast, 2 The Hive
+#   .vGreen  3 The Hive
+#   .vRed    3 The Hive
+#   .vWhite  3 The Hive
+SB: 1 Red Elemental Blast

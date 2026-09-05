@@ -1,0 +1,25 @@
+# Black-red aggro on the classic Ritual-into-Specter curve.
+# group: Starter decks
+name: Black-Red Raiders
+4 Erg Raiders
+3 Hypnotic Specter
+2 Drudge Skeletons
+2 Scathe Zombies
+2 Bog Wraith
+3 Lightning Bolt
+2 Terror
+2 Dark Ritual
+1 Bad Moon
+1 Fireball
+1 Shivan Dragon
+9 Swamp
+8 Mountain
+
+# The sideboard — `SB:` lines, the shape DeckList has always parsed.
+# Swapped in between the duels of a match (`Side&board between duels`,
+# Program/Text.res:2863).
+SB: 2 Terror
+SB: 3 Gloom
+SB: 3 Deathgrip
+SB: 3 Shatter
+SB: 4 Red Elemental Blast

@@ -1,0 +1,45 @@
+# Kiska-Ra — one of the Dragons of the 1997 game, the deck as the original shipped it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Kiska-Ra (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0994.dck "Kiska-Ra (W/G/U, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 28 maindeck lines are the 1997 deck, the 24 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/kiska_ra.toml (main_cards, sideboard_cards, level 9)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/kiska_ra.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Kiska-Ra" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Kiska-Ra
+6 Plains
+6 Island
+6 Forest
+3 Gem Bazaar
+1 Mox Emerald
+1 Mox Pearl
+1 Mox Sapphire
+2 Savannah Lions
+2 Giant Tortoise
+2 Elvish Archers
+2 Scryb Sprites
+2 Zephyr Falcon
+2 Tundra Wolves
+2 Timber Wolves
+2 Samite Healer
+2 Birds of Paradise
+2 Pikemen
+3 Unstable Mutation
+3 Giant Growth
+3 Holy Strength
+4 Tawnos's Weaponry
+2 Control Magic
+2 Desert Twister
+1 Ancestral Recall
+1 Time Walk
+1 Timetwister
+1 Braingeyser
+1 Regrowth
+# The 1997 file has no .v colour sections: this enemy played the same 66 cards against everyone.

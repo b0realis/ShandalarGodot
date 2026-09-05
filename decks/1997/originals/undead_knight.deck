@@ -1,0 +1,48 @@
+# Undead Knight — an Aggro enemy of the 1997 game, the deck as the original shipped it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Undead Knight (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0016.dck "Undead Knight (Bl, 4th Edition)" [Tier 3 —
+#   Manalink 3 file dated 2016-02-15; its first 15 maindeck lines are the 1997 deck, the 12
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/undead_knight.toml (main_cards, sideboard_cards, level 2)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/undead_knight.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Undead Knight" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Undead Knight
+22 Swamp
+3 Howl from Beyond
+3 Unholy Strength
+4 Bad Moon
+2 Flying Carpet
+4 Black Knight
+2 Drudge Skeletons
+2 Scathe Zombies
+2 Frozen Shade
+2 Fear
+2 Spirit Shackle
+2 Lost Soul
+3 El-Hajjâj
+2 Marsh Gas
+2 Nightmare
+3 Terror
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Terror
+#   .vBlack  3 Bog Wraith
+#   .vBlue   3 Terror
+#   .vGreen  3 Animate Dead
+#   .vRed    3 Simulacrum
+#   .vWhite  2 Brass Man, 1 Obsianus Golem
+SB: 3 Bog Wraith
+SB: 3 Animate Dead
+SB: 3 Simulacrum
+SB: 2 Brass Man
+SB: 1 Obsianus Golem

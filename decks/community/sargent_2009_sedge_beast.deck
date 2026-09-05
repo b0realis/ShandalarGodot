@@ -1,0 +1,29 @@
+# Sedge Beast (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Sedge Beast deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-07-30).
+# archetype: the Shandalar enemy "Sedge Beast" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/sedge_beast.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/
+#   — The Kitchen Table #296 - Shandalar Allied Multicolor Decks — "Modified Sedge Beast"
+#   [Tier-web — Abe Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/sedge_beast.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Sedge Beast (Sargent, 2009)
+2 Cyclopean Mummy
+4 Erg Raiders
+4 Ironclaw Orcs
+4 Sedge Troll
+4 Uthden Troll
+4 Blight
+2 Immolation
+4 Sinkhole
+4 Stone Rain
+4 Fissure
+4 Badlands
+8 Mountain
+4 Strip Mine
+8 Swamp

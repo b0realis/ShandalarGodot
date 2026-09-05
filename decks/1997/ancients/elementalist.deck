@@ -1,0 +1,31 @@
+# Elementalist — a Two-color Lesser enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Elementalist (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0399.dck "Elementalist (Re/Ub, Type 1)" [Tier 1 — the
+#   1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Elementalist (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Elementalist (Spells of the Ancients)
+10 Mountain
+10 Island
+4 Volcanic Island
+4 Mana Vault
+1 Sol Ring
+1 Mox Ruby
+1 Mox Sapphire
+4 Air Elemental
+4 Earth Elemental
+4 Fire Elemental
+4 Water Elemental
+2 Wall of Air
+2 Wall of Water
+4 Twiddle
+4 Earthquake
+4 Fireball
+1 Braingeyser
+1 Ancestral Recall
+3 Drain Power

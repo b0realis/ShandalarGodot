@@ -1,0 +1,28 @@
+# Druid — a Weak enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Druid (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Druid (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Druid (Duels of the Planeswalkers)
+2 Craw Wurm
+2 Durkwood Boars
+2 Giant Spider
+3 Grizzly Bears
+2 Ironroot Treefolk
+2 Killer Bees
+3 Ley Druid
+3 Llanowar Elves
+2 Nafs Asp
+2 Wall of Wood
+4 Giant Growth
+4 Wooden Sphere
+3 Instill Energy
+3 Wanderlust
+20 Forest
+4 Mishra's Factory
+2 Oasis

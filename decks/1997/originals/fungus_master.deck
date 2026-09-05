@@ -1,0 +1,44 @@
+# Fungus Master — a Two-color Lesser enemy of the 1997 game, the deck as the original shipped it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Fungus Master (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0094.dck "Fungus Master (G/U, 4th)" [Tier 3 —
+#   Manalink 3 file dated 2016-02-15; its first 14 maindeck lines are the 1997 deck, the 15
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/fungus_master.toml (main_cards, sideboard_cards, level 4)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/fungus_master.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Fungus Master" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Fungus Master
+11 Forest
+11 Island
+4 Prodigal Sorcerer
+4 Fungusaur
+3 Ironroot Treefolk
+2 Wall of Brambles
+4 Rod of Ruin
+2 Carnivorous Plant
+2 Untamed Wilds
+2 Wild Growth
+2 Wall of Wood
+2 Oasis
+4 Regeneration
+4 Unsummon
+3 Power Sink
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Power Sink
+#   .vBlack  1 Power Sink, 2 Kormus Bell
+#   .vBlue   3 Power Sink
+#   .vGreen  2 Living Lands, 1 Power Sink
+#   .vRed    3 Power Sink
+#   .vWhite  3 Power Sink
+SB: 2 Kormus Bell
+SB: 2 Living Lands

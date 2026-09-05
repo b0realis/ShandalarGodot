@@ -1,0 +1,30 @@
+# Elvish Magi (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Elvish Magi deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-03-25).
+# archetype: the Shandalar enemy "Elvish Magi" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/elvish_magi.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-278-shandalar-green-decks/
+#   — The Kitchen Table #278 - Shandalar Green Decks — "Modified Elvish Magi" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/elvish_magi.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 8 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Elvish Magi (Sargent, 2009)
+22 Forest
+4 Elvish Archers
+4 Elven Riders
+4 Llanowar Elves
+4 Savaen Elves
+2 People of the Woods
+4 War Mammoth
+2 Winter Blast
+4 Hurricane
+2 Stream of Life
+2 Giant Spider
+2 Tranquility
+2 Jayemdae Tome
+2 Green Mana Battery

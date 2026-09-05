@@ -1,0 +1,40 @@
+# Arzakon — the final boss, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 12/12 Arzakon — life set by the difficulty, can't be bribed
+# enemy: Arzakon (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# note: the expansion file names this deck "Climatic Battle"
+# source: ../shandalar-src/Program/decks/0999.DCK "Climatic Battle" [Tier 1 — the 1997 Program/
+#   directory carried in the Manalink tree; only 0150.DCK in it is a Manalink replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Arzakon) — "Climatic Battle"
+#   [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Climatic Battle (Spells of the Ancients)
+4 Taiga
+2 Tropical Island
+2 Volcanic Island
+4 City of Brass
+4 Urza's Mine
+4 Urza's Power Plant
+4 Urza's Tower
+2 Circle of Protection: Red
+2 Stream of Life
+2 Fireball
+2 Disintegrate
+2 Rock Hydra
+2 Hurricane
+2 Earthquake
+1 Timetwister
+1 Wheel of Fortune
+1 Braingeyser
+1 Black Lotus
+2 Clockwork Avian
+2 Clockwork Beast
+2 Triskelion
+2 Juggernaut
+2 Dancing Scimitar
+2 Yotian Soldier
+2 Clay Statue
+2 Colossus of Sardia
+4 Rocket Launcher
+4 Howling Mine

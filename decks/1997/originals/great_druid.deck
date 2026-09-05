@@ -1,0 +1,44 @@
+# Great Druid — one of the five Guildlords of the 1997 game, the deck as the original shipped it.
+# tier: 11/12 The Guildlords — 35 to 45 life, can't be bribed
+# enemy: Great Druid (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0095.dck "Great Druid (G, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 13 maindeck lines are the 1997 deck, the 16 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/great_druid.toml (main_cards, sideboard_cards, level 11)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/great_druid.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Guildlords) — "Morgane - The Great
+#   Druid" (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Great Druid
+22 Forest
+3 Llanowar Elves
+3 Gaea's Liege
+3 Birds of Paradise
+4 Aspect of Wolf
+3 Instill Energy
+2 Living Lands
+3 Stream of Life
+3 Untamed Wilds
+4 Killer Bees
+3 Jayemdae Tome
+2 Living Artifact
+2 Verduran Enchantress
+3 Desert Twister
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Desert Twister
+#   .vBlack  2 Lifeforce, 1 Desert Twister
+#   .vBlue   2 Tsunami, 1 Desert Twister
+#   .vGreen  1 Desert Twister, 2 Shanodin Dryads
+#   .vRed    3 Desert Twister
+#   .vWhite  3 Desert Twister
+SB: 2 Lifeforce
+SB: 2 Tsunami
+SB: 2 Shanodin Dryads

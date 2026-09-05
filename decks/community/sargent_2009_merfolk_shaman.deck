@@ -1,0 +1,27 @@
+# Merfolk Shaman (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Merfolk Shaman deck
+#   — his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-15).
+# archetype: the Shandalar enemy "Merfolk Shaman" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/merfolk_shaman.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-281-blue-shandalar-decks/
+#   — The Kitchen Table #281 - Blue Shandalar Decks — "Modified Merfolk Shaman" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/merfolk_shaman.deck [Tier 3 — his "Initial" (unmodified)
+#   list differs from the shipped 1997 original by 8 cards (his transcription, or the later
+#   Manalink file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Merfolk Shaman (Sargent, 2009)
+23 Island
+4 Merfolk of the Pearl Trident
+4 Lord of Atlantis
+4 War Barge
+3 Psionic Blast
+4 Merfolk Assassin
+4 Unstable Mutation
+4 Phantasmal Terrain
+3 Mana Short
+4 Sunken City
+4 Magical Hack

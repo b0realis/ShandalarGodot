@@ -1,0 +1,49 @@
+# Mind Stealer — a Two-color Lesser enemy of the 1997 game, the deck as the original shipped it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Mind Stealer (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0289.dck "Mind Stealer (U/B, 4th)" [Tier 3 — Manalink
+#   3 file dated 2016-02-15; its first 17 maindeck lines are the 1997 deck, the 14 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/mind_stealer.toml (main_cards, sideboard_cards, level 4)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/mind_stealer.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Mind Stealer" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Mind Stealer
+11 Swamp
+11 Island
+3 Hypnotic Specter
+4 Sengir Vampire
+3 Will-o'-the-Wisp
+4 Control Magic
+2 Steal Artifact
+4 Unholy Strength
+2 Siren's Call
+1 Mind Twist
+2 Phantasmal Forces
+2 Phantom Monster
+2 Drain Power
+2 Fellwar Stone
+2 Junún Efreet
+2 Animate Dead
+2 Call from the Grave
+3 Sindbad
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Sindbad
+#   .vBlack  3 Sindbad
+#   .vBlue   3 Sindbad
+#   .vGreen  1 Sindbad, 1 Lifetap, 1 Deathgrip
+#   .vRed    2 Sindbad, 1 Volcanic Eruption
+#   .vWhite  2 Sindbad, 1 Gloom
+SB: 1 Lifetap
+SB: 1 Deathgrip
+SB: 1 Volcanic Eruption
+SB: 1 Gloom

@@ -1,0 +1,31 @@
+# Beast Master (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Beast Master deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-03-25).
+# archetype: the Shandalar enemy "Beast Master" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/beast_master.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-278-shandalar-green-decks/
+#   — The Kitchen Table #278 - Shandalar Green Decks — "Modified Beast Master" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/beast_master.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 4 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Beast Master (Sargent, 2009)
+21 Forest
+2 Birds of Paradise
+4 Timber Wolves
+2 Nafs Asp
+2 Giant Badger
+4 Grizzly Bears
+4 Aswan Jaguar
+2 Durkwood Boars
+2 Giant Spider
+2 Killer Bees
+4 Aspect of Wolf
+2 Giant Turtle
+3 Wyluli Wolf
+2 Untamed Wilds
+4 Giant Growth

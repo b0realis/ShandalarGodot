@@ -1,0 +1,29 @@
+# Conjurer (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Conjurer deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-15).
+# archetype: the Shandalar enemy "Conjurer" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/conjurer.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-281-blue-shandalar-decks/
+#   — The Kitchen Table #281 - Blue Shandalar Decks — "Modified Conjurer" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/conjurer.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Conjurer (Sargent, 2009)
+24 Island
+4 Prodigal Sorcerer
+4 Pirate Ship
+2 Wall of Water
+2 Wall of Air
+4 Apprentice Wizard
+3 Giant Tortoise
+2 Triskelion
+2 Psionic Blast
+2 Counterspell
+2 Rocket Launcher
+4 Rod of Ruin
+2 Aladdin's Ring
+3 Jayemdae Tome

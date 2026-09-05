@@ -1,0 +1,49 @@
+# Mark Justice — quarterfinalist, Pro Tour New York (Pro Tour 1), February 1996 — Standard (R/W Winter Orb / Howling Mine prison)
+# TOURNAMENT DECK — not a MicroProse deck. Pro Tour Collector Set (1996): Mark Justice's
+#   quarterfinalist deck from Pro Tour New York, February 1996 — R/W Winter Orb / Howling Mine
+#   prison.
+# archetype: R/W Winter Orb / Howling Mine prison
+# pilot: Mark Justice
+# event: Pro Tour New York (Pro Tour 1), February 1996 — Standard
+# year: 1996
+# place: quarterfinalist
+# caveat: Pro Tour Collector Set (1996) printing of the Top 8 deck
+# source: https://mtg.wiki/page/Pro_Tour_Collector_Set — Pro Tour Collector Set — "Mark Justice,
+#   Quarterfinalist" [Tier-web — no local 1997/s30/Manalink copy exists]
+# cross-check: ../mage-go/data/preconstructed_decks.yaml pro_tour_collector_set.decks["Mark
+#   Justice, Quarterfinalist"] [Tier 3 — agrees card for card]
+# group: Tournament decks
+name: Justice — PT New York 1996 quarterfinalist
+2 City of Brass
+4 Dwarven Ruins
+1 Havenwood Battleground
+4 Karplusan Forest
+4 Mishra's Factory
+3 Mountain
+3 Plains
+1 Black Vise
+1 Elkin Bottle
+1 Feldon's Cane
+3 Fellwar Stone
+4 Howling Mine
+4 Icy Manipulator
+1 Ivory Tower
+1 Jester's Cap
+3 Winter Orb
+1 Zuran Orb
+2 Stormbind
+1 Balance
+3 Swords to Plowshares
+1 Detonate
+1 Earthquake
+3 Fireball
+2 Incinerate
+4 Lightning Bolt
+2 Shatter
+SB: 2 Fountain of Youth
+SB: 3 Serrated Arrows
+SB: 2 Anarchy
+SB: 1 Detonate
+SB: 2 Eron the Relentless
+SB: 3 Pyroblast
+SB: 2 Shatter

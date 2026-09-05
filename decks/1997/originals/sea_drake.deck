@@ -1,0 +1,42 @@
+# Sea Drake — an Intermediate enemy of the 1997 game, the deck as the original shipped it.
+# tier: 5/12 Intermediate enemies — 18 life, bribe 80 gold
+# enemy: Sea Dragon — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Sea Drake"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0218.dck "Sea Drake (U, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 12 maindeck lines are the 1997 deck, the 12 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/sea_drake.toml (main_cards, sideboard_cards, level 5)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/sea_drake.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Intermediate) — "Sea Dragon"
+#   (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Sea Drake
+22 Island
+2 Island Fish Jasconius
+2 Water Elemental
+4 Sea Serpent
+4 Siren's Call
+4 Creature Bond
+2 Mana Vault
+4 Jump
+4 Phantasmal Terrain
+4 Segovian Leviathan
+4 Giant Tortoise
+1 Leviathan
+3 Counterspell
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Counterspell
+#   .vBlack  3 Counterspell
+#   .vBlue   3 Counterspell
+#   .vGreen  1 Lifetap, 2 Counterspell
+#   .vRed    1 Blue Elemental Blast, 2 Counterspell
+#   .vWhite  3 Counterspell
+SB: 1 Lifetap
+SB: 1 Blue Elemental Blast

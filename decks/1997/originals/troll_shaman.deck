@@ -1,0 +1,50 @@
+# Troll Shaman — a Typical enemy of the 1997 game, the deck as the original shipped it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Troll Shaman (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0261.dck "Troll Shaman (Re, 4th)" [Tier 3 — Manalink
+#   3 file dated 2016-02-15; its first 14 maindeck lines are the 1997 deck, the 11 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/troll_shaman.toml (main_cards, sideboard_cards, level 3)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/troll_shaman.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Troll Shaman" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Troll Shaman
+22 Mountain
+2 Strip Mine
+2 Lightning Bolt
+2 Conservator
+3 Fireball
+4 Stone Giant
+4 Hill Giant
+2 Gray Ogre
+4 Uthden Troll
+3 The Brute
+3 Eternal Warrior
+2 Hurloon Minotaur
+2 Oasis
+2 Dancing Scimitar
+2 Shatter
+1 Shivan Dragon
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   2 Shatter, 1 Shivan Dragon
+#   .vBlack  2 Shatter, 1 Throne of Bone
+#   .vBlue   1 Shatter, 1 Red Elemental Blast, 1 Shivan Dragon
+#   .vGreen  2 Shatter, 1 Wooden Sphere
+#   .vRed    1 Burrowing, 1 Shatter, 1 Shivan Dragon
+#   .vWhite  1 Ivory Cup, 1 Celestial Prism, 1 Colossus of Sardia
+SB: 1 Throne of Bone
+SB: 1 Red Elemental Blast
+SB: 1 Wooden Sphere
+SB: 1 Burrowing
+SB: 1 Ivory Cup
+SB: 1 Celestial Prism
+SB: 1 Colossus of Sardia

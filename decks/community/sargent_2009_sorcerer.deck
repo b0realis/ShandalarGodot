@@ -1,0 +1,28 @@
+# Sorcerer (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Sorcerer deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-01).
+# archetype: the Shandalar enemy "Sorcerer" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/sorcerer.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-279-red-shandalar-decks/
+#   — The Kitchen Table #279 - Red Shandalar Decks — "Modified Sorcerer" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/sorcerer.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Sorcerer (Sargent, 2009)
+16 Mountain
+4 Strip Mine
+4 Goblin Balloon Brigade
+4 Mons's Goblin Raiders
+3 Ali Baba
+3 Hurr Jackal
+4 Sisters of the Flame
+4 Manabarbs
+4 Giant Strength
+3 Immolation
+4 Winds of Change
+4 Lightning Bolt
+3 Ankh of Mishra

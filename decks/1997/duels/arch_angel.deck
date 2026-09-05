@@ -1,0 +1,22 @@
+# Arch Angel — a Strong enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Arch Angel (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Arch Angel (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Arch Angel (Duels of the Planeswalkers)
+4 Onulet
+4 Osai Vultures
+4 Serra Angel
+4 Tetravus
+4 Swords to Plowshares
+4 Wrath of God
+2 Mana Vault
+4 Soul Net
+4 The Hive
+22 Plains
+4 Mishra's Factory

@@ -1,0 +1,32 @@
+# Ape Lord — a Two-color greater enemy of the 1997 game, the deck as the original shipped it.
+# tier: 7/12 Two-color greater enemies — 20 life, bribe 100 gold
+# enemy: Ape Lord (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0437.dck "Ape Lord (R/G, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 15 maindeck lines are the 1997 deck, the 15 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/ape_lord.toml (main_cards, sideboard_cards, level 7)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/ape_lord.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Greater) — "Ape Lord" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Ape Lord
+12 Forest
+10 Mountain
+2 Mana Vault
+4 Birds of Paradise
+4 Llanowar Elves
+1 Detonate
+4 Winter Blast
+4 Killer Bees
+2 Shivan Dragon
+2 Craw Wurm
+2 Dragon Engine
+3 Stream of Life
+3 Fireball
+3 Disintegrate
+4 Firebreathing
+# The 1997 file has no .v colour sections: this enemy played the same 60 cards against everyone.

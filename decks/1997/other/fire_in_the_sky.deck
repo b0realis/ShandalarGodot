@@ -1,0 +1,31 @@
+# Fire in the Sky — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Grant Frazier (MicroProse, largely the Quality Assurance team — precon page)
+# colours: W/R
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.other ["Fire in the
+#   Sky"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Other) — "Fire in the Sky"
+#   [Tier-web — agrees card for card]
+# group: Other MicroProse decks
+name: Fire in the Sky
+4 Goblin Digging Team
+2 Fire Drake
+2 Ivory Guardians
+2 Serra Angel
+2 Shivan Dragon
+3 Squire
+4 Disenchant
+2 Fissure
+4 Lightning Bolt
+2 Swords to Plowshares
+2 Fireball
+1 Mox Pearl
+1 Mox Ruby
+2 Sunglasses of Urza
+2 Conversion
+2 Divine Transformation
+2 Giant Strength
+2 Spiritual Sanctuary
+9 Plains
+10 Mountain

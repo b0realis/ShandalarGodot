@@ -1,0 +1,29 @@
+# Elementalist — a Two-color Lesser enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Elementalist (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Elementalist (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Elementalist (Duels of the Planeswalkers)
+3 Air Elemental
+3 Earth Elemental
+3 Fire Elemental
+3 Water Elemental
+1 Wall of Air
+1 Wall of Water
+1 Wall of Fire
+1 Wall of Stone
+2 Lightning Bolt
+3 Earthquake
+3 Fireball
+6 Drain Power
+2 Mana Vault
+2 Unstable Mutation
+2 Energy Flux
+12 Island
+12 Mountain
+2 Gem Bazaar

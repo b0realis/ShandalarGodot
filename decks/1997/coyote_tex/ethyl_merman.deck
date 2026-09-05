@@ -1,0 +1,25 @@
+# Ethyl Merman — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Coyote Tex, MicroProse designer/producer (precon page, ref. 3); the .dck files are dated 19 September 1996
+# colours: U
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.coyote_tex ["Ethyl
+#   Merman"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Coyote_Tex) — "Ethyl Merman"
+#   [Tier-web — agrees card for card]
+# group: Coyote Tex's decks
+name: Ethyl Merman
+4 Lord of Atlantis
+2 Mahamoti Djinn
+4 Merfolk of the Pearl Trident
+2 Segovian Leviathan
+2 Triskelion
+4 Zephyr Falcon
+4 Counterspell
+4 Magical Hack
+2 Unsummon
+2 Drain Power
+2 Lifetap
+4 Psychic Venom
+4 Unstable Mutation
+22 Island

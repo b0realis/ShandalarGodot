@@ -1,0 +1,27 @@
+# Priestess — an Aggro enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Priestess (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Priestess (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Priestess (Duels of the Planeswalkers)
+2 Benalish Hero
+2 Elder Land Wurm
+2 Mesa Pegasus
+2 Pikemen
+4 Wall of Spears
+4 Wall of Swords
+2 Disenchant
+3 Healing Salve
+2 Reverse Damage
+3 Ivory Cup
+4 Animate Wall
+2 Blessing
+2 Castle
+2 Fortified Area
+3 Spirit Link
+23 Plains

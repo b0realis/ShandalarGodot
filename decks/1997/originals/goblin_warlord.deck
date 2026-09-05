@@ -1,0 +1,43 @@
+# Goblin Warlord — an Intermediate enemy of the 1997 game, the deck as the original shipped it.
+# tier: 5/12 Intermediate enemies — 18 life, bribe 80 gold
+# enemy: Goblin Lord — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Goblin Warlord"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0102.dck "Goblin Warlord (Re, 4th)" [Tier 3 —
+#   Manalink 3 file dated 2016-02-15; its first 11 maindeck lines are the 1997 deck, the 12
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/goblin_warlord.toml (main_cards, sideboard_cards, level
+#   5) [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/goblin_warlord.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Intermediate) — "Goblin Warlord"
+#   (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Goblin Warlord
+21 Mountain
+4 Orcish Oriflamme
+4 Helm of Chatzuk
+4 Goblin King
+4 Goblin Balloon Brigade
+4 Mons's Goblin Raiders
+4 Keldon Warlord
+4 Goblin Polka Band
+2 Tawnos's Weaponry
+2 Immolation
+4 Giant Strength
+2 Manabarbs
+1 Shatter
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   2 Manabarbs, 1 Shatter
+#   .vBlack  2 Manabarbs, 1 Shatter
+#   .vBlue   1 Manabarbs, 1 Red Elemental Blast, 1 Shatter
+#   .vGreen  2 Manabarbs, 1 Shatter
+#   .vRed    1 Manabarbs, 2 Goblin Rock Sled
+#   .vWhite  1 Sunglasses of Urza, 2 Manabarbs
+SB: 1 Red Elemental Blast
+SB: 2 Goblin Rock Sled
+SB: 1 Sunglasses of Urza

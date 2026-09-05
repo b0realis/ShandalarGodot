@@ -1,0 +1,37 @@
+# Shapeshifter (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Shapeshifter deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-15).
+# archetype: the Shandalar enemy "Shapeshifter" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/shapeshifter.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-281-blue-shandalar-decks/
+#   — The Kitchen Table #281 - Blue Shandalar Decks — "Modified Shapeshifter" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/shapeshifter.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 4 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Shapeshifter (Sargent, 2009)
+20 Island
+4 Mishra's Factory
+1 Mishra's Workshop
+2 Apprentice Wizard
+2 Clone
+2 Vesuvan Doppelganger
+4 Unsummon
+4 Hurkyl's Recall
+3 Shapeshifter
+4 Primal Clay
+3 Mana Vault
+2 Basalt Monolith
+1 Copy Artifact
+1 Urza's Avenger
+1 Triskelion
+1 Transmute Artifact
+1 Clockwork Avian
+1 Clockwork Beast
+1 Tawnos's Coffin
+1 Tetravus
+1 Drafna's Restoration

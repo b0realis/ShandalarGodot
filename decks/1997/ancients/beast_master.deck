@@ -1,0 +1,23 @@
+# Beast Master — a Strong enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Beastmaster — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Beast Master"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0170.dck "Beast Master (Gr, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Beast Master (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Beast Master (Spells of the Ancients)
+20 Forest
+4 Birds of Paradise
+4 Timber Wolves
+4 Wyluli Wolf
+4 Giant Badger
+4 Nafs Asp
+4 Grizzly Bears
+4 Aswan Jaguar
+4 Durkwood Boars
+4 Mightstone
+4 Tawnos's Weaponry

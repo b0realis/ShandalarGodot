@@ -1,0 +1,28 @@
+# Great Druid — one of the five Guildlords, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 11/12 The Guildlords — 35 to 45 life, can't be bribed
+# enemy: Great Druid (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0095.dck "Great Druid (Gr, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Guildlords) — "Great Druid (Spells
+#   of the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Great Druid (Spells of the Ancients)
+22 Forest
+1 Mox Emerald
+1 Sol Ring
+1 Black Lotus
+2 Ghazbán Ogre
+4 Gaea's Liege
+2 Singing Tree
+4 Aspect of Wolf
+4 Instill Energy
+1 Fastbond
+2 Living Lands
+4 Stream of Life
+4 Untamed Wilds
+2 Verduran Enchantress
+4 Erhnam Djinn
+2 Citanul Druid

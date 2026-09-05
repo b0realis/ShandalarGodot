@@ -1,0 +1,31 @@
+# Priestess (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Priestess deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-06-10).
+# archetype: the Shandalar enemy "Priestess" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/priestess.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-289-white-shandalar-decks/
+#   — The Kitchen Table #289 - White Shandalar Decks — "Modified Priestess" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/priestess.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 3 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Priestess (Sargent, 2009)
+23 Plains
+4 Wall of Swords
+2 Pikemen
+2 Mesa Pegasus
+4 Wall of Light
+4 Animate Wall
+2 Spirit Link
+4 Fortified Area
+2 Blessing
+2 Castle
+2 Reverse Damage
+2 Healing Salve
+2 Disenchant
+3 Ivory Cup
+4 Wall of Spears

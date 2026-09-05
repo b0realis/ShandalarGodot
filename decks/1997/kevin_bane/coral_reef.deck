@@ -1,0 +1,34 @@
+# Coral Reef — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: U
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane ["Coral
+#   Reef"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Coral Reef"
+#   [Tier-web — agrees card for card]
+# group: Kevin Bane's decks
+name: Coral Reef
+1 Air Elemental
+4 Azure Drake
+2 Devouring Deep
+1 Giant Tortoise
+2 Mahamoti Djinn
+1 Phantasmal Forces
+4 Phantom Monster
+1 Prodigal Sorcerer
+1 Segovian Leviathan
+1 Ancestral Recall
+2 Boomerang
+4 Counterspell
+3 Power Sink
+2 Spell Blast
+1 Time Walk
+1 Black Lotus
+1 Black Vise
+1 Mox Sapphire
+1 Control Magic
+2 Flood
+1 Sunken City
+3 Unstable Mutation
+20 Island

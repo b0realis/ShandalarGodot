@@ -1,0 +1,31 @@
+# Tusk Guardian (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Tusk Guardian deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-07-30).
+# archetype: the Shandalar enemy "Tusk Guardian" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/guardian_of_the_tusk.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/
+#   — The Kitchen Table #296 - Shandalar Allied Multicolor Decks — "Modified Tusk Guardian"
+#   [Tier-web — Abe Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/guardian_of_the_tusk.deck [Tier 3 — his "Initial"
+#   (unmodified) list agrees with the shipped 1997 original]
+# group: Community decks
+name: Tusk Guardian (Sargent, 2009)
+4 Birds of Paradise
+2 Craw Wurm
+3 Savannah Lions
+3 Timber Wolves
+3 Tundra Wolves
+4 War Elephant
+4 War Mammoth
+2 Divine Transformation
+4 Holy Strength
+2 Desert Twister
+1 Berserk
+4 Giant Growth
+2 Elephant Graveyard
+9 Forest
+9 Plains
+4 Savannah

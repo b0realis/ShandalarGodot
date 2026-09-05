@@ -1,0 +1,25 @@
+# Kzzy'n - The Dragon Lord — one of the five Guildlords, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 11/12 The Guildlords — 35 to 45 life, can't be bribed
+# enemy: Dragon Lord — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Kzzy'n - The Dragon Lord"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0135.dck "Kzzy'n - The Dragon Lord (Re, Type 1)" [Tier
+#   1 — the 1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a
+#   Manalink replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Guildlords) — "Kzzy'n - The Dragon
+#   Lord (Spells of the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Kzzy'n - The Dragon Lord (Spells of the Ancients)
+22 Mountain
+4 Mana Flare
+4 Gauntlet of Might
+4 Lightning Bolt
+1 Sol Ring
+1 Mox Ruby
+1 Black Lotus
+1 Wheel of Fortune
+4 Shivan Dragon
+4 Dragon Whelp
+4 Dragon Engine
+4 Nalathni Dragon
+4 Aladdin

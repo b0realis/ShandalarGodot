@@ -1,0 +1,35 @@
+# Dracur — one of the Dragons, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Dracur (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Dracur - Red Dragon"
+#   [Tier-web — no local copy of the Duels enemy files exists in ../shandalar-src, ../s30 or
+#   ../mage-go; the wiki lists this variant for 25 of the 55 enemies]
+# group: Duels of the Planeswalkers
+name: Dracur (Duels of the Planeswalkers)
+4 Hypnotic Specter
+2 Rag Man
+3 Wall of Dust
+3 Fissure
+2 Lightning Bolt
+3 Desert Twister
+2 Disintegrate
+2 Fireball
+1 Mind Twist
+4 Stone Rain
+1 Tranquility
+1 Black Lotus
+2 Dingus Egg
+2 Disrupting Scepter
+2 Fellwar Stone
+1 Mox Emerald
+1 Mox Jet
+1 Mox Ruby
+2 Blight
+2 Mana Flare
+5 Swamp
+5 Mountain
+5 Forest
+3 Gem Bazaar
+2 Strip Mine

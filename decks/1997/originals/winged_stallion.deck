@@ -1,0 +1,47 @@
+# Winged Stallion — a Two-color greater enemy of the 1997 game, the deck as the original shipped it.
+# tier: 7/12 Two-color greater enemies — 20 life, bribe 100 gold
+# enemy: Winged Stallion (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0127.dck "Winged Stallion (U/W, 4th)" [Tier 3 —
+#   Manalink 3 file dated 2016-02-15; its first 16 maindeck lines are the 1997 deck, the 16
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/winged_stallion.toml (main_cards, sideboard_cards, level
+#   7) [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/winged_stallion.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Greater) — "Winged Stallion"
+#   (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Winged Stallion
+12 Plains
+12 Island
+3 Howling Mine
+3 Island Sanctuary
+4 Mesa Pegasus
+2 Phantasmal Forces
+2 Serra Angel
+2 Dancing Scimitar
+4 Magical Hack
+2 Karma
+2 Lifetap
+4 Psionic Entity
+3 Holy Armor
+3 Holy Strength
+2 Segovian Leviathan
+1 Disenchant
+1 Conversion
+2 Counterspell
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   1 Conversion, 2 Counterspell
+#   .vBlack  3 Counterspell
+#   .vBlue   3 Counterspell
+#   .vGreen  3 Counterspell
+#   .vRed    2 Conversion, 1 Counterspell
+#   .vWhite  3 Counterspell
+SB: 1 Counterspell
+SB: 1 Conversion

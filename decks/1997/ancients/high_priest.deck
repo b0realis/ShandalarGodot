@@ -1,0 +1,24 @@
+# High Priest — one of the Henchmen, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 10/12 The Henchmen — up to 27 life, can't be bribed
+# enemy: High Priest (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0203.dck "High Priest (Wh, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Henchmen) — "High Priest (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: High Priest (Spells of the Ancients)
+20 Plains
+4 Armageddon
+4 Dingus Egg
+4 Holy Strength
+4 Healing Salve
+4 Consecrate Land
+2 Mesa Pegasus
+2 Abu Ja'far
+4 Savannah Lions
+4 Mishra's Factory
+4 White Knight
+4 Tundra Wolves

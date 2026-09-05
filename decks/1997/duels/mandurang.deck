@@ -1,0 +1,30 @@
+# Mandurang — one of the Dragons, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Mandurang (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Mandurang - Black Dragon"
+#   [Tier-web — no local copy of the Duels enemy files exists in ../shandalar-src, ../s30 or
+#   ../mage-go; the wiki lists this variant for 25 of the 55 enemies]
+# group: Duels of the Planeswalkers
+name: Mandurang (Duels of the Planeswalkers)
+2 Carrion Ants
+4 Dancing Scimitar
+4 Ornithopter
+4 Will-o'-the-Wisp
+4 Zephyr Falcon
+1 Blood Lust
+1 Braingeyser
+2 Celestial Prism
+3 Jayemdae Tome
+1 Mox Jet
+1 Mox Ruby
+1 Mox Sapphire
+1 Deathgrip
+4 Giant Strength
+1 Lifetap
+4 Unholy Strength
+4 Unstable Mutation
+6 Island
+6 Mountain
+6 Swamp

@@ -1,0 +1,32 @@
+# Paladin (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Paladin deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-06-10).
+# archetype: the Shandalar enemy "Paladin" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/paladin.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-289-white-shandalar-decks/
+#   — The Kitchen Table #289 - White Shandalar Decks — "Modified Paladin" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/paladin.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 5 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Paladin (Sargent, 2009)
+16 Plains
+4 Island
+4 Tundra
+4 Northern Paladin
+4 White Knight
+3 Rainbow Knights
+4 Angry Mob
+2 Holy Strength
+2 Lifeblood
+3 Karma
+1 Circle of Protection: Blue
+1 Circle of Protection: Green
+1 Disenchant
+2 Swords to Plowshares
+4 Sleight of Mind
+4 Magical Hack

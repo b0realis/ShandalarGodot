@@ -1,0 +1,35 @@
+# Bruise — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: U/B
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane ["Bruise"]
+#   [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Bruise" [Tier-web —
+#   agrees card for card]
+# group: Kevin Bane's decks
+name: Bruise
+2 Air Elemental
+2 Azure Drake
+4 Black Knight
+1 Carrion Ants
+2 Drowned
+2 Fallen Angel
+2 Hypnotic Specter
+2 Phantom Monster
+2 Zephyr Falcon
+2 Counterspell
+1 Howl from Beyond
+2 Psionic Blast
+1 Terror
+1 Demonic Tutor
+1 Syphon Soul
+1 Time Walk
+1 Black Lotus
+1 Black Vise
+1 Mox Jet
+1 Mox Sapphire
+4 Unholy Strength
+2 Unstable Mutation
+11 Island
+11 Swamp

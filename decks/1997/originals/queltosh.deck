@@ -1,0 +1,80 @@
+# Queltosh — one of the Genies of the 1997 game, the deck as the original shipped it.
+# tier: 6/12 The Genies — 19 life, bribe 80 gold
+# enemy: Queltosh (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0442.dck "Queltosh (U/W/R, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 36 maindeck lines are the 1997 deck, the 23 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/queltosh.toml (main_cards, sideboard_cards, level 6)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/queltosh.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Genies) — "Queltosh" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Queltosh
+8 Island
+8 Plains
+8 Mountain
+1 Eye for an Eye
+1 Pikemen
+1 Mesa Pegasus
+1 Serra Angel
+1 Spirit Link
+1 White Knight
+1 Ancestral Recall
+1 Control Magic
+1 Giant Tortoise
+1 Mahamoti Djinn
+1 Prodigal Sorcerer
+1 Time Elemental
+1 Unstable Mutation
+1 Black Vise
+1 Candelabra of Tawnos
+1 Clockwork Avian
+1 Urza's Avenger
+1 Wall of Dust
+1 Feedback
+1 Fireball
+1 Land Tax
+1 Lightning Bolt
+1 Disenchant
+1 Zephyr Falcon
+1 Counterspell
+1 Power Sink
+1 Spell Blast
+1 Brass Man
+1 Wall of Air
+1 Phantasmal Forces
+1 Fire Elemental
+1 Phantom Monster
+1 The Hive
+1 Reverse Damage
+1 Divine Transformation
+1 Pearled Unicorn
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   1 Reverse Damage, 1 Divine Transformation, 1 Pearled Unicorn
+#   .vBlack  1 Angry Mob, 1 Karma, 1 Northern Paladin
+#   .vBlue   1 Magnetic Mountain, 1 Red Elemental Blast, 1 Crystal Rod
+#   .vGreen  1 Lifetap, 1 Wooden Sphere, 1 Reverse Damage
+#   .vRed    1 Blue Elemental Blast, 1 Burrowing, 1 Circle of Protection: Red
+#   .vWhite  1 Ivory Cup, 1 Flashfires, 1 Disenchant
+SB: 1 Angry Mob
+SB: 1 Karma
+SB: 1 Northern Paladin
+SB: 1 Magnetic Mountain
+SB: 1 Red Elemental Blast
+SB: 1 Crystal Rod
+SB: 1 Lifetap
+SB: 1 Wooden Sphere
+SB: 1 Blue Elemental Blast
+SB: 1 Burrowing
+SB: 1 Circle of Protection: Red
+SB: 1 Ivory Cup
+SB: 1 Flashfires
+SB: 1 Disenchant

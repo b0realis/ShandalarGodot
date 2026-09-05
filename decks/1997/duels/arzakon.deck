@@ -1,0 +1,85 @@
+# Arzakon — the final boss, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 12/12 Arzakon — life set by the difficulty, can't be bribed
+# enemy: Arzakon (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Arzakon) — "Arzakon (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Arzakon (Duels of the Planeswalkers)
+2 Brass Man
+1 Clockwork Avian
+1 Clockwork Beast
+1 Colossus of Sardia
+1 Dancing Scimitar
+1 Diabolic Machine
+2 Elvish Archers
+2 Erg Raiders
+1 Grapeshot Catapult
+2 Grizzly Bears
+2 Hurr Jackal
+2 Mesa Pegasus
+1 Obsianus Golem
+2 Pikemen
+2 Samite Healer
+2 Savannah Lions
+1 Shapeshifter
+1 Tetravus
+1 Triskelion
+1 Urza's Avenger
+2 Wall of Dust
+2 Will-o'-the-Wisp
+2 Zephyr Falcon
+1 Ancestral Recall
+1 Berserk
+2 Blood Lust
+2 Fog
+2 Giant Growth
+2 Howl from Beyond
+2 Lightning Bolt
+2 Power Sink
+2 Siren's Call
+1 Braingeyser
+2 Desert Twister
+2 Disintegrate
+1 Mind Twist
+2 Pyrotechnics
+2 Raise Dead
+1 Regrowth
+1 Time Walk
+1 Timetwister
+1 Wheel of Fortune
+1 Aladdin's Ring
+1 Black Mana Battery
+1 Blue Mana Battery
+4 Fellwar Stone
+1 Green Mana Battery
+1 Mox Emerald
+1 Mox Jet
+1 Mox Pearl
+1 Mox Ruby
+1 Mox Sapphire
+1 Red Mana Battery
+1 Sol Ring
+2 The Hive
+1 White Mana Battery
+2 Animate Dead
+1 Circle of Protection: Artifacts
+1 Circle of Protection: Black
+1 Circle of Protection: Blue
+1 Circle of Protection: Green
+1 Circle of Protection: Red
+1 Circle of Protection: White
+2 Giant Strength
+2 Immolation
+2 Paralyze
+2 Spirit Link
+6 Plains
+6 Island
+6 Swamp
+6 Mountain
+6 Forest
+4 Gem Bazaar
+4 Mishra's Factory

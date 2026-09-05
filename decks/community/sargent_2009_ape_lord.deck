@@ -1,0 +1,30 @@
+# Ape Lord (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Ape Lord deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-07-30).
+# archetype: the Shandalar enemy "Ape Lord" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/ape_lord.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/
+#   — The Kitchen Table #296 - Shandalar Allied Multicolor Decks — "Modified Ape Lord" [Tier-web
+#   — Abe Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/ape_lord.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Ape Lord (Sargent, 2009)
+4 Barbary Apes
+4 Birds of Paradise
+2 Craw Wurm
+4 Killer Bees
+4 Kird Ape
+4 Llanowar Elves
+2 Shivan Dragon
+3 Disintegrate
+3 Fireball
+3 Stream of Life
+4 Winter Blast
+1 Lightning Bolt
+10 Forest
+8 Mountain
+4 Taiga

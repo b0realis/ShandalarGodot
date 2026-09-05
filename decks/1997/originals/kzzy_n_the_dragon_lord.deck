@@ -1,0 +1,36 @@
+# Kzzy'n - The Dragon Lord — one of the five Guildlords of the 1997 game, the deck as the original shipped it.
+# tier: 11/12 The Guildlords — 35 to 45 life, can't be bribed
+# enemy: Dragon Lord — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Kzzy'n - The Dragon Lord"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0135.dck "Kzzy'n - The Dragon Lord (R, 4th)" [Tier 3
+#   — Manalink 3 file dated 2016-02-15; its first 19 maindeck lines are the 1997 deck, the 21
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/kzzy_n_the_dragon_lord.toml (main_cards, sideboard_cards,
+#   level 11) [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/kzzy_n_the_dragon_lord.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Guildlords) — "Kyzz'n The Dragon
+#   Lord" (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Kzzy'n - The Dragon Lord
+18 Mountain
+2 Forest
+2 Plains
+4 Gem Bazaar
+4 Birds of Paradise
+2 Fellwar Stone
+2 Mana Flare
+2 Disenchant
+4 Lightning Bolt
+4 Shivan Dragon
+4 Dragon Whelp
+2 Dragon Engine
+2 Faerie Dragon
+2 Prismatic Dragon
+2 Celestial Prism
+2 Craw Wurm
+2 Elder Land Wurm
+1 Ivory Tower
+3 Winds of Change
+# The 1997 file has no .v colour sections: this enemy played the same 64 cards against everyone.

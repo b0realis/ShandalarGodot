@@ -1,0 +1,26 @@
+# Fungus Master — a Two-color Lesser enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Fungus Master (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0094.dck "Fungus Master (Gr/Ub, Type 1)" [Tier 1 — the
+#   1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Fungus Master (Spells of
+#   the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Fungus Master (Spells of the Ancients)
+9 Forest
+9 Island
+4 Tropical Island
+4 Prodigal Sorcerer
+4 Fungusaur
+4 Birds of Paradise
+2 Wall of Brambles
+4 Clone
+4 Giant Growth
+4 Rod of Ruin
+2 Kudzu
+2 Psionic Entity
+4 Web
+4 Psionic Blast

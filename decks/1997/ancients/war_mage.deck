@@ -1,0 +1,24 @@
+# War Mage — one of the Henchmen, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 10/12 The Henchmen — up to 27 life, can't be bribed
+# enemy: War Mage (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0229.dck "War Mage (Re, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Henchmen) — "War Mage (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: War Mage (Spells of the Ancients)
+18 Mountain
+4 Mana Vault
+4 Lightning Bolt
+2 Disenchant
+4 Fireball
+4 Earthquake
+4 Plateau
+4 Gauntlet of Might
+4 Circle of Protection: Red
+4 Ball Lightning
+4 Disintegrate
+4 Inferno

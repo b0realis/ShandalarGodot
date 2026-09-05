@@ -1,0 +1,27 @@
+# Merfolk Shaman — an Aggro enemy of the 1997 game, the deck as the original shipped it.
+# tier: 2/12 Aggro enemies — 12 life, bribe 40 gold
+# enemy: Merfolk Shaman (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../s30/assets/configs/rogues/merfolk_shaman.toml (main_cards, sideboard_cards, level
+#   2) [Tier 3 — the only local copy of the 1997 list: Decks.zip:Decks/0150.dck "Merfolk Shaman
+#   (Ub, Type 1)" is a Manalink replacement deck (120 modern-era cards, no 1997 prefix, no .v
+#   sections)]
+# source: ../mage-go/rogue_dck/merfolk_shaman.dck [Tier 3 — equals s30]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Aggro) — "Merfolk Shaman" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Merfolk Shaman
+22 Island
+4 Merfolk of the Pearl Trident
+4 Lord of Atlantis
+4 Segovian Leviathan
+4 Unstable Mutation
+4 Phantasmal Terrain
+3 Pirate Ship
+3 Sea Serpent
+2 Island Fish Jasconius
+3 Magical Hack
+3 Lifetap
+4 Unsummon
+# The 1997 file has no .v colour sections: this enemy played the same 60 cards against everyone.

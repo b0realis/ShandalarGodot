@@ -1,0 +1,32 @@
+# Shapeshifter — a Strong enemy of the 1997 game, the deck as the original shipped it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Shapeshifter (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0263.dck "Shapeshifter (U, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 15 maindeck lines are the 1997 deck, the 12 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/shapeshifter.toml (main_cards, sideboard_cards, level 8)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/shapeshifter.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Shapeshifter" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Shapeshifter
+20 Island
+4 Mishra's Factory
+4 Unsummon
+2 Power Struggle
+4 Hurkyl's Recall
+3 Shapeshifter
+4 Primal Clay
+3 Mana Vault
+2 Fellwar Stone
+3 Apprentice Wizard
+2 Backfire
+1 Ivory Tower
+4 Unstable Mutation
+3 Urza's Avenger
+3 Triskelion
+# The 1997 file has no .v colour sections: this enemy played the same 62 cards against everyone.

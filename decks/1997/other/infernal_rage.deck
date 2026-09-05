@@ -1,0 +1,30 @@
+# Infernal Rage — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Tim McCracken (MicroProse, largely the Quality Assurance team — precon page)
+# colours: R
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.other ["Infernal
+#   Rage"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Other) — "Infernal Rage" [Tier-web
+#   — agrees card for card]
+# cross-check: a screenshot of the original .DCK file is on the wiki page (files.mtg.wiki Infernal_rage_dotp.png)
+# group: Other MicroProse decks
+name: Infernal Rage
+4 Ball Lightning
+1 Beasts of Bogardan
+3 Dragon Whelp
+1 Fire Drake
+3 Shivan Dragon
+3 Sisters of the Flame
+3 Blood Lust
+4 Lightning Bolt
+3 Disintegrate
+2 Fountain of Youth
+3 Mana Vault
+1 Mox Ruby
+2 Relic Barrier
+1 Serpent Generator
+1 Sol Ring
+2 Immolation
+2 Mana Flare
+21 Mountain

@@ -1,0 +1,49 @@
+# Queltosh — one of the Genies, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 6/12 The Genies — 19 life, bribe 80 gold
+# enemy: Queltosh (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Genies) — "Queltosh - Red Djinn"
+#   [Tier-web — no local copy of the Duels enemy files exists in ../shandalar-src, ../s30 or
+#   ../mage-go; the wiki lists this variant for 25 of the 55 enemies]
+# group: Duels of the Planeswalkers
+name: Queltosh (Duels of the Planeswalkers)
+1 Brass Man
+1 Clockwork Avian
+1 Fire Elemental
+1 Giant Tortoise
+1 Keldon Warlord
+1 Mahamoti Djinn
+1 Mesa Pegasus
+1 Pearled Unicorn
+1 Phantasmal Forces
+1 Phantom Monster
+1 Pikemen
+1 Prodigal Sorcerer
+1 Serra Angel
+1 Time Elemental
+1 Urza's Avenger
+1 Wall of Air
+1 Wall of Dust
+1 White Knight
+1 Zephyr Falcon
+1 Ancestral Recall
+1 Counterspell
+1 Disenchant
+1 Eye for an Eye
+1 Lightning Bolt
+1 Power Sink
+1 Spell Blast
+1 Fireball
+1 Black Vise
+1 Candelabra of Tawnos
+1 The Hive
+1 Control Magic
+1 Divine Transformation
+1 Feedback
+1 Land Tax
+1 Spirit Link
+1 Unstable Mutation
+8 Plains
+8 Island
+8 Mountain

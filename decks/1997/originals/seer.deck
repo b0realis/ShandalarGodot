@@ -1,0 +1,30 @@
+# Seer — a Weak enemy of the 1997 game, the deck as the original shipped it.
+# tier: 1/12 Weak enemies — 10 life, bribe 40 gold
+# enemy: Seer (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0069.dck "Seer (Ub, 4th)" [Tier 3 — Manalink 3 file
+#   dated 2016-02-15; its first 13 maindeck lines are the 1997 deck, the 13 lines (60 cards)
+#   after them are the modern deck Manalink appended and are NOT shipped; its .vNone/.v<Colour>
+#   sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/seer.toml (main_cards, sideboard_cards, level 1) [Tier 3
+#   — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/seer.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Weak) — "Seer" (Original) [Tier-web
+#   — maindeck agrees]
+# group: 1997 originals
+name: Seer
+22 Island
+3 Drain Power
+4 Crystal Rod
+2 Counterspell
+4 Unsummon
+4 Zephyr Falcon
+4 Ghost Ship
+4 Unstable Mutation
+2 Time Elemental
+3 Tetravus
+3 Triskelion
+2 Hurkyl's Recall
+3 Ornithopter
+# The 1997 file has no .v colour sections: this enemy played the same 60 cards against everyone.

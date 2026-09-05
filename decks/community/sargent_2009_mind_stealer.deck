@@ -1,0 +1,35 @@
+# Mind Stealer (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Mind Stealer deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-07-30).
+# archetype: the Shandalar enemy "Mind Stealer" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/mind_stealer.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/
+#   — The Kitchen Table #296 - Shandalar Allied Multicolor Decks — "Modified Mind Stealer"
+#   [Tier-web — Abe Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/mind_stealer.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 4 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Mind Stealer (Sargent, 2009)
+4 Hypnotic Specter
+1 Old Man of the Sea
+2 Phantasmal Forces
+2 Phantom Monster
+4 Sengir Vampire
+3 Will-o'-the-Wisp
+2 Fellwar Stone
+2 Animate Dead
+2 Call from the Grave
+4 Control Magic
+2 Steal Artifact
+3 Unholy Strength
+2 Amnesia
+2 Drain Power
+1 Mind Twist
+2 Siren's Call
+9 Island
+9 Swamp
+4 Underground Sea

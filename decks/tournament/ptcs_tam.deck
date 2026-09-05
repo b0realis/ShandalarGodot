@@ -1,0 +1,58 @@
+# Eric Tam — quarterfinalist, Pro Tour New York (Pro Tour 1), February 1996 — Standard (R/G/W Erhnam control)
+# TOURNAMENT DECK — not a MicroProse deck. Pro Tour Collector Set (1996): Eric Tam's
+#   quarterfinalist deck from Pro Tour New York, February 1996 — R/G/W Erhnam control.
+# archetype: R/G/W Erhnam control
+# pilot: Eric Tam
+# event: Pro Tour New York (Pro Tour 1), February 1996 — Standard
+# year: 1996
+# place: quarterfinalist
+# caveat: Pro Tour Collector Set (1996) printing of the Top 8 deck
+# source: https://mtg.wiki/page/Pro_Tour_Collector_Set — Pro Tour Collector Set — "Eric Tam,
+#   Quarterfinalist" [Tier-web — no local 1997/s30/Manalink copy exists]
+# cross-check: ../mage-go/data/preconstructed_decks.yaml pro_tour_collector_set.decks["Eric Tam,
+#   Quarterfinalist"] [Tier 3 — DIFFERS (yaml minus wiki): main +{} -{'Plains': 1}; side +{} -{}
+#   — the wiki list is shipped]
+# group: Tournament decks
+name: Tam — PT New York 1996 quarterfinalist
+1 Autumn Willow
+3 Birds of Paradise
+1 Blinking Spirit
+4 Erhnam Djinn
+1 Serra Angel
+1 Orgg
+4 Disenchant
+2 Incinerate
+1 Lightning Bolt
+3 Swords to Plowshares
+1 Balance
+1 Earthquake
+2 Fireball
+1 Icatian Town
+2 Wrath of God
+3 Fellwar Stone
+3 Icy Manipulator
+1 Jayemdae Tome
+1 Zuran Orb
+1 Land Tax
+2 Stormbind
+1 Zur's Weirding
+4 Brushland
+2 City of Brass
+4 Karplusan Forest
+2 Mishra's Factory
+4 Mountain
+4 Plains
+SB: 1 An-Zerrin Ruins
+SB: 1 Apocalypse Chime
+SB: 1 Autumn Willow
+SB: 1 Circle of Protection: Red
+SB: 1 Disrupting Scepter
+SB: 1 Divine Offering
+SB: 1 Dwarven Catapult
+SB: 1 Energy Storm
+SB: 1 Icatian Town
+SB: 2 Nevinyrral's Disk
+SB: 1 Reverse Damage
+SB: 1 Ring of Renewal
+SB: 1 Serrated Arrows
+SB: 1 Swords to Plowshares

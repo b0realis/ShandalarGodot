@@ -1,0 +1,26 @@
+# Sea Dragon (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Sea Dragon deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-15).
+# archetype: the Shandalar enemy "Sea Dragon" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/sea_drake.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-281-blue-shandalar-decks/
+#   — The Kitchen Table #281 - Blue Shandalar Decks — "Modified Sea Dragon" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/sea_drake.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Sea Dragon (Sargent, 2009)
+26 Island
+2 Island Fish Jasconius
+2 Water Elemental
+4 Sea Serpent
+4 Segovian Leviathan
+4 Azure Drake
+4 Giant Tortoise
+4 Phantasmal Terrain
+4 Counterspell
+4 Power Sink
+2 Mana Vault

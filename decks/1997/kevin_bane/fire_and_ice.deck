@@ -1,0 +1,32 @@
+# Fire and Ice — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: U/R
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane ["Fire and
+#   Ice"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Fire and Ice"
+#   [Tier-web — agrees card for card]
+# cross-check: a screenshot of the original .DCK file is on the wiki page (files.mtg.wiki Fire_and_ice_duels.png)
+# group: Kevin Bane's decks
+name: Fire and Ice
+4 Ball Lightning
+2 Fire Drake
+1 Ancestral Recall
+3 Boomerang
+4 Counterspell
+4 Lightning Bolt
+3 Power Sink
+2 Remove Soul
+1 Reset
+2 Spell Blast
+4 Disintegrate
+4 Fireball
+1 Time Walk
+1 Timetwister
+1 Black Lotus
+1 Black Vise
+1 Mox Ruby
+1 Mox Sapphire
+10 Mountain
+10 Island

@@ -1,0 +1,27 @@
+# Witch (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Witch deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-09).
+# archetype: the Shandalar enemy "Witch" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/witch.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-280-black-shandalar-decks/
+#   — The Kitchen Table #280 - Black Shandalar Decks — "Modified Witch" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/witch.deck [Tier 3 — his "Initial" (unmodified) list agrees
+#   with the shipped 1997 original]
+# group: Community decks
+name: Witch (Sargent, 2009)
+26 Swamp
+2 Wall of Bone
+4 Drudge Skeletons
+4 Will-o'-the-Wisp
+4 Scavenging Ghoul
+4 Walking Dead
+2 Drain Life
+2 Dark Ritual
+3 Throne of Bone
+4 Nevinyrral's Disk
+4 Clay Statue
+3 Diabolic Machine

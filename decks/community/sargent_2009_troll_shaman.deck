@@ -1,0 +1,31 @@
+# Troll Shaman (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Troll Shaman deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-01).
+# archetype: the Shandalar enemy "Troll Shaman" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/troll_shaman.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-279-red-shandalar-decks/
+#   — The Kitchen Table #279 - Red Shandalar Decks — "Modified Troll Shaman" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/troll_shaman.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Troll Shaman (Sargent, 2009)
+22 Mountain
+2 Strip Mine
+2 Oasis
+4 Stone Giant
+4 Hill Giant
+2 Cave People
+4 Uthden Troll
+2 Hurloon Minotaur
+2 Shivan Dragon
+2 Pyrotechnics
+2 Ydwen Efreet
+3 Fireball
+3 Lightning Bolt
+2 Shatter
+2 Conservator
+2 Dancing Scimitar

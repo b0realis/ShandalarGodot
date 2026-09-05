@@ -1,0 +1,29 @@
+# High Priest (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" High Priest deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-06-10).
+# archetype: the Shandalar enemy "High Priest" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/high_priest.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-289-white-shandalar-decks/
+#   — The Kitchen Table #289 - White Shandalar Decks — "Modified High Priest" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/high_priest.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: High Priest (Sargent, 2009)
+21 Plains
+4 Strip Mine
+1 Mox Pearl
+4 Mesa Pegasus
+4 Savannah Lions
+4 White Knight
+4 Tundra Wolves
+2 Holy Strength
+4 Armageddon
+1 Balance
+4 Swords to Plowshares
+2 Disenchant
+4 Dingus Egg
+2 White Mana Battery

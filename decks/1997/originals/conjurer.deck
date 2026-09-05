@@ -1,0 +1,47 @@
+# Conjurer — a Typical enemy of the 1997 game, the deck as the original shipped it.
+# tier: 3/12 Typical enemies — 14 life, bribe 60 gold
+# enemy: Conjurer (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0260.dck "Conjurer (Ub, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 14 maindeck lines are the 1997 deck, the 11 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/conjurer.toml (main_cards, sideboard_cards, level 3)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/conjurer.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Typical) — "Conjurer" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Conjurer
+22 Island
+2 Fellwar Stone
+4 Prodigal Sorcerer
+4 Pirate Ship
+2 Wall of Water
+2 Wall of Air
+2 Counterspell
+2 Steal Artifact
+2 Animate Artifact
+2 Unsummon
+4 Rod of Ruin
+2 Aladdin's Ring
+4 Apprentice Wizard
+3 Jayemdae Tome
+3 Giant Tortoise
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Giant Tortoise
+#   .vBlack  1 Mahamoti Djinn, 2 Giant Tortoise
+#   .vBlue   2 Giant Tortoise, 1 Island Fish Jasconius
+#   .vGreen  3 Giant Tortoise
+#   .vRed    1 Blue Elemental Blast, 1 Giant Tortoise, 1 Volcanic Eruption
+#   .vWhite  3 Power Sink
+SB: 1 Mahamoti Djinn
+SB: 1 Island Fish Jasconius
+SB: 1 Blue Elemental Blast
+SB: 1 Volcanic Eruption
+SB: 3 Power Sink

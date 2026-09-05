@@ -1,0 +1,30 @@
+# Mental Flight — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Rosalie Kofsky (MicroProse, largely the Quality Assurance team — precon page)
+# colours: W/U
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.other ["Mental
+#   Flight"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Other) — "Mental Flight" [Tier-web
+#   — agrees card for card]
+# group: Other MicroProse decks
+name: Mental Flight
+3 Azure Drake
+3 Mesa Pegasus
+3 Serra Angel
+3 Tundra Wolves
+3 Thunder Spirit
+3 Water Wurm
+3 Counterspell
+3 Disenchant
+3 Swords to Plowshares
+1 Time Walk
+1 Timetwister
+1 Black Lotus
+1 Black Vise
+1 Mox Pearl
+1 Mox Sapphire
+3 Control Magic
+4 Spirit Link
+11 Plains
+11 Island

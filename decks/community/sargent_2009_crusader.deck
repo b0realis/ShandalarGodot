@@ -1,0 +1,29 @@
+# Crusader (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Crusader deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-06-10).
+# archetype: the Shandalar enemy "Crusader" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/crusader.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-289-white-shandalar-decks/
+#   — The Kitchen Table #289 - White Shandalar Decks — "Modified Crusader" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/crusader.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Crusader (Sargent, 2009)
+22 Plains
+4 White Knight
+4 Pikemen
+4 Rainbow Knights
+4 Benalish Hero
+4 Crusade
+2 Castle
+2 Angelic Voices
+2 Disenchant
+4 Eye for an Eye
+2 Morale
+4 Swords to Plowshares
+2 Battering Ram
+2 Knights of Thorn

@@ -1,0 +1,36 @@
+# Winged Stallion (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Winged Stallion deck
+#   — his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-07-30).
+# archetype: the Shandalar enemy "Winged Stallion" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/winged_stallion.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/
+#   — The Kitchen Table #296 - Shandalar Allied Multicolor Decks — "Modified Winged Stallion"
+#   [Tier-web — Abe Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/winged_stallion.deck [Tier 3 — his "Initial" (unmodified)
+#   list differs from the shipped 1997 original by 2 cards (his transcription, or the later
+#   Manalink file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Winged Stallion (Sargent, 2009)
+2 Angry Mob
+2 Dancing Scimitar
+4 Mesa Pegasus
+2 Phantasmal Forces
+2 Segovian Leviathan
+2 Serra Angel
+3 Howling Mine
+1 Ivory Tower
+1 Conversion
+2 Holy Armor
+2 Holy Strength
+3 Island Sanctuary
+2 Karma
+2 Lifetap
+2 Disenchant
+4 Magical Hack
+2 Swords to Plowshares
+10 Island
+10 Plains
+4 Tundra

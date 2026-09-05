@@ -1,0 +1,29 @@
+# Necromancer (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Necromancer deck —
+#   his improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-09).
+# archetype: the Shandalar enemy "Necromancer" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/necromancer.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-280-black-shandalar-decks/
+#   — The Kitchen Table #280 - Black Shandalar Decks — "Modified Necromancer" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/necromancer.deck [Tier 3 — his "Initial" (unmodified) list
+#   agrees with the shipped 1997 original]
+# group: Community decks
+name: Necromancer (Sargent, 2009)
+24 Swamp
+4 Scathe Zombies
+4 Zombie Master
+4 Bog Wraith
+4 Lost Soul
+2 Sengir Vampire
+1 Demonic Tutor
+1 Contract from Below
+4 Bad Moon
+2 Necropolis of Azar
+2 Animate Dead
+4 Evil Presence
+2 Drain Life
+2 Cyclopean Tomb

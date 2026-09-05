@@ -1,0 +1,41 @@
+# War Mage — one of the Henchmen of the 1997 game, the deck as the original shipped it.
+# tier: 10/12 The Henchmen — up to 27 life, can't be bribed
+# enemy: War Mage (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0229.dck "War Mage (Re, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 11 maindeck lines are the 1997 deck, the 14 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/war_mage.toml (main_cards, sideboard_cards, level 10)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/war_mage.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Henchmen) — "War Mage" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: War Mage
+23 Mountain
+4 Mana Vault
+2 Fellwar Stone
+4 Lightning Bolt
+4 Fireball
+4 Earthquake
+2 Smoke
+4 Ball Lightning
+4 Disintegrate
+4 Mana Flare
+2 Aladdin's Ring
+3 Detonate
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Detonate
+#   .vBlack  3 Detonate
+#   .vBlue   1 Red Elemental Blast, 2 Detonate
+#   .vGreen  3 Detonate
+#   .vRed    3 Detonate
+#   .vWhite  1 Celestial Prism, 2 Detonate
+SB: 1 Red Elemental Blast
+SB: 1 Celestial Prism

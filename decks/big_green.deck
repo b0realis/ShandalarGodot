@@ -1,0 +1,24 @@
+# Green midrange: mana elves into oversized bodies.
+# group: Starter decks
+name: Big Green
+4 Llanowar Elves
+2 Grizzly Bears
+2 Elvish Archers
+3 Giant Spider
+3 War Mammoth
+3 Ironroot Treefolk
+2 Craw Wurm
+3 Giant Growth
+1 Hurricane
+1 Regrowth
+1 Fog
+15 Forest
+
+# The sideboard — `SB:` lines, the shape DeckList has always parsed.
+# Swapped in between the duels of a match (`Side&board between duels`,
+# Program/Text.res:2863).
+SB: 4 Tranquility
+SB: 3 Lifeforce
+SB: 3 Fog
+SB: 3 Crumble
+SB: 2 Hurricane

@@ -1,0 +1,26 @@
+# Shapeshifter — a Strong enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 8/12 Strong enemies — 22 life, bribe 100 gold
+# enemy: Shapeshifter (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Strong) — "Shapeshifter (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Shapeshifter (Duels of the Planeswalkers)
+3 Apprentice Wizard
+4 Primal Clay
+3 Shapeshifter
+3 Urza's Avenger
+4 Hurkyl's Recall
+4 Unsummon
+2 Fellwar Stone
+1 Ivory Tower
+3 Mana Vault
+2 Backfire
+2 Power Struggle
+4 Unstable Mutation
+20 Island
+4 Mishra's Factory
+1 Mishra's Workshop

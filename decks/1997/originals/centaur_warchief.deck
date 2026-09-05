@@ -1,0 +1,46 @@
+# Centaur Warchief — a Two-color greater enemy of the 1997 game, the deck as the original shipped it.
+# tier: 7/12 Two-color greater enemies — 20 life, bribe 100 gold
+# enemy: Centaur Warchief (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0897.dck "Centaur Warchief (Re/Wh, 4th)" [Tier 3 —
+#   Manalink 3 file dated 2016-02-15; its first 16 maindeck lines are the 1997 deck, the 16
+#   lines (60 cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/centaur_warchief.toml (main_cards, sideboard_cards, level
+#   7) [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/centaur_warchief.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Greater) — "Centaur Warchief"
+#   (Original) [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Centaur Warchief
+12 Plains
+12 Mountain
+4 Serra Angel
+4 Yotian Soldier
+2 Wall of Swords
+3 Smoke
+2 Eternal Warrior
+2 Lightning Bolt
+2 Healing Salve
+3 Kismet
+2 Colossus of Sardia
+2 Cave People
+2 Ali Baba
+2 Dragon Whelp
+2 Savannah Lions
+1 Land Tax
+3 Swords to Plowshares
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Swords to Plowshares
+#   .vBlack  2 Kormus Bell, 1 Swords to Plowshares
+#   .vBlue   2 Magnetic Mountain, 1 Swords to Plowshares
+#   .vGreen  3 Swords to Plowshares
+#   .vRed    3 Swords to Plowshares
+#   .vWhite  3 Swords to Plowshares
+SB: 2 Kormus Bell
+SB: 2 Magnetic Mountain

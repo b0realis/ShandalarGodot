@@ -1,0 +1,28 @@
+# Emerald Blur — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Kevin Bane, Assistant Lead of Quality Assurance on Duels of the Planeswalkers (precon page, ref. 4)
+# colours: G
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.kevin_bane ["Emerald
+#   Blur"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Kevin_Bane) — "Emerald Blur"
+#   [Tier-web — agrees card for card]
+# group: Kevin Bane's decks
+name: Emerald Blur
+4 Barbary Apes
+1 Cat Warriors
+4 Elvish Archers
+2 Force of Nature
+1 Gaea's Liege
+3 Grizzly Bears
+4 Killer Bees
+4 Llanowar Elves
+4 Scryb Sprites
+1 Berserk
+4 Giant Growth
+2 Storm Seeker
+2 Desert Twister
+1 Black Lotus
+1 Mox Emerald
+2 Aspect of Wolf
+20 Forest

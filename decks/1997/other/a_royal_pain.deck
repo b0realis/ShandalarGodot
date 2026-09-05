@@ -1,0 +1,31 @@
+# A Royal Pain — a "Play Deck" folder deck installed by Duels of the Planeswalkers (1998): a ready-made
+# player deck that shipped in the expansion's files but was not offered in-game (the precon
+# page: "users would need to open the game's files and move them into a different directory").
+# designer: Grant Frazier (MicroProse, largely the Quality Assurance team — precon page)
+# colours: B/G
+# source: ../mage-go/data/preconstructed_decks.yaml shandalar.player_decks.other ["A Royal
+#   Pain"] [Tier 3 — mage-go's transcription of the expansion's Play Deck files]
+# cross-check: https://mtg.wiki/page/Shandalar_Player_Decks_(Other) — "A Royal Pain" [Tier-web —
+#   agrees card for card]
+# group: Other MicroProse decks
+name: A Royal Pain
+2 Barbary Apes
+2 Elves of Deep Shadow
+3 Hypnotic Specter
+2 Llanowar Elves
+4 Royal Assassin
+2 Sengir Vampire
+4 Dark Ritual
+2 Darkness
+4 Giant Growth
+2 Terror
+1 Demonic Tutor
+1 Regrowth
+2 Winter Blast
+1 Mox Jet
+1 Mox Emerald
+4 Instill Energy
+4 Paralyze
+2 Unholy Strength
+8 Forest
+9 Swamp

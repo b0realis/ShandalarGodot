@@ -1,0 +1,33 @@
+# Azaar (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Azaar deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-09).
+# archetype: the Shandalar enemy "Azaar" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/azaar_lichlord.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-280-black-shandalar-decks/
+#   — The Kitchen Table #280 - Black Shandalar Decks — "Modified Azaar" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/azaar_lichlord.deck [Tier 3 — his "Initial" (unmodified)
+#   list agrees with the shipped 1997 original]
+# group: Community decks
+name: Azaar (Sargent, 2009)
+23 Swamp
+4 Hypnotic Specter
+4 Sengir Vampire
+3 Juzám Djinn
+2 Nightmare
+3 Will-o'-the-Wisp
+1 Contract from Below
+2 Greed
+2 Terror
+1 Mind Twist
+4 Drain Life
+4 Dark Ritual
+1 Sol Ring
+1 Mox Jet
+1 Black Lotus
+1 Demonic Tutor
+2 Oubliette
+2 Demonic Hordes

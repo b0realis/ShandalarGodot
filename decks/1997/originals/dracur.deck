@@ -1,0 +1,57 @@
+# Dracur — one of the Dragons of the 1997 game, the deck as the original shipped it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Dracur (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0993.dck "Dracur (R/G/B, 4th)" [Tier 3 — Manalink 3
+#   file dated 2016-02-15; its first 24 maindeck lines are the 1997 deck, the 17 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/dracur.toml (main_cards, sideboard_cards, level 9) [Tier
+#   3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/dracur.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Dracur" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Dracur
+5 Mountain
+5 Swamp
+5 Forest
+3 Gem Bazaar
+1 Mox Emerald
+1 Mox Jet
+1 Mox Ruby
+1 Black Lotus
+2 Strip Mine
+2 Fellwar Stone
+4 Stone Rain
+2 Dingus Egg
+2 Fireball
+2 Disintegrate
+2 Lightning Bolt
+2 Mana Flare
+2 Blight
+2 Desert Twister
+3 Fissure
+1 Mind Twist
+2 Rag Man
+4 Hypnotic Specter
+2 Disrupting Scepter
+3 Wall of Dust
+1 Tranquility
+2 Earthquake
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   1 Tranquility, 2 Earthquake
+#   .vBlack  2 Tranquility, 1 Earthquake
+#   .vBlue   1 Tsunami, 2 Tranquility
+#   .vGreen  2 Earthquake, 1 Tranquility
+#   .vRed    2 Stream of Life, 1 Tranquility
+#   .vWhite  1 Gloom, 2 Tranquility
+SB: 1 Tranquility
+SB: 1 Tsunami
+SB: 2 Stream of Life
+SB: 1 Gloom

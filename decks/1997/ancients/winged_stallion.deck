@@ -1,0 +1,28 @@
+# Winged Stallion — a Two-color greater enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 7/12 Two-color greater enemies — 20 life, bribe 100 gold
+# enemy: Winged Stallion (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0127.dck "Winged Stallion (Ub/Wh, Type 1)" [Tier 1 —
+#   the 1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Greater) — "Winged Stallion (Spells
+#   of the Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Winged Stallion (Spells of the Ancients)
+10 Plains
+10 Island
+4 Tundra
+1 Sol Ring
+4 Mesa Pegasus
+2 Phantasmal Forces
+2 Serra Angel
+2 Flying Men
+2 Air Elemental
+2 Dancing Scimitar
+4 Magical Hack
+4 Karma
+2 Lifetap
+4 Angry Mob
+4 Segovian Leviathan
+3 Cyclopean Tomb

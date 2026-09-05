@@ -1,0 +1,53 @@
+# Mandurang — one of the Dragons of the 1997 game, the deck as the original shipped it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Mandurang (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Original (base game; the enemy deck files are dated 19 September 1996)
+# source: ../shandalar-src/Decks.zip:Decks/0990.dck "Mandurang (R/U/B, 4th)" [Tier 3 — Manalink
+#   3 file dated 2016-02-15; its first 18 maindeck lines are the 1997 deck, the 24 lines (60
+#   cards) after them are the modern deck Manalink appended and are NOT shipped; its
+#   .vNone/.v<Colour> sections are the 1997 colour-keyed swaps]
+# source: ../s30/assets/configs/rogues/mandurang.toml (main_cards, sideboard_cards, level 9)
+#   [Tier 3 — equals the 1997 prefix above]
+# source: ../mage-go/rogue_dck/mandurang.dck [Tier 3 — equals the 1997 prefix]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Mandurang" (Original)
+#   [Tier-web — maindeck agrees]
+# group: 1997 originals
+name: Mandurang
+2 Carrion Ants
+4 Zephyr Falcon
+4 Will-o'-the-Wisp
+4 Dancing Scimitar
+4 Ornithopter
+2 Celestial Prism
+6 Mountain
+6 Swamp
+6 Island
+1 Mox Ruby
+1 Mox Jet
+1 Mox Sapphire
+2 Jayemdae Tome
+4 Giant Strength
+4 Unstable Mutation
+4 Unholy Strength
+1 Braingeyser
+1 Blood Lust
+3 Cursed Land
+# The 1997 file's colour-keyed sideboard sections. The AI played the maindeck WITHOUT
+# .vNone plus the one section matching the player's deck colour (.vNone by default);
+# .vNone is folded into the maindeck above, and SB: holds, per name, the largest
+# colour-section count minus the .vNone count — the smallest sideboard from which
+# every 1997 configuration can be rebuilt by swapping.
+#   .vNone   3 Cursed Land
+#   .vBlack  3 Bog Wraith
+#   .vBlue   3 Red Elemental Blast
+#   .vGreen  2 Deathgrip, 1 Lifetap
+#   .vRed    3 Blue Elemental Blast
+#   .vWhite  1 Gloom, 2 Flashfires
+SB: 3 Bog Wraith
+SB: 3 Red Elemental Blast
+SB: 2 Deathgrip
+SB: 1 Lifetap
+SB: 3 Blue Elemental Blast
+SB: 1 Gloom
+SB: 2 Flashfires

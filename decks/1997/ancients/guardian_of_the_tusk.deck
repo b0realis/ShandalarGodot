@@ -1,0 +1,27 @@
+# Guardian of the Tusk — a Two-color Lesser enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Tusk Guardian — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Guardian of the Tusk"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0414.dck "Guardian of the Tusk (Wh/Gr, Type 1)" [Tier 1
+#   — the 1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a
+#   Manalink replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Guardian of the Tusk"
+#   [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Guardian of the Tusk (Spells of the Ancients)
+4 Savannah
+4 Savannah Lions
+4 Army of Allah
+4 Elephant Graveyard
+4 War Elephant
+4 War Mammoth
+3 Fellwar Stone
+6 Plains
+6 Forest
+4 Ghazbán Ogre
+4 Spirit Link
+4 Birds of Paradise
+3 Healing Salve
+2 Mightstone
+4 Singing Tree

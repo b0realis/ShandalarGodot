@@ -1,0 +1,32 @@
+# Summoner (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" Summoner deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-03-25).
+# archetype: the Shandalar enemy "Summoner" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/summoner.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-278-shandalar-green-decks/
+#   — The Kitchen Table #278 - Shandalar Green Decks — "Modified Summoner" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/summoner.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 10 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: Summoner (Sargent, 2009)
+5 Plains
+18 Forest
+4 Savannah
+4 Circle of Protection: Green
+2 Disenchant
+3 Healing Salve
+2 Cyclone
+2 Desert Twister
+4 War Mammoth
+3 Force of Nature
+3 Radjan Spirit
+1 Channel
+4 Hurricane
+4 Lifelace
+2 Colossus of Sardia
+2 Flying Carpet

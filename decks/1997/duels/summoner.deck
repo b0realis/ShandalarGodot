@@ -1,0 +1,25 @@
+# Summoner — one of the Henchmen, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 10/12 The Henchmen — up to 27 life, can't be bribed
+# enemy: Summoner (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Henchmen) — "Summoner (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Summoner (Duels of the Planeswalkers)
+4 Birds of Paradise
+2 Colossus of Sardia
+3 Force of Nature
+4 Radjan Spirit
+4 War Mammoth
+2 Disenchant
+3 Healing Salve
+4 Lifelace
+1 Channel
+4 Hurricane
+2 Flying Carpet
+4 Circle of Protection: Green
+18 Forest
+5 Plains

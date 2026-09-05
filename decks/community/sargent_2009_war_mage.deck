@@ -1,0 +1,30 @@
+# War Mage (Sargent, 2009)
+# COMMUNITY / PERIOD DECK — not a MicroProse deck. Abe Sargent's "Modified" War Mage deck — his
+#   improved build of the in-game enemy deck, from his StarCityGames column on Shandalar
+#   (article date 2009-04-01).
+# archetype: the Shandalar enemy "War Mage" deck, re-tuned within the Shandalar card pool
+# designer: Abe Sargent
+# year: 2009
+# base: decks/1997/originals/war_mage.deck — the enemy deck this re-tunes
+# source: https://articles.starcitygames.com/articles/the-kitchen-table-279-red-shandalar-decks/
+#   — The Kitchen Table #279 - Red Shandalar Decks — "Modified War Mage" [Tier-web — Abe
+#   Sargent's "The Kitchen Table" column, StarCityGames; no local copy exists]
+# cross-check: decks/1997/originals/war_mage.deck [Tier 3 — his "Initial" (unmodified) list
+#   differs from the shipped 1997 original by 4 cards (his transcription, or the later Manalink
+#   file); the Modified list is shipped as he printed it]
+# group: Community decks
+name: War Mage (Sargent, 2009)
+23 Mountain
+4 Ball Lightning
+2 Wall of Stone
+2 Smoke
+4 Mana Flare
+4 Fireball
+4 Earthquake
+4 Disintegrate
+1 Detonate
+4 Lightning Bolt
+4 Mana Vault
+1 Wheel of Fortune
+1 Pyrotechnics
+2 Aladdin's Ring

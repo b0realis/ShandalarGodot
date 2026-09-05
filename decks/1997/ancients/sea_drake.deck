@@ -1,0 +1,23 @@
+# Sea Drake — an Intermediate enemy, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 5/12 Intermediate enemies — 18 life, bribe 80 gold
+# enemy: Sea Dragon — the 1997 in-game name (s30/assets/text/Advstrings.txt @CREATURENAMES); the deck file, s30 and the wiki call it "Sea Drake"
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0218.dck "Sea Drake (Ub, Type 1)" [Tier 1 — the 1997
+#   Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Intermediate) — "Sea Drake"
+#   [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Sea Drake (Spells of the Ancients)
+24 Island
+4 Water Elemental
+2 Sea Serpent
+4 Siren's Call
+4 Creature Bond
+4 Jump
+4 Invisibility
+4 Giant Tortoise
+2 Leviathan
+4 Psionic Blast
+4 Juggernaut

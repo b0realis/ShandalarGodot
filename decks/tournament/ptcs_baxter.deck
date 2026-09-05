@@ -1,0 +1,40 @@
+# George Baxter — quarterfinalist, Pro Tour New York (Pro Tour 1), February 1996 — Standard (B/R/G Necro-Erhnam)
+# TOURNAMENT DECK — not a MicroProse deck. Pro Tour Collector Set (1996): George Baxter's
+#   quarterfinalist deck from Pro Tour New York, February 1996 — B/R/G Necro-Erhnam.
+# archetype: B/R/G Necro-Erhnam
+# pilot: George Baxter
+# event: Pro Tour New York (Pro Tour 1), February 1996 — Standard
+# year: 1996
+# place: quarterfinalist
+# caveat: Pro Tour Collector Set (1996) printing of the Top 8 deck
+# source: https://mtg.wiki/page/Pro_Tour_Collector_Set — Pro Tour Collector Set — "George
+#   Baxter, Quarterfinalist" [Tier-web — no local 1997/s30/Manalink copy exists]
+# cross-check: ../mage-go/data/preconstructed_decks.yaml pro_tour_collector_set.decks["George
+#   Baxter, Quarterfinalist"] [Tier 3 — agrees card for card]
+# group: Tournament decks
+name: Baxter — PT New York 1996 quarterfinalist
+3 City of Brass
+3 Karplusan Forest
+1 Lava Tubes
+2 Mishra's Factory
+2 Sulfurous Springs
+12 Swamp
+2 Barbed Sextant
+1 Zuran Orb
+4 Hypnotic Specter
+1 Ihsan's Shade
+4 Knight of Stromgald
+4 Order of the Ebon Hand
+2 Sengir Vampire
+4 Erhnam Djinn
+4 Dark Ritual
+4 Hymn to Tourach
+3 Fireball
+4 Lightning Bolt
+SB: 2 Nevinyrral's Disk
+SB: 2 Serrated Arrows
+SB: 2 Dark Banishing
+SB: 2 Ihsan's Shade
+SB: 3 Red Elemental Blast
+SB: 2 Shatter
+SB: 2 Tranquility

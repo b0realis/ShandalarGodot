@@ -1,0 +1,30 @@
+# Mandurang — one of the Dragons, the deck as the first expansion (Spells of the Ancients, 1997) replaced it.
+# tier: 9/12 The Dragons — 24 life, bribe 110 gold
+# enemy: Mandurang (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Spells of the Ancients (first expansion; "Type 1" deck files; no colour-keyed sideboard sections)
+# source: ../shandalar-src/Program/decks/0990.dck "Mandurang (R/U/B, Type 1, M.B.)" [Tier 1 —
+#   the 1997 Program/ directory carried in the Manalink tree; only 0150.DCK in it is a Manalink
+#   replacement]
+# cross-check: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Dragons) — "Mandurang (Spells of the
+#   Ancients)" [Tier-web — agrees]
+# group: Spells of the Ancients
+name: Mandurang (Spells of the Ancients)
+4 Unholy Strength
+4 City of Brass
+4 Volcanic Island
+4 Underground Sea
+4 Badlands
+1 Mox Ruby
+1 Mox Jet
+1 Mox Sapphire
+4 Blood Lust
+4 Unstable Mutation
+4 Giant Strength
+4 Ornithopter
+4 Will-o'-the-Wisp
+4 Zephyr Falcon
+4 Flying Men
+4 Immolation
+2 Dancing Scimitar
+3 Phantom Monster

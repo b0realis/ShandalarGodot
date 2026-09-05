@@ -1,0 +1,29 @@
+# Mind Stealer — a Two-color Lesser enemy, the deck as the second expansion (Duels of the Planeswalkers, 1998) replaced it.
+# tier: 4/12 Two-color Lesser enemies — 16 life, bribe 70 gold
+# enemy: Mind Stealer (1997 in-game name, s30/assets/text/Advstrings.txt @CREATURENAMES)
+# designer: Coyote Tex, MicroProse designer/producer — every enemy deck (precon page, ref. 2)
+# variant: Duels of the Planeswalkers (second expansion; no colour-keyed sideboard sections)
+# source: https://mtg.wiki/page/Shandalar_Enemy_Decks_(Lesser) — "Mind Stealer (Duels of the
+#   Planeswalkers)" [Tier-web — no local copy of the Duels enemy files exists in
+#   ../shandalar-src, ../s30 or ../mage-go; the wiki lists this variant for 25 of the 55
+#   enemies]
+# group: Duels of the Planeswalkers
+name: Mind Stealer (Duels of the Planeswalkers)
+4 Hypnotic Specter
+2 Junún Efreet
+2 Phantasmal Forces
+2 Phantom Monster
+4 Sengir Vampire
+3 Sindbad
+3 Will-o'-the-Wisp
+2 Siren's Call
+2 Call from the Grave
+2 Drain Power
+1 Mind Twist
+2 Fellwar Stone
+2 Animate Dead
+4 Control Magic
+2 Steal Artifact
+4 Unholy Strength
+11 Island
+11 Swamp
