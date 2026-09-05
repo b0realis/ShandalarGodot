@@ -229,17 +229,19 @@ of the 317 decks here trace back to lists it preserved.
 [s30](https://github.com/benprew/s30), its rules engine
 [mage-go](https://github.com/benprew/mage-go), and
 [mp_pic_tools](https://github.com/benprew/mp_pic_tools), whose `.PIC`/`.SPR`
-decoding made the original's raw art readable at all. This project is GPLv2
-in part to match theirs.
+decoding made the original's raw art readable at all.
 
 And everyone who converted, catalogued or simply archived a file so that
 somebody later could find it.
 
 ## Licence
 
-**GNU General Public License, version 2** — see [LICENSE](LICENSE). The same
-licence as [s30](https://github.com/benprew/s30), deliberately, so work can
-move between these projects without a licence question.
+**GNU General Public License, version 3** — see [LICENSE](LICENSE).
+
+Copyleft, so this stays free: anyone may use, study, change and share it,
+and anything built on it carries the same freedoms forward. Version 3
+because it is the current one, with the patent and anti-tivoisation terms
+version 2 predates.
 
 ## Legal
 
