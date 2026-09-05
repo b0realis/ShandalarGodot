@@ -1003,3 +1003,61 @@ func test_a_group_with_one_playable_deck_offers_no_pool() -> void:
 		assert_gt(SetupScreen.paths_in_group(
 			screen._playable_paths, group).size(), 1,
 			"%s would not have been worth offering" % group)
+
+
+# ------------------------------------- the shell's bed carries in here --
+#
+# *"The magic battle GUI menu should have also the same music as main
+# menu."* (playtest, 2026-09-05)
+#
+# Magic Battle is the title screen's next room — reached by a button on
+# the shell, left again with `Back` — so falling silent on the way in made
+# the menu music read as a title jingle rather than as the front of the
+# game.
+
+
+func test_it_plays_the_shells_own_bed_and_not_a_bed_of_its_own() -> void:
+	# THE REQUIREMENT IS A COUPLING, so it is tested as one: whatever the
+	# title screen ends up playing, this screen plays the same thing. That
+	# holds on a machine with the 1997 music imported and on one without
+	# (where both are silent), and it is what would actually break if
+	# somebody gave this screen a bed list of its own.
+	assert_not_null(screen._music, "the screen holds its own player")
+	var shell: MainScreen = load("res://game/main.tscn").instantiate()
+	add_child_autofree(shell)
+	await get_tree().process_frame
+	screen._apply_music_switch()
+	shell._apply_music_switch()
+	assert_eq(screen._music.tracks, shell._music.tracks,
+		"the setup screen plays exactly what the title screen plays")
+	# And it is the shell's LIST it read, not a copy that could drift.
+	assert_gt(MainScreen.MENU_BEDS.size(), 0, "the shell declares the beds")
+
+
+func test_the_global_switch_silences_it() -> void:
+	# The shell's rule exactly: the global `music_enabled` key decides.
+	# The Deck Builder's own screen-scoped switch is that screen's and
+	# must not reach this one.
+	var had := Settings.has_value("music_enabled")
+	var saved: Variant = Settings.get_value("music_enabled", true)
+	Settings.set_value("music_enabled", false)
+	screen._apply_music_switch()
+	assert_eq(screen._music.tracks.size(), 0, "off means silent")
+	Settings.set_value("music_enabled", true)
+	screen._apply_music_switch()
+	if had:
+		Settings.set_value("music_enabled", saved)
+	else:
+		Settings.clear_value("music_enabled")
+
+
+func test_leaving_stops_it() -> void:
+	# So the duel starts against silence and the PCM is dropped rather
+	# than carried into the next screen.
+	var fresh: SetupScreen = load("res://game/setup_screen.tscn").instantiate()
+	add_child(fresh)
+	await get_tree().process_frame
+	var player: MusicPlayer = fresh._music
+	fresh.free()
+	assert_true(player == null or not is_instance_valid(player)
+		or player.tracks.is_empty(), "the bed does not follow the player out")

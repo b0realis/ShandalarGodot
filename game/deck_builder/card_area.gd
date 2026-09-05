@@ -1060,8 +1060,18 @@ func _dress_tag(cell: Cell) -> void:
 
 
 ## s30's count overlay (`drawCountOverlay`, edit_deck.go:1075): a dark
-## disc at the card's bottom-right corner with the number on it — the
-## manual's *"tiny number on the single representative card"*.
+## disc with the number on it — the manual's *"tiny number on the single
+## representative card"*.
+##
+## BOTTOM LEFT, NOT BOTTOM RIGHT, and that is a deliberate `[QoL]`
+## departure from s30. The bottom-right corner of a mini card is where
+## [MiniCard] paints POWER/TOUGHNESS, so on a creature the two numbers
+## landed on each other and neither could be read — reported from a real
+## deck build, 2026-09-05: *"the multiples number collides with creature
+## power/defense"*. s30 can put it right because its editor cards carry no
+## P/T there; ours do, so the badge takes the free corner instead. Nothing
+## else occupies bottom-left: the mana stripes run down the LEFT EDGE
+## above it and the badge clears them at this size.
 func _badge() -> Control:
 	var badge := Panel.new()
 	var disc := StyleBoxFlat.new()
@@ -1071,7 +1081,7 @@ func _badge() -> Control:
 	disc.set_corner_radius_all(11)
 	badge.add_theme_stylebox_override("panel", disc)
 	badge.size = Vector2(22, 22)
-	badge.position = _cell - Vector2(25, 25)
+	badge.position = Vector2(3.0, _cell.y - 25.0)
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	badge.visible = false
 	var number := Label.new()

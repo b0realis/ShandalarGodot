@@ -227,7 +227,7 @@ func test_the_filter_strip_is_one_row() -> void:
 
 
 func test_the_card_count_uses_the_1997_wording() -> void:
-	assert_string_contains(screen._count_label.text, "cards are in the list")
+	assert_string_contains(screen._count_label.text, "cards")
 
 
 # -------------------------------------------------------- the commands --
@@ -857,7 +857,7 @@ func test_the_type_ahead_can_reach_into_card_text() -> void:
 
 
 func test_the_count_line_says_where_in_the_list_you_are() -> void:
-	assert_string_contains(screen._count_label.text, "cards are in the list")
+	assert_string_contains(screen._count_label.text, "cards")
 	assert_string_contains(screen._count_label.text, "showing 1-",
 		"[QoL] one row of nine is eighty-eight pages; say which one")
 

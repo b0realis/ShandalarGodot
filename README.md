@@ -1,5 +1,9 @@
 # ShandalarGodot
 
+<p align="center">
+  <img src="branding/logo-360.png" alt="ShandalarGodot" width="240">
+</p>
+
 > This project is a love letter to MicroProse MTG: to preserve that special
 > 90s Shandalar feeling — the feel of playing early Magic, up to Fourth
 > Edition, Alliances, and maybe Fifth — while still going for

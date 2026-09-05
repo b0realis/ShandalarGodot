@@ -150,6 +150,17 @@ func _init() -> void:
 	bar.offset_top = EDGE
 	bar.offset_bottom = EDGE + TITLE_H
 	bar.add_theme_stylebox_override("panel", OriginalDialog.bar_style(2.0))
+	# THE BAR IS THE DRAG HANDLE, which is the era's own gesture and not an
+	# invention: `Duel.hlp`, topic **Hands** — *"To move a hand window,
+	# click and drag on the bar at the top of the window"* — and this
+	# window has the same bar in the same place. [StackHand] already binds
+	# it that way; this is that behaviour, on the window the 2026-09-05
+	# playtest asked to move: *"battle window should be movable as it can
+	# occlude cards the player wants to designate as attackers or
+	# blockers"*. A window that hides the thing it is asking you to click
+	# is worse than one you have to move.
+	bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	bar.gui_input.connect(_on_bar_input)
 	add_child(bar)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
@@ -164,6 +175,61 @@ func _init() -> void:
 	_minimize.tooltip_text = "Minimize"
 	_minimize.pressed.connect(_on_minimize_pressed)
 	row.add_child(_minimize)
+
+
+## Where the player last put this window, remembered like the hand's is
+## (`Settings "hand_stack_pos"`). Absence means "wherever the screen puts
+## it", so a player who has never moved it is not pinned to a position
+## chosen on somebody else's resolution.
+const POS_SETTING := "combat_window_pos"
+## A press moves a pixel or two under the finger; without a threshold
+## every click on the bar would read as a drag. [StackHand]'s number.
+const DRAG_SLOP := 4.0
+
+var _dragging := false
+var _drag_moved := false
+var _drag_from := Vector2.ZERO
+var _drag_offset := Vector2.ZERO
+
+
+func _on_bar_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_dragging = true
+			_drag_moved = false
+			_drag_from = get_global_mouse_position()
+			_drag_offset = _drag_from - global_position
+		else:
+			if _dragging and _drag_moved:
+				Settings.set_value(POS_SETTING, position)
+			_dragging = false
+	elif event is InputEventMouseMotion and _dragging:
+		if get_global_mouse_position().distance_to(_drag_from) > DRAG_SLOP:
+			_drag_moved = true
+		if _drag_moved:
+			position = get_global_mouse_position() - _drag_offset
+			_clamp_on_screen()
+
+
+## NEVER OFF THE EDGE. A window dragged past the viewport cannot be
+## dragged back, so the bar always stays reachable — the same guard
+## [StackHand] keeps for the same reason.
+func _clamp_on_screen() -> void:
+	var room := get_viewport_rect().size
+	if room.x <= 0.0 or room.y <= 0.0:
+		return
+	position.x = clampf(position.x, -size.x + EDGE + 60.0, room.x - EDGE - 60.0)
+	position.y = clampf(position.y, 0.0, room.y - EDGE - TITLE_H)
+
+
+## Put it back where the player left it, if they ever moved it.
+func restore_position() -> void:
+	if not Settings.has_value(POS_SETTING):
+		return
+	var saved: Variant = Settings.get_value(POS_SETTING, Vector2.ZERO)
+	if saved is Vector2:
+		position = saved
+		_clamp_on_screen()
 
 
 func _make_lane(top: float) -> HFlowContainer:

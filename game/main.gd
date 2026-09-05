@@ -1,3 +1,4 @@
+class_name MainScreen
 extends Control
 ## Title screen — three stone buttons aligned center-right over the
 ## original title art (the 1997 shell's composition): Magic Battle opens

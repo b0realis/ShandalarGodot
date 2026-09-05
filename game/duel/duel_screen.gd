@@ -343,7 +343,9 @@ var _qol_reserve: Control = null       # black strip under it, for future QoL
 ## separate entries (§6.3). The sidebar toggle is the owner's own control
 ## and works the whole table at once — it is the door that says "sort the
 ## table"; the menu entries are the doors that say "sort this one".
-var _arrange_button: ArrangeButton = null
+var _arrange_button: ArrangeButton
+## The Showcase's `Expand` toggle — see where it is built.
+var _expand_button: ExpandButton = null
 var _arranged: Array[bool] = [false, false]
 ## `Don't auto tap this card` — `@MENU_SMALLCARD` entry 4
 ## (`shandalar-src/Program/UIStrings.txt:941`), live since the auto-cast
@@ -4955,6 +4957,14 @@ func _open_mana_menu(at: Vector2) -> void:
 
 ## `@MENU_FULLCARD` — the SHOWCASE's own menu, and its one live entry is
 ## the `Expand` toggle the help file describes.
+## The visible Expand toggle. Writes through [method CardPreview.set_expand]
+## like the menu entry does, and re-applies to the Showcase at once.
+func _on_expand_toggled(on: bool) -> void:
+	CardPreview.set_expand(on)
+	if _card_preview != null:
+		_card_preview.set_text_expanded(on)
+
+
 func _open_full_card_menu(at: Vector2) -> void:
 	CardMenu.build(_full_card_menu, CardMenu.FULL_CARD)
 	var at_index := _full_card_menu.get_item_index(0)
@@ -4965,6 +4975,10 @@ func _open_full_card_menu(at: Vector2) -> void:
 
 
 func _on_full_card_menu_chosen(id: int) -> void:
+	if id == 0 and _expand_button != null:
+		# The menu and the button are two doors onto one setting, so each
+		# has to show what the other did.
+		_expand_button.set_expanded(not CardPreview.expand_wanted())
 	if id != 0:
 		return
 	var on := not CardPreview.expand_wanted()
@@ -6445,6 +6459,26 @@ func _build_ui() -> void:
 	_arrange_button.offset_right = -4.0
 	_arrange_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
 	_qol_reserve.add_child(_arrange_button)
+	# EXPAND, GIVEN THE SAME DOOR. The toggle is the original's own
+	# (`@MENU_FULLCARD` entry 1) but its only door was a right-click on the
+	# Showcase's text area — a gesture nobody finds, which is why the
+	# 2026-09-05 playtest reported long text clipping rather than a toggle
+	# being off. The Deck Builder got a visible one beside its Sort button
+	# the same day; this is that button, in the duel, under the large card
+	# where the owner asked for it. Same key, same behaviour: two doors
+	# onto one setting, never two features.
+	_expand_button = ExpandButton.create(_on_expand_toggled)
+	# BESIDE ARRANGE, NOT UNDER IT. Stacked, the second button landed at
+	# y=634 with the mana pool's panel starting at ~640, so it was buried
+	# (caught by screenshotting it, 2026-09-05). The reserve is a thin
+	# strip between the card and the player's block; it has width to spare
+	# and no height, so the QoL controls run ACROSS it.
+	_expand_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_expand_button.offset_left = -ArrangeButton.FACE.x * 2.0 - 10.0
+	_expand_button.offset_top = 4.0
+	_expand_button.offset_right = -ArrangeButton.FACE.x - 10.0
+	_expand_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
+	_qol_reserve.add_child(_expand_button)
 	# Last child of the column, so the player's life numeral finishes
 	# flush with the bottom edge of the screen.
 	sidebar.add_child(_player_panel(0, false))
@@ -6612,6 +6646,9 @@ func _build_ui() -> void:
 	_combat_window.gui_input.connect(_on_attack_window_input)
 	add_child(_combat_window)
 	move_child(_combat_window, root.get_index() + 1)
+	# Where the player last dragged it, if they ever did — after the add,
+	# because clamping needs the viewport, and only then.
+	_combat_window.restore_position()
 
 	# ----------------------------------------------------------- arrows --
 	# Blocker and spell-target arrows (s30 duel.go:3449-3554). s30's Draw()

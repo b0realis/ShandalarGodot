@@ -19,6 +19,13 @@ config/name="Shandalar"
 config/version="0.9.0-dev"
 config/description="Open-source remake of MicroProse's 1997 Magic: The Gathering (Shandalar), with a modular GDScript MTG rules engine."
 run/main_scene="res://game/main.tscn"
+; THE PROJECT'S OWN MARK. Godot draws this in the editor, on the window
+; and in the taskbar, so it ships in the pack for the same reason the boot
+; splash does — it is OURS, not 1997 art, and it must be there for a
+; player who has imported nothing. `branding/logo.png` is the
+; full-resolution master; this is the 256px cut a window icon actually
+; wants.
+config/icon="res://game/icon.png"
 ; OUR OWN SPLASH, not Godot's. The boot image is shown before a single
 ; line of the game runs, so it has to live in the .pck — which is why it
 ; is here in game/ and not in assets/ (art is never packed, see

@@ -367,3 +367,78 @@ func test_arrange_my_cards_from_the_other_territory_arranges_that_half() -> void
 	screen._on_territory_menu_chosen(DuelScreen.REST_BASE + 0)
 	assert_true(screen._arranged[1], "the half that was clicked")
 	assert_false(screen._arranged[0], "and not seat 0's")
+
+
+# ---------------------------------- the combat window moves, and remembers --
+#
+# *"Battle window should be movable as it can occlude cards the player
+# wants to designate as attackers or blockers."* (playtest, 2026-09-05)
+#
+# A window that hides the thing it is asking you to click is worse than
+# one you have to move. The gesture is the era's own: `Duel.hlp`, topic
+# **Hands**, binds "click and drag on the bar at the top of the window",
+# and this window has the same bar in the same place.
+
+
+func test_the_combat_windows_bar_is_a_drag_handle() -> void:
+	var win := screen._combat_window
+	assert_not_null(win, "the duel builds one")
+	var bar := _first_child_of_type(win, "PanelContainer")
+	assert_not_null(bar, "it has a title bar")
+	assert_eq(bar.mouse_filter, Control.MOUSE_FILTER_STOP,
+		"the bar takes the press — a PASS filter would let it fall through")
+	assert_true(bar.gui_input.is_connected(win._on_bar_input),
+		"…and the press reaches the drag")
+
+
+func test_dragging_moves_it_and_remembers_where() -> void:
+	var win := screen._combat_window
+	Settings.clear_value(CombatWindow.POS_SETTING)
+	win.position = Vector2(200, 200)
+	# A press, a real move, a release — the shape the handler expects.
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	win._on_bar_input(down)
+	assert_true(win._dragging, "the press started a drag")
+	win._drag_moved = true
+	win._drag_offset = Vector2.ZERO
+	win.position = Vector2(320, 260)
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	win._on_bar_input(up)
+	assert_false(win._dragging, "the release ended it")
+	assert_true(Settings.has_value(CombatWindow.POS_SETTING),
+		"and the position is remembered, like the hand's is")
+	Settings.clear_value(CombatWindow.POS_SETTING)
+
+
+func test_it_cannot_be_dragged_off_the_screen() -> void:
+	# A window dragged past the viewport cannot be dragged back, so the
+	# bar always stays reachable.
+	var win := screen._combat_window
+	var room := win.get_viewport_rect().size
+	for wild in [Vector2(-9000, -9000), Vector2(9000, 9000)]:
+		win.position = wild
+		win._clamp_on_screen()
+		assert_lt(win.position.x, room.x, "its left edge stays on screen")
+		assert_gte(win.position.y, 0.0, "and its bar never goes above the top")
+		assert_lt(win.position.y, room.y, "…nor below the bottom")
+
+
+func test_an_untouched_window_keeps_the_screens_own_placement() -> void:
+	# Absence of the key means "wherever the screen puts it" — a player
+	# who never moved it is not pinned to someone else's resolution.
+	Settings.clear_value(CombatWindow.POS_SETTING)
+	var win := screen._combat_window
+	var where := win.position
+	win.restore_position()
+	assert_eq(win.position, where, "nothing stored, nothing moved")
+
+
+func _first_child_of_type(node: Node, type_name: String) -> Control:
+	for child in node.get_children():
+		if child.get_class() == type_name:
+			return child
+	return null

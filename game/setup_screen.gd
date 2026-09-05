@@ -176,6 +176,9 @@ const NO_PORTRAITS := "(no portraits)"
 const TERRITORY_PREVIEW := Vector2(160, 70)
 
 
+## The shell's bed, carried into this screen — see `_start_music`.
+var _music: MusicPlayer
+
 func _ready() -> void:
 	_scan_decks()
 	_build_ui()
@@ -183,6 +186,44 @@ func _ready() -> void:
 		_update_face(pid)
 	_refresh_format_note()
 	_apply_mode(BattleMode.VS_AI)
+	_start_music()
+
+## THE SHELL'S BED CARRIES INTO THE SETUP SCREEN. Magic Battle is the
+## title screen's own next room — you reach it by pressing a button on the
+## shell and you go back with `Back` — so falling silent on the way in
+## made the menu music read as a title-screen jingle rather than as the
+## front of the game (2026-09-05 playtest: *"the magic battle GUI menu
+## should have also the same music as main menu"*).
+##
+## The SAME bed, from [constant MainScreen.MENU_BEDS] via the same
+## [method MusicLibrary.single_for], so the two screens cannot drift onto
+## different tracks; and [method MusicPlayer.play_one] keys on the track
+## id, so this is a fresh start of the same tune rather than a second
+## voice over the first. The global `music_enabled` switch is the whole
+## rule here, exactly as it is on the shell — the Deck Builder's own
+## screen-scoped switch is that screen's and must not reach this one.
+func _start_music() -> void:
+	GameAudio.apply_settings()
+	_music = MusicPlayer.new()
+	add_child(_music)
+	_apply_music_switch()
+
+
+func _apply_music_switch() -> void:
+	if _music == null:
+		return
+	if not Settings.music_enabled():
+		_music.stop_music()
+		return
+	_music.play_one(MusicLibrary.single_for(MainScreen.MENU_BEDS))
+
+
+## Stops on the way out, so the duel starts against silence and the PCM
+## is dropped rather than carried — [MainScreen] does the same.
+func _exit_tree() -> void:
+	if is_instance_valid(_music):
+		_music.stop_music()
+
 
 
 ## Every deck this screen LISTS, from both deck directories — the ones the

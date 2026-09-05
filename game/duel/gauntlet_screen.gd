@@ -136,6 +136,58 @@ func _ready() -> void:
 		begin_run()
 		return
 	_show_options()
+	_start_music()
+
+## THE GAUNTLET'S OWN BED, and the longest the library has: a gauntlet is
+## a RUN of duels, so its screen is looked at repeatedly across a session
+## and a short loop wears through fastest of anything in the game.
+##
+## `music_location_13` measured 2026-09-05 across all 27 beds: **38.9 s,
+## the longest**, with **zero** frames below the silence floor (the trap
+## that ruled out `Ucastle`, which is 30.6% silence) and 932
+## zero-crossings/s — darker than its length-neighbours (`location_14` is
+## 1577), which is what a screen you return to between duels wants.
+## `location_11` (38.6 s) and `location_19` (36.2 s) sit behind it in
+## measured order. Deliberately NOT the shell's `music_location_15`: the
+## two screens are one button apart and sharing a bed would restart the
+## same track on every crossing.
+##
+## `[QoL]`: the 1997 shell played no music at all (`Provenance.md`, "The
+## shell screen's audio"), so every bed on a menu screen here is ours.
+const GAUNTLET_BEDS: Array[String] = [
+	"music_location_13",
+	"music_location_11",
+	"music_location_19",
+]
+
+## The screen's voice on the Music bus. Freed with the screen.
+var _music: MusicPlayer
+
+
+func _start_music() -> void:
+	GameAudio.apply_settings()
+	_music = MusicPlayer.new()
+	add_child(_music)
+	_apply_music_switch()
+
+
+## The GLOBAL `music_enabled` switch is the whole rule, as it is on the
+## shell — the Deck Builder's screen-scoped switch is that screen's.
+func _apply_music_switch() -> void:
+	if _music == null:
+		return
+	if not Settings.music_enabled():
+		_music.stop_music()
+		return
+	_music.play_one(MusicLibrary.single_for(GAUNTLET_BEDS))
+
+
+## Stops on the way out, so the duel starts against silence and the PCM
+## is dropped rather than carried.
+func _exit_tree() -> void:
+	if is_instance_valid(_music):
+		_music.stop_music()
+
 
 
 ## THE GROUND THE OPTIONS WINDOW SITS ON. `Winbk_Startduel` — the

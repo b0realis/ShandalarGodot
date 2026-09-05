@@ -474,8 +474,26 @@ func _deck_rect() -> Rect2:
 
 ## [QoL] The sideboard strip: the deck area's width, one card tall, sitting
 ## directly above the command bar.
+## HOW FAR RIGHT THE SIDEBOARD SITS OF THE DECK'S NOMINAL LEFT EDGE.
+##
+## The two rects are computed from the same expression and land on the
+## same number — and they still do not LOOK aligned, which is what the
+## 2026-09-05 playtest reported. Measured off a capture: the deck area's
+## visible ground begins at x=281 while the sideboard's teal begins at
+## x=267, a fourteen-pixel step down the seam between them. Something
+## inside the deck surface insets its own ground by that much; this
+## constant matches the sideboard to what is actually DRAWN rather than to
+## what is computed, and the seam is straight.
+##
+## Honest about its own standing: 14 is a measurement, not a derivation. I
+## did not find the inset's source, so if the deck surface's drawing
+## changes this number is stale and the seam will step again — a capture
+## is the only thing that catches it.
+const SIDEBOARD_INSET := 14.0
+
+
 func _sideboard_rect() -> Rect2:
-	var left := MARGIN + LEFT_W + 10.0
+	var left := MARGIN + LEFT_W + 10.0 + SIDEBOARD_INSET
 	var bottom := _filter_bar.position.y - COMMAND_BAR_H - 8.0
 	return Rect2(left, maxf(MARGIN, bottom - SIDEBOARD_H),
 		maxf(0.0, size.x - left - MARGIN), SIDEBOARD_H)
@@ -743,11 +761,36 @@ func _build_showcase() -> void:
 	bar_style.set_content_margin_all(6.0)
 	bar.add_theme_stylebox_override("panel", bar_style)
 	bar.custom_minimum_size = Vector2(LEFT_W, 42)
+	# EXACTLY [constant LEFT_W], not "at least". `custom_minimum_size` is a
+	# floor and a VBox child fills the column, so this strip stretched to
+	# 268 and its right edge crossed x=267 — where the deck area's ground
+	# above and the sideboard's ground below both begin. The overlap was
+	# reported as the sideboard being too far left (2026-09-05); it is not,
+	# the two grounds share that edge exactly. It was this well overrunning
+	# them, so the well is pinned instead of the layout being moved.
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	var lines := VBoxContainer.new()
 	lines.add_theme_constant_override("separation", 0)
-	_count_label = OriginalDialog.ink_label("", 12)
+	# PALE ON THE WELL, AND NO OUTLINE. [method OriginalDialog.ink_label]
+	# is dark ink under a 4px pale outline — right for the sandstone it
+	# was written for, and wrong the moment this strip became a dark inset
+	# (2026-09-05): the outline reads as a border around every glyph and
+	# the owner reported the line "hardly readable with its border". The
+	# ground changed, so the lettering changes with it, which is the same
+	# rule [UiChrome] settled for the sand panels in the other direction.
+	_count_label = _well_label(15, true)
+	# THE TEXT MUST NOT SET THE WIDTH. A Label's minimum size is its whole
+	# string, and a PanelContainer is at least its content — so the count
+	# line, once it grew to 15px bold, pushed this strip from 252 to 268
+	# and over the x=267 edge the deck and sideboard grounds share. Capped
+	# here and allowed to wrap, so the panel's width is the LAYOUT's
+	# decision and the line's length is not.
+	_count_label.custom_minimum_size.x = LEFT_W - 16
+	_count_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_count_label.max_lines_visible = 1
+	_count_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	lines.add_child(_count_label)
-	_status_label = OriginalDialog.ink_label("", 13)
+	_status_label = _well_label(13, false)
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status_label.custom_minimum_size.x = LEFT_W - 16
 	_status_label.max_lines_visible = 2
@@ -1289,10 +1332,44 @@ func _update_count_line() -> void:
 	var total := _inventory.entry_count()
 	var first: int = mini(_inventory.offset() + 1, total)
 	var last: int = mini(_inventory.offset() + _inventory.page_size(), total)
-	_count_label.text = "%d cards are in the list" % total
+	# SHORT ENOUGH TO SURVIVE THE COLUMN. The 1997 cue-card phrasing
+	# ("X cards are in the list", `Cuecards.txt`) is 38 characters with the
+	# range on it, and at the 15px bold the owner asked for that needs
+	# ~256px in a 236px column — so it ellipsised away the very range it
+	# was there to show (caught by screenshotting it, 2026-09-05). The
+	# echo of the era's voice is worth less than the number, so the number
+	# stays and the sentence goes: both figures fit at full size.
+	_count_label.text = "%d cards" % total
 	if total > _inventory.page_size():
 		_count_label.text += " — showing %d-%d" % [first, last]
 	_inventory.tally = "%d card%s" % [total, "" if total == 1 else "s"]
+
+
+## A line ON THE DARK WELL: white, no outline, and emboldened when it is
+## the count — the owner asked for *"white text, larger and bold on that
+## inset"*. `MPlantin` ships one cut, so the weight is synthesised by
+## growing the outline the way [method UiChrome.menu_button] does for the
+## shell buttons; there is no bold companion to ask for.
+func _well_label(size: int, heavy: bool) -> Label:
+	var lab := Label.new()
+	lab.add_theme_font_size_override("font_size", size)
+	lab.add_theme_color_override("font_color", Color(0.96, 0.96, 0.93))
+	# A one-pixel dark seat, not a four-pixel ring: enough to hold the
+	# letters off a busy ground, invisible as an edge.
+	lab.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.65))
+	lab.add_theme_constant_override("shadow_offset_x", 1)
+	lab.add_theme_constant_override("shadow_offset_y", 1)
+	lab.add_theme_constant_override("outline_size", 0)
+	var body: Font = GameSkin.font("font_body")
+	if body != null:
+		if heavy:
+			var thick := FontVariation.new()
+			thick.base_font = body
+			thick.variation_embolden = 0.05
+			lab.add_theme_font_override("font", thick)
+		else:
+			lab.add_theme_font_override("font", body)
+	return lab
 
 
 ## A line in the era's voice, cleared after a few seconds — the duel
