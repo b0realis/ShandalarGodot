@@ -1575,6 +1575,7 @@ func _respond_action(game: MtgGame) -> String:
 	var saved := _save_from_the_stack(game)
 	if saved != "":
 		return saved
+	var response := ""
 	if not game.combat.attackers.is_empty():
 		var shield := _combat_regeneration(game)
 		if shield != "":
@@ -1583,23 +1584,31 @@ func _respond_action(game: MtgGame) -> String:
 		if pumped != "":
 			return pumped
 		if game.active_player != pid:
-			return _defensive_combat_response(game)
-		return _offensive_combat_response(game)
+			response = _defensive_combat_response(game)
+		else:
+			response = _offensive_combat_response(game)
 	# THE OPPONENT'S TURN, empty stack: the two moments the ability scorer
 	# keys on (their upkeep, their end step) and the last call for a held
 	# instant before our own untap.
-	if game.active_player != pid and game.stack.is_empty():
+	elif game.active_player != pid and game.stack.is_empty():
 		match game.current_step():
 			Mtg.Step.UPKEEP:
 				# The tap policy's strongest reading (see "the tap policy"):
 				# a tap laid down HERE holds through their turn and ours.
-				var tapped_down := _fire_tap_instant(game)
-				if tapped_down != "":
-					return tapped_down
-				return _try_activate(game, Moment.UPKEEP)
+				response = _fire_tap_instant(game)
+				if response == "":
+					response = _try_activate(game, Moment.UPKEEP)
 			Mtg.Step.END:
-				return _end_of_their_turn(game)
-	return ""
+				response = _end_of_their_turn(game)
+	if response != "":
+		return response
+	# LAST, after every responder above has had its say and declined: the
+	# spell whose only legal moment is one of these (see "the window
+	# caster" below). Last because each responder above HOLDS what it is
+	# for — the counter for the threat, the Fog for the lethal swing, the
+	# Bolt for the end step — and a general caster that ran first would
+	# spend the mana they are waiting on.
+	return _cast_in_window(game)
 
 
 ## The opponent's end step: everything still in hand or open that would
@@ -1610,6 +1619,463 @@ func _end_of_their_turn(game: MtgGame) -> String:
 	if fired != "":
 		return fired
 	return _try_activate(game, Moment.SINK)
+
+
+# ==================================================== the window caster --
+#
+# THE CARDS WITH A MOMENT (2026-09-06). Twelve cards in this pool carry a
+# "Cast this spell only ..." rider that keeps them out of their caster's
+# own main phase altogether — Festival at an opponent's upkeep, Siren's
+# Call before they declare attackers, Reset once they are past their
+# upkeep, Teleport in a declare-attackers step, Blaze of Glory and
+# Disharmony before blockers, False Orders in the declare-blockers step —
+# and until this landed every one of them sat in hand for the whole duel:
+# [method _try_cast_best] runs only in our own main phase, where the
+# rider refuses them, and nothing outside it asked (docs/ROADMAP.md, the
+# dead-card sweep's class 1).
+#
+# THE GATE IS THE CLASS ITSELF, and it is the safest one there is. A card
+# is this arm's only if [method MtgGame.rider_admits_own_main] says its
+# rider would refuse it in BOTH of our main phases — so Berserk and Rapid
+# Fire, which the planner may cast in our first main, stay the planner's,
+# and nothing an existing responder holds can be reached at all: a
+# counterspell, a Fog, a Bolt, a Giant Growth has no rider. The second
+# fence, [method _claimed_by_a_responder], says the same thing
+# structurally, so a rider added to a removal spell some day still could
+# not be fired from here out of turn.
+#
+# THE PRICE IS THE BOARD'S. Every card the gate admits is a card-local
+# effect the intent reader cannot express, and what it does is done to
+# THE COMBAT it is cast into rather than to a target; so
+# [constant EffectIntent.WINDOW_SHAPES] names the shape and
+# [method _window_worth] prices the shape from the board, with the
+# primitives the attack and block planners already use (one blocker per
+# attacker, [method _dies_to], [method _face_damage_value]). A shape it
+# has no reading for is not cast — risk first. The bar is the card's own
+# worth ([method Evaluator.card_value]): a Siren's Call that kills a 2/2
+# is a card for a card, and a Festival that stops two damage at twenty
+# life is a card for nothing.
+#
+# THE 1997 GAME had no policy for these beyond legality. The Manalink AI
+# speculates every card whose EVENT_CAN_CAST handler admits the phase
+# (`functions/ai.c`, ai_decision_phase: dispatch EVENT_SHOULD_AI_PLAY,
+# keep the line with the better ai_opinion_of_gamestate), and the card
+# functions answer only "may this be cast now" (unlimited.c,
+# card_sirens_call: `current_turn != player && current_phase <
+# PHASE_DECLARE_ATTACKERS`; the_dark.c, card_festival; legends.c,
+# card_reset). Legality from the card, the decision from a whole-state
+# opinion after trying it — which is this arm's shape too, with the
+# engine's own [method MtgGame.cast_refusal] as the card's answer and a
+# one-ply reading of the board in place of the speculation.
+
+## One window cast, or "" — the last arm of [method _respond_action].
+func _cast_in_window(game: MtgGame) -> String:
+	if not profile.casts_timed_spells:
+		return ""
+	var me := game.players[pid]
+	var sources: Array = []
+	var reserve: Dictionary = {}
+	var looked := false
+	var best: CardInstance = null
+	var best_targets: Array = []
+	var best_value := 0.0
+	for inst in me.hand:
+		if not inst.is_type(Mtg.CardType.INSTANT) \
+				or not inst.data.cast_condition.is_valid():
+			continue
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+			continue   # refused this step, locked, banned, or the rider says not now
+		if game.rider_admits_own_main(pid, inst):
+			continue   # the main-phase planner's card, whatever the rider allows tonight
+		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
+		if _claimed_by_a_responder(inst.data, intent):
+			continue
+		# Nothing below taps a land, so the sources and the reserve are the
+		# same for every candidate — and most priority rounds never get
+		# this far, so neither is built until one does.
+		if not looked:
+			sources = _mana_sources(game)
+			reserve = _held_reserve(game)
+			looked = true
+		var surcharge := game.spell_surcharge(pid, inst.data)
+		if _plan_taps_from(sources, inst.data.cost, surcharge,
+				game.mana_usage_keys(inst.data)).is_empty() \
+				and not (_cost_is_free(inst.data.cost) and surcharge == 0):
+			continue
+		var worth := _window_worth(game, inst, intent, reserve)   # {} = no reading, or not tonight
+		if worth.is_empty():
+			continue
+		var value: float = worth["value"]
+		if value < Evaluator.card_value(inst.data):
+			continue
+		# Mana kept open for a held instant or a counter — the 1.5x rule of
+		# [method _try_cast_best]: a window cast that would tap us out of
+		# it must be worth half again as much. Except the one shape whose
+		# whole worth is that reserve: a Reset is cast BECAUSE the held
+		# card cannot be paid for tonight, and untapping the lands is what
+		# pays for it.
+		if not reserve.is_empty() and value < float(reserve["value"]) * 1.5 \
+				and intent.window != EffectIntent.Shape.UNTAPS_LANDS \
+				and _plan_taps_from(sources, _combined_cost(inst.data.cost, reserve["cost"]),
+					surcharge).is_empty():
+			continue
+		var targets: Array = worth["targets"]
+		if game.cast_refusal(pid, inst, targets) != "":
+			continue
+		if value > best_value:
+			best = inst
+			best_targets = targets
+			best_value = value
+	if best == null:
+		return ""
+	return _cast_response(game, best, best_targets, 0,
+		"cast %s in its window" % best.data.card_name)
+
+
+## Does an existing responder HOLD this instant for a moment of its own?
+## The counter and the Fog ([method _is_reactive]), the shield, the
+## ritual, the sweeper and the animation ([method _try_cast_best]'s), the
+## removal, the draw and the face burn ([method _fire_held_instant],
+## [method _find_instant_removal_for]), the tap ([method
+## _fire_tap_instant]), the stat pump and the X pump ([method
+## _find_pump_instant], [method _find_x_power_pump], [method
+## _combat_self_pumps]). Structural, like the readers it names: the
+## window caster fires nothing that any of them could.
+func _claimed_by_a_responder(data: CardData, intent: EffectIntent) -> bool:
+	if _is_reactive(data) or data.is_modal():
+		return true
+	if intent.counters or intent.fogs or intent.regenerates or intent.adds_mana:
+		return true
+	if intent.sweeper != null or intent.animates != null:
+		return true
+	if intent.answers_creatures() or intent.draws > 0 or intent.draws_use_x:
+		return true
+	if intent.taps or intent.untaps:
+		return true
+	if intent.pumps and (intent.pump_toughness > 0 or intent.pump_uses_x
+			or intent.pump_self):
+		return true
+	return false
+
+
+## What [param inst] is worth cast into THIS moment: `{targets, value}`,
+## or `{}` when the arm has no reading for its shape or the board gives
+## the shape nothing to do. [param reserve] is [method _held_reserve]'s
+## answer, already built by the caller. The value is on [method
+## Evaluator]'s stat scale, the way every other price in this file is.
+func _window_worth(game: MtgGame, inst: CardInstance, intent: EffectIntent,
+		reserve: Dictionary) -> Dictionary:
+	var theirs := game.active_player != pid
+	match intent.window:
+		EffectIntent.Shape.STOPS_ATTACKS:
+			return _worth_stopping_attacks(game) if theirs else {}
+		EffectIntent.Shape.FORCES_ATTACKS:
+			return _worth_forcing_attacks(game) if theirs else {}
+		EffectIntent.Shape.UNTAPS_LANDS:
+			return _worth_untapping_lands(game, reserve) if theirs else {}
+		EffectIntent.Shape.STEALS_ATTACKER:
+			return _worth_stealing_an_attacker(game) if theirs else {}
+		EffectIntent.Shape.CONSCRIPTS_BLOCKER:
+			return _worth_conscripting_a_blocker(game) if theirs else {}
+		EffectIntent.Shape.PULLS_BLOCKER:
+			return {} if theirs else _worth_pulling_a_blocker(game)
+	# Teleport's shape is read from the effect rather than from a row: a
+	# pump that grants UNBLOCKABLE and nothing else.
+	if intent.pumps and intent.pump_keywords.has(Mtg.Keyword.UNBLOCKABLE) \
+			and intent.pump_power == 0 and intent.pump_toughness == 0:
+		return {} if theirs else _worth_unblockable(game, inst)
+	return {}
+
+
+## Untapped creatures [param of_pid] controls — the bodies that could
+## attack or block this turn, before any legality question.
+func _untapped_creatures(game: MtgGame, of_pid: int) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	for inst in game.players[of_pid].battlefield:
+		if inst.is_creature() and not inst.tapped:
+			out.append(inst)
+	return out
+
+
+## The declared attackers still on the battlefield.
+func _declared_attackers(game: MtgGame) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	for attacker_id in game.combat.attackers:
+		var attacker := game.find_instance(attacker_id)
+		if attacker != null and attacker.zone == Mtg.Zone.BATTLEFIELD:
+			out.append(attacker)
+	return out
+
+
+## STOPS_ATTACKS (Festival, their upkeep): a Fog cast before the swing,
+## priced by the Fog's own rule — what their whole attack would land on
+## us after our best one-blocker-per-attacker answer, worth casting at
+## the same seven-or-lethal bar [method _defensive_combat_response] holds
+## the Fog to, and the game itself when the swing is lethal.
+func _worth_stopping_attacks(game: MtgGame) -> Dictionary:
+	var me := game.players[pid]
+	var opponent := game.opponent_of(pid)
+	var could_attack: Array[CardInstance] = []
+	for inst in _untapped_creatures(game, opponent):
+		if CombatState.attack_illegality(game, inst, pid) == "":
+			could_attack.append(inst)
+	var through := _damage_through_blocks(game, could_attack,
+		_untapped_creatures(game, pid), pid)
+	if through < mini(me.life, 7):
+		return {}
+	var value: float = LETHAL_WORTH if through >= me.life \
+		else _face_damage_value(game, through, pid)
+	return {"targets": [], "value": value}
+
+
+## FORCES_ATTACKS (Siren's Call, their turn before attackers): every
+## non-Wall creature they held since the turn began attacks or dies at
+## the end step. What we gain is what the forced swing costs them — the
+## bodies that cannot attack at all (tapped, defender, a Serpent with no
+## Island to swim to), and the ones our blockers kill and survive or
+## trade up against, one blocker each — less what lands on us through
+## the rest. Never when the rest is lethal: a card that forces the
+## attack that kills us is not a card.
+func _worth_forcing_attacks(game: MtgGame) -> Dictionary:
+	var me := game.players[pid]
+	var opponent := game.opponent_of(pid)
+	var gain := 0.0
+	var forced: Array[CardInstance] = []
+	for inst in game.players[opponent].battlefield:
+		if not inst.is_creature() or inst.has_subtype("wall") or inst.summoning_sick:
+			continue
+		if CombatState.attack_illegality(game, inst, pid) != "":
+			gain += Evaluator.permanent_value(inst)   # dies at the end step
+		else:
+			forced.append(inst)
+	forced.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+		return Evaluator.permanent_value(a) > Evaluator.permanent_value(b))
+	var free := _untapped_creatures(game, pid)
+	var used: Dictionary = {}
+	var through := 0
+	for attacker in forced:
+		var worth := Evaluator.permanent_value(attacker)
+		var best_gain := 0.0
+		var best_blocker: CardInstance = null
+		for blocker in free:
+			if used.has(blocker.id) \
+					or CombatState.block_illegality(game, blocker, attacker, pid) != "":
+				continue
+			if not _dies_to(game, attacker, blocker):
+				continue
+			var trade := worth
+			if _dies_to(game, blocker, attacker):
+				trade -= Evaluator.permanent_value(blocker)
+			if trade > best_gain:
+				best_gain = trade
+				best_blocker = blocker
+		if best_blocker != null:
+			used[best_blocker.id] = true
+			gain += best_gain
+		else:
+			through += attacker.cur_power
+	if through >= me.life:
+		return {}
+	var value := gain - _face_damage_value(game, through, pid)
+	if value <= 0.0:
+		return {}
+	return {"targets": [], "value": value}
+
+
+## UNTAPS_LANDS (Reset, their turn past their upkeep): every land we
+## control untaps, the two that paid for it included, so the mana it
+## returns is exactly the lands that were tapped — and mana is worth
+## what it lets us cast ([method _mana_spell_enables]' rule for the
+## ritual). Worth a card only when something in hand is WAITING for it:
+## the held instant or the counter [method _held_reserve] names.
+func _worth_untapping_lands(game: MtgGame, reserve: Dictionary) -> Dictionary:
+	if reserve.is_empty():
+		return {}
+	var tapped := 0
+	for inst in game.players[pid].battlefield:
+		if inst.is_land() and inst.tapped:
+			tapped += 1
+	if tapped == 0:
+		return {}
+	return {"targets": [], "value": float(tapped)}
+
+
+## STEALS_ATTACKER (Disharmony, their declare-attackers step): their
+## attacker leaves combat untapped and is ours until the end of the turn
+## — half a body's worth of it (it cannot attack for us, but it can
+## block) plus the damage it was bringing, priced the way [method
+## _defensive_combat_response] prices an attacker worth killing, and
+## the game itself when it is the one that makes the swing lethal.
+func _worth_stealing_an_attacker(game: MtgGame) -> Dictionary:
+	var me := game.players[pid]
+	var attackers := _declared_attackers(game)
+	var blockers := _untapped_creatures(game, pid)
+	var through := _damage_through_blocks(game, attackers, blockers, pid)
+	var incoming := 0
+	for attacker in attackers:
+		incoming += attacker.cur_power
+	var best: CardInstance = null
+	var best_value := 0.0
+	for attacker in attackers:
+		var value := Evaluator.permanent_value(attacker) * 0.5
+		if through >= me.life:
+			var rest: Array[CardInstance] = attackers.duplicate()
+			rest.erase(attacker)
+			var stolen_blockers: Array[CardInstance] = blockers.duplicate()
+			stolen_blockers.append(attacker)
+			if _damage_through_blocks(game, rest, stolen_blockers, pid) < me.life:
+				value += LETHAL_WORTH
+		else:
+			value += attacker.cur_power * (1.0 if me.life - incoming <= 10 else 0.34)
+		if value > best_value:
+			best = attacker
+			best_value = value
+	if best == null:
+		return {}
+	return {"targets": [TargetRef.card(best)], "value": best_value}
+
+
+## CONSCRIPTS_BLOCKER (Blaze of Glory, their declare-attackers step): one
+## creature of ours blocks every attacker it can reach. Its worth is what
+## it stops beyond what our ordinary one-blocker-per-attacker answer
+## already stopped, plus the attackers its power kills (dealt biggest
+## first, the way [method order_blockers] orders damage), less the body
+## itself when the sum of their power gets through its toughness. Two
+## attackers in reach at least — a single block needs no Blaze.
+func _worth_conscripting_a_blocker(game: MtgGame) -> Dictionary:
+	var attackers := _declared_attackers(game)
+	var blockers := _untapped_creatures(game, pid)
+	var through_now := _damage_through_blocks(game, attackers, blockers, pid)
+	var best: CardInstance = null
+	var best_value := 0.0
+	for conscript in blockers:
+		var reach: Array[CardInstance] = []
+		var rest: Array[CardInstance] = []
+		var taken := 0
+		for attacker in attackers:
+			if CombatState.block_illegality(game, conscript, attacker, pid) == "":
+				reach.append(attacker)
+				taken += attacker.cur_power
+			else:
+				rest.append(attacker)
+		if reach.size() < 2:
+			continue
+		var others: Array[CardInstance] = blockers.duplicate()
+		others.erase(conscript)
+		var stopped := through_now - _damage_through_blocks(game, rest, others, pid)
+		var value := _face_damage_value(game, stopped, pid)
+		reach.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+			return Evaluator.permanent_value(a) > Evaluator.permanent_value(b))
+		var power_left := conscript.cur_power
+		for attacker in reach:
+			var needed := attacker.cur_toughness - attacker.damage
+			if needed <= 0 or needed > power_left or attacker.cur_indestructible \
+					or _shieldable(game, attacker):
+				continue
+			power_left -= needed
+			value += Evaluator.permanent_value(attacker)
+		if taken >= conscript.cur_toughness - conscript.damage \
+				and not conscript.cur_indestructible and not _shieldable(game, conscript):
+			value -= Evaluator.permanent_value(conscript)
+		if value > best_value:
+			best = conscript
+			best_value = value
+	if best == null:
+		return {}
+	return {"targets": [TargetRef.card(best)], "value": best_value}
+
+
+## PULLS_BLOCKER (False Orders, our declare-blockers step): the one
+## creature blocking one of our attackers alone leaves the block, and
+## the attacker connects. "You may have it block an attacking creature
+## of your choice" is answered through the option funnel with the card's
+## own hint — our smallest attacker that is not being blocked, the freed
+## one included — so the price is the whole exchange: the freed
+## attacker's damage and its life, less the attacker the blocker lands
+## on instead. A pull whose hint would put the blocker straight back
+## where it was is worth nothing and is not made.
+func _worth_pulling_a_blocker(game: MtgGame) -> Dictionary:
+	var opponent := game.opponent_of(pid)
+	var them := game.players[opponent]
+	var attackers := _declared_attackers(game)
+	var unblocked: Array[CardInstance] = []
+	var landing_total := 0
+	for attacker in attackers:
+		if not game.combat.was_blocked(game.combat.band_of(attacker.id)):
+			unblocked.append(attacker)
+			landing_total += attacker.cur_power
+	var best: CardInstance = null
+	var best_value := 0.0
+	for attacker in attackers:
+		var blockers := game.combat.blockers_of(attacker.id)
+		if blockers.size() != 1:
+			continue
+		var blocker := game.find_instance(blockers[0])
+		if blocker == null or blocker.zone != Mtg.Zone.BATTLEFIELD \
+				or blocker.controller_id != opponent:
+			continue
+		# Where the hint sends it once the freed attacker is unblocked too.
+		var landing: CardInstance = attacker
+		for other in unblocked:
+			if other.cur_power < landing.cur_power:
+				landing = other
+		if landing == attacker:
+			continue
+		var value := _face_damage_value(game, attacker.cur_power, opponent) \
+			- _face_damage_value(game, landing.cur_power, opponent)
+		if _dies_to(game, attacker, blocker):
+			value += Evaluator.permanent_value(attacker)
+		if _dies_to(game, blocker, attacker):
+			value -= Evaluator.permanent_value(blocker)
+		if _dies_to(game, landing, blocker):
+			value -= Evaluator.permanent_value(landing)
+		if _dies_to(game, blocker, landing):
+			value += Evaluator.permanent_value(blocker)
+		if landing_total + attacker.cur_power - landing.cur_power >= them.life \
+				and landing_total < them.life:
+			value += LETHAL_WORTH
+		if value > best_value:
+			best = blocker
+			best_value = value
+	if best == null:
+		return {}
+	return {"targets": [TargetRef.card(best)], "value": best_value}
+
+
+## UNBLOCKABLE for the turn (Teleport, our declare-attackers step): the
+## attacker of ours whose connecting matters most — the damage it adds
+## to what our swing already gets through their best blocks, plus the
+## worst a block could have done to it ([method _attack_risk]), and the
+## game itself when it is the one that makes the swing lethal. An
+## attacker nothing of theirs may block gains nothing from it.
+func _worth_unblockable(game: MtgGame, _inst: CardInstance) -> Dictionary:
+	var opponent := game.opponent_of(pid)
+	var them := game.players[opponent]
+	var attackers: Array[CardInstance] = []
+	for attacker in _declared_attackers(game):
+		if attacker.controller_id == pid:
+			attackers.append(attacker)
+	var blockers := _untapped_creatures(game, opponent)
+	var through_now := _damage_through_blocks(game, attackers, blockers, opponent)
+	var best: CardInstance = null
+	var best_value := 0.0
+	for attacker in attackers:
+		var risk := _attack_risk(game, attacker, blockers, opponent)
+		if risk < 0.0:
+			continue   # nothing they have may block it anyway
+		var rest: Array[CardInstance] = attackers.duplicate()
+		rest.erase(attacker)
+		var through_with := _damage_through_blocks(game, rest, blockers, opponent) \
+			+ attacker.cur_power
+		var value := _face_damage_value(game, through_with - through_now, opponent) + risk
+		if through_with >= them.life and through_now < them.life:
+			value += LETHAL_WORTH
+		if value > best_value:
+			best = attacker
+			best_value = value
+	if best == null:
+		return {}
+	return {"targets": [TargetRef.card(best)], "value": best_value}
 
 
 # ---------------------------------------- regeneration under modern rules --

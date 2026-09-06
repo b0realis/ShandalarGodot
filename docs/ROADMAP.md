@@ -884,7 +884,11 @@ rather than against intuition:
 
 ### Still open, and why
 
-* **Class 1, "only castable in our own main phase" (12 cards).**
+* ~~**Class 1, "only castable in our own main phase" (12 cards).**~~
+  **CLOSED 2026-09-06** — `AiPlayer._cast_in_window`, the last arm of
+  `_respond_action`, gated by `AiProfile.casts_timed_spells`; seven of the
+  twelve are cast in their window now, see THE 2026-09-06 PASS, item 12.
+  As it stood:
   `_respond_action` needs a GENERAL "cast the best legal spell in this
   window" arm — it currently knows Fog by name and three effect shapes.
   That is a new AI capability with its own risk surface (an instant cast
@@ -1174,7 +1178,10 @@ refusal memo — and it wants its own measurement.
 
 ### Still open after this pass
 
-* **Class 1, "only castable in our own main phase" (12 cards).** Unchanged
+* ~~**Class 1, "only castable in our own main phase" (12 cards).**~~
+  **CLOSED 2026-09-06** — `AiPlayer._cast_in_window` asks `cast_refusal`
+  exactly as this row hoped, and prices the seven shapes it can read from
+  the board; see THE 2026-09-06 PASS, item 12. As it stood: Unchanged
   and untouched: `_respond_action` still needs a general "cast the best
   legal spell in this window" arm. This pass makes it CHEAPER — the window
   caster can now ask `cast_refusal` instead of mirroring the timing rules
@@ -3667,9 +3674,14 @@ live list:
   draw"). Most map straight onto `Mtg.Keyword` or a CardData field —
   Web is REACH, Free Action is VIGILANCE, Quick draw is HASTE — but
   Native-vs-Gives needs a static-ability scan we do not have.
-- `@RARITY` and `@ARTIST` cannot be built at all: `cards/data/*.json` is
-  fetched without either field, so this is a card-pipeline job first
-  (`tools/fetch_cards.py`), not a UI one. **And `@RARITY` is more than a
+- `@RARITY` and `@ARTIST` as FILTERS are not built. The data is no
+  longer the obstacle — this note used to say `cards/data/*.json` is
+  fetched without either field, which stopped being true when
+  `tools/fetch_cards.py` kept `rarity` and `artist` for the set packages,
+  and since 2026-09-06 `DeckStats.rarity_of` reads the rarity and the
+  command bar's `Rarity` switch letters every card with it (see THE
+  2026-09-06 PASS). What is missing is the filter widget, and the
+  1997 filter's other two values. **`@RARITY` is more than a
   filter** — its five values are `&Common &Uncommon &Rare R&estricted
   &Banned` (`s30/assets/text/Menus.txt:384`), and `@RESTRICTED`
   (`Program/CueCards.txt:81`) letters *"Restricted cards are in the
@@ -6042,6 +6054,211 @@ MPlantin has no U+2192 and the arrow drew as a gap. And the owner's own
 crop: the marble title slab took the column's 252 and stood twelve
 pixels proud of the 240 Showcase card it names; it is the card's width.
 Two rows in `tests/ui/test_deck_builder.gd`.
+
+### The instrument, made one command
+
+**11. The three-pair measurement is a switch — `--sweep`, `[QoL]`.**
+Every number in this pass and the last was three Deck Lab runs by hand:
+the candidate pair, the null pair, the control pair, then a spreadsheet
+to take the delta and an eye on the control's record to call it
+byte-identical — which "527/1000 against 527/1000" is not a proof of,
+since two runs can share a record and not a game. `DeckLab/simulate.gd`
+plays all three in one run now: `--sweep KNOB=V1,V2,.. --control-deck-a
+DECK --control-deck-b DECK`, any `AiProfile` knob, one seed set, `--games`
+per arm and per pair, the null `off` for a boolean and the seat-A preset's
+own value for a number unless `--null` says otherwise. The null arm deals
+the games a plain `--profile-a wizard:KNOB=null --profile-b
+wizard:KNOB=null` run deals, game for game (checked: the first 200 of
+seed 11 are 16-184 both ways). The control is READ, not assumed: every
+game carries the md5 of `MtgGame.log_lines`, which under a seed is the
+whole game move for move, and a control arm passes only when each of its
+games carries the null game's fingerprint at the same seed; a FAIL names
+the first game that moved and what moved, the report is written anyway
+because a moved control is a finding, and the run ends with exit 4 so no
+script reads the deltas above it as a measurement. One report, a row per
+value with the win rate, its interval, the delta against the null with
+its own interval (the two Wilson half-widths in quadrature), the control's
+verdict per value; `sweep.json`, `sweep.csv`, `games.csv` beside it, and
+the Elo ledger never touched. An unknown knob, a value the knob cannot
+read, `--matrix`, `random`, or a knob also set in `--profile-a` is exit
+2. Run on item 4's own pair (`pays_sacrifices=on,off`, seed 11, 1,000
+games an arm, 6,000 games in 46 s):
+
+| Dracur (Ancients) vs Big Green | games | win rate | delta vs null |
+|---|---|---|---|
+| null (off) | 1000 | 24.6% [22.0%..27.4%] | — |
+| on | 1000 | 27.0% [24.3%..29.8%] | +2.4 ±3.8 |
+| off | 1000 | 24.6% [22.0%..27.4%] | +0.0 ±3.8 |
+
+Control Big Green vs White Knights: 527-473 on every arm, **PASS,
+byte-identical to the null, 1000 of 1000 games** for both values — which
+is item 4's table again (25.3% / 27.2% on 2,000 games), read by one
+command instead of three and a spreadsheet. The same command with
+`mistake_chance=0.5` — a knob that fires on any deck — moves the control
+at game 0 and is exit 4, which is the test's FAIL row. **A trap the
+first run fell into, worth writing down:** there are three Dracurs
+(`decks/1997/{originals,ancients,duels}/dracur.deck`) and only the
+Spells of the Ancients list carries Strip Mine, Sinkhole AND Ice Storm;
+the originals' Dracur reads 10.4% null / 10.8% on against Big Green on
+the same seeds, and for an hour that looked like a regression between
+item 4 and this tree. It was the other deck. The report names a deck
+by its own title line — `Dracur (Spells of the Ancients)` against a
+plain `Dracur` — which is the one thing that tells the two apart on
+paper; read it. `tests/tools/test_deck_lab_sweep.gd`, 12 tests: the
+flags, the arms, the verdict read from real fingerprints, a small sweep
+end to end on both exits.
+
+### The cards with a moment
+
+**12. The window caster — `AiProfile.casts_timed_spells`.** The dead-card
+sweep's class 1, open since 2026-09-04 with a warning on it: twelve cards
+in this pool carry a "Cast this spell only ..." rider that keeps them out
+of their caster's own main phase altogether — Festival at an opponent's
+upkeep, Siren's Call before they declare attackers, Reset once they are
+past their upkeep, Teleport in a declare-attackers step, Blaze of Glory
+and Disharmony before blockers, False Orders in the declare-blockers
+step — and every one sat in hand for the whole duel, because
+`_try_cast_best` runs only in our own main phase, where the rider refuses
+them, and nothing outside it asked. `AiPlayer._cast_in_window` is the
+LAST arm of `_respond_action` now, after every responder above it has
+declined: it asks the engine's own `cast_refusal` for legality, prices
+the card from the board, and casts the best when it is worth a card.
+It is a CAPABILITY, gated like `plays_engines` and `pays_sacrifices`
+(Sorcerer and Wizard have it; the Apprentice and the Magician not
+holding it is the same honest weakness as the Apprentice never holding
+an instant).
+
+**The gate is the class itself — the safest one there is.** The risk the
+2026-09-04 row named was an instant cast in the wrong window, and the
+cards that would hurt most are the ones the existing responders HOLD
+for a moment of their own: the counter, the Fog, the Bolt, the Giant
+Growth. So a card is this arm's only if `MtgGame.rider_admits_own_main`
+(new, modelled on the probe `target_legal_at`: the rider asked with our
+seat active and the step set to each main phase in turn) says its rider
+would refuse it in BOTH of our main phases — which no held instant has a
+rider to say, and which keeps Berserk, Rapid Fire and Glyph of
+Reincarnation the planner's. A second fence,
+`_claimed_by_a_responder`, says the same thing structurally from the
+intent reader (reactive, modal, counters, fogs, regenerates, ritual,
+sweeper, removal, draw, tap, pump), so a rider added to a removal spell
+some day still could not be fired from here out of turn. And a card the
+pricing has no reading for is not cast at all: `EffectIntent.WINDOW_SHAPES`
+names the SHAPE of six card-local effects, the way `CARD_LOCAL` names
+one (Teleport is read structurally — a 0/0 pump that grants
+unblockable), `_window_worth` prices each shape with the primitives the
+attack and block planners already use — one blocker per attacker,
+`_dies_to`, `_face_damage_value`, `LETHAL_WORTH` — and the bar is the
+card's own `Evaluator.card_value`, so a Siren's Call that walks a 2/2
+into a Hill Giant is a card for a card and a Festival that stops two
+damage at twenty life is a card for nothing. Camouflage has no row on
+purpose: it assigns blockers at random, and the pilot does not gamble a
+card on a coin flip — the same rule that keeps Orcish Catapult in hand.
+Reset is the one shape exempt from the planner's 1.5x reserve rule,
+because its whole worth IS the reserve: it is cast because the held
+counter cannot be paid for tonight. The 1997 game had no policy here
+beyond legality — Manalink's `ai_decision_phase` (`functions/ai.c`)
+speculates every card whose `EVENT_CAN_CAST` handler admits the phase
+and keeps the better `ai_opinion_of_gamestate`, while the card functions
+(`card_sirens_call`, `card_festival`, `card_reset`) answer only "may this
+be cast now" — so the shape is ported (legality from the card, the
+decision from the state) and the pricing is this project's own.
+`tests/unit/test_window_caster_2026_09_06.gd`, 22 tests: the probe, the
+two fences card by card, one cast-and-one-hold pair per shape, the knob
+off, the ladder.
+
+**MEASURED** (1,000 games a pair, `wizard` on seat A against
+`wizard:casts_timed_spells=off` on both, by hand — item 11's `--sweep`
+was landing in the same hour):
+
+| Matchup | seed | null | candidate |
+|---|---|---|---|
+| Sea Drake (4 Siren's Call) mirror | 7 | 49.8% [46.7%..52.9%] | **50.8%** [47.7%..53.9%] |
+| Sea Drake vs Whim (2 Siren's Call) | 11 | 32.6% | **33.7%** |
+| Sea Drake vs White Knights | 7 | 3.7% | 4.8% |
+| Sea Drake vs Big Green | 7 | 3.5% | 4.3% |
+| Whim vs White Knights | 11 | 5.8% | 6.2% |
+| Fire and Ice (1 Reset) vs Big Green | 13 | 9.8% | 9.7% |
+| Big Green vs White Knights (no window card in either) | 7 | 527/1000 | 527/1000 — **byte-identical** (`cmp` on matchups.csv) |
+
+Read honestly: every delta sits inside its own interval (a thousand
+games is ±3 points), five of six point the same way, the sixth is a
+one-of, and the control did not move. The instrumented 200-game runs
+say the arm fires where it should and nowhere else: Sea Drake mirror,
+seat A cast Siren's Call 20 times and seat B (knob off) never; against
+White Knights 17 casts where the null run has 0; Fire and Ice's single
+Reset was cast 12 times in 200 games. The 1997 enemy decks these cards
+live in are weak against the shipped modern-built lists, which is why
+four rows sit under 10% either way; the mirror is the row that can see
+the edge, and it agrees with the rest. Measurement does not argue for a
+wider gate, so the gate stays the class.
+
+**Still open, and why.** Five of the twelve stay in hand. Feint, Glyph
+of Delusion, Glyph of Destruction and Fire and Brimstone carry their
+window in the TARGET SPEC (an attacking creature, a Wall that blocked
+this turn, a blocking Wall you control, a player who attacked this turn)
+rather than in a cast rider, so `rider_admits_own_main` has nothing to
+read and the gate does not admit them; they want a "target legal only
+in a window" reading of their own. Glyph of Life has no window at all in
+the engine's eyes — any Wall is a legal target at any time — and is a
+card-local effect no arm prices. Glyph of Reincarnation's rider admits
+our second main phase, so it is the planner's — and during our own turn
+the planner never has a Wall of ours that blocked. Camouflage is the
+coin flip above.
+
+### The Stats window, examined, and the Rarity switch
+
+**13. The Stats pages, checked by looking — three bugs and a layout.**
+*"Can you also examine the deck builder stats pages and improve it?"*
+Every page was rendered on White Knights and on Black Red Raiders and
+read as a player would. Three things were wrong that no test had
+caught, all in `game/deck_builder/deck_stats.gd`'s oracle-text scans:
+the ante list flagged Holy Strength and ninety other cards, because
+`String.contains("ante")` matches "enchANTEd"; the colour-hate list
+credited "red" to every card that "entered" or "reduced" something, and
+"black" to Terror's nonblack clause and to Dakkon Blackblade's own name,
+so the Matchups page said White Knights had cards aimed at four
+colours; and the Deck page's
+tournament line read *"1 cards break"*. The scans are whole-word now
+(`\b<word>(s|walk)?\b` — plains/Plains, swampwalk), the seven real
+ante cards are named in the comment as the fixture, and
+`_format_warning` counts its grammar. Three rows in
+`tests/ui/test_deck_stats.gd` pin each one to the card that exposed it.
+
+The layout: every `label ... value` line let the label expand and the
+value landed flush right, 500 px from the words it belonged to, so
+"by turn 3" and its 97.5% had to be paired across a field of stone. The
+lines are two columns now (`STATS_LABEL_W`, `STATS_VALUE_W`) and digits
+right-align in the second. The Deck page's Colors bars draw only the
+colours the deck has (a mono-white deck showed four `0  0 mana sources`
+tracks), the rarity block left the Speed page — it was the one thing
+there with nothing to do with speed — and sits on the Deck page as bars
+in the switch's own colours, counted the switch's own way. The Matchups
+page has a new section, **Blunted against**, from
+`DeckStats.color_blind_spots`: the "non<colour>" cards (Terror,
+Paralyze) that are dead draws against the colour they name, which in a
+game where the opponent's colour is on the setup screen is the matchup
+fact most worth having before the duel.
+
+**14. The Rarity switch — `[QoL]`.** *"Can we have rarity button (make
+stats button narrower and add in-between new rarity button) — on press
+each mini card (center bottom) would have C symbol (common), U
+(uncommon, silver), R (rare, gold) and L (legendary, purple)."* Exactly
+that: `Stats` gave up twenty pixels, `Rarity` sits between it and `Deck`
+as a toggle that stays down, and every card on all three surfaces
+(deck, sideboard, inventory) wears an 18px plate at its bottom centre —
+the one free spot between the count disc (bottom left) and the P/T
+(bottom right) — lettered C on dark, U on silver, R on gold, L on
+purple. **Legendary first**: it is the supertype, and the sixty-one
+legends in this pool were printed at uncommon and rare both, so the
+letter says what the card IS rather than which sheet it came off
+(`DeckStats.rarity_tier`; `rarity_tiers` is the same count for the
+Stats bars, and `rarity_counts` still files a legend under its printed
+rarity for anyone who wants that). The switch is remembered
+(`Settings` key `deck_rarity_marks`). The 1997 deck builder knew rarity
+only as a filter (`@RARITY`, `Menus.txt:384`; `defs.h:1307`'s enum) and
+lettered nothing on the card, so the marks are `[QoL]`. Three rows in
+`tests/ui/test_deck_builder.gd` (position, letters and colours per
+tier, persistence) and two in `test_deck_stats.gd` (the tiers).
 
 ### The gate, and the bug hunt's wide net
 

@@ -204,6 +204,36 @@ func test_a_plain_creature_names_no_colour() -> void:
 	assert_eq(DeckStats.color_hate(deck).size(), 0)
 
 
+func test_the_colour_scan_reads_whole_words() -> void:
+	# Caught by looking at the Matchups page (2026-09-06): a substring
+	# search found RED in "declared" and "reduce", BLACK in "Blackblade"
+	# and in "nonblack". Ten cards were "aimed at red" that never name it.
+	_fill("Blaze of Glory", 1)      # "...before blockers are declared"
+	_fill("Ali from Cairo", 1)      # "...reduce your life total..."
+	_fill("Dakkon Blackblade", 1)   # its own name in its own text
+	_fill("Terror", 1)              # "nonblack creature"
+	assert_eq(DeckStats.color_hate(deck).size(), 0,
+		"none of these names a colour: %s" % str(DeckStats.color_hate(deck)))
+	# ...and the words that ARE the colour still count, plural and walk.
+	_fill("Karma", 1)               # "Swamps"
+	var hate := DeckStats.color_hate(deck)
+	assert_eq(hate.size(), 1)
+	assert_eq(String(hate[0]["card"]), "Karma")
+
+
+func test_the_blind_spots_are_the_non_colour_cards() -> void:
+	# The opposite question from colour hate, and the more painful one in
+	# a game whose opponents have known colours: Terror is a dead card
+	# against a black deck.
+	_fill("Terror", 2)
+	_fill("Karma", 1)
+	var blind := DeckStats.color_blind_spots(deck)
+	assert_eq(blind.size(), 1, "Karma is aimed at black; Terror is blunted by it")
+	assert_eq(String(blind[0]["card"]), "Terror")
+	assert_eq(int(blind[0]["count"]), 2)
+	assert_true((blind[0]["colors"] as Array).has(Mtg.ManaColor.B))
+
+
 func test_ante_cards_are_flagged_because_ante_is_real_here() -> void:
 	# Shandalar duels are played for a card, so these change what losing
 	# costs. Not a curiosity in this game.
@@ -211,6 +241,16 @@ func test_ante_cards_are_flagged_because_ante_is_real_here() -> void:
 	var ante := DeckStats.ante_cards(deck)
 	assert_eq(ante.size(), 1)
 	assert_eq(String(ante[0]["card"]), "Contract from Below")
+
+
+func test_ante_is_a_word_and_not_the_middle_of_enchanted() -> void:
+	# "enchANTEd": a substring search put Holy Strength — and ninety other
+	# cards — on the ante list (caught by looking, 2026-09-06).
+	_fill("Holy Strength", 3)
+	_fill("Demonic Attorney", 1)    # "...antes the top card..."
+	var ante := DeckStats.ante_cards(deck)
+	assert_eq(ante.size(), 1, "one ante card, not two: %s" % str(ante))
+	assert_eq(String(ante[0]["card"]), "Demonic Attorney")
 
 
 func test_evasion_counts_the_creatures_a_wall_cannot_stop() -> void:
@@ -257,3 +297,36 @@ func test_every_card_in_a_real_deck_has_a_known_rarity() -> void:
 			missing.append(String(card_name))
 	assert_eq(missing.size(), 0,
 		"every card has a rarity; these do not: %s" % str(missing))
+
+
+# ---------------------------------------------------- the four tiers --
+#
+# *"C symbol (common), U (uncommon, silver), R (rare, gold) and L
+# (legendary, purple)"* (2026-09-06). The letter on the card and the bar
+# in the Stats window both come from here.
+
+func test_a_legend_is_a_legend_before_it_is_a_rare_or_an_uncommon() -> void:
+	# Jedit Ojanen was printed at UNCOMMON in Legends; Lady Orca too. The
+	# tier says what the card is.
+	assert_eq(DeckStats.rarity_of("Jedit Ojanen"), "uncommon", "the sheet")
+	assert_eq(DeckStats.rarity_tier(CardRegistry.get_card("Jedit Ojanen")),
+		"legendary", "the tier")
+	assert_eq(DeckStats.rarity_tier(CardRegistry.get_card("Serra Angel")), "uncommon")
+	assert_eq(DeckStats.rarity_tier(CardRegistry.get_card("Savannah Lions")), "rare")
+	assert_eq(DeckStats.rarity_tier(CardRegistry.get_card("Grizzly Bears")), "common")
+	assert_eq(DeckStats.rarity_tier(null), "", "no card, no tier")
+
+
+func test_the_tier_tally_counts_a_legend_once_and_as_a_legend() -> void:
+	_fill("Jedit Ojanen", 2)
+	_fill("Serra Angel", 3)
+	_fill("Savannah Lions", 4)
+	_fill("Plains", 10)
+	var tiers := DeckStats.rarity_tiers(deck)
+	assert_eq(int(tiers.get("legendary", 0)), 2)
+	assert_eq(int(tiers.get("uncommon", 0)), 3, "the legend is NOT here too")
+	assert_eq(int(tiers.get("rare", 0)), 4)
+	assert_eq(int(tiers.get("common", 0)), 10)
+	assert_false(tiers.has("unknown"), "every one of these is in the pool")
+	# ...whereas the printed count files the legend under its sheet.
+	assert_eq(int(DeckStats.rarity_counts(deck).get("uncommon", 0)), 5)

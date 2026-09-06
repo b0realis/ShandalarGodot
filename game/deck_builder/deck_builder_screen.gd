@@ -216,7 +216,12 @@ const EXTRA_COMMANDS: Array[String] = [
 ## report it: the legality line, the Stats window and the save dialog. Ours
 ## — the 1997 program had no equivalent, since it classified a deck and
 ## printed the answer rather than saying what was wrong with it.
-const FORMAT_WARNING := "%d cards break the tournament rules (four copies, the restricted list, the banned list):"
+const FORMAT_WARNING := "%d card%s break%s the tournament rules (four copies, the restricted list, the banned list):"
+
+## [QoL] The `[Settings]` key the bar's `Rarity` switch keeps its state
+## under, so the marks a player asked for are there next time. Off by
+## default: the 1997 screen lettered nothing on a card.
+const RARITY_SETTING := "deck_rarity_marks"
 
 const MARGIN := 8.0
 const HEADER_H := 50.0
@@ -308,6 +313,8 @@ var _command_row: HBoxContainer
 ## [method refresh] runs on every card click and did a scene-tree search
 ## for it every time.
 var _stats_button: Button
+## [QoL] The bar's `Rarity` switch — see [member CardArea.show_rarity].
+var _rarity_button: Button
 var _left_column: VBoxContainer
 var _stats_label: Label
 ## A flat 1997 choice line, not a Label — it is clickable ([QoL], see
@@ -349,6 +356,7 @@ func _ready() -> void:
 	_build_command_bar()
 	_build_filters()
 	_build_inventory()
+	_apply_rarity_marks(bool(Settings.get_value(RARITY_SETTING, false)))
 	_layout()
 	refresh()
 	_refresh_inventory()
@@ -674,11 +682,25 @@ func _build_command_bar() -> void:
 	_command_row = HBoxContainer.new()
 	_command_row.add_theme_constant_override("separation", 4)
 
-	_stats_button = OriginalDialog.button("", Vector2(140, COMMAND_BAR_H))
+	_stats_button = OriginalDialog.button("", Vector2(120, COMMAND_BAR_H))
 	_stats_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stats_button.pressed.connect(_run_command.bind("Stats"))
 	_stats_button.name = "StatsButton"
 	_command_row.add_child(_stats_button)
+
+	# [QoL] RARITY, between Stats and the mini-menu — the owner's ask,
+	# 2026-09-06: *"make stats button narrower and add in-between new
+	# rarity button"*. A SWITCH, not a command: it stays down while the
+	# marks are up, the way the Stats tabs do, and it is the one button
+	# on this bar that remembers its state ([constant RARITY_SETTING]).
+	_rarity_button = OriginalDialog.button("Rarity", Vector2(72, COMMAND_BAR_H))
+	_rarity_button.name = "RarityButton"
+	_rarity_button.toggle_mode = true
+	_rarity_button.tooltip_text = "Letter every card with its rarity — " \
+		+ "C common, U uncommon, R rare, L legendary"
+	_rarity_button.set_pressed_no_signal(bool(Settings.get_value(RARITY_SETTING, false)))
+	_rarity_button.toggled.connect(_set_rarity_marks)
+	_command_row.add_child(_rarity_button)
 
 	var menu := OriginalDialog.button("Deck", Vector2(72, COMMAND_BAR_H))
 	menu.tooltip_text = "@DECKSURFACE_STANDALONE — the deck surface's mini-menu"
@@ -1338,7 +1360,7 @@ func _refresh_legality() -> void:
 			# method runs on every card click.
 			var offences := deck.format_offences()
 			if not offences.is_empty():
-				full = FORMAT_WARNING % offences.size() \
+				full = _format_warning(offences.size()) \
 					+ " " + " ".join(offences)
 				color = OriginalDialog.CHOICE
 	# [QoL] THE SIDEBOARD SIZE RULE, stated in the one place this screen
@@ -2535,6 +2557,29 @@ func _toggle_consolidate() -> void:
 	_say("Duplicate cards %s" % ("grouped" if _deck_area.consolidated else "shown separately"))
 
 
+## The [constant FORMAT_WARNING] heading, with its grammar: one card
+## BREAKS the rules, two cards BREAK them.
+func _format_warning(count: int) -> String:
+	return FORMAT_WARNING % [count, "" if count == 1 else "s", "s" if count == 1 else ""]
+
+
+## [QoL] The bar's `Rarity` switch: every card on all three surfaces
+## wears its letter, or none does, and the choice is kept.
+func _set_rarity_marks(on: bool) -> void:
+	Settings.set_value(RARITY_SETTING, on)
+	_apply_rarity_marks(on)
+	if _rarity_button != null and _rarity_button.button_pressed != on:
+		_rarity_button.set_pressed_no_signal(on)
+	_say("Rarity marks %s" % ("on: C common, U uncommon, R rare, L legendary"
+		if on else "off"))
+
+
+func _apply_rarity_marks(on: bool) -> void:
+	for area in [_deck_area, _sideboard_area, _inventory]:
+		if area != null:
+			(area as CardArea).show_rarity = on
+
+
 ## `E&xit deck builder`. Asks about EVERY slot with unsaved work, not just
 ## the one on the surface — see [method _unsaved_slots].
 func _exit() -> void:
@@ -2867,7 +2912,7 @@ func _warn_about_legality() -> void:
 	# dialog that still fits the screen; the Stats window lists them all.
 	var dialog := OriginalDialog.create("Deck legality",
 		Vector2(560, 150.0 + 26.0 * mini(offences.size() + 2, 10)))
-	var head := OriginalDialog.label(FORMAT_WARNING % offences.size(), 14)
+	var head := OriginalDialog.label(_format_warning(offences.size()), 14)
 	head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	head.custom_minimum_size.x = 500
 	dialog.body().add_child(head)
@@ -2991,7 +3036,7 @@ func _stats_page_deck(page: VBoxContainer) -> void:
 	# explanation was the one with none.
 	var offences := deck.format_offences()
 	if not offences.is_empty():
-		var head := OriginalDialog.label(FORMAT_WARNING % offences.size(), 13)
+		var head := OriginalDialog.label(_format_warning(offences.size()), 13)
 		head.add_theme_color_override("font_color", Color8(232, 176, 96))
 		page.add_child(head)
 		for line in offences:
@@ -3029,13 +3074,26 @@ func _stats_page_deck(page: VBoxContainer) -> void:
 	page.add_child(OriginalDialog.label("Colors", 13, true))
 	var colors := deck.color_counts()
 	var sources_by_color := deck.mana_sources()
+	var colours_drawn := 0
 	for column in DeckModel.STAT_COLUMNS:
 		var color := int(column[1])
 		if color == 0:
 			continue
-		page.add_child(_bar_row(String(column[0]),
-			int(colors.get(color, 0)), deck.total(), MANA_BAR.get(color, Color.GRAY),
-			"%d mana sources" % int(sources_by_color.get(color, 0))))
+		var cards := int(colors.get(color, 0))
+		var sources_of := int(sources_by_color.get(color, 0))
+		# Only the colours the deck touches. A mono-white deck used to
+		# show four empty tracks reading `0  0 mana sources` above the
+		# one bar that mattered (checked by looking, 2026-09-06); the
+		# matrix above already says which colours are absent.
+		if cards == 0 and sources_of == 0:
+			continue
+		colours_drawn += 1
+		page.add_child(_bar_row(String(column[0]), cards, deck.total(),
+			MANA_BAR.get(color, Color.GRAY),
+			"%d mana source%s" % [sources_of, "" if sources_of == 1 else "s"]))
+	if colours_drawn == 0:
+		page.add_child(OriginalDialog.label(
+			"   None — every card here is colourless.", 12))
 
 	page.add_child(OriginalDialog.label("Card types", 13, true))
 	var types := deck.type_counts()
@@ -3049,6 +3107,27 @@ func _stats_page_deck(page: VBoxContainer) -> void:
 		"%.0f%% of the deck" % (deck.land_ratio() * 100.0)))
 	page.add_child(_bar_row("Spells", deck.total() - deck.land_count(),
 		deck.total(), Color8(180, 180, 220)))
+
+	# [QoL] RARITY, because in Shandalar a rare is something you have to go
+	# and win rather than something you buy. A deck leaning on four of them
+	# is a deck you may not be able to build yet, and that is a fact about
+	# the deck worth knowing beside what it is made of. The same four tiers
+	# the bar's `Rarity` switch letters the cards with, in the same
+	# colours, counted the same way ([method DeckStats.rarity_tiers]). It
+	# lived on the Speed page from 2026-09-05 to 2026-09-06, where it was
+	# the one thing that had nothing to do with speed.
+	var tiers := DeckStats.rarity_tiers(deck)
+	if not tiers.is_empty():
+		page.add_child(OriginalDialog.label("Rarity", 13, true))
+		for tier in DeckStats.RARITY_TIERS:
+			var n := int(tiers.get(tier, 0))
+			if n > 0:
+				page.add_child(_bar_row(tier.capitalize(), n, deck.total(),
+					_rarity_bar_color(tier)))
+		var unplaced := int(tiers.get("unknown", 0))
+		if unplaced > 0:
+			page.add_child(_bar_row("Unplaced", unplaced, deck.total(),
+				Color8(150, 158, 186), "proxies, or printed outside the 1997 sets"))
 
 	# The complaints, in the order the legality line states them — the
 	# proxies first, because the strip clips its own text to three lines
@@ -3100,13 +3179,28 @@ func _stats_head(text: String) -> Label:
 	return head
 
 
-## One `label ....... value` line, which is most of what these pages are.
+## One `label   value` line, which is most of what these pages are. TWO
+## COLUMNS, not a label pushed to the far edge: the first cut let the
+## label expand and the value landed 500 px away, flush right against
+## the window, and a reader had to trace a line across blank stone to
+## pair "by turn 3" with its 97.5% (checked by looking, 2026-09-06). Now
+## the label owns a fixed column and the value sits beside it, digits
+## right-aligned in their own narrow column so a stack of numbers lines
+## up; a longer value (`71.1% on the play,  73.2% on the draw`) simply
+## runs on from the same left edge.
+const STATS_LABEL_W := 250
+const STATS_VALUE_W := 64
+
 func _stats_line(text: String, value: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
 	var left := OriginalDialog.label(text, 13)
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.custom_minimum_size.x = STATS_LABEL_W
 	row.add_child(left)
-	row.add_child(OriginalDialog.label(value, 13, true))
+	var right := OriginalDialog.label(value, 13, true)
+	right.custom_minimum_size.x = STATS_VALUE_W
+	right.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(right)
 	return row
 
 
@@ -3207,18 +3301,6 @@ func _stats_page_speed(page: VBoxContainer) -> void:
 		page.add_child(OriginalDialog.label("Add some cards first.", 13))
 		return
 	var s := DeckStats.speed(deck)
-	# [QoL] RARITY, because in Shandalar a rare is something you have to go
-	# and win rather than something you buy. A deck leaning on four of them
-	# is a deck you may not be able to build yet, and that is a fact about
-	# the deck worth knowing beside its speed.
-	var rarity := DeckStats.rarity_counts(deck)
-	if not rarity.is_empty():
-		page.add_child(_stats_head("Rarity"))
-		for key in ["common", "uncommon", "rare", "special", "unknown"]:
-			var n := int(rarity.get(key, 0))
-			if n > 0:
-				page.add_child(_stats_line("   %s" % key, "%d" % n))
-
 	page.add_child(_stats_head("Cost"))
 	page.add_child(_stats_line("   average creature", "%.2f" % float(s["creature_cost"])))
 	page.add_child(_stats_line("   average other spell", "%.2f" % float(s["spell_cost"])))
@@ -3280,15 +3362,24 @@ func _stats_page_matchups(page: VBoxContainer) -> void:
 			var n := int(by_color.get(int(column[1]), 0))
 			if n > 0:
 				summary.append("%s %d" % [String(column[0]), n])
-		page.add_child(_stats_line("   cards aimed at", "   ".join(summary)))
+		page.add_child(_stats_line("   colours named", "   ".join(summary)))
 		for row in hate:
-			var names := PackedStringArray()
-			for color in (row["colors"] as Array):
-				for column in DeckModel.STAT_COLUMNS:
-					if int(column[1]) == int(color):
-						names.append(String(column[0]))
 			page.add_child(_stats_line("      %d %s" % [int(row["count"]),
-				String(row["card"])], "   ".join(names)))
+				String(row["card"])], _colour_names(row["colors"] as Array)))
+
+	# [QoL] THE OTHER EDGE OF THE SAME BLADE: the cards that name a colour
+	# as the one they CANNOT touch. Terror and Paralyze read "nonblack";
+	# against the black opponent the setup screen just showed you, they
+	# are dead draws, and that is the matchup fact a builder most wants
+	# before the duel rather than during it.
+	var blunted := DeckStats.color_blind_spots(deck)
+	if not blunted.is_empty():
+		page.add_child(_stats_head("Blunted against"))
+		page.add_child(OriginalDialog.label(
+			"   These cannot touch a card of the colour they name.", 12))
+		for row in blunted:
+			page.add_child(_stats_line("      %d %s" % [int(row["count"]),
+				String(row["card"])], _colour_names(row["colors"] as Array)))
 
 	var ante := DeckStats.ante_cards(deck)
 	if not ante.is_empty():
@@ -3298,6 +3389,28 @@ func _stats_page_matchups(page: VBoxContainer) -> void:
 		for row in ante:
 			page.add_child(_stats_line("      %d %s" % [int(row["count"]),
 				String(row["card"])], ""))
+
+
+## The column headings' words for a list of `Mtg.ManaColor`s —
+## `[B, R]` → `Black   Red`.
+func _colour_names(colors: Array) -> String:
+	var names := PackedStringArray()
+	for column in DeckModel.STAT_COLUMNS:
+		if colors.has(int(column[1])):
+			names.append(String(column[0]))
+	return "   ".join(names)
+
+
+## The bar colour for a rarity tier: the BRIGHT half of the mark's pair
+## in [constant CardArea.RARITY_MARKS], because the track is dark stone
+## and the common mark's plate is darker still.
+static func _rarity_bar_color(tier: String) -> Color:
+	var mark: Array = CardArea.RARITY_MARKS.get(tier, [])
+	if mark.size() < 3:
+		return Color8(150, 158, 186)
+	var plate: Color = mark[1]
+	var ink: Color = mark[2]
+	return plate if plate.get_luminance() >= ink.get_luminance() else ink
 
 
 ## [QoL] The mana palette the bars are drawn in — the duel's own colours

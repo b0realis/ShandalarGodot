@@ -2545,3 +2545,175 @@ func test_the_toggle_is_the_1997_key_so_both_doors_agree() -> void:
 	# The duel screen's right-click menu and this button write the SAME
 	# key, so flipping either one is visible from the other.
 	assert_eq(CardPreview.EXPAND_SETTING, "ExpandTextBoxOnBigCard")
+
+
+# ------------------------------------------- [QoL] the Rarity switch --
+#
+# *"Can we have rarity button (make stats button narrower and add
+# in-between new rarity button) — on press each mini card (center bottom)
+# would have C symbol (common), U (uncommon, silver), R (rare, gold) and
+# L (legendary, purple)."* (2026-09-06)
+
+func _rarity_button() -> Button:
+	return screen._command_row.get_node_or_null("RarityButton") as Button
+
+
+func _remember_rarity_setting() -> Array:
+	return [Settings.has_value(DeckBuilderScreen.RARITY_SETTING),
+		Settings.get_value(DeckBuilderScreen.RARITY_SETTING, false)]
+
+
+func _restore_rarity_setting(kept: Array) -> void:
+	if bool(kept[0]):
+		Settings.set_value(DeckBuilderScreen.RARITY_SETTING, kept[1])
+	else:
+		Settings.clear_value(DeckBuilderScreen.RARITY_SETTING)
+
+
+func test_the_rarity_switch_sits_between_stats_and_deck() -> void:
+	var button := _rarity_button()
+	assert_not_null(button, "a RarityButton on the command bar")
+	if button == null:
+		return
+	assert_true(button.toggle_mode, "a switch, not a command")
+	var order := []
+	for node in screen._command_row.get_children():
+		if node is Button:
+			order.append((node as Button).text)
+	var stats := -1
+	for i in order.size():
+		if String(order[i]).begins_with("Stats"):
+			stats = i
+	assert_gt(stats, -1, "the Stats button is on the bar")
+	assert_eq(order[stats + 1], "Rarity", "Rarity right after Stats: %s" % str(order))
+	assert_eq(order[stats + 2], "Deck", "and Deck right after Rarity")
+	assert_true(screen._command_row.get_global_rect().encloses(button.get_global_rect()),
+		"inside the bar, not spilling out of it")
+	assert_lt(screen._stats_button.custom_minimum_size.x, 140.0,
+		"the Stats button gave up the room the switch needed")
+
+
+func test_the_rarity_switch_letters_every_card() -> void:
+	var kept := _remember_rarity_setting()
+	screen._add_one("Grizzly Bears")
+	screen._add_one("Serra Angel")
+	screen._add_one("Savannah Lions")
+	screen._add_one("Jedit Ojanen")
+	var button := _rarity_button()
+	button.button_pressed = true
+	await get_tree().process_frame
+	var seen := {}
+	for cell in _cells(screen._deck_area):
+		var c: CardArea.Cell = cell
+		if c.data == null:
+			assert_false(c.rarity.visible, "an empty cell wears no mark")
+			continue
+		seen[c.card_name] = c
+	var expected := {"Grizzly Bears": "common", "Serra Angel": "uncommon",
+		"Savannah Lions": "rare", "Jedit Ojanen": "legendary"}
+	for card_name in expected:
+		assert_true(seen.has(card_name), "%s is on the surface" % card_name)
+		if not seen.has(card_name):
+			continue
+		var c: CardArea.Cell = seen[card_name]
+		var mark: Array = CardArea.RARITY_MARKS[expected[card_name]]
+		assert_true(c.rarity.visible, "%s wears its mark" % card_name)
+		assert_eq(c.rarity_label.text, String(mark[0]), "the letter on %s" % card_name)
+		assert_eq(c.rarity_label.get_theme_color("font_color"), mark[2],
+			"in the tier's ink")
+		var stone := c.rarity.get_theme_stylebox("panel") as StyleBoxFlat
+		assert_eq(stone.bg_color, mark[1], "on the tier's plate")
+		# BOTTOM CENTRE, between the count disc (bottom left) and the P/T
+		# (bottom right): the owner's placement, and the one free spot.
+		var centre := c.rarity.position.x + c.rarity.size.x * 0.5
+		assert_almost_eq(centre, MiniCard.SIZE.x * 0.5, 1.0, "centred on the card")
+		assert_gt(c.rarity.position.y, MiniCard.SIZE.y * 0.6, "and along its bottom")
+	assert_eq(seen["Jedit Ojanen"].rarity_label.text, "L",
+		"a legend printed at uncommon is lettered L, not U")
+	assert_true(bool(Settings.get_value(DeckBuilderScreen.RARITY_SETTING, false)),
+		"the switch is remembered")
+	button.button_pressed = false
+	await get_tree().process_frame
+	for cell in _cells(screen._deck_area):
+		assert_false((cell as CardArea.Cell).rarity.visible, "off means off")
+	assert_false(bool(Settings.get_value(DeckBuilderScreen.RARITY_SETTING, true)),
+		"and so is turning it off")
+	_restore_rarity_setting(kept)
+
+
+func test_the_rarity_switch_comes_back_the_way_it_was_left() -> void:
+	var kept := _remember_rarity_setting()
+	Settings.set_value(DeckBuilderScreen.RARITY_SETTING, true)
+	var again: DeckBuilderScreen = load(
+		"res://game/deck_builder/deck_builder_screen.tscn").instantiate()
+	add_child_autofree(again)
+	await get_tree().process_frame
+	var button := again._command_row.get_node_or_null("RarityButton") as Button
+	assert_true(button.button_pressed, "the switch is down on the next visit")
+	assert_true(again._deck_area.show_rarity, "the deck wears the marks")
+	assert_true(again._inventory.show_rarity, "so does the inventory")
+	assert_true(again._sideboard_area.show_rarity, "and the sideboard")
+	_restore_rarity_setting(kept)
+
+
+# ---------------------------------------- [QoL] the Stats pages, again --
+#
+# *"Can you also examine the deck builder stats pages and improve it?"*
+# (2026-09-06). What the examination found, pinned.
+
+func test_the_format_warning_counts_its_grammar() -> void:
+	# `1 cards break` was on the Deck page until someone looked.
+	assert_true(screen._format_warning(1).begins_with("1 card breaks "),
+		screen._format_warning(1))
+	assert_true(screen._format_warning(2).begins_with("2 cards break "),
+		screen._format_warning(2))
+
+
+func _stats_labels() -> Array:
+	var out := []
+	for node in _walk(screen):
+		if node is Label:
+			out.append(String((node as Label).text).strip_edges())
+	return out
+
+
+func _stats_tabs() -> HBoxContainer:
+	return screen._stats_pages.get_parent().get_parent().get_child(0) as HBoxContainer
+
+
+func test_rarity_is_on_the_deck_page_and_not_the_speed_page() -> void:
+	screen._add_one("Jedit Ojanen")
+	screen._add_one("Grizzly Bears")
+	screen._run_command("Stats")
+	var labels := _stats_labels()
+	assert_true(labels.has("Rarity"), "the Deck page has the rarity block")
+	assert_true(labels.has("Common") and labels.has("Legendary"),
+		"as bars per tier, a legend counted as a legend: %s" % str(labels))
+	screen._show_stats_page(3, _stats_tabs())
+	await get_tree().process_frame   # the old page is queue_free'd
+	labels = _stats_labels()
+	assert_false(labels.has("Rarity"), "the Speed page is about speed")
+	assert_true(labels.has("Cost"), "and still says so")
+
+
+func test_the_matchups_page_names_what_the_deck_is_blunted_against() -> void:
+	screen._add_one("Terror")
+	screen._add_one("Terror")
+	screen._add_one("Karma")   # white, and it names Swamps
+	screen._add_one("Swamp")
+	screen._add_one("Plains")
+	screen._run_command("Stats")
+	screen._show_stats_page(4, _stats_tabs())
+	await get_tree().process_frame
+	var labels := _stats_labels()
+	assert_true(labels.has("colours named"), "the summary line, by its new name")
+	assert_true(labels.has("1 Karma"), "Karma names Swamps")
+	assert_true(labels.has("Blunted against"), "the section")
+	assert_true(labels.has("2 Terror"), "Terror is a nonblack card")
+	# The Deck page draws only the colours the deck has: two bars, one
+	# source each, and no `0  0 mana sources` track for the other three.
+	screen._show_stats_page(0, _stats_tabs())
+	await get_tree().process_frame
+	labels = _stats_labels()
+	assert_true(labels.has("1 mana source"), "the bars' note, singular")
+	assert_false(labels.has("0 mana sources"), "no empty bar for a colour the deck lacks")

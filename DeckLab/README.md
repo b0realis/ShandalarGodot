@@ -99,6 +99,9 @@ flyers rule the starter meta.
 | `--jobs N` | worker threads | all cores |
 | `--profile-a NAME` / `--profile-b NAME` | pilot skill: `apprentice`, `magician`, `sorcerer`, `wizard` | wizard |
 | `--profile-a NAME:knob=value,...` | the same preset with knobs overridden — `wizard:pays_sacrifices=off`, `wizard:minds_pain=off,counter_threshold=4`. Booleans read on/off (true/false, 1/0), numbers as the knob's own type; an unknown knob is refused at parse time. How one AI capability is measured against its own null: the candidate on seat A, the knob off on seat B, same seeds | — |
+| `--sweep KNOB=V1,V2,...` | the three-pair measurement of one AI knob in ONE run over one seed set: per value the CANDIDATE pair (deck A with the knob at that value vs deck B at the null), once the NULL pair (both seats at the null), and per value the CONTROL pair (below), which must replay its own null run game for game. One report with a row per value: win rate, interval, delta vs null, and the control's PASS/FAIL. Needs `--deck-a`/`--deck-b` or `--gauntlet` plus both control decks; never writes the Elo ledger; refuses `--matrix`, `random`, and a knob also set in `--profile-a/-b`. An unknown knob or a value the knob cannot read is exit 2 (see [the sweep](#the-sweep--one-knob-three-pairs-one-run-2026-09-06)) | — |
+| `--null VALUE` | the sweep's null | `off` for a boolean knob, the seat-A preset's own value for a number |
+| `--control-deck-a DECK` / `--control-deck-b DECK` | the sweep's control pair — two decks the knob cannot fire on. Required with `--sweep`, meaningless without it | — |
 | `--out DIR` | output directory, created and NAMED BEFORE the run starts (one inside the project gets a `.gdignore`, so the editor never imports the run's `matchups.csv` as a translation table) | `DeckLab/results/run_<stamp>` |
 | `--no-svg` | skip chart files | off |
 | `--quiet` | no banner and no progress bar; errors only | off |
@@ -289,6 +292,80 @@ stay ORDERED — mirror matches, profile P in seat A vs a Wizard in seat B,
 Magician 36.5% (37.0%), Sorcerer 43.5% (41.5%), Wizard 45.5% (43.8%).
 The cost is CPU: ~6 games/s on the matrix where it was ~9.
 
+### The sweep — one knob, three pairs, one run (2026-09-06)
+
+Every AI capability this project has measured was measured the same way,
+by hand, in three runs: the CANDIDATE pair (deck A piloted with the knob
+on, deck B with it off, same seeds), the NULL pair (both seats off), and a
+CONTROL pair — two decks the knob cannot fire on — which had to come out
+byte-identical to its own null, or the "delta" was the seeding, not the
+knob. Three commands, three reports, a spreadsheet, and the control was
+checked by eye. `--sweep` is those three runs as one command and one
+report:
+
+```
+DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.deck \
+    --sweep pays_sacrifices=on,off \
+    --control-deck-a big_green.deck --control-deck-b white_knights.deck \
+    --seed 11 --games 1000
+```
+
+`KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`,
+`minds_pain`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
+the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
+are refused with exit 2, as is a knob that does not exist. The null is
+`off` for a boolean and the seat-A preset's own value for a number unless
+`--null` says otherwise. Every other switch keeps its meaning: `--games`
+is per arm and per pair, the seeds are the ones a plain `--deck-a`/
+`--deck-b` run deals (the null arm is `--profile-a wizard:KNOB=null
+--profile-b wizard:KNOB=null`, game for game), and `--gauntlet` sweeps
+every matchup. The run above is 3 arms x 2 pairs x
+1000 games, and its report is:
+
+```
+Dracur (Spells of the Ancients) vs Big Green: Dracur (Spells of the Ancients)'s win rate with pays_sacrifices at each value on seat A, off on seat B
+  value           games  win rate                     delta vs null
+  null (off)       1000   24.6%  CI [22.0%..27.4%]        --
+  on               1000   27.0%  CI [24.3%..29.8%]      +2.4 +-3.8
+  off              1000   24.6%  CI [22.0%..27.4%]      +0.0 +-3.8
+
+control Big Green vs White Knights: the knob cannot fire here, so every arm must replay the null game for game
+  value           games  record     verdict
+  null (off)       1000  527-473    the baseline
+  on               1000  527-473    PASS  byte-identical to the null, 1000 of 1000 games
+  off              1000  527-473    PASS  byte-identical to the null, 1000 of 1000 games
+
+control: PASS -- every arm replays the null game for game; the deltas above are the knob's own.
+```
+
+— which is the ROADMAP's own table for `pays_sacrifices` (25.3% / 27.2%
+on 2,000 games), read by one command. Mind the deck: there are three
+Dracurs under `decks/1997/` and only the Ancients list carries the
+sacrifice cards; the originals' reads 10.4% / 10.8% here, and the report
+names which one it played by the deck's own title.
+
+The control is read from the games, never assumed: every game is
+fingerprinted with the md5 of the engine's own log (`MtgGame.log_lines`,
+which under a seed is the whole game, move for move), and a control arm
+PASSES only when every one of its games carries the fingerprint of the
+null arm's game with the same seed. A FAIL names the first game that
+moved and what moved (`game 0 (seed 4242): the game log, a_won false vs
+true, turns 12 vs 13`) and the run ends with **exit 4** — the report is
+still written, because a moved control is itself a finding (the knob
+fired where it cannot, or something in the run is not seeded), but the
+deltas above it are not a measurement and a script must not read them as
+one. The delta's interval is the two Wilson half-widths in quadrature, so
+at 1,000 games per arm a delta under 4.4 points is invisible, and the
+reading block at the foot of the report says how many games a `+-3` or
+`+-1` delta would need.
+
+A sweep writes `report.txt`, `sweep.json` (everything, including the
+control verdict and each arm's profiles), `sweep.csv` (one row per arm
+and pair) and `games.csv` (every game's seat, result, turns and
+fingerprint, which is what the verdict was read from and what a later run
+can be diffed against). It never touches the Elo ledger: a candidate
+pilot is not the shipped one, and its games are not rating games.
+
 ### Why `--mulligan` defaults off, and what it costs
 
 Until 2026-09-01 the Lab never mulliganed. `MtgGame.start()` is exactly
@@ -366,7 +443,9 @@ Printed to stdout AND written to `--out`:
 
 `results.json`, `matchups.csv` and the SVGs are read by other tooling and
 their shape does not move; the reading paragraphs above are report.txt
-and stdout only.
+and stdout only. A `--sweep` writes its own set instead — `report.txt`,
+`sweep.json`, `sweep.csv`, `games.csv` — described under
+[the sweep](#the-sweep--one-knob-three-pairs-one-run-2026-09-06).
 
 ## Two channels: the instrument and the human
 
@@ -397,8 +476,11 @@ project has lost hours to exactly that ambiguity.
 
 **Exit codes**: 0 a finished run with every file written; 1 the run broke
 (a worker thread stopped, a file could not be written); 2 the command line
-was wrong (bad flag, missing or illegal deck); 3 no Godot binary
-(`deck_lab.sh`; set `GODOT=/path/to/godot`).
+was wrong (bad flag, missing or illegal deck, a `--sweep` knob or value the
+profile cannot read); 3 no Godot binary (`deck_lab.sh`; set
+`GODOT=/path/to/godot`); 4 a `--sweep` ran to the end and wrote its files,
+but its control pair did not replay the null game for game — the report
+names the first game that moved.
 
 ## Methodology (why the numbers can be trusted)
 
@@ -466,3 +548,4 @@ preallocated results array — RAM stays flat.
 | `decks/*.deck` | the shipped five-style gauntlet |
 | `decks/ratings.txt` | the default Elo ledger (created on first rated run) |
 | `tests/tools/test_deck_lab.gd` | component tests |
+| `tests/tools/test_deck_lab_sweep.gd` | the sweep: its flags, the three arms, the control verdict read from the games, a small run end to end (exit 0 and exit 4) |

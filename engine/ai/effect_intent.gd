@@ -10,8 +10,8 @@ extends RefCounted
 ## card it is on — the reason s30's AI activates a Rod of Ruin it has never
 ## seen a special case for. Here the classification is by EFFECT CLASS, so
 ## every card built from the shared effect vocabulary (docs/adding-cards.md)
-## is understood for free, and the ONE table of card-local effects below
-## covers the shapes the shared vocabulary cannot express.
+## is understood for free, and the two tables of card-local effects below
+## cover the shapes the shared vocabulary cannot express.
 ##
 ## Read-only: nothing here mutates the game, and nothing here holds a
 ## CardInstance beyond the call that built it.
@@ -57,6 +57,12 @@ var pump_self: bool = false
 var pumps: bool = false
 var pump_uses_x: bool = false
 
+## Every keyword the pumps grant (Teleport's UNBLOCKABLE, Jump's FLYING),
+## summed the way the stat bonuses are. A pump that grants a keyword and
+## no stats is invisible to every reading of [member pump_power] and
+## [member pump_toughness]; this is where such a card says what it does.
+var pump_keywords: Array[int] = []
+
 ## Regeneration shield (Drudge Skeletons, Death Ward).
 var regenerates: bool = false
 
@@ -97,6 +103,22 @@ var unknown: bool = false
 ## The first targeting effect's spec (null when nothing targets).
 var target_spec: TargetSpec = null
 
+## THE WINDOW SHAPES — what a spell whose rider keeps it out of its
+## caster's own main phase DOES in the moment the rider names, for the
+## card-local effects of that kind (see [constant WINDOW_SHAPES]). NONE
+## for everything else, including every window card the AI has no board
+## reading for. (`Shape` rather than `Window`: that name is a Node class.)
+enum Shape {
+	NONE,
+	STOPS_ATTACKS,      ## Festival: no creature attacks this turn
+	FORCES_ATTACKS,     ## Siren's Call: theirs attack this turn or die
+	UNTAPS_LANDS,       ## Reset: every land we control untaps
+	STEALS_ATTACKER,    ## Disharmony: their attacker leaves combat and is ours for the turn
+	CONSCRIPTS_BLOCKER, ## Blaze of Glory: one defender blocks every attacker it can
+	PULLS_BLOCKER,      ## False Orders: a defender leaves combat and re-blocks where we say
+}
+var window: int = Shape.NONE
+
 
 # ---------------------------------------------------------------- the table --
 # Card-local effects (`class X extends EffectBase` inside a card file) that
@@ -123,6 +145,37 @@ const CARD_LOCAL := {
 	"Twiddle": {"taps": true, "untaps": true},
 }
 
+# THE WINDOW TABLE (2026-09-06). The cards whose "Cast this spell only ..."
+# rider leaves them NO legal moment in their caster's own main phase —
+# the dead-card sweep's class 1 (docs/ROADMAP.md) — are card-local
+# effects to a card, and the question the AI has to answer about them is
+# not "what does it do to its target" but "what does it do to THE COMBAT
+# it is cast into", which no flag above expresses. Each row names that
+# shape; [method AiPlayer._window_worth] prices the shape from the board
+# it is looking at and never the name.
+#
+# A SECOND TABLE rather than a "window" key in the one above, because a
+# row in CARD_LOCAL makes the reader stop calling the effect `unknown`,
+# and these effects ARE unknown to every reading that word gates — the
+# harm reading, the target picker, the card's plain worth. Only the
+# window caster reads this column, and it must be the only thing that
+# changes when a card is added here.
+#
+# Camouflage is deliberately absent: what it does is a coin flip the
+# defender half-controls (they choose the piles, the deal is random), and
+# a one-ply board reading cannot price a coin flip honestly — the same
+# rule that keeps Orcish Catapult in hand. Teleport is not a row
+# either: it is a PumpEffect that grants UNBLOCKABLE and no stats, so the
+# reader sees it structurally through [member pump_keywords].
+const WINDOW_SHAPES := {
+	"Festival": Shape.STOPS_ATTACKS,
+	"Siren's Call": Shape.FORCES_ATTACKS,
+	"Reset": Shape.UNTAPS_LANDS,
+	"Disharmony": Shape.STEALS_ATTACKER,
+	"Blaze of Glory": Shape.CONSCRIPTS_BLOCKER,
+	"False Orders": Shape.PULLS_BLOCKER,
+}
+
 
 ## Read [param effects] (a spell's spell_effects, one mode's effects, or an
 ## ability's effects) into an intent. [param card_name] keys the
@@ -130,6 +183,7 @@ const CARD_LOCAL := {
 static func read(effects: Array, card_name: String = "") -> EffectIntent:
 	var intent := EffectIntent.new()
 	var note: Dictionary = CARD_LOCAL.get(card_name, {})
+	intent.window = int(WINDOW_SHAPES.get(card_name, Shape.NONE))
 	for e in effects:
 		if intent.target_spec == null and e.target_spec != null:
 			intent.target_spec = e.target_spec
@@ -165,6 +219,9 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 				intent.pump_self = true
 			if e.use_x_power:
 				intent.pump_uses_x = true
+			for keyword in e.granted_keywords:
+				if not intent.pump_keywords.has(keyword):
+					intent.pump_keywords.append(keyword)
 		elif e is RegenerateEffect:
 			intent.regenerates = true
 		elif e is GainLifeEffect:

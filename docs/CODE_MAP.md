@@ -502,6 +502,17 @@ shandalar/
 │   │                          is left to find. The X stamp moved BELOW
 │   │                          those checks, so a refused announcement now
 │   │                          leaves memory as it was (CR 601.2h).
+│   │                          rider_admits_own_main(pid, inst)
+│   │                          (2026-09-06) is the probe behind the
+│   │                          window caster: would the card's "Cast this
+│   │                          spell only ..." rider admit a cast in
+│   │                          EITHER of pid's own main phases — asked
+│   │                          the way target_legal_at asks, with the
+│   │                          active player and step set for one call
+│   │                          and restored; true for a card with no
+│   │                          rider, and for Berserk / Rapid Fire /
+│   │                          Glyph of Reincarnation, whose riders name
+│   │                          a moment our own turn also has.
 │   │                          THE PRE-FLIGHT (§1.3): with
 │   │                          interactive_choices on, _resolve_top first
 │   │                          runs _preflight — the item resolves once
@@ -1014,6 +1025,15 @@ shandalar/
 │   │                      day) is whether a City of Brass is not a
 │   │                      Plains — on for EVERY profile, a knob only so
 │   │                      the Deck Lab can run the null.
+│   │                      casts_timed_spells (2026-09-06) is THE WINDOW:
+│   │                      whether the profile casts a spell whose ONLY
+│   │                      legal moment is outside its own main phase —
+│   │                      a Festival at their upkeep, a Siren's Call
+│   │                      before they declare attackers, a Reset once
+│   │                      they are past their upkeep — the dead-card
+│   │                      sweep's class 1, twelve cards that sat in hand
+│   │                      for the whole duel until then; Sorcerer and
+│   │                      Wizard (AiPlayer._cast_in_window).
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -1072,7 +1092,25 @@ shandalar/
 │   │   │                      signals first (steals / reanimates /
 │   │   │                      grants protection), then the 28-name
 │   │   │                      hostile set, friendly by default, the
-│   │   │                      whole pool pinned by a coverage test
+│   │   │                      whole pool pinned by a coverage test.
+│   │   │                      THE WINDOW SHAPES (WINDOW_SHAPES / Shape /
+│   │   │                      .window, 2026-09-06): a SECOND table, six
+│   │   │                      rows, naming what a card-local spell whose
+│   │   │                      rider keeps it out of its caster's main
+│   │   │                      phase does to THE COMBAT it is cast into
+│   │   │                      (Festival stops attacks, Siren's Call
+│   │   │                      forces them, Reset untaps lands, Disharmony
+│   │   │                      steals an attacker, Blaze of Glory
+│   │   │                      conscripts a blocker, False Orders pulls
+│   │   │                      one) — a second table rather than a key in
+│   │   │                      CARD_LOCAL because these effects must STAY
+│   │   │                      unknown to every reading that word gates;
+│   │   │                      only AiPlayer._window_worth reads the
+│   │   │                      column. Camouflage has no row on purpose (a
+│   │   │                      coin flip). pump_keywords is every keyword
+│   │   │                      the pumps grant, so Teleport (a 0/0 pump
+│   │   │                      granting unblockable) is read structurally
+│   │   │                      and needs no row.
 │   │   ├── combat_search.gd
 │   │   │                    class CombatSearch — THE CRACK-BACK SEARCH
 │   │   │                      (M4 phase 3's first landing, 2026-09-05):
@@ -1157,7 +1195,30 @@ shandalar/
 │   │                          blocker in the way in OUR PRECOMBAT MAIN
 │   │                          with an attack ready; never a land, never
 │   │                          one of ours, never one already tapped,
-│   │                          never below a card's worth; combat maths with
+│   │                          never below a card's worth; THE WINDOW
+│   │                          CASTER (_cast_in_window, 2026-09-06), the
+│   │                          LAST arm of _respond_action after every
+│   │                          responder above it has declined — the
+│   │                          spell whose only legal moment is theirs
+│   │                          (dead-card class 1: Festival, Siren's
+│   │                          Call, Reset, Disharmony, Blaze of Glory,
+│   │                          False Orders, Teleport), admitted only
+│   │                          when MtgGame.rider_admits_own_main says
+│   │                          its rider refuses BOTH our main phases
+│   │                          and _claimed_by_a_responder says no
+│   │                          existing responder holds it, priced by
+│   │                          SHAPE from the board (_window_worth and
+│   │                          one _worth_* per EffectIntent.Shape, with
+│   │                          _damage_through_blocks / _dies_to /
+│   │                          _face_damage_value / LETHAL_WORTH) against
+│   │                          the card's own Evaluator.card_value, the
+│   │                          1.5x reserve rule kept except for Reset,
+│   │                          whose worth IS the reserve; a shape with
+│   │                          no reading is not cast (Camouflage).
+│   │                          Manalink's shape (legality from the card,
+│   │                          the decision from the state), the pricing
+│   │                          this project's own; gated by
+│   │                          AiProfile.casts_timed_spells; combat maths with
 │   │                          first strike, regeneration shields and
 │   │                          trample (_dies_to, _damage_through_blocks),
 │   │                          ATTACKS DECIDED AS A GROUP
@@ -1467,7 +1528,16 @@ shandalar/
 │   │                          WorkerThreadPool parallelism,
 │   │                          report/JSON/CSV/SVG output. stdout is the
 │   │                          report; stderr is banner/progress/hints.
-│   │                          Manual: DeckLab/README.md
+│   │                          Since 2026-09-06 THE SWEEP **[QoL]**:
+│   │                          `--sweep KNOB=V1,V2,.. --control-deck-a/-b`
+│   │                          plays the candidate, null and control
+│   │                          pairs of one AiProfile knob in one run
+│   │                          over one seed set, fingerprints every
+│   │                          game from the engine log and PASSES the
+│   │                          control only when each arm replays the
+│   │                          null game for game (exit 4 when it does
+│   │                          not); one report, sweep.json/csv,
+│   │                          games.csv. Manual: DeckLab/README.md
 │   ├── lab_console.gd       class LabConsole — the terminal side of the
 │   │                          Lab: the banner, the in-place progress bar
 │   │                          with its ETA, colour that degrades to plain
@@ -1484,8 +1554,10 @@ shandalar/
 │   ├── elo_ledger.gd        class EloLedger — decks/ratings.txt, the Deck
 │   │                          Lab's running Elo (K=8 per game)
 │   ├── README.md            The manual (methodology, every switch, the
-│   │                          measured experiments)
+│   │                          measured experiments, the sweep)
 │   └── results/             Where a run writes unless --out says otherwise
+│                              (a sweep: report.txt, sweep.json, sweep.csv,
+│                              games.csv)
 ├── duel_soak.sh             Duel-soak entry point: wraps tools/duel_soak.gd
 │                              in the safe Xvfb recipe and FAILS on any
 │                              ERROR/WARNING/STALL line; exit 2 stall, 3 bad
@@ -1546,7 +1618,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4469 tests / ~129 000 asserts, ~290 s
+├── tests/                   GUT suite — 4516 tests / ~130 000 asserts, ~290 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2401,7 +2473,29 @@ shandalar/
 │    2026-09-06 photo: the quilt starting at the deck area's own edge and
 │    the sideboard's field sharing that area's edges, the title slab as
 │    wide as the Showcase card, and the well's message pale with room for
-│    its two lines (one at 720);
+│    its two lines (one at 720); and the **[QoL]** Rarity switch — between
+│    Stats and Deck, inside the bar, every card on the deck surface
+│    lettered C/U/R/L in its tier's ink on its tier's plate at the
+│    card's bottom centre (a legend printed at uncommon reads L), off
+│    hiding every mark, the setting remembered across a new screen — with
+│    the Stats window's own rows: `_format_warning` counting its grammar,
+│    the rarity bars on the Deck page and NOT on Speed, the Matchups
+│    page's `Blunted against`, and no `0  0 mana sources` track for a
+│    colour the deck lacks;
+│    tests/ui/test_deck_stats.gd — the probability page's arithmetic,
+│    EXACT: the hypergeometric against values computed by hand and
+│    surviving a deck too big for a factorial, the land row a real
+│    distribution, keepable = the 2-5 band, the draw worth a card, land
+│    drops and colour-by-turn moving the right way, pips counting symbols
+│    not cards, the hardest cast named, creature and spell costs kept
+│    apart with land left out of every average; the oracle-text scans as
+│    WHOLE WORDS (Karma names Swamps; "enchanted" is not an ante card,
+│    "entered" is not red, Dakkon Blackblade is not black hate), the
+│    non<colour> blind spots, the seven real ante cards, evasion; rarity
+│    read from cards/data and not the card objects, every card of a
+│    shipped deck having one, and the four TIERS — a legend a legend
+│    before it is the uncommon it was printed at, and the tier tally
+│    counting it once;
 │    tests/ui/test_help_screen.gd — the paged reference: every page
 │    renders and shows its title, titles are unique, every QUOTE cites a
 │    source, paging cannot run off either end by button or key, the Help
@@ -2584,6 +2678,23 @@ shandalar/
 │    life a City costs yet paying a life for a card, firing from painless
 │    mana, the main phase still paying a life for a spell, and the null
 │    profile tapping the City for the sink as before;
+│    tests/unit/test_window_caster_2026_09_06.gd — THE WINDOW
+│    (AiProfile.casts_timed_spells): rider_admits_own_main telling the
+│    window cards from the planner's and leaving the game as it found it;
+│    _claimed_by_a_responder true for every held instant (Fog,
+│    Counterspell, Bolt, Giant Growth, Terror, Unsummon, Ancestral, Dark
+│    Ritual, Twiddle, Howl, Healing Salve) and false for the seven window
+│    cards; the arm firing neither a declined Fog nor an under-threshold
+│    Counterspell, and Berserk staying the planner's; one cast-and-hold
+│    pair per shape — Festival at their upkeep against twelve power and
+│    held against Bears, Siren's Call walking Bears into a Hill Giant and
+│    held against a Craw Wurm, Reset with a Counterspell waiting and held
+│    with nothing to pay for, Disharmony taking the Serra at five life,
+│    Blaze of Glory conscripting the Wall against three Bears and not one,
+│    False Orders pulling the Wall off the Wurm onto Bears and held when
+│    the hint sends it back, Teleport past the Wall at six life and held
+│    when the attacker is unblockable anyway; Camouflage never cast; the
+│    reader's shape and pump_keywords; the knob off passing; the ladder;
 │    tests/unit/test_card_discarded_event_2026_09_06.gd — CARD_DISCARDED
 │    once per card, after the move, from discard_cards / discard_random /
 │    discard_hand and the cleanup discard (by_effect false), an empty hand
@@ -2593,7 +2704,17 @@ shandalar/
 │    and the key are one switch, one window however often asked, not a
 │    modal (Q still pauses under it, Esc's ladder untouched), a bracket
 │    is text, on screen right of the sidebar, Save writes the whole log
-│    and says where, the glyph is a page of lines
+│    and says where, the glyph is a page of lines;
+│    tests/tools/test_deck_lab_sweep.gd — THE SWEEP **[QoL]** (the Deck
+│    Lab's `--sweep`): the flag parses and defaults its null (off for a
+│    boolean, the preset's own number), an unknown knob or an unreadable
+│    value is exit 2, the companions need each other and the sweep
+│    refuses --matrix, random, the Elo ledger and a knob also in
+│    --profile, the arms are the null then one candidate per value, the
+│    control verdict is read from the games' fingerprints and never a
+│    constant, a game's fingerprint is the game (same seed same md5), a
+│    2-game sweep writes the table with its PASS rows and the four files,
+│    and a knob that fires on any deck moves the control and is exit 4
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title: 6 stone buttons center-right over the
@@ -2927,7 +3048,16 @@ shandalar/
 │   │   │                      behind the screenshot's Deck1/2/3, one-step
 │   │   │                      UNDO, ADD BASIC LAND, DECK NOTES, EXPORT to
 │   │   │                      .dec/.dck, the Stats window's colour / type /
-│   │   │                      land graphs and average cost, and Ctrl-key
+│   │   │                      land / rarity graphs and average cost, its
+│   │   │                      four added PAGES (Draws, Mana, Speed,
+│   │   │                      Matchups — every number from DeckStats; two
+│   │   │                      fixed columns per line since 2026-09-06 so a
+│   │   │                      value sits beside its label, and only the
+│   │   │                      colours the deck has get a bar), the
+│   │   │                      command bar's `Rarity` SWITCH (between Stats
+│   │   │                      and Deck, `deck_rarity_marks` in Settings,
+│   │   │                      CardArea.show_rarity on all three surfaces),
+│   │   │                      and Ctrl-key
 │   │   │                      shortcuts. SECOND AUDIT PASS: every dialog is
 │   │   │                      now one-at-a-time and MODAL (`_show_dialog`
 │   │   │                      puts a full-screen blocker under it — clicks
@@ -3067,6 +3197,35 @@ shandalar/
 │   │   │                      **modern Magic's convention, not a 1997
 │   │   │                      rule**, and is advice (`sideboard_advice`)
 │   │   │                      rather than a refusal
+│   │   ├── deck_stats.gd    class DeckStats — **[QoL]** the numbers
+│   │   │                      behind the Stats window's four added pages
+│   │   │                      (2026-09-05), PURE and static so the window
+│   │   │                      stays a view: the hypergeometric (a product
+│   │   │                      of ratios, never three factorials divided,
+│   │   │                      so a 200-card deck cannot overflow it) for
+│   │   │                      lands in the opening seven,
+│   │   │                      keepable hands, land drops and a colour by
+│   │   │                      turn N on the play or the draw; colour PIPS
+│   │   │                      against sources and the hardest cast; speed
+│   │   │                      (creature and spell cost apart, a castable
+│   │   │                      creature by turn, evasion); and the ORACLE
+│   │   │                      SCANS — `colors_named` (colour hate, the
+│   │   │                      era's basic-land wording included: Karma
+│   │   │                      says Swamps), `colors_excluded` (the
+│   │   │                      non<colour> blind spots, `color_blind_spots`)
+│   │   │                      and `ante_cards` — all WHOLE-WORD RegEx
+│   │   │                      since 2026-09-06, because `contains("ante")`
+│   │   │                      had flagged Holy Strength (enchANTEd) and
+│   │   │                      ninety others. Rarity is read from
+│   │   │                      cards/data/*.json (`rarity_of`, first
+│   │   │                      printing wins; the card files have no such
+│   │   │                      field) and comes in two counts: `rarity_counts`
+│   │   │                      by the printed sheet, and the four TIERS the
+│   │   │                      deck builder letters (`RARITY_TIERS`,
+│   │   │                      `rarity_tier`, `rarity_tiers` — legendary
+│   │   │                      first, by supertype, because the pool's 61
+│   │   │                      legends were printed at uncommon and rare
+│   │   │                      both)
 │   │   ├── deck_filter.gd   class DeckFilter — the four Filter groups'
 │   │   │                      logic, ported from s30's collectionFilter
 │   │   │                      with the ORIGINAL's polarity (every button
@@ -3184,7 +3343,15 @@ shandalar/
 │   │   │                      has; TALLY_W is the same card's width x1.3,
 │   │   │                      for the same reason. And
 │   │   │                      `card_shifted` is the SHIFT-click that sends
-│   │   │                      a card to the other pile
+│   │   │                      a card to the other pile. **[QoL]**
+│   │   │                      `show_rarity` (2026-09-06) letters every
+│   │   │                      cell with its tier — `RARITY_MARKS`: C on
+│   │   │                      dark, U on silver, R on gold, L on purple —
+│   │   │                      on an 18px plate at the card's BOTTOM
+│   │   │                      CENTRE, the one spot the count disc (bottom
+│   │   │                      left) and the P/T (bottom right) leave
+│   │   │                      free; `rarity_key` is DeckStats.rarity_tier,
+│   │   │                      so the letter and the Stats bars agree
 │   │   ├── proxy_face.gd    class ProxyFace — **[QoL]** THE PROXY CARD,
 │   │   │                      DRAWN: a card-shaped, card-sized piece of
 │   │   │                      plain paper carrying the name and the word

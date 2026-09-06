@@ -1653,6 +1653,43 @@ func legal_targets_at(spec: TargetSpec, source: CardInstance, x_value: int,
 	return out
 
 
+## Would [param inst]'s "Cast this spell only ..." rider admit a cast in
+## [param pid]'s OWN main phase — either of them — with the board as it
+## stands? True for a rider that names a moment its caster's turn also
+## has (Berserk's "before the combat damage step", Rapid Fire's "before
+## blockers are declared", Glyph of Reincarnation's "after combat"), false
+## for one whose every legal moment is on the other side of the table or
+## inside combat (Reset, Festival, Siren's Call, Teleport, False Orders,
+## Blaze of Glory, Disharmony, Camouflage). A spell without a rider is
+## trivially admitted.
+##
+## Asked by [method AiPlayer._cast_in_window], whose gate is exactly this
+## question: a spell the main-phase planner could cast on some turn of
+## its own belongs to that planner, and only a spell that NEVER gets a
+## main-phase window may be cast outside one (docs/ROADMAP.md, the dead-
+## card sweep's class 1). The rider is put the hypothetical the way
+## [method target_legal_at] puts a spell an X: the turn structure is set
+## to the caller's main phase for the length of one call and restored.
+## Every rider in the pool reads only [member active_player] and [method
+## current_step], and a rider is a predicate over the game — it moves
+## nothing — so nothing else can notice the question being asked.
+func rider_admits_own_main(pid: int, inst: CardInstance) -> bool:
+	if inst == null or not inst.data.cast_condition.is_valid():
+		return true
+	var was_active := active_player
+	var was_index := _step_index
+	active_player = pid
+	var admitted := false
+	for step in [Mtg.Step.MAIN1, Mtg.Step.MAIN2]:
+		_step_index = Mtg.STEP_ORDER.find(step)
+		if String(inst.data.cast_condition.call(self, pid)) == "":
+			admitted = true
+			break
+	active_player = was_active
+	_step_index = was_index
+	return admitted
+
+
 ## Would [method cast_spell] refuse this announcement, and why? Everything
 ## it checks that can be answered without paying: the zone, priority and
 ## timing gates, the mode, the damage window, the whole target plan at

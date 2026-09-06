@@ -239,13 +239,52 @@ static func colors_named(data: CardData) -> Array[int]:
 	# every landwalker. Naming a basic land IS naming a colour here, and a
 	# detector that only read colour words found Karma innocent (caught by
 	# the test, 2026-09-05).
-	for pair in [["white", Mtg.ManaColor.W], ["plains", Mtg.ManaColor.W],
-			["blue", Mtg.ManaColor.U], ["island", Mtg.ManaColor.U],
-			["black", Mtg.ManaColor.B], ["swamp", Mtg.ManaColor.B],
-			["red", Mtg.ManaColor.R], ["mountain", Mtg.ManaColor.R],
-			["green", Mtg.ManaColor.G], ["forest", Mtg.ManaColor.G]]:
+	for pair in COLOR_WORDS:
 		var color := int(pair[1])
-		if text.contains(String(pair[0])) and not found.has(color):
+		if _names_word(text, String(pair[0])) and not found.has(color):
+			found.append(color)
+	return found
+
+
+## The ten words that name a colour on a 1997 card, and the colour each
+## one names. The land words carry the colour of the land.
+const COLOR_WORDS := [["white", Mtg.ManaColor.W], ["plains", Mtg.ManaColor.W],
+	["blue", Mtg.ManaColor.U], ["island", Mtg.ManaColor.U],
+	["black", Mtg.ManaColor.B], ["swamp", Mtg.ManaColor.B],
+	["red", Mtg.ManaColor.R], ["mountain", Mtg.ManaColor.R],
+	["green", Mtg.ManaColor.G], ["forest", Mtg.ManaColor.G]]
+
+## WHOLE WORDS, plus the plural and the landwalk. A substring search read
+## "declared" and "reduce" as RED (Blaze of Glory, Siren's Call, Ali from
+## Cairo — ten cards in the pool), "Blackblade" as black and "nonblack" as
+## black (Terror, which is the one card in the pool that CANNOT touch a
+## black creature); caught by looking at the Matchups page, 2026-09-06.
+## "Swamps", "swampwalk" and "Islands" are still the colour they name.
+static var _word_cache: Dictionary = {}
+
+static func _names_word(text: String, word: String) -> bool:
+	var pattern: RegEx = _word_cache.get(word)
+	if pattern == null:
+		pattern = RegEx.new()
+		pattern.compile("\\b%s(s|walk)?\\b" % word)
+		_word_cache[word] = pattern
+	return pattern.search(text) != null
+
+
+## The colours a card NAMES AS THE ONES IT CANNOT TOUCH — "nonblack
+## creature", "nonwhite creatures" — by `Mtg.ManaColor`. The opposite
+## question from [method colors_named] and the more painful one in this
+## game: against a black opponent Terror is a dead card, and a builder who
+## can see the opponent's colour on the setup screen wants to know that
+## before the duel, not during it.
+static func colors_excluded(data: CardData) -> Array[int]:
+	var found: Array[int] = []
+	if data == null or data.oracle_text == "":
+		return found
+	var text := data.oracle_text.to_lower()
+	for pair in COLOR_WORDS:
+		var color := int(pair[1])
+		if _names_word(text, "non" + String(pair[0])) and not found.has(color):
 			found.append(color)
 	return found
 
@@ -265,15 +304,35 @@ static func color_hate(deck: DeckModel) -> Array:
 	return out
 
 
+## Cards in the deck that are BLUNTED against a colour — the "non<colour>"
+## cards ([method colors_excluded]), in the same shape as
+## [method color_hate]: `[{"card": "Terror", "count": 2, "colors": [B]}]`.
+static func color_blind_spots(deck: DeckModel) -> Array:
+	var out := []
+	for card_name in deck.counts:
+		var d := deck._card(card_name)
+		var excluded := colors_excluded(d)
+		if excluded.is_empty():
+			continue
+		out.append({"card": card_name, "count": int(deck.counts[card_name]),
+			"colors": excluded})
+	out.sort_custom(func(a, b): return String(a["card"]) < String(b["card"]))
+	return out
+
+
 ## Cards that play for the ANTE, which in this game is not a curiosity:
 ## Shandalar duels are played for a card and these change what a loss
 ## costs. Detected from the oracle text, which names the ante explicitly
-## on every card in the pool that touches it.
+## on every card in the pool that touches it — seven of them: Bronze
+## Tablet, Contract from Below, Darkpact, Demonic Attorney, Jeweled Bird,
+## Rebirth, Tempest Efreet. AS A WORD: a substring search put Holy
+## Strength on the list, because "enchANTEd" contains it, along with
+## ninety other cards (2026-09-06).
 static func ante_cards(deck: DeckModel) -> Array:
 	var out := []
 	for card_name in deck.counts:
 		var d := deck._card(card_name)
-		if d == null or not d.oracle_text.to_lower().contains("ante"):
+		if d == null or not _names_word(d.oracle_text.to_lower(), "ante"):
 			continue
 		out.append({"card": card_name, "count": int(deck.counts[card_name])})
 	out.sort_custom(func(a, b): return String(a["card"]) < String(b["card"]))
@@ -356,4 +415,41 @@ static func rarity_counts(deck: DeckModel) -> Dictionary:
 		if rarity == "":
 			rarity = "unknown"
 		tally[rarity] = int(tally.get(rarity, 0)) + int(deck.counts[card_name])
+	return tally
+
+
+## [QoL] The four TIERS the deck builder letters a card with — the owner's
+## own list (2026-09-06): *"C symbol (common), U (uncommon, silver), R
+## (rare, gold) and L (legendary, purple)"*. In this order, which is the
+## order the Stats window draws them.
+const RARITY_TIERS: Array[String] = ["common", "uncommon", "rare", "legendary"]
+
+
+## Which tier a card belongs to — one of [constant RARITY_TIERS], or `""`
+## for a card the pool's data does not place (a proxy, or a printing
+## outside the eight 1997 sets). LEGENDARY FIRST: it is the card's
+## supertype ([constant Mtg.Supertype.LEGENDARY]) and the sixty-one
+## legends in this pool were printed at uncommon and rare both, so the
+## tier says what the card IS rather than which sheet it came off.
+static func rarity_tier(data: CardData) -> String:
+	if data == null or ProxyCard.is_proxy_data(data):
+		return ""
+	if (data.supertypes & Mtg.Supertype.LEGENDARY) != 0:
+		return "legendary"
+	var word := rarity_of(data.card_name)
+	return word if RARITY_TIERS.has(word) else ""
+
+
+## How many cards of each TIER the deck holds, keyed by
+## [constant RARITY_TIERS] plus `"unknown"` — the same count the marks on
+## the cards make, so the Stats bars and the letters on the cards agree
+## (a legend counts as a legend here and NOT as the rare it was printed
+## at, which is where this differs from [method rarity_counts]).
+static func rarity_tiers(deck: DeckModel) -> Dictionary:
+	var tally := {}
+	for card_name in deck.counts:
+		var tier := rarity_tier(deck._card(card_name))
+		if tier == "":
+			tier = "unknown"
+		tally[tier] = int(tally.get(tier, 0)) + int(deck.counts[card_name])
 	return tally

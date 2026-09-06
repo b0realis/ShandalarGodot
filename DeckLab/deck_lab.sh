@@ -8,6 +8,7 @@
 # Exit codes (the Lab's own; this wrapper adds only 3):
 #   0 a finished run, every output file written
 #   1 the run broke   2 the command line was wrong   3 no Godot to run
+#   4 a --sweep finished, but its control pair did not replay the null
 set -euo pipefail
 
 # THE LAB LIVES IN ITS OWN FOLDER (2026-09-05), so the Godot project root

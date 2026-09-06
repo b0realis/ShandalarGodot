@@ -124,6 +124,26 @@ var plays_engines := false
 ## and nothing it gates is card-named.
 var pays_sacrifices := false
 
+## THE WINDOW: does this profile cast a spell whose ONLY legal moment is
+## outside its own main phase — a Festival at their upkeep, a Siren's Call
+## before they declare attackers, a Reset once they are past their upkeep,
+## a Teleport in the declare-attackers step?
+##
+## A CAPABILITY, like [member plays_engines] and [member pays_sacrifices]
+## — not a second difficulty concept. Knowing that a card in hand has a
+## moment, and that the moment is on the other side of the table, is a
+## whole layer of play, and the bottom two difficulties not having it at
+## all is the same honest weakness as the Apprentice never holding an
+## instant. Until 2026-09-06 no profile had it: the main-phase planner
+## refused every "Cast this spell only ..." rider by asking it, and
+## nothing outside the main phase asked at all, so twelve cards in the
+## pool sat in hand for the whole duel (docs/ROADMAP.md, the dead-card
+## sweep's class 1). Everything it gates is priced from the board by
+## [method AiPlayer._window_worth]; the only thing named by card is the
+## SHAPE of a card-local effect ([constant EffectIntent.WINDOW_SHAPES]),
+## the way [constant EffectIntent.CARD_LOCAL] names one.
+var casts_timed_spells := false
+
 ## THE LIFE A TAP COSTS: does this profile know that a City of Brass is
 ## not a Plains? On, the planner taps the painless source first, never
 ## taps a source whose damage would be the last of its life ([method
@@ -138,7 +158,7 @@ var minds_pain := true
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
-		p_engines := false, p_sacrifices := false) -> void:
+		p_engines := false, p_sacrifices := false, p_timed := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -149,6 +169,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	combat_search_nodes = p_search_nodes
 	plays_engines = p_engines
 	pays_sacrifices = p_sacrifices
+	casts_timed_spells = p_timed
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -195,12 +216,12 @@ static func magician() -> AiProfile:
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true)
 
 
 func _to_string() -> String:

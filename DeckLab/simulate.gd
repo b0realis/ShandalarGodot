@@ -39,6 +39,17 @@ extends SceneTree
 ## on` against `--sideboard off` on the same seed is the experiment that
 ## says whether the heuristic (or the sideboard) is any good.
 ##
+## `--sweep` IS THIS PROJECT'S OWN MEASUREMENT, AS ONE COMMAND. Every AI
+## capability docs/ROADMAP.md has measured was measured the same way and
+## by hand: the CANDIDATE pair (the knob on seat A, off on seat B), the
+## NULL pair (off on both), and a CONTROL pair the knob cannot fire on —
+## which has to replay its own null byte for byte, or the delta is not
+## the knob's — three runs, one seed, and a table typed up afterwards.
+## The sweep runs the three pairs over one seed set, fingerprints every
+## game from the engine's own log, prints the table, and exits 4 when the
+## control moved. THE SWEEP, before THE TERMINAL at the foot of this
+## file, holds it.
+##
 ## DEFAULTS NEVER MOVE. Every flag above defaults to what this script did
 ## before it existed, because the determinism check — same seed, same
 ## win/loss split, byte-identical matchups.csv — is how this project proves
@@ -99,6 +110,8 @@ USAGE
   DeckLab/deck_lab.sh --deck-a DECK --deck-b random     [options]  (vs the field)
   DeckLab/deck_lab.sh --deck-a DECK --gauntlet LIST|DIR [options]  (gauntlet)
   DeckLab/deck_lab.sh --matrix LIST|DIR                 [options]  (matrix)
+  DeckLab/deck_lab.sh --deck-a DECK --deck-b DECK --sweep KNOB=V1,V2
+                      --control-deck-a DECK --control-deck-b DECK  (sweep)
   DeckLab/deck_lab.sh -h | --help
 
 QUICK START — copy one of these
@@ -238,6 +251,30 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
                       pool_empties_on_attack, damage_prevention_window,
                       free_damage_assignment.
 
+THE SWEEP (measuring one AI knob the way this project measures every one)
+  --sweep KNOB=V1,V2,.. Play the three-pair measurement for one AI profile
+                      knob (engine/ai/ai_profile.gd) in one run, over one
+                      seed set. For each value: the CANDIDATE pair, deck A
+                      piloted with the knob at that value against deck B
+                      with it at the null. Once: the NULL pair, both seats
+                      at the null. And for each value the CONTROL pair —
+                      two decks the knob cannot fire on — candidate against
+                      null, which must replay the control's own null run
+                      GAME FOR GAME: every game is fingerprinted from the
+                      engine's log, and a control that moved means the
+                      knob fired where it cannot or the run is not seeded,
+                      so the deltas are not a measurement. One report:
+                      per matchup, a row per value with the win rate, its
+                      interval and the delta against the null; then the
+                      control's verdict per value, PASS or FAIL with the
+                      first game that differed. Needs --deck-a/--deck-b or
+                      --gauntlet, never writes the Elo ledger, and does
+                      not combine with --matrix or `random`.
+  --null VALUE        The knob's null. Default: off for a boolean knob, the
+                      preset's own value for a number.
+  --control-deck-a DECK  The control pair. Both are required with --sweep,
+  --control-deck-b DECK  and mean nothing without it.
+
 HOW MANY GAMES DO I NEED
   Every win rate is printed with its Wilson 95% interval, and THE
   INTERVAL, NOT THE PERCENTAGE, is what you may quote. At an even win
@@ -269,6 +306,8 @@ WHAT GOES WHERE
   --out    report.txt, results.json, matchups.csv — always.
            winrates.svg, turns.svg — duel/gauntlet (unless --no-svg).
            matrix.svg             — matrix mode (unless --no-svg).
+           report.txt, sweep.json, sweep.csv, games.csv — a --sweep
+                                  (the last is every game's fingerprint).
            The Elo ledger lives at --elo-file and persists across runs.
 
 EXIT CODES
@@ -276,6 +315,8 @@ EXIT CODES
   1  the run broke (a worker thread stopped, a file could not be written)
   2  the command line was wrong (bad flag, missing or illegal deck)
   3  no Godot binary (deck_lab.sh; set GODOT=/path/to/godot)
+  4  a --sweep ran to the end, but its control pair did not replay the
+     null game for game — the report says which game moved first
 
 ENVIRONMENT
   GODOT               Which Godot to run (default ../tools/godot, then PATH).
@@ -291,6 +332,9 @@ EXAMPLES
   DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --games 2000
   DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --deck-pool tier1/ --games 2000
   DeckLab/deck_lab.sh --deck-a a.deck --deck-b b.deck --best-of 3 --sideboard on --no-elo
+  DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.deck \\
+                      --sweep pays_sacrifices=on --control-deck-a big_green.deck \\
+                      --control-deck-b white_knights.deck --seed 11 --games 2000
 """
 
 const PROFILES := ["apprentice", "magician", "sorcerer", "wizard"]
@@ -532,6 +576,12 @@ func _main(argv: PackedStringArray) -> int:
 		return 1
 	_keep_the_importer_out(out_dir)
 	var unit := "games" if opts.best_of == MatchState.FREE_PLAY else "matches"
+	_duel_opts = _duel_options(opts)
+	# A SWEEP IS ITS OWN RUN FROM HERE: the same decks, loader, fan-out
+	# and per-game records, but three pairs and a verdict where a plain
+	# run has one report (THE SWEEP, towards the foot of this file).
+	if not opts.sweep.is_empty():
+		return _run_sweep(opts, decks, pairs, out_dir, jobs, unit)
 	print("Deck Lab (%s): %d deck(s), %d matchup(s) x %d %s, seed %d, %d thread(s)"
 		% [mode, decks.size(), pairs.size(), opts.games, unit, opts.seed, jobs])
 	# WHICH DECKS, BY NAME. "5 deck(s)" is not enough to know that the
@@ -543,15 +593,6 @@ func _main(argv: PackedStringArray) -> int:
 			", ".join(_deck_names(field))])
 	print("total: %s %s   out: %s" % [
 		LabConsole.commas(pairs.size() * opts.games), unit, out_dir])
-	_duel_opts = {
-		"lives": opts.lives, "ante": opts.ante, "names": opts.names,
-		"mulligan": opts.mulligan, "rules": opts.rules,
-		"rule_overrides": opts.rule_overrides,
-		# THE MATCH PARAMETERS. `format` rides along because the sideboard
-		# step has to keep a deck legal in the format the run required.
-		"best_of": opts.best_of, "sideboard": opts.sideboard,
-		"format": opts.format,
-	}
 	var settings_line := _settings_line(opts)
 	if settings_line != "":
 		print(settings_line)
@@ -601,42 +642,8 @@ func _main(argv: PackedStringArray) -> int:
 	_results.resize(_tasks.size())
 
 	# ---- run, in parallel ----
-	var started_at := Time.get_ticks_msec()
-	# ---- fan out across PROCESSES when that is faster, which is nearly
-	# always. Measured on an idle 22-core machine, 240 games: the thread
-	# pool peaks at 18.1 games/s (four threads) and falls to 4.4 at
-	# twenty-two, while four separate single-threaded PROCESSES do 61.3
-	# and twenty do 155.5 — 8.6x the pool, still climbing. Whatever
-	# serialises the work (the VM, the allocator, the pool itself) is
-	# inside one process, and separate processes step around it.
-	#
-	# SAFE BECAUSE THE TASK LIST IS ALREADY DECIDED. Every seed is
-	# computed above, before any game runs, so a slice played in another
-	# process is the same game with the same rolls — proven rather than
-	# assumed: a matchup run on its own writes a byte-identical
-	# `matchups.csv` row to the same matchup inside a `--matrix` sweep.
-	#
-	# FALLS BACK RATHER THAN FAILING. If a child cannot be spawned (a
-	# sandbox, no executable path, a full disk for the slice files), the
-	# in-process pool below runs the same work and the only cost is time.
-	var procs := _process_count(opts, _tasks.size())
-	var fanned := procs > 1 and _fan_out(procs, unit, started_at)
-	if not fanned:
-		var group := WorkerThreadPool.add_group_task(
-			_run_one_game, _tasks.size(), jobs, true, "deck_lab")
-		# WAITED ON IN A POLLING LOOP RATHER THAN ONE BLOCKING CALL, so the
-		# run can say how far along it is. A 10,000-game matchup is ten
-		# minutes and a matrix sweep an hour; before this the tool printed a
-		# header and then nothing at all, which is indistinguishable from a
-		# hang — and this project has lost hours to exactly that ambiguity.
-		# The wait itself is unchanged (the pool's own threads do the work,
-		# and `wait_for_group_task_completion` still frees the group).
-		_watch(group, _tasks.size(), unit, started_at)
-	var elapsed := (Time.get_ticks_msec() - started_at) / 1000.0
-	var missing := missing_records(_results)
-	if missing > 0:
-		printerr("deck_lab: %d of %d games produced no record — a worker thread stopped on an error (see above)"
-			% [missing, _results.size()])
+	var elapsed := _play_tasks(opts, jobs, unit)
+	if elapsed < 0.0:
 		return 1
 
 	# ---- aggregate ----
@@ -867,6 +874,69 @@ func _main(argv: PackedStringArray) -> int:
 	return 0
 
 
+## What every game of a run plays under, from the parsed flags — the
+## duel settings the class doc lists, and the match parameters. Read by
+## the worker threads (and shipped to the worker processes) through
+## [member _duel_opts]; built here so a plain run and a sweep cannot
+## drift apart on it.
+func _duel_options(opts: Dictionary) -> Dictionary:
+	return {
+		"lives": opts.lives, "ante": opts.ante, "names": opts.names,
+		"mulligan": opts.mulligan, "rules": opts.rules,
+		"rule_overrides": opts.rule_overrides,
+		# THE MATCH PARAMETERS. `format` rides along because the sideboard
+		# step has to keep a deck legal in the format the run required.
+		"best_of": opts.best_of, "sideboard": opts.sideboard,
+		"format": opts.format,
+	}
+
+
+## Play every work order in [member _tasks] into [member _results], in
+## parallel, and return the seconds it took — or a negative number when a
+## record is missing, which is a worker that stopped on an error: the
+## message is printed here and the caller exits 1.
+##
+## FANS OUT ACROSS PROCESSES when that is faster, which is nearly always.
+## Measured on an idle 22-core machine, 240 games: the thread pool peaks
+## at 18.1 games/s (four threads) and falls to 4.4 at twenty-two, while
+## four separate single-threaded PROCESSES do 61.3 and twenty do 155.5 —
+## 8.6x the pool, still climbing. Whatever serialises the work (the VM,
+## the allocator, the pool itself) is inside one process, and separate
+## processes step around it.
+##
+## SAFE BECAUSE THE TASK LIST IS ALREADY DECIDED. Every seed is computed
+## by the caller, before any game runs, so a slice played in another
+## process is the same game with the same rolls — proven rather than
+## assumed: a matchup run on its own writes a byte-identical
+## `matchups.csv` row to the same matchup inside a `--matrix` sweep.
+##
+## FALLS BACK RATHER THAN FAILING. If a child cannot be spawned (a
+## sandbox, no executable path, a full disk for the slice files), the
+## in-process pool runs the same work and the only cost is time.
+func _play_tasks(opts: Dictionary, jobs: int, unit: String) -> float:
+	var started_at := Time.get_ticks_msec()
+	var procs := _process_count(opts, _tasks.size())
+	var fanned := procs > 1 and _fan_out(procs, unit, started_at)
+	if not fanned:
+		var group := WorkerThreadPool.add_group_task(
+			_run_one_game, _tasks.size(), jobs, true, "deck_lab")
+		# WAITED ON IN A POLLING LOOP RATHER THAN ONE BLOCKING CALL, so the
+		# run can say how far along it is. A 10,000-game matchup is ten
+		# minutes and a matrix sweep an hour; before this the tool printed a
+		# header and then nothing at all, which is indistinguishable from a
+		# hang — and this project has lost hours to exactly that ambiguity.
+		# The wait itself is unchanged (the pool's own threads do the work,
+		# and `wait_for_group_task_completion` still frees the group).
+		_watch(group, _tasks.size(), unit, started_at)
+	var elapsed := (Time.get_ticks_msec() - started_at) / 1000.0
+	var missing := missing_records(_results)
+	if missing > 0:
+		printerr("deck_lab: %d of %d games produced no record — a worker thread stopped on an error (see above)"
+			% [missing, _results.size()])
+		return -1.0
+	return elapsed
+
+
 ## One work order, run on a worker thread. Writes ONLY _results[index] and
 ## the shared finished-game counter (one lock, for the progress bar — see
 ## THE TERMINAL at the foot of this file). In free play the order is one
@@ -1084,13 +1154,16 @@ func _play_task(task: Dictionary) -> Dictionary:
 	# existed SimStats read the game as a win for deck B and the Elo
 	# ledger charged deck A a loss for it. Rare but real: 1 game in 600 of
 	# the shipped gauntlet, measured 2026-09-01.
-	return {
+	var record := {
 		"a_won": duel["finished"] and int(duel["winner"]) == a_seat,
 		"a_on_play": task.a_on_play,
 		"turns": duel["turns"],
 		"stalled": not duel["finished"],
 		"drawn": duel["drawn"],
 	}
+	if duel.has("fingerprint"):
+		record["fingerprint"] = duel["fingerprint"]
+	return record
 
 
 ## ONE DUEL, start to finish, on this thread. [param seat_decks] and
@@ -1151,13 +1224,23 @@ func _play_duel(seat_decks: Array, seat_profiles: Array, duel_seed: int,
 					game.decline_mulligan(pid)
 	game.start_duel(0)
 	var finished := AiPlayer.play_out(game, ai0, ai1)
-	return {
+	var out := {
 		"winner": game.winner,
 		"turns": game.turn_number,
 		"finished": finished,
 		"drawn": finished and game.is_draw,
 		"rng": game.rng,
 	}
+	# THE FINGERPRINT OF A GAME, for a sweep's control: the engine's own
+	# audit trail — every mutation helper writes a `log_line`, none of
+	# them a timestamp or an instance id — hashed. Two seeded games whose
+	# logs hash the same are the same game move for move, which is a
+	# stronger statement than "the same winner in the same turn" and the
+	# one the control has to make. Only a sweep asks; a plain run's
+	# records keep the shape they have always had.
+	if bool(_duel_opts.get("fingerprint", false)):
+		out["fingerprint"] = "\n".join(game.log_lines).md5_text()
+	return out
 
 
 ## ONE MATCH — the original's `&Best of:` (`Program/Text.res:2862`), which
@@ -1203,6 +1286,7 @@ func _run_one_match(task: Dictionary) -> Dictionary:
 	var turns_total := 0
 	var duels := 0
 	var stalled := false
+	var fingerprints := PackedStringArray()
 	while not state.is_over():
 		var a_seat := 0 if a_on_play else 1
 		var seat_decks := [deck_cards[0], deck_cards[1]] if a_seat == 0 \
@@ -1216,6 +1300,8 @@ func _run_one_match(task: Dictionary) -> Dictionary:
 			watchers)
 		duels += 1
 		turns_total += int(duel["turns"])
+		if duel.has("fingerprint"):
+			fingerprints.append(duel["fingerprint"])
 		if not duel["finished"]:
 			# A stalled duel cannot be scored, so neither can the match.
 			stalled = true
@@ -1232,7 +1318,7 @@ func _run_one_match(task: Dictionary) -> Dictionary:
 			for d in 2:
 				AiSideboard.sideboard(memories[d], deck_cards[d], boards[d],
 					_profile(profiles[d]), duel["rng"], format)
-	return {
+	var record := {
 		"a_won": not stalled and state.winner() == 0,
 		"a_on_play": task.a_on_play,
 		# The match's own length, in turns per duel — the figure the turn
@@ -1243,6 +1329,11 @@ func _run_one_match(task: Dictionary) -> Dictionary:
 		"stalled": stalled,
 		"drawn": not stalled and state.winner() == -1,
 	}
+	# A match's fingerprint is its duels', in order — the sideboard step
+	# between them shows in the next duel's log, so nothing is lost.
+	if not fingerprints.is_empty():
+		record["fingerprint"] = "+".join(fingerprints)
+	return record
 
 
 ## `wizard`, or `wizard:pays_sacrifices=off,counter_threshold=4` — a
@@ -1458,6 +1549,10 @@ const FLAG_HINTS := {
 	"--rule": "--rule KEY=on|off: override one rules fork; repeatable",
 	"--best-of": "--best-of N: play matches of 1, 3 or 5 duels instead of single duels",
 	"--sideboard": "--sideboard on|off: AI sideboards between duels; needs --best-of 3 or 5",
+	"--sweep": "--sweep KNOB=V1,V2,...: measure one AI knob at each value against its null, with a control pair (see --help, THE SWEEP)",
+	"--null": "--null VALUE: the swept knob's null — off for a boolean knob, the preset's own value for a number",
+	"--control-deck-a": "--control-deck-a PATH: the sweep's control pair, deck A — a deck the knob cannot fire on",
+	"--control-deck-b": "--control-deck-b PATH: the sweep's control pair, deck B",
 }
 
 ## The flags that take no value. Same contract as [constant FLAG_HINTS]:
@@ -1522,6 +1617,10 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		# no sideboarding — which is exactly what this script did before
 		# they existed, so the determinism baseline is untouched.
 		"best_of": MatchState.FREE_PLAY, "sideboard": false,
+		# THE SWEEP (see that section): {} for a plain run. `sweep_null`
+		# is "" until `sweep_options_error` has filled it in, because the
+		# default depends on the knob and on `--profile-a`.
+		"sweep": {}, "sweep_null": "", "control_a": "", "control_b": "",
 	}
 	# `--group` IS READ FIRST, before the loop, because `--gauntlet DIR`
 	# and `--matrix DIR` expand their pools as they are parsed — so a
@@ -1682,6 +1781,16 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				if not known:
 					return {"error": "unknown rules fork '%s'" % split[0]}
 				opts.rule_overrides[split[0]] = split[1].to_lower() == "on"
+			"--sweep":
+				var sweep := parse_sweep(value)
+				if sweep.has("error"):
+					return {"error": sweep.error}
+				opts.sweep = sweep
+			# Checked against the knob's type once the knob is known, in
+			# `sweep_options_error` — `--null` may be typed first.
+			"--null": opts.sweep_null = value.to_lower()
+			"--control-deck-a": opts.control_a = value
+			"--control-deck-b": opts.control_b = value
 		i += 1
 	# `--gauntlet`, now that `--deck-a` is known whichever side it was on.
 	for value in opts.gauntlets:
@@ -1694,6 +1803,11 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	# swap happens between two duels, and there is no second duel.
 	if opts.sideboard and opts.best_of < 3:
 		return {"error": "--sideboard needs --best-of 3 or 5 (there is nothing between one duel and no other)"}
+	# THE SWEEP'S OWN CHECKS, here because the matrix branch below returns
+	# early and a sweep with --matrix is one of the things it refuses.
+	var sweep_error := sweep_options_error(opts)
+	if sweep_error != "":
+		return {"error": sweep_error}
 	if not opts.matrix_pool.is_empty():
 		if opts.deck_a != "" or not opts.opponents.is_empty():
 			return {"error": "--matrix does not combine with --deck-a/--deck-b/--gauntlet"}
@@ -1864,6 +1978,546 @@ func _write(path: String, content: String) -> bool:
 		return false
 	file.store_string(content)
 	return true
+
+
+# ============================================================== THE SWEEP ==
+#
+# THE METHOD, which is older than this section. Every AI capability
+# docs/ROADMAP.md has measured (the engine room, the trade, the life a
+# tap costs — "THE 2026-09-06 PASS") was measured the same way:
+#
+#   the CANDIDATE pair   deck A piloted with the knob at the value under
+#                        test, deck B with it at the null, same seeds;
+#   the NULL pair        both seats at the null — the baseline the
+#                        candidate's win rate is a delta from;
+#   the CONTROL pair     two decks the knob CANNOT fire on, candidate
+#                        against null. It has to replay the control's own
+#                        null run game for game, and until it does the
+#                        delta on the candidate pair is not the knob's —
+#                        it is the knob plus whatever else moved.
+#
+# By hand that was three `--profile-a wizard:knob=...` runs per value, a
+# `matchups.csv` diff for the control, and a table typed up afterwards;
+# `--sweep` is the three pairs over one seed set, in one work list, with
+# one report — and a control judged on the ENGINE LOG of every game
+# rather than on a row of summary numbers, because two games can share a
+# winner and a turn count and still not be the same game.
+#
+# EXIT 4 IS THE VERDICT. A sweep whose control moved prints its report
+# in full (the failure is IN the report, naming the first game that
+# differed and how) and then refuses to exit 0, so a script that runs a
+# sweep and reads the deltas cannot mistake a broken measurement for a
+# finding.
+
+## The exit code of a sweep whose control pair did not replay its null
+## game for game. Distinct from 1 (the run broke) because the run did not
+## break: it finished, wrote every file, and the measurement failed.
+const EXIT_CONTROL_MOVED := 4
+
+## The record fields the control's verdict names when they differ, after
+## the fingerprint. A fingerprint already implies every one of them; they
+## are compared so the FAIL line can say "turns 12 vs 15" rather than
+## only "the log differs".
+const VERDICT_FIELDS := ["a_won", "turns", "stalled", "drawn"]
+
+## The result of a `--sweep KNOB=V1,V2,...` value: `{knob, type, values}`
+## with the values normalised (booleans to on/off, whole numbers to their
+## digits) — or `{error}`. The knob is checked against a real profile, so
+## an unknown one is refused at parse time exactly as `--profile-a`
+## refuses it; a value is checked against the knob's TYPE, because
+## `AiProfile.apply_overrides` reads `counter_threshold=abc` as 0 and
+## `pays_sacrifices=maybe` as off, silently, and a sweep over a typo is
+## a sweep over the wrong thing.
+static func parse_sweep(value: String) -> Dictionary:
+	var eq := value.find("=")
+	if eq < 0:
+		return {"error": "--sweep takes KNOB=V1,V2,... (%s)" % FLAG_HINTS["--sweep"]}
+	var knob := value.substr(0, eq).strip_edges().to_lower()
+	var probe := AiProfile.wizard()
+	var knob_type := TYPE_NIL if knob.is_empty() or knob == "profile_name" \
+		else typeof(probe.get(knob))
+	if not [TYPE_BOOL, TYPE_INT, TYPE_FLOAT].has(knob_type):
+		return {"error": "unknown knob '%s' in --sweep '%s'" % [knob, value]}
+	var values := PackedStringArray()
+	for raw in value.substr(eq + 1).split(",", false):
+		var normalised := knob_value(knob_type, raw)
+		if normalised == "":
+			return {"error": "--sweep %s: '%s' is not a %s" % [knob,
+				raw.strip_edges(), knob_type_name(knob_type)]}
+		if values.has(normalised):
+			return {"error": "--sweep %s: '%s' is listed twice" % [knob, normalised]}
+		values.append(normalised)
+	if values.is_empty():
+		return {"error": "--sweep %s: no values (KNOB=V1,V2,...)" % knob}
+	return {"knob": knob, "type": knob_type, "values": values}
+
+
+## [param raw] as a value of a knob of [param knob_type], normalised —
+## "" when it is not one. The spellings are [method
+## AiProfile.apply_overrides]'s own, so what the sweep accepts is what the
+## profile will read.
+static func knob_value(knob_type: int, raw: String) -> String:
+	var text := raw.strip_edges().to_lower()
+	match knob_type:
+		TYPE_BOOL:
+			if text in ["on", "true", "1", "yes"]:
+				return "on"
+			if text in ["off", "false", "0", "no"]:
+				return "off"
+			return ""
+		TYPE_INT:
+			return str(text.to_int()) if text.is_valid_int() else ""
+		TYPE_FLOAT:
+			return text if text.is_valid_float() else ""
+	return ""
+
+
+static func knob_type_name(knob_type: int) -> String:
+	match knob_type:
+		TYPE_BOOL: return "boolean (on/off)"
+		TYPE_INT: return "whole number"
+		TYPE_FLOAT: return "number"
+	return "knob value"
+
+
+## What is wrong with the sweep flags as parsed, or "" — and, on the way,
+## the null's default: off for a boolean knob, and for a number the value
+## the seat-A preset (with its own `--profile-a` overrides applied) already
+## carries, so that "candidate against the null" means "against the
+## shipped pilot" unless `--null` says otherwise.
+##
+## A SWEEP REFUSES WHAT IT WOULD OTHERWISE IGNORE. `--matrix` has no seat
+## A to put a candidate on; `random` on a seat is a different opponent per
+## game on each arm, which the control's game-for-game comparison cannot
+## read; a `--profile-a` that already names the knob would be overridden
+## by every arm; and the Elo ledger is never written by an experiment, so
+## an `--elo-file` here is a flag that lies about the run.
+static func sweep_options_error(opts: Dictionary) -> String:
+	var sweep: Dictionary = opts.sweep
+	if sweep.is_empty():
+		if opts.control_a != "" or opts.control_b != "":
+			return "--control-deck-a/--control-deck-b only mean something with --sweep"
+		if opts.sweep_null != "":
+			return "--null only means something with --sweep"
+		return ""
+	if not opts.matrix_pool.is_empty():
+		return "--sweep does not combine with --matrix (the candidate sits on seat A, and a matrix has no seat A)"
+	if is_random(opts.deck_a):
+		return "--sweep needs a named deck on seat A, not `%s`" % RANDOM_TOKEN
+	for opponent in opts.opponents:
+		if is_random(opponent):
+			return "--sweep needs named opponents, not `%s` (the control compares game for game)" % RANDOM_TOKEN
+	if opts.control_a == "" or opts.control_b == "":
+		return "--sweep needs its control pair: --control-deck-a DECK --control-deck-b DECK, two decks the knob cannot fire on"
+	if opts.elo_file != EloLedger.DEFAULT_PATH:
+		return "--elo-file: a sweep is an experiment and never writes the Elo ledger"
+	var knob: String = sweep.knob
+	for spec in [opts.profile_a, opts.profile_b]:
+		var colon := String(spec).find(":")
+		if colon < 0:
+			continue
+		for part in String(spec).substr(colon + 1).split(",", false):
+			if part.substr(0, part.find("=")).strip_edges() == knob:
+				return "--sweep %s: the knob is also set in --profile '%s'; the sweep sets it on every arm" % [knob, spec]
+	if opts.sweep_null == "":
+		var preset := _profile(opts.profile_a)
+		opts.sweep_null = "off" if int(sweep.type) == TYPE_BOOL \
+			else knob_value(int(sweep.type), str(preset.get(knob)))
+	else:
+		var normalised := knob_value(int(sweep.type), opts.sweep_null)
+		if normalised == "":
+			return "--null: '%s' is not a %s" % [opts.sweep_null,
+				knob_type_name(int(sweep.type))]
+		opts.sweep_null = normalised
+	# AN EXPERIMENT NEVER RATES. `--no-elo` is accepted as well because it
+	# agrees; it is set here so the rest of the run needs no second rule.
+	opts.no_elo = true
+	return ""
+
+
+## [param spec] (`wizard`, or `wizard:aggression=0.7`) with one more knob
+## set — the profile spec a sweep arm hands the seat.
+static func with_knob(spec: String, knob: String, value: String) -> String:
+	return "%s%s%s=%s" % [spec, "," if spec.contains(":") else ":", knob, value]
+
+
+## The arms of a sweep, in the order they are played and reported: the
+## NULL first (index 0, both seats at the null), then one CANDIDATE per
+## value (seat A at the value, seat B at the null). Each arm is
+## `{value, is_null, profile_a, profile_b}`; the same arms are played on
+## every test pair and on the control pair.
+static func sweep_arms(knob: String, values: PackedStringArray, null_value: String,
+		profile_a: String, profile_b: String) -> Array:
+	var arms: Array = [{
+		"value": null_value, "is_null": true,
+		"profile_a": with_knob(profile_a, knob, null_value),
+		"profile_b": with_knob(profile_b, knob, null_value),
+	}]
+	for value in values:
+		arms.append({
+			"value": value, "is_null": false,
+			"profile_a": with_knob(profile_a, knob, value),
+			"profile_b": with_knob(profile_b, knob, null_value),
+		})
+	return arms
+
+
+## THE CONTROL'S VERDICT — a pure function of two record lists, index-
+## matched game for game: [param arm] is the control pair with the knob
+## at a value on seat A, [param null_arm] the same pair, same seeds, with
+## the knob at the null on both. [param seeds] is index-matched too, so
+## the FAIL line can name the seed that reproduces the game.
+##
+## It reads the RECORDS and nothing else: the fingerprint each game
+## carries (the engine's log, hashed — [method _play_duel]), then the
+## [constant VERDICT_FIELDS], which a fingerprint already implies but a
+## reader wants named. A record WITHOUT a fingerprint is a difference,
+## never a pass: the verdict is only worth anything when it was reached
+## through the games' own artefacts.
+##
+## Returns `{pass, games, differing, first}` — `first` is "" on a pass,
+## and otherwise names the first game that differed and every way it did.
+static func control_verdict(arm: Array, null_arm: Array, seeds: Array) -> Dictionary:
+	var verdict := {"pass": false, "games": arm.size(), "differing": 0, "first": ""}
+	if arm.size() != null_arm.size():
+		verdict.differing = absi(arm.size() - null_arm.size())
+		verdict.first = "%d games against the null's %d" % [arm.size(), null_arm.size()]
+		return verdict
+	for i in arm.size():
+		var a: Dictionary = arm[i]
+		var n: Dictionary = null_arm[i]
+		var differences := PackedStringArray()
+		var print_a := String(a.get("fingerprint", ""))
+		var print_n := String(n.get("fingerprint", ""))
+		if print_a == "" or print_n == "":
+			differences.append("no fingerprint on the game")
+		elif print_a != print_n:
+			differences.append("the game log")
+		for field in VERDICT_FIELDS:
+			var value_a: Variant = a.get(field)
+			var value_n: Variant = n.get(field)
+			# Through a worker process every number is a JSON float, so
+			# the fields are compared as what they are, not as typed.
+			var same: bool = int(value_a) == int(value_n) if field == "turns" \
+				else bool(value_a) == bool(value_n)
+			if not same:
+				differences.append("%s %s vs %s" % [field, str(value_a), str(value_n)])
+		if differences.is_empty():
+			continue
+		verdict.differing += 1
+		if verdict.first == "":
+			var seed_note := "" if i >= seeds.size() else " (seed %d)" % int(seeds[i])
+			verdict.first = "game %d%s: %s" % [i, seed_note, ", ".join(differences)]
+	verdict.pass = verdict.differing == 0
+	return verdict
+
+
+## The row label of an arm in the report and in sweep.csv — the null
+## says which value it is, because "null" alone leaves the reader to look
+## it up.
+static func arm_label(arm: Dictionary) -> String:
+	return "null (%s)" % arm.value if arm.is_null else String(arm.value)
+
+
+## `+1.5 +-9.6`: a candidate's win rate less the null's, in points, with
+## the half-width the two Wilson intervals give the difference (their
+## half-widths in quadrature — the arms are independent games). A delta
+## that clears its own half-width is the only kind the sweep may call
+## found, and the reading block counts those.
+static func delta_of(candidate: Dictionary, baseline: Dictionary) -> Dictionary:
+	var c: Dictionary = candidate.winrate
+	var b: Dictionary = baseline.winrate
+	var half_c := (float(c.high) - float(c.low)) / 2.0
+	var half_b := (float(b.high) - float(b.low)) / 2.0
+	var delta := (float(c.mid) - float(b.mid)) * 100.0
+	var margin := sqrt(half_c * half_c + half_b * half_b) * 100.0
+	return {"points": delta, "margin": margin, "clear": absf(delta) > margin}
+
+
+## The three pairs, one work list, one report. [param decks] and
+## [param pairs] are the plain run's own, loaded by `_main`; the control
+## pair is loaded here and appended, so the work list, the fan-out and
+## the aggregation are the plain run's code paths and not a second set.
+func _run_sweep(opts: Dictionary, decks: Array[DeckList], pairs: Array,
+		out_dir: String, jobs: int, unit: String) -> int:
+	var sweep: Dictionary = opts.sweep
+	var control_a := _load_deck(opts.control_a, opts.format)
+	if control_a == null:
+		return 2
+	var control_b := _load_deck(opts.control_b, opts.format)
+	if control_b == null:
+		return 2
+	var control_pair := pairs.size()
+	decks.append(control_a)
+	decks.append(control_b)
+	pairs.append([decks.size() - 2, decks.size() - 1])
+	var arms := sweep_arms(sweep.knob, sweep.values, opts.sweep_null,
+		opts.profile_a, opts.profile_b)
+	_duel_opts["fingerprint"] = true
+
+	# ---- the plan, on stdout like a plain run's ----
+	var pair_names := PackedStringArray()
+	for pair_index in control_pair:
+		pair_names.append("%s vs %s" % [decks[pairs[pair_index][0]].deck_name,
+			decks[pairs[pair_index][1]].deck_name])
+	print("Deck Lab (sweep): %s = %s   null: %s   pilots: %s vs %s" % [
+		sweep.knob, ", ".join(sweep.values), opts.sweep_null,
+		opts.profile_a, opts.profile_b])
+	print("pair%s: %s   control: %s vs %s" % ["" if pair_names.size() == 1 else "s",
+		", ".join(pair_names), control_a.deck_name, control_b.deck_name])
+	print("total: %s %s — %d arms x %d pairs x %d %s, seed %d, %d thread(s)   out: %s" % [
+		LabConsole.commas(arms.size() * pairs.size() * opts.games), unit,
+		arms.size(), pairs.size(), opts.games, unit, opts.seed, jobs, out_dir])
+	var settings_line := _settings_line(opts)
+	if settings_line != "":
+		print(settings_line)
+
+	# ---- work list: every arm on every pair, over ONE seed set ----
+	# A test pair's seeds are the plain run's (`seed + pair * games +
+	# game`), so a matchup here replays the same games a `--deck-a/-b`
+	# run of it plays. The control pair takes the FIRST pair's seeds
+	# rather than the next slot's, so that in duel mode — the way every
+	# measurement so far was run — the whole sweep is one seed set, and
+	# "seed 11" in the report means seed 11 on every arm of every pair.
+	for arm_index in arms.size():
+		var arm: Dictionary = arms[arm_index]
+		for pair_index in pairs.size():
+			var seed_pair := 0 if pair_index == control_pair else pair_index
+			var row: DeckList = decks[pairs[pair_index][0]]
+			var col: DeckList = decks[pairs[pair_index][1]]
+			for game_index in opts.games:
+				_tasks.append({
+					"arm": arm_index,
+					"pair": pair_index,
+					"game": game_index,
+					"seed": opts.seed + seed_pair * opts.games + game_index,
+					"a_on_play": game_index % 2 == 0,
+					"deck_a": row.cards, "deck_b": col.cards,
+					"sb_a": row.sideboard, "sb_b": col.sideboard,
+					"dealt": "",
+					"profile_a": arm.profile_a, "profile_b": arm.profile_b,
+				})
+	_results.resize(_tasks.size())
+	var elapsed := _play_tasks(opts, jobs, unit)
+	if elapsed < 0.0:
+		return 1
+
+	# ---- aggregate: records and stats per [arm][pair] ----
+	var records: Array = []
+	var stats: Array = []
+	for arm_index in arms.size():
+		records.append([])
+		stats.append([])
+		for pair_index in pairs.size():
+			records[arm_index].append([])
+	for i in _tasks.size():
+		records[_tasks[i].arm][_tasks[i].pair].append(_results[i])
+	var every_stats: Array = []
+	for arm_index in arms.size():
+		for pair_index in pairs.size():
+			var summary := SimStats.summarize(records[arm_index][pair_index])
+			stats[arm_index].append(summary)
+			every_stats.append(summary)
+	# ---- the verdict, per candidate arm, on the control pair ----
+	var seeds: Array = []
+	for game_index in opts.games:
+		seeds.append(opts.seed + game_index)
+	var verdicts: Array = [{}]
+	var control_pass := true
+	for arm_index in range(1, arms.size()):
+		var verdict := control_verdict(records[arm_index][control_pair],
+			records[0][control_pair], seeds)
+		verdicts.append(verdict)
+		control_pass = control_pass and bool(verdict.pass)
+
+	# ---- report ----
+	var report := _sweep_report(opts, sweep, arms, decks, pairs, control_pair,
+		stats, verdicts, elapsed, unit)
+	var report_text := "\n".join(report)
+	print("\n" + report_text)
+	_stall_warning(every_stats, opts, unit)
+
+	# ---- files ----
+	var wrote_all := true
+	wrote_all = _write(out_dir + "/report.txt", report_text + "\n") and wrote_all
+	var csv := PackedStringArray()
+	csv.append("pair,deck_a,deck_b,value,arm,games,a_wins,b_wins,stalled,winrate,ci_low,ci_high,delta,delta_margin,verdict")
+	var json_matchups: Array = []
+	var json_control := {}
+	for pair_index in pairs.size():
+		var is_control := pair_index == control_pair
+		var row_name := decks[pairs[pair_index][0]].deck_name
+		var col_name := decks[pairs[pair_index][1]].deck_name
+		var json_arms: Array = []
+		for arm_index in arms.size():
+			var arm: Dictionary = arms[arm_index]
+			var summary: Dictionary = stats[arm_index][pair_index]
+			var delta := {} if arm.is_null else delta_of(summary, stats[0][pair_index])
+			var verdict: Dictionary = verdicts[arm_index] if is_control else {}
+			csv.append("%s,%s,%s,%s,%s,%d,%d,%d,%d,%.4f,%.4f,%.4f,%s,%s,%s" % [
+				"control" if is_control else "test",
+				row_name.replace(",", " "), col_name.replace(",", " "),
+				arm.value, "null" if arm.is_null else "candidate",
+				summary.games, summary.a_wins, summary.b_wins, summary.stalled,
+				summary.winrate.mid, summary.winrate.low, summary.winrate.high,
+				"" if delta.is_empty() else "%+.4f" % (float(delta.points) / 100.0),
+				"" if delta.is_empty() else "%.4f" % (float(delta.margin) / 100.0),
+				"" if verdict.is_empty() else ("PASS" if verdict.pass else "FAIL")])
+			var json_stats := summary.duplicate()
+			json_stats.erase("turns")
+			json_stats["value"] = arm.value
+			json_stats["null"] = arm.is_null
+			json_stats["profile_a"] = arm.profile_a
+			json_stats["profile_b"] = arm.profile_b
+			if not delta.is_empty():
+				json_stats["delta"] = delta
+			if not verdict.is_empty():
+				json_stats["verdict"] = verdict
+			json_arms.append(json_stats)
+		var matchup := {"deck_a": row_name, "deck_b": col_name, "arms": json_arms}
+		if is_control:
+			json_control = matchup
+		else:
+			json_matchups.append(matchup)
+	var sweep_json := {
+		"mode": "sweep", "knob": sweep.knob, "values": Array(sweep.values),
+		"null": opts.sweep_null,
+		"games_per_arm": opts.games, "seed": opts.seed,
+		"profile_a": opts.profile_a, "profile_b": opts.profile_b,
+		"lives": opts.lives, "ante": opts.ante, "mulligan": opts.mulligan,
+		"rules": opts.rules, "rule_overrides": opts.rule_overrides,
+		"format": opts.format, "best_of": opts.best_of, "sideboard": opts.sideboard,
+		"elapsed_seconds": elapsed,
+		"matchups": json_matchups, "control": json_control,
+		"control_pass": control_pass,
+	}
+	wrote_all = _write(out_dir + "/sweep.json",
+		JSON.stringify(sweep_json, "  ") + "\n") and wrote_all
+	wrote_all = _write(out_dir + "/sweep.csv", "\n".join(csv) + "\n") and wrote_all
+	# THE ARTEFACTS THE VERDICT WAS REACHED FROM, one row per game of
+	# every arm and pair, so the verdict is checkable from outside: the
+	# control's rows for a value and for the null, sorted, must be the
+	# same file but for the value column.
+	var games := PackedStringArray()
+	games.append("pair,deck_a,deck_b,value,arm,game,seed,a_on_play,a_won,turns,stalled,drawn,fingerprint")
+	for i in _tasks.size():
+		var task: Dictionary = _tasks[i]
+		var arm: Dictionary = arms[task.arm]
+		var record: Dictionary = _results[i]
+		games.append("%s,%s,%s,%s,%s,%d,%d,%s,%s,%d,%s,%s,%s" % [
+			"control" if int(task.pair) == control_pair else "test",
+			decks[pairs[task.pair][0]].deck_name.replace(",", " "),
+			decks[pairs[task.pair][1]].deck_name.replace(",", " "),
+			arm.value, "null" if arm.is_null else "candidate",
+			task.game, task.seed, task.a_on_play, record.a_won, int(record.turns),
+			record.stalled, record.get("drawn", false),
+			record.get("fingerprint", "")])
+	wrote_all = _write(out_dir + "/games.csv", "\n".join(games) + "\n") and wrote_all
+	if not wrote_all:
+		printerr("deck_lab: not every file of %s was written (see above); the run is not a result" % out_dir)
+		return 1
+	print("\nwrote %s/{report.txt, sweep.json, sweep.csv, games.csv}" % out_dir)
+	if not control_pass:
+		printerr("deck_lab: the control pair did not replay its null game for game (see the report); exit %d"
+			% EXIT_CONTROL_MOVED)
+		return EXIT_CONTROL_MOVED
+	return 0
+
+
+## The sweep's report.txt — and, byte for byte, its stdout. One table per
+## test pair (the null row first, then a row per value with its delta),
+## one for the control with the verdict per value, the verdict in a
+## sentence, and what a sample this size can see. ASCII throughout, like
+## the plain report's reading block, so it pastes anywhere.
+func _sweep_report(opts: Dictionary, sweep: Dictionary, arms: Array,
+		decks: Array[DeckList], pairs: Array, control_pair: int,
+		stats: Array, verdicts: Array, elapsed: float, unit: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var total: int = arms.size() * pairs.size() * opts.games
+	out.append("Deck Lab sweep: %s = %s   null: %s   pilots: %s vs %s" % [
+		sweep.knob, ", ".join(sweep.values), opts.sweep_null,
+		opts.profile_a, opts.profile_b])
+	out.append("%s/arm: %d   seed: %d   %d arms x %d pairs   %.1fs (%.0f %s/s)" % [
+		unit, opts.games, opts.seed, arms.size(), pairs.size(), elapsed,
+		total / maxf(elapsed, 0.001), unit])
+	var settings_report := _settings_line(opts)
+	if settings_report != "":
+		out.append(settings_report)
+	var clear := 0
+	var deltas := 0
+	for pair_index in control_pair:
+		var row_name := decks[pairs[pair_index][0]].deck_name
+		var col_name := decks[pairs[pair_index][1]].deck_name
+		out.append("")
+		out.append("%s vs %s: %s's win rate with %s at each value on seat A, %s on seat B"
+			% [row_name, col_name, row_name, sweep.knob, opts.sweep_null])
+		out.append("  %-14s %6s  %-28s %s" % ["value", unit, "win rate", "delta vs null"])
+		for arm_index in arms.size():
+			var arm: Dictionary = arms[arm_index]
+			var summary: Dictionary = stats[arm_index][pair_index]
+			var rate := "%s  CI [%s..%s]" % [SimStats.percent(summary.winrate.mid),
+				SimStats.percent(summary.winrate.low).strip_edges(),
+				SimStats.percent(summary.winrate.high).strip_edges()]
+			var delta_text := "    --"
+			if not arm.is_null:
+				var delta := delta_of(summary, stats[0][pair_index])
+				delta_text = "%+6.1f +-%.1f" % [delta.points, delta.margin]
+				deltas += 1
+				if delta.clear:
+					clear += 1
+			out.append("  %-14s %6d  %-28s %s" % [arm_label(arm), summary.games,
+				rate, delta_text])
+	# ---- the control ----
+	var control_a := decks[pairs[control_pair][0]].deck_name
+	var control_b := decks[pairs[control_pair][1]].deck_name
+	out.append("")
+	out.append("control %s vs %s: the knob cannot fire here, so every arm must replay the null game for game"
+		% [control_a, control_b])
+	out.append("  %-14s %6s  %-10s %s" % ["value", unit, "record", "verdict"])
+	var failed := PackedStringArray()
+	for arm_index in arms.size():
+		var arm: Dictionary = arms[arm_index]
+		var summary: Dictionary = stats[arm_index][control_pair]
+		var record := "%d-%d" % [summary.a_wins, summary.b_wins]
+		if int(summary.stalled) > 0:
+			record += " (%d stalled)" % summary.stalled
+		var verdict_text := "the baseline"
+		if not arm.is_null:
+			var verdict: Dictionary = verdicts[arm_index]
+			if verdict.pass:
+				verdict_text = "PASS  byte-identical to the null, %d of %d %s" % [
+					verdict.games, verdict.games, unit]
+			else:
+				verdict_text = "FAIL  %d of %d %s differ; first: %s" % [
+					verdict.differing, verdict.games, unit, verdict.first]
+				failed.append(String(arm.value))
+		out.append("  %-14s %6d  %-10s %s" % [arm_label(arm), summary.games,
+			record, verdict_text])
+	out.append("")
+	if failed.is_empty():
+		out.append("control: PASS -- every arm replays the null game for game; the deltas above are the knob's own.")
+	else:
+		out.append("control: FAIL -- %s moved the control (exit %d). The knob fired on a pair it cannot fire on, or"
+			% [", ".join(failed), EXIT_CONTROL_MOVED])
+		out.append("  something else in the run is not seeded; the deltas above are not a measurement until that is found.")
+	# ---- what this many games can see, on a DELTA ----
+	# The plain report's reading block speaks of one win rate; a sweep is
+	# read for the difference between two, whose interval is wider by
+	# root two (two independent arms of the same size).
+	var margin := SimStats.margin_at(opts.games)
+	var delta_margin := margin * sqrt(2.0)
+	out.append("")
+	out.append("reading these numbers:")
+	out.append("  %s %s per arm: the 95%% interval is +-%.1f points on a win rate and +-%.1f on a"
+		% [LabConsole.commas(opts.games), unit, margin * 100.0, delta_margin * 100.0])
+	out.append("  delta between two arms, so no delta smaller than %.1f points is visible at this size."
+		% (delta_margin * 100.0))
+	out.append("  deltas clear of zero: %d of %d." % [clear, deltas])
+	if clear < deltas:
+		out.append("  a +-3.0 point interval on a delta needs %s %s per arm; +-1.0 needs %s."
+			% [LabConsole.commas(SimStats.games_for_margin(0.03 / sqrt(2.0))), unit,
+				LabConsole.commas(SimStats.games_for_margin(0.01 / sqrt(2.0)))])
+	return out
 
 
 # ============================================================ THE TERMINAL ==

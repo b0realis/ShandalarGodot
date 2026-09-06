@@ -242,6 +242,42 @@ var consolidated := true:
 			if _grid != null:
 				_rebuild()
 
+## [QoL] RARITY MARKS — the owner's ask, 2026-09-06: *"on press each mini
+## card (center bottom) would have C symbol (common), U (uncommon,
+## silver), R (rare, gold) and L (legendary, purple)"*. A letter on a
+## plate at the card's bottom centre, the one corner nothing else uses:
+## the count disc is bottom-LEFT, the P/T bottom-RIGHT. Off by default and
+## a setting rather than a session flag, because a player who wants the
+## marks wants them every time.
+##
+## `[QoL]` and marked as one: the 1997 Deck Builder could FILTER by rarity
+## (`@RARITY` — `&Common &Uncommon &Rare`, `Menus.txt:397`) but lettered
+## nothing on the card. It matters more here than in a shop-bought
+## format — in Shandalar a rare is something you have to go and WIN.
+var show_rarity := false:
+	set(value):
+		if show_rarity != value:
+			show_rarity = value
+			for cell in _cells:
+				_dress_rarity(cell)
+
+## The four marks, keyed by the word [method rarity_key] answers: the
+## letter, the plate, and the ink on it. Common is the printed symbol's
+## own black; uncommon silver and rare gold are the set symbols' colours
+## since Exodus, the year after this game; legendary is a SUPERTYPE, not
+## a printed rarity, and the owner's purple is its own so the four read
+## apart at a glance. [DeckBuilderScreen] draws the Stats window's rarity
+## bars in these same colours, so the window and the cards agree.
+const RARITY_MARKS := {
+	"common": ["C", Color8(44, 44, 48), Color8(214, 214, 208)],
+	"uncommon": ["U", Color8(198, 202, 210), Color8(28, 24, 26)],
+	"rare": ["R", Color8(222, 178, 64), Color8(28, 24, 26)],
+	"legendary": ["L", Color8(122, 70, 176), Color8(242, 234, 250)],
+}
+## The plate under the letter: as tall as the count disc's letters, on
+## the disc's own baseline.
+const RARITY_PLATE := Vector2(18, 18)
+
 var _entries: Array = []          ## [[CardData, count], ...] in display order
 ## [member _entries] with every copy on its own face, built only while
 ## [member consolidated] is off. Cached so `_rebuild` does not re-expand a
@@ -872,6 +908,9 @@ class Cell extends Control:
 	## [QoL] The pile marker — see [member CardArea.corner_tag].
 	var tag: Control = null
 	var tag_label: Label = null
+	## [QoL] The rarity mark — see [member CardArea.show_rarity].
+	var rarity: Control = null
+	var rarity_label: Label = null
 
 	## Whichever face this cell is holding, for the callers that only need
 	## to position or free it.
@@ -948,6 +987,10 @@ func _make_cell(first: CardData) -> Cell:
 	holder.tag_label = tag.get_child(0)
 	holder.add_child(tag)
 	_dress_tag(holder)
+	var mark := _rarity_plate()
+	holder.rarity = mark
+	holder.rarity_label = mark.get_child(0)
+	holder.add_child(mark)
 	holder.gui_input.connect(_on_cell_input.bind(holder))
 	holder.mouse_entered.connect(func() -> void:
 		_hovered_slot = _cells.find(holder)
@@ -1029,6 +1072,7 @@ func _bind_cell(cell: Cell, data: CardData, count: int) -> void:
 			cell.tooltip_text = "%s\n%s" % [data.card_name, data.oracle_text]
 	cell.source = source_name
 	_bind_badge(cell, count)
+	_dress_rarity(cell)
 
 
 func _bind_badge(cell: Cell, count: int) -> void:
@@ -1093,6 +1137,60 @@ func _dress_tag(cell: Cell) -> void:
 		return
 	cell.tag.visible = corner_tag != ""
 	cell.tag_label.text = corner_tag
+
+
+## [QoL] Which mark a card wears — a key of [constant RARITY_MARKS], or
+## `""` for a card the pool's data does not place. The decision is
+## [method DeckStats.rarity_tier]'s (legendary first, then the printed
+## rarity), so the letter on a card and the bar in the Stats window are
+## the same count.
+static func rarity_key(data: CardData) -> String:
+	var tier := DeckStats.rarity_tier(data)
+	return tier if RARITY_MARKS.has(tier) else ""
+
+
+## The mark's plate, at the card's BOTTOM CENTRE: the same dark plate as
+## the count disc and the pile marker, coloured per rarity by
+## [method _dress_rarity]. Above the name label's `z_index = 2` for the
+## reason [method _tag] gives.
+func _rarity_plate() -> Control:
+	var plate := Panel.new()
+	var stone := StyleBoxFlat.new()
+	stone.bg_color = Color(0, 0, 0, 0.78)
+	stone.border_color = OriginalDialog.HIGHLIGHT
+	stone.set_border_width_all(1)
+	stone.set_corner_radius_all(3)
+	plate.add_theme_stylebox_override("panel", stone)
+	plate.size = RARITY_PLATE
+	plate.position = Vector2((MiniCard.SIZE.x - RARITY_PLATE.x) * 0.5,
+		MiniCard.SIZE.y - RARITY_PLATE.y - 3.0)
+	plate.z_index = 3
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.visible = false
+	var letter := Label.new()
+	letter.set_anchors_preset(Control.PRESET_FULL_RECT)
+	letter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	letter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	letter.add_theme_font_size_override("font_size", 12)
+	letter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_child(letter)
+	return plate
+
+
+func _dress_rarity(cell: Cell) -> void:
+	if cell == null or cell.rarity == null:
+		return
+	var key := rarity_key(cell.data) if show_rarity else ""
+	cell.rarity.visible = key != ""
+	if key == "":
+		return
+	var mark: Array = RARITY_MARKS[key]
+	cell.rarity_label.text = String(mark[0])
+	cell.rarity_label.add_theme_color_override("font_color", mark[2])
+	var stone := cell.rarity.get_theme_stylebox("panel") as StyleBoxFlat
+	if stone != null:
+		stone.bg_color = mark[1]
+		stone.border_color = Color(mark[2], 0.6)
 
 
 ## s30's count overlay (`drawCountOverlay`, edit_deck.go:1075): a dark
