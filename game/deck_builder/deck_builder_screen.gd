@@ -221,6 +221,11 @@ const FORMAT_WARNING := "%d cards break the tournament rules (four copies, the r
 const MARGIN := 8.0
 const HEADER_H := 50.0
 const LEFT_W := 252.0
+## The well's lettering ([method _well_label], [method _say]): the dark
+## inset under the Showcase takes pale text, and its warning is a light
+## warm red rather than the deep red that read on the old pale face.
+const WELL_INK := Color(0.96, 0.96, 0.93)
+const WELL_WARNING := Color8(244, 150, 128)
 const SHOWCASE_SCALE := 0.80
 ## The Inventory: ONE row of cards plus its scroll bar, which is what the
 ## 1997 screenshot shows and roughly a fifth of its screen. Every card on
@@ -451,13 +456,42 @@ func _layout() -> void:
 	_command_row.size = Vector2(side_rect.size.x, COMMAND_BAR_H)
 
 	_header_slab.position = Vector2(MARGIN, MARGIN)
-	_header_slab.size = Vector2(LEFT_W, HEADER_H)
+	# AS WIDE AS THE CARD UNDER IT, not the column. The slab took the
+	# column's 252 and the Showcase is 240 (a card at [constant
+	# SHOWCASE_SCALE]), so the title stood twelve pixels proud of the
+	# picture it names — the owner's own crop of 2026-09-06 shows the
+	# marble's right edge past the card's. The two are one stack now.
+	_header_slab.size = Vector2(CardPreview.SIZE.x * SHOWCASE_SCALE, HEADER_H)
 
 	_showcase.position = Vector2(MARGIN, MARGIN + HEADER_H + 6.0)
 	_proxy_showcase.position = _showcase.position
 	_left_column.position = Vector2(MARGIN,
 		_showcase.position.y + CardPreview.SIZE.y * SHOWCASE_SCALE + 6.0)
 	_left_column.size.x = LEFT_W
+	_fit_the_well()
+
+
+## THE WELL YIELDS ITS SECOND LINE BEFORE THE COLUMN OVERRUNS THE STRIP.
+## The column under the Showcase is the Stats (up to three lines), the
+## complaint (clipped to three) and the well; at the shipping 800 the
+## well holds the count line and two lines of message, at 720 it cannot,
+## and a message with no room is cut at the baseline — which is what the
+## 42px floor did at EVERY height (2026-09-06). Decided on the column at
+## its FULLEST rather than on the text of the moment, so the well does
+## not grow and shrink as the complaint comes and goes.
+func _fit_the_well() -> void:
+	if _status_label == null or _filter_bar == null:
+		return
+	var room := _filter_bar.position.y - 5.0 - _left_column.position.y
+	var line := _status_label.get_line_height()
+	var complaint: float = _legality_label.get_theme_font("font").get_height(
+		_legality_label.get_theme_font_size("font_size"))
+	var separation := _left_column.get_theme_constant("separation")
+	var fullest := _stats_label.get_line_height() * 3 + complaint * 3 \
+		+ separation * 2 + _count_label.custom_minimum_size.y + 12.0
+	var lines := 2 if fullest + line * 2 <= room else 1
+	_status_label.max_lines_visible = lines
+	_status_label.custom_minimum_size.y = line * lines
 
 
 func _filter_height() -> float:
@@ -798,6 +832,13 @@ func _build_showcase() -> void:
 	bar_style.set_content_margin_all(6.0)
 	bar.add_theme_stylebox_override("panel", bar_style)
 	bar.custom_minimum_size = Vector2(LEFT_W, 42)
+	# THE HEIGHT IS THE LINES', NOT A NUMBER'S. A Label that wraps AND
+	# trims reports a minimum height of one pixel (it can always show
+	# less), so this floor of 42 was the well's whole height: six pixels
+	# of margin twice, the count line, and about ten pixels left for a
+	# status line allowed two — which cut every message off at the
+	# baseline (caught by screenshotting it, 2026-09-06). Each line now
+	# asks for its own height below, and the well is as tall as they are.
 	# EXACTLY [constant LEFT_W], not "at least". `custom_minimum_size` is a
 	# floor and a VBox child fills the column, so this strip stretched to
 	# 268 and its right edge crossed x=267 — where the deck area's ground
@@ -826,12 +867,16 @@ func _build_showcase() -> void:
 	_count_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_count_label.max_lines_visible = 1
 	_count_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_count_label.custom_minimum_size.y = _count_label.get_line_height()
 	lines.add_child(_count_label)
 	_status_label = _well_label(13, false)
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status_label.custom_minimum_size.x = LEFT_W - 16
 	_status_label.max_lines_visible = 2
 	_status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	# Two lines when the column has the room, one when it does not —
+	# [method _fit_the_well] decides at every layout.
+	_status_label.custom_minimum_size.y = _status_label.get_line_height() * 2
 	lines.add_child(_status_label)
 	bar.add_child(lines)
 	_left_column.add_child(bar)
@@ -1072,7 +1117,7 @@ func _add_one_side(card_name: String) -> void:
 	_remember(before, "Add %s to the sideboard" % card_name)
 	_dirty = true
 	refresh()
-	_say("%s → sideboard (%d)" % [card_name, deck.side_total()])
+	_say("%s to the sideboard (%d)" % [card_name, deck.side_total()])
 
 
 func _remove_one_side(card_name: String) -> void:
@@ -1111,7 +1156,7 @@ func _move_to_sideboard(card_name: String) -> void:
 	_remember(before, "Move %s to the sideboard" % card_name)
 	_dirty = true
 	refresh()
-	_say("%s → sideboard (%d)" % [card_name, deck.side_total()])
+	_say("%s to the sideboard (%d)" % [card_name, deck.side_total()])
 
 
 ## Sideboard -> deck, one copy. [method DeckModel.to_deck] puts nothing
@@ -1126,7 +1171,10 @@ func _move_to_deck(card_name: String) -> void:
 	_remember(before, "Move %s into the deck" % card_name)
 	_dirty = true
 	refresh()
-	_say("%s → deck (%d)" % [card_name, deck.total()])
+	# "TO THE", NOT AN ARROW. `MPlantin` has no U+2192 and the well drew
+	# the move as "Circle of Protection: Red    sideboard (18)" — a gap
+	# where the direction was (caught by screenshotting it, 2026-09-06).
+	_say("%s to the deck (%d)" % [card_name, deck.total()])
 
 
 # THE DROP ROUTING. Every surface accepts a drop from every OTHER surface
@@ -1392,7 +1440,7 @@ func _update_count_line() -> void:
 func _well_label(size: int, heavy: bool) -> Label:
 	var lab := Label.new()
 	lab.add_theme_font_size_override("font_size", size)
-	lab.add_theme_color_override("font_color", Color(0.96, 0.96, 0.93))
+	lab.add_theme_color_override("font_color", WELL_INK)
 	# A one-pixel dark seat, not a four-pixel ring: enough to hold the
 	# letters off a busy ground, invisible as an edge.
 	lab.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.65))
@@ -1415,11 +1463,17 @@ func _well_label(size: int, heavy: bool) -> Label:
 ## screen's warningMsg treatment, on the builder's own header.
 func _say(text: String, warning := false) -> void:
 	_status_label.text = text.replace("\n", "  ")
-	# The bar is the era's pale speckle, so the voice is DARK INK — the way
-	# the original letters its own light-faced buttons — and a warning is a
-	# deep red on the same face rather than the amber that reads on stone.
+	# PALE ON THE WELL. This line was lettered in dark ink, the way the
+	# original letters its light-faced buttons, from when the strip WAS a
+	# light face; the strip became a dark inset on 2026-09-05 and the
+	# owner asked for white on it, which [method _well_label] gave the
+	# count line — but every message written here put the ink back, so
+	# "Added 4 Lightning Bolt" was near-black on near-black (caught by
+	# screenshotting it, 2026-09-06). The voice is the well's own pale
+	# now, and a warning is a light warm red that reads on the dark ground
+	# rather than the deep red that read on the pale one.
 	_status_label.add_theme_color_override("font_color",
-		Color8(122, 34, 24) if warning else OriginalDialog.INK)
+		WELL_WARNING if warning else WELL_INK)
 	_status_timer = 4.0
 
 

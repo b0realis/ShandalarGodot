@@ -2399,7 +2399,9 @@ shandalar/
 │    Showcase enlarges one — and the SAVE-TIME LEGALITY WARNING, whose
 │    first test is that the file is written anyway; and the owner's
 │    2026-09-06 photo: the quilt starting at the deck area's own edge and
-│    the sideboard's field sharing that area's edges;
+│    the sideboard's field sharing that area's edges, the title slab as
+│    wide as the Showcase card, and the well's message pale with room for
+│    its two lines (one at 720);
 │    tests/ui/test_help_screen.gd — the paged reference: every page
 │    renders and shows its title, titles are unique, every QUOTE cites a
 │    source, paging cannot run off either end by button or key, the Help

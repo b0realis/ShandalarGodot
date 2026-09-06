@@ -6025,6 +6025,24 @@ mirror 177 both ways); the wide runs below held 130 games/s on eight
 threads. No hot path was changed for speed in this pass — the planner's
 new work is one pass over the battlefield per plan.
 
+**10. The well under the Showcase, checked by looking.** The 1280x800
+render taken for the owner after the release showed two things the
+suite could not: every message the screen writes under the count line
+("Added 4 Lightning Bolt", "There is nothing to undo") was lettered in
+`OriginalDialog.INK` from when the strip was a pale face — near-black on
+the dark inset the strip became on 2026-09-05 — and cut off at the
+baseline, because a Label that wraps and trims asks for one pixel of
+height and the well's 42px floor left it ten. The well's lettering is
+`WELL_INK` / `WELL_WARNING` now (pale, and a light warm red), each line
+asks for its own height, and `_fit_the_well` gives the message two lines
+where the column has the room (the shipping 800) and one where it does
+not (720), decided on the column at its fullest so it never jumps as the
+complaint comes and goes. The move messages spell "to the sideboard" —
+MPlantin has no U+2192 and the arrow drew as a gap. And the owner's own
+crop: the marble title slab took the column's 252 and stood twelve
+pixels proud of the 240 Showcase card it names; it is the card's width.
+Two rows in `tests/ui/test_deck_builder.gd`.
+
 ### The gate, and the bug hunt's wide net
 
 Full suite green before and after (`./run_tests.sh`), both soaks

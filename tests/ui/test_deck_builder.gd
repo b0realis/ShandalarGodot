@@ -661,6 +661,55 @@ func test_the_sideboard_field_shares_the_deck_areas_edges() -> void:
 			"but a margin above the strip's cards")
 
 
+func test_the_title_slab_is_as_wide_as_the_card_under_it() -> void:
+	# The owner's crop of 2026-09-06: the marble title slab took the
+	# column's full width and stood twelve pixels proud of the Showcase
+	# card it names. One stack, one width — the card's.
+	await get_tree().process_frame
+	var slab := screen._header_slab.get_rect()
+	var card := Rect2(screen._showcase.position,
+		CardPreview.SIZE * DeckBuilderScreen.SHOWCASE_SCALE)
+	assert_eq(slab.position.x, card.position.x, "the same left edge")
+	assert_almost_eq(slab.end.x, card.end.x, 0.01, "the same right edge")
+
+
+func test_the_wells_message_is_pale_and_has_room_for_two_lines() -> void:
+	# Screenshotted on 2026-09-06: the well under the Showcase is a dark
+	# inset, its count line was white as the owner asked, and every
+	# message written under it came out in the dark ink of the pale strip
+	# it used to be — near-black on near-black — and cut off at the
+	# baseline, because a Label that wraps and trims asks for one pixel
+	# and the well's floor left it ten.
+	screen._say("Added 4 Lightning Bolt")
+	assert_eq(screen._status_label.get_theme_color("font_color"),
+		DeckBuilderScreen.WELL_INK, "a message is the well's own pale")
+	screen._say("There is nothing to undo", true)
+	assert_eq(screen._status_label.get_theme_color("font_color"),
+		DeckBuilderScreen.WELL_WARNING, "a warning is a light red, not a deep one")
+	assert_gt(DeckBuilderScreen.WELL_WARNING.get_luminance(), 0.4,
+		"...light enough to read on the dark inset")
+	screen.size = Vector2(1280.0, 800.0)
+	await get_tree().process_frame
+	var line: float = screen._status_label.get_line_height()
+	assert_eq(screen._status_label.max_lines_visible, 2, "two lines at the shipping height")
+	assert_gte(screen._status_label.size.y, line * 2,
+		"and the height of the two lines it may show")
+	assert_gte(screen._count_label.size.y, screen._count_label.get_line_height(),
+		"and the count line has its own")
+	# At 720 the column has no room for a second line, and the well gives
+	# it up rather than the column overrunning the filter strip.
+	screen.size = Vector2(1280.0, 720.0)
+	await get_tree().process_frame
+	assert_eq(screen._status_label.max_lines_visible, 1, "one line at 720")
+	assert_gte(screen._status_label.size.y, line, "still a whole line, not ten pixels")
+	# The move messages spell their direction out: MPlantin has no arrow
+	# glyph, and "Card    sideboard (18)" is what U+2192 drew.
+	screen._add_one("Lightning Bolt")
+	screen._move_to_sideboard("Lightning Bolt")
+	assert_string_contains(screen._status_label.text, "to the sideboard")
+	assert_false("\u2192" in screen._status_label.text, "no arrow the font cannot draw")
+
+
 func test_the_inventory_is_one_row_of_full_size_cards() -> void:
 	# The screenshot shows a single rack of large cards, not two rows of
 	# miniatures. The trade is stated in _build_inventory: fewer cards on
