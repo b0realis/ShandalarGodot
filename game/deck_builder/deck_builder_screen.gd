@@ -533,7 +533,26 @@ func _ground(key: String, fallback: Color, full_rect: bool) -> Control:
 	if art != null:
 		var tile := TextureRect.new()
 		tile.texture = art
-		tile.stretch_mode = TextureRect.STRETCH_TILE
+		# A TILE TILES; A PANEL STRETCHES, and the two are told apart by
+		# size rather than by name. `deck_tile_slate` is 32x32 — a scrap
+		# of weave meant to repeat, and stretching it to 1150 would be a
+		# smear. `Dekbar1` is 1006x198 — a whole painted panel, and TILING
+		# it repeats at 1006, which is invisible at the 1280 the screen was
+		# built against (the strip is 1002 wide there, just under one tile)
+		# and shows as a seam on anything wider. Measured on a 2560-wide
+		# window, 2026-09-06: a column-to-column jump of 7.2 exactly at the
+		# repeat, against 1.4 typical.
+		tile.stretch_mode = TextureRect.STRETCH_TILE if art.get_width() <= 128 \
+			else TextureRect.STRETCH_SCALE
+		# A TextureRect's MINIMUM SIZE IS ITS TEXTURE unless it is told
+		# otherwise, so `_layout`'s `.size = ...` is a request the node can
+		# refuse. `Dekbar1` is 1006x198 and the sideboard's strip is 994
+		# wide, so that ground came out twelve pixels too wide and hung
+		# past the screen's right edge — the deck's own ground never showed
+		# it because `deck_tile_slate` is 32x32 and no layout is smaller
+		# than that. Found 2026-09-05 by measuring the two grounds against
+		# each other after they stopped agreeing on their right edge.
+		tile.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		node = tile
 	else:
 		var flat := ColorRect.new()

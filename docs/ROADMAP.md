@@ -1796,6 +1796,295 @@ it where it can make the AI CAST something it is not casting (the block
 audit's class 1, "only castable in our own main phase"), not where its
 only output is caution.
 
+## The control sweep: the AI could not pilot a control deck (2026-09-06)
+
+Every AI measurement this project had made was a MIRROR — a candidate
+policy against the shipped one on the SAME deck — and a mirror cancels
+out exactly the kind of blindness that is the same on both seats. The
+first measurement taken against an external standard found one.
+
+**Brian Weissman's The Deck**, the archetypal control list, scored **3.8%
+against the five shipped starters — 57 wins in 1,500 games**, 2 in 300
+against White Knights. The list is not the problem: it is 59/60 of Randy
+Buehler's August 2015 Old School build, one substitution documented in
+the file. Average game length against Big Green was 31.8 turns with a
+median of 23 — the AI SURVIVED and then lost, which is a player that
+defends adequately and has no idea how to win.
+
+### What the article says the deck is, and what the sweep found
+
+Wizards' own retrospective (magic.wizards.com, "The Deck", 2014-02-17)
+and Weissman's *Taking Card Advantage* (The Duelist #14, April 1996)
+state the principles as: **elongate the game until it is out of the
+opponent's reach**; answer threats one-for-one and bank the difference;
+**"taking cards away from your opponent is card advantage just as much as
+drawing cards of your own"**; and win with ONE threat deployed only after
+stabilising — "The Deck's principal way to win is by attacking with Serra
+Angel", and Buehler's Old School list does not even run the Angel. **Its
+only threat is three Mishra's Factories.**
+
+The dead-card sweep (the method from the 2026-09-04 pass) was run over
+the whole list: 100 instrumented games, 20 against each starter, every
+card counted for turns-in-hand, turns-on-battlefield, casts and
+activations. Four rows carried the whole finding:
+
+| card | turns on the battlefield | activations |
+| --- | --- | --- |
+| **Mishra's Factory** — the deck's ONLY win condition | 2,339 | **0** |
+| **Disrupting Scepter** — the deck's soft lock | 1,706 | **0** |
+| Strip Mine | 2,733 | 0 (cost rider the planner does not model — left) |
+| Library of Alexandria | 890 | 27 |
+
+**The AI had never once animated a Mishra's Factory**, so a deck of
+fifty-nine answers had literally no way to end a game it had already
+stabilised. Its 57 wins were the opponent decking out.
+
+### Why, structurally — and it is one hole, not three
+
+`AiPlayer._ability_option` prices an activated ability by the board it
+changes: damage dealt, a creature removed, a permanent tapped, cards
+drawn, life gained, a sweeper's swing. Everything else falls through to a
+final `return {}` — "pumps, regeneration, mana, untaps, unknowns: not
+here". **An animation changes nothing until the attack it enables, and a
+discard changes nothing on the board at all**, so both landed in that
+`{}` and neither could ever be chosen. The same hole that class 2 of the
+2026-09-04 sweep found in `card_value` (a creature the evaluator could
+not price was never cast) had a twin one function over, in the ability
+scorer, and it swallowed the entire control archetype.
+
+### What was built — three general capabilities, none card-named
+
+* **`EffectIntent` reads the ANIMATE shape** (`AnimateSelfEffect`, kept
+  whole the way a sweeper is, because its worth is a combat calculation)
+  **and the AIMED DISCARD.** There is no shared `DiscardEffect` in this
+  vocabulary — every discard in the pool is a card-local class — so the
+  reader consults the effect's own `describe()` line, the precedent
+  `_is_counterspell` set for the same reason. The `target player` /
+  `target opponent` prefix is the guard that separates an aimed discard
+  (Scepter, Rag Man, Gwendlyn Di Corci, Wand of Ith, Nebuchadnezzar) from
+  a symmetrical one (Wheel of Fortune, Mind Bomb) and from one WE pay
+  (Contract from Below, Recall) — pinned by a test, because getting it
+  wrong would have the AI emptying its own hand every turn.
+* **`_animation_value` prices the animation as the ATTACK it enables**, in
+  the same `_face_damage_value` currency `_declare_attacks` uses, so the
+  scorer and the attack code agree about one swing. It refuses in four
+  places, and the refusals are the interesting half: already a creature
+  (the animation has no per-turn cap, so the mana sink would re-animate
+  the same land forever), not our precombat main / tapped / summoning
+  sick (CR 302.6, the Factory judge call), and — the one that decides how
+  the deck plays — **any untapped creature they could block with that
+  survives the body or kills it**. What animates is almost always a LAND,
+  and a land traded for nothing is a mana source a control deck needed.
+  That refusal reproduces Weissman's own order of operations (clear the
+  board, THEN attack with the Factory) from the numbers rather than by
+  being told.
+* **An arm may state its own bar.** `ABILITY_BAR_MAIN` (3.0) asks "is this
+  worth mana a SPELL might want" — but `_try_activate(MAIN)` runs only
+  after `_try_cast_best` has declined every card in hand, and
+  `_held_reserve` has already protected the instant this seat means to
+  hold. An ability that **cannot be used at any later moment this turn**
+  is therefore not competing with a spell, and answers to the SINK bar
+  instead, for the sink's own stated reason: mana that would otherwise be
+  lost. That is what makes an animation (useful only before our combat)
+  and a `your_turn_only` Scepter fire at all — `_face_damage_value(2)` at
+  20 life is 2.2, and against a 3.0 bar the Factory stayed a land even
+  after the reader learned to see it. Two runs are on the record for
+  exactly this: the arm with the moment's bar moved the number **not one
+  game** (57-1443, byte-identical to the null); with its own bar it went
+  to 118.
+* **An animation is never paid for by tapping the thing it animates.**
+  `ManaPlanner` sorts the least flexible source first, so Mishra's
+  Factory — which makes exactly one colour — is the FIRST land the
+  planner reaches for, and it happily tapped the Factory to pay for the
+  Factory's own animation. The body that comes out cannot attack and
+  cannot block (CR 508.1a, 509.1a both want an untapped creature), so the
+  {1} bought nothing. `ManaPlanner.sources` already takes an `excluded`
+  set; the animation asks for the plan without itself, BEFORE the option
+  is offered. Worth **+1.7 points on its own** (137 → 162 wins).
+
+All of it is gated by **`AiProfile.plays_engines`** — a CAPABILITY in the
+sense `holds_instants` and `combat_search_nodes` are, off for Apprentice
+and Magician, on for Sorcerer and Wizard. Reading a permanent as a thing
+that PAYS OVER TIME rather than as a number on the board today is a whole
+layer of play, and the bottom two difficulties not having it is the same
+honest weakness as the Apprentice never holding an instant.
+
+### Measured
+
+The Deck against the five shipped starters, 300 games per matchup, seed
+4242, wizard on both seats, against a null run of the identical shipped
+AI at the same seed:
+
+| matchup | shipped (null) | with the capability | Δ |
+| --- | --- | --- | --- |
+| vs Big Green | 1.3% (4-296) | **11.7%** (35-265) | **+10.4** |
+| vs Blue Skies | 15.3% (46-254) | **22.7%** (68-232) | **+7.4** |
+| vs White Knights | 0.7% (2-298) | **4.0%** (12-288) | **+3.3** |
+| vs Mountain Artillery | 0.7% (2-298) | **6.7%** (20-280) | **+6.0** |
+| vs Black-Red Raiders | 1.0% (3-297) | **9.0%** (27-273) | **+8.0** |
+| **the whole gauntlet** | **3.8%** (57-1443) | **10.8%** (162-1338) | **+7.0** |
+
+Five matchups of five move the right way; the aggregate 95% interval is
+±1.6 points against a +7.0 shift. **A 2.8x win rate on the hardest deck
+in the collection.**
+
+### The row that provably cannot move — and it is the whole starter matrix
+
+The five starters run **no animation, no repeatable discard and no draw
+ability at all**, so every arm added here is unreachable from any of the
+10 cells of their round robin. `matchups.csv` for the 5x5 matrix at seed
+4242 is **BYTE-IDENTICAL to the null**, 3,000 games game for game — and
+so is the same matrix piloted by a Sorcerer and by a Magician. Not a
+tolerance, an identity: the change cannot cost the aggro decks a game
+because it cannot execute in one.
+
+That is also the honest limit of the claim. It is a general capability —
+it fires for any deck holding a man-land or a repeatable discarder, and
+there are nine playable such decks in `decks/` — but the five starters
+are not among them, so the starter gauntlet says nothing about it either
+way beyond "no harm, provably".
+
+### Generality: the same capability on eight other decks
+
+The capability is keyed on effect SHAPE, not on a card name, so the test
+of that claim is other decks. **Weissman's four real historical lists**,
+none of which runs a Mishra's Factory at all — so this measures the
+DISCARD arm alone, against the same five starters, 1,500 games each:
+
+| list | shipped (null) | with the capability | Δ |
+| --- | --- | --- | --- |
+| The Deck, Fall 1994 ("Protection deck") | 33.4% (501-999) | **36.6%** (549-951) | **+3.2** |
+| The Deck, Winter 1994-95 | 35.6% (534-966) | **40.2%** (603-897) | **+4.6** |
+| The Deck, February 1996 | 19.4% (291-1209) | **23.3%** (350-1150) | **+3.9** |
+| The Deck, Summer 1996 | 1.9% (29-1471) | **2.3%** (35-1465) | **+0.4** |
+
+Four of four the right way. Summer 1996 barely moves, and the reason is
+the same finding from the other end: that list's only threat is Mirror
+Universe, so a Scepter lock buys it turns it still cannot convert.
+
+And a MIXED FIELD, where both seats get the capability and the question
+is whether it costs anyone: eight playable decks, round robin, 300 games
+a matchup, 8,400 games an arm. Four of the eight hold an animation or a
+repeatable discard; four hold neither.
+
+| deck | engine cards | null | with | Δ |
+| --- | --- | --- | --- | --- |
+| "Stalin" (n00bcon 2014, UR Eel aggro) | 1 Factory | 51.1% | **53.2%** | **+2.1** |
+| Arch Angel (Sargent) | 4 Factory | 54.5% | **55.3%** | **+0.8** |
+| Mono Brown Workshop Aggro (Menendian) | 2 Factory | 50.1% | **50.7%** | **+0.6** |
+| Berlin (n00bcon 2016, The Deck) | 3 | 28.7% | 28.8% | +0.1 |
+| Proto-Zoo (Edwards) | none | 64.4% | 64.1% | -0.3 |
+| Twist of Fire (Merritt) | none | 63.5% | 62.9% | -0.6 |
+| Beckert (EC Old School 2015) | none | 35.6% | 34.8% | -0.8 |
+| Ape Lord (Sargent) | none | 52.1% | 50.1% | -2.0 |
+
+**Every deck that gains holds an engine card and every deck that loses
+holds none** — a matrix is zero-sum, so a deck with nothing to gain loses
+exactly what its opponents win. The worst single cell, Ape Lord vs Arch
+Angel at -5.7, is Arch Angel's four Mishra's Factories finally attacking;
+Ape Lord's own play is unchanged. And the identity holds cell by cell:
+**every one of the six matchups where NEITHER deck holds an animation or
+an aimed discard is byte-identical to the null**, 300 games each.
+
+### Tried and rejected, with the numbers
+
+* **Repricing the card-draw engines.** `_draw_need` is mage-go's appetite
+  reading (a 7-card hand is charged -3.0, a 9-card hand -4.0) and it
+  switches Library of Alexandria off at EXACTLY the hand size the card
+  requires. Replacing it, for engine abilities only, with the real cost —
+  the cleanup discard, which CR 514.1 puts on the ACTIVE player alone, so
+  a card drawn at their end step is never discarded — made the deck
+  **worse: 9.1% → 7.3%** (137 → 109 wins), Big Green 8.7% → 5.7%.
+  Restricting it to the mana-sink moment gave the same 7.3%. The reading
+  is that card QUANTITY is not this deck's bottleneck and a four-mana
+  Tome activation costs it the Counterspell. Left out; `_draw_need` is
+  untouched.
+* **Animating to BLOCK.** The defensive half of the same capability, in
+  the declare-attackers window where the AI already answers an attack
+  with removal — and the only window Jade Statue has at all ("activate
+  only during combat", so the main-phase arm can never reach it).
+  Measured **10.6% (159) with, 10.8% (162) without**: a wash, inside
+  noise. No playable deck in the collection runs Jade Statue, so there is
+  nowhere it could be shown to earn its place. Left out, and Jade Statue
+  stays a dead card.
+* **Keeping animated permanents off the mana plan** (a permanent that is
+  a creature now but is not printed as one goes to the back of the source
+  list). Measured **exactly neutral** — 136-1364 with and without — because
+  by the time a permanent is animated the main phase has already spent its
+  mana. Left out; the real bug was one step earlier, and is fixed above.
+* **Animating BEFORE the main-phase caster** rather than after it, so the
+  clock is bought before a spell takes the mana: **8.4% (126) against
+  9.1% (137)**. The sequencing that looks obviously right costs more mana
+  than the swing is worth. Left out.
+
+### What is still open
+
+* **Strip Mine, and the thirteen other sacrifice-cost abilities.**
+  `_ability_available` refuses any ability with a sacrifice rider because
+  the planner cannot model the cost; 2,733 battlefield-turns of Strip
+  Mine produced zero activations. Land destruction is a real control tool
+  and this is the last big dead card in the list. Not attempted here: it
+  needs `_best_victim` to look past creatures, and against five starters
+  holding fifteen basics apiece the gauntlet could not have measured it.
+* **The Deck still loses 96% to White Knights.** The loss profile says
+  why it is not a board problem: over 49 losses to White Knights and
+  Mountain Artillery the AI died on turn 27.8 with **8.4 lands untapped
+  and 1.8 enemy creatures worth 3.7 power on the table**. It is being
+  ground down, not overrun — and 4 City of Brass paying a life a tap over
+  28 turns is the first thing to instrument next. `ManaPlanner` has no
+  model of a source that HURTS to tap; it orders by colour flexibility
+  alone, which happens to defer City of Brass but for the wrong reason.
+* **The counter threshold is an absolute card value** (`counter_threshold`
+  against `Evaluator.card_value`), so against White Knights The Deck
+  counters almost nothing: Savannah Lions prices at 3.0 and Crusade at
+  3.0 against a Wizard's 5.0 bar. Weissman's rule is different in kind —
+  counter what your hand cannot answer LATER — and that is a real
+  capability, but it runs through the same `_try_counter` that Blue
+  Skies' two Counterspells use, so it cannot be made starter-neutral by
+  construction the way this pass was. It needs its own measurement.
+
+### The difficulty ladder, and a pre-existing inversion this pass exposed
+
+The capability is gated by `plays_engines` exactly the way
+`combat_search_nodes` and `holds_instants` are, so the ladder question
+has to be asked. On a STARTER mirror it is untouched and monotone — Big
+Green against a Wizard, 1,000 games a rung: **15.8% / 37.6% / 45.1% /
+51.7%** (the last is the seat bias in a true mirror), and byte-identical
+to the null at every profile because the starters cannot reach any of
+the new arms.
+
+On The Deck's own mirror the shipped ladder was **completely inverted**,
+and this pass is what made it visible. Against a Wizard, 1,500 games a
+rung:
+
+| pilot | shipped (null), 400 games | with the capability, 1,500 games |
+| --- | --- | --- |
+| Apprentice | **87.8%** | 34.3% |
+| Magician | 76.0% | 48.8% |
+| Sorcerer | 73.8% | **60.6%** |
+| Wizard (the mirror's seat bias) | 52.5% | 49.7% |
+
+A fumbling Apprentice beat a Wizard **87.8%** of the time with the
+shipped AI, and the worse the profile the better it did — because
+neither seat could win, every duel went fifty turns to attrition, and
+the seat that DID less took less City of Brass damage doing it. Playing
+well was strictly a liability in a deck that had no way to convert it.
+The capability puts three of the four rungs back in order. Sorcerer
+still sits about eleven points above Wizard, which is outside its
+interval and is now the open item — the Wizard's lower
+`counter_threshold` (5.0 against 5.5) spends more mana in a game already
+decided by attrition, and four City of Brass charge a life for every
+point of it. That is a knob question on a deck that still cannot close
+reliably, not a capability question, and it needs the loss-profile
+instrumentation above before anyone touches a number.
+
+### Gates
+
+Suite 250 scripts / 4,376 tests, exit 0. `./duel_soak.sh` green (`SOAK
+done`, 6 duels, exit 0). `matchups.csv` for the headline run is
+byte-identical at `--jobs 1 --procs 1`, at the default, and at `--jobs 8
+--procs 4`.
+
 ## Where we are — M1: engine core (DONE, v0.1)
 
 Working and tested (50 tests / 647 asserts): turn/step machine with priority

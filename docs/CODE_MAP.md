@@ -990,6 +990,15 @@ shandalar/
 │   │                      past its own combat (Apprentice and Magician 0,
 │   │                      Sorcerer 1500, Wizard 3000) — a CAPABILITY, the
 │   │                      way holds_instants is.
+│   │                      plays_engines is THE ENGINE ROOM (2026-09-06):
+│   │                      whether the profile understands an ability
+│   │                      whose payoff is cumulative rather than a board
+│   │                      swing today — a land that becomes the deck's
+│   │                      only clock, a Scepter taking a card off the
+│   │                      hand every turn. Off for Apprentice and
+│   │                      Magician, on for Sorcerer and Wizard; the
+│   │                      capability a control deck is made of
+│   │                      (docs/ROADMAP.md, "the control sweep").
 │   │   ├── ai_match_memory.gd
 │   │   │                    class AiMatchMemory — WHAT ONE SEAT SAW, and
 │   │   │                      the only thing AiSideboard may read. Watches
@@ -1022,7 +1031,14 @@ shandalar/
 │   │   │                      read once into numbers the AI reasons with
 │   │   │                      (damage / X damage / self-damage / removes /
 │   │   │                      bounces / taps / draws / pumps / regenerates
-│   │   │                      / adds mana / sweeper kept whole), by EFFECT
+│   │   │                      / adds mana / sweeper kept whole / the
+│   │   │                      ANIMATION kept whole for the same reason /
+│   │   │                      the AIMED DISCARD, read off the effect's own
+│   │   │                      describe() line because every discard in the
+│   │   │                      pool is card-local and the "target player"
+│   │   │                      prefix is what keeps a Wheel of Fortune or a
+│   │   │                      Contract from Below from reading as one),
+│   │   │                      by EFFECT
 │   │   │                      CLASS so every card built from the shared
 │   │   │                      vocabulary is understood for free, plus the
 │   │   │                      ONE table of card-local effects (Orcish
@@ -1090,7 +1106,25 @@ shandalar/
 │   │                          ONE SCORER FOR EVERY ACTIVATED ABILITY
 │   │                          (_try_activate, three moments: our main at
 │   │                          quality >= 3, their upkeep for tap effects,
-│   │                          their end step as the mana sink); HELD
+│   │                          their end step as the mana sink — and since
+│   │                          2026-09-06 an ARM MAY STATE ITS OWN BAR:
+│   │                          one whose ability has no later moment this
+│   │                          turn answers to the sink bar, because
+│   │                          _try_cast_best has already declined every
+│   │                          card in hand by the time this runs); THE
+│   │                          ENGINE ROOM (AiProfile.plays_engines,
+│   │                          2026-09-06) — _animation_value prices a
+│   │                          permanent that BECOMES a creature as the
+│   │                          attack it enables, refusing an already
+│   │                          animated / tapped / summoning-sick body and
+│   │                          any board where an untapped blocker eats
+│   │                          it, and _animation_payable /
+│   │                          _pay_without_source keep the planner from
+│   │                          tapping the very land it is animating; the
+│   │                          aimed-discard arm ticks a Disrupting
+│   │                          Scepter at the opponent while there is a
+│   │                          hand to take from (docs/ROADMAP.md, "the
+│   │                          control sweep"); HELD
 │   │                          INSTANTS (removal, draw, tricks) kept for
 │   │                          their combat / their end step with mana
 │   │                          reserved for them (mage-go's
@@ -2052,6 +2086,18 @@ shandalar/
 │    counterspell built from a card-local effect was not recognised as one
 │    at all — Power Sink, Mana Drain, Spell Blast and Force Spike, dead
 │    cards in hand in a third of the shipped deck pool;
+│    tests/ai/test_ai_control_2026_09_06.gd — THE CONTROL SWEEP: the two
+│    shapes a control deck wins with, neither of which the ability scorer
+│    had an arm for, so both scored `{}` and neither ever fired. A land
+│    that BECOMES the deck's clock (animated, attacked with, and the four
+│    refusals that matter — already a creature, summoning sick, a blocker
+│    that would eat it, and never paid for by tapping the land it
+│    animates) and a permanent that takes a card off the opponent's hand
+│    every turn. Plus what the discard reader will and will not read:
+│    Disrupting Scepter, Mind Twist and Rag Man yes, Wheel of Fortune,
+│    Contract from Below and Recall no. Every behaviour pinned twice —
+│    once for a profile with AiProfile.plays_engines and once for one
+│    without, which is the difficulty ladder;
 │    tests/ai/test_ai_x_seam_2026_09_05.gd — THE X A SPELL IS BEING CAST
 │    FOR, AND THE MANA THE PLANNER USED TO LEAK. Class 4 of the
 │    2026-09-04 sweep was a live bug, not just silence: the planner taps
@@ -2166,6 +2212,17 @@ shandalar/
 │    pick-up instead of being lifted there at all; and the three
 │    sentences @PROMPT_DEFENDWHOM speaks (`Block which attacker?`,
 │    `Illegal block.`, `That isn't an attacker.`);
+│    tests/ui/test_enchanted_attacker_2026_09_06.gd — THE ATTACK THAT WAS
+│    NEVER DECLARED: an attachment is drawn as a whole card standing
+│    proud of its host (AURA_PEEK), so the band a player clicks on an
+│    enchanted creature is the AURA's button — and in the three combat
+│    gestures that click now means the creature under it
+│    (DuelScreen._combat_body), while outside them the aura is still its
+│    own card (The Brute's {R}{R}{R} menu); a click that can declare
+│    nothing says `Illegal attacker.` instead of being swallowed; and a
+│    creature in the active player's HAND is not an attacker
+│    (CombatState.attack_illegality's battlefield check, CR 508.1a — the
+│    same hole block_illegality closed on 2026-09-04);
 │    tests/ui/test_ability_target.gd — CLICKING AN ABILITY ON THE CHAIN
 │    (TargetSpec.Kind.ABILITY, which the picker had no case for): the
 │    click naming the ACTIVATION and not its source permanent, the

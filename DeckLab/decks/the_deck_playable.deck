@@ -1,0 +1,72 @@
+# The Deck (playable variant) — A LAB FIXTURE, NOT A SHIPPED DECK.
+#   It lives here rather than in decks/ because it is OURS: the shipped
+#   folders are a provenance ledger, every entry a list somebody really
+#   published, and the counts are pinned by tests
+#   (tests/unit/test_decks_1997.gd) precisely so a deck cannot appear in
+#   them without one. This is a derived variant, so it has no such claim
+#   to make. Copy it into your own decks folder if you want to play it.
+#
+# ONE CARD CHANGED, and it is not a
+#   deckbuilding opinion. Randy Buehler's August 2015 Old School list
+#   (os_the_deck_buehler_2015.deck) is 59/60 implementable in this pool;
+#   the sixtieth is Chaos Orb, which no digital version of Magic has ever
+#   implemented because playing it means physically flipping the card onto
+#   the table. This project drops it by definition, with Falling Star,
+#   Shahrazad and Word of Command (docs/ROADMAP.md — the same four s30
+#   drops, and none of them is in cards/data/ at all).
+#
+#   The substitution is 1 Chaos Orb -> 1 Nevinyrral's Disk: the nearest
+#   thing in the pool to the job Chaos Orb did in this deck, which was to
+#   be the answer to a permanent nothing else in the list could answer.
+#   It is slower and symmetrical, so this is NOT Buehler's deck and is not
+#   labelled as though it were — the original stays beside it, unchanged
+#   and unplayable, because a reference list you can trust is worth more
+#   than a playable one you cannot.
+#
+# archetype: The Deck — Old School 93/94, made playable
+# designer: Randy Buehler (list); the one substitution is this project's
+# year: August 2015 (list), 2026-09-06 (substitution)
+# source: os_the_deck_buehler_2015.deck, which carries the full provenance
+name: The Deck (playable variant)
+1 Mana Drain
+4 Counterspell
+1 Red Elemental Blast
+4 Swords to Plowshares
+4 Disenchant
+1 Balance
+1 Nevinyrral's Disk
+3 The Abyss
+1 Mind Twist
+2 Disrupting Scepter
+1 Ancestral Recall
+1 Time Walk
+2 Jayemdae Tome
+1 Braingeyser
+1 Demonic Tutor
+1 Regrowth
+1 Recall
+1 Ivory Tower
+1 Black Lotus
+1 Mox Emerald
+1 Mox Jet
+1 Mox Pearl
+1 Mox Ruby
+1 Mox Sapphire
+1 Sol Ring
+1 Library of Alexandria
+3 Mishra's Factory
+4 City of Brass
+3 Underground Sea
+3 Tundra
+2 Volcanic Island
+2 Island
+1 Plains
+3 Strip Mine
+SB: 2 Amnesia
+SB: 2 Divine Offering
+SB: 4 Blue Elemental Blast
+SB: 3 Red Elemental Blast
+SB: 1 Circle of Protection: Red
+SB: 1 The Abyss
+SB: 1 Island
+SB: 1 Strip Mine

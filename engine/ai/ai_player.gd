@@ -414,6 +414,33 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			value -= intent.self_damage * (0.5 if me.life > 12 else (1.0 if me.life > 6 else 2.0))
 		if value > float(out.get("value", 0.0)):
 			out = {"cost": inst.data.cost, "value": value}
+	# A COUNTERSPELL RESERVES TOO, though it is not a "held instant".
+	#
+	# [method _is_held_instant] excludes anything that counters, and it is
+	# right to: a held instant is one [method _fire_held_instant] may cast
+	# at the opponent's end step, and a counterspell fired at an empty
+	# stack is a card thrown away. But the two questions are different —
+	# "would I cast this unprompted?" and "must the mana still be there
+	# when the moment comes?" — and the reserve was only ever asking the
+	# first. So the AI would tap out over a Counterspell for any creature
+	# worth casting, and the counter it was holding could not be paid for
+	# (found 2026-09-06 by asking it to choose between a Counterspell and
+	# a 3/3 flier: it cast the flier).
+	#
+	# ITS VALUE IS THE THRESHOLD IT ANSWERS AT. We cannot know what the
+	# opponent will cast, but we know what this AI would bother countering
+	# — [member AiProfile.counter_threshold] — so that is what the open
+	# mana is worth. The 1.5x rule in [method _try_cast_best] then does
+	# the rest: something clearly better than the thing we would counter
+	# still gets cast.
+	if profile.holds_instants:
+		for inst in me.hand:
+			if not _is_counterspell(inst.data):
+				continue
+			if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+				continue
+			if profile.counter_threshold > float(out.get("value", 0.0)):
+				out = {"cost": inst.data.cost, "value": profile.counter_threshold}
 	return out
 
 
@@ -495,7 +522,15 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 					and not game.players[pid].mana_pool.can_pay(ability.cost, surcharge):
 				continue
 			var option := _ability_option(game, inst, index, moment)
-			if option.is_empty() or float(option["value"]) < bar:
+			# AN ARM MAY STATE ITS OWN BAR. The moment's bar asks "is this
+			# worth the mana a SPELL might want"; an ability with no other
+			# moment to be used at is not competing with a spell, because
+			# `_try_cast_best` has already declined every card in hand by
+			# the time this runs. Such an arm answers with the sink bar,
+			# for the sink's own stated reason — mana that would otherwise
+			# be lost (see [method _animation_value]).
+			if option.is_empty() \
+					or float(option["value"]) < float(option.get("bar", bar)):
 				continue
 			if not reserve.is_empty() and float(option["value"]) < float(reserve["value"]) * 1.5 \
 					and _plan_taps_from(sources,
@@ -507,7 +542,10 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 		return ""
 	var source: CardInstance = best["inst"]
 	var ability: ActivatedAbility = source.cur_activated_abilities[int(best["index"])]
-	if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source)):
+	var paid := _pay_without_source(game, source, ability) \
+		if bool(best.get("keep_source_untapped", false)) \
+		else _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source))
+	if not paid:
 		return ""
 	var err := game.activate_ability(pid, source, int(best["index"]), best["targets"])
 	if err != "":
@@ -592,6 +630,10 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 	var them := game.players[opponent]
 	var value := 0.0
 	var targets: Array = []
+	# The bar this option answers to, or -1.0 for "the moment's own".
+	var own_bar := -1.0
+	# Whether the ability must be paid for WITHOUT tapping its own source.
+	var keep_source_untapped := false
 	# Mana is the price of everything else this turn: a point per mana
 	# above the first, halved — a 4-mana Tome draw still clears the bar with
 	# a thin hand, a 3-mana Rod ping at the face does not.
@@ -662,10 +704,136 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		value = 1.0 + (2.0 if me.life <= 10 else 0.0)
 	elif intent.sweeper != null:
 		value = _sweep_value(game, intent.sweeper, 0)
+	elif intent.animates != null and profile.plays_engines:
+		# THE CLOCK A PERMANENT CAN BECOME (2026-09-06, the control sweep).
+		value = _animation_value(game, inst, intent.animates, moment)
+		if value <= 0.0:
+			return {}
+		if not _animation_payable(game, inst, ability):
+			return {}
+		own_bar = ABILITY_BAR_SINK
+		keep_source_untapped = true
+	elif intent.discards != 0 and profile.plays_engines \
+			and intent.target_spec != null:
+		# THE REPEATABLE DISCARD (2026-09-06, the control sweep). Weissman
+		# named the principle this arm encodes: "taking cards away from
+		# your opponent is card advantage just as much as drawing cards of
+		# your own" — and a Disrupting Scepter that ticks a card off the
+		# hand every turn is the whole soft lock The Deck wins with. In
+		# 100 instrumented games the AI had one on the battlefield 1,706
+		# times and activated it ZERO times, because the scorer had no arm
+		# for an effect whose payoff is a card the opponent no longer has.
+		if them.hand.is_empty():
+			return {}   # nothing to take
+		if not _spec_allows_player(intent.target_spec, game, inst, opponent):
+			return {}
+		targets = [TargetRef.player(opponent)]
+		# A card denied is a card, priced on this function's own scale for
+		# one (the draw arm's 5.0 cheap / 3.0 dear). The last cards in a
+		# hand are worth more than the first: that is the difference
+		# between a plan and a topdeck.
+		value = 3.0
+		if them.hand.size() <= 2:
+			value += 1.0
+		# "Activate only during your turn" (the Scepter's own rider) means
+		# there is no later moment to spend this mana at — the same
+		# argument the animation makes, so the same bar.
+		if ability.turn_restriction > 0:
+			own_bar = ABILITY_BAR_SINK
 	else:
 		return {}   # pumps, regeneration, mana, untaps, unknowns: not here
 	value -= price
-	return {"inst": inst, "index": index, "targets": targets, "value": value}
+	var out := {"inst": inst, "index": index, "targets": targets, "value": value}
+	if own_bar >= 0.0:
+		out["bar"] = own_bar
+	if keep_source_untapped:
+		out["keep_source_untapped"] = true
+	return out
+
+
+## CAN THE ANIMATION BE PAID FOR WITHOUT TAPPING THE THING IT ANIMATES?
+##
+## The one seam an animation has that no other ability has: the permanent
+## being animated is itself a MANA SOURCE, and [ManaPlanner] sorts the
+## least flexible source first — so a Mishra's Factory, which makes
+## exactly one colour, is the first land the planner reaches for and it
+## would happily tap the Factory to pay for the Factory's own animation.
+## The body that comes out of that cannot attack and cannot block (CR
+## 508.1a, 509.1a both want an untapped creature), so the {1} buys
+## nothing at all. Asked BEFORE the option is offered, so an animation
+## that can only be paid for this way is simply not one of the choices.
+func _animation_payable(game: MtgGame, inst: CardInstance,
+		ability: ActivatedAbility) -> bool:
+	var surcharge := game.ability_surcharge(pid, inst)
+	if _cost_is_free(ability.cost) and surcharge == 0:
+		return true
+	return not _plan_taps_from(ManaPlanner.sources(game, pid, {inst.id: true}),
+		ability.cost, surcharge).is_empty()
+
+
+## Pay [param ability]'s cost from everything EXCEPT [param inst] itself.
+## See [method _animation_payable] for why that exception exists.
+func _pay_without_source(game: MtgGame, inst: CardInstance,
+		ability: ActivatedAbility) -> bool:
+	var surcharge := game.ability_surcharge(pid, inst)
+	if _cost_is_free(ability.cost) and surcharge == 0:
+		return true
+	var plan := _plan_taps_from(ManaPlanner.sources(game, pid, {inst.id: true}),
+		ability.cost, surcharge)
+	if plan.is_empty():
+		return false
+	ManaPlanner.run_plan(game, pid, plan)
+	return true
+
+
+## WHAT A PERMANENT THAT BECOMES A CREATURE IS WORTH THIS TURN.
+##
+## THE WIN CONDITION THIS AI COULD NOT SEE. Every other arm of
+## [method _ability_option] prices an ability by the board it changes;
+## an animation changes nothing until the attack it enables, so the
+## reader had no model for it and [method _ability_option] fell through
+## to its final `return {}`. In 100 instrumented games of Weissman's The
+## Deck the AI put a Mishra's Factory on the battlefield 2,339 times and
+## animated one ZERO times — and since that list runs no other threat,
+## a deck of fifty-nine answers had literally no way to end a game it
+## had already stabilised (docs/ROADMAP.md, "the control sweep").
+##
+## Priced as the ATTACK it enables, in the currency the attack code
+## already uses ([method _face_damage_value]), so the ability scorer and
+## [method _declare_attacks] agree about the same swing. The refusals are
+## the interesting half:
+##
+##  * ALREADY A CREATURE — the animation is until end of turn and has no
+##    per-turn cap, so without this the mana sink would re-animate the
+##    same Factory every priority round for as long as the mana lasted.
+##  * NOT OUR PRECOMBAT MAIN, TAPPED, OR SUMMONING SICK — the three ways
+##    a body cannot swing this turn (CR 302.6 is the famous Factory judge
+##    call: a land played this turn may animate and may not attack).
+##  * A BLOCKER THAT EATS IT. What animates here is almost always a LAND,
+##    and a land traded for nothing is a mana source the control deck
+##    needed. So the body goes only when the damage actually arrives:
+##    every untapped creature they could block with has to die to it
+##    without killing it back. That is also Weissman's own order of
+##    operations — clear the board first, attack with the Factory
+##    afterwards — arrived at from the numbers rather than written in.
+func _animation_value(game: MtgGame, inst: CardInstance,
+		anim: AnimateSelfEffect, moment: int) -> float:
+	if inst.is_creature():
+		return 0.0
+	if (anim.add_types & Mtg.CardType.CREATURE) == 0 or anim.set_power <= 0:
+		return 0.0
+	if moment != Moment.MAIN or game.active_player != pid \
+			or game.current_step() != Mtg.Step.MAIN1 \
+			or inst.tapped or inst.summoning_sick:
+		return 0.0
+	var defender := game.opponent_of(pid)
+	for blocker in game.players[defender].battlefield:
+		if not blocker.is_creature() or blocker.tapped:
+			continue
+		if blocker.cur_power >= anim.set_toughness \
+				or anim.set_power < blocker.cur_toughness:
+			return 0.0   # it survives the block, or kills us for free
+	return _face_damage_value(game, anim.set_power, defender)
 
 
 ## mage-go's `cardDrawNeedAdjustment`: a thin hand wants cards, a full one

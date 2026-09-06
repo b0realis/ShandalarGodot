@@ -275,6 +275,18 @@ func blockers_of(attacker_id: int) -> Array[int]:
 static func attack_illegality(game: MtgGame, inst: CardInstance, defender_pid: int) -> String:
 	if not inst.is_creature():
 		return "not a creature"
+	# CR 508.1a: an attacking creature is one the active player controls ON
+	# THE BATTLEFIELD. [method MtgGame.declare_attackers] checks the zone
+	# itself, so this is not what makes an illegal declaration illegal — it
+	# makes the PREDICATE honest for the callers that ask "could this
+	# attack?" BEFORE any declaration, which is the same hole
+	# [method block_illegality] closed on the blocking side (2026-09-04):
+	# a creature card in the active player's HAND answered "yes", and the
+	# duel screen would put it in the Combat window's attack lane, where it
+	# could only ever produce a declaration the engine refused as a whole —
+	# taking the player's real attackers down with it.
+	if inst.zone != Mtg.Zone.BATTLEFIELD:
+		return "%s is not on the battlefield" % inst.data.card_name
 	if inst.tapped:
 		return "tapped creatures can't attack"
 	# HASTE, or "can attack as though it had haste" (Instill Energy) — the

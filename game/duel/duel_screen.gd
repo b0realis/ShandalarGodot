@@ -1107,13 +1107,13 @@ func _on_card_clicked(inst: CardInstance) -> void:
 		Mode.TARGETING:
 			_try_take_target(TargetRef.card(inst))
 		Mode.ATTACKERS:
-			_toggle_attacker(inst)
+			_toggle_attacker(_combat_body(inst))
 		Mode.BLOCKERS:
-			_pick_block(inst)
+			_pick_block(_combat_body(inst))
 		Mode.DISCARD:
 			_toggle_discard(inst)
 		Mode.DAMAGE:
-			_assign_one_point(inst.id)
+			_assign_one_point(_combat_body(inst).id)
 		Mode.PAYING:
 			# *"Once a land is in play, you can tap it for mana at any
 			# time. Simply place the mouse pointer over the land you want
@@ -2388,8 +2388,49 @@ func _on_search_confirmed() -> void:
 
 # ----------------------------------------------------------------- combat --
 
+## THE CREATURE A COMBAT CLICK MEANS — an attached card's HOST, and
+## anything else unchanged.
+##
+## An attachment is drawn as a WHOLE CARD behind its host, 6px right and
+## [constant AURA_PEEK].y ABOVE it ([method _make_widget]), so what stands
+## proud of an enchanted creature's top edge is the aura's own title bar —
+## a live [MiniCard] button, and part of the picture the player reads as
+## ONE creature. That is what the original and s30 both draw and it is the
+## right picture; what was wrong is where the click went.
+##
+## THE PLAYTEST DEFECT OF 2026-09-06. *"I had Hurloon Minotaur with The
+## Brute enchantment on it. I attacked ... my damage did not go through."*
+## The click landed on the band, [method _toggle_attacker] opened with
+## `not inst.is_creature()` and returned WITHOUT A WORD, Done declared no
+## attackers, and the engine skipped the rest of the combat (there is
+## nothing to block). Same shape as the block that was never declared
+## (`tests/ui/test_block_declaration_2026_09_04.gd`): a swallowed click in
+## a declaration.
+##
+## ONLY THE THREE COMBAT GESTURES — choose attackers, choose blockers,
+## divide damage — where an Aura is never a legal object and the stack of
+## cards is one body. Outside them the aura is its own card: Disenchant
+## targets it, and The Brute's own `{R}{R}{R}` regeneration is activated
+## by clicking exactly this band.
+func _combat_body(inst: CardInstance) -> CardInstance:
+	if inst == null or inst.attached_to == -1:
+		return inst
+	var host := game.find_instance(inst.attached_to)
+	if host == null or host.zone != Mtg.Zone.BATTLEFIELD:
+		return inst
+	return host
+
+
 func _toggle_attacker(inst: CardInstance) -> void:
 	if inst.controller_id != game.active_player or not inst.is_creature():
+		# A CLICK THAT CAN DECLARE NOTHING SAYS SO, when it was on one of
+		# YOUR OWN permanents — silence is what let the defect above look
+		# like a finished attack. The opponent's half stays quiet: reading
+		# their board is not a mistake.
+		if inst.controller_id == game.active_player \
+				and inst.zone == Mtg.Zone.BATTLEFIELD:
+			_set_prompt("Illegal attacker. %s" % CombatState.attack_illegality(
+				game, inst, game.opponent_of(game.active_player)))
 		return
 	if _selected_attackers.has(inst.id):
 		# Taking an attacker back. The 1997 game did NOT allow this
@@ -4021,9 +4062,40 @@ func _on_ability_chosen(id: int) -> void:
 ## at duel scale (tens of cards) it is instant, and it can never drift out
 ## of sync with the engine — the classic immediate-mode trade documented in
 ## the design doc.
+## The turn this screen last drew, and whose it was — the pair that says
+## whether an EXTRA TURN just happened. See [method _watch_for_extra_turn].
+var _drawn_turn := -1
+var _drawn_active := -1
+
+
+## SAY WHEN A TURN REPEATS, because the game already knows and the player
+## cannot tell.
+##
+## Time Walk and Time Vault are both in this pool and both implemented, so
+## an opponent taking a second turn in a row is CORRECT — and it reads
+## exactly like a bug from the other side of the table: the AI attacks,
+## the turn appears to end, and it attacks again (reported 2026-09-05,
+## "like a new immediate turn"). The engine writes "%s takes an extra
+## turn!" to its log and this screen has no log pane, so the one sentence
+## that would have explained it went nowhere.
+##
+## DETECTED STRUCTURALLY rather than by matching that sentence: the same
+## player active on two consecutive turn numbers IS an extra turn, however
+## it was granted, so a card added later is covered without anyone
+## remembering to.
+func _watch_for_extra_turn() -> void:
+	if game.turn_number != _drawn_turn:
+		if _drawn_turn > 0 and game.active_player == _drawn_active:
+			_report("%s takes an extra turn!"
+				% game.players[game.active_player].player_name)
+		_drawn_turn = game.turn_number
+		_drawn_active = game.active_player
+
+
 func _refresh() -> void:
 	if game == null:
 		return
+	_watch_for_extra_turn()
 	# THE CHOICE OVERLAY (§1.3): the engine holds a resolution open the
 	# moment it finds a question this seat has not answered, and it can do
 	# that from ANY driver — a pass, a Done order, the AI's own turn — so

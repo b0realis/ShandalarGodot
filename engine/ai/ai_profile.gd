@@ -87,10 +87,31 @@ var sideboard_swaps := 0
 ## monotone in this knob as it does in every other.
 var combat_search_nodes := 0
 
+## THE ENGINE ROOM: does this profile understand an activated ability whose
+## payoff is CUMULATIVE rather than a board swing this turn — a land that
+## becomes the deck's only clock, a Scepter that takes a card off their
+## hand every turn, a Tome that turns mana it has nothing else to do with
+## into cards?
+##
+## A CAPABILITY, like [member holds_instants] and
+## [member combat_search_nodes] — not a second difficulty concept. Reading
+## a permanent as a THING THAT PAYS OVER TIME rather than as a number on
+## the board today is a whole layer of play, and the bottom two
+## difficulties not having it at all is the same honest weakness as the
+## Apprentice never holding an instant. Everything it gates is priced from
+## numbers the AI already had, and nothing it gates is card-named.
+##
+## It is what a control deck is MADE of: an AI without it answers every
+## threat correctly and then never wins, because the cards that turn
+## survival into a victory are all of this shape (docs/ROADMAP.md, "the
+## control sweep").
+var plays_engines := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
-		p_sideboard_swaps := 0, p_search_nodes := 0) -> void:
+		p_sideboard_swaps := 0, p_search_nodes := 0,
+		p_engines := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -99,28 +120,29 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	counter_threshold = p_counter_threshold
 	sideboard_swaps = p_sideboard_swaps
 	combat_search_nodes = p_search_nodes
+	plays_engines = p_engines
 
 
 ## Lowest difficulty: fumbles a third of its actions, swings recklessly, and
 ## never holds up instants — sorcery-speed Magic, which is the honest way to
 ## be weak without cheating the rules.
 static func apprentice() -> AiProfile:
-	return AiProfile.new("Apprentice", 0.35, 0.75, 3, false, 5.0, 0, 0)
+	return AiProfile.new("Apprentice", 0.35, 0.75, 3, false, 5.0, 0, 0, false)
 
 ## Second difficulty: reactive play switches on, but the high counter
 ## threshold means it only answers the biggest threats and lets the rest
 ## resolve.
 static func magician() -> AiProfile:
-	return AiProfile.new("Magician", 0.20, 0.60, 4, true, 7.0, 2, 0)
+	return AiProfile.new("Magician", 0.20, 0.60, 4, true, 7.0, 2, 0, false)
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true)
 
 
 func _to_string() -> String:

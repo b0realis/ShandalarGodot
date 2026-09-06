@@ -160,6 +160,11 @@ func _init() -> void:
 	# blockers"*. A window that hides the thing it is asking you to click
 	# is worse than one you have to move.
 	bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	# THE POINTER SAYS SO, as it already does over the hand's own bar. A
+	# window you can drag but whose cursor never changes is a window
+	# nobody discovers they can drag (2026-09-05: *"it can be dragged,
+	# just the mouse pointer should change also"*).
+	bar.mouse_default_cursor_shape = Control.CURSOR_MOVE
 	bar.gui_input.connect(_on_bar_input)
 	add_child(bar)
 	var row := HBoxContainer.new()

@@ -76,6 +76,18 @@ var fogs: bool = false
 ## whole because its worth is a board calculation, not a number.
 var sweeper: EffectBase = null
 
+## "This permanent becomes an N/N creature" (Mishra's Factory, Jade
+## Statue), kept whole for the same reason a sweeper is: its worth is a
+## COMBAT calculation — what the body would do this turn — not a number
+## that can be summed here.
+var animates: AnimateSelfEffect = null
+
+## Cards the TARGET player is made to discard (Disrupting Scepter's one,
+## Rag Man's one at random). -1 means the count is the spell's X (Mind
+## Twist, Nebuchadnezzar). See [method _aimed_discard] for why this is
+## read the way it is.
+var discards: int = 0
+
 ## Something the reader has no model for (a card-local effect outside the
 ## table). The AI treats an unknown TARGETED effect as removal-shaped —
 ## the common case in this pool — and an unknown untargeted one as a
@@ -165,12 +177,23 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.fogs = true
 		elif e is DestroyAllEffect or e is DamageAllEffect:
 			intent.sweeper = e
+		elif e is AnimateSelfEffect:
+			intent.animates = e
 		elif e is MassPumpEffect or e is SearchLibraryEffect \
 				or e is ReturnFromGraveyardEffect or e is PreventDamageEffect \
 				or e is PreventDamageShieldEffect or e is MillEffect:
 			pass   # priced elsewhere (card_value); nothing here to sum
 		elif note.is_empty():
 			intent.unknown = true
+			# ...but an AIMED DISCARD says so in its own description, and
+			# an unknown effect that says so is still read for that one
+			# fact. `unknown` deliberately STAYS set: the harm reading and
+			# the target picker keep the behaviour they already had, and
+			# only the ability scorer consults [member discards].
+			var stripped := _aimed_discard(e)
+			if stripped != 0:
+				intent.discards = -1 if stripped < 0 or intent.discards < 0 \
+					else intent.discards + stripped
 	# The table overrides what the reader could not see.
 	if not note.is_empty():
 		intent.damage += int(note.get("damage", 0))
@@ -188,6 +211,41 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 		if bool(note.get("untaps", false)):
 			intent.untaps = true
 	return intent
+
+
+## THE AIMED DISCARD, read from the effect's own one-line description.
+##
+## There is no shared `DiscardEffect` in this vocabulary — every discard in
+## the pool is a `class X extends EffectBase` inside its own card file — so
+## the reader has nothing to test `is` against, exactly the situation
+## [constant CARD_LOCAL] exists for. What it has instead is a signal every
+## effect already provides: [method EffectBase.describe] is part of the
+## effect contract, the duel log and the UI both read it, and the seven
+## aimed discards in this pool all state themselves the same way. Reading
+## the card's own line is the precedent [method AiPlayer._is_counterspell]
+## set, for the same reason and with the same limits.
+##
+## THE "TARGET PLAYER" PREFIX IS LOAD-BEARING, not decoration. It is what
+## separates an aimed discard (Disrupting Scepter, Rag Man, Gwendlyn Di
+## Corci, Wand of Ith, Nebuchadnezzar, Mind Twist, Amnesia) from a
+## SYMMETRICAL one (Wheel of Fortune, Mind Bomb — "each player discards")
+## and from one WE pay for (Contract from Below's "discards your hand",
+## Recall's "discards X cards and recalls that many"). Getting that wrong
+## would have the AI emptying its own hand every turn, so the test is
+## deliberately narrow: an effect that does not announce a target player
+## is simply not read, and stays the plain `unknown` it always was.
+##
+## Returns the number of cards, -1 when the count is the spell's X, or 0
+## when this is not an aimed discard.
+static func _aimed_discard(e: EffectBase) -> int:
+	if e.target_spec == null or e.target_spec.kind != TargetSpec.Kind.PLAYER:
+		return 0
+	var line := e.describe().to_lower()
+	if not (line.begins_with("target player") or line.begins_with("target opponent")):
+		return 0
+	if not line.contains("discard"):
+		return 0
+	return -1 if line.contains(" x ") else 1
 
 
 ## Does this intent hurt what it targets? Mirrors the classification
