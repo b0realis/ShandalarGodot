@@ -595,3 +595,338 @@ func test_a_prefix_match_still_leads_the_list() -> void:
 			continue
 		assert_true(d.card_name.to_lower() > last, d.card_name)
 		last = d.card_name.to_lower()
+
+
+# ------------------------------------------ the five list sub-filters --
+# The 1997 `@LONGLIST` sub-filters (creatures, enchantments, abilities,
+# rarity, artists), all pages of the one Filters window since 2026-09-06.
+# Each starts inert: every check ticked, every "Enable Filter" off.
+
+func _shown(pool: Array[CardData]) -> Array[String]:
+	var names: Array[String] = []
+	for d in pool:
+		if filter.matches(d):
+			names.append(d.card_name)
+	return names
+
+
+func test_a_fresh_filter_has_no_list_in_force() -> void:
+	assert_false(filter.lists_active())
+	assert_true(filter.creature_type_on("elf"), "absent means ticked")
+	assert_true(filter.enchantment_on(DeckFilter.Aura.WORLD))
+	assert_true(filter.ability_ticked(DeckAbilities.Ability.FLYING))
+	assert_true(filter.rarity_ticked(DeckFilter.Rarity.BANNED))
+	assert_true(filter.artist_ticked("Douglas Shuler"))
+
+
+# -- creatures --
+
+func test_summon_admits_the_plain_creatures_and_artifact_the_others() -> void:
+	# `check_creatures`, deckdll.cpp:6995 — "Summon Bear" versus
+	# "Artifact Creature" in the 1997 type line. The Artifact MEDALLION
+	# admits an artifact creature on its own (the groups are ORed), so it
+	# goes up for the Artifact check to be the one asked; likewise a mana
+	# creature is Land's through `Land and Mana`, so the Bears stand in.
+	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	filter.creature_summon = false
+	assert_false(filter.matches(_card("Grizzly Bears")), "a Summon with Summon up")
+	assert_true(filter.matches(_card("Primal Clay")), "an artifact creature is Artifact's")
+	filter.creature_summon = true
+	filter.creature_artifact = false
+	assert_true(filter.matches(_card("Grizzly Bears")))
+	assert_false(filter.matches(_card("Primal Clay")))
+	assert_true(filter.matches(_card("Lightning Bolt")), "a spell never asks the creature checks")
+
+
+func test_a_mana_creature_is_still_lands_with_summon_up() -> void:
+	# `Land and Mana` reaches every card that taps for mana, Summon or not.
+	filter.creature_summon = false
+	assert_true(filter.matches(_card("Llanowar Elves")))
+	filter.land_mode = DeckFilter.Land.LAND_ONLY
+	assert_false(filter.matches(_card("Llanowar Elves")))
+
+
+func test_the_list_is_an_or_term_on_top_of_summon() -> void:
+	# The list ADDS to Summon — with Summon still down it changes nothing,
+	# which is why the window says so (DeckBuilderScreen.LIST_HINT).
+	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	filter.creature_list_on = true
+	for subtype in FilterBar.creature_types():
+		filter.tick_creature_type(subtype, false)
+	filter.tick_creature_type("bear", true)
+	assert_true(filter.matches(_card("Savannah Lions")), "Summon is still down")
+	filter.creature_summon = false
+	filter.creature_artifact = false
+	assert_true(filter.matches(_card("Grizzly Bears")), "the Bear comes through the list")
+	assert_false(filter.matches(_card("Savannah Lions")), "the Cat does not")
+	assert_false(filter.matches(_card("Primal Clay")), "nor the artifact creature")
+	filter.creature_list_on = false
+	assert_false(filter.matches(_card("Grizzly Bears")), "the list off is the list ignored")
+
+
+func test_the_creature_type_list_is_the_pools_own() -> void:
+	var listed := FilterBar.creature_types()
+	assert_gt(listed.size(), 100, "every creature subtype in the pool")
+	assert_has(listed, "elf")
+	assert_has(listed, "wall")
+	assert_eq(listed, listed.duplicate().filter(func(t: String) -> bool: return t == t.to_lower()),
+		"all lower case, as the registry spells them")
+	var sorted := listed.duplicate()
+	sorted.sort()
+	assert_eq(listed, sorted, "alphabetical")
+
+
+# -- enchantments --
+
+func test_an_aura_is_the_kind_of_thing_it_enchants() -> void:
+	# `check_enchantments`, deckdll.cpp:7015.
+	assert_eq(DeckFilter.aura_kind(_card("Crusade")), DeckFilter.Aura.ENCHANTMENTS, "a global enchantment")
+	assert_eq(DeckFilter.aura_kind(_card("The Abyss")), DeckFilter.Aura.WORLD)
+	assert_eq(DeckFilter.aura_kind(_card("Nether Void")), DeckFilter.Aura.WORLD)
+	assert_eq(DeckFilter.aura_kind(_card("Wild Growth")), DeckFilter.Aura.LAND)
+	assert_eq(DeckFilter.aura_kind(_card("Psychic Venom")), DeckFilter.Aura.LAND)
+	assert_eq(DeckFilter.aura_kind(_card("Holy Strength")), DeckFilter.Aura.CREATURE)
+	assert_eq(DeckFilter.aura_kind(_card("Control Magic")), DeckFilter.Aura.CREATURE)
+	assert_eq(DeckFilter.aura_kind(_card("Animate Dead")), DeckFilter.Aura.CREATURE,
+		"it ends up on a creature, as the 1997 check has it")
+	assert_eq(DeckFilter.aura_kind(_card("Animate Artifact")), DeckFilter.Aura.ARTIFACT)
+	assert_eq(DeckFilter.aura_kind(_card("Land Tax")), DeckFilter.Aura.ENCHANTMENTS)
+	assert_eq(DeckFilter.aura_kind(_card("Copy Artifact")), DeckFilter.Aura.ENCHANTMENTS,
+		"a copy is not an aura")
+
+
+func test_unticking_an_enchantment_kind_hides_those_auras_only() -> void:
+	filter.tick_enchantment(DeckFilter.Aura.CREATURE, false)
+	assert_true(filter.lists_active())
+	assert_false(filter.matches(_card("Holy Strength")))
+	assert_true(filter.matches(_card("Crusade")))
+	assert_true(filter.matches(_card("Wild Growth")))
+	assert_true(filter.matches(_card("Serra Angel")), "a creature never asks the enchantment checks")
+	filter.tick_enchantment(DeckFilter.Aura.CREATURE, true)
+	assert_false(filter.lists_active())
+	assert_true(filter.matches(_card("Holy Strength")))
+
+
+func test_the_aura_labels_are_the_1997_menu() -> void:
+	# Menus.txt `@ENCHANTMENT`.
+	assert_eq(DeckFilter.AURA_LABELS.size(), 6)
+	assert_eq(DeckFilter.AURA_LABELS[DeckFilter.Aura.ENCHANTMENTS], "Enchantments")
+	assert_eq(DeckFilter.AURA_LABELS[DeckFilter.Aura.WORLD], "World")
+	assert_eq(DeckFilter.AURA_LABELS[DeckFilter.Aura.ENCHANT], "Enchant")
+
+
+# -- abilities --
+
+func test_the_ability_filter_is_inert_until_enabled() -> void:
+	for ability in DeckAbilities.Ability.values():
+		filter.tick_ability(ability, false)
+	assert_true(filter.matches(_card("Serra Angel")), "nothing ticked, but the filter is off")
+	filter.ability_on = true
+	assert_false(filter.matches(_card("Serra Angel")), "on with nothing ticked shows no creature")
+	assert_false(filter.matches(_card("Plains")), "and every card is asked, a land too")
+
+
+func test_the_ability_filter_finds_the_fliers() -> void:
+	filter.ability_on = true
+	for ability in DeckAbilities.Ability.values():
+		filter.tick_ability(ability, ability == DeckAbilities.Ability.FLYING)
+	assert_true(filter.matches(_card("Serra Angel")))
+	assert_true(filter.matches(_card("Jump")), "Gives is on: the spell that grants it")
+	assert_false(filter.matches(_card("Grizzly Bears")))
+	assert_false(filter.matches(_card("Earthbind")), "losing flying is not flying")
+
+
+func test_native_and_gives_are_the_two_scopes() -> void:
+	# `check_abilities`, deckdll.cpp:7126.
+	filter.ability_on = true
+	for ability in DeckAbilities.Ability.values():
+		filter.tick_ability(ability, ability == DeckAbilities.Ability.REGENERATION)
+	filter.ability_gives = false
+	assert_true(filter.matches(_card("Will-o'-the-Wisp")), "has it")
+	assert_false(filter.matches(_card("Regeneration")), "only gives it")
+	assert_false(filter.matches(_card("Zombie Master")), "only gives it")
+	filter.ability_gives = true
+	filter.ability_native = false
+	assert_false(filter.matches(_card("Will-o'-the-Wisp")))
+	assert_true(filter.matches(_card("Regeneration")))
+	assert_true(filter.matches(_card("Zombie Master")))
+	filter.ability_gives = false
+	assert_false(filter.matches(_card("Will-o'-the-Wisp")), "neither scope is nothing")
+	assert_false(filter.matches(_card("Regeneration")))
+
+
+# -- rarity --
+
+func test_a_cards_rarities_are_its_printing_and_its_lists() -> void:
+	assert_eq(DeckFilter.rarity_kinds(_card("Grizzly Bears")), [DeckFilter.Rarity.COMMON])
+	assert_eq(DeckFilter.rarity_kinds(_card("Serra Angel")), [DeckFilter.Rarity.UNCOMMON])
+	assert_eq(DeckFilter.rarity_kinds(_card("Johan")), [DeckFilter.Rarity.RARE])
+	assert_eq(DeckFilter.rarity_kinds(_card("Black Lotus")),
+		[DeckFilter.Rarity.RARE, DeckFilter.Rarity.RESTRICTED], "rare AND restricted")
+	assert_eq(DeckFilter.rarity_kinds(_card("Contract from Below")),
+		[DeckFilter.Rarity.RARE, DeckFilter.Rarity.BANNED], "the ante cards are banned")
+
+
+func test_the_rarity_filter_keeps_a_card_with_any_ticked_kind() -> void:
+	filter.rarity_on = true
+	for kind in DeckFilter.Rarity.values():
+		filter.tick_rarity(kind, kind == DeckFilter.Rarity.RESTRICTED)
+	assert_true(filter.matches(_card("Black Lotus")))
+	assert_false(filter.matches(_card("Johan")), "a plain rare")
+	assert_false(filter.matches(_card("Grizzly Bears")))
+	filter.tick_rarity(DeckFilter.Rarity.COMMON, true)
+	assert_true(filter.matches(_card("Grizzly Bears")))
+	filter.rarity_on = false
+	assert_true(filter.matches(_card("Johan")), "off is everything")
+
+
+func test_the_rarity_labels_are_the_1997_menu() -> void:
+	assert_eq(DeckFilter.RARITY_LABELS[DeckFilter.Rarity.COMMON], "Common")
+	assert_eq(DeckFilter.RARITY_LABELS[DeckFilter.Rarity.RESTRICTED], "Restricted")
+	assert_eq(DeckFilter.RARITY_LABELS[DeckFilter.Rarity.BANNED], "Banned")
+
+
+# -- artists --
+
+func test_the_artist_filter_shows_the_ticked_artists_cards() -> void:
+	filter.artist_on = true
+	for artist in FilterBar.artists():
+		filter.tick_artist(artist, artist == "Douglas Shuler")
+	assert_true(filter.matches(_card("Serra Angel")))
+	assert_true(filter.matches(_card("Rainbow Knights")))
+	assert_false(filter.matches(_card("Grizzly Bears")), "Jeff A. Menges")
+	filter.artist_on = false
+	assert_true(filter.matches(_card("Grizzly Bears")))
+
+
+func test_the_artist_list_is_the_pools_own() -> void:
+	var listed := FilterBar.artists()
+	assert_gt(listed.size(), 40)
+	assert_has(listed, "Douglas Shuler")
+	assert_has(listed, "Christopher Rush")
+	var sorted := listed.duplicate()
+	sorted.sort()
+	assert_eq(listed, sorted, "alphabetical")
+
+
+# -- the window's snapshot, and reset --
+
+func test_lists_active_reads_every_page() -> void:
+	assert_false(filter.lists_active())
+	filter.creature_summon = false
+	assert_true(filter.lists_active())
+	filter.creature_summon = true
+	filter.creature_list_on = true
+	assert_true(filter.lists_active())
+	filter.creature_list_on = false
+	filter.ability_on = true
+	assert_true(filter.lists_active())
+	filter.ability_on = false
+	filter.rarity_on = true
+	assert_true(filter.lists_active())
+	filter.rarity_on = false
+	filter.artist_on = true
+	assert_true(filter.lists_active())
+	filter.artist_on = false
+	assert_false(filter.lists_active())
+
+
+func test_a_snapshot_restores_the_pages_as_they_were() -> void:
+	# Cancel in the Filters window: everything the window can touch goes
+	# back, the strip's own buttons are not the window's to restore.
+	filter.tick_creature_type("elf", false)
+	filter.tick_rarity(DeckFilter.Rarity.COMMON, false)
+	var kept := filter.window_snapshot()
+	var before := filter.revision
+	filter.creature_list_on = true
+	filter.tick_creature_type("goblin", false)
+	filter.tick_creature_type("elf", true)
+	filter.ability_on = true
+	filter.tick_ability(DeckAbilities.Ability.FLYING, false)
+	filter.tick_enchantment(DeckFilter.Aura.WORLD, false)
+	filter.artist_on = true
+	filter.tick_artist("Mark Tedin", false)
+	filter.toggle_color(Mtg.ManaColor.W)
+	filter.window_restore(kept)
+	assert_false(filter.creature_list_on)
+	assert_true(filter.creature_type_on("goblin"))
+	assert_false(filter.creature_type_on("elf"), "as ticked when the snapshot was taken")
+	assert_false(filter.ability_on)
+	assert_true(filter.ability_ticked(DeckAbilities.Ability.FLYING))
+	assert_true(filter.enchantment_on(DeckFilter.Aura.WORLD))
+	assert_false(filter.artist_on)
+	assert_true(filter.artist_ticked("Mark Tedin"))
+	assert_false(filter.rarity_ticked(DeckFilter.Rarity.COMMON))
+	assert_false(filter.color_on(Mtg.ManaColor.W), "the strip's colour is not the window's")
+	assert_gt(filter.revision, before, "a restore is a change")
+
+
+func test_a_snapshot_is_a_copy_not_a_view() -> void:
+	var kept := filter.window_snapshot()
+	filter.tick_creature_type("elf", false)
+	assert_false(kept["creature_types"].has("elf"), "ticking after does not reach into the snapshot")
+
+
+func test_reset_puts_every_page_back() -> void:
+	filter.creature_summon = false
+	filter.creature_list_on = true
+	filter.tick_creature_type("elf", false)
+	filter.tick_enchantment(DeckFilter.Aura.LAND, false)
+	filter.ability_on = true
+	filter.ability_native = false
+	filter.tick_ability(DeckAbilities.Ability.TRAMPLE, false)
+	filter.rarity_on = true
+	filter.tick_rarity(DeckFilter.Rarity.RARE, false)
+	filter.artist_on = true
+	filter.tick_artist("Mark Poole", false)
+	assert_true(filter.lists_active())
+	filter.reset()
+	assert_false(filter.lists_active())
+	assert_true(filter.creature_summon)
+	assert_true(filter.creature_type_on("elf"))
+	assert_true(filter.enchantment_on(DeckFilter.Aura.LAND))
+	assert_true(filter.ability_native)
+	assert_true(filter.ability_ticked(DeckAbilities.Ability.TRAMPLE))
+	assert_true(filter.rarity_ticked(DeckFilter.Rarity.RARE))
+	assert_true(filter.artist_ticked("Mark Poole"))
+	assert_false(filter.active())
+
+
+func test_select_all_resets_the_pages_and_clear_all_leaves_them() -> void:
+	# The strip's Select All is the whole pool again, pages included;
+	# Clear All is the first half of picking a few medallions out and does
+	# not reach into the window (which has its own pair per page).
+	filter.rarity_on = true
+	filter.tick_rarity(DeckFilter.Rarity.COMMON, false)
+	filter.clear_all()
+	assert_true(filter.rarity_on)
+	assert_false(filter.rarity_ticked(DeckFilter.Rarity.COMMON))
+	filter.select_all()
+	assert_false(filter.rarity_on)
+	assert_true(filter.rarity_ticked(DeckFilter.Rarity.COMMON))
+	assert_false(filter.lists_active())
+
+
+func test_the_list_pages_count_toward_active() -> void:
+	assert_false(filter.active())
+	filter.artist_on = true
+	assert_true(filter.active(), "an artist filter on is a filter in force")
+	filter.artist_on = false
+	filter.tick_enchantment(DeckFilter.Aura.ENCHANT, false)
+	assert_true(filter.active())
+
+
+func test_the_shipped_sub_filters_are_the_five_longlists() -> void:
+	assert_eq(DeckFilter.SHIPPED, ["@CREATURE", "@ENCHANTMENT", "@ABILITY", "@RARITY", "@ARTIST"])
+
+
+func test_a_ticked_list_moves_the_revision_only_when_it_changes() -> void:
+	var before := filter.revision
+	filter.tick_creature_type("elf", true)
+	assert_eq(filter.revision, before, "already ticked")
+	filter.tick_creature_type("elf", false)
+	assert_eq(filter.revision, before + 1)
+	filter.tick_creature_type("elf", false)
+	assert_eq(filter.revision, before + 1, "already unticked")
+	filter.tick_creature_type("elf", true)
+	assert_eq(filter.revision, before + 2)

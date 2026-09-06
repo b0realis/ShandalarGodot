@@ -222,6 +222,8 @@ const FORMAT_WARNING := "%d card%s break%s the tournament rules (four copies, th
 ## under, so the marks a player asked for are there next time. Off by
 ## default: the 1997 screen lettered nothing on a card.
 const RARITY_SETTING := "deck_rarity_marks"
+## [QoL] Whether the mini cards wear their mana cost — see [member CardArea.show_cost].
+const COST_SETTING := "deck_cost_marks"
 
 const MARGIN := 8.0
 const HEADER_H := 50.0
@@ -315,6 +317,8 @@ var _command_row: HBoxContainer
 var _stats_button: Button
 ## [QoL] The bar's `Rarity` switch — see [member CardArea.show_rarity].
 var _rarity_button: Button
+## [QoL] The bar's `Cost` switch — see [member CardArea.show_cost].
+var _cost_button: Button
 var _left_column: VBoxContainer
 var _stats_label: Label
 ## A flat 1997 choice line, not a Label — it is clickable ([QoL], see
@@ -357,6 +361,7 @@ func _ready() -> void:
 	_build_filters()
 	_build_inventory()
 	_apply_rarity_marks(bool(Settings.get_value(RARITY_SETTING, false)))
+	_apply_cost_marks(bool(Settings.get_value(COST_SETTING, false)))
 	_layout()
 	refresh()
 	_refresh_inventory()
@@ -702,6 +707,17 @@ func _build_command_bar() -> void:
 	_rarity_button.toggled.connect(_set_rarity_marks)
 	_command_row.add_child(_rarity_button)
 
+	# [QoL] COST, its twin — the owner's ask, 2026-09-06: *"mana cost icons
+	# overlay … centered in the center of minicard on the touch of a button
+	# named 'cost'"*. Same kind of switch, same memory.
+	_cost_button = OriginalDialog.button("Cost", Vector2(64, COMMAND_BAR_H))
+	_cost_button.name = "CostButton"
+	_cost_button.toggle_mode = true
+	_cost_button.tooltip_text = "Show every card's mana cost on its face"
+	_cost_button.set_pressed_no_signal(bool(Settings.get_value(COST_SETTING, false)))
+	_cost_button.toggled.connect(_set_cost_marks)
+	_command_row.add_child(_cost_button)
+
 	var menu := OriginalDialog.button("Deck", Vector2(72, COMMAND_BAR_H))
 	menu.tooltip_text = "@DECKSURFACE_STANDALONE — the deck surface's mini-menu"
 	menu.pressed.connect(_open_mini_menu)
@@ -992,6 +1008,7 @@ func _build_filters() -> void:
 	_filter_bar.menu_requested.connect(_open_filter_menu)
 	_filter_bar.expand_toggled.connect(func(on: bool) -> void:
 		_showcase.set_text_expanded(on))
+	_filter_bar.search_field.text_submitted.connect(_add_first_match)
 	add_child(_filter_bar)
 
 
@@ -1064,6 +1081,24 @@ func _add_one(card_name: String) -> bool:
 	_audio.play(DeckAudio.CUE_ADD)
 	refresh()
 	return true
+
+
+## [QoL] ENTER IN THE TYPE-AHEAD ADDS THE FIRST CARD LEFT. Ctrl+F,
+## "bolt", Enter — a card into the deck without the hand leaving the
+## keyboard (the owner's ask, 2026-09-06: *"do 'enter to add'"*). The
+## field keeps its text and the keyboard, so four Enters are four Bolts
+## and Esc hands the keyboard back ([method _on_escape]). What is added
+## is the first card the Inventory SHOWS — the type-ahead narrowed by
+## every other filter on the strip, in the sort the player chose — so
+## what you see first is what you get.
+func _add_first_match(_typed: String) -> void:
+	var first := _inventory.first_entry()
+	if first == null:
+		_say("Nothing in the Inventory matches \"%s\"" % filter.text, true)
+		return
+	if _add_one(first.card_name):
+		_say("Added %s (%d in deck)" % [first.card_name,
+			deck.count_of(first.card_name)])
 
 
 ## The whole playset at once (right-click in the Inventory) — the
@@ -2326,21 +2361,50 @@ func _open_mini_menu() -> void:
 
 ## A filter button's own mini-menu (see [signal FilterBar.menu_requested]),
 ## with the string table's entries and, when the filter compares against a
-## number, the number too.
+## number, the number too. A menu of CHECKS (`relabel` present) stays open
+## while its lines are ticked, the Inventory re-listing under it, and
+## closes on `Done`; the filter window's request is a different window
+## ([method _open_filter_window]).
 func _open_filter_menu(request: Dictionary) -> void:
 	if _dialog_busy():
 		return
+	if bool(request.get("window", false)):
+		_open_filter_window(request)
+		return
 	var lines: Array = request["lines"]
+	var relabel: Callable = request.get("relabel", Callable())
+	var enabled: Callable = request.get("enabled", Callable())
+	var extra := 1 if enabled.is_valid() else 0
 	var dialog := OriginalDialog.create(String(request["title"]),
-		Vector2(400, 130.0 + 26.0 * lines.size()))
+		Vector2(400, 130.0 + 26.0 * (lines.size() + extra)))
+	dialog.set_meta("filter_menu", true)
+	if enabled.is_valid():
+		# The 1997 window's master switch, at the head of its own list —
+		# `@LONGLIST`'s first line, "Enable Filter".
+		var master := _menu_line(_check_text(enabled.call(), "Enable Filter"))
+		master.pressed.connect(func() -> void:
+			request["set_enabled"].call(not enabled.call())
+			master.text = _check_text(enabled.call(), "Enable Filter"))
+		dialog.body().add_child(master)
+		dialog.body().add_child(HSeparator.new())
+	var rows: Array[Button] = []
 	for i in lines.size():
 		var line := _menu_line(String(lines[i]))
+		rows.append(line)
 		line.pressed.connect(func() -> void:
-			dialog.dismiss()
-			request["pick"].call(i))
+			if relabel.is_valid():
+				request["pick"].call(i)
+				var now: Array = relabel.call()
+				for j in mini(now.size(), rows.size()):
+					rows[j].text = String(now[j])
+			else:
+				dialog.dismiss()
+				request["pick"].call(i))
 		dialog.body().add_child(line)
 	var amount: Callable = request.get("amount", Callable())
-	if amount.is_valid():
+	if relabel.is_valid():
+		dialog.add_button("Done").pressed.connect(dialog.dismiss)
+	elif amount.is_valid():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		row.add_child(OriginalDialog.label("Number", 14))
@@ -2359,6 +2423,186 @@ func _open_filter_menu(request: Dictionary) -> void:
 	else:
 		dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
+
+
+## `[x] Elf` / `[  ] Elf` — the checked-line convention this screen's own
+## mini-menu uses.
+static func _check_text(on: bool, text: String) -> String:
+	return ("[x] " if on else "[  ] ") + text
+
+
+## THE FILTER WINDOW — the 1997 LIST WINDOW, `@LONGLIST` (Menus.txt:19-23):
+## "Enable Filter" at the head, a long list of checks, "Select All" /
+## "Clear All", OK and Cancel. Manalink's `dlgproc_FilterSubtype` is the
+## shape: the enable box acts at once, the list is multi-select, OK keeps
+## what is ticked and Cancel puts the old selection back. The original
+## opened one such window per filter; ours is ONE window with the five
+## lists as PAGES down its left edge, each tab wearing the medallion the
+## 1997 strip gave that filter, because the strip has no room for three
+## more medallions and the owner asked for *"the same button that opens
+## a popup filtering window with all possible new filtering options"*.
+## The pages come from [method FilterBar.window_pages]. Three things
+## are ours:
+##
+## - [QoL] A FINDER over the long lists, like the Load dialog's: a hundred
+##   and twenty-three creature types is fifteen pages of the wheel, and
+##   typing "el" leaves Elf, Elemental and Elephant.
+## - THE INVENTORY FOLLOWS EVERY TICK. The original re-listed on OK; here
+##   the filter is edited live so the window answers "what would this
+##   show?" as it is used. Cancel is still honest because it restores the
+##   snapshot the window opened on — all five pages of it.
+## - THE HINT. The creature list is an OR term on top of Summon
+##   (`check_creatures`, deckdll.cpp:6995), so ticking Elf with Summon
+##   still down changes nothing; the Situation Bar says so
+##   ([constant LIST_HINT]) the moment the list goes on.
+const LIST_HINT := "The list adds to Summon — untick Summon to see only the listed types"
+const WINDOW_SIZE := Vector2(720, 560)
+const TAB_SIZE := Vector2(170, 32)
+const LIST_COLUMNS := 2
+const LIST_COLUMNS_FROM := 16
+
+var _window_page := ""
+
+
+func _open_filter_window(request: Dictionary) -> void:
+	var pages: Array = request["pages"]
+	var kept: Dictionary = request["snapshot"].call()
+	var dialog := OriginalDialog.create("Filters", WINDOW_SIZE)
+	dialog.set_meta("filter_window", true)
+
+	var split := HBoxContainer.new()
+	split.add_theme_constant_override("separation", 14)
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dialog.body().add_child(split)
+	var tabs := VBoxContainer.new()
+	tabs.name = "Tabs"
+	tabs.add_theme_constant_override("separation", 4)
+	split.add_child(tabs)
+	split.add_child(VSeparator.new())
+	var sheet := VBoxContainer.new()
+	sheet.name = "Page"
+	sheet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sheet.add_theme_constant_override("separation", 6)
+	split.add_child(sheet)
+
+	# What `Select All` / `Clear All` act on: the page in view.
+	var view := {"rows": [], "page": {}}
+	var wanted := String(request.get("page", ""))
+	if wanted == "":
+		wanted = _window_page if _window_page != "" else String(pages[0]["key"])
+	var tab_buttons: Array[Button] = []
+	for page in pages:
+		var tab := OriginalDialog.button(String(page["title"]), TAB_SIZE)
+		tab.name = String(page["key"]).capitalize() + "Tab"
+		tab.toggle_mode = true
+		tab.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		if page["icon"] != null:
+			tab.icon = page["icon"]
+			tab.add_theme_constant_override("icon_max_width", 22)
+			tab.add_theme_constant_override("h_separation", 8)
+		tab_buttons.append(tab)
+		tab.pressed.connect(func() -> void:
+			for other in tab_buttons:
+				other.set_pressed_no_signal(other == tab)
+			_fill_filter_page(sheet, page, view))
+		tabs.add_child(tab)
+	for i in pages.size():
+		if String(pages[i]["key"]) == wanted:
+			tab_buttons[i].button_pressed = true
+			_fill_filter_page(sheet, pages[i], view)
+
+	# `Select All` / `Clear All` act on the rows in view, so a finder that
+	# has narrowed the list to the Elves makes "all the Elves" one click.
+	for pair in [["Select All", true], ["Clear All", false]]:
+		dialog.add_button(String(pair[0])).pressed.connect(func() -> void:
+			var page: Dictionary = view["page"]
+			for row in view["rows"]:
+				if row["line"].visible and page["ticked"].call(row["key"]) != bool(pair[1]):
+					page["tick"].call(row["key"], bool(pair[1]))
+					row["line"].text = _check_text(bool(pair[1]), String(row["label"])))
+	dialog.add_button("OK").pressed.connect(dialog.dismiss)
+	dialog.add_button("Cancel").pressed.connect(func() -> void:
+		request["restore"].call(kept)
+		dialog.dismiss())
+	_show_dialog(dialog)
+
+
+## One page of the filter window into [param sheet]: the check lines
+## above the list, the finder when the list is long, then the list.
+func _fill_filter_page(sheet: VBoxContainer, page: Dictionary, view: Dictionary) -> void:
+	for old in sheet.get_children():
+		sheet.remove_child(old)
+		old.queue_free()
+	_window_page = String(page["key"])
+	view["page"] = page
+	view["rows"] = []
+
+	for head in page["heads"]:
+		if head.is_empty():
+			sheet.add_child(HSeparator.new())
+			continue
+		var line := _menu_line(_check_text(head["get"].call(), String(head["text"])))
+		line.pressed.connect(func() -> void:
+			var on: bool = not head["get"].call()
+			head["set"].call(on)
+			line.text = _check_text(on, String(head["text"]))
+			if on and String(head["text"]) == "Summon from list" and filter.creature_summon:
+				_say(LIST_HINT))
+		sheet.add_child(line)
+	if not page["heads"].is_empty():
+		sheet.add_child(HSeparator.new())
+
+	var entries: Array = page["entries"]
+	var labels: Array = page["labels"]
+	var ticked: Callable = page["ticked"]
+	var finder: LineEdit = null
+	if bool(page["finder"]):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		finder = OriginalDialog.text_field("find", Vector2(200, 26))
+		finder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(finder)
+		row.add_child(OriginalDialog.label("%d listed" % entries.size(), 13))
+		sheet.add_child(row)
+
+	var scroll := ScrollContainer.new()
+	scroll.name = "List"
+	scroll.custom_minimum_size = Vector2(0, 120)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# The two long lists run in two columns — half the wheel-pages — the
+	# short ones in one, as `@LONGLIST` drew them.
+	var column := GridContainer.new()
+	column.columns = LIST_COLUMNS if entries.size() > LIST_COLUMNS_FROM else 1
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_theme_constant_override("v_separation", 0)
+	column.add_theme_constant_override("h_separation", 12)
+	scroll.add_child(column)
+	sheet.add_child(scroll)
+
+	var rows: Array = []    # {line, key, label, needle}
+	for i in entries.size():
+		var key: Variant = entries[i]
+		var label := String(labels[i])
+		var line := _menu_line(_check_text(ticked.call(key), label))
+		line.custom_minimum_size.x = 200
+		line.pressed.connect(func() -> void:
+			page["tick"].call(key, not ticked.call(key))
+			line.text = _check_text(ticked.call(key), label))
+		column.add_child(line)
+		rows.append({"line": line, "key": key, "label": label, "needle": label.to_lower()})
+	if entries.is_empty():
+		column.add_child(OriginalDialog.label("(nothing to list)", 14))
+	view["rows"] = rows
+
+	if finder != null:
+		finder.text_changed.connect(func(typed: String) -> void:
+			var needle := typed.strip_edges().to_lower()
+			for row in rows:
+				row["line"].visible = needle == "" or String(row["needle"]).contains(needle))
+		# Deferred: the first page is filled before the window is shown.
+		finder.call_deferred("grab_focus")
 
 
 ## A clickable list line for the mini-menu and the Load Deck list. The
@@ -2580,6 +2824,21 @@ func _apply_rarity_marks(on: bool) -> void:
 			(area as CardArea).show_rarity = on
 
 
+## [QoL] The bar's `Cost` switch — the same three surfaces, the same memory.
+func _set_cost_marks(on: bool) -> void:
+	Settings.set_value(COST_SETTING, on)
+	_apply_cost_marks(on)
+	if _cost_button != null and _cost_button.button_pressed != on:
+		_cost_button.set_pressed_no_signal(on)
+	_say("Cost overlays %s" % ("on" if on else "off"))
+
+
+func _apply_cost_marks(on: bool) -> void:
+	for area in [_deck_area, _sideboard_area, _inventory]:
+		if area != null:
+			(area as CardArea).show_cost = on
+
+
 ## `E&xit deck builder`. Asks about EVERY slot with unsaved work, not just
 ## the one on the surface — see [method _unsaved_slots].
 func _exit() -> void:
@@ -2618,15 +2877,10 @@ func _open_deck_info(then := Callable(), reason := "",
 		why.custom_minimum_size.x = 400
 		dialog.body().add_child(why)
 	dialog.body().add_child(OriginalDialog.label("Title", 14))
-	var edit := LineEdit.new()
-	edit.text = suggested if suggested != "" else deck.deck_name
-	edit.custom_minimum_size = Vector2(360, 28)
 	# The era's sunken stone, not a bare Godot field — the same box the
-	# Filter strip's type-ahead wears (FilterBar._search_group).
-	for state in ["normal", "focus"]:
-		edit.add_theme_stylebox_override(state,
-			OriginalDialog.panel_style("panel_dark_stone", 5.0))
-	edit.add_theme_color_override("font_color", OriginalDialog.CHOICE_LIT)
+	# Filter strip's type-ahead wears.
+	var edit := OriginalDialog.text_field()
+	edit.text = suggested if suggested != "" else deck.deck_name
 	dialog.body().add_child(edit)
 	dialog.add_button("OK").pressed.connect(func() -> void:
 		var wanted := edit.text.strip_edges()
@@ -2661,10 +2915,21 @@ func _open_load_dialog() -> void:
 func _show_load_dialog() -> void:
 	if _dialog_busy():
 		return
-	var dialog := OriginalDialog.create("Load Deck", Vector2(560, 440))
-	dialog.body().add_child(OriginalDialog.label("Player deck:", 14))
+	var dialog := OriginalDialog.create("Load Deck", Vector2(560, 470))
+	# [QoL] A FINDER ABOVE THE LIST. Three hundred and eighteen decks and
+	# eight rows in view is forty pages of the wheel; the Inventory's
+	# type-ahead is the answer there and it is the answer here. Type, and
+	# the list keeps only the decks whose title or file name contains
+	# what you typed; Enter loads the first one left.
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	head.add_child(OriginalDialog.label("Player deck:", 14))
+	var finder := OriginalDialog.text_field("find a deck", Vector2(200, 26))
+	finder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(finder)
+	dialog.body().add_child(head)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(500, 250)
+	scroll.custom_minimum_size = Vector2(500, 270)
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(column)
@@ -2677,10 +2942,32 @@ func _show_load_dialog() -> void:
 	# from five files to nearly two hundred with the 2026-09-02 port of the
 	# 1997 deck groups (`docs/decks-1997.md`), and a flat list of that
 	# many was no longer a list a player could find a deck in.
+	#
+	# YOUR OWN DECKS FIRST. ORDER puts `User-created` last, which is right
+	# for a picker that tells the game's story top to bottom and wrong for
+	# this one: the deck a player comes here for is nearly always the one
+	# they saved, and it was the one at the very bottom.
 	var grouped := DeckGroups.grouped(paths)
-	for group in grouped:
-		column.add_child(OriginalDialog.label(group, 14, true))
-		_fill_load_rows(column, dialog, grouped[group])
+	var groups: Array = grouped.keys()
+	if grouped.has(DeckGroups.USER):
+		groups.erase(DeckGroups.USER)
+		groups.push_front(DeckGroups.USER)
+	# heading Label -> its rows, each `{line, key}`; what the finder walks.
+	var sections: Array = []
+	for group in groups:
+		var heading := OriginalDialog.label(group, 14, true)
+		column.add_child(heading)
+		sections.append({"heading": heading,
+			"rows": _fill_load_rows(column, dialog, grouped[group])})
+	finder.text_changed.connect(func(typed: String) -> void:
+		_sift_load_rows(sections, typed))
+	finder.text_submitted.connect(func(_typed: String) -> void:
+		for section in sections:
+			for row in section["rows"]:
+				if row["line"].visible:
+					dialog.dismiss()
+					_load_deck(row["path"])
+					return)
 	# [QoL] THE OTHER HALF OF THE OWNER'S ASK — *"or any other from the
 	# disk for that matter"* (2026-09-04). The list above is the decks this
 	# game knows; this is every other file on the machine, in any of the
@@ -2693,6 +2980,20 @@ func _show_load_dialog() -> void:
 		_open_deck_file_browser("Load Deck", _load_from_disk))
 	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
+	finder.grab_focus()
+
+
+## Keep only the Load Deck rows whose title or file name contains
+## [param typed] (any case), and the headings that still have a row.
+func _sift_load_rows(sections: Array, typed: String) -> void:
+	var needle := typed.strip_edges().to_lower()
+	for section in sections:
+		var any := false
+		for row in section["rows"]:
+			var shown: bool = needle == "" or String(row["key"]).contains(needle)
+			row["line"].visible = shown
+			any = any or shown
+		section["heading"].visible = any
 
 
 ## A DECK FILE FROM ANYWHERE ON THE MACHINE, read the lenient way — the
@@ -2750,17 +3051,28 @@ func _refuse_file(path: String, report: Array) -> void:
 
 
 ## One clickable line per deck of one group of the Load Deck list, plus a
-## `Delete` for each of the player's own.
+## `Delete` for each of the player's own. Returns the rows as
+## `{line, key, path}` — the row control, the lower-cased text the finder
+## matches against, and the file.
 func _fill_load_rows(column: VBoxContainer, dialog: OriginalDialog,
-		paths: Array) -> void:
+		paths: Array) -> Array:
+	var rows: Array = []
 	for path in paths:
 		var row := HBoxContainer.new()
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_theme_constant_override("separation", 6)
+		var list := DeckList.load_file(path, false)
+		# [QoL] COLOUR PIPS before the title — the 1997 symbols, one per
+		# colour the deck plays, in WUBRG order. Titles like "Dracur" and
+		# "Sultan of Sand" do not say what they cast; the pips do, and a
+		# player scanning for the red-green deck reads them faster than
+		# any word.
+		row.add_child(_load_pips(DeckStore.colors_of(list)))
 		# [QoL] The deck's OWN title and size, not just its file name. The
 		# 1997 list showed eight-character DOS names because that was all a
 		# `.dck` had; ours carry a title inside, and a player with a dozen
 		# decks should not have to load one to find out which it is.
-		var line := _menu_line(DeckStore.describe(path))
+		var line := _menu_line(DeckStore.describe_list(list, path))
 		line.pressed.connect(func() -> void:
 			dialog.dismiss()
 			_load_deck(path))
@@ -2781,6 +3093,35 @@ func _fill_load_rows(column: VBoxContainer, dialog: OriginalDialog,
 					_show_load_dialog())
 			row.add_child(drop)
 		column.add_child(row)
+		rows.append({"line": row,
+			"key": ("%s %s" % [list.deck_name, path.get_file()]).to_lower(),
+			"path": path})
+	return rows
+
+
+## The pip strip for one Load Deck row: the 1997 mana symbols for every
+## colour in [param mask], or their letters when the skin is absent. A
+## fixed width either way, so the titles line up down the list.
+const LOAD_PIP := 14
+const LOAD_PIP_LETTER := {Mtg.ManaColor.W: "W", Mtg.ManaColor.U: "U",
+	Mtg.ManaColor.B: "B", Mtg.ManaColor.R: "R", Mtg.ManaColor.G: "G"}
+
+
+func _load_pips(mask: int) -> Control:
+	var cost := ""
+	var letters := ""
+	for color in Mtg.WUBRG:
+		if mask & color:
+			cost += "{%s}" % LOAD_PIP_LETTER[color]
+			letters += LOAD_PIP_LETTER[color]
+	var strip: Control = ManaIcons.cost_row(cost, LOAD_PIP)
+	if strip == null:
+		var text := OriginalDialog.label(letters, 12)
+		text.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+		strip = text
+	strip.custom_minimum_size.x = (LOAD_PIP + 1) * 5
+	strip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return strip
 
 
 func _load_deck(path: String) -> void:

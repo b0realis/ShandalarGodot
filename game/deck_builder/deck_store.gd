@@ -143,8 +143,13 @@ static func deck_paths_in(dir_path: String) -> Array[String]:
 ## A file that will not parse still gets a line, naming itself, so the
 ## list never hides a deck the player can see in the folder.
 static func describe(path: String) -> String:
+	return describe_list(DeckList.load_file(path, false), path)
+
+
+## [method describe] for a list already read — the Load Deck dialog reads
+## every file once and wants the line AND the colours from the same read.
+static func describe_list(list: DeckList, path: String) -> String:
 	var file := path.get_file()
-	var list := DeckList.load_file(path, false)
 	if not list.errors.is_empty():
 		return "%s  (unreadable)" % file
 	var title := list.deck_name if list.deck_name.strip_edges() != "" \
@@ -160,6 +165,20 @@ static func describe(path: String) -> String:
 	var proxies := "" if list.proxies.is_empty() \
 		else "  (%d proxy)" % list.proxies.size()
 	return "%s — %s%s · %s" % [title, size, proxies, file]
+
+
+## The colours a deck's cards are, as an `Mtg.ManaColor` mask — every
+## colour with at least one card in the main deck. [QoL] The Load Deck
+## list wears it as pips, so *"the blue-white one"* can be found among
+## three hundred titles that do not say.
+static func colors_of(list: DeckList) -> int:
+	var mask := 0
+	for card_name in list.cards:
+		# `has_card` first: a proxy is not an error here, only a card
+		# with no colour to count.
+		if CardRegistry.has_card(card_name):
+			mask |= CardRegistry.get_card(card_name).color_mask()
+	return mask & ~Mtg.ManaColor.C
 
 
 ## True for a deck the player may overwrite or delete — one of their own.

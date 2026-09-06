@@ -38,7 +38,9 @@ extends RefCounted
 ## filter."* The audit pass (2026-08-31) added the three the string table
 ## spells out and our card data can answer — `@LAND`, `@ARTIFACT` and the
 ## `@POWER`/`@TOUGHNESS` pair — on top of the `@GOLD` and `@CASTCOST` the
-## building pass shipped. What is still owed is listed at [constant OWED].
+## building pass shipped. The fourth pass (2026-09-06) built the last five
+## — `@CREATURE`, `@ENCHANTMENT`, `@ABILITY`, `@RARITY` and `@ARTIST` —
+## on the `@LONGLIST` window the first two needed; see [constant SHIPPED].
 ##
 ## Pure logic, no Nodes: the screen owns one of these and the tests drive
 ## it directly (tests/ui/test_deck_filter.gd).
@@ -53,6 +55,14 @@ extends RefCounted
 ## `Select All` / `Clear All` (`@LONGLIST`) are [method select_all] and
 ## [method clear_all], recovered by the second audit pass: a strip of
 ## twenty-three toggles needs a way back from them.
+##
+## THE FILTER WINDOW (2026-09-06). The five sub-filters of [constant
+## SHIPPED] are long lists — ninety creature types, fifty painters — and
+## the strip had no room for three more medallions, so they live in ONE
+## window with a page each, opened by the funnel medallion that closes
+## the Other Filters group ([method FilterBar.window_pages]). The state
+## is all here; [method lists_active], [method window_snapshot] and
+## [method window_restore] are what the window and its Cancel need.
 
 ## Sort orders the builder offers. `Sort deck` itself is the DECK's order
 ## and lives on [DeckModel]; this is the INVENTORY's.
@@ -87,24 +97,48 @@ enum Rank { OFF, GE, LE, EQ }
 ## producing mana."*
 enum Land { LAND_AND_MANA, LAND_ONLY, MANA_ONLY }
 
-## Sub-filters the 1997 Deck Builder had that we cannot build yet, kept
-## here so the gap is a record rather than an omission:
+## `@ENCHANTMENT` (`Menus.txt:338`) — the Enchantments button's mini-menu:
+## "&Enchantments / &World / &Land / &Creature / &Artifact / E&nchant",
+## six independent checks, all on to begin with. The first is the plain
+## global enchantment (neither an Aura nor a World); the other five are
+## what an Aura is cast on, read from [member CardData.aura_target] —
+## `check_enchantments`, `deckdll.cpp:7015`.
+enum Aura { ENCHANTMENTS, WORLD, LAND, CREATURE, ARTIFACT, ENCHANT }
+
+const AURA_LABELS := {
+	Aura.ENCHANTMENTS: "Enchantments", Aura.WORLD: "World", Aura.LAND: "Land",
+	Aura.CREATURE: "Creature", Aura.ARTIFACT: "Artifact", Aura.ENCHANT: "Enchant",
+}
+
+## `@RARITY` (`Menus.txt:384`) — "&Common / &Uncommon / &Rare / R&estricted /
+## &Banned", ORed while the filter is enabled (`check_rarity`,
+## `deckdll.cpp:7107`). Restricted and Banned are the two tournament lists
+## ([constant DeckFormat.RESTRICTED], [constant DeckFormat.BANNED]).
+enum Rarity { COMMON, UNCOMMON, RARE, RESTRICTED, BANNED }
+
+const RARITY_LABELS := {
+	Rarity.COMMON: "Common", Rarity.UNCOMMON: "Uncommon", Rarity.RARE: "Rare",
+	Rarity.RESTRICTED: "Restricted", Rarity.BANNED: "Banned",
+}
+
+## The five 1997 sub-filters the first three passes could not build and
+## the fourth (2026-09-06) did, kept as the record the `OWED` list
+## used to be:
 ##
 ## - `@CREATURE` "&Summon / &Token / &Artifact / Summon from &list..." —
-##   the pool has no token cards, and the by-subtype list wants
-##   `@CREATURENAMES`' 210 entries plus a list window.
-## - `@ENCHANTMENT` "&Enchantments / &World / &Land / &Creature / &Artifact
-##   / E&nchant" — the enchant-target split is readable from
-##   [member CardData.aura_target], but the window it needs is the same
-##   list window as above.
-## - `@ABILITY`'s fifteen ("&Native / &Gives / &Flying / F&irst strike /
-##   &Trample / &Regeneration / &Banding / (&Color) Ward / (&Land) Walk /
-##   &Poison / R&ampage / &Web / &Stoning / Free &Action / &Quick draw").
-##   Most map onto [enum Mtg.Keyword] or a CardData field; Native-vs-Gives
-##   needs a static-ability scan we do not have.
-## - `@RARITY` and `@ARTIST` — [CardData] carries neither field, so these
-##   two cannot be built at all until the card pipeline imports them.
-const OWED := ["@CREATURE", "@ENCHANTMENT", "@ABILITY", "@RARITY", "@ARTIST"]
+##   [member creature_summon], [member creature_artifact] and the
+##   [member creature_types] list. TOKEN IS DROPPED: the pool has no token
+##   cards, so the check could never admit anything, and a switch that
+##   does nothing is worse than none (the Interrupts precedent,
+##   [constant TYPE_ORDER]).
+## - `@ENCHANTMENT` — [enum Aura] and [member enchantments].
+## - `@ABILITY` — [member ability_on], the Native/Gives pair and
+##   [member abilities]; the profile is [DeckAbilities]'.
+## - `@RARITY` — [enum Rarity] and [member rarities]; the printed rarity
+##   comes from [method DeckStats.rarity_of].
+## - `@ARTIST` — [member artist_on] and [member artists] over
+##   [member CardData.artist].
+const SHIPPED := ["@CREATURE", "@ENCHANTMENT", "@ABILITY", "@RARITY", "@ARTIST"]
 
 ## The Color Filter buttons, in the mana pool's own order.
 const COLOR_ORDER: Array[int] = [
@@ -280,6 +314,69 @@ var artifact_noncreatures := true:
 		if artifact_noncreatures != value:
 			artifact_noncreatures = value
 			revision += 1
+## `@CREATURE` — "&Summon" admits a creature that is not an artifact,
+## "&Artifact" an artifact creature, and the list, once enabled, admits
+## any creature of a ticked type ON TOP of those two (`check_creatures`,
+## `deckdll.cpp:6995`: the list is an OR term, not a narrowing). So "only
+## the Elves" is Summon and Artifact off, the list on, Elf ticked — which
+## is how the original did it, and the window says so
+## ([constant DeckBuilderScreen.LIST_HINT]) when the list goes on with
+## Summon still down.
+var creature_summon := true:
+	set(value):
+		if creature_summon != value:
+			creature_summon = value
+			revision += 1
+var creature_artifact := true:
+	set(value):
+		if creature_artifact != value:
+			creature_artifact = value
+			revision += 1
+## "Summon from &list..." — is the list in force at all.
+var creature_list_on := false:
+	set(value):
+		if creature_list_on != value:
+			creature_list_on = value
+			revision += 1
+## creature subtype (the registry's own spelling, lower case) -> ticked.
+## Absent means ticked, so a fresh list has every type selected.
+var creature_types: Dictionary = {}
+## `@ENCHANTMENT` — [enum Aura] -> ticked; absent means ticked.
+var enchantments: Dictionary = {}
+## `@ABILITY` — the filter is a whole ("Enable Filter"); Native and Gives
+## are its two scopes and [member abilities] the thirteen it looks for.
+## Ticking everything while the filter is off is the 1997 default.
+var ability_on := false:
+	set(value):
+		if ability_on != value:
+			ability_on = value
+			revision += 1
+var ability_native := true:
+	set(value):
+		if ability_native != value:
+			ability_native = value
+			revision += 1
+var ability_gives := true:
+	set(value):
+		if ability_gives != value:
+			ability_gives = value
+			revision += 1
+## [enum DeckAbilities.Ability] -> ticked; absent means ticked.
+var abilities: Dictionary = {}
+## `@RARITY` — enabled, and [enum Rarity] -> ticked (absent means ticked).
+var rarity_on := false:
+	set(value):
+		if rarity_on != value:
+			rarity_on = value
+			revision += 1
+var rarities: Dictionary = {}
+## `@ARTIST` — enabled, and artist name -> ticked (absent means ticked).
+var artist_on := false:
+	set(value):
+		if artist_on != value:
+			artist_on = value
+			revision += 1
+var artists: Dictionary = {}
 ## Which order [method apply] returns the survivors in.
 var sort_mode: int = Sort.NAME:
 	set(value):
@@ -317,7 +414,26 @@ func reset() -> void:
 	artifact_creatures = true
 	artifact_noncreatures = true
 	search_rules = false
+	_reset_lists()
 	revision += 1
+
+
+## The five 1997 sub-filters back to their opening state: the three
+## enabled flags up, every check ticked.
+func _reset_lists() -> void:
+	creature_summon = true
+	creature_artifact = true
+	creature_list_on = false
+	creature_types.clear()
+	enchantments.clear()
+	ability_on = false
+	ability_native = true
+	ability_gives = true
+	abilities.clear()
+	rarity_on = false
+	rarities.clear()
+	artist_on = false
+	artists.clear()
 
 
 ## The type-ahead's text, as a method for callers that want the intent to
@@ -351,6 +467,7 @@ func select_all() -> void:
 	artifact_creatures = true
 	artifact_noncreatures = true
 	text = ""
+	_reset_lists()
 	revision += 1
 
 
@@ -395,7 +512,44 @@ func active() -> bool:
 	return not gold or _needle != "" or cost_mode != Cost.OFF \
 		or power_mode != Rank.OFF or toughness_mode != Rank.OFF \
 		or land_mode != Land.LAND_AND_MANA \
-		or not artifact_creatures or not artifact_noncreatures
+		or not artifact_creatures or not artifact_noncreatures \
+		or lists_active()
+
+
+## Whether any of the FILTER WINDOW's five pages ([constant SHIPPED]) is
+## narrowing the list — what lights the funnel medallion
+## ([constant FilterBar.FUNNEL_CELL]).
+func lists_active() -> bool:
+	return not creature_summon or not creature_artifact or creature_list_on \
+		or enchantments.values().has(false) \
+		or ability_on or rarity_on or artist_on
+
+
+## The window's whole state, for its Cancel button: every tick in the
+## window edits this filter live (the Inventory re-lists under it), so
+## Cancel has to put back what was there when the window opened.
+func window_snapshot() -> Dictionary:
+	return {
+		"creature_summon": creature_summon,
+		"creature_artifact": creature_artifact,
+		"creature_list_on": creature_list_on,
+		"creature_types": creature_types.duplicate(),
+		"enchantments": enchantments.duplicate(),
+		"ability_on": ability_on,
+		"ability_native": ability_native,
+		"ability_gives": ability_gives,
+		"abilities": abilities.duplicate(),
+		"rarity_on": rarity_on,
+		"rarities": rarities.duplicate(),
+		"artist_on": artist_on,
+		"artists": artists.duplicate(),
+	}
+
+
+func window_restore(kept: Dictionary) -> void:
+	for key in kept:
+		set(key, kept[key].duplicate() if kept[key] is Dictionary else kept[key])
+	revision += 1
 
 
 func toggle_color(color: int) -> void:
@@ -423,6 +577,58 @@ func type_on(type_flag: int) -> bool:
 
 func set_on(code: String) -> bool:
 	return bool(sets.get(code, true))
+
+
+## The five lists share one shape — absent means ticked — so the windows
+## and mini-menus that edit them go through these.
+func creature_type_on(subtype: String) -> bool:
+	return bool(creature_types.get(subtype, true))
+
+
+func enchantment_on(kind: int) -> bool:
+	return bool(enchantments.get(kind, true))
+
+
+func ability_ticked(ability: int) -> bool:
+	return bool(abilities.get(ability, true))
+
+
+func rarity_ticked(rarity: int) -> bool:
+	return bool(rarities.get(rarity, true))
+
+
+func artist_ticked(name: String) -> bool:
+	return bool(artists.get(name, true))
+
+
+func tick_creature_type(subtype: String, on: bool) -> void:
+	_tick(creature_types, subtype, on)
+
+
+func tick_enchantment(kind: int, on: bool) -> void:
+	_tick(enchantments, kind, on)
+
+
+func tick_ability(ability: int, on: bool) -> void:
+	_tick(abilities, ability, on)
+
+
+func tick_rarity(rarity: int, on: bool) -> void:
+	_tick(rarities, rarity, on)
+
+
+func tick_artist(name: String, on: bool) -> void:
+	_tick(artists, name, on)
+
+
+func _tick(list: Dictionary, key: Variant, on: bool) -> void:
+	if on == not list.has(key):
+		return
+	if on:
+		list.erase(key)
+	else:
+		list[key] = false
+	revision += 1
 
 
 ## `X cards are in the list` / `X cards are filtered out` — the 1997 cue
@@ -516,6 +722,7 @@ func matches(d: CardData) -> bool:
 	_sync_masks()
 	return matches_set(d) and matches_text(d) and matches_cost(d) \
 		and matches_power(d) and matches_toughness(d) \
+		and matches_rarity(d) and matches_artist(d) and matches_ability(d) \
 		and matches_color(d) and matches_type(d)
 
 
@@ -555,9 +762,10 @@ func _matches_gold(mask: int) -> bool:
 	return true    # Gold.ALL — "All gold cards"
 
 
-## The Type Filters, with the two sub-menus the manual singles out:
-## *"There's one exception to this. The first two buttons are Land and
-## Artifacts."*
+## The Type Filters: one check per button, ORed — a card is shown if ANY
+## depressed button admits it (`deckdll.cpp:7356-7364`, the seven `&&
+## !check_*` in a row). Instants and Sorceries are the button alone; the
+## other four ask their mini-menu.
 ##
 ## LAND (`@LAND`) is not only a type filter: *"The Land filter adds in all
 ## mana-producing cards (mana sources)"*, so with `Land and Mana` (the
@@ -569,28 +777,72 @@ func _matches_gold(mask: int) -> bool:
 ## and only [method matches_color] exempts an actual land.
 ##
 ## ARTIFACTS (`@ARTIFACT`) splits into two independent toggles, *"All
-## Creatures"* and *"All Non-Creatures"*.
+## Creatures"* and *"All Non-Creatures"*. CREATURES (`@CREATURE`) and
+## ENCHANTMENTS (`@ENCHANTMENT`) are [method _admits_creature] and
+## [method _admits_enchantment].
 func matches_type(d: CardData) -> bool:
 	_sync_masks()
-	# The card's own types that are depressed. Everything but Land and
-	# Artifacts admits the card outright; those two ask their sub-menu.
 	var lit := d.types & _type_on_mask
-	if lit != 0:
-		if lit & ~(Mtg.CardType.LAND | Mtg.CardType.ARTIFACT):
+	if lit & (Mtg.CardType.INSTANT | Mtg.CardType.SORCERY):
+		return true
+	if (lit & Mtg.CardType.LAND) and land_mode != Land.MANA_ONLY:
+		return true
+	if lit & Mtg.CardType.ARTIFACT:
+		if artifact_creatures if d.is_creature() else artifact_noncreatures:
 			return true
-		if (lit & Mtg.CardType.LAND) and land_mode != Land.MANA_ONLY:
-			return true
-		if lit & Mtg.CardType.ARTIFACT:
-			var wanted := artifact_creatures if d.is_creature() \
-				else artifact_noncreatures
-			if wanted:
-				return true
+	if (lit & Mtg.CardType.CREATURE) and _admits_creature(d):
+		return true
+	if (lit & Mtg.CardType.ENCHANTMENT) and _admits_enchantment(d):
+		return true
 	# `Land and Mana` / `Mana only`: the Land button reaches past its own
 	# type to every other card that taps for mana.
 	if (_type_on_mask & Mtg.CardType.LAND) and land_mode != Land.LAND_ONLY \
 			and not d.is_land() and not d.mana_abilities.is_empty():
 		return true
 	return false
+
+
+## `check_creatures` (`deckdll.cpp:6995`): Summon is a creature that is
+## not an artifact (in 1997 the type line read "Summon Elf"; an artifact
+## creature's read "Artifact Creature"), Artifact the other kind, and the
+## list an OR term over the card's creature types.
+func _admits_creature(d: CardData) -> bool:
+	var artifact := (d.types & Mtg.CardType.ARTIFACT) != 0
+	if creature_summon and not artifact:
+		return true
+	if creature_artifact and artifact:
+		return true
+	if creature_list_on:
+		for subtype in d.subtypes:
+			if creature_type_on(subtype):
+				return true
+	return false
+
+
+## `check_enchantments` (`deckdll.cpp:7015`): a World is its own kind, an
+## Aura is the kind of thing it is cast on, and "Enchantments" is what is
+## left — the plain global enchantment.
+func _admits_enchantment(d: CardData) -> bool:
+	return enchantment_on(aura_kind(d))
+
+
+## Which [enum Aura] check answers for [param d]. A Wall is a creature to
+## the 1997 check (`creature_or_wall`), and so is Animate Dead's creature
+## card in a graveyard — it ends up on a creature.
+static func aura_kind(d: CardData) -> int:
+	if d.supertypes & Mtg.Supertype.WORLD:
+		return Aura.WORLD
+	var target := d.aura_target
+	if target == null:
+		return Aura.ENCHANTMENTS
+	var what := target.description.to_lower()
+	if what.contains("artifact"):
+		return Aura.ARTIFACT
+	if what.contains("land"):
+		return Aura.LAND
+	if what.contains("enchantment"):
+		return Aura.ENCHANT
+	return Aura.CREATURE
 
 
 func matches_set(d: CardData) -> bool:
@@ -657,6 +909,73 @@ static func _matches_rank(mode: int, limit: int, d: CardData, value: int) -> boo
 		Rank.EQ:
 			return value == limit
 	return true
+
+
+## `@RARITY` — `check_rarity` (`deckdll.cpp:7107`): off is everything;
+## on is an OR over the ticked kinds. A card can be both a rare and
+## restricted (Sol Ring is uncommon and restricted), so each tick is
+## asked in turn.
+func matches_rarity(d: CardData) -> bool:
+	if not rarity_on:
+		return true
+	var kinds := rarity_kinds(d)
+	for kind in kinds:
+		if rarity_ticked(kind):
+			return true
+	return false
+
+
+## Every [enum Rarity] that describes [param d]: its printed rarity
+## ([method DeckStats.rarity_of]) and the tournament lists it is on.
+static func rarity_kinds(d: CardData) -> Array[int]:
+	var kinds: Array[int] = []
+	match DeckStats.rarity_of(d.card_name):
+		"common":
+			kinds.append(Rarity.COMMON)
+		"uncommon":
+			kinds.append(Rarity.UNCOMMON)
+		"rare":
+			kinds.append(Rarity.RARE)
+	if DeckFormat.RESTRICTED.has(d.card_name):
+		kinds.append(Rarity.RESTRICTED)
+	if DeckFormat.BANNED.has(d.card_name):
+		kinds.append(Rarity.BANNED)
+	return kinds
+
+
+## `@ARTIST` — off is everything; on shows the ticked artists' cards.
+func matches_artist(d: CardData) -> bool:
+	return not artist_on or artist_ticked(d.artist)
+
+
+## `@ABILITY` — `check_abilities` (`deckdll.cpp:7126`): off is everything;
+## on with neither scope is nothing; otherwise a card is shown if any
+## ticked ability is on it natively (Native) or handed out by it (Gives).
+func matches_ability(d: CardData) -> bool:
+	if not ability_on:
+		return true
+	if not ability_native and not ability_gives:
+		return false
+	var wanted := _ability_mask()
+	if ability_native and (DeckAbilities.native(d) & wanted):
+		return true
+	return ability_gives and (DeckAbilities.gives(d) & wanted) != 0
+
+
+## The ticked abilities as a mask over [enum DeckAbilities.Ability],
+## rebuilt with the other masks whenever [member revision] moves.
+var _ability_mask_revision := -1
+var _ability_on_mask := 0
+
+
+func _ability_mask() -> int:
+	if _ability_mask_revision != revision:
+		_ability_mask_revision = revision
+		_ability_on_mask = 0
+		for ability in DeckAbilities.Ability.values():
+			if ability_ticked(ability):
+				_ability_on_mask |= 1 << ability
+	return _ability_on_mask
 
 
 ## The survivors of [param pool], in [member sort_mode] order. A name

@@ -1618,7 +1618,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4516 tests / ~130 000 asserts, ~290 s
+├── tests/                   GUT suite — 4584 tests / ~130 500 asserts, ~290 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2440,11 +2440,18 @@ shandalar/
 │    two doors that are NOT writes (Delete refuses; Export is allowed and
 │    lands where no picker looks) and the ROADMAP one-liner that `Import
 │    deck` must ask before it replaces the surface;
+│    tests/ui/test_deck_abilities.gd — the @ABILITY profile, twenty cards
+│    checked against their printed text by hand: Earthbind loses flying
+│    and gives nothing, Zombie Master gives two and has neither, Gabriel
+│    Angelfire's choice is all four, the whole pool profiles clean;
 │    tests/ui/test_deck_filter.gd — the Filter groups' 1997 contract,
 │    quoted from the manual: every button starts depressed, additive
 │    within a group and exclusive between groups, lands and colourless
 │    cards exempt from colour, plus the mini-menus (@LAND's three modes,
-│    @ARTIFACT's two toggles) and the @POWER/@TOUGHNESS filters;
+│    @ARTIFACT's two toggles), the @POWER/@TOUGHNESS filters and the five
+│    @LONGLIST sub-filters (the creature list as an OR term on top of
+│    Summon, `aura_kind`, Native/Gives, rare-and-restricted, artists,
+│    the window's snapshot/restore, Select All resetting the pages);
 │    tests/ui/test_deck_model.gd — the deck's counts, the 1997 limits and
 │    Shandalar's duplicate table, the Stats matrix, and the round trip
 │    through the .deck format that keeps a saved deck playable — one
@@ -2481,7 +2488,14 @@ shandalar/
 │    the Stats window's own rows: `_format_warning` counting its grammar,
 │    the rarity bars on the Deck page and NOT on Speed, the Matchups
 │    page's `Blunted against`, and no `0  0 mana sources` track for a
-│    colour the deck lacks;
+│    colour the deck lacks; the Filters WINDOW behind the
+│    funnel — the twenty-fourth medallion and its lit state, five tabs
+│    wearing their 1997 medallions, right-click pages, live re-list under
+│    the window, LIST_HINT, Cancel/OK, the finder and the in-view Select
+│    All, one dialog at a time; the **[QoL]** Cost switch (placement,
+│    centred plates, persistence, no overlap with the rarity mark); the
+│    Load dialog's user-first order, finder, Enter and colour pips;
+│    Enter-to-add in the type-ahead; and `MiniCard.bar_title` (CoP: Red);
 │    tests/ui/test_deck_stats.gd — the probability page's arithmetic,
 │    EXACT: the hypergeometric against values computed by hand and
 │    surviving a deck too big for a factorial, the land row a real
@@ -3240,8 +3254,14 @@ shandalar/
 │   │   │                      @CASTCOST, and the @POWER / @TOUGHNESS
 │   │   │                      filters. `revision` counts real changes so
 │   │   │                      the screen re-walks 800 cards only when the
-│   │   │                      filter moved; `OWED` lists the sub-filters
-│   │   │                      our card data cannot answer yet.
+│   │   │                      filter moved. The five @LONGLIST sub-filters
+│   │   │                      (`SHIPPED`: @CREATURE's Summon/Artifact/list
+│   │   │                      as `check_creatures`' OR term, @ENCHANTMENT's
+│   │   │                      six kinds by `aura_kind`, @ABILITY's two
+│   │   │                      scopes over DeckAbilities, @RARITY's five
+│   │   │                      with the era lists, @ARTIST) are the Filters
+│   │   │                      window's pages; `window_snapshot` /
+│   │   │                      `window_restore` are its Cancel.
 │   │   │                      `select_all` / `clear_all` are @LONGLIST's own
 │   │   │                      two, and the way back from twenty-three
 │   │   │                      toggles. `_facts_for` caches each card's
@@ -3256,6 +3276,18 @@ shandalar/
 │   │   │                      2.3 ms); the `sort_key` the old comparator
 │   │   │                      used was left behind unused by that change
 │   │   │                      and has been deleted
+│   │   ├── deck_abilities.gd class DeckAbilities — the @ABILITY profile:
+│   │   │                      which of the 1997 filter's thirteen
+│   │   │                      abilities a card HAS (`native`) and which it
+│   │   │                      GIVES (`gives`), read off the keyword and
+│   │   │                      field data the engine plays from and, for
+│   │   │                      the rest, off the card's own text — "gains"
+│   │   │                      is native, "have"/"gets" to others is gives,
+│   │   │                      "loses" is neither. The 1997 names with the
+│   │   │                      modern ones beside them (Ward = protection,
+│   │   │                      Walk = landwalk, Web = reach, Stoning =
+│   │   │                      deathtouch, Free Action = vigilance, Quick
+│   │   │                      draw = haste); cached per card.
 │   │   ├── filter_bar.gd    class FilterBar — those groups as the 1997
 │   │   │                      screenshot draws them: ONE unlabelled row of
 │   │   │                      sprite_sheet medallions (colours, sets,

@@ -512,6 +512,29 @@ static func field(min_width := 96.0) -> SpinBox:
 	return spin
 
 
+## A TEXT FIELD on the dark stone — the box the Filter strip's type-ahead
+## wears, the Deck Info title field, and the Load Deck list's finder, so a
+## place to type looks the same wherever a dialog offers one. Pale letters
+## on `panel_dark_stone`, the placeholder a shade dimmer than the letters
+## so an empty field still says what it is for.
+static func text_field(placeholder := "",
+		min_size := Vector2(360, 28)) -> LineEdit:
+	var edit := LineEdit.new()
+	edit.placeholder_text = placeholder
+	edit.custom_minimum_size = min_size
+	for state in ["normal", "focus"]:
+		edit.add_theme_stylebox_override(state,
+			panel_style("panel_dark_stone", 5.0))
+	edit.add_theme_color_override("font_color", CHOICE_LIT)
+	edit.add_theme_color_override("caret_color", CHOICE_LIT)
+	edit.add_theme_color_override("font_placeholder_color",
+		Color(0.72, 0.68, 0.60, 0.7))
+	var body := GameSkin.font("font_body")
+	if body != null:
+		edit.add_theme_font_override("font", body)
+	return edit
+
+
 ## A CLICKABLE LIST LINE — the original's dialogs answer a question by
 ## offering lines, not radio buttons (Primal Clay's "Creature type?",
 ## `prompts.txt:670`). Tan when idle, pale under the pointer.

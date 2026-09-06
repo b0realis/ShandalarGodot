@@ -215,6 +215,8 @@ func test_the_filter_bar_offers_every_group() -> void:
 		"five colours and @GOLD")
 	assert_eq(bar.group_buttons("Type Filters").size(),
 		DeckFilter.TYPE_ORDER.size())
+	assert_eq(bar.group_buttons("Other Filters").size(), 4,
+		"cast cost, power, toughness and the funnel")
 
 
 func test_the_filter_strip_is_one_row() -> void:
@@ -1193,7 +1195,9 @@ func test_the_filter_strip_offers_select_all_and_clear_all() -> void:
 		seen.append(request))
 	screen._filter_bar.open_all_menu()
 	assert_eq(seen.size(), 1)
-	assert_eq(seen[0]["lines"], FilterBar.ALL_MENU, "the table's own two words")
+	assert_eq(seen[0]["lines"].slice(0, 2), FilterBar.ALL_MENU, "the table's own two words")
+	assert_eq(seen[0]["lines"].size(), 3, "and the [QoL] card-text switch under them")
+	assert_true(String(seen[0]["lines"][2]).ends_with(FilterBar.RULES_LINE))
 	seen[0]["pick"].call(1)                  # Clear All
 	screen._refresh_inventory()
 	assert_eq(screen._inventory.entry_count(), 0, "every medallion is up")
@@ -1449,7 +1453,7 @@ func test_the_regions_do_not_overlap_at_either_window_height() -> void:
 			screen._filter_bar.position.y,
 			"the left column clears the strip at %d" % height)
 		assert_lte(screen._filter_bar.get_combined_minimum_size().x, 1280.0,
-			"and twenty-three medallions plus the tail still fit 1280")
+			"and twenty-four medallions plus the tail still fit 1280")
 
 
 # ============================================================ THIRD PASS ==
@@ -2586,7 +2590,8 @@ func test_the_rarity_switch_sits_between_stats_and_deck() -> void:
 			stats = i
 	assert_gt(stats, -1, "the Stats button is on the bar")
 	assert_eq(order[stats + 1], "Rarity", "Rarity right after Stats: %s" % str(order))
-	assert_eq(order[stats + 2], "Deck", "and Deck right after Rarity")
+	assert_eq(order[stats + 2], "Cost", "Cost right after Rarity")
+	assert_eq(order[stats + 3], "Deck", "and Deck right after the two switches")
 	assert_true(screen._command_row.get_global_rect().encloses(button.get_global_rect()),
 		"inside the bar, not spilling out of it")
 	assert_lt(screen._stats_button.custom_minimum_size.x, 140.0,
@@ -2717,3 +2722,575 @@ func test_the_matchups_page_names_what_the_deck_is_blunted_against() -> void:
 	labels = _stats_labels()
 	assert_true(labels.has("1 mana source"), "the bars' note, singular")
 	assert_false(labels.has("0 mana sources"), "no empty bar for a colour the deck lacks")
+
+
+# ------------------------------------------ [1997] the Filters window --
+#
+# *"There is no space for new medallions. Maybe lets move all new filters
+# under the same button that opens a popup filtering window with all
+# possible new filtering options"* → *"Or if there is space maybe for one
+# medallion more? That opens the advanced filtering window."*
+# (2026-09-06). There was: the twenty-fourth medallion is the funnel, and
+# the five `@LONGLIST` sub-filters are the pages of the one window it
+# opens.
+
+func _funnel() -> Button:
+	return screen._filter_bar.group_buttons("Other Filters")[3]
+
+
+func _right_click(button: Button) -> void:
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_RIGHT
+	click.pressed = true
+	button.gui_input.emit(click)
+
+
+func _window() -> OriginalDialog:
+	for dialog in screen.open_dialogs():
+		if dialog.has_meta("filter_window"):
+			return dialog
+	return null
+
+
+func _tab(key: String) -> Button:
+	var window := _window()
+	return window.find_child(key + "Tab", true, false) as Button if window != null else null
+
+
+func _pressed_tab() -> String:
+	var tabs: Node = _window().find_child("Tabs", true, false)
+	for tab in tabs.get_children():
+		if tab is Button and (tab as Button).button_pressed:
+			return (tab as Button).text
+	return ""
+
+
+func _page_lines() -> Array:
+	var page: Node = _window().find_child("Page", true, false)
+	var out := []
+	for node in _walk(page):
+		if node is Button and node.visible and (node as Button).text.begins_with("["):
+			out.append((node as Button).text)
+	return out
+
+
+func _page_line(text: String) -> Button:
+	var page: Node = _window().find_child("Page", true, false)
+	for node in _walk(page):
+		if node is Button and (node as Button).text.ends_with(text):
+			return node
+	return null
+
+
+func _finder() -> LineEdit:
+	var page: Node = _window().find_child("Page", true, false)
+	for node in _walk(page):
+		if node is LineEdit:
+			return node
+	return null
+
+
+func test_the_funnel_is_the_twenty_fourth_medallion() -> void:
+	var others: Array = screen._filter_bar.group_buttons("Other Filters")
+	assert_eq(others.size(), 4, "cost, power, toughness and the funnel")
+	var funnel: Button = others[3]
+	assert_eq(funnel.get_meta("icon_cell"), FilterBar.FUNNEL_CELL,
+		"drawn from the X stone, not a sheet cell of its own")
+	assert_true(funnel.has_meta("has_menu"), "its right-click is its own, not Select All")
+	assert_eq(funnel.custom_minimum_size, FilterBar.ICON_SIZE, "one of the row")
+	var strip := screen._filter_bar
+	assert_lt(strip.get_combined_minimum_size().x, 1280.0,
+		"twenty-four still fit the 1997 width")
+	assert_false(funnel.button_pressed, "up while no page is in force")
+
+
+func test_the_funnel_opens_the_one_window_with_its_five_pages() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	var window := _window()
+	assert_not_null(window, "the Filters window")
+	if window == null:
+		return
+	var titled := false
+	for node in _walk(window):
+		if node is Label and (node as Label).text == "Filters":
+			titled = true
+	assert_true(titled, "titled Filters")
+	for key in ["Creatures", "Enchantments", "Abilities", "Rarity", "Artists"]:
+		var tab := _tab(key)
+		assert_not_null(tab, "%s tab" % key)
+		if tab == null:
+			continue
+		assert_eq(tab.text, key)
+		assert_true(tab.toggle_mode)
+		assert_not_null(tab.icon, "%s wears its 1997 medallion" % key)
+	assert_eq(_pressed_tab(), "Creatures", "the first page to begin with")
+	var texts := _button_texts()
+	for label in ["Select All", "Clear All", "OK", "Cancel"]:
+		assert_true(texts.has(label), "@LONGLIST: %s" % label)
+	assert_eq(screen.open_dialogs().size(), 1, "one window, not one per page")
+
+
+func test_the_funnel_goes_down_while_a_page_is_in_force() -> void:
+	screen.filter.ability_on = true
+	screen._filter_bar.refresh()
+	assert_true(_funnel().button_pressed)
+	screen.filter.ability_on = false
+	screen._filter_bar.refresh()
+	assert_false(_funnel().button_pressed)
+
+
+func test_a_right_click_on_creatures_opens_its_own_page() -> void:
+	var creatures: Button = screen._filter_bar.group_buttons("Type Filters")[2]
+	_right_click(creatures)
+	await get_tree().process_frame
+	assert_not_null(_window(), "the window, at the creatures page")
+	assert_eq(_pressed_tab(), "Creatures")
+	var lines := _page_lines()
+	assert_eq(lines[0], "[x] Summon")
+	assert_eq(lines[1], "[x] Artifact")
+	assert_eq(lines[2], "[  ] Summon from list")
+	assert_true(lines.has("[x] Elf"), "the pool's own types, capitalised")
+	assert_true(lines.has("[x] Wall"))
+	assert_gt(lines.size(), 100)
+	_answer("Cancel")
+
+
+func test_a_right_click_on_enchantments_opens_the_aura_page() -> void:
+	var enchantments: Button = screen._filter_bar.group_buttons("Type Filters")[3]
+	_right_click(enchantments)
+	await get_tree().process_frame
+	assert_eq(_pressed_tab(), "Enchantments")
+	var lines := _page_lines()
+	assert_eq(lines.size(), DeckFilter.AURA_LABELS.size(), "the six kinds and nothing above them")
+	assert_eq(lines[0], "[x] Enchantments")
+	assert_eq(lines[1], "[x] World")
+	_answer("Cancel")
+
+
+func test_the_window_remembers_the_page_it_was_left_on() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	_tab("Rarity").pressed.emit()
+	assert_eq(_pressed_tab(), "Rarity")
+	_answer("OK")
+	await get_tree().process_frame
+	assert_null(_window(), "closed")
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	assert_eq(_pressed_tab(), "Rarity", "where it was left")
+	_answer("OK")
+
+
+func test_ticking_a_type_re_lists_the_inventory_under_the_window() -> void:
+	var whole := screen._inventory.entry_count()
+	var creatures: Button = screen._filter_bar.group_buttons("Type Filters")[2]
+	_right_click(creatures)
+	await get_tree().process_frame
+	# Summon up, list on, Elf alone: the 1997 way to "only the Elves".
+	_page_line("Summon").pressed.emit()
+	_page_line("Artifact").pressed.emit()
+	_page_line("Summon from list").pressed.emit()
+	_answer("Clear All")
+	_page_line(" Elf").pressed.emit()
+	await get_tree().process_frame
+	assert_true(screen.filter.creature_list_on)
+	assert_false(screen.filter.creature_summon)
+	assert_true(screen.filter.creature_type_on("elf"))
+	assert_false(screen.filter.creature_type_on("goblin"))
+	assert_eq(_page_line(" Elf").text, "[x] Elf", "the line relabelled")
+	assert_eq(_page_line(" Goblin").text, "[  ] Goblin")
+	assert_lt(screen._inventory.entry_count(), whole, "the Inventory re-listed live")
+	assert_gt(screen._inventory.entry_count(), 0)
+	assert_not_null(_window(), "and the window stayed up")
+	_answer("OK")
+	await get_tree().process_frame
+	assert_true(_funnel().button_pressed, "the funnel is down: a page is in force")
+
+
+func test_the_list_hint_is_said_when_the_list_goes_on_under_summon() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	_page_line("Summon from list").pressed.emit()
+	assert_eq(screen._status_label.text, DeckBuilderScreen.LIST_HINT,
+		"the list adds to Summon — a player who ticks Elf and sees no change is told why")
+	_answer("Cancel")
+
+
+func test_cancel_puts_the_pages_back_and_ok_keeps_them() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	_tab("Rarity").pressed.emit()
+	_page_line("Enable Filter").pressed.emit()
+	_page_line("Common").pressed.emit()
+	assert_true(screen.filter.rarity_on)
+	assert_false(screen.filter.rarity_ticked(DeckFilter.Rarity.COMMON))
+	_answer("Cancel")
+	await get_tree().process_frame
+	assert_false(screen.filter.rarity_on, "Cancel: as it was")
+	assert_true(screen.filter.rarity_ticked(DeckFilter.Rarity.COMMON))
+	assert_false(_funnel().button_pressed)
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	_page_line("Enable Filter").pressed.emit()
+	_page_line("Common").pressed.emit()
+	_answer("OK")
+	await get_tree().process_frame
+	assert_true(screen.filter.rarity_on, "OK: kept")
+	assert_false(screen.filter.rarity_ticked(DeckFilter.Rarity.COMMON))
+	assert_true(_funnel().button_pressed)
+
+
+func test_the_finder_narrows_the_long_pages() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	var finder := _finder()
+	assert_not_null(finder, "the creature page has a finder")
+	if finder == null:
+		return
+	var all_lines := _page_lines().size()
+	finder.text = "el"
+	finder.text_changed.emit("el")
+	var left := _page_lines()
+	assert_lt(left.size(), all_lines)
+	assert_true(left.has("[x] Elf"))
+	assert_true(left.has("[x] Elemental"))
+	assert_false(left.has("[x] Goblin"))
+	assert_true(left.has("[x] Summon"), "the heads are not the finder's to hide")
+	finder.text = ""
+	finder.text_changed.emit("")
+	assert_eq(_page_lines().size(), all_lines, "cleared is everything again")
+	_tab("Enchantments").pressed.emit()
+	assert_null(_finder(), "six lines need no finder")
+	_tab("Artists").pressed.emit()
+	assert_not_null(_finder(), "fifty artists do")
+	_answer("Cancel")
+
+
+func test_select_all_and_clear_all_act_on_the_rows_in_view() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	var finder := _finder()
+	finder.text = "el"
+	finder.text_changed.emit("el")
+	_answer("Clear All")
+	assert_false(screen.filter.creature_type_on("elf"), "an Elf line in view was cleared")
+	assert_false(screen.filter.creature_type_on("elemental"))
+	assert_true(screen.filter.creature_type_on("goblin"), "the hidden Goblin was not")
+	assert_true(screen.filter.creature_summon, "nor the heads")
+	assert_eq(_page_line(" Elf").text, "[  ] Elf")
+	_answer("Select All")
+	assert_true(screen.filter.creature_type_on("elf"))
+	assert_eq(_page_line(" Elf").text, "[x] Elf")
+	_answer("Cancel")
+
+
+func test_the_ability_page_carries_the_two_scopes_and_the_modern_names() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	_tab("Abilities").pressed.emit()
+	var lines := _page_lines()
+	assert_eq(lines[0], "[  ] Enable Filter")
+	assert_eq(lines[1], "[x] Native")
+	assert_eq(lines[2], "[x] Gives")
+	assert_eq(lines[3], "[x] Flying")
+	assert_true(lines.has("[x] Ward  (protection)"), "the 1997 word, and the one players know")
+	assert_true(lines.has("[x] Quick draw  (haste)"))
+	assert_eq(lines.size(), 3 + DeckAbilities.LABELS.size())
+	_page_line("Enable Filter").pressed.emit()
+	assert_true(screen.filter.ability_on)
+	_page_line("Native").pressed.emit()
+	assert_false(screen.filter.ability_native)
+	_answer("Cancel")
+	assert_false(screen.filter.ability_on)
+	assert_true(screen.filter.ability_native)
+
+
+func test_the_artist_page_lists_the_pool_and_letters_its_count() -> void:
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	_tab("Artists").pressed.emit()
+	var lines := _page_lines()
+	assert_eq(lines[0], "[  ] Enable Filter")
+	assert_true(lines.has("[x] Douglas Shuler"))
+	var counted := false
+	for node in _walk(_window()):
+		if node is Label and (node as Label).text == "%d listed" % FilterBar.artists().size():
+			counted = true
+	assert_true(counted, "the finder row says how many")
+	_answer("Cancel")
+
+
+func test_the_window_does_not_open_over_another_dialog() -> void:
+	screen._open_mini_menu()
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	assert_null(_window(), "one dialog at a time")
+
+
+func test_the_check_menus_keep_their_own_done_button() -> void:
+	# The Artifacts medallion's two checks are a mini-menu still, with the
+	# 1997 `Done` — the window is for the five list sub-filters only.
+	var artifacts: Button = screen._filter_bar.group_buttons("Type Filters")[1]
+	_right_click(artifacts)
+	await get_tree().process_frame
+	assert_null(_window(), "not the window")
+	assert_eq(screen.open_dialogs().size(), 1)
+	assert_true(screen.open_dialogs()[0].has_meta("filter_menu"))
+	assert_true(_button_texts().has("Done"))
+	_answer("Done")
+
+
+# --------------------------------------------- [QoL] the Cost switch --
+#
+# *"For the visual type players lets also add mana cost icons overlay (as
+# in the top right of the large card) centerd in the center of minicard
+# (centerd vertical and horizontal) on the touch of a button named
+# 'cost'."* (2026-09-06)
+
+func _cost_button() -> Button:
+	return screen._command_row.get_node_or_null("CostButton") as Button
+
+
+func _remember_cost_setting() -> Array:
+	return [Settings.has_value(DeckBuilderScreen.COST_SETTING),
+		Settings.get_value(DeckBuilderScreen.COST_SETTING, false)]
+
+
+func _restore_cost_setting(kept: Array) -> void:
+	if bool(kept[0]):
+		Settings.set_value(DeckBuilderScreen.COST_SETTING, kept[1])
+	else:
+		Settings.clear_value(DeckBuilderScreen.COST_SETTING)
+
+
+func test_the_cost_switch_sits_beside_rarity() -> void:
+	var button := _cost_button()
+	assert_not_null(button, "a CostButton on the command bar")
+	if button == null:
+		return
+	assert_true(button.toggle_mode, "a switch, not a command")
+	assert_eq(button.text, "Cost")
+	assert_true(screen._command_row.get_global_rect().encloses(button.get_global_rect()),
+		"inside the bar, not spilling out of it")
+
+
+func test_the_cost_switch_plates_every_card_in_the_middle() -> void:
+	var kept := _remember_cost_setting()
+	screen._add_one("Grizzly Bears")
+	screen._add_one("Serra Angel")
+	screen._add_one("Ornithopter")
+	screen._add_one("Plains")
+	var button := _cost_button()
+	button.button_pressed = true
+	await get_tree().process_frame
+	assert_true(screen._deck_area.show_cost)
+	assert_true(screen._inventory.show_cost, "the Inventory wears them too")
+	assert_true(screen._sideboard_area.show_cost, "and the sideboard")
+	var seen := {}
+	for cell in _cells(screen._deck_area):
+		var c: CardArea.Cell = cell
+		if c.data != null:
+			seen[c.card_name] = c
+	for card_name in ["Grizzly Bears", "Serra Angel", "Ornithopter"]:
+		assert_true(seen.has(card_name), "%s is on the surface" % card_name)
+		if not seen.has(card_name):
+			continue
+		var c: CardArea.Cell = seen[card_name]
+		assert_true(c.cost.visible, "%s wears its cost" % card_name)
+		assert_gt(c.cost.get_child_count(), 0, "a row of the 1997 symbols")
+		var centre := c.cost.position + c.cost.size * 0.5
+		assert_almost_eq(centre.x, MiniCard.SIZE.x * 0.5, 1.0, "%s: centred across" % card_name)
+		assert_almost_eq(centre.y, MiniCard.SIZE.y * 0.5, 1.0, "%s: and down" % card_name)
+	assert_true(seen["Ornithopter"].cost.visible, "{0} is a cost")
+	if seen.has("Plains"):
+		assert_false(seen["Plains"].cost.visible, "a land has no cost to show")
+	assert_true(bool(Settings.get_value(DeckBuilderScreen.COST_SETTING, false)),
+		"the switch is remembered")
+	button.button_pressed = false
+	await get_tree().process_frame
+	for cell in _cells(screen._deck_area):
+		assert_false((cell as CardArea.Cell).cost.visible, "off means off")
+	_restore_cost_setting(kept)
+
+
+func test_the_cost_switch_comes_back_the_way_it_was_left() -> void:
+	var kept := _remember_cost_setting()
+	Settings.set_value(DeckBuilderScreen.COST_SETTING, true)
+	var again: DeckBuilderScreen = load(
+		"res://game/deck_builder/deck_builder_screen.tscn").instantiate()
+	add_child_autofree(again)
+	await get_tree().process_frame
+	var button := again._command_row.get_node_or_null("CostButton") as Button
+	assert_true(button.button_pressed, "the switch is down on the next visit")
+	assert_true(again._inventory.show_cost)
+	_restore_cost_setting(kept)
+
+
+func test_the_cost_plate_and_the_rarity_mark_share_a_card() -> void:
+	var kept_cost := _remember_cost_setting()
+	var kept_rarity := _remember_rarity_setting()
+	screen._add_one("Serra Angel")
+	_cost_button().button_pressed = true
+	_rarity_button().button_pressed = true
+	await get_tree().process_frame
+	for cell in _cells(screen._deck_area):
+		var c: CardArea.Cell = cell
+		if c.data == null:
+			continue
+		assert_true(c.cost.visible)
+		assert_true(c.rarity.visible)
+		assert_false(c.cost.get_rect().intersects(c.rarity.get_rect()),
+			"the centre plate and the bottom mark do not overlap")
+	_restore_cost_setting(kept_cost)
+	_restore_rarity_setting(kept_rarity)
+
+
+# ----------------------------------- [QoL] the Load dialog, revisited --
+
+func _load_dialog() -> OriginalDialog:
+	screen._show_load_dialog()
+	return screen.open_dialogs()[-1]
+
+
+func _load_headings(dialog: OriginalDialog) -> Array:
+	var out := []
+	for node in _walk(dialog):
+		if node is Label and node.visible and DeckGroups.ORDER.has((node as Label).text):
+			out.append((node as Label).text)
+	return out
+
+
+func test_the_load_dialog_puts_your_own_decks_first() -> void:
+	var built := DeckModel.new()
+	built.deck_name = "Zz Own Deck Test"
+	built.counts["Mountain"] = 20
+	assert_eq(DeckStore.save(built), "", "a user deck to find")
+	var path := DeckStore.path_for(built.deck_name)
+	var dialog := _load_dialog()
+	var heads := _load_headings(dialog)
+	assert_gt(heads.size(), 1)
+	assert_eq(heads[0], DeckGroups.USER, "User-created leads the list: %s" % str(heads))
+	dialog.dismiss()
+	DeckStore.delete_deck(path)
+
+
+func test_the_load_finder_keeps_the_decks_whose_name_matches() -> void:
+	var dialog := _load_dialog()
+	var finder: LineEdit = null
+	for node in _walk(dialog):
+		if node is LineEdit and (node as LineEdit).placeholder_text == "find a deck":
+			finder = node
+	assert_not_null(finder, "a finder above the list")
+	if finder == null:
+		return
+	var rows_before := 0
+	for node in _walk(dialog):
+		if node is Button and (node as Button).text.contains(" cards · "):
+			rows_before += 1
+	finder.text = "white knights"
+	finder.text_changed.emit("white knights")
+	var shown := []
+	for node in _walk(dialog):
+		if node is Button and (node as Button).text.contains(" cards · ") \
+				and node.is_visible_in_tree():
+			shown.append((node as Button).text)
+	assert_gt(rows_before, shown.size(), "narrowed")
+	assert_gt(shown.size(), 0, "to the deck typed for")
+	for text in shown:
+		assert_true(String(text).to_lower().contains("white knights"), text)
+	var heads := _load_headings(dialog)
+	assert_eq(heads.size(), 1, "only the heading that still has a row: %s" % str(heads))
+	dialog.dismiss()
+
+
+func test_enter_in_the_load_finder_loads_the_first_deck_left() -> void:
+	var dialog := _load_dialog()
+	for node in _walk(dialog):
+		if node is LineEdit and (node as LineEdit).placeholder_text == "find a deck":
+			(node as LineEdit).text = "white knights"
+			(node as LineEdit).text_changed.emit("white knights")
+			(node as LineEdit).text_submitted.emit("white knights")
+	await get_tree().process_frame
+	assert_eq(screen.open_dialogs().size(), 0, "the dialog closed")
+	assert_eq(screen.deck.deck_name, "White Knights")
+
+
+func test_every_load_row_wears_its_colour_pips() -> void:
+	var dialog := _load_dialog()
+	var pip_strips := 0
+	var titled := 0
+	for node in _walk(dialog):
+		if node is HBoxContainer and node.get_child_count() >= 2 \
+				and node.get_child(1) is Button \
+				and (node.get_child(1) as Button).text.contains(" cards · "):
+			titled += 1
+			var strip: Control = node.get_child(0)
+			assert_eq(strip.custom_minimum_size.x, float((DeckBuilderScreen.LOAD_PIP + 1) * 5),
+				"a fixed width, so the titles line up")
+			pip_strips += 1
+	assert_gt(titled, 0)
+	assert_eq(pip_strips, titled, "one pip strip per row")
+	dialog.dismiss()
+
+
+func test_the_pips_are_the_decks_colours_in_wubrg_order() -> void:
+	var list := DeckList.load_file("res://decks/white_knights.deck", true)
+	assert_eq(DeckStore.colors_of(list), Mtg.ManaColor.W, "a mono-white deck")
+	var strip: Control = autofree(screen._load_pips(Mtg.ManaColor.G | Mtg.ManaColor.W))
+	if strip is Label:
+		assert_eq((strip as Label).text, "WG", "letters when the skin is absent, W before G")
+	else:
+		assert_eq(strip.get_child_count(), 2, "two symbols")
+
+
+# ------------------------------------------- [QoL] Enter in the type-ahead --
+
+func test_enter_in_the_type_ahead_adds_the_first_card_shown() -> void:
+	var box := screen._filter_bar.search_field
+	box.text = "lightning bol"
+	screen.filter.set_text("lightning bol")
+	screen._refresh_inventory()
+	await get_tree().process_frame
+	box.text_submitted.emit("lightning bol")
+	assert_eq(screen.deck.count_of("Lightning Bolt"), 1, "the first card left went in")
+	box.text_submitted.emit("lightning bol")
+	assert_eq(screen.deck.count_of("Lightning Bolt"), 2, "four Enters are four Bolts")
+	assert_eq(screen.filter.text, "lightning bol", "the field keeps its text")
+	assert_true(screen._status_label.text.begins_with("Added Lightning Bolt"))
+
+
+func test_enter_with_nothing_shown_says_so() -> void:
+	screen.filter.set_text("zzzz nothing")
+	screen._refresh_inventory()
+	await get_tree().process_frame
+	var before := screen.deck.total()
+	screen._filter_bar.search_field.text_submitted.emit("zzzz nothing")
+	assert_eq(screen.deck.total(), before, "nothing added")
+	assert_true(screen._status_label.text.contains("Nothing in the Inventory matches"))
+
+
+func test_the_first_entry_is_the_first_card_in_the_sort_chosen() -> void:
+	screen.filter.set_text("bolt")
+	screen._refresh_inventory()
+	var first := screen._inventory.first_entry()
+	assert_not_null(first)
+	assert_eq(first.card_name, "Lightning Bolt", "a prefix match leads the list")
+	screen.filter.set_text("zzzz nothing")
+	screen._refresh_inventory()
+	assert_null(screen._inventory.first_entry())
+
+
+# --------------------------------------- [QoL] a title that fits its bar --
+
+func test_a_family_name_that_will_not_fit_keeps_its_own_half() -> void:
+	# *CoP: Red* — the six Circles read identically on the Inventory row
+	# when every one was trimmed to "Circle of Protection: …".
+	var font: Font = ThemeDB.fallback_font
+	assert_eq(MiniCard.bar_title("Plains", font), "Plains", "a short name is left alone")
+	assert_eq(MiniCard.bar_title("Circle of Protection: Red", font, 60.0), "CoP: Red",
+		"the family to its initials, the colour whole")
+	assert_eq(MiniCard.bar_title("Circle of Protection: Red", font, 10000.0),
+		"Circle of Protection: Red", "untouched when it fits")
+	assert_eq(MiniCard.bar_title("Serra Angel", font, 10.0), "Serra Angel",
+		"no family, no initials — the bar's own ellipsis does the rest")

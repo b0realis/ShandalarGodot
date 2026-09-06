@@ -324,6 +324,33 @@ const SIZE := Vector2(132, 106)
 ## names that don't fit are ellipsized, never scaled down.
 const NAME_FONT_SIZE := 11
 
+## Width the title bar has for letters: [constant SIZE].x less the name
+## label's own insets (6 left, 4 right; see [method _build_face]).
+const NAME_ROOM := SIZE.x - 10.0
+
+
+## [QoL] THE NAME AS THE BAR CAN CARRY IT. A long name is trimmed with an
+## ellipsis and the font never shrinks — right for the twenty-odd names
+## in the pool that overrun the bar on their own, and useless for a
+## FAMILY: every Circle of Protection trimmed to *"Circle of Protection:
+## …"* and the 2026-09-06 playtest could not tell the six apart on the
+## Inventory row. A family name ("Circle of Protection: Red") that will
+## not fit keeps its distinguishing half whole and shortens the family to
+## its initials — *CoP: Red*, which is what the era's players wrote
+## anyway. A name that fits, or has no family, is untouched.
+static func bar_title(card_name: String, font: Font,
+		room := NAME_ROOM) -> String:
+	var colon := card_name.find(": ")
+	if colon <= 0 or font == null:
+		return card_name
+	if font.get_string_size(card_name, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			NAME_FONT_SIZE).x <= room:
+		return card_name
+	var initials := ""
+	for word in card_name.left(colon).split(" ", false):
+		initials += word[0]
+	return "%s:%s" % [initials, card_name.substr(colon + 1)]
+
 ## SIZE OF THE POWER/TOUGHNESS PAIR, and it is a MEASURED RATIO rather
 ## than a taste. The owner, 2026-09-03: *"The power and defense numbers on
 ## mini cards should be a bit more prominent (mini card builder) — like
@@ -902,7 +929,7 @@ func refresh() -> void:
 	for child in [_name_label, _name_band, _art_frame, _art_placeholder,
 			_pt_label, _status_label, _stripes]:
 		child.visible = true
-	_name_label.text = d.card_name
+	_name_label.text = bar_title(d.card_name, _name_label.get_theme_font("font"))
 	# NO mana cost on cards in play or in hand — the reference shows the
 	# cost only on the enlarged card in the sidebar. (Three branches that
 	# tore down a `_cost_row` stood here and on the face-down path; nothing

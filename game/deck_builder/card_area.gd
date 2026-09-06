@@ -261,6 +261,23 @@ var show_rarity := false:
 			for cell in _cells:
 				_dress_rarity(cell)
 
+## [QoL] COST OVERLAYS — the owner's ask, 2026-09-06: *"for the visual
+## type players lets also add mana cost icons overlay (as in the top right
+## of the large card) centered in the center of minicard … on the touch
+## of a button named 'cost'"*. The 1997 mini card is art, name bar and
+## P/T — the cost lives on the big card at the left, one card at a time.
+## With the switch down every card on every surface wears its cost on a
+## plate at dead centre, the 1997 mana symbols at the size the Load
+## dialog's pips use, so a curve can be read off a whole page at once. A
+## land wears nothing. Off by default and a setting, like the rarity
+## marks and for the same reason.
+var show_cost := false:
+	set(value):
+		if show_cost != value:
+			show_cost = value
+			for cell in _cells:
+				_dress_cost(cell)
+
 ## The four marks, keyed by the word [method rarity_key] answers: the
 ## letter, the plate, and the ink on it. Common is the printed symbol's
 ## own black; uncommon silver and rare gold are the set symbols' colours
@@ -277,6 +294,9 @@ const RARITY_MARKS := {
 ## The plate under the letter: as tall as the count disc's letters, on
 ## the disc's own baseline.
 const RARITY_PLATE := Vector2(18, 18)
+## The cost plate's symbol size and the room around the row of them.
+const COST_ICON := 16
+const COST_PAD := Vector2(8, 6)
 
 var _entries: Array = []          ## [[CardData, count], ...] in display order
 ## [member _entries] with every copy on its own face, built only while
@@ -704,6 +724,13 @@ func entry_count() -> int:
 	return _visible_entries().size()
 
 
+## The first card on the surface in display order, or null when it shows
+## none — what `Enter` in the Inventory's type-ahead adds.
+func first_entry() -> CardData:
+	var shown := _visible_entries()
+	return shown[0][0] if not shown.is_empty() else null
+
+
 ## The page's live widgets, in display order. For tests and for the
 ## keyboard, which needs the card under the cursor.
 func cell_nodes() -> Array[Cell]:
@@ -911,6 +938,8 @@ class Cell extends Control:
 	## [QoL] The rarity mark — see [member CardArea.show_rarity].
 	var rarity: Control = null
 	var rarity_label: Label = null
+	## [QoL] The cost plate — see [member CardArea.show_cost].
+	var cost: Control = null
 
 	## Whichever face this cell is holding, for the callers that only need
 	## to position or free it.
@@ -991,6 +1020,9 @@ func _make_cell(first: CardData) -> Cell:
 	holder.rarity = mark
 	holder.rarity_label = mark.get_child(0)
 	holder.add_child(mark)
+	var plate := _cost_plate()
+	holder.cost = plate
+	holder.add_child(plate)
 	holder.gui_input.connect(_on_cell_input.bind(holder))
 	holder.mouse_entered.connect(func() -> void:
 		_hovered_slot = _cells.find(holder)
@@ -1073,6 +1105,7 @@ func _bind_cell(cell: Cell, data: CardData, count: int) -> void:
 	cell.source = source_name
 	_bind_badge(cell, count)
 	_dress_rarity(cell)
+	_dress_cost(cell)
 
 
 func _bind_badge(cell: Cell, count: int) -> void:
@@ -1191,6 +1224,52 @@ func _dress_rarity(cell: Cell) -> void:
 	if stone != null:
 		stone.bg_color = mark[1]
 		stone.border_color = Color(mark[2], 0.6)
+
+
+## The cost's plate, at the card's CENTRE: the same dark stone as the
+## other three plates, sized to its row of symbols by [method _dress_cost].
+## Above the name label for the reason [method _tag] gives.
+func _cost_plate() -> Control:
+	var plate := Panel.new()
+	var stone := StyleBoxFlat.new()
+	stone.bg_color = Color(0, 0, 0, 0.72)
+	stone.border_color = OriginalDialog.HIGHLIGHT
+	stone.set_border_width_all(1)
+	stone.set_corner_radius_all(4)
+	plate.add_theme_stylebox_override("panel", stone)
+	plate.z_index = 3
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.visible = false
+	return plate
+
+
+## The cost the card's centre plate shows, or `""` for nothing: a land, a
+## proxy, or the switch up. `{0}` is a cost (Ornithopter wears its zero).
+func cost_key(data: CardData) -> String:
+	if not show_cost or data == null or data.cost == null:
+		return ""
+	return data.cost.text
+
+
+func _dress_cost(cell: Cell) -> void:
+	if cell == null or cell.cost == null:
+		return
+	for old in cell.cost.get_children():
+		old.queue_free()
+	var key := cost_key(cell.data)
+	var row: Control = ManaIcons.cost_row(key, COST_ICON) if key != "" else null
+	if row == null:
+		cell.cost.visible = false
+		return
+	var symbols := row.get_child_count()
+	var inner := Vector2(symbols * (COST_ICON + 1) - 1, COST_ICON)
+	cell.cost.size = inner + COST_PAD
+	cell.cost.position = ((MiniCard.SIZE - cell.cost.size) * 0.5).floor()
+	row.position = (COST_PAD * 0.5).floor()
+	row.size = inner
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.cost.add_child(row)
+	cell.cost.visible = true
 
 
 ## s30's count overlay (`drawCountOverlay`, edit_deck.go:1075): a dark

@@ -43,13 +43,17 @@ extends HBoxContainer
 ## that filter."* Right-clicking Land, Artifacts, Gold, Casting Cost,
 ## Power or Toughness opens that button's own menu, with the string
 ## table's entries verbatim (`@LAND`, `@ARTIFACT`, `@GOLD`, `@CASTCOST`,
-## `@POWER`, `@TOUGHNESS`).
+## `@POWER`, `@TOUGHNESS`). The five sub-filters that are LISTS —
+## `@CREATURE`, `@ENCHANTMENT`, `@ABILITY`, `@RARITY`, `@ARTIST` — are
+## the pages of the FILTER WINDOW (2026-09-06), opened by the funnel
+## medallion that closes the Other Filters group and by a right-click on
+## Creatures or Enchantments; see [method window_pages].
 ##
 ## THE TAIL OF THE ROW IS [QoL] and is described at [method _search_group]:
-## the type-ahead the manual promises, a rules-text switch for it, and the
-## Inventory's sort. All three set fields on the same [DeckFilter], so they
-## belong on the same strip; putting them here also deleted the separate
-## Inventory header strip the restyle had no room for.
+## the type-ahead the manual promises and the Inventory's sort. Both set
+## fields on the same [DeckFilter], so they belong on the same strip;
+## putting them here also deleted the separate Inventory header strip the
+## restyle had no room for.
 ##
 ## Without the skin every toggle falls back to a lettered 1997 button, so
 ## the bar still works and still reads.
@@ -60,7 +64,10 @@ signal changed
 ## puts the dialog up, because it owns the modal layer. The request
 ## carries `title`, `lines` (already marked with the current state),
 ## `pick` (Callable taking the chosen index) and, when the filter compares
-## against a number, `amount` / `set_amount`.
+## against a number, `amount` / `set_amount`. A menu of INDEPENDENT checks
+## also carries `relabel` (Callable -> the lines as they now read), so the
+## screen can keep it open and tick several. The FILTER WINDOW's request
+## is the other shape, [method window_request]'s.
 signal menu_requested(request: Dictionary)
 
 ## The Showcase's `Expand` toggle was flipped. The bar does not own the
@@ -68,7 +75,7 @@ signal menu_requested(request: Dictionary)
 signal expand_toggled(on: bool)
 
 const CELL := 40
-## Displayed medallion size. 34 rather than the art's 40: eighteen
+## Displayed medallion size. 34 rather than the art's 40: twenty-four
 ## medallions, four group gaps and the [QoL] tail have to fit the 1280
 ## window the game opens in (tests/ui/test_deck_builder.gd pins it).
 const ICON_SIZE := Vector2(34, 34)
@@ -155,10 +162,21 @@ const TYPE_CELL := {
 ## place by the screenshot's Other Filters run (X, sword, shield, eye, gem).
 const POWER_CELL := [2, 2]
 const TOUGHNESS_CELL := [2, 7]
-## `@ABILITY`'s eye and `@RARITY`'s gem, recorded so the map is complete
-## even though neither filter can be built yet (DeckFilter.OWED).
+## `@ABILITY`'s eye and `@RARITY`'s gem, both in the screenshot's Other
+## Filters run, and `@ARTIST`'s palette — the one cell left unassigned by
+## the audits, and the sheet's only glyph that is a painter's tool. Not
+## medallions here (the strip has no room for three more — the owner,
+## 2026-09-06) but the tabs of their pages in the filter window.
 const ABILITY_CELL := [0, 0]
 const RARITY_CELL := [2, 3]
+const ARTIST_CELL := [0, 5]
+## [QoL] The funnel that opens the filter window — not on the 1997 sheet,
+## so [method sheet_cell] composes it from the `X` medallion's disc in
+## the sheet's own inks ([method _funnel_cell]). The owner asked for a
+## funnel by name.
+const FUNNEL_CELL := [-1, -1]
+const FUNNEL_CENTRE := Vector2(20, 19)
+const FUNNEL_RADIUS := 13.5
 ## The six sets the original drew a filter medallion for. Unlimited and
 ## the promos have none — as the printed cards have no set symbol either
 ## (game/skin.gd SET_LABELS) — so those two toggles are lettered.
@@ -191,12 +209,19 @@ const RANK_MENU: Array[String] = ["Greater than or equal to",
 ## window's own "Enable Filter / Select All / Clear All". `Enable Filter`
 ## is the window's master switch and this strip has none — the medallions
 ## ARE the filter — but the other two are the answer to a strip of
-## twenty-three toggles with no way back, and they are the ORIGINAL's own
+## twenty-four toggles with no way back, and they are the ORIGINAL's own
 ## words for it. Every medallion that has no sub-menu of its own opens
 ## this one on a right-click, which is the manual's own promise that
 ## *"you can also right-click on some of the filter buttons"* extended to
 ## the rest of them, in the era's language.
+##
+## The third line is [QoL] and says so on the menu: the rules-text switch
+## for the type-ahead ([member DeckFilter.search_rules]). It lived on the
+## eye medallion while that one had no filter of its own; `@ABILITY` has
+## it back, and the switch is a property of the box, so it sits with the
+## box's other commands and on a right-click of the box itself.
 const ALL_MENU: Array[String] = ["Select All", "Clear All"]
+const RULES_LINE := "Search card text too  [QoL]"
 ## [QoL] The Inventory's own order, offered through the same mini-menu
 ## idiom rather than a dropdown, so the row stays 1997 furniture.
 const SORT_MENU: Array[String] = ["Name", "Casting cost", "Card Type",
@@ -259,19 +284,30 @@ func _with_all_menu(button: Button) -> void:
 ## Put the strip's `@LONGLIST` mini-menu up. Public so the screen's own
 ## mini-menu can reach the same two commands.
 func open_all_menu() -> void:
+	var lines: Array[String] = ALL_MENU.duplicate()
+	lines.append(_checked(filter.search_rules, RULES_LINE))
 	menu_requested.emit({
 		"title": "Filters",
-		"lines": ALL_MENU.duplicate(),
+		"lines": lines,
 		"pick": func(index: int) -> void:
-			if index == 0:
-				filter.select_all()
-			else:
-				filter.clear_all()
+			match index:
+				0:
+					filter.select_all()
+				1:
+					filter.clear_all()
+				_:
+					filter.search_rules = not filter.search_rules
 			refresh()
 			changed.emit(),
 		"amount": Callable(),
 		"set_amount": Callable(),
 	})
+
+
+## A menu line that shows its own state, in the convention the screen's
+## own mini-menu uses for its checked commands.
+static func _checked(on: bool, text: String) -> String:
+	return ("[x] " if on else "[  ] ") + text
 
 
 ## The manual's four group names, in its order — the structure that
@@ -360,21 +396,24 @@ func _type_group() -> Control:
 						filter.artifact_creatures = not filter.artifact_creatures
 					else:
 						filter.artifact_noncreatures = not filter.artifact_noncreatures)
+		elif type_flag == Mtg.CardType.CREATURE:
+			# `@CREATURE` — its page of the filter window.
+			_with_window(button, "creatures")
+		elif type_flag == Mtg.CardType.ENCHANTMENT:
+			# `@ENCHANTMENT` — likewise.
+			_with_window(button, "enchantments")
 		_add(strip, GROUPS[2], button)
 	return strip
 
 
 ## `Other Filters` — the original's group of six (Casting Cost, Power,
-## Toughness, Ability, Rarity, Artist). We ship CASTING COST — the one the
-## manual describes as a plain number (*"The casting cost filter treats
-## mana cost as a simple number"*) — plus POWER and TOUGHNESS, which the
-## audit pass added because [CardData] already carries both numbers.
-## Ability, Rarity and Artist are still owed; [constant DeckFilter.OWED]
-## says why each one is.
-##
-## All three are BUTTONS with right-click mini-menus, exactly as the
-## original drew them. Each menu ends with the number the comparison uses,
-## so one gesture sets both halves of "power >= 4".
+## Toughness, Ability, Rarity, Artist). The first three are here as the
+## original drew them, buttons with right-click mini-menus that compare
+## against a number, each menu ending with that number so one gesture
+## sets both halves of "power >= 4". The last three were ENABLE switches
+## whose right-click was a window of checks; they are the pages of ONE
+## filter window here, behind the funnel that closes the group — see
+## [method window_pages].
 func _other_group() -> Control:
 	var strip := _group(GROUPS[3])
 
@@ -416,20 +455,217 @@ func _other_group() -> Control:
 		func() -> int: return filter.toughness_value,
 		func(value: int) -> void: filter.toughness_value = value)
 	_add(strip, GROUPS[3], toughness)
+
+	# [QoL] THE FUNNEL — the door to the filter window, closing the group
+	# where the 1997 strip went on to Ability, Rarity and Artist. It is
+	# lit while any of the window's pages is narrowing the list, and a
+	# click with either button opens the window — the original's three
+	# medallions were enable switches whose right-click was the window,
+	# and this one is the same door for all five pages.
+	var funnel := _toggle("the Filter window",
+		func() -> bool: return filter.lists_active(),
+		func() -> void: menu_requested.emit(window_request("")),
+		true)
+	_dress_icon(funnel, FUNNEL_CELL)
+	_with_window(funnel, "")
+	_add(strip, GROUPS[3], funnel)
 	return strip
 
 
-## [QoL] THE TAIL OF THE STRIP. Three controls that all write to the same
+# ---------------------------------------------------- the filter window --
+
+## THE FILTER WINDOW's five pages, one per 1997 sub-filter of
+## [constant DeckFilter.SHIPPED]: the `@LONGLIST` shape (Menus.txt:19) —
+## "Enable Filter" at the head, a long multi-select list, "Select All" /
+## "Clear All", OK and Cancel — with the five lists side by side as pages
+## of ONE window rather than five windows behind three medallions the
+## strip had no room for. The strip only DESCRIBES the pages; the screen
+## owns the modal layer and draws the window
+## ([method DeckBuilderScreen._open_filter_window]).
+##
+## A page is `key`, `title`, `icon` (the medallion cell the 1997 program
+## gave the same filter, so the page tab wears it), `heads` (the check
+## lines above the list, a `{}` being a rule between them), `entries` /
+## `labels` / `ticked` / `tick` (the list itself — `entries` are the
+## filter's own keys, `labels` what the window writes for them: the
+## registry keeps creature types in lower case, `@CREATURENAMES` wrote
+## them capitalised) and `finder`, on for the two lists long enough to
+## need a type-ahead. Every Callable edits the [DeckFilter] live and
+## re-reads the strip, so the Inventory re-lists under the window as
+## checks are ticked; `snapshot` / `restore` are what Cancel puts back.
+func window_request(page: String) -> Dictionary:
+	return {
+		"window": true,
+		"page": page,
+		"pages": window_pages(),
+		"snapshot": func() -> Dictionary: return filter.window_snapshot(),
+		"restore": func(kept: Dictionary) -> void:
+			filter.window_restore(kept)
+			refresh()
+			changed.emit(),
+	}
+
+
+func window_pages() -> Array[Dictionary]:
+	var ability_labels: Array = []
+	for i in DeckAbilities.LABELS.size():
+		var label: String = DeckAbilities.LABELS[i]
+		if DeckAbilities.MODERN.has(i):
+			label += "  (%s)" % DeckAbilities.MODERN[i]
+		ability_labels.append(label)
+	var creature_labels: Array = []
+	for subtype in creature_types():
+		creature_labels.append(String(subtype).capitalize())
+	return [
+		# `@CREATURE` — Summon and Artifact tick, "Summon from list" is
+		# the list's own enable, and the list is an OR term on top of
+		# the two (DeckFilter.creature_summon).
+		_page("creatures", "Creatures", TYPE_CELL[Mtg.CardType.CREATURE], [
+			_head("Summon",
+				func() -> bool: return filter.creature_summon,
+				func(on: bool) -> void: filter.creature_summon = on),
+			_head("Artifact",
+				func() -> bool: return filter.creature_artifact,
+				func(on: bool) -> void: filter.creature_artifact = on),
+			{},
+			_head("Summon from list",
+				func() -> bool: return filter.creature_list_on,
+				func(on: bool) -> void: filter.creature_list_on = on),
+		], creature_types(), creature_labels,
+			func(key: Variant) -> bool: return filter.creature_type_on(String(key)),
+			func(key: Variant, on: bool) -> void:
+				filter.tick_creature_type(String(key), on),
+			true),
+		# `@ENCHANTMENT` — six independent checks, no master switch.
+		_page("enchantments", "Enchantments", TYPE_CELL[Mtg.CardType.ENCHANTMENT], [],
+			DeckFilter.Aura.values(), _labels(DeckFilter.Aura.values(), DeckFilter.AURA_LABELS),
+			func(key: Variant) -> bool: return filter.enchantment_on(int(key)),
+			func(key: Variant, on: bool) -> void: filter.tick_enchantment(int(key), on)),
+		# `@ABILITY` — Native, Gives, then the thirteen.
+		_page("abilities", "Abilities", ABILITY_CELL, [
+			_head("Enable Filter",
+				func() -> bool: return filter.ability_on,
+				func(on: bool) -> void: filter.ability_on = on),
+			{},
+			_head("Native",
+				func() -> bool: return filter.ability_native,
+				func(on: bool) -> void: filter.ability_native = on),
+			_head("Gives",
+				func() -> bool: return filter.ability_gives,
+				func(on: bool) -> void: filter.ability_gives = on),
+		], range(DeckAbilities.LABELS.size()), ability_labels,
+			func(key: Variant) -> bool: return filter.ability_ticked(int(key)),
+			func(key: Variant, on: bool) -> void: filter.tick_ability(int(key), on)),
+		# `@RARITY` — five checks, ORed.
+		_page("rarity", "Rarity", RARITY_CELL, [
+			_head("Enable Filter",
+				func() -> bool: return filter.rarity_on,
+				func(on: bool) -> void: filter.rarity_on = on),
+		], DeckFilter.Rarity.values(), _labels(DeckFilter.Rarity.values(), DeckFilter.RARITY_LABELS),
+			func(key: Variant) -> bool: return filter.rarity_ticked(int(key)),
+			func(key: Variant, on: bool) -> void: filter.tick_rarity(int(key), on)),
+		# `@ARTIST` — `@ARTISTNAMES` from the pool itself rather than a
+		# fixed table, so a card that arrives with a new painter lists it.
+		_page("artists", "Artists", ARTIST_CELL, [
+			_head("Enable Filter",
+				func() -> bool: return filter.artist_on,
+				func(on: bool) -> void: filter.artist_on = on),
+		], artists(), artists(),
+			func(key: Variant) -> bool: return filter.artist_ticked(String(key)),
+			func(key: Variant, on: bool) -> void: filter.tick_artist(String(key), on),
+			true),
+	]
+
+
+## One check line above a page's list.
+func _head(text: String, get_on: Callable, set_on: Callable) -> Dictionary:
+	return {
+		"text": text,
+		"get": get_on,
+		"set": func(on: bool) -> void:
+			set_on.call(on)
+			refresh()
+			changed.emit(),
+	}
+
+
+func _page(key: String, title: String, icon: Array, heads: Array,
+		entries: Array, labels: Array, ticked: Callable, tick: Callable,
+		finder := false) -> Dictionary:
+	return {
+		"key": key,
+		"title": title,
+		"icon": sheet_cell("filter_icons", icon[0], icon[1]),
+		"heads": heads,
+		"entries": entries,
+		"labels": labels,
+		"ticked": ticked,
+		"tick": func(entry: Variant, on: bool) -> void:
+			tick.call(entry, on)
+			refresh()
+			changed.emit(),
+		"finder": finder,
+	}
+
+
+static func _labels(kinds: Array, table: Dictionary) -> Array:
+	var out: Array = []
+	for kind in kinds:
+		out.append(table[kind])
+	return out
+
+
+## Every creature type the pool knows, sorted, computed once; and every
+## painter.
+static var _creature_types: Array = []
+static var _artists: Array = []
+
+
+static func creature_types() -> Array:
+	if _creature_types.is_empty():
+		var seen := {}
+		for card_name in CardRegistry.all_names():
+			var d := CardRegistry.get_card(card_name)
+			if d.is_creature():
+				for subtype in d.subtypes:
+					seen[subtype] = true
+		_creature_types = seen.keys()
+		_creature_types.sort()
+	return _creature_types
+
+
+static func artists() -> Array:
+	if _artists.is_empty():
+		var seen := {}
+		for card_name in CardRegistry.all_names():
+			var artist := CardRegistry.get_card(card_name).artist
+			if artist != "":
+				seen[artist] = true
+		_artists = seen.keys()
+		_artists.sort()
+	return _artists
+
+
+## A right-click that opens the filter window on [param page].
+func _with_window(button: Button, page: String) -> void:
+	button.set_meta("has_menu", true)
+	button.gui_input.connect(func(event: InputEvent) -> void:
+		if not (event is InputEventMouseButton) or not event.pressed \
+				or event.button_index != MOUSE_BUTTON_RIGHT:
+			return
+		button.accept_event()
+		menu_requested.emit(window_request(page)))
+
+
+## [QoL] THE TAIL OF THE STRIP. Controls that all write to the same
 ## [DeckFilter] the medallions do, so this is where they belong once the
 ## restyle takes the Inventory's own header strip away:
 ##
-## - the ABILITY medallion, reused as the rules-text switch. The original
-##   drew it for `@ABILITY` (fifteen keyword sub-filters we cannot build —
-##   DeckFilter.OWED), and searching rules text is the same question asked
-##   with a keyboard, so the glyph is honest and the row gains nothing new.
 ## - the TYPE-AHEAD box the manual promises: *"you can type in the first
 ##   few letters of the name of any card you want to see"*. Sunken 1997
-##   stone, not a modern field.
+##   stone, not a modern field. Its rules-text switch is on the Filters
+##   menu ([constant RULES_LINE]), which a right-click on the box opens.
+##   (The switch wore the eye medallion until `@ABILITY` took it back.)
 ## - SORT, as a bevelled button with a mini-menu rather than a dropdown —
 ##   the same idiom the filter buttons use for their sub-groups.
 func _search_group() -> Control:
@@ -438,33 +674,27 @@ func _search_group() -> Control:
 	strip.add_theme_constant_override("separation", 6)
 	strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var rules := _toggle("card text",
-		func() -> bool: return filter.search_rules,
-		func() -> void: filter.search_rules = not filter.search_rules,
-		true)
-	_dress_icon(rules, ABILITY_CELL)
-	rules.tooltip_text = "[QoL] the box below also searches card text"
-	strip.add_child(rules)
-
-	search_field = LineEdit.new()
-	search_field.placeholder_text = "type the first letters"
-	search_field.custom_minimum_size = Vector2(110, ICON_SIZE.y)
+	# `panel_dark_stone` ([method OriginalDialog.text_field]), not the
+	# Situation Bar's Telluser: Telluser is red-brown and put a salmon box
+	# in the middle of a blue strip. The placeholder is SHORT on purpose:
+	# the field is the one thing on the strip that gives way when the
+	# twenty-odd medallions ask for their width, and at 1280 the older
+	# "type the first letters" was cut to *"type the first let"*.
+	search_field = OriginalDialog.text_field("type a name",
+		Vector2(100, ICON_SIZE.y))
 	search_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# `panel_dark_stone`, not the Situation Bar's Telluser: Telluser is
-	# red-brown and put a salmon box in the middle of a blue strip.
-	search_field.add_theme_stylebox_override("normal",
-		OriginalDialog.panel_style("panel_dark_stone", 5.0))
-	search_field.add_theme_stylebox_override("focus",
-		OriginalDialog.panel_style("panel_dark_stone", 5.0))
-	search_field.add_theme_color_override("font_color", OriginalDialog.CHOICE_LIT)
-	search_field.add_theme_color_override("font_placeholder_color",
-		Color(0.72, 0.68, 0.60, 0.7))
+	search_field.tooltip_text = "type a name — right-click for the card-text switch"
 	search_field.text_changed.connect(func(value: String) -> void:
 		filter.text = value
 		changed.emit())
+	search_field.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed \
+				and event.button_index == MOUSE_BUTTON_RIGHT:
+			search_field.accept_event()
+			open_all_menu())
 	strip.add_child(search_field)
 
-	sort_button = OriginalDialog.button(_sort_label(), Vector2(104, ICON_SIZE.y))
+	sort_button = OriginalDialog.button(_sort_label(), Vector2(96, ICON_SIZE.y))
 	sort_button.pressed.connect(_open_sort_menu)
 	sort_button.tooltip_text = "[QoL] the order the Inventory is listed in"
 	strip.add_child(sort_button)
@@ -477,7 +707,7 @@ func _search_group() -> Control:
 	# reporting a toggle that was off. Same setting, same behaviour;
 	# this is a second door, not a second feature, and it shows its state
 	# so the Showcase's mode is readable at a glance.
-	expand_button = OriginalDialog.button(_expand_label(), Vector2(104, ICON_SIZE.y))
+	expand_button = OriginalDialog.button(_expand_label(), Vector2(96, ICON_SIZE.y))
 	expand_button.toggle_mode = true
 	expand_button.button_pressed = CardPreview.expand_wanted()
 	expand_button.pressed.connect(_flip_expand)
@@ -613,24 +843,38 @@ func _with_menu(button: Button, title: String, entries: Array[String],
 
 
 ## The `@ARTIFACT` shape: entries that tick independently, so the menu
-## stays open in spirit and every line shows its own state.
+## STAYS OPEN and every line shows its own state — `relabel` is how the
+## screen re-reads the lines after each tick. [param enabled] /
+## [param set_enabled], when given, put the 1997 window's "Enable Filter"
+## at the head of the menu, for the three Other Filters whose medallion
+## is that switch.
 func _with_checks(button: Button, title: String, entries: Array[String],
-		states: Callable, flip: Callable) -> void:
+		states: Callable, flip: Callable,
+		enabled := Callable(), set_enabled := Callable()) -> void:
 	button.set_meta("has_menu", true)
+	var lines_now := func() -> Array[String]:
+		var on: Array = states.call()
+		var lines: Array[String] = []
+		for i in entries.size():
+			lines.append(_checked(bool(on[i]), entries[i]))
+		return lines
 	button.gui_input.connect(func(event: InputEvent) -> void:
 		if not (event is InputEventMouseButton) or not event.pressed \
 				or event.button_index != MOUSE_BUTTON_RIGHT:
 			return
 		button.accept_event()
-		var on: Array = states.call()
-		var lines: Array[String] = []
-		for i in entries.size():
-			lines.append(("[x] " if bool(on[i]) else "[  ] ") + entries[i])
 		menu_requested.emit({
 			"title": title,
-			"lines": lines,
+			"lines": lines_now.call(),
+			"relabel": lines_now,
 			"pick": func(index: int) -> void:
 				flip.call(index)
+				refresh()
+				changed.emit(),
+			"enabled": enabled,
+			"set_enabled": func(on: bool) -> void:
+				if set_enabled.is_valid():
+					set_enabled.call(on)
 				refresh()
 				changed.emit(),
 			"amount": Callable(),
@@ -852,11 +1096,76 @@ static func sheet_cell(key: String, row: int, col: int) -> Texture2D:
 	if _cell_cache.has(id):
 		return _cell_cache[id]
 	var result: Texture2D = null
-	var sheet := GameSkin.texture(key)
-	if sheet != null:
-		var image := sheet.get_image()
-		if image.get_width() >= (col + 1) * CELL and image.get_height() >= (row + 1) * CELL:
-			result = ImageTexture.create_from_image(
-				image.get_region(Rect2i(col * CELL, row * CELL, CELL, CELL)))
+	if row < 0:
+		result = _funnel_cell(key)
+	else:
+		var sheet := GameSkin.texture(key)
+		if sheet != null:
+			var image := sheet.get_image()
+			if image.get_width() >= (col + 1) * CELL and image.get_height() >= (row + 1) * CELL:
+				result = ImageTexture.create_from_image(
+					image.get_region(Rect2i(col * CELL, row * CELL, CELL, CELL)))
 	_cell_cache[id] = result
 	return result
+
+
+## [QoL] THE FUNNEL MEDALLION, which the 1997 sheet does not have: the
+## `X` medallion's disc with its glyph rubbed out and a funnel cut in its
+## place, in the sheet's own two inks — the darkest and the brightest
+## pixel of the disc, which are the X's groove and the light on its lower
+## edge — so it sits in the row as one of them. Built from whichever
+## sheet [param key] names, so the sunken and lit versions come out of
+## the sunken and lit sheets and keep their 2:1 split.
+static func _funnel_cell(key: String) -> Texture2D:
+	var base := sheet_cell(key, COST_CELL[0], COST_CELL[1])
+	if base == null:
+		return null
+	var img: Image = base.get_image().duplicate()
+	img.convert(Image.FORMAT_RGBA8)
+	var ink := Color.WHITE
+	var gleam := Color.BLACK
+	var face: Array[Color] = []
+	for y in CELL:
+		for x in CELL:
+			var r := Vector2(x, y).distance_to(FUNNEL_CENTRE)
+			if r > FUNNEL_RADIUS:
+				continue
+			var c := img.get_pixel(x, y)
+			if c.get_luminance() < ink.get_luminance():
+				ink = c
+			if c.get_luminance() > gleam.get_luminance():
+				gleam = c
+			# The face is the ring the X's arms stop short of.
+			if r > FUNNEL_RADIUS - 2.5:
+				face.append(c)
+	face.sort_custom(func(a: Color, b: Color) -> bool:
+		return a.get_luminance() < b.get_luminance())
+	# Drop the ring's own rim shading at both ends and speckle the disc
+	# with the middle of it, so the stone reads as the same stone.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1997
+	var lo := face.size() / 5
+	var hi := face.size() - lo
+	for y in CELL:
+		for x in CELL:
+			if Vector2(x, y).distance_to(FUNNEL_CENTRE) <= FUNNEL_RADIUS - 1.0:
+				img.set_pixel(x, y, face[rng.randi_range(lo, hi - 1)])
+	# The funnel: a bowl eight rows deep narrowing from seventeen wide to
+	# three, then a stem of the same three down to the disc's lower rim.
+	var cut := {}
+	for y in range(11, 19):
+		var half := 8.0 - (y - 11) * 6.0 / 7.0
+		for x in range(int(FUNNEL_CENTRE.x - half), int(FUNNEL_CENTRE.x + half) + 1):
+			cut[Vector2i(x, y)] = true
+	for y in range(19, 28):
+		for x in range(int(FUNNEL_CENTRE.x) - 1, int(FUNNEL_CENTRE.x) + 2):
+			cut[Vector2i(x, y)] = true
+	# The X's groove catches the light on its lower-right edge; so does
+	# this one.
+	for at in cut:
+		var below: Vector2i = at + Vector2i(1, 1)
+		if not cut.has(below):
+			img.set_pixel(below.x, below.y, gleam)
+	for at in cut:
+		img.set_pixel(at.x, at.y, ink)
+	return ImageTexture.create_from_image(img)

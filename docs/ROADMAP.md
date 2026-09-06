@@ -3660,37 +3660,30 @@ Added by the second audit pass:
 - **`@FULLCARD` ("Expand Text Box")** on the Showcase — still owed, still
   `CardPreview`'s, which belongs to the duel.
 
-Owed, and each one is owed for a stated reason — `DeckFilter.OWED` is the
-live list:
+~~Owed, and each one is owed for a stated reason — `DeckFilter.OWED` is
+the live list~~ **ALL FIVE SHIPPED 2026-09-06** as the pages of the one
+FILTERS WINDOW behind the funnel medallion — see THE 2026-09-06 PASS,
+item 20. `DeckFilter.SHIPPED` is the list now, and what the record used
+to say is kept for what it explains:
 
 - `@CREATURE`'s "Summon from list..." and `@ENCHANTMENT`'s enchant-target
-  split both want the 1997 LIST WINDOW (`@LONGLIST`: "Enable Filter /
-  Select All / Clear All") over `@CREATURENAMES`' 210 subtypes. The data
-  is there (`CardData.subtypes`, `CardData.aura_target`); the widget is
-  not.
-- `@ABILITY`'s fifteen toggles ("&Native / &Gives / &Flying / F&irst
-  strike / &Trample / &Regeneration / &Banding / (&Color) Ward / (&Land)
-  Walk / &Poison / R&ampage / &Web / &Stoning / Free &Action / &Quick
-  draw"). Most map straight onto `Mtg.Keyword` or a CardData field —
-  Web is REACH, Free Action is VIGILANCE, Quick draw is HASTE — but
-  Native-vs-Gives needs a static-ability scan we do not have.
-- `@RARITY` and `@ARTIST` as FILTERS are not built. The data is no
-  longer the obstacle — this note used to say `cards/data/*.json` is
-  fetched without either field, which stopped being true when
-  `tools/fetch_cards.py` kept `rarity` and `artist` for the set packages,
-  and since 2026-09-06 `DeckStats.rarity_of` reads the rarity and the
-  command bar's `Rarity` switch letters every card with it (see THE
-  2026-09-06 PASS). What is missing is the filter widget, and the
-  1997 filter's other two values. **`@RARITY` is more than a
-  filter** — its five values are `&Common &Uncommon &Rare R&estricted
-  &Banned` (`s30/assets/text/Menus.txt:384`), and `@RESTRICTED`
-  (`Program/CueCards.txt:81`) letters *"Restricted cards are in the
-  list"*. So the 1997 game knew which cards were restricted, and that
-  data is the one thing that could settle the list below. It is not in
-  `Rarity.csv` (checked: its `Rarity` column is print rarity and
-  print-run counts, `C`/`U`/`R`/`U1`/`C3`, across all 1001 rows); it is
-  inside `Rarity.dat`, a 943 KB undecoded binary whose Manalink copy
-  differs from the `Program/` one, or inside `Deckdll.dll`.
+  split both wanted the 1997 LIST WINDOW (`@LONGLIST`: "Enable Filter /
+  Select All / Clear All") over `@CREATURENAMES`' subtypes. The window is
+  `DeckBuilderScreen._open_filter_window`; the Creatures page lists the
+  pool's own 123 subtypes with a finder, and the list is the OR term
+  `check_creatures` (`deckdll.cpp:6995`) made it, which the window says
+  out loud (`LIST_HINT`) the moment the list goes on under Summon.
+- `@ABILITY`'s fifteen toggles. Native-vs-Gives needed a static-ability
+  scan we did not have; `game/deck_builder/deck_abilities.gd` is that
+  scan — keywords and fields first, the card's own text for the rest —
+  and `tests/ui/test_deck_abilities.gd` pins twenty cards to it by hand
+  (Earthbind LOSES flying and gives nothing; Zombie Master gives two and
+  has neither; Gabriel Angelfire's choice is all four).
+- `@RARITY` and `@ARTIST` as FILTERS. Rarity's five values are the 1997
+  five — `&Common &Uncommon &Rare R&estricted &Banned` — and Restricted
+  and Banned are `DeckFormat`'s two era-correct lists, so a card can be
+  rare AND restricted (Black Lotus) and answers to either tick. `Rarity.dat`
+  stays undecoded; it was not needed for this.
 
 - `@FULLCARD` ("&Expand Text Box"), the Showcase's own right-click
   toggle: it belongs to `CardPreview`, which is the duel's.
@@ -6259,6 +6252,99 @@ only as a filter (`@RARITY`, `Menus.txt:384`; `defs.h:1307`'s enum) and
 lettered nothing on the card, so the marks are `[QoL]`. Three rows in
 `tests/ui/test_deck_builder.gd` (position, letters and colours per
 tier, persistence) and two in `test_deck_stats.gd` (the tiers).
+
+### The Deck Builder, reviewed — and the Filters window
+
+*"Go through Deck Builder. Do you see any enhancements we could do?"*
+The review found six things; the owner picked the order, and the last
+one grew into the window the record above had owed since the first
+audit pass. All `[QoL]` except the window, which is 1997's.
+
+**15. The Load dialog buried your own decks.** `DeckGroups.ORDER` puts
+`User-created` last, which tells the game's story top to bottom on the
+battle setup screen and was wrong here: the deck a player comes to Load
+for is nearly always the one they saved, and it sat under three hundred
+shipped ones. Your own decks head the list now; a FINDER above it keeps
+the rows whose title or file name contains what you typed (Enter loads
+the first one left); and every row wears the deck's COLOUR PIPS — the
+1997 mana symbols, one per colour the deck casts, WUBRG order, a fixed
+width so the titles line up (`DeckStore.colors_of`, `_load_pips`).
+"Dracur" and "Sultan of Sand" do not say what they play; the pips do.
+
+**16. The type-ahead's placeholder was clipped** — *"type the first
+letters"* in a 110px box read *"type the first le"*. The box is
+`OriginalDialog.text_field` now, the one text field every dialog uses
+(the Deck Info title, the Load finder, the window's finders), and its
+placeholder is *"type a name"*, short on purpose.
+
+**17. Seven Circles of Protection read identically** on the Inventory
+row — every one trimmed to *"Circle of Protection: …"* by the bar's
+ellipsis. `MiniCard.bar_title` keeps a family name's distinguishing half
+whole and shortens the family to its initials — *CoP: Red* — which is
+what the era's players wrote anyway; a name that fits, or has no colon,
+is untouched.
+
+**18. Enter to add.** *"And do 'enter to add'!"* Ctrl+F, "bolt", Enter:
+the first card the Inventory shows goes into the deck
+(`CardArea.first_entry`, `_add_first_match`), the field keeps its text
+and the keyboard, so four Enters are four Bolts and Esc hands the
+keyboard back; nothing left in the list says so on the status line.
+
+**19. The Cost switch.** *"For the visual type players lets also add
+mana cost icons overlay (as in the top right of the large card) centerd
+in the center of minicard … on the touch of a button named 'cost'."*
+`Cost` sits beside `Rarity` on the command bar, a toggle that stays down
+and is remembered (`deck_cost_marks`); every card on all three surfaces
+wears its cost as a row of the 1997 symbols on a dark plate at its
+exact centre (`CardArea._dress_cost`) — `{0}` included, Ornithopter
+wears its zero — and a land wears nothing. The centre plate and the
+bottom-centre rarity mark never overlap; a test says so.
+
+**20. The Filters window, and the twenty-fourth medallion.** Building
+the five list sub-filters put three more medallions on the strip — the
+1997 eye (`@ABILITY`), gem (`@RARITY`) and palette (`@ARTIST`) — and the
+owner's answer was the design: *"There is no space for new medallions.
+Maybe lets move all new filters under the same button that opens a popup
+filtering window with all possible new filtering options"* → *"Or if
+there is space maybe for one medallion more? That opens the advanced
+filtering window."* There was room for one. The FUNNEL closes the Other
+Filters group as the strip's twenty-fourth medallion (34px cells; the
+row measures 1208 at 1280), lit while any page is narrowing the list,
+and either click opens ONE window — `Filters`, 720x560 — with five
+stone tabs down its left, each wearing its 1997 medallion: **Creatures**
+(Summon / Artifact / Summon from list, the 123 subtypes), **Enchantments**
+(the six `@ENCHANTMENT` kinds by what the aura enchants —
+`DeckFilter.aura_kind`), **Abilities** (Enable / Native / Gives, the
+thirteen with their modern names in brackets: *Ward (protection)*,
+*Quick draw (haste)*), **Rarity** (the five, Restricted and Banned from
+the era lists) and **Artists** (the pool's fifty). The long pages run in
+two columns behind a finder that says how many are listed; `Select All`
+/ `Clear All` act on the rows IN VIEW, so a finder narrowed to "el" makes
+"all the Elves and Elementals" one click; the Inventory re-lists live
+under the window; `OK` keeps, `Cancel` restores the snapshot
+(`DeckFilter.window_snapshot` / `window_restore`). A right-click on the
+Creatures or Enchantments medallion opens its own page, as the 1997
+right-click did; the window reopens on the page it was left on.
+
+The funnel is not on the 1997 sheet — no stone there is a funnel — so
+`FilterBar._funnel_cell` composes it at runtime from the `X` medallion's
+own disc: the ring's stone speckled across the face, the funnel cut in
+the sheet's darkest ink with the sheet's own gleam under its edge.
+Checked by looking; it reads as one of the row. (The owner's suggested
+logo was a stock-photo thumbnail with a watermark and was not used.)
+
+Pinned: `tests/ui/test_deck_abilities.gd` (16), the five sub-filters'
+semantics in `test_deck_filter.gd` (26 new: Summon/Artifact/list as an
+OR term, `aura_kind`, the two ability scopes, rare-and-restricted,
+artists, `lists_active`, snapshot/restore, reset, that Select All resets
+the pages and Clear All leaves them), and the screen in
+`test_deck_builder.gd` (28 new: the funnel as the twenty-fourth
+medallion and its lit state, the window's five tabs and their icons,
+right-click pages, live re-list, `LIST_HINT`, Cancel/OK, the finder and
+the in-view Select All, one dialog at a time, the check menus' own
+`Done`; the Cost switch's placement, plates, persistence and
+non-overlap; Load's user-first order, finder, Enter and pips; Enter to
+add; `bar_title`).
 
 ### The gate, and the bug hunt's wide net
 
