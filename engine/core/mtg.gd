@@ -178,6 +178,21 @@ enum EventType {
 	                      ## observable difference is that MtgGame's
 	                      ## event_occurred signal does not carry unheard
 	                      ## mana activations.
+	CARD_DISCARDED,       ## data: {player, instance, by_effect, to_library}
+	                      ## — `player` discarded `instance` from their
+	                      ## hand: at cleanup (`by_effect` false, CR 514.1)
+	                      ## or because a spell or ability said so. One
+	                      ## event per card, AFTER the card has moved;
+	                      ## `to_library` is Library of Leng's "instead"
+	                      ## (the card is on top of its library and it is
+	                      ## still a discard). Dispatched for the table —
+	                      ## `Discard.wav` is played INSIDE the original's
+	                      ## discard itself, once per card
+	                      ## (`functions.c:14861`), and until 2026-09-06
+	                      ## only the human's own cleanup discard sounded.
+	                      ## No rules code reads it: a card's own
+	                      ## on-discard hook is [member CardData.on_discarded],
+	                      ## which runs after the whole instruction.
 }
 
 ## What kind of object a StackItem is.

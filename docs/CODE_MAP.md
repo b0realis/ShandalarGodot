@@ -335,7 +335,13 @@ shandalar/
 │   │   │                      because zero is legal and the AI's planner
 │   │   │                      skips fixed counter costs) — the only
 │   │   │                      places a mana ability's question can hold
-│   │   │                      the duel open (§1.3, the COST hold)
+│   │   │                      the duel open (§1.3, the COST hold).
+│   │   │                      .hurting(n) / pain (2026-09-06): the life
+│   │   │                      a tap costs (City of Brass, Elves of Deep
+│   │   │                      Shadow) — a fact about the source the card
+│   │   │                      already charges itself, declared so the
+│   │   │                      planner can sort it last and never tap the
+│   │   │                      last one at 1 life (AiPlayer._pain_excluded)
 │   │   ├── activated_ability.gd class ActivatedAbility — mana/tap cost +
 │   │   │                      effects + text; uses the stack; sickness rules
 │   │   │                      enforced by MtgGame. Riders:
@@ -999,6 +1005,19 @@ shandalar/
 │   │                      Magician, on for Sorcerer and Wizard; the
 │   │                      capability a control deck is made of
 │   │                      (docs/ROADMAP.md, "the control sweep").
+│   │                      pays_sacrifices (2026-09-06) is THE TRADE:
+│   │                      whether the profile activates an ability whose
+│   │                      cost is a permanent of its own (Strip Mine,
+│   │                      Scavenger Folk), priced by the body that goes
+│   │                      (AiPlayer._sacrifice_price) against what it
+│   │                      buys; Sorcerer and Wizard. minds_pain (same
+│   │                      day) is whether a City of Brass is not a
+│   │                      Plains — on for EVERY profile, a knob only so
+│   │                      the Deck Lab can run the null.
+│   │                      apply_overrides("knob=value,...") is what the
+│   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
+│   │                      out — the candidate against its own null with
+│   │                      no scratch patch on the tree.
 │   │   ├── ai_match_memory.gd
 │   │   │                    class AiMatchMemory — WHAT ONE SEAT SAW, and
 │   │   │                      the only thing AiSideboard may read. Watches
@@ -1527,7 +1546,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 3671 tests / ~84 200 asserts, ~135 s
+├── tests/                   GUT suite — 4469 tests / ~129 000 asserts, ~290 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -1692,6 +1711,13 @@ shandalar/
 │    must-attack creature and a must-be-blocked attacker are orange, a
 │    declared attacker is green, and the two targeting cue states are
 │    pushed down to the small card;
+│    tests/ui/test_skin.gd — the skin loader in BOTH states of the world
+│    (imported and not), and since 2026-09-06 THE ART CACHE'S BOUND:
+│    never more than ART_CACHE_CAP pictures, the oldest the one that
+│    goes, a picture asked for again young again (LRU, not FIFO), a
+│    missing picture costing no slot, and an evicted texture still on
+│    its card — driven with stand-in textures, so it holds in a checkout
+│    with no art;
 │    tests/ui/test_card_dimensions.gd — ONE CARD SIZE, EVERYWHERE, the
 │    owner's standing rule, MEASURED on real widgets after a real layout
 │    pass: the whole table (a lone Crusade beside a five-card pile, an
@@ -2371,7 +2397,9 @@ shandalar/
 │    Import (file, pasted list, sniffed .dck, refusals), `Add proxy card`,
 │    that the deck area draws a ProxyFace beside a MiniCard, that the
 │    Showcase enlarges one — and the SAVE-TIME LEGALITY WARNING, whose
-│    first test is that the file is written anyway;
+│    first test is that the file is written anyway; and the owner's
+│    2026-09-06 photo: the quilt starting at the deck area's own edge and
+│    the sideboard's field sharing that area's edges;
 │    tests/ui/test_help_screen.gd — the paged reference: every page
 │    renders and shows its title, titles are unique, every QUOTE cites a
 │    source, paging cannot run off either end by button or key, the Help
@@ -2524,7 +2552,46 @@ shandalar/
 │    cast at my land attaches (CR 303.4a), stings the LAND's controller
 │    and not the aura's, and goes to its OWNER's graveyard when it or its
 │    host dies (CR 400.3 / 704.5m) — swept over every aura in the pool
-│    that can legally cross the table
+│    that can legally cross the table;
+│    tests/unit/test_combat_auras_2026_09_06.gd — the COMBAT half of the
+│    owner's report ("a 1/1 blocker kills a bigger creature"): a body's
+│    LIVE toughness — printed plus every aura, pump and counter — is what
+│    its damage is measured against, in a single block, a gang block,
+│    first strike, the 1997 prevention window with a human on both seats,
+│    and the human dividing their own damage;
+│    tests/unit/test_untamed_wilds_2026_09_06.gd — the engine side of the
+│    tutor-before-the-cast: the pick parked on the HumanAgent, spent once
+│    at resolution, the found land on the battlefield; and
+│    tests/ui/test_tutor_payment_2026_09_06.gd — the same cast through the
+│    LIVE screen, paid one land at a time and by the double-click's
+│    auto-tap, asking once (DuelScreen._submit_pending's re-entrancy latch,
+│    the 2026-09-06 playtest bug);
+│    tests/ai/test_ai_sacrifice_2026_09_06.gd — THE TRADE
+│    (AiProfile.pays_sacrifices): Strip Mine taking their only land and
+│    the dual over the basic, held when the hand needs the mana, not
+│    traded for a fourth Plains; the bottom difficulties never stripping;
+│    Goblin Digging Team demolishing a Wall worth more than itself; the
+│    combat pump still blind to a body-priced pump (Fallen Angel); Stone
+│    Rain picking the dual off the same _victim_value; land_value reading
+│    scarcity, duals, only-sources and abilities; and the Deck Lab's
+│    knob overrides read by type and refused by name;
+│    tests/ai/test_ai_pain_2026_09_06.gd — THE LIFE A TAP COSTS
+│    (ManaAbility.pain, AiProfile.minds_pain): the painless source tapped
+│    first (a dual before Elves of Deep Shadow), the last City never
+│    tapped at 1 life — by the Apprentice too — the mana sink pricing the
+│    life a City costs yet paying a life for a card, firing from painless
+│    mana, the main phase still paying a life for a spell, and the null
+│    profile tapping the City for the sink as before;
+│    tests/unit/test_card_discarded_event_2026_09_06.gd — CARD_DISCARDED
+│    once per card, after the move, from discard_cards / discard_random /
+│    discard_hand and the cleanup discard (by_effect false), an empty hand
+│    announcing nothing;
+│    tests/ui/test_duel_log_2026_09_06.gd — THE DUEL LOG (L): opens with
+│    the log so far, follows it line by line, the strip button and the ×
+│    and the key are one switch, one window however often asked, not a
+│    modal (Q still pauses under it, Esc's ladder untouched), a bracket
+│    is text, on screen right of the sidebar, Save writes the whole log
+│    and says where, the glyph is a page of lines
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title: 6 stone buttons center-right over the
@@ -2783,7 +2850,15 @@ shandalar/
 │   │                          (TEXTURE_FILTER_LINEAR_WITH_MIPMAPS), so
 │   │                          every other user still draws mip 0. The
 │   │                          1997 SHEETS deliberately get none — they
-│   │                          are sliced by pixel and drawn near native
+│   │                          are sliced by pixel and drawn near native.
+│   │                          The art is BOUNDED since 2026-09-06:
+│   │                          _art_cache, least-recently-used, capped at
+│   │                          ART_CACHE_CAP (256) pictures, the missing
+│   │                          ones remembered apart in _art_missing — a
+│   │                          600-art browse holds 267 MB against 608
+│   │                          unbounded; the sheets stay in
+│   │                          _texture_cache, unbounded, because they
+│   │                          are few and wanted for the whole run
 │   ├── help/                THE HELP SCREEN — the main menu's Help button
 │   │   │                      (directly above Exit). The 1997 game had a
 │   │   │                      printed manual and a context-sensitive
@@ -3686,7 +3761,25 @@ shandalar/
 │       │                      opening deal one Draw.wav, while different
 │       │                      cues layer. Moved out of duel_screen.gd on
 │       │                      2026-09-02 with three timing corrections —
-│       │                      see docs/duel-todo.md §3.8
+│       │                      see docs/duel-todo.md §3.8. Discard.wav
+│       │                      (functions.c:14861, INSIDE the discard,
+│       │                      once per card) rides the engine's
+│       │                      CARD_DISCARDED event since 2026-09-06, so
+│       │                      a Hymn, a Specter's hit and the AI's own
+│       │                      cleanup sound where only the human's did
+│       ├── duel_log.gd      class DuelLog — THE DUEL LOG (L), [QoL]
+│       │                      2026-09-06: MtgGame.log_lines in a window
+│       │                      on the CombatWindow's pattern — knot
+│       │                      ground, Situation-Bar title, drag by the
+│       │                      bar, clamped on screen, position remembered
+│       │                      (Settings duel_log_pos) — the text inset on
+│       │                      the library picker's dark stone, turn
+│       │                      headers lit, bbcode OFF so a bracket is
+│       │                      text. NOT a modal: the duel runs on under
+│       │                      it. Copy (clipboard) and Save
+│       │                      (user://duel_log_<ticks>.txt), the notice
+│       │                      on the bar. DuelLog.button() is the reserve
+│       │                      strip's page-of-lines switch beside Expand
 │       ├── spell_flight.gd  class SpellFlight — THE SPELL-CAST
 │       │                      ANIMATION (duel-todo §2.4): a ghost
 │       │                      MiniCard tweens from the hand slot to the

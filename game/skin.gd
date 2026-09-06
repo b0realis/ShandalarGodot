@@ -44,6 +44,31 @@ static func search_dirs() -> Array:
 static var _texture_cache: Dictionary = {}
 static var _font_cache: Dictionary = {}
 
+## HOW MANY CARD ARTS [method card_art] KEEPS — the bound the card-state
+## catalogue left open (docs/card-states.md §5.6, docs/ROADMAP.md): the
+## art cache never evicted, so a full browse of the Deck Builder's grid
+## held every art it had ever shown — 909 MB across the pool's 897 crops
+## once they carried mipmaps — on a game whose first-class targets
+## include a Raspberry Pi. A duel needs at most its two decks' distinct
+## cards (about 60), a Deck Builder page columns x rows (about 40 at
+## 1280x800, more on a wide window), so 256 is several screens' worth,
+## kept LEAST-RECENTLY-USED: at ~1 MB a crop with its mipmaps, about 260
+## MB at the very worst, and a browse that keeps scrolling costs disk
+## reads for the pictures that fell off the end rather than memory that
+## never comes back. An evicted texture that is still on a card stays
+## alive on that card (the cache holds one reference, the TextureRect
+## another); it is only the cache's claim that goes.
+const ART_CACHE_CAP := 256
+
+## [method card_art]'s pictures, youngest LAST — a Dictionary keeps
+## insertion order, so the first key is the one to drop. Separate from
+## [member _texture_cache], whose sheets are few, sliced by pixel
+## coordinates and wanted for the whole run.
+static var _art_cache: Dictionary = {}
+## The names [method card_art] looked for and found no file — kept apart
+## so a missing picture costs one search and no cache slot.
+static var _art_missing: Dictionary = {}
+
 
 ## Texture for a manifest key ("card_frame_red", "duel_pattern_green"...)
 ## or null when the skin doesn't provide it.
@@ -127,8 +152,15 @@ static func metadata(key: String) -> Dictionary:
 ## null (a graceful placeholder) otherwise.
 static func card_art(card_name: String) -> Texture2D:
 	var key := "cardart/" + _snake(card_name)
-	if _texture_cache.has(key):
-		return _texture_cache[key]
+	if _art_cache.has(key):
+		# Asked for again: re-insert so it is the youngest, and the browse's
+		# leftmost column is not what falls off the end.
+		var hit: Texture2D = _art_cache[key]
+		_art_cache.erase(key)
+		_art_cache[key] = hit
+		return hit
+	if _art_missing.has(key):
+		return null
 	var result: Texture2D = null
 	var path := ""
 	# tools/fetch_card_art.py downloads Scryfall art_crop JPGs (the s30
@@ -163,7 +195,14 @@ static func card_art(card_name: String) -> Texture2D:
 			# their native size.
 			img.generate_mipmaps()
 			result = ImageTexture.create_from_image(img)
-	_texture_cache[key] = result
+	if result == null:
+		_art_missing[key] = true
+		return null
+	_art_cache[key] = result
+	while _art_cache.size() > ART_CACHE_CAP:
+		for oldest in _art_cache:
+			_art_cache.erase(oldest)
+			break
 	return result
 
 

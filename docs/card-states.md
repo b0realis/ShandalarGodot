@@ -467,7 +467,9 @@ unchanged and pre-existing: `GameSkin._texture_cache` is a static
 dictionary that never evicts, so a full browse of the Deck Builder's grid
 would hold every art it has ever shown (682 MB across the whole pool
 before this change, 909 MB after). That cache, not the mipmaps, is what
-wants a bound.
+wants a bound. *(It has one since 2026-09-06: the card art moved to
+`GameSkin._art_cache`, least-recently-used, capped at 256 pictures —
+measured at 267 MB over a 600-art browse against 608 unbounded.)*
 
 ---
 

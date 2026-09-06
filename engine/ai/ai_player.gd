@@ -486,8 +486,10 @@ static func _combined_cost(a: ManaCost, b: ManaCost) -> ManaCost:
 #    with positive value fires (a Rod ping at the face, a Tome draw). This
 #    is the "unused mana at the end of the opponent's turn" pass.
 #
-# Costs the planner cannot model (sacrifice/discard/exile riders) are
-# skipped, as they always were; a life cost is priced, not skipped.
+# Costs the planner cannot model (discard/exile riders) are skipped, as
+# they always were; a life cost is priced, not skipped, and since
+# 2026-09-06 so is a SACRIFICE ([method _sacrifice_price]) — for the
+# profiles that [member AiProfile.pays_sacrifices] says may pay one.
 
 const ABILITY_BAR_MAIN := 3.0
 const ABILITY_BAR_UPKEEP := 2.0
@@ -514,7 +516,7 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 	for inst in game.players[pid].battlefield:
 		for index in inst.cur_activated_abilities.size():
 			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
-			if not _ability_available(game, inst, index):
+			if not _ability_available(game, inst, index, true):
 				continue
 			var surcharge := game.ability_surcharge(pid, inst)
 			if not (_cost_is_free(ability.cost) and surcharge == 0) \
@@ -522,6 +524,18 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 					and not game.players[pid].mana_pool.can_pay(ability.cost, surcharge):
 				continue
 			var option := _ability_option(game, inst, index, moment)
+			if not option.is_empty() and profile.minds_pain:
+				# THE LIFE THE TAPS COST. A Rod ping at their end step is
+				# "mana about to be wasted" only from a Mountain; from a
+				# City of Brass it is a life, and a life is not wasted by
+				# untapping. Priced as the reaper's own recoil is
+				# ([method _life_price]): a Tome draw pays it at any life
+				# above the last, a ping for a life is no trade at all.
+				var pain := ManaPlanner.plan_pain(sources,
+					_plan_taps_from(sources, ability.cost, surcharge))
+				if pain > 0:
+					option["value"] = float(option["value"]) \
+						- pain * _life_price(game.players[pid].life)
 			# AN ARM MAY STATE ITS OWN BAR. The moment's bar asks "is this
 			# worth the mana a SPELL might want"; an ability with no other
 			# moment to be used at is not competing with a spell, because
@@ -558,7 +572,17 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 ## The cheap half of [method MtgGame.activate_ability]'s legality check —
 ## everything that can be known without paying. Mirrors the engine's order
 ## so a refusal never costs a tapped land.
-func _ability_available(game: MtgGame, inst: CardInstance, index: int) -> bool:
+##
+## [param priced_sacrifice]: the caller PRICES a sacrifice rider — charges
+## the body that goes against the effect it buys — and may therefore see
+## an ability the other callers may not. Only [method _try_activate]
+## does, through [method _sacrifice_price]; every other path (the combat
+## pump, the shield, the attack-time pump) reads an ability's effect and
+## not its cost, and for those a pump whose price is a BODY (Fallen
+## Angel, Atog) must stay invisible or it eats the board one Serra at a
+## time — which is what it did before the gate existed.
+func _ability_available(game: MtgGame, inst: CardInstance, index: int,
+		priced_sacrifice := false) -> bool:
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 	if ability.only_opponents_may_activate:
 		return false
@@ -568,9 +592,25 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int) -> bool:
 		return false   # refused this step already — do not pay for it twice
 	if ability.cost.has_x:
 		return false   # X abilities: no sizing model yet (none in the starter decks)
+	# A SACRIFICE IS A PRICE, NOT A REFUSAL (2026-09-06). Until this
+	# landed every sacrifice rider was refused here outright, and 2,733
+	# battlefield-turns of Strip Mine produced zero activations — the
+	# last big dead card in the control sweep's list. The cost is the
+	# body; [method _sacrifice_price] says what the body is worth, and
+	# the scorer's bar says whether the effect is worth more. Gated by
+	# [member AiProfile.pays_sacrifices] like every other capability.
+	# "Sacrifice any number" (Sword of the Ages) is a different question
+	# — one optional ask per body — and stays outside the model.
+	var sacrifices := ability.sacrifice_cost or ability.sacrifice_filter.is_valid()
+	if sacrifices:
+		if not priced_sacrifice or not profile.pays_sacrifices \
+				or ability.sacrifice_any_number:
+			return false
+		if ability.sacrifice_filter.is_valid() \
+				and _sacrifice_fodder(game, inst, ability) == null:
+			return false   # the engine would refuse it AFTER the mana was paid
 	# Cost riders the mana planner does not model.
-	if ability.sacrifice_cost or ability.sacrifice_filter.is_valid() \
-			or ability.exile_cost or ability.exile_filter.is_valid() \
+	if ability.exile_cost or ability.exile_filter.is_valid() \
 			or ability.graveyard_exile_filter.is_valid() \
 			or ability.random_discard_cost or ability.discard_cost > 0 \
 			or ability.counter_cost_kind != "":
@@ -588,7 +628,8 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int) -> bool:
 	# Incarnation's redirect, Dream Coat) are card-local; the general
 	# scorer leaves them to their moment.
 	if not ability.tap_cost and ability.cost.mana_value() == 0 \
-			and ability.life_cost <= 0 and ability.max_per_turn <= 0:
+			and ability.life_cost <= 0 and ability.max_per_turn <= 0 \
+			and not sacrifices:   # a body is a thing the turn runs out of
 		return false
 	if ability.life_cost > 0 and game.players[pid].life - ability.life_cost <= 3:
 		return false   # never pay life down to the last few points
@@ -641,9 +682,7 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 	if intent.self_damage > 0:
 		if intent.self_damage >= me.life:
 			return {}
-		# The reaper's price: cheap at 20 life, dear under 8.
-		var life_price := 0.5 if me.life > 12 else (1.0 if me.life > 6 else 2.0)
-		price += intent.self_damage * life_price
+		price += intent.self_damage * _life_price(me.life)
 	if intent.damage > 0 and intent.target_spec != null:
 		# Kill the best creature it can; failing that, the face.
 		var victim := _best_victim(game, inst, intent, 0)
@@ -690,7 +729,7 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		if victim == null:
 			return {}
 		targets = [TargetRef.card(victim)]
-		value = Evaluator.permanent_value(victim) + 1.0
+		value = _victim_value(game, victim) + 1.0
 	elif intent.draws > 0 and intent.target_spec == null:
 		if me.library.size() <= intent.draws:
 			return {}
@@ -742,6 +781,15 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 			own_bar = ABILITY_BAR_SINK
 	else:
 		return {}   # pumps, regeneration, mana, untaps, unknowns: not here
+	var sacrifice := _sacrifice_price(game, inst, ability)
+	if sacrifice > 0.0:
+		# A BODY IS NOT MANA ABOUT TO BE LOST. The sink's low bar is for
+		# mana the untap step would waste; a Strip Mine costs the same
+		# land at their end step as in our main phase, so a sacrifice
+		# rider answers to the main bar at every moment — the sink must
+		# not turn "trade my Mine for their fourth Plains" into a bargain.
+		own_bar = maxf(own_bar, ABILITY_BAR_MAIN)
+	price += sacrifice
 	value -= price
 	var out := {"inst": inst, "index": index, "targets": targets, "value": value}
 	if own_bar >= 0.0:
@@ -767,8 +815,10 @@ func _animation_payable(game: MtgGame, inst: CardInstance,
 	var surcharge := game.ability_surcharge(pid, inst)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
-	return not _plan_taps_from(ManaPlanner.sources(game, pid, {inst.id: true}),
-		ability.cost, surcharge).is_empty()
+	var excluded := _pain_excluded(game)
+	excluded[inst.id] = true
+	return not _plan_taps_from(ManaPlanner.sources(game, pid, excluded,
+		profile.minds_pain), ability.cost, surcharge).is_empty()
 
 
 ## Pay [param ability]'s cost from everything EXCEPT [param inst] itself.
@@ -778,8 +828,10 @@ func _pay_without_source(game: MtgGame, inst: CardInstance,
 	var surcharge := game.ability_surcharge(pid, inst)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
-	var plan := _plan_taps_from(ManaPlanner.sources(game, pid, {inst.id: true}),
-		ability.cost, surcharge)
+	var excluded := _pain_excluded(game)
+	excluded[inst.id] = true
+	var plan := _plan_taps_from(ManaPlanner.sources(game, pid, excluded,
+		profile.minds_pain), ability.cost, surcharge)
 	if plan.is_empty():
 		return false
 	ManaPlanner.run_plan(game, pid, plan)
@@ -852,22 +904,124 @@ func _draw_need(hand_size: int) -> float:
 
 ## The most valuable enemy creature [param intent] would actually finish
 ## at X = [param x_value], legal for the spec, or null.
+##
+## A creature is "finished" by damage or removal; a LAND, an artifact or
+## an enchantment only by removal — damage does nothing to a Tundra — so
+## those are shopped only when [member EffectIntent.removes] is set, and
+## priced by [method _victim_value], which is what lets a Strip Mine pick
+## the dual over the basic and a Scavenger Folk the Disk over the Ring.
 func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
 		x_value: int) -> CardInstance:
 	var best: CardInstance = null
 	var best_value := 0.0
 	for inst in game.players[game.opponent_of(pid)].battlefield:
-		if not inst.is_creature() or not intent.kills(inst, x_value):
+		if inst.is_creature():
+			if not intent.kills(inst, x_value):
+				continue
+		elif not (intent.removes or intent.bounces):
 			continue
 		if inst.cur_indestructible and intent.removes:
 			continue
 		if not intent.target_spec.is_legal(game, TargetRef.card(inst), source):
 			continue
-		var value := Evaluator.permanent_value(inst)
+		var value := _victim_value(game, inst)
 		if value > best_value:
 			best = inst
 			best_value = value
 	return best
+
+
+## What taking [param inst] off the OPPONENT's board is worth: a
+## creature by its live stats ([method Evaluator.permanent_value]), a land
+## by what it does for them ([method Evaluator.land_value]), and any other
+## permanent by its cost, plus a point when it has an activated ability —
+## an Icy Manipulator or a Jayemdae Tome is on the table to be USED, and
+## the ability is the reason to take it.
+func _victim_value(game: MtgGame, inst: CardInstance) -> float:
+	if inst.is_creature():
+		return Evaluator.permanent_value(inst)
+	if inst.is_land():
+		return Evaluator.land_value(game, inst)
+	var value := Evaluator.permanent_value(inst)
+	if not inst.cur_activated_abilities.is_empty():
+		value += 1.0
+	return value
+
+
+## What giving up [param inst] of OUR OWN costs — the other side of the
+## same ledger. A land counts the lands still in hand (information a seat
+## may use about itself) and, when losing it would leave the hand's
+## biggest spell uncastable even after every land in hand is played,
+## carries a surcharge: that is a source we cannot spare, whatever it
+## buys. [param as_source] prices a permanent whose OWN ability is being
+## paid for — a Strip Mine's strip is the thing being bought, not a
+## reason to keep the Mine.
+func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
+	if not inst.is_land():
+		return Evaluator.permanent_value(inst)
+	var me := game.players[pid]
+	var in_hand := 0
+	var biggest := 0
+	for card in me.hand:
+		if card.is_land():
+			in_hand += 1
+		else:
+			biggest = maxi(biggest, card.data.cost.mana_value())
+	var on_table := 0
+	for perm in me.battlefield:
+		if perm.is_land():
+			on_table += 1
+	var value := Evaluator.land_value(game, inst, in_hand)
+	if as_source and not inst.cur_activated_abilities.is_empty():
+		value -= 1.5   # the ability's bonus, which is what we are spending
+	if on_table - 1 + in_hand < biggest:
+		value += 2.0
+	return value
+
+
+## The body a "sacrifice a <desc>" rider would eat: the least valuable
+## permanent of ours the filter accepts — the same list the engine
+## builds ([method MtgGame.activate_ability]) and the same choice
+## [method answer_card] makes when the cost is actually asked, so the
+## price the scorer charges is the body that goes. Null = no legal body.
+func _sacrifice_fodder(game: MtgGame, inst: CardInstance,
+		ability: ActivatedAbility) -> CardInstance:
+	var best: CardInstance = null
+	var best_value := 0.0
+	for perm in game.players[pid].battlefield:
+		if perm == inst and not ability.sacrifice_may_be_source:
+			continue
+		if not ability.sacrifice_filter.call(perm):
+			continue
+		var value := _own_value(game, perm)
+		if best == null or value < best_value:
+			best = perm
+			best_value = value
+	return best
+
+
+## What [param ability]'s sacrifice riders cost in board: the source
+## itself for "Sacrifice this", the cheapest legal body for "Sacrifice a
+## <desc>", both on [method _own_value]'s scale. Zero for an ability with
+## no such rider, which is nearly all of them.
+func _sacrifice_price(game: MtgGame, inst: CardInstance,
+		ability: ActivatedAbility) -> float:
+	var price := 0.0
+	if ability.sacrifice_cost:
+		price += _own_value(game, inst, true)
+	if ability.sacrifice_filter.is_valid():
+		var fodder := _sacrifice_fodder(game, inst, ability)
+		if fodder == null:
+			return INF
+		price += _own_value(game, fodder)
+	return price
+
+
+## The reaper's price for a point of our own life: cheap at 20, dear
+## under 8. What an ability's recoil (Orcish Artillery) and the life its
+## taps cost (City of Brass) are both charged at.
+func _life_price(life: int) -> float:
+	return 0.5 if life > 12 else (1.0 if life > 6 else 2.0)
 
 
 ## What to hold down with a tap ability: their best untapped creature,
@@ -3169,7 +3323,8 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 ## decompilation evidence that 1997 auto-tapped at all, are in that file.
 func _plan_taps(game: MtgGame, cost: ManaCost, x_value: int,
 		usage_keys: Array = []) -> Array:
-	return ManaPlanner.plan(game, pid, cost, x_value, usage_keys)
+	return ManaPlanner.plan(game, pid, cost, x_value, usage_keys,
+		_pain_excluded(game))
 
 
 ## The untapped mana sources available right now — [method
@@ -3177,7 +3332,48 @@ func _plan_taps(game: MtgGame, cost: ManaCost, x_value: int,
 ## passed to [method _plan_taps_from], because one "what should I cast?"
 ## pass plans a cost for every card in hand.
 func _mana_sources(game: MtgGame) -> Array:
-	return ManaPlanner.sources(game, pid)
+	return ManaPlanner.sources(game, pid, _pain_excluded(game),
+		profile.minds_pain)
+
+
+## THE SOURCE THAT WOULD KILL US, left out of the plan — `{id: true}`,
+## the same shape as the 1997 `Don't auto tap this card` mark.
+##
+## A City of Brass makes any colour for a life a tap ([member
+## ManaAbility.pain]), and to the planner every point of mana was
+## equally free. Most of those lives are the card's own trade — a colour
+## the deck lacks, at a life — and the planner leaves them to the sort
+## ([method ManaPlanner.cheapest_source_first]: the painless source
+## first) and to the price [method _try_activate] charges an ability for
+## them. The one it never pays is the LAST: a tap whose damage meets our
+## life total is the game, whatever it buys, and the engine would let it
+## happen. Gated by [member AiProfile.minds_pain], so the Deck Lab can
+## run the null.
+##
+## MEASURED (2026-09-06, 2,000 games a pair, same seeds, the candidate
+## on one seat against `wizard:minds_pain=off` on both): The Deck against
+## White Knights 6.2% -> 7.1%, against Big Green 12.6% -> 13.1%; Saltrem
+## Tor (four Cities) flat in the mirror and against Big Green. A first
+## cut that REFUSED every painful source at the sink measured the same
+## within noise (7.2% / 13.4%) but would not draw a card off a Jayemdae
+## Tome through a City at 20 life, which is plainly the trade to make —
+## so the sink prices the life instead. The instrumented run put The
+## Deck's self-inflicted damage at 3.3 a game against 17 from the
+## opponent: a tax, not the loss, and the 96% is the matchup (The Abyss
+## cannot target a White Knight), not the mana.
+func _pain_excluded(game: MtgGame) -> Dictionary:
+	var out: Dictionary = {}
+	if not profile.minds_pain:
+		return out
+	var life := game.players[pid].life
+	for inst in game.players[pid].battlefield:
+		if inst.tapped or inst.cur_mana_abilities.is_empty():
+			continue
+		for ability in inst.cur_mana_abilities:
+			if int(ability.pain) > 0 and int(ability.pain) >= life:
+				out[inst.id] = true
+				break
+	return out
 
 
 ## [method _plan_taps] against a pre-built source list.
@@ -3191,7 +3387,8 @@ func _plan_taps_from(sources: Array, cost: ManaCost, x_value: int,
 ## [param usage_keys]: see [method ManaPlanner.plan_from].
 func _plan_and_pay(game: MtgGame, cost: ManaCost, extra := 0,
 		usage_keys: Array = []) -> bool:
-	return ManaPlanner.plan_and_pay(game, pid, cost, extra, usage_keys)
+	return ManaPlanner.plan_and_pay(game, pid, cost, extra, usage_keys,
+		_pain_excluded(game))
 
 
 func _cost_is_free(cost: ManaCost) -> bool:
@@ -3202,7 +3399,7 @@ func _cost_is_free(cost: ManaCost) -> bool:
 func _max_affordable_x(game: MtgGame, cost: ManaCost, extra := 0,
 		sources: Array = [], x_color := 0, usage_keys: Array = []) -> int:
 	return ManaPlanner.max_affordable_x(game, pid, cost, extra, sources,
-		x_color, usage_keys)
+		x_color, usage_keys, _pain_excluded(game))
 
 
 # =============================================================== targeting --
@@ -3450,7 +3647,11 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			if intent != null and intent.is_tap_utility() \
 					and not _tap_denies_something(game, inst):
 				continue
-			var value := Evaluator.permanent_value(inst)
+			# Their permanents by what taking them costs THEM (a Stone
+			# Rain on the only Swamp, not the fourth Mountain); ours by
+			# the flat board scale.
+			var value := _victim_value(game, inst) if harmful \
+				else Evaluator.permanent_value(inst)
 			if value > best_value:
 				best = inst
 				best_value = value
@@ -4041,7 +4242,7 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 ## the answer — or the list is what a COST eats ([member
 ## PlayerChoice.is_cost]: "sacrifice a creature" for a Fallen Angel pump
 ## or a Sacrifice spell), when the LEAST valuable body goes.
-func answer_card(_game: MtgGame, _p_pid: int, candidates: Array[CardInstance],
+func answer_card(game: MtgGame, _p_pid: int, candidates: Array[CardInstance],
 		_prompt: String) -> CardInstance:
 	var asked := current_choice()
 	if asked != null and (asked.adverse or asked.ordered) \
@@ -4053,7 +4254,10 @@ func answer_card(_game: MtgGame, _p_pid: int, candidates: Array[CardInstance],
 		if best == null:
 			best = inst
 		elif paying:
-			if Evaluator.permanent_value(inst) < Evaluator.permanent_value(best):
+			# The body a cost eats is priced the way [method
+			# _sacrifice_price] priced it when the activation was chosen,
+			# so the two cannot disagree about which land goes.
+			if _own_value(game, inst) < _own_value(game, best):
 				best = inst
 		elif Evaluator.card_value(inst.data) > Evaluator.card_value(best.data):
 			best = inst

@@ -193,9 +193,15 @@ var corner_tag := "":
 			_dress_tag(cell)
 ## Lay the 1997 slot carvings under the cards (the Deck area does; the
 ## Inventory sits on Dekbar1's plain teal field, as it does in 1997).
+## A quilted surface also lays its cards out differently — see
+## [method _lead] — so setting this is a relayout, not just a redraw.
 var slot_plaques := false:
 	set(value):
+		if slot_plaques == value:
+			return
 		slot_plaques = value
+		if _grid != null:
+			_relayout()
 		queue_redraw()
 ## [QoL] Flank the cards with the two scroll arrows — see [constant
 ## ARROW_W]. Only meaningful on a surface with a BOTTOM bar, which is the
@@ -248,8 +254,9 @@ var _vertical_bar := true
 ## One card, and it is [constant MiniCard.SIZE] on both surfaces.
 var _cell := Vector2.ZERO
 ## Where the page's block of columns starts, and how many columns it has —
-## kept from the last [method _rebuild] so [method _draw] lays the slot
-## carvings on exactly the grid the cards sit on.
+## kept from the last [method _rebuild]. The column count is what keeps
+## [method _draw]'s carvings cycling on the grid the cards sit on; the
+## inset is kept so a test can say where the block stands.
 var _inset := 0.0
 var _columns := 1
 ## The page's widgets, built once and REBOUND as the surface scrolls.
@@ -392,14 +399,36 @@ func arrow_pad() -> float:
 	return ARROW_W if scroll_arrows else 0.0
 
 
-## The area minus the strip the scroll bar occupies, and minus the two
-## arrow columns when this surface has them.
+## WHERE THE BLOCK OF CARDS STARTS, from the area's top-left. On a quilted
+## surface the first carved frame stands ON the area's edge and the card
+## sits half a gap inside it, exactly as every other card sits inside its
+## own frame — so the quilt reaches the edge of the area and the area's
+## edge is the quilt's. A plain surface starts its block at the edge and
+## [method _rebuild] centres it.
+##
+## The owner's photo of a wide window, 2026-09-06: *"backgrounds still do
+## not align from the left side"*. The deck's block of columns was CENTRED
+## (a leftover strip split between both ends, which is right for the
+## Inventory's teal field) and the quilt was laid from where the block
+## started, so on a 2560-wide screen thirty pixels of bare weave stood
+## between the sideboard's edge and the first carving. The quilt is laid
+## edge to edge now, whatever the width, and the leftover is on the right
+## under the last, partial column of carvings — which is what "laid edge
+## to edge across the whole area" meant in the first place.
+func _lead() -> Vector2:
+	return GAP / 2.0 if slot_plaques else Vector2.ZERO
+
+
+## The area minus the strip the scroll bar occupies, minus the two arrow
+## columns when this surface has them, and minus the quilt's lead.
 func _inner_size() -> Vector2:
 	var pad := 2.0 * arrow_pad()
+	var lead := _lead()
 	if _vertical_bar:
-		return Vector2(maxf(size.x - BAR_THICKNESS - 2.0 - pad, 0.0), size.y)
-	return Vector2(maxf(size.x - pad, 0.0),
-		maxf(size.y - BAR_THICKNESS - 2.0, 0.0))
+		return Vector2(maxf(size.x - BAR_THICKNESS - 2.0 - pad - lead.x, 0.0),
+			maxf(size.y - lead.y, 0.0))
+	return Vector2(maxf(size.x - pad - lead.x, 0.0),
+		maxf(size.y - BAR_THICKNESS - 2.0 - lead.y, 0.0))
 
 
 ## The tally's font size — see [constant TALLY_FONT_RATIO].
@@ -683,8 +712,13 @@ func _rebuild(shifted := 0) -> void:
 	_refresh_arrows()
 	# Centre the fixed block of columns in the area: the column count never
 	# changes with the card count, so this is a stable margin, not a
-	# shifting one, and it keeps the Inventory's leftover strip off one end.
-	var inset := maxf(0.0, (_inner_size().x - (cols * (_cell.x + GAP.x) - GAP.x)) / 2.0)
+	# shifting one, and it keeps the Inventory's leftover strip off one
+	# end. A QUILTED surface does not centre — its block starts inside the
+	# first carved frame and the leftover stays on the right, under the
+	# carvings ([method _lead]).
+	var lead := _lead()
+	var inset := lead.x if slot_plaques \
+		else maxf(0.0, (_inner_size().x - (cols * (_cell.x + GAP.x) - GAP.x)) / 2.0)
 	_inset = inset
 	_columns = cols
 	queue_redraw()
@@ -706,7 +740,7 @@ func _rebuild(shifted := 0) -> void:
 		var col := (i % cols) if _vertical_bar else (i / row_count)
 		var row := (i / cols) if _vertical_bar else (i % row_count)
 		cell.position = Vector2(inset + col * (_cell.x + GAP.x),
-			row * (_cell.y + GAP.y))
+			lead.y + row * (_cell.y + GAP.y))
 		cell.visible = true
 	_settle_hover(shown)
 
@@ -767,11 +801,14 @@ func _rotate_cells(shift: int) -> void:
 ## the whole point of the audit pass's paging is that this surface holds a
 ## page of widgets and not a field of them.
 ##
-## The carvings are laid on the CARD PITCH (cell + gap) and start half a
-## gap earlier, so they meet edge to edge with no seam and each one frames
-## the card that sits in it — the reference's quilt exactly. They cover the
-## WHOLE area, not just the occupied slots: in 1997 an empty deck is a full
-## grid of watermarks waiting to be filled.
+## The carvings are laid on the CARD PITCH (cell + gap) from the area's
+## own top-left corner, so they meet edge to edge with no seam and each
+## one frames the card that sits half a gap inside it ([method _lead]) —
+## the reference's quilt exactly. They cover the WHOLE area, not just the
+## occupied slots and not just the block of columns: in 1997 an empty deck
+## is a full grid of watermarks waiting to be filled, and on a wide window
+## the strip past the last column is more quilt, cut by the area's edge,
+## rather than bare weave.
 func _draw() -> void:
 	if not slot_plaques:
 		return
@@ -779,9 +816,9 @@ func _draw() -> void:
 	if sheet == null:
 		return
 	var pitch := _cell + GAP
-	var inner := _inner_size()
-	var down: int = int(ceil(inner.y / pitch.y))
-	var across: int = int(ceil((inner.x - _inset) / pitch.x))
+	var pad := arrow_pad()
+	var down: int = int(ceil(size.y / pitch.y))
+	var across: int = int(ceil((size.x - 2.0 * pad) / pitch.x))
 	for row in down:
 		for col in across:
 			var index: int = (row * _columns + col) % PLAQUE_COLUMNS
@@ -789,8 +826,7 @@ func _draw() -> void:
 			if art == null:
 				continue
 			draw_texture_rect(art, Rect2(
-				Vector2(arrow_pad() + _inset - GAP.x / 2.0 + col * pitch.x,
-					-GAP.y / 2.0 + row * pitch.y), pitch), false)
+				Vector2(pad + col * pitch.x, row * pitch.y), pitch), false)
 
 
 ## One carved slot, from the sheet's BOTTOM row (cool blue slate — the row

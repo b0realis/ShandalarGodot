@@ -57,6 +57,50 @@ static func permanent_value(inst: CardInstance) -> float:
 	return maxf(inst.data.cost.mana_value() * 0.8, 1.0)
 
 
+## What one LAND is worth to the seat that controls it, on the same scale
+## as [method permanent_value] — the number a Stone Rain, a Sinkhole or a
+## Strip Mine shops by.
+##
+## THE REASON IT EXISTS: [method permanent_value] prices every land at
+## 1.0, so land destruction hit the first land it found and could not
+## tell a Tundra from an Island, a Mishra's Factory from a Mountain, or
+## the only Swamp on the table from the fifth. Four things move it, all
+## read off the battlefield alone (the hand is not looked at):
+##
+##  * SCARCITY — the fewer lands its controller has, the more each one is
+##    (their only land is a turn lost; their sixth is a spare).
+##    [param lands_in_hand] lets a seat pricing its OWN land count the
+##    ones it is holding, which is information it may use.
+##  * A DUAL — two colours in one card, the era's best lands.
+##  * THE ONLY SOURCE OF A COLOUR — taking it takes every spell of that
+##    colour with it, for as long as it stays gone.
+##  * A LAND THAT DOES MORE THAN MAKE MANA — a Factory, a Library, a
+##    Maze of Ith: the activated ability is the reason it is in the deck.
+static func land_value(game: MtgGame, inst: CardInstance, lands_in_hand := 0) -> float:
+	var lands := lands_in_hand
+	var sources: Dictionary = {}   # colour -> how many of their lands make it
+	for perm in game.players[inst.controller_id].battlefield:
+		if not perm.is_land():
+			continue
+		lands += 1
+		for ability in perm.cur_mana_abilities:
+			for pair in ability.produces:
+				sources[int(pair[0])] = int(sources.get(int(pair[0]), 0)) + 1
+	var value := 1.0 + 3.0 / maxf(lands, 1.0)
+	var colours: Dictionary = {}
+	for ability in inst.cur_mana_abilities:
+		for pair in ability.produces:
+			colours[int(pair[0])] = true
+	if colours.size() > 1:
+		value += 1.0
+	for colour in colours:
+		if colour != Mtg.ManaColor.C and int(sources.get(colour, 0)) <= 1:
+			value += 1.0
+	if not inst.cur_activated_abilities.is_empty():
+		value += 1.5
+	return value
+
+
 ## Worth of a card as a thing to have/keep (hand, tutor, discard picks).
 static func card_value(data: CardData) -> float:
 	if data.is_land():

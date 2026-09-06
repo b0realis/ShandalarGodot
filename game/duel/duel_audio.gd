@@ -272,6 +272,16 @@ static func cue_for(event: GameEvent) -> String:
 			return "sfx_damage"
 		Mtg.EventType.DIES:
 			return "sfx_buried"            # WAV_BURIED
+		Mtg.EventType.CARD_DISCARDED:
+			# WAV_DISCARD, `functions.c:14861` — played INSIDE the discard
+			# itself, once per card, whoever is discarding and whyever.
+			# The screen used to play it by hand on the human's own
+			# confirmed cleanup discard and nowhere else, so a Hymn to
+			# Tourach, a Mind Twist and the AI's whole cleanup were mute
+			# (2026-09-06). The per-frame coalesce still makes a batch one
+			# sound. Milling (`deck.c:2015`) reuses the file in the
+			# original; ours dispatches no mill event, so it stays quiet.
+			return "sfx_discard"
 	return ""
 
 

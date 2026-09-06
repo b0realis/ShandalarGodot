@@ -177,6 +177,8 @@ var _over_dialog: OriginalDialog = null       # the duel's last word
 ## wait for" in between (2026-09-02).
 var _result_pending := false
 var _options_dialog: OriginalDialog = null    # `Duel Options...` (§6.4)
+var _duel_log: DuelLog = null                # the log window, `L` [QoL]
+var _log_button: Button = null                # its switch on the reserve strip
 var _card_preview: CardPreview = null        # shared enlarged-card popup
 var _phase_bar: PhaseBar = null
 ## The COMBAT BAR, which REPLACES the Phase Bar for the length of an attack
@@ -590,10 +592,13 @@ func _is_human(pid: int) -> bool:
 	return pid >= 0 and not _ais.has(pid)
 
 
-func _on_log_line(_line: String) -> void:
-	pass   # the log accumulates in game.log_lines; no on-screen pane
-	       # (complete-reimplementation rule: the original had none —
-	       # a QoL log viewer returns later)
+## The log accumulates in `game.log_lines` whatever happens here; this
+## only keeps the [DuelLog] window current while one is open. The table
+## itself shows no pane (complete-reimplementation rule: the original had
+## none) — the viewer is a window on `L`, § THE DUEL LOG below.
+func _on_log_line(line: String) -> void:
+	if _duel_log != null and is_instance_valid(_duel_log):
+		_duel_log.append_line(line)
 
 
 ## THE DUEL'S LAST WORD. `@DIALOG_SHANDALARENDDUEL` (UIStrings.txt:514)
@@ -625,8 +630,12 @@ func _on_game_over(winner_id: int) -> void:
 		_audio.stop_music()
 	# The original has exactly two stings here — Shell_WinDuel.wav and
 	# Shell_LoseDuel.wav (`windows.c:1229-1230`) — and no third for the
-	# draw, so a draw ends in silence rather than in either.
-	if winner_id >= 0:
+	# draw, so a draw ends in silence rather than in either. Both stings
+	# are addressed to the PLAYER — "you won", "you lost" — so a duel with
+	# no human seat (the title screen's demo, `DuelConfig.demo_default`)
+	# has nobody to congratulate or console and used to play the LOSE
+	# sting whichever AI won (2026-09-06).
+	if winner_id >= 0 and (_is_human(winner_id) or _is_human(1 - winner_id)):
 		_play_sfx("sfx_win" if _is_human(winner_id) else "sfx_lose")
 	if DisplayServer.get_name() == "headless":
 		_result_pending = false
@@ -1352,12 +1361,9 @@ func _confirm_discard() -> void:
 	if err == "":
 		_discard_picks = []
 		mode = Mode.NORMAL
-		# WAV_DISCARD, `functions.c:14861` — the original plays it inside
-		# the discard itself, once per card put into the graveyard. Ours
-		# fires on the confirmed hand-size discard, and [DuelAudio]'s
-		# per-frame coalesce makes a two-card discard one sound, which is
-		# what a batch discard sounds like anyway.
-		_play_sfx("sfx_discard")
+		# WAV_DISCARD sounds from the engine's CARD_DISCARDED event now
+		# ([DuelAudio.cue_for]) — for this discard and for every forced
+		# one, which used to be mute. Nothing to play by hand here.
 	_report(err)
 	_refresh()
 
@@ -1717,9 +1723,23 @@ func _advance_pending() -> void:
 ##
 ## Does NOT refresh: the two callers own that (one is inside a refresh
 ## already).
+##
+## NOT RE-ENTRANT, and it has to say so ([member _submitting]): the engine
+## emits `state_changed` from INSIDE cast_spell, [method _refresh] answers
+## it with [method _retry_payment], and while the cast is in
+## [constant Mode.PAYING] that found the pool moved and submitted the SAME
+## cast a second time — from inside the first, with the card already on
+## the chain. The engine refused the echo, the refusal cleared the pending
+## cast as a real refusal does, and the tutor pick parked for the
+## resolution went with it: an Untamed Wilds paid for one land at a time
+## asked for its land all over again when it resolved (playtest,
+## 2026-09-06). A Wilds paid from a full pool never entered the mode and
+## never showed it, which is why the Demonic Tutor test of 2026-09-02
+## stayed green.
 func _submit_pending() -> void:
-	if _pending_card == null:
+	if _pending_card == null or _submitting:
 		return
+	_submitting = true
 	var err: String
 	if _pending_ability_index < 0:
 		err = game.cast_spell(_pending_pid, _pending_card, _pending_targets,
@@ -1727,6 +1747,7 @@ func _submit_pending() -> void:
 	else:
 		err = game.activate_ability(_pending_pid, _pending_card,
 			_pending_ability_index, _pending_targets, _pending_x)
+	_submitting = false
 	if MtgGame.is_unpaid_refusal(err) and _pending_is_reachable():
 		mode = Mode.PAYING
 		_set_target_cursor(false)
@@ -1739,6 +1760,11 @@ func _submit_pending() -> void:
 	# made Demonic Tutor ask twice (2026-09-02). A refused one drops it.
 	_clear_pending(err == "")
 	_report(err)
+
+
+## [method _submit_pending] is on the engine's side of the door right now
+## — see its re-entrancy note.
+var _submitting := false
 
 
 ## COULD THE PENDING ACTION STILL BE PAID FOR, from everything this seat
@@ -4782,6 +4808,73 @@ func _minimize_window() -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
 
 
+# ------------------------------------------------------- THE DUEL LOG (L) --
+#
+# `[QoL]`. The engine's own audit trail ([member MtgGame.log_lines]), in a
+# window the player can open, read, drag, copy and save — see [DuelLog]
+# for what it is and why. Three doors onto one window: the `L` key, the
+# reserve strip's page button ([member _log_button]) and the window's own
+# `×`; the button's pressed state follows the window whichever door was
+# used, so it never lies about what is open.
+#
+# NOT A MODAL. The duel runs on under it — the AI's clock, the automatic
+# pass, every click on the table — and [method _modal_open] and
+# [method _dialogs_open] both leave it out, so Space, Return and Esc keep
+# their jobs with it open. It is the [CombatWindow]'s standing, not the
+# Pause window's.
+
+## Is the log window up?
+func duel_log_is_open() -> bool:
+	return _duel_log != null and is_instance_valid(_duel_log)
+
+
+func _toggle_duel_log() -> void:
+	if duel_log_is_open():
+		_close_duel_log()
+	else:
+		_open_duel_log()
+
+
+func _open_duel_log() -> void:
+	if duel_log_is_open() or game == null:
+		return
+	var window := DuelLog.new()
+	window.closed.connect(_on_duel_log_closed)
+	window.notice.connect(_set_prompt)
+	add_child(window)
+	# Where the screen puts it when the player never moved it: the upper
+	# right of the table, clear of the hand along the bottom and of the
+	# sidebar and Phase Bar on the left, over the far corner of the
+	# opponent's territory. The clamp needs a viewport, so after add.
+	var room := get_viewport_rect().size
+	window.place(Vector2(room.x - DuelLog.SIZE.x - 12.0, 8.0))
+	window.fill(game.log_lines)
+	_duel_log = window
+	if _log_button != null:
+		_log_button.set_pressed_no_signal(true)
+
+
+func _close_duel_log() -> void:
+	if duel_log_is_open():
+		_duel_log.dismiss()   # -> _on_duel_log_closed, once
+
+
+## The window is going — by its own `×`, by `L`, by the strip button or
+## by [method _close_duel_log]; all four end here, once.
+func _on_duel_log_closed() -> void:
+	_duel_log = null
+	if _log_button != null:
+		_log_button.set_pressed_no_signal(false)
+
+
+## The reserve strip's page button, pressed or released.
+func _on_log_button_toggled(on: bool) -> void:
+	if on:
+		_open_duel_log()
+	else:
+		_close_duel_log()
+
+
 # ------------------------------------------------ THE PAUSE WINDOW (Q/Esc) --
 #
 # The owner's playtest, 2026-09-03: *"When a player types Q or ESC keys
@@ -6641,6 +6734,15 @@ func _build_ui() -> void:
 	_expand_button.offset_right = -ArrangeButton.FACE.x - 10.0
 	_expand_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
 	_qol_reserve.add_child(_expand_button)
+	# THE LOG, the strip's third tenant, running across it like the two
+	# before it (§ THE DUEL LOG): the window's switch, beside Expand.
+	_log_button = DuelLog.button(_on_log_button_toggled)
+	_log_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_log_button.offset_left = -ArrangeButton.FACE.x * 3.0 - 16.0
+	_log_button.offset_top = 4.0
+	_log_button.offset_right = -ArrangeButton.FACE.x * 2.0 - 16.0
+	_log_button.offset_bottom = 4.0 + ArrangeButton.FACE.y
+	_qol_reserve.add_child(_log_button)
 	# Last child of the column, so the player's life numeral finishes
 	# flush with the bottom edge of the screen.
 	sidebar.add_child(_player_panel(0, false))
@@ -7643,6 +7745,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				# with the pointer already busy on the board — so it has
 				# to be reachable without aiming at a 22px title bar.
 				_toggle_hand()
+			KEY_L:
+				# The Duel Log window (§ THE DUEL LOG). `[QoL]`, and on a
+				# bare key for the reason `H` and `M` are: it carries no
+				# 1997 duty and the 1997 menus are not ours to grow.
+				# NOT under the choice overlay (returned above), where the
+				# keys are the answers; anywhere else, because a log is
+				# something you want to read exactly when a question is
+				# up.
+				_toggle_duel_log()
 			KEY_M:
 				# A SESSION HUSH, not a preference: `M` silences both
 				# buses and writes nothing to `user://settings.cfg`

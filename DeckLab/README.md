@@ -98,6 +98,7 @@ flyers rule the starter meta.
 | `--seed N` | base RNG seed — same seed + decks = identical results at ANY `--jobs` | 1 |
 | `--jobs N` | worker threads | all cores |
 | `--profile-a NAME` / `--profile-b NAME` | pilot skill: `apprentice`, `magician`, `sorcerer`, `wizard` | wizard |
+| `--profile-a NAME:knob=value,...` | the same preset with knobs overridden — `wizard:pays_sacrifices=off`, `wizard:minds_pain=off,counter_threshold=4`. Booleans read on/off (true/false, 1/0), numbers as the knob's own type; an unknown knob is refused at parse time. How one AI capability is measured against its own null: the candidate on seat A, the knob off on seat B, same seeds | — |
 | `--out DIR` | output directory, created and NAMED BEFORE the run starts (one inside the project gets a `.gdignore`, so the editor never imports the run's `matchups.csv` as a translation table) | `DeckLab/results/run_<stamp>` |
 | `--no-svg` | skip chart files | off |
 | `--quiet` | no banner and no progress bar; errors only | off |

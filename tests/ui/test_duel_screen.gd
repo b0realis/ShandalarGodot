@@ -484,6 +484,26 @@ func test_a_drawn_duel_plays_neither_sting_and_belongs_to_no_seat() -> void:
 		"the human seat's win still has its sting")
 
 
+func test_a_duel_between_two_ais_plays_neither_sting() -> void:
+	# Both stings are addressed to the player ("you won" / "you lost"), so
+	# the title screen's demo — no human seat — used to end on the LOSE
+	# sting whoever won (2026-09-06).
+	var demo: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	demo.config = DuelConfig.demo_default()
+	demo.config.pace = 0.0
+	add_child_autofree(demo)
+	await get_tree().process_frame
+	assert_false(demo._is_human(0))
+	assert_false(demo._is_human(1))
+	for winner in [0, 1]:
+		demo._audio.recent.clear()
+		demo._on_game_over(winner)
+		assert_eq(demo._audio.recent, [] as Array[String],
+			"nobody at the table to hear a sting")
+		assert_eq(demo._prompt_label.text,
+			"%s won" % demo.game.players[winner].player_name)
+
+
 func test_every_centre_popup_wears_the_shared_chrome() -> void:
 	# The whole point of OriginalDialog: one component, so the look cannot
 	# drift popup by popup. No duel popup may be an OS Window again.

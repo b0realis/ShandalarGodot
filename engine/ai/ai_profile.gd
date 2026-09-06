@@ -107,11 +107,38 @@ var combat_search_nodes := 0
 ## control sweep").
 var plays_engines := false
 
+## THE TRADE: does this profile activate an ability whose cost is one of
+## its OWN permanents — a Strip Mine that goes to the graveyard to take a
+## land with it, a Goblin Digging Team that dies demolishing a Wall, a
+## Scavenger Folk traded for a Disk?
+##
+## A CAPABILITY, like [member plays_engines] — not a second difficulty
+## concept. Weighing a permanent you hold against the one it buys is a
+## whole layer of play, and the bottom two difficulties not having it at
+## all is the same honest weakness as the Apprentice never holding an
+## instant. Until 2026-09-06 no profile had it: `_ability_available`
+## refused every sacrifice rider outright, and 2,733 battlefield-turns of
+## Strip Mine produced zero activations (docs/ROADMAP.md, "the control
+## sweep", still open). Everything it gates is priced by the body that
+## goes ([method AiPlayer._sacrifice_price]) against the body it takes,
+## and nothing it gates is card-named.
+var pays_sacrifices := false
+
+## THE LIFE A TAP COSTS: does this profile know that a City of Brass is
+## not a Plains? On, the planner taps the painless source first, never
+## taps a source whose damage would be the last of its life ([method
+## AiPlayer._pain_excluded]), and prices the life an ability's taps would
+## cost against what the ability buys ([method AiPlayer._try_activate]).
+## On for EVERY profile: an Apprentice that kills itself tapping for a
+## Grizzly Bears is not a weak player, it is a broken one. It is a knob
+## only so the Deck Lab can run the null.
+var minds_pain := true
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
-		p_engines := false) -> void:
+		p_engines := false, p_sacrifices := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -121,6 +148,37 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	sideboard_swaps = p_sideboard_swaps
 	combat_search_nodes = p_search_nodes
 	plays_engines = p_engines
+	pays_sacrifices = p_sacrifices
+
+
+## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
+## `counter_threshold=4` — to this profile, returning the first name that
+## is not a knob (or "" when every one applied). Booleans read on/off,
+## true/false, 1/0; numbers read as the knob's own type. It is how the
+## Deck Lab's `--profile-a wizard:pays_sacrifices=off` names a CANDIDATE
+## against the shipped pilot without a scratch patch to this file, which
+## is what every measurement in docs/ROADMAP.md needed and had to
+## improvise.
+func apply_overrides(spec: String) -> String:
+	for part in spec.split(",", false):
+		var eq := part.find("=")
+		if eq < 0:
+			return part
+		var knob := part.substr(0, eq).strip_edges()
+		var raw := part.substr(eq + 1).strip_edges().to_lower()
+		if knob == "profile_name" or knob.is_empty() or get(knob) == null:
+			return knob
+		var current = get(knob)
+		match typeof(current):
+			TYPE_BOOL:
+				set(knob, raw in ["on", "true", "1", "yes"])
+			TYPE_INT:
+				set(knob, int(raw.to_float()))
+			TYPE_FLOAT:
+				set(knob, raw.to_float())
+			_:
+				return knob
+	return ""
 
 
 ## Lowest difficulty: fumbles a third of its actions, swings recklessly, and
@@ -137,12 +195,12 @@ static func magician() -> AiProfile:
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true)
 
 
 func _to_string() -> String:

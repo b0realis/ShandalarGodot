@@ -3434,7 +3434,11 @@ The engine is the referee; the UI never second-guesses it.
 ## 5. Quality-of-life — shipped now vs wishlist
 
 Shipped in v1:
-- Full game log (the engine's log, scrolling, always visible).
+- Full game log — the engine's log (`MtgGame.log_lines`) has been kept
+  since v1; the table shows NO pane for it (the 1997 screen had none). Since
+  2026-09-06 it is a **window on `L`** (`duel_log.gd`, `[QoL]`): the
+  Combat window's chrome, draggable and remembered, not a modal, with
+  Copy and Save; the page glyph on the reserve strip is the same switch.
 - Legality highlighting: castable cards and legal targets glow.
 - Auto-skip: "Pass until something happens" — holding Pass passes priority
   through empty steps (the original's phase-stop settings, simplified).
@@ -3450,6 +3454,10 @@ Shipped in v1.1 (the 1997-feel pass):
   the skin import (24 sound keys in the importer manifest); silent clean
   fallback without the skin. M toggles mute.
 - **F12** saves a screenshot to user:// (path shown in the prompt bar).
+- **Keys on the table**, all of them: **Space** Done, **Return** the lit
+  button, **Esc** the cancel ladder and then Pause, **Q** Pause, **H** fold
+  the hand, **L** the duel log, **M** mute, **Ctrl+T / Ctrl+I / Ctrl+U** the
+  display toggles, **F12** screenshot.
 
 Wishlist (ordered; each is a self-contained follow-up):
 - **Phase stops config** (the original's duel options panel): choose which
@@ -3712,6 +3720,7 @@ and is unchanged.
 | fireball_dialog.gd | `@DIALOG_FIREBALL` — the X dialog, and for Fireball the target count and the arithmetic between them. NOT the divided-damage dial (`@PYROTECHNICS` is, and it is a click loop) — the forty-seventh pass |
 | death_mark.gd | THE DYING MARK: `@CUECARD_SMALLCARD`'s `Dying` — a ghost MiniCard wearing `Dying.pic`'s silver cracks, held for a beat over the square a DESTROYED permanent has just left. 1997's predicate is `kill_code == KILL_DESTROY` (`windows.c:724`), the same one regeneration targets; raised off `Mtg.EventType.DIES` so a REGENERATED creature can never wear it. HOLD+FADE are `[QoL]` — the fifty-second pass |
 | spell_flight.gd | THE SPELL-CAST ANIMATION: a ghost MiniCard from the hand slot to the Spell Chain window and on to where it lands. s30's `duel_spell_animation.go` with the 1997 destination — the forty-seventh pass, `duel-todo.md §2.4` |
+| duel_log.gd | THE DUEL LOG (`L`) — `[QoL]`, 2026-09-06: the engine's audit trail in a window on the Combat window's pattern (knot ground, Situation-Bar title, drag by the bar, clamped on screen, position remembered), the text inset on the library picker's dark stone, turn headers lit, `bbcode_enabled` off so a bracket is text. Not a modal — the duel runs on under it. Copy to clipboard; Save to `user://duel_log_<ticks>.txt`. Its strip button (`DuelLog.button`, the page-of-lines glyph beside Expand) follows the window whichever door closed it |
 | card_pile.gd | The original's strip-stack window: overlapping MiniCards clipped to their title bars, the top one whole. `glow_actionable` (2026-09-03) lets a BATTLEFIELD pile wear the "you may act on this" ring an unpiled permanent already wears — which is what shows the mana sources while a cast waits for them |
 | decks.gd | v1 starter decks (implemented-pool-only); replaced by real deck data in M3 |
 | gauntlet_state.gd | THE GAUNTLET RUN, pure and headless: the shuffled opponent order and its twenty cap, the random start offset and the original's `(start + round) % n` wrap, the round counter, the SESSION record, and the ten `@GAUNTLET` + four `@DIALOG_GAUNTLETENDDUEL` strings — the forty-ninth pass, `docs/gauntlet-design.md`; plus the three `@DIALOG_STARTEXP1MATCH_GAUNTLET` announcements and the four `@GAUNTLETERRORS` opponent-deck refusals (three reachable, one recorded and unreachable) — the fifty-first pass |

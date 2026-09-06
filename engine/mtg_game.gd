@@ -4975,12 +4975,14 @@ func discard_cards(pid: int, cards: Array, by_effect := true) -> void:
 		if inst.data.on_discarded.is_valid():
 			fired.append(inst)
 		if _discard_to_library_instead(pid, inst, by_effect):
+			_announce_discard(pid, inst, by_effect, true)
 			continue
 		_rec_move(inst, pid, Mtg.Zone.GRAVEYARD)
 		p.hand.erase(inst)
 		inst.zone = Mtg.Zone.GRAVEYARD
 		p.graveyard.append(inst)
 		log_line("%s discards %s" % [p.player_name, inst.data.card_name])
+		_announce_discard(pid, inst, by_effect, false)
 	_emit_state()
 	# After the whole discard, so a card that punishes the discarder sees a
 	# settled hand (CR 603.2 — the ability triggers on the event, and every
@@ -5110,12 +5112,25 @@ func discard_hand(pid: int) -> void:
 	while not p.hand.is_empty():
 		var inst: CardInstance = p.hand[-1]
 		if _discard_to_library_instead(pid, inst, true):
+			_announce_discard(pid, inst, true, true)
 			continue
 		p.hand.pop_back()
 		inst.zone = Mtg.Zone.GRAVEYARD
 		p.graveyard.append(inst)
+		_announce_discard(pid, inst, true, false)
 	log_line("%s discards their hand" % p.player_name)
 	_emit_state()
+
+
+## One card has left [param pid]'s hand as a discard — say so on the
+## event bus ([constant Mtg.EventType.CARD_DISCARDED]), for the table's
+## ear. After the move, never before: a listener that reads the card's
+## zone must see where it went.
+func _announce_discard(pid: int, inst: CardInstance, by_effect: bool,
+		to_library: bool) -> void:
+	dispatch_event(Mtg.EventType.CARD_DISCARDED, {
+		"player": pid, "instance": inst,
+		"by_effect": by_effect, "to_library": to_library})
 
 
 ## Library of Leng's second half (CR 614.1a-style "instead"): with
@@ -5214,11 +5229,13 @@ func discard_random(pid: int, count := 1, by_effect := true) -> void:
 		var idx := rng.randi_range(0, p.hand.size() - 1)
 		var inst: CardInstance = p.hand[idx]
 		log_line("%s discards %s at random" % [p.player_name, inst.data.card_name])
-		if not _discard_to_library_instead(pid, inst, by_effect):
+		var to_library := _discard_to_library_instead(pid, inst, by_effect)
+		if not to_library:
 			_rec_move(inst, pid, Mtg.Zone.GRAVEYARD)
 			p.hand.remove_at(idx)
 			inst.zone = Mtg.Zone.GRAVEYARD
 			p.graveyard.append(inst)
+		_announce_discard(pid, inst, by_effect, to_library)
 		if inst.data.on_discarded.is_valid():
 			inst.data.on_discarded.call(self, inst, pid, _resolving_controller)
 	_emit_state()

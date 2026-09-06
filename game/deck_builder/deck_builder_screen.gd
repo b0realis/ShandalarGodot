@@ -318,7 +318,6 @@ var _audio: DeckAudio
 var _music: MusicPlayer
 ## The Q/Esc menu ([method _open_deck_menu]) while it is up.
 var _menu: OriginalDialog = null
-var _slate_ground: Control
 var _bar_ground: Control
 var _side_ground: Control
 var _status_timer := 0.0
@@ -427,17 +426,20 @@ func _layout() -> void:
 	var deck_rect := _deck_rect()
 	_deck_area.position = deck_rect.position
 	_deck_area.size = deck_rect.size
-	_slate_ground.position = deck_rect.grow(3.0).position
-	_slate_ground.size = deck_rect.grow(3.0).size
 
 	# The sideboard strip closes the deck area's bottom edge, on the
 	# Inventory's own teal field rather than the deck's navy quilt — the
-	# second of the three cues that say which pile a card is in.
+	# second of the three cues that say which pile a card is in. Its field
+	# has the DECK AREA'S OWN LEFT AND RIGHT EDGES: the quilt above it is
+	# laid from the area's edge ([method CardArea._lead]), and two panels
+	# stacked on one column read as one column only if their edges agree.
+	# (It grows only up and down, a margin for the strip's cards; grown
+	# sideways as well it stood three pixels proud of the quilt.)
 	var side_rect := _sideboard_rect()
 	_sideboard_area.position = side_rect.position
 	_sideboard_area.size = side_rect.size
-	_side_ground.position = side_rect.grow(3.0).position
-	_side_ground.size = side_rect.grow(3.0).size
+	_side_ground.position = Vector2(side_rect.position.x, side_rect.position.y - 3.0)
+	_side_ground.size = Vector2(side_rect.size.x, side_rect.size.y + 6.0)
 
 	# The command bar closes the deck area along its bottom edge — which is
 	# now the SIDEBOARD STRIP's bottom edge, not the deck's. Taking it from
@@ -507,9 +509,16 @@ func _inventory_rect() -> Rect2:
 ## The screen's own tiled grounds, all 1997. The whole screen is
 ## `Dektile4`'s navy weave — the screenshot's ground everywhere outside the
 ## Inventory, including behind the Deck Header and the Showcase — and the
-## Deck area lays a second copy of it under its quilt so the area reads as
-## a panel with an edge. Dekbar1, the dithered teal field, is the
-## Inventory's own ground and always was.
+## Deck area's edge is its QUILT's edge ([method CardArea._draw] lays the
+## carvings to the area's own bounds). Dekbar1, the dithered teal field, is
+## the Inventory's own ground and always was.
+##
+## (There used to be a second copy of the weave under the deck area, grown
+## three pixels past it "so the area reads as a panel with an edge". A
+## 32x32 tile laid from a second origin repeats on a different phase from
+## the one under it, so the edge it drew was a SEAM — a hard vertical
+## line three pixels off the quilt, in the owner's photo of 2026-09-06 —
+## and the quilt now reaches the edge on its own.)
 ##
 ## (s30 tiles the OLIVE `Dektile1` over its whole edit-deck screen. The
 ## screenshot is of the real program and it is navy, so navy wins; the
@@ -517,7 +526,6 @@ func _inventory_rect() -> Rect2:
 ## `deck_slot_plaques` was carved for.)
 func _build_grounds() -> void:
 	_ground("deck_tile_slate", Color(0.11, 0.13, 0.17), true)
-	_slate_ground = _ground("deck_tile_slate", Color(0.11, 0.13, 0.17), false)
 	_bar_ground = _ground("deck_bar_ground", Color(0.16, 0.32, 0.36), false)
 	# The sideboard strip wears Dekbar1 — the INVENTORY's teal field, not
 	# the deck's navy weave — because a pile that is not the deck should

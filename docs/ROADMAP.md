@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **3671 tests, 0 failing, 0 risky, 0 orphans, 0 warnings, 215 scripts** (84 201 asserts, ~135 s), `./run_tests.sh` exit 0 — and exit 0 now MEANS something, see the review bullet below |
+| Test suite | **4469 tests, 0 failing, 259 scripts** (129 349 asserts, ~290 s, the 2026-09-06 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -1887,7 +1887,7 @@ activations. Four rows carried the whole finding:
 | --- | --- | --- |
 | **Mishra's Factory** — the deck's ONLY win condition | 2,339 | **0** |
 | **Disrupting Scepter** — the deck's soft lock | 1,706 | **0** |
-| Strip Mine | 2,733 | 0 (cost rider the planner does not model — left) |
+| Strip Mine | 2,733 | 0 (cost rider the planner did not model — closed 2026-09-06, `pays_sacrifices`: 45 activations per 200 games, see THE 2026-09-06 PASS) |
 | Library of Alexandria | 890 | 27 |
 
 **The AI had never once animated a Mishra's Factory**, so a deck of
@@ -2074,21 +2074,22 @@ an aimed discard is byte-identical to the null**, 300 games each.
 
 ### What is still open
 
-* **Strip Mine, and the thirteen other sacrifice-cost abilities.**
-  `_ability_available` refuses any ability with a sacrifice rider because
-  the planner cannot model the cost; 2,733 battlefield-turns of Strip
-  Mine produced zero activations. Land destruction is a real control tool
-  and this is the last big dead card in the list. Not attempted here: it
-  needs `_best_victim` to look past creatures, and against five starters
-  holding fifteen basics apiece the gauntlet could not have measured it.
-* **The Deck still loses 96% to White Knights.** The loss profile says
-  why it is not a board problem: over 49 losses to White Knights and
-  Mountain Artillery the AI died on turn 27.8 with **8.4 lands untapped
-  and 1.8 enemy creatures worth 3.7 power on the table**. It is being
-  ground down, not overrun — and 4 City of Brass paying a life a tap over
-  28 turns is the first thing to instrument next. `ManaPlanner` has no
-  model of a source that HURTS to tap; it orders by colour flexibility
-  alone, which happens to defer City of Brass but for the wrong reason.
+* ~~**Strip Mine, and the thirteen other sacrifice-cost abilities.**~~
+  **CLOSED 2026-09-06** — `AiProfile.pays_sacrifices`, priced by the
+  body that goes, `_best_victim` looking past creatures; Dracur's mirror
+  49.8% -> 52.0%, the control pair byte-identical. See THE 2026-09-06
+  PASS. (As written here: `_ability_available` refused any ability with
+  a sacrifice rider; 2,733 battlefield-turns of Strip Mine, zero
+  activations.)
+* ~~**The Deck still loses 96% to White Knights.**~~ **INSTRUMENTED AND
+  ANSWERED 2026-09-06**: the four Cities cost The Deck 3.3 life a game
+  against 17 from the opponent — a tax, not the loss; the 96% is the
+  matchup (The Abyss cannot target a White Knight). The tax got its model
+  anyway (`ManaAbility.pain`, `AiProfile.minds_pain`: 6.2% -> 7.1%
+  against White Knights) and the planner will never tap the last City at
+  1 life. The loss profile stands as it was read: died on turn 27.8 with
+  8.4 lands untapped and 1.8 enemy creatures worth 3.7 power on the table
+  — ground down, not overrun.
 * **The counter threshold is an absolute card value** (`counter_threshold`
   against `Evaluator.card_value`), so against White Knights The Deck
   counters almost nothing: Savannah Lions prices at 3.0 and Crusade at
@@ -5590,13 +5591,15 @@ The two shortest summaries worth having here:
   so keying off it would draw every masked creature face up in those
   modes. The day the engine can answer, this relaxes at one line in
   `DuelScreen._make_card`.
-* **`GameSkin._texture_cache` has no bound.** It is a static dictionary
-  that never evicts, so a full browse of the Deck Builder's grid holds
-  every art it has ever shown: 682 MB across the pool's 897 crops, and
-  909 MB now that the crops carry mipmaps (§5.6 — the mipmaps are +33%,
-  the CACHE is the cliff). An LRU or a per-screen clear is the fix; the
-  static-var rule from `CONTRIBUTING.md` does not forbid it (it holds textures,
-  not `CardData`).
+* ~~**`GameSkin._texture_cache` has no bound.**~~ **CLOSED 2026-09-06**:
+  the card art has its own cache, `GameSkin._art_cache`, least-recently-
+  used and capped at `ART_CACHE_CAP` = 256 pictures; missing pictures are
+  remembered apart so they cost a search and no slot. Measured under
+  Xvfb, a browse of 600 arts: **267 MB held (256 kept) against 608 MB
+  unbounded** — the 909 MB at the whole pool becomes a ceiling of about
+  270 whatever is browsed. See THE 2026-09-06 PASS. (As written: a static
+  dictionary that never evicted — 682 MB across the pool's 897 crops, 909
+  MB with mipmaps; the mipmaps were +33%, the cache was the cliff.)
 
 ## THE DECK BUILDER PLAYTEST PASS (2026-09-04) — eight items, five of them [QoL]
 
@@ -5779,6 +5782,260 @@ and not ours.
 Both items are pinned in `tests/ui/test_title_screen.gd`, including the
 ceiling on the splash wait — a later "make it a bit longer again" that
 pushed past two seconds would fail a test rather than pass a review.
+
+## THE 2026-09-06 PASS — three playtest reports, two AI capabilities, one window
+
+> *"analyze all work done and all recent patches also and whole codebase
+> and do a bug hunt, optimization pass and implement any key and
+> low-hanging fruit features that would really benefit the player and
+> improve the game. Do also an AI game engine pass over everything."*
+
+Three things the owner saw at the table came first; then the two AI
+capabilities the control sweep had left open with numbers against them;
+then one `[QoL]` window the design doc had promised since v1 and the
+audio cue it turned up. Everything measured is measured the sweep's way:
+the candidate on ONE seat against the shipped pilot with the knob off on
+both, same seeds, and a control pair on decks the change cannot touch
+that must land byte-identical.
+
+### The three playtest reports
+
+**1. The deck builder's left edge (photo).** *"Backgrounds still do not
+align from the left side."* The deck's block of columns was CENTRED in
+its area — a leftover strip split between both ends, which is right for
+the Inventory's teal field — and the quilt of carved frames was laid from
+where the block started, so on a 2560-wide window thirty pixels of bare
+weave stood between the sideboard's edge and the first carving. Under it
+a SECOND copy of the weave, grown three pixels past the area "so it reads
+as a panel", repeated a 32x32 tile on a different phase from the one
+beneath it and drew a hard seam three pixels off the quilt. Both gone:
+a quilted surface lays its carvings from the area's own top-left corner
+edge to edge, the first card sits half a gap inside the first frame
+(`CardArea._lead`), the leftover is on the RIGHT under a partial column
+of carvings, and the sideboard's slate takes the deck area's own left and
+right edges so the two panels read as one column. `tests/ui/
+test_deck_builder.gd` pins the lead, the edge and the seam's absence.
+
+**2. Untamed Wilds asked for its land twice, and the land never came.**
+The library picker opens BEFORE the cast, parks the pick on the
+`HumanAgent`, and the resolution spends it. Paid from a full pool that
+worked (the Demonic Tutor test of 2026-09-02 pays that way). Paid ONE
+LAND AT A TIME it did not: the engine emits `state_changed` from inside
+`cast_spell`, `_refresh` answers it with `_retry_payment`, and with the
+cast in `Mode.PAYING` that found the pool moved and submitted the SAME
+cast again — from inside the first, with the card already on the chain.
+The engine refused the echo, the refusal cleared the pending cast the
+way a real refusal does, and the parked pick went with it, so the
+resolution asked all over again and the answer had nowhere to land.
+`_submit_pending` is not re-entrant now (`_submitting`), and
+`tests/ui/test_tutor_payment_2026_09_06.gd` plays the cast both ways —
+tapping lands one at a time and by the double-click's auto-tap — through
+the live screen, asserting one ask, one Mountain on the battlefield.
+
+**3. "A 1/1 blocker kills a bigger creature"** — the owner asked for this
+to be *checked and asserted* on creatures wearing several auras. It was
+checked and it holds: `tests/unit/test_combat_auras_2026_09_06.gd` pins
+that a body's LIVE toughness — printed plus every aura, every
+until-end-of-turn pump, every counter — is what its damage is measured
+against, in every combat shape the table produces: a single block, a
+gang block, first strike, the 1997 damage-prevention window with a human
+on both seats, and the human dividing their own damage. The rules half
+of the same afternoon's aura reports (all 1326 creature-aura pairs, and
+an aura on a permanent its caster does not control) is in
+`tests/cards/test_auras_2026_09_06.gd`. The Hurr Jackal report — the
+prevention window with no life change — is still waiting on the owner's
+answer to one question (did life not move at all, or drop by 2?) and is
+not closed by this.
+
+### The AI: two capabilities the control sweep had priced and left
+
+**4. A sacrifice is a price, not a refusal — `AiProfile.pays_sacrifices`.**
+The sweep's own row: *"2,733 battlefield-turns of Strip Mine produced
+zero activations"*, because `_ability_available` refused every ability
+with a sacrifice rider outright. It is a CAPABILITY now, gated like
+`plays_engines` (Sorcerer and Wizard have it; the Apprentice and the
+Magician not holding it is the same honest weakness as the Apprentice
+never holding an instant), and nothing it gates is card-named:
+`_sacrifice_price` says what the body that goes is worth — the source
+itself for "Sacrifice this", the cheapest legal body for "Sacrifice a
+<desc>", both on `_own_value`'s scale, where a land counts the lands
+still in hand and carries a surcharge when losing it would leave the
+hand's biggest spell uncastable — and the scorer's bar says whether the
+effect buys more. `_best_victim` looks past creatures for it: a land, an
+artifact or an enchantment is only ever *finished* by removal, so those
+are shopped when the effect `removes` and priced by `_victim_value`,
+which is what lets a Strip Mine take the dual over the basic and a
+Scavenger Folk the Disk over the Ring. The pump paths — combat, shield,
+attack-time — still do not see a sacrifice-priced ability at all, and
+must not: a Fallen Angel or an Atog read as a pump eats the board one
+Serra at a time, which is what it did before the gate existed. "Sacrifice
+any number" (Sword of the Ages) is one optional ask per body and stays
+outside the model. `tests/ai/test_ai_sacrifice_2026_09_06.gd`, 11 tests.
+
+**MEASURED** (2,000 games a pair, seed 11, `wizard` on seat A against
+`wizard:pays_sacrifices=off` on both):
+
+| Matchup | null | candidate |
+|---|---|---|
+| Dracur (Strip Mine, Sinkhole, Ice Storm) mirror | 49.8% | **52.0%** |
+| Dracur vs Big Green | 25.3% | **27.2%** |
+| Sedge Beast mirror | 48.5% | 49.0% |
+| Big Green vs White Knights (no sacrifice card in either) | 527/1000 | 527/1000 — **byte-identical** |
+
+The instrumented 200-game run against Big Green: 45 Strip Mine
+activations where there were none, and the three sorceries around it
+cast at the same rate (Ice Storm 187 vs 191, Sinkhole 134 vs 135, Stone
+Rain 168 vs 166) — the Mine is played on top of the land destruction,
+not instead of it.
+
+**5. The life a tap costs — `ManaAbility.pain`, `AiProfile.minds_pain`.**
+The sweep's other open row: The Deck dying on turn 27.8 with 8.4 lands
+untapped, and *"4 City of Brass paying a life a tap over 28 turns is the
+first thing to instrument next"*. Instrumented: 3.3 self-inflicted
+damage a game against 17 from the opponent. **A tax, not the loss** —
+the 96% against White Knights is the matchup (The Abyss cannot target a
+White Knight), not the mana. The tax is still real and the planner had
+no model of it: every point of mana was equally free, and City of Brass
+was deferred by colour-flexibility ordering for the wrong reason. Now
+a mana ability can say it `hurting(1)` (City of Brass, Elves of Deep
+Shadow), `ManaPlanner.cheapest_source_first` sorts pain LAST, the planner
+never taps a source whose damage meets our life total
+(`_pain_excluded`, `{id: true}` — the same shape as the 1997 `Don't auto
+tap this card` mark), and `_try_activate` prices the life an ability's
+taps would cost at `_life_price` (cheap at 20, dear under 8) against
+what the ability buys. On for EVERY profile — an Apprentice that kills
+itself tapping for a Grizzly Bears is not weak, it is broken; the knob
+exists so the Deck Lab can run the null. A first cut that REFUSED every
+painful source at the sink measured the same within noise (7.2% /
+13.4%) but would not draw off a Jayemdae Tome through a City at 20 life,
+plainly the trade to make, so the sink prices the life instead.
+`tests/ai/test_ai_pain_2026_09_06.gd`, 10 tests.
+
+**MEASURED** (2,000 games a pair, seed 11, `wizard` against
+`wizard:minds_pain=off` on both):
+
+| Matchup | null | candidate |
+|---|---|---|
+| The Deck vs White Knights | 6.2% | **7.1%** |
+| The Deck vs Big Green | 12.6% | **13.1%** |
+| Saltrem Tor (four Cities) mirror | 50.6% | 50.7% |
+| Saltrem Tor vs Big Green | 23.4% | 23.6% |
+| Big Green vs White Knights (no painful source) | 1076/2000 | 1076/2000 — **byte-identical** |
+
+Small, in the direction the model says, and the point was never the
+percentage: it was the planner tapping the LAST City at 1 life for a
+spell that could wait, which the engine allowed and the null run does.
+
+**The Deck Lab learned to name a null.** Every measurement in this file
+before today needed a scratch patch on the tree to turn a capability off
+on one seat. `--profile-a wizard:pays_sacrifices=off,counter_threshold=4`
+now applies knob overrides to a preset (`AiProfile.apply_overrides`:
+booleans read on/off, numbers as the knob's type, an unknown knob is a
+refusal at parse time and not a silent Wizard). The parser first accepted
+the spec and then dropped it on the floor — which is why the first
+control pair above was run twice.
+
+**Still open, and now the only row:** the counter threshold is an
+absolute card value, so against White Knights The Deck counters almost
+nothing (Savannah Lions 3.0, Crusade 3.0, a Wizard's bar 5.0). Weissman's
+rule — counter what your hand cannot answer LATER — is a capability of a
+different kind and needs its own measurement.
+
+### The window, and the cue it turned up
+
+**6. THE DUEL LOG — `L` — `[QoL]`.** The engine has kept a full audit
+trail (`MtgGame.log_lines`) since the first commit, and the design doc's
+§5 said *"Full game log (the engine's log, scrolling, always visible)"*
+shipped in v1 — while the table, under the complete-reimplementation
+rule (the 1997 screen had no log pane), showed none of it and the
+sidebar's comment promised *"a QoL log viewer returns later"*. It has
+returned as a WINDOW, not a pane: `game/duel/duel_log.gd`, on the
+`CombatWindow`'s pattern — the knot ground, the Situation-Bar title,
+drag by the bar, clamped on screen, its position remembered
+(`Settings` `duel_log_pos`) — with the text inset on the library
+picker's dark-stone list ground because the first screenshot showed pale
+lettering on the busy knot unreadable. Turn headers are lit; everything
+else is the choice colour; `bbcode_enabled` is off so a `[QoL]` in a log
+line is text and not markup. Three doors onto one window: the `L` key,
+a page-of-lines glyph on the reserve strip beside Expand (the pause
+window measured full at five buttons; the strip had room), and the
+window's own `×`; the button's pressed state follows the window whichever
+door was used. **Not a modal**: the duel runs on under it, `_modal_open`
+and `_dialogs_open` leave it out, Space/Return/Esc keep their jobs, `Q`
+still pauses over it. `Copy` puts the whole log on the clipboard, `Save`
+writes `user://duel_log_<ticks>.txt` and says where on the bar. 16 tests
+in `tests/ui/test_duel_log_2026_09_06.gd`, checked by looking under Xvfb.
+
+**7. `Discard.wav` for every discard — `Mtg.EventType.CARD_DISCARDED`.**
+Wiring the window meant reading the sound table again, and the discard
+cue was played BY THE SCREEN, on the human's confirmed cleanup discard
+only: a Hymn to Tourach, a Mind Twist, a Hypnotic Specter's hit, the
+AI's own cleanup — all mute. The 1997 site is `functions.c:14861`,
+INSIDE the discard, once per card. So the engine announces it: one
+`CARD_DISCARDED` event per card, after the move, from all three paths
+(`discard_cards`, `discard_random`, `discard_hand`, the cleanup discard
+through the first), carrying `{player, instance, by_effect, to_library}`;
+`DuelAudio.cue_for` maps it to `sfx_discard`; the screen's hand-played
+cue is gone. No rules code reads the event — `CardData.on_discarded` is
+the card hook — and milling (`deck.c:2015` reuses the WAV there) stays
+quiet, as it was. `tests/unit/test_card_discarded_event_2026_09_06.gd`
+(every path, the cleanup one `by_effect == false`, an empty hand
+announcing nothing) and a row in `test_duel_sound.gd`.
+
+**8. No sting for a duel nobody is in.** `Shell_WinDuel.wav` and
+`Shell_LoseDuel.wav` are addressed to the player, and the title screen's
+demo (`DuelConfig.demo_default`, two AIs) ended on the LOSE sting
+whichever AI won, because "not the human" was the lose branch. A duel
+with no human seat now ends in silence, like a draw.
+`tests/ui/test_duel_screen.gd`.
+
+**Three audio ideas looked at and dropped, for the record.** An
+untap-step cue: `BECAME_UNTAPPED -> ""` is the owner's own 2026-09-03
+rule, *"a phase makes no noise by itself"*. `Cancel.wav` on the cancel
+paths: the file is in Duelsounds but the 1997 duel enum
+(`defs.h:2179`) has no `WAV_CANCEL` and no call site, so there is nothing
+to be faithful to. Re-hanging `EndTurn.wav` on the AI's end-turn ACTION
+(`ai.c:588`, the row above): a defensible reading of the source but the
+same owner's rule read literally says no, and it stays unplayed.
+
+### The optimisation, measured
+
+**9. The art cache has a bound.** The card-state catalogue's own note:
+`GameSkin._texture_cache` never evicted, so a full browse of the Deck
+Builder's grid held every art it had ever shown, 909 MB across the pool
+— on a game that calls a Raspberry Pi a first-class target. The card art
+now lives in its own least-recently-used cache, `_art_cache`, capped at
+256 pictures (a duel's two decks are about 60 distinct cards, a Deck
+Builder page about 40), with the names that have no file remembered
+apart so a missing picture costs one search and no slot. A hit re-inserts
+the key, so the card the player keeps looking at is never the one that
+falls off the end; an evicted texture still on a card stays alive on
+that card — the cache's claim is the only one dropped. **Measured under
+Xvfb over a browse of 600 arts: 267 MB held (256 kept) against 608 MB
+unbounded**; the whole pool would have been 909 and is now a ceiling of
+about 270. The 1997 sheets stay in `_texture_cache` unbounded: they are
+few, sliced by pixel coordinates and wanted for the whole run. Four rows
+in `tests/ui/test_skin.gd`, driven with stand-in textures so the bound
+is tested in a checkout with no art.
+
+**The AI's speed, for the record.** The pain model costs the Deck Lab
+about 2% (Saltrem Tor's mirror 173 -> 170 games/s, The Deck against Big
+Green 80 -> 77) and the sacrifice arm nothing measurable (Dracur's
+mirror 177 both ways); the wide runs below held 130 games/s on eight
+threads. No hot path was changed for speed in this pass — the planner's
+new work is one pass over the battlefield per plan.
+
+### The gate, and the bug hunt's wide net
+
+Full suite green before and after (`./run_tests.sh`), both soaks
+(`--rules fifth`, `--rules modern`, six duels each through the live UI,
+exit 0), the Python tools (88), a boot smoke; counts in `README.md` and
+`docs/CODE_MAP.md` are from this run. The wide net — the Deck Lab over
+decks this pass could not have tuned for: Big Green against all 55 of
+the 1997 originals, White Knights against all 55 of the Ancients,
+Mountain Artillery against the five proxy-free tournament decks, 20 games
+a pair at seed 7 — **2,300 games, zero stalled, zero refusals, zero
+engine errors**, on top of the ~24,000 games of the measurements above.
 
 ## Standing quality gates
 

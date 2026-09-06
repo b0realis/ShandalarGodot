@@ -170,7 +170,11 @@ OPTIONS
                       stops at eight; raise it if you have the RAM.
   --profile-a NAME    AI skill piloting deck A / the row deck:
   --profile-b NAME    apprentice|magician|sorcerer|wizard (default wizard
-                      both — skill-neutral deck comparison).
+                      both — skill-neutral deck comparison). A preset may
+                      carry knob overrides, `wizard:pays_sacrifices=off`,
+                      which is how one capability is measured against its
+                      own null: the candidate on seat A, the same preset
+                      with the knob off on seat B, same seeds.
   --out DIR           Output directory (default DeckLab/results/run_<stamp>,
                       printed before the run starts).
   --no-svg            Skip chart generation.
@@ -1241,12 +1245,30 @@ func _run_one_match(task: Dictionary) -> Dictionary:
 	}
 
 
-static func _profile(profile_name: String) -> AiProfile:
+## `wizard`, or `wizard:pays_sacrifices=off,counter_threshold=4` — a
+## preset with knobs overridden ([method AiProfile.apply_overrides]),
+## which is how a capability is measured against its own null without a
+## scratch patch on the tree: the candidate on one seat, the same preset
+## with the knob off on the other, same seeds. An unknown knob is a
+## refusal at parse time, not a silent wizard.
+static func _profile(spec: String) -> AiProfile:
+	var profile_name := spec
+	var overrides := ""
+	var colon := spec.find(":")
+	if colon >= 0:
+		profile_name = spec.substr(0, colon)
+		overrides = spec.substr(colon + 1)
+	var profile: AiProfile
 	match profile_name:
-		"apprentice": return AiProfile.apprentice()
-		"magician": return AiProfile.magician()
-		"sorcerer": return AiProfile.sorcerer()
-		_: return AiProfile.wizard()
+		"apprentice": profile = AiProfile.apprentice()
+		"magician": profile = AiProfile.magician()
+		"sorcerer": profile = AiProfile.sorcerer()
+		_: profile = AiProfile.wizard()
+	if overrides != "":
+		var bad := profile.apply_overrides(overrides)
+		if bad != "":
+			push_error("--profile: unknown knob '%s' in '%s'" % [bad, spec])
+	return profile
 
 
 ## Load one deck, and — when [param format] is set — REFUSE it here rather
@@ -1422,8 +1444,8 @@ const FLAG_HINTS := {
 	"--seed": "--seed N: base RNG seed, default 1 — the same seed replays a run",
 	"--jobs": "--jobs N: worker threads INSIDE one process, default 4 (0 = every core, which is slower — see --procs)",
 	"--procs": "--procs N: separate worker processes, default 8 when the run is big enough (1 = none). Each is ~235 MB and about 8x the speed of threads",
-	"--profile-a": "--profile-a NAME: apprentice|magician|sorcerer|wizard, default wizard",
-	"--profile-b": "--profile-b NAME: apprentice|magician|sorcerer|wizard, default wizard",
+	"--profile-a": "--profile-a NAME[:knob=value,...]: apprentice|magician|sorcerer|wizard, default wizard",
+	"--profile-b": "--profile-b NAME[:knob=value,...]: apprentice|magician|sorcerer|wizard, default wizard",
 	"--out": "--out DIR: where report.txt/results.json/matchups.csv are written",
 	"--elo-file": "--elo-file PATH: the Elo ledger, default " + EloLedger.DEFAULT_PATH,
 	"--lives": "--lives N or A,B: starting life per seat, default 20,20",
@@ -1574,9 +1596,18 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				if opts.jobs < 0:
 					return {"error": "--jobs must be >= 0 (0 = every core)"}
 			"--profile-a", "--profile-b":
-				if not PROFILES.has(value.to_lower()):
+				# `wizard` or `wizard:knob=value,...` (see _profile): the
+				# preset is checked by name, the knobs by trying them on.
+				var spec := value.to_lower()
+				var colon := spec.find(":")
+				var preset := spec if colon < 0 else spec.substr(0, colon)
+				if not PROFILES.has(preset):
 					return {"error": "unknown profile '%s'" % value}
-				opts["profile_a" if arg == "--profile-a" else "profile_b"] = value.to_lower()
+				if colon >= 0:
+					var bad := _profile(preset).apply_overrides(spec.substr(colon + 1))
+					if bad != "":
+						return {"error": "unknown knob '%s' in profile '%s'" % [bad, value]}
+				opts["profile_a" if arg == "--profile-a" else "profile_b"] = spec
 			"--out": opts.out = value
 			"--elo-file": opts.elo_file = value
 			"--lives":

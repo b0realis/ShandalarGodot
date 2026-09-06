@@ -8,16 +8,18 @@ extends CardScript
 ## controller — ANY tap fires it: for mana, or an Icy Manipulator's
 ## effect. This is a NORMAL (stacked) trigger, not a mana trigger — the
 ## damage happens after the mana is in the pool, matching the card's
-## play pattern.
+## play pattern. `.hurting(1)` on each option is for the mana planner
+## only ([member ManaAbility.pain]): the engine deals the damage through
+## the trigger, the planner just knows the tap is not free.
 
 
 func build() -> CardData:
 	return CardData.new("City of Brass", "", Mtg.CardType.LAND) \
-		.mana(ManaAbility.new(Mtg.ManaColor.W)) \
-		.mana(ManaAbility.new(Mtg.ManaColor.U)) \
-		.mana(ManaAbility.new(Mtg.ManaColor.B)) \
-		.mana(ManaAbility.new(Mtg.ManaColor.R)) \
-		.mana(ManaAbility.new(Mtg.ManaColor.G)) \
+		.mana(ManaAbility.new(Mtg.ManaColor.W).hurting(1)) \
+		.mana(ManaAbility.new(Mtg.ManaColor.U).hurting(1)) \
+		.mana(ManaAbility.new(Mtg.ManaColor.B).hurting(1)) \
+		.mana(ManaAbility.new(Mtg.ManaColor.R).hurting(1)) \
+		.mana(ManaAbility.new(Mtg.ManaColor.G).hurting(1)) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.BECAME_TAPPED,
 			_self_burn,

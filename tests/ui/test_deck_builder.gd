@@ -618,6 +618,49 @@ func test_the_deck_area_is_a_quilt_of_1997_slot_carvings() -> void:
 	assert_false(screen._inventory.slot_plaques, "the Inventory is not")
 
 
+func test_the_quilt_starts_at_the_deck_areas_own_edge() -> void:
+	# The owner's photo of a wide window, 2026-09-06: *"backgrounds still
+	# do not align from the left side"*. The deck's block of columns was
+	# CENTRED and the carvings were laid from where the block started, so
+	# on a 2560-wide screen thirty pixels of bare weave stood between the
+	# sideboard's left edge and the first carving. A quilted surface does
+	# not centre its block: the first carved frame stands on the area's
+	# edge and the card sits half a gap inside it — at every width, with
+	# the leftover on the right under more carvings (CardArea._lead).
+	screen._add_one("Lightning Bolt")
+	for width in [1280.0, 1422.0, 1920.0]:
+		screen.size = Vector2(width, 800)
+		await get_tree().process_frame
+		assert_eq(screen._deck_area._cells[0].position, CardArea.GAP / 2.0,
+			"%d wide: the first card sits inside the first carving" % int(width))
+		assert_eq(screen._deck_area._inset, CardArea.GAP.x / 2.0,
+			"%d wide: the block is not centred" % int(width))
+	# ...while the Inventory, on Dekbar1's plain field, still centres its
+	# block so its leftover strip stays off one end.
+	var inventory := screen._inventory
+	var block := inventory.columns() * (inventory._cell.x + CardArea.GAP.x) - CardArea.GAP.x
+	assert_almost_eq(inventory._inset, (inventory._inner_size().x - block) / 2.0, 0.01,
+		"the Inventory's block is centred")
+	assert_gt(inventory._inset, 0.0, "and there is a strip to split")
+
+
+func test_the_sideboard_field_shares_the_deck_areas_edges() -> void:
+	# The same photo's other line: the sideboard's teal field was grown
+	# three pixels on every side, so it stood proud of the quilt above it
+	# on the left AND the right, and two panels stacked on one column did
+	# not read as one column. It grows only up and down now.
+	for width in [1280.0, 1920.0]:
+		screen.size = Vector2(width, 800)
+		await get_tree().process_frame
+		var deck := screen._deck_area.get_rect()
+		var field := screen._side_ground.get_rect()
+		assert_eq(field.position.x, deck.position.x,
+			"%d wide: the same left edge" % int(width))
+		assert_eq(field.end.x, deck.end.x, "%d wide: the same right edge" % int(width))
+		assert_lt(field.position.y, screen._sideboard_area.position.y,
+			"but a margin above the strip's cards")
+
+
 func test_the_inventory_is_one_row_of_full_size_cards() -> void:
 	# The screenshot shows a single rack of large cards, not two rows of
 	# miniatures. The trade is stated in _build_inventory: fewer cards on

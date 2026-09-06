@@ -217,6 +217,18 @@ func test_the_rest_of_the_1997_vocabulary_is_where_it_was() -> void:
 		{"instance": _inst("Grizzly Bears")}), "sfx_buried")
 
 
+func test_a_discard_sounds_whoever_discards_and_whyever() -> void:
+	# WAV_DISCARD is played INSIDE the original's discard (`functions.c:
+	# 14861`), once per card — not only on the human's cleanup discard,
+	# which was the one place the screen used to play it by hand.
+	for by_effect in [false, true]:
+		for to_library in [false, true]:
+			assert_eq(_cue(Mtg.EventType.CARD_DISCARDED, {"player": 1,
+				"instance": _inst("Grizzly Bears"), "by_effect": by_effect,
+				"to_library": to_library}), "sfx_discard",
+				"by_effect=%s to_library=%s" % [by_effect, to_library])
+
+
 func test_an_event_the_1997_game_had_no_sound_for_is_silent() -> void:
 	# BLOCKED fires once per attacker/blocker PAIR; the original's
 	# WAV_BLOCK2 is on the declaration (`engine.c:1539`), so a double

@@ -12,7 +12,7 @@ func build() -> CardData:
 	return CardData.new("Elves of Deep Shadow", "{G}", Mtg.CardType.CREATURE) \
 		.pt(1, 1) \
 		.with_subtypes(["elf", "druid"]) \
-		.mana(ManaAbility.new(Mtg.ManaColor.B).with_side_effect(_sting)) \
+		.mana(ManaAbility.new(Mtg.ManaColor.B).with_side_effect(_sting).hurting(1)) \
 		.oracle("{T}: Add {B}. This creature deals 1 damage to you.")
 
 

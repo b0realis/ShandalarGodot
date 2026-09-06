@@ -35,11 +35,12 @@ extends RefCounted
 
 ## The untapped mana sources [param pid] has right now, sorted the way the
 ## planner wants them:
-## `[inst, ability_index, color, amount, sacrifice, restriction_key]`.
+## `[inst, ability_index, color, amount, sacrifice, restriction_key, pain]`.
 ## `restriction_key` is "" for ordinary mana and the
 ## [member ManaAbility.restriction_key] of mana that may pay only for one
 ## kind of spell (Mishra's Workshop's "artifact") — a source a plan may use
-## only when the caller's `usage_keys` include the key.
+## only when the caller's `usage_keys` include the key. `pain` is
+## [member ManaAbility.pain], the life the tap costs (City of Brass).
 ##
 ## Split out from [method plan] because the list depends only on the
 ## battlefield, while a single "what should I cast?" pass plans a cost for
@@ -52,15 +53,20 @@ extends RefCounted
 ## to tap a locked land is manually, by clicking on it"* (`Duel.hlp`, topic
 ## **Territory**). Floating mana is never excluded: it is already in the
 ## pool and cannot be "not tapped".
-static func sources(game: MtgGame, pid: int, excluded: Dictionary = {}) -> Array:
-	var out: Array = []   # [inst, ability_index, color, amount, sacrifice, restriction_key]
+##
+## [param mind_pain] — off, and a source that hurts to tap sorts like any
+## other (the planner as it was before 2026-09-06). It is the Deck Lab's
+## null for [member AiProfile.minds_pain]; nothing else turns it off.
+static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
+		mind_pain := true) -> Array:
+	var out: Array = []   # [inst, ability_index, color, amount, sacrifice, restriction_key, pain]
 	# Mana already floating (a resolved Dark Ritual) is a source that costs
 	# nothing to "tap": a null instance the executors skip. Without it the
 	# Ritual's {B}{B}{B} sat in the pool until the step ended and burned.
 	var pool := game.players[pid].mana_pool
 	for color in Mtg.ManaColor.values():
 		for unit in pool.amount_of(color):
-			out.append([null, unit, color, 1, false, ""])   # one unit per entry
+			out.append([null, unit, color, 1, false, "", 0])   # one unit per entry
 	for inst in game.players[pid].battlefield:
 		if inst.tapped or inst.cur_mana_abilities.is_empty():
 			continue
@@ -96,8 +102,9 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {}) -> Array
 			elif ability.dynamic_color.is_valid():
 				color = int(ability.dynamic_color.call(game, inst))
 			out.append([inst, index, color,
-				amount, ability.sacrifice_source, ability.restriction_key])
-	# Fewer options first; sacrifices last.
+				amount, ability.sacrifice_source, ability.restriction_key,
+				ability.pain if mind_pain else 0])
+	# Fewer options first; painful sources after painless; sacrifices last.
 	out.sort_custom(cheapest_source_first)
 	return out
 
@@ -169,13 +176,40 @@ static func source_usable(s: Array, usage_keys: Array) -> bool:
 
 
 ## Comparator for [method sources]: non-sacrifice sources first, then the
-## least flexible land (a basic before a dual). A named static instead of
-## an inline lambda — the planner runs once per castable card per AI
-## action, and a lambda allocates a fresh Callable on every call.
+## ones that cost no life (a Plains, and a Tundra too, before a City of
+## Brass — the dual's flexibility is free and the City's costs a life a
+## tap), then the least flexible land (a basic before a dual). A named
+## static instead of an inline lambda — the planner runs once per
+## castable card per AI action, and a lambda allocates a fresh Callable
+## on every call.
 static func cheapest_source_first(a: Array, b: Array) -> bool:
 	if a[4] != b[4]:
 		return not a[4]
+	var pain_a := source_pain(a)
+	var pain_b := source_pain(b)
+	if (pain_a > 0) != (pain_b > 0):
+		return pain_a == 0
 	return source_options(a) < source_options(b)
+
+
+## The life a source's tap costs its controller ([member ManaAbility.pain]).
+static func source_pain(s: Array) -> int:
+	return int(s[6]) if s.size() > 6 else 0
+
+
+## The life [param tap_plan] would cost, summed over the sources in
+## [param src] it taps — what an AI seat charges an ability for being
+## paid through a City of Brass ([method AiPlayer._try_activate]).
+static func plan_pain(src: Array, tap_plan: Array) -> int:
+	var pain := 0
+	for step in tap_plan:
+		if step[0] == null:
+			continue
+		for s in src:
+			if s[0] == step[0] and int(s[1]) == int(step[1]):
+				pain += source_pain(s)
+				break
+	return pain
 
 
 ## How many ways a source can make mana (floating mana: none — spend it

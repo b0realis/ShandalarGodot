@@ -141,6 +141,23 @@ func with_life_cost(amount: int) -> ManaAbility:
 	return self
 
 
+## WHAT THE TAP COSTS IN LIFE — not a cost the player pays (that is
+## [member life_cost], which the planner refuses to model) but damage the
+## source deals its controller for being tapped: City of Brass's trigger,
+## Elves of Deep Shadow's rider. The engine never reads it; it is the
+## planner's knowledge that this mana is not free ([method
+## ManaPlanner.cheapest_source_first] taps a Plains before a City, and
+## [method AiPlayer._pain_excluded] keeps the AI from paying a life for
+## mana that was about to be wasted, or the last life it has).
+var pain: int = 0
+
+## Fluent: this source deals [param amount] damage to its controller when
+## tapped (see [member pain]).
+func hurting(amount: int) -> ManaAbility:
+	pain = amount
+	return self
+
+
 ## Optional side effect run right after the mana is produced:
 ## [code]func(game: MtgGame, source: CardInstance, controller: int) -> void[/code].
 ## For mana abilities whose text does more than add mana (Elves of Deep
