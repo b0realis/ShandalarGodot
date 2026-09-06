@@ -258,3 +258,72 @@ func test_dividing_damage_onto_an_enchanted_blocker_through_its_aura() -> void:
 	screen._on_card_clicked(strength)   # the aura band on the blocker
 	assert_eq(int(screen._damage_picks.get(bears.id, 0)), 1,
 		"the point went onto the creature under the aura")
+
+
+# ======================================== ...AND WHEN THERE ARE TWO --
+#
+# THE SECOND REPORT, the same afternoon: *"I have a Hurr Jackal — it has
+# Firebreathing and The Brute enchantments on it. I attack with it, no
+# blocker, no other cards in play. My attack does not go through."*
+#
+# A SECOND aura peeks a second step out, so the band standing proud of the
+# creature belongs to the OUTER one and the inner aura shows only a thin
+# strip between them. Both are live [MiniCard]s and either can be the one
+# the player hits, so both must mean the creature. The whole class is
+# swept in `tests/cards/test_auras_2026_09_06.gd` (§1) — every pair and
+# every triple in the pool, for the summed body and for the damage it
+# deals — and this is the board the report named, through the screen.
+
+func test_the_reported_two_aura_board() -> void:
+	var g: MtgGame = screen.game
+	var jackal := _summon("Hurr Jackal", 0)
+	var breath := _enchant("Firebreathing", jackal, 0)
+	var brute := _enchant("The Brute", jackal, 0)
+	assert_eq(jackal.cur_power, 2, "1/1 wearing The Brute's +1/+0")
+	_attackers_moment()
+	# The OUTER band — the one a player's pointer meets first.
+	screen._on_card_clicked(brute)
+	assert_true(screen._selected_attackers.has(jackal.id),
+		"the outer aura's band declares the creature")
+	# ...and the INNER one, the strip between the two.
+	screen._on_card_clicked(breath)
+	assert_false(screen._selected_attackers.has(jackal.id),
+		"the inner aura's band is the same creature (take-back)")
+	screen._on_card_clicked(breath)
+	screen._on_done()
+	assert_true(g.combat.attackers.has(jackal.id), "the engine has the attacker")
+	assert_ok_step(g)
+	assert_eq(g.players[1].life, 18,
+		"2 unblocked damage reached the defender (CR 510.1c)")
+
+
+## A THIRD one on top changes nothing: the outermost band is still the
+## creature.
+func test_three_auras_deep() -> void:
+	var jackal := _summon("Hurr Jackal", 0)
+	_enchant("Firebreathing", jackal, 0)
+	_enchant("The Brute", jackal, 0)
+	var strength := _enchant("Holy Strength", jackal, 0)
+	assert_eq(jackal.attachments.size(), 3, "all three are on it")
+	assert_eq(jackal.cur_power, 3, "1/1 +1/+0 +1/+2 — cumulative")
+	assert_eq(jackal.cur_toughness, 3)
+	_attackers_moment()
+	screen._on_card_clicked(strength)
+	assert_true(screen._selected_attackers.has(jackal.id),
+		"the third band is still the creature")
+
+
+## AND THE REFUSAL STILL SURFACES THROUGH TWO OF THEM. Hurr Jackal has a
+## {T} ability of its own, so a Jackal that answered a Drudge Skeletons
+## this turn is tapped and cannot attack — and the bar must say so rather
+## than swallow the click, which is the whole point of the first fix.
+func test_a_tapped_jackal_says_so_through_its_auras() -> void:
+	var jackal := _summon("Hurr Jackal", 0)
+	_enchant("Firebreathing", jackal, 0)
+	var brute := _enchant("The Brute", jackal, 0)
+	jackal.tapped = true
+	_attackers_moment()
+	screen._on_card_clicked(brute)
+	assert_false(screen._selected_attackers.has(jackal.id))
+	assert_string_contains(screen._prompt_label.text, "Illegal attacker.")
+	assert_string_contains(screen._prompt_label.text, "tapped")

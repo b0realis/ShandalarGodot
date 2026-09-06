@@ -200,3 +200,166 @@ func test_a_doubled_x_cost_steps_the_field_so_no_mana_is_wasted() -> void:
 	screen._on_x_confirmed()
 	assert_eq(screen._pending_x, 2)
 	assert_eq(screen._pending_slots[0]["max"], 2, "X targets, and X is 2")
+
+
+# --------------------------------- the bound is POTENTIAL mana, not the pool --
+#
+# THE DEFECT (playtest, 2026-09-06): *"Disintegrate makes a dialog and asks
+# for generic mana to put into the spell. However it does not let me tap
+# the lands to put into the spell, or select any mana at the dialog!"*
+#
+# Both halves of that sentence are one bug. 1997 pays for a spell AFTER it
+# is chosen — *"Once you've selected a spell to cast, you must draw enough
+# mana… to power the spell"* (`Duel.hlp`, topic **Hands**) — so at the
+# moment this question is asked the floating pool is EMPTY and the lands
+# are still untapped. The bound was read off that empty pool, so the field
+# was 0..0 with nothing to select; and the window is modal
+# ([method DuelScreen._modal_open]), so the lands could not be tapped
+# either. X was 0 and every {X} spell in the pool was uncastable by hand.
+#
+# The bound is the same number the double-click already knew:
+# *"ALL of the mana you have available in your pool AND FROM LAND SOURCES"*
+# (`Duel.hlp`, topic **Hands**, and again under **Spells**) —
+# `DuelScreen._auto_x_budget`, whose own doc comment described itself as
+# "[method _open_x_dialog]'s own budget loop, asked of potential mana
+# instead of the floating pool". Now they are one function.
+
+func test_the_bound_counts_the_untapped_lands_not_only_the_pool() -> void:
+	# Six Mountains, nothing floating: the {R} takes one and the other five
+	# are X. Before the fix `max_value` was 0 and OK cast Disintegrate for
+	# X = 0.
+	for _n in 6:
+		_put(0, "Mountain")
+	_put(1, "Grizzly Bears")
+	screen.game.recalculate()
+	_main_phase()
+	assert_eq(screen.game.players[0].mana_pool.total(), 0,
+		"nothing is floating — the lands are the whole budget")
+	screen._click_hand_card(_give("Disintegrate"))
+	assert_not_null(screen._x_dialog, "the X question is up")
+	assert_eq(int(screen._x_spin.max_value), 5,
+		"six Mountains less the one that pays the {R}")
+
+
+func test_the_x_spell_can_actually_be_cast_from_untapped_lands() -> void:
+	# End to end, the way the player meets it: click, dial X to the max the
+	# window offers, aim, then tap the lands the cast is waiting for.
+	for _n in 6:
+		_put(0, "Mountain")
+	var victim := _put(1, "Grizzly Bears")
+	screen.game.recalculate()
+	_main_phase()
+	screen._click_hand_card(_give("Disintegrate"))
+	screen._x_spin.value = screen._x_spin.max_value
+	screen._on_x_confirmed()
+	assert_eq(screen._pending_x, 5, "five damage, not nothing")
+	screen._on_card_clicked(victim)
+	assert_eq(screen.mode, DuelScreen.Mode.PAYING,
+		"the cast is held open for its mana, as 1997 holds it")
+	for land in screen.game.players[0].battlefield:
+		screen._on_card_clicked(land)
+	assert_eq(screen.game.stack.size(), 1, "the cast went through")
+	assert_eq(screen.game.stack[0].x_value, 5)
+
+
+func test_the_pool_and_the_lands_are_added_together() -> void:
+	# A resolved Dark Ritual in the pool is a source like any other
+	# (`ManaPlanner.sources` lists floating mana first).
+	for _n in 3:
+		_put(0, "Mountain")
+	screen.game.recalculate()
+	_main_phase()
+	screen.game.players[0].mana_pool.add(Mtg.ManaColor.C, 2)
+	screen._click_hand_card(_give("Disintegrate"))
+	assert_eq(int(screen._x_spin.max_value), 4,
+		"three lands and two floating, one of the lands for the {R}")
+
+
+func test_an_ability_x_counts_the_lands_too() -> void:
+	# The same question is asked for an activated ability's {X}
+	# (Candelabra of Tawnos, Voodoo Doll's {X}{X}), through the same door.
+	var lamp := _put(0, "Aladdin's Lamp")
+	for _n in 4:
+		_put(0, "Mountain")
+	screen.game.recalculate()
+	_main_phase()
+	lamp.summoning_sick = false
+	screen._open_ability_menu(lamp)
+	screen._on_ability_chosen(0)
+	assert_not_null(screen._x_dialog, "the ability asks for its X")
+	assert_eq(int(screen._x_spin.max_value), 4, "four untapped Mountains")
+
+
+# ------------------------------------------------------- the whole {X} class --
+
+func _basics(each: int) -> void:
+	for land in ["Plains", "Island", "Swamp", "Mountain", "Forest"]:
+		for _n in each:
+			_put(0, land)
+	screen.game.recalculate()
+
+
+func test_every_x_spell_in_the_pool_offers_a_bound_it_can_pay() -> void:
+	# THE CLASS, not the one card the playtest named: every card whose CAST
+	# cost carries an {X} is dealt to a seat with four of each basic and
+	# clicked. Each must offer a field the player can actually move —
+	# twenty lands less its own coloured pips — or it is as unplayable as
+	# an unimplemented card.
+	_basics(4)
+	_main_phase()
+	var seen := 0
+	for card_name in CardRegistry.all_names():
+		var data := CardRegistry.get_card(card_name)
+		if not data.cost.has_x:
+			continue
+		seen += 1
+		var pips := data.cost.mana_value()   # {X} counts as 0 (CR 202.3b)
+		screen._click_hand_card(_give(card_name))
+		if data.is_modal():
+			# Alabaster Potion is the pool's one modal {X} spell: the mode
+			# is asked first and the X question comes after it
+			# (`_on_mode_chosen` -> `_continue_cast_chain`).
+			assert_not_null(screen._mode_overlay, "%s asks its mode" % card_name)
+			screen._on_mode_chosen(0)
+		assert_not_null(screen._x_dialog, "%s asks for X" % card_name)
+		if screen._x_dialog == null:
+			continue
+		var want: int = 20 - pips
+		# A doubled {X}{X} (Part Water, Recall) is rounded down to a whole
+		# point of X; Fireball's per-target surcharge keeps every unit.
+		if data.extra_cost_per_target <= 0:
+			want -= want % maxi(data.cost.x_count, 1)
+		assert_eq(int(screen._x_spin.max_value), want,
+			"%s (%s) offers its lands" % [card_name, data.cost.text])
+		screen._on_x_canceled()
+	assert_eq(seen, 24, "the pool's {X} spells, all of them asked")
+
+
+func test_every_x_ability_in_the_pool_offers_a_bound_it_can_pay() -> void:
+	# The other half of the class: an activated ability whose cost carries
+	# an {X} comes through the same window (`_open_ability_menu` ->
+	# `_open_x_dialog`), and had the same empty bound.
+	_basics(4)
+	_main_phase()
+	var seen := 0
+	for card_name in CardRegistry.all_names():
+		var data := CardRegistry.get_card(card_name)
+		for i in data.activated_abilities.size():
+			var ability: ActivatedAbility = data.activated_abilities[i]
+			if not ability.cost.has_x:
+				continue
+			seen += 1
+			var source := _put(0, card_name)
+			screen.game.recalculate()
+			source.summoning_sick = false
+			screen._pending_card = source
+			screen._pending_pid = 0
+			screen._pending_ability_index = i
+			screen._open_x_dialog()
+			assert_not_null(screen._x_dialog, "%s asks for X" % card_name)
+			if screen._x_dialog == null:
+				continue
+			assert_gt(int(screen._x_spin.max_value), 0,
+				"%s — %s offers its lands" % [card_name, ability.text])
+			screen._on_x_canceled()
+	assert_eq(seen, 10, "the pool's {X} abilities, all of them asked")

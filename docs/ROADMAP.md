@@ -1056,6 +1056,61 @@ across 258 decks becoming 0 — and the fact that this is a BUG, not a
 tuning constant: the planner was buying the engine's answer with its
 lands.
 
+### AND THE HUMAN HAD THE SAME HOLE, on the other side of the screen (2026-09-06)
+
+This whole pass was the PLANNER's. The human's X window was never in its
+scope, and it turned out to be shut in a simpler and worse way: **no {X}
+spell and no {X} ability in the pool could be cast by hand at all.**
+
+`DuelScreen._open_x_dialog` sized `@DIALOG_FIREBALL`'s `(max: %d)` off
+`players[pid].mana_pool` — the FLOATING pool. But payment comes after the
+choice in this game as it did in 1997 (*"Once you've selected a spell to
+cast, you must draw enough mana… to power the spell"*, `Duel.hlp`, topic
+**Hands**), so at the moment that window opens the pool is empty and the
+lands are still untapped. The bound was therefore 0, the SpinBox was
+0..0 with nothing to select, and the window is modal (`_modal_open`) so
+the lands could not be tapped either. OK paid X = 0. The owner's playtest
+put it in one sentence: *"Disintegrate makes a dialog and asks for generic
+mana to put into the spell. However it does not let me tap the lands to
+put into the spell, or select any mana at the dialog!"*
+
+**The right number was already in the file, under another name.** The
+double-click auto-cast answers the same question — *"ALL of the mana you
+have available in your pool AND FROM LAND SOURCES will be put into that
+spell"* (`Duel.hlp`, **Hands**, repeated under **Spells**) — and
+`_auto_x_budget`'s own doc comment described itself as *"`_open_x_dialog`'s
+own budget loop, asked of potential mana instead of the floating pool"*.
+Two answers to one question, and the window had the wrong one. They are
+now one function, `DuelScreen._x_budget`, planning the whole cost at each
+candidate X over `ManaPlanner.sources` so the coloured pips and X compete
+for the same lands (six Mountains pay Disintegrate's `{R}` from one and
+leave five for X). The single difference is the exclusion set: the
+gesture leaves a locked land alone, the window counts it, because
+`_pending_is_reachable` already reasons that way — *"the only way to tap a
+locked land is manually, by clicking on it"* (`Duel.hlp`, **Territory**).
+
+**Swept as a class, not as a card.** 24 spells with `{X}` in the cast cost
+(Alabaster Potion, Braingeyser, Detonate, Disintegrate, Drain Life,
+Earthquake, Fireball, Frankenstein's Monster, Guardian Angel, Howl from
+Beyond, Hurricane, Mind Twist, Orcish Catapult, Part Water, Power Sink,
+Recall, Rock Hydra, Spell Blast, Stream of Life, Venarian Gold, Volcanic
+Eruption, Whimsy, Winter Blast, Word of Binding) and 10 activated
+abilities with `{X}` in theirs (Aladdin's Lamp, Banshee, Candelabra of
+Tawnos, Clockwork Avian, Clockwork Beast, Goblin Polka Band, Illusionary
+Mask, Nebuchadnezzar, Reflecting Mirror, Voodoo Doll). Every one of the
+34 is now dealt to a seat with twenty lands and clicked by
+`tests/ui/test_x_dialog.gd`, which asserts each offers the bound its own
+board can pay. The OTHER way a human is asked for mana mid-resolution —
+*"unless that player pays {X}"* / *"you may pay {X}"* (In the Eye of
+Chaos, Invoke Prejudice, Power Sink, Primordial Ooze, Transmute Artifact)
+— was never affected: it is a `PlayerChoice.YES_NO` whose hint is
+`MtgGame.can_afford_cost`, and `try_pay` auto-taps lands on a yes.
+
+**Why the suite did not catch it.** Every X test in the file staged its
+mana by writing into `mana_pool` directly. Not one of them put a land on
+the battlefield, which is the only way a player ever arrives at that
+window. The four new end-to-end tests all start from untapped lands.
+
 ### Class 6, measured on its own: the +X/+0 finisher
 
 `_find_pump_instant` is why Howl from Beyond (12 deck files) and Jump (2)

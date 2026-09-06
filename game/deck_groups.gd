@@ -83,6 +83,18 @@ const COMMUNITY := "Community decks"
 ## Old School 93/94 archetype reference lists and anything else that leans
 ## on cards outside this project's pool (`decks/extended_community/`).
 const EXTENDED_COMMUNITY := "Extended community decks"
+## Decks this project MADE rather than ported (`decks/variants/`).
+##
+## A GROUP OF ITS OWN, because the others are a ledger. Every heading
+## above it holds lists somebody really published, and
+## `tests/unit/test_decks_1997.gd` pins each folder to "exactly the number
+## of decks its sources yielded" — a sentence a deck of ours would make
+## false. The Deck's playable variant went into `extended_community` once
+## and those tests caught it (2026-09-06), which is the guard working.
+##
+## So the variants ship, appear in the picker like anything else, and are
+## counted separately: the port stays 312 whatever we add here.
+const VARIANTS := "Playable variants"
 ## Everything in `user://decks`. Derived from the path, never declared.
 const USER := "User-created"
 
@@ -92,7 +104,7 @@ const USER := "User-created"
 ## community's, the community's extended lists, then yours.
 const ORDER: Array[String] = [ORIGINALS, ANCIENTS, PLANESWALKERS,
 	COYOTE_TEX, KEVIN_BANE, OTHER, STARTER, TOURNAMENT, COMMUNITY,
-	EXTENDED_COMMUNITY, USER]
+	EXTENDED_COMMUNITY, VARIANTS, USER]
 
 ## The line a deck file declares its group with. Written this way; read
 ## back tolerantly (see [method declared_in]).

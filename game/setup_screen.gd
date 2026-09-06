@@ -390,11 +390,20 @@ func _build_ui() -> void:
 		deck_option.clip_text = true
 		deck_option.custom_minimum_size.x = 300
 		_fill_deck_options(deck_option)
-		# Seat 1 defaults to the first deck, seat 2 to the second — the
-		# selection this screen has always opened on. Counted in DECKS,
-		# not in rows, so neither `<random deck>` nor a group heading can
-		# shift it.
-		deck_option.select(_row_of_deck(deck_option, pid))
+		# BOTH SEATS OPEN ON A RANDOM 1997 DECK. The screen used to open
+		# on the first two decks in the list, which is alphabetical and so
+		# always the same two — a Magic Battle you could start twice and
+		# get the identical duel. The owner asked for the game's own decks
+		# instead (2026-09-06), and the pooled draw built for exactly this
+		# is already in the list: `<random from 1997 originals>` picks one
+		# of the fifty-five decks the 1997 game shipped, and only those.
+		#
+		# Falls back to a real deck if that row is absent — a player whose
+		# `decks/` folder has been emptied of the originals should still
+		# get a working picker rather than an empty one.
+		var opened := _row_of_group(deck_option, DeckGroups.ORIGINALS)
+		deck_option.select(opened if opened >= 0
+			else _row_of_deck(deck_option, pid))
 		deck_option.item_selected.connect(func(_i: int) -> void:
 			_update_face(pid)
 			# `Deck color` follows seat 1's deck, so the preview beside
@@ -940,6 +949,16 @@ func _fill_deck_options(option: OptionButton) -> void:
 			if not proxies.is_empty():
 				option.set_item_tooltip(option.item_count - 1,
 					ProxyCard.refusal(proxies))
+
+
+## The row of the pooled `<random from …>` entry for [param group], or -1.
+## Kept beside [method _row_of_deck] because both answer "which row does
+## this screen open on", and both must skip what is not a deck.
+static func _row_of_group(option: OptionButton, group: String) -> int:
+	for i in option.item_count:
+		if str(option.get_item_metadata(i)) == GROUP_RANDOM + group:
+			return i
+	return -1
 
 
 ## The row index of the [param nth] deck in a picker (0-based), skipping

@@ -2047,6 +2047,77 @@ the courtesy offer no longer prints entry 9 as a prompt: `%s will also take
 a mulligan` REPORTS the second player's decision, and the head band is
 already saying why you are being asked.
 
+#### THE COMPOSITION CLAIM ABOVE IS WRONG, and the two clicks it caused — CORRECTED 2026-09-06
+
+*"The twelve entries are one window, not two"* is right; *"the original
+opens ONE window"* is not, and it was never cited. **1997 had TWO windows,
+and the evidence is three-deep.**
+
+* **The string tables keep them apart.** `Program/UIStrings.txt:487`
+  `@DIALOG_PLAYORDRAW` declares **9** entries and `Play first` / `Draw
+  first` are its 6th and 7th (`:494-495`); `:499` `@DIALOG_MULLIGAN`
+  declares **12** and `&Start the duel` is its 12th (`:512`). Both counts
+  are exact, so `Start the duel` cannot be read into the play-or-draw
+  group. (The s30 copy of the table is byte-identical here.)
+* **The Windows DIALOG templates keep them apart, and this is decisive.**
+  `Program/Magic.exe`'s RT_DIALOG directory holds 34 templates and **no
+  single one carries both**. Resource **244** (117x150 DLU) is the
+  play-or-draw window and has four controls — the two statics `<You won
+  the coin toss.>` / `<Would you like to:>` and the two owner-draw buttons
+  `Play first` (id 1221) and `Draw first` (id 1222). **It has no IDOK and
+  no third button**: the only way out of it is the order. Resource **227**
+  (316x206 DLU) is the mulligan window — the first-turn line (1090), the
+  two ante captions (1095/1094), two 73x114 card slots (1097/1096), two
+  message areas (1091/1093), `Mulligan` (1092) and `Start the duel` at
+  **control id 1, i.e. IDOK**. Each template's default text maps onto its
+  string group one for one, which is the cross-check `Provenance.md`
+  prescribes, and both pass. The templates are byte-identical in the
+  `shandalar-xp` tree.
+* **They have different backdrops, both dated 1996** in the owner's
+  install: `Winbk_Startduel2.pic` (284x394) and `Winbk_Startduel.pic`
+  (659x394). `Magic.exe`'s string literals bind them in two consecutive
+  groups keyed by the two dialog names, and Manalink's
+  `src/functions/windows.c:1338-1369` has the matching pair of loaders —
+  `load_startduel_assets` (the mulligan ground, plus the button's
+  **disabled** plate) and `load_startduel_assets2` (the play-or-draw
+  ground, normal and depressed only). Only the mulligan window loads a
+  greyed button state, which is why it is shown even when you do not
+  qualify for a redraw.
+
+**So the second click is 1997's.** Choosing the order dismissed dialog 244;
+the duel began on `Start the duel` in dialog 227, a different window on a
+different ground, and that window was the first place the player saw the
+antes, who leads, and what the opponent had done.
+
+**We do not have two windows, so we do not have the second click.** The
+merge into one `OpeningWindow` is this project's own composition — as is
+the row `Take mulligan` / `Draw first` / `Play first`, which no 1997
+template puts together (`opening_hand.gd` attributes it to the owner's
+2026-09-03 correction, and that is what it is). Once both questions are
+asked in one window with the antes up the whole time, the original's second
+click has nothing left to show, and the playtest of 2026-09-06 said so:
+*"if you click either button the duel should start — now you have to click
+an additional 'start duel' button, but you already decided in the previous
+button."* **Both the merge and the single click are `[QoL]`**, and this is
+the row that labels them.
+
+**WHAT THE FIX ACTUALLY WAS — a counter, not a removed button.**
+`OpeningHand.run` already had the right rule: the window owes the player
+one last `Start the duel` *only when something has happened since they last
+pressed*, so the opponent's redraw is always read before the duel starts
+(that is `OpeningWindow.status_serial` against `run`'s `pressed_serial`).
+`_ask_lead_and_mulligan` simply never wrote to `pressed_serial`, so the
+order buttons did not count as a press, the counter stayed at its
+never-pressed `-1`, and the window found itself owing a look nobody was
+owed — in every duel the player won the toss in. One line records the
+press. **The asymmetry the item requires survives unchanged**: `Take
+mulligan` never reaches that line (it loops inside
+`_ask_lead_and_mulligan` until an order is chosen), so a redraw still deals
+a new hand and asks again; losing the toss still ends on `Start the duel`;
+and an opponent who redraws *after* your order still buys you the last
+look. Pinned by five tests under `tests/ui/test_opening_hand.gd`'s
+`one decision, one click` banner.
+
 ### 6.3 [1997] The Territory menu — the duel's master control — DONE (2026-09-01; the `Go to:` list 2026-08-31). Two entries stay greyed, both with a reason
 
 `UIStrings.txt:908` `@MENU_TERRITORY`, 25 entries: a right-click menu on

@@ -19,12 +19,17 @@ extends Control
 ##     │            [ Take mulligan ]  [ Start the duel ]         │
 ##     └──────────────────────────────────────────────────────────┘
 ##
-## ONE WINDOW, not two. We used to draw play-or-draw and the mulligan as
-## separate popups; the original composes a single window that opens after
-## the coin toss and closes when you press `Start the duel`, asking each
+## ONE WINDOW, not two — and that is OURS, `[QoL]`. 1997 had two: DIALOG
+## resource 244 (`@DIALOG_PLAYORDRAW`, `Play first` / `Draw first`, no OK)
+## on `Winbk_Startduel2.pic`, then resource 227 (`@DIALOG_MULLIGAN`, both
+## antes, `Mulligan`, `Start the duel` as IDOK) on the ground below. We
+## compose a single window that opens after the coin toss and asks each
 ## question in its own button row while the antes stay on screen the whole
-## time. That is what makes the ante *visible before the first card is
-## played*, which is §6.19's whole point.
+## time — which is what makes the ante *visible before the first card is
+## played*, §6.19's whole point, from the first frame rather than from the
+## second window. Because they are up all along, choosing the order ends
+## the opening (docs/duel-todo.md §6.2, "THE COMPOSITION CLAIM ABOVE IS
+## WRONG"); `Start the duel` is still the row for every other ending.
 ##
 ## THE GROUND is `Winbk_Startduel.pic` (imported as `versus_background`,
 ## 659x394) — the four classical mourning figures. It is a PICTURE, so its

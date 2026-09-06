@@ -16,7 +16,7 @@ Lifecycle="*res://game/lifecycle.gd"
 [application]
 
 config/name="Shandalar"
-config/version="0.12.0-dev"
+config/version="0.13.0-dev"
 config/description="Open-source remake of MicroProse's 1997 Magic: The Gathering (Shandalar), with a modular GDScript MTG rules engine."
 run/main_scene="res://game/main.tscn"
 ; THE PROJECT'S OWN MARK. Godot draws this in the editor, on the window

@@ -39,7 +39,7 @@ const VICTIM := "res://decks/1997/originals/cleric.deck"
 ## owns the breakdown (5 starters + 312 ported); this is the number the
 ## fingerprint below covers, pinned so a deck added later is covered too
 ## rather than silently skipped.
-const SHIPPED_FILES := 317
+const SHIPPED_FILES := 318
 
 var _written: Array[String] = []
 

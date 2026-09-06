@@ -2222,7 +2222,18 @@ shandalar/
 │    nothing says `Illegal attacker.` instead of being swallowed; and a
 │    creature in the active player's HAND is not an attacker
 │    (CombatState.attack_illegality's battlefield check, CR 508.1a — the
-│    same hole block_illegality closed on 2026-09-04);
+│    same hole block_illegality closed on 2026-09-04); and the SECOND
+│    report of the same afternoon — Hurr Jackal wearing TWO auras, where
+│    the outer band is the one the pointer meets and the inner one shows
+│    a strip between them, both meaning the creature, three deep as well;
+│    tests/ui/test_enchanted_permanent_2026_09_06.gd — THE AURA THAT WAS
+│    NEVER DRAWN: Psychic Venom on one of MY lands is on the battlefield
+│    and the player could see nothing, because lands and the other
+│    permanents fold into the original's strip PILES at two and
+│    CardPile.populate builds bare MiniCards with no aura fan — so an
+│    enchanted permanent now keeps a slot of its own
+│    (DuelScreen._flush_pile), in either row, in either half, whoever
+│    controls the aura, while a plain row still piles;
 │    tests/ui/test_ability_target.gd — CLICKING AN ABILITY ON THE CHAIN
 │    (TargetSpec.Kind.ABILITY, which the picker had no case for): the
 │    click naming the ACTIVATION and not its source permanent, the
@@ -2500,7 +2511,20 @@ shandalar/
 │    on ContinuousEffects.add_until_eot_base_pt), Spitting Slug blocking
 │    two attackers under Blaze of Glory hearing "blocks" once (CR
 │    509.1h), and the Scryfall reminder text pinned on Scarwood Hag and
-│    Master of the Hunt)
+│    Master of the Hunt);
+│    tests/cards/test_auras_2026_09_06.gd — the RULES half of both of that
+│    afternoon's aura reports. §1 the owner's cumulative rule ("multiple
+│    auras can be on a card! All should take effect and present final
+│    cumulative card properties"): every one of the 1326 PAIRS in the
+│    creature-aura pool, and a triple pass, read as the printed body plus
+│    BOTH deltas and deal that sum unblocked (Brainwash's attack tax and
+│    Gaseous Form's prevention are the two cards that legitimately break
+│    the equality; the ward cycle sheds its partner, CR 702.16d/704.5m).
+│    §2 an aura on a permanent its CASTER DOES NOT CONTROL: Psychic Venom
+│    cast at my land attaches (CR 303.4a), stings the LAND's controller
+│    and not the aura's, and goes to its OWNER's graveyard when it or its
+│    host dies (CR 400.3 / 704.5m) — swept over every aura in the pool
+│    that can legally cross the table
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title: 6 stone buttons center-right over the
@@ -3273,8 +3297,12 @@ shandalar/
 │       │                      @DIALOG_MULLIGAN string (§1.5, §6.2), the
 │       │                      ante captions included. The SEQUENCER only:
 │       │                      every question is asked through one
-│       │                      OpeningWindow, which is what the 1997
-│       │                      table's twelve entries describe
+│       │                      OpeningWindow. 1997 used TWO dialogs here
+│       │                      (Magic.exe resources 244 and 227, each with
+│       │                      its own Winbk_Startduel ground); merging
+│       │                      them is [QoL], and it is why choosing the
+│       │                      order starts the duel with no second click
+│       │                      (§6.2, corrected 2026-09-06)
 │       ├── opening_window.gd class OpeningWindow — THE START-OF-DUEL
 │       │                      WINDOW (§6.19): one panel on
 │       │                      Winbk_Startduel.pic (versus_background)

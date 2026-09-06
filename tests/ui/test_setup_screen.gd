@@ -1061,3 +1061,27 @@ func test_leaving_stops_it() -> void:
 	fresh.free()
 	assert_true(player == null or not is_instance_valid(player)
 		or player.tracks.is_empty(), "the bed does not follow the player out")
+
+
+func test_both_seats_open_on_a_random_1997_deck() -> void:
+	# *"In the Magic Battle menu the default decks should be random from
+	# 1997."* (2026-09-06). The screen used to open on the first two decks
+	# alphabetically, so a duel started twice was the same duel twice.
+	for pid in 2:
+		var picker: OptionButton = screen._deck_options[pid]
+		var meta := str(picker.get_item_metadata(picker.selected))
+		assert_eq(meta, SetupScreen.GROUP_RANDOM + DeckGroups.ORIGINALS,
+			"seat %d opens on the pooled 1997 draw" % pid)
+
+
+func test_the_opening_draw_really_only_yields_1997_decks() -> void:
+	# The selection is only worth anything if the pool behind it is right.
+	var pool := SetupScreen.paths_in_group(screen._playable_paths,
+		DeckGroups.ORIGINALS)
+	assert_gt(pool.size(), 1, "there is a pool to draw from")
+	var rng := RandomNumberGenerator.new()
+	for seed_value in range(100):
+		rng.seed = seed_value
+		var drawn := SetupScreen.random_deck_path(pool, rng)
+		assert_eq(DeckGroups.of(drawn), DeckGroups.ORIGINALS,
+			"seed %d drew %s" % [seed_value, drawn])

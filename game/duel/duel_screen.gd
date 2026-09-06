@@ -1849,9 +1849,12 @@ func _auto_cast(inst: CardInstance) -> void:
 	_refresh()
 
 
-## The largest EXTRA GENERIC the pending cast could find from untapped
-## sources — [method _open_x_dialog]'s own budget loop, asked of potential
-## mana instead of the floating pool.
+## The largest EXTRA GENERIC the pending cast could find, the gesture's
+## own answer to the X question: *"ALL of the mana you have available in
+## your pool and from land sources"* (`Duel.hlp`, topic **Hands**). The
+## auto-tapper leaves a LOCKED land alone, so this asks the shared budget
+## with [member _no_auto_tap] taken out — the one way it differs from the
+## bound [method _open_x_dialog] prints, which the player answers by hand.
 func _auto_x_budget() -> int:
 	var cost: ManaCost = _pending_card.data.cost
 	var surcharge := game.spell_surcharge(_pending_pid, _pending_card.data)
@@ -1860,7 +1863,22 @@ func _auto_x_budget() -> int:
 		cost = _pending_card.cur_activated_abilities[_pending_ability_index].cost
 		surcharge = 0        # surcharges are a SPELL tax (Gloom et al.)
 		usage = []
-	var src := ManaPlanner.sources(game, _pending_pid, _no_auto_tap)
+	return _x_budget(cost, surcharge, usage, _no_auto_tap)
+
+
+## THE ONE X BUDGET, shared by the window and the double-click so the two
+## can never disagree about what a point of X costs: the largest extra
+## generic [member _pending_pid] can pay on top of [param cost] from
+## everything [ManaPlanner] can see — floating mana first, then every
+## untapped source it can plan a tap for — minus [param excluded].
+##
+## It plans the whole cost at each candidate, rather than counting sources,
+## because the coloured pips compete with X for the same lands: six
+## Mountains pay Disintegrate's {R} out of one of them and leave five for
+## X, and only a plan can say so.
+func _x_budget(cost: ManaCost, surcharge: int, usage: Array,
+		excluded: Dictionary) -> int:
+	var src := ManaPlanner.sources(game, _pending_pid, excluded)
 	var budget := 0
 	# 40 is the same kind of safety net the advance driver carries: no
 	# board in this pool makes more mana than that in one step.
@@ -3893,15 +3911,31 @@ var _pending_target_count := -1
 ## Candelabra's {X}). The window is [FireballDialog], which carries
 ## `@DIALOG_FIREBALL`'s seven strings and the arithmetic behind them.
 ##
-## The bound is what the pool can ACTUALLY pay, so the dialog can never
-## set up a guaranteed refusal. Three things earlier versions got wrong:
+## The bound is what this seat can ACTUALLY pay, so the dialog can never
+## set up a guaranteed refusal. Four things earlier versions got wrong:
+##   * **IT IS POTENTIAL MANA, NOT THE FLOATING POOL** — the 2026-09-06
+##     playtest: *"Disintegrate makes a dialog and asks for generic mana
+##     to put into the spell. However it does not let me tap the lands to
+##     put into the spell, or select any mana at the dialog!"* Both halves
+##     of that sentence were one bug. Payment comes AFTER the choice in
+##     1997 (*"Once you've selected a spell to cast, you must draw enough
+##     mana… to power the spell"*, `Duel.hlp`, topic **Hands**), so at the
+##     moment this question is asked the pool is EMPTY and the lands are
+##     still untapped; a bound read off the pool was therefore 0, the
+##     field was 0..0 with nothing to select, and the window is modal
+##     ([method _modal_open]) so the lands could not be tapped either.
+##     Every {X} spell and every {X} ability in the pool was uncastable by
+##     hand — OK paid X = 0 and Disintegrate dealt nothing. The bound is
+##     the one the double-click already used: *"ALL of the mana you have
+##     available in your pool AND FROM LAND SOURCES"* (`Duel.hlp`, topics
+##     **Hands** and **Spells**), which is [method _x_budget].
 ##   * {X}{X} costs (Part Water, Voodoo Doll) charge x_count mana per
 ##     point of X — the engine multiplies internally (mtg_game.gd:620,
 ##     762), so the payable bound must multiply too, or the dialog offers
 ##     double the X the player can afford.
 ##   * an ability's X is paid in COLOURED mana when x_color is set
-##     (Goblin Polka Band), which the generic bound can't model — those
-##     fall back to the engine's own refusal.
+##     (no card in the pool sets one today), which the generic bound can't
+##     model — those fall back to the engine's own refusal.
 ##   * **THE PER-TARGET SURCHARGE (§6.14).** Fireball costs *"{1} more to
 ##     cast for each target beyond the first"*, and X used to be asked
 ##     BEFORE targets and priced without them: the dialog offered the
@@ -3910,9 +3944,9 @@ var _pending_target_count := -1
 ##     `@DIALOG_FIREBALL` asks for both in one window precisely so the
 ##     budget adds up, which is what the extra five strings are for.
 func _open_x_dialog() -> void:
-	var pool := game.players[_pending_pid].mana_pool
 	var cost: ManaCost = _pending_card.data.cost
 	var surcharge := game.spell_surcharge(_pending_pid, _pending_card.data)
+	var usage: Array = game.mana_usage_keys(_pending_card.data)
 	var label := _pending_card.data.card_name
 	var per_target := 0
 	if _pending_ability_index >= 0:
@@ -3920,15 +3954,18 @@ func _open_x_dialog() -> void:
 			_pending_card.cur_activated_abilities[_pending_ability_index]
 		cost = ability.cost
 		surcharge = 0        # surcharges are a SPELL tax (Gloom et al.)
+		usage = []           # nor does an ability qualify for "cast only" mana
 		label = "%s — %s" % [label, ability.text]
 	else:
 		per_target = _pending_card.data.extra_cost_per_target
 	var per_x: int = maxi(cost.x_count, 1)
 	# The BUDGET is in mana, which is what entry 1 asks for: the largest
-	# extra generic this pool can cover on top of the printed cost.
-	var budget := 0
-	while pool.can_pay(cost, surcharge + budget + 1):
-		budget += 1
+	# extra generic this seat can cover on top of the printed cost, from
+	# the pool AND from every source it can still tap. [member _no_auto_tap]
+	# is deliberately NOT excluded, for [method _pending_is_reachable]'s
+	# reason — *"the only way to tap a locked land is manually, by clicking
+	# on it"* — and this window is answered by hand.
+	var budget := _x_budget(cost, surcharge, usage, {})
 	if per_target <= 0:
 		# A plain {X} spell: only entries 1 and 2, and the field steps by
 		# x_count so every value on it buys a whole point of X.
@@ -5354,27 +5391,80 @@ func _rebuild_field(pid: int) -> void:
 		# Lands and other permanents group into the original's piles. The
 		# arrange runs BEFORE the slicing, or the piles would re-shuffle
 		# their membership every time a land taps.
-		var cards: Array = _display_order(pid, by_row[row], row)
-		var i := 0
-		while i < cards.size():
-			var chunk := cards.slice(i, i + PILE_SIZE)
-			if chunk.size() == 1:
-				container.add_child(_make_widget(chunk[0]))
-			else:
-				var pile := CardPile.new()
-				pile.preview = _card_preview
-				pile.framed = true   # the original's tan window border
-				# A permanent in a pile carries the same "you may act on
-				# this" ring an unpiled one does — and while a cast waits
-				# for its mana that ring IS the prompt, on cards that are
-				# nearly always piled (see CardPile.glow_actionable).
-				pile.glow_actionable = true
-				pile.populate(chunk, false, _on_card_clicked, _highlight_for)
-				_arm_pile_drag(pile)
-				# The row sizes by minimum size; the pile computed its own.
-				container.add_child(pile)
-			i += PILE_SIZE
+		#
+		# ...EXCEPT AN ENCHANTED ONE, which keeps a slot of its own — see
+		# [method _flush_pile] for the report that put this here.
+		var waiting: Array = []
+		for inst in _display_order(pid, by_row[row], row):
+			if not inst.attachments.is_empty():
+				_flush_pile(container, waiting)
+				waiting = []
+				container.add_child(_make_widget(inst))
+				continue
+			waiting.append(inst)
+			if waiting.size() == PILE_SIZE:
+				_flush_pile(container, waiting)
+				waiting = []
+		_flush_pile(container, waiting)
 	_rebuild_placed(pid)
+
+
+## WHY AN ENCHANTED PERMANENT IS NEVER FOLDED INTO A PILE — the playtest
+## defect of 2026-09-06, second half.
+##
+## *"Opponent casts Psychic Venom on MY land — it went directly to the
+## graveyard. The card should be present as an aura behind my land on my
+## playfield."*
+##
+## The engine had it right all along: the Aura resolved, entered attached
+## (CR 303.4a), stayed on the battlefield under its caster's control, and
+## stung the LAND's controller on every tap. What the player saw was a
+## board with no Psychic Venom anywhere on it — so the only reading left
+## was that the card had gone to a graveyard.
+##
+## An attachment is drawn as a whole card peeking out from behind its host
+## ([method _make_widget], [constant AURA_PEEK]), and [method
+## _rebuild_field] skips every attached card because the HOST's widget is
+## what draws it. That is the whole of the picture, and it is only true of
+## a host that gets a widget from [method _make_widget]. Lands and the
+## other permanents group into the original's strip PILES the moment
+## there are two of them, and [method CardPile.populate] builds its own
+## rows out of bare [MiniCard]s — no fan, no aura, nothing. So the aura on
+## a lone land was drawn and the aura on one of TWO lands vanished, which
+## is every land a real duel ever has.
+##
+## It is not only the land cycle: `Row.OTHER` piles the same way, so an
+## artifact wearing Artifact Ward or Curse Artifact disappeared just as
+## completely. Creatures were never affected — that row never piles,
+## "because combat must read", which is why the enchanted CREATURE the
+## same playtest reported was a different bug entirely (see
+## [method _combat_body]).
+##
+## THE FIX IS THE SLOT, NOT THE PILE. Teaching [CardPile] to draw a fan
+## would put an 18px band into the one place on the table where cards
+## deliberately overlap to their title bars — the band would land on the
+## row in front of it and read as neither card's. A permanent that is
+## wearing something is a STACK of cards already, so it comes out of the
+## pile and stands on its own, exactly as a creature does; the piles close
+## up around it and the rest of the row is unchanged.
+func _flush_pile(container: Container, cards: Array) -> void:
+	if cards.is_empty():
+		return
+	if cards.size() == 1:
+		container.add_child(_make_widget(cards[0]))
+		return
+	var pile := CardPile.new()
+	pile.preview = _card_preview
+	pile.framed = true   # the original's tan window border
+	# A permanent in a pile carries the same "you may act on this" ring an
+	# unpiled one does — and while a cast waits for its mana that ring IS
+	# the prompt, on cards that are nearly always piled (see
+	# CardPile.glow_actionable).
+	pile.glow_actionable = true
+	pile.populate(cards, false, _on_card_clicked, _highlight_for)
+	_arm_pile_drag(pile)
+	# The row sizes by minimum size; the pile computed its own.
+	container.add_child(pile)
 
 
 ## THE CARDS THE PLAYER HAS MOVED (§2.3b), drawn absolutely over the rows

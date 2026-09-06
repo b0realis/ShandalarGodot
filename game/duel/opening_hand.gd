@@ -30,12 +30,26 @@ extends Control
 ## `Start the duel` (see [method _ask_lead_and_mulligan], and the owner's
 ## correction it records).
 ##
-## IT ALL HAPPENS IN ONE WINDOW ([OpeningWindow], §6.19). The original does
-## not pop a dialog per question: it opens the start-of-duel window on the
-## classical line-art ground, shows BOTH ANTES as full cards, and asks each
-## question in that window's own button row — which is why `@DIALOG_MULLIGAN`
-## carries `%s ante:` and `Your ante:` among its twelve entries. The window
-## closes on your `Start the duel`, and the duel begins.
+## IT ALL HAPPENS IN ONE WINDOW ([OpeningWindow]), AND THAT IS OUR OWN
+## COMPOSITION — `[QoL]`, not `[1997]`. **1997 had two windows.**
+## `@DIALOG_PLAYORDRAW` is `Magic.exe`'s DIALOG resource 244 — four
+## controls, `Play first` and `Draw first` and NO OK button — on
+## `Winbk_Startduel2.pic` (284x394); `@DIALOG_MULLIGAN` is resource 227 —
+## the first-turn line, both ante slots, `Mulligan`, and `Start the duel`
+## at control id 1 (IDOK) — on `Winbk_Startduel.pic` (659x394). Two
+## loaders in Manalink's `src/functions/windows.c:1338-1369` bind each
+## ground to its dialog. So the original really did take two clicks: the
+## order dismissed the first window, and the duel began on `Start the
+## duel` in the second — which was the first place the player saw the
+## antes and who leads. The full citation is docs/duel-todo.md §6.2,
+## "THE COMPOSITION CLAIM ABOVE IS WRONG".
+##
+## WE MERGED THEM, SO THE SECOND CLICK HAS NOTHING LEFT TO SHOW. Both
+## antes are up from the first frame, so choosing the order IS the last
+## word and [method run] starts the duel on it (the 2026-09-06 playtest).
+## The window still holds for one `Start the duel` whenever something
+## happened after that press — see [member OpeningWindow.status_serial]
+## and `run`'s `pressed_serial`, which is the whole of that rule.
 ##
 ## The engine half is MtgGame.stake_ante / deal_opening_hands / may_mulligan
 ## / take_mulligan / decline_mulligan / start_duel; this only asks.
@@ -125,8 +139,9 @@ static func play_or_draw_line(game: MtgGame, winner: int, plays: bool) -> String
 ## nothing is drawn, which is what makes the sequence testable headless.
 ##
 ## With a human at the table this opens ONE [OpeningWindow] and keeps it up
-## until the player presses `Start the duel` — the original's shape, and
-## the reason both antes are on screen for the whole opening.
+## until the player has had the last word — the order they chose, or a
+## `Start the duel` when anything happened after it — which is the reason
+## both antes are on screen for the whole opening.
 func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 	_game = game
 	_is_human = is_human
@@ -143,20 +158,33 @@ func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 		add_child(_window)
 		_window.show_antes(game, _viewer)
 
+	# THE PLAYER PRESSED LAST: -1 until they have, so a duel in which nobody
+	# is ever offered a mulligan still ends on their own `Start the duel`
+	# — which is exactly what the original's window is for.
+	var pressed_serial := -1
+
 	var plays_first := true
 	if _human(winner):
 		plays_first = await _ask_lead_and_mulligan(winner)
+		# **CHOOSING THE ORDER IS A PRESS** (playtest, 2026-09-06: *"if you
+		# click either button the duel should start — now you have to click
+		# an additional 'start duel' button, but you already decided in the
+		# previous button"*). This line is the whole of that fix: the rule
+		# below was always "hold for one more look only if something
+		# happened since the player last pressed", and `Draw first` /
+		# `Play first` never counted as pressing, so the counter sat at its
+		# never-pressed -1 and the window always found itself owing a look
+		# nobody was owed. `Take mulligan` cannot reach here — it loops
+		# inside [method _ask_lead_and_mulligan] until an order is chosen —
+		# so the asymmetry survives: a redraw deals again and asks again.
+		if _window != null:
+			pressed_serial = _window.status_serial
 	# The AI takes the play, which is what both references do and what the
 	# 1997 opponent does: the tempo is worth more than the extra card.
 	var first_player := winner if plays_first else game.opponent_of(winner)
 	announced.emit(play_or_draw_line(game, winner, plays_first))
 	if _window != null:
 		_window.set_lead(lead_line(game, first_player, _viewer))
-
-	# THE PLAYER PRESSED LAST: -1 until they have, so a duel in which nobody
-	# is ever offered a mulligan still ends on their own `Start the duel`
-	# — which is exactly what the original's window is for.
-	var pressed_serial := -1
 
 	# The offers, first player first — and then round two, which exists
 	# because "the other player has the option to do so as well".

@@ -47,6 +47,16 @@ const NON_MICROPROSE := {
 	"extended_community": [DeckGroups.EXTENDED_COMMUNITY, 15, "designer:"],
 }
 const PORTED_TOTAL := 312
+## Decks this project MADE, in `decks/variants/` under
+## [constant DeckGroups.VARIANTS]. Counted APART from the port and
+## deliberately: every number above is "what the sources yielded", and a
+## deck of ours must not be able to move one of them. The Deck's playable
+## variant went into `extended_community` once and these tests caught it
+## (2026-09-06) — this constant is how the guard keeps working while the
+## variants still ship.
+const VARIANT_TOTAL := 1
+## Every `.deck` under `decks/`, ported and ours together.
+const SHIPPED_TOTAL := PORTED_TOTAL + VARIANT_TOTAL
 ## The enemy-deck groups: one deck per enemy, each with a `# tier:` line.
 const ENEMY_GROUPS := ["originals", "ancients", "duels"]
 
@@ -223,7 +233,7 @@ func test_each_group_holds_exactly_the_decks_its_sources_yielded() -> void:
 		assert_eq(paths.size(), NON_MICROPROSE[folder][1], folder)
 		total += paths.size()
 	assert_eq(total, PORTED_TOTAL)
-	assert_eq(DeckStore.shipped_subfolder_paths().size(), PORTED_TOTAL,
+	assert_eq(DeckStore.shipped_subfolder_paths().size(), SHIPPED_TOTAL,
 		"and the store walks exactly those")
 
 
@@ -233,7 +243,7 @@ func test_the_ported_folders_are_the_only_subfolders() -> void:
 		expected.append(ROOT + "/" + folder)
 	expected.sort()
 	assert_eq(DeckStore.subfolders_of(ROOT), expected)
-	var top: Array[String] = [ROOT]
+	var top: Array[String] = [ROOT, DeckStore.SHIPPED_DIR + "/variants"]
 	for folder in NON_MICROPROSE:
 		top.append(DeckStore.SHIPPED_DIR + "/" + folder)
 	top.sort()
@@ -262,7 +272,7 @@ func test_every_ported_deck_loads_with_no_parse_error() -> void:
 		assert_not_null(DeckStore.load_deck(path, report),
 			"the Deck Builder opens %s" % path)
 		seen += 1
-	assert_eq(seen, PORTED_TOTAL)
+	assert_eq(seen, SHIPPED_TOTAL)
 
 
 func test_every_ported_deck_declares_the_group_its_folder_files_it_under() -> void:
@@ -419,7 +429,12 @@ func test_the_gauntlet_deals_every_microprose_deck_and_no_proxied_deck() -> void
 	# decks ARE dealt — a 1994 Worlds list, the Shandalar community's
 	# re-tuned enemies — because a strict load takes them whole.
 	var roster := GauntletScreen.default_roster()
-	assert_eq(roster.size(), 5 + MICROPROSE_TOTAL + _proxy_free_total())
+	# ...plus the variants, which are dealt because they are playable BY
+	# CONSTRUCTION: a variant exists precisely so a list that leans on an
+	# unimplementable card can be played, so it is always proxy-free and
+	# always belongs in a gauntlet.
+	assert_eq(roster.size(),
+		5 + MICROPROSE_TOTAL + _proxy_free_total() + VARIANT_TOTAL)
 	for folder in GROUPS:
 		for path in _paths(folder):
 			assert_true(roster.has(path), path)

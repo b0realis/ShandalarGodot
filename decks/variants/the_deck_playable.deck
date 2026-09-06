@@ -1,10 +1,13 @@
-# The Deck (playable variant) — A LAB FIXTURE, NOT A SHIPPED DECK.
-#   It lives here rather than in decks/ because it is OURS: the shipped
-#   folders are a provenance ledger, every entry a list somebody really
-#   published, and the counts are pinned by tests
-#   (tests/unit/test_decks_1997.gd) precisely so a deck cannot appear in
-#   them without one. This is a derived variant, so it has no such claim
-#   to make. Copy it into your own decks folder if you want to play it.
+# The Deck (playable variant) — NEVINYRRAL'S DISK INSTEAD OF CHAOS ORB.
+#   That is the whole difference from the list this is taken from, and it
+#   is the reason this file exists: without it The Deck cannot be played
+#   here at all.
+#
+#   It ships under "Playable variants" rather than with the community
+#   lists because those folders are a provenance ledger — every entry a
+#   deck somebody really published, each folder pinned by tests to the
+#   number its sources yielded. This one is OURS, so it is counted
+#   separately and says so.
 #
 # ONE CARD CHANGED, and it is not a
 #   deckbuilding opinion. Randy Buehler's August 2015 Old School list
@@ -27,6 +30,7 @@
 # designer: Randy Buehler (list); the one substitution is this project's
 # year: August 2015 (list), 2026-09-06 (substitution)
 # source: os_the_deck_buehler_2015.deck, which carries the full provenance
+# group: Playable variants
 name: The Deck (playable variant)
 1 Mana Drain
 4 Counterspell

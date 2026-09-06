@@ -474,26 +474,24 @@ func _deck_rect() -> Rect2:
 
 ## [QoL] The sideboard strip: the deck area's width, one card tall, sitting
 ## directly above the command bar.
-## HOW FAR RIGHT THE SIDEBOARD SITS OF THE DECK'S NOMINAL LEFT EDGE.
+## THE SIDEBOARD SHARES THE DECK'S EDGES, and derives nothing.
 ##
-## The two rects are computed from the same expression and land on the
-## same number — and they still do not LOOK aligned, which is what the
-## 2026-09-05 playtest reported. Measured off a capture: the deck area's
-## visible ground begins at x=281 while the sideboard's teal begins at
-## x=267, a fourteen-pixel step down the seam between them. Something
-## inside the deck surface insets its own ground by that much; this
-## constant matches the sideboard to what is actually DRAWN rather than to
-## what is computed, and the seam is straight.
+## An earlier pass put a fourteen-pixel inset here because the deck's
+## CARDS appear to start that far right of the deck's GROUND. They do —
+## and it is not a constant: `CardArea` CENTRES its block of columns in
+## whatever width it is given (`card_area.gd`, `inset := (inner - block)
+## / 2`), so the margin is a function of the resolution. Fourteen was
+## measured at 1280x800 and is wrong at every other size, which is what a
+## 4K television showed (2026-09-06).
 ##
-## Honest about its own standing: 14 is a measurement, not a derivation. I
-## did not find the inset's source, so if the deck surface's drawing
-## changes this number is stale and the seam will step again — a capture
-## is the only thing that catches it.
-const SIDEBOARD_INSET := 14.0
+## So nothing is derived from it. The two GROUNDS take the same left and
+## the same width, each area centres its own cards inside its own ground,
+## and the seam is straight at any resolution because the two rects are
+## the same expression.
 
 
 func _sideboard_rect() -> Rect2:
-	var left := MARGIN + LEFT_W + 10.0 + SIDEBOARD_INSET
+	var left := MARGIN + LEFT_W + 10.0
 	var bottom := _filter_bar.position.y - COMMAND_BAR_H - 8.0
 	return Rect2(left, maxf(MARGIN, bottom - SIDEBOARD_H),
 		maxf(0.0, size.x - left - MARGIN), SIDEBOARD_H)
@@ -594,8 +592,20 @@ func _build_header() -> void:
 	_header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_header_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_header_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# A LONG NAME IS TRIMMED, NOT LET OUT OF THE SLAB. Deck names run to
+	# 71 characters in the shipped lists ("Råde — Worlds 1996
+	# (Erhnamgeddon)"), and the marble title slab is a fixed width: a name
+	# that does not fit used to run past both its ends. `..._FORCE` is the
+	# variant that actually draws the ellipsis — plain TRIM drops the dots
+	# (a lesson from the setup screen's deck picker).
+	_header_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS_FORCE
+	_header_label.clip_text = true
 	_header_slab.add_child(_header_label)
-	_header_slab.tooltip_text = "Deck Info — name this deck"
+	# ...AND THE WHOLE NAME IS ONE HOVER AWAY. A trimmed name the player
+	# cannot read in full is worse than a name that overflows, so the slab
+	# carries it as a tooltip — at the pointer, in Godot's own tooltip
+	# font, which is larger than the 18px the slab letters it in.
+	_header_slab.tooltip_text = "%s\n\nDeck Info — name this deck" % deck.deck_name
 	_header_slab.pressed.connect(_open_deck_info)
 	add_child(_header_slab)
 
@@ -1142,6 +1152,8 @@ func _dropped_on_inventory(card_name: String, from: String) -> void:
 ## when the filter does.
 func refresh() -> void:
 	_header_label.text = deck.deck_name
+	if _header_slab != null:
+		_header_slab.tooltip_text = "%s\n\nDeck Info — name this deck" % deck.deck_name
 	# ONE WALK for the four numbers this method letters, not five
 	# ([method DeckModel.headline_counts] — third audit pass, 2026-09-01).
 	var tally := deck.headline_counts()
