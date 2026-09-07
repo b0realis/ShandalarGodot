@@ -87,8 +87,9 @@ func test_no_card_in_the_pool_loses_a_character_to_the_split() -> void:
 
 ## THE CODES THIS POOL ACTUALLY USES, against the nineteen cells the 1997
 ## sheet has. Everything but `{C}` is on the sheet; `{C}` is Scryfall's
-## modern colorless pip, which the 1997 texts wrote out in words and the
-## 1997 sheet therefore has no cell for. It must READ, not vanish.
+## modern colorless pip, which the 1997 sheet has no cell for because the
+## 1997 text drew a run of colorless mana as a generic NUMERAL (below).
+## Any other code off the sheet would need a decision of its own.
 func test_every_code_in_the_pool_is_either_on_the_sheet_or_falls_back() -> void:
 	var codes := {}
 	for card_name in CardRegistry.all_names():
@@ -104,21 +105,70 @@ func test_every_code_in_the_pool_is_either_on_the_sheet_or_falls_back() -> void:
 		"only {C} is off the 1997 sheet; a new one would need a decision")
 
 
-## A code with no cell goes back in as its own braces rather than drawing
-## nothing — checked on the real `{C}`, so it cannot rot.
-func test_a_code_the_sheet_cannot_draw_stays_readable_text() -> void:
+## **`{C}` IS A NUMERAL** — the owner's 2026-09-07 note on Apprentice
+## Wizard: *"it has text add {C} {C} {C} - {C} should render as 1 in a
+## gray circle - noncolred mana to the manapool."* Master.csv (Tier 1)
+## says exactly how far to take that: a RUN of colorless mana was ONE
+## generic-mana disc of its length — Apprentice Wizard `|U, |T: Add |3 to
+## your mana pool`, Sol Ring `|T: to add |2 to pool`, Strip Mine `|T: Add
+## |1`, Su-Chi `add |4`. So `{C}` alone is the "1" disc and `{C}{C}{C}`
+## the "3" disc, and the sentence gets SHORTER, not three grey ones.
+func test_a_run_of_colorless_pips_draws_as_the_1997_numeral() -> void:
 	if not _skinned():
 		return
-	var built := ManaText.build("{T}: Add {C}{C}.", _body, 18, 400.0, 1)
+	# Apprentice Wizard, verbatim from the pool.
+	var text: String = CardRegistry.get_card("Apprentice Wizard").oracle_text
+	assert_eq(text, "{U}, {T}: Add {C}{C}{C}.")
+	var built := ManaText.build(text, _body, 18, 400.0, 1)
 	var icons: Dictionary = built["icons"]
-	assert_eq(icons.size(), 1, "the {T} draws")
+	assert_eq(icons.size(), 3, "{U}, then {T}, then the numeral")
+	var last: Array = icons.values()[2]
+	assert_eq(last.size(), 1, "three {C}s are ONE symbol")
+	assert_same(last[0], ManaIcons.symbol("3"), "and it is the 3 disc")
+	# A single {C} is the 1 disc — Strip Mine's `|1`.
+	var one := ManaText.build("{T}: Add {C}.", _body, 18, 400.0, 1)
+	var one_icons: Dictionary = one["icons"]
+	assert_eq(one_icons.size(), 2)
+	assert_same(one_icons.values()[1][0], ManaIcons.symbol("1"))
+	# Su-Chi's four, and a run the sheet cannot count in one disc is
+	# drawn in tens (no card does this; the rule is pinned so it cannot
+	# silently draw nothing).
+	var four := ManaText.build("add {C}{C}{C}{C}.", _body, 18, 400.0, 1)
+	assert_same((four["icons"] as Dictionary).values()[0][0], ManaIcons.symbol("4"))
+	var twelve := ManaText.build("{C}".repeat(12), _body, 18, 4000.0, 1)
+	var run: Array = (twelve["icons"] as Dictionary).values()[0]
+	assert_eq(run.size(), 2, "twelve pips are a 10 and a 2")
+	assert_same(run[0], ManaIcons.symbol("10"))
+	assert_same(run[1], ManaIcons.symbol("2"))
+	# Only ABUTTING pips fold: the Urza's Tower sentence keeps its two
+	# separate amounts as two separate discs.
+	var tower := ManaText.build("{T}: Add {C}. If you control both, add {C}{C}{C} instead.",
+		_body, 18, 4000.0, 1)
+	var tower_icons: Dictionary = tower["icons"]
+	assert_eq(tower_icons.size(), 3, "{T}, the 1, the 3")
+	assert_same(tower_icons.values()[1][0], ManaIcons.symbol("1"))
+	assert_same(tower_icons.values()[2][0], ManaIcons.symbol("3"))
+	# And the fold makes the sentence NARROWER than the braces were.
 	var para: TextParagraph = built["para"]
 	assert_eq(para.get_line_count(), 1)
-	# The braces are in the paragraph as text: it is wider than the same
-	# sentence with the {C}s deleted.
-	var without := ManaText.build("{T}: Add .", _body, 18, 400.0, 1)
-	assert_gt(para.get_size().x, (without["para"] as TextParagraph).get_size().x,
-		"{C}{C} occupies room as text")
+	var braces := ManaText.build("{U}, {T}: Add {X}{X}{X}.", _body, 18, 400.0, 1)
+	assert_lt(para.get_size().x, (braces["para"] as TextParagraph).get_size().x,
+		"one disc is narrower than three")
+
+
+## And with no sheet the pips are the braces they were — per token, so
+## `{C}{C}{C}` still reads as three, not as a `{3}` nobody wrote.
+func test_with_no_imported_sheet_the_colorless_pips_stay_as_braces() -> void:
+	_hide_the_sheet()
+	var built := ManaText.build("{T}: Add {C}{C}{C}.", _body, 18, 400.0, 1)
+	assert_eq((built["icons"] as Dictionary).size(), 0, "nothing is drawn")
+	var plain := TextParagraph.new()
+	plain.set_break_flags(ManaText.WRAP_FLAGS)
+	plain.set_width(400.0)
+	plain.set_line_spacing(1)
+	plain.add_string("{T}: Add {C}{C}{C}.", _body, 18)
+	assert_almost_eq((built["para"] as TextParagraph).get_size().x,
+		plain.get_size().x, 0.5, "it measures as the plain string")
 
 
 # -------------------------------------------------------------- no skin --

@@ -90,14 +90,30 @@ extends Control
 ## arithmetic the card already trusted, now measured rather than assumed —
 ## `get_size().y == lines * line_height + (lines - 1) * line_spacing`.
 ##
-## **UNSKINNED IT IS THE BRACES, and so is any code the sheet cannot
-## draw.** [ManaIcons.symbol] returns null when no skin is imported, and
-## the fallback is PER TOKEN, not per card: the run goes back in as the
-## literal text. The one code this pool uses that the nineteen cells cannot
-## draw is `{C}` (90 occurrences — Scryfall's modern colorless pip, which
-## the 1997 texts wrote out in words); it reads as `{C}` and the `{T}`
-## beside it still draws. The game is complete with no 1997 files at all,
-## which is a standing rule of this project.
+## # `{C}` IS A NUMERAL — THE 1997 DATABASE AGAIN
+##
+## Scryfall's `{C}` (the modern colorless pip, 2016) is the one code this
+## pool uses that the nineteen cells have no picture for — 90 occurrences
+## on 22 cards, every one of them mana PRODUCED ("Add {C}{C}{C}."), never
+## a cost. `Master.csv` shows what the 1997 game drew there: a run of
+## colorless mana is ONE generic-mana numeral —
+##
+##     0300,Apprentice Wizard,...,"|U, |T: Add  |3  to your mana pool. ..."
+##     0230,Sol Ring,...,|T: to add |2 to pool - Interrupt,
+##     0510,Mishra's Workshop,Land,...,|T: Add |3 to your mana pool. ...
+##     Strip Mine / Mishra's Factory / Elephant Graveyard:  |T: Add |1 ...
+##     Su-Chi: ... add |4 to your mana pool.
+##
+## So [method build] folds a run of abutting `{C}` into the numeral cell
+## of its length: `{C}` is the "1" disc, `{C}{C}{C}` the "3" disc. A run
+## the sheet cannot number (eleven or more — none in the pool) is drawn in
+## tens. The split ([method runs]) stays lossless; only the DRAW folds.
+##
+## **UNSKINNED IT IS THE BRACES.** [ManaIcons.symbol] returns null when no
+## skin is imported, and the fallback is PER TOKEN, not per card: each
+## token goes back in as its literal text — `{C}{C}{C}` reads as
+## `{C}{C}{C}`, the `{T}` beside it likewise. The game is complete with no
+## 1997 files at all, which is a standing rule of this project.
 
 ## The word-wrap flags that reproduce a [Label]'s `AUTOWRAP_WORD_SMART`:
 ## break at word boundaries, fall back to breaking inside a word only when
@@ -114,6 +130,11 @@ const SYMBOL_RATIO := 0.75
 ## `sym_ext_wid = w * 85 / 100` (`:298`). The difference is the padding
 ## that keeps `{B}{B}{B}` from touching, split evenly either side.
 const SYMBOL_ADVANCE_RATIO := 0.85
+
+## Scryfall's colorless pip, which the 1997 sheet draws as a numeral.
+const COLORLESS := "C"
+## The largest numeral on the nineteen-cell sheet — `{10}` is cell 11.
+const MOST_COLORLESS := 10
 
 ## `{...}` and what is inside it. Compiled once — a `RegEx` is a
 ## RefCounted, not card data, so a static cache is safe here (see
@@ -201,16 +222,31 @@ static func build(text: String, font: Font, font_size: int, width: float,
 	var literal := ""            # abutting text, likewise
 	var key := 0
 
-	for run in runs(text):
+	var toks := runs(text)
+	var i := 0
+	while i < toks.size():
+		var run: Array = toks[i]
 		var tex: Texture2D = null
+		var span := 1
 		if run[0] == "s":
-			tex = ManaIcons.symbol(run[1])
+			if run[1] == COLORLESS:
+				# [1997] "Add |3 to your mana pool" — abutting {C}s are
+				# ONE numeral, as many as the sheet can count at a time.
+				while span < MOST_COLORLESS and i + span < toks.size() \
+						and toks[i + span][0] == "s" \
+						and toks[i + span][1] == COLORLESS:
+					span += 1
+				tex = ManaIcons.symbol(str(span))
+			else:
+				tex = ManaIcons.symbol(run[1])
 		if tex != null:
 			if literal != "":
 				para.add_string(literal, font, font_size)
 				literal = ""
 			pending.append(tex)
+			i += span
 			continue
+		i += 1
 		if not pending.is_empty():
 			para.add_object(key, Vector2(advance * pending.size(), side),
 				INLINE_ALIGNMENT_CENTER, 1, 0.0)

@@ -832,11 +832,12 @@ static func _page_icons_mana() -> Dictionary:
 			+ "and at a small card's bottom-left corner, where they show an "
 			+ "ability you can pay to use."),
 		{"kind": ICONS, "entries": entries},
-		_text("Colorless mana has no symbol of its own in a cost — cards "
-			+ "that make it say so in words. It pays generic costs like any "
-			+ "other mana, and nothing else. Your mana pool shows it in its "
-			+ "own row, which the original's cue card names 'Your mana "
-			+ "pool: amount of Colorless'."),
+		_text("Colorless mana has no symbol of its own — a card that makes "
+			+ "it shows the amount as a plain number, the way the original "
+			+ "wrote Sol Ring's 'Add {2}' and Apprentice Wizard's 'Add {3}'. "
+			+ "It pays generic costs like any other mana, and nothing else. "
+			+ "Your mana pool shows it in its own row, which the original's "
+			+ "cue card names 'Your mana pool: amount of Colorless'."),
 	]}
 
 

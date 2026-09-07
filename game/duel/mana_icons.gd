@@ -15,9 +15,12 @@ extends RefCounted
 ## its header reads 342x18 — nineteen 18x18 cells, and an 18-pixel symbol is
 ## exactly one line of text tall at the original's 640x480. This is a sheet
 ## drawn to be set IN RUNNING TEXT, and 1997 set it there: see [ManaText]
-## for the evidence, and note that the pool's `{C}` is the one code these
-## nineteen cells cannot draw ([method symbol] returns null for it, and
-## every caller falls back to the braces as text).
+## for the evidence. The pool's `{C}` (Scryfall's colorless pip) has no
+## cell of its own — [method symbol] returns null for it — because the
+## 1997 text never needed one: it wrote a run of colorless mana as a
+## generic numeral (`Add |3 to your mana pool`, Master.csv), and
+## [method ManaText.build] does the same, folding `{C}{C}{C}` into cell
+## "3".
 
 const CELL := {
 	"X": 0, "0": 1, "1": 2, "2": 3, "3": 4, "4": 5, "5": 6,
@@ -64,8 +67,8 @@ static func symbol(sym: String) -> Texture2D:
 
 ## Build a row of symbol icons for a cost string ("{2}{W}{W}"), or null
 ## when the skin is absent / a symbol is unknown (caller falls back to
-## text). Colorless {C} costs render as generic numbers on the 1997 sheet
-## era, so {C} maps to the "1" digit look via plain text fallback.
+## text). No cost in this pool writes `{C}` — it is a rules-text code, and
+## [method ManaText.build] is where it becomes a numeral.
 static func cost_row(cost_text: String, icon_size := 14) -> HBoxContainer:
 	if GameSkin.texture("mana_symbols") == null or cost_text == "":
 		return null

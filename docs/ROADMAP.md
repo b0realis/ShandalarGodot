@@ -6614,6 +6614,65 @@ work; each points at the section that owns it.
   `@FULLCARD` ("Expand Text Box") and the six remaining `@TITLEDIALOG`
   fields on Deck Info.
 
+## THE COLORLESS NUMERAL, AND A WIZARD UNDER LAND (2026-09-07) — [1997]
+
+Two notes from the owner after playing v0.18.0-dev in the Deck Builder,
+and a change of flow.
+
+**The flow.** *"In the future lets not automatically build release,
+first local test then online release."* Written into `CONTRIBUTING.md`
+beside the build command: the local build is a step of the work, the
+GitHub release is the owner's call after playing it. This pass ends at
+a local build.
+
+**`{C}` renders as a numeral.** *"Apprentice wizard … has text add {C}
+{C} {C} - {C} should render as 1 in a gray circle - noncolred mana to the
+manapool."* Until now `{C}` was the one code `ManaText` sent back into
+the sentence as literal braces, on the reasoning that the nineteen-cell
+1997 sheet has no colorless pip (it has none; `{C}` is Scryfall's, from
+2016). The owner's note sent the pass back to `Master.csv` (Tier 1,
+1997-08-14) for what the 1997 game drew THERE, and the answer is one
+step beyond a grey "1" per pip — a RUN of colorless mana was one
+generic-mana numeral of its length:
+
+    0300,Apprentice Wizard,...,"|U, |T: Add  |3  to your mana pool. ..."
+    0230,Sol Ring,...,|T: to add |2 to pool - Interrupt,
+    0510,Mishra's Workshop,Land,...,|T: Add |3 to your mana pool. ...
+    Strip Mine, Mishra's Factory, Elephant Graveyard: |T: Add |1 ...
+    Su-Chi: ... add |4 to your mana pool.
+
+(Basalt Monolith, Desert and Mana Crypt say it in words — "3 colorless
+mana" — as the modern text would with braces; the numeral is what the
+sheet gives the sentence when it has a symbol at all.) So
+`ManaText.build` folds a run of abutting `{C}` into the numeral cell of
+its length: `{C}` alone IS the owner's "1 in a gray circle", Apprentice
+Wizard reads `Add ③.`, Sol Ring `Add ②.`, Su-Chi `add ④.`, and Urza's
+Tower keeps its two amounts apart — `Add ①. … add ③ instead.` — because
+only ABUTTING pips fold. A run past ten (none in the pool) draws in
+tens. The split (`ManaText.runs`) is untouched and still lossless, and
+with no imported sheet every pip is its own braces again. Checked by
+looking at the Showcase on those four cards at 3×.
+
+The rest of the pool's 90 `{C}`s are all mana produced, never a cost, so
+`ManaIcons.cost_row` needs nothing. `tests/ui/test_mana_text.gd` swaps
+the old "stays readable braces" pin for the numeral pin (the 1/3/4/10+2
+cases, the Tower's two runs, the sentence getting narrower) and adds the
+no-sheet fallback on `{C}{C}{C}`; the Showcase's full-size floors (685
+and 810) hold.
+
+**Apprentice Wizard under the Land button is the manual's rule.**
+*"Check, apprentice wizard filters as a land."* It shows under Land
+because the Land button's default mini-menu entry is `Land and Mana`
+(`@LAND`, Menus.txt:320), and the manual says what that means: *"this
+filters in all land and all other cards capable of producing mana."*
+The Wizard taps for mana, so it is reached exactly as Sol Ring and Birds
+of Paradise are. `Land only` (right-click the Land medallion) leaves it
+out; and being a creature rather than a land it is NOT exempt from the
+Color Filters — Blue up and it goes, where an Island stays (*"the same
+is not true for other mana sources"*). No code moved; the answer is
+pinned as `test_a_creature_that_taps_for_mana_is_reached_through_the_land_button`
+in `tests/ui/test_deck_filter.gd` so the next reader finds it.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

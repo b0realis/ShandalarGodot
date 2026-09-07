@@ -54,6 +54,10 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   copy. The export templates here are `4.7.stable` while the pinned engine
   is 4.7.2, so the preset names the release template by path — which is
   why the preset itself is gitignored and only the example is committed.
+  The build is the LOCAL step and the GitHub release is a separate one:
+  a local build gets played first, and `gh release create` runs only
+  when the owner asks for the release — never as the automatic tail of a
+  piece of work.
 - Python tool self-tests (no Godot, no network):
   `python3 -m unittest discover -s tools -p 'test_*.py'`
 - Screenshots under Xvfb: see **Commands that can hang** below. Do not

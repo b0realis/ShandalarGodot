@@ -261,6 +261,31 @@ func test_the_land_button_shows_every_mana_source_by_default() -> void:
 	assert_false(filter.matches(_card("Lightning Bolt")), "makes no mana")
 
 
+## The owner's 2026-09-07 check: *"apprentice wizard filters as a land."*
+## It does, and it is the manual's own rule, not a bug: the Wizard taps
+## for mana, so `Land and Mana` reaches it exactly as it reaches Sol Ring
+## and Birds of Paradise. `Land only` is the option that leaves it out,
+## and — being a creature, not a land — it is NOT exempt from the Color
+## Filters the way a land is (*"the same is not true for other mana
+## sources"*): Blue up, and it goes.
+func test_a_creature_that_taps_for_mana_is_reached_through_the_land_button() -> void:
+	for type_flag in DeckFilter.TYPE_ORDER:
+		if type_flag != Mtg.CardType.LAND:
+			filter.toggle_type(type_flag)
+	var wizard := _card("Apprentice Wizard")
+	assert_true(wizard.is_creature() and not wizard.is_land(), "a creature")
+	assert_false(wizard.mana_abilities.is_empty(), "that taps for mana")
+	assert_true(filter.matches(wizard), "Land and Mana: shown, with Sol Ring")
+	filter.toggle_color(Mtg.ManaColor.U)
+	assert_false(filter.matches(wizard), "Blue up: a mana CREATURE obeys the colours")
+	assert_true(filter.matches(_card("Island")), "a land does not")
+	filter.toggle_color(Mtg.ManaColor.U)
+	filter.land_mode = DeckFilter.Land.LAND_ONLY
+	assert_false(filter.matches(wizard), "Land only: lands, and nothing else")
+	filter.land_mode = DeckFilter.Land.MANA_ONLY
+	assert_true(filter.matches(wizard), "Mana only: the sources without the lands")
+
+
 func test_land_only_drops_the_other_mana_sources() -> void:
 	# "Land Only displays only land cards."
 	filter.land_mode = DeckFilter.Land.LAND_ONLY

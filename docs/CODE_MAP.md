@@ -1618,7 +1618,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4613 tests / ~131 000 asserts, ~290 s
+├── tests/                   GUT suite — 4615 tests / ~131 000 asserts, ~290 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -1823,8 +1823,9 @@ shandalar/
 │    (Master.csv, Tier 1, 1997-08-14 — 204 of its 338 tagged rows carry
 │    `|T`, and tap is never part of a cost) and pins the contract the
 │    enlarged card's fitting arithmetic rests on: the split is lossless
-│    over all 897 oracle texts, `{C}` is the ONLY code the nineteen-cell
-│    sheet cannot draw and it falls back to readable braces, a symbol is
+│    over all 897 oracle texts, `{C}` is the ONLY code off the nineteen-
+│    cell sheet and a run of it draws as the 1997 numeral (`Add |3`,
+│    Master.csv — the "3" disc, braces again with no sheet), a symbol is
 │    3/4 of the line box it stands in and never makes that line taller,
 │    a run of abutting symbols never breaks across a line, and with no
 │    skin the paragraph measures as the plain string it used to be;
@@ -3672,8 +3673,11 @@ shandalar/
 │       │                      so it scales with the type and never grows
 │       │                      the line; a run of abutting symbols is ONE
 │       │                      inline object, which is how the original
-│       │                      keeps {B}{B}{B} whole. No skin, or a code
-│       │                      off the nineteen-cell sheet ({C}), falls
+│       │                      keeps {B}{B}{B} whole. Scryfall's {C} has
+│       │                      no cell: a run of it folds into the generic
+│       │                      numeral of its length ({C}{C}{C} = the "3"
+│       │                      disc), which is what Master.csv wrote
+│       │                      ("Add |3 to your mana pool"). No skin falls
 │       │                      back PER TOKEN to the literal braces
 │       ├── card_pile.gd     class CardPile — the original's universal
 │       │                      grouping device: a stack of WHOLE MiniCards,
