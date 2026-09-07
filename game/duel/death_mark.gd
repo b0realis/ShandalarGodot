@@ -76,10 +76,11 @@ extends Control
 const HOLD := 0.45
 const FADE := 0.55
 
-## Above the board, the Combat window (z 10), the target arrows (20) and
-## the damage markers (25); below the spell flight (70) and everything
-## modal. The duel screen's own ladder, `duel_screen.gd:5258-5348`.
-const Z := 30
+## Above the board, the Combat window (z 30), the target arrows (35) and
+## the damage markers (40); below the log (50), the spell flight (70) and
+## everything modal. The duel screen's own ladder is documented beside
+## `DuelScreen.ROW_Z_STEP`.
+const Z := 45
 
 ## The dead card's face, wearing the `Dying` cracks over its art.
 var ghost: MiniCard = null

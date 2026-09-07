@@ -3459,6 +3459,23 @@ Shipped in v1.1 (the 1997-feel pass):
   the hand, **L** the duel log, **M** mute, **Ctrl+T / Ctrl+I / Ctrl+U** the
   display toggles, **F12** screenshot.
 
+Shipped 2026-09-07 (the v0.18.0-dev playtest, all `[QoL]`):
+- **The rows slide under one another** instead of leaving the playfield:
+  a board half is a `SqueezeColumn` (`squeeze_column.gd`), the vertical
+  twin of `SqueezeRow` — rows fit as before, and when they do not the
+  overflow is shared over the seams, creatures always whole. The board's
+  rows and every floating window stand on one z ladder (`ROW_Z_STEP`).
+- **Full screen** — a switch under Options → Display (`display.gd`);
+  borderless at the desktop's resolution, applied at once and at boot by
+  the `Lifecycle` autoload, remembered in `settings.cfg`.
+- **Magic Battle opens on what you played last** — every picker but the
+  seed is written at `Go!`, after every gate, and restored on the next
+  visit (`setup_screen.gd`, `battle_*` keys).
+- **The End of Duel window answers Return, Space and Esc**, and the tail
+  of `_on_game_over` is hardened at four joints (the tree's timer instead
+  of a node-bound tween, OK added before the lines are written,
+  `is_instance_valid` plus the `result_closed` signal, and the keys).
+
 Wishlist (ordered; each is a self-contained follow-up):
 - **Phase stops config** (the original's duel options panel): choose which
   steps pause for you; per-seat.

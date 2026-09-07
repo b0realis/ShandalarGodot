@@ -152,8 +152,10 @@ func test_a_tapped_host_is_lifted_by_its_holder() -> void:
 
 func test_host_z_is_one_above_a_cards_own_children() -> void:
 	# The number is not free: one above the highest z a card gives its own
-	# children, or the fix is by luck; and under the combat window's 10,
-	# or an attacker wearing an aura draws through the window it stands in.
+	# children, or the fix is by luck; inside one row step, or a host in the
+	# land row draws through the creature lying over it; and, from the free
+	# layer's step, under the combat window, or an attacker wearing an aura
+	# draws through the window it stands in.
 	var lion := _summon("Savannah Lions", 0)
 	screen.game.recalculate()
 	screen._refresh()
@@ -163,8 +165,13 @@ func test_host_z_is_one_above_a_cards_own_children() -> void:
 	w._refresh_highlight_ring(true)
 	assert_eq(DuelScreen.HOST_Z, _top_z_in(w, w) + 1,
 		"HOST_Z is exactly one above the tallest thing on a card")
-	assert_lt(DuelScreen.HOST_Z + _top_z_in(w, w), 10,
-		"and a host's tallest child is still under the combat window")
+	assert_lt(DuelScreen.HOST_Z + _top_z_in(w, w), DuelScreen.ROW_Z_STEP,
+		"and a host's tallest child is still inside its row's step")
+	assert_lt(DuelScreen.PILE_SIZE - 1 + _top_z_in(w, w), DuelScreen.ROW_Z_STEP,
+		"as is a pile's last card and its name band")
+	assert_lt(DuelScreen.FREE_LAYER_Z + DuelScreen.HOST_Z + _top_z_in(w, w),
+		screen._combat_window.z_index,
+		"and a host on the free layer is still under the combat window")
 	assert_gt(DuelScreen.LIFT_Z, DuelScreen.HOST_Z + _top_z_in(w, w),
 		"and under a right-held neighbour")
 
@@ -185,7 +192,10 @@ func test_a_right_held_host_drops_back_onto_its_aura_not_under_it() -> void:
 	var fan: Array = await _the_elves_and_their_energy()
 	var host_w: MiniCard = fan[0]
 	screen._on_card_look(_right(true), host_w, host_w.instance)
-	assert_eq(host_w.z_index, DuelScreen.LIFT_Z, "held to the front")
+	# LIFT_Z on the SCREEN's ladder: z is relative and the row stands on
+	# a step of its own (ROW_Z_STEP), which the lift takes off.
+	assert_eq(host_w.z_index + screen._z_under(host_w), DuelScreen.LIFT_Z,
+		"held to the front")
 	screen._on_card_look(_right(false), host_w, host_w.instance)
 	assert_eq(host_w.z_index, DuelScreen.HOST_Z,
 		"and put back where it RESTED — over the aura, not at 0")
@@ -199,6 +209,8 @@ func test_a_plain_card_still_drops_back_to_zero() -> void:
 	var w: MiniCard = _drawn().get(lion.id)
 	assert_eq(w.z_index, 0, "an unenchanted card rests at 0")
 	screen._on_card_look(_right(true), w, lion)
-	assert_eq(w.z_index, DuelScreen.LIFT_Z)
+	assert_eq(w.z_index + screen._z_under(w), DuelScreen.LIFT_Z)
+	assert_eq(screen._z_under(w), DuelScreen.Row.CREATURES * DuelScreen.ROW_Z_STEP,
+		"a creature's row is two steps up")
 	screen._on_card_look(_right(false), w, lion)
 	assert_eq(w.z_index, 0, "and goes back to 0, as it always did")

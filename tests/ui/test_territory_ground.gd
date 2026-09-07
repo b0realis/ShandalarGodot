@@ -226,24 +226,29 @@ func test_the_duel_dresses_both_halves_and_redresses_on_a_change() -> void:
 	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
 	add_child_autofree(screen)
 	await get_tree().process_frame
+	# The ground is the half's FIRST child — under the rows and the free
+	# layer. (This used to pick "the last child that is not the rows" and
+	# passed only because a redress threw the free layer away with the
+	# ground; it no longer does, 2026-09-07.)
 	var grounds: Array = []
 	for pid in 2:
 		var holder: Control = screen._half_rows[pid].get_parent()
-		var found: Control = null
-		for child in holder.get_children():
-			if child != screen._half_rows[pid]:
-				found = child
+		var found: Control = holder.get_child(0)
 		assert_not_null(found, "seat %d has a ground" % pid)
+		assert_ne(found, screen._half_rows[pid])
+		assert_ne(found, screen._free_layers[pid])
 		grounds.append(found)
+	var free0: Control = screen._free_layers[0]
 	DuelOptions.set_territory_type("Line drawing")
 	screen._redress_territory(0)
 	var holder0: Control = screen._half_rows[0].get_parent()
-	var after: Control = null
-	for child in holder0.get_children():
-		if child != screen._half_rows[0]:
-			after = child
+	var after: Control = holder0.get_child(0)
 	assert_not_null(after)
 	assert_ne(after, grounds[0], "the player's half took the new style")
-	assert_eq(holder0.get_child(0), after,
+	assert_ne(after, screen._half_rows[0],
 		"and the ground is still UNDER the cards, not over them")
+	assert_true(is_instance_valid(free0) and free0.get_parent() == holder0,
+		"and the free layer — the cards moved by hand — survived the change")
+	assert_eq(screen._free_layers[0], free0)
+	assert_eq(holder0.get_child_count(), 3, "ground, rows, free layer")
 	await get_tree().process_frame   # the replaced ground's queue_free

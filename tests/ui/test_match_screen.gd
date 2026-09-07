@@ -305,3 +305,46 @@ func test_a_finished_duel_stops_taking_input_under_the_owners_window() -> void:
 	assert_true(is_instance_valid(duel), "the owner keeps the duel on screen")
 	assert_eq(duel.process_mode, Node.PROCESS_MODE_DISABLED,
 		"and it takes no input under the owner's window")
+
+
+# ------------------------ two ears on the End of Duel window (2026-09-07) --
+#
+# The fourth playtest report: *"when you win a match and after win window,
+# the music stops and you are stuck on playfield"*. The match used to
+# learn of the window's closing only by polling `result_dialog_open()`
+# every frame from inside `_on_duel_finished`; now the duel also SAYS so
+# (`DuelScreen.result_closed`), and whichever ear hears first advances —
+# once. See `DuelScreen._show_result_window`.
+
+func test_the_duel_announces_its_window_closing_and_the_match_advances_once() -> void:
+	runner = _run(1)
+	await get_tree().process_frame
+	var duel: DuelScreen = runner._duel
+	assert_eq(duel.result_closed.get_connections().size(), 1,
+		"the match listens to the duel's last word")
+	var heard: Array[int] = []
+	runner.match_finished.connect(func(winner: int) -> void: heard.append(winner))
+	duel.duel_finished.emit(0)
+	assert_eq(heard, [0], "advanced on the result")
+	assert_true(runner._duel_advanced)
+	# The window closes — the duel says so — and nothing happens twice.
+	duel._on_game_over_dismissed()
+	assert_eq(heard, [0], "the second ear stays quiet")
+	runner._advance_once(duel)
+	assert_eq(heard, [0], "and so does a third call")
+
+
+func test_a_closing_word_from_a_dropped_duel_is_ignored() -> void:
+	runner = _run(3)
+	await get_tree().process_frame
+	var first: DuelScreen = runner._duel
+	first.duel_finished.emit(0)
+	assert_ne(runner._duel, first, "duel 2 is up")
+	assert_false(runner._duel_advanced, "a fresh duel, not yet advanced")
+	var played := runner.state.duels_played()
+	# A stale word from the duel that was dropped (queued to free, not yet
+	# gone) must not move the match.
+	assert_true(first.is_queued_for_deletion())
+	runner._advance_once(first)
+	assert_false(runner._duel_advanced, "not the duel on the table: ignored")
+	assert_eq(runner.state.duels_played(), played)

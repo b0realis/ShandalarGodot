@@ -1156,6 +1156,20 @@ a row whose cards are allowed to lie on top of one another.
 Pinned by `tests/ui/test_squeeze_row.gd` (11 tests, including the
 mixed-width case and "the board's rows really are these").
 
+**AND ITS VERTICAL TWIN (2026-09-07, `[QoL]`).** The three rows of a
+board half sat in a `VBoxContainer`, which has one answer to rows that
+want more height than the half has: it grows, and the creature row ran
+out through the half's clip — the owner's playtest screenshot, "cards
+sometimes automatically go outside the playfield". A turned pile over a
+tapped artifact over a row of attackers is 431 tall in a 388 half.
+`game/duel/squeeze_column.gd` (`SqueezeColumn`) lays the rows out exactly
+as the VBox did while they fit and, once they do not, shares the overflow
+over the seams so each earlier row slides UNDER the next — the creatures
+always whole, the hand plate never squeezed. Sliding under is drawing
+under, so the rows now stand one `ROW_Z_STEP` apart and every floating
+thing starts above the ladder (see `docs/ROADMAP.md`, "THE PLAYTEST OF
+v0.18.0-dev"). Pinned by `tests/ui/test_squeeze_column.gd`.
+
 ### 2.14 [s30] Hover-examine has no top-of-stack fallback — DONE (2026-09-01), AND THE 1997 RULE IT WAS MISSING
 
 s30's hover chain ends with: if nothing is hovered, show the TOP STACK

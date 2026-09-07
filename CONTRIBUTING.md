@@ -121,6 +121,18 @@ directory, inspect, delete immediately; the screenshot tour writes ~100 MB
 per run. A session once accumulated 2.4 GB across 420 directories and was
 OOM-killed.
 
+A scratch Godot run that is NOT a test (a screenshot script, a click-through
+probe) gets two more flags, and both matter. `--log-file "$SCRATCH/x.log"`:
+Godot keeps only the last five files in `user://logs/`, so a scratch run
+without it silently pushes the owner's own play logs out of the ring — and
+a probe you want to read after the fact is then the one that got rotated.
+`XDG_DATA_HOME="$SCRATCH/xdg"` whenever the script touches `Settings`, the
+options screen, or Magic Battle's `Go!`: `user://settings.cfg` is the
+owner's own file, `Settings.set_value` persists by default, and a run that
+ticks Full screen or presses `Go!` from a script would otherwise rewrite
+what the owner opens on next time. `run_tests.sh` and `duel_soak.sh`
+already isolate it; a hand-written run does not unless you say so.
+
 ## Hard rules
 
 1. `engine/` and `cards/` stay pure: RefCounted only — never Node, scenes,

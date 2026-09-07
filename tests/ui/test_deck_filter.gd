@@ -248,46 +248,59 @@ func test_the_whole_pool_survives_an_untouched_filter() -> void:
 
 # ------------------------------------------------- @LAND, the mini-menu --
 
-func test_the_land_button_shows_every_mana_source_by_default() -> void:
-	# `@LAND` (s30/assets/text/Menus.txt): "&Land and Mana" is the first and
-	# therefore default option, and the manual says what it means: "this
-	# filters in all land and all other cards capable of producing mana."
-	assert_eq(filter.land_mode, DeckFilter.Land.LAND_AND_MANA)
+func test_the_land_button_shows_lands_only_by_default() -> void:
+	# [QoL] `@LAND` (s30/assets/text/Menus.txt) lists "&Land and Mana"
+	# first, and in 1997 that was the default: "this filters in all land
+	# and all other cards capable of producing mana." Here `Land only` is
+	# the default (the owner, 2026-09-07: "No apprentice wizard should
+	# still be a creature."); the manual's reach is the menu's first entry.
+	assert_eq(filter.land_mode, DeckFilter.Land.LAND_ONLY)
 	for type_flag in DeckFilter.TYPE_ORDER:
 		if type_flag != Mtg.CardType.LAND:
 			filter.toggle_type(type_flag)
 	assert_true(filter.matches(_card("Mountain")), "a land")
-	assert_true(filter.matches(_card("Sol Ring")), "an artifact that makes mana")
+	assert_false(filter.matches(_card("Llanowar Elves")), "a creature that makes mana is not a land")
 	assert_false(filter.matches(_card("Lightning Bolt")), "makes no mana")
+	filter.land_mode = DeckFilter.Land.LAND_AND_MANA
+	assert_true(filter.matches(_card("Llanowar Elves")), "the 1997 default reaches it")
+	assert_false(filter.matches(_card("Sol Ring")), "but not past the raised Artifacts button")
 
 
 ## The owner's 2026-09-07 check: *"apprentice wizard filters as a land."*
-## It does, and it is the manual's own rule, not a bug: the Wizard taps
-## for mana, so `Land and Mana` reaches it exactly as it reaches Sol Ring
-## and Birds of Paradise. `Land only` is the option that leaves it out,
-## and — being a creature, not a land — it is NOT exempt from the Color
-## Filters the way a land is (*"the same is not true for other mana
-## sources"*): Blue up, and it goes.
-func test_a_creature_that_taps_for_mana_is_reached_through_the_land_button() -> void:
+## Under the manual's default it did — the Wizard taps for mana, so `Land
+## and Mana` reaches it exactly as it reaches Sol Ring and Birds of
+## Paradise — and the owner's answer was *"No apprentice wizard should
+## still be a creature."* So `Land only` is the default now and the Wizard
+## is a creature the Land button leaves alone; `Land and Mana` and `Mana
+## only` still reach it, and — being a creature, not a land — it is NOT
+## exempt from the Color Filters the way a land is (*"the same is not true
+## for other mana sources"*): Blue up, and it goes.
+func test_a_creature_that_taps_for_mana_is_a_creature_under_the_land_button() -> void:
 	for type_flag in DeckFilter.TYPE_ORDER:
 		if type_flag != Mtg.CardType.LAND:
 			filter.toggle_type(type_flag)
 	var wizard := _card("Apprentice Wizard")
 	assert_true(wizard.is_creature() and not wizard.is_land(), "a creature")
 	assert_false(wizard.mana_abilities.is_empty(), "that taps for mana")
+	assert_false(filter.matches(wizard), "Land only, the default: not a land, not shown")
+	assert_true(filter.matches(_card("Island")), "the land is")
+	filter.land_mode = DeckFilter.Land.LAND_AND_MANA
 	assert_true(filter.matches(wizard), "Land and Mana: shown, with Sol Ring")
 	filter.toggle_color(Mtg.ManaColor.U)
 	assert_false(filter.matches(wizard), "Blue up: a mana CREATURE obeys the colours")
 	assert_true(filter.matches(_card("Island")), "a land does not")
 	filter.toggle_color(Mtg.ManaColor.U)
-	filter.land_mode = DeckFilter.Land.LAND_ONLY
-	assert_false(filter.matches(wizard), "Land only: lands, and nothing else")
 	filter.land_mode = DeckFilter.Land.MANA_ONLY
 	assert_true(filter.matches(wizard), "Mana only: the sources without the lands")
+	filter.land_mode = DeckFilter.Land.LAND_ONLY
+	filter.toggle_type(Mtg.CardType.LAND)
+	filter.toggle_type(Mtg.CardType.CREATURE)
+	assert_true(filter.matches(wizard), "the Creatures button is where the Wizard lives")
 
 
 func test_land_only_drops_the_other_mana_sources() -> void:
 	# "Land Only displays only land cards."
+	filter.land_mode = DeckFilter.Land.LAND_AND_MANA
 	filter.land_mode = DeckFilter.Land.LAND_ONLY
 	for type_flag in DeckFilter.TYPE_ORDER:
 		if type_flag != Mtg.CardType.LAND:
@@ -304,7 +317,10 @@ func test_mana_only_drops_the_lands() -> void:
 		if type_flag != Mtg.CardType.LAND:
 			filter.toggle_type(type_flag)
 	assert_false(filter.matches(_card("Mountain")), "the land is filtered out")
-	assert_true(filter.matches(_card("Sol Ring")), "the mana artifact stays")
+	assert_true(filter.matches(_card("Llanowar Elves")), "the mana creature stays")
+	assert_false(filter.matches(_card("Sol Ring")), "the mana artifact is the raised Artifacts button's")
+	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	assert_true(filter.matches(_card("Sol Ring")))
 
 
 func test_a_mana_source_reached_through_land_still_ignores_the_colors() -> void:
@@ -332,6 +348,52 @@ func test_the_artifact_sub_filters_split_creatures_from_the_rest() -> void:
 	filter.artifact_creatures = false
 	assert_false(filter.matches(_card("Clockwork Beast")))
 	assert_true(filter.matches(_card("Sol Ring")), "unaffected, as the manual says")
+
+
+## [QoL] The owner, 2026-09-07: *"artifact filter button should filter
+## out all artifacts (even if they are artifact creatures or artifact
+## lands etc….). If you want artifact creatures you combine other filters
+## ."* In 1997 the groups were a plain OR, so with Artifacts UP the
+## Creatures button's own "Artifact" tick still reached Clockwork Beast.
+## Now the raised button is a gate: nothing carrying the Artifact type
+## gets past it, and Artifacts + Creatures is the combination that shows
+## an artifact creature.
+func test_the_artifact_button_up_hides_every_artifact() -> void:
+	var beast := _card("Clockwork Beast")
+	assert_true(beast.is_creature() and (beast.types & Mtg.CardType.ARTIFACT), "an artifact creature")
+	assert_true(filter.matches(beast), "everything down: shown")
+	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	assert_false(filter.matches(_card("Sol Ring")), "Artifacts up: the plain artifact goes")
+	assert_false(filter.matches(beast), "and so does the artifact creature, Creatures down or not")
+	assert_true(filter.creature_artifact, "the Creature page's Artifact tick does not reach past the gate")
+	assert_true(filter.matches(_card("Grizzly Bears")), "a plain creature is untouched")
+	filter.land_mode = DeckFilter.Land.LAND_AND_MANA
+	assert_false(filter.matches(_card("Sol Ring")), "nor does Land and Mana reach past it")
+	assert_true(filter.matches(_card("Mountain")), "a land is untouched")
+	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	for type_flag in DeckFilter.TYPE_ORDER:
+		if type_flag != Mtg.CardType.ARTIFACT and type_flag != Mtg.CardType.CREATURE:
+			filter.toggle_type(type_flag)
+	assert_true(filter.matches(beast), "Artifacts + Creatures: the artifact creature")
+	assert_true(filter.matches(_card("Sol Ring")), "Artifacts down admits by its own ticks")
+	filter.artifact_noncreatures = false
+	assert_false(filter.matches(_card("Sol Ring")), "the mini-menu still has its say")
+	assert_true(filter.matches(beast))
+
+
+func test_an_artifact_land_is_an_artifact_first() -> void:
+	# The owner named artifact lands too. The pool's lands do not carry the
+	# Artifact type in the sets shipped (Mishra's Factory is a plain land),
+	# so the gate is pinned on a card given both types by hand.
+	var d := CardData.new()
+	d.card_name = "A Seat of the Synod"
+	d.types = Mtg.CardType.LAND | Mtg.CardType.ARTIFACT
+	assert_true(filter.matches(d), "everything down: shown")
+	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	assert_false(filter.matches(d), "Artifacts up: the artifact land goes, though Land is down")
+	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	filter.toggle_type(Mtg.CardType.LAND)
+	assert_true(filter.matches(d), "Land up, Artifacts down: reached as an artifact")
 
 
 # ------------------------------------------ @POWER / @TOUGHNESS filters --
@@ -401,7 +463,7 @@ func test_reset_restores_every_audit_pass_filter_too() -> void:
 	filter.toughness_mode = DeckFilter.Rank.LE
 	filter.gold_mode = DeckFilter.Gold.MATCH_ANY
 	filter.reset()
-	assert_eq(filter.land_mode, DeckFilter.Land.LAND_AND_MANA)
+	assert_eq(filter.land_mode, DeckFilter.Land.LAND_ONLY, "[QoL] Land only is the default")
 	assert_true(filter.artifact_creatures)
 	assert_eq(filter.power_mode, DeckFilter.Rank.OFF)
 	assert_eq(filter.toughness_mode, DeckFilter.Rank.OFF)
@@ -649,10 +711,12 @@ func test_a_fresh_filter_has_no_list_in_force() -> void:
 func test_summon_admits_the_plain_creatures_and_artifact_the_others() -> void:
 	# `check_creatures`, deckdll.cpp:6995 — "Summon Bear" versus
 	# "Artifact Creature" in the 1997 type line. The Artifact MEDALLION
-	# admits an artifact creature on its own (the groups are ORed), so it
-	# goes up for the Artifact check to be the one asked; likewise a mana
-	# creature is Land's through `Land and Mana`, so the Bears stand in.
-	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	# admits an artifact creature on its own (the groups are ORed), so its
+	# "All Creatures" tick goes off for the Creature check to be the one
+	# asked — the medallion itself stays DOWN, since up it gates every
+	# artifact out (the [QoL] gate, further down). The Bears are a plain
+	# Summon under `Land only`, the default.
+	filter.artifact_creatures = false
 	filter.creature_summon = false
 	assert_false(filter.matches(_card("Grizzly Bears")), "a Summon with Summon up")
 	assert_true(filter.matches(_card("Primal Clay")), "an artifact creature is Artifact's")
@@ -665,6 +729,7 @@ func test_summon_admits_the_plain_creatures_and_artifact_the_others() -> void:
 
 func test_a_mana_creature_is_still_lands_with_summon_up() -> void:
 	# `Land and Mana` reaches every card that taps for mana, Summon or not.
+	filter.land_mode = DeckFilter.Land.LAND_AND_MANA
 	filter.creature_summon = false
 	assert_true(filter.matches(_card("Llanowar Elves")))
 	filter.land_mode = DeckFilter.Land.LAND_ONLY
@@ -673,8 +738,10 @@ func test_a_mana_creature_is_still_lands_with_summon_up() -> void:
 
 func test_the_list_is_an_or_term_on_top_of_summon() -> void:
 	# The list ADDS to Summon — with Summon still down it changes nothing,
-	# which is why the window says so (DeckBuilderScreen.LIST_HINT).
-	filter.toggle_type(Mtg.CardType.ARTIFACT)
+	# which is why the window says so (DeckBuilderScreen.LIST_HINT). The
+	# Artifact medallion's "All Creatures" tick goes off so the Clay is the
+	# creature checks' to answer for.
+	filter.artifact_creatures = false
 	filter.creature_list_on = true
 	for subtype in FilterBar.creature_types():
 		filter.tick_creature_type(subtype, false)

@@ -1618,7 +1618,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4615 tests / ~131 000 asserts, ~290 s
+├── tests/                   GUT suite — 4649 tests / ~131 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2016,6 +2016,13 @@ shandalar/
 │    tests/ui/test_squeeze_row.gd — a board row shrinking its pitch
 │    instead of wrapping, including mixed widths and the last card always
 │    showing in full;
+│    tests/ui/test_squeeze_column.gd — the row's vertical twin
+│    (2026-09-07, "cards go outside the playfield"): while the rows fit
+│    the column lays out as the VBox did, over the half it shares the
+│    overflow over the seams so earlier rows slide UNDER later ones, the
+│    last row (the creatures) always whole, rows outside `squeezed` (the
+│    hand plate, the fan) never squeezed, and the z ladder that makes
+│    sliding under drawing under;
 │    tests/ui/test_card_menus.gd — the rest of the @MENU_ family (§6.12)
 │    and the last live entries of @MENU_TERRITORY (§6.3): every table
 │    verbatim and complete, `Count library cards`, `Expand text box`, the
@@ -2362,6 +2369,12 @@ shandalar/
 │    write user://settings.cfg ONCE per drag: a tick applies in memory
 │    (and reaches the audio bus at once), the file is written when the
 │    handle is let go, when focus leaves, or when the screen does;
+│    tests/ui/test_options_display.gd — [QoL] `Full screen` (2026-09-07):
+│    windowed by default with nothing materialized into the file, the
+│    switch a VIEW of the `fullscreen` key (opens on what is stored,
+│    writes to disk at once, survives Settings.reload), the Display row
+│    above Sound, borderless not exclusive, applying silent headless,
+│    and the Lifecycle autoload applying it at boot;
 │    tests/ui/test_options_music.gd — the MUSIC SYSTEM and the PHASE CUE,
 │    both from the owner's 2026-09-03 playtest: the original has 27
 │    loopable beds and not one, a player file in user://music replaces an
@@ -2415,6 +2428,18 @@ shandalar/
 │    keeps the game reachable in about two seconds, the image is still
 │    the owner's on black, and run/main_scene is still main.tscn (no
 │    scene was added ahead of the title screen);
+│    tests/ui/test_setup_screen.gd — THE BATTLE-SETUP SCREEN: `<random
+│    deck>` first and worded as 1997 worded it, the pick a pure function
+│    of the seed, every duel leaving seeded, the duelist's face per seat,
+│    the picker grouped by DeckGroups with a pooled random per heading,
+│    the seed box, the five formats and the note under the picker, the
+│    match row, the proxy and parser gates on Go!, HAL's names, the
+│    panel's fit, the portraits, the shell's bed; and since 2026-09-07
+│    WHAT YOU PLAYED LAST IS WHAT YOU OPEN ON — every choice but the
+│    seed remembered at Go! in ONE write, read back on the next screen,
+│    a gone deck / an emptied pool / nonsense in the file falling back
+│    to the control's default, a refused deck not remembered, and
+│    forget_choices leaving no trace;
 │    tests/ui/test_deck_scroll.gd — the two scroll arrows and the corner
 │    count: an arrow at each end running the full height, the bar and the
 │    cards both INSIDE them, the triangle MOUSE_FILTER_IGNORE, one press
@@ -2853,7 +2878,13 @@ shandalar/
 │   │                          duel screen, a match to MatchScreen.
 │   │                          Scans DeckStore.all_deck_paths(), so decks
 │   │                          saved in the Deck Builder are playable, and
-│   │                          groups the list by DeckGroups
+│   │                          groups the list by DeckGroups. [QoL]
+│   │                          REMEMBERS every choice but the seed
+│   │                          (`battle_*` Settings keys, written once at
+│   │                          Go! after every gate, read back with a
+│   │                          fallback per control) — 2026-09-07, "all
+│   │                          selections you make should keep as
+│   │                          default on your next run"
 │   ├── deck_groups.gd       class DeckGroups — WHERE A DECK CAME FROM,
 │   │                          the heading it appears under in the deck
 │   │                          list. `User-created` is DERIVED from the
@@ -2941,7 +2972,9 @@ shandalar/
 │   │                          playlist so even a one-track loop wraps on a
 │   │                          crossfade instead of a click
 │   ├── options_screen.gd/.tscn  Options ([QoL] — 1997 had no options
-│   │                          screen): Music and Sound Effects switches
+│   │                          screen): the Display row's `Full screen`
+│   │                          switch (GameDisplay, 2026-09-07), Music
+│   │                          and Sound Effects switches
 │   │                          (the deck builder's mini-menu carries the
 │   │                          same two keys), music/sfx volume sliders
 │   │                          (ours — 1997 had no volume anywhere), the
@@ -2954,6 +2987,21 @@ shandalar/
 │   ├── settings.gd          class Settings — user://settings.cfg wrapper;
 │   │                          saved on every set, except set_value(...,
 │   │                          false) + flush() for a slider's drag
+│   ├── display.gd           class GameDisplay — THE WINDOW: the one
+│   │                          `fullscreen` key and the one place it is
+│   │                          put onto the OS window (borderless
+│   │                          WINDOW_MODE_FULLSCREEN, not exclusive;
+│   │                          idempotent; silent headless). [QoL] —
+│   │                          1997 had `M&inimize` and a frameless-
+│   │                          window ini key (`NoFrame`) and no more.
+│   │                          The Options switch writes it, Lifecycle
+│   │                          applies it at boot
+│   ├── lifecycle.gd         THE ONE AUTOLOAD (`Lifecycle`) — enters the
+│   │                          tree first (applies GameDisplay at boot)
+│   │                          and leaves it last, dropping the card
+│   │                          database while the card scripts are still
+│   │                          loaded (CardRegistry.unload) so quit()
+│   │                          never aborts in static teardown
 │   ├── ui_chrome.gd         class UiChrome — the original sandstone panel
 │   │                          (Winbk_Options 9-patch) + era buttons/labels;
 │   │                          ONE place for the game's window look
@@ -3285,9 +3333,13 @@ shandalar/
 │   │   │                      colourless cards exempt from colour. Also
 │   │   │                      the mini-menus the string table spells out:
 │   │   │                      @LAND (Land and Mana / Land only / Mana
-│   │   │                      only — the Land button reaches every mana
-│   │   │                      source, not just lands), @ARTIFACT (All
-│   │   │                      Creatures / All Non-Creatures), @GOLD,
+│   │   │                      only — [QoL] `Land only` is OUR default
+│   │   │                      since 2026-09-07, the 1997 `Land and Mana`
+│   │   │                      reaching every mana source one right-click
+│   │   │                      away), @ARTIFACT (All Creatures / All
+│   │   │                      Non-Creatures; [QoL] the button up hides
+│   │   │                      EVERY artifact, artifact creatures and
+│   │   │                      lands included — the owner's rule), @GOLD,
 │   │   │                      @CASTCOST, and the @POWER / @TOUGHNESS
 │   │   │                      filters. `revision` counts real changes so
 │   │   │                      the screen re-walks 800 cards only when the
@@ -3982,6 +4034,21 @@ shandalar/
 │       │                      than a MiniCard). A wrapped row would break
 │       │                      the three-row reading order §2.3 and §4.2
 │       │                      are both about
+│       ├── squeeze_column.gd class SqueezeColumn — THE ROWS NEVER LEAVE
+│       │                      THEIR HALF, the row's vertical twin
+│       │                      (2026-09-07: "cards go outside the
+│       │                      playfield"). Replaces the half's VBox,
+│       │                      which GREW past the half; over the half's
+│       │                      height the overflow is shared over the
+│       │                      seams between the squeezed rows so each
+│       │                      earlier row slides UNDER the next, the
+│       │                      creatures always whole, the hand plate and
+│       │                      fan never squeezed. Under means DRAWN
+│       │                      under: the rows stand ROW_Z_STEP (7)
+│       │                      apart and every floating thing starts
+│       │                      above the free layer (DuelScreen's z
+│       │                      ladder). [QoL] — 1997's grid overflows
+│       │                      too (Arrange Cards tidies it)
 │       ├── territory_menu.gd class TerritoryMenu — @MENU_TERRITORY
 │       │                      (UIStrings.txt:908), the 25-entry mini-menu
 │       │                      a right-click on either territory opens.

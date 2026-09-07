@@ -128,6 +128,15 @@ static func ai_pace() -> float:
 	return get_value("ai_pace", 0.35)
 
 
+## [QoL] `Full screen` on the Options screen — see [GameDisplay] for what
+## 1997 had instead (nothing but `M&inimize` and a frameless-window
+## config key). Off by default: the shipped window is what the game has
+## always opened into, and a default that changed under the owner would
+## be a surprise, not a setting.
+static func fullscreen() -> bool:
+	return get_value("fullscreen", false)
+
+
 ## How the player's own hand renders on the duel screen:
 ## "stack" — the ORIGINAL's draggable list window, one name+cost strip per
 ##           card, enlarged card in the sidebar dock on hover (DEFAULT —

@@ -16,6 +16,11 @@ extends Control
 ## replays which decks `<random deck>` chose as well, and a duel is
 ## reproducible from its logged seed alone.
 ##
+## WHAT YOU PLAYED LAST IS WHAT YOU OPEN ON. `[QoL]`: every choice on
+## this screen except the seed is written down when `Go!` starts a duel
+## and read back the next time the screen opens — see
+## [method _remember_choices] for which, and why the seed is left out.
+##
 ## THIS SCREEN IS A DOOR INTO A DUEL, which means it is one of the places
 ## the [ProxyCard] boundary is held. A deck holding proxies is LISTED here
 ## (marked, and with the names on its tooltip) but refused twice over:
@@ -166,6 +171,18 @@ const FACE_SIZE := Vector2(120, 88)
 const PORTRAIT_SIZE := Vector2(120, 148)
 ## Where a seat's chosen portrait is remembered, by ID.
 const PORTRAIT_KEY := "Portrait%d"
+## Where the rest of the screen is remembered ([method _remember_choices]):
+## one [Settings] key per control, under this prefix — `battle_mode`,
+## `battle_deck_0`, ... — so they read as one family in the file and
+## [method forget_choices] can drop them as one.
+const REMEMBER_PREFIX := "battle_"
+## The whole family, seat-numbered where a control is per seat. The one
+## list that [method _remember_choices], [method _restore_choices] and
+## [method forget_choices] all agree on.
+const REMEMBERED_KEYS: Array[String] = [
+	"mode", "format", "ante", "best_of", "sideboard", "demo_pace",
+	"deck_0", "deck_1", "name_0", "name_1", "life_0", "life_1",
+	"skill_0", "skill_1"]
 ## What the caption says when the player has no portrait art at all.
 const NO_PORTRAITS := "(no portraits)"
 
@@ -182,10 +199,15 @@ var _music: MusicPlayer
 func _ready() -> void:
 	_scan_decks()
 	_build_ui()
+	# The remembered choices go on BEFORE the faces and the note are
+	# worked out, because both read the pickers; and the mode is applied
+	# inside, since a stored name only makes sense once the seats know
+	# whose they are.
+	_restore_choices()
 	for pid in 2:
 		_update_face(pid)
+	_update_territory_preview()
 	_refresh_format_note()
-	_apply_mode(BattleMode.VS_AI)
 	_start_music()
 
 ## THE SHELL'S BED CARRIES INTO THE SETUP SCREEN. Magic Battle is the
@@ -1181,6 +1203,131 @@ func _apply_mode(mode: int) -> void:
 	_pace_row.visible = mode == BattleMode.DEMO
 
 
+## `[QoL]` WHAT YOU PLAYED LAST IS WHAT YOU OPEN ON. The owner, 2026-09-07:
+## *"all selections you make should keep as default on your next run."*
+## The Options screen already kept every one of its rows; THIS screen
+## forgot everything the moment a duel started, so a player who always
+## duels the Wizard with the same deck at best of three re-made those
+## choices every run.
+##
+## WRITTEN AT `Go!` AND NOWHERE ELSE — one write, one gesture, once every
+## gate in [method _start_battle] has passed. Not on every click, and not
+## on the way out: a scripted tour that opens this screen and pokes at
+## its pickers (`tools/screenshot_tour.gd`) must not rewrite the player's
+## file, and a choice the player made and then walked away from with
+## `Back` was not a choice they played. The 1997 deck builder remembered
+## the player's name the same way, by key, in its ini
+## (`config_get_str(MAX_NAMELEN, "Name", "User", ...)`,
+## `shandalar-src/src/deck/deckdll.cpp:1273`); the rest of this list is
+## ours.
+##
+## NOT THE SEED. A seed is one duel's identity, typed to replay that duel
+## and that duel only; remembered, it would deal the same opening hands
+## every run until the player noticed and blanked it. It opens empty,
+## which means "roll a fresh one", as it always has.
+##
+## The deck is stored as the row's METADATA — `""` for `<random deck>`,
+## `group:1997 originals` for a pooled draw, a path for a deck — so a
+## deck that has been deleted, or a group that has emptied, simply fails
+## to match a row on the way back and the screen opens on its default.
+func _remember_choices() -> void:
+	var values := {
+		"mode": _mode,
+		"format": deck_format(),
+		"ante": _ante_check.button_pressed,
+		"best_of": best_of(),
+		"sideboard": _sideboard_check.button_pressed,
+		"demo_pace": _pace_slider.value,
+	}
+	for pid in 2:
+		var meta: Variant = _deck_options[pid].get_selected_metadata()
+		values["deck_%d" % pid] = str(meta) if meta != null else ""
+		values["name_%d" % pid] = _name_edits[pid].text
+		values["life_%d" % pid] = int(_life_spins[pid].value)
+		values["skill_%d" % pid] = _difficulty_options[pid].selected
+	# In memory per key and ONE write for the gesture — the Options
+	# screen's rule for its sliders and its rules preset.
+	for key in REMEMBERED_KEYS:
+		Settings.set_value(REMEMBER_PREFIX + key, values[key], false)
+	Settings.flush()
+
+
+## The other half of [method _remember_choices]: put back what was
+## written, control by control, and fall back to the control's own
+## default wherever the stored value no longer fits — a deck row that is
+## gone, a format the list does not carry, a skill out of range. Every
+## read is guarded by [method Settings.has_value] so a file with none of
+## these keys (a first run, or after [method forget_choices]) opens the
+## screen exactly as it opened before any of this existed.
+func _restore_choices() -> void:
+	var mode := int(_remembered("mode", BattleMode.VS_AI))
+	if mode < BattleMode.HOTSEAT or mode > BattleMode.DEMO:
+		mode = BattleMode.VS_AI
+	_apply_mode(mode)
+	for pid in 2:
+		var key := "deck_%d" % pid
+		if Settings.has_value(REMEMBER_PREFIX + key):
+			var row := _row_of_metadata(_deck_options[pid],
+				str(_remembered(key, "")))
+			if row >= 0:
+				_deck_options[pid].select(row)
+		# After `_apply_mode`, which writes the seat's default name; a
+		# stored name is the player's, whether typed or the default they
+		# played under, and it stands.
+		var name_text := str(_remembered("name_%d" % pid, "")).strip_edges()
+		if name_text != "":
+			_name_edits[pid].text = name_text
+		# A SpinBox clamps for us; the difficulty list does not.
+		_life_spins[pid].value = int(_remembered("life_%d" % pid,
+			int(_life_spins[pid].value)))
+		var skill := int(_remembered("skill_%d" % pid,
+			_difficulty_options[pid].selected))
+		if skill >= 0 and skill < DIFFICULTIES.size():
+			_difficulty_options[pid].select(skill)
+	var format := DeckFormat.ORDER.find(str(_remembered("format", "")))
+	if format >= 0:
+		_format_option.select(format)
+	_ante_check.button_pressed = bool(_remembered("ante",
+		_ante_check.button_pressed))
+	var length := MatchState.LENGTHS.find(int(_remembered("best_of",
+		MatchState.FREE_PLAY)))
+	if length >= 0:
+		_best_of_check.button_pressed = true
+		_best_of_option.select(length)
+	else:
+		_free_play.button_pressed = true
+	_sideboard_check.button_pressed = bool(_remembered("sideboard",
+		_sideboard_check.button_pressed))
+	_pace_slider.value = float(_remembered("demo_pace", _pace_slider.value))
+	_apply_match_mode()
+
+
+## One remembered value, or [param fallback] when it was never written.
+static func _remembered(key: String, fallback: Variant) -> Variant:
+	return Settings.get_value(REMEMBER_PREFIX + key, fallback)
+
+
+## Drop every remembered choice, so the screen opens on its shipped
+## defaults again. Tests call this to leave no trace; nothing on the
+## screen does yet.
+static func forget_choices() -> void:
+	for key in REMEMBERED_KEYS:
+		Settings.clear_value(REMEMBER_PREFIX + key)
+
+
+## The row whose metadata is exactly [param meta] — `""` is `<random
+## deck>`, a `group:` string a pooled draw, a path a deck — or -1. Kept
+## beside [method _row_of_group] and [method _row_of_deck], the other two
+## answers to "which row does this screen open on".
+static func _row_of_metadata(option: OptionButton, meta: String) -> int:
+	for i in option.item_count:
+		if option.is_item_separator(i):
+			continue
+		if str(option.get_item_metadata(i)) == meta:
+			return i
+	return -1
+
+
 func _start_battle() -> void:
 	if _leaving:
 		return
@@ -1262,6 +1409,10 @@ func _start_battle() -> void:
 	config.best_of = best_of()
 	config.sideboard_between_duels = _sideboard_check.button_pressed \
 		and config.best_of != MatchState.FREE_PLAY
+	# EVERY GATE IS BEHIND US: this duel is starting, so this is the set of
+	# choices worth opening on next time. A refused deck is not remembered
+	# — the refusal is on screen and the player is about to change it.
+	_remember_choices()
 	var tree := get_tree()
 	# FREE PLAY GOES STRAIGHT TO THE DUEL, exactly as it always has — one
 	# screen, one duel, nothing between this and it. A match needs

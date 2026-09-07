@@ -6672,6 +6672,140 @@ Color Filters — Blue up and it goes, where an Island stays (*"the same
 is not true for other mana sources"*). No code moved; the answer is
 pinned as `test_a_creature_that_taps_for_mana_is_reached_through_the_land_button`
 in `tests/ui/test_deck_filter.gd` so the next reader finds it.
+*(Superseded the same day — the owner rejected the manual's default;
+see the next heading. The test is now
+`test_a_creature_that_taps_for_mana_is_a_creature_under_the_land_button`.)*
+
+## THE PLAYTEST OF v0.18.0-dev (2026-09-07) — [QoL], and one thing that never reproduced
+
+Five notes from the owner after playing the local build, with two
+screenshots. Two are the deck builder's filters, two are the duel table,
+one is the shell; and the release flow of the previous heading holds —
+this pass ends at a local build the owner plays first.
+
+**`Land only` is the default, and Artifacts is a gate.** *"No apprentice
+wizard should still be a creature."* The previous heading found the
+manual's rule and kept it; the owner's answer is that the manual's
+default is wrong for them, and the default is a `[QoL]` call: the Land
+button's mini-menu now opens on `Land only`, so Apprentice Wizard,
+Llanowar Elves and Birds of Paradise are creatures under Creatures and
+nothing else, and `Land and Mana` — the 1997 default, still in the menu
+one right-click away — is the way to reach every mana source
+(`DeckFilter.land_mode`, `Land.LAND_ONLY`; both resets and the
+active-check follow). The second filter note: *"artifact filter button
+should filter out all artifacts (even if they are artifact creatures or
+artifact lands etc….). If you want artifact creatures you combine other
+filters."* `matches_type` used to OR the type buttons, so an artifact
+creature stayed in through Creatures with Artifacts up; it now gates on
+the Artifact bit FIRST — any card carrying it is hidden the moment the
+chalice is up, whatever else it is — and with Artifacts down the other
+buttons combine as before, so Artifacts + Creatures is the artifact
+creatures and Artifacts + Land the artifact lands. (A consequence pinned
+in the tests: with the chalice up, `Land and Mana` no longer reaches Sol
+Ring either — it is an artifact.) The Help page's Land and Artifact
+entries say both; `tests/ui/test_deck_filter.gd` (76) renames the
+default pin, adds `test_the_artifact_button_up_hides_every_artifact`
+and `test_an_artifact_land_is_an_artifact_first` (a hand-made
+`LAND | ARTIFACT` card), and moves the summon/list tests off the
+Artifact button onto `artifact_creatures` so they test what they name.
+
+**Cards outside the playfield — the rows now slide under one another.**
+*"cards sometimes automatically go outside the playfield for me or the
+opponent — fix this please."* The screenshot shows it: a board half's
+three rows (lands, other permanents, creatures) sat in a `VBoxContainer`,
+and a VBox has one answer to rows that want more height than the half
+has — it grows, and a Control can never be smaller than its minimum.
+One turned pile (140) over a tapped artifact (140) over a row of
+attackers (140) is 431 tall in a 388 half, and the creature row ran out
+through the half's clip — the opponent's through the seam, the player's
+off the bottom. That is any board with a tapped permanent and a pile.
+`game/duel/squeeze_column.gd` (`SqueezeColumn`, `[QoL]`) is the
+vertical twin of `SqueezeRow` (§2.13): while the rows fit it lays them
+out exactly as the VBox did, and once they do not it shares the overflow
+over the seams between the squeezed rows so each earlier row slides UNDER
+the next, the creatures — the cards a duel is decided by — always whole,
+the hand plate and the fan never squeezed. Sliding under means DRAWING
+under, so the board got a z ladder: rows stand one `ROW_Z_STEP` (7)
+apart, enough to clear a pile's fifth card and its name band; the free
+layer where hand-moved cards live is one step above the last row; and
+everything that floats starts above it — the Combat window 30, the target
+arrows 35, the damage markers 40, the death mark 45, the log 50, the hand
+window 60, the spell flight 70, the chain 80, the Situation Bar 90. A
+lifted or dragged card is given its z against that ladder with what its
+ancestors already add taken off (`_z_under`), and put back at the z it
+rested at, not at 0. One more thing found on the way: a change of
+territory wallpaper used to rebuild the free layer with the ground and
+lose the cards the player had moved by hand; only the ground goes now.
+`tests/ui/test_squeeze_column.gd` pins the layout (fits → VBox
+behaviour; overflow → shared seams, last row whole, unsqueezed rows
+whole, z order), and `test_enchanted_host_z_2026_09_07.gd` /
+`test_territory_ground.gd` follow the ladder. Checked by looking at a
+board crowded the way the owner's shot was, rebuilt on the table.
+
+**Stuck on the playfield after a win — hardened at every joint, because
+it never reproduced.** *"when you win a match and after win window, the
+music stops and you are stuck on playfield — examine and please fix!"*
+and, on the expected way out, *"the click on the win window should just
+put you in main menu."* The screenshot is the table after the verdict —
+Done dead, the win on the bar, the Combat window still open, no End of
+Duel window. Every scripted route was driven with real clicks under
+Xvfb on the release code and on the exported `.pck`: free play, a match,
+the gauntlet, sideboarding, eight AI-vs-AI endings — every one put the
+window up and OK went where it should (free play to the main menu; a
+match to the match window). So the tail of `_on_game_over` was hardened
+at the four joints that could have failed instead: (1) the death
+countdown waited on a **node-bound tween's `finished`**, which never
+comes if the node stops processing — it now waits on the tree's own
+timer and kills the tween; (2) the window's lines were written BEFORE
+its OK was added and it was put in the tree, so one line erroring (a
+name, a next draw) took the button with it — the OK and `add_child` now
+come first (`_show_result_window`); (3) `result_dialog_open()` answered
+`true` for a window freed under it (`!= null` is true for a freed
+object) — `is_instance_valid` now, and the duel says so outright with a
+new `result_closed` signal that `MatchScreen` listens to as well as
+polling (`_advance_once`: two ears, one advance); (4) the way out no
+longer depends on one button taking one click — **Return, Space and Esc
+answer the window** (`_answer_result`), `Duel.hlp`'s own rule for a
+one-button bar. `tests/ui/test_duel_screen.gd` (57) pins the OK-first
+build, the freed-window case, the flags and signal, and the three keys;
+`tests/ui/test_match_screen.gd` (22) the once-only advance and a dropped
+duel's closing word being ignored. Free play's OK → main menu is
+unchanged and now the owner's stated expectation; in a match the End of
+Duel OK leads to the 1997 match window (Continue / Quit, or the verdict
+with OK → main menu), as it did. If the table is ever seen bare again,
+the duel log (`L`) and `user://logs/` are what to send — and see the new
+rule in `CONTRIBUTING.md` on `--log-file`, written because this pass's
+own scratch runs rotated the owner's play logs away before they could
+be read.
+
+**Full screen, and what you played last is what you open on.** *"options
+menu in the main menu lacks full screen / windowed option. And all
+selections you make should keep as default on your next run."* Two
+`[QoL]` pieces. `Options → Display → Full screen` (`game/display.gd`,
+`GameDisplay`): one `Settings` key, borderless full screen at the
+desktop's resolution (not exclusive — the compositor keeps running, a 2D
+card game gains nothing from a mode switch), applied the moment it is
+ticked and at boot by the `Lifecycle` autoload, which now enters the
+tree first as well as leaving it last. The 1997 game had no such switch
+— `M&inimize` and a frameless-window config key (`NoFrame`,
+`deckdll.cpp:1269`) are as close as it came. Every row of the Options
+screen already persisted; the screen that forgot everything was Magic
+Battle, so it now remembers every choice but the seed — mode, both
+decks (by the row's metadata, so a deleted deck or an emptied pool falls
+back to the default row), both names, lives, skills, format, ante, free
+play / best of, sideboarding, demo pace — written ONCE at `Go!` after
+every gate has passed (a refused deck is not remembered, and neither is
+a choice walked away from with `Back` — a scripted tour poking the
+pickers must not rewrite the player's file), and read back with a
+fallback per control for a value that no longer fits. The seed is one
+duel's identity and opens blank, as it always has. The 1997 deck
+builder remembered the player's name by key in its ini
+(`config_get_str(..., "Name", "User", ...)`, `deckdll.cpp:1273`); the
+rest of the list is ours. `tests/ui/test_options_display.gd` (9, new)
+and seven tests on `test_setup_screen.gd` (77); checked by looking at
+the Display row, the window flipping to mode 3 and back under Xvfb, and
+a reopened Magic Battle screen carrying Hotseat, the deck, the name,
+life 25, Restricted (Type 1) and Best of 3.
 
 ## Standing quality gates
 

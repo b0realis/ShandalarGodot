@@ -1431,11 +1431,14 @@ static func _page_icons_builder_sets() -> Dictionary:
 static func _page_icons_builder_types() -> Dictionary:
 	var type_help := {
 		Mtg.CardType.LAND: "A range of hills. Right-click for its three "
-			+ "exclusive options — Land and Mana, Land only, or Mana only: "
-			+ "the button reaches every mana source, not only lands.",
-		Mtg.CardType.ARTIFACT: "A chalice. Right-click to tick All "
-			+ "Creatures and All Non-Creatures, which are independent of "
-			+ "each other.",
+			+ "exclusive options — Land only (the default), Land and Mana, "
+			+ "or Mana only: the last two reach every mana source, "
+			+ "Llanowar Elves and Sol Ring included, not only lands.",
+		Mtg.CardType.ARTIFACT: "A chalice. Up, it hides every artifact — "
+			+ "artifact creatures and artifact lands too; keep it down with "
+			+ "Creatures to see the artifact creatures. Right-click to tick "
+			+ "All Creatures and All Non-Creatures, which are independent "
+			+ "of each other.",
 		Mtg.CardType.CREATURE: "A bat. Anything with a power and a "
 			+ "toughness. Right-click for its page of the Filters window: "
 			+ "Summon, Artifact, and the creature types from a list.",

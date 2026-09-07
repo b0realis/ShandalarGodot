@@ -136,7 +136,7 @@ var _pass_button: Button
 ## [method _can_cancel] (§6.11).
 var _cancel_button: Button = null
 var _hand_rows: Array[Control] = []   # [p1 hand (top), p0 hand (bottom fan)]
-var _field_rows: Dictionary = {}             # [pid][row] -> HFlowContainer
+var _field_rows: Dictionary = {}             # [pid][row] -> SqueezeRow
 # Every centre popup is an OriginalDialog (game/duel/original_dialog.gd)
 # built when it is needed and freed when it is answered — the 1997
 # dialogs are drawn INSIDE the dueling table, never in an OS window, so
@@ -339,8 +339,26 @@ const AURA_PEEK := Vector2(6, 18)
 ## whole ring OVER the host's face (the owner's Llanowar Elves, 2026-09-07).
 ## One above the highest z a card gives its own children covers all of an
 ## attachment but the strip that peeks out; the host's children ride on top
-## of this (z is relative) and it is well under the combat window's 10.
+## of this (z is relative) and it is well inside one row's step
+## ([constant ROW_Z_STEP]), so still under the next row and the windows.
 const HOST_Z := 3
+
+## THE BOARD'S Z LADDER, from the table up. A half's rows stand on steps —
+## LANDS at 0, OTHER one step up, CREATURES two — because the column they
+## sit in lets an overflowing row slide UNDER the next ([SqueezeColumn]),
+## and under means DRAWN under: a row's cards carry z of their own (a
+## pile's fifth card is at 4 and its name band 2 above that, an enchanted
+## host at [constant HOST_Z]), so one step has to clear the tallest thing
+## a row draws, or a land's name band would show through the creature
+## lying over it. The free layer, where the cards the player moved by hand
+## live, is one step above the last row. Everything that floats starts
+## above the free layer's tallest card: the Combat window (30), the target
+## arrows (35), the damage markers (40), the death mark (45), the log
+## (50), the hand window (60, [constant LIFT_Z]), the spell flight (70,
+## [constant DRAG_Z]), the chain (80), the Situation Bar (90). A lifted or
+## dragged card is given its z against THIS ladder — see [method _z_under].
+const ROW_Z_STEP := 7
+const FREE_LAYER_Z := ROW_Z_STEP * 3
 var _chain_box: VBoxContainer = null   # the original's floating spell chain
 var _mode_overlay: Control = null      # modal-choice dialog (Winbk_Bigcard)
 var _preview_dock: Control = null      # sidebar slot for the big card
@@ -421,6 +439,8 @@ const DRAG_Z := 70
 ## The widget being dragged (its outermost laid-out node), and the state
 ## the gesture needs. Null when nothing is being dragged.
 var _drag_root: Control = null
+## The z_index it rested at — a pile's holders are stepped — and goes back to.
+var _drag_rest_z := 0
 var _drag_inst: CardInstance = null
 var _drag_from := Vector2.ZERO
 var _drag_origin := Vector2.ZERO
@@ -436,9 +456,10 @@ var _damage_markers: DamageMarkerLayer = null
 ## Spell Chain and on to wherever it lands (see spell_flight.gd, which
 ## also carries the evidence that this is [s30] and not [1997]).
 var _flight: SpellFlight = null
-## The row VBox of each board half, pid-indexed. Each half keeps its FULL
-## width: the floating hand window is chrome the player parks where they
-## like and the board never rearranges itself around it (§2.3b, §3.6).
+## The row column ([SqueezeColumn]) of each board half, pid-indexed. Each
+## half keeps its FULL width: the floating hand window is chrome the player
+## parks where they like and the board never rearranges itself around it
+## (§2.3b, §3.6).
 var _half_rows: Array = [null, null]
 ## Board inset: cards never sit flush against a half's edges.
 const BOARD_INSET := 8.0
@@ -475,6 +496,14 @@ func _on_done() -> void:
 ## across duels; [MatchScreen] is the one thing that does. Nothing else in
 ## this file knows a match exists, which is the point: a duel is a duel.
 signal duel_finished(winner_id: int)
+
+## THE LAST WORD IS SAID. Emitted once, when the End of Duel window has
+## been dismissed — the moment [method result_dialog_open] turns false.
+## [MatchScreen] listens to this as well as polling, so its own window
+## follows the duel's whatever became of the frame loop that was polling
+## (the 2026-09-07 playtest, *"stuck on playfield"*; see [method
+## _on_game_over]).
+signal result_closed
 
 ## Battlefield display rows, in the order the OWNER'S REFERENCE SCREENSHOT
 ## was measured to have them (the thirteenth pass of
@@ -655,21 +684,41 @@ func _on_game_over(winner_id: int) -> void:
 	# for it. Nothing else about the verdict is deferred — the bar already
 	# says who won, the music has stopped, Done is dead.
 	await _run_death_countdown()
-	if not is_instance_valid(self):
+	if not is_instance_valid(self) or not is_inside_tree():
 		return
-	if _over_dialog != null:
+	_show_result_window(verdict)
+
+
+## THE END OF DUEL WINDOW, and the one way out of a finished duel. The
+## 2026-09-07 playtest: *"when you win a match and after win window, the
+## music stops and you are stuck on playfield"* — a table with the verdict
+## on the bar, Done dead, the music gone, and no window to answer. No
+## scripted route reproduced it (free play, a match, the gauntlet, real
+## clicks, AI-vs-AI endings), so the tail of [method _on_game_over] was
+## hardened instead, at every joint that could have failed:
+##   * the countdown waits on the tree's clock, not a node-bound tween
+##     ([method _run_death_countdown]);
+##   * the window gets its OK and goes into the tree BEFORE the lines are
+##     written into it, so a line that fails (a name, a next draw) cannot
+##     take the button with it;
+##   * [method result_dialog_open] does not count a window that was freed
+##     under it, and [signal result_closed] tells the owner outright;
+##   * Return, Space and Esc answer the window ([method _answer_result]),
+##     so the way out never depends on one button taking one click.
+func _show_result_window(verdict: String) -> void:
+	if _over_dialog != null and is_instance_valid(_over_dialog):
 		_over_dialog.queue_free()
 	_over_dialog = OriginalDialog.create(verdict, Vector2(272, 300),
 		"panel_end_duel")
+	# "OK" is one of the three buttons the 1997 game owns (@DIALOGBUTTONS).
+	_over_dialog.add_button("OK").pressed.connect(_on_game_over_dismissed)
+	add_child(_over_dialog)
 	_over_dialog.body().add_child(OriginalDialog.label(
 		"%s  %d life" % [game.players[0].player_name, game.players[0].life], 14))
 	_over_dialog.body().add_child(OriginalDialog.label(
 		"%s  %d life" % [game.players[1].player_name, game.players[1].life], 14))
 	for line in next_draw_lines():
 		_over_dialog.body().add_child(OriginalDialog.label(line, 14))
-	# "OK" is one of the three buttons the 1997 game owns (@DIALOGBUTTONS).
-	_over_dialog.add_button("OK").pressed.connect(_on_game_over_dismissed)
-	add_child(_over_dialog)
 
 
 ## How long the losing numeral takes to fall, and how long it is held at
@@ -719,12 +768,18 @@ func _run_death_countdown() -> void:
 		tween.tween_method(_set_counted_life.bind(pid),
 			float(_last_life[pid]), float(game.players[pid].life),
 			LOSS_COUNT_SECONDS)
-	await tween.finished
+	# THE WAIT IS THE TREE'S CLOCK, NOT THE TWEEN'S. A tween made by
+	# `create_tween` is bound to this node and runs only while the node
+	# does — and a tween that never runs out never emits `finished`,
+	# which would hold this await, and the End of Duel window behind it,
+	# for ever (see [method _show_result_window]). A SceneTreeTimer
+	# counts whatever this node is doing, paused included; the tween is
+	# the picture, the timer is the wait.
+	await get_tree().create_timer(LOSS_COUNT_SECONDS + LOSS_HOLD_SECONDS).timeout
 	if not is_instance_valid(self):
 		return
-	await get_tree().create_timer(LOSS_HOLD_SECONDS).timeout
-	if not is_instance_valid(self):
-		return
+	if tween.is_valid():
+		tween.kill()
 	_life_countdown.clear()
 
 
@@ -769,14 +824,30 @@ func next_draw_lines() -> PackedStringArray:
 ## Is the End of Duel window still up? Read by [MatchScreen], which must
 ## let the duel have its last word before the match's own window opens.
 func result_dialog_open() -> bool:
-	return _result_pending or _over_dialog != null
+	return _result_pending \
+		or (_over_dialog != null and is_instance_valid(_over_dialog))
+
+
+## Is the End of Duel window itself up (not merely pending)?
+func result_window_up() -> bool:
+	return _over_dialog != null and is_instance_valid(_over_dialog) \
+		and not _over_dialog.is_queued_for_deletion()
+
+
+## Return, Space and Esc under the End of Duel window: its OK. `Duel.hlp`
+## on the Situation Bar — *"if there is only one button, pressing this is
+## the same as clicking that button"* — and the window has one.
+func _answer_result() -> void:
+	if result_window_up():
+		_on_game_over_dismissed()
 
 
 func _on_game_over_dismissed() -> void:
-	if _over_dialog != null:
+	if _over_dialog != null and is_instance_valid(_over_dialog):
 		_over_dialog.dismiss()
-		_over_dialog = null
+	_over_dialog = null
 	_result_pending = false
+	result_closed.emit()
 	# FREE PLAY ENDS AT THE TITLE. The setup screen hands the tree straight
 	# to this scene for a free-play duel, and until 2026-09-02 nothing
 	# ever handed it back: OK dismissed the window and left a dead table
@@ -5268,8 +5339,11 @@ func _redress_territory(pid: int) -> void:
 	var holder: Control = rows.get_parent()
 	if holder == null:
 		return
+	# Only the ground goes: the free layer beside it holds the cards the
+	# player has moved by hand, and a change of wallpaper is no reason to
+	# lose them (it used to take the layer with it, 2026-09-07).
 	for child in holder.get_children():
-		if child != rows:
+		if child != rows and child != _free_layers[pid]:
 			holder.remove_child(child)
 			child.queue_free()
 	var ground := _ground_node(pid)
@@ -5990,7 +6064,7 @@ func _on_card_look(event: InputEvent, w: MiniCard, inst: CardInstance) -> void:
 		# being overlapped. It is put back where it RESTED, which is 0 for
 		# most cards and HOST_Z for one wearing an aura.
 		_lifted_rest_z = w.z_index
-		w.z_index = LIFT_Z
+		w.z_index = LIFT_Z - _z_under(w)
 		_lifted_card = w
 		_right_press_ms = Time.get_ticks_msec()
 	else:
@@ -6009,6 +6083,21 @@ func _on_card_look(event: InputEvent, w: MiniCard, inst: CardInstance) -> void:
 ## z_index a right-held card lifts to — above its neighbours in the row and
 ## below the floating windows (the chain sits at 80, the Situation Bar 90).
 const LIFT_Z := 60
+
+
+## The z the board has already put under [param node]: its row's step
+## ([constant ROW_Z_STEP]), a pile holder's own step, the free layer's.
+## A lifted or dragged card is given its z against the SCREEN's ladder —
+## under the floating windows, whichever row it came from — and z is
+## relative, so what its ancestors add is taken off first.
+func _z_under(node: Control) -> int:
+	var total := 0
+	var n := node.get_parent()
+	while n != null and n != self:
+		if n is CanvasItem:
+			total += (n as CanvasItem).z_index
+		n = n.get_parent()
+	return total
 
 ## How long the right button has to be down for the gesture to count as a
 ## HOLD rather than a click (§6.12). Windows' own press-and-hold threshold
@@ -6153,6 +6242,7 @@ func _begin_drag_node(root: Control, inst: CardInstance) -> void:
 		return
 	_drag_inst = inst
 	_drag_root = root
+	_drag_rest_z = root.z_index
 	_drag_from = get_global_mouse_position()
 	_drag_origin = root.global_position
 	_dragging = false
@@ -6168,7 +6258,7 @@ func _drag_motion() -> void:
 		if delta.length() < DRAG_SLOP:
 			return
 		_dragging = true
-		_drag_root.z_index = DRAG_Z
+		_drag_root.z_index = DRAG_Z - _z_under(_drag_root)
 	# THE BOUNDARY IS VISIBLE, not a snap-back on release: the card stops
 	# dead at the edge of its own territory and the pointer runs on
 	# without it (§2.3b). Clamping only on drop let the player carry a
@@ -6394,7 +6484,7 @@ func _reclamp_placements() -> void:
 ## Forget a gesture in progress, putting a lifted widget back down.
 func _cancel_drag() -> void:
 	if _drag_root != null and is_instance_valid(_drag_root):
-		_drag_root.z_index = 0
+		_drag_root.z_index = _drag_rest_z
 	_drag_root = null
 	_drag_inst = null
 	_dragging = false
@@ -6779,7 +6869,7 @@ func _build_ui() -> void:
 
 	var top_half := _board_half(1)
 	board.add_child(top_half[0])
-	var top_rows: VBoxContainer = top_half[1]
+	var top_rows: SqueezeColumn = top_half[1]
 
 	# Opponent rows read top-down: lands, other, creatures (creatures
 	# nearest the battle line — design doc §3).
@@ -6792,19 +6882,27 @@ func _build_ui() -> void:
 	# order and wrapping destroys it (§2.13). An overflowing row now
 	# shrinks its pitch and the cards slide under one another, which is
 	# what s30 does and what the original's own **Arrange Cards** verb
-	# presupposes.
+	# presupposes. And the rows sit in a [SqueezeColumn], not a VBox, for
+	# the same reason turned on its side: three rows taller than the half
+	# slide under one another instead of running out through the seam.
+	# Each row stands one [constant ROW_Z_STEP] above the one before it,
+	# so sliding under is drawing under.
 	_field_rows[1] = {}
 	for row in [Row.LANDS, Row.OTHER]:
 		var c := SqueezeRow.new()
 		c.align = SqueezeRow.Align.END
+		c.z_index = row * ROW_Z_STEP
 		top_rows.add_child(c)
 		_field_rows[1][row] = c
 	var top_spacer := Control.new()
 	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	top_rows.add_child(top_spacer)
 	var opp_creatures := SqueezeRow.new()
+	opp_creatures.z_index = Row.CREATURES * ROW_Z_STEP
 	top_rows.add_child(opp_creatures)
 	_field_rows[1][Row.CREATURES] = opp_creatures
+	top_rows.squeezed = [_field_rows[1][Row.LANDS], _field_rows[1][Row.OTHER],
+		opp_creatures]
 
 	# The opponent's hand window — its TITLE BAR only (manual p.114), built
 	# by StackHand.title_plate so it is the same object as the player's.
@@ -6828,7 +6926,7 @@ func _build_ui() -> void:
 
 	var bottom_half := _board_half(0)
 	board.add_child(bottom_half[0])
-	var bottom_rows: VBoxContainer = bottom_half[1]
+	var bottom_rows: SqueezeColumn = bottom_half[1]
 
 	# BOTH halves read the same top-down order — measured off the owner's
 	# screenshot: the player's artifact/land piles sit just BELOW the seam
@@ -6842,14 +6940,18 @@ func _build_ui() -> void:
 		# it every time the player drags it (§2.3b, §3.6).
 		var c := SqueezeRow.new()
 		c.align = SqueezeRow.Align.END
+		c.z_index = row * ROW_Z_STEP
 		bottom_rows.add_child(c)
 		_field_rows[0][row] = c
 	var bottom_spacer := Control.new()
 	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	bottom_rows.add_child(bottom_spacer)
 	var my_creatures := SqueezeRow.new()
+	my_creatures.z_index = Row.CREATURES * ROW_Z_STEP
 	bottom_rows.add_child(my_creatures)
 	_field_rows[0][Row.CREATURES] = my_creatures
+	bottom_rows.squeezed = [_field_rows[0][Row.LANDS], _field_rows[0][Row.OTHER],
+		my_creatures]
 
 	# The player's own hand: the fan (our default) or the ORIGINAL's
 	# draggable stacked list window ("Hand display" in Options). The stack
@@ -6947,10 +7049,11 @@ func _build_ui() -> void:
 	_arrows.board_root = self
 	_arrows.player_anchors = _life_buttons
 	_arrows.hand_anchors = [_hand_rows[1], _hand_rows[0]]
-	# Above the Combat window (z 10) and its cards, below the hand window
+	# Above the Combat window (z 30) and its cards, below the hand window
 	# (z 60): the red blocker→attacker arrows run BETWEEN the window's two
-	# lanes, so they must not be buried by the window's own ground.
-	_arrows.z_index = 20
+	# lanes, so they must not be buried by the window's own ground. (The
+	# ladder: [constant ROW_Z_STEP].)
+	_arrows.z_index = 35
 	add_child(_arrows)
 	move_child(_arrows, _combat_window.get_index() + 1)
 
@@ -6964,7 +7067,7 @@ func _build_ui() -> void:
 	_damage_markers.board_root = self
 	_damage_markers.player_anchors = _life_buttons
 	_damage_markers.marker_clicked.connect(_on_damage_marker_clicked)
-	_damage_markers.z_index = 25
+	_damage_markers.z_index = 40
 	add_child(_damage_markers)
 	move_child(_damage_markers, _arrows.get_index() + 1)
 
@@ -7200,8 +7303,8 @@ const GROUND_DIM := Color(0.55, 0.55, 0.55)
 
 
 ## One half of the playfield: the seat's territory ground with the row
-## VBox on top. Both halves get equal stretch, so the board splits EXACTLY
-## in half at the message seam (the reference layout).
+## column on top. Both halves get equal stretch, so the board splits
+## EXACTLY in half at the message seam (the reference layout).
 func _board_half(pid: int) -> Array:
 	var holder := Control.new()
 	holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -7210,22 +7313,27 @@ func _board_half(pid: int) -> Array:
 	holder.add_child(_ground_node(pid))
 	# Inset the rows so cards never sit flush against the half's edges
 	# (the reference leaves a clear margin all round).
-	var rows := VBoxContainer.new()
+	# A [SqueezeColumn], not a VBox: the half is a fixed height and a VBox
+	# whose rows want more simply GROWS past it, straight through the
+	# `clip_contents` above (the owner's cards *"outside the playfield"*,
+	# 2026-09-07). The column slides the rows under one another instead.
+	var rows := SqueezeColumn.new()
 	rows.set_anchors_preset(Control.PRESET_FULL_RECT)
 	rows.offset_left = BOARD_INSET
 	rows.offset_right = -BOARD_INSET
 	rows.offset_top = BOARD_INSET_V
 	rows.offset_bottom = -BOARD_INSET_V
-	rows.add_theme_constant_override("separation", 2)
 	holder.add_child(rows)
 	_half_rows[pid] = rows
 	# THE FREE LAYER, over the rows: the cards the player has moved by hand
 	# (§2.3b). Mouse-transparent itself — only its children take clicks —
 	# and inset exactly like the rows, so a placement reads in the same
-	# coordinates whichever way a card got there.
+	# coordinates whichever way a card got there. One row step above the
+	# creatures, so a placed card lies over every row's cards.
 	var free := Control.new()
 	free.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	free.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	free.z_index = FREE_LAYER_Z
 	holder.add_child(free)
 	_free_layers[pid] = free
 	# The half only knows its own rect after the first layout pass, and the
@@ -7718,7 +7826,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				# Space is Done — right up until Cancel joins it, at which
 				# point the bar has two buttons and the key is ambiguous.
 				# The original says so; Return and Esc still name one each.
-				if not _can_cancel() and not _dialogs_open():
+				# Under the End of Duel window the one button is its OK.
+				if result_window_up():
+					_answer_result()
+				elif not _can_cancel() and not _dialogs_open():
 					_on_done()
 			KEY_ENTER, KEY_KP_ENTER:
 				# Manual p.116: "Return has the same effect as clicking the
@@ -7735,7 +7846,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				# returns at once unless the mode is NORMAL), so the one
 				# keystroke the manual names could not answer the prompts
 				# that most need answering.
-				if _modal_open() or _dialogs_open():
+				if result_window_up():
+					_answer_result()
+				elif _modal_open() or _dialogs_open():
 					pass          # the dialog's own OK answers it
 				elif mode == Mode.NORMAL:
 					_on_pass_turn()
@@ -7750,7 +7863,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				# [method _can_cancel] is the same predicate the Situation
 				# Bar's Cancel button uses, so the key and the button can
 				# never disagree about whether there is anything to undo.
-				if _can_cancel() or _dialogs_open():
+				if result_window_up():
+					_answer_result()
+				elif _can_cancel() or _dialogs_open():
 					_on_escape()
 				else:
 					_toggle_pause()

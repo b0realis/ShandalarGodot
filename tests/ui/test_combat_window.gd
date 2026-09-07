@@ -215,8 +215,14 @@ func test_the_bone_strip_splits_top_image_over_bottom_mask() -> void:
 
 func test_the_window_sits_above_the_board_but_under_the_arrows() -> void:
 	# A mini-card's name label carries z_index 2, so a window at 0 would be
-	# painted through; the arrows in turn run between the window's lanes.
-	assert_eq(screen._combat_window.z_index, 10)
+	# painted through; and since 2026-09-07 the board's rows and its free
+	# layer stand on a ladder (`ROW_Z_STEP`), so the window must start
+	# above the free layer's tallest card, not merely above zero. The
+	# arrows in turn run between the window's lanes.
+	assert_eq(screen._combat_window.z_index, 30)
+	assert_gt(screen._combat_window.z_index,
+		DuelScreen.FREE_LAYER_Z + DuelScreen.ROW_Z_STEP,
+		"the window clears the free layer and a pile's name band on it")
 	assert_gt(screen._arrows.z_index, screen._combat_window.z_index + 2,
 		"arrows draw over the window AND over its cards' name bands")
 

@@ -100,10 +100,13 @@ var _bottom_ids: Array = []
 func _init() -> void:
 	# ABOVE the board: a mini-card's own name label carries `z_index = 2`
 	# (mini_card.gd), so a window at the default zero would have the
-	# territory's card names painted straight through it. The arrow layer
-	# is lifted above this in turn (duel_screen.gd), because the blocker
-	# arrows run between the two lanes.
-	z_index = 10
+	# territory's card names painted straight through it — and the board's
+	# three rows and its free layer each stand a step higher than the last
+	# (`DuelScreen.ROW_Z_STEP`, the whole ladder is documented there), so
+	# the window starts above the free layer's tallest card. The arrow
+	# layer is lifted above this in turn (duel_screen.gd), because the
+	# blocker arrows run between the two lanes.
+	z_index = 30
 	custom_minimum_size = Vector2(320.0, HEIGHT)
 	size = Vector2(ART_SIZE.x, HEIGHT)
 

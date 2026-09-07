@@ -81,6 +81,10 @@ var reports_to_owner := false
 
 var _duel: DuelScreen = null
 var _window: Control = null
+## Has the duel that is up been advanced past? Two ears hear the End of
+## Duel window close — [signal DuelScreen.result_closed] and the frame
+## loop in [method _on_duel_finished] — and only the first may act.
+var _duel_advanced := false
 ## Draws each duel's seed from the match's, so a match replays whole.
 var _seeder := RandomNumberGenerator.new()
 ## One [AiMatchMemory] per seat (null for a human seat) — what that seat
@@ -128,7 +132,9 @@ func _human_seat() -> int:
 func _start_duel() -> void:
 	_duel = load("res://game/duel/duel_screen.tscn").instantiate()
 	_duel.config = _config_for_this_duel()
+	_duel_advanced = false
 	_duel.duel_finished.connect(_on_duel_finished)
+	_duel.result_closed.connect(_on_result_closed.bind(_duel))
 	# `add_child` runs the duel screen's `_ready`, which builds its
 	# [MtgGame] — so the memories can start watching on the very next
 	# line, before a single card is played.
@@ -166,12 +172,32 @@ func _on_duel_finished(winner_id: int) -> void:
 	if DisplayServer.get_name() == "headless":
 		# Tests/CI: no windows and nothing to dismiss — the match simply
 		# plays on, exactly as the duel screen starts without a coin toss.
-		_advance()
+		_advance_once(_duel)
 		return
 	# The duel's own End of Duel window has the duel's last word; the
 	# match's window is the next one, not a second one on top of it.
-	while is_instance_valid(_duel) and _duel.result_dialog_open():
+	# TWO EARS ON ONE MOMENT. The duel announces the window's closing
+	# ([signal DuelScreen.result_closed], [method _on_result_closed]) and
+	# this loop watches for it as well; whichever hears first advances,
+	# and [member _duel_advanced] keeps the other quiet. One ear was the
+	# 2026-09-07 playtest's *"stuck on playfield"* — see
+	# [method DuelScreen._show_result_window].
+	var duel := _duel
+	while is_instance_valid(duel) and duel.result_dialog_open():
 		await get_tree().process_frame
+	_advance_once(duel)
+
+
+func _on_result_closed(duel: DuelScreen) -> void:
+	_advance_once(duel)
+
+
+## Advance past [param duel] — once, and only while it is still the duel
+## on the table.
+func _advance_once(duel: DuelScreen) -> void:
+	if _duel_advanced or duel != _duel:
+		return
+	_duel_advanced = true
 	_advance()
 
 

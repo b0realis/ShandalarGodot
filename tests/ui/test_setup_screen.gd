@@ -25,6 +25,12 @@ func before_each() -> void:
 	await get_tree().process_frame
 
 
+func after_each() -> void:
+	# The screen opens on what was last remembered (2026-09-07), so a test
+	# that remembered anything must not hand it to the next one.
+	SetupScreen.forget_choices()
+
+
 func _deck_pickers() -> Array:
 	return screen._deck_options
 
@@ -1085,3 +1091,155 @@ func test_the_opening_draw_really_only_yields_1997_decks() -> void:
 		var drawn := SetupScreen.random_deck_path(pool, rng)
 		assert_eq(DeckGroups.of(drawn), DeckGroups.ORIGINALS,
 			"seed %d drew %s" % [seed_value, drawn])
+
+
+# ============================== what you played last is what you open on ==
+#
+# `[QoL]`, 2026-09-07: *"all selections you make should keep as default on
+# your next run."* `Go!` writes every choice but the seed
+# (`SetupScreen._remember_choices`), the next screen reads them back
+# (`_restore_choices`), and a value that no longer fits falls back to the
+# control's own default.
+
+func _fresh_screen() -> SetupScreen:
+	var fresh: SetupScreen = load("res://game/setup_screen.tscn").instantiate()
+	add_child_autofree(fresh)
+	return fresh
+
+
+func test_a_first_run_opens_on_the_shipped_defaults() -> void:
+	for key in SetupScreen.REMEMBERED_KEYS:
+		assert_false(Settings.has_value(SetupScreen.REMEMBER_PREFIX + key),
+			"opening the screen writes nothing: %s" % key)
+	assert_eq(screen._mode, SetupScreen.BattleMode.VS_AI)
+	assert_eq(screen.best_of(), MatchState.FREE_PLAY)
+	assert_true(screen._ante_check.button_pressed, "ante is on, as 1997 had it")
+	assert_eq(screen.deck_format(), DeckFormat.ORDER[0])
+	for pid in 2:
+		assert_eq(int(screen._life_spins[pid].value), 20)
+		assert_eq(screen._difficulty_options[pid].selected, 3, "Wizard")
+	assert_eq(screen._name_edits[0].text, "Player 1")
+	assert_eq(screen._name_edits[1].text, SetupScreen.AI_NAMES[0])
+
+
+func test_go_remembers_every_choice_but_the_seed() -> void:
+	screen._apply_mode(SetupScreen.BattleMode.DEMO)
+	var deck_row := SetupScreen._row_of_deck(screen._deck_options[0], 0)
+	screen._deck_options[0].select(deck_row)
+	var deck_meta := str(screen._deck_options[0].get_item_metadata(deck_row))
+	screen._deck_options[1].select(0)     # `<random deck>`
+	screen._name_edits[0].text = "Sorceress"
+	screen._name_edits[1].text = "The Dragon Lord"
+	screen._life_spins[0].value = 30
+	screen._life_spins[1].value = 15
+	screen._difficulty_options[0].select(0)
+	screen._difficulty_options[1].select(2)
+	screen._format_option.select(1)
+	screen._ante_check.button_pressed = false
+	screen._best_of_check.button_pressed = true
+	screen._best_of_option.select(MatchState.LENGTHS.find(5))
+	screen._sideboard_check.button_pressed = true
+	screen._pace_slider.value = 1.3
+	screen._seed_edit.text = "12345"
+	var writes := Settings.write_count
+	screen._remember_choices()
+	assert_eq(Settings.write_count, writes + 1,
+		"fourteen keys, ONE write — the sliders' rule")
+	assert_false(Settings.has_value(SetupScreen.REMEMBER_PREFIX + "seed"),
+		"the seed is one duel's identity and is never remembered")
+	assert_eq(Settings.get_value("battle_deck_0", null), deck_meta)
+	assert_eq(Settings.get_value("battle_deck_1", null), "",
+		"<random deck> is remembered as the empty metadata it carries")
+
+	var fresh := _fresh_screen()
+	await get_tree().process_frame
+	assert_eq(fresh._mode, SetupScreen.BattleMode.DEMO, "the mode")
+	assert_true(fresh._pace_row.visible, "and the mode's own row with it")
+	assert_eq(fresh._deck_options[0].selected, deck_row, "seat 1's deck")
+	assert_eq(fresh._deck_options[1].selected, 0, "seat 2's <random deck>")
+	assert_eq(fresh._name_edits[0].text, "Sorceress", "a typed name")
+	assert_eq(fresh._name_edits[1].text, "The Dragon Lord")
+	assert_eq(int(fresh._life_spins[0].value), 30)
+	assert_eq(int(fresh._life_spins[1].value), 15)
+	assert_eq(fresh._difficulty_options[0].selected, 0, "Apprentice")
+	assert_eq(fresh._difficulty_options[1].selected, 2, "Sorcerer")
+	assert_eq(fresh.deck_format(), DeckFormat.ORDER[1])
+	assert_false(fresh._ante_check.button_pressed)
+	assert_eq(fresh.best_of(), 5)
+	assert_true(fresh._best_of_check.button_pressed)
+	assert_false(fresh._free_play.button_pressed, "one radio group, one answer")
+	assert_true(fresh._sideboard_check.button_pressed)
+	assert_false(fresh._sideboard_check.disabled, "a match, so the step is offered")
+	assert_almost_eq(fresh._pace_slider.value, 1.3, 0.001)
+	assert_eq(fresh._seed_edit.text, "", "the seed opens blank: a fresh duel")
+	assert_eq(fresh._face_captions[1].text, SetupScreen.RANDOM_DECK,
+		"the face row was worked out AFTER the pickers were restored")
+
+
+func test_a_remembered_deck_that_is_gone_opens_on_the_default_row() -> void:
+	var opened := screen._deck_options[0].selected
+	Settings.set_value("battle_deck_0", "user://decks/_gut_gone_since.deck")
+	Settings.set_value("battle_deck_1", SetupScreen.GROUP_RANDOM + "No Such Group")
+	var fresh := _fresh_screen()
+	await get_tree().process_frame
+	assert_eq(fresh._deck_options[0].selected, opened,
+		"a deleted deck matches no row, so the screen opens as it always did")
+	assert_eq(fresh._deck_options[1].selected, opened,
+		"and so does a pool that no longer exists")
+
+
+func test_nonsense_in_the_file_opens_the_defaults() -> void:
+	Settings.set_value("battle_mode", 7, false)
+	Settings.set_value("battle_skill_0", 9, false)
+	Settings.set_value("battle_format", "No Such Format", false)
+	Settings.set_value("battle_best_of", 4, false)
+	Settings.set_value("battle_name_1", "   ", false)
+	Settings.flush()
+	var fresh := _fresh_screen()
+	await get_tree().process_frame
+	assert_eq(fresh._mode, SetupScreen.BattleMode.VS_AI, "a mode off the enum")
+	assert_eq(fresh._difficulty_options[0].selected, 3, "a skill off the list")
+	assert_eq(fresh.deck_format(), DeckFormat.ORDER[0], "a format off the list")
+	assert_eq(fresh.best_of(), MatchState.FREE_PLAY, "a length off the list")
+	assert_eq(fresh._name_edits[1].text, SetupScreen.AI_NAMES[0],
+		"a blank name is no name, and the seat keeps its default")
+
+
+func test_a_refused_deck_is_not_remembered() -> void:
+	# The write sits behind every gate in `_start_battle`: a duel that did
+	# not start is not the set of choices to open on.
+	var path := _write_proxy_deck()
+	_select_path(0, path)
+	screen._start_battle()
+	assert_true(is_instance_valid(screen), "refused, so the screen stays")
+	for key in SetupScreen.REMEMBERED_KEYS:
+		assert_false(Settings.has_value(SetupScreen.REMEMBER_PREFIX + key),
+			"nothing remembered: %s" % key)
+	_drop_proxy_deck()
+
+
+func test_forget_choices_leaves_no_trace() -> void:
+	screen._remember_choices()
+	assert_true(Settings.has_value("battle_mode"))
+	SetupScreen.forget_choices()
+	for key in SetupScreen.REMEMBERED_KEYS:
+		assert_false(Settings.has_value(SetupScreen.REMEMBER_PREFIX + key))
+	var fresh := _fresh_screen()
+	await get_tree().process_frame
+	assert_eq(fresh._mode, SetupScreen.BattleMode.VS_AI)
+	assert_eq(fresh.best_of(), MatchState.FREE_PLAY)
+
+
+func test_a_name_the_default_was_played_under_stands_through_the_restore() -> void:
+	# The AI's HAL is a default this screen writes; remembered and read
+	# back under the same mode it is the same text, and the player's own
+	# name for the seat is never touched either way.
+	screen._name_edits[1].text = "Mishra"
+	screen._remember_choices()
+	var fresh := _fresh_screen()
+	await get_tree().process_frame
+	assert_eq(fresh._name_edits[0].text, "Player 1")
+	assert_eq(fresh._name_edits[1].text, "Mishra")
+	fresh._apply_mode(SetupScreen.BattleMode.HOTSEAT)
+	assert_eq(fresh._name_edits[1].text, "Mishra",
+		"a typed name survives a mode change, restored or not")

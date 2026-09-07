@@ -92,9 +92,16 @@ enum Rank { OFF, GE, LE, EQ }
 
 ## `@LAND` (`Menus.txt:320`) — the Land button's mini-menu: "&Land and
 ## Mana" / "Land &only" / "&Mana only", *"three mutually exclusive
-## options"*. The first is the default and the manual says exactly what it
-## does: *"this filters in all land and all other cards capable of
-## producing mana."*
+## options"*. In 1997 the first was the default and the manual says
+## exactly what it does: *"this filters in all land and all other cards
+## capable of producing mana."*
+##
+## [QoL] The default here is `Land only`. The 1997 default pulls every
+## mana creature under the Land button — Apprentice Wizard, Llanowar
+## Elves, Birds of Paradise — which the owner rejected on 2026-09-07:
+## *"No apprentice wizard should still be a creature."* The three options
+## stay, so `Land and Mana` is one right-click away for anyone who wants
+## the manual's reach.
 enum Land { LAND_AND_MANA, LAND_ONLY, MANA_ONLY }
 
 ## `@ENCHANTMENT` (`Menus.txt:338`) — the Enchantments button's mini-menu:
@@ -295,8 +302,9 @@ var toughness_value := 0:
 		if toughness_value != value:
 			toughness_value = value
 			revision += 1
-## The Land button's mini-menu (`@LAND`).
-var land_mode: int = Land.LAND_AND_MANA:
+## The Land button's mini-menu (`@LAND`); `Land only` by default, see
+## [enum Land].
+var land_mode: int = Land.LAND_ONLY:
 	set(value):
 		if land_mode != value:
 			land_mode = value
@@ -410,7 +418,7 @@ func reset() -> void:
 	power_value = 0
 	toughness_mode = Rank.OFF
 	toughness_value = 0
-	land_mode = Land.LAND_AND_MANA
+	land_mode = Land.LAND_ONLY
 	artifact_creatures = true
 	artifact_noncreatures = true
 	search_rules = false
@@ -463,7 +471,7 @@ func select_all() -> void:
 	cost_mode = Cost.OFF
 	power_mode = Rank.OFF
 	toughness_mode = Rank.OFF
-	land_mode = Land.LAND_AND_MANA
+	land_mode = Land.LAND_ONLY
 	artifact_creatures = true
 	artifact_noncreatures = true
 	text = ""
@@ -511,7 +519,7 @@ func active() -> bool:
 			return true
 	return not gold or _needle != "" or cost_mode != Cost.OFF \
 		or power_mode != Rank.OFF or toughness_mode != Rank.OFF \
-		or land_mode != Land.LAND_AND_MANA \
+		or land_mode != Land.LAND_ONLY \
 		or not artifact_creatures or not artifact_noncreatures \
 		or lists_active()
 
@@ -769,19 +777,33 @@ func _matches_gold(mask: int) -> bool:
 ##
 ## LAND (`@LAND`) is not only a type filter: *"The Land filter adds in all
 ## mana-producing cards (mana sources)"*, so with `Land and Mana` (the
-## default) or `Mana only` a depressed Land button also admits Birds of
-## Paradise and Sol Ring. Those extra sources are NOT exempt from the
+## 1997 default) or `Mana only` a depressed Land button also admits Birds
+## of Paradise and Sol Ring. Those extra sources are NOT exempt from the
 ## other groups — *"Which lands are displayed is not affected by the Color
 ## Filters or Other Filters, but the same is not true for other mana
 ## sources"* — and they are not, because [method matches] ANDs the groups
-## and only [method matches_color] exempts an actual land.
+## and only [method matches_color] exempts an actual land. The default
+## here is `Land only` ([enum Land]).
 ##
 ## ARTIFACTS (`@ARTIFACT`) splits into two independent toggles, *"All
 ## Creatures"* and *"All Non-Creatures"*. CREATURES (`@CREATURE`) and
 ## ENCHANTMENTS (`@ENCHANTMENT`) are [method _admits_creature] and
 ## [method _admits_enchantment].
+##
+## [QoL] The Artifacts button UP is a gate on top of the OR: it hides
+## every card that carries the Artifact type, artifact creatures and
+## artifact lands included, whichever other buttons are down. In 1997 the
+## Creature button's own "Artifact" tick still reached Clockwork Beast
+## with Artifacts up; the owner asked for the button to mean what it says
+## (2026-09-07): *"artifact filter button should filter out all artifacts
+## (even if they are artifact creatures or artifact lands etc….). If you
+## want artifact creatures you combine other filters ."* So Artifacts +
+## Creatures is how an artifact creature is reached, and Artifacts down
+## still answers to its own two ticks.
 func matches_type(d: CardData) -> bool:
 	_sync_masks()
+	if (d.types & Mtg.CardType.ARTIFACT) and not (_type_on_mask & Mtg.CardType.ARTIFACT):
+		return false
 	var lit := d.types & _type_on_mask
 	if lit & (Mtg.CardType.INSTANT | Mtg.CardType.SORCERY):
 		return true

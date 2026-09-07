@@ -125,11 +125,12 @@ var _drag_offset := Vector2.ZERO
 
 
 func _init() -> void:
-	# ABOVE the combat window (10) and the arrows (20) — a log the player
-	# opened is the thing they are reading — but UNDER the hand (60), the
-	# chain box (80) and every dialog (200): it must never sit on top of
-	# a question.
-	z_index = 40
+	# ABOVE the combat window (30), the arrows (35), the damage markers
+	# (40) and the death mark (45) — a log the player opened is the thing
+	# they are reading — but UNDER the hand (60), the chain box (80) and
+	# every dialog (200): it must never sit on top of a question. (The
+	# ladder is documented beside `DuelScreen.ROW_Z_STEP`.)
+	z_index = 50
 	size = SIZE
 	custom_minimum_size = Vector2(240.0, 120.0)
 

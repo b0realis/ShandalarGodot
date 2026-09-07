@@ -760,6 +760,81 @@ func test_the_owner_hears_of_the_result_while_the_last_word_is_still_pending() -
 		"headless has no window, and says so on the way out")
 
 
+# ---------------------------- the End of Duel window, hardened (2026-09-07) --
+#
+# The fourth playtest report: *"when you win a match and after win window,
+# the music stops and you are stuck on playfield"* — the verdict on the
+# bar, Done dead, no window to answer. No scripted route reproduced it, so
+# every joint in the tail of `_on_game_over` was hardened instead (see
+# `DuelScreen._show_result_window`). Tests run headless, where the window
+# is never built by the game-over path itself, so the pieces are pinned
+# one by one.
+
+func _send_key(code: int) -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.pressed = true
+	screen._unhandled_key_input(ev)
+
+
+func test_the_window_carries_its_ok_before_a_single_line_is_written() -> void:
+	# The button and the window go into the tree first; the lines follow.
+	# A line that fails cannot take the way out with it.
+	screen._show_result_window("You won!")
+	assert_true(screen.result_window_up())
+	assert_true(screen.result_dialog_open())
+	var dialog: OriginalDialog = screen._over_dialog
+	assert_eq(dialog.get_parent(), screen, "in the tree")
+	var ok: Button = null
+	for child in dialog._buttons.get_children():
+		if child is Button and child.text == "OK":
+			ok = child
+	assert_not_null(ok, "the one 1997 button")
+	assert_eq(ok.get_index(), 0, "and it was the first thing added")
+	assert_gte(dialog.body().get_child_count(), 2, "both life lines followed")
+
+
+func test_a_window_freed_under_the_screen_no_longer_counts_as_open() -> void:
+	# `_over_dialog != null` is TRUE for a freed object in GDScript, so a
+	# window that went away by any path but its own OK left the owner
+	# waiting on a ghost for ever.
+	screen._show_result_window("You won!")
+	screen._over_dialog.free()
+	assert_false(screen.result_window_up())
+	assert_false(screen.result_dialog_open(), "nothing left to wait for")
+
+
+func test_ok_says_so_and_clears_both_flags() -> void:
+	var heard: Array = []
+	screen.result_closed.connect(func() -> void: heard.append(true))
+	screen._result_pending = true
+	screen._show_result_window("You won!")
+	screen._on_game_over_dismissed()
+	assert_eq(heard.size(), 1, "the owner is told outright")
+	assert_null(screen._over_dialog)
+	assert_false(screen._result_pending)
+	assert_false(screen.result_dialog_open())
+
+
+func test_return_space_and_escape_answer_the_window() -> void:
+	var heard: Array = []
+	screen.result_closed.connect(func() -> void: heard.append(true))
+	for code in [KEY_ENTER, KEY_SPACE, KEY_ESCAPE]:
+		heard.clear()
+		screen._show_result_window("You won!")
+		_send_key(code)
+		assert_eq(heard.size(), 1, "key %d answers the window" % code)
+		assert_false(screen.result_window_up())
+		assert_false(screen.is_paused(), "Esc did not open the Pause window instead")
+
+
+func test_the_keys_answer_nothing_when_no_window_is_up() -> void:
+	var heard: Array = []
+	screen.result_closed.connect(func() -> void: heard.append(true))
+	screen._answer_result()
+	assert_true(heard.is_empty(), "no window, no word")
+
+
 # ------------------------------------------- the tutor's pick (2026-09-02) --
 
 func test_a_tutors_pick_survives_its_cast() -> void:

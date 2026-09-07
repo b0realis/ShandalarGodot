@@ -8,11 +8,12 @@ extends Control
 ## in the Duel Options panel. One value, one storage, many views — never a
 ## parallel copy.
 ##
-## Sound on/off (music and effects separately, as the original separated
-## them), music & effects volume, hand display, the rules forks, AI pace —
-## persisted immediately through Settings (user://settings.cfg). Grows as
-## options do (phase stops, UI scale and colorblind palette are on the
-## QoL wishlist in docs/duel-screen-design.md).
+## Full screen, sound on/off (music and effects separately, as the
+## original separated them), music & effects volume, hand display, the
+## rules forks, AI pace — persisted immediately through Settings
+## (user://settings.cfg), so every one of them is the default of the next
+## run. Grows as options do (phase stops, UI scale and colorblind palette
+## are on the QoL wishlist in docs/duel-screen-design.md).
 
 ## The stone panel's width, and the window it leaves clear top and bottom.
 ## The panel is anchored to those margins rather than sized to its
@@ -74,6 +75,8 @@ func _ready() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(title)
 
+	_add_display_section(content)
+
 	_add_sound_section(content)
 
 	content.add_child(UiChrome.body_label("Hand display:"))
@@ -108,6 +111,29 @@ func _ready() -> void:
 	back_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	back_row.add_child(back)
 	content.add_child(back_row)
+
+
+## DISPLAY — ONE SWITCH, and it is `[QoL]` outright. See [GameDisplay]
+## for what the 1997 game had instead (a `M&inimize` entry and a
+## frameless-window config key with no menu entry); this row exists
+## because the owner asked for it on 2026-09-07: *"options menu in the
+## main menu lacks full screen / windowed option."* Off is the window the
+## game has always opened into; on is borderless full screen at the
+## desktop's own resolution. Applied the moment it is ticked, so the
+## player sees what they chose while this screen is still up — and
+## remembered, so the next run opens into it ([Lifecycle]).
+func _add_display_section(content: VBoxContainer) -> void:
+	content.add_child(UiChrome.body_label("Display:"))
+	var fullscreen := CheckButton.new()
+	fullscreen.text = "Full screen"
+	fullscreen.tooltip_text = "On: borderless full screen at your " \
+		+ "desktop's resolution. Off: the 1280x800 window. Takes effect " \
+		+ "at once and is remembered for the next run."
+	fullscreen.button_pressed = Settings.fullscreen()
+	fullscreen.toggled.connect(func(on: bool) -> void:
+		GameDisplay.set_fullscreen(on))
+	UiChrome.shadowed_button(fullscreen)
+	content.add_child(fullscreen)
 
 
 ## SOUND — TWO SWITCHES AND TWO SLIDERS, and only the switches are 1997's.
