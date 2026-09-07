@@ -208,12 +208,27 @@ var levels_boards := false
 ## and the two library counts.
 var paces_draws := false
 
+## THE SECOND LEGEND: does this profile keep in hand a permanent whose
+## arrival would be a card thrown away? A legend whose name is already
+## on the battlefield — either side's — is buried the moment it lands
+## (the legend rule as 1997 played it: the newcomer loses), and a world
+## enchantment buries every other world on arrival (CR 704.5k), a world
+## of OURS with it — the same card twice, or a world traded for a world.
+## A world of THEIRS is what ours is for, and is not held. Off, the pilot
+## cast its second and third The Abyss over the first, four mana and a
+## card each time (docs/ROADMAP.md, "The Deck, second pass"). Sorcerer
+## and Wizard. Nothing here names a card: the rule reads the supertype
+## bits and the names on the battlefield ([method
+## AiPlayer._arrival_wasted]).
+var holds_duplicates := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
 		p_engines := false, p_sacrifices := false, p_timed := false,
-		p_counts := false, p_levels := false, p_paces := false) -> void:
+		p_counts := false, p_levels := false, p_paces := false,
+		p_duplicates := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -228,6 +243,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	counts_cards = p_counts
 	levels_boards = p_levels
 	paces_draws = p_paces
+	holds_duplicates = p_duplicates
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -274,12 +290,14 @@ static func magician() -> AiProfile:
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
+		true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
+		true)
 
 
 func _to_string() -> String:

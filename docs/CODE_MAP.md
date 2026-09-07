@@ -1103,6 +1103,20 @@ shandalar/
 │   │                      thousand games an arm, three of five clear.
 │   │                      Sorcerer and Wizard. The Deck 31.7% -> 36.2%
 │   │                      against the starters.
+│   │                      holds_duplicates (2026-09-07) is THE SECOND
+│   │                      LEGEND: whether a permanent whose arrival
+│   │                      would be a card thrown away stays in hand —
+│   │                      a legend whose name is already on the
+│   │                      battlefield, either side's (the legend rule
+│   │                      as 1997 played it buries the newcomer), a
+│   │                      world enchantment when a world of OURS is out
+│   │                      (CR 704.5k buries every other world; theirs
+│   │                      is what ours is for). AiPlayer._arrival_wasted
+│   │                      reads the supertype bits and the names, in
+│   │                      _try_cast_best and _try_play_land; off, the
+│   │                      pilot cast its second and third The Abyss over
+│   │                      the first. Sorcerer and Wizard. The Deck
+│   │                      36.2% -> 39.8% against the starters.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -1688,7 +1702,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4779 tests / ~134 000 asserts, ~300 s
+├── tests/                   GUT suite — 4791 tests / ~134 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2937,7 +2951,16 @@ shandalar/
 │    to the spare cards, waiting at nothing to spare, still emptying
 │    THEIR library from behind; Demonic Tutor as the class held at level
 │    and cast on a lead; the ladder from Sorcerer up; the knob read by
-│    the Lab
+│    the Lab;
+│    tests/ai/test_ai_holds_duplicates_2026_09_07.gd — THE SECOND
+│    LEGEND (AiProfile.holds_duplicates): a second The Abyss held over
+│    our own and the null burying the first, a Living Plane of ours
+│    holding The Abyss, The Abyss cast over THEIR Concordant Crossroads
+│    and buried it, the first world cast as ever; Jasmine Boreal held
+│    against theirs and the null's copy buried on arrival, a second
+│    Karakas not played over the first and the null playing it into the
+│    graveyard, Tobias Andrion cast beside a different legend; the
+│    ladder from Sorcerer up; the knob read by the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

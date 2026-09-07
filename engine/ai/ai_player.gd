@@ -159,6 +159,8 @@ func _try_play_land(game: MtgGame) -> bool:
 	for inst in me.hand:
 		if not inst.is_land():
 			continue
+		if _arrival_wasted(game, inst.data):
+			continue   # a second Karakas is buried on arrival: the drop is worth more
 		var score := 0.0
 		for ability in inst.data.mana_abilities:
 			for pair in ability.produces:
@@ -234,6 +236,8 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue   # refused this step already — do not tap for it twice
 		if _cast_gate(game, inst) != "":
 			continue   # locked, banned, or "Cast this spell only ..." — not now
+		if _arrival_wasted(game, inst.data):
+			continue   # a second legend, a second world: a card thrown away
 		if not _sacrifice_fodder_ok(game, inst):
 			continue   # "As an additional cost, sacrifice ..." with nothing worth giving
 		# Cost modifiers (Gloom) are part of the real price — plan them in,
@@ -360,6 +364,36 @@ func _cast_gate(game: MtgGame, inst: CardInstance) -> String:
 	if inst.data.cast_condition.is_valid():
 		return String(inst.data.cast_condition.call(game, pid))
 	return ""
+
+
+## THE SECOND LEGEND (2026-09-07, [member AiProfile.holds_duplicates]):
+## would this permanent's arrival be a card thrown away? A legend whose
+## name is already on the battlefield — either side's — is buried the
+## moment it lands (the legend rule as 1997 played it, the newcomer
+## loses: MtgGame._newest_duplicate_legend), and a world enchantment
+## buries every other world on arrival (CR 704.5k,
+## MtgGame._superseded_world_permanent) — a world of OURS with it, which
+## is the same card twice or a world traded for a world; a world of
+## THEIRS is what ours is for. The pilot that never asked cast its
+## second and third The Abyss over the first, four mana and a card each.
+## The supertype bits and the names on the battlefield: nothing here
+## names a card.
+func _arrival_wasted(game: MtgGame, data: CardData) -> bool:
+	if not profile.holds_duplicates:
+		return false
+	var legend := (data.supertypes & Mtg.Supertype.LEGENDARY) != 0
+	var world := (data.supertypes & Mtg.Supertype.WORLD) != 0
+	if not legend and not world:
+		return false
+	for seat in [pid, game.opponent_of(pid)]:
+		for perm in game.players[seat].battlefield:
+			if legend and perm.data.card_name == data.card_name \
+					and (perm.data.supertypes & Mtg.Supertype.LEGENDARY) != 0:
+				return true
+			if world and seat == pid \
+					and (perm.data.supertypes & Mtg.Supertype.WORLD) != 0:
+				return true
+	return false
 
 
 ## "As an additional cost to cast this spell, sacrifice a creature"
