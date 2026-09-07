@@ -9,7 +9,8 @@ extends CardScript
 ## itself is ON THE STACK while resolving, so it is NOT shuffled in — it
 ## reaches the graveyard only after resolution (CR 608.2m), exactly like
 ## the real card. The engine of the dos486 guide's infinite-turn Arzakon
-## kill (Timetwister–Regrowth loop — Regrowth still a stub).
+## kill (the Timetwister–Regrowth loop; Regrowth is in the pool,
+## cards/sets/2ed/regrowth.gd).
 
 
 func build() -> CardData:

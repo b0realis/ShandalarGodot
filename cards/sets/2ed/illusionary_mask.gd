@@ -22,9 +22,12 @@ extends CardScript
 ##
 ## SIMPLIFIED (docs/simplified-cards.md, "Illusionary Mask"): the creature
 ## goes straight onto the battlefield face down rather than being cast as a
-## face-down spell (nothing in the pool can counter it either way), and
-## WHICH creature is masked is the DecisionAgent's pick — the most
-## expensive one X can cover, which is the whole point of the card.
+## face-down spell — so Counterspell or Remove Soul, which could counter a
+## face-down creature SPELL, get no say — and WHICH creature is masked is
+## the DecisionAgent's pick — the most expensive one X can cover, which is
+## the whole point of the card. Left 2026-09-07: a face-down spell on the
+## stack is an engine mechanic, not a prompt, and the owner's ruling of
+## that day asks for the simple thing that reuses what exists.
 
 
 ## "Activate only as a sorcery" (CR 307.1): your turn, a main phase,

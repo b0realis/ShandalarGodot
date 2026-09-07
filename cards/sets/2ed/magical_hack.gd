@@ -24,7 +24,9 @@ extends CardScript
 ##
 ## SIMPLIFIED (docs/simplified-cards.md, "Text changes"): a text change
 ## only reaches what this engine stores — subtypes, landwalk and a basic
-## land's mana — not arbitrary rules text.
+## land's mana — not arbitrary rules text. Ruled and left, 2026-09-07:
+## the owner asked for exactly this limited list ("you should be
+## presented with a limited list so make things as simple as possible").
 
 
 const BASICS := ["plains", "island", "swamp", "mountain", "forest"]
