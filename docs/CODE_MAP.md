@@ -827,8 +827,10 @@ shandalar/
 │   │                          CHOOSERS (random permanent / creature /
 │   │                          spell-or-permanent / damage target / player /
 │   │                          colour / graveyard card / library card /
-│   │                          creature type; sample N different elements;
-│   │                          distribute N at random), all
+│   │                          creature type — rolled over a LIBRARY only,
+│   │                          "deck" being the library (Aswan Jaguar);
+│   │                          sample N different elements; distribute N
+│   │                          at random), all
 │   │                          rolled through MtgGame.rng
 │   ├── combat.gd            class CombatState — attacker/blocker declarations
 │   │                          + legality (flying/reach/vigilance/defender/
@@ -1638,7 +1640,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4712 tests / ~132 000 asserts, ~300 s
+├── tests/                   GUT suite — 4713 tests / ~132 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent

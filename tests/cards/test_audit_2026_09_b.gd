@@ -314,17 +314,57 @@ func test_necropolis_spends_a_husk_counter_as_a_cost() -> void:
 
 # ------------------------------------------------------------- Aswan Jaguar --
 
-func test_aswan_jaguar_rolls_over_more_than_the_deck() -> void:
-	# SIMPLIFIED (ledger row reported with this audit): the printed trigger
-	# reads "a random creature type from those in target opponent's DECK",
-	# but RandomEffects.creature_type_of scans library + hand + battlefield +
-	# graveyard, and this card may not narrow it without an engine change.
-	var bear := put_battlefield(1, "Grizzly Bears")   # only on the BATTLEFIELD
+func test_aswan_jaguar_rolls_over_the_deck_only() -> void:
+	# "A random creature type from those in target opponent's DECK" — and
+	# the deck is the library (Duel.hlp, Library: "the dueling decks, each
+	# of which is now considered to be a player's library"). Lifted
+	# 2026-09-07: until then RandomEffects.creature_type_of also read the
+	# hand, the battlefield and the graveyard, so a Bear that was only on
+	# the table could be rolled.
+	var bear := put_battlefield(1, "Grizzly Bears")   # on the TABLE
+	give_hand(1, "Hill Giant")                        # in their HAND
+	var wall := _make_instance(1, "Wall of Wood")     # in their GRAVEYARD
+	wall.zone = Mtg.Zone.GRAVEYARD
+	g.players[1].graveyard.append(wall)
 	var jaguar := put_battlefield(0, "Aswan Jaguar")
 	resolve_stack()
-	assert_eq(String(jaguar.memory.get("type", "")), "bear",
-		"SIMPLIFIED: a type that is nowhere in the opponent's deck can be rolled")
+	assert_eq(String(jaguar.memory.get("type", "")), "",
+		"thirty Forests hold no creature type: the Jaguar hunts nothing")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.G, 2)
+	assert_refused(g.activate_ability(0, jaguar, 0, [TargetRef.card(bear)]),
+		"Illegal target")
 	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_aswan_jaguar_weighs_each_deck_type_once() -> void:
+	# Manalink's card_aswan_jaguar: "equal chance for each creature type
+	# present in opponent's library, no matter how many times it appears".
+	# Nine Bears and one Wall in the deck: over a run of seeded games the
+	# Wall must come up about as often as the Bear, not one time in ten.
+	var walls := 0
+	for seed in 40:
+		g = MtgGame.new()
+		var filler: Array = []
+		for i in 30:
+			filler.append("Forest")
+		g.setup(filler, filler, "P0", "P1", 20, 20, 1000 + seed)
+		g.start(0)
+		for i in 9:
+			var bear := _make_instance(1, "Grizzly Bears")
+			bear.zone = Mtg.Zone.LIBRARY
+			g.players[1].library.append(bear)
+		var wall := _make_instance(1, "Wall of Wood")
+		wall.zone = Mtg.Zone.LIBRARY
+		g.players[1].library.append(wall)
+		var jaguar := put_battlefield(0, "Aswan Jaguar")
+		resolve_stack()
+		var chosen := String(jaguar.memory.get("type", ""))
+		assert_true(chosen == "bear" or chosen == "wall", chosen)
+		if chosen == "wall":
+			walls += 1
+	assert_between(walls, 8, 32,
+		"two types, each weighed once: the Wall should land near half the time")
 
 
 # -------------------------------------------------------- Al-abara's Carpet --

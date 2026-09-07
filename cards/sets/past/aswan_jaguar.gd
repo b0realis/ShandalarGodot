@@ -10,13 +10,19 @@ extends CardScript
 ## destroy-without-regeneration. With one opponent per duel, "target
 ## opponent's deck" is that opponent's — no target choice to make.
 ##
-## SIMPLIFIED (docs/simplified-cards.md, "Aswan Jaguar"): the roll is over
-## the creature types in the opponent's DECK, i.e. their library;
-## RandomEffects.creature_type_of also scans their hand, battlefield and
-## graveyard, so a type that is nowhere in the deck can come up (and one
-## buried deep in an empty-of-creatures library cannot be missed). Fixing
-## it belongs in that engine helper — mage-go's
-## ChooseRandomCreatureSubtypeFromTargetLibrary reads the library only.
+## "Deck" is the LIBRARY [1997]: Duel.hlp's Library topic calls the two
+## face-down piles "the dueling decks, each of which is now considered to
+## be a player's library", and RandomEffects.creature_type_of rolls over
+## the distinct creature types in that pile alone — each type once, however
+## many cards carry it (the Manalink rewrite's "equal chance for each
+## creature type present in opponent's library, no matter how many times it
+## appears", and mage-go's ChooseRandomCreatureSubtypeFromTargetLibrary).
+## A type that is only in their hand, on the table or in their graveyard
+## cannot come up, and a library with no creature card left leaves the
+## Jaguar hunting nothing — its ability then has no legal target. The 1997
+## FAQ's "in deck or graveyard" (s30/shandalar-faq.txt) is the one witness
+## for the graveyard, a secondary paraphrase the printed text outranks;
+## the roll scanned four zones until 2026-09-07.
 
 
 static func _matches_chosen(_game: MtgGame, source: CardInstance,
@@ -46,8 +52,6 @@ static func _is_self(_game: MtgGame, source: CardInstance, event: GameEvent) -> 
 
 static func _choose_type(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
 	var victim := game.opponent_of(source.controller_id)
-	# SIMPLIFIED (see the header): "from those in target opponent's DECK",
-	# but this helper scans library + hand + battlefield + graveyard.
 	var chosen := RandomEffects.creature_type_of(game, victim)
 	source.memory["type"] = chosen
 	if chosen != "":

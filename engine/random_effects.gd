@@ -125,22 +125,32 @@ static func card_in_libraries(game: MtgGame,
 	return pick(game, pool)
 
 
-## A random creature SUBTYPE present in [param pid]'s library, hand,
-## battlefield AND GRAVEYARD ("a random creature type from those in target
-## opponent's deck" — Aswan Jaguar). "" when that player has no creatures
-## at all. The graveyard is in scope on purpose — the whole 60 cards the
-## opponent brought are "their deck" — and it used to be scanned without
-## being named here, which is a rules question, not a wording one.
+## A random creature SUBTYPE present in [param pid]'s LIBRARY ("a random
+## creature type from those in target opponent's deck" — Aswan Jaguar), each
+## distinct type weighed once however many cards carry it. "" when the
+## library holds no creature card, and the Jaguar then hunts nothing.
+##
+## [1997] "Deck" is the library: Duel.hlp's Library topic calls the two
+## face-down piles "the dueling decks, each of which is now considered to
+## be a player's library", and Pandora's Box ("from all players' decks",
+## [method card_in_libraries]) reads the same word the same way. The
+## Manalink rewrite of the card (`card_aswan_jaguar`, promo.c) scans
+## `deck_ptr[]` — the library array — with the comment "equal chance for
+## each creature type present in opponent's library, no matter how many
+## times it appears", and mage-go's
+## ChooseRandomCreatureSubtypeFromTargetLibrary does the same. Until
+## 2026-09-07 this helper also scanned the hand, the battlefield and the
+## graveyard; the one witness for the graveyard is the 1997 FAQ's
+## paraphrase ("in deck or graveyard", s30/shandalar-faq.txt), a secondary
+## source that the printed text and both reimplementations outrank.
 static func creature_type_of(game: MtgGame, pid: int) -> String:
 	var types: Array = []
-	var p := game.players[pid]
-	for pile in [p.library, p.hand, p.battlefield, p.graveyard]:
-		for inst in pile:
-			if not inst.data.is_creature():
-				continue
-			for t in inst.data.subtypes:
-				if not types.has(t):
-					types.append(t)
+	for inst in game.players[pid].library:
+		if not inst.data.is_creature():
+			continue
+		for t in inst.data.subtypes:
+			if not types.has(t):
+				types.append(t)
 	var chosen: Variant = pick(game, types)
 	return "" if chosen == null else String(chosen)
 

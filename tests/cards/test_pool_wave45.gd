@@ -194,8 +194,18 @@ func test_necropolis_ignores_black_creatures() -> void:
 
 # ------------------------------------------------------------ Aswan Jaguar --
 
+## A creature card into the top of [param pid]'s LIBRARY — the Jaguar's
+## roll reads "their deck", which is that pile (Duel.hlp, Library).
+func _put_library(pid: int, card_name: String) -> CardInstance:
+	var card := _make_instance(pid, card_name)
+	card.zone = Mtg.Zone.LIBRARY
+	g.players[pid].library.append(card)
+	return card
+
+
 func test_aswan_jaguar_hunts_the_type_it_rolled() -> void:
-	var bear := put_battlefield(1, "Grizzly Bears")     # the only type around
+	_put_library(1, "Grizzly Bears")                    # the only type in the deck
+	var bear := put_battlefield(1, "Grizzly Bears")
 	var jaguar := put_battlefield(0, "Aswan Jaguar")
 	resolve_stack()
 	assert_eq(String(jaguar.memory.get("type", "")), "bear")
@@ -207,15 +217,15 @@ func test_aswan_jaguar_hunts_the_type_it_rolled() -> void:
 
 
 func test_aswan_jaguar_refuses_the_wrong_type() -> void:
-	put_battlefield(1, "Grizzly Bears")
+	_put_library(1, "Grizzly Bears")                    # bears only, in the deck
 	var giant := put_battlefield(1, "Hill Giant")
 	var jaguar := put_battlefield(0, "Aswan Jaguar")
 	resolve_stack()
+	assert_eq(String(jaguar.memory.get("type", "")), "bear")
 	advance_to_step(Mtg.Step.MAIN1)
 	add_mana(0, Mtg.ManaColor.G, 2)
-	if String(jaguar.memory.get("type", "")) != "giant":
-		assert_refused(g.activate_ability(0, jaguar, 0, [TargetRef.card(giant)]),
-			"Illegal target")
+	assert_refused(g.activate_ability(0, jaguar, 0, [TargetRef.card(giant)]),
+		"Illegal target")
 
 
 # ---------------------------------------------------------- Pandora's Box --
