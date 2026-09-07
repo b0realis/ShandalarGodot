@@ -10,15 +10,23 @@ extends CardScript
 ## the consequence either way — aim it at yourself for card selection, at
 ## an opponent to mill them.
 ##
-## SIMPLIFIED (docs/simplified-cards.md, "Petra Sphinx").
-## WHAT MAY BE NAMED: the distinct card names in the chooser's own library.
-## That is a bound, and it is the honest one — a player knows their own
-## deck list and knows what they have already drawn, so the names left in
-## their library are information they already have; and naming a card that
-## cannot be there is never a play. The engine has no free-text naming and
-## an option list of all 896 pool names would be neither playable nor
-## answerable by an AI. The list is ordered by how many copies remain, so
-## the heuristic's "first option" is the best guess a player could make.
+## WHAT MAY BE NAMED: the chooser's own DECKLIST (MtgPlayer.deck_names —
+## what they brought to the duel, known before the first draw), each name
+## once, through the ordinary option prompt. The owner's ruling of
+## 2026-09-07: *"When you have name a card: you should probably only
+## display selection of cards from opponents deck (as you can see the deck
+## beforehand in real mtg)... you should be presented with a limited list
+## so make things as simple as possible."* There is no free-text naming
+## and no long list of every name in the pool: a name outside one's own
+## deck can never be on top of one's own library (a card always returns
+## to its OWNER's library, CR 400.3), so nothing that can matter in this
+## pool is left unsayable. Until 2026-09-07 the list was the names still
+## IN the library, which could not say a card whose every copy was drawn.
+##
+## The list is ordered by how many copies remain in the library, most
+## first — a player knows what they have drawn, so that is their own
+## information — and the heuristic's "first option" is the likeliest top
+## card, as it was before.
 ##
 ## The card goes to the hand WITHOUT being drawn (MtgGame.
 ## top_of_library_to_hand, CR 121.8) — Underworld Dreams must stay quiet.
@@ -48,35 +56,42 @@ class RiddleEffect extends EffectBase:
 	func _init() -> void:
 		target_spec = TargetSpec.player()
 
-	## The names in [param pid]'s library, most copies first and
-	## alphabetical within a tie so the order is deterministic.
+	## The names in [param pid]'s DECKLIST, each once — most copies still
+	## in the library first, alphabetical within a tie, so the order is
+	## deterministic and the first is the likeliest top card.
 	static func nameable(game: MtgGame, pid: int) -> Array[String]:
-		var counts: Dictionary = {}
-		for inst in game.players[pid].library:
+		var p := game.players[pid]
+		var left: Dictionary = {}   # name -> copies still in the library
+		for n in p.deck_names:
+			left[n] = 0
+		for inst in p.library:
 			var n: String = inst.data.card_name
-			counts[n] = int(counts.get(n, 0)) + 1
+			if left.has(n):
+				left[n] = int(left[n]) + 1
 		var names: Array[String] = []
-		for n in counts:
+		for n in left:
 			names.append(n)
 		names.sort_custom(func(a: String, b: String) -> bool:
-			if int(counts[a]) != int(counts[b]):
-				return int(counts[a]) > int(counts[b])
+			if int(left[a]) != int(left[b]):
+				return int(left[a]) > int(left[b])
 			return a < b)
 		return names
 
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
 		var pid := target.player_id
-		var names := nameable(game, pid)
-		if names.is_empty():
+		if game.players[pid].library.is_empty():
 			return   # an empty library: nothing to reveal
-		# SIMPLIFIED (docs/simplified-cards.md, "Petra Sphinx"): the option
-		# list is the chooser's own library, not every card name there is.
-		var picked: int = game.agents[pid].choose_option(game, pid, names,
-			"Name a card — Petra Sphinx reveals the top of your library", 0)
-		if picked < 0:
-			return
-		var named: String = names[picked]
+		var names := nameable(game, pid)
+		# No decklist to name from (a bare test game): the name said is one
+		# the top card cannot have, and the reveal is a miss.
+		var named := ""
+		if not names.is_empty():
+			var picked: int = game.agents[pid].choose_option(game, pid, names,
+				"Name a card — Petra Sphinx reveals the top of your library", 0)
+			if picked < 0:
+				return
+			named = names[picked]
 		var top: CardInstance = game.players[pid].library.back()
 		game.log_line("%s names %s; %s reveals %s" % [
 			game.players[pid].player_name, named,

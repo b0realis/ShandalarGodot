@@ -59,10 +59,23 @@ So the test is not "does a prompt exist" but **"is the decision delegated?"**:
   list, a floor the rules do not impose) → **a real row**; the bound is
   the deviation, not the asking.
 
+## Naming a card, rewriting a card — the owner's ruling (2026-09-07)
+
+Neither gets a free-text box or a list of every name in the pool. The
+owner, 2026-09-07: *"Many of these cards have player input window that we
+can reuse. When you have name a card: you should probably only display
+selection of cards from opponents deck (as you can see the deck beforehand
+in real mtg). When you can rewrite the card text - the same - you should be
+presented with a limited list so make things as simple as possible."* So a
+card is NAMED from a DECKLIST — `MtgPlayer.deck_names`, what a player
+brought to the duel, never a scan of zones (Petra Sphinx from one's own,
+Nebuchadnezzar from the target opponent's; both rows lifted 2026-09-07), and
+a text change picks from the words the engine models (the Text changes row
+below stays, and says so). Do not re-litigate either.
+
 | Card | What's simplified | Needs | Who benefits |
 |---|---|---|---|
 | ~~Blaze of Glory, Two-Headed Giant of Foriys~~ **LIFTED 2026-09-02** | The engine used to assign ONE attacker per blocker, so *"can block any number of creatures"* and *"can block an additional creature"* both became one block | Built: `CombatState.extra_blocks` + `CardData.extra_blocks` / `CardInstance.extra_blocks_this_turn` (CR 509.1b), pinned by `tests/unit/test_one_to_many_blocks.gd`. **The HUMAN half is not there**: `duel_screen.gd`'s block picker still points one blocker at one attacker, so a human cannot declare the second block a rules engine now accepts — see docs/ROADMAP.md | — |
 | Illusionary Mask | The masked creature goes straight onto the battlefield face down instead of being CAST as a face-down spell (WHICH creature is masked is the controller's own choice, asked on resolution) | Face-down casting | Nobody — nothing in the pool can counter the difference |
 | Nebuchadnezzar | The names that may be chosen are the DISTINCT CARD NAMES IN THE TARGET OPPONENT'S LIBRARY, GRAVEYARD, BATTLEFIELD AND EXILE — their deck minus the one zone it would be cheating to read. Their HAND is excluded on purpose, which is the anti-cheat guarantee; the cost is that a name whose every copy is already in hand cannot be said. Same bound as Petra Sphinx, aimed the other way | Free-text card naming, and a UI that can take one | The victim, in the one case where they hold every copy of a card |
-| Petra Sphinx | The names that may be chosen are the DISTINCT CARD NAMES IN THE CHOOSER'S OWN LIBRARY, not any name in Magic. Naming a card that cannot be there is never a play and a player already knows their own decklist, so this is a bound rather than an information change — but a name that is genuinely absent (a bluff, or an opponent's card) cannot be said | Free-text card naming, and a UI that can take one | Nobody — the option list is a superset of every name worth saying |
 | Text changes (Magical Hack, Sleight of Mind) | A text change reaches SUBTYPES, landwalk types, protection colours and a basic land's mana — not arbitrary rules text, which this engine stores as behaviour rather than words. (The pair of words IS the caster's: two prompts on resolution, `@MAGICAL_HACK` / `@SLEIGHT_OF_MIND` — lifted 2026-09-02.) **Narrower than the 1997 ruling (noted 2026-09-02):** Duel.hlp lets either target ANY spell or permanent, colour words or not, and edits every occurrence in the text box — so Sleight of Mind re-pointing a Circle of Protection: Red to blue, or a Karma to Islands under Magical Hack, are printed use cases this engine cannot do; ours only offers targets carrying a word it models (a protection colour, a land subtype / landwalk) and refuses the rest | Rules text as data | The Circles of Protection, Karma, the Elemental Blasts, Flashfires / Tsunami and every other card whose colour or land word is behaviour here — the classic Sleight/Hack tricks on them are simply not available |

@@ -466,3 +466,36 @@ func test_petra_sphinx_does_not_make_the_player_DRAW() -> void:
 	assert_ok(g.activate_ability(0, sphinx, 0, [TargetRef.player(0)]))
 	resolve_stack()
 	assert_eq(g.players[0].life, 20, "Underworld Dreams stayed quiet")
+
+
+## Says a name if it is on offer, else the first — and remembers the list.
+class Namer extends DecisionAgent:
+	var says := ""
+	var offered: Array[String] = []
+
+	func answer_option(_game: MtgGame, _pid: int, _prompt: String,
+			options: Array[String], _hint: int) -> int:
+		offered = options.duplicate()
+		var i := options.find(says)
+		return i if i >= 0 else 0
+
+
+func test_petra_sphinx_offers_the_decklist_and_nothing_else() -> void:
+	# The owner's ruling (2026-09-07): the names on offer are the DECK's —
+	# what a player knew before the duel — not a scan of any zone. A name
+	# whose every copy is in hand is on the list; a card the player never
+	# brought is not, wherever it sits.
+	g.players[0].deck_names.append("Hill Giant")
+	give_hand(0, "Hill Giant")             # its only copy, in hand
+	put_battlefield(0, "Grizzly Bears")    # on the table, but not in the deck
+	var sphinx := put_battlefield(0, "Petra Sphinx")
+	var namer := Namer.new()
+	namer.says = "Hill Giant"
+	g.set_agent(0, namer)
+	assert_ok(g.activate_ability(0, sphinx, 0, [TargetRef.player(0)]))
+	resolve_stack()
+	assert_true(namer.offered.has("Hill Giant"), "a name held only in hand can be said")
+	assert_false(namer.offered.has("Grizzly Bears"), "a name the deck never had cannot")
+	assert_eq(namer.offered[0], "Forest", "the likeliest top card comes first")
+	assert_eq(g.players[0].graveyard.size(), 1,
+		"named a card that could not be on top, and missed")
