@@ -1,0 +1,308 @@
+# Arzakon — how players beat the final boss, and what the engine should know
+
+A provenance note, written 2026-09-07, companion to
+`docs/difficult_cards.someday`. It records the ways players of the 1997
+game beat Arzakon — the loops and locks that the community has passed
+around for nearly thirty years — with the sources that show them, so
+that the engine's rules support and, later, its AI can be checked
+against a list rather than a memory. The `.strategy` suffix says what it
+is: not a plan, a reference.
+
+The rule of the file, as in the companion: every line is SOURCED (a
+quote, with who, where, when) or a RECEIVED CLAIM (something we were
+told and could not find in a readable source). The two are kept apart,
+and where a received claim gets a rule wrong, the correction is here
+too.
+
+
+## 1. Sources
+
+| # | Where | Who / when | What it is |
+|---|---|---|---|
+| S1 | http://www.dos486.com/magic/ (HTTP only) | Erik, dos486 — a 204-0 Wizard-difficulty playthrough | The best single account of the game's systems; ends with the Arzakon kill. Already cited by `docs/SHANDALAR_LORE.md` and by the Time Walk / Regrowth / Timetwister card headers |
+| S2 | https://slightlymagic.net/forum/viewtopic.php?f=76&t=1389 (four pages, `&start=15/30/45`) | "Shandalar Strategies" — jatill, aww1979, thedrigo, somacat, FallenOne, Professor, profse, jasonbrown669, jiansonz and others, Jul 2009 – Sep 2011 | Fifty-seven posts of decklists and finishes: the Black Vise decks, the Timetwister decks, Moat, Millstone, poison, the ante thieves |
+| S3 | https://slightlymagic.net/forum/viewtopic.php?f=76&t=5283 | Blissy (30 Aug 2011), donjuancho (23 Dec 2011) | "End game challenge: Steal Arzakon's entire deck" — the infinite-turn loop taken for granted, the decking finish, the 1997 program's limits |
+| S4 | https://mtg.wiki/page/Shandalar_Enemy_Decks_(Arzakon) | mtg.wiki | Decklists only (the three variants); no strategy text on the page |
+| S5 | https://www.reddit.com/r/magicTCG/comments/2zzjmr/finally_beat_shandalar_boss_with_120_dmg_channel/ | r/magicTCG | Could not be read from this machine — the page shell came back without the post. Everything attributed to it stays a received claim |
+| S6 | https://www.reddit.com/r/magicTCG/comments/1qadps/arzakon_never_knew_what_hit_him/ | r/magicTCG | Same — unreadable here |
+| S7 | https://www.reddit.com/r/Shandalar/comments/1jchhm1/back_to_shandalar_need_tips_please/ | r/Shandalar | Same — unreadable here |
+| L1 | `decks/1997/originals/arzakon.deck`, `decks/1997/ancients/arzakon.deck`, `decks/1997/duels/arzakon.deck` | this repository | Arzakon's three decks as the 1997 files and the wiki give them (provenance in each header and in `docs/decks-1997.md`) |
+| L2 | `docs/SHANDALAR_LORE.md`, difficulty table | Dana Huyler's FAQ v1.2, May 1997 | Arzakon's life by difficulty |
+
+
+## 2. The opponent (sourced)
+
+- LIFE: 100 / 200 / 300 / 400 at Apprentice / Magician / Sorcerer /
+  Wizard (L2). "His 400 life" in every strategy below is the Wizard
+  number; the same lines work at 100.
+- DECK: the Original is 138 cards, the Spells of the Ancients "Climatic
+  Battle" 66, the Duels of the Planeswalkers 137 (L1; the wiki's prose
+  says 107 for the Original and its own list adds to 138 —
+  `docs/decks-1997.md` explains). "Over a hundred cards" is true of two
+  of the three; jiansonz (S2, 27 Sep 2011): *"In Mok's version of
+  Shandalar, he has a decently strong 60-card deck. In the original
+  setup … he has 130-something cards, including a Timetwister…"*
+- WHAT THE ORIGINAL DECK HOLDS THAT MATTERS HERE (L1): Ancestral Recall,
+  Time Walk, Timetwister, Regrowth, Braingeyser, Wheel of Fortune, Mind
+  Twist, the five Moxes, Sol Ring, Mishra's Workshop, 4 Mishra's
+  Factory — every piece of the loops below is in HIS deck too. His
+  answers: 2 Power Sink, 2 Desert Twister, 2 Fog, 2 Paralyze, 2
+  Lightning Bolt, 2 Disintegrate, one Circle of Protection of each
+  colour (Red included), 2 Spirit Link, 2 Siren's Call. Thirty-five
+  creatures, mostly small, thirteen of them artifact creatures; fifty-
+  four mana sources counting the Factories, the Fellwar Stones and the
+  five Mana Batteries.
+- HOW HE PLAYS IT (S1): *"Arzakon's deck is terrible, with hardly
+  anything worth attacking with, so you get plenty of time to set up
+  whatever overkill you want…"* The received claim that he "rarely
+  plays his power cards quickly" says the same thing from the other
+  side; no source measures it.
+
+
+## 3. The loops
+
+### A. Channel + Fireball / Disintegrate — life into one burn spell
+
+- SOURCED: Professor (S2, 29 Oct 2009): *"One exception is when I make
+  my red mage a Channel deck. It's pretty unfair to play Channel when
+  your life total start out 10 or 20 higher than your opponent, and you
+  get a lot of consistency playing 30 or 35 card decks."* discoransom
+  (S2, 26 Apr 2010): *"I morph into a Ball Lightning/ChannelBall deck
+  asap."* carletto1979 (S2, 30 Jul 2009): *"In the final battle I try
+  to make more than 400 damages in some creative way."*
+- RECEIVED CLAIM: the 120-damage Channel kill of S5's title (unreadable
+  here) — Moxes, Black Lotus and Channel, the campaign-inflated life
+  total (mana links raise the base of 10, L2) turned into mana, one
+  Fireball or Disintegrate to the face. Consistent with the sourced
+  posts; the number is the thread's.
+- RULES: Channel lets you pay life down to exactly 0 (CR 119.4, the rule
+  `cards/sets/2ed/channel.gd` cites as 118.4); the state-based actions
+  then kill you unless the spell already killed them. At 400 life the
+  player needs a life total above 400 plus the spell's colour, or two
+  spells, or the pump below.
+- HERE: Channel (`MtgPlayer.life_for_mana`, `MtgGame.pay_life_for_mana`,
+  refuses a payment above the life total), Fireball
+  (`cards/sets/2ed/fireball.gd`, divided evenly, the surcharge per extra
+  target), Disintegrate — all real. The Setup screen's "Starting life"
+  spinner goes to 400 (`game/setup_screen.gd`), so the fight can be set
+  up today: Arzakon's deck from L1 at 400 against a Channel deck at
+  whatever the campaign would have given.
+- FOR THE ENGINE, SOMEDAY: the AI as Arzakon holds Circle of Protection:
+  Red and two Power Sinks (L1); a pilot that reads "X = the opponent's
+  life" as lethal-in-hand and holds the Sink is the defence. The AI as
+  the Channel player is the mirror: `AiPlayer` prices X by the target's
+  life (its `LETHAL_WORTH` branch), but the life-for-mana pump is a
+  player action it does not yet take.
+
+### B. Lich + Channel + Fireball — the "infinite" variant
+
+- RECEIVED CLAIM (S5, unreadable here): *Lich alters how life is
+  tracked, so Channel nets infinite mana and 400+ damage in one shot.*
+  No sourced post found for the Lich line; the sourced Channel decks
+  above never mention it.
+- RULES: this one is a 1997-PROGRAM artefact, not a rules loop. Lich
+  sets your life to 0 and says you don't lose for it; Channel's payment
+  is a cost, and CR 119.4 lets a player pay life only if their life
+  total is at least the payment — at 0 you cannot pay 1. Under the
+  printed rules Lich + Channel makes zero mana. What the claim describes
+  is a program that let life go negative under Lich and read the
+  negative number as mana paid — an exploit of the implementation, and
+  the 1997 program's, not something the card does.
+- HERE: `cards/sets/2ed/lich.gd` implements every clause (life to 0,
+  can't lose to life, life gain becomes draws, damage sacrifices
+  permanents, leaving loses the game); `pay_life_for_mana` refuses at 0.
+  The engine will NOT let this happen, and that is the intended result:
+  a faithful Lich, a faithful Channel, no free mana between them.
+- FOR THE ENGINE, SOMEDAY: nothing to build. If a future pass wants the
+  old exploit as a `[1997]` option it needs a flag on the payment; the
+  ledger's answer today is no.
+
+### C. Infinite turns — Time Walk + Regrowth + Timetwister
+
+- SOURCED, S1: *"I pared down the deck enough that every turn I could
+  cast Timetwister and it would draw back into Regrowth and Time Walk,
+  creating a loop of infinite turns. … I took about six consecutive
+  turns this way before this screenshot, with about 40 power worth of
+  creatures attacking each turn. … And finished off Arzakon's 400 life
+  total there. Although I could have done 4000 or 4 billion if
+  necessary, with infinite turns."* And the extension: *"it's possible
+  to deal exponentially infinite damage in a single turn: include Wild
+  Growths and a Twiddle so that each iteration of the Timetwister-
+  Regrowth loop nets positive mana, and include Berserk in the loop to
+  exponentially double a creature's power each time. The Shandalar
+  program tends to crash after looping that a bunch of times, though."*
+- SOURCED, S3 (Blissy, 30 Aug 2011): *"First, get into a Time Walk +
+  Timetwister + Regrowth loop giving Arzakon no more turns. This is a
+  no brainer."* S2, aww1979 (12 Oct 2009): *"simply Timetwister and
+  Time Walk and not actually give the AI a turn until I'd either taken
+  all the cards I wanted or couldn't continue any longer. Then I'd make
+  the kill."* profse (S2, 11 Mar 2011), a 40-card list of 4 Mox
+  Sapphire / 4 Sol Ring / 4 Black Lotus / 4 Library of Alexandria / 4
+  Island / 4 Mahamoti Djinn / 4 Time Walk / 4 Timetwister / 4 Ancestral
+  Recall / 4 Ivory Tower: *"This deck can go infinite turn 1 … it takes
+  at least 20 turns to beat the boss with 400 life, but he rarely takes
+  more than a turn or 2."* jasonbrown669 (S2, 24 Aug 2011), "TIMELORD":
+  8 Island, 4 Strip Mine, 4 Mox Sapphire, 4 Black Lotus, 4 Braingeyser,
+  4 Time Walk, 4 Timetwister, 4 Ancestral Recall, 4 Black Vise.
+- RECEIVED CLAIM: "(or Time Spiral)". Time Spiral is Urza's Saga (1998)
+  — not in the 1997 pool, not in ours. Strike it from the list; the
+  1997 loop is Timetwister's alone.
+- RULES: one iteration costs {1}{U} + {1}{G} + {2}{U} = seven mana and
+  gives an extra turn, a fresh seven-card hand and Regrowth back in the
+  library; the loop holds as long as the Timetwister finds the other
+  two again, which is why the sourced decks are 40 cards or pare the
+  deck down with permanents (S1's Paralyzes *"stay in play once cast,
+  rather than occupying deck and hand slots"*). Timetwister is on the
+  stack while it resolves and is not shuffled in (CR 608.2m), so it
+  does have to be Regrown. The 1997 program's four-of limit was lifted
+  by the Tome of Knowledge past 60 cards (aww1979, S2, 19 Jul 2009),
+  which is where the playsets of restricted cards come from.
+- HERE: fully playable. Time Walk (`ExtraTurnEffect`, `MtgGame.
+  extra_turns`), Regrowth (`ReturnFromGraveyardEffect.any_card()`),
+  Timetwister (card-local over `shuffle_hand_and_graveyard_into_library`
+  + `draw_cards`, APNAP, not shuffled in itself) — the Regrowth and
+  Timetwister headers already name this loop as their reason. Berserk,
+  Wild Growth and Twiddle are in the pool for S1's exponential version;
+  the engine has no crash to imitate.
+- FOR THE ENGINE, SOMEDAY: (1) the AI as Arzakon holds two Power Sinks
+  and the loop has exactly two must-resolve spells a turn; a counter
+  rule that prices Time Walk and Timetwister by what they DO rather
+  than by their mana cost is the defence — the `counter_threshold`
+  knob is an absolute card value today (`docs/ROADMAP.md`, "the
+  counter threshold is absolute"). (2) Arzakon's own deck holds Time
+  Walk, Regrowth, Timetwister and Braingeyser (L1): an AI that
+  recognises the three-card loop in its own hand-and-graveyard and
+  runs it is the far end of "pilot The Deck" — not asked for, not
+  measured, noted.
+
+### D. Black Vise + Moat, and the forced draw
+
+- SOURCED, S2: aww1979 (17 Jul 2009): *"If you want a quick and dirty
+  win, make a black vise deck. … eventually it will degenerate into
+  this monstrosity with like 15 black vises and $10000 of moxes, time
+  walks, and so on."* And the finish: *"Then, I drew an ancestral
+  recall. Half an hour later (still that same turn, not counting time
+  walking), a dozen black vises processed for about 40 damage each, and
+  arzakon went from 400 to negative lots in one upkeep."* thedrigo (17
+  Jul 2009), the blue-white control list — Moxen, 5+ Howling Mine, 6–7
+  Black Vise, 4 Ivory Tower, 3–4 Moat, 4 Wrath of God, 4 Swords, 4
+  Timetwister, 4 Time Walk, 4 Ancestral Recall, 3 Braingeyser: *"Even
+  Arzakon goes down within 10 turns. … watch him take 40+ damage every
+  upkeep."* sodtiwaz (21 Aug 2009): 4 Ivory Tower, 4 Black Vise, 3
+  Manabarbs, 4 Swords, 3 Howling Mine, Moxes, 4 Timetwister, 4
+  Ancestral Recall. jasonbrown669 (27 Sep 2011), "Moat.deck": 4 Moat, 4
+  Serra Angel, 4 Tetravus, 4 Swords, 4 Wrath, 20 Plains, then a Moat /
+  Howling Mine / Millstone control build.
+- RECEIVED CLAIM: "dealing 3 to 4 damage each per card in his hand".
+  Wrong reading of the card: Black Vise deals 1 damage for each card
+  above FOUR in the hand at upkeep. Three to four damage per Vise is a
+  hand of seven or eight; aww1979's *"40 damage each"* is a hand of 44
+  after Ancestral Recall and Braingeyser into a hand the 1997 program
+  never made him discard — which is the exploit: the 1997 AI kept the
+  cards. The rest of the claim (Moat stops the creature deck; Howling
+  Mine, Ancestral Recall, Braingeyser, his own Timetwister and Wheel of
+  Fortune fill his hand; several Vises multiply it) is what the sourced
+  lists do.
+- RULES: cleanup discards to seven (CR 514.1), so a hand of 44 survives
+  only from an end-of-turn draw to his own upkeep — which is precisely
+  when the Vises trigger. The loop is honest: Ancestral Recall /
+  Braingeyser at his end step, Vises at his upkeep, then he discards.
+- HERE: Black Vise (`cards/sets/2ed/black_vise.gd`, the opponent locked
+  in as it enters, so a stolen Vise keeps squeezing), Moat
+  (`cards/sets/leg/moat.gd`, `cur_cant_attack` on non-fliers), Howling
+  Mine, Ivory Tower, Braingeyser, Ancestral Recall, Wheel of Fortune,
+  Millstone — all in. Cleanup discards to hand size for every seat
+  (`MtgGame._cleanup_step`), the human's held open as the original's
+  own Discard Phase.
+- FOR THE ENGINE, SOMEDAY: the AI as Arzakon: (1) play cards out of a
+  full hand under a Vise rather than hold them — the pilot's `_hand_
+  room` (the 2026-09-07 `counts_cards` capability) reads its room but
+  the Vise is not yet a reason to empty it; (2) Desert Twister ×2 and
+  the artifact answers in his deck should go at a Vise or a Moat before
+  a creature; (3) not cast his own Wheel of Fortune or Timetwister into
+  three Vises. All three are `EffectIntent` questions, none card-named.
+
+### E. Decking him — Braingeyser for the library
+
+- SOURCED, S3 (Blissy): *"Once you have depleted his entire deck …
+  perform a Timetwister, then Braingeyser him for 1, drawing his last
+  card into his hand."* and *"blast him with an Ancestral Recall to end
+  the game … No more cards. You lose Mr. Arzakon."* FallenOne (S2, 29
+  Sep 2009): *"Defeat Arzakon using a deck with multiples of restricted
+  cards. This may mean 400+ damage, poison counters or decking."*
+  jasonbrown669's Millstone build (S2, 27 Sep 2011).
+- RECEIVED CLAIM: "cast a massive Braingeyser targeting Arzakon, forcing
+  him to draw his entire remaining library at once, causing him to lose
+  instantly when he cannot draw a card." Right in substance: a player
+  who attempts to draw from an empty library loses when state-based
+  actions are next checked (CR 704.5b) — during the resolution's
+  aftermath, not at his next draw step. A 138-card deck makes X large,
+  which is why the sourced version runs the infinite-turn loop first
+  and decks him at leisure (Timetwister puts his graveyard BACK, so the
+  Millstone route fights the Timetwister in his own deck).
+- HERE: `MtgGame.draw_cards` loses the game at the empty draw; milling
+  (`mill`) is not a loss until the draw. Braingeyser targets a player.
+  The pilot's new `counts_cards` capability (2026-09-07) already aims a
+  draw spell at the opponent when X reaches their library — so the AI
+  can do this to a human, and to Arzakon.
+- FOR THE ENGINE, SOMEDAY: the AI as Arzakon should count its own
+  library against a Braingeyser on the stack (a Power Sink target
+  again) and against Millstone; and never Timetwister a graveyard that
+  is the opponent's win condition back into their library.
+
+### F. Also in the sources, for completeness
+
+- The Time Elemental soft lock (Salbei, S2, 12 Oct 2009): bounce
+  everything at the end of his turn until he can play only Moxes and a
+  land; Disrupting Scepter to empty his hand (donjuancho, S3). Time
+  Elemental and Disrupting Scepter are in the pool.
+- The ante thieves — Tempest Efreet, Bronze Tablet, Demonic Attorney,
+  Darkpact, Jeweled Bird — used INSIDE the infinite-turn loop to take
+  Arzakon's deck card by card (S3, S2). All six are implemented over
+  the engine's opt-in ante zone (`docs/mechanics.md`, Ante); settling
+  the ante after the duel is adventure-layer and absent by design. The
+  1997 program's Tempest Efreet bug (*"hundreds of copies of the card
+  you stole, all in your graveyard"*, Blissy; aww1979 12 Oct 2009) is
+  not reproduced.
+- Poison (jiansonz, S2: *"On the two highest difficulties, I have only
+  managed to beat him with a poison deck"*) — ten counters ignore the
+  400 (`MtgPlayer.poison`, CR 704.5c). Marsh Viper, Pit Scorpion in
+  the pool.
+- Contract from Below / Dark Ritual / Nether Shadow / Black Lotus
+  (jiazhouhuaqiao, S2, 26 Apr 2010): *"the most consistent T1 kill deck
+  possible"* — no loop, just the 1997 card limits.
+- The 1997 program's own limits, from S3, worth knowing when a report
+  says "it crashed": an AddCard error from *"too many cards in play at
+  one time or too many cards played on a turn"*, a ten-card ante cap,
+  and S1's crash on a long Berserk loop. None of them are ours.
+
+
+## 4. What the engine should know, in one list
+
+Rules support — DONE: extra turns, Regrowth on any card, Timetwister
+not shuffling itself, Channel down to 0 and not below, Lich in full,
+Fireball's division, Black Vise locked to a player, Moat, forced draws
+that lose at the empty library, cleanup discard for every seat, poison,
+ante as an opt-in zone. A duel against Arzakon's real 138 cards at 400
+life is one Setup screen away.
+
+Deliberately NOT supported: Lich + Channel below zero (section B); the
+1997 program's crashes and its Tempest Efreet duplication; Time Spiral
+(not a 1997 card).
+
+AI, someday, measured Deck-Lab style when it comes (every entry an
+`EffectIntent` question, none card-named):
+
+1. Counter by what a spell does: Time Walk, Timetwister, a Braingeyser
+   at your own library, an X burn spell at your face — the absolute
+   `counter_threshold` misses all four (C, E).
+2. Under a Black Vise, empty the hand; never Wheel or Twister into one
+   (D).
+3. Send Desert Twister / Disenchant at the Vise or the Moat first (D).
+4. Count the library against draw spells and Millstone; don't put the
+   opponent's graveyard back with a Timetwister when it is their loop
+   (E).
+5. Read "X equals my life" as lethal and hold the Fog / Sink / Circle
+   for it (A).
+6. The far end: recognise the three-card loop in your own hand and run
+   it (C). Arzakon holds every piece.
