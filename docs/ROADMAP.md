@@ -2105,6 +2105,11 @@ an aimed discard is byte-identical to the null**, 300 games each.
   capability, but it runs through the same `_try_counter` that Blue
   Skies' two Counterspells use, so it cannot be made starter-neutral by
   construction the way this pass was. It needs its own measurement.
+  *(2026-09-07: built as written and measured — THE UNANSWERABLE, in
+  THE DECK, SECOND PASS below. It fires, and the number does not move:
+  The Deck +0.7 over the gauntlet, no row clear; Blue Skies, Weissman's
+  Winter list and Sargent's Sea Dragon all inside their intervals. Not
+  kept; the bar stays absolute.)*
 
 ### The difficulty ladder, and a pre-existing inversion this pass exposed
 
@@ -7054,6 +7059,406 @@ first load is 44 MB (about 15 MB over the wire with gzip; the host must
 compress, the game cannot) — a minute on mobile data, and a PWA with an
 offline page would be the cure the preset declines. Orientation and the
 portrait picture as measured above; a portrait layout is a week.
+
+## THE DECK, SECOND PASS (2026-09-07) — four capabilities kept, two measured and not kept
+
+> *"Fire off an agent to further teach our engine to pilot "The Deck".
+> We had one try at this before. Reference strategy:
+> [Making Magic, "The Deck", 2014-02-17]. In our game we have The Deck
+> with Nevinyrral's Disk instead of Chaos Orb."*
+
+### What the article says
+
+Rosewater's column is about Brian Weissman's deck as the first one built
+around card advantage as a goal in itself, and it opens with Weissman's
+own sentence: *"the surest way to defeat your opponent consistently is
+by dominating him or her in the war of card advantage."* Two Serra
+Angels are the only creatures; everything else either answers a card
+one-for-one (Swords, Disenchant, Counterspell, Mana Drain), answers
+many cards at once (Moat, The Abyss, Balance, the Orb — here the Disk),
+or turns mana into cards (Jayemdae Tome, Braingeyser, Ancestral, the
+Library) and cards out of the other hand (Mind Twist, Disrupting
+Scepter). The deck does not try to win early; it extends the game until
+the opponent has nothing left, and only then commits an Angel. The
+first pass (THE CONTROL SWEEP, 2026-09-06) taught the pilot the engines
+— Tome, Scepter, the Factories, Strip Mine, the life a City costs —
+and left three rows open: the counter threshold, Disk timing, and a
+deck that *"still cannot close"*.
+
+### What the data said before anything was built
+
+The baseline, `decks/variants/the_deck_playable.deck` against the five
+starters at seed 4242, 300 games a matchup, Wizard against Wizard:
+Big Green **13.0%** [9.7..17.3], Black-Red Raiders **12.0%**
+[8.8..16.2], Blue Skies **25.7%** [21.1..30.9], Mountain Artillery
+**7.0%** [4.6..10.5], White Knights **5.7%** [3.6..8.9]; **12.7%**
+[11.1..14.4] over the gauntlet. A census of thirty logged games a
+matchup then said where the games went, and it was not where the open
+list pointed:
+
+* **Decking was the biggest loss mode.** 13 of 22 losses against Blue
+  Skies, 11 of 27 against Big Green, 9 of 29 against White Knights were
+  the pilot drawing from an empty library — at 30 to 47 life. It cast
+  Braingeyser for X=19 into a library of nine, Mind Twist for X=20 at an
+  empty hand, and ticked two Tomes into hands of fifteen that cleanup
+  then discarded.
+* **Balance was cast against itself**: fourteen lands to their ten, six
+  cards to their none, no creatures on either side — seven lands and
+  four cards for nothing, priced as any two-mana sorcery.
+* **The Disk fired one to five times in thirty games**; the fast losses
+  (turn 9–16 to three to five creatures) had no Disk on the table at all.
+* **The counters let the small things through** — against White Knights,
+  Crusade eleven times, Holy Strength eleven, Savannah Lions
+  twenty-three — and countered White Knight and Serra, which is what an
+  absolute bar does.
+
+So the order was re-ranked by the numbers: the count first, Balance
+second, the counter rule third (measured, not kept), the library race
+fourth, the second legend fifth — a rule the traces turned up while
+the fourth was being read — and the Disk last: its census payoff, once
+the count had removed most of the decking, was three losses in
+eighty-six with an idle Disk on the table.
+
+### 1. THE COUNT — `AiProfile.counts_cards` (commit cd1f3ae)
+
+An X spell is sized to the cards it acts on, not to the mana at hand.
+`_size_and_aim`: a draw-X is capped by the room in the hand
+(`_hand_room`: the maximum hand size plus what the next turn plays, the
+spell itself counted out) and never takes the library's last card; a
+discard-X at a player is capped by their hand, waits for an empty one,
+and a Twist for one that leaves them holding more waits too. A Tome, a
+Library of Alexandria or an Ancestral that would draw into a hand
+cleanup discards is not activated (`_ability_option`,
+`_fire_held_instant`, the reservation that holds their mana). And
+THE DRAW THAT WINS (`_decking_draw`): a draw effect that may target a
+player and can draw the opponent's whole library is cast at them for
+exactly that — they lose at their next draw step (CR 704.5b) — which
+is how a sixty-card control deck beats forty-card starters. Nothing here
+names a card; it reads `EffectIntent.draws`, `draws_use_x`, `discards`
+and the target spec. Sorcerer and Wizard.
+`tests/ai/test_ai_counts_cards_2026_09_07.gd`, 16 tests.
+
+**MEASURED** (`--sweep counts_cards=on,off`, seed 4242, 300 games an
+arm, the control pair Big Green vs White Knights replayed on both arms):
+
+| Matchup | null (off) | candidate (on) | delta |
+|---|---|---|---|
+| The Deck vs Big Green | 13.0% | **28.7%** [23.8..34.0] | +15.7 ± 6.4 |
+| The Deck vs Black-Red Raiders | 12.0% | **24.7%** [20.1..29.8] | +12.7 ± 6.1 |
+| The Deck vs Blue Skies | 25.7% | **43.0%** [37.5..48.7] | +17.3 ± 7.4 |
+| The Deck vs Mountain Artillery | 7.0% | **17.0%** [13.2..21.7] | +10.0 ± 5.2 |
+| The Deck vs White Knights | 5.7% | **11.3%** [8.2..15.4] | +5.7 ± 4.5 |
+| control: Big Green vs White Knights | 173–127 | 173–127 | **PASS** (byte-identical) |
+
+Five of five clear of zero; the gauntlet 12.7% → **24.9%**. No harm:
+Blue Skies swept on the same knob against the four other starters is
+**+0.0 on every row** (the arms replay byte-identically — the starters
+hold no draw-X and no optional draw the count would refuse), the
+starters' 5×5 matrix at seed 4242 with the knob on and off is
+**identical** in every cell, and two of Weissman's own lists — Winter
+1994–95: +1.3 ± 8.0, +1.7 ± 7.9, +1.3 ± 7.4, −0.3 ± 7.8, +3.0 ± 7.8;
+February 1996: +5.3 ± 7.7, +3.0 ± 7.5, +2.0 ± 5.6, +2.7 ± 7.2,
++2.3 ± 6.4 — move the right way and none of it clear, every control
+PASS. In the thirty-game census the losses by decking fell from
+13/11/9/12/9 (Blue Skies, Big Green, White Knights, Mountain Artillery,
+Black-Red) to 3/4/2/4/2, and 44 of the 57 wins were the opponent
+drawing from an empty library.
+
+**Tried and NOT kept — `library_slack`**, an integer knob that would
+keep N cards of library beyond the count: 300 games an arm, every row
+between +0.0 and +2.7 and none clear; at 1,000 games an arm, null
+against 4: Big Green 29.9 → 32.5 (+2.6 ± 4.1), Black-Red 23.9 → 25.5
+(+1.6 ± 3.8), Blue Skies 36.4 → 37.0 (+0.6 ± 4.2), Mountain Artillery
+19.0 → 21.4 (+2.4 ± 3.5), White Knights 17.6 → 18.7 (+1.1 ± 3.4);
+control 539–461 PASS; 0 of 5 clear. Removed. (Its better half came back
+as THE PACE, below, once the census said which draws were the problem.)
+
+### 2. THE LEVELLER — `AiProfile.levels_boards` (commit 692a76e)
+
+A spell that levels every player down to the smallest board is priced
+by what each side would actually lose. `EffectIntent.levels` is read
+from a one-entry table (`LEVELLERS := ["Balance"]`) — the pool's one
+leveller is a card-local effect, so the READING is card-named the way a
+window card's shape is, and nothing else is. `_level_value` counts the
+lands each side sacrifices at `Evaluator.W_LANDS` (weighted up when the
+smaller side keeps very few), the cards each side discards at `W_HAND`
+with the spell itself counted out of our hand, and the creatures each
+side loses — cheapest first, which is the choice CR 701.8 leaves to the
+player — at `W_BOARD`; the swing has to clear `SWEEP_BAR` (a Bears'
+worth, the sweeper's own bar) or the spell waits in hand. Sorcerer and
+Wizard. `tests/ai/test_ai_levels_boards_2026_09_07.gd`, 11 tests.
+
+**MEASURED** (`--sweep levels_boards=on,off`, seed 4242, 300 an arm,
+the null being the shipped pilot after THE COUNT):
+
+| Matchup | null (off) | candidate (on) | delta |
+|---|---|---|---|
+| The Deck vs Big Green | 28.7% | **41.3%** [35.9..47.0] | **+12.7 ± 7.5** |
+| The Deck vs Black-Red Raiders | 24.7% | 31.7% [26.7..37.1] | +7.0 ± 7.1 |
+| The Deck vs Blue Skies | 41.0% | 46.3% [40.8..52.0] | +5.3 ± 7.9 |
+| The Deck vs Mountain Artillery | 17.0% | 22.3% [18.0..27.4] | +5.3 ± 6.3 |
+| The Deck vs White Knights | 11.3% | **18.3%** [14.4..23.1] | **+7.0 ± 5.7** |
+| control: Big Green vs White Knights | 173–127 | 173–127 | **PASS** |
+
+Two of five clear, the other three positive and inside their intervals;
+the gauntlet 24.5% → **32.0%**. No harm: Blue Skies +0.0 on every row
+(byte-identical, no leveller in the list), the control PASS; Winter
+1994–95: +0.3, −0.3, +2.3, +5.0, +2.0; Fall 1994: +4.3, +1.3, +3.0,
++5.3, +5.0 — none clear, every control PASS.
+
+### 3. THE UNANSWERABLE — `counters_unanswered`. TRIED AND NOT KEPT.
+
+The open row from the last pass, built as written: in `_try_counter`, a
+permanent spell under the profile's bar was raised to the bar when
+nothing in hand would answer it later — each card's intent read per
+mode, "answers" meaning a removal or bounce whose target spec admits the
+spell (kind, filter, protection against the answer's colours) and, for a
+creature, that `EffectIntent.kills` it at its toughness; a sweeper in
+hand or a sweeper ability already on our table counted too. "Does
+something" meant a creature with power, or any activated, triggered or
+static ability, or an Aura; a Mox was let through, a Wall of Stone was
+let through. Twenty tests passed. It FIRED: in the thirty-game census
+against White Knights the counters cast went from 38 to 57 — Savannah
+Lions nine times, Mesa Pegasus eight, Benalish Hero six, Holy Strength
+three, where before there had been none — and White Knight and Serra
+were countered a little less (19 → 16, 15 → 13) because the Counterspells
+had been spent.
+
+**MEASURED** (`--sweep counters_unanswered=on,off`, seed 4242, 300 an
+arm, null = the shipped pilot after THE LEVELLER):
+
+| Matchup | null | candidate | delta |
+|---|---|---|---|
+| The Deck vs Big Green | 41.3% | 40.7% | −0.7 ± 7.8 |
+| The Deck vs Black-Red Raiders | 31.7% | 34.3% | +2.7 ± 7.5 |
+| The Deck vs Blue Skies | 46.3% | 45.3% | −1.0 ± 7.9 |
+| The Deck vs Mountain Artillery | 22.3% | 23.3% | +1.0 ± 6.7 |
+| The Deck vs White Knights | 18.3% | 20.0% | +1.7 ± 6.3 |
+| control | 173–127 | 173–127 | PASS |
+
+Zero of five clear; the gauntlet 32.0% → 32.7%. Blue Skies, which
+counters through the same `_try_counter`: +0.3 ± 7.8, −0.7 ± 7.9,
++0.0 ± 7.5, −0.3 ± 7.3 — no harm and no help. Winter 1994–95:
++2.7, +3.3, −0.3, +0.0, +5.0 (± 7.5 to 7.9); Sargent's Sea Dragon
+(Counterspells over a creature suite): +0.0 ± 6.0, +2.3 ± 6.2,
+−0.7 ± 4.5, +0.3 ± 5.5, +3.3 ± 6.6. A second variant that keeps the
+LAST counter (fires only with two or more in hand): −0.7 ± 7.8,
++1.3 ± 7.4, −0.3 ± 7.9, −0.3 ± 6.6, +1.0 ± 6.2. Every control PASS.
+The rule fires and the number does not move, so it is not in the tree.
+Why it does not move, as far as the logs say: the hand-only reading is
+pessimistic in a deck of Tomes (the answer is usually two draws away,
+not in hand), and the two things that actually answer a Lions here — a
+blocker, and The Abyss's upkeep trigger — are not readable as answers
+(a callback trigger has no intent). The old open row is answered as
+"measured, neutral"; the counter threshold stays an absolute bar.
+(Robaina's Monkey, the other counter deck the generality run wanted, is
+unplayable: four proxies — Hydroblast, Jester's Cap, Merchant Scroll,
+Pyroblast.)
+
+### 4. THE PACE — `AiProfile.paces_draws` (commit 587f449)
+
+After THE COUNT the census still lost 11 of 86 games to an empty
+library at 5 to 42 life (Big Green 2 of 14, Black-Red 2 of 20, Mountain
+Artillery 4 of 20, Blue Skies 3 of 11), and 41 of the 64 wins were the
+OPPONENT decking — against forty-card starters the libraries are the
+second clock of the game, and the pilot only ever read one of them.
+
+**The first cut was wrong, and measured as such.** It read the two
+counts alone: a seat strictly ahead may draw down to a lead of one, a
+seat behind or level has nothing to protect. Sweep `sw_pace` (300 an
+arm, null = the shipped pilot after THE LEVELLER): Big Green +0.0 ±7.8,
+Black-Red +0.3 ±7.4, Blue Skies +1.0 ±7.9, Mountain Artillery +1.0
+±6.7, White Knights +1.0 ±6.2; control PASS; 0 of 10 clear. A census
+of 30 games against Blue Skies converted one loss in thirty. Two
+traced losses said why: at 16 to 16 with THEIR draw step next the race
+is won — they draw from nothing first — and the rule called it lost and
+ticked the Tome for value, at 16/16, 4/4 and 3/3, until it was. The
+lead had gone earlier to a Demonic Tutor (a card off the library the
+reading did not count) and to Time Walk's extra draw steps.
+
+**The rule as kept.** `_library_slack` is the two counts and WHOSE draw
+step comes next: when theirs is, they empty first as long as our
+library is no smaller than theirs; when ours is, ours has to be
+strictly larger. A seat that holds the race may spend its lead down to
+nothing and no further; a race already lost is not ours to protect and
+is drawn into for value; while our library is beyond `PACE_HORIZON`
+(twenty cards — twenty turns of draw steps) the libraries are not what
+decides the game. `_hand_room` is capped by it, so every optional draw
+goes through it — the Tome and the Library at the sink and at their
+upkeep, the Ancestral held for their end step and the mana reserved for
+it, the Braingeyser's X — and a search (`EffectIntent.searches`, the
+one new reading: `SearchLibraryEffect`, priced elsewhere) is gated the
+same in `_size_and_aim`. THE DRAW THAT WINS is untouched, being aimed
+at them. Nothing names a card. Sorcerer and Wizard.
+`tests/ai/test_ai_paces_draws_2026_09_07.gd`, 28 tests.
+
+**MEASURED** (`--sweep paces_draws=on,off`, seed 4242, null = the
+shipped pilot after THE LEVELLER, `sw_pace2` at 300 an arm and
+`sw_pace3` at 1000):
+
+| The Deck vs | null (off) | on | delta (1000/arm) | 300/arm |
+|---|---|---|---|---|
+| Big Green | 38.8% [35.8..41.9] | 44.2% [41.1..47.3] | **+5.4 ±4.3, clear** | +4.0 ±7.9 |
+| Black-Red Raiders | 29.9% [27.1..32.8] | 35.9% [33.0..38.9] | **+6.0 ±4.1, clear** | +6.0 ±7.6 |
+| Blue Skies | 42.0% [39.0..45.1] | 45.0% [41.9..48.1] | +3.0 ±4.3 | +3.3 ±7.9 |
+| Mountain Artillery | 26.2% [23.6..29.0] | 30.0% [27.2..32.9] | +3.8 ±3.9 | +5.7 ±6.9 |
+| White Knights | 21.7% [19.3..24.4] | 25.9% [23.3..28.7] | **+4.2 ±3.7, clear** | +5.0 ±6.5 |
+| control Big Green vs White Knights | 539-461 | 539-461 | PASS, byte-identical | 173-127 PASS |
+| aggregate | 1586/5000 = 31.7% | 1810/5000 = 36.2% | +4.5 | 32.0% → 36.8% |
+
+Three of five clear at a thousand games, all five in the knob's favour
+at both sizes, where the first cut had moved nothing.
+
+**No harm, generality.** Blue Skies, which holds Ancestral Recall and
+Braingeyser and so CAN fire the knob, against the four other starters:
++0.0 ±7.8 / −0.3 ±7.9 / −0.7 ±7.6 / −0.7 ±7.3 at 300 games and +0.1
+±4.3 / −0.3 ±4.3 / −0.3 ±4.3 / −0.5 ±4.0 at 1000, none clear, control
+PASS at both. The starters' 5×5 matrix on and off (`mxp2_on`,
+`mxp2_off`, 300 games a cell): identical in every row but the two Blue
+Skies rows (177-123 against 178-122 and 206-94 against 209-91, the
+knob's own). Weissman's February 1996 list against the five starters
++0.3 / −0.3 / +0.0 / −0.3 / +0.0, control PASS; Sargent's Conjurer
+(three Jayemdae Tomes) +0.0 five times, byte for byte — neither list
+lives long enough for the race to the libraries to matter, which is the
+horizon doing its job.
+
+### 5. THE SECOND LEGEND — `AiProfile.holds_duplicates` (commit 5b075ab)
+
+Found in a traced loss while reading THE PACE: turn 32, "The Abyss is
+put into the graveyard — the world rule", and again on turn 34. The
+playable list carries three, and the pilot cast the second and third
+over the first, four mana and a card each time, because nothing in
+`ai_player.gd` reads a supertype. The rule is general and reads two:
+a LEGENDARY permanent whose name is already on the battlefield — either
+side's — is buried the moment it lands (the legend rule as 1997 played
+it, the newcomer loses: `_newest_duplicate_legend`), and a WORLD
+enchantment buries every other world on arrival (CR 704.5k,
+`_superseded_world_permanent`) — a world of OURS with it, the same card
+twice or a world traded for a world. A world of THEIRS is what ours is
+for, and is not held. `_arrival_wasted` sits in `_try_cast_best` beside
+the cast gate and in `_try_play_land` (a second Karakas is a land drop
+buried). Nothing names a card. Sorcerer and Wizard.
+`tests/ai/test_ai_holds_duplicates_2026_09_07.gd`, 12 tests.
+
+Where it can fire: of every deck under `decks/`, only the playable list
+holds more than one world or legend (three The Abyss); the Weissman
+November 1996 list holds one Abyss and Wright's Explosion one
+Pendelhaven, and the starters and Blue Skies hold none, so the matrix
+and every no-harm sweep are byte-identical by construction and the
+generality of the rule is pinned by the tests (Karakas, Jasmine Boreal,
+Living Plane, Concordant Crossroads).
+
+**MEASURED** (`--sweep holds_duplicates=on,off`, seed 4242, null = the
+shipped pilot after THE PACE):
+
+| The Deck vs | null (off) | on | delta (1000/arm) | 300/arm |
+|---|---|---|---|---|
+| Big Green | 44.2% [41.1..47.3] | 47.7% [44.6..50.8] | +3.5 ±4.4 | +2.0 ±7.9 |
+| Black-Red Raiders | 35.9% [33.0..38.9] | 40.6% [37.6..43.7] | **+4.7 ±4.2, clear** | +5.0 ±7.8 |
+| Blue Skies | 44.9% [41.8..48.0] | 47.1% [44.0..50.2] | +2.2 ±4.4 | +2.0 ±7.9 |
+| Mountain Artillery | 30.0% [27.2..32.9] | 35.0% [32.1..38.0] | **+5.0 ±4.1, clear** | +7.3 ±7.4 |
+| White Knights | 25.9% [23.3..28.7] | 28.6% [25.9..31.5] | +2.7 ±3.9 | +1.0 ±6.8 |
+| control Big Green vs White Knights | 539-461 | 539-461 | PASS, byte-identical | 173-127 PASS |
+| aggregate | 1809/5000 = 36.2% | 1990/5000 = 39.8% | +3.6 | |
+
+Two of five clear at a thousand games, all five in the knob's favour at
+both sizes. (The null here is a game apart from THE PACE's `on` arm
+against Blue Skies — 44.9% against 45.0% — because a sweep's null has
+the knob under test off on BOTH seats and every other Wizard knob on,
+so Blue Skies paces its own draws in this null and did not in that
+arm.) The thirty-game census against Blue Skies says what changed: the
+null cast The Abyss 79 times and buried 53 of them to the world rule;
+on, 25 casts and no burial. Against White Knights 44 casts and 21
+burials became 23 and none.
+
+**No harm, generality.** Blue Skies against the four other starters
++0.0 four times, byte-identical, control 173-127 PASS (`nh_dup_bs`);
+the starters' 5×5 matrix on and off (`mxd_on`, `mxd_off`, 300 games a
+cell) identical in every cell — no starter holds a legend or a
+world, so the knob has nothing to read there and the sweeps say so.
+The generality is the tests': a second Karakas not played, a Jasmine
+Boreal held against theirs, a Living Plane holding The Abyss, The Abyss
+cast over THEIR Concordant Crossroads.
+
+### The whole pass, before and after
+
+The shipped Wizard — every knob at its preset — against the gauntlet at
+seed 4242, 300 games a matchup, the same command as the baseline
+(`--gauntlet decks/ --deck-a decks/variants/the_deck_playable.deck`):
+
+| The Deck (playable variant) vs | before (bef8989) | after (5b075ab) |
+|---|---|---|
+| Big Green | 13.0% [9.7..17.3] (39–261) | **47.3%** [41.8..53.0] (142–158) |
+| Black-Red Raiders | 12.0% [8.8..16.2] (36–264) | **42.7%** [37.2..48.3] (128–172) |
+| Blue Skies | 25.7% [21.1..30.9] (77–223) | **51.7%** [46.0..57.3] (155–145) |
+| Mountain Artillery | 7.0% [4.6..10.5] (21–279) | **35.3%** [30.1..40.9] (106–194) |
+| White Knights | 5.7% [3.6..8.9] (17–283) | **24.3%** [19.8..29.5] (73–227) |
+| the gauntlet | 12.7% [11.1..14.4] (190–1310) | **40.3%** [37.8..42.8] (604–896) |
+
+Zero stalled in either run. The order of the matchups is unchanged:
+Blue Skies and the two green-and-red decks are the games a control deck
+can extend, White Knights is still the one it cannot — the turn-9-to-16
+losses to Crusade and Lions are the mulligan and the Disk, both open
+below. Every knob of the pass — `counts_cards`, `levels_boards`,
+`paces_draws`, `holds_duplicates` — is on for Sorcerer and Wizard and
+off for Apprentice and Magician, the ladder's shape (a weaker pilot is
+one that does not count, does not price, does not pace, does not hold);
+none of the four was measured on the lower rungs, and the four presets
+are the owner's to move.
+
+### Still open, and why
+
+* **The Factory animated for nothing.** `_animation_value` refuses when
+  an untapped blocker survives or kills; it does not see the attackers
+  that stayed tapped through our turn, so on turn 11 of a logged loss
+  both Factories were animated in the main phase and then "declares no
+  attackers" — two mana a turn, several turns running. The attack
+  cohort's own reading should be the animation's.
+* **Disk timing.** The census payoff, after THE COUNT, is 3 losses in 86
+  with an idle Disk on the table and their creatures on it. The design
+  if it is ever wanted: for an ACTIVATED sweeper, count the source's own
+  body out of `_sweep_value` (it is the price, not a loss), and add a
+  pressure term — their power the sweep removes, at `_life_price`, and
+  `LETHAL_WORTH` when that power meets our life. The control pair for it
+  has to be Blue Skies vs Black-Red Raiders: Big Green and White Knights
+  hold Hurricane and Wrath.
+* **The win condition.** The playable list has no Serra; the wins are
+  Factory beats and the opponent's empty library. The article's rule —
+  commit the Angel only when the board is locked — needs a deck with an
+  Angel in it and an honest "locked" before it can be measured.
+* **The mulligan.** Several of the fastest losses are one-to-three-land
+  keeps still holding seven cards on turn 9–16. That is a mulligan
+  question, out of this pass's scope.
+* **The Abyss as an answer.** Its upkeep trigger is a callback, not an
+  intent, so no reading of "what answers this" can see it. It is the
+  reason THE UNANSWERABLE counted Lions the deck already handles.
+* **Time Walk's draw step.** THE PACE reads the two libraries and whose
+  draw step is next; it does not read that an extra turn is an extra
+  draw step of ours, so the lead it holds is a card too generous after
+  a Time Walk. A tutor's card off the library IS read now
+  (`EffectIntent.searches`); the extra turn is the remaining hole, and
+  it is one card once a game.
+* **`holds_instants`** already keeps {U}{U} open and floats Mana Drain's
+  mana; the article's "hold mana up" is in the tree from the first pass
+  and was not remeasured here.
+
+### Gates
+
+Full suite after each capability, exit 0 every time: 4,740 tests across
+274 scripts after THE COUNT, 4,751 / 275 after THE LEVELLER, 4,779 / 276
+after THE PACE, **4,791 tests / 134,414 asserts across 277 scripts**
+after THE SECOND LEGEND, and both soaks (`--rules fifth`, `--rules
+modern`, six duels each, exit 0, no "SOAK IS NOT CLEAN") after each.
+THE UNANSWERABLE's twenty tests passed and went with it. The
+measurements are some 260,000 Deck Lab games — the sweeps at 300 and
+1,000 an arm, the four 5×5 matrices, the no-harm runs over Blue Skies,
+three Weissman lists, Sargent's Conjurer and Sea Dragon, the censuses —
+zero stalled, zero engine errors; the counts in `README.md` and
+`docs/CODE_MAP.md` are from the last gate. Every `-s` run in this worktree prints `Compile Error:
+Identifier not found: ShellMusic at res://game/setup_screen.gd:217` and
+`Failed to load script res://DeckLab/simulate.gd` before Godot retries
+and the run completes with exit 0 — the autoload named directly from a
+script before the autoloads register (`game/`, not touched here).
 
 ## Standing quality gates
 

@@ -1064,6 +1064,65 @@ shandalar/
 │   │                      sweep's class 1, twelve cards that sat in hand
 │   │                      for the whole duel until then; Sorcerer and
 │   │                      Wizard (AiPlayer._cast_in_window).
+│   │                      counts_cards (2026-09-07) is THE COUNT: whether
+│   │                      the profile sizes a draw or a discard to the
+│   │                      cards in front of it — an X discard to the
+│   │                      target's hand (and waits at an empty one), an
+│   │                      X draw to the room in its own hand and never
+│   │                      the library's last card, no draw that cleanup
+│   │                      would discard, and a draw that can empty the
+│   │                      OPPONENT'S library pointed at them for the win
+│   │                      (AiPlayer._hand_room, _decking_draw); Sorcerer
+│   │                      and Wizard. The Deck 12.7% -> 24.9% against
+│   │                      the starters (docs/ROADMAP.md, "The Deck,
+│   │                      second pass").
+│   │                      levels_boards (2026-09-07) is THE LEVELLER:
+│   │                      whether a spell that levels every player down
+│   │                      to the fewest lands, cards in hand and
+│   │                      creatures is priced the way a sweeper is — by
+│   │                      what each side would lose on the Evaluator's
+│   │                      scale, the cheapest creatures first because
+│   │                      that is what a sacrifice picks — and held
+│   │                      below the sweeper's bar (AiPlayer._level_value
+│   │                      against SWEEP_BAR); off, it is a two-mana
+│   │                      sorcery cast for its printed worth, which is
+│   │                      how the pilot came to sacrifice seven lands
+│   │                      at fifteen to their eight. Sorcerer and
+│   │                      Wizard; the reading is EffectIntent.LEVELLERS,
+│   │                      the third table, one row, because the pool's
+│   │                      one leveller is a card-local effect. The Deck
+│   │                      24.5% -> 32.0% against the starters.
+│   │                      paces_draws (2026-09-07) is THE PACE: whether
+│   │                      an optional draw — a Tome tick, the Library at
+│   │                      seven, an Ancestral, a Braingeyser's X, a
+│   │                      tutor — is paced to the race of the two
+│   │                      libraries, the other clock of the game (CR
+│   │                      704.5b). The race is the two counts and whose
+│   │                      draw step comes next (AiPlayer._library_slack
+│   │                      caps _hand_room; EffectIntent.searches is
+│   │                      gated the same in _size_and_aim): a draw that
+│   │                      would hand them the race is refused inside
+│   │                      PACE_HORIZON, a race already lost is drawn
+│   │                      into for value. The first cut read the counts
+│   │                      without the turn order and moved nothing;
+│   │                      this one is +3.0..+6.0 on every starter at a
+│   │                      thousand games an arm, three of five clear.
+│   │                      Sorcerer and Wizard. The Deck 31.7% -> 36.2%
+│   │                      against the starters.
+│   │                      holds_duplicates (2026-09-07) is THE SECOND
+│   │                      LEGEND: whether a permanent whose arrival
+│   │                      would be a card thrown away stays in hand —
+│   │                      a legend whose name is already on the
+│   │                      battlefield, either side's (the legend rule
+│   │                      as 1997 played it buries the newcomer), a
+│   │                      world enchantment when a world of OURS is out
+│   │                      (CR 704.5k buries every other world; theirs
+│   │                      is what ours is for). AiPlayer._arrival_wasted
+│   │                      reads the supertype bits and the names, in
+│   │                      _try_cast_best and _try_play_land; off, the
+│   │                      pilot cast its second and third The Abyss over
+│   │                      the first. Sorcerer and Wizard. The Deck
+│   │                      36.2% -> 39.8% against the starters.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -1099,7 +1158,8 @@ shandalar/
 │   │   ├── effect_intent.gd class EffectIntent — WHAT AN EFFECT LIST DOES,
 │   │   │                      read once into numbers the AI reasons with
 │   │   │                      (damage / X damage / self-damage / removes /
-│   │   │                      bounces / taps / draws / pumps / regenerates
+│   │   │                      bounces / taps / draws / searches / pumps /
+│   │                      regenerates
 │   │   │                      / adds mana / sweeper kept whole / the
 │   │   │                      ANIMATION kept whole for the same reason /
 │   │   │                      the AIMED DISCARD, read off the effect's own
@@ -1653,7 +1713,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4772 tests / ~132 000 asserts, ~300 s
+├── tests/                   GUT suite — 4839 tests / ~134 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2902,7 +2962,51 @@ shandalar/
 │    control verdict is read from the games' fingerprints and never a
 │    constant, a game's fingerprint is the game (same seed same md5), a
 │    2-game sweep writes the table with its PASS rows and the four files,
-│    and a knob that fires on any deck moves the control and is exit 4
+│    and a knob that fires on any deck moves the control and is exit 4;
+│    tests/ai/test_ai_counts_cards_2026_09_07.gd — THE COUNT
+│    (AiProfile.counts_cards): Mind Twist sized to their hand, waiting at
+│    an empty one, a Twist for one held while they hold three, the null
+│    casting at every land; Braingeyser sized to the room in our hand
+│    and never the library's last card, the null at every land;
+│    Braingeyser and Ancestral Recall emptying a library they can reach
+│    for the win (CR 704.5b) and drawing our own when they cannot; a
+│    Tome refusing a ninth card and drawing into a hand with room;
+│    Library of Alexandria still firing at exactly seven at their end
+│    step; the ladder from Sorcerer up; the knob read by the Lab;
+│    tests/ai/test_ai_levels_boards_2026_09_07.gd — THE LEVELLER
+│    (AiProfile.levels_boards): Balance held at fourteen lands and four
+│    Wurms against ten Forests and nothing, the null casting it there;
+│    cast when it takes their three creatures, three cards and two
+│    lands for none of ours (their army and hand empty, four lands
+│    each); held for one card of theirs, cast for two; held when it
+│    trades one creature for one and cast when Bears and a Giant go for
+│    our one Serra that stays; cast for two Wurms against Bears at
+│    eight lands to five; held when our Serra and Giant would go for
+│    their four cards; the ladder from Sorcerer up; the knob read by the
+│    Lab;
+│    tests/ai/test_ai_paces_draws_2026_09_07.gd — THE PACE
+│    (AiProfile.paces_draws): the slack table with their draw step next
+│    (level counts keep) and with ours (a lead of one keeps), a race
+│    lost or beyond the horizon unlimited; a Tome holding a lead of one
+│    at their end step and spending the second card of two, ticking a
+│    level race far from the end, holding level in our main phase and
+│    in their upkeep, ticking a lead of one down to level in our main
+│    phase; the null ticking through all of it; the pace without the
+│    count; the Library at seven holding the lead and drawing the spare
+│    card; Ancestral needing a lead of four for three; Braingeyser sized
+│    to the spare cards, waiting at nothing to spare, still emptying
+│    THEIR library from behind; Demonic Tutor as the class held at level
+│    and cast on a lead; the ladder from Sorcerer up; the knob read by
+│    the Lab;
+│    tests/ai/test_ai_holds_duplicates_2026_09_07.gd — THE SECOND
+│    LEGEND (AiProfile.holds_duplicates): a second The Abyss held over
+│    our own and the null burying the first, a Living Plane of ours
+│    holding The Abyss, The Abyss cast over THEIR Concordant Crossroads
+│    and buried it, the first world cast as ever; Jasmine Boreal held
+│    against theirs and the null's copy buried on arrival, a second
+│    Karakas not played over the first and the null playing it into the
+│    graveyard, Tobias Andrion cast beside a different legend; the
+│    ladder from Sorcerer up; the knob read by the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

@@ -154,11 +154,81 @@ var casts_timed_spells := false
 ## only so the Deck Lab can run the null.
 var minds_pain := true
 
+## THE COUNT: does this profile size a card-advantage spell to the hands
+## and libraries in front of it? On, an X discard is cast for the cards
+## its target actually holds and waits while they hold none; an X draw is
+## sized to the room in its own hand and never past its own library; a
+## draw that would only be discarded at cleanup is not made; and a draw
+## spell that can empty the OPPONENT'S library is pointed at them for the
+## win ([method AiPlayer._size_and_aim], [method AiPlayer._hand_room]).
+##
+## A CAPABILITY, like [member plays_engines] — not a second difficulty
+## concept. Counting the cards on the other side of the table before
+## paying for a spell that acts on them is a whole layer of play, and the
+## bottom two difficulties not having it is the same honest weakness as
+## the Apprentice never holding an instant. Until 2026-09-07 no profile
+## had it: the pilot cast Mind Twist for X=20 at an empty hand and
+## Braingeyser for X=19 into a library of nine, and lost a third of its
+## long games by drawing from an empty library at 30 to 47 life
+## (docs/ROADMAP.md, "The Deck, second pass"). Everything it gates is
+## read from [EffectIntent]'s draw and discard fields; nothing is
+## card-named.
+var counts_cards := false
+
+## THE LEVELLER: does this profile price a spell that levels every
+## player down to the smallest board — lands, hands, creatures — by what
+## each side would actually lose? On, the leveller is cast when the
+## count is in our favour by a Bears' worth ([constant
+## AiPlayer.SWEEP_BAR], the sweeper's own bar) and held otherwise; off,
+## it is cast for its printed worth like any two-mana sorcery, which is
+## how the pilot came to sacrifice seven lands and four cards for
+## nothing at fifteen lands to their eight (docs/ROADMAP.md, "The Deck,
+## second pass"). Sorcerer and Wizard. What it gates is [method
+## AiPlayer._level_value], a count on the Evaluator's scale; the one
+## card-named thing is the READING ([constant EffectIntent.LEVELLERS]),
+## because the pool's one leveller is a card-local effect, the way a
+## window card's shape is named.
+var levels_boards := false
+
+## THE PACE: does this profile pace its optional draws to the race of the
+## libraries? Every optional draw — a Tome tick, a Library of Alexandria
+## at seven, an Ancestral for three, a Braingeyser sized for its own
+## hand, a tutor — is a card off the library, and a library is the other
+## clock in a game of Magic: the player who has to draw from an empty one
+## loses (CR 704.5b). The race is the two library counts and WHOSE draw
+## step comes next ([method AiPlayer._library_slack]): on, a draw that
+## would hand the OPPONENT that race is refused once the end is within
+## sight ([constant AiPlayer.PACE_HORIZON] cards of our own library); a
+## race already lost is not ours to protect, and a draw that keeps it
+## costs nothing. Off, the pilot draws for value alone, which is how a
+## sixty-card deck of card-drawers lost to forty-card starters on an
+## empty library at twenty life and more (docs/ROADMAP.md, "The Deck,
+## second pass"). Sorcerer and Wizard. Nothing here names a card: the
+## rule reads [member EffectIntent.draws], [member EffectIntent.searches]
+## and the two library counts.
+var paces_draws := false
+
+## THE SECOND LEGEND: does this profile keep in hand a permanent whose
+## arrival would be a card thrown away? A legend whose name is already
+## on the battlefield — either side's — is buried the moment it lands
+## (the legend rule as 1997 played it: the newcomer loses), and a world
+## enchantment buries every other world on arrival (CR 704.5k), a world
+## of OURS with it — the same card twice, or a world traded for a world.
+## A world of THEIRS is what ours is for, and is not held. Off, the pilot
+## cast its second and third The Abyss over the first, four mana and a
+## card each time (docs/ROADMAP.md, "The Deck, second pass"). Sorcerer
+## and Wizard. Nothing here names a card: the rule reads the supertype
+## bits and the names on the battlefield ([method
+## AiPlayer._arrival_wasted]).
+var holds_duplicates := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
-		p_engines := false, p_sacrifices := false, p_timed := false) -> void:
+		p_engines := false, p_sacrifices := false, p_timed := false,
+		p_counts := false, p_levels := false, p_paces := false,
+		p_duplicates := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -170,6 +240,10 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	plays_engines = p_engines
 	pays_sacrifices = p_sacrifices
 	casts_timed_spells = p_timed
+	counts_cards = p_counts
+	levels_boards = p_levels
+	paces_draws = p_paces
+	holds_duplicates = p_duplicates
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -216,12 +290,14 @@ static func magician() -> AiProfile:
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
+		true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
+		true)
 
 
 func _to_string() -> String:

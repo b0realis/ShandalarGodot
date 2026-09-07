@@ -159,6 +159,8 @@ func _try_play_land(game: MtgGame) -> bool:
 	for inst in me.hand:
 		if not inst.is_land():
 			continue
+		if _arrival_wasted(game, inst.data):
+			continue   # a second Karakas is buried on arrival: the drop is worth more
 		var score := 0.0
 		for ability in inst.data.mana_abilities:
 			for pair in ability.produces:
@@ -234,6 +236,8 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue   # refused this step already — do not tap for it twice
 		if _cast_gate(game, inst) != "":
 			continue   # locked, banned, or "Cast this spell only ..." — not now
+		if _arrival_wasted(game, inst.data):
+			continue   # a second legend, a second world: a card thrown away
 		if not _sacrifice_fodder_ok(game, inst):
 			continue   # "As an additional cost, sacrifice ..." with nothing worth giving
 		# Cost modifiers (Gloom) are part of the real price — plan them in,
@@ -362,6 +366,36 @@ func _cast_gate(game: MtgGame, inst: CardInstance) -> String:
 	return ""
 
 
+## THE SECOND LEGEND (2026-09-07, [member AiProfile.holds_duplicates]):
+## would this permanent's arrival be a card thrown away? A legend whose
+## name is already on the battlefield — either side's — is buried the
+## moment it lands (the legend rule as 1997 played it, the newcomer
+## loses: MtgGame._newest_duplicate_legend), and a world enchantment
+## buries every other world on arrival (CR 704.5k,
+## MtgGame._superseded_world_permanent) — a world of OURS with it, which
+## is the same card twice or a world traded for a world; a world of
+## THEIRS is what ours is for. The pilot that never asked cast its
+## second and third The Abyss over the first, four mana and a card each.
+## The supertype bits and the names on the battlefield: nothing here
+## names a card.
+func _arrival_wasted(game: MtgGame, data: CardData) -> bool:
+	if not profile.holds_duplicates:
+		return false
+	var legend := (data.supertypes & Mtg.Supertype.LEGENDARY) != 0
+	var world := (data.supertypes & Mtg.Supertype.WORLD) != 0
+	if not legend and not world:
+		return false
+	for seat in [pid, game.opponent_of(pid)]:
+		for perm in game.players[seat].battlefield:
+			if legend and perm.data.card_name == data.card_name \
+					and (perm.data.supertypes & Mtg.Supertype.LEGENDARY) != 0:
+				return true
+			if world and seat == pid \
+					and (perm.data.supertypes & Mtg.Supertype.WORLD) != 0:
+				return true
+	return false
+
+
 ## "As an additional cost to cast this spell, sacrifice a creature"
 ## (Sacrifice, Metamorphosis): castable only with a body to give — the
 ## engine refuses otherwise, after the taps — and worth casting only when
@@ -400,7 +434,12 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			continue   # _fire_held_instant would never fire it either
 		var value := 0.0
 		if intent.draws > 0:
-			value = 3.0 + _draw_need(me.hand.size())
+			if _decking_draw(game, inst, intent, intent.draws, 0) >= 0:
+				value = LETHAL_WORTH
+			elif intent.draws > _hand_room(game, Moment.SINK, inst):
+				continue   # _fire_held_instant would not draw it either
+			else:
+				value = 3.0 + _draw_need(me.hand.size())
 		elif intent.answers_creatures():
 			var victim := _best_victim(game, inst, intent, 0)
 			if victim != null:
@@ -733,6 +772,10 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 	elif intent.draws > 0 and intent.target_spec == null:
 		if me.library.size() <= intent.draws:
 			return {}
+		# THE COUNT (2026-09-07): a draw the hand cannot hold or the
+		# library cannot spare is not a draw, it is a card thrown away.
+		if intent.draws > _hand_room(game, moment):
+			return {}
 		value = 5.0 if ability.cost.mana_value() <= 2 else 3.0
 		value += _draw_need(me.hand.size())
 		if ability.life_cost > 0:
@@ -900,6 +943,86 @@ func _draw_need(hand_size: int) -> float:
 	if hand_size >= 7:
 		return -3.0
 	return 0.0
+
+
+## THE COUNT (2026-09-07, [member AiProfile.counts_cards]): how many more
+## cards this seat can draw at [param moment] and still USE — the room
+## under its maximum hand size, plus the cards its next turn will play. A
+## card drawn into a full hand is discarded at cleanup (CR 514.1), which
+## is a card off the library for nothing; the pilot that never counted
+## this drew with a Tome into hands of fifteen and drew itself out. At
+## THEIR end step our own draw step still adds one before we play
+## anything; in our main phase what is drawn can be played on the spot.
+## Every seat that does not count has all the room in the world. A
+## [param source] cast from the hand counts itself out. The room is then
+## capped by THE PACE ([method _library_slack]): a card the hand could
+## hold but the library race cannot spare is not drawn either.
+func _hand_room(game: MtgGame, moment: int, source: CardInstance = null) -> int:
+	var room := 1 << 20
+	if profile.counts_cards:
+		var me := game.players[pid]
+		var allowance := 2 if moment == Moment.MAIN else 1
+		room = me.max_hand_size + allowance - me.hand.size()
+		if source != null and source.zone == Mtg.Zone.HAND:
+			room += 1   # the spell itself leaves the hand before its cards arrive
+	return mini(room, _library_slack(game))
+
+
+## THE PACE (2026-09-07, [member AiProfile.paces_draws]): the end of a
+## library is this near — in cards of our own — before the race to it
+## is allowed to refuse a draw. Twenty turns of draw steps: a game that
+## has not ended by then is being decided by the libraries.
+const PACE_HORIZON := 20
+
+
+## THE PACE (2026-09-07, [member AiProfile.paces_draws]): how many cards
+## this seat can take off its library and still win the race to deck.
+## The loss is the draw from the empty library (CR 704.5b), and each
+## draw step takes one card from each library in turn, so the race is
+## the two counts and WHOSE draw step comes next: when theirs does, they
+## draw from nothing first as long as our library is no smaller than
+## theirs; when ours does, ours has to be strictly larger. A seat that
+## holds the race may spend its lead down to nothing and no further; a
+## seat that has already lost it has nothing left to protect, and draws
+## for value; and while the library is beyond [constant PACE_HORIZON]
+## the game is not being decided by the libraries at all. The pilot that
+## never counted this drew with two Tomes into a race it then lost from
+## twenty life. Every seat that does not pace has all the slack in the
+## world.
+func _library_slack(game: MtgGame) -> int:
+	if not profile.paces_draws:
+		return 1 << 20
+	var mine := game.players[pid].library.size()
+	var theirs := game.players[game.opponent_of(pid)].library.size()
+	var step := game.current_step()
+	var ours_next := (game.active_player == pid and step < Mtg.Step.DRAW) \
+		or (game.active_player != pid and step >= Mtg.Step.DRAW)
+	var lead := mine - theirs - (1 if ours_next else 0)
+	if lead < 0:
+		return 1 << 20   # the race is lost already: not ours to protect
+	return maxi(lead, mine - PACE_HORIZON - 1)
+
+
+## THE DRAW THAT WINS (2026-09-07, [member AiProfile.counts_cards]): a
+## draw effect that may target a player and can draw the OPPONENT'S whole
+## library. They lose the game at their next draw step (CR 704.5b), and
+## nothing they draw on the way changes that. [param draws] is the number
+## the spell would draw at the X it can afford; returns the X to cast it
+## for, or -1 when the play is not there.
+func _decking_draw(game: MtgGame, source: CardInstance, intent: EffectIntent,
+		draws: int, max_x: int) -> int:
+	if not profile.counts_cards or intent.target_spec == null \
+			or intent.target_spec.kind != TargetSpec.Kind.PLAYER:
+		return -1
+	var opponent := game.opponent_of(pid)
+	var theirs := game.players[opponent].library.size()
+	if theirs <= 0 or draws < theirs:
+		return -1
+	var x := theirs if intent.draws_use_x else 0
+	if not game.target_legal_at(intent.target_spec, TargetRef.player(opponent),
+			source, x):
+		return -1
+	return mini(x, max_x)
 
 
 ## The most valuable enemy creature [param intent] would actually finish
@@ -1109,6 +1232,58 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 	return 0.0
 
 
+## What a leveller (Balance: [member EffectIntent.levels]) would move,
+## on the Evaluator's scale — theirs counting for us, ours against. Each
+## pass measures the fewest across the two seats and every card over it
+## goes: a land at what one more is worth to the player left with the
+## fewest ([method Evaluator.land_value]'s curve, W_LANDS), a card in
+## hand at W_HAND, a creature at its permanent value times W_BOARD. The
+## choices being each player's own, the CHEAPEST creatures are the ones
+## assumed to go (the order the card's own default takes,
+## BalanceEffect._cheapest_first), and the leveller itself is on the
+## stack by the time the hands are counted (CR 601.2a).
+func _level_value(game: MtgGame, source: CardInstance) -> float:
+	var me := game.players[pid]
+	var them := game.players[game.opponent_of(pid)]
+	var swing := 0.0
+	# Lands.
+	var my_lands := 0
+	var their_lands := 0
+	for inst in me.battlefield:
+		if inst.is_land():
+			my_lands += 1
+	for inst in them.battlefield:
+		if inst.is_land():
+			their_lands += 1
+	var fewest := mini(my_lands, their_lands)
+	var land_price := Evaluator.W_LANDS * (1.0 + 3.0 / float(maxi(fewest, 1)))
+	swing += float(their_lands - fewest) * land_price
+	swing -= float(my_lands - fewest) * land_price
+	# Hands.
+	var my_hand := me.hand.size() - (1 if source.zone == Mtg.Zone.HAND else 0)
+	var their_hand := them.hand.size()
+	fewest = mini(my_hand, their_hand)
+	swing += float(their_hand - fewest) * Evaluator.W_HAND
+	swing -= float(my_hand - fewest) * Evaluator.W_HAND
+	# Creatures: each side gives up its cheapest, however big the rest.
+	var mine: Array[float] = []
+	var theirs: Array[float] = []
+	for inst in me.battlefield:
+		if inst.is_creature():
+			mine.append(Evaluator.permanent_value(inst))
+	for inst in them.battlefield:
+		if inst.is_creature():
+			theirs.append(Evaluator.permanent_value(inst))
+	mine.sort()
+	theirs.sort()
+	fewest = mini(mine.size(), theirs.size())
+	for i in theirs.size() - fewest:
+		swing += theirs[i] * Evaluator.W_BOARD
+	for i in mine.size() - fewest:
+		swing -= mine[i] * Evaluator.W_BOARD
+	return swing
+
+
 func _board_value(game: MtgGame, of_pid: int) -> float:
 	var total := 0.0
 	for inst in game.players[of_pid].battlefield:
@@ -1207,6 +1382,15 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		if best_value < SWEEP_BAR:
 			return {}
 		return {"x": best_x, "targets": [], "value": best_value}
+	# THE LEVELLER (2026-09-07, AiProfile.levels_boards): a spell that
+	# levels lands, hands and creatures down to the fewest is priced the
+	# way a sweeper is — by what each side would lose — and waits below
+	# the sweeper's bar. Off, it is cast for its printed worth, below.
+	if intent.levels and profile.levels_boards and not data.is_modal():
+		var swing := _level_value(game, inst)
+		if swing < SWEEP_BAR:
+			return {}
+		return {"x": 0, "targets": [], "value": swing}
 	if intent.damage_uses_x and intent.target_spec != null and not data.is_modal():
 		return _size_x_burn(game, inst, intent, max_x)
 	# A tap is worth nothing by itself: it has a POLICY, not a value.
@@ -1214,6 +1398,41 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		return _size_tap(game, inst, intent, max_x, mode)
 	if intent.draws_use_x and max_x < 2 and game.players[pid].hand.size() > 1:
 		return {}   # Braingeyser for one is a bad Ancestral
+	# THE PACE (2026-09-07, AiProfile.paces_draws): a search is a card off
+	# the library as much as a draw is, and the race counts it the same.
+	if intent.searches and not data.is_modal() and _library_slack(game) < 1:
+		return {}
+	# THE COUNT (2026-09-07, AiProfile.counts_cards): an X that draws or
+	# discards is sized to the cards it acts on, not to the mana at hand.
+	if profile.counts_cards and not data.is_modal():
+		if intent.draws_use_x:
+			var win_x := _decking_draw(game, inst, intent, max_x, max_x)
+			if win_x >= 0:
+				return {"x": win_x, "targets": [TargetRef.player(game.opponent_of(pid))],
+					"value": LETHAL_WORTH}
+			# Our own draw: the room in the hand, and never the library's
+			# last card.
+			var x := mini(max_x, _hand_room(game, Moment.MAIN, inst))
+			x = mini(x, game.players[pid].library.size() - 1)
+			if x < 1 or (x < 2 and game.players[pid].hand.size() > 1):
+				return {}
+			var targets = _choose_targets(game, inst, x, mode)
+			if targets == null:
+				return {}
+			return {"x": x, "targets": targets, "value": _cast_value(game, inst, targets, x)}
+		if intent.discards < 0 and intent.target_spec != null \
+				and intent.target_spec.kind == TargetSpec.Kind.PLAYER:
+			# An X discard at a player: their hand is the ceiling, an empty
+			# hand is a reason to wait, and a Twist for one that leaves them
+			# holding more is the deck's one Twist wasted.
+			var their_hand := game.players[game.opponent_of(pid)].hand.size()
+			var x := mini(max_x, their_hand)
+			if x <= 0 or (x < 2 and x < their_hand):
+				return {}
+			var targets = _choose_targets(game, inst, x, mode)
+			if targets == null:
+				return {}
+			return {"x": x, "targets": targets, "value": _cast_value(game, inst, targets, x)}
 	# A SPELL WHOSE TARGETS MOVE WITH ITS X has to be sized to the thing it
 	# wants, not to the mana it has: a Detonate for 6 may not name a Sol
 	# Ring at all (CR 115.4). Try each affordable X on — cheapest first, so
@@ -1520,11 +1739,18 @@ func _fire_held_instant(game: MtgGame) -> String:
 		var targets: Array = []
 		var value := 0.0
 		if intent.draws > 0:
-			if me.library.size() <= intent.draws:
+			# THE DRAW THAT WINS (2026-09-07): an Ancestral at a library
+			# of three is lethal at their next draw step.
+			if _decking_draw(game, inst, intent, intent.draws, 0) >= 0:
+				targets = [TargetRef.player(opponent)]
+				value = LETHAL_WORTH
+			elif me.library.size() <= intent.draws \
+					or intent.draws > _hand_room(game, Moment.SINK, inst):
 				continue
-			if intent.target_spec != null:
-				targets = [TargetRef.player(pid)]
-			value = 3.0 + _draw_need(me.hand.size())
+			else:
+				if intent.target_spec != null:
+					targets = [TargetRef.player(pid)]
+				value = 3.0 + _draw_need(me.hand.size())
 		elif intent.answers_creatures():
 			var victim := _best_victim(game, inst, intent, 0)
 			if victim != null:
