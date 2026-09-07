@@ -1161,6 +1161,58 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 	return 0.0
 
 
+## What a leveller (Balance: [member EffectIntent.levels]) would move,
+## on the Evaluator's scale — theirs counting for us, ours against. Each
+## pass measures the fewest across the two seats and every card over it
+## goes: a land at what one more is worth to the player left with the
+## fewest ([method Evaluator.land_value]'s curve, W_LANDS), a card in
+## hand at W_HAND, a creature at its permanent value times W_BOARD. The
+## choices being each player's own, the CHEAPEST creatures are the ones
+## assumed to go (the order the card's own default takes,
+## BalanceEffect._cheapest_first), and the leveller itself is on the
+## stack by the time the hands are counted (CR 601.2a).
+func _level_value(game: MtgGame, source: CardInstance) -> float:
+	var me := game.players[pid]
+	var them := game.players[game.opponent_of(pid)]
+	var swing := 0.0
+	# Lands.
+	var my_lands := 0
+	var their_lands := 0
+	for inst in me.battlefield:
+		if inst.is_land():
+			my_lands += 1
+	for inst in them.battlefield:
+		if inst.is_land():
+			their_lands += 1
+	var fewest := mini(my_lands, their_lands)
+	var land_price := Evaluator.W_LANDS * (1.0 + 3.0 / float(maxi(fewest, 1)))
+	swing += float(their_lands - fewest) * land_price
+	swing -= float(my_lands - fewest) * land_price
+	# Hands.
+	var my_hand := me.hand.size() - (1 if source.zone == Mtg.Zone.HAND else 0)
+	var their_hand := them.hand.size()
+	fewest = mini(my_hand, their_hand)
+	swing += float(their_hand - fewest) * Evaluator.W_HAND
+	swing -= float(my_hand - fewest) * Evaluator.W_HAND
+	# Creatures: each side gives up its cheapest, however big the rest.
+	var mine: Array[float] = []
+	var theirs: Array[float] = []
+	for inst in me.battlefield:
+		if inst.is_creature():
+			mine.append(Evaluator.permanent_value(inst))
+	for inst in them.battlefield:
+		if inst.is_creature():
+			theirs.append(Evaluator.permanent_value(inst))
+	mine.sort()
+	theirs.sort()
+	fewest = mini(mine.size(), theirs.size())
+	for i in theirs.size() - fewest:
+		swing += theirs[i] * Evaluator.W_BOARD
+	for i in mine.size() - fewest:
+		swing -= mine[i] * Evaluator.W_BOARD
+	return swing
+
+
 func _board_value(game: MtgGame, of_pid: int) -> float:
 	var total := 0.0
 	for inst in game.players[of_pid].battlefield:
@@ -1259,6 +1311,15 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		if best_value < SWEEP_BAR:
 			return {}
 		return {"x": best_x, "targets": [], "value": best_value}
+	# THE LEVELLER (2026-09-07, AiProfile.levels_boards): a spell that
+	# levels lands, hands and creatures down to the fewest is priced the
+	# way a sweeper is — by what each side would lose — and waits below
+	# the sweeper's bar. Off, it is cast for its printed worth, below.
+	if intent.levels and profile.levels_boards and not data.is_modal():
+		var swing := _level_value(game, inst)
+		if swing < SWEEP_BAR:
+			return {}
+		return {"x": 0, "targets": [], "value": swing}
 	if intent.damage_uses_x and intent.target_spec != null and not data.is_modal():
 		return _size_x_burn(game, inst, intent, max_x)
 	# A tap is worth nothing by itself: it has a POLICY, not a value.

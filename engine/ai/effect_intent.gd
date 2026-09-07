@@ -103,6 +103,13 @@ var unknown: bool = false
 ## The first targeting effect's spec (null when nothing targets).
 var target_spec: TargetSpec = null
 
+## A LEVELLER: every player down to the fewest lands, the fewest cards
+## in hand and the fewest creatures (Balance). Its worth is a three-way
+## count of both boards that nothing here can sum, so it is a flag and
+## [method AiPlayer._level_value] does the counting; see [constant
+## LEVELLERS] for why it is read by name.
+var levels: bool = false
+
 ## THE WINDOW SHAPES — what a spell whose rider keeps it out of its
 ## caster's own main phase DOES in the moment the rider names, for the
 ## card-local effects of that kind (see [constant WINDOW_SHAPES]). NONE
@@ -176,6 +183,16 @@ const WINDOW_SHAPES := {
 	"False Orders": Shape.PULLS_BLOCKER,
 }
 
+# THE LEVELLERS — the third table, one row, for the same reason the
+# second exists: Balance is a card-local effect (`BalanceEffect`, three
+# passes of "each player down to the fewest"), so the reader has nothing
+# to test `is` against, and a row in CARD_LOCAL would stop it being
+# `unknown` to every reading that word gates. Only [member levels] reads
+# this column. The card IS the class here — it is the pool's only
+# leveller — and what the AI does with the flag is a count of both
+# boards ([method AiPlayer._level_value]), never a rule about the name.
+const LEVELLERS := ["Balance"]
+
 
 ## Read [param effects] (a spell's spell_effects, one mode's effects, or an
 ## ability's effects) into an intent. [param card_name] keys the
@@ -184,6 +201,7 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 	var intent := EffectIntent.new()
 	var note: Dictionary = CARD_LOCAL.get(card_name, {})
 	intent.window = int(WINDOW_SHAPES.get(card_name, Shape.NONE))
+	intent.levels = LEVELLERS.has(card_name)
 	for e in effects:
 		if intent.target_spec == null and e.target_spec != null:
 			intent.target_spec = e.target_spec

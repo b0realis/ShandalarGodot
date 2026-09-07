@@ -1070,6 +1070,22 @@ shandalar/
 │   │                      and Wizard. The Deck 12.7% -> 24.9% against
 │   │                      the starters (docs/ROADMAP.md, "The Deck,
 │   │                      second pass").
+│   │                      levels_boards (2026-09-07) is THE LEVELLER:
+│   │                      whether a spell that levels every player down
+│   │                      to the fewest lands, cards in hand and
+│   │                      creatures is priced the way a sweeper is — by
+│   │                      what each side would lose on the Evaluator's
+│   │                      scale, the cheapest creatures first because
+│   │                      that is what a sacrifice picks — and held
+│   │                      below the sweeper's bar (AiPlayer._level_value
+│   │                      against SWEEP_BAR); off, it is a two-mana
+│   │                      sorcery cast for its printed worth, which is
+│   │                      how the pilot came to sacrifice seven lands
+│   │                      at fifteen to their eight. Sorcerer and
+│   │                      Wizard; the reading is EffectIntent.LEVELLERS,
+│   │                      the third table, one row, because the pool's
+│   │                      one leveller is a card-local effect. The Deck
+│   │                      24.5% -> 32.0% against the starters.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -1654,7 +1670,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4740 tests / ~133 000 asserts, ~300 s
+├── tests/                   GUT suite — 4751 tests / ~133 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2878,7 +2894,18 @@ shandalar/
 │    for the win (CR 704.5b) and drawing our own when they cannot; a
 │    Tome refusing a ninth card and drawing into a hand with room;
 │    Library of Alexandria still firing at exactly seven at their end
-│    step; the ladder from Sorcerer up; the knob read by the Lab
+│    step; the ladder from Sorcerer up; the knob read by the Lab;
+│    tests/ai/test_ai_levels_boards_2026_09_07.gd — THE LEVELLER
+│    (AiProfile.levels_boards): Balance held at fourteen lands and four
+│    Wurms against ten Forests and nothing, the null casting it there;
+│    cast when it takes their three creatures, three cards and two
+│    lands for none of ours (their army and hand empty, four lands
+│    each); held for one card of theirs, cast for two; held when it
+│    trades one creature for one and cast when Bears and a Giant go for
+│    our one Serra that stays; cast for two Wurms against Bears at
+│    eight lands to five; held when our Serra and Giant would go for
+│    their four cards; the ladder from Sorcerer up; the knob read by the
+│    Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

@@ -175,12 +175,27 @@ var minds_pain := true
 ## card-named.
 var counts_cards := false
 
+## THE LEVELLER: does this profile price a spell that levels every
+## player down to the smallest board — lands, hands, creatures — by what
+## each side would actually lose? On, the leveller is cast when the
+## count is in our favour by a Bears' worth ([constant
+## AiPlayer.SWEEP_BAR], the sweeper's own bar) and held otherwise; off,
+## it is cast for its printed worth like any two-mana sorcery, which is
+## how the pilot came to sacrifice seven lands and four cards for
+## nothing at fifteen lands to their eight (docs/ROADMAP.md, "The Deck,
+## second pass"). Sorcerer and Wizard. What it gates is [method
+## AiPlayer._level_value], a count on the Evaluator's scale; the one
+## card-named thing is the READING ([constant EffectIntent.LEVELLERS]),
+## because the pool's one leveller is a card-local effect, the way a
+## window card's shape is named.
+var levels_boards := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
 		p_engines := false, p_sacrifices := false, p_timed := false,
-		p_counts := false) -> void:
+		p_counts := false, p_levels := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -193,6 +208,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	pays_sacrifices = p_sacrifices
 	casts_timed_spells = p_timed
 	counts_cards = p_counts
+	levels_boards = p_levels
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -239,12 +255,12 @@ static func magician() -> AiProfile:
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true)
 
 
 func _to_string() -> String:

@@ -310,7 +310,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
     --seed 11 --games 1000
 ```
 
-`KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`,
+`KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
 `minds_pain`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
