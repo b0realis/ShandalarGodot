@@ -154,11 +154,33 @@ var casts_timed_spells := false
 ## only so the Deck Lab can run the null.
 var minds_pain := true
 
+## THE COUNT: does this profile size a card-advantage spell to the hands
+## and libraries in front of it? On, an X discard is cast for the cards
+## its target actually holds and waits while they hold none; an X draw is
+## sized to the room in its own hand and never past its own library; a
+## draw that would only be discarded at cleanup is not made; and a draw
+## spell that can empty the OPPONENT'S library is pointed at them for the
+## win ([method AiPlayer._size_and_aim], [method AiPlayer._hand_room]).
+##
+## A CAPABILITY, like [member plays_engines] — not a second difficulty
+## concept. Counting the cards on the other side of the table before
+## paying for a spell that acts on them is a whole layer of play, and the
+## bottom two difficulties not having it is the same honest weakness as
+## the Apprentice never holding an instant. Until 2026-09-07 no profile
+## had it: the pilot cast Mind Twist for X=20 at an empty hand and
+## Braingeyser for X=19 into a library of nine, and lost a third of its
+## long games by drawing from an empty library at 30 to 47 life
+## (docs/ROADMAP.md, "The Deck, second pass"). Everything it gates is
+## read from [EffectIntent]'s draw and discard fields; nothing is
+## card-named.
+var counts_cards := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
-		p_engines := false, p_sacrifices := false, p_timed := false) -> void:
+		p_engines := false, p_sacrifices := false, p_timed := false,
+		p_counts := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -170,6 +192,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	plays_engines = p_engines
 	pays_sacrifices = p_sacrifices
 	casts_timed_spells = p_timed
+	counts_cards = p_counts
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -216,12 +239,12 @@ static func magician() -> AiProfile:
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true)
 
 
 func _to_string() -> String:

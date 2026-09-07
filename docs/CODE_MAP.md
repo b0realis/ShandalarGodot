@@ -1058,6 +1058,18 @@ shandalar/
 │   │                      sweep's class 1, twelve cards that sat in hand
 │   │                      for the whole duel until then; Sorcerer and
 │   │                      Wizard (AiPlayer._cast_in_window).
+│   │                      counts_cards (2026-09-07) is THE COUNT: whether
+│   │                      the profile sizes a draw or a discard to the
+│   │                      cards in front of it — an X discard to the
+│   │                      target's hand (and waits at an empty one), an
+│   │                      X draw to the room in its own hand and never
+│   │                      the library's last card, no draw that cleanup
+│   │                      would discard, and a draw that can empty the
+│   │                      OPPONENT'S library pointed at them for the win
+│   │                      (AiPlayer._hand_room, _decking_draw); Sorcerer
+│   │                      and Wizard. The Deck 12.7% -> 24.9% against
+│   │                      the starters (docs/ROADMAP.md, "The Deck,
+│   │                      second pass").
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -1642,7 +1654,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4724 tests / ~132 000 asserts, ~300 s
+├── tests/                   GUT suite — 4740 tests / ~133 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2856,7 +2868,17 @@ shandalar/
 │    control verdict is read from the games' fingerprints and never a
 │    constant, a game's fingerprint is the game (same seed same md5), a
 │    2-game sweep writes the table with its PASS rows and the four files,
-│    and a knob that fires on any deck moves the control and is exit 4
+│    and a knob that fires on any deck moves the control and is exit 4;
+│    tests/ai/test_ai_counts_cards_2026_09_07.gd — THE COUNT
+│    (AiProfile.counts_cards): Mind Twist sized to their hand, waiting at
+│    an empty one, a Twist for one held while they hold three, the null
+│    casting at every land; Braingeyser sized to the room in our hand
+│    and never the library's last card, the null at every land;
+│    Braingeyser and Ancestral Recall emptying a library they can reach
+│    for the win (CR 704.5b) and drawing our own when they cannot; a
+│    Tome refusing a ninth card and drawing into a hand with room;
+│    Library of Alexandria still firing at exactly seven at their end
+│    step; the ladder from Sorcerer up; the knob read by the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

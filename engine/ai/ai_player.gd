@@ -400,7 +400,12 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			continue   # _fire_held_instant would never fire it either
 		var value := 0.0
 		if intent.draws > 0:
-			value = 3.0 + _draw_need(me.hand.size())
+			if _decking_draw(game, inst, intent, intent.draws, 0) >= 0:
+				value = LETHAL_WORTH
+			elif intent.draws > _hand_room(game, Moment.SINK, inst):
+				continue   # _fire_held_instant would not draw it either
+			else:
+				value = 3.0 + _draw_need(me.hand.size())
 		elif intent.answers_creatures():
 			var victim := _best_victim(game, inst, intent, 0)
 			if victim != null:
@@ -733,6 +738,10 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 	elif intent.draws > 0 and intent.target_spec == null:
 		if me.library.size() <= intent.draws:
 			return {}
+		# THE COUNT (2026-09-07): a draw the hand cannot hold or the
+		# library cannot spare is not a draw, it is a card thrown away.
+		if intent.draws > _hand_room(game, moment):
+			return {}
 		value = 5.0 if ability.cost.mana_value() <= 2 else 3.0
 		value += _draw_need(me.hand.size())
 		if ability.life_cost > 0:
@@ -900,6 +909,49 @@ func _draw_need(hand_size: int) -> float:
 	if hand_size >= 7:
 		return -3.0
 	return 0.0
+
+
+## THE COUNT (2026-09-07, [member AiProfile.counts_cards]): how many more
+## cards this seat can draw at [param moment] and still USE — the room
+## under its maximum hand size, plus the cards its next turn will play. A
+## card drawn into a full hand is discarded at cleanup (CR 514.1), which
+## is a card off the library for nothing; the pilot that never counted
+## this drew with a Tome into hands of fifteen and drew itself out. At
+## THEIR end step our own draw step still adds one before we play
+## anything; in our main phase what is drawn can be played on the spot.
+## Every seat that does not count has all the room in the world. A
+## [param source] cast from the hand counts itself out.
+func _hand_room(game: MtgGame, moment: int, source: CardInstance = null) -> int:
+	if not profile.counts_cards:
+		return 1 << 20
+	var me := game.players[pid]
+	var allowance := 2 if moment == Moment.MAIN else 1
+	var room := me.max_hand_size + allowance - me.hand.size()
+	if source != null and source.zone == Mtg.Zone.HAND:
+		room += 1   # the spell itself leaves the hand before its cards arrive
+	return room
+
+
+## THE DRAW THAT WINS (2026-09-07, [member AiProfile.counts_cards]): a
+## draw effect that may target a player and can draw the OPPONENT'S whole
+## library. They lose the game at their next draw step (CR 704.5b), and
+## nothing they draw on the way changes that. [param draws] is the number
+## the spell would draw at the X it can afford; returns the X to cast it
+## for, or -1 when the play is not there.
+func _decking_draw(game: MtgGame, source: CardInstance, intent: EffectIntent,
+		draws: int, max_x: int) -> int:
+	if not profile.counts_cards or intent.target_spec == null \
+			or intent.target_spec.kind != TargetSpec.Kind.PLAYER:
+		return -1
+	var opponent := game.opponent_of(pid)
+	var theirs := game.players[opponent].library.size()
+	if theirs <= 0 or draws < theirs:
+		return -1
+	var x := theirs if intent.draws_use_x else 0
+	if not game.target_legal_at(intent.target_spec, TargetRef.player(opponent),
+			source, x):
+		return -1
+	return mini(x, max_x)
 
 
 ## The most valuable enemy creature [param intent] would actually finish
@@ -1214,6 +1266,37 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		return _size_tap(game, inst, intent, max_x, mode)
 	if intent.draws_use_x and max_x < 2 and game.players[pid].hand.size() > 1:
 		return {}   # Braingeyser for one is a bad Ancestral
+	# THE COUNT (2026-09-07, AiProfile.counts_cards): an X that draws or
+	# discards is sized to the cards it acts on, not to the mana at hand.
+	if profile.counts_cards and not data.is_modal():
+		if intent.draws_use_x:
+			var win_x := _decking_draw(game, inst, intent, max_x, max_x)
+			if win_x >= 0:
+				return {"x": win_x, "targets": [TargetRef.player(game.opponent_of(pid))],
+					"value": LETHAL_WORTH}
+			# Our own draw: the room in the hand, and never the library's
+			# last card.
+			var x := mini(max_x, _hand_room(game, Moment.MAIN, inst))
+			x = mini(x, game.players[pid].library.size() - 1)
+			if x < 1 or (x < 2 and game.players[pid].hand.size() > 1):
+				return {}
+			var targets = _choose_targets(game, inst, x, mode)
+			if targets == null:
+				return {}
+			return {"x": x, "targets": targets, "value": _cast_value(game, inst, targets, x)}
+		if intent.discards < 0 and intent.target_spec != null \
+				and intent.target_spec.kind == TargetSpec.Kind.PLAYER:
+			# An X discard at a player: their hand is the ceiling, an empty
+			# hand is a reason to wait, and a Twist for one that leaves them
+			# holding more is the deck's one Twist wasted.
+			var their_hand := game.players[game.opponent_of(pid)].hand.size()
+			var x := mini(max_x, their_hand)
+			if x <= 0 or (x < 2 and x < their_hand):
+				return {}
+			var targets = _choose_targets(game, inst, x, mode)
+			if targets == null:
+				return {}
+			return {"x": x, "targets": targets, "value": _cast_value(game, inst, targets, x)}
 	# A SPELL WHOSE TARGETS MOVE WITH ITS X has to be sized to the thing it
 	# wants, not to the mana it has: a Detonate for 6 may not name a Sol
 	# Ring at all (CR 115.4). Try each affordable X on — cheapest first, so
@@ -1520,11 +1603,18 @@ func _fire_held_instant(game: MtgGame) -> String:
 		var targets: Array = []
 		var value := 0.0
 		if intent.draws > 0:
-			if me.library.size() <= intent.draws:
+			# THE DRAW THAT WINS (2026-09-07): an Ancestral at a library
+			# of three is lethal at their next draw step.
+			if _decking_draw(game, inst, intent, intent.draws, 0) >= 0:
+				targets = [TargetRef.player(opponent)]
+				value = LETHAL_WORTH
+			elif me.library.size() <= intent.draws \
+					or intent.draws > _hand_room(game, Moment.SINK, inst):
 				continue
-			if intent.target_spec != null:
-				targets = [TargetRef.player(pid)]
-			value = 3.0 + _draw_need(me.hand.size())
+			else:
+				if intent.target_spec != null:
+					targets = [TargetRef.player(pid)]
+				value = 3.0 + _draw_need(me.hand.size())
 		elif intent.answers_creatures():
 			var victim := _best_victim(game, inst, intent, 0)
 			if victim != null:
