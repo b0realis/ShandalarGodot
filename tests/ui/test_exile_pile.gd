@@ -131,3 +131,34 @@ func test_clicking_the_exile_pile_opens_the_same_viewer() -> void:
 		"and it is showing the exiled card")
 	screen._on_grave_pile_clicked(0)
 	assert_false(screen.graveyard_is_open(), "the same pile again shuts it")
+
+
+func test_a_seat_without_a_plate_leaves_nothing_behind() -> void:
+	# THE ORPHAN. A table drawn without the original skin has no plates,
+	# and the TextureRect built for the graveyard's never joined the tree
+	# in that case — nor was it freed, so every such duel left one behind
+	# and Godot listed it at exit. The skin's own cache is the seam: a
+	# null under every plate key is exactly what a player without the art
+	# gets, so this pins the no-plate table with the art present too.
+	var keys: Array[String] = []
+	for seat_color in ["white", "blue", "black", "red", "green"]:
+		keys.append("grave_panel_" + seat_color)
+	var saved: Dictionary = {}
+	for key in keys:
+		saved[key] = GameSkin._texture_cache.get(key)
+		GameSkin._texture_cache[key] = null
+	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	add_child(screen)
+	await get_tree().process_frame
+	for pid in 2:
+		assert_null(screen._grave_icons[pid],
+			"seat %d: no plate, so no plate node either" % pid)
+		assert_not_null(screen._grave_labels[pid],
+			"seat %d: the count still stands at the end of the row" % pid)
+	screen.free()
+	assert_no_new_orphans("a table without plates frees everything it built")
+	for key in keys:
+		if saved[key] == null:
+			GameSkin._texture_cache.erase(key)
+		else:
+			GameSkin._texture_cache[key] = saved[key]

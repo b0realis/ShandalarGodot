@@ -7537,12 +7537,16 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	piles_row.add_child(deck_stack)
 	# The graveyard shows its TOP CARD when it has one, and the original's
 	# empty-grave art otherwise (the reference: a card face in a full
-	# graveyard, the red skull plate in an empty one).
-	var grave_icon := TextureRect.new()
+	# graveyard, the red skull plate in an empty one). The node is built
+	# INSIDE the branch: a seat with no plate keeps a null here (every
+	# reader checks), where a TextureRect made outside it and never added
+	# to the row was an orphan for the run — one per seat, listed at exit
+	# on every table drawn without the original skin.
 	_grave_icons.resize(2)
-	_grave_icons[pid] = grave_icon
 	var grave_texture := GameSkin.texture("grave_panel_" + config.panel_colors[pid])
 	if grave_texture != null:
+		var grave_icon := TextureRect.new()
+		_grave_icons[pid] = grave_icon
 		grave_icon.texture = grave_texture
 		grave_icon.custom_minimum_size = Vector2(40, 60)
 		grave_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
