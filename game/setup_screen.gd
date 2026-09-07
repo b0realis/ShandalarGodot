@@ -214,8 +214,22 @@ func _ready() -> void:
 	# bed is the `ShellMusic` autoload's, so it does not even restart at
 	# the door: a room that follows a room is a room in which the music
 	# never stopped. `Go!` stops it (`_start_battle`), Back does not.
-	ShellMusic.play()
+	# Reached through the tree and not by name: `DeckLab/simulate.gd` and
+	# every other `-s` script that reads `SetupScreen.random_deck_path`
+	# compiles this file BEFORE the autoloads register, and a bare
+	# `ShellMusic` there was a compile error on the first pass (Godot
+	# retried and ran, but every Lab log opened with it).
+	_shell_music_call(&"play")
 
+
+
+## The `ShellMusic` autoload, `play` or `stop`, looked up in the tree so
+## this script compiles without it (see `_ready`); a headless run that has
+## no autoloads — a `-s` script — simply has no music to start or stop.
+func _shell_music_call(method: StringName) -> void:
+	var music := get_node_or_null(^"/root/ShellMusic")
+	if music != null:
+		music.call(method)
 
 
 ## Every deck this screen LISTS, from both deck directories — the ones the
@@ -1386,7 +1400,7 @@ func _start_battle() -> void:
 	# The shell's tune stops HERE and not in `_exit_tree`, because `Back`
 	# leaves this screen too and the title screen it returns to is the
 	# same room, musically. The duel starts against silence, as it did.
-	ShellMusic.stop()
+	_shell_music_call(&"stop")
 	var tree := get_tree()
 	# FREE PLAY GOES STRAIGHT TO THE DUEL, exactly as it always has — one
 	# screen, one duel, nothing between this and it. A match needs
