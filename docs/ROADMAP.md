@@ -6346,6 +6346,82 @@ the in-view Select All, one dialog at a time, the check menus' own
 non-overlap; Load's user-first order, finder, Enter and pips; Enter to
 add; `bar_title`).
 
+**21. The type-ahead had no "off".** The morning after the window
+shipped: *"How do we now turn on or off the type-ahead filter? It has
+no button just delete what you type probably?"* The box IS the filter —
+empty is everything, text is a name filter, exactly the 1997 field, which
+had no switch either — and Escape and `Select All` both emptied it, but
+neither was written on the box. `[QoL]` A small × now sits at the
+box's right edge while it has text and empties it (`LineEdit`'s own
+`clear_button_enabled`, in the placeholder's shade so it reads as
+furniture of the box; `OriginalDialog.text_field(…, clears)`). The same
+× is on the two other FINDERS — the Load dialog's and the Filters
+window's — because a finder's text is a filter too; the Deck Info title
+is a name and keeps the plain box. The tooltip names the × and Escape.
+Checked by looking at 1280: the × in the stone box with "serra" typed,
+gone when the box is empty, and on the Load finder with "white".
+Pinned in `test_deck_builder.gd` (3: the box wears it and the tooltip
+says so; `clear()` — the ×'s own path — empties the filter and the
+Inventory is whole again; the two finders wear it and Deck Info does
+not).
+
+**22. The Help was a release behind.** *"Also update help for new
+release."* The in-game reference's last Deck Builder page still said
+*"Three of them — Ability, Rarity and Artist — are not built here"*,
+and nothing in it named the bar under the deck, the box, or the keys.
+Now: a page of its own, **The Deck Builder** (page 24 of 27) — the
+Inventory's 1997 sentences from `Duel.hlp` "All Cards Inventory", the
+gestures, the bar (Stats and its five pages, the Rarity and Cost
+switches, Deck and the mini-menu's every command with the `[QoL]` ones
+marked as the menu marks them, Load, the three slots, Done), the box
+(prefix-then-anywhere, no on/off, the cross or Escape clears it, Enter
+adds, the right-click menu with `Search card text too`, Sort, Text) and
+the keys (the six Ctrl shortcuts, Ctrl+F, Q, Escape's order). The
+types-and-other-filters page gained the funnel as an icon entry (drawn
+through `FilterBar.sheet_cell` at `FUNNEL_CELL`, so the help draws the
+same runtime funnel the strip does), a "The Filters window" section
+with `Duel.hlp` "Other Filters"' own sentences on Artists and on
+Native/Gives, the eye, gem and palette as the tabs' medallions with
+their 1997 cue cards, and the Creatures and Enchantments entries now
+say what their right-click opens. Nothing on either page is from
+memory: the quotes are `strings` off `shandalar-src/Duel.hlp`, and the
+test holds the page to the screen's own constants — every entry of
+`COMMANDS`, `MENU_COMMANDS`, `EXTRA_COMMANDS`, `STATS_PAGES`,
+`SHORTCUTS`, `FilterBar.ALL_MENU`, `RULES_LINE` and `SORT_MENU` must
+appear, the eye's thirteen pairs must be `DeckAbilities.MODERN`'s, and
+the four new cells join the cell check. The × glyph is not in the
+1997 face, so the page and the tooltip say "cross". Checked by looking
+at both pages, top to bottom. `test_help_screen.gd` 35/35 (3 new).
+
+### A fourth playtest report (2026-09-07): the aura that drew over its host
+
+> *"I have Llanowar Elves and on them enchantment Instill Energy. The
+> yellow border from the enchantment Instill Energy is seen on top of
+> Llanowar Elves mini card — it should be in the back."*
+
+Child order was right and still lost. An attachment is a whole card
+behind its host, offset by `AURA_PEEK`, and the host is added LAST so it
+overlaps everything behind it — `test_card_dimensions.gd` pins that
+order. But a `MiniCard` gives three of its own children a `z_index` of
+2 (the name, the `(T)`, the highlight ring), and the canvas sorts by z
+before it sorts by order: Instill Energy has an untap to offer, so the
+board ringed it yellow (`Highlight.OPTIONAL`), and a ring at z 2 on the
+card BEHIND painted straight over the face of the card in front, whose
+own face sits at 0 — a yellow frame around the Elves that belonged to
+the aura. Now the host of a fan carries `DuelScreen.HOST_Z` (3: one
+above the tallest thing a card puts on itself, well under the combat
+window's 10), on the rotation holder when tapped and on the card when
+not, so it covers all of an attachment but the strip that peeks out.
+The right-hold lift, which raises a card to `LIFT_Z` and put it back at
+0, puts it back where it RESTED (`_lifted_rest_z`) — a reset to 0 would
+have dropped the Elves under the ring again the moment the button was
+let go. `tests/ui/test_enchanted_host_z_2026_09_07.gd` (5 tests) pins
+the host over every pixel of its aura's subtree, tapped and untapped,
+the number's two bounds, and both lifts' landings; red without the
+one line, green with it. Checked by looking: the same board shot before
+and after, the ring across the Elves' art and their 1/1 in the first,
+on the aura's peeking band and right edge only in the second.
+
 ### The gate, and the bug hunt's wide net
 
 Full suite green before and after (`./run_tests.sh`), both soaks

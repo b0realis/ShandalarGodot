@@ -2560,7 +2560,7 @@ func _fill_filter_page(sheet: VBoxContainer, page: Dictionary, view: Dictionary)
 	if bool(page["finder"]):
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
-		finder = OriginalDialog.text_field("find", Vector2(200, 26))
+		finder = OriginalDialog.text_field("find", Vector2(200, 26), true)
 		finder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(finder)
 		row.add_child(OriginalDialog.label("%d listed" % entries.size(), 13))
@@ -2924,7 +2924,7 @@ func _show_load_dialog() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 10)
 	head.add_child(OriginalDialog.label("Player deck:", 14))
-	var finder := OriginalDialog.text_field("find a deck", Vector2(200, 26))
+	var finder := OriginalDialog.text_field("find a deck", Vector2(200, 26), true)
 	finder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(finder)
 	dialog.body().add_child(head)

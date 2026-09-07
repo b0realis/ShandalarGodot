@@ -232,7 +232,9 @@ func test_the_deck_builder_filter_icons_are_the_bars_own_cells() -> void:
 		assert_true(shown.has(FilterBar.COLOR_CELL[color]),
 			"color cell %s explained" % [FilterBar.COLOR_CELL[color]])
 	for cell in [FilterBar.GOLD_CELL, FilterBar.COST_CELL,
-			FilterBar.POWER_CELL, FilterBar.TOUGHNESS_CELL]:
+			FilterBar.POWER_CELL, FilterBar.TOUGHNESS_CELL,
+			FilterBar.FUNNEL_CELL, FilterBar.ABILITY_CELL,
+			FilterBar.RARITY_CELL, FilterBar.ARTIST_CELL]:
 		assert_true(shown.has(cell), "cell %s explained" % [cell])
 	for code in FilterBar.SET_CELL:
 		assert_true(shown.has(FilterBar.SET_CELL[code]),
@@ -522,6 +524,77 @@ func test_the_page_no_longer_claims_the_pool_filters_the_list_for_us() -> void:
 		assert_true(DeckFormat.RESTRICTED.has(card_name), card_name)
 		assert_true(CardRegistry.has_card(card_name),
 			"%s is in the pool, so the page is not promising air" % card_name)
+
+
+# ------------------------------------------------- the deck builder page --
+
+func _builder_page() -> Dictionary:
+	for page in HelpPages.pages():
+		if String(page["title"]) == "The Deck Builder":
+			return page
+	return {}
+
+
+## The v0.16.0 update (2026-09-07): the five list filters shipped as the
+## pages of one window behind the funnel, and the page that used to say
+## three of them were not built had to stop saying so.
+func test_the_help_no_longer_says_three_filters_are_missing() -> void:
+	var text := HelpPages.all_text()
+	assert_false(text.contains("are not built here"), "all five are")
+	assert_true(text.contains("Filters window"), "and the window is taught")
+	for name in ["Creatures", "Enchantments", "Abilities", "Rarity", "Artists"]:
+		assert_true(text.contains(name), "%s page named" % name)
+	var bar: FilterBar = autofree(FilterBar.new(DeckFilter.new()))
+	for page in bar.window_pages():
+		var name := String(page["title"])
+		assert_true(text.contains(name), "the window's own '%s' tab" % name)
+	# The window's ability names are the 1997 ones with today's beside
+	# them; the page must not teach a different pairing.
+	var eye := ""
+	for entry in HelpPages.icon_entries():
+		if String(entry.get("name", "")).begins_with("Abilities"):
+			eye = String(entry.get("text", ""))
+	assert_ne(eye, "", "the eye is explained")
+	for i in DeckAbilities.MODERN:
+		var pair := "%s is %s" % [DeckAbilities.LABELS[i], DeckAbilities.MODERN[i]]
+		assert_true(eye.contains(pair), pair)
+
+
+## The page names the screen's commands by the screen's own constants, so
+## a command added to the mini-menu without a line here fails this.
+func test_the_deck_builder_page_names_every_command_and_key() -> void:
+	var page := _builder_page()
+	assert_false(page.is_empty(), "there is a Deck Builder page")
+	if page.is_empty():
+		return
+	var text := _all_text(page)
+	for label in DeckBuilderScreen.COMMANDS:
+		assert_true(text.contains(label), "1997 command '%s'" % label)
+	for label in DeckBuilderScreen.MENU_COMMANDS:
+		assert_true(text.contains(label), "1997 command '%s'" % label)
+	for label in DeckBuilderScreen.EXTRA_COMMANDS:
+		assert_true(text.contains(label), "[QoL] command '%s'" % label)
+	for label in DeckBuilderScreen.STATS_PAGES:
+		assert_true(text.contains(label), "Stats page '%s'" % label)
+	for keycode in DeckBuilderScreen.SHORTCUTS:
+		var key := "Ctrl+%s" % OS.get_keycode_string(keycode)
+		assert_true(text.contains(key), "%s is on the page" % key)
+	assert_true(text.contains("Ctrl+F"), "and the type-ahead's own key")
+	for line in FilterBar.ALL_MENU:
+		assert_true(text.to_lower().contains(line.to_lower()), line)
+	assert_true(text.contains("Search card text too"), FilterBar.RULES_LINE)
+	for name in FilterBar.SORT_MENU:
+		assert_true(text.contains(name), "sort '%s'" % name)
+
+
+## The owner's question of 2026-09-07 — *"How do we now turn on or off
+## the type-ahead filter? It has no button"* — is answered on the page.
+func test_the_deck_builder_page_says_how_the_type_ahead_is_cleared() -> void:
+	var text := _all_text(_builder_page())
+	assert_true(text.contains("no button to switch it on or off"))
+	assert_true(text.contains("small cross at its right edge"), "the clear button")
+	assert_true(text.contains("Escape"), "and the key")
+	assert_true(text.contains("Enter adds the first card shown"))
 
 
 # --------------------------------------------------- rebuilding a page --

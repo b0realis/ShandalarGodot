@@ -3270,6 +3270,65 @@ func test_enter_with_nothing_shown_says_so() -> void:
 	assert_true(screen._status_label.text.contains("Nothing in the Inventory matches"))
 
 
+# ----------------------------------------------- [QoL] the × on the box --
+
+## The owner, 2026-09-07: *"How do we now turn on or off the type-ahead
+## filter? It has no button just delete what you type probably?"* — Escape
+## and Select All both emptied it, and neither was written on the box.
+func test_the_type_ahead_wears_a_clear_button() -> void:
+	var box := screen._filter_bar.search_field
+	assert_true(box.clear_button_enabled, "the × that empties the box")
+	assert_true(box.tooltip_text.contains("cross or Escape"), "and the tooltip says so")
+	assert_true(box.has_theme_color_override("clear_button_color"),
+		"in the placeholder's shade, not the theme's white")
+
+
+func test_the_clear_button_empties_the_filter_with_the_box() -> void:
+	var box := screen._filter_bar.search_field
+	box.text = "serra"
+	box.text_changed.emit("serra")
+	screen._refresh_inventory()
+	await get_tree().process_frame
+	assert_eq(screen.filter.text, "serra")
+	var narrowed := screen._inventory.entry_count()
+	box.clear()  # what the × runs — it goes out through `text_changed`
+	assert_eq(box.text, "")
+	assert_eq(screen.filter.text, "", "the filter followed the box")
+	screen._refresh_inventory()
+	await get_tree().process_frame
+	assert_gt(screen._inventory.entry_count(), narrowed, "and the Inventory is whole again")
+
+
+## The × is for FINDERS — a field whose text is a filter. The Deck Info
+## title is a name and keeps the plain box.
+func test_the_finders_wear_the_clear_button_and_the_deck_title_does_not() -> void:
+	var dialog := _load_dialog()
+	var load_finder: LineEdit = null
+	for node in _walk(dialog):
+		if node is LineEdit and (node as LineEdit).placeholder_text == "find a deck":
+			load_finder = node
+	assert_not_null(load_finder)
+	if load_finder != null:
+		assert_true(load_finder.clear_button_enabled, "the Load finder")
+	dialog.dismiss()
+	await get_tree().process_frame
+	_funnel().pressed.emit()
+	await get_tree().process_frame
+	var page_finder := _finder()
+	assert_not_null(page_finder)
+	if page_finder != null:
+		assert_true(page_finder.clear_button_enabled, "the window's page finder")
+	_answer("Cancel")
+	await get_tree().process_frame
+	screen._add_one("Lightning Bolt")
+	screen._save_deck(Callable())
+	assert_eq(screen.open_dialogs().size(), 1, "Deck Info is asking for a name")
+	for node in _walk(screen.open_dialogs()[-1]):
+		if node is LineEdit:
+			assert_false((node as LineEdit).clear_button_enabled, "a name is not a filter")
+	_answer("Cancel")
+
+
 func test_the_first_entry_is_the_first_card_in_the_sort_chosen() -> void:
 	screen.filter.set_text("bolt")
 	screen._refresh_inventory()

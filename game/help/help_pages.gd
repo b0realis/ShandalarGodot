@@ -117,6 +117,7 @@ static func pages() -> Array:
 		_page_icons_phase_marks(),
 		_page_icons_combat_bar(),
 		_page_icons_table(),
+		_page_builder(),
 		_page_icons_builder_colors(),
 		_page_icons_builder_sets(),
 		_page_icons_builder_types(),
@@ -1231,6 +1232,96 @@ static func _page_icons_table() -> Dictionary:
 	]}
 
 
+# --------------------------------------------------- the deck builder --
+
+## The Deck Builder's own page: the surfaces, the bar under the deck, the
+## box at the end of the filter strip, and the keys. The 1997 sentences
+## are Duel.hlp's; everything the original did not have is marked [QoL]
+## here as it is on the screen, so the two never disagree about which is
+## which. The command names are the screen's own constants — a test holds
+## this page to [constant DeckBuilderScreen.COMMANDS] and its two
+## companions, and to [constant DeckBuilderScreen.SHORTCUTS].
+static func _page_builder() -> Dictionary:
+	return {"title": "The Deck Builder", "blocks": [
+		_quote("Along the bottom of the Deck Builder screen is the "
+			+ "Inventory area. Here, every card you can put into a deck is "
+			+ "available…", "Duel.hlp, topic \"All Cards Inventory\""),
+		_text("What the Inventory shows at any moment is what the filter "
+			+ "strip above it lets through — the three icon pages after "
+			+ "this one explain every medallion on that strip."),
+		_quote("To move a card from the inventory into your deck, simply "
+			+ "double-click on it or drag it there with the mouse, then "
+			+ "release.", "Duel.hlp, topic \"All Cards Inventory\""),
+		_text("A single click does the same, in both directions; a "
+			+ "right-click on a card moves the whole stack of copies at "
+			+ "once; Shift-click sends one copy to the other pile — from "
+			+ "the Inventory or the deck to the sideboard, from the "
+			+ "sideboard to the deck. The Showcase on the left enlarges "
+			+ "whatever the pointer rests on, exactly as it does at the "
+			+ "dueling table."),
+		_heading("The bar under the deck"),
+		_text("STATS opens the statistics window — five pages: Deck, "
+			+ "Draws, Mana, Speed and Matchups — and carries the deck's "
+			+ "card count on its face. RARITY [QoL] letters every card on "
+			+ "the deck surface C, U, R or L for common, uncommon, rare or "
+			+ "legendary; COST [QoL] lays every card's mana cost on its "
+			+ "face. Both are switches: they stay down while their marks "
+			+ "are up, and they remember."),
+		_text("DECK opens the deck surface's own mini-menu — the one the "
+			+ "original put on a right-click anywhere over the deck, which "
+			+ "still works. Its 1997 commands: New deck, Load deck, Save "
+			+ "deck, Consolidate duplicate cards, Clear deck, Sort deck, "
+			+ "Stats, Music, Sound Effects, Exit deck builder, Extra "
+			+ "Cards and Move by color out of deck. Marked [QoL] on the "
+			+ "menu itself: Undo, Filters, Add basic land, Add proxy card, "
+			+ "Copy deck to, Deck notes, Sideboard, Import deck and Export "
+			+ "deck."),
+		_text("LOAD [QoL] is a door to the Load Deck dialog from the bar: "
+			+ "your own decks head the list, a finder above it keeps the "
+			+ "rows whose title or file name contains what you type, "
+			+ "Enter loads the first one left, and every row wears the "
+			+ "deck's colors as mana symbols. DECK1, DECK2 and DECK3 "
+			+ "[QoL] are three decks in hand at once; the starred one is "
+			+ "the deck on the surface. DONE leaves."),
+		_heading("The box at the end of the filter strip"),
+		_quote("At the bottom of the Inventory area is a scroll bar you "
+			+ "can use to move through the inventory… or you can type in "
+			+ "the first few letters of the name of any card you want to "
+			+ "see.", "Duel.hlp, topic \"All Cards Inventory\""),
+		_text("The box reading 'type a name' is that field. It matches "
+			+ "the start of a name first, then anywhere in it, so 'bolt' "
+			+ "still finds Lightning Bolt. The box IS the filter: empty "
+			+ "shows everything, text narrows the Inventory as you type, "
+			+ "and there is no button to switch it on or off. To clear it, "
+			+ "press the small cross at its right edge, or Escape. Enter adds the "
+			+ "first card shown to your deck — press it four times for "
+			+ "four Lightning Bolts."),
+		_text("A right-click on the box, or on any medallion that has no "
+			+ "menu of its own, opens the strip's mini-menu: SELECT ALL "
+			+ "puts every filter back to where the builder opened, CLEAR "
+			+ "ALL puts every color and type medallion up so you can pick "
+			+ "a few, and 'Search card text too' [QoL] makes the box search "
+			+ "a card's rules text as well as its name — 'gain life' finds "
+			+ "the cards that do."),
+		_text("SORT lists the Inventory by Name, Casting cost, Card Type, "
+			+ "Color or Set. TEXT is the Showcase's Expand toggle — 1997 "
+			+ "keeps a card's text box at its printed size, full grows it "
+			+ "to fit."),
+		_heading("The keys [QoL]"),
+		_text("Ctrl+S saves the deck, Ctrl+O loads one, Ctrl+N starts a "
+			+ "new one, Ctrl+Z undoes the last change, Ctrl+L adds a basic "
+			+ "land, Ctrl+E exports the deck, and Ctrl+F puts the cursor in "
+			+ "the type-ahead box with its text selected."),
+		_text("Q opens the deck builder's menu — return to the builder, "
+			+ "save the current deck, open an existing one, return to the "
+			+ "main menu or exit the game, with the music and sound "
+			+ "switches under a rule. Escape closes whatever is in the "
+			+ "way, in order: that menu, then an open dialog, then a "
+			+ "type-ahead holding the keyboard or its text; with nothing "
+			+ "in the way it opens the menu."),
+	]}
+
+
 static func _page_icons_builder_colors() -> Dictionary:
 	var glyphs := {
 		Mtg.ManaColor.W: "a burst of light", Mtg.ManaColor.U: "a water drop",
@@ -1326,10 +1417,13 @@ static func _page_icons_builder_types() -> Dictionary:
 			+ "Creatures and All Non-Creatures, which are independent of "
 			+ "each other.",
 		Mtg.CardType.CREATURE: "A bat. Anything with a power and a "
-			+ "toughness.",
+			+ "toughness. Right-click for its page of the Filters window: "
+			+ "Summon, Artifact, and the creature types from a list.",
 		Mtg.CardType.ENCHANTMENT: "A crescent moon with NO gold ring — the "
 			+ "ringed crescent two places along is The Dark. Lasting magic, "
-			+ "local or global.",
+			+ "local or global. Right-click for its page of the Filters "
+			+ "window: Enchantments, World, and the Enchant kinds — Land, "
+			+ "Creature, Artifact, Enchant.",
 		Mtg.CardType.INSTANT: "A lightning bolt. Castable at almost any "
 			+ "time, including on your opponent's turn.",
 		Mtg.CardType.SORCERY: "A hooded sorcerer. Castable only in your "
@@ -1364,6 +1458,44 @@ static func _page_icons_builder_types() -> Dictionary:
 			+ "\". The same, for how much damage a creature can absorb.",
 			{"src": SRC_FILTER, "row": FilterBar.TOUGHNESS_CELL[0],
 				"col": FilterBar.TOUGHNESS_CELL[1]}, "T"),
+		_icon("The Filters window — a funnel",
+			"Not a 1997 medallion: the original's Other Filters group had "
+			+ "three more buttons, Ability, Rarity and Artist, each opening "
+			+ "a list. Here the three lists, and the Creature and "
+			+ "Enchantment ones, are the five pages of ONE window, and the "
+			+ "funnel is its door. It is drawn lit while any page is "
+			+ "narrowing the Inventory.",
+			{"src": SRC_FILTER, "row": FilterBar.FUNNEL_CELL[0],
+				"col": FilterBar.FUNNEL_CELL[1]}, "F"),
+	]
+	var pages: Array = [
+		_icon("Abilities — an eye",
+			"Cue card: \"" + DeckFilter.filtered_by_cue_card("ability", true)
+			+ "\". The tab wears the 1997 Ability medallion. Enable Filter "
+			+ "turns the page on; Native keeps cards that simply have an "
+			+ "ability, Gives keeps cards that can bestow one; then the "
+			+ "thirteen, by their 1997 names with today's in brackets — "
+			+ "Ward is protection, Walk is landwalk, Web is reach, Stoning "
+			+ "is deathtouch, Free Action is vigilance, Quick draw is "
+			+ "haste.",
+			{"src": SRC_FILTER, "row": FilterBar.ABILITY_CELL[0],
+				"col": FilterBar.ABILITY_CELL[1]}, "Ab"),
+		_icon("Rarity — a gem",
+			"Cue card: \"" + DeckFilter.filtered_by_cue_card("rarity", true)
+			+ "\". The 1997 Rarity medallion. Common, Uncommon and Rare "
+			+ "are the printed tiers; Restricted and Banned are the era's "
+			+ "tournament lists, so a card can be Rare and Restricted at "
+			+ "once — Black Lotus is.",
+			{"src": SRC_FILTER, "row": FilterBar.RARITY_CELL[0],
+				"col": FilterBar.RARITY_CELL[1]}, "Ra"),
+		_icon("Artists — a palette",
+			"Cue card: \"" + DeckFilter.filtered_by_cue_card("artist", true)
+			+ "\". The 1997 Artist medallion. Every painter in the card "
+			+ "pool, listed from the cards themselves; the finder above "
+			+ "the list narrows it, and Select All and Clear All act on "
+			+ "the names in view.",
+			{"src": SRC_FILTER, "row": FilterBar.ARTIST_CELL[0],
+				"col": FilterBar.ARTIST_CELL[1]}, "Ar"),
 	]
 	return {"title": "Icons — the Deck Builder: types and other filters",
 		"blocks": [
@@ -1374,11 +1506,35 @@ static func _page_icons_builder_types() -> Dictionary:
 			+ "that filter.", "Duel.hlp, topic \"Filters\""),
 		_heading("Other Filters"),
 		{"kind": ICONS, "entries": other},
-		_text("The original's Other Filters group had six buttons. Three of "
-			+ "them — Ability, Rarity and Artist — are not built here, "
-			+ "because the card data this remake loads cannot answer them "
-			+ "yet, and a filter that quietly does nothing is worse than a "
-			+ "missing one."),
+		_heading("The Filters window"),
+		_text("Five pages behind the funnel — Creatures, Enchantments, "
+			+ "Abilities, Rarity, Artists — each tab wearing the medallion "
+			+ "the original gave that filter. A page's ticks change the "
+			+ "Inventory as you make them; OK keeps them, Cancel puts the "
+			+ "page back as it was. On the long pages a finder narrows the "
+			+ "list, and Select All and Clear All act on the rows in view, "
+			+ "so 'all the Elves and Elementals' is a finder reading 'el' "
+			+ "and one click."),
+		_quote("Initially, all the artists are selected. You can use the "
+			+ "Clear All button to de-select everyone and start from "
+			+ "scratch. If you change your mind, you can use Select All to "
+			+ "return the list to its original, fully selected state. To "
+			+ "switch an artist's name from selected to de-selected or "
+			+ "vice versa, click on it.",
+			"Duel.hlp, topic \"Other Filters\""),
+		_text("On the Creatures page the list is a third term: Summon "
+			+ "and Artifact admit their creatures, and a ticked type ADDS "
+			+ "its creatures to those — so to see only the listed types, "
+			+ "untick Summon. The screen says so the moment the list goes "
+			+ "on."),
+		{"kind": ICONS, "entries": pages},
+		_quote("Note that the first two filters modify the effects of the "
+			+ "others. Native means that the ability is an integral part "
+			+ "of the card's makeup; it simply has the ability… Gives "
+			+ "refers to those cards which can bestow an ability as an "
+			+ "effect, regardless of whether it can be bestowed on the "
+			+ "card itself, on another card, or both.",
+			"Duel.hlp, topic \"Other Filters\""),
 	]}
 
 

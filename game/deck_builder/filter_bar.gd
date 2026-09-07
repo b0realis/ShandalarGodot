@@ -680,10 +680,15 @@ func _search_group() -> Control:
 	# the field is the one thing on the strip that gives way when the
 	# twenty-odd medallions ask for their width, and at 1280 the older
 	# "type the first letters" was cut to *"type the first let"*.
+	# [QoL] `clears`: the × that empties the box. The box IS the filter —
+	# there is no medallion to put up — and the owner's question was the
+	# right one (2026-09-07): *"How do we now turn on or off the type-ahead
+	# filter? It has no button"*. Escape and Select All both did it; neither
+	# is written on the box. Now the box says so itself.
 	search_field = OriginalDialog.text_field("type a name",
-		Vector2(100, ICON_SIZE.y))
+		Vector2(100, ICON_SIZE.y), true)
 	search_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	search_field.tooltip_text = "type a name — right-click for the card-text switch"
+	search_field.tooltip_text = "type a name — the cross or Escape clears it; right-click for the card-text switch"
 	search_field.text_changed.connect(func(value: String) -> void:
 		filter.text = value
 		changed.emit())

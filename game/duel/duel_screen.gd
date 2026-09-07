@@ -330,6 +330,17 @@ var _grave_rings: Array[Panel] = []
 ## "Ability Effect" card is revealed 43px to the right of a 948px-wide
 ## host, i.e. 4.5% of the card's width = 5.9px on ours.
 const AURA_PEEK := Vector2(6, 18)
+
+## z_index of an enchanted host over its fan of attachments. Child order
+## puts the host last, but z beats it: a card's name, its (T) and its
+## highlight ring sit at z 2 inside the card (`MiniCard._build_face`,
+## `_refresh_highlight_ring`), so an attachment that had something to
+## offer — Instill Energy, ringed yellow for "you may untap" — painted its
+## whole ring OVER the host's face (the owner's Llanowar Elves, 2026-09-07).
+## One above the highest z a card gives its own children covers all of an
+## attachment but the strip that peeks out; the host's children ride on top
+## of this (z is relative) and it is well under the combat window's 10.
+const HOST_Z := 3
 var _chain_box: VBoxContainer = null   # the original's floating spell chain
 var _mode_overlay: Control = null      # modal-choice dialog (Winbk_Bigcard)
 var _preview_dock: Control = null      # sidebar slot for the big card
@@ -5976,7 +5987,9 @@ func _on_card_look(event: InputEvent, w: MiniCard, inst: CardInstance) -> void:
 			_card_preview.show_card(inst)
 		# The lift, held only while the button is. z_index, not a reparent:
 		# the card stays exactly where the row put it and simply stops
-		# being overlapped.
+		# being overlapped. It is put back where it RESTED, which is 0 for
+		# most cards and HOST_Z for one wearing an aura.
+		_lifted_rest_z = w.z_index
 		w.z_index = LIFT_Z
 		_lifted_card = w
 		_right_press_ms = Time.get_ticks_msec()
@@ -6010,13 +6023,16 @@ var _right_press_ms := 0
 ## The card currently held to the front by the right button, if any.
 var _lifted_card: MiniCard = null
 
+## The z_index it rested at before the lift, and goes back to.
+var _lifted_rest_z := 0
+
 
 ## Put a right-held card back down. Called on release and defensively from
 ## [method _rebuild_field], because a rebuild frees the widget the release
 ## would otherwise have arrived at.
 func _drop_lifted_card() -> void:
 	if _lifted_card != null and is_instance_valid(_lifted_card):
-		_lifted_card.z_index = 0
+		_lifted_card.z_index = _lifted_rest_z
 	_lifted_card = null
 
 
@@ -6488,6 +6504,11 @@ func _make_widget(inst: CardInstance) -> Control:
 		if result == w:
 			w.size = MiniCard.SIZE
 		wrap.add_child(result)
+		# ...and z says so too, or the attachment's ring wins (HOST_Z).
+		# On the holder when tapped, on the card itself when not — the
+		# right-hold lift raises `w` from whatever it rests at
+		# (_drop_lifted_card), so the two never fight.
+		result.z_index = HOST_Z
 		return wrap
 	return result
 

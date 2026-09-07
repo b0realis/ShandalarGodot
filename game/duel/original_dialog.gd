@@ -41,6 +41,7 @@ const SHADOW := Color8(82, 111, 140)       ## bottom/right rule (slate)
 const INK := Color8(28, 24, 26)            ## outline; letters on a light face
 const CHOICE := Color8(205, 176, 143)      ## an unpicked list line
 const CHOICE_LIT := Color8(247, 240, 208)  ## the line under the pointer
+const PLACEHOLDER := Color(0.72, 0.68, 0.60, 0.7)  ## an empty field saying what it is for
 
 ## Measured per ground: 9-patch margin (= the baked bevel's own width,
 ## plus a pixel of texture so a corner never samples the face) and
@@ -517,8 +518,17 @@ static func field(min_width := 96.0) -> SpinBox:
 ## place to type looks the same wherever a dialog offers one. Pale letters
 ## on `panel_dark_stone`, the placeholder a shade dimmer than the letters
 ## so an empty field still says what it is for.
+##
+## [QoL] `clears` puts a small × at the right edge while the field has
+## text, and the × empties it. Not 1997 — the original's type-in had no
+## such thing, you deleted what you had typed — and so it is off unless a
+## caller asks. The callers that ask are the FINDERS: a field whose text
+## is a filter, where "turn it off" is the question, and where the only
+## other answers (Escape, or Select All on the mini-menu) are not written
+## anywhere on the field itself. The Deck Info title is a name, not a
+## filter, and keeps the plain box.
 static func text_field(placeholder := "",
-		min_size := Vector2(360, 28)) -> LineEdit:
+		min_size := Vector2(360, 28), clears := false) -> LineEdit:
 	var edit := LineEdit.new()
 	edit.placeholder_text = placeholder
 	edit.custom_minimum_size = min_size
@@ -528,10 +538,17 @@ static func text_field(placeholder := "",
 	edit.add_theme_color_override("font_color", CHOICE_LIT)
 	edit.add_theme_color_override("caret_color", CHOICE_LIT)
 	edit.add_theme_color_override("font_placeholder_color",
-		Color(0.72, 0.68, 0.60, 0.7))
+		PLACEHOLDER)
 	var body := GameSkin.font("font_body")
 	if body != null:
 		edit.add_theme_font_override("font", body)
+	if clears:
+		edit.clear_button_enabled = true
+		# The × in the placeholder's shade, so it reads as furniture of
+		# the box and not as a third colour; lit like the letters while
+		# it is being pressed.
+		edit.add_theme_color_override("clear_button_color", PLACEHOLDER)
+		edit.add_theme_color_override("clear_button_color_pressed", CHOICE_LIT)
 	return edit
 
 

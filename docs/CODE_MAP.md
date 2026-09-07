@@ -1618,7 +1618,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4584 tests / ~130 500 asserts, ~290 s
+├── tests/                   GUT suite — 4595 tests / ~130 500 asserts, ~290 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2332,6 +2332,13 @@ shandalar/
 │    enchanted permanent now keeps a slot of its own
 │    (DuelScreen._flush_pile), in either row, in either half, whoever
 │    controls the aura, while a plain row still piles;
+│    tests/ui/test_enchanted_host_z_2026_09_07.gd — THE AURA THAT DREW
+│    OVER ITS HOST: Instill Energy's yellow ring across the Llanowar
+│    Elves it enchanted, because a MiniCard's name, (T) and ring sit at
+│    z 2 and the canvas sorts by z before child order — the host of a
+│    fan now carries DuelScreen.HOST_Z (3, on the holder when tapped),
+│    pinned over every pixel of the aura's subtree, and the right-hold
+│    lift puts a card back where it RESTED (_lifted_rest_z), not at 0;
 │    tests/ui/test_ability_target.gd — CLICKING AN ABILITY ON THE CHAIN
 │    (TargetSpec.Kind.ABILITY, which the picker had no case for): the
 │    click naming the ACTIVATION and not its source permanent, the
@@ -2495,7 +2502,9 @@ shandalar/
 │    All, one dialog at a time; the **[QoL]** Cost switch (placement,
 │    centred plates, persistence, no overlap with the rarity mark); the
 │    Load dialog's user-first order, finder, Enter and colour pips;
-│    Enter-to-add in the type-ahead; and `MiniCard.bar_title` (CoP: Red);
+│    Enter-to-add in the type-ahead, and the **[QoL]** × that empties it
+│    (on the two finders too, not on the Deck Info title); and
+│    `MiniCard.bar_title` (CoP: Red);
 │    tests/ui/test_deck_stats.gd — the probability page's arithmetic,
 │    EXACT: the hypergeometric against values computed by hand and
 │    surviving a deck too big for a factorial, the land row a real
@@ -2518,7 +2527,12 @@ shandalar/
 │    RESOLVES TO A REAL TEXTURE whenever the 1997 skin is imported, with
 │    the badge/filter inventories checked against MiniCard.BADGE_SLOT,
 │    PROTECTION_SLOT and FilterBar's own cell maps so a moved cell fails
-│    here too;
+│    here too (the funnel, eye, gem and palette included); the Deck
+│    Builder page names every command in COMMANDS / MENU_COMMANDS /
+│    EXTRA_COMMANDS, every Stats page, every Ctrl key, the strip menu's
+│    lines and the sort names, and says how the type-ahead is cleared;
+│    the page no longer says three filters are missing, and the eye's
+│    thirteen 1997-to-modern pairs are DeckAbilities' own;
 │    tests/ui/test_set_badges.gd — the title screen's set row: a badge per
 │    CardRegistry.SET_ORDER entry in printing order, each tooltipped with
 │    its 1997 cue-card name; the SHIPPED lettered row spelled out in full
@@ -3027,7 +3041,13 @@ shandalar/
 │   │                          drifts fails the help test at the same
 │   │                          moment it breaks that screen. The word
 │   │                          "interrupt" is banned here per
-│   │                          glossary-1997.md §5 and a test enforces it
+│   │                          glossary-1997.md §5 and a test enforces it.
+│   │                          Twenty-seven pages: the primer, the duel's
+│   │                          icons, then THE DECK BUILDER — its own page
+│   │                          (the bar, the box, the keys, held to the
+│   │                          screen's COMMANDS/SHORTCUTS by a test) and
+│   │                          three icon pages, the last teaching the
+│   │                          funnel and the Filters window's five pages
 │   ├── deck_builder/        THE DECK BUILDER (@SHELLSCREEN_TOOLS: "Deck
 │   │   │                      Builder: Build or Modify decks."). The 1997
 │   │   │                      original was its own module (Deckdll.dll), so
@@ -4058,7 +4078,11 @@ shandalar/
 │       │                      button*, a DOUBLE bevel rule) 9-patched;
 │       │                      label()/ink_label() are the era's two text
 │       │                      voices; choice_line() and field() its list
-│       │                      lines and numeric boxes. Wording comes from
+│       │                      lines and numeric boxes; text_field() the
+│       │                      sunken stone a place to type wears (the
+│       │                      type-ahead, the finders, the Deck Info
+│       │                      title), with a **[QoL]** × that empties a
+│       │                      FINDER when asked for. Wording comes from
 │       │                      docs/glossary-1997.md. Worn by: the
 │       │                      Situation Bar + Done, the modal-choice
 │       │                      dialog, the X question, the library picker,
