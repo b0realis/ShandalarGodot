@@ -90,10 +90,13 @@ window/stretch/aspect="expand"
 ; landscape design and `expand` only ever adds room at the sides or the
 ; top and bottom, never re-flows a column; a portrait phone would draw the
 ; table at a third of its width with the hand unreadable. A desktop window
-; ignores this key entirely; the web export's manifest and the browser's
-; own lock read it. 4 is SCREEN_SENSOR_LANDSCAPE: either way up, never
-; portrait (plain landscape, 0, is the engine default and would not even
-; be written here).
+; ignores this key entirely; a native phone build and a web build's PWA
+; manifest (an app installed to the home screen) read it, a browser TAB
+; does not — the web template locks nothing, so a phone held upright in
+; a browser gets the portrait picture (measured 2026-09-07). 4 is
+; SCREEN_SENSOR_LANDSCAPE: either way up, never portrait (plain
+; landscape, 0, is the engine default and would not even be written
+; here).
 window/handheld/orientation=4
 
 [rendering]

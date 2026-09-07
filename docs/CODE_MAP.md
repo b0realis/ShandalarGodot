@@ -1638,7 +1638,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4756 tests / ~132 000 asserts, ~300 s
+├── tests/                   GUT suite — 4760 tests / ~132 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -1965,7 +1965,10 @@ shandalar/
 │    so lands and artifacts (which pile the moment there are two) could
 │    not be dragged at all. The holder now carries the gesture, on the
 │    ROW rather than the pile, clamped by a whole card rather than a
-│    17px title strip;
+│    17px title strip; and (2026-09-07) THE POINTER IS THE EVENT'S: the
+│    drag and the ability menu read positions from the event in hand,
+│    not `get_global_mouse_position()` — the same number under a mouse,
+│    and the only one a finger on the touch layer has;
 │    tests/unit/test_mana_planner.gd — the moved planner (sources,
 │    colour-first plans, restricted mana, `Don't auto tap`, max X), the
 │    AI still answering through it, and the engine queries the auto-cast
@@ -2047,8 +2050,9 @@ shandalar/
 │    and the last live entries of @MENU_TERRITORY (§6.3): every table
 │    verbatim and complete, `Count library cards`, `Expand text box`, the
 │    three display toggles (ID tags on the card, `all cards'` summoning
-│    sickness reaching non-creatures), and Concede asking before it gives
-│    up;
+│    sickness reaching non-creatures), Concede asking before it gives
+│    up, and the combat window's bar following the event's position
+│    (2026-09-07);
 │    tests/ui/test_x_dialog.gd — @DIALOG_FIREBALL: the seven strings, the
 │    arithmetic that splits one pot of generic between X and the
 │    additional-target surcharge, and the bug it fixes (a full-value
@@ -3175,7 +3179,14 @@ shandalar/
 │   │                            on nothing that listens moves to the
 │   │                            nearest enabled button within 22 px
 │   │                            (half the 44-px target), only if that
-│   │                            button is what is drawn there. No
+│   │                            button is what is drawn there. A finger
+│   │                            moves NO OS POINTER (measured: the root
+│   │                            viewport's `get_global_mouse_position()`
+│   │                            stood still under a synthesized drag), so
+│   │                            the screens that read the pointer mid-
+│   │                            gesture — the table's card drag, the log's,
+│   │                            the combat window's and the hand's title
+│   │                            bars — read the event in hand instead. No
 │   │                            class_name — an autoload is its name
 │   ├── ui_chrome.gd         class UiChrome — the original sandstone panel
 │   │                          (Winbk_Options 9-patch) + era buttons/labels;

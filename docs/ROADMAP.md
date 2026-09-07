@@ -6928,6 +6928,83 @@ wearing Holy Strength with a Samite Healer outside it, a Rock Hydra
 under an Indestructible Aura reading `prevent all` and its neighbour
 reading `prevent 1` with nothing behind it.
 
+## TOUCH CONTROLS (2026-09-07) — [QoL], for the web export and a tablet
+
+*"Modularly do touch control support if enabled/present, for online web
+export and play via mobiles/tablets."* Nothing in the 1997 screens knows
+a finger, and none of them learns one: the whole of it is one autoload
+and one recogniser under `game/input/` that TYPE THE MOUSE for the
+finger, and a screen that worked under a mouse works under a finger
+without a line changed in it — with the four exceptions measured below.
+
+**The layer.** `TouchControls` is ACTIVE on `auto` when the platform
+reports a touchscreen or the web build finds itself in a mobile browser,
+on `on` always, on `off` never (Settings key `touch_controls`; the
+Options row *Touch controls: Auto / On / Off* is a view of it, see
+docs/player-files.md). Active, it takes the whole touch stream —
+Godot's own emulated mouse (device -1) and the raw `ScreenTouch`/
+`ScreenDrag` both, since a 4.7 `BaseButton` presses itself from a bare
+touch and a tap would land twice — and spends `TouchGestures`' intents
+as mouse events stamped device 4096, pushed at the root. Inactive it
+processes NOTHING, so mouse play is the same event stream as before
+(pinned: a real click with the layer off and on is one click either
+way). The vocabulary: touch-down HOVERS (so a card's preview docks
+before anything is clicked), tap is a LEFT CLICK at the down point,
+long-press (450 ms) and lift is a RIGHT CLICK — on the lift, because a
+popup opened under a resting finger takes that finger's release as its
+own and picks its first entry — two-finger tap the same, a drag past a
+12-px slop a LEFT DRAG, a finger in a `ScrollContainer` moves it pixel
+for pixel, two fingers scroll by wheel notch, and a tap on nothing that
+listens moves to the nearest enabled button within 22 px (half the 44-px
+target), only if that button is what is drawn there. `game/input/
+touch_gestures.gd`, `game/input/touch_controls.gd`; `tests/unit/
+test_touch_gestures.gd` (24), `tests/ui/test_touch_controls.gd` (20,
+driven through `Input.parse_input_event`, emulation and all).
+
+**What the finger is NOT: the OS pointer.** The first pass claimed the
+engine's emulation keeps `Input`'s mouse position under the finger. It
+does not, and the table's drag never moved under Xvfb: the root
+viewport answers `get_global_mouse_position()` with the display server's
+pointer, which a finger — synthesized or, on a phone, real — never
+moves. Four readers polled it mid-gesture: the duel table's card drag
+(`_begin_drag_node`, `_drag_motion`), the ability menu's opening point,
+and the title bars of the duel log, the combat window and the hand
+stack. Every one now reads the position FROM THE EVENT in hand — the
+same number under a mouse, which is what the four new tests pin
+(`tests/ui/test_card_placement.gd`, `test_card_menus.gd`,
+`test_stack_hand.gd`) — and the ability menu, which opens from a card's
+`pressed` and has no event of its own, takes the click that fired it on
+the same frame (`DuelScreen._pointer`). Nothing else on the table polls
+the pointer.
+
+**Screen fit, measured** (`canvas_items`/`expand`, base 1280×800): at
+1280×720 (16:9) the canvas scales 0.9; at 1560×720 (19.5:9) 0.9 with a
+wider canvas; at 1024×768 (4:3) 0.8 with a canvas of 1280×960 — extra
+vertical room, the layout intact; at 720×1560 (portrait phone) 0.5625
+with a canvas 2773 tall, everything tiny. The 1997 layout is landscape
+and stays so; `display/window/handheld/orientation` is set to landscape
+for the native mobile case, and is INERT in a browser — the web template
+carries no `screen.orientation.lock`, so a phone held upright gets the
+portrait picture above. A hint to turn the phone, or a portrait layout,
+is the owner's call and the latter is a week's work, not this pass.
+
+**Checked by looking under Xvfb** at 1024×768 with the layer on: a
+finger on a hand card docks its preview (and its tap cast the spell);
+holding a Grizzly Bears and lifting opens @MENU_SMALLCARD at the finger;
+dragging it moves it and letting go places it. One thing seen on the
+way and left as it is: while the AI is acting, its every action
+refreshes the table, and `_rebuild_field` commits a drag in progress —
+the same under a mouse, and it has been so since the free layer was
+built; the probe waits for the human's own moment.
+
+**Still open.** A finger has been driven only through
+`Input.parse_input_event` and under Xvfb — no real touchscreen or phone
+has been tried; the web build's touch path (the template's
+`godot_js_input_touch_cb`) is the same `ScreenTouch` stream and should
+behave the same, unverified. Text entry (a deck's name) opens no
+on-screen keyboard through this layer — the browser's own does on a
+`LineEdit` focus, the native mobile builds are not this pass's.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -10,12 +10,12 @@ extends Node
 ## table keeps its mouse handler, and this node types the mouse for the
 ## finger. Godot's own `emulate_mouse_from_touch` does half of that
 ## already (tap is a click, a moving finger is a left drag) and it is
-## left ON, because it is also what keeps [Input]'s mouse position under
-## the finger for the screens that ask `get_global_mouse_position()`
-## while dragging. What it cannot do is the other half: there is no
-## right button for the menus, a press lands the click before the preview
-## can dock, and a fingertip's wobble turns a tap on a card into a 5-px
-## drag of it. So while this layer is ACTIVE it takes the whole touch
+## left ON — it is the engine's own bookkeeping of which finger is the
+## pointer, and it costs nothing under this layer, which eats what it
+## makes. What it cannot do is the other half: there is no right button
+## for the menus, a press lands the click before the preview can dock,
+## and a fingertip's wobble turns a tap on a card into a 5-px drag of
+## it. So while this layer is ACTIVE it takes the whole touch
 ## stream at `_input` — the engine's emulated mouse events (`device ==
 ## DEVICE_ID_EMULATION`) AND the raw [InputEventScreenTouch] /
 ## [InputEventScreenDrag] behind them — reads the touches into a
@@ -24,6 +24,16 @@ extends Node
 ## press, a proper drag past a wide slop. Real mouse events (`device >=
 ## 0`, not ours) pass through untouched, so a touch laptop keeps its
 ## mouse and its trackpad exactly as before.
+##
+## NO OS POINTER MOVES. A finger is not the pointer the display server
+## reports: `get_global_mouse_position()` on the root viewport is the OS
+## pointer's place (measured under Xvfb, 4.7: it sat where the mouse
+## last was while a synthesized drag ran), and a phone has none. So this
+## layer never relies on it, and every screen that used to read it mid-
+## gesture now reads the event in hand instead (the duel table's card
+## drag, the log's and the combat window's and the hand's title bars —
+## 2026-09-07, the same number under a mouse). A screen that still polls
+## the pointer would see it standing still under a finger.
 ##
 ## WHY THE RAW TOUCHES ARE TAKEN TOO. Godot 4.7's [BaseButton] presses
 ## itself from a bare [InputEventScreenTouch] (measured: `button_down` on

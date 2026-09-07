@@ -114,7 +114,7 @@ func test_a_press_that_never_moves_is_still_a_click() -> void:
 	var bear := _bear()
 	var w := MiniCard.new(bear)
 	add_child_autofree(w)
-	screen._begin_drag(w, bear)
+	screen._begin_drag(w, bear, w.global_position)
 	assert_false(screen._dragging, "an armed gesture is not yet a drag")
 	screen._commit_drag()
 	assert_false(screen._placements.has(bear.id),
@@ -133,7 +133,7 @@ func test_a_committed_drag_writes_a_placement() -> void:
 	var w := MiniCard.new(bear)
 	w.size = MiniCard.SIZE
 	screen._free_layers[0].add_child(w)
-	screen._begin_drag(w, bear)
+	screen._begin_drag(w, bear, w.global_position)
 	screen._dragging = true                  # the pointer passed the slop
 	w.global_position = screen._free_layers[0].global_position + Vector2(64, 32)
 	screen._commit_drag()
@@ -683,3 +683,69 @@ func _all(n: Node) -> Array:
 	for c in n.get_children():
 		out.append_array(_all(c))
 	return out
+
+
+# ------------------------- THE POINTER IS THE EVENT'S (2026-09-07) --
+#
+# The drag used to ask `get_global_mouse_position()` where the pointer
+# was. Under a mouse that is the same number the event carries; under a
+# FINGER on the touch layer (game/input/touch_controls.gd) it is not —
+# the root viewport answers with the OS pointer, and a finger moves none
+# (measured under Xvfb: the delta read zero and the card never moved).
+# So every read is from the event in hand, and these drive the handlers
+# with events whose positions differ from wherever the pointer sits.
+
+
+func _at(pressed: bool, at: Vector2) -> InputEventMouseButton:
+	var ev := _click(pressed)
+	ev.global_position = at
+	ev.position = at
+	return ev
+
+
+func _moved_to(at: Vector2) -> InputEventMouseMotion:
+	var ev := InputEventMouseMotion.new()
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
+	ev.global_position = at
+	ev.position = at
+	return ev
+
+
+func test_the_drag_reads_the_events_position_not_the_os_pointer() -> void:
+	var bear := _bear()
+	var row: Container = screen._field_rows[0][DuelScreen.Row.CREATURES]
+	var w: MiniCard = null
+	for child in row.get_children():
+		if child is MiniCard and (child as MiniCard).instance == bear:
+			w = child
+	assert_not_null(w, "the bear is on the table")
+	var origin := w.get_global_rect().get_center()
+	var rest: Vector2 = screen._layout_root(w).global_position
+	screen._on_card_look(_at(true, origin), w, bear)
+	assert_eq(screen._drag_from, origin, "armed where the PRESS said")
+	screen._on_card_look(_moved_to(origin + Vector2(2, 1)), w, bear)
+	assert_false(screen._dragging, "two pixels is inside the slop")
+	screen._on_card_look(_moved_to(origin + Vector2(40, 10)), w, bear)
+	assert_true(screen._dragging, "forty is a drag")
+	var layer: Control = screen._free_layers[0]
+	var want := layer.global_position + screen._clamp_in_half(0,
+		rest + Vector2(40, 10) - layer.global_position, bear)
+	assert_eq(screen._layout_root(w).global_position, want,
+		"and the card is where the MOTION said (inside its half, as always), not where the pointer is")
+	screen._on_card_look(_at(false, origin + Vector2(40, 10)), w, bear)
+	assert_true(screen._placements.has(bear.id), "let go: placed")
+
+
+func test_the_ability_menu_opens_at_the_click_that_fired_it() -> void:
+	# `_open_ability_menu` runs from a card's `pressed`, which has no event
+	# of its own; it takes the click the card's handler saw on the same
+	# frame, and only then — a later frame is back to the pointer.
+	var bear := _bear()
+	var w := MiniCard.new(bear)
+	add_child_autofree(w)
+	screen._on_card_look(_at(true, Vector2(300, 300)), w, bear)
+	screen._on_card_look(_at(false, Vector2(300, 300)), w, bear)
+	assert_eq(screen._pointer(), Vector2(300, 300), "this frame: the click")
+	await get_tree().process_frame
+	assert_eq(screen._pointer(), screen.get_global_mouse_position(),
+		"next frame: whatever the pointer says, as before")

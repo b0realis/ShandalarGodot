@@ -446,6 +446,20 @@ var _drag_inst: CardInstance = null
 var _drag_from := Vector2.ZERO
 var _drag_origin := Vector2.ZERO
 var _dragging := false
+# WHERE THE POINTER IS COMES FROM THE EVENT, not from
+# `get_global_mouse_position()` (2026-09-07). The two are the same number
+# under a mouse — the pointer is where its last event said — but the
+# viewport answers that call with the OS pointer, and a FINGER on the
+# touch layer (game/input/touch_controls.gd) moves no OS pointer: on
+# a desktop touchscreen the drag read a delta of zero and the card never
+# moved (measured under Xvfb). Every pointer read on this screen takes
+# its position from the event in hand; the one that has no event, the
+# ability menu opened from a card's `pressed`, takes the click that fired
+# it, which [method _on_card_look] saw a moment earlier.
+## The last mouse-button event a card's handler saw, and the frame it
+## came in — the `pressed` it fires is the same event's, on the same frame.
+var _click_at := Vector2.ZERO
+var _click_frame := -1
 ## Blocker/stack/targeting ARROWS over the board (see target_arrows.gd).
 var _arrows: TargetArrows = null
 ## THE DAMAGE MARKERS (§6.20b, §6.8) — the yellow "cards" the 1997 game
@@ -4187,8 +4201,16 @@ func _open_ability_menu(inst: CardInstance, mana_only := false) -> void:
 			id += 1
 	_ability_menu.set_meta("mana_only", mana_only)
 	_ability_menu.set_meta("instance_id", inst.id)
-	_ability_menu.position = Vector2i(get_global_mouse_position())
+	_ability_menu.position = Vector2i(_pointer())
 	_ability_menu.popup()
+
+
+## Where the pointer is, for a handler that has no event of its own: the
+## click that fired it if one did this frame, else the viewport's answer.
+func _pointer() -> Vector2:
+	if _click_frame == Engine.get_process_frames():
+		return _click_at
+	return get_global_mouse_position()
 
 
 func _on_ability_chosen(id: int) -> void:
@@ -6045,11 +6067,13 @@ func _on_card_look(event: InputEvent, w: MiniCard, inst: CardInstance) -> void:
 	# THE LEFT BUTTON'S DRAG (§2.3b). Motion only ever reaches here while
 	# this widget holds the mouse, which is exactly the span of a drag.
 	if event is InputEventMouseMotion and _drag_inst == inst:
-		_drag_motion()
+		_drag_motion((event as InputEventMouseMotion).global_position)
 		return
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
+	_click_at = mb.global_position
+	_click_frame = Engine.get_process_frames()
 	# THE LEFT BUTTON'S SECOND CLICK — the 1997 auto-cast (§6.20c). The
 	# widget is a Button, so its own `pressed` has already fired for the
 	# FIRST click of the pair and the cast has begun; this picks it up
@@ -6064,7 +6088,7 @@ func _on_card_look(event: InputEvent, w: MiniCard, inst: CardInstance) -> void:
 				_cancel_drag()
 				_auto_cast(inst)
 				return
-			_begin_drag(w, inst)
+			_begin_drag(w, inst, mb.global_position)
 			return
 		# THE RELEASE. A press that never travelled [constant DRAG_SLOP] is
 		# a CLICK and is left alone — the Button's own `pressed` fires and
@@ -6202,13 +6226,15 @@ func _on_piled_card_input(event: InputEvent, holder: Control,
 		# front of it rather than cropped (`CardPile.populate`,
 		# 2026-09-04), so there is no clip left to take off — the card was
 		# already whole before the drag began.
-		_drag_motion()
+		_drag_motion((event as InputEventMouseMotion).global_position)
 		return
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
 	if mb.button_index != MOUSE_BUTTON_LEFT:
 		return
+	_click_at = mb.global_position
+	_click_frame = Engine.get_process_frames()
 	if mb.pressed:
 		if mb.double_click:
 			# The pile's own double-click is the 1997 auto-cast, and the
@@ -6216,7 +6242,7 @@ func _on_piled_card_input(event: InputEvent, holder: Control,
 			# dragging the card out from under it.
 			_cancel_drag()
 			return
-		_begin_drag_node(holder, inst)
+		_begin_drag_node(holder, inst, mb.global_position)
 		return
 	# The release. A press that never travelled [constant DRAG_SLOP] is a
 	# CLICK and is left for the holder's own `pressed`; one that did travel
@@ -6250,32 +6276,34 @@ func _half_of(inst: CardInstance) -> int:
 
 ## Arm the gesture. Nothing moves and nothing is claimed yet: until the
 ## pointer travels [constant DRAG_SLOP] this is still an ordinary click.
-func _begin_drag(w: MiniCard, inst: CardInstance) -> void:
-	_begin_drag_node(_layout_root(w), inst)
+## [param at] is where the press landed, from the press's own event.
+func _begin_drag(w: MiniCard, inst: CardInstance, at: Vector2) -> void:
+	_begin_drag_node(_layout_root(w), inst, at)
 
 
 ## The same gesture, armed on a node the caller has already chosen. A card
 ## inside a [CardPile] cannot use [method _layout_root]: its holder's
 ## parent chain runs through the PILE, so the walk would hand back the
 ## whole pile and the player would drag five cards at once.
-func _begin_drag_node(root: Control, inst: CardInstance) -> void:
+func _begin_drag_node(root: Control, inst: CardInstance, at: Vector2) -> void:
 	_cancel_drag()
 	if game == null or root == null or _half_of(inst) == -1:
 		return
 	_drag_inst = inst
 	_drag_root = root
 	_drag_rest_z = root.z_index
-	_drag_from = get_global_mouse_position()
+	_drag_from = at
 	_drag_origin = root.global_position
 	_dragging = false
 
 
-## The pointer moved with the button down.
-func _drag_motion() -> void:
+## The pointer moved with the button down, to [param at] (the motion
+## event's own global position).
+func _drag_motion(at: Vector2) -> void:
 	if _drag_root == null or not is_instance_valid(_drag_root):
 		_cancel_drag()
 		return
-	var delta := get_global_mouse_position() - _drag_from
+	var delta := at - _drag_from
 	if not _dragging:
 		if delta.length() < DRAG_SLOP:
 			return

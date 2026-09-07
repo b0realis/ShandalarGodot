@@ -177,7 +177,7 @@ func test_headless_there_is_no_touchscreen_so_auto_is_off() -> void:
 
 func test_the_engine_settings_the_layer_builds_on() -> void:
 	assert_true(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch", true),
-		"the engine's finger-as-mouse stays on: it keeps Input's mouse position under the finger")
+		"the engine's finger-as-mouse stays on underneath; the layer eats what it makes")
 	assert_false(ProjectSettings.get_setting("input_devices/pointing/emulate_touch_from_mouse", false),
 		"and a mouse is never dressed up as a finger")
 	assert_eq(int(ProjectSettings.get_setting("display/window/handheld/orientation", 0)),

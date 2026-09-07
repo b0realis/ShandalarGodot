@@ -420,22 +420,25 @@ func dismiss() -> void:
 
 # --------------------------------------------------------------- the bar --
 
+## The pointer is read FROM THE EVENT, not `get_global_mouse_position()`:
+## the same number under a mouse, and the only one a finger on the touch
+## layer has (game/input/touch_controls.gd — it moves no OS pointer).
 func _on_bar_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			_dragging = true
 			_drag_moved = false
-			_drag_from = get_global_mouse_position()
+			_drag_from = event.global_position
 			_drag_offset = _drag_from - global_position
 		else:
 			if _dragging and _drag_moved:
 				Settings.set_value(POS_SETTING, position)
 			_dragging = false
 	elif event is InputEventMouseMotion and _dragging:
-		if get_global_mouse_position().distance_to(_drag_from) > DRAG_SLOP:
+		if event.global_position.distance_to(_drag_from) > DRAG_SLOP:
 			_drag_moved = true
 		if _drag_moved:
-			position = get_global_mouse_position() - _drag_offset
+			position = event.global_position - _drag_offset
 			_clamp_on_screen()
 
 

@@ -873,3 +873,40 @@ func test_the_H_key_folds_the_hand_from_the_duel_screen() -> void:
 	assert_true(hand.is_collapsed(), "H folds")
 	screen._unhandled_key_input(key)
 	assert_false(hand.is_collapsed(), "H unfolds")
+
+
+func test_the_title_bar_follows_the_events_position_not_the_os_pointer() -> void:
+	# The owner's hand stack drags by its bar. A finger on the touch layer
+	# moves no OS pointer, so the bar reads the event (2026-09-07) — the
+	# same number under a mouse.
+	var stack := StackHand.new()
+	add_child_autofree(stack)
+	stack.populate([_instance("Island")], false, func(_inst): pass, _no_highlight)
+	await get_tree().process_frame
+	var had := Settings.has_value("hand_stack_pos")
+	var was: Variant = Settings.get_value("hand_stack_pos", null) if had else null
+	stack.global_position = Vector2(300, 200)
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = Vector2(StackHand.ARROW_ZONE + 10, 5)   # the bar's middle
+	down.global_position = Vector2(340, 205)
+	stack._on_title_input(down)
+	assert_true(stack._dragging)
+	assert_eq(stack._drag_offset, Vector2(40, 5), "the grip, from the press")
+	var move := InputEventMouseMotion.new()
+	move.button_mask = MOUSE_BUTTON_MASK_LEFT
+	move.global_position = Vector2(440, 255)
+	stack._on_title_input(move)
+	assert_true(stack._drag_moved)
+	assert_eq(stack.global_position, Vector2(400, 250), "the window under the grip")
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.global_position = Vector2(440, 255)
+	stack._on_title_input(up)
+	assert_false(stack._dragging)
+	if had:
+		Settings.set_value("hand_stack_pos", was)
+	else:
+		Settings.clear_value("hand_stack_pos")
