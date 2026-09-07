@@ -20,12 +20,15 @@ class PickByName extends DecisionAgent:
 		return null if candidates.is_empty() else candidates[0]
 
 
-## Picks an OPTION by its label (the named card), else the first.
+## Picks an OPTION by its label (the named card), else the first — and
+## remembers what was on offer.
 class NameSaying extends DecisionAgent:
 	var says := ""
+	var offered: Array[String] = []
 
 	func answer_option(_game: MtgGame, _pid: int, _prompt: String,
 			options: Array[String], _hint: int) -> int:
+		offered = options.duplicate()
 		var i := options.find(says)
 		return i if i >= 0 else 0
 
@@ -251,8 +254,9 @@ func test_nebuchadnezzar_discards_every_copy_it_names() -> void:
 	var neb := put_battlefield(0, "Nebuchadnezzar")
 	for _i in 3:
 		give_hand(1, "Grizzly Bears")
-	# The name has to be findable in the opponent's VISIBLE deck.
-	put_battlefield(1, "Grizzly Bears")
+	# The name has to be in the opponent's DECKLIST (the owner's ruling,
+	# 2026-09-07) — a test hands cards out past setup, so say so.
+	g.players[1].deck_names.append("Grizzly Bears")
 	var agent := NameSaying.new()
 	agent.says = "Grizzly Bears"
 	g.set_agent(0, agent)
@@ -267,7 +271,7 @@ func test_nebuchadnezzar_reveals_only_x_cards() -> void:
 	var neb := put_battlefield(0, "Nebuchadnezzar")
 	for _i in 4:
 		give_hand(1, "Grizzly Bears")
-	put_battlefield(1, "Grizzly Bears")
+	g.players[1].deck_names.append("Grizzly Bears")
 	var agent := NameSaying.new()
 	agent.says = "Grizzly Bears"
 	g.set_agent(0, agent)
@@ -281,7 +285,7 @@ func test_nebuchadnezzar_leaves_a_hand_of_other_cards_alone() -> void:
 	var neb := put_battlefield(0, "Nebuchadnezzar")
 	give_hand(1, "Lightning Bolt")
 	give_hand(1, "Lightning Bolt")
-	put_battlefield(1, "Grizzly Bears")
+	g.players[1].deck_names.append("Grizzly Bears")
 	var agent := NameSaying.new()
 	agent.says = "Grizzly Bears"
 	g.set_agent(0, agent)
@@ -298,6 +302,49 @@ func test_nebuchadnezzar_is_your_turn_only() -> void:
 	add_mana(0, Mtg.ManaColor.C, 1)
 	assert_refused(g.activate_ability(0, neb, 0, [TargetRef.player(1)], 1),
 		"only during your turn")
+
+
+func test_nebuchadnezzar_names_from_the_opponents_decklist() -> void:
+	# The owner's ruling (2026-09-07): "only display selection of cards from
+	# opponents deck (as you can see the deck beforehand in real mtg)". The
+	# list is the DECKLIST, so a card whose every copy is in hand — the one
+	# case the old visible-zones scan could not name — is on it, and a card
+	# the opponent never brought is not, wherever it sits.
+	var neb := put_battlefield(0, "Nebuchadnezzar")
+	g.players[1].deck_names.append("Hill Giant")
+	give_hand(1, "Hill Giant")             # its only copy, in hand
+	put_battlefield(1, "Grizzly Bears")    # theirs on the table, not in the deck
+	var agent := NameSaying.new()
+	agent.says = "Hill Giant"
+	g.set_agent(0, agent)
+	add_mana(0, Mtg.ManaColor.C, 1)
+	assert_ok(g.activate_ability(0, neb, 0, [TargetRef.player(1)], 1))
+	resolve_stack()
+	assert_true(agent.offered.has("Hill Giant"), "the decklist says it, the hand does not")
+	assert_false(agent.offered.has("Grizzly Bears"), "a card the deck never had")
+	assert_eq(g.players[1].hand.size(), 0, "named and discarded")
+
+
+func test_nebuchadnezzar_heuristic_names_what_is_likeliest_still_hidden() -> void:
+	# Two Bolts and three Bears in the deck; two Bears already in the
+	# graveyard. Unaccounted for: one Bear, two Bolts — the Bolt is the
+	# better guess, and the default seat takes the first name offered.
+	var neb := put_battlefield(0, "Nebuchadnezzar")
+	g.players[1].deck_names.assign(["Grizzly Bears", "Lightning Bolt",
+		"Grizzly Bears", "Lightning Bolt", "Grizzly Bears"])
+	for _i in 2:
+		var dead := give_hand(1, "Grizzly Bears")
+		g.players[1].hand.erase(dead)
+		dead.zone = Mtg.Zone.GRAVEYARD
+		g.players[1].graveyard.append(dead)
+	give_hand(1, "Lightning Bolt")
+	give_hand(1, "Grizzly Bears")
+	add_mana(0, Mtg.ManaColor.C, 2)
+	assert_ok(g.activate_ability(0, neb, 0, [TargetRef.player(1)], 2))
+	resolve_stack()
+	assert_eq(g.players[1].hand.size(), 1)
+	assert_eq(g.players[1].hand[0].data.card_name, "Grizzly Bears",
+		"the heuristic named the Bolt and the Bolt went")
 
 
 # -------------------------------------------------- Season of the Witch --
