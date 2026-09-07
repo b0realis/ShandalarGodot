@@ -353,6 +353,86 @@ func test_power_leak_half_payment_prevents_half() -> void:
 	assert_eq(g.players[1].life, 19)
 
 
+func test_power_leak_takes_more_than_two_and_the_third_mana_prevents_nothing() -> void:
+	# The printed card: "may pay any amount of mana". The engine capped the
+	# question at {2} until 2026-09-07 (the 1997 wording, Duel.hlp); now the
+	# bound is what the victim can actually pay.
+	var moat := put_battlefield(1, "Moat")
+	var islands: Array[CardInstance] = []
+	for i in 3:
+		islands.append(put_battlefield(1, "Island"))
+	var leak := give_hand(0, "Power Leak")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 2)
+	assert_ok(g.cast_spell(0, leak, [TargetRef.card(moat)]))
+	resolve_stack()
+	_numbers(1, 3)
+	advance_to_next_turn()
+	assert_eq(g.players[1].life, 20, "two of the three prevented the whole 2")
+	for island in islands:
+		assert_true(island.tapped, "all three Islands paid — the third bought nothing")
+
+
+func test_power_leak_asks_no_more_than_the_victim_can_pay() -> void:
+	var moat := put_battlefield(1, "Moat")
+	put_battlefield(1, "Island")
+	put_battlefield(1, "Island")
+	put_battlefield(1, "Island")
+	var leak := give_hand(0, "Power Leak")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 2)
+	assert_ok(g.cast_spell(0, leak, [TargetRef.card(moat)]))
+	resolve_stack()
+	var agent := _numbers(1, 9)            # asks for more than there is
+	advance_to_next_turn()
+	assert_eq(agent.want, 9)
+	assert_eq(g.players[1].life, 20, "the ceiling was three, and three is enough")
+
+
+func test_power_leak_heuristic_still_pays_exactly_the_rent() -> void:
+	# The AI seat's own answer is unchanged: at 10 life or less it pays the
+	# rent and not a mana more, however many lands it has.
+	var moat := put_battlefield(1, "Moat")
+	var islands: Array[CardInstance] = []
+	for i in 4:
+		islands.append(put_battlefield(1, "Island"))
+	g.players[1].life = 10
+	var leak := give_hand(0, "Power Leak")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 2)
+	assert_ok(g.cast_spell(0, leak, [TargetRef.card(moat)]))
+	resolve_stack()
+	advance_to_next_turn()
+	assert_eq(g.players[1].life, 10, "paid the rent")
+	var tapped := 0
+	for island in islands:
+		if island.tapped:
+			tapped += 1
+	assert_eq(tapped, 2, "and not a mana more")
+
+
+func test_power_leak_soaks_a_floating_pool_that_would_have_burned() -> void:
+	# The one place the cap showed in play: under mana burn, a victim with
+	# three floating could only dump two into the Aura and burned for the
+	# third. Now every floating point can go into the Leak.
+	g.rules.mana_burn = true
+	var moat := put_battlefield(1, "Moat")
+	var leak := give_hand(0, "Power Leak")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 2)
+	assert_ok(g.cast_spell(0, leak, [TargetRef.card(moat)]))
+	resolve_stack()
+	_numbers(1, 3)
+	advance_to_step(Mtg.Step.UPKEEP)      # the victim's upkeep, trigger waiting
+	assert_eq(g.active_player, 1)
+	assert_false(g.stack.is_empty(), "the Leak's trigger is on the stack")
+	add_mana(1, Mtg.ManaColor.U, 3)
+	resolve_stack()
+	assert_eq(g.players[1].mana_pool.total(), 0, "all three went into the Aura")
+	advance_to_step(Mtg.Step.DRAW)
+	assert_eq(g.players[1].life, 20, "nothing left to burn")
+
+
 # -------------------------------------------------------------- Petra Sphinx --
 
 func test_petra_sphinx_hits_the_named_card() -> void:

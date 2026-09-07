@@ -9,12 +9,21 @@ extends CardScript
 ## Implementation: the Warp Artifact aura shape, on an ENCHANTMENT, with a
 ## rent the victim can buy out of. The amount is a real question
 ## (DecisionAgent.choose_number), asked of the HOST's controller — never
-## the Aura's — and capped at 2: the oracle lets a player pay more, but the
-## third mana prevents nothing, and the original's own text already reads
-## *"That player may pay up to {2} to prevent that amount of damage dealt
-## to him or her by Power Leak"* (Duel.hlp, Power Leak).
+## the Aura's — and bounded by what that player can pay RIGHT NOW: the
+## floating pool plus every untapped mana source (MtgGame.can_afford_cost,
+## probed upward one mana at a time). "Any amount" has no ceiling of its
+## own, and this is the honest one. The third mana onward prevents nothing
+## — the Aura deals 2 and the prevention is `min(paid, 2)` — but a player
+## may still pay it: under the optional 1997 MANA BURN rule, dumping a
+## bigger floating pool into the Aura is how the burn is dodged.
 ##
-## SIMPLIFIED (docs/simplified-cards.md, "Power Leak"): that {2} cap.
+## [1997] The original's own text read *"That player may pay up to {2} to
+## prevent that amount of damage dealt to him or her by Power Leak"*
+## (Duel.hlp, Power Leak), and its prompt offered three answers — "Take
+## the 2 damage." / "Pay 1 mana, take 1 damage." / "Pay 2 mana."
+## (`@POWERLEAK`, prompts.txt). The engine kept that {2} cap until
+## 2026-09-07; the printed card (and mage-go, which bounds the question
+## by the hypothetical mana available) allows any amount.
 ##
 ## The prevention is applied at the SOURCE — the Aura deals `2 - X` — rather
 ## than through MtgPlayer.damage_prevention. That is not a shortcut, it is
@@ -66,19 +75,27 @@ static func _leak(game: MtgGame, source: CardInstance, event: GameEvent) -> void
 	# CR 608.2h — the trigger resolves even if the Aura has fallen off; the
 	# victim is the player the event named.
 	var pid: int = event.data["player"]
-	# SIMPLIFIED (docs/simplified-cards.md, "Power Leak"): capped at RENT.
-	# Only the optional 1997 mana-burn rule can tell the difference.
-	var most := 0
-	for n in range(RENT, 0, -1):
-		if game.can_afford_cost(pid, ManaCost.parse("{%d}" % n)):
-			most = n
-			break
+	# "Any amount": the bound is what the victim can pay this moment.
+	var most := _most_payable(game, pid)
 	var paid := 0
 	if most > 0:
-		var want: int = most if game.players[pid].life <= 10 else 0
+		# The heuristic never pays past the rent — the third mana buys nothing
+		# it wants (it does not play the mana-burn dodge).
+		var want: int = mini(most, RENT) if game.players[pid].life <= 10 else 0
 		var wish: int = game.agents[pid].choose_number(game, pid, 0, most,
 			"Pay how much mana to prevent Power Leak's damage?", want)
 		if wish > 0 and game.try_pay(pid, ManaCost.parse("{%d}" % wish)):
 			paid = wish
-	if paid < RENT:
-		game.deal_damage(source, TargetRef.player(pid), RENT - paid)
+	var prevented := mini(paid, RENT)
+	if prevented < RENT:
+		game.deal_damage(source, TargetRef.player(pid), RENT - prevented)
+
+
+## The largest generic cost [param pid] can pay right now — floating mana
+## and untapped sources together. Affordability of {n} is monotone in n,
+## so the first {n+1} refused is the ceiling.
+static func _most_payable(game: MtgGame, pid: int) -> int:
+	var n := 0
+	while game.can_afford_cost(pid, ManaCost.parse("{%d}" % (n + 1))):
+		n += 1
+	return n
