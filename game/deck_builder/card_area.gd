@@ -724,6 +724,15 @@ func entry_count() -> int:
 	return _visible_entries().size()
 
 
+## Copies on the surface, every entry's count together — what a sealed
+## pool's Inventory counts, where a card's count is copies still in hand.
+func copies_shown() -> int:
+	var n := 0
+	for entry in _visible_entries():
+		n += int(entry[1])
+	return n
+
+
 ## The first card on the surface in display order, or null when it shows
 ## none — what `Enter` in the Inventory's type-ahead adds.
 func first_entry() -> CardData:

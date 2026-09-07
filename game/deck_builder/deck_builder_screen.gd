@@ -224,6 +224,14 @@ const FORMAT_WARNING := "%d card%s break%s the tournament rules (four copies, th
 const RARITY_SETTING := "deck_rarity_marks"
 ## [QoL] Whether the mini cards wear their mana cost — see [member CardArea.show_cost].
 const COST_SETTING := "deck_cost_marks"
+## [QoL] The Sealed Deck window's four numbers, remembered between visits
+## the way the two switches above are — see [member sealed].
+const SEALED_SETTINGS := {
+	"boosters": "sealed_boosters", "starters": "sealed_starters",
+	"free_lands": "sealed_free_lands", "extras": "sealed_extras",
+}
+## Whether `Done` in the sealed window clears the deck first, remembered.
+const SEALED_FRESH_SETTING := "sealed_fresh_deck"
 
 const MARGIN := 8.0
 const HEADER_H := 50.0
@@ -319,6 +327,16 @@ var _stats_button: Button
 var _rarity_button: Button
 ## [QoL] The bar's `Cost` switch — see [member CardArea.show_cost].
 var _cost_button: Button
+## [QoL] The dice medallion at the bar's left end — see [member sealed].
+var _dice_button: Button
+## [QoL] THE SEALED DECK POOL IN FORCE, or null while the Inventory is the
+## whole library. While it is set the Inventory offers only what the
+## packs dealt ([method _refresh_inventory]), a card leaves it as its
+## last copy goes into the deck, and every door into the deck refuses a
+## copy the pool did not deal ([method _sealed_refusal]). The dice
+## medallion stays down for as long as it is set. See [SealedPool] for
+## the packs and [method _open_sealed_window] for the door.
+var sealed: SealedPool = null
 var _left_column: VBoxContainer
 var _stats_label: Label
 ## A flat 1997 choice line, not a Label — it is clickable ([QoL], see
@@ -467,6 +485,15 @@ func _layout() -> void:
 	_command_row.position = Vector2(side_rect.position.x,
 		side_rect.position.y + side_rect.size.y + 3.0)
 	_command_row.size = Vector2(side_rect.size.x, COMMAND_BAR_H)
+	# [QoL] The dice medallion: the row's left end, on the row's own centre
+	# line, and the row starts after it — see [method _build_command_bar].
+	if _dice_button != null:
+		var dice := float(FilterBar.DICE_SIZE)
+		_dice_button.position = Vector2(_command_row.position.x,
+			_command_row.position.y - (dice - COMMAND_BAR_H) / 2.0)
+		_dice_button.size = Vector2(dice, dice)
+		_command_row.position.x += dice + 4.0
+		_command_row.size.x = maxf(0.0, _command_row.size.x - dice - 4.0)
 
 	_header_slab.position = Vector2(MARGIN, MARGIN)
 	# AS WIDE AS THE CARD UNDER IT, not the column. The slab took the
@@ -686,6 +713,25 @@ func _build_header() -> void:
 func _build_command_bar() -> void:
 	_command_row = HBoxContainer.new()
 	_command_row.add_theme_constant_override("separation", 4)
+
+	# [QoL] THE DICE, left of Stats — the owner's ask, 2026-09-07: *"one
+	# medallion to the left of the stats button: one with playing dice on
+	# it"*. A medallion and not a bar button, dressed by the filter strip's
+	# own hand ([method FilterBar.dress_medallion]) in the strip's own
+	# polarity: DOWN and lit while a sealed pool is in force, up and sunken
+	# while the Inventory is the whole library. Up, a click opens the
+	# Sealed Deck window; down, a click puts the library back. It stands
+	# beside the row rather than in it, four pixels taller than the bar
+	# ([constant FilterBar.DICE_SIZE]), placed by [method _layout].
+	_dice_button = Button.new()
+	_dice_button.name = "DiceButton"
+	_dice_button.toggle_mode = true
+	_dice_button.focus_mode = Control.FOCUS_ALL
+	_dice_button.tooltip_text = "Sealed Deck — open packs and build from what they deal"
+	FilterBar.dress_medallion(_dice_button, FilterBar.DICE_CELL, "Sealed",
+		Vector2(FilterBar.DICE_SIZE, FilterBar.DICE_SIZE))
+	_dice_button.pressed.connect(_on_dice_pressed)
+	add_child(_dice_button)
 
 	_stats_button = OriginalDialog.button("", Vector2(120, COMMAND_BAR_H))
 	_stats_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1071,7 +1117,9 @@ func _show_in_showcase(data: CardData) -> void:
 
 func _add_one(card_name: String) -> bool:
 	var before := deck.duplicate_model()
-	var refusal := deck.add(card_name)
+	var refusal := _sealed_refusal(card_name)
+	if refusal == "":
+		refusal = deck.add(card_name)
 	if refusal != "":
 		_say(refusal, true)
 		return false
@@ -1111,7 +1159,9 @@ func _add_playset(card_name: String) -> void:
 	var added := 0
 	var refusal := ""
 	for _i in 4:
-		refusal = deck.add(card_name)
+		refusal = _sealed_refusal(card_name)
+		if refusal == "":
+			refusal = deck.add(card_name)
 		if refusal != "":
 			break
 		added += 1
@@ -1167,7 +1217,9 @@ func _remove_all(card_name: String) -> void:
 ## without a detour through the deck.
 func _add_one_side(card_name: String) -> void:
 	var before := deck.duplicate_model()
-	var refusal := deck.add_side(card_name)
+	var refusal := _sealed_refusal(card_name)
+	if refusal == "":
+		refusal = deck.add_side(card_name)
 	if refusal != "":
 		_say(refusal, true)
 		return
@@ -1278,6 +1330,12 @@ func refresh() -> void:
 	# [QoL] the Inventory's badges follow the deck — page-sized work only.
 	if _inventory != null:
 		_inventory.refresh_counts()
+	# [QoL] ...except under a sealed pool, where the Inventory IS a function
+	# of the deck — copies in hand are copies not yet placed — so it is
+	# redrawn, scroll kept. The pool is a hundred cards, not nine hundred.
+	if sealed != null and _inventory != null:
+		_drawn_revision = -1
+		_refresh_inventory(true)
 	var order: Array = deck.names() if _sorted else deck.counts.keys()
 	_deck_area.set_entries(_entries_for(order, deck.counts))
 	_refresh_sideboard_area()
@@ -1435,18 +1493,33 @@ func _open_the_complaint() -> void:
 ## Re-run the filter over the pool — but only when the filter has actually
 ## moved. A new list starts at its first card, which is the one place
 ## s30 resets its carousel too (`edit_deck.go:391-396`).
-func _refresh_inventory() -> void:
+func _refresh_inventory(keep_scroll := false) -> void:
 	if filter.revision == _drawn_revision:
 		return
 	_drawn_revision = filter.revision
 	filter_passes += 1
-	var shown := filter.apply(_pool)
 	var entries: Array = []
-	entries.resize(shown.size())
-	for i in shown.size():
-		entries[i] = [shown[i], 1]
+	if sealed == null:
+		var shown := filter.apply(_pool)
+		entries.resize(shown.size())
+		for i in shown.size():
+			entries[i] = [shown[i], 1]
+	else:
+		# [QoL] THE POOL, LESS WHAT IS PLACED. What the packs dealt, through
+		# the same filters and sort, each card with the copies still in
+		# hand — the deck and the sideboard both count as placed
+		# ([method DeckModel.copies_of]) — and a card whose last copy is
+		# placed is not listed at all. That is the 1997 collection's own
+		# idiom (manual ch.10: a card dragged into the deck leaves the
+		# inventory), which the whole-library Inventory has no use for
+		# and this one is built on.
+		for data in filter.apply(_sealed_library()):
+			var left: int = sealed.copies_of(data.card_name) - deck.copies_of(data.card_name)
+			if left > 0:
+				entries.append([data, left])
 	_inventory.set_entries(entries)
-	_inventory.reset_scroll()
+	if not keep_scroll:
+		_inventory.reset_scroll()
 	_update_count_line()
 	_filter_bar.refresh()
 
@@ -1484,7 +1557,12 @@ func _update_count_line() -> void:
 	# echo of the era's voice is worth less than the number, so the number
 	# stays and the sentence goes: both figures fit at full size.
 	_count_label.text = "%d cards" % total
-	if total > _inventory.page_size():
+	if sealed != null:
+		# [QoL] Under a sealed pool the number is COPIES IN HAND, not names
+		# — the question the pool poses — and the line says whose they are.
+		total = _copies_listed()
+		_count_label.text = "%d pool cards" % total
+	if _inventory.entry_count() > _inventory.page_size():
 		_count_label.text += " — showing %d-%d" % [first, last]
 	_inventory.tally = "%d card%s" % [total, "" if total == 1 else "s"]
 
@@ -1753,7 +1831,9 @@ func _add_basic_land(card_name: String, wanted: int) -> void:
 	var added := 0
 	var refusal := ""
 	for _i in wanted:
-		refusal = deck.add(card_name)
+		refusal = _sealed_refusal(card_name)
+		if refusal == "":
+			refusal = deck.add(card_name)
 		if refusal != "":
 			break
 		added += 1
@@ -1764,6 +1844,353 @@ func _add_basic_land(card_name: String, wanted: int) -> void:
 	_dirty = true
 	refresh()
 	_say("Added %d %s" % [added, card_name])
+
+
+# ------------------------------------------------ [QoL] the sealed deck --
+# THE PACK-OPENING HALF OF THE 1997 SEALED DECK SCREEN. The shell offered
+# it — `@SHELLSCREEN_DUEL`: *"Sealed Deck: Compete in the most popular form
+# of Magic Tournament."* — and the string table roughed the whole screen
+# in (`@SHELLPAGE_SEALEDDECK`, `@SEALEDDECK_FOILPACKSCREEN`, see
+# [SealedPool]) without a line of code behind it. This is the owner's
+# brief of 2026-09-07 built on those strings: a dice medallion on the
+# command bar, a window that deals packs, and an Inventory that then
+# offers only what was dealt. The tournament ladder is not here.
+
+## The window's title, in the owner's words; the 1997 foil-pack screen's
+## was "Sealed Deck Tournament Information".
+const SEALED_TITLE := "Sealed Deck Tournament Simulation"
+## Its one subtitle, the owner's brief, with the deck floor the 1997
+## strings state (`@SHELLPAGE_SEALEDDECK`: *"Minimum deck size: 40
+## cards"*) — the 1998 strategy guide put the format in a sentence too
+## (*"You take a Sealed Deck and a booster, and are supposed to make a
+## forty card deck out of it."*, p.75), which is quoted in [SealedPool]
+## and not lettered here: one subtitle, the owner's.
+const SEALED_BRIEF := "Make the most of the random selection, and make yourself a deck of at least %d cards."
+## The four numbers the window asks for: label, [SealedPool] property,
+## the caption that says what one of them holds, and the spinner's
+## ceiling. The captions are the owner's pack shapes verbatim.
+const SEALED_ROWS: Array = [
+	["Booster packs", "boosters",
+		"15 cards — 1 rare or legend, 3 uncommons, 1 land, 10 commons",
+		SealedPool.MOST_PACKS],
+	["Starter packs", "starters",
+		"the tournament pack: 60 cards — 3 rares, 9 uncommons, 26 commons, 22 lands",
+		SealedPool.MOST_PACKS],
+	["Free lands, of each type", "free_lands",
+		"Plains, Island, Swamp, Mountain and Forest",
+		SealedPool.MOST_FREE_LANDS],
+	["Random cards", "extras",
+		"any card in the library, whatever its rarity",
+		SealedPool.MOST_EXTRAS],
+]
+## `@SEALEDDECK_FOILPACKSCREEN`'s own two headings and
+## `@SHELLPAGE_SEALEDDECK`'s count line.
+const SEALED_PACKS_HEAD := "Your Starters and Boosters"
+const SEALED_CARDS_HEAD := "Cards In Pack"
+const SEALED_COUNT_LINE := "Each player gets %d cards"
+## The letters the card lines wear: the rarity tier's initial, a legend
+## its own L since the rare slot deals both, a dot for a land.
+const SEALED_SLOT_LETTERS := {"legendary": "L", "rare": "R", "uncommon": "U",
+	"common": "C", "land": "•"}
+## Under the brief, the line that asks whether to start from nothing.
+const SEALED_FRESH_LINE := "Start from an empty deck (Restore deck brings this one back)"
+## The right-hand list before the first throw.
+const SEALED_EMPTY_HINT := "Open the packs to see what you are dealt."
+
+
+## The medallion's click: up, it opens the window and stays up — it goes
+## down only once a pool is in force; down, it puts the library back.
+func _on_dice_pressed() -> void:
+	if sealed != null:
+		_leave_sealed()
+		return
+	_dice_button.set_pressed_no_signal(false)
+	_open_sealed_window()
+
+
+## Why the pool refuses [param card_name] into the deck or the sideboard,
+## or "" — the one gate every door into the deck passes through
+## ([method _add_one], [method _add_playset], [method _add_one_side],
+## [method _add_basic_land], and the drops that route to them). Copies
+## are counted across both piles ([method DeckModel.copies_of]), as the
+## model counts them. `Load deck`, `Import deck` and a proxy are not
+## policed: a pool is a promise the player made, and the 1997 screen
+## offered `Load tournament...` beside it.
+func _sealed_refusal(card_name: String) -> String:
+	if sealed == null:
+		return ""
+	var held := sealed.copies_of(card_name)
+	if held == 0:
+		return "Your sealed pool has no %s" % card_name
+	if deck.copies_of(card_name) >= held:
+		if held == 1:
+			return "Your sealed pool holds only one %s" % card_name
+		return "Your sealed pool holds only %d %s" % [held, card_name]
+	return ""
+
+
+## The dealt cards as [CardData], for the filter to walk.
+func _sealed_library() -> Array:
+	var out: Array = []
+	for card_name in sealed.names():
+		var data := CardRegistry.get_card(card_name)
+		if data != null:
+			out.append(data)
+	return out
+
+
+## Copies on the Inventory's list, all entries together.
+func _copies_listed() -> int:
+	return _inventory.copies_shown()
+
+
+## Put [param pool] in force: the medallion goes down, the Inventory
+## becomes the pool less what is placed, and its badge — copies in the
+## DECK on the whole library, since that is the question there — becomes
+## the entry's own count, copies IN HAND, from the second copy on, the
+## manual's *"tiny number on the single representative card"*.
+func _enter_sealed(pool: SealedPool, fresh := false) -> void:
+	sealed = pool
+	_dice_button.set_pressed_no_signal(true)
+	if fresh and deck.total() + deck.side_total() > 0:
+		# `Clear deck`'s own route, so `Restore deck` can undo it.
+		_cleared = deck.duplicate_model()
+		deck.clear()
+		_clear_button.text = "Restore deck"
+		refresh()
+	_inventory.count_source = Callable()
+	_inventory.badge_min = 2
+	_drawn_revision = -1
+	_refresh_inventory()
+	_say("Sealed Deck — %s" % pool.summary())
+
+
+## The whole library back, the badge back to copies in the deck. The deck
+## built from the pool stays as it is.
+func _leave_sealed() -> void:
+	sealed = null
+	_dice_button.set_pressed_no_signal(false)
+	_inventory.badge_min = 1
+	_inventory.count_source = func(card_name: String) -> int:
+		return deck.count_of(card_name)
+	_drawn_revision = -1
+	_refresh_inventory()
+	_say("The whole library is back in the Inventory")
+
+
+## Deal a pool from the four numbers in [param settings] (the
+## [SealedPool] property names), remembering them; [param roll] is the
+## seed, 0 for a fresh one.
+func _deal_sealed(settings: Dictionary, roll := 0) -> SealedPool:
+	var pool := SealedPool.new()
+	for key in settings:
+		pool.set(key, int(settings[key]))
+		Settings.set_value(String(SEALED_SETTINGS[key]), int(settings[key]))
+	var seed_used := roll
+	while seed_used == 0:
+		seed_used = randi()
+	pool.deal(_pool, seed_used)
+	return pool
+
+
+## THE WINDOW. The title and the brief, the four numbers with what each
+## one holds and `Each player gets N cards` under them, then the dice —
+## every press of them a fresh deal — and, once there is a deal, the
+## foil-pack screen's two lists: the packs down the left, the selected
+## pack's cards down the right lettered by slot, with a hover on a card
+## putting it in the Showcase, which the window leaves uncovered. `Done`
+## puts the pool in force; `Cancel` and Escape leave the library as it
+## was. The medallion is up throughout, and goes down with Done.
+func _open_sealed_window() -> void:
+	if _dialog_busy():
+		return
+	var dialog := OriginalDialog.create(SEALED_TITLE, WINDOW_SIZE)
+	dialog.set_meta("sealed_window", true)
+	var body := dialog.body()
+	body.add_theme_constant_override("separation", 6)
+	body.add_child(OriginalDialog.label(SEALED_BRIEF % DeckModel.MIN_CARDS, 14, true))
+	var fresh := {"on": bool(Settings.get_value(SEALED_FRESH_SETTING, true))}
+	var fresh_line := _menu_line(_check_text(fresh["on"], SEALED_FRESH_LINE))
+	fresh_line.name = "FreshLine"
+	fresh_line.custom_minimum_size.x = 0
+	fresh_line.pressed.connect(func() -> void:
+		fresh["on"] = not fresh["on"]
+		fresh_line.text = _check_text(fresh["on"], SEALED_FRESH_LINE)
+		Settings.set_value(SEALED_FRESH_SETTING, fresh["on"]))
+	body.add_child(fresh_line)
+	body.add_child(HSeparator.new())
+
+	# The four numbers, each with what one of them holds beside it.
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 4)
+	var spins := {}
+	var count_line := OriginalDialog.label("", 14, true)
+	count_line.name = "CountLine"
+	var recount := func(_value: float = 0.0) -> void:
+		var pool := SealedPool.new()
+		for key in spins:
+			pool.set(key, int(spins[key].value))
+		count_line.text = SEALED_COUNT_LINE % pool.card_total()
+	for row in SEALED_ROWS:
+		var key := String(row[1])
+		grid.add_child(OriginalDialog.label(String(row[0]), 14))
+		var spin := OriginalDialog.field(72.0)
+		spin.name = key.capitalize().replace(" ", "") + "Field"
+		spin.min_value = 0
+		spin.max_value = int(row[3])
+		spin.value = int(Settings.get_value(String(SEALED_SETTINGS[key]),
+			SealedPool.new().get(key)))
+		spin.value_changed.connect(recount)
+		spins[key] = spin
+		grid.add_child(spin)
+		grid.add_child(OriginalDialog.label(String(row[2]), 12))
+	body.add_child(grid)
+	body.add_child(count_line)
+	recount.call()
+	body.add_child(HSeparator.new())
+
+	# The dice, and the tally of the last throw beside them.
+	var throw_row := HBoxContainer.new()
+	throw_row.add_theme_constant_override("separation", 12)
+	# The medallion itself, at its own size, on the button that throws.
+	var throw := OriginalDialog.button("Open the packs",
+		Vector2(196, FilterBar.DICE_SIZE + 8))
+	throw.name = "DealButton"
+	var dice_art := FilterBar.sheet_cell("filter_icons", FilterBar.DICE_CELL[0],
+		FilterBar.DICE_CELL[1])
+	if dice_art != null:
+		throw.icon = dice_art
+		throw.add_theme_constant_override("h_separation", 10)
+	throw_row.add_child(throw)
+	var tally := OriginalDialog.label("", 13)
+	tally.name = "PoolTally"
+	tally.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	throw_row.add_child(tally)
+	body.add_child(throw_row)
+
+	# `@SEALEDDECK_FOILPACKSCREEN`: the packs, and the selected pack's cards.
+	var split := HBoxContainer.new()
+	split.add_theme_constant_override("separation", 14)
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var packs_column := VBoxContainer.new()
+	packs_column.name = "Packs"
+	packs_column.add_theme_constant_override("separation", 4)
+	packs_column.custom_minimum_size.x = TAB_SIZE.x
+	packs_column.add_child(OriginalDialog.label(SEALED_PACKS_HEAD, 13, true))
+	var packs_scroll := ScrollContainer.new()
+	packs_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	packs_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var packs_list := VBoxContainer.new()
+	packs_list.name = "PackList"
+	packs_list.add_theme_constant_override("separation", 2)
+	packs_scroll.add_child(packs_list)
+	packs_column.add_child(packs_scroll)
+	split.add_child(packs_column)
+	split.add_child(VSeparator.new())
+	var cards_column := VBoxContainer.new()
+	cards_column.name = "Cards"
+	cards_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cards_column.add_theme_constant_override("separation", 4)
+	cards_column.add_child(OriginalDialog.label(SEALED_CARDS_HEAD, 13, true))
+	var cards_scroll := ScrollContainer.new()
+	cards_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cards_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var cards_list := GridContainer.new()
+	cards_list.name = "PackCards"
+	cards_list.columns = LIST_COLUMNS
+	cards_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cards_list.add_theme_constant_override("v_separation", 0)
+	cards_list.add_theme_constant_override("h_separation", 12)
+	cards_scroll.add_child(cards_list)
+	cards_column.add_child(cards_scroll)
+	split.add_child(cards_column)
+	body.add_child(split)
+
+	cards_list.add_child(OriginalDialog.label(SEALED_EMPTY_HINT, 13))
+
+	var view := {"pool": null}
+	var done := dialog.add_button("Done")
+	done.disabled = true
+	done.pressed.connect(func() -> void:
+		var pool: SealedPool = view["pool"]
+		dialog.dismiss()
+		if pool != null:
+			_enter_sealed(pool, fresh["on"]))
+	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
+
+	throw.pressed.connect(func() -> void:
+		var settings := {}
+		for key in spins:
+			settings[key] = int(spins[key].value)
+		var pool := _deal_sealed(settings)
+		view["pool"] = pool
+		tally.text = pool.summary()
+		done.disabled = pool.total() == 0
+		_fill_pack_list(packs_list, cards_list, pool)
+		_audio.play(DeckAudio.CUE_ADD))
+	_show_dialog(dialog)
+
+
+## The packs down [param packs_list] as a row of toggles, the first one
+## down, and its cards in [param cards_list].
+func _fill_pack_list(packs_list: VBoxContainer, cards_list: GridContainer,
+		pool: SealedPool) -> void:
+	for old in packs_list.get_children():
+		packs_list.remove_child(old)
+		old.queue_free()
+	var buttons: Array[Button] = []
+	for i in pool.packs.size():
+		var pack: Dictionary = pool.packs[i]
+		var button := OriginalDialog.button("%s  (%d)" % [String(pack["title"]),
+			(pack["cards"] as Array).size()], Vector2(TAB_SIZE.x, 26))
+		button.name = "PackButton"
+		button.toggle_mode = true
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		buttons.append(button)
+		button.pressed.connect(func() -> void:
+			for other in buttons:
+				other.set_pressed_no_signal(other == button)
+			_fill_pack_cards(cards_list, pack))
+		packs_list.add_child(button)
+	if buttons.is_empty():
+		_fill_pack_cards(cards_list, {"title": "", "cards": []})
+		return
+	buttons[0].button_pressed = true
+	_fill_pack_cards(cards_list, pool.packs[0])
+
+
+## The [constant SEALED_SLOT_LETTERS] key for [param card_name]: its
+## slot, except that a legend says so.
+func _sealed_letter_key(card_name: String) -> String:
+	var slot := SealedPool.slot_of(card_name)
+	if slot == "rare":
+		var data := CardRegistry.get_card(card_name)
+		if data != null and DeckStats.rarity_tier(data) == "legendary":
+			return "legendary"
+	return slot
+
+
+## One pack's cards, lettered by slot, a hover putting the card in the
+## Showcase.
+func _fill_pack_cards(cards_list: GridContainer, pack: Dictionary) -> void:
+	for old in cards_list.get_children():
+		cards_list.remove_child(old)
+		old.queue_free()
+	var cards: Array = pack["cards"]
+	for card_name in cards:
+		var letter := String(SEALED_SLOT_LETTERS.get(_sealed_letter_key(card_name), " "))
+		var line := OriginalDialog.choice_line("%s   %s" % [letter, card_name])
+		line.custom_minimum_size = Vector2(200, 22)
+		line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.mouse_entered.connect(func() -> void:
+			var data := CardRegistry.get_card(card_name)
+			if data != null:
+				_show_in_showcase(data))
+		cards_list.add_child(line)
+	if cards.is_empty():
+		cards_list.add_child(OriginalDialog.label("(nothing dealt)", 14))
 
 
 # ------------------------------------------ the two recovered 1997 commands --

@@ -177,6 +177,19 @@ const ARTIST_CELL := [0, 5]
 const FUNNEL_CELL := [-1, -1]
 const FUNNEL_CENTRE := Vector2(20, 19)
 const FUNNEL_RADIUS := 13.5
+## [QoL] THE DICE, the Deck Builder's Sealed Deck medallion — on the
+## command bar, not this strip, but drawn by the same hand from the same
+## stone ([method _dice_cell]) so it is one of the family. The owner
+## asked for *"one medallion to the left of the stats button: one with
+## playing dice on it"* (2026-09-07). Composed at [constant DICE_SIZE]
+## pixel for pixel rather than at the sheet's 40 and shrunk, so its
+## one-pixel grooves and two-pixel pips are crisp where they show.
+const DICE_CELL := [-2, -2]
+## Its side: the command bar is 26 tall with four free pixels above and
+## below it (`DeckBuilderScreen.COMMAND_BAR_H`, `_layout`), so a
+## medallion of 30 sits on the bar's own centre line two pixels clear of
+## the sideboard's ground above and the strip below.
+const DICE_SIZE := 30
 ## The six sets the original drew a filter medallion for. Unlimited and
 ## the promos have none — as the printed cards have no set symbol either
 ## (game/skin.gd SET_LABELS) — so those two toggles are lettered.
@@ -942,8 +955,19 @@ const FLAT_OFF := Color(0.19, 0.21, 0.26)
 
 
 func _dress_icon(button: Button, cell: Array) -> void:
+	dress_medallion(button, cell, String(button.get_meta("cue", "")))
+
+
+## [QoL] A MEDALLION FOR ANOTHER SURFACE — the Deck Builder's command bar
+## wears the dice ([constant DICE_CELL]) and the Help draws every cell —
+## so the dressing is public and static: the same four draw states, the
+## same fallback lettered from [param cue] when there is no skin, at
+## [param size] a side.
+static func dress_medallion(button: Button, cell: Array, cue: String,
+		size := ICON_SIZE) -> void:
 	button.set_meta("icon_cell", cell)
-	button.custom_minimum_size = ICON_SIZE
+	button.set_meta("cue", cue)
+	button.custom_minimum_size = size
 	_paint_icon(button)
 
 
@@ -955,7 +979,7 @@ func _dress_icon(button: Button, cell: Array) -> void:
 ## Bound ONCE, across the four draw states that a toggle actually visits,
 ## so `set_pressed_no_signal` alone says which one shows and a held button
 ## previews its flip. See the head of this section for the arithmetic.
-func _paint_icon(button: Button) -> void:
+static func _paint_icon(button: Button) -> void:
 	var cell: Array = button.get_meta("icon_cell")
 	var on_art := sheet_cell("filter_icons", cell[0], cell[1])
 	var off_art := sheet_cell("filter_icons_pressed", cell[0], cell[1])
@@ -1065,7 +1089,7 @@ static func _box_for(art: Texture2D, lift := 1.0) -> StyleBoxTexture:
 ## No skin: the era's own bevel geometry in flat colour, lettered — and
 ## split across the same four draw states, so the strip still goes down
 ## under the finger on a machine with no original art at all.
-func _paint_fallback(button: Button, letters: String) -> void:
+static func _paint_fallback(button: Button, letters: String) -> void:
 	button.text = letters
 	button.add_theme_font_size_override("font_size", 12)
 	button.add_theme_stylebox_override("normal", _flat_face(FLAT_OFF))
@@ -1101,7 +1125,9 @@ static func sheet_cell(key: String, row: int, col: int) -> Texture2D:
 	if _cell_cache.has(id):
 		return _cell_cache[id]
 	var result: Texture2D = null
-	if row < 0:
+	if row == DICE_CELL[0]:
+		result = _dice_cell(key)
+	elif row < 0:
 		result = _funnel_cell(key)
 	else:
 		var sheet := GameSkin.texture(key)
@@ -1122,39 +1148,9 @@ static func sheet_cell(key: String, row: int, col: int) -> Texture2D:
 ## sheet [param key] names, so the sunken and lit versions come out of
 ## the sunken and lit sheets and keep their 2:1 split.
 static func _funnel_cell(key: String) -> Texture2D:
-	var base := sheet_cell(key, COST_CELL[0], COST_CELL[1])
-	if base == null:
+	var disc := _blank_disc(key, CELL)
+	if disc.is_empty():
 		return null
-	var img: Image = base.get_image().duplicate()
-	img.convert(Image.FORMAT_RGBA8)
-	var ink := Color.WHITE
-	var gleam := Color.BLACK
-	var face: Array[Color] = []
-	for y in CELL:
-		for x in CELL:
-			var r := Vector2(x, y).distance_to(FUNNEL_CENTRE)
-			if r > FUNNEL_RADIUS:
-				continue
-			var c := img.get_pixel(x, y)
-			if c.get_luminance() < ink.get_luminance():
-				ink = c
-			if c.get_luminance() > gleam.get_luminance():
-				gleam = c
-			# The face is the ring the X's arms stop short of.
-			if r > FUNNEL_RADIUS - 2.5:
-				face.append(c)
-	face.sort_custom(func(a: Color, b: Color) -> bool:
-		return a.get_luminance() < b.get_luminance())
-	# Drop the ring's own rim shading at both ends and speckle the disc
-	# with the middle of it, so the stone reads as the same stone.
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 1997
-	var lo := face.size() / 5
-	var hi := face.size() - lo
-	for y in CELL:
-		for x in CELL:
-			if Vector2(x, y).distance_to(FUNNEL_CENTRE) <= FUNNEL_RADIUS - 1.0:
-				img.set_pixel(x, y, face[rng.randi_range(lo, hi - 1)])
 	# The funnel: a bowl eight rows deep narrowing from seventeen wide to
 	# three, then a stem of the same three down to the disc's lower rim.
 	var cut := {}
@@ -1165,12 +1161,113 @@ static func _funnel_cell(key: String) -> Texture2D:
 	for y in range(19, 28):
 		for x in range(int(FUNNEL_CENTRE.x) - 1, int(FUNNEL_CENTRE.x) + 2):
 			cut[Vector2i(x, y)] = true
-	# The X's groove catches the light on its lower-right edge; so does
-	# this one.
+	return _engrave(disc, cut)
+
+
+## [QoL] THE DICE MEDALLION — see [constant DICE_CELL]. Two dice on the
+## same blank disc the funnel is cut in, at [constant DICE_SIZE], and in
+## the funnel's own manner: solid silhouettes in the ink, since a hollow
+## square with pips in it is a lattice at eleven pixels. The front die is
+## whole and shows five, in single pixels of the disc's own light; the
+## back one sits up and to the left of it behind a one-pixel gap of
+## stone, so the two read apart, and shows the three pips the front one
+## leaves uncovered. The pair fits the square the disc's face inscribes,
+## corner to rim, the way the X's arms reach it.
+static func _dice_cell(key: String) -> Texture2D:
+	var disc := _blank_disc(key, DICE_SIZE)
+	if disc.is_empty():
+		return null
+	var back := Rect2i(8, 7, 11, 11)
+	var front := Rect2i(12, 11, 11, 11)
+	var cut := {}
+	var light := {}
+	_cut_die(cut, light, back)
+	var gap := front.grow(1)
+	for at in cut.keys():
+		if gap.has_point(at):
+			cut.erase(at)
+			light.erase(at)
+	_cut_die(cut, light, front)
+	return _engrave(disc, cut, light)
+
+
+## One die into [param cut] — its whole square — with a five on its face
+## into [param light]: the four corners two pixels in and the centre.
+static func _cut_die(cut: Dictionary, light: Dictionary, box: Rect2i) -> void:
+	for y in box.size.y:
+		for x in box.size.x:
+			cut[box.position + Vector2i(x, y)] = true
+	var far := box.size.x - 3
+	var mid := box.size.x / 2
+	for pip in [Vector2i(2, 2), Vector2i(far, 2), Vector2i(2, far),
+			Vector2i(far, far), Vector2i(mid, mid)]:
+		light[box.position + pip] = true
+
+
+## THE BLANK STONE every composed medallion starts from: the `X` cell of
+## sheet [param key], at [param size] pixels a side (the sheet's own 40,
+## or shrunk first with cubic filtering), with its glyph rubbed out.
+## `"img"` is the disc, `"ink"` and `"gleam"` its darkest and brightest
+## pixels — the groove and the light the glyph is then cut in. Empty
+## without the skin.
+##
+## The rubbing-out: the ring of face the X's arms stop short of is
+## sampled, sorted by luminance, trimmed of its own rim shading at both
+## ends, and the middle of it is speckled back over the whole face with a
+## fixed seed, so the stone reads as the same stone and every build draws
+## the same medallion.
+static func _blank_disc(key: String, size: int) -> Dictionary:
+	var base := sheet_cell(key, COST_CELL[0], COST_CELL[1])
+	if base == null:
+		return {}
+	var img: Image = base.get_image().duplicate()
+	img.convert(Image.FORMAT_RGBA8)
+	var scale := float(size) / CELL
+	if size != CELL:
+		img.resize(size, size, Image.INTERPOLATE_CUBIC)
+	var centre := FUNNEL_CENTRE * scale
+	var radius := FUNNEL_RADIUS * scale
+	var ink := Color.WHITE
+	var gleam := Color.BLACK
+	var face: Array[Color] = []
+	for y in size:
+		for x in size:
+			var r := Vector2(x, y).distance_to(centre)
+			if r > radius:
+				continue
+			var c := img.get_pixel(x, y)
+			if c.get_luminance() < ink.get_luminance():
+				ink = c
+			if c.get_luminance() > gleam.get_luminance():
+				gleam = c
+			if r > radius - 2.5 * scale:
+				face.append(c)
+	face.sort_custom(func(a: Color, b: Color) -> bool:
+		return a.get_luminance() < b.get_luminance())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1997
+	var lo := face.size() / 5
+	var hi := face.size() - lo
+	for y in size:
+		for x in size:
+			if Vector2(x, y).distance_to(centre) <= radius - 1.0 * scale:
+				img.set_pixel(x, y, face[rng.randi_range(lo, hi - 1)])
+	return {"img": img, "ink": ink, "gleam": gleam}
+
+
+## Cut [param cut]'s pixels into a blank disc as a groove. The X's groove
+## catches the light on its lower-right edge; so does this one: every cut
+## pixel lights the pixel below and to its right, unless that is cut too.
+## [param light] is then laid on in the same light — the pips of a die.
+static func _engrave(disc: Dictionary, cut: Dictionary, light := {}) -> Texture2D:
+	var img: Image = disc["img"]
+	var edge := img.get_width()
 	for at in cut:
 		var below: Vector2i = at + Vector2i(1, 1)
-		if not cut.has(below):
-			img.set_pixel(below.x, below.y, gleam)
+		if not cut.has(below) and below.x < edge and below.y < edge:
+			img.set_pixel(below.x, below.y, disc["gleam"])
 	for at in cut:
-		img.set_pixel(at.x, at.y, ink)
+		img.set_pixel(at.x, at.y, disc["ink"])
+	for at in light:
+		img.set_pixel(at.x, at.y, disc["gleam"])
 	return ImageTexture.create_from_image(img)

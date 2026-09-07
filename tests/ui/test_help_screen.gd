@@ -233,7 +233,7 @@ func test_the_deck_builder_filter_icons_are_the_bars_own_cells() -> void:
 			"color cell %s explained" % [FilterBar.COLOR_CELL[color]])
 	for cell in [FilterBar.GOLD_CELL, FilterBar.COST_CELL,
 			FilterBar.POWER_CELL, FilterBar.TOUGHNESS_CELL,
-			FilterBar.FUNNEL_CELL, FilterBar.ABILITY_CELL,
+			FilterBar.FUNNEL_CELL, FilterBar.DICE_CELL, FilterBar.ABILITY_CELL,
 			FilterBar.RARITY_CELL, FilterBar.ARTIST_CELL]:
 		assert_true(shown.has(cell), "cell %s explained" % [cell])
 	for code in FilterBar.SET_CELL:

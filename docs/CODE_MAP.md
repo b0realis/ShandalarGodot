@@ -1618,7 +1618,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4595 tests / ~130 500 asserts, ~290 s
+├── tests/                   GUT suite — 4613 tests / ~131 000 asserts, ~290 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2505,6 +2505,22 @@ shandalar/
 │    Enter-to-add in the type-ahead, and the **[QoL]** × that empties it
 │    (on the two finders too, not on the Deck Info title); and
 │    `MiniCard.bar_title` (CoP: Red);
+│    tests/ui/test_sealed_deck_2026_09_07.gd — **[QoL]** the Sealed
+│    Deck: SealedPool's four sheets (a legend on the rare sheet, the
+│    basics off common, sorted), the two pack shapes and the owner's
+│    105, free lands and random cards as packs of their own, a seed is
+│    a pool, no spell twice within a pack; the dice medallion left of
+│    Stats, taller than the row and centred on it, opening the window
+│    and staying UP; the window's title, ONE subtitle, the spinners at
+│    the defaults, the live "Each player gets N cards", Done disabled
+│    until a deal, Escape as Cancel, the deal and the re-deal, the
+│    numbers remembered; Done putting the pool in force and the
+│    medallion down, depressing it bringing the 897 back; the
+│    empty-deck line by Clear deck's route (Restore deck undoes it);
+│    the Inventory as the pool less what is placed, the badge counting
+│    down from the second copy, the last copy taking the card away;
+│    every door refusing beyond what is held; the type-ahead narrowing
+│    the pool; the badge source restored on leaving;
 │    tests/ui/test_deck_stats.gd — the probability page's arithmetic,
 │    EXACT: the hypergeometric against values computed by hand and
 │    surviving a deck too big for a factorial, the land row a real
@@ -2527,7 +2543,7 @@ shandalar/
 │    RESOLVES TO A REAL TEXTURE whenever the 1997 skin is imported, with
 │    the badge/filter inventories checked against MiniCard.BADGE_SLOT,
 │    PROTECTION_SLOT and FilterBar's own cell maps so a moved cell fails
-│    here too (the funnel, eye, gem and palette included); the Deck
+│    here too (the funnel, dice, eye, gem and palette included); the Deck
 │    Builder page names every command in COMMANDS / MENU_COMMANDS /
 │    EXTRA_COMMANDS, every Stats page, every Ctrl key, the strip menu's
 │    lines and the sort names, and says how the type-ahead is cleared;
@@ -3331,7 +3347,33 @@ shandalar/
 │   │   │                      read card TEXT, and the Inventory's Sort. A
 │   │   │                      medallion with NO sub-menu of its own answers
 │   │   │                      a right-click with @LONGLIST's Select All /
-│   │   │                      Clear All (`open_all_menu`)
+│   │   │                      Clear All (`open_all_menu`). Two medallions
+│   │   │                      are COMPOSED rather than cut from the sheet,
+│   │   │                      both on the X medallion's duplicated stone
+│   │   │                      (`_blank_disc` + `_engrave`): the funnel
+│   │   │                      (FUNNEL_CELL, the Filters window's door) and
+│   │   │                      the dice (DICE_CELL, at DICE_SIZE 30 for the
+│   │   │                      command row, dressed on the screen's button
+│   │   │                      through `dress_medallion`)
+│   │   ├── sealed_pool.gd   class SealedPool — **[QoL]** THE SEALED DECK'S
+│   │   │                      MASTER LIBRARY, on the 1997 strings the shell
+│   │   │                      roughed the screen in with and never built
+│   │   │                      (@SHELLSCREEN_DUEL, @SHELLPAGE_SEALEDDECK,
+│   │   │                      @SEALEDDECK_FOILPACKSCREEN). The owner's two
+│   │   │                      pack shapes (BOOSTER 1 rare-or-legend / 3
+│   │   │                      uncommon / 1 land / 10 common, STARTER 3 / 9
+│   │   │                      / 26 / 22), free lands of each type, random
+│   │   │                      cards off every sheet; `sheets()` splits the
+│   │   │                      library four ways by DeckStats.rarity_tier,
+│   │   │                      basics lifted out of common, each sorted so
+│   │   │                      a seed is one pool; `deal(library, roll)`
+│   │   │                      draws spell slots without replacement within
+│   │   │                      a pack (partial Fisher-Yates) and the land
+│   │   │                      slot with; `packs` is the foil-pack screen's
+│   │   │                      list, `counts` the library, `copies_of` its
+│   │   │                      one question, `summary()` the tally line. The
+│   │   │                      per-card ceiling is enforced at the SCREEN
+│   │   │                      (`_sealed_refusal`), not here
 │   │   ├── card_area.gd     class CardArea — the Deck area and the
 │   │   │                      Inventory area, one widget twice: a PAGED
 │   │   │                      grid of MiniCards (s30's ScrollableList

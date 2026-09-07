@@ -6434,6 +6434,186 @@ Mountain Artillery against the five proxy-free tournament decks, 20 games
 a pair at seed 7 — **2,300 games, zero stalled, zero refusals, zero
 engine errors**, on top of the ~24,000 games of the measurements above.
 
+## THE SEALED DECK (2026-09-07) — [QoL] on 1997 strings, v0.18.0-dev
+
+> *"Can we make one medallion to the left of the stats button: one
+> with playing dice on it. When you click on it a window appears with
+> the title Sealed deck tournament simulation; subtitle — make the most
+> of the random selection and make yourself a min 40 card deck. Then
+> you have settings to select no of boosters (each booster: 1 rare or
+> legendary, 3 uncommons, 1 land, 10 common cards — default 3), no of
+> tournament packs (each pack: 3 rare, 9 uncommon, 26 common, 22 lands
+> — default 1), no of each land type (default 0). After that you have a
+> button with the dice to randomly generate as many cards as you
+> selected. This will be your master library (and not all 900 cards we
+> have) and you have to make best of it. In the menu another click on
+> the dice button and new random selection of cards. The dice medallion
+> then shows pressed button. If you depress it normal library of all
+> cards is again available."* — and, a message later, *"Add also
+> additional totally random cards (default 0)"*.
+
+### What 1997 had
+
+The shell OFFERED the format and never built it. `Uistrings.txt` carries
+`@SHELLSCREEN_DUEL` — *"Sealed Deck: Compete in the most popular form of
+Magic Tournament."* — and a whole screen roughed in as strings:
+`@SHELLPAGE_SEALEDDECK` (*"Each player gets %d cards"*, *"Free lands:"*,
+*"Minimum deck size:"*, *"40 cards"*), `@SEALEDDECK_FOILPACKSCREEN`
+(*"Sealed Deck Tournament Information"*, *"%d Starter Packs"*, *"%d
+Booster Packs"*, *"Your Starters and Boosters"*, *"Selected Pack"*,
+*"Cards In Pack"*, *"DONE"*), `@SEALEDDECK_PICKFREELANDS` and
+`@SEALEDDECK_LADDERSCREEN`; `defs.h` reserves `GAMETYPE_SEALED_DECK =
+3`; a `WinSealedTournament.avi` was cut for the ladder's end. Not a line
+of code sits behind any of it, so the screen is the owner's brief built
+on those strings, marked `[QoL]` at every site and quoting the strings
+it uses. The 1998 strategy guide's one sentence on the format —
+*"You take a Sealed Deck and a booster, and are supposed to make a forty
+card deck out of it."* (Sealed Deck Strategy, p.75) — is quoted in
+`SealedPool`'s header and NOT lettered in the window: the owner asked
+for one subtitle, their own.
+
+### The pool — `game/deck_builder/sealed_pool.gd`
+
+`SealedPool` is a `RefCounted` with the four numbers (`boosters`,
+`starters`, `free_lands` of EACH type, `extras`), the owner's two pack
+shapes as constants (`BOOSTER` 1/3/1/10, `STARTER` 3/9/26/22), and
+`deal(library, roll)`. The library is split into four SHEETS by
+`DeckStats.rarity_tier` — rare takes the legends too, since the owner's
+rare slot is *"rare or legendary"*; the five basics are lifted out of
+common into the land sheet — each sorted by name, so a seed means one
+pool whatever order the registry handed the cards over in. A pack's
+spell slots draw WITHOUT replacement within the pack (a partial
+Fisher-Yates: ten commons cost ten swaps, not a shuffle of 261); its
+land slot draws with replacement off the five basics, which is what a
+land slot is. Packs come out *"Starter Pack N"* first, as the foil-pack
+screen lists them, then *"Booster Pack N"*, *"Free Lands"* (N of each
+type), *"Random Cards"* (off every sheet at once, any rarity). `counts`
+is the master library, `copies_of(name)` its one question,
+`card_total()` the count line's arithmetic before the throw, `summary()`
+the tally after it (*"105 cards — 6 rare, 18 uncommon, 56 common, 25
+land"* for the owner's defaults). No four-of, no deck-size rule lives
+here: the model's `MIN_CARDS 40` is the floor the 1997 strings state,
+and the pool's ceiling per card is enforced at the SCREEN, where the
+deck's doors are.
+
+### The medallion — `FilterBar.DICE_CELL`, composed at 30 px
+
+The dice are drawn the way the funnel is (2026-09-06): the X medallion's
+stone duplicated, its face cut, the cut engraved. The funnel's code was
+lifted into `_blank_disc(key, size)` + `_engrave(disc, cut, light)` so
+both share it, and the funnel's three sheets were checked byte-for-byte
+against the pre-refactor output before the dice were added. The dice
+are two solid ink squares, 11 px each, the front one four pixels down
+and right of the back one with a one-pixel stone gap between them, five
+one-pixel pips in the stone's gleam on each — the first cut (hollow
+outlines, 2×2 pips) read as a lattice at 8× and was thrown out. The
+cell is composed at `DICE_SIZE` 30 rather than the strip's 40 because
+it lives on the COMMAND ROW, not the strip: the band between the
+sideboard's field and the filter strip is 34 px and the row's buttons
+26, so a 30-px medallion centred on the row clears both by two pixels,
+and it sits outside the row's HBox so the other buttons keep their
+height. `FilterBar.dress_medallion(button, cell, cue, size)` is the
+public door the screen dresses it through — the same four draw states
+as the strip: sunken dark at rest, lit when pressed, both lifted under
+the pointer.
+
+### The window and the Inventory
+
+The dice open `Sealed Deck Tournament Simulation` (`OriginalDialog`, the
+Filters window's 720×560 stone): the owner's brief with the model's
+`MIN_CARDS` in it; a `[x] Start from an empty deck (Restore deck brings
+this one back)` line, on by default and remembered; the four numbers as
+sunken spinners with what one of each holds beside them and `Each
+player gets N cards` under them, live; the medallion itself on the
+`Open the packs` button, every press a fresh deal and the four numbers
+saved; then `@SEALEDDECK_FOILPACKSCREEN`'s two lists — *"Your Starters
+and Boosters"* down the left as toggles, the selected pack's *"Cards In
+Pack"* down the right lettered L, R, U, C or • by tier, a hover on a
+line putting the card in the Showcase, which the window leaves
+uncovered. `Done` (enabled by the first deal) puts the pool in force,
+`Cancel` and Escape leave the library as it was.
+
+In force: the medallion is DOWN (and it goes down only then — opening
+the window leaves it up), `DeckBuilderScreen.sealed` holds the pool,
+and the Inventory is the pool less what is placed — an entry per name
+with copies remaining (pool − deck − sideboard), the badge carrying that
+count from the second copy on (the strip's `badge_min` 2, its
+`count_source` cleared, both restored on leaving), and a card leaving
+the Inventory when its last copy is placed, the 1997 collection idiom.
+The count line reads `N pool cards`. Every door into the deck —
+`_add_one`, `_add_playset`, `_add_one_side`, `_add_basic_land`, and the
+drops that route to them — passes `_sealed_refusal` first: *"Your
+sealed pool has no Shivan Dragon"*, *"Your sealed pool holds only 2
+Plains"*. Load, Import and a proxy are not policed: a pool is a promise
+the player made, and the 1997 screen offered `Load tournament...` beside
+it. `Start from an empty deck` goes through `Clear deck`'s own route, so
+`Restore deck` undoes it. Pressing the medallion again clears `sealed`,
+puts the whole library back and leaves the deck built from the pool as
+it is. The deck change under a pool re-reads the pool (≤ 200 names),
+never the 897-card library; the normal-mode contract that a deck change
+walks no pool at all (`filter_passes`) is untouched and still tested.
+
+`tests/ui/test_sealed_deck_2026_09_07.gd` (18 tests): the four sheets
+(a legend on the rare sheet, the basics off common, sorted), the two
+pack shapes and the owner's 105, free lands and random cards as packs
+of their own, a seed is a pool and another seed is another, no spell
+twice within a pack, copies across packs; the medallion left of Stats,
+taller than the row and centred on it; the window's title, ONE
+subtitle, spinners at the defaults, the live count line, Done disabled
+until a deal, Escape as Cancel; the deal and the re-deal (five packs
+with two random cards, the first pack selected, a booster's fifteen,
+another click another selection, the numbers remembered); Done putting
+the pool in force and the medallion down, and depressing it bringing
+the 897 back; the empty-deck line by `Clear deck`'s route and off
+leaving the deck; the Inventory as the pool less what is placed with
+the badge counting down and the last copy taking the card away; every
+door refusing beyond what is held; the type-ahead narrowing the pool;
+the badge source restored on leaving. The Help gained the dice as an
+icon entry (`DICE_CELL` joins the cell check) and a "The dice at the
+left of the bar" section on the Deck Builder page quoting
+`@SHELLSCREEN_DUEL`. Checked by looking: the bar with the medallion up
+(sunken) and down (lit), the window fresh and dealt, a second pack
+selected, the Inventory under a pool before and after the last copy of
+a card went in, and the bar after leaving.
+
+### Carried forward, unchanged (2026-09-07)
+
+The list the owner asked to have written down for future work, so no
+pass has to rediscover it. None of these moved in the v0.17 and v0.18
+work; each points at the section that owns it.
+
+- **The eye medallion question** (asked 2026-09-06, still unanswered):
+  what the 1997 eye (`@ABILITY`, `FilterBar.ABILITY_CELL`) did and why
+  it left the strip. Today it is the Abilities tab's medallion inside
+  the Filters window; the offered alternative — drop the funnel, put the
+  eye and the gem back on the strip as their 1997 selves at 32px cells —
+  waits on the owner's answer. See "The Deck Builder, reviewed — and the
+  Filters window" above.
+- **The Hurr Jackal report**: the prevention window with no life change.
+  Waiting on one answer — did life not move at all, or drop by 2? See
+  "The three playtest reports" above.
+- **The counter threshold is an absolute card value** (`counter_threshold`,
+  5.0 against 5.5 measured): The Deck counters almost nothing against
+  White Knights. It needs its own measured capability — a threshold
+  relative to what the opponent's deck can put on the table. See "What
+  is still open" in the AI pass and "The AI: two capabilities" above.
+- **Class 1 leftovers in the target window**: Feint, Glyph of Delusion,
+  Glyph of Destruction and Fire and Brimstone carry their window in the
+  target spec; Glyph of Life is unpriced; Camouflage is deliberately
+  never cast. See "The cards with a moment" above.
+- **The duel screen's overlay work**: the soak's `HumanClicker` never
+  reaches five of the human seat's paths (number keys, the overlay's own
+  buttons, a chain ability click, a many-to-one block, the graveyard,
+  territory and concede). See the audit list under "Four passes ran on
+  2026-09-01".
+- **Six kept fidelity-ledger rows**, still marked simplified and still
+  named in `tests/test_simplified_ledger.gd` — Sword of the Ages'
+  clamped power among them.
+- **The pack decisions**: which set packages ship in which zip and what
+  the art archive carries. Along with the two owed Showcase items —
+  `@FULLCARD` ("Expand Text Box") and the six remaining `@TITLEDIALOG`
+  fields on Deck Info.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -1283,6 +1283,25 @@ static func _page_builder() -> Dictionary:
 			+ "deck's colors as mana symbols. DECK1, DECK2 and DECK3 "
 			+ "[QoL] are three decks in hand at once; the starred one is "
 			+ "the deck on the surface. DONE leaves."),
+		_heading("The dice at the left of the bar"),
+		_quote("Sealed Deck: Compete in the most popular form of Magic "
+			+ "Tournament.", "Uistrings.txt, @SHELLSCREEN_DUEL"),
+		_text("The dice medallion [QoL] is the pack-opening half of that "
+			+ "1997 screen. It opens the Sealed Deck Tournament Simulation "
+			+ "window: choose how many booster packs (15 cards — one rare "
+			+ "or legend, three uncommons, a land, ten commons), starter "
+			+ "packs (the tournament pack of 60 — three rares, nine "
+			+ "uncommons, twenty-six commons, twenty-two lands), free "
+			+ "lands of each type and random cards you are dealt, then "
+			+ "press the dice. Every press deals afresh; the packs are "
+			+ "listed on the left and the selected pack's cards on the "
+			+ "right, lettered L, R, U or C. DONE puts the deal in force: "
+			+ "the medallion stays pressed, the Inventory offers only the "
+			+ "cards you were dealt, as many copies as you hold, and a "
+			+ "card leaves the Inventory when its last copy is in the "
+			+ "deck or the sideboard. Make yourself a deck of at least "
+			+ "40 cards from it. Pressing the medallion again brings the "
+			+ "whole library back."),
 		_heading("The box at the end of the filter strip"),
 		_quote("At the bottom of the Inventory area is a scroll bar you "
 			+ "can use to move through the inventory… or you can type in "
@@ -1467,6 +1486,15 @@ static func _page_icons_builder_types() -> Dictionary:
 			+ "narrowing the Inventory.",
 			{"src": SRC_FILTER, "row": FilterBar.FUNNEL_CELL[0],
 				"col": FilterBar.FUNNEL_CELL[1]}, "F"),
+		_icon("Sealed Deck — a pair of dice",
+			"Not a filter and not on the strip: it sits at the left of "
+			+ "the command bar above, beside STATS. Up, the whole library "
+			+ "is in the Inventory; press it to open the Sealed Deck "
+			+ "Tournament Simulation window and be dealt packs. Down, the "
+			+ "Inventory is only what was dealt, and pressing it again "
+			+ "brings the whole library back.",
+			{"src": SRC_FILTER, "row": FilterBar.DICE_CELL[0],
+				"col": FilterBar.DICE_CELL[1]}, "D"),
 	]
 	var pages: Array = [
 		_icon("Abilities — an eye",
