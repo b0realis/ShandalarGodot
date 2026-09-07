@@ -1,0 +1,263 @@
+# Difficult cards — what the 1997 game left out, and why we think so
+
+A provenance note for the decklists, written 2026-09-07. Nothing in here
+is a plan; it is the record of a mini research pass into the cards that
+the 1997 MicroProse game is said to have shipped in its data files but
+never turned on, so that when a community decklist names one of them
+(Chaos Orb, above all) the substitution we make is documented rather
+than quiet. The `.someday` suffix says the rest: a future pass may pick
+any of these up, and this file is where it starts.
+
+The rule of the file: every statement is either SOURCED (a quote, with
+who said it, where and when) or a RECEIVED CLAIM (something we were
+told, marked as such, not yet found in a readable source). The two are
+kept apart on purpose — a decklist ledger is only worth having if it
+says which of its reasons it can show.
+
+
+## 1. Sources
+
+| # | Where | Who / when | What it is |
+|---|---|---|---|
+| S1 | https://slightlymagic.net/forum/viewtopic.php?p=189014 | Korath (Manalink / Shandalar developer), dingbat1 — 21 Nov 2015 | "What card sets were in orginal Shandalar?" — the one first-hand account of the 1997 data files |
+| S2 | https://slightlymagic.net/forum/viewtopic.php?f=85&t=1842&start=15 | joemuz, jatill (Manalink developer) — 16 Nov 2009 | The list of 1997-era cards still missing from Manalink in 2009, and a developer's view of which were codable |
+| S3 | https://edhsilver.com/philosophy/ | EDH Silver, undated | General context on dexterity cards (Chaos Orb from Alpha, Falling Star from Legends) — says nothing about the 1997 game |
+| S4 | https://www.reddit.com/r/Shandalar/comments/1oaa8ah/cool_as_f_shandalar_is_still_around/ | r/Shandalar thread | Could not be read from this machine (only the page shell came back, no comments). Everything attributed to it below stays a received claim |
+
+Not consulted: the decompiled 1997 sources (the `benprew/microprose-shandalar-source`
+project) are not on this machine, and `../shandalar-src/` is a Manalink 3
+(2016) tree — its `Info.csv` / `Legacy.csv` / `Concise.csv` are Manalink's
+own card database, evidence of what Manalink implemented, not of what
+1997 shipped. Two of its rows are worth keeping in mind all the same:
+`Chaos Orb … "Silly Orb Thing"` (id 1002) and `Nevinyrral's Disk …
+"History Eraser Button"` (id 1040) — Manalink's later, software-only
+Orb, and the Disk that this repository swaps in for it.
+
+
+## 2. What the 1997 game had (sourced)
+
+Korath, S1, 21 Nov 2015 — the pool:
+
+> all of Fourth Edition; most of Unlimited, Arabian Nights, Antiquities,
+> The Dark; bits of Legends; around six promo cards (Arena, Giant Badger …);
+> the twelve Astral cards; nothing from Fallen Empires.
+
+(Paraphrased from the post; the set list matches `tools/fetch_cards.py`'s
+eight Scryfall sets — 2ed, 4ed, arn, atq, past, phpr, leg, drk — and the
+Astral twelve under `cards/sets/past/`.)
+
+Korath, S1, same post — the cards in the files but not in the game:
+
+> The only cards I've found that were implemented but "not turned on"
+> … are Chaos Orb, City in a Bottle, Cocoon, Golgothian Sylex,
+> Metamorphosis, Power Artifact, Transmutation, and Wood Elemental, all
+> of which are broken to varying extent.
+
+> There's more cards, including plenty of gold ones, that had entries
+> defined in cards1.dat, but that doesn't contain much more than card
+> text, frame, power, toughness, and mana cost — only enough to display
+> the card on the screen. That's not "implemented" by any reasonable
+> measure.
+
+dingbat1, S1, 21 Nov 2015:
+
+> the cards were implemented, but not turned on. With very minor
+> modification, the cards could be accessed in the deckbuilder
+
+> Notably, it did not have any gold cards.
+
+That is the whole of the first-hand evidence: EIGHT cards with real code
+behind them that the shipped game hid, "broken to varying extent", and
+an unknown number of text-only stubs (many of them gold / Legends
+multicolour cards) that never had rules code at all.
+
+
+## 3. The eight "implemented but not turned on" cards
+
+For each: what the sources support, what we were told (received claim),
+what this repository does today, and what a future pass would need.
+
+### Chaos Orb (Alpha / Unlimited, artifact — the flip)
+
+- SOURCED: in the 1997 data files, hidden, broken (Korath, S1). Still
+  missing from Manalink in 2009 (joemuz, S2). A dexterity card by
+  design (S3).
+- RECEIVED CLAIM: that it was left out because the physical flipping
+  mechanic has no honest software form. Plausible on its face — S3
+  gives the general reason dexterity cards are banned everywhere — but
+  no source ties that reasoning to MicroProse's decision.
+- HERE: excluded from the pool outright, `tools/fetch_cards.py`
+  `EXCLUDED_NAMES`, following s30's precedent (`docs/audit-vs-s30.md`,
+  "DEFAULT_EXCLUDED_NAMES"). Not a stub, not simplified: absent.
+- DECKLIST CONSEQUENCE: the community lists in `docs/decks-1997.md`
+  count Chaos Orb as their most-proxied name (tables at lines ~477,
+  ~657, ~706; "The Old School lists proxy mostly one name, Chaos Orb,
+  which the pool does not hold"). `decks/variants/the_deck_playable.deck`
+  is The Deck with Nevinyrral's Disk in the Orb's slot — the header of
+  that file explains that this is the one change and why it is filed
+  under "Playable variants" rather than with the ledgers.
+- SOMEDAY: a software Orb. Manalink's precedent is the "Silly Orb Thing"
+  — {1}, tap and sacrifice, destroy target nontoken permanent — i.e. a
+  guaranteed hit with no flip; a stricter reading would be a coin flip
+  per attempt. Either is a `[QoL]` invention, which is why it is not
+  done: the 1997 game did not have it either.
+
+### City in a Bottle (Arabian Nights, artifact)
+
+- SOURCED: in the files, hidden, broken (Korath, S1); missing from
+  Manalink in 2009 (joemuz, S2); jatill (S2) thought it "should be
+  doable".
+- RECEIVED CLAIM: that Wizards of the Coast ordered MicroProse to cut it,
+  and that it "ruined deck diversity" (attributed to S4, unreadable
+  here). NOT FOUND in any source we could read; Korath's account gives
+  no reason at all for any of the eight. Treat as folklore until
+  someone quotes the thread.
+- HERE: implemented, `cards/sets/arn/city_in_a_bottle.gd` — the
+  play-ban keyed on the card NAME through
+  `CardRegistry.originally_printed_in(name, "arn")`, so a Fourth
+  Edition reprint of an Arabian Nights card is still an Arabian Nights
+  card, as printed.
+
+### Golgothian Sylex (Antiquities, artifact)
+
+- SOURCED: in the files, hidden, broken (Korath, S1); missing from
+  Manalink in 2009 (joemuz, S2); jatill (S2) thought it doable.
+- RECEIVED CLAIM: "the Antiquities equivalent, disabled for the same
+  reason" — the same-reason half is unsourced (see City in a Bottle).
+- HERE: implemented, `cards/sets/atq/golgothian_sylex.gd`, the same
+  originally-printed-in test against `atq`.
+
+### Wood Elemental (Legends, creature — sacrifice untapped Forests as it enters)
+
+- SOURCED: in the files, hidden, broken (Korath, S1).
+- RECEIVED CLAIM: that the "sacrifice any number of untapped Forests"
+  choice was error-prone in the 1997 engine. Unsourced; nothing in S1
+  says which way any of the eight was broken.
+- HERE: implemented, `cards/sets/leg/wood_elemental.gd`, through the
+  ordinary `choose_number` funnel.
+
+### Cocoon (Legends, enchantment — pupa counters)
+
+- SOURCED: in the files, hidden, broken (Korath, S1).
+- RECEIVED CLAIM: that tracking the pupa counters across upkeeps broke.
+  Unsourced.
+- HERE: implemented, `cards/sets/leg/cocoon.gd`.
+
+### Metamorphosis (Arabian Nights, sorcery — sacrifice a creature for mana)
+
+- SOURCED: in the files, hidden, broken (Korath, S1); missing from
+  Manalink in 2009 (joemuz, S2).
+- RECEIVED CLAIM: that the AI failed the sacrifice-then-spend sequence.
+  Unsourced.
+- HERE: implemented, `cards/sets/arn/metamorphosis.gd`.
+
+### Power Artifact (Antiquities, enchant artifact — cost reduction)
+
+- SOURCED: in the files, hidden, broken (Korath, S1).
+- RECEIVED CLAIM: that dynamic activation-cost reductions did not fit
+  the 1997 cost model. Unsourced — though of the eight it is the claim
+  that best matches the shape of the card.
+- HERE: implemented, `cards/sets/atq/power_artifact.gd`.
+
+### Transmutation (Legends, instant — swap power and toughness)
+
+- SOURCED: in the files, hidden, broken (Korath, S1).
+- RECEIVED CLAIM: that a P/T swap fought the engine's continuous-effect
+  layering. Unsourced.
+- HERE: implemented, `cards/sets/leg/transmutation.gd`, in the layer
+  system (`docs/mechanics.md`, layers).
+
+Summary: of the eight, SEVEN are in this repository's pool and
+implemented; ONE (Chaos Orb) is deliberately absent. No decklist in
+`decks/` needs any of the seven proxied.
+
+
+## 4. The 2009 Manalink "still missing" list (sourced, S2)
+
+joemuz's list of 16 Nov 2009 — cards from the 1997-era sets that
+Manalink had not implemented by then. Useful here because Manalink began
+from the 1997 code, so a card missing in 2009 is a card the 1997 engine
+gave them nothing for. It is NOT a list of what 1997 lacked (Illusionary
+Mask, for one, is in the 1997 pool).
+
+- Alpha/Beta/Unlimited (5): Word of Command, Camouflage, False Orders,
+  Chaos Orb, Illusionary Mask.
+- Arabian Nights (3): Metamorphosis, Shahrazad, City in a Bottle.
+- Antiquities (1): Golgothian Sylex.
+- The Dark (40): a set-sized gap — Manalink had barely started The Dark
+  in 2009. (The full forty are in the thread; they are ordinary cards
+  and all in our pool through the `drk` set.)
+
+jatill, S2, 16 Nov 2009, on the A/B/U five:
+
+> I guessing they are mostly uncodable, though (ex: Illusionary Mask)
+
+and on the rest:
+
+> looking through the list of old cards that were left out, I believe
+> the City in A Gottle and Gothian Cyclex should be doable.
+
+(Spelling as in the post.)
+
+HERE: Camouflage (`cards/sets/2ed/camouflage.gd`), False Orders
+(`cards/sets/2ed/false_orders.gd`) and Illusionary Mask
+(`cards/sets/2ed/illusionary_mask.gd`, real face-down permanents; its
+remaining deviation is listed in `docs/simplified-cards.md`) are
+implemented. Word of Command and Shahrazad are excluded (section 6).
+
+
+## 5. The text-only stubs (sourced, S1)
+
+Korath's second paragraph in section 2 is the whole of it: cards1.dat
+carried entries — text, frame, P/T, cost, "only enough to display the
+card on the screen" — for cards the game had no rules for, "plenty of
+gold ones" among them. dingbat1 adds that the shipped game had no gold
+cards at all. These were templates, not cards, and nothing in the 1997
+game or in any decklist ledger depends on them.
+
+RECEIVED CLAIM: "dozens of gold/Legends cards existed as empty
+templates". The number is unsourced; Korath says "plenty". Our pool
+takes Legends whole from Scryfall (`leg`, all colours), so the gold
+cards this game never played are playable here — an `[s30]`-style
+widening, noted in `docs/decks-1997.md`, not a fidelity claim.
+
+`cards/data/dck_ids.txt` (371 name→id pairs harvested from original
+`.dck` files) is the one 1997-side witness this repository holds, and it
+is silent on all of the above: none of the eight, nor Shahrazad, Falling
+Star, Word of Command, Camouflage or False Orders appear in it, while
+Nevinyrral's Disk does (id 173). A card that no shipped deck could
+contain leaves no id in the deck files — consistent with Korath, and
+nothing more.
+
+
+## 6. Our own exclusions, for the record
+
+`tools/fetch_cards.py`, `EXCLUDED_NAMES = {"Chaos Orb", "Shahrazad",
+"Word of Command", "Falling Star"}` — the same three as s30 plus Falling
+Star (the Legends dexterity card, S3), see `docs/mechanics.md` ("excluded
+from the pool outright … not simplified") and `docs/audit-vs-s30.md`.
+
+| Card | Why it is out | Someday |
+|---|---|---|
+| Chaos Orb | Dexterity — the flip has no honest software form | A software Orb (Manalink's "Silly Orb Thing": {1}, T, sacrifice: destroy target nontoken permanent — or a coin flip). A `[QoL]` invention either way |
+| Falling Star | Dexterity, same as the Orb | Same — a random-or-guaranteed 3 damage to a set of creatures |
+| Shahrazad | A subgame: the duel inside the duel | Needs a second `MtgGame` on the same seats with half-life stakes; the engine is a plain object and could host one, the screen could not, today |
+| Word of Command | Drives the opponent's turn: choose a card in their hand and make them play it | A bounded form fits the owner's 2026-09-07 ruling (a list from the opponent's hand, the engine casts it), but it still needs "play it as if you controlled them" |
+
+Also open, though in the pool: Illusionary Mask's remaining deviation
+(`docs/simplified-cards.md`), and Magical Hack / Sleight of Mind, whose
+word lists follow the owner's ruling of 2026-09-07 (the lists the engine
+models, no free text).
+
+
+## 7. What a future pass would need
+
+1. Read S4 from a machine that can, and quote it — the WotC-ordered-cut
+   story for City in a Bottle is the one claim above that would change
+   the ledger's wording if it held.
+2. Read the decompiled 1997 sources for the eight: which way each was
+   broken, and whether any was cut by a flag or by missing code. That
+   turns every RECEIVED CLAIM in section 3 into a sourced line or
+   strikes it.
+3. Decide the Orb. Until then The Deck is played with the Disk, and the
+   community lists that name the Orb stay proxied in the ledger.
