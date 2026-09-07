@@ -6997,13 +6997,63 @@ refreshes the table, and `_rebuild_field` commits a drag in progress —
 the same under a mouse, and it has been so since the free layer was
 built; the probe waits for the human's own moment.
 
-**Still open.** A finger has been driven only through
-`Input.parse_input_event` and under Xvfb — no real touchscreen or phone
-has been tried; the web build's touch path (the template's
-`godot_js_input_touch_cb`) is the same `ScreenTouch` stream and should
-behave the same, unverified. Text entry (a deck's name) opens no
-on-screen keyboard through this layer — the browser's own does on a
-`LineEdit` focus, the native mobile builds are not this pass's.
+**The web export, built and looked at.** `export_presets.cfg.example`
+gained a `Web` preset and `build_release.sh --web` exports it to
+`../shandalar-build/web/` — index.html, index.js, index.wasm, index.pck
+and the icons, served by any static host. The choices, each with its
+reason in the preset file's header: the `web_nothreads` template,
+because the threaded one needs SharedArrayBuffer and a browser grants
+that only to a page served with COOP/COEP headers, which a GitHub Pages
+folder, an itch.io upload or `python3 -m http.server` never sends — and
+the game plays on one thread anyway, the only `WorkerThreadPool` user
+being the headless Deck Lab; adaptive canvas (resize policy 2), so the
+canvas fills the browser window and the `canvas_items`/`expand` stretch
+fits the table to it; the canvas focused on start, so the first tap is
+the game's; the experimental virtual keyboard ON, since the template
+builds it only where `ontouchstart` is in the window — a desktop
+browser never sees it, a tablet gets one for the deck's name; no PWA,
+because a service worker caches the whole pack and the owner rebuilds
+often; VRAM texture compression moot, every imported texture in this
+project is lossless. What `auto` reads on the web:
+`DisplayServer.is_touchscreen_available()` is the template's
+`"ontouchstart" in window`. Audio needs no nudge — the template resumes
+its AudioContext on the first gesture itself, ShellMusic just plays.
+NUMBERS, one export on 2026-09-07: 44 MB in the folder; index.wasm
+39.5 MB (10.1 MB gzipped) — the engine, and only a custom template with
+modules disabled shrinks it; index.pck 5.4 MB (4.3 MB gzipped, the same
+pack as the Linux build's — cards and decks are text and compress
+well); index.js 280 KB (68 KB gzipped); the export log's only warnings
+are the GUT addon's "invalid UID" lines, and the addon is excluded from
+the pack. The pack diet, in numbers and NOT done: the 1997 skin is
+89 MB on disk and the card art 189 MB (1795 files); neither ships, the
+web build draws the clean built-in skin with no card art, and putting
+them online would need a loading path `GameSkin` does not have
+(`Image.load_from_file` reads no URL — a fetched resource pack would)
+besides being the owner's call, and the licence's.
+
+**Checked by looking in a browser.** The build served from a plain
+`python3 -m http.server`, opened in headless Firefox 155 with touch
+events on and an Android user agent, driven through WebDriver's touch
+pointer — the browser's own touchstart/touchend into the canvas, not
+the engine's event parser: the main menu is up in about six seconds
+(`v0.18.0-dev · 897 cards`, clean skin, 1280×714 canvas in a 1280×800
+window); a tap on Options opens Options with the row reading *Touch
+controls: Auto* — the layer active, through `ontouchstart`; a tap 14 px
+beside the Help button opens Help, the fat-finger rule at work; a swipe
+up the Help page scrolls it to its end. A duel was not played in the
+browser — the Xvfb pass above covers the table, and the input path
+under it is the same `ScreenTouch` stream.
+
+**Still open.** No real touchscreen or phone has been tried: the web
+touch path is verified in a desktop Firefox pretending to be a tablet,
+and a phone's browser — Safari's touch handling, an address bar that
+eats height, a 19.5:9 canvas — is exactly what a synthetic finger cannot
+show. Text entry (a deck's name) on a tablet rests on the template's
+experimental virtual keyboard, unverified for the same reason. The
+first load is 44 MB (about 15 MB over the wire with gzip; the host must
+compress, the game cannot) — a minute on mobile data, and a PWA with an
+offline page would be the cure the preset declines. Orientation and the
+portrait picture as measured above; a portrait layout is a week.
 
 ## Standing quality gates
 

@@ -54,6 +54,11 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   copy. The export templates here are `4.7.stable` while the pinned engine
   is 4.7.2, so the preset names the release template by path — which is
   why the preset itself is gitignored and only the example is committed.
+  `--web` exports the `Web` preset (the `web_nothreads` template: static
+  hosting, no COOP/COEP headers) to `../shandalar-build/web/` and checks
+  that index.html/.js/.wasm/.pck came out; nothing boots headless there,
+  a browser does that (`python3 -m http.server --directory
+  ../shandalar-build/web`). `--skin`/`--package` are the Linux build's.
   The build is the LOCAL step and the GitHub release is a separate one:
   a local build gets played first, and `gh release create` runs only
   when the owner asks for the release — never as the automatic tail of a

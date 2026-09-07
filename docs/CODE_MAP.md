@@ -19,7 +19,13 @@ shandalar/
 │                              by PATH because this machine's templates are
 │                              4.7.stable and the pinned engine is 4.7.2.
 │                              Ships scripts, cards/data/ and every .deck;
-│                              ships NO art (see build_release.sh)
+│                              ships NO art (see build_release.sh). "Web"
+│                              (2026-09-07): the same pack in the
+│                              web_nothreads template — static hosting,
+│                              no COOP/COEP; adaptive canvas, focus on
+│                              start, virtual keyboard only where
+│                              `ontouchstart` exists, no PWA; the header
+│                              of the .example says why each
 ├── run_tests.sh             Headless test runner (uses ../tools/godot, GUT CLI);
 │                              times out (SUITE_TIMEOUT), fails on any ERROR:
 │                              line, a risky test or a leak — header says why
@@ -1588,7 +1594,12 @@ shandalar/
 │                              and fails on an error line. --out DIR, --skin
 │                              (links assets/ into user://original_skin so an
 │                              exported build looks like a dev checkout).
-│                              Default output ../shandalar-build/linux64/
+│                              Default output ../shandalar-build/linux64/.
+│                              --web (2026-09-07) exports the "Web" preset
+│                              to ../shandalar-build/web/ instead: no
+│                              smoke-boot (a browser does that), checks
+│                              index.html/.js/.wasm/.pck came out, prints
+│                              their sizes and the one-line static server
 ├── decks/                   Shipped five-style gauntlet (.deck files —
 │   │                          format in DeckLab/README.md); a CI test
 │   │                          keeps every deck valid vs the card pool.
