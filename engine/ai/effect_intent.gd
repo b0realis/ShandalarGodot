@@ -48,6 +48,11 @@ var untaps: bool = false
 var draws: int = 0
 var draws_use_x: bool = false
 
+## Searches the library (a tutor, a land fetch): a card off the library
+## the way a draw is, which is all THE PACE ([member AiProfile.paces_draws])
+## needs to know; the value of the search is priced by card_value.
+var searches: bool = false
+
 ## Targeted or self pump. [member pump_self] for the firebreathing shape;
 ## [member pump_uses_x] when the power bonus is the spell's X (Howl from
 ## Beyond) — [member pump_power] then holds only the printed part.
@@ -254,7 +259,9 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.sweeper = e
 		elif e is AnimateSelfEffect:
 			intent.animates = e
-		elif e is MassPumpEffect or e is SearchLibraryEffect \
+		elif e is SearchLibraryEffect:
+			intent.searches = true   # priced by card_value; a card off the library
+		elif e is MassPumpEffect \
 				or e is ReturnFromGraveyardEffect or e is PreventDamageEffect \
 				or e is PreventDamageShieldEffect or e is MillEffect:
 			pass   # priced elsewhere (card_value); nothing here to sum

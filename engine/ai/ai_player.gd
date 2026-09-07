@@ -920,16 +920,53 @@ func _draw_need(hand_size: int) -> float:
 ## THEIR end step our own draw step still adds one before we play
 ## anything; in our main phase what is drawn can be played on the spot.
 ## Every seat that does not count has all the room in the world. A
-## [param source] cast from the hand counts itself out.
+## [param source] cast from the hand counts itself out. The room is then
+## capped by THE PACE ([method _library_slack]): a card the hand could
+## hold but the library race cannot spare is not drawn either.
 func _hand_room(game: MtgGame, moment: int, source: CardInstance = null) -> int:
-	if not profile.counts_cards:
+	var room := 1 << 20
+	if profile.counts_cards:
+		var me := game.players[pid]
+		var allowance := 2 if moment == Moment.MAIN else 1
+		room = me.max_hand_size + allowance - me.hand.size()
+		if source != null and source.zone == Mtg.Zone.HAND:
+			room += 1   # the spell itself leaves the hand before its cards arrive
+	return mini(room, _library_slack(game))
+
+
+## THE PACE (2026-09-07, [member AiProfile.paces_draws]): the end of a
+## library is this near — in cards of our own — before the race to it
+## is allowed to refuse a draw. Twenty turns of draw steps: a game that
+## has not ended by then is being decided by the libraries.
+const PACE_HORIZON := 20
+
+
+## THE PACE (2026-09-07, [member AiProfile.paces_draws]): how many cards
+## this seat can take off its library and still win the race to deck.
+## The loss is the draw from the empty library (CR 704.5b), and each
+## draw step takes one card from each library in turn, so the race is
+## the two counts and WHOSE draw step comes next: when theirs does, they
+## draw from nothing first as long as our library is no smaller than
+## theirs; when ours does, ours has to be strictly larger. A seat that
+## holds the race may spend its lead down to nothing and no further; a
+## seat that has already lost it has nothing left to protect, and draws
+## for value; and while the library is beyond [constant PACE_HORIZON]
+## the game is not being decided by the libraries at all. The pilot that
+## never counted this drew with two Tomes into a race it then lost from
+## twenty life. Every seat that does not pace has all the slack in the
+## world.
+func _library_slack(game: MtgGame) -> int:
+	if not profile.paces_draws:
 		return 1 << 20
-	var me := game.players[pid]
-	var allowance := 2 if moment == Moment.MAIN else 1
-	var room := me.max_hand_size + allowance - me.hand.size()
-	if source != null and source.zone == Mtg.Zone.HAND:
-		room += 1   # the spell itself leaves the hand before its cards arrive
-	return room
+	var mine := game.players[pid].library.size()
+	var theirs := game.players[game.opponent_of(pid)].library.size()
+	var step := game.current_step()
+	var ours_next := (game.active_player == pid and step < Mtg.Step.DRAW) \
+		or (game.active_player != pid and step >= Mtg.Step.DRAW)
+	var lead := mine - theirs - (1 if ours_next else 0)
+	if lead < 0:
+		return 1 << 20   # the race is lost already: not ours to protect
+	return maxi(lead, mine - PACE_HORIZON - 1)
 
 
 ## THE DRAW THAT WINS (2026-09-07, [member AiProfile.counts_cards]): a
@@ -1327,6 +1364,10 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		return _size_tap(game, inst, intent, max_x, mode)
 	if intent.draws_use_x and max_x < 2 and game.players[pid].hand.size() > 1:
 		return {}   # Braingeyser for one is a bad Ancestral
+	# THE PACE (2026-09-07, AiProfile.paces_draws): a search is a card off
+	# the library as much as a draw is, and the race counts it the same.
+	if intent.searches and not data.is_modal() and _library_slack(game) < 1:
+		return {}
 	# THE COUNT (2026-09-07, AiProfile.counts_cards): an X that draws or
 	# discards is sized to the cards it acts on, not to the mana at hand.
 	if profile.counts_cards and not data.is_modal():

@@ -190,12 +190,30 @@ var counts_cards := false
 ## window card's shape is named.
 var levels_boards := false
 
+## THE PACE: does this profile pace its optional draws to the race of the
+## libraries? Every optional draw — a Tome tick, a Library of Alexandria
+## at seven, an Ancestral for three, a Braingeyser sized for its own
+## hand, a tutor — is a card off the library, and a library is the other
+## clock in a game of Magic: the player who has to draw from an empty one
+## loses (CR 704.5b). The race is the two library counts and WHOSE draw
+## step comes next ([method AiPlayer._library_slack]): on, a draw that
+## would hand the OPPONENT that race is refused once the end is within
+## sight ([constant AiPlayer.PACE_HORIZON] cards of our own library); a
+## race already lost is not ours to protect, and a draw that keeps it
+## costs nothing. Off, the pilot draws for value alone, which is how a
+## sixty-card deck of card-drawers lost to forty-card starters on an
+## empty library at twenty life and more (docs/ROADMAP.md, "The Deck,
+## second pass"). Sorcerer and Wizard. Nothing here names a card: the
+## rule reads [member EffectIntent.draws], [member EffectIntent.searches]
+## and the two library counts.
+var paces_draws := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
 		p_engines := false, p_sacrifices := false, p_timed := false,
-		p_counts := false, p_levels := false) -> void:
+		p_counts := false, p_levels := false, p_paces := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -209,6 +227,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	casts_timed_spells = p_timed
 	counts_cards = p_counts
 	levels_boards = p_levels
+	paces_draws = p_paces
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -255,12 +274,12 @@ static func magician() -> AiProfile:
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true)
+	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true)
+	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true)
 
 
 func _to_string() -> String:

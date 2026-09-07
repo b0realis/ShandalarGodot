@@ -1086,6 +1086,23 @@ shandalar/
 │   │                      the third table, one row, because the pool's
 │   │                      one leveller is a card-local effect. The Deck
 │   │                      24.5% -> 32.0% against the starters.
+│   │                      paces_draws (2026-09-07) is THE PACE: whether
+│   │                      an optional draw — a Tome tick, the Library at
+│   │                      seven, an Ancestral, a Braingeyser's X, a
+│   │                      tutor — is paced to the race of the two
+│   │                      libraries, the other clock of the game (CR
+│   │                      704.5b). The race is the two counts and whose
+│   │                      draw step comes next (AiPlayer._library_slack
+│   │                      caps _hand_room; EffectIntent.searches is
+│   │                      gated the same in _size_and_aim): a draw that
+│   │                      would hand them the race is refused inside
+│   │                      PACE_HORIZON, a race already lost is drawn
+│   │                      into for value. The first cut read the counts
+│   │                      without the turn order and moved nothing;
+│   │                      this one is +3.0..+6.0 on every starter at a
+│   │                      thousand games an arm, three of five clear.
+│   │                      Sorcerer and Wizard. The Deck 31.7% -> 36.2%
+│   │                      against the starters.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -1121,7 +1138,8 @@ shandalar/
 │   │   ├── effect_intent.gd class EffectIntent — WHAT AN EFFECT LIST DOES,
 │   │   │                      read once into numbers the AI reasons with
 │   │   │                      (damage / X damage / self-damage / removes /
-│   │   │                      bounces / taps / draws / pumps / regenerates
+│   │   │                      bounces / taps / draws / searches / pumps /
+│   │                      regenerates
 │   │   │                      / adds mana / sweeper kept whole / the
 │   │   │                      ANIMATION kept whole for the same reason /
 │   │   │                      the AIMED DISCARD, read off the effect's own
@@ -1670,7 +1688,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4751 tests / ~133 000 asserts, ~300 s
+├── tests/                   GUT suite — 4779 tests / ~134 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2905,7 +2923,21 @@ shandalar/
 │    our one Serra that stays; cast for two Wurms against Bears at
 │    eight lands to five; held when our Serra and Giant would go for
 │    their four cards; the ladder from Sorcerer up; the knob read by the
-│    Lab
+│    Lab;
+│    tests/ai/test_ai_paces_draws_2026_09_07.gd — THE PACE
+│    (AiProfile.paces_draws): the slack table with their draw step next
+│    (level counts keep) and with ours (a lead of one keeps), a race
+│    lost or beyond the horizon unlimited; a Tome holding a lead of one
+│    at their end step and spending the second card of two, ticking a
+│    level race far from the end, holding level in our main phase and
+│    in their upkeep, ticking a lead of one down to level in our main
+│    phase; the null ticking through all of it; the pace without the
+│    count; the Library at seven holding the lead and drawing the spare
+│    card; Ancestral needing a lead of four for three; Braingeyser sized
+│    to the spare cards, waiting at nothing to spare, still emptying
+│    THEIR library from behind; Demonic Tutor as the class held at level
+│    and cast on a lead; the ladder from Sorcerer up; the knob read by
+│    the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see
