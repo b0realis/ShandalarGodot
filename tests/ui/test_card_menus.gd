@@ -442,3 +442,29 @@ func _first_child_of_type(node: Node, type_name: String) -> Control:
 		if child.get_class() == type_name:
 			return child
 	return null
+
+
+func test_the_bar_follows_the_events_position_not_the_os_pointer() -> void:
+	# A finger on the touch layer moves no OS pointer, so the bar reads
+	# the event (2026-09-07) — the same number under a mouse.
+	var win := screen._combat_window
+	Settings.clear_value(CombatWindow.POS_SETTING)
+	win.position = Vector2(200, 200)
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.global_position = Vector2(250, 210)
+	win._on_bar_input(down)
+	assert_eq(win._drag_offset, Vector2(50, 10), "the grip, from the press")
+	var move := InputEventMouseMotion.new()
+	move.button_mask = MOUSE_BUTTON_MASK_LEFT
+	move.global_position = Vector2(400, 300)
+	win._on_bar_input(move)
+	assert_eq(win.position, Vector2(350, 290), "the window under the grip")
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.global_position = Vector2(400, 300)
+	win._on_bar_input(up)
+	assert_false(win._dragging)
+	Settings.clear_value(CombatWindow.POS_SETTING)

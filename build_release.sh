@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Release build — exports the "Linux 64" preset (export_presets.cfg) with
-# the project-pinned Godot, then smoke-boots what it produced.
+# the project-pinned Godot, then smoke-boots what it produced; or, with
+# `--web`, the "Web" preset, which a browser boots instead.
 #
 #   ./build_release.sh              # -> ../shandalar-build/linux64/
 #   ./build_release.sh --out DIR    # somewhere else
@@ -8,9 +9,17 @@
 #                                   #    into user://original_skin, so the
 #                                   #    exported build looks like the dev
 #                                   #    one (see below)
+#   ./build_release.sh --web        # the "Web" preset instead ->
+#                                   #    ../shandalar-build/web/index.html
+#                                   #    and its .wasm/.pck/.js beside it;
+#                                   #    serve the folder over http (a
+#                                   #    file:// page cannot fetch the
+#                                   #    .wasm). No threads, so any static
+#                                   #    host will do — see the preset's
+#                                   #    note in export_presets.cfg.example
 #
 # WHAT SHIPS, AND WHAT DOES NOT. The .pck carries game/, engine/, cards/
-# (scripts + cards/data/) and every deck under decks/ — about 3 MB. It
+# (scripts + cards/data/) and every deck under decks/ — about 5 MB. It
 # carries NO art: `game/skin.gd` loads the original 1997 graphics and the
 # card art with Image.load_from_file from `user://original_skin` (or
 # `res://assets/original` in a dev checkout), never through Godot's import
@@ -21,6 +30,11 @@
 # --dest "$HOME/.local/share/godot/app_userdata/Shandalar/original_skin"`
 # is how a player fills it from their own 1997 CD.
 #
+# THE WEB BUILD draws the clean built-in skin and no card art whatever
+# `--skin` says: a browser's `user://` is an empty IndexedDB and there is
+# no folder beside the executable. Hosting the 1997 graphics online is
+# the owner's call, and not one this script makes.
+#
 # Uses the project-pinned Godot (../tools/godot), falling back to PATH.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -29,16 +43,22 @@ OUT="../shandalar-build/linux64"
 PRESET="Linux 64"
 LINK_SKIN=0
 PACKAGE=0
+WEB=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--out) OUT="$2"; shift 2 ;;
 		--preset) PRESET="$2"; shift 2 ;;
 		--skin) LINK_SKIN=1; shift ;;
 		--package) PACKAGE=1; shift ;;
-		-h|--help) sed -n '2,25p' "$0" | sed 's/^# \?//'; exit 0 ;;
+		--web) WEB=1; PRESET="Web"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/web"; shift ;;
+		-h|--help) sed -n '2,38p' "$0" | sed 's/^# \?//'; exit 0 ;;
 		*) echo "build_release: unknown argument '$1'" >&2; exit 3 ;;
 	esac
 done
+if [ "$WEB" = 1 ] && [ "$LINK_SKIN$PACKAGE" != 00 ]; then
+	echo "build_release: --skin and --package are the Linux build's; the web build carries no art" >&2
+	exit 3
+fi
 
 GODOT="${GODOT:-../tools/godot}"
 if [ ! -x "$GODOT" ]; then GODOT=godot; fi
@@ -46,6 +66,7 @@ if [ ! -x "$GODOT" ]; then GODOT=godot; fi
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 BIN="$OUT/Shandalar.x86_64"
+[ "$WEB" = 1 ] && BIN="$OUT/index.html"
 LOG="${TMPDIR:-/tmp}/shandalar-export.log"
 
 # Warm the import cache quietly (a cold checkout has no .godot/).
@@ -62,6 +83,19 @@ if grep -qiE '^(ERROR|SCRIPT ERROR)|Cannot export project|export template' "$LOG
 	echo "BUILD FAILED: the export reported errors (log: $LOG)" >&2
 	grep -inE '^(ERROR|SCRIPT ERROR)|Cannot export project|export template' "$LOG" | head -5 >&2
 	exit 1
+fi
+
+# THE WEB BUILD ENDS HERE: nothing to smoke-boot without a browser (the
+# template is JavaScript around a .wasm), so the check is that the three
+# files a page needs came out, and the sizes are printed for the hosting
+# question — the .wasm is the engine and gzips to a quarter.
+if [ "$WEB" = 1 ]; then
+	for f in index.html index.js index.wasm index.pck; do
+		[ -s "$OUT/$f" ] || { echo "BUILD FAILED: no $f in $OUT" >&2; exit 1; }
+	done
+	echo "ok: $(du -sh "$OUT/index.wasm" | cut -f1) engine + $(du -sh "$OUT/index.pck" | cut -f1) pack in $OUT"
+	echo "serve it with: python3 -m http.server --directory $OUT 8000   # then open http://localhost:8000/"
+	exit 0
 fi
 [ -x "$BIN" ] || { echo "BUILD FAILED: no executable at $BIN" >&2; exit 1; }
 

@@ -85,7 +85,7 @@ cards of the eight 1997 sets, one documented file each, no stubs left.
 **M4 — AI: attacking, blocking and casting audited and measured.**
 **317 decks** ported with their provenance recorded.
 
-Verified by **4724 tests / ~132 000 assertions** across 273 scripts, running
+Verified by **4772 tests / ~132 000 assertions** across 275 scripts, running
 headless, plus a duel soak that plays whole games through the live UI.
 Adventure mode (M5) is next — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -101,6 +101,22 @@ Adventure mode (M5) is next — see [docs/ROADMAP.md](docs/ROADMAP.md).
 # Open in the editor (Godot 4.7+)
 godot -e --path .
 ```
+
+## Play in the browser / on a tablet
+
+```sh
+./build_release.sh --web                                        # -> ../shandalar-build/web/
+python3 -m http.server --directory ../shandalar-build/web 8000  # then open http://localhost:8000/
+```
+
+Any static host will do — the web build runs without threads, so there
+are no COOP/COEP headers to arrange. On a touchscreen the game types the
+mouse for your finger: tap clicks, hold and lift right-clicks, drag drags,
+a swipe scrolls a list; *Options → Touch controls* is Auto / On / Off. The
+browser build draws the clean built-in skin — the 1997 graphics and the
+card art stay on your own disk (next section). The table is landscape;
+a phone held upright gets a small picture. So far this has been checked
+in a desktop browser pretending to be a tablet, not on a real one.
 
 ## The art, and how to reconstruct it
 
@@ -163,6 +179,7 @@ a file — it asks Scryfall for the pool instead, one paged search per set.
 | Auto-generated cards and stubs | `tools/gen_cards.py` | the data above |
 | Frozen set packages | `tools/build_card_packs.py` | network, or `--offline` |
 | The Linux 64 build | `./build_release.sh` | Godot 4.7 + export templates; copy `export_presets.cfg.example` first |
+| The web build | `./build_release.sh --web` | the same, plus the `web_nothreads` templates |
 
 The 897 card implementations are **authored, not generated** — `gen_cards.py`
 emits stubs, and the hand-written rules files are the project itself.
@@ -204,7 +221,7 @@ given away for free.
 most literal sense: a genuinely free engine, with no runtime fee, no seat, no
 licence server and no company able to change the terms afterwards — which is
 exactly what a project that intends to still be here in ten years needs. Its
-headless mode is why an entire rules engine and 4724 tests run in seconds in
+headless mode is why an entire rules engine and 4772 tests run in seconds in
 a terminal; its Compatibility renderer is why a 1997 game's look runs on the
 kind of machine people actually have; and GDScript is why a card is a
 readable twenty-line file instead of a build system. Thank you for building

@@ -303,6 +303,9 @@ func populate(hand: Array, hidden: bool, click_cb: Callable,
 
 # ------------------------------------------- title bar: drag & collapse --
 
+## The pointer is read FROM THE EVENT, not `get_global_mouse_position()`:
+## the same number under a mouse, and the only one a finger on the touch
+## layer has (game/input/touch_controls.gd — it moves no OS pointer).
 func _on_title_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
@@ -317,7 +320,7 @@ func _on_title_input(event: InputEvent) -> void:
 				return
 			_dragging = true
 			_drag_moved = false
-			_drag_from = get_global_mouse_position()
+			_drag_from = event.global_position
 			_drag_offset = _drag_from - global_position
 		else:
 			if _dragging:
@@ -341,7 +344,7 @@ func _on_title_input(event: InputEvent) -> void:
 		# under the finger during an ordinary click, and without the
 		# threshold every header click would be read as a one-pixel drag
 		# and toggle nothing.
-		if get_global_mouse_position().distance_to(_drag_from) > DRAG_SLOP:
+		if event.global_position.distance_to(_drag_from) > DRAG_SLOP:
 			_drag_moved = true
 		# THE SLOP GATES THE MOVEMENT, not just the flag. It used to gate
 		# only `_drag_moved`, so the pixel or two a mouse travels under
@@ -351,7 +354,7 @@ func _on_title_input(event: InputEvent) -> void:
 		# header click and snapped back next duel.
 		if not _drag_moved:
 			return
-		global_position = get_global_mouse_position() - _drag_offset
+		global_position = event.global_position - _drag_offset
 		_clamp_on_screen()
 
 
