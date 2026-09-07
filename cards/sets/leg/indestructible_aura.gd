@@ -20,12 +20,13 @@ class ShieldEffect extends EffectBase:
 	func _init() -> void:
 		target_spec = TargetSpec.creature()
 
-	func resolve(game: MtgGame, _source: CardInstance, _controller: int,
+	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
 		var inst := game.find_instance(target.instance_id)
 		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
 			return
 		inst.prevention = 9999
+		inst.prevention_source = source.data
 		game.log_line("%s will take no damage this turn" % inst.data.card_name)
 
 	func describe() -> String:

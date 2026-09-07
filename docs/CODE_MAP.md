@@ -162,7 +162,12 @@ shandalar/
 │   │   │                      change for Creature Bond, Soul Net,
 │   │   │                      Necropolis of Azar & co.);
 │   │   │                      restore_printed_identity() ends a copy AFTER
-│   │   │                      its own dies-trigger is heard (CR 707.2)
+│   │   │                      its own dies-trigger is heard (CR 707.2).
+│   │   │                      prevention_source (2026-09-07): the CardData
+│   │   │                      whose effect last filled `prevention` —
+│   │   │                      the table draws it behind the creature as a
+│   │   │                      shield ghost; set by every writer of the
+│   │   │                      pool, cleared with it at cleanup
 │   │   ├── target.gd        class TargetSpec — what may be targeted (kind +
 │   │   │                      filter Callable + card-English description);
 │   │   │                      Kind.ABILITY names an ACTIVATED ability on
@@ -283,7 +288,11 @@ shandalar/
 │   │   │                      and .to_controller() variants (wave 8);
 │   │   │                      .with_paid_rider() grants Guardian Angel's
 │   │   │                      "pay {1} any time for 1 more" on the seat
-│   │   │                      (MtgGame.grant_paid_prevention)
+│   │   │                      (MtgGame.grant_paid_prevention, which keeps
+│   │   │                      the Angel's CardData so the point bought
+│   │   │                      later still names it); a creature's pool
+│   │   │                      also takes the source's CardData as its
+│   │   │                      prevention_source (2026-09-07)
 │   │   ├── animate_self_effect.gd — until-EOT type change ("becomes a
 │   │   │                      2/2 creature") — Mishra's Factory
 │   │   ├── exile_effect.gd       — Ashes to Ashes (no regen, no dies-trigger)
@@ -1629,7 +1638,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4692 tests / ~132 000 asserts, ~300 s
+├── tests/                   GUT suite — 4712 tests / ~132 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2813,6 +2822,21 @@ shandalar/
 │    lands in it, no marker or indent before the first turn, the turn
 │    header naming the seat after a gap (none before the first), reset,
 │    plain() one row per line and surviving a short meta column;
+│    tests/unit/test_prevention_source.gd — WHO SHIELDED THIS CREATURE
+│    (CardInstance.prevention_source): Healing Salve names itself, the
+│    name stays while the pool drains and goes at cleanup, a second
+│    shield takes it, a Hydra's {R} names the Hydra, Guardian Angel's
+│    paid point names the Angel, Indestructible Aura names itself, a
+│    probe unmakes the name with the pool (a paid point's too);
+│    tests/ui/test_shield_ghost_2026_09_07.gd — THE SHIELD GHOST: the
+│    Salve drawn one fan step behind the creature it shielded (built
+│    from the definition, id -1, disabled, FOCUS_NONE, hover previews),
+│    the host at HOST_Z, none without a pool, outside the auras when
+│    there are any (and the wrap reserves both steps), counted by
+│    _placement_span, none for a creature shielding itself; the words
+│    "prevent 3" in SHIELD_INK centred on the art with the P/T outline,
+│    following the pool, "prevent all" at 9999, yielding to a targeting
+│    stamp, hidden face down, the tooltip's shield line;
 │    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):
 │    user:// under the editor, the location seam, the banner's moment /
 │    players / seed, a game as banner + lines in the window's shape,
@@ -3701,6 +3725,17 @@ shandalar/
 │       │                      child_entered_tree (the first click rebuilds
 │       │                      the board and frees the row the second lands
 │       │                      on). tests/ui/test_casting_flow.gd
+│       │                      THE SHIELD GHOST (2026-09-07, [QoL]):
+│       │                      _shield_ghost(inst) builds a MiniCard from
+│       │                      inst.prevention_source (no id, disabled,
+│       │                      FOCUS_NONE, MOUSE_FILTER_PASS so hover
+│       │                      docks it in the sidebar) and _make_widget
+│       │                      stands it as the OUTERMOST step of the aura
+│       │                      fan while the pool holds; _fan_steps(inst)
+│       │                      is what _placement_span counts; a creature
+│       │                      shielding itself gets no ghost
+│       │                      (_shield_ghost_data). tests/ui/
+│       │                      test_shield_ghost_2026_09_07.gd
 │       ├── human_agent.gd   class HumanAgent — DecisionAgent for human
 │       │                      seats: pre-selection mailbox the UI fills
 │       │                      BEFORE casting (tutor picks) plus park(),
@@ -3932,6 +3967,17 @@ shandalar/
 │       │                      the only reading that cannot leak. Still
 │       │                      clickable on the battlefield: a face-down
 │       │                      permanent attacks, blocks and is targeted.
+│       │                      THE SHIELD WORDS (2026-09-07, [QoL]):
+│       │                      _refresh_shield draws "prevent 3" in
+│       │                      SHIELD_INK red with the P/T's outline over
+│       │                      the centre of the art while the instance
+│       │                      carries a prevention pool — following the
+│       │                      pool, "prevent all" from SHIELD_ALL (9999)
+│       │                      up, yielding the centre to a targeting
+│       │                      stamp (_centre_stamp), hidden face down;
+│       │                      shield_words(pool), shield_cue() in the
+│       │                      tooltip. On the CREATURE, because the card
+│       │                      drawn behind it shows only its title band.
 │       │                      Badge slots: BADGE_SLOT +
 │       │                      PROTECTION_SLOT + REGENERATION_SLOT 15
 │       │                      (predicate regenerates_itself — there is no

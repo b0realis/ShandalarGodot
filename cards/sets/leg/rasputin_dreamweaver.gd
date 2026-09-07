@@ -90,6 +90,7 @@ class DreamShieldEffect extends EffectBase:
 			_target: TargetRef, _x_value: int = 0) -> void:
 		if source != null and source.zone == Mtg.Zone.BATTLEFIELD:
 			source.prevention += 1
+			source.prevention_source = source.data
 			game.log_line("%s shields itself from the next 1 damage"
 				% source.data.card_name)
 

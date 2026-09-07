@@ -162,6 +162,9 @@ var _status_label: Label = null
 var _sick_spiral: TextureRect = null
 var _damage_icon: TextureRect = null
 var _damage_count: Label = null
+## "prevent 3" over the art while the card carries a prevention pool —
+## see [method _refresh_shield]. Built on first need.
+var _shield_words: Label = null
 ## The `Show ID tags` overlay — see [constant DuelOptions.MENU_TOGGLES].
 var _id_tag: Label = null
 var _badges: HBoxContainer = null
@@ -395,6 +398,20 @@ const PT_BOX := Vector2(70, 32)
 ## How far the box stands off the card's right and bottom edges — s30's
 ## own 3 and 2 on its 100x83 card, scaled to ours.
 const PT_INSET := Vector2(4, 2)
+
+## THE SHIELD WORDS — *"prevent 3"* in red over the art of a creature
+## carrying a damage-prevention pool ([member CardInstance.prevention]),
+## following the pool as damage drains it and gone with it at cleanup.
+## `[QoL]`, 2026-09-07: *"mini card should have some symbol like "prevent
+## 3" red letter in center of the card so player knows."* ON THE
+## CREATURE, not on the card drawn behind it (`DuelScreen._shield_ghost`):
+## a card in the aura fan shows its title band and a sliver of its right
+## edge, and its centre is exactly the part the host covers. Outlined
+## like the P/T, for the same reason — red on any art.
+const SHIELD_INK := Color(0.93, 0.13, 0.10)
+const SHIELD_FONT_SIZE := 15
+## A pool this deep is "prevent all" (Indestructible Aura writes 9999).
+const SHIELD_ALL := 9999
 
 
 ## [param p_game] is optional and is the SAME reference [member game]
@@ -882,6 +899,45 @@ static func _set_art_region(c: Control) -> void:
 
 ## Re-derive the whole visual from engine state. Cheap; called on every
 ## board refresh.
+## The words for a pool of [param pool]: "prevent 3", or "prevent all"
+## from [constant SHIELD_ALL] up.
+static func shield_words(pool: int) -> String:
+	if pool >= SHIELD_ALL:
+		return "prevent all"
+	return "prevent %d" % pool
+
+
+## Show the shield words when the instance carries a pool, and yield the
+## centre to a targeting stamp ([constant CENTRE_STAMPS]) while a prompt
+## has one up — the prompt is the more urgent of the two, and it is
+## over in a click.
+func _refresh_shield(centre_stamp: bool) -> void:
+	var pool := instance.prevention if instance != null else 0
+	if pool <= 0:
+		if _shield_words != null:
+			_shield_words.visible = false
+		return
+	if _shield_words == null:
+		_shield_words = Label.new()
+		# Over the ART WINDOW, centred in it — the frame's stone surround
+		# is not where a stamp goes.
+		_shield_words.anchor_left = ART_LEFT
+		_shield_words.anchor_top = ART_TOP
+		_shield_words.anchor_right = ART_RIGHT
+		_shield_words.anchor_bottom = ART_BOTTOM
+		_shield_words.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_shield_words.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_shield_words.add_theme_font_size_override("font_size", SHIELD_FONT_SIZE)
+		_shield_words.add_theme_color_override("font_color", SHIELD_INK)
+		_shield_words.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+		_shield_words.add_theme_constant_override("outline_size", PT_OUTLINE_SIZE)
+		_shield_words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_shield_words.z_index = 1   # over the DYING cracks, like the P/T
+		add_child(_shield_words)
+	_shield_words.text = shield_words(pool)
+	_shield_words.visible = not centre_stamp
+
+
 func refresh() -> void:
 	# `Show ID tags` — off by default, and shown even on a face-down card:
 	# the ID is what tells two identical face-down cards apart, which is
@@ -908,7 +964,7 @@ func refresh() -> void:
 		# and the mana a card taps for is exactly the information a card
 		# back exists to withhold. Same reason the state overlays are
 		# hidden two lines down.
-		for child in [_name_label, _name_band, _band_texture, _art, _art_frame, _art_placeholder, _pt_label, _status_label, _badges, _damage_count, _stripes, _tap_wash, _tap_mark]:
+		for child in [_name_label, _name_band, _band_texture, _art, _art_frame, _art_placeholder, _pt_label, _status_label, _badges, _damage_count, _stripes, _tap_wash, _tap_mark, _shield_words]:
 			if child != null:
 				child.visible = false
 		# EVERY state overlay too (the dagger and the spiral included): a
@@ -960,6 +1016,7 @@ func refresh() -> void:
 	_damage_count.visible = wounded
 	var states := active_states()
 	_apply_states(states)
+	_refresh_shield(_centre_stamp(states) != -1)
 	_refresh_status(states)
 	_refresh_tap_mark()
 	# The card's tooltip is name + rules + THE 1997 CUE CARDS for whatever
@@ -967,6 +1024,8 @@ func refresh() -> void:
 	# card stays clickable, which makes this the only place the player
 	# actually reads them.
 	tooltip_text = "%s\n%s" % [d.card_name, d.oracle_text]
+	if instance.prevention > 0:
+		tooltip_text += "\n" + shield_cue()
 	# `Show cue cards` (§6.4) — *"controls the appearance of the tiny hints
 	# that pop up when you position the mouse cursor over an active
 	# location. If you don't like the little tips, toggle the cue cards
@@ -989,14 +1048,28 @@ func state_cues(states: Array[int]) -> PackedStringArray:
 	return out
 
 
+## The one centre stamp [param states] earns, in [constant CENTRE_STAMPS]
+## order — or -1.
+func _centre_stamp(states: Array[int]) -> int:
+	for state in CENTRE_STAMPS:
+		if states.has(state):
+			return state
+	return -1
+
+
+## The shield's line in the tooltip: how much, and from what.
+func shield_cue() -> String:
+	var how := "all damage" if instance.prevention >= SHIELD_ALL \
+		else "the next %d damage" % instance.prevention
+	var from := "" if instance.prevention_source == null \
+		else " (%s)" % instance.prevention_source.card_name
+	return "Prevents %s to this creature this turn%s" % [how, from]
+
+
 ## Show/hide every overlay for the states this card is in. The three
 ## CENTRE stamps share one spot, so only the first of them wins.
 func _apply_states(states: Array[int]) -> void:
-	var centre := -1
-	for state in CENTRE_STAMPS:
-		if states.has(state):
-			centre = state
-			break
+	var centre := _centre_stamp(states)
 	# Whatever this card is actually in, make sure it HAS an overlay for it
 	# (see _ensure_overlay); a state it is not in never costs a node.
 	for state in states:

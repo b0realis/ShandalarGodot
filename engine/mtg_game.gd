@@ -1227,7 +1227,8 @@ func pay_life_for_mana(pid: int, amount := 1) -> String:
 ## per resolution, so two Angels on the same Bears are two permissions
 ## that each cost {1} per point — which is the same as one, and the
 ## duplicate is kept only so the log can name both.
-func grant_paid_prevention(pid: int, target: TargetRef, desc: String) -> void:
+func grant_paid_prevention(pid: int, target: TargetRef, desc: String,
+		data: CardData = null) -> void:
 	if target == null or target.is_damage or target.is_ability:
 		return
 	if not target.is_player:
@@ -1235,7 +1236,7 @@ func grant_paid_prevention(pid: int, target: TargetRef, desc: String) -> void:
 		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
 			return
 	_rec(players[pid], &"paid_prevention")
-	players[pid].paid_prevention.append({"target": target, "desc": desc})
+	players[pid].paid_prevention.append({"target": target, "desc": desc, "data": data})
 	log_line("%s may pay {1} to prevent 1 more damage to %s this turn (%s)" % [
 		players[pid].player_name, target_label(target), desc])
 
@@ -1301,7 +1302,11 @@ func pay_for_prevention(pid: int, target: TargetRef) -> String:
 	pool.pay(one, 0, [], subs)   # not undoable (CR 601.2h), like any cost
 	if inst != null:
 		_rec(inst, &"prevention")
+		_rec(inst, &"prevention_source")
 		inst.prevention += 1
+		var shield: CardData = entry.get("data")
+		if shield != null:
+			inst.prevention_source = shield   # the Angel's, for the table
 	else:
 		_rec(players[target.player_id], &"damage_prevention")
 		players[target.player_id].damage_prevention += 1
@@ -9313,6 +9318,7 @@ func _finish_cleanup() -> void:
 		inst.regeneration_banned_this_turn = false
 		inst.damage_unpreventable_this_turn = false
 		inst.prevention = 0             # damage prevention is this-turn only
+		inst.prevention_source = null   # ...and so is the card drawn for it
 		inst.ability_uses.clear()       # "N times each turn" counters reset
 	for pl in players:
 		pl.artifact_damage_this_turn = 0

@@ -82,6 +82,8 @@ func with_paid_rider() -> PreventDamageEffect:
 ## Adds to a prevention POOL — MtgPlayer.damage_prevention for a player,
 ## CardInstance.prevention for a creature. Both are plain counters that
 ## MtgGame.deal_damage draws down before damage lands; cleanup zeroes them.
+## A creature's pool also remembers WHICH CARD filled it
+## ([member CardInstance.prevention_source]) so the table can show it.
 ## This is the one effect family that writes instance state directly rather
 ## than going through an MtgGame helper, because a prevention pool is inert
 ## bookkeeping: nothing triggers on it and no state-based action reads it.
@@ -89,13 +91,15 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 		x_value: int = 0) -> void:
 	var n := x_value if use_x else amount
 	if paid_rider and target != null:
-		game.grant_paid_prevention(controller, target, source.data.card_name)
+		game.grant_paid_prevention(controller, target, source.data.card_name,
+			source.data)
 	if n <= 0:
 		return
 	if source_mode:
 		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
 			return
 		source.prevention += n
+		source.prevention_source = source.data
 		game.log_line("%s will prevent the next %d damage to itself this turn" % [
 			source.data.card_name, n])
 		return
@@ -115,6 +119,10 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
 			return
 		inst.prevention += n
+		# WHO SHIELDED IT, for the table to draw behind the creature — see
+		# [member CardInstance.prevention_source]. Inside a resolution, so
+		# the journal already has the instance whole (_rec_resolution).
+		inst.prevention_source = source.data
 		game.log_line("%s will prevent the next %d damage to %s this turn" % [
 			source.data.card_name, n, inst.data.card_name])
 

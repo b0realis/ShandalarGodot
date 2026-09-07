@@ -6887,6 +6887,47 @@ new), `tests/unit/test_duel_log_text.gd` (10, new),
 window under Xvfb — dark gadgets, a green bold `Grizzly Bears` under a
 `[First Main]` marker — and at the running file's banner and indents.
 
+**The Healing Salve that stays on the table.** *"Cast Healing Salve on a
+creature should be like an aura (mini card behind a creature) just last
+only one turn. To know that that creature has healing salve on it. (Now
+it goes to graveyard). Also mini card should have some symbol like
+"prevent 3" red letter in center of the card so player knows. This
+mechanic can be reused on other preventions cards in the future."*
+`[QoL]`. The Salve still goes to the graveyard — it is an instant, and
+the engine's prevention pool (`CardInstance.prevention`, this turn
+only) was always the thing that stayed; what the engine did not keep was
+WHO filled it. Now it does: `CardInstance.prevention_source` is the
+definition of the card whose effect last wrote the pool, set by every
+writer — `PreventDamageEffect` for a target (Healing Salve, Samite
+Healer, Alabaster Potion, Amulet of Kroog, Oasis, Argivian Blacksmith,
+Rakalite, Kei Takahashi) and for its own source (Rock Hydra's `{R}`),
+Guardian Angel's paid point (`pay_for_prevention` reads the Angel off
+the permission it granted), Rasputin's dream, Indestructible Aura —
+left alone while damage drains the pool, cleared with it at
+cleanup, journaled beside it, and rewound by a probe like the pool is.
+THE TABLE draws it as a SHIELD GHOST: a `MiniCard` built from the
+definition (`DuelScreen._shield_ghost`: no instance, no id, a Button
+that never presses, `FOCUS_NONE`, hover docks the Salve in the sidebar)
+standing as the OUTERMOST step of the creature's aura fan — the newest
+and the briefest thing there, so nothing already on the card moves when
+it goes — with the free layer's footprint (`_placement_span`, through
+`_fan_steps`) counting it as a step. THE WORDS, *"prevent 3"*, in red
+with the P/T's black outline, sit in the centre of the art ON THE
+CREATURE (`MiniCard._refresh_shield`, `SHIELD_INK`), not on the ghost:
+a card in the fan shows its title band and a sliver of its right edge,
+and its centre is exactly the part the host covers. They follow the
+pool as damage drains it ("prevent 1"), read "prevent all" from 9999
+up (Indestructible Aura), yield the centre to a targeting stamp while a
+prompt has one up, and go with the pool. A creature shielding ITSELF —
+the Hydra, Rasputin — gets the words and not a copy of itself behind
+it. The tooltip gains "Prevents the next 3 damage to this creature this
+turn (Healing Salve)". `tests/unit/test_prevention_source.gd` (8, new),
+`tests/ui/test_shield_ghost_2026_09_07.gd` (12, new); checked by looking
+under Xvfb — a Healing Salve behind a Bear reading `prevent 3`, a Bear
+wearing Holy Strength with a Samite Healer outside it, a Rock Hydra
+under an Indestructible Aura reading `prevent all` and its neighbour
+reading `prevent 1` with nothing behind it.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -3492,6 +3492,18 @@ Shipped 2026-09-07 (the v0.18.0-dev playtest, all `[QoL]`):
   line as it happens; past 1 MB the oldest slab goes from the front,
   the cut on a banner. A bug report is a seed and a log, and this is
   where the log is when nobody thought to keep it.
+- **The Healing Salve stays on the table** — a creature carrying a
+  damage-prevention pool wears the card that filled it behind it like an
+  aura, the outermost step of its fan (`DuelScreen._shield_ghost`, built
+  from `CardInstance.prevention_source`, no click, hover previews it) for
+  the turn the pool lasts, and reads *"prevent 3"* in red over its own
+  art (`MiniCard._refresh_shield`), following the pool as damage drains
+  it, *"prevent all"* under an Indestructible Aura. Samite Healer,
+  Guardian Angel's paid point, Rock Hydra's `{R}` (words only — a Hydra
+  is not drawn behind the Hydra) and the rest of the family come for
+  free. The owner: *"like an aura (mini card behind a creature) just
+  last only one turn … "prevent 3" red letter in center of the card so
+  player knows."*
 
 Wishlist (ordered; each is a self-contained follow-up):
 - **Phase stops config** (the original's duel options panel): choose which

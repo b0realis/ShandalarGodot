@@ -6415,9 +6415,7 @@ func _placement_span(inst: CardInstance) -> Rect2:
 	var span := Vector2(
 		maxf(MiniCard.SIZE.x, MiniCard.TURN_HOLDER_SIZE.x),
 		maxf(MiniCard.SIZE.y, MiniCard.TURN_HOLDER_SIZE.y))
-	var auras := 0
-	if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD:
-		auras = inst.attachments.size()
+	var auras := _fan_steps(inst)
 	if auras == 0:
 		return Rect2(Vector2.ZERO, span)
 	# The fan: a whole card wide per step to the RIGHT, off the turned
@@ -6512,6 +6510,59 @@ func _cancel_drag() -> void:
 	_dragging = false
 
 
+## How many cards stand behind [param inst] in its fan: its attachments,
+## and the shield ghost when it wears one — the number both the widget
+## ([method _make_widget]) and the free layer's footprint
+## ([method _placement_span]) count by.
+func _fan_steps(inst: CardInstance) -> int:
+	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
+		return 0
+	return inst.attachments.size() + (1 if _shield_ghost_data(inst) != null else 0)
+
+
+## The card to draw behind [param inst] for the shield it carries, or
+## null: the definition that filled its prevention pool while the pool
+## still holds — and not the creature's own (a Rock Hydra's `{R}`, a
+## Rasputin's dream), which the words on its face already say.
+func _shield_ghost_data(inst: CardInstance) -> CardData:
+	if inst.prevention <= 0 or inst.prevention_source == null:
+		return null
+	if inst.prevention_source == inst.data:
+		return null
+	return inst.prevention_source
+
+
+## A SHIELD GHOST — the Healing Salve that was cast on this creature,
+## drawn behind it like an aura for the turn its shield lasts. `[QoL]`,
+## 2026-09-07: *"Cast Healing Salve on a creature should be like an aura
+## (mini card behind a creature), just last only one turn. To know that
+## that creature has healing salve on it. (Now it goes to graveyard.)"*
+## The Salve IS in the graveyard, and stays there: this is a card built
+## from the definition the engine remembered ([member
+## CardInstance.prevention_source]), with no instance behind it, no id
+## and nothing to click — it stands in the fan for the eye, and hovering
+## its title band docks it in the sidebar like any card. The amount is
+## on the CREATURE's face ([method MiniCard._refresh_shield]), where it
+## can be seen.
+func _shield_ghost(inst: CardInstance) -> MiniCard:
+	var data := _shield_ghost_data(inst)
+	if data == null:
+		return null
+	var ghost_inst := CardInstance.new(data, -1, inst.controller_id)
+	var ghost := MiniCard.new(ghost_inst)
+	ghost.name = "ShieldGhost"
+	ghost.size = MiniCard.SIZE
+	ghost.focus_mode = Control.FOCUS_NONE
+	# A Button that never presses, like the deck builder's faces: the
+	# board under the fan is what a click there means.
+	ghost.disabled = true
+	ghost.mouse_filter = Control.MOUSE_FILTER_PASS
+	ghost.mouse_entered.connect(func() -> void:
+		if _card_preview != null:
+			_card_preview.show_card(ghost_inst))
+	return ghost
+
+
 func _make_widget(inst: CardInstance) -> Control:
 	var w := _make_card(inst)
 	var result: Control = w
@@ -6545,15 +6596,23 @@ func _make_widget(inst: CardInstance) -> Control:
 	# fan and nothing already on the card moves. s30 orders them the same
 	# way (`slices.Backward`: last drawn first, `attachments[0]` last and
 	# therefore on top of its neighbours).
-	if not inst.attachments.is_empty() and inst.zone == Mtg.Zone.BATTLEFIELD:
+	#
+	# THE SHIELD GHOST stands at the OUTSIDE of the fan — the Healing Salve
+	# behind whatever auras the creature wears — because it is the newest
+	# and the briefest thing there: it goes at cleanup, and nothing already
+	# on the card moves when it does. See _shield_ghost.
+	var ghost := _shield_ghost(inst) if inst.zone == Mtg.Zone.BATTLEFIELD \
+		else null
+	if (not inst.attachments.is_empty() or ghost != null) \
+			and inst.zone == Mtg.Zone.BATTLEFIELD:
 		var attached: Array[CardInstance] = []
 		for id in inst.attachments:
 			var aura := game.find_instance(id)
 			if aura != null:
 				attached.append(aura)
-		if attached.is_empty():
+		if attached.is_empty() and ghost == null:
 			return result
-		var steps := float(attached.size())
+		var steps := float(attached.size() + (1 if ghost != null else 0))
 		var wrap := Control.new()
 		# A TAPPED host is already inside its rotation holder, which is
 		# WIDER and TALLER than a card and holds the turning card centred
@@ -6603,6 +6662,9 @@ func _make_widget(inst: CardInstance) -> Control:
 		wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		# Furthest-out first: later children draw over earlier ones, so the
 		# host — added last — overlaps every card behind it.
+		if ghost != null:
+			ghost.position = corner + Vector2(AURA_PEEK.x * steps, -AURA_PEEK.y * steps)
+			wrap.add_child(ghost)
 		for j in range(attached.size() - 1, -1, -1):
 			var out := float(j + 1)
 			var back := _make_card(attached[j])

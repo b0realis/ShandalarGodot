@@ -183,6 +183,19 @@ var damage_unpreventable_this_turn: bool = false
 ## incoming damage consumes it point for point. Cleared at cleanup.
 var prevention: int = 0
 
+## THE CARD THE SHIELD CAME FROM — the definition of whatever last filled
+## [member prevention]: the Healing Salve, the Samite Healer, the creature
+## itself for a Rock Hydra's `{R}`. The table draws it behind the creature
+## the way an aura is drawn, for the turn the pool lasts (`[QoL]`,
+## 2026-09-07: *"Cast Healing Salve on a creature should be like an aura
+## (mini card behind a creature), just last only one turn … so the player
+## knows that creature has Healing Salve on it"*). The engine reads
+## nothing off it; an instant is in the graveyard by the time anyone
+## looks, which is why the definition is kept and not the instance. Set
+## by every writer of the pool, left alone while damage drains the pool
+## (the table hides it at 0), cleared with the pool at cleanup.
+var prevention_source: CardData = null
+
 ## BLOCK HISTORY: creatures this permanent BLOCKED this turn, as
 ## {attacker instance id: the controller it had when the block happened}.
 ## The whole Glyph cycle reads it ("target creature that target Wall
@@ -839,6 +852,7 @@ func clear_battlefield_state() -> void:
 	regeneration_banned_this_turn = false
 	damage_unpreventable_this_turn = false
 	prevention = 0
+	prevention_source = null
 	attacked_this_turn = false
 	could_attack_this_turn = false
 	blocked_this_turn = false
