@@ -13,6 +13,10 @@ config_version=5
 
 Lifecycle="*res://game/lifecycle.gd"
 ShellMusic="*res://game/shell_music.gd"
+; The finger-as-mouse layer for tablets, phones (the web export) and touch
+; laptops. Inert wherever there is no touchscreen unless the player turns
+; it on (Options > Touch controls); see game/input/touch_controls.gd.
+TouchControls="*res://game/input/touch_controls.gd"
 
 [application]
 
@@ -82,6 +86,15 @@ window/size/viewport_width=1280
 window/size/viewport_height=800
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+; Phones and tablets hold the game sideways. The 1997 table is a 1280x800
+; landscape design and `expand` only ever adds room at the sides or the
+; top and bottom, never re-flows a column; a portrait phone would draw the
+; table at a third of its width with the hand unreadable. A desktop window
+; ignores this key entirely; the web export's manifest and the browser's
+; own lock read it. 4 is SCREEN_SENSOR_LANDSCAPE: either way up, never
+; portrait (plain landscape, 0, is the engine default and would not even
+; be written here).
+window/handheld/orientation=4
 
 [rendering]
 

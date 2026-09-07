@@ -137,6 +137,15 @@ static func fullscreen() -> bool:
 	return get_value("fullscreen", false)
 
 
+## [QoL] `Touch controls` on the Options screen — `auto`, `on` or `off`;
+## see the `TouchControls` autoload for what each means. `auto` by
+## default: a desk with a mouse never sees the layer, a tablet always
+## does, and neither has to be told.
+static func touch_controls() -> String:
+	var value: Variant = get_value("touch_controls", "auto")
+	return value if value is String and value in ["auto", "on", "off"] else "auto"
+
+
 ## How the player's own hand renders on the duel screen:
 ## "stack" — the ORIGINAL's draggable list window, one name+cost strip per
 ##           card, enlarged card in the sidebar dock on hover (DEFAULT —

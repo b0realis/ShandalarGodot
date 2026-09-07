@@ -21,6 +21,9 @@ extends Control
 ## contents, because this list only ever grows.
 const PANEL_WIDTH := 460.0
 const PANEL_MARGIN := 24.0
+## The `Touch controls` row's items, in the order they are listed: the
+## index the OptionButton reports IS the index into this.
+const TOUCH_MODES: Array[String] = ["auto", "on", "off"]
 
 
 func _ready() -> void:
@@ -140,6 +143,32 @@ func _add_display_section(content: VBoxContainer) -> void:
 		GameDisplay.set_fullscreen(on))
 	UiChrome.shadowed_button(fullscreen)
 	content.add_child(fullscreen)
+
+	# `[QoL]` TOUCH CONTROLS — the finger-as-mouse layer (`TouchControls`,
+	# `game/input/touch_controls.gd`) for the web export on a tablet or a
+	# phone and for touch laptops. Three states, one stored key, and the
+	# row is a VIEW of it like the switch above: it opens on what is
+	# stored and writes what is picked, at once, through the autoload so
+	# the file and the layer cannot disagree. `Auto` is the default and
+	# what nearly everyone should leave it on: it turns the layer on only
+	# where there is a touchscreen to serve.
+	var touch_row := HBoxContainer.new()
+	touch_row.add_theme_constant_override("separation", 12)
+	touch_row.add_child(UiChrome.body_label("Touch controls:"))
+	var touch := OptionButton.new()
+	touch.name = "TouchControls"
+	touch.add_item("Auto", 0)
+	touch.add_item("On", 1)
+	touch.add_item("Off", 2)
+	touch.tooltip_text = "Play by finger: tap to click, hold and lift " \
+		+ "for the right-click menu, drag to move. Auto turns it on " \
+		+ "only where there is a touchscreen; On forces it; Off never."
+	touch.selected = TOUCH_MODES.find(Settings.touch_controls())
+	touch.item_selected.connect(func(index: int) -> void:
+		TouchControls.choose(TOUCH_MODES[index]))
+	UiChrome.shadowed_button(touch)
+	touch_row.add_child(touch)
+	content.add_child(touch_row)
 
 
 ## SOUND — TWO SWITCHES AND TWO SLIDERS, and only the switches are 1997's.

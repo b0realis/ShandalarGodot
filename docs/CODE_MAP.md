@@ -1638,7 +1638,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4712 tests / ~132 000 asserts, ~300 s
+├── tests/                   GUT suite — 4756 tests / ~132 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2395,6 +2395,37 @@ shandalar/
 │    writes to disk at once, survives Settings.reload), the Display row
 │    above Sound, borderless not exclusive, applying silent headless,
 │    and the Lifecycle autoload applying it at boot;
+│    tests/unit/test_touch_gestures.gd — THE GESTURE VOCABULARY
+│    (TouchGestures, 2026-09-07) walked with a hand-held clock: a tap at
+│    the down point under a 12-px wobble, the double within 300 ms and 30
+│    px and not beyond, the long-press arming at 450 ms and answering a
+│    CONTEXT on the lift (a lift before the mark is a tap; a move after
+│    it is a drag), the drag's start/move/end relative to the last point,
+│    the scroll on a scrollable origin with no button, two fingers as a
+│    context at the FIRST finger on the first lift in either order (too
+│    slow is nothing; a pinch is nothing), two-finger travel as wheel
+│    notches with the content following the finger, and the refusals — an
+│    unknown lift, a third finger deadening until all are up, a stray
+│    finger mid-drag ignored, a cancel ending a drag without a tap;
+│    tests/ui/test_touch_controls.gd — THE TOUCH LAYER (TouchControls)
+│    driven through Input.parse_input_event, emulation and all: headless
+│    `auto` is off and processes nothing, a real mouse click is the same
+│    click with the layer off OR on, the engine's emulated click reaches a
+│    button with the layer off, and with it on a tap clicks ONCE (the
+│    emulated click and the raw touch both eaten — a 4.7 Button presses
+│    itself from a bare touch), touch-down hovers before any click, a
+│    long-press and lift is a right click (the button's gui_input sees it,
+│    `pressed` does not fire), a drag presses at the origin and moves with
+│    the button held and lets go where the finger left (outside the
+│    button: no press), two fingers right-click at the first, a finger in
+│    a ScrollContainer moves it pixel for pixel with the half-pixels
+│    carried and no button at all, a drag carries Godot's own
+│    drag-and-drop to a drop target, a fat tap 10 px beside a 20-px button
+│    reaches it and 40 px away does not; on the DUEL TABLE touching a card
+│    docks its preview, holding one and lifting opens @MENU_SMALLCARD, and
+│    dragging one places it; the Options row is a view of the key and
+│    the layer follows it at once, the choice survives Settings.reload,
+│    and switching off mid-drag lets the button go;
 │    tests/ui/test_options_music.gd — the MUSIC SYSTEM and the PHASE CUE,
 │    both from the owner's 2026-09-03 playtest: the original has 27
 │    loopable beds and not one, a player file in user://music replaces an
@@ -3042,7 +3073,9 @@ shandalar/
 │   │                          crossfade instead of a click
 │   ├── options_screen.gd/.tscn  Options ([QoL] — 1997 had no options
 │   │                          screen): the Display row's `Full screen`
-│   │                          switch (GameDisplay, 2026-09-07), Music
+│   │                          switch (GameDisplay, 2026-09-07) and its
+│   │                          `Touch controls: Auto / On / Off` choice
+│   │                          (TouchControls, 2026-09-07), Music
 │   │                          and Sound Effects switches
 │   │                          (the deck builder's mini-menu carries the
 │   │                          same two keys), music/sfx volume sliders
@@ -3055,7 +3088,9 @@ shandalar/
 │   │                          AGGREGATOR over Settings, never a copy
 │   ├── settings.gd          class Settings — user://settings.cfg wrapper;
 │   │                          saved on every set, except set_value(...,
-│   │                          false) + flush() for a slider's drag
+│   │                          false) + flush() for a slider's drag;
+│   │                          `touch_controls()` reads auto/on/off and
+│   │                          answers `auto` to anything else
 │   ├── display.gd           class GameDisplay — THE WINDOW: the one
 │   │                          `fullscreen` key and the one place it is
 │   │                          put onto the OS window (borderless
@@ -3086,6 +3121,62 @@ shandalar/
 │   │                          that the 1997 shell played nothing) and
 │   │                          the global music_enabled rule. No
 │   │                          class_name — an autoload is its name
+│   ├── input/               THE TOUCH LAYER ([QoL], 2026-09-07: "touch
+│   │                          control support if enabled/present, for
+│   │                          online web export and play via mobiles/
+│   │                          tablets"). Nothing in the 1997 screens
+│   │                          knows a finger; these two type the mouse
+│   │                          for it and no screen learns a new event
+│   │   ├── touch_gestures.gd  class TouchGestures — THE GESTURE
+│   │   │                        VOCABULARY, a pure RefCounted state
+│   │   │                        machine with the clock as an argument
+│   │   │                        (unit-tested headless in milliseconds
+│   │   │                        of the test's choosing): touch-down is
+│   │   │                        HOVER, tap is a LEFT CLICK at the down
+│   │   │                        point (double within 300 ms / 30 px),
+│   │   │                        long-press (450 ms) and LIFT is a RIGHT
+│   │   │                        CLICK (on the lift, measured: a popup
+│   │   │                        opened under a resting finger takes its
+│   │   │                        own release and picks its first entry),
+│   │   │                        two-finger tap the same right click at
+│   │   │                        the first finger, one-finger drag past a
+│   │   │                        12-px slop a LEFT DRAG (or a SCROLL when
+│   │   │                        the autoload says the origin scrolls),
+│   │   │                        two-finger drag WHEEL NOTCHES per 40 px
+│   │   │                        with the content following the finger.
+│   │   │                        A third finger or a stray one mid-drag
+│   │   │                        deadens the gesture; a lift it never
+│   │   │                        saw pressed (a touch that began on a
+│   │   │                        popup) is ignored
+│   │   └── touch_controls.gd  AUTOLOAD `TouchControls` — the one place
+│   │                            the finger becomes the mouse. ACTIVE on
+│   │                            `auto` when the platform has a
+│   │                            touchscreen or the web build runs in a
+│   │                            mobile browser (UA, maxTouchPoints), on
+│   │                            `on` always, on `off` never (one
+│   │                            Settings key, `touch_controls`, the
+│   │                            Options row a view of it). Active, it
+│   │                            takes the whole touch stream at
+│   │                            `_input` — Godot's emulated mouse
+│   │                            (device -1) AND the raw ScreenTouch/
+│   │                            ScreenDrag, since a 4.7 BaseButton
+│   │                            presses itself from a bare touch and
+│   │                            would act twice — queues it, and spends
+│   │                            the recogniser's intents at the next
+│   │                            `_process` as mouse events stamped
+│   │                            device 4096 (push_input on the root):
+│   │                            hover, click, right click, drag, a
+│   │                            ScrollContainer's scroll values moved
+│   │                            with the finger, wheel notches. A real
+│   │                            mouse (device >= 0) passes untouched;
+│   │                            INACTIVE it processes nothing at all,
+│   │                            so mouse play is the same event stream
+│   │                            as before. The fat-finger rule: a tap
+│   │                            on nothing that listens moves to the
+│   │                            nearest enabled button within 22 px
+│   │                            (half the 44-px target), only if that
+│   │                            button is what is drawn there. No
+│   │                            class_name — an autoload is its name
 │   ├── ui_chrome.gd         class UiChrome — the original sandstone panel
 │   │                          (Winbk_Options 9-patch) + era buttons/labels;
 │   │                          ONE place for the game's window look
