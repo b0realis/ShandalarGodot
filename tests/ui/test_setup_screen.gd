@@ -1076,7 +1076,9 @@ func test_back_does_not_stop_it_and_go_does() -> void:
 	var source: String = (screen.get_script() as GDScript).source_code
 	var go := source.find("func _start_battle(")
 	var remembered := source.find("_remember_choices()", go)
-	var stopped := source.find("ShellMusic.stop()", go)
+	# `_shell_music_call` is the autoload reached through the tree, so a
+	# `-s` script that compiles this screen compiles without it.
+	var stopped := source.find("_shell_music_call(&\"stop\")", go)
 	assert_gt(go, -1)
 	assert_gt(remembered, go, "Go! remembers the choices")
 	assert_gt(stopped, remembered,
