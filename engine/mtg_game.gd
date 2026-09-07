@@ -979,6 +979,7 @@ func _build_library(pid: int, names: Array) -> void:
 		_next_instance_id += 1
 		_instances[inst.id] = inst
 		players[pid].library.append(inst)
+		players[pid].deck_names.append(data.card_name)   # the decklist
 
 
 ## Fisher–Yates with the game RNG (never Array.shuffle(): that uses the
@@ -3715,10 +3716,13 @@ func take_from_outside_the_game(inst: CardInstance, pid: int) -> void:
 	if undo_log != null:
 		_rec(players[pid], &"outside_the_game")
 		_rec(players[pid], &"hand")
+		_rec(players[pid], &"deck_names")
 		_rec(inst, &"zone")
 	players[pid].outside_the_game.erase(inst)
 	inst.zone = Mtg.Zone.HAND
 	players[pid].hand.append(inst)
+	# Announced, so from here on it is a name the opponent may say.
+	players[pid].deck_names.append(inst.data.card_name)
 	log_line("%s comes in from outside the game" % inst.data.card_name)
 	_emit_state()
 

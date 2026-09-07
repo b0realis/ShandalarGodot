@@ -79,6 +79,18 @@ var phased_out: Array[CardInstance] = []
 ## the 1997 game's Ring reaches into.
 var outside_the_game: Array[CardInstance] = []
 
+## THE DECKLIST — every card name the player brought to the duel, in the
+## order the deck was registered and with its copies ([method
+## MtgGame.setup]), plus any card wished in from outside the game once its
+## arrival has been announced ([method MtgGame.take_from_outside_the_game],
+## journaled). Never a scan of zones: this is what a player knew before the
+## first card was drawn, so a card may be NAMED from it — Petra Sphinx from
+## one's own, Nebuchadnezzar from the opponent's (the owner's ruling of
+## 2026-09-07: "only display selection of cards from opponents deck (as you
+## can see the deck beforehand in real mtg)") — without reading a hand or a
+## library.
+var deck_names: Array[String] = []
+
 var mana_pool := ManaPool.new()
 
 ## Lands played this turn (limit 1, reset each untap step).

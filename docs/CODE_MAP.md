@@ -754,8 +754,10 @@ shandalar/
 │   ├── mtg_player.gd        class MtgPlayer — seat: life, library/hand/
 │   │                          battlefield/graveyard/ante/phased_out/
 │   │                          outside_the_game, ManaPool, poison,
-│   │                          per-turn
-│   │                          flags; prevention_shields (+ predicate
+│   │                          per-turn flags; deck_names (the DECKLIST
+│   │                          as registered — what a card may be NAMED
+│   │                          from: Petra Sphinx, Nebuchadnezzar);
+│   │                          prevention_shields (+ predicate
 │   │                          shields — the Circles' id-bound one-shots),
 │   │                          reverse_damage_sources (Reverse Damage's
 │   │                          named sources), max_hand_size,
@@ -1640,7 +1642,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4717 tests / ~132 000 asserts, ~300 s
+├── tests/                   GUT suite — 4721 tests / ~132 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
