@@ -4768,6 +4768,25 @@ shandalar/
     │                          Life Register...), what we call it today, and
     │                          the 1997↔modern phase mapping. Read before
     │                          naming any new duel control or prompt
+    ├── ai-difficulty.md     THE FOUR OPPONENTS (2026-09-07) — what the AI
+    │                          at each difficulty can do: the rule of the
+    │                          ladder (mistake rate first, capabilities
+    │                          second, monotone, nothing card-named), every
+    │                          AiProfile knob by rung, each rung in the
+    │                          player's terms, the measured ladder, and the
+    │                          owner's ruling that the Magician stays a
+    │                          rung below the capabilities
+    ├── arzakon.strategy     HOW PLAYERS BEAT ARZAKON (2026-09-07) — the
+    │                          sourced loops (Channel-Fireball, the
+    │                          infinite turn, Vise behind Moat, decking),
+    │                          which are rules and which were the 1997
+    │                          program's, what the engine supports, and
+    │                          what the AI should someday know; comments
+    │                          at the bottom
+    ├── difficult_cards.someday  THE CARDS THE 1997 PROGRAM DID NOT PLAY
+    │                          (2026-09-07) — the eight "implemented but
+    │                          not turned on", each sourced, with where
+    │                          it stands here and what a future pass owes
     └── ROADMAP.md           v0.1 simplifications & milestone plan
 ```
 

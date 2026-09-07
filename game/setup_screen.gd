@@ -132,8 +132,11 @@ const DIFFICULTY_TOOLTIP := \
 	+ "open (sorcery-speed Magic), never sideboards.\n" \
 	+ "Magician: holds instants and mana for them; counters only the " \
 	+ "biggest threats; may sideboard 2 cards.\n" \
-	+ "Sorcerer: few mistakes; may sideboard 3 cards.\n" \
-	+ "Wizard: no mistakes; may sideboard 4 cards."
+	+ "Sorcerer: few mistakes; reads your crack-back before it attacks; " \
+	+ "plays engines, pays sacrifices, casts spells with a moment, counts " \
+	+ "cards and paces its draws; may sideboard 3 cards.\n" \
+	+ "Wizard: no mistakes, the same plays with twice the search; may " \
+	+ "sideboard 4 cards."
 
 ## `<random deck>` — the original's own entry, verbatim, and its own place:
 ## first in the deck list, above the decks themselves

@@ -306,3 +306,73 @@ AI, someday, measured Deck-Lab style when it comes (every entry an
    for it (A).
 6. The far end: recognise the three-card loop in your own hand and run
    it (C). Arzakon holds every piece.
+
+
+## 5. Comments (2026-09-07) — the editor's reading, kept apart from the sources
+
+Added at the owner's request, after the sections above were written; the
+sources stay as they are, and these are the opinions.
+
+1. The premise — *"legit old-style Magic loops the engine should know
+   about eventually"* — holds for four of the five: A, C, D and E are
+   rules-legal under the Comprehensive Rules and every card in them is
+   in the pool at printed strength. The engine plays all four today
+   between two humans, and a duel against Arzakon's real 138 cards at
+   400 life is one Setup screen away (life spinner, `decks/1997/*/arzakon.deck`).
+
+2. B is the exception and should stay one. Lich + Channel makes no mana
+   under CR 119.4 — a life payment needs the life — so the "infinite"
+   variant is the 1997 program's bookkeeping, not a loop. The engine's
+   refusal (`pay_life_for_mana` at 0) is the faithful result, the same
+   way Timetwister not shuffling itself is. If it is ever wanted for
+   nostalgia it is a `[1997]` flag on the payment, off by default, with
+   the negative life total it implies; the recommendation is not to.
+
+3. Of the four, the infinite turn (C) is the one that matters to the
+   AI, in both seats. As the pilot it is the only loop that can be RUN
+   rather than merely cast: recognise the three cards in hand, Time
+   Walk, Regrowth the Walk, Twister when the hand is spent, and it is
+   an `EffectIntent` question (an extra-turn spell, a graveyard-to-hand
+   effect, a wheel) with nothing card-named. As Arzakon it is the
+   spell to Power Sink — and today it is not: `Evaluator.card_value`
+   prices a non-creature spell at its mana value plus one, so Time Walk
+   is a 3.0 threat and Timetwister a 4.0 against the Wizard's
+   `counter_threshold` of 5.0 (`docs/ai-difficulty.md` §5), and a Wizard
+   holding two Power Sinks lets both resolve while it waits for a Serra
+   Angel. The counter-side is the cheaper fix and the one to do first.
+
+4. D and E are the same lesson from the AI's side of the table:
+   count. A Vise on the table makes seven cards in hand three damage a
+   turn; a library of nine makes a Braingeyser for nine lethal.
+   `counts_cards` (2026-09-07) already sizes the pilot's own draws and
+   aims a draw at an empty library; what is missing is the DEFENSIVE
+   read — empty the hand under a Vise, never wheel into one, keep the
+   library count against the opponent's X. A Fog line is worthless
+   against either, and the pilot's Fog in Arzakon's deck should not be
+   held for them.
+
+5. The 1997 difficulty ramp is why these loops exist at all. Arzakon's
+   life goes 100 / 200 / 300 / 400 by level (FAQ v1.2), and a 400-life
+   opponent cannot be raced by creatures out of a 1997 deck — the loops
+   are the player's answer to the ramp, not an exploit of it. When the
+   adventure lands, the Arzakon duel gets the same profile ladder as
+   every other (`docs/ai-difficulty.md`): a Wizard Arzakon that counters
+   the loop's first card and counts its own library is the top table;
+   an Apprentice Arzakon that lets Time Walk resolve is the bottom one.
+   That is the ramp the owner asked for, and it needs no Arzakon-shaped
+   code.
+
+6. Not worth building, ever: the 1997 program's own faults that the
+   sources lean on — the Tempest Efreet duplication, the AddCard limits,
+   the Berserk crash, the ten-card ante cap — and Time Spiral, a 1998
+   card. A report that quotes one of them is a report about MicroProse's
+   build.
+
+7. Suggested order if section 4's someday list is taken up, each step
+   measured Deck-Lab style with a loop deck against
+   `decks/1997/duels/arzakon.deck` at 400 life: (i) counter by what a
+   spell does (the extra turn, the wheel, the lethal X) — one
+   `EffectIntent` read on the counter pricing; (ii) the defensive count
+   against draw spells and Millstone, extending `counts_cards`; (iii)
+   the Vise-aware hand; (iv) the pilot running the loop. The first two
+   are hours; the last is the far end.
