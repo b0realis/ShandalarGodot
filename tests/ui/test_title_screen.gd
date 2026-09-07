@@ -17,7 +17,11 @@ extends GutTest
 ## `x:sound\locmus0..19.wav`, `x:sound\tmplmus1.wav`,
 ## `x:sound\[bgruw]castle.wav`) lives in `Shandalar.exe`, the ADVENTURE.
 ## So the shell's music is `[QoL]` and the bed is ours to choose;
-## `MainScreen.MENU_BEDS` carries the measurements it was chosen on.
+## `ShellMusic.MENU_BEDS` (`game/shell_music.gd`, the autoload that holds
+## the one bed for every room of the shell since 2026-09-07) carries the
+## measurements it was chosen on. The title screen's `_ready` asks that
+## autoload to play, so these tests read the autoload's player; what the
+## other rooms do with the same bed is `tests/ui/test_shell_music.gd`.
 ##
 ## THE MUSIC SEAMS are [MusicLibrary]'s own `dirs` / `skin_dirs`, pointed
 ## at scratch folders exactly as `tests/ui/test_options_music.gd` and
@@ -70,6 +74,11 @@ func after_each() -> void:
 			Settings.clear_value(key)
 		else:
 			Settings.set_value(key, _saved[key])
+	# The shell's player outlives every screen AND every test: put it
+	# back the way a headless run finds it.
+	ShellMusic.stop()
+	if _shell() != null:
+		_shell().silent = DisplayServer.get_name() == "headless"
 
 
 ## Snapshot the player's own value before a test writes the key.
@@ -95,6 +104,11 @@ func _build() -> Control:
 	add_child_autofree(screen)
 	await get_tree().process_frame
 	return screen
+
+
+## The shell's one player — the autoload's, not the screen's.
+func _shell() -> MusicPlayer:
+	return ShellMusic.player()
 
 
 ## A real, minimal PCM wav — 22 050 Hz, mono, 16-bit, like every file the
@@ -153,15 +167,15 @@ func test_the_shell_asks_for_one_bed_and_loops_it() -> void:
 	_unset("music_enabled")
 	_write_every_original_track()
 	await _build()
-	assert_not_null(screen._music, "the screen holds its own player")
-	screen._music.silent = false
-	screen._apply_music_switch()
-	assert_eq(screen._music.tracks.size(), 1, "one bed, not eight")
-	assert_eq(screen._music.tracks[0], _first_bed(),
+	assert_not_null(_shell(), "the autoload holds the shell's player")
+	_shell().silent = false
+	ShellMusic.play()
+	assert_eq(_shell().tracks.size(), 1, "one bed, not eight")
+	assert_eq(_shell().tracks[0], _first_bed(),
 		"the bed MENU_BEDS names first")
-	assert_eq(screen._music.key, screen._music.tracks[0],
+	assert_eq(_shell().key, _shell().tracks[0],
 		"…and it names it, so re-applying the switch does not restart it")
-	var list := screen._music.stream as AudioStreamPlaylist
+	var list := _shell().stream as AudioStreamPlaylist
 	assert_not_null(list, "an AudioStreamPlaylist, as every bed here is")
 	assert_true(list.loop, "it LOOPS — a title screen is not ten seconds")
 	assert_eq(list.get_stream_count(), 2,
@@ -219,9 +233,9 @@ func test_the_options_choice_wins_over_the_shells_own_pick() -> void:
 	_write(PLAYER_DIR, "windswept_march.wav")
 	MusicLibrary.set_choice("windswept_march")
 	await _build()
-	screen._music.silent = false
-	screen._apply_music_switch()
-	assert_eq(screen._music.tracks, ["windswept_march"] as Array[String],
+	_shell().silent = false
+	ShellMusic.play()
+	assert_eq(_shell().tracks, ["windswept_march"] as Array[String],
 		"the player's own track, on the shell too")
 	# …and the two "you choose" modes hand the decision back to MENU_BEDS.
 	for mode in [MusicLibrary.CHOICE_SHUFFLE, MusicLibrary.CHOICE_ORIGINAL]:
@@ -239,17 +253,17 @@ func test_the_global_music_switch_silences_the_shell() -> void:
 	Settings.clear_value("music_enabled")
 	_write_every_original_track()
 	await _build()
-	screen._music.silent = false
-	screen._apply_music_switch()
-	assert_eq(screen._music.tracks.size(), 1, "the bed is up by default")
+	_shell().silent = false
+	ShellMusic.play()
+	assert_eq(_shell().tracks.size(), 1, "the bed is up by default")
 	Settings.set_value("music_enabled", false)
-	screen._apply_music_switch()
-	assert_eq(screen._music.tracks.size(), 0, "and switching music off stops it")
-	assert_false(screen._music.playing)
-	assert_null(screen._music.stream, "and lets go of the PCM")
+	ShellMusic.play()
+	assert_eq(_shell().tracks.size(), 0, "and switching music off stops it")
+	assert_false(_shell().playing)
+	assert_null(_shell().stream, "and lets go of the PCM")
 	Settings.set_value("music_enabled", true)
-	screen._apply_music_switch()
-	assert_eq(screen._music.tracks.size(), 1, "…and comes back")
+	ShellMusic.play()
+	assert_eq(_shell().tracks.size(), 1, "…and comes back")
 
 
 func test_the_deck_builders_own_switch_does_not_reach_the_shell() -> void:
@@ -262,32 +276,35 @@ func test_the_deck_builders_own_switch_does_not_reach_the_shell() -> void:
 	DeckAudio.set_music(false)
 	_write_every_original_track()
 	await _build()
-	screen._music.silent = false
-	screen._apply_music_switch()
+	_shell().silent = false
+	ShellMusic.play()
 	assert_false(DeckAudio.music_on(), "the builder is quiet")
-	assert_eq(screen._music.tracks.size(), 1, "the shell is not")
+	assert_eq(_shell().tracks.size(), 1, "the shell is not")
 
 
-func test_leaving_the_shell_stops_the_bed() -> void:
-	# *"it stops when the shell leaves"*: the next screen must start its
-	# own bed against silence, and nothing may sit on megabytes of PCM
-	# that nobody can hear. `_open` stops it the moment the button is
-	# pressed (change_scene_to_file is deferred to the end of the frame);
-	# `_exit_tree` catches every other way out, which is what this drives.
+func test_the_title_screen_leaving_does_not_take_the_bed_with_it() -> void:
+	# Until 2026-09-07 the tune was the screen's and died with it, so the
+	# next room started it over from the top. It is the SHELL'S now: the
+	# title screen going is a room being left, not the shell, and the bed
+	# plays on for whichever room comes next. The doors it does stop at
+	# — the Deck Builder, the Gauntlet, the table — are pinned in
+	# `tests/ui/test_shell_music.gd`.
 	_unset(MusicLibrary.SETTING)
 	_unset("music_enabled")
 	_write_every_original_track()
 	await _build()
-	screen._music.silent = false
-	screen._apply_music_switch()
-	var player: MusicPlayer = screen._music
+	_shell().silent = false
+	ShellMusic.play()
+	var player: MusicPlayer = _shell()
 	assert_eq(player.tracks.size(), 1, "playing")
+	var stream := player.stream
 	remove_child(screen)
 	await get_tree().process_frame
-	assert_eq(player.key, "", "the shell let go of its tune")
-	assert_eq(player.tracks, [] as Array[String])
-	assert_false(player.playing)
-	assert_null(player.stream, "and of the audio behind it")
+	assert_true(is_instance_valid(player), "the player outlives the screen")
+	assert_eq(player.key, _first_bed(), "the shell kept its tune")
+	assert_eq(player.tracks.size(), 1)
+	assert_true(player.playing)
+	assert_eq(player.stream, stream, "the very same audio — not restarted")
 
 
 func test_a_shell_with_no_music_imported_is_silence_not_an_error() -> void:
@@ -297,10 +314,10 @@ func test_a_shell_with_no_music_imported_is_silence_not_an_error() -> void:
 	_unset("music_enabled")
 	assert_eq(MusicLibrary.single_for(_beds()), "")
 	await _build()
-	screen._music.silent = false
-	screen._apply_music_switch()
-	assert_eq(screen._music.tracks, [] as Array[String])
-	assert_false(screen._music.playing)
+	_shell().silent = false
+	ShellMusic.play()
+	assert_eq(_shell().tracks, [] as Array[String])
+	assert_false(_shell().playing)
 
 
 func test_a_partial_import_falls_back_down_the_list_in_order() -> void:
@@ -339,10 +356,10 @@ func test_a_headless_shell_loads_nothing_and_starts_no_voice() -> void:
 	_unset("music_enabled")
 	_write_every_original_track()
 	await _build()
-	assert_true(screen._music.silent, "a headless run says so for itself")
-	assert_eq(screen._music.tracks, [] as Array[String])
-	assert_null(screen._music.stream)
-	assert_false(screen._music.playing)
+	assert_true(_shell().silent, "a headless run says so for itself")
+	assert_eq(_shell().tracks, [] as Array[String])
+	assert_null(_shell().stream)
+	assert_false(_shell().playing)
 
 
 # =================================================== 2. THE BOOT SPLASH ==
@@ -418,18 +435,13 @@ func _unique(ids: Array[String]) -> Array[String]:
 	return out
 
 
-## `game/main.gd` carries no `class_name` (it is a scene script, like every
-## other screen here), so its constant is read off the script resource
-## rather than through a type. Doing it in one place means a rename of
-## `MENU_BEDS` fails these tests loudly instead of silently testing
-## nothing.
+## The shell's ordered list of beds, read through the autoload (which
+## carries no `class_name` — an autoload is its name). Doing it in one
+## place means a rename of `MENU_BEDS` fails these tests loudly instead
+## of silently testing nothing.
 func _beds() -> Array[String]:
-	var script: GDScript = load("res://game/main.gd")
-	var constants := script.get_script_constant_map()
-	assert_true(constants.has("MENU_BEDS"),
-		"game/main.gd names the shell's beds in MENU_BEDS")
 	var out: Array[String] = []
-	for id in constants.get("MENU_BEDS", []):
+	for id in ShellMusic.MENU_BEDS:
 		out.append(String(id))
 	return out
 

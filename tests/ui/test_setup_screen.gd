@@ -1019,25 +1019,25 @@ func test_a_group_with_one_playable_deck_offers_no_pool() -> void:
 # Magic Battle is the title screen's next room — reached by a button on
 # the shell, left again with `Back` — so falling silent on the way in made
 # the menu music read as a title jingle rather than as the front of the
-# game.
+# game. Since 2026-09-07 the bed is the `ShellMusic` autoload's, shared by
+# every room of the shell, so this screen holds no player of its own and
+# the tune does not even restart at its door; `Go!` is the one way out of
+# it that stops the music. The autoload's own contract — which rooms keep
+# the bed, which doors stop it — is `tests/ui/test_shell_music.gd`.
 
 
 func test_it_plays_the_shells_own_bed_and_not_a_bed_of_its_own() -> void:
-	# THE REQUIREMENT IS A COUPLING, so it is tested as one: whatever the
-	# title screen ends up playing, this screen plays the same thing. That
-	# holds on a machine with the 1997 music imported and on one without
-	# (where both are silent), and it is what would actually break if
-	# somebody gave this screen a bed list of its own.
-	assert_not_null(screen._music, "the screen holds its own player")
-	var shell: MainScreen = load("res://game/main.tscn").instantiate()
-	add_child_autofree(shell)
-	await get_tree().process_frame
-	screen._apply_music_switch()
-	shell._apply_music_switch()
-	assert_eq(screen._music.tracks, shell._music.tracks,
-		"the setup screen plays exactly what the title screen plays")
-	# And it is the shell's LIST it read, not a copy that could drift.
-	assert_gt(MainScreen.MENU_BEDS.size(), 0, "the shell declares the beds")
+	# THE REQUIREMENT IS A COUPLING, so it is tested as one: this screen
+	# has NO [MusicPlayer] of its own anywhere under it — the one voice is
+	# the autoload's, which `_ready` asked to play — so it cannot drift
+	# onto a list of its own. That holds on a machine with the 1997 music
+	# imported and on one without.
+	for node in _walk(screen):
+		assert_false(node is MusicPlayer,
+			"no player of its own: %s" % node.get_path())
+	assert_not_null(ShellMusic.player(),
+		"the shell's player is up — `_ready` asked for the bed")
+	assert_gt(ShellMusic.MENU_BEDS.size(), 0, "the shell declares the beds")
 
 
 func test_the_global_switch_silences_it() -> void:
@@ -1047,26 +1047,47 @@ func test_the_global_switch_silences_it() -> void:
 	var had := Settings.has_value("music_enabled")
 	var saved: Variant = Settings.get_value("music_enabled", true)
 	Settings.set_value("music_enabled", false)
-	screen._apply_music_switch()
-	assert_eq(screen._music.tracks.size(), 0, "off means silent")
+	ShellMusic.play()
+	assert_eq(ShellMusic.player().tracks.size(), 0, "off means silent")
 	Settings.set_value("music_enabled", true)
-	screen._apply_music_switch()
+	ShellMusic.play()
 	if had:
 		Settings.set_value("music_enabled", saved)
 	else:
 		Settings.clear_value("music_enabled")
 
 
-func test_leaving_stops_it() -> void:
-	# So the duel starts against silence and the PCM is dropped rather
-	# than carried into the next screen.
+func test_back_does_not_stop_it_and_go_does() -> void:
+	# `Back` returns to the title screen, which is the same room musically,
+	# so the screen going is NOT the music going: the autoload's player
+	# outlives it. `Go!` is the door that leads out of the shell, and it
+	# stops the bed AFTER every gate — a refused deck leaves the tune
+	# playing, because the player is still standing in the shell. No test
+	# can start a duel through `_start_battle` (every deck it is handed is
+	# refused for one reason or another), so the order of the two calls
+	# is pinned on the source: the stop comes after the choices are
+	# remembered, i.e. after the last gate.
 	var fresh: SetupScreen = load("res://game/setup_screen.tscn").instantiate()
 	add_child(fresh)
 	await get_tree().process_frame
-	var player: MusicPlayer = fresh._music
+	var player := ShellMusic.player()
 	fresh.free()
-	assert_true(player == null or not is_instance_valid(player)
-		or player.tracks.is_empty(), "the bed does not follow the player out")
+	assert_true(is_instance_valid(player), "the bed does not go with the screen")
+	var source: String = (screen.get_script() as GDScript).source_code
+	var go := source.find("func _start_battle(")
+	var remembered := source.find("_remember_choices()", go)
+	var stopped := source.find("ShellMusic.stop()", go)
+	assert_gt(go, -1)
+	assert_gt(remembered, go, "Go! remembers the choices")
+	assert_gt(stopped, remembered,
+		"…and stops the shell's bed only after that, i.e. after every gate")
+
+
+func _walk(node: Node) -> Array:
+	var out: Array = [node]
+	for child in node.get_children():
+		out.append_array(_walk(child))
+	return out
 
 
 func test_both_seats_open_on_a_random_1997_deck() -> void:

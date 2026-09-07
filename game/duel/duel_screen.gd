@@ -178,6 +178,7 @@ var _over_dialog: OriginalDialog = null       # the duel's last word
 var _result_pending := false
 var _options_dialog: OriginalDialog = null    # `Duel Options...` (§6.4)
 var _duel_log: DuelLog = null                # the log window, `L` [QoL]
+var _log_file: DuelLogFile = null            # the running `duel_log.txt` [QoL]
 var _log_button: Button = null                # its switch on the reserve strip
 var _card_preview: CardPreview = null        # shared enlarged-card popup
 var _phase_bar: PhaseBar = null
@@ -553,6 +554,11 @@ func _new_game() -> void:
 	var duel_seed := config.rng_seed
 	if duel_seed == 0:
 		duel_seed = randi() | 1     # never 0: that means "roll one"
+	# THE RUNNING FILE opens its banner BEFORE setup, so the engine's
+	# own first line ("Game set up: ...") is the first line under it.
+	_log_file = DuelLogFile.new()
+	_log_file.begin(PackedStringArray([config.player_names[0],
+		config.player_names[1]]), duel_seed)
 	game.setup(config.decks[0], config.decks[1],
 		config.player_names[0], config.player_names[1],
 		config.lives[0], config.lives[1], duel_seed)
@@ -633,12 +639,16 @@ func _is_human(pid: int) -> bool:
 
 
 ## The log accumulates in `game.log_lines` whatever happens here; this
-## only keeps the [DuelLog] window current while one is open. The table
-## itself shows no pane (complete-reimplementation rule: the original had
-## none) — the viewer is a window on `L`, § THE DUEL LOG below.
-func _on_log_line(line: String) -> void:
+## keeps the [DuelLog] window current while one is open and writes every
+## line to the running file ([DuelLogFile], `duel_log.txt` beside the
+## game). The table itself shows no pane (complete-reimplementation
+## rule: the original had none) — the viewer is a window on `L`, § THE
+## DUEL LOG below.
+func _on_log_line(line: String, meta: Dictionary) -> void:
+	if _log_file != null:
+		_log_file.write(line, meta)
 	if _duel_log != null and is_instance_valid(_duel_log):
-		_duel_log.append_line(line)
+		_duel_log.append_line(line, meta)
 
 
 ## THE DUEL'S LAST WORD. `@DIALOG_SHANDALARENDDUEL` (UIStrings.txt:514)
@@ -872,6 +882,16 @@ func _play_sfx(key: String) -> void:
 ## the twenty `LocMus` location tracks the ADVENTURE and the deck builder
 ## use (`src/deck/deckdll.cpp:2047`). A duel has one bed and it loops.
 func _play_music() -> void:
+	# Whatever route led to this table, the shell's bed stops at it —
+	# `Go!` already stopped it, the Gauntlet's own bed did; this catches
+	# the rest (`game/shell_music.gd`). FOUND THROUGH THE TREE, not
+	# named: a `-s` tool that depends on this script (the soak) is
+	# compiled before the autoload globals exist, and `ShellMusic.stop()`
+	# here was "Identifier not found" for the whole chain — the soak
+	# never started a duel (2026-09-07; CONTRIBUTING, gotchas).
+	var shell := get_node_or_null(^"/root/ShellMusic")
+	if shell != null:
+		shell.stop()
 	if _audio != null:
 		_audio.play_music("music_duel")
 
@@ -4930,7 +4950,9 @@ func _open_duel_log() -> void:
 	# opponent's territory. The clamp needs a viewport, so after add.
 	var room := get_viewport_rect().size
 	window.place(Vector2(room.x - DuelLog.SIZE.x - 12.0, 8.0))
-	window.fill(game.log_lines)
+	window.set_names(PackedStringArray([game.players[0].player_name,
+		game.players[1].player_name]))
+	window.fill(game.log_lines, game.log_meta)
 	_duel_log = window
 	if _log_button != null:
 		_log_button.set_pressed_no_signal(true)

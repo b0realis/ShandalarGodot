@@ -405,6 +405,33 @@ static func button(label: String, min_size := Vector2(96, 26)) -> Button:
 	return btn
 
 
+## A WINDOW'S GADGET: the same three-state art as [method button], cut
+## down to a title bar's height — 20px tall, lettered a size smaller and
+## with its content margins pinched (the art's 8px 9-patch margin would
+## otherwise ask for 30px of height and overflow a 28px bar). No focus:
+## a gadget on a window that floats over the table must never take the
+## table's keys.
+##
+## WHY NOT [method bar_button]. The duel log's Copy, Save and × wore the
+## Situation Bar's lightened patch — pale letters on pale tan — and the
+## owner's playtest of 2026-09-07 read them as *"unreadable buttons"*: a
+## 13px word has no room for a bevel to carry it. The 1997 button art is
+## dark ink on a light face, which is the contrast a small word needs;
+## the Done button already made the same move (2026-09-03).
+static func gadget(label: String, width := 48.0) -> Button:
+	var btn := button(label, Vector2(width, 20.0))
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", 13)
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var box: StyleBox = btn.get_theme_stylebox(state).duplicate()
+		box.content_margin_top = 1.0
+		box.content_margin_bottom = 1.0
+		box.content_margin_left = 6.0
+		box.content_margin_right = 6.0
+		btn.add_theme_stylebox_override(state, box)
+	return btn
+
+
 static func _button_style(key: String) -> StyleBoxTexture:
 	var art := GameSkin.texture(key)
 	if art == null:

@@ -17,82 +17,6 @@ const MENU_FONT := 21
 ## Faked weight — MagicMedieval ships no bold ([method UiChrome.menu_button]).
 const MENU_BOLD := 0.05
 
-## THE SHELL'S BED — the one tune the title screen loops, and the beds it
-## falls back to when the player has not imported that one. The owner's
-## playtest of 2026-09-04: *"Play a suitable soothing music at the main
-## menu."*
-##
-## **WHAT THE 1997 SHELL PLAYED: NOTHING.** This was asked as a provenance
-## question first, and the answer is that the original's shell screen has
-## no music bed at all. The shell is `Magic.exe`'s own window class
-## (`wndproc_MagicShellClass`, `Magic-trace.c:4124`, entry `4CC770`); it
-## loads its art from `\ShellArt` (`%s\WINBK_ShellScreen16.bmp`, the five
-## `%s\WINBK_ShellSphereAnimation16-%d.bmp` frames) and its pages from
-## `@SHELLSCREEN_DUEL` / `_TOOLS` / `_METAGAME` / `_HELP` / `_RECORDS`.
-## Its ENTIRE audio vocabulary is the 68-entry one-shot table at
-## `shandalar-src/src/functions/windows.c:1181-1266`, and the only shell
-## entries in it are seven cues — `WAV_SHELL_SHANDALAR`, `_TOOLTIME`,
-## `_HELPME`, `_HALLOFRECORDS`, `_DUELMENOW` (ids 60-64) and
-## `_WINDUEL`/`_LOSEDUEL` (44-45), `defs.h:2232-2252`. Those five map
-## one-to-one onto the five shell pages and measure 2.8-6.1 s each
-## (`Duelsounds/Shell_*.wav`, 22 050 Hz stereo): they are page stingers,
-## not a bed. Every LOOPING bed literal in the original —
-## `x:sound\dueltune.wav`, `x:sound\locmus0..19.wav`,
-## `x:sound\tmplmus1.wav`, `x:sound\[bgruw]castle.wav` — lives in
-## `Shandalar.exe`, the ADVENTURE, and none of them in the shell's exe,
-## which carries no `music` string and no `sound\` path at all. A full
-## audio inventory of the owner's install confirms it: there is no title
-## or menu file to source. So the title screen's music is `[QoL]`, and
-## the choice below is OURS.
-##
-## **HOW THE BED WAS CHOSEN, WITHOUT ANYBODY HEARING IT.** Nobody on this
-## side of the work can listen to audio, so the pick is made on what the
-## bytes can be measured for. All 27 beds were read for duration, peak,
-## RMS, crest, the spread between the 10th and 90th percentile of a 20 ms
-## loudness envelope, the rate of frames whose energy jumps 6 dB
-## (transients per second), zero-crossing rate and a high-frequency
-## energy ratio. `music_location_15` (LocMus15) came out as the calmest
-## bed the Deck Builder does not already own:
-##
-##   * **0.06 transients/s** over 36 s — joint lowest of the twenty
-##     location beds, i.e. essentially no percussion or stabs.
-##   * **816 zero-crossings/s and -19.2 dB of high-frequency energy** —
-##     the second-darkest bed in the library; a sustained thing, not a
-##     bright or busy one.
-##   * **8.3 dB of loudness spread**, no frame below -50 dBFS: it never
-##     swells and it never drops out.
-##   * **36.0 s**, the second-longest bed there is, so the loop wraps
-##     less often than anything else would.
-##
-## The two the prompt guessed at do NOT measure calmest, which is why
-## this list is not headed by either. `music_temple` (Tmplmus1) is the
-## SHORTEST bed at 24.9 s, spends only 43% of its length within 3 dB of
-## its own median and has an 18.2 dB crest — a struck, bell-like shape.
-## `music_castle_blue` is 30.6% SILENCE, an ambience file with holes in
-## it, which would loop as a tune that keeps stopping.
-##
-## **THIS IS A JUDGEMENT MADE WITHOUT HEARING THE MUSIC.** If the owner
-## disagrees, the fix is ONE LINE: put another id first in this list.
-## The runners-up are here in measured order behind it —
-## `music_location_8` (equally transient-free and steadier still, but
-## brighter and shorter) and `music_location_2` (a little quieter),
-## with `music_temple` last as the calmest of the non-location beds.
-##
-## **NOT THE DECK BUILDER'S BED, deliberately.** That screen loops
-## [method MusicLibrary.single_for] over `deck_builder_beds()` =
-## LocMus1..19, so it takes `music_location_1` — measurably the steadiest
-## bed of all, and already spoken for. Sharing it would mean the same
-## track restarting from zero every time the player crossed between the
-## two screens, which reads as a stutter rather than as continuity.
-const MENU_BEDS: Array[String] = [
-	"music_location_15",
-	"music_location_8",
-	"music_location_2",
-	"music_temple",
-]
-
-## The shell's own voice on the Music bus. Freed with the screen.
-var _music: MusicPlayer
 
 
 ## The flag that turns the shipped game into the Deck Lab.
@@ -298,66 +222,13 @@ func _ready() -> void:
 	badges.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	corner.add_child(badges)
 
-	_start_music()
-
-
-## THE TITLE SCREEN HAS MUSIC, AND IT IS ONE BED, LOOPING — see
-## [constant MENU_BEDS] for what the 1997 shell played (nothing) and how
-## this one was picked.
-##
-## Built exactly the way the Deck Builder builds its own
-## (`DeckBuilderScreen._start_music`): a [MusicPlayer] child, so the tune
-## dies with the screen, and [method MusicPlayer.play_one] rather than
-## [method MusicPlayer.play_key], so it is ONE bed on repeat and not the
-## front of a shuffle. `play_one` lists the single track twice inside the
-## [AudioStreamPlaylist], which is what gives the wrap a seam to
-## crossfade instead of the click a patched loop marker makes.
-##
-## The buses are dressed before the first note: [method
-## GameAudio.apply_settings] pushes the stored volume and the two
-## enable switches onto them, so a player who turned the music down last
-## session does not get one loud second of it first.
-##
-## Silent for a player who has not imported the original's `Sound/`
-## folder — [MusicPlayer] treats a missing id as silence — and silent
-## headless.
-func _start_music() -> void:
-	GameAudio.apply_settings()
-	_music = MusicPlayer.new()
-	add_child(_music)
-	_apply_music_switch()
-
-
-## Start or stop the bed to match the GLOBAL music switch — the same
-## `music_enabled` key the Options screen shows and the Deck Builder's own
-## `&Music` menu entry writes. The shell has no screen-scoped switch of
-## its own (the Deck Builder's `deck_builder_music` is that screen's, and
-## must not silence this one), so the global switch is the whole rule.
-##
-## Re-callable: [method MusicPlayer.play_one] keys on the track id, so
-## asking again for the bed that is already up does nothing rather than
-## restarting it.
-func _apply_music_switch() -> void:
-	if _music == null:
-		return
-	if not Settings.music_enabled():
-		_music.stop_music()
-		return
-	_music.play_one(MusicLibrary.single_for(MENU_BEDS))
-
-
-## THE SHELL'S TUNE DOES NOT FOLLOW THE PLAYER OUT. Leaving the title
-## screen for the duel, the Deck Builder or Options stops it, so the
-## screen that arrives starts its own bed against silence rather than
-## against ours. Stopping also drops the stream, which is megabytes of
-## PCM the next screen would otherwise be holding for nothing.
-##
-## Belt and braces on purpose: [method _open] stops it the moment the
-## button is pressed (`change_scene_to_file` is deferred to the end of the
-## frame), and this catches every other way the screen can leave.
-func _exit_tree() -> void:
-	if is_instance_valid(_music):
-		_music.stop_music()
+	# THE TITLE SCREEN HAS MUSIC, and it is the SHELL'S — one bed, looping,
+	# held by the `ShellMusic` autoload so it carries on unbroken into
+	# Magic Battle, Options and Help and back. That file says what the
+	# 1997 shell played (nothing) and how the bed was picked. The screens
+	# with a bed of their own stop it when they start theirs, so this
+	# screen has nothing to do on the way out.
+	ShellMusic.play()
 
 
 ## Hand the rest of the command line to the Deck Lab and quit with its
@@ -397,6 +268,4 @@ static func _corner_label(label: Label, size: int) -> void:
 
 
 func _open(scene_path: String) -> void:
-	if is_instance_valid(_music):
-		_music.stop_music()
 	get_tree().change_scene_to_file(scene_path)

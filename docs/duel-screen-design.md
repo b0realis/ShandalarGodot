@@ -3475,6 +3475,23 @@ Shipped 2026-09-07 (the v0.18.0-dev playtest, all `[QoL]`):
   of `_on_game_over` is hardened at four joints (the tree's timer instead
   of a node-bound tween, OK added before the lines are written,
   `is_instance_valid` plus the `result_closed` signal, and the keys).
+- **The duel log reads like a report** — the engine's every line now has
+  a second column (`MtgGame.log_meta`: turn, step, seat, kind, card and
+  colours), and one shape (`DuelLogText`) prints it for the window and
+  the file alike: a `[First Main]` marker the first time a line lands in
+  a step, `Player 2 (HAL 9000)` in place of the name on every act, the
+  turn header naming the seat, indents under the marker. The window
+  (`duel_log.gd`) inks it — seats amber and sky, the line's card in its
+  colour, bold for a cast — and its Copy / Save / × are
+  `OriginalDialog.gadget`, dark letters on the 1997 button face, in
+  place of the pale bar buttons the owner could not read.
+- **A running `duel_log.txt` beside the game** (`DuelLogFile`; under
+  `user://` when the editor runs the project): every duel, whether or
+  not anyone pressed Save, opened with a `**********  GAME at <date
+  time>  —  A vs B  (seed N)  **********` banner and appended line by
+  line as it happens; past 1 MB the oldest slab goes from the front,
+  the cut on a banner. A bug report is a seed and a log, and this is
+  where the log is when nobody thought to keep it.
 
 Wishlist (ordered; each is a self-contained follow-up):
 - **Phase stops config** (the original's duel options panel): choose which
@@ -3486,6 +3503,7 @@ Wishlist (ordered; each is a self-contained follow-up):
   log makes replay-to-previous-state trivial and safe pre-commitment).
 - **Replays & bug reports**: seed + action list = full reproduction; a
   "copy replay" button on the loss screen (mirrors s30's bug reporter).
+  The running `duel_log.txt` is the first half of this.
 - **Keyboard/gamepad bindings**: Space=pass, A=attack-all, digits=targets;
   D-pad focus ring for console/TV play.
 - **Readability aids**: hover/long-press zoom on any card (oracle text +

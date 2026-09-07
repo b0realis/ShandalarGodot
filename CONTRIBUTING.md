@@ -131,7 +131,11 @@ options screen, or Magic Battle's `Go!`: `user://settings.cfg` is the
 owner's own file, `Settings.set_value` persists by default, and a run that
 ticks Full screen or presses `Go!` from a script would otherwise rewrite
 what the owner opens on next time. `run_tests.sh` and `duel_soak.sh`
-already isolate it; a hand-written run does not unless you say so.
+already isolate it; a hand-written run does not unless you say so. The
+same flag keeps a scratch duel out of the owner's running `duel_log.txt`
+(`DuelLogFile`): beside the executable in an exported game, under
+`user://` whenever the editor binary runs the project — so every duel a
+scratch script plays through the live screen is appended there too.
 
 ## Hard rules
 
@@ -169,6 +173,16 @@ already isolate it; a hand-written run does not unless you say so.
   hundreds of failures, so run the boot smoke after touching any card.
 - Test-only state surgery belongs in `tests/game_test.gd` helpers, which may
   reach into `g._instances` etc.; real tests act through the public API.
+- A `-s` script (`duel_soak.gd`, the benches, any scratch SceneTree
+  script) is COMPILED BEFORE THE AUTOLOADS EXIST. Naming an autoload —
+  `ShellMusic.stop()` — in a script the tool depends on (a typed
+  `DuelScreen` variable pulls in `duel_screen.gd`) is "Identifier not
+  found" for the whole chain and the soak never starts a duel, while
+  the suite, which runs as a scene, is green. A screen that a tool may
+  depend on reaches an autoload through the tree at call time
+  (`get_node_or_null(^"/root/ShellMusic")`), and a scratch `-s` script
+  keeps its screen variables untyped (`var duel = load(...).instantiate()`).
+  The soak is the gate that catches it: run it after touching a screen.
 - Cite CR (Comprehensive Rules) numbers in comments for rules behavior —
   existing code shows the style.
 - Reference implementations for tricky cards/rules: the mage-go clone

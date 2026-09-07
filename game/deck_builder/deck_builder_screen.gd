@@ -418,6 +418,9 @@ func _ready() -> void:
 ## Silent for a player who has not imported the original's `Sound/` folder
 ## — [MusicPlayer] treats a missing id as silence — and silent headless.
 func _start_music() -> void:
+	# The shell's bed stops at this door: this screen has a bed of its own
+	# and starts it against silence (`game/shell_music.gd`).
+	ShellMusic.stop()
 	_music = MusicPlayer.new()
 	add_child(_music)
 	_apply_music_switch()

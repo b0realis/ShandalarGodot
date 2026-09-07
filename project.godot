@@ -12,6 +12,7 @@ config_version=5
 [autoload]
 
 Lifecycle="*res://game/lifecycle.gd"
+ShellMusic="*res://game/shell_music.gd"
 
 [application]
 

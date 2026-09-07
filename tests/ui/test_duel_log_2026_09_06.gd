@@ -185,8 +185,9 @@ func test_save_writes_the_whole_log_beside_the_screenshots() -> void:
 	file.close()
 	assert_true(body.contains("SeatZero casts Lightning Bolt"))
 	assert_true(body.contains(g.log_lines[0]), "from the first line")
-	assert_eq(body.split("\n", false).size(), g.log_lines.size(),
-		"one line per log line")
+	var names: PackedStringArray = screen._duel_log._shape.names
+	assert_eq(body.split("\n", false), DuelLogText.plain(g.log_lines, g.log_meta, names).split("\n", false),
+		"the window's shape, line for line — step markers and seat labels included")
 	assert_eq(heard.size(), 1)
 	assert_true(heard[0].begins_with("Duel log saved: "), heard[0])
 	assert_eq(screen._prompt_label.text, heard[0],
@@ -199,6 +200,96 @@ func test_copy_says_so_on_the_bar() -> void:
 	screen._duel_log.copy_to_clipboard()
 	assert_true(screen._prompt_label.text.begins_with("Duel log copied"),
 		screen._prompt_label.text)
+
+
+# ============================================== the 2026-09-07 reading --
+# The owner's playtest: "unreadable buttons", casts "colored and
+# emphasized by card colour", "individual phases should be indicated",
+# "each action from the player prefixed by Player 1 (name)", and the
+# running `duel_log.txt` "at the game location".
+
+func _gadgets() -> Array[Button]:
+	var out: Array[Button] = []
+	var stack: Array[Node] = [screen._duel_log]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is Button:
+			out.append(node)
+		stack.append_array(node.get_children())
+	return out
+
+
+func test_the_gadgets_wear_dark_ink_on_the_1997_button_face() -> void:
+	_send_key(KEY_L)
+	var gadgets := _gadgets()
+	var labels := PackedStringArray()
+	for btn in gadgets:
+		labels.append(btn.text)
+		assert_eq(btn.get_theme_color("font_color"), OriginalDialog.INK,
+			"%s: dark letters, not the Situation Bar's pale ones" % btn.text)
+		assert_eq(btn.get_theme_color("font_hover_color"), OriginalDialog.INK)
+		assert_eq(btn.get_theme_font_size("font_size"), 13)
+		assert_eq(btn.custom_minimum_size.y, 20.0, "a gadget's height")
+		assert_eq(btn.focus_mode, Control.FOCUS_NONE, "never takes the keys from the table")
+		assert_true(btn.get_theme_stylebox("normal") is StyleBoxTexture,
+			"%s wears the 1997 button art" % btn.text)
+	labels.sort()
+	assert_eq(labels, PackedStringArray(["Copy", "Save", "×"]))
+
+
+func test_an_act_reads_with_its_seat_label_and_its_step() -> void:
+	var g: MtgGame = screen.game
+	_send_key(KEY_L)
+	g.log_line("%s casts Lightning Bolt" % g.players[1].player_name, null, "cast", 1)
+	var body := screen._duel_log.text()
+	var label := screen._duel_log._shape.seat(1)
+	assert_true(body.contains(label + " casts Lightning Bolt"),
+		"prefixed by the seat: " + label)
+	assert_true(body.contains("[%s]" % Mtg.step_name(g.current_step())),
+		"the step it happened in is marked")
+	var tail: String = body.split("\n", false)[-1]
+	assert_true(tail.begins_with(DuelLogText.INDENT), "indented under its marker")
+
+
+func test_a_cards_ink_is_its_colour_and_gold_when_it_has_several() -> void:
+	assert_eq(DuelLog.card_ink(Mtg.ManaColor.R), DuelLog.CARD_INKS[Mtg.ManaColor.R])
+	assert_eq(DuelLog.card_ink(Mtg.ManaColor.G), DuelLog.CARD_INKS[Mtg.ManaColor.G])
+	assert_eq(DuelLog.card_ink(Mtg.ManaColor.W | Mtg.ManaColor.U), DuelLog.GOLD_INK, "gold")
+	assert_eq(DuelLog.card_ink(0), DuelLog.STEEL_INK, "colourless")
+	assert_eq(DuelLog.card_ink(Mtg.ManaColor.C), DuelLog.STEEL_INK)
+
+
+func test_the_screen_keeps_the_running_file_beside_the_game() -> void:
+	# The seam: this test's own directory under user://, not the real one.
+	var dir := ProjectSettings.globalize_path("user://").path_join("duel_log_screen_test")
+	DirAccess.make_dir_recursive_absolute(dir)
+	DuelLogFile.location = dir
+	if FileAccess.file_exists(DuelLogFile.path()):
+		DirAccess.remove_absolute(DuelLogFile.path())
+	var fresh: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	var config := DuelConfig.hotseat_default()
+	config.pilots = [null, AiProfile.wizard()]
+	config.pace = 0.0
+	config.rng_seed = 4242
+	fresh.config = config
+	add_child_autofree(fresh)
+	await get_tree().process_frame
+	var g: MtgGame = fresh.game
+	g.log_line("%s casts Lightning Bolt" % g.players[0].player_name, null, "cast", 0)
+	var file := FileAccess.open(DuelLogFile.path(), FileAccess.READ)
+	assert_not_null(file, "the running file exists: " + DuelLogFile.path())
+	var body := file.get_as_text()
+	file.close()
+	DirAccess.remove_absolute(DuelLogFile.path())
+	DirAccess.remove_absolute(dir)
+	DuelLogFile.location = ""
+	assert_true(body.contains("GAME at"), "opened with a banner")
+	assert_true(body.contains("(seed 4242)"), "the banner names the seed")
+	assert_true(body.contains(g.log_lines[0]), "every engine line, from the first")
+	var shape := DuelLogText.new()
+	shape.names = PackedStringArray([g.players[0].player_name, g.players[1].player_name])
+	assert_true(body.contains(shape.seat(0) + " casts Lightning Bolt"),
+		"in the window's shape")
 
 
 # =========================================================== the strip --

@@ -12,7 +12,8 @@ extends Control
 ## original separated them), music & effects volume, hand display, the
 ## rules forks, AI pace — persisted immediately through Settings
 ## (user://settings.cfg), so every one of them is the default of the next
-## run. Grows as options do (phase stops, UI scale and colorblind palette
+## run. The shell's bed plays on through this screen (`ShellMusic`), and
+## the three music controls act on it as they are moved. Grows as options do (phase stops, UI scale and colorblind palette
 ## are on the QoL wishlist in docs/duel-screen-design.md).
 
 ## The stone panel's width, and the window it leaves clear top and bottom.
@@ -25,8 +26,13 @@ const PANEL_MARGIN := 24.0
 func _ready() -> void:
 	# The screen and the mixer must agree before a control is drawn: the
 	# sliders read Settings, so the buses had better be carrying the same
-	# numbers or the readout is a lie.
-	GameAudio.apply_settings()
+	# numbers or the readout is a lie. `ShellMusic.play` dresses the buses
+	# first for exactly that reason — and keeps the shell's bed playing
+	# through this room, which is the one room where a player is LISTENING
+	# for it: the Music switch, the volume slider and the track picker
+	# below all sound at once against it (2026-09-07 playtest: *"Help and
+	# options in main menu should have same music as main menu"*).
+	ShellMusic.play()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Color(0.09, 0.08, 0.07)
@@ -182,7 +188,9 @@ func _add_sound_section(content: VBoxContainer) -> void:
 	music.button_pressed = Settings.music_enabled()
 	music.toggled.connect(func(on: bool) -> void:
 		Settings.set_value("music_enabled", on)
-		GameAudio.apply_settings())
+		# The shell's bed answers the switch here and now — off stops it
+		# and drops the PCM, on starts it — rather than at the next room.
+		ShellMusic.play())
 	UiChrome.shadowed_button(music)
 	content.add_child(music)
 
@@ -249,7 +257,11 @@ func _add_music_choice(content: VBoxContainer) -> void:
 			MusicLibrary.set_choice(String(tracks[id - 2]["id"]))
 		# The next screen that starts music takes the new order; a session
 		# that has already shuffled should not keep the old one.
-		MusicPlayer.reset_order())
+		MusicPlayer.reset_order()
+		# And the shell's bed, which is playing behind this row, changes to
+		# the new choice at once — `play_one` keys on the track id, so a
+		# choice that names the bed already up leaves it alone.
+		ShellMusic.play())
 	UiChrome.shadowed_button(picker)
 	content.add_child(picker)
 

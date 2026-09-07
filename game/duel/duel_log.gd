@@ -34,6 +34,17 @@ extends Control
 ## not grow — so this lives on a bare key, the way `H` (s30's hand fold)
 ## and `M` (mute) do, and on nothing in the menus. Recorded in
 ## `docs/ROADMAP.md`.
+##
+## WHAT IT PRINTS (2026-09-07). The shape is [DuelLogText]'s — a step
+## marker the first time a line lands in a step, the seat's label
+## ("Player 2 (HAL 9000)") in place of the name on every act, indents,
+## a gap before each turn — and this window adds the colour: turn
+## headers lit, step markers dim, the seat labels in two seat colours,
+## and the card a line is about lettered in the CARD'S OWN COLOUR, bold
+## when the line is a cast (*"casting of cards should be colored and
+## emphasized by card colour"*). `Copy` and `Save` write what is on the
+## screen, markers and labels included, and the running file
+## ([DuelLogFile]) prints the same shape uncoloured.
 
 ## The ruled frame's own width (`OriginalDialog._rule`), as the combat
 ## window has it.
@@ -55,6 +66,26 @@ const DRAG_SLOP := 4.0
 const FONT_SIZE := 13
 ## Where `Save` writes, beside `user://screenshot_<ms>.png` (F12).
 const SAVE_PREFIX := "user://duel_log_"
+
+## THE INKS. The prose in the list's own unpicked colour, a cast's prose
+## lit; a turn header lit; a step marker in the frame's slate, readable
+## and plainly not a sentence. Two seat colours — amber for Player 1,
+## sky for Player 2 — that are neither of the five card colours' inks
+## below, so a seat is never read as a card. The card inks are the five
+## colours as they read on the dark stone (a black card's ink is the
+## violet-grey the frames use, not black on black), gold for a
+## multicoloured card and steel for a colourless one.
+const STEP_INK := Color8(150, 172, 196)
+const SEAT_INKS: Array[Color] = [Color8(252, 206, 108), Color8(150, 202, 244)]
+const CARD_INKS := {
+	Mtg.ManaColor.W: Color8(248, 242, 216),
+	Mtg.ManaColor.U: Color8(126, 178, 240),
+	Mtg.ManaColor.B: Color8(186, 156, 208),
+	Mtg.ManaColor.R: Color8(242, 122, 98),
+	Mtg.ManaColor.G: Color8(132, 210, 122),
+}
+const GOLD_INK := Color8(236, 198, 96)
+const STEEL_INK := Color8(200, 202, 210)
 
 ## The window was closed by its own gadget — the screen forgets its
 ## handle on this, nothing more.
@@ -117,6 +148,8 @@ static func glyph() -> ImageTexture:
 var _text: RichTextLabel = null
 var _title: Label = null
 var _count := 0
+## The shape every line is printed in — the step cursor lives here.
+var _shape := DuelLogText.new()
 
 var _dragging := false
 var _drag_moved := false
@@ -171,19 +204,20 @@ func _init() -> void:
 	_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.add_child(_title)
-	var copy := OriginalDialog.bar_button("Copy", Vector2(48.0, 18.0))
+	# THE GADGETS wear the 1997 button art — dark ink on a light face —
+	# and not the Situation Bar's lightened patch, whose pale-on-tan the
+	# owner read as "unreadable buttons" (2026-09-07; see
+	# `OriginalDialog.gadget`).
+	var copy := OriginalDialog.gadget("Copy", 50.0)
 	copy.tooltip_text = "Copy the whole log to the clipboard"
-	copy.focus_mode = Control.FOCUS_NONE
 	copy.pressed.connect(copy_to_clipboard)
 	row.add_child(copy)
-	var save := OriginalDialog.bar_button("Save", Vector2(48.0, 18.0))
+	var save := OriginalDialog.gadget("Save", 50.0)
 	save.tooltip_text = "Save the log as a text file (beside the F12 screenshots)"
-	save.focus_mode = Control.FOCUS_NONE
 	save.pressed.connect(save_to_file)
 	row.add_child(save)
-	var close := OriginalDialog.bar_button("×", Vector2(22.0, 18.0))
+	var close := OriginalDialog.gadget("×", 26.0)
 	close.tooltip_text = "Close (L)"
-	close.focus_mode = Control.FOCUS_NONE
 	close.pressed.connect(dismiss)
 	row.add_child(close)
 
@@ -213,6 +247,8 @@ func _init() -> void:
 	_text.selection_enabled = true
 	_text.focus_mode = Control.FOCUS_NONE
 	_text.add_theme_font_size_override("normal_font_size", FONT_SIZE)
+	# The bold face too, or a cast's card name jumps to the theme's 16.
+	_text.add_theme_font_size_override("bold_font_size", FONT_SIZE)
 	_text.add_theme_color_override("default_color", OriginalDialog.CHOICE)
 	_text.add_theme_color_override("font_shadow_color", OriginalDialog.INK)
 	_text.add_theme_constant_override("shadow_offset_x", 1)
@@ -220,30 +256,122 @@ func _init() -> void:
 	var body := GameSkin.font("font_body")
 	if body != null:
 		_text.add_theme_font_override("normal_font", body)
+		# The skin's face has no bold cut (see `UiChrome.menu_button`), so
+		# a cast's card name is the same face emboldened by outline.
+		var thick := FontVariation.new()
+		thick.base_font = body
+		thick.variation_embolden = 0.6
+		_text.add_theme_font_override("bold_font", thick)
 	add_child(_text)
+
+
+## The players' names by seat — what the seat labels are built from.
+## Set before [method fill].
+func set_names(names: PackedStringArray) -> void:
+	_shape.names = names
 
 
 ## Fill from the whole log so far, then follow it line by line through
 ## [method append_line]. Called once, when the window opens mid-duel.
-func fill(lines: PackedStringArray) -> void:
+## [param metas] is [member MtgGame.log_meta], index for index with
+## [param lines]; a missing entry prints the line plain.
+func fill(lines: PackedStringArray, metas: Array[Dictionary] = []) -> void:
 	_text.clear()
 	_count = 0
-	for line in lines:
-		append_line(line)
+	_shape.reset()
+	for i in lines.size():
+		append_line(lines[i], metas[i] if i < metas.size() else {})
 
 
 ## One more line — the screen forwards [signal MtgGame.log_appended] here.
-func append_line(line: String) -> void:
+## Counts the engine's lines, not the rows: a step marker is the shape's,
+## and the title says how much of the DUEL is here.
+func append_line(line: String, meta: Dictionary = {}) -> void:
 	_count += 1
-	var header := line.begins_with("== ")
-	_text.push_color(OriginalDialog.CHOICE_LIT if header
-		else OriginalDialog.CHOICE)
-	# `add_text`, never `append_text`: a card name or an effect's own
-	# words may carry a `[`, and this is a log, not markup.
-	_text.add_text(line)
-	_text.pop()
-	_text.newline()
+	for row in _shape.rows(line, meta):
+		_print_row(row)
 	_title.text = "Duel log  (%d lines)" % _count
+
+
+## One row onto the label, coloured by its role. `add_text`, never
+## `append_text`: a card name or an effect's own words may carry a `[`
+## (and so does every step marker), and this is a log, not markup.
+func _print_row(row: Dictionary) -> void:
+	var role := String(row["role"])
+	var text := String(row["text"])
+	var meta: Dictionary = row["meta"]
+	match role:
+		"gap":
+			pass
+		"turn":
+			_text.push_color(OriginalDialog.CHOICE_LIT)
+			_text.add_text(text)
+			_text.pop()
+		"step":
+			_text.push_color(STEP_INK)
+			_text.add_text(text)
+			_text.pop()
+		_:
+			_print_line(text, meta)
+	_text.newline()
+
+
+## A sentence: the seat's label in its seat colour where the line opens
+## with one, the card it is about in the card's own ink (bold for a
+## cast), the rest of the prose lit for a cast and plain otherwise.
+func _print_line(text: String, meta: Dictionary) -> void:
+	var kind := String(meta.get("kind", ""))
+	var prose := OriginalDialog.CHOICE_LIT if kind == "cast" else OriginalDialog.CHOICE
+	var rest := text
+	# THE SEAT LABEL — only when the shape put one there, which is only
+	# when the sentence is an act of that seat's.
+	var pid := int(meta.get("pid", -1))
+	if pid >= 0 and pid < SEAT_INKS.size():
+		var label := _shape.seat(pid)
+		var lead := DuelLogText.INDENT if rest.begins_with(DuelLogText.INDENT) else ""
+		if rest.begins_with(lead + label + " "):
+			_text.push_color(prose)
+			_text.add_text(lead)
+			_text.pop()
+			_text.push_color(SEAT_INKS[pid])
+			_text.add_text(label)
+			_text.pop()
+			rest = rest.substr(lead.length() + label.length())
+	# THE CARD — the first mention, in its colour.
+	var card := String(meta.get("card", ""))
+	var at := rest.find(card) if not card.is_empty() else -1
+	if at < 0:
+		_text.push_color(prose)
+		_text.add_text(rest)
+		_text.pop()
+		return
+	_text.push_color(prose)
+	_text.add_text(rest.left(at))
+	_text.pop()
+	_text.push_color(card_ink(int(meta.get("colors", 0))))
+	if kind == "cast":
+		_text.push_bold()
+	_text.add_text(card)
+	if kind == "cast":
+		_text.pop()
+	_text.pop()
+	_text.push_color(prose)
+	_text.add_text(rest.substr(at + card.length()))
+	_text.pop()
+
+
+## The ink for a colour mask: one colour's own, gold for more than one,
+## steel for none.
+static func card_ink(mask: int) -> Color:
+	var colours := 0
+	var ink := STEEL_INK
+	for bit in CARD_INKS:
+		if mask & int(bit):
+			colours += 1
+			ink = CARD_INKS[bit]
+	if colours > 1:
+		return GOLD_INK
+	return ink
 
 
 ## How many lines the window holds. Tests read this; so does the title.

@@ -46,8 +46,9 @@ signal event_occurred(event: GameEvent)
 ## by the player if [member PlayerChoice.answered_by_player], otherwise by
 ## a heuristic on their behalf (docs/duel-todo.md §1.3).
 signal choice_requested(choice: PlayerChoice)
-## A line was added to the game log.
-signal log_appended(line: String)
+## A line was added to the game log, with its [member log_meta] entry —
+## the turn and step it was written in, the seat and the card it is about.
+signal log_appended(line: String, meta: Dictionary)
 ## Some state changed; UIs should refresh. Coarse by design.
 signal state_changed
 ## The game ended. winner_id is 0 or 1.
@@ -312,6 +313,19 @@ var creatures_died_this_turn := 0
 var spells_cast_this_turn: Array = [[], []]
 
 var log_lines := PackedStringArray()
+## THE LOG'S SECOND COLUMN, one Dictionary per line of [member log_lines],
+## index for index: what a reader cannot parse back out of the prose.
+## `turn` and `step` (a [enum Mtg.Step], -1 before the first turn) place
+## the line; `pid` is the seat the line is about (-1 for none — derived
+## from the sentence when the writer did not say, see [method log_line]);
+## `kind` names the sentence's shape where a reader wants to tell casts
+## from consequences ("turn", "cast", "play", "activate", "trigger",
+## "resolve", "draw", "attack", "block", "damage", "end", or ""); `card`
+## and `colors` name the card the line is about and its colour mask (a
+## basic land carries the colour it taps for), so a viewer can letter the
+## name in the card's own colour. The duel log window and the running
+## log file both read it; the engine itself never does.
+var log_meta: Array[Dictionary] = []
 
 # ------------------------------------------------- the mid-resolution ask --
 #
@@ -951,7 +965,8 @@ func start_duel(first_player := 0) -> void:
 	turn_number = 1
 	active_player = clampi(first_player, 0, 1)
 	_skip_first_draw = true
-	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name])
+	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],
+		null, "turn", active_player)
 	_enter_step(0)
 
 
@@ -1167,7 +1182,8 @@ func play_land(pid: int, inst: CardInstance) -> String:
 	players[pid].lands_played_this_turn += 1
 	_put_on_battlefield(inst, pid)
 	dispatch_event(Mtg.EventType.LAND_PLAYED, {"instance": inst, "controller": pid})
-	log_line("%s plays %s" % [players[pid].player_name, inst.data.card_name])
+	log_line("%s plays %s" % [players[pid].player_name, inst.data.card_name],
+		inst, "play", pid)
 	return ""
 
 
@@ -1955,7 +1971,7 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 			break
 	dispatch_event(Mtg.EventType.SPELL_CAST, {"instance": inst, "controller": pid},
 		self_listener)
-	log_line(item.description)
+	log_line(item.description, inst, "cast", pid)
 	# Caster keeps priority after casting (CR 117.3c).
 	_resume_priority(pid)
 	return ""
@@ -2281,7 +2297,7 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	item.id = _next_stack_id
 	_next_stack_id += 1
 	stack.append(item)
-	log_line(item.description)
+	log_line(item.description, inst, "activate", pid)
 	# CR 602.2b — the ability is now ON the stack, so anything that triggers
 	# on its activation goes on TOP of it and resolves first (Artifact
 	# Possession stings before the Basalt Monolith untaps). Dispatched after
@@ -2437,12 +2453,13 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 			{"instance": inst, "controller": inst.controller_id})
 	awaiting_attackers = false
 	if declared.is_empty():
-		log_line("%s declares no attackers" % players[pid].player_name)
+		log_line("%s declares no attackers" % players[pid].player_name, null, "attack", pid)
 	else:
 		var names := PackedStringArray()
 		for inst in declared:
 			names.append(inst.data.card_name)
-		log_line("%s attacks with: %s" % [players[pid].player_name, ", ".join(names)])
+		log_line("%s attacks with: %s" % [players[pid].player_name, ", ".join(names)],
+			null, "attack", pid)
 		if undo_log != null: _rec(players[pid], &"attacked_this_turn")
 		players[pid].attacked_this_turn = true
 		dispatch_event(Mtg.EventType.DECLARED_ATTACKERS, {"attackers": declared})
@@ -2636,7 +2653,8 @@ func declare_blockers(pid: int, block_map: Dictionary) -> String:
 			# verbatim.
 			blocker.blocked_ids_this_turn[blocked.id] = blocked.controller_id
 			log_line("%s blocks %s" % [
-				blocker.data.card_name, blocked.data.card_name])
+				blocker.data.card_name, blocked.data.card_name],
+				blocker, "block", blocker.controller_id)
 	awaiting_blockers = false
 	# "Blocks or becomes blocked" triggers, one event per PAIR
 	# (Cockatrice/Basilisk hear both directions from the same event) — so a
@@ -3004,7 +3022,8 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		if not source.damaged_players_this_turn.has(target.player_id):
 			source.damaged_players_this_turn.append(target.player_id)
 		log_line("%s deals %d damage to %s (life %d)" % [
-			source.data.card_name, amount, p.player_name, p.life])
+			source.data.card_name, amount, p.player_name, p.life],
+			source, "damage")
 		dispatch_event(Mtg.EventType.DAMAGE_DEALT,
 			{"source": source, "amount": amount, "to_player": target.player_id,
 			"packet": packet})
@@ -3161,7 +3180,8 @@ func _land_damage_rest(packet: DamagePacket, inst: CardInstance, amount: int,
 	inst.damage_from_this_turn[source.id] = \
 		int(inst.damage_from_this_turn.get(source.id, 0)) + amount
 	log_line("%s deals %d damage to %s (%d marked)" % [
-		source.data.card_name, amount, inst.data.card_name, inst.damage])
+		source.data.card_name, amount, inst.data.card_name, inst.damage],
+		source, "damage")
 	# "Whenever this creature deals damage to a creature this turn, ..."
 	# (Runesword) — fired while the victim is still on the battlefield.
 	for watcher in damage_watchers.duplicate():
@@ -3702,6 +3722,7 @@ func take_from_outside_the_game(inst: CardInstance, pid: int) -> void:
 ## library loses the game (CR 120.3).
 func draw_cards(pid: int, count: int) -> void:
 	var p := players[pid]
+	var drawn := 0
 	for _i in count:
 		# CR 614: a draw can be REPLACED before it happens (Island
 		# Sanctuary, Chains of Mephistopheles, Aladdin's Lamp). A replaced
@@ -3732,6 +3753,13 @@ func draw_cards(pid: int, count: int) -> void:
 		# reads it; triggers still key off `player`.
 		dispatch_event(Mtg.EventType.CARD_DRAWN,
 			{"player": pid, "instance": inst})
+		drawn += 1
+	# The log names the draw and not the card: the log window is read at
+	# the table, and the opponent's hand is theirs to know.
+	if drawn == 1:
+		log_line("%s draws a card" % p.player_name, null, "draw", pid)
+	elif drawn > 1:
+		log_line("%s draws %d cards" % [p.player_name, drawn], null, "draw", pid)
 	_emit_state()
 
 
@@ -3900,7 +3928,7 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 		dispatch_event(Mtg.EventType.BECAME_TAPPED,
 			{"instance": inst, "controller": inst.controller_id})
 		return
-	log_line("%s is destroyed" % inst.data.card_name)
+	log_line("%s is destroyed" % inst.data.card_name, inst)
 	_move_to_graveyard(inst, true)
 
 
@@ -3911,7 +3939,7 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 func sacrifice_permanent(inst: CardInstance) -> void:
 	if inst.zone != Mtg.Zone.BATTLEFIELD:
 		return
-	log_line("%s is sacrificed" % inst.data.card_name)
+	log_line("%s is sacrificed" % inst.data.card_name, inst)
 	_move_to_graveyard(inst, true, true)
 
 
@@ -3939,7 +3967,7 @@ func counter_spell(inst: CardInstance) -> void:
 		if stack[i].kind == Mtg.StackKind.SPELL and stack[i].card == inst:
 			stack.remove_at(i)
 			break
-	log_line("%s is countered" % inst.data.card_name)
+	log_line("%s is countered" % inst.data.card_name, inst)
 	_forget_x(inst)
 	if inst.is_copy:
 		# A copy of a spell is not a card: countering it makes it cease to
@@ -4055,7 +4083,7 @@ func exile_permanent(inst: CardInstance) -> void:
 		log_line("%s ceases to exist" % inst.data.card_name)   # CR 111.7
 	else:
 		players[inst.owner_id].exile.append(inst)
-		log_line("%s is exiled" % inst.data.card_name)
+		log_line("%s is exiled" % inst.data.card_name, inst)
 	dispatch_event(Mtg.EventType.LEAVES_BATTLEFIELD,
 		{"instance": inst, "from_controller": was_controller,
 			"memory": parting_memory},
@@ -5681,7 +5709,7 @@ func _run_item(item: StackItem) -> void:
 			if _trigger_target_illegal(item):
 				log_line("%s fizzles (illegal target)" % item.description)
 			else:
-				log_line("Resolving trigger: %s" % item.description)
+				log_line("Resolving trigger: %s" % item.description, item.card, "resolve")
 				# The chosen target is readable as [method current_targets]
 				# while the trigger resolves, exactly as an ability's is.
 				var outer_targets := _resolving_targets
@@ -5701,7 +5729,7 @@ func _run_item(item: StackItem) -> void:
 			if _all_targets_illegal(item):
 				log_line("%s is countered (no legal targets)" % item.description)
 			else:
-				log_line("Resolving: %s" % item.description)
+				log_line("Resolving: %s" % item.description, item.card, "resolve")
 				_run_effects(item)
 		Mtg.StackKind.SPELL:
 			_resolve_spell(item)
@@ -6360,7 +6388,8 @@ func _resolve_spell(item: StackItem) -> void:
 			_spell_to_graveyard(inst)
 			return
 	if inst.data.is_permanent_type():
-		log_line("Resolving: %s enters the battlefield" % inst.data.card_name)
+		log_line("Resolving: %s enters the battlefield" % inst.data.card_name,
+			inst, "resolve")
 		if inst.data.is_aura():
 			var host := find_instance(item.targets[0].instance_id)
 			# Animate Dead: raise the graveyard target FIRST, then attach.
@@ -6376,7 +6405,7 @@ func _resolve_spell(item: StackItem) -> void:
 		else:
 			_put_on_battlefield(inst, item.controller)
 	else:
-		log_line("Resolving: %s" % inst.data.card_name)
+		log_line("Resolving: %s" % inst.data.card_name, inst, "resolve")
 		_run_effects(item)
 		_spell_to_graveyard(inst)
 
@@ -6393,7 +6422,7 @@ func _spell_to_graveyard(inst: CardInstance) -> void:
 		inst.exile_after_resolution = false
 		inst.zone = Mtg.Zone.EXILE
 		players[inst.owner_id].exile.append(inst)
-		log_line("%s is exiled" % inst.data.card_name)
+		log_line("%s is exiled" % inst.data.card_name, inst)
 		return
 	if inst.is_copy:
 		if undo_log != null:
@@ -7296,14 +7325,14 @@ func check_state_based_actions() -> void:
 				if inst.cur_toughness <= 0:
 					# Zero toughness is not destruction — regeneration
 					# cannot save it (CR 704.5f vs 704.5g).
-					log_line("%s has toughness 0 and dies" % inst.data.card_name)
+					log_line("%s has toughness 0 and dies" % inst.data.card_name, inst)
 					_move_to_graveyard(inst, true)
 					acted = true
 					break
 				if inst.damage >= inst.cur_toughness:
 					# Lethal damage IS destruction — goes through destroy()
 					# so regeneration shields apply (CR 704.5g).
-					log_line("%s has lethal damage" % inst.data.card_name)
+					log_line("%s has lethal damage" % inst.data.card_name, inst)
 					destroy(inst, true)
 					acted = true
 					break
@@ -7580,7 +7609,7 @@ func draw_game(reason: String) -> void:
 	game_over = true
 	is_draw = true
 	winner = -1
-	log_line("The game is a draw: %s" % reason)
+	log_line("The game is a draw: %s" % reason, null, "end")
 	if not _probing:
 		game_ended.emit(-1)
 	_emit_state()
@@ -7627,7 +7656,8 @@ func _lose(pid: int, reason: String) -> void:
 	game_over = true
 	winner = opponent_of(pid)
 	log_line("%s loses: %s. %s wins!" % [
-		players[pid].player_name, reason, players[winner].player_name])
+		players[pid].player_name, reason, players[winner].player_name],
+		null, "end", pid)
 	if not _probing:
 		game_ended.emit(winner)
 	_emit_state()
@@ -7748,7 +7778,7 @@ func _push_trigger(item: StackItem) -> void:
 	item.id = _next_stack_id
 	_next_stack_id += 1
 	stack.append(item)
-	log_line("Trigger: %s" % item.description)
+	log_line("Trigger: %s" % item.description, item.card, "trigger", item.controller)
 
 
 # ------------------------------------------------- targeted TRIGGERS --
@@ -8029,11 +8059,59 @@ func recalculate() -> void:
 ## Append one line to the game log and mirror it on [signal log_appended].
 ## The log is the engine's audit trail: every mutation helper writes one,
 ## which is what makes a bug report reproducible from a seed plus a log.
-func log_line(msg: String) -> void:
+##
+## [param about] is the card the line is about, [param kind] the shape of
+## the sentence and [param pid] the seat it belongs to — all three
+## optional, all three landing in [member log_meta]. A writer that names
+## no seat gets one derived from the prose: a sentence that OPENS with a
+## player's name ("HAL 9000 plays Island") is that player's, and nothing
+## else is — "HAL 9000's damage to Serra Angel is prevented" is about a
+## card, not an act, and stays unattributed.
+func log_line(msg: String, about: CardInstance = null, kind := "", pid := -1) -> void:
 	if _probing:
 		return   # a probe is rewound; its log lines never happened
+	if pid < 0:
+		pid = _seat_of_sentence(msg)
+	var meta := {
+		"turn": turn_number,
+		"step": current_step() if turn_number > 0 else -1,
+		"pid": pid,
+		"kind": kind,
+		"card": "" if about == null else about.data.card_name,
+		"colors": 0 if about == null else _log_ink(about),
+	}
 	log_lines.append(msg)
-	log_appended.emit(msg)
+	log_meta.append(meta)
+	log_appended.emit(msg, meta)
+
+
+## The seat whose name opens [param msg], or -1. The longer name is tried
+## first so "Bob" never claims "Bobby plays Island"; the name must be
+## followed by a space, so a possessive ("Bob's Serra Angel ...") is not
+## an act of Bob's.
+func _seat_of_sentence(msg: String) -> int:
+	var best := -1
+	var best_len := 0
+	for i in players.size():
+		var who: String = players[i].player_name
+		if who.is_empty() or who.length() <= best_len:
+			continue
+		if msg.begins_with(who + " "):
+			best = i
+			best_len = who.length()
+	return best
+
+
+## The colour a log line letters [param inst]'s name in: the card's own
+## colour mask, or for a basic land the colour it taps for — so "plays
+## Island" reads blue and "plays Mountain" red, the way the table's own
+## land art does.
+func _log_ink(inst: CardInstance) -> int:
+	var mask := inst.data.color_mask()
+	if mask == 0 and inst.data.is_land():
+		for sub in inst.data.subtypes:
+			mask |= int(Mtg.BASIC_LAND_COLORS.get(String(sub).to_lower(), 0))
+	return mask
 
 
 func _emit_state() -> void:
@@ -9299,5 +9377,6 @@ func _next_turn() -> void:
 		active_player = opponent_of(active_player)
 	turn_number += 1
 	_skip_first_draw = false
-	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name])
+	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],
+		null, "turn", active_player)
 	_enter_step(0)

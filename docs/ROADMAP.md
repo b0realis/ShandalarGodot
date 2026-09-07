@@ -6807,6 +6807,86 @@ the Display row, the window flipping to mode 3 and back under Xvfb, and
 a reopened Magic Battle screen carrying Hotseat, the deck, the name,
 life 25, Restricted (Type 1) and Best of 3.
 
+**One soundtrack for the shell.** *"Help and options in main menu should
+have same music as main menu."* They already played the same four beds
+— the title screen, Magic Battle and the Options screen each owned a
+`MusicPlayer` of their own, picked the same `single_for(MENU_BEDS)`
+tune and started it from the top at every door, so the tune restarted
+on the way into Options and stopped dead on the way into Help, which
+had no player at all. `[QoL]`: the bed now belongs to a second autoload,
+`ShellMusic` (`game/shell_music.gd`), the four rooms of the shell — the
+title screen, Magic Battle, Options, Help — each call `ShellMusic.play()`
+on entry, and `play_one` is keyed on the track id, so the call is a
+no-op while the same tune is already up: the playback position runs on
+uninterrupted through every door (1.5 s → 3.1 s → 4.7 s → 6.7 s → 8.2 s
+main → options → help → setup → main, under Xvfb). The rooms with a
+soundtrack of their own — the deck builder's LocMus1, the gauntlet's,
+the duel's — call `ShellMusic.stop()` at their door, and the title
+screen starts the bed afresh on the way back; the global switch and
+the track picker on the Options screen still act at once through the
+same player. The 1997 game ran one music engine underneath every
+screen; this is the first time ours does. `tests/ui/test_shell_music.gd`
+(13, new); `test_title_screen.gd` and `test_setup_screen.gd` re-aimed
+at the shared player. One trap, found by the soak and not the suite: a
+`-s` script is compiled before the autoload globals exist, so the
+duel screen naming `ShellMusic` at its door was "Identifier not found"
+for `duel_soak.gd`'s whole chain and the soak never started a duel
+while 4662 tests were green. The duel screen now finds the bed through
+the tree at call time; the rule is in CONTRIBUTING's gotchas.
+
+**A duel log a human can read and a bug report can quote.** *"The duel
+log window has unreadable buttons. In the log casting of cards should
+be colored and emphasized by card colour. Also individual phases should
+be indicated: and each action from the player prefixed by Player 1
+(name), Player 2 (name). The log should be able to really help check
+the engine performance and dig out bugs and faults but also be readable
+quickly by a human. It should also have save log as option. All logs
+should be saved also to a running log text file at the game location
+(each game separated by some large comment block ********* GAME at
+{date time} ********** or something similar). That running log should
+be 1 MB and just oldest output overwritten by newest (new logs just
+appended)."* `[QoL]`, in three pieces. THE ENGINE now writes a second
+column beside every prose line: `MtgGame.log_meta`, index for index
+with `log_lines` — the turn and step the line was written in, the seat
+it belongs to (a sentence that opens with a player's name is that
+player's act; a possessive is not), the card it is about and that card's
+colours (a basic land reads as the colour it taps for) — and tags the
+kind of line at the two hundred sites that already logged: `turn`,
+`play`, `cast`, `activate`, `trigger`, `resolve`, `draw`, `attack`,
+`block`, `damage`, `end`. Nothing is parsed back out of the prose; a
+probe's lines never happened in either column; and a draw is now
+logged at all ("HAL 9000 draws a card", never the card). THE SHAPE
+(`DuelLogText`) is one reading of that stream that the window and the
+file share: a `[First Main]` marker the first time a line lands in a
+step, lazily — a turn walks thirteen steps and most pass in silence —
+the seat label `Player 2 (HAL 9000)` in place of the name on every act
+(and plain `Player 1` when the name is the default, so the parenthesis
+never repeats itself), the turn header naming the seat the same way, a
+blank line before each turn, and indentation under the marker, so
+`grep '^\['` cuts the file by step and `grep 'Player 1'` by seat. THE
+WINDOW prints it in ink: the seat labels in amber and sky, the card
+named by a line in its own colour (white, blue, black, red, green; gold
+for several; steel for none), bold and lit for a cast, the step markers
+in a quiet slate, and its three gadgets — `Copy`, `Save`, `×` — now wear
+the 1997 button art with dark letters on the light face
+(`OriginalDialog.gadget`) instead of the Situation Bar's pale-on-tan
+that the owner could not read at 13 px. THE RUNNING FILE
+(`DuelLogFile`, `duel_log.txt`) sits beside the executable — "at the
+game location" — and under `user://` when the editor binary runs the
+project (the project directory is the repository, and the suite plays
+hundreds of duels through the live screen), opens each duel with a
+three-line `**********  GAME at 2026-09-07 21:14:03  —  Player 1 vs HAL
+9000  (seed 4242)  **********` banner BEFORE the engine's own "Game set
+up" line, appends every line in the window's shape as it happens, and
+is trimmed from the front when an append takes it past 1 MB: a 64 KB
+slab and a little more, the cut landing on the next banner so the file
+always opens on a `GAME at` line. `tests/unit/test_log_meta.gd` (9,
+new), `tests/unit/test_duel_log_text.gd` (10, new),
+`tests/unit/test_duel_log_file.gd` (7, new), four tests on
+`tests/ui/test_duel_log_2026_09_06.gd` (20); checked by looking at the
+window under Xvfb — dark gadgets, a green bold `Grizzly Bears` under a
+`[First Main]` marker — and at the running file's banner and indents.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

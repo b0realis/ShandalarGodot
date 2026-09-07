@@ -531,6 +531,17 @@ shandalar/
 │   │                          incl. trample, cleanup. Signals for UIs:
 │   │                          event_occurred, log_appended, state_changed,
 │   │                          game_ended. Actions return "" or a refusal.
+│   │                          THE LOG (2026-09-07): log_lines is the
+│   │                          prose, log_meta its second column index
+│   │                          for index — turn, step, seat (a sentence
+│   │                          opening with a player's name is that
+│   │                          seat's act; a possessive is not), kind
+│   │                          (turn/play/cast/activate/trigger/resolve/
+│   │                          draw/attack/block/damage/end), the card
+│   │                          and its colours (a basic land reads as
+│   │                          what it taps for); log_appended carries
+│   │                          both; a probe writes neither; draws are
+│   │                          logged without naming the card.
 │   │                          THE DAMAGE-PREVENTION WINDOW (§6.8, a
 │   │                          RulesOptions fork, default OFF): packets
 │   │                          queue in damage_pending instead of landing;
@@ -1618,7 +1629,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4649 tests / ~131 000 asserts, ~300 s
+├── tests/                   GUT suite — 4692 tests / ~132 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2415,15 +2426,23 @@ shandalar/
 │    and the switch PRECEDENCE — global off beats screen-on, the two
 │    defaults are ON and absent from settings.cfg, unticking either takes
 │    effect on the next press;
+│    tests/ui/test_shell_music.gd — THE SHELL'S ONE BED (ShellMusic):
+│    the autoload holds the only player; all four rooms find it playing
+│    and keep the SAME stream (never restarted at a door); a room opened
+│    cold starts it; a room going does not take it; the Deck Builder, the
+│    table and the Gauntlet stop it at their doors; the global switch is
+│    the whole rule; the Options Music switch and track picker act on it
+│    AT ONCE; headless makes no voice;
 │    tests/ui/test_title_screen.gd — THE FRONT DOOR, both halves of the
 │    2026-09-04 playtest: the shell loops ONE bed (play_one, an
 │    AudioStreamPlaylist of the same stream twice so the wrap
-│    crossfades), the bed is MENU_BEDS' own head and not the Deck
-│    Builder's LocMus1, an Options track choice outranks it, the GLOBAL
-│    music switch silences it while the builder's screen-scoped one does
-│    not, a partial import falls back down the list in order, an empty
-│    library is silence, leaving the screen stops the tune AND drops the
-│    PCM, and a headless run makes no voice; plus the splash route pinned
+│    crossfades) through the ShellMusic autoload, the bed is MENU_BEDS'
+│    own head and not the Deck Builder's LocMus1, an Options track choice
+│    outranks it, the GLOBAL music switch silences it while the builder's
+│    screen-scoped one does not, a partial import falls back down the
+│    list in order, an empty library is silence, the title screen going
+│    does NOT take the bed with it (the rooms share it), and a headless
+│    run makes no voice; plus the splash route pinned
 │    as numbers — minimum_display_time is 1000 ms, is <= the ceiling that
 │    keeps the game reachable in about two seconds, the image is still
 │    the owner's on black, and run/main_scene is still main.tscn (no
@@ -2434,7 +2453,8 @@ shandalar/
 │    the picker grouped by DeckGroups with a pooled random per heading,
 │    the seed box, the five formats and the note under the picker, the
 │    match row, the proxy and parser gates on Go!, HAL's names, the
-│    panel's fit, the portraits, the shell's bed; and since 2026-09-07
+│    panel's fit, the portraits, the shell's bed (since 2026-09-07
+│    ShellMusic's — the screen holds no player of its own); and since 2026-09-07
 │    WHAT YOU PLAYED LAST IS WHAT YOU OPEN ON — every choice but the
 │    seed remembered at Go! in ONE write, read back on the next screen,
 │    a gone deck / an emptied pool / nonsense in the file falling back
@@ -2774,7 +2794,31 @@ shandalar/
 │    and the key are one switch, one window however often asked, not a
 │    modal (Q still pauses under it, Esc's ladder untouched), a bracket
 │    is text, on screen right of the sidebar, Save writes the whole log
-│    and says where, the glyph is a page of lines;
+│    in the window's shape and says where, the glyph is a page of lines;
+│    since 2026-09-07 the gadgets wear dark ink on the 1997 button face,
+│    an act reads with its seat label under its step marker, a card's
+│    ink is its colour (gold for several, steel for none), and the screen
+│    keeps the running duel_log.txt through DuelLogFile's seam — banner,
+│    seed, every engine line;
+│    tests/unit/test_log_meta.gd — THE LOG'S SECOND COLUMN
+│    (MtgGame.log_meta): index for index with log_lines; a cast names
+│    its card, colour, caster, kind and step; a basic land carries the
+│    colour it taps for; a sentence opening with a name is that seat's
+│    and a possessive is not; the longer name wins a prefix tie; the
+│    turn header knows its seat; a draw is logged without the card;
+│    a destroyed creature is the line's card; no step before turn 1;
+│    tests/unit/test_duel_log_text.gd — THE SHAPE (DuelLogText): seat
+│    labels (the default name never repeats itself), acts prefixed and
+│    consequences not, a step marked once per turn the first time a line
+│    lands in it, no marker or indent before the first turn, the turn
+│    header naming the seat after a gap (none before the first), reset,
+│    plain() one row per line and surviving a short meta column;
+│    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):
+│    user:// under the editor, the location seam, the banner's moment /
+│    players / seed, a game as banner + lines in the window's shape,
+│    games appended in order each with its own reading, the 1 MB cap
+│    trimming the front on a banner (a slab, not the file), a write
+│    before begin still landing;
 │    tests/tools/test_deck_lab_sweep.gd — THE SWEEP **[QoL]** (the Deck
 │    Lab's `--sweep`): the flag parses and defaults its null (off for a
 │    boolean, the preset's own number), an unknown knob or an unreadable
@@ -2787,7 +2831,8 @@ shandalar/
 │    and a knob that fires on any deck moves the control and is exit 4
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
-│   ├── main.tscn / main.gd  Title: 6 stone buttons center-right over the
+│   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see
+│   │                          shell_music.gd): 6 stone buttons center-right over the
 │   │                          original title art — Magic Battle /
 │   │                          Gauntlet / Deck Builder / Options / Help /
 │   │                          Exit (Gauntlet is @SHELLSCREEN_DUEL entry
@@ -2996,12 +3041,27 @@ shandalar/
 │   │                          window ini key (`NoFrame`) and no more.
 │   │                          The Options switch writes it, Lifecycle
 │   │                          applies it at boot
-│   ├── lifecycle.gd         THE ONE AUTOLOAD (`Lifecycle`) — enters the
-│   │                          tree first (applies GameDisplay at boot)
-│   │                          and leaves it last, dropping the card
-│   │                          database while the card scripts are still
-│   │                          loaded (CardRegistry.unload) so quit()
-│   │                          never aborts in static teardown
+│   ├── lifecycle.gd         AUTOLOAD `Lifecycle` — enters the tree
+│   │                          first (applies GameDisplay at boot) and
+│   │                          leaves it last, dropping the card database
+│   │                          while the card scripts are still loaded
+│   │                          (CardRegistry.unload) so quit() never
+│   │                          aborts in static teardown
+│   ├── shell_music.gd       AUTOLOAD `ShellMusic` — THE SHELL'S ONE BED
+│   │                          ([QoL], 2026-09-07: "Help and options in
+│   │                          main menu should have same music as main
+│   │                          menu"). One MusicPlayer that outlives the
+│   │                          rooms: the title screen, Magic Battle,
+│   │                          Options and Help each call `play()` from
+│   │                          _ready and the tune carries on unbroken
+│   │                          (play_one keys on the id); the Deck
+│   │                          Builder, the Gauntlet, the table and Go!
+│   │                          call `stop()` — every door out of the
+│   │                          shell. Carries MENU_BEDS (LocMus15 and the
+│   │                          measured fallbacks, with the provenance
+│   │                          that the 1997 shell played nothing) and
+│   │                          the global music_enabled rule. No
+│   │                          class_name — an autoload is its name
 │   ├── ui_chrome.gd         class UiChrome — the original sandstone panel
 │   │                          (Winbk_Options 9-patch) + era buttons/labels;
 │   │                          ONE place for the game's window look
@@ -4113,7 +4173,39 @@ shandalar/
 │       │                      it. Copy (clipboard) and Save
 │       │                      (user://duel_log_<ticks>.txt), the notice
 │       │                      on the bar. DuelLog.button() is the reserve
-│       │                      strip's page-of-lines switch beside Expand
+│       │                      strip's page-of-lines switch beside Expand.
+│       │                      Since 2026-09-07 it prints DuelLogText's
+│       │                      rows in ink: step markers slate, seat
+│       │                      labels amber / sky, the line's card in its
+│       │                      colour (card_ink: W/U/B/R/G, gold for
+│       │                      several, steel for none), bold and lit for
+│       │                      a cast; Copy / Save / × are
+│       │                      OriginalDialog.gadget (dark letters — the
+│       │                      bar_button's pale ones were "unreadable")
+│       ├── duel_log_text.gd class DuelLogText — THE SHAPE OF THE LOG,
+│       │                      shared by the window and the running file
+│       │                      (2026-09-07): rows(line, meta) → gap /
+│       │                      turn / step / line — a [Step] marker the
+│       │                      first time a line lands in a step (lazily,
+│       │                      not thirteen headings over three
+│       │                      sentences), "Player 2 (name)" in place of
+│       │                      the name on every act (plain "Player 1"
+│       │                      when the name is the default), the turn
+│       │                      header naming the seat the same way, a
+│       │                      blank before each turn, indents under the
+│       │                      marker; plain() is the whole log as text
+│       ├── duel_log_file.gd class DuelLogFile — THE RUNNING LOG,
+│       │                      duel_log.txt beside the executable ("at the
+│       │                      game location"; user:// under the editor
+│       │                      or when the exe's directory is read-only):
+│       │                      begin() writes the `**********  GAME at
+│       │                      <date time>  —  A vs B  (seed N)
+│       │                      **********` banner before the engine's
+│       │                      first line, write() appends each line in
+│       │                      the window's shape, and an append past
+│       │                      1 MB trims a 64 KB slab from the FRONT,
+│       │                      the cut on the next banner. `location` is
+│       │                      the tests' seam
 │       ├── spell_flight.gd  class SpellFlight — THE SPELL-CAST
 │       │                      ANIMATION (duel-todo §2.4): a ghost
 │       │                      MiniCard tweens from the hand slot to the
@@ -4195,7 +4287,9 @@ shandalar/
 │       │                      sunken stone a place to type wears (the
 │       │                      type-ahead, the finders, the Deck Info
 │       │                      title), with a **[QoL]** × that empties a
-│       │                      FINDER when asked for. Wording comes from
+│       │                      FINDER when asked for; gadget() is button()
+│       │                      at 20 px for a window's title bar (the
+│       │                      duel log's Copy / Save / ×). Wording comes from
 │       │                      docs/glossary-1997.md. Worn by: the
 │       │                      Situation Bar + Done, the modal-choice
 │       │                      dialog, the X question, the library picker,

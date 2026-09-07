@@ -28,6 +28,9 @@ extends Control
 ## Escape returns to the menu. The keys are read in [method _input] and
 ## marked handled, so a focused button's own arrow-key focus navigation
 ## can never eat a page turn.
+##
+## THE MUSIC is the shell's own bed, carried on rather than restarted —
+## see `game/shell_music.gd`.
 
 ## THE PAGE IS SAND, SO THE WORDS ARE DARK. Every emphasised word here —
 ## section headings, an icon's name, the letter standing in for a missing
@@ -82,6 +85,11 @@ var _next_button: Button = null
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pages = HelpPages.pages()
+	# A room of the shell, so the shell's bed plays on through it — the
+	# `ShellMusic` autoload's, left where it is if it is already up
+	# (2026-09-07 playtest: *"Help and options in main menu should have
+	# same music as main menu"*).
+	ShellMusic.play()
 
 	var bg := ColorRect.new()
 	bg.color = Color(0.09, 0.08, 0.07)

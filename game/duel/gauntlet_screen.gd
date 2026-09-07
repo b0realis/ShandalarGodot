@@ -165,6 +165,9 @@ var _music: MusicPlayer
 
 
 func _start_music() -> void:
+	# The shell's bed stops at this door: this screen has a bed of its own
+	# and starts it against silence (`game/shell_music.gd`).
+	ShellMusic.stop()
 	GameAudio.apply_settings()
 	_music = MusicPlayer.new()
 	add_child(_music)

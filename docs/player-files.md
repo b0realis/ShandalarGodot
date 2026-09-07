@@ -7,8 +7,10 @@ your file manager names them.
 `user://` is **`~/.local/share/godot/app_userdata/Shandalar/`** on Linux
 (`%APPDATA%\Godot\app_userdata\Shandalar\` on Windows,
 `~/Library/Application Support/Godot/app_userdata/Shandalar/` on macOS).
-It is the only place the game WRITES. Nothing is written beside the
-executable, and nothing outside your home directory is touched.
+It is where the game WRITES, with one exception asked for by name: the
+running duel log, `duel_log.txt`, is kept beside the executable so it is
+where you look for it (and under `user://` instead when that directory
+cannot be written). Nothing else is written outside your home directory.
 
 `res://` is inside `Shandalar.pck`, the pack beside the executable. It is
 read-only and the game ships everything it needs there — except art, which
@@ -35,6 +37,8 @@ so give it the same treatment when it writes.
 | **Card art** | `user://original_skin/cardart/<snake_name>.jpg` | Scryfall art crops fetched by `tools/fetch_card_art.py`, or your own: `shivan_dragon.jpg`. Missing art is a graceful placeholder, never an error. |
 | **Your settings** | `user://settings.cfg` | Options, rules forks, phase stops, territory background, chosen portraits, and the Deck Builder's own two sound switches (`deck_builder_music`, `deck_builder_sfx` — the boxes on its **Q**/**Esc** menu; they silence that screen only, and turning the game-wide Music or Sound Effects off still silences it whatever they say). Delete it to go back to the shipped defaults. A key that is ABSENT means its default applies — which is why a duel you have never changed the Stops in starts with the three red dots and leaves no `phase_stoppers` row behind, while clearing every Stop DOES write one, and why ticking a Deck Builder box back ON removes its row rather than writing `true`. A `phase_stoppers` row also carries a fifth number, the generation of the defaults it was a decision about: a row written by a build that shipped no defaults is a leftover rather than an opt-out, and the current defaults apply over it (`docs/ROADMAP.md`, "WHY THE THREE DOTS DID NOT REACH THE OWNER"). |
 | **Logs** | `user://logs/` | Godot's own. Where a crash would show up. |
+| **The running duel log** | `duel_log.txt` beside the executable | Every duel, appended as it happens — the same lines the duel log window (`L`) shows, with `[Step]` markers and `Player 1 (name)` labels — each game under a `**********  GAME at <date time>  —  A vs B  (seed N)  **********` banner. Capped at 1 MB: past that the oldest game drops off the front. Under `user://` when the executable's directory is read-only, or when the editor runs the project. This is the file to attach to a bug report; the seed on its banner replays the duel. |
+| **A saved duel log** | `user://duel_log_<ms>.txt` | What the duel log window's **Save** writes: one duel, on request. |
 | **Screenshots** | `user://screenshot_<ms>.png` | What the duel screen's screenshot key writes. |
 
 ## What ships inside the pack (read-only)
