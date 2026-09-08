@@ -407,6 +407,23 @@ func test_the_bar_asks_the_famous_question_in_your_own_windows() -> void:
 	assert_eq(screen._status_message(), "Fast Effects?...Assign Blockers")
 
 
+func test_the_beginning_of_combat_is_announced_not_asked_for() -> void:
+	# The owner's playtest (2026-09-08): a Stop at the start of your own
+	# combat read "Choose Attackers" — an instruction you could not yet
+	# follow; the lineup is asked for one step later. *"So the first
+	# message should be modified to only announcement: 'Begin combat'."*
+	var g := _window(0, Mtg.Step.COMBAT_BEGIN)
+	g.priority_player = 0
+	assert_eq(screen._status_message(), "Begin Combat", "your own turn, the stop holding")
+	_window(1, Mtg.Step.COMBAT_BEGIN)
+	assert_eq(screen._status_message(), "Fast Effects?...Begin Combat",
+		"their turn: the question, filled with the same name")
+	g = _window(0, Mtg.Step.DECLARE_ATTACKERS)
+	g.awaiting_attackers = true
+	assert_eq(screen._status_message(), "Combat phase: Choose attackers.",
+		"and only then the instruction")
+
+
 func test_the_bar_asks_for_the_lineup_while_it_is_owed() -> void:
 	# `@PROMPT_MAIN` entries 5 and 8, UIStrings.txt:1063 — the instruction,
 	# not the question. The attackers line used to be given AFTER the
@@ -424,7 +441,11 @@ func test_the_damage_steps_take_the_originals_names() -> void:
 	# `@PROMPT_SPECIALFEPHASE`, UIStrings.txt:1039 — the sibling table
 	# the original fills the same blank with. These used to answer
 	# "Main Phase".
-	assert_eq(DuelScreen._fe_phase_name(Mtg.Step.COMBAT_BEGIN), "Choose Attackers")
+	# The beginning of combat is an announcement, not an instruction: the
+	# owner's playtest read "Choose Attackers" there as a step too early
+	# (*"the first message should be modified to only announcement:
+	# 'Begin combat'"*).
+	assert_eq(DuelScreen._fe_phase_name(Mtg.Step.COMBAT_BEGIN), "Begin Combat")
 	assert_eq(DuelScreen._fe_phase_name(Mtg.Step.FIRST_STRIKE_DAMAGE), "Damage Dealing")
 	assert_eq(DuelScreen._fe_phase_name(Mtg.Step.COMBAT_DAMAGE), "Damage Dealing")
 	assert_eq(DuelScreen._fe_phase_name(Mtg.Step.COMBAT_END), "End of Combat")

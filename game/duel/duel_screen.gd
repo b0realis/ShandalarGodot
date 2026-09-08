@@ -1127,15 +1127,27 @@ static func _phase_icon_slot(step: int) -> int:
 ## duel now holds open (see [method _instant_window_reason]). They take
 ## the sibling table's words instead — `@PROMPT_SPECIALFEPHASE`,
 ## UIStrings.txt:1039, the names the original fills the SAME blank with
-## for its trigger windows: `Choose Attackers` (:1052), `Damage Dealing`
-## (:1043, and `Duel.hlp`'s own name for the three damage icons of the
-## Combat Bar), `End of Combat` (:1055).
+## for its trigger windows: `Damage Dealing` (:1043, and `Duel.hlp`'s
+## own name for the three damage icons of the Combat Bar), `End of
+## Combat` (:1055).
+##
+## THE BEGINNING OF COMBAT is a step the original never stopped in —
+## its combat opened on the attackers' choice — so no table names it,
+## and the trigger-window name it borrowed at first, `Choose Attackers`
+## (:1052), read as an instruction one step early. The owner, from a
+## playtest (2026-09-08): *"when combat phase start first announcement
+## is choose attackers (but you cannot as it is combat phase
+## announcement). Then only you click next: new announcement: combat
+## phase: choose attackers. So the first message should be modified to
+## only announcement: 'Begin combat'."* — so it says that, in the
+## capitalisation of its table neighbours (`Begin Upkeep`, :1047).
+## [QoL]
 static func _fe_phase_name(step: int) -> String:
 	match step:
 		Mtg.Step.UPKEEP: return "Upkeep Phase"
 		Mtg.Step.DRAW: return "Draw Phase"
 		Mtg.Step.MAIN1, Mtg.Step.MAIN2: return "Main Phase"
-		Mtg.Step.COMBAT_BEGIN: return "Choose Attackers"
+		Mtg.Step.COMBAT_BEGIN: return "Begin Combat"
 		Mtg.Step.DECLARE_ATTACKERS: return "Assign Attackers"
 		Mtg.Step.DECLARE_BLOCKERS: return "Assign Blockers"
 		Mtg.Step.FIRST_STRIKE_DAMAGE, Mtg.Step.COMBAT_DAMAGE:
