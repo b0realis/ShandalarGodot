@@ -3400,7 +3400,10 @@ shandalar/
 │   │                          portraits/, then res://assets/original/
 │   │                          portraits/ — first wins, so a player's own
 │   │                          file replaces an imported one. Reads bytes
-│   │                          (Image.load_from_file), so art dropped in
+│   │                          (Image.load_from_file, through
+│   │                          GameSkin.locate so a portrait inside the
+│   │                          mounted skin pack keeps its res://skin
+│   │                          name — 2026-09-08), so art dropped in
 │   │                          after shipping works in an export; writes
 │   │                          the README that documents the format.
 │   │                          Chosen per seat in setup_screen, stored BY

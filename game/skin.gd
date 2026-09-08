@@ -354,26 +354,32 @@ static func _snake(card_name: String) -> String:
 ## True when any original skin directory exists (UI may mention it).
 static func is_present() -> bool:
 	for dir in search_dirs():
-		if DirAccess.dir_exists_absolute(_locate(dir)):
+		if DirAccess.dir_exists_absolute(locate(dir)):
 			return true
 	return false
 
 
-## A search directory as the filesystem sees it. The mounted pack stays
-## a `res://` path — its files live inside a zip the engine reads through
-## `res://`, and globalizing it would name a folder beside the binary
-## that does not exist. Everything else becomes an absolute path, which
-## is what makes `user://` and a gitignored checkout folder read the same
-## way in the editor, headless and exported.
-static func _locate(dir: String) -> String:
-	if dir.begins_with(PACK_DIR):
-		return dir
-	return ProjectSettings.globalize_path(dir)
+## A search directory (or a file in one) as the filesystem sees it. The
+## mounted pack stays a `res://` path — its files live inside a zip the
+## engine reads through `res://`, and globalizing it would name a folder
+## beside the binary that does not exist. Everything else becomes an
+## absolute path, which is what makes `user://` and a gitignored checkout
+## folder read the same way in the editor, headless and exported.
+##
+## Public because [PortraitLibrary] loads its pictures the same way and
+## must make the same distinction: a portrait listed out of the pack is
+## read at its `res://skin/portraits/` name, not at a globalized one
+## (2026-09-08 — the pack's portraits were listed in the chooser but
+## drew nothing, in the package and the browser alike).
+static func locate(path: String) -> String:
+	if path.begins_with(PACK_DIR):
+		return path
+	return ProjectSettings.globalize_path(path)
 
 
 static func _find(filename: String) -> String:
 	for dir in search_dirs():
-		var path := _locate(dir + "/" + filename)
+		var path := locate(dir + "/" + filename)
 		if FileAccess.file_exists(path):
 			return path
 	return ""

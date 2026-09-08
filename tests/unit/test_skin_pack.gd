@@ -152,6 +152,14 @@ func test_the_mounted_pack_supplies_portraits() -> void:
 	for face in PortraitLibrary.all():
 		ids.append(String(face["id"]))
 	assert_has(ids, "zz_probe_face", "the portrait inside the zip is in the chooser")
+	# And it DRAWS: read at its `res://skin/` name, not at a globalized
+	# path beside the binary that does not exist (2026-09-08 — the pack's
+	# portraits were listed and blank, in the package and the browser).
+	var tex := PortraitLibrary.texture("zz_probe_face")
+	assert_not_null(tex, "the portrait inside the zip, as a texture")
+	if tex != null:
+		assert_eq(tex.get_width(), 4)
+		assert_eq(tex.get_height(), 6)
 	GameSkin.pack_mounted = false
 	assert_does_not_have(PortraitLibrary.portable_dirs(), GameSkin.PACK_DIR.path_join("portraits"))
 

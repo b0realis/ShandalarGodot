@@ -149,8 +149,9 @@ static func texture(id: String) -> Texture2D:
 	for entry in all():
 		if entry["id"] != id:
 			continue
-		var image := Image.load_from_file(
-			ProjectSettings.globalize_path(String(entry["path"])))
+		# `GameSkin.locate`, not a bare globalize: a portrait inside the
+		# mounted skin pack is read at its `res://skin/` name.
+		var image := Image.load_from_file(GameSkin.locate(String(entry["path"])))
 		if image != null:
 			result = ImageTexture.create_from_image(image)
 		break

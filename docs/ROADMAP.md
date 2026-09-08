@@ -7626,6 +7626,28 @@ the player who wants it, `--remove` to undo. Unpacking installs nothing.
 zip is one more place the game looks, and the first one that works in a
 browser.
 
+**The blank portraits (2026-09-08, the owner's report: *"web build does
+not have portraits and no sfx"*).** The seventy portraits and the
+sixty-five sounds ARE in the zip; the sounds load (checked in headless
+Firefox: `sfx_button.wav` 1.71 s, `music_duel.wav`, all off `res://skin`),
+the portraits were listed in the chooser and drew nothing.
+`PortraitLibrary.texture` globalized every listed path before
+`Image.load_from_file`, and a globalized `res://skin/portraits/x.png`
+names a folder beside the binary that does not exist — `GameSkin._find`
+had made exactly that distinction for the skin's own files and the
+portraits had not. The locator is public now (`GameSkin.locate`) and
+the portraits go through it. It showed in the package as well as the
+browser wherever the pack is the only source; a desktop that still has
+`user://original_skin/portraits` from an earlier `--install` never saw
+it. `test_skin_pack.gd` now asks for the probe portrait's TEXTURE, and
+failed on the old code.
+
+**The size.** 277 MB, not the 84 MB of the earlier art zip, because the
+pack carries `cardart/` — 1 795 art crops, 193 MB of JPEG — beside the
+1997 material (8 MB of sheets, 79 MB of WAV, the two movies, the
+portraits). Whether to ship the card art in the same zip, in a second
+one, re-encoded smaller, or not at all is the owner's call.
+
 ## THE INSTANT WINDOWS (2026-09-08) — [QoL]
 
 *"During playtesting i found a bug: i have an instant like 'lightning
