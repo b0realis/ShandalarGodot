@@ -234,6 +234,15 @@ func test_the_fetch_progress_is_unknown_when_nothing_is_in_flight() -> void:
 	assert_false(SkinPack.fetching)
 
 
+## The web client never says how big a body is, so the size comes from
+## the host's HEAD answer — read case-blind, and -1 when it is missing.
+func test_the_zips_size_is_read_off_the_hosts_head_answer() -> void:
+	assert_eq(SkinPack.content_length(PackedStringArray([
+		"content-type:application/zip", "Content-Length: 277089881"])), 277089881)
+	assert_eq(SkinPack.content_length(PackedStringArray(["content-type:application/zip"])), -1)
+	assert_eq(SkinPack.content_length(PackedStringArray(["content-length: 0"])), -1)
+
+
 func test_the_shipped_zip_has_no_place_under_the_editor() -> void:
 	assert_eq(SkinPack.portable_zip(), "", "no executable to be beside")
 

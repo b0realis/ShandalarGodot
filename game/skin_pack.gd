@@ -80,12 +80,19 @@ const RELOAD_GUARD := 3.0
 ## A megabyte per chunk: the zip is tens of megabytes and a 4 KB default
 ## chunk is a thousand callbacks a second.
 const CHUNK := 1 << 20
+## Where the browser's download is written, and where it is moved to
+## while still being written — see [method _process].
+const FETCHING := USER_DIR + "/fetching.zip"
+const ARRIVING := USER_DIR + "/arriving.zip"
 
 ## The zips mounted this run, in mount order.
 var mounted: Array[String] = []
 ## Whether a browser download is in flight.
 var fetching := false
 var _request: HTTPRequest = null
+## The zip's size from the host's own HEAD answer, or -1: the web client
+## cannot say how big a body is (`http_client_web.cpp`, always -1).
+var _expected := -1
 var _notice: CanvasLayer = null
 var _arrived_at := 0.0
 
@@ -98,12 +105,36 @@ func _ready() -> void:
 	get_tree().root.files_dropped.connect(_on_files_dropped)
 	if OS.has_feature("web") and mounted.is_empty():
 		_start_fetch()
-	set_process(false)
+	set_process(fetching)
 
 
+## While a download is in flight: report how far it is, and MOVE THE
+## FILE OUT FROM UNDER THE REQUEST as soon as the request has opened it.
+##
+## Godot 4.7's `HTTPRequest` deletes its `download_file` in
+## `cancel_request()` unless `download_complete` was set, and the branch
+## that finishes a body of unknown length (read to EOF) never sets it
+## (`scene/main/http_request.cpp`, the `STATUS_DISCONNECTED` branch of
+## `STATUS_BODY`). On the web the length is ALWAYS unknown —
+## `platform/web/http_client_web.cpp` returns -1 on purpose (GH-47597,
+## GH-79327) — so every finished download on the web is deleted the
+## moment it completes, and reported a success.
+##
+## The file is a name; the request writes to an inode. Renaming
+## [const FETCHING] to [const ARRIVING] while it is open leaves the
+## request writing to the same inode under the new name, and the
+## deletion at the end finds nothing at the old one. The chunks go
+## through `fwrite` a megabyte at a time, larger than the C buffer, so
+## nothing is held back that the rename could lose. Native platforms
+## know the length and never hit the branch; the rename is harmless
+## there, and [method _on_fetched] accepts either name.
 func _process(_delta: float) -> void:
-	if fetching:
-		fetch_progressed.emit(fetch_progress())
+	if not fetching:
+		return
+	fetch_progressed.emit(fetch_progress())
+	if _request != null and _request.download_file == FETCHING \
+			and FileAccess.file_exists(FETCHING):
+		DirAccess.rename_absolute(FETCHING, ARRIVING)
 
 
 # ----------------------------------------------------------- the zips --
@@ -252,23 +283,30 @@ static func pack_url(href: String) -> String:
 func fetch_progress() -> float:
 	if _request == null:
 		return -1.0
-	var total := _request.get_body_size()
+	var total := _expected if _expected > 0 else _request.get_body_size()
 	if total <= 0:
 		return -1.0
 	return clampf(float(_request.get_downloaded_bytes()) / float(total), 0.0, 1.0)
 
 
+## Ask the host how big the zip is (HEAD), then fetch it. Two requests
+## because the web client will not say how big a body is while it
+## arrives, and a title line that only says "fetching" for a minute is
+## a line the player stops believing.
 func _start_fetch() -> void:
 	var href := String(JavaScriptBridge.eval("location.href", true))
 	if href.is_empty():
 		return
 	DirAccess.make_dir_recursive_absolute(USER_DIR)
+	for stale in [FETCHING, ARRIVING]:
+		if FileAccess.file_exists(stale):
+			DirAccess.remove_absolute(stale)
+	_expected = -1
 	_request = HTTPRequest.new()
-	_request.download_file = USER_ZIP
-	_request.download_chunk_size = CHUNK
-	_request.request_completed.connect(_on_fetched)
+	_request.request_completed.connect(_on_measured)
 	add_child(_request)
-	if _request.request(pack_url(href)) != OK:
+	if _request.request(pack_url(href), PackedStringArray(),
+			HTTPClient.METHOD_HEAD) != OK:
 		_request.queue_free()
 		_request = null
 		return
@@ -276,22 +314,60 @@ func _start_fetch() -> void:
 	set_process(true)
 
 
-func _on_fetched(result: int, code: int, _headers: PackedStringArray,
+## The `content-length` a host answered with, or -1 when it did not.
+static func content_length(headers: PackedStringArray) -> int:
+	for header in headers:
+		if header.to_lower().begins_with("content-length:"):
+			var size := header.get_slice(":", 1).strip_edges().to_int()
+			return size if size > 0 else -1
+	return -1
+
+
+func _on_measured(result: int, code: int, headers: PackedStringArray,
 		_body: PackedByteArray) -> void:
+	if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+		_expected = content_length(headers)
+	_request.request_completed.disconnect(_on_measured)
+	_request.request_completed.connect(_on_fetched)
+	_request.download_file = FETCHING
+	_request.download_chunk_size = CHUNK
+	if _request.request(pack_url(String(JavaScriptBridge.eval(
+			"location.href", true)))) != OK:
+		_fetch_over()
+
+
+func _fetch_over() -> void:
 	fetching = false
 	set_process(false)
 	_request.queue_free()
 	_request = null
 	fetch_progressed.emit(-1.0)
+
+
+func _on_fetched(result: int, code: int, _headers: PackedStringArray,
+		_body: PackedByteArray) -> void:
+	_fetch_over()
+	# Whichever name the download ended under (see _process).
+	var landed := ARRIVING if FileAccess.file_exists(ARRIVING) else FETCHING
 	if result == HTTPRequest.RESULT_SUCCESS and code == 200 \
-			and inspect(USER_ZIP)["ok"]:
-		if mount(USER_ZIP, true):
-			_arrived()
-		return
+			and FileAccess.file_exists(landed):
+		var report := inspect(landed)
+		if report["ok"]:
+			if FileAccess.file_exists(USER_ZIP):
+				DirAccess.remove_absolute(USER_ZIP)
+			if DirAccess.rename_absolute(landed, USER_ZIP) == OK \
+					and mount(USER_ZIP, true):
+				_arrived()
+				return
+		else:
+			push_warning("skin pack: the fetched zip was refused — %s" % report["why"])
+	else:
+		push_warning("skin pack: fetch failed (result %d, HTTP %d)" % [result, code])
 	# A 404 page, a cut connection, a file that is not a skin: whatever
 	# was written is not a skin and must not be mounted next visit.
-	if FileAccess.file_exists(USER_ZIP):
-		DirAccess.remove_absolute(USER_ZIP)
+	for leftover in [FETCHING, ARRIVING]:
+		if FileAccess.file_exists(leftover):
+			DirAccess.remove_absolute(leftover)
 
 
 # ----------------------------------------------------------- the notice --

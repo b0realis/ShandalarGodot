@@ -1750,7 +1750,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4891 tests / ~134 000 asserts, ~300 s
+├── tests/                   GUT suite — 4892 tests / ~134 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -3010,8 +3010,10 @@ shandalar/
 │    MusicLibrary, and is invisible again once pack_mounted is false; a
 │    drop keeps the zip at USER_ZIP, mounts it and (off the title)
 │    shows the Restart/Later notice, a bad drop is refused with an OK
-│    notice, a drop without a zip does nothing; pack_url strips query
-│    and fragment; plan_after_arrival;
+│    notice, a drop without a zip does nothing (the drop test pins the
+│    tree's current scene to a stand-in, since an earlier suite's Back
+│    button leaves the title there); pack_url strips query and
+│    fragment; plan_after_arrival; content_length reads the HEAD answer;
 │    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):
 │    user:// under the editor, the location seam, the banner's moment /
 │    players / seed, a game as banner + lines in the window's shape,
@@ -3480,9 +3482,16 @@ shandalar/
 │   │                          RELOAD_GUARD so the IDBFS sync lands) or
 │   │                          Later. On web with nothing stored it fetches
 │   │                          pack_url(location.href) — `skin/
-│   │                          original_skin.zip` beside the page — with
-│   │                          HTTPRequest.download_file, deleting a 404
-│   │                          page or a cut download so it is never
+│   │                          original_skin.zip` beside the page — a HEAD
+│   │                          for the size (content_length(); the web
+│   │                          client never knows a body's length), then
+│   │                          HTTPRequest.download_file into fetching.zip,
+│   │                          which _process renames to arriving.zip while
+│   │                          it is still being written: Godot 4.7 deletes
+│   │                          a finished download of unknown length on
+│   │                          completion (http_request.cpp, EOF branch
+│   │                          never sets download_complete). A 404 page
+│   │                          or a cut download is deleted so it is never
 │   │                          mounted; fetch_progressed feeds the title's
 │   │                          line
 │   ├── help/                THE HELP SCREEN — the main menu's Help button

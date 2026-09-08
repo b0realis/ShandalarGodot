@@ -7570,6 +7570,39 @@ while it comes. Whether the art is hosted at all stays the owner's call:
 `build_release.sh --web --skin` places the zip beside the page, plain
 `--web` removes an earlier one.
 
+**The fetch that vanished (found the same night, headless Firefox
+against the built page).** The zip arrived, the request reported
+success, and the file was gone: `exists=false` the frame after
+`downloaded=277089881`. Godot 4.7's `HTTPRequest::cancel_request()`
+deletes its `download_file` unless `download_complete` was set, and the
+branch that ends a body of UNKNOWN length — read to EOF, the
+`STATUS_DISCONNECTED` case of `STATUS_BODY` in
+`scene/main/http_request.cpp` — never sets it. On the web the length is
+always unknown: `platform/web/http_client_web.cpp` returns -1 on purpose
+(GH-47597, GH-79327: a browser's `content-length` is meaningless for a
+compressed answer). So every finished `download_file` on the web is
+deleted on completion and reported a success — an engine bug, worth an
+upstream report. Two things follow in `game/skin_pack.gd`:
+
+ * The download is written to `user://skin/fetching.zip`, and
+   `_process` renames it to `arriving.zip` as soon as the request has
+   opened it. A name is not an inode: the request keeps writing to the
+   renamed file, the deletion at the end finds nothing at the old name,
+   and `_on_fetched` renames the arrival to `original_skin.zip` once
+   `inspect` has passed it. Chunks go through `fwrite` a megabyte at a
+   time — larger than the C buffer, so nothing is held back that a rename
+   could lose. Native platforms know the length, never reach the branch,
+   and the rename is harmless there.
+ * The size for the title's percentage comes from a HEAD request first
+   (`content_length()`), since the body's own length is never known.
+
+Also found there: `_ready` called `set_process(false)` AFTER
+`_start_fetch` had turned processing on, so `fetch_progressed` never
+fired and the title's line never moved. Now `set_process(fetching)`.
+Checked by looking, twice: *"Fetching the 1997 art… 30%"* mid-way, the
+1997 title after the reload, and the second visit dressed from IndexedDB
+with no request at all.
+
 **The catalogue** (`tools/skin_catalogue.py` → `docs/skin-catalogue.txt`,
 shipped as `skin/SKIN.txt`) is generated, not typed, so it cannot drift:
 the names come off the importer's MANIFEST, the dimensions are measured
