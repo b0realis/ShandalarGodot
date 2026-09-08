@@ -33,10 +33,13 @@ extends Node
 ## which `FileAccess`, `DirAccess`, `Image.load_from_file`, `FontFile`
 ## and `AudioStreamWAV.load_from_file` all read `res://skin/x` straight
 ## out of it. Nothing is copied, nothing is decoded ahead of need, and
-## the SAME mechanism serves the desktop: the package ships both zips
-## beside the executable where it used to ship the loose files, and a
-## player who drops or chooses any skin zip keeps it. One contract,
-## every platform.
+## the SAME mechanism serves the desktop: the two zips sit beside the
+## executable where the package used to ship the loose files — the skin
+## zip a download of its own, the card art built by the player's own
+## scripts, since 2026-09-08 neither in the game's zip (the owner:
+## *"Cardart we dont release, only scripts to build it — licence"*) —
+## and a player who drops or chooses any skin zip keeps it. One
+## contract, every platform.
 ##
 ## THE CONTRACT. A zip has a top-level `skin/` folder and everything
 ## the catalogue (`skin/SKIN.txt`, `docs/skin-catalogue.txt`) lists
@@ -623,8 +626,11 @@ func _describe_packs() -> Dictionary:
 	return about
 
 
-## The words for whose a zip is, by [method source_of]'s answer.
-const WHOSE := {"yours": "your own", "shipped": "shipped with the game",
+## The words for whose a zip is, by [method source_of]'s answer. A zip
+## beside the executable is "beside the game", not "shipped with" it:
+## since 2026-09-08 the game's zip carries no art, and what sits there
+## the player put there.
+const WHOSE := {"yours": "your own", "shipped": "beside the game",
 	"mounted": "mounted", "forgotten": "forgotten, worn until the restart"}
 
 

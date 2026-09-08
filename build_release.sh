@@ -9,10 +9,15 @@
 #                                   #    into user://original_skin, so the
 #                                   #    exported build looks like the dev
 #                                   #    one (see below)
-#   ./build_release.sh --package    # + the zip a player unpacks and runs:
-#                                   #    skin/original_skin.zip,
-#                                   #    skin/cardart.zip and the
-#                                   #    catalogue, icon.png, shortcut.sh
+#   ./build_release.sh --package    # + the zip a player unpacks and runs
+#                                   #    (the game, the catalogue, icon.png,
+#                                   #    shortcut.sh, the tools — NO art),
+#                                   #    the skin zip beside it as its own
+#                                   #    download, the card art zip in
+#                                   #    ../shandalar-build/local/ (never
+#                                   #    released), and the unzipped folder
+#                                   #    left with both packs in its skin/
+#                                   #    as the owner's play copy
 #   ./build_release.sh --web        # the "Web" preset instead ->
 #                                   #    ../shandalar-build/web/index.html
 #                                   #    and its .wasm/.pck/.js beside it;
@@ -21,9 +26,12 @@
 #                                   #    .wasm). No threads, so any static
 #                                   #    host will do — see the preset's
 #                                   #    note in export_presets.cfg.example
-#   ./build_release.sh --web --skin # + skin/original_skin.zip and
-#                                   #    skin/cardart.zip beside the page,
-#                                   #    which the game fetches once
+#   ./build_release.sh --web --skin # + skin/original_skin.zip beside the
+#                                   #    page, which the game fetches once
+#   ./build_release.sh --web --skin --cardart
+#                                   # + skin/cardart.zip beside it too, for
+#                                   #    PLAYING THE PAGE LOCALLY — the card
+#                                   #    art is never hosted (see below)
 #
 # WHAT SHIPS, AND WHAT DOES NOT. The .pck carries game/, engine/, cards/
 # (scripts + cards/data/) and every deck under decks/ — about 5 MB. It
@@ -41,15 +49,29 @@
 # mounts in place at boot (`game/skin_pack.gd`): `skin/original_skin.zip`
 # (the 1997 material, 84 MB) and `skin/cardart.zip` (one picture per
 # card, 193 MB, from Scryfall and so on another licence) — beside the
-# executable in the package, beside `index.html` for the web build, or
-# chosen in Options > Skin / dropped on the running game's window on
-# either (a skin zip lands in `user://skins/`, a card pack in
-# `user://cardpacks/` where every zip is worn — the places and their
-# settings.cfg keys are `game/paths.gd`). Next to them goes
-# `skin/SKIN.txt`, the catalogue of everything
-# the zips hold (docs/skin-catalogue.txt), so a player can draw a skin
-# of their own. Whether the art is HOSTED online is the owner's call:
-# `--web --skin` places the zips, plain `--web` removes them.
+# executable, beside `index.html` for the web build, or chosen in
+# Options > Skin / dropped on the running game's window on either (a
+# skin zip lands in `user://skins/`, a card pack in `user://cardpacks/`
+# where every zip is worn — the places and their settings.cfg keys are
+# `game/paths.gd`). With them goes `skin/SKIN.txt`, the catalogue of
+# everything the zips hold (docs/skin-catalogue.txt), so a player can
+# draw a skin of their own.
+#
+# WHAT IS RELEASED, AND WHAT IS NOT (the owner, 2026-09-08: "separately
+# … Cardart we dont release, only scripts to build it — licence"). The
+# package zip carries the game and NO art: it is a 33 MB download (the
+# engine deflates well), and the two packs are not folded into it — a
+# zip inside a zip does not. The skin zip is its own
+# download beside the package (`pkg/original_skin.zip`), dropped into
+# the game's `skin/` folder or chosen in Options. The card art zip is
+# NEVER released: `--package` writes it to `../shandalar-build/local/`
+# for the owner's own play, and `tools/fetch_card_art.py` +
+# `tools/mtg_assets.py --from-cardart` are how a player builds their
+# own. Whether even the skin zip is hosted is the owner's call: `--web
+# --skin` places it beside the page, plain `--web` removes it, and
+# `--cardart` (with `--web --skin`) adds the card art beside the page
+# for a LOCAL serve only — a web folder with `skin/cardart.zip` in it
+# is not one to upload.
 #
 # THE ICON (2026-09-08). The package carries `icon.png` and a
 # `shortcut.sh` that writes a desktop entry pointing at the binary and
@@ -65,12 +87,14 @@ PRESET="Linux 64"
 LINK_SKIN=0
 PACKAGE=0
 WEB=0
+CARDART=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--out) OUT="$2"; shift 2 ;;
 		--preset) PRESET="$2"; shift 2 ;;
 		--skin) LINK_SKIN=1; shift ;;
 		--package) PACKAGE=1; shift ;;
+		--cardart) CARDART=1; shift ;;
 		--web) WEB=1; PRESET="Web"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/web"; shift ;;
 		-h|--help) sed -n '2,50p' "$0" | sed 's/^# \?//'; exit 0 ;;
 		*) echo "build_release: unknown argument '$1'" >&2; exit 3 ;;
@@ -78,6 +102,10 @@ while [ $# -gt 0 ]; do
 done
 if [ "$WEB" = 1 ] && [ "$PACKAGE" = 1 ]; then
 	echo "build_release: --package is the Linux build's; the web build is served, not unpacked" >&2
+	exit 3
+fi
+if [ "$CARDART" = 1 ] && { [ "$WEB" != 1 ] || [ "$LINK_SKIN" != 1 ]; }; then
+	echo "build_release: --cardart goes with --web --skin (the Linux play copy gets the card art on its own)" >&2
 	exit 3
 fi
 
@@ -99,41 +127,48 @@ LOG="${TMPDIR:-/tmp}/shandalar-export.log"
 # on their own disc, so a player's zips and the shipped ones are the
 # same shape. Symlinks are DEREFERENCED (`cp -RL`) on the way: the dev
 # skin can be a tree of links into this checkout, and a zip of links is
-# a zip of nothing. Beside them, the catalogue.
-skin_pack() {  # skin_pack DEST_DIR
-	local dest="$1" stage log
+# a zip of nothing. Each is written ONCE per build, to its own place —
+# the skin zip beside the package as a download of its own, the card
+# art zip under ../shandalar-build/local/ where nothing is uploaded
+# from — and copied to where a build wants it.
+skin_zip() {  # skin_zip DEST_FILE — the 1997 material, or nothing without assets/original
+	local out="$1" stage log
 	log="${TMPDIR:-/tmp}/shandalar-skin-zip.log"
+	rm -f "$out"
+	[ -d assets/original ] || return 0
+	mkdir -p "$(dirname "$out")"
 	stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-skin.XXXXXX")"
-	mkdir -p "$dest"
-	rm -f "$dest/original_skin.zip" "$dest/cardart.zip"
-	if [ -d assets/original ]; then
-		cp -RLp assets/original/. "$stage/" 2>/dev/null || true
-		find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
-		# Any pictures in the dev skin folder belong to the second zip.
-		rm -rf "$stage/cardart"
-		python3 tools/mtg_assets.py --from-skin "$stage" --out "$dest/original_skin.zip" \
-			> "$log" 2>&1 \
-			|| { echo "BUILD FAILED: the skin zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
-	fi
+	cp -RLp assets/original/. "$stage/" 2>/dev/null || true
+	# .import sidecars and the checkout's .gdignore are the editor's, not
+	# the skin's; any pictures in the dev skin folder belong to the
+	# second zip.
+	find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
+	rm -rf "$stage/cardart"
+	python3 tools/mtg_assets.py --from-skin "$stage" --out "$out" > "$log" 2>&1 \
+		|| { echo "BUILD FAILED: the skin zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
 	rm -rf "$stage"
-	if [ -d assets/cardart ]; then
-		stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-cardart.XXXXXX")"
-		cp -RLp assets/cardart/. "$stage/" 2>/dev/null || true
-		# .import sidecars and the checkout's .gdignore are the editor's,
-		# not the skin's.
-		find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
-		python3 tools/mtg_assets.py --from-cardart "$stage" --out "$dest/cardart.zip" \
-			> "$log" 2>&1 \
-			|| { echo "BUILD FAILED: the card art zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
-		rm -rf "$stage"
-	fi
-	cp -p docs/skin-catalogue.txt "$dest/SKIN.txt"
-	local said="" f
-	for f in original_skin.zip cardart.zip; do
-		[ -f "$dest/$f" ] && said="$said $f ($(du -h "$dest/$f" | cut -f1))"
-	done
-	echo "skin pack: $dest/ —${said:- nothing to zip} + SKIN.txt"
+	echo "skin zip: $out ($(du -h "$out" | cut -f1))"
 }
+
+cardart_zip() {  # cardart_zip DEST_FILE — the card pictures, or nothing without assets/cardart
+	local out="$1" stage log
+	log="${TMPDIR:-/tmp}/shandalar-cardart-zip.log"
+	rm -f "$out"
+	[ -d assets/cardart ] || return 0
+	mkdir -p "$(dirname "$out")"
+	stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-cardart.XXXXXX")"
+	cp -RLp assets/cardart/. "$stage/" 2>/dev/null || true
+	find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
+	python3 tools/mtg_assets.py --from-cardart "$stage" --out "$out" > "$log" 2>&1 \
+		|| { echo "BUILD FAILED: the card art zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
+	rm -rf "$stage"
+	echo "card art zip: $out ($(du -h "$out" | cut -f1)) — NOT a release file"
+}
+
+# Where the packs are built: the skin zip with the package, the card art
+# zip apart from everything that is uploaded.
+PKG_DIR="$(cd "$(dirname "$OUT")" && pwd)/pkg"
+LOCAL_DIR="$(cd "$(dirname "$OUT")" && pwd)/local"
 
 # Warm the import cache quietly (a cold checkout has no .godot/).
 timeout -k 5 900 "$GODOT" --headless --import . >/dev/null 2>&1 </dev/null || true
@@ -155,18 +190,26 @@ fi
 # template is JavaScript around a .wasm), so the check is that the three
 # files a page needs came out, and the sizes are printed for the hosting
 # question — the .wasm is the engine and gzips to a quarter. With
-# `--skin` the two zips go beside the page as `skin/original_skin.zip`
-# and `skin/cardart.zip` (the game fetches each it lacks from there,
-# once); without, any earlier ones are removed so a build without
-# `--skin` never hosts the art by accident.
+# `--skin` the skin zip goes beside the page as `skin/original_skin.zip`
+# with its catalogue (the game fetches it once if it lacks a skin);
+# `--cardart` adds `skin/cardart.zip` the same way, for a page served on
+# this machine only; without `--skin`, any earlier ones are removed so a
+# build without it never hosts the art by accident.
 if [ "$WEB" = 1 ]; then
 	for f in index.html index.js index.wasm index.pck; do
 		[ -s "$OUT/$f" ] || { echo "BUILD FAILED: no $f in $OUT" >&2; exit 1; }
 	done
+	rm -rf "$OUT/skin"
 	if [ "$LINK_SKIN" = 1 ]; then
-		skin_pack "$OUT/skin"
-	else
-		rm -rf "$OUT/skin"
+		mkdir -p "$OUT/skin"
+		skin_zip "$PKG_DIR/original_skin.zip"
+		[ -f "$PKG_DIR/original_skin.zip" ] && cp -p "$PKG_DIR/original_skin.zip" "$OUT/skin/"
+		cp -p docs/skin-catalogue.txt "$OUT/skin/SKIN.txt"
+		if [ "$CARDART" = 1 ]; then
+			cardart_zip "$LOCAL_DIR/cardart.zip"
+			[ -f "$LOCAL_DIR/cardart.zip" ] && cp -p "$LOCAL_DIR/cardart.zip" "$OUT/skin/"
+			echo "web: skin/cardart.zip is beside the page for a LOCAL serve — do not upload $OUT with it in"
+		fi
 	fi
 	echo "ok: $(du -sh "$OUT/index.wasm" | cut -f1) engine + $(du -sh "$OUT/index.pck" | cut -f1) pack in $OUT"
 	echo "serve it with: python3 -m http.server --directory $OUT 8000   # then open http://localhost:8000/"
@@ -208,16 +251,18 @@ echo "run it with: $BIN"
 
 # ---------------------------------------------------------------- package --
 #
-# EVERYTHING IN ONE ZIP, for a machine that has none of this. The .pck
-# carries the game and the decks but no art (docs/player-files.md), and the
-# art normally lives in the player's own `user://` folder — which does not
-# exist on somebody else's computer. So the package puts it BESIDE THE
-# EXECUTABLE as `skin/original_skin.zip` and `skin/cardart.zip`, where
-# `SkinPack` mounts them at boot: unzip the package, run, done — the
-# zips themselves stay zips.
+# THE GAME IN ONE ZIP, for a machine that has none of this — and the art
+# apart from it. The .pck carries the game and the decks but no art
+# (docs/player-files.md); the package carries the `skin/` folder with
+# only the catalogue in it, which is the door: `skin/original_skin.zip`
+# dropped there (its own download, written beside the package) is
+# mounted at the next start, and a card pack built with the tools goes
+# beside it as `skin/cardart.zip`. The staged folder the zip was made
+# from is then given both packs, so the owner has a copy to play
+# without assembling one; the zip has neither.
 if [ "$PACKAGE" = 1 ]; then
 	VERSION="$(sed -n 's/^config\/version="\(.*\)"/\1/p' project.godot)"
-	STAGE="$(dirname "$OUT")/pkg/Shandalar-$VERSION-linux64"
+	STAGE="$PKG_DIR/Shandalar-$VERSION-linux64"
 	rm -rf "$STAGE"
 	mkdir -p "$STAGE/skin"
 	cp -p "$BIN" "$OUT/Shandalar.pck" "$STAGE/"
@@ -289,8 +334,7 @@ LAB
 	chmod +x "$STAGE/deck_lab.sh"
 	cp -p tools/mtg_assets.py tools/import_original.py \
 	      tools/fetch_card_art.py tools/skin_catalogue.py "$STAGE/"
-	echo "packaging art..."
-	skin_pack "$STAGE/skin"
+	cp -p docs/skin-catalogue.txt "$STAGE/skin/SKIN.txt"
 	cat > "$STAGE/run.sh" <<'RUNNER'
 #!/usr/bin/env bash
 # Run the game from wherever this folder happens to be.
@@ -298,8 +342,18 @@ cd "$(dirname "$(readlink -f "$0")")"
 exec ./Shandalar.x86_64 "$@"
 RUNNER
 	chmod +x "$STAGE/run.sh"
-	ZIP="$(cd "$(dirname "$STAGE")" && pwd)/Shandalar-$VERSION-linux64.zip"
+	ZIP="$PKG_DIR/Shandalar-$VERSION-linux64.zip"
 	rm -f "$ZIP"
-	(cd "$(dirname "$STAGE")" && zip -qr "$ZIP" "$(basename "$STAGE")")
-	echo "package: $ZIP ($(du -h "$ZIP" | cut -f1))"
+	(cd "$PKG_DIR" && zip -qr "$ZIP" "$(basename "$STAGE")")
+	echo "package: $ZIP ($(du -h "$ZIP" | cut -f1)) — the game, no art"
+	# The packs: the skin zip as a download of its own, the card art
+	# where nothing is released from, and both into the play copy.
+	echo "packaging art..."
+	skin_zip "$PKG_DIR/original_skin.zip"
+	cardart_zip "$LOCAL_DIR/cardart.zip"
+	for f in "$PKG_DIR/original_skin.zip" "$LOCAL_DIR/cardart.zip"; do
+		[ -f "$f" ] && cp -p "$f" "$STAGE/skin/"
+	done
+	echo "release files: $ZIP + $PKG_DIR/original_skin.zip"
+	echo "play copy (both packs in skin/, not for release): $STAGE/"
 fi

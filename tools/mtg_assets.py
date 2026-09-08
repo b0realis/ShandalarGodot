@@ -193,7 +193,9 @@ WHAT IT DOES NOT PRODUCE
       python3 fetch_card_art.py --out cardart/
       python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
 
-  and cardart.zip goes beside original_skin.zip.
+  and cardart.zip goes beside original_skin.zip. It is never shipped —
+  the pictures are Scryfall's, on a licence of their own — so a release
+  carries these two scripts and what they make is yours.
 
 TRY IT
 

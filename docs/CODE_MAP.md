@@ -1725,27 +1725,42 @@ shandalar/
 │                              smoke-boot (a browser does that), checks
 │                              index.html/.js/.wasm/.pck came out, prints
 │                              their sizes and the one-line static server.
-│                              THE SKIN PACK (2026-09-08): skin_pack()
-│                              stages assets/original (minus cardart/) and
-│                              assets/cardart as real files and writes TWO
-│                              zips through tools/mtg_assets.py:
-│                              `original_skin.zip` (--from-skin, the shape
-│                              a player's own disc produces, ~84 MB) and
-│                              `cardart.zip` (--from-cardart, the Scryfall
-│                              crops under skin/cardart/, ~190 MB — apart
-│                              since 2026-09-08, "the skin assets should
-│                              be a separate zip, card art pack should be
-│                              separate"), beside a copy of
-│                              docs/skin-catalogue.txt as SKIN.txt.
-│                              --package puts the three in skin/ next to
-│                              the binary, plus icon.png (game/icon.png)
-│                              and shortcut.sh, the opt-in desktop entry
-│                              (~/.local/share/applications/
-│                              shandalar.desktop, --remove undoes it);
-│                              --web --skin puts them beside index.html
-│                              for SkinPack to fetch, plain --web removes
-│                              an earlier skin/ so the art is never hosted
-│                              by accident. --web --package is refused
+│                              THE SKIN PACKS (2026-09-08): skin_zip()
+│                              stages assets/original (minus cardart/),
+│                              cardart_zip() assets/cardart, as real files,
+│                              and each writes its zip through
+│                              tools/mtg_assets.py: `original_skin.zip`
+│                              (--from-skin, the shape a player's own disc
+│                              produces, ~84 MB) and `cardart.zip`
+│                              (--from-cardart, the Scryfall crops under
+│                              skin/cardart/, ~190 MB — apart since
+│                              2026-09-08, "the skin assets should be a
+│                              separate zip, card art pack should be
+│                              separate"). WHAT IS RELEASED (the owner,
+│                              the same day: "Cardart we dont release,
+│                              only scripts to build it — licence"):
+│                              --package writes the game zip
+│                              (pkg/Shandalar-<ver>-linux64.zip: binary,
+│                              pck, skin/SKIN.txt — the catalogue —
+│                              icon.png (game/icon.png), shortcut.sh, the
+│                              opt-in desktop entry (~/.local/share/
+│                              applications/shandalar.desktop, --remove
+│                              undoes it), run.sh, the tools; NO art),
+│                              then the skin zip beside it as its own
+│                              download (pkg/original_skin.zip) and the
+│                              card art zip under ../shandalar-build/
+│                              local/, from where nothing is uploaded,
+│                              and copies both into the staged folder's
+│                              skin/ so it is the owner's play copy —
+│                              the zip made before that has neither.
+│                              --web --skin puts the skin zip and the
+│                              catalogue beside index.html for SkinPack
+│                              to fetch; --web --skin --cardart the card
+│                              art too, for a page served locally only;
+│                              plain --web removes an earlier skin/ so
+│                              the art is never hosted by accident.
+│                              --web --package is refused, --cardart
+│                              without --web --skin too
 ├── decks/                   Shipped five-style gauntlet (.deck files —
 │   │                          format in DeckLab/README.md); a CI test
 │   │                          keeps every deck valid vs the card pool.
@@ -3703,7 +3718,7 @@ shandalar/
 │   │                          status_line() are the Options rows' words
 │   │                          ("Skin: <path> — 235 files, your own";
 │   │                          "Card folder: <path> — cardart.zip (1795
-│   │                          pictures, shipped with the game)"; "Skin:
+│   │                          pictures, beside the game)"; "Skin:
 │   │                          none — <folder> is not there" when the
 │   │                          folder switch is on), mounted zips first,
 │   │                          loose folders after. adopt(path) is a drop

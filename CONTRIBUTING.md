@@ -59,10 +59,18 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   that index.html/.js/.wasm/.pck came out; nothing boots headless there,
   a browser does that (`python3 -m http.server --directory
   ../shandalar-build/web`). `--web --skin` writes the skin zip and its
-  catalogue beside the page (`web/skin/`) for the page to fetch;
-  `--package` is the Linux build's (`--skin --package` stages
-  `skin/original_skin.zip` + `skin/cardart.zip` + `SKIN.txt`, `icon.png`
-  and `shortcut.sh` into the zip). Since 2026-09-08 a built game mounts
+  catalogue beside the page (`web/skin/`) for the page to fetch, and
+  `--web --skin --cardart` the card art too, for a page served on this
+  machine only; `--package` is the Linux build's, and since the owner's
+  ruling of 2026-09-08 ("Cardart we dont release, only scripts to build
+  it — licence") it writes THREE things: the game zip
+  (`pkg/Shandalar-<ver>-linux64.zip` — the game, `skin/SKIN.txt`,
+  `icon.png`, `shortcut.sh`, the tools, NO art), the skin zip beside it
+  (`pkg/original_skin.zip`, a release download of its own) and the card
+  art zip where nothing is uploaded from (`../shandalar-build/local/
+  cardart.zip`, never a release asset); the staged folder the game zip
+  was made from is left with both packs in its `skin/` as the play
+  copy. A release is the first two files. Since 2026-09-08 a built game mounts
   the skin as TWO zips (`SkinPack`, `load_resource_pack`): the 1997
   material and, apart, the card art — a zip's kind is what it holds,
   not its name. A player chooses either in Options → Skin, or drops it

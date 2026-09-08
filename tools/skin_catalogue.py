@@ -302,8 +302,12 @@ resource tree and a stray file would land among the game's scripts.
 
 WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
   * Beside the game: <the game's folder>/skin/original_skin.zip and
-    <the game's folder>/skin/cardart.zip. The packaged builds ship
-    them there.
+    <the game's folder>/skin/cardart.zip. Neither is in the game's
+    own zip: the skin zip is a download of its own beside it, to be
+    put there (or chosen, below); the card art is nobody's to ship —
+    the pictures are Scryfall's — and is built by the scripts in the
+    game's folder (fetch_card_art.py, then mtg_assets.py
+    --from-cardart) in a few minutes.
   * Chosen in Options > Skin: the Skin row says which zip dresses the
     game now, by its path, and its Choose... button opens a file box.
     A skin zip chosen is copied into the game's skins folder
@@ -328,9 +332,10 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
   * A zip of your own (chosen, dropped or fetched) has precedence over
     the one beside the game. One chosen on the title screen shows at
     once; one chosen anywhere else shows from the next start.
-  * In a browser: the same choosing and dropping, or the zips served
-    beside the page as skin/original_skin.zip and skin/cardart.zip,
-    which the game fetches once and keeps.
+  * In a browser: the same choosing and dropping, or a skin zip served
+    beside the page as skin/original_skin.zip (and, on a page served
+    on your own machine, skin/cardart.zip), which the game fetches
+    once and keeps.
   * A loose folder still works too: <the game's folder>/skin/ with the
     same files unzipped, or the skin folder, user://original_skin/
     (what import_original.py fills). The game looks in the skin

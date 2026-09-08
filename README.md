@@ -121,11 +121,13 @@ The browser wears the art the same way the desktop does — as **two
 zips** mounted in place: `original_skin.zip` (the 1997 material) and
 `cardart.zip` (the card pictures). Choose either in *Options → Skin* or
 drop it on the page, and the game keeps it (in the browser's own
-storage, across visits); or serve them beside the page as
-`skin/original_skin.zip` and `skin/cardart.zip` and the game fetches
-each it lacks, once — `./build_release.sh --web --skin` places them
-there, plain `--web` never does. Whether the 1997 graphics are hosted
-anywhere is the owner's call, not the build's.
+storage, across visits); or serve the skin zip beside the page as
+`skin/original_skin.zip` and the game fetches it once if it lacks a
+skin — `./build_release.sh --web --skin` places it there, plain `--web`
+never does. Whether the 1997 graphics are hosted anywhere is the
+owner's call, not the build's; the card art is never hosted (`--web
+--skin --cardart` puts `skin/cardart.zip` beside the page for a serve
+on your own machine only — see below).
 
 ## The art, and how to reconstruct it
 
@@ -147,7 +149,9 @@ python3 tools/mtg_assets.py --install /path/to/game  # imports, writes a zip
 frames and mana symbols, portraits, fonts, sounds, the card database and the
 coin-toss movies — so a partial install tells you exactly which parts stay
 drawn. `--install` writes one archive whose inner folder is `skin/` — a
-**skin zip**, which the game mounts as it is: put it beside the executable
+**skin zip**, which the game mounts as it is — the same shape as the
+`original_skin.zip` a release offers as its own download beside the
+game: put it beside the executable
 as `skin/original_skin.zip`, choose it in *Options → Skin* (it is kept in
 the game's `skins/` folder under its own name and worn from then on), or
 drop it onto the running game's window — a tar.gz at any of these doors
@@ -212,7 +216,11 @@ and on another licence; it goes beside the executable as
 `skin/cardart.zip`, or through the same *Options → Skin* row and drop
 into the **card folder** (`user://cardpacks/`), where every zip is worn —
 one per card set, as many as you like, the first to hold a picture
-winning.
+winning. **The card pack is never a release file and never hosted** —
+the pictures are Scryfall's, on their own licence — so a release ships
+these two scripts and nothing they fetch; `build_release.sh --package`
+writes the pack to `../shandalar-build/local/` for play on this
+machine, and the game zip that goes up carries no art at all.
 
 ### 3. Everything else
 

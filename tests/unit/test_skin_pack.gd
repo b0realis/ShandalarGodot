@@ -590,7 +590,7 @@ func test_the_status_lines_say_what_dresses_the_game() -> void:
 		"Skin: /home/me/.local/share/godot/app_userdata/Shandalar/skins/original_skin.zip — 235 files, your own")
 	assert_eq(SkinPack.status_line("skin",
 		{"source": "shipped", "name": "/opt/shandalar/skin/original_skin.zip", "files": 1}),
-		"Skin: /opt/shandalar/skin/original_skin.zip — 1 file, shipped with the game")
+		"Skin: /opt/shandalar/skin/original_skin.zip — 1 file, beside the game")
 	assert_eq(SkinPack.status_line("skin",
 		{"source": "folder", "name": "/home/me/original_skin", "files": 236}),
 		"Skin: a loose folder, /home/me/original_skin — 236 files")
@@ -614,7 +614,7 @@ func test_the_status_lines_say_what_dresses_the_game() -> void:
 			{"name": "cardart.zip", "files": 1795, "source": "shipped"}]}),
 		"Card folder: %s — cardart.zip (1795 pictures, your own); " % folder
 		+ "more.zip (1 picture, forgotten, worn until the restart); "
-		+ "cardart.zip (1795 pictures, shipped with the game)")
+		+ "cardart.zip (1795 pictures, beside the game)")
 
 
 func test_the_rows_read_the_mounted_zips_first_and_the_folders_after() -> void:

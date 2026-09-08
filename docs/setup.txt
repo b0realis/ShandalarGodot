@@ -25,12 +25,9 @@ your home directory.
 
     Shandalar.x86_64     the game
     Shandalar.pck        its code, the 897 cards' rules, and 317 decks
-    skin/original_skin.zip   the 1997 art, as one zip the game reads
-                             in place — never unpacked
-    skin/cardart.zip     the card pictures, a second zip read the same
-                         way (apart, because it is twice the size and
-                         from another source)
-    skin/SKIN.txt        the catalogue: every file the zips hold, its
+    skin/                the art's folder, EMPTY BUT FOR THE CATALOGUE:
+                         the art is not in this zip (see below)
+    skin/SKIN.txt        the catalogue: every file a skin holds, its
                          format, size and name, for drawing a skin of
                          your own
     icon.png             the game's icon
@@ -42,10 +39,26 @@ your home directory.
     DECKLAB.md           its manual
     setup.txt            this file
 
-The .pck holds no art of any kind. Art is read off the filesystem at
-runtime — out of the zip, or loose files beside it — which is what makes
+The .pck holds no art of any kind, and neither does this zip: the game
+is one download, the art another. Art is read off the filesystem at
+runtime — out of a zip, or loose files beside it — which is what makes
 the skin swappable: drop another skin zip onto the game's window and it
-is kept (section 3).
+is kept (section 3). The two zips the game wears:
+
+    original_skin.zip    the 1997 art (84 MB) — a separate download
+                         where you got this one. Put it in skin/ beside
+                         the game, or choose it in Options > Skin, or
+                         drop it on the window; the game reads it in
+                         place, never unpacked.
+    cardart.zip          the card pictures (193 MB). NOT downloadable
+                         here — the pictures are Scryfall's, on their
+                         own licence — but built in a few minutes by
+                         the two scripts in this folder (section 4).
+                         Goes in skin/ beside the game the same way, or
+                         in the card folder.
+
+Without the first the game wears its own plain skin; without the second
+every card draws with a clean placeholder. Both are playable.
 
 
 ---------------------------------------------------------------------
@@ -79,6 +92,7 @@ ART IS SEARCHED IN FOUR PLACES, FIRST MATCH WINS:
     3. the mounted zips                  your skin zip, then every card
                                          pack, then <this folder>/skin/
                                          original_skin.zip and cardart.zip
+                                         if you put them there
     4. (a development checkout's assets/original/, not present here)
 
 So anything you put in (1) or (2) overrides what shipped in (3). Portraits
@@ -170,8 +184,10 @@ into Save As, with the new name already filled in.
 4. CARD ART — THE ONE THING YOU COLLECT YOURSELF
 ---------------------------------------------------------------------
 
-897 cards. The art is not in the 1997 install in any usable form, so it
-is downloaded from Scryfall by a script that ships beside this file:
+897 cards. The art is not in the 1997 install in any usable form, and
+it is not shipped with the game either — the pictures are Scryfall's,
+on a licence of their own, so what ships is the script that fetches
+them, beside this file:
 
     python3 fetch_card_art.py --out cardart/
     python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
@@ -181,10 +197,10 @@ minutes (it is deliberately polite to the API — about eight requests a
 second), it SKIPS what it already has, so an interrupted run just carries
 on where it stopped, and it prints what it could not fetch rather than
 stopping. The second line zips the folder the way the game reads it —
-a card pack: choose it in Options > Skin, drop it on the window, or put
-it in the card folder yourself (section 3). The same two lines make a
-pack for a card set of the future, too: the game wears every pack in
-the folder.
+a card pack: choose it in Options > Skin, drop it on the window, put it
+in skin/ beside the game as skin/cardart.zip, or in the card folder
+(section 3). The same two lines make a pack for a card set of the
+future, too: the game wears every pack in the folder.
 
 Without it, cards draw with a clean placeholder and are perfectly
 playable — every name, cost, type, rules text and picture frame is there,
@@ -195,8 +211,8 @@ only the illustration is missing.
 5. BUILDING THE ART ARCHIVE FROM YOUR OWN 1997 DISC
 ---------------------------------------------------------------------
 
-If you own the original and would rather import it yourself than use the
-zip that shipped here:
+If you own the original and would rather import it yourself than use
+the original_skin.zip download:
 
     python3 mtg_assets.py                          explains what it needs
     python3 mtg_assets.py --check   /path/to/game  looks, reports, writes nothing
@@ -204,7 +220,7 @@ zip that shipped here:
 
 It reads your install and never writes to it. The zip it produces is a
 skin zip — a `skin/` folder inside — so choose it in Options > Skin, drop
-it onto the game's window, or put it where the shipped one is:
+it onto the game's window, or put it where the download goes:
 
     cp shandalar-art.zip <this folder>/skin/original_skin.zip
 

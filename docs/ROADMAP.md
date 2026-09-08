@@ -7787,6 +7787,28 @@ can create new skins if they wish!"*).**
    folder and the two libraries at scratch through the keys, remembered
    and put back.
 
+**What is released, and what is not (2026-09-08).** The owner, asked
+why the Linux package was 310 MB (it always had been: 193 MB of card
+art, 84 MB of skin, 73 MB of engine, 5.5 MB of game — zips inside a
+zip do not compress): *"Yes 1 - separately. (Cardart we dont release,
+only scripts to build it!!!! - licence)."* So `build_release.sh
+--package` now writes THREE things and a release is two of them: the
+game zip (`pkg/Shandalar-<ver>-linux64.zip`, 33 MB — binary, pck,
+`skin/SKIN.txt`, icon, shortcut, run.sh, the tools, NO art), the skin
+zip beside it as a download of its own (`pkg/original_skin.zip`,
+84 MB; whether it is hosted stays the owner's call), and the card art
+zip where nothing is uploaded from (`../shandalar-build/local/
+cardart.zip`, NEVER a release asset — the pictures are Scryfall's, on a
+licence of their own, and what ships is `fetch_card_art.py` +
+`mtg_assets.py --from-cardart`, which build it in minutes). The staged
+folder the game zip was made from is then given both packs in its
+`skin/`, so the owner has a play copy without assembling one; the zip
+has neither. The web build's `--skin` places only the skin zip beside
+the page; a new `--cardart` adds the card art for a page served on
+this machine, and the script says so in its output. `setup.txt`,
+`SKIN.txt`, `README.md`, `player-files.md`, `CONTRIBUTING.md` and the
+tools' own advice all say where each zip now comes from.
+
 ## THE INSTANT WINDOWS (2026-09-08) — [QoL]
 
 *"During playtesting i found a bug: i have an instant like 'lightning
