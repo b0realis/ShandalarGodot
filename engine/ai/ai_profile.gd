@@ -178,6 +178,21 @@ var fits_auras := true
 ## start. A knob only so the Deck Lab can run the null.
 var mulligans := true
 
+## THE TRIBUTE: when a card makes this profile give up one of its own —
+## The Abyss at its upkeep, a Lord of the Pit's or a Lich's tribute, a
+## Mana Vortex's land, an Elder Spawn's Island, a Sylvan Library's extra
+## draw — does it give up the LEAST valuable? Until 2026-09-08 the
+## answer to every such ask was the card the seat valued MOST
+## ([method AiPlayer.answer_card] priced every card ask as a gain), so
+## an AI under The Abyss fed it a Serra Angel and kept the Bears beside
+## it, and a Lord of the Pit ate its master's best creature every turn.
+## On, an ask that is a loss — the candidates all its own, the prompt a
+## sacrifice, a destruction or a discard — is answered with the cheapest
+## body ([method AiPlayer._own_value]) or card. On for EVERY profile,
+## like [member minds_pain]: feeding the Abyss your Angel is not a weak
+## play, it is no play. A knob only so the Deck Lab can run the null.
+var feeds_worst := true
+
 ## THE COUNT: does this profile size a card-advantage spell to the hands
 ## and libraries in front of it? On, an X discard is cast for the cards
 ## its target actually holds and waits while they hold none; an X draw is

@@ -76,21 +76,27 @@ override any knob on any preset for a measurement
 | `minds_pain` | on | on | on | on | a City of Brass is not a Plains; on everywhere (see below) |
 | `fits_auras` | on | on | on | on | hangs a friendly aura only on a creature it gives something to — no vigilance on a Wall; on everywhere, for the same reason |
 | `mulligans` | on | on | on | on | judges the opening hand under the Paris rule by its lands (`AiMulligan`: none, all, too few or too many for the hand's size, or lands that cast none of its spells; nothing below four cards goes back); on everywhere — keeping a no-land seven is a malfunction, not a weakness |
+| `feeds_worst` | on | on | on | on | asked which of its own to give up when the giving is no cost it chose — The Abyss's meal, Lord of the Pit's tribute, Mana Vortex's land, a Sylvan Library's discard — it gives the least valuable, not the best; on everywhere, the same reason |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 
-`minds_pain`, `fits_auras` and `mulligans` are the three knobs that are
-on at every rung, and the reason is the line between weak and broken: an
-Apprentice that taps City of Brass for its last life to cast a Grizzly
-Bears is not a worse player, it is a malfunction — and so is one that
-puts Eternal Warrior on a Wall of Swords, or keeps a seven with no land
-in it (the owner's playtests, 2026-09-08). They are knobs only so the
-Deck Lab can run the null; with `mulligans` off the pilot falls back to
-`DecisionAgent`'s plain rule, which throws back only the two hands the
-1997 game named — no land, all land — down to the same floor of four.
+`minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` are the four
+knobs that are on at every rung, and the reason is the line between weak
+and broken: an Apprentice that taps City of Brass for its last life to
+cast a Grizzly Bears is not a worse player, it is a malfunction — and so
+is one that puts Eternal Warrior on a Wall of Swords, or keeps a seven
+with no land in it (the owner's playtests, 2026-09-08), or feeds its
+Serra Angel to The Abyss with a Grizzly Bears standing beside it (The
+Deck's third pass, the same day: every "choose one of yours to lose"
+that is not a cost the pilot chose to pay was answered with its BEST
+card, because the one answer for card questions was written for the
+tutors). They are knobs only so the Deck Lab can run the null; with
+`mulligans` off the pilot falls back to `DecisionAgent`'s plain rule,
+which throws back only the two hands the 1997 game named — no land, all
+land — down to the same floor of four.
 
 The Apprentice's `counter_threshold` is in brackets because it never
 reads it — with `holds_instants` off there is no counterspell to price.
@@ -159,7 +165,15 @@ pass (2026-09-07) is four of the capabilities: The Deck playable
 against the five starters went from 12.7% to 40.3%. The third pass
 (2026-09-08) re-measured that with the mulligan on — 40.1% — and added
 `animates_to_attack`, a wash on the totals with the wasted animations
-gone (29 of 834 before, 0 of 808 after, in the census).
+gone (29 of 834 before, 0 of 808 after, in the census). `feeds_worst`
+is measured from the other seat — it is the STARTERS that face The
+Deck's Abyss — and every one of the five gains against it with the knob
+on (+2.3, +2.0, +2.0, +0.3, +1.0; 26 games flipped to a win against 3
+flipped away, of 1 500), which is to say The Deck's own rate against the
+field drops by about a point and a half now that its Abyss is fed a
+Llanowar Elves instead of a War Mammoth. The starter matrix is
+byte-identical with the knob on and off: no starter owns a card that
+asks the question.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -179,7 +193,8 @@ Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
   pass). And no rung animates a Factory to BLOCK on the opponent's turn.
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
-  (the way `minds_pain`, `fits_auras` and `mulligans` did) goes on everywhere;
+  (the way `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` did)
+  goes on everywhere;
   anything that is a layer of play stays a rung.
 - The 1997 adventure's difficulty (gold, deck minimum, life, the creature
   bonus, Arzakon's 100/200/300/400) is not a duel-profile matter and is

@@ -5060,14 +5060,18 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 ## the card sorted from its controller's point of view), when the first is
 ## the answer — or the list is what a COST eats ([member
 ## PlayerChoice.is_cost]: "sacrifice a creature" for a Fallen Angel pump
-## or a Sacrifice spell), when the LEAST valuable body goes.
-func answer_card(game: MtgGame, _p_pid: int, candidates: Array[CardInstance],
-		_prompt: String) -> CardInstance:
+## or a Sacrifice spell), or a TRIBUTE ([method _tribute_ask]: The Abyss,
+## a Lord of the Pit, a Mana Vortex — the same loss without the cost
+## flag; [member AiProfile.feeds_worst]), when the LEAST valuable goes.
+func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
+		prompt: String) -> CardInstance:
 	var asked := current_choice()
 	if asked != null and (asked.adverse or asked.ordered) \
 			and not candidates.is_empty():
 		return candidates[0]
 	var paying := asked != null and asked.is_cost
+	var tribute := not paying and profile.feeds_worst \
+		and _tribute_ask(p_pid, candidates, prompt)
 	var best: CardInstance = null
 	for inst in candidates:
 		if best == null:
@@ -5078,6 +5082,51 @@ func answer_card(game: MtgGame, _p_pid: int, candidates: Array[CardInstance],
 			# so the two cannot disagree about which land goes.
 			if _own_value(game, inst) < _own_value(game, best):
 				best = inst
+		elif tribute:
+			if _tribute_value(game, inst) < _tribute_value(game, best):
+				best = inst
 		elif Evaluator.card_value(inst.data) > Evaluator.card_value(best.data):
 			best = inst
 	return best
+
+
+## THE TRIBUTE (2026-09-08, AiProfile.feeds_worst): is this card ask a
+## LOSS for the seat answering it — one of its own to sacrifice, to be
+## destroyed, or to discard — rather than the gain every other card ask
+## is (a tutor, a Regrowth, a Reanimate)? Read off the two things every
+## such ask shares: the candidates are all the seat's own, and the line
+## it is asked with says what happens to the one it names. The words are
+## [constant TRIBUTE_WORDS], the vocabulary of the pool's own prompts
+## ("Sacrifice a creature to Lord of the Pit", "The Abyss: choose a
+## nonartifact creature to be destroyed", "Select card drawn this turn
+## to discard."); an ask an OPPONENT answers about our cards (Demonic
+## Hordes' "Choose a land for X's controller to sacrifice") fails the
+## first test and stays the gain it is for them.
+func _tribute_ask(p_pid: int, candidates: Array[CardInstance], prompt: String) -> bool:
+	if candidates.is_empty():
+		return false
+	var loss := false
+	for word in TRIBUTE_WORDS:
+		if prompt.findn(word) >= 0:
+			loss = true
+			break
+	if not loss:
+		return false
+	for inst in candidates:
+		if inst.controller_id != p_pid:
+			return false
+	return true
+
+
+## The words a card ask uses when the card named is lost by the seat
+## naming it. Matched case-blind, anywhere in the prompt.
+const TRIBUTE_WORDS: Array[String] = ["sacrifice", "destroy", "discard", "bury"]
+
+
+## What a tribute costs the seat: a permanent by [method _own_value] (a
+## land's scarcity and colour counted, the way a cost's sacrifice prices
+## it), a card in hand by [method Evaluator.card_value].
+func _tribute_value(game: MtgGame, inst: CardInstance) -> float:
+	if inst.zone == Mtg.Zone.BATTLEFIELD:
+		return _own_value(game, inst)
+	return Evaluator.card_value(inst.data)

@@ -1051,6 +1051,14 @@ shandalar/
 │   │   │                      judged by AiMulligan, on for EVERY profile
 │   │   │                      like fits_auras — a knob only for the
 │   │   │                      Deck Lab's null.
+│   │   │                      feeds_worst (2026-09-08): THE TRIBUTE —
+│   │   │                      asked which of its own to lose when the
+│   │   │                      loss is no cost it chose (The Abyss's meal,
+│   │   │                      Lord of the Pit, Mana Vortex, a Sylvan
+│   │   │                      Library's discard), the pilot gives its
+│   │   │                      least valuable; AiPlayer.answer_card used
+│   │   │                      to give its BEST, the tutors' answer. On
+│   │   │                      for every profile like mulligans.
 │   │                      combat_search_nodes is the CRACK-BACK SEARCH's
 │   │                      leaf budget, 0 for a profile that does not look
 │   │                      past its own combat (Apprentice and Magician 0,
@@ -3359,6 +3367,15 @@ shandalar/
 │    the log and the journal as it found them, and surviving inside a
 │    search already open; the ladder from Sorcerer up; the knob read by
 │    the Lab
+│    tests/ai/test_ai_feeds_worst_2026_09_08.gd — THE TRIBUTE
+│    (AiProfile.feeds_worst): The Abyss fed the Bears and the null
+│    feeding the Angel, a pro-black Knight no choice at all; Lord of
+│    the Pit's tribute the Bears, the null's the Angel; the reading —
+│    a sacrifice, the Abyss's line and a Sylvan Library's discard read
+│    as losses, a tutor's and a Regrowth's as gains, Demonic Hordes'
+│    enemy naming OUR land as its gain; a land tribute priced by the
+│    own ledger (the fifth Forest before the only Island under a
+│    Counterspell); on at every rung; the knob read by the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see
