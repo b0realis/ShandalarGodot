@@ -85,7 +85,7 @@ cards of the eight 1997 sets, one documented file each, no stubs left.
 **M4 — AI: attacking, blocking and casting audited and measured.**
 **317 decks** ported with their provenance recorded.
 
-Verified by **4930 tests / ~135 000 assertions** across 283 scripts, running
+Verified by **4978 tests / ~135 000 assertions** across 286 scripts, running
 headless, plus a duel soak that plays whole games through the live UI.
 Adventure mode (M5) is next — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -150,8 +150,10 @@ drawn. `--install` writes one archive whose inner folder is `skin/` — a
 **skin zip**, which the game mounts as it is: put it beside the executable
 as `skin/original_skin.zip`, choose it in *Options → Skin* (it is kept in
 the game's `skins/` folder under its own name and worn from then on), or
-drop it onto the running game's window. Nothing is unpacked. Would you
-rather have loose files? `tools/import_original.py --source /path/to/game`
+drop it onto the running game's window — a tar.gz at any of these doors
+(`skin/original_skin.tar.gz` beside the executable too) is repacked into
+a zip of its name once, since only a zip can be mounted.
+Nothing is unpacked. Would you rather have loose files? `tools/import_original.py --source /path/to/game`
 fills the **skin folder** (`user://original_skin/`) instead, and *Use the
 skin folder instead of the zip* on the same screen wears it alone.
 
@@ -263,7 +265,7 @@ given away for free.
 most literal sense: a genuinely free engine, with no runtime fee, no seat, no
 licence server and no company able to change the terms afterwards — which is
 exactly what a project that intends to still be here in ten years needs. Its
-headless mode is why an entire rules engine and 4930 tests run in seconds in
+headless mode is why an entire rules engine and 4978 tests run in seconds in
 a terminal; its Compatibility renderer is why a 1997 game's look runs on the
 kind of machine people actually have; and GDScript is why a card is a
 readable twenty-line file instead of a build system. Thank you for building

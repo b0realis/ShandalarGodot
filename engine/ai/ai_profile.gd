@@ -154,6 +154,19 @@ var casts_timed_spells := false
 ## only so the Deck Lab can run the null.
 var minds_pain := true
 
+## THE HOST: does this profile hang a friendly aura only on a creature
+## that gets something from it? On, what the aura grants is read off
+## its own words ([method EffectIntent.aura_gifts]) and a host that has
+## the keyword already, or is offered an attacker's gift (vigilance,
+## fear, landwalk, unblockability) while it cannot attack, is passed
+## over ([method EffectIntent.aura_fits]); with no fitting host the
+## aura waits in hand. The owner's playtest (2026-09-08): *"the AI put
+## 'eternal warrior' aura - vigilance on the wall - this is complete
+## nonsense!"* On for EVERY profile, like [member minds_pain]: vigilance
+## on a Wall is not a weak play, it is no play. A knob only so the Deck
+## Lab can run the null.
+var fits_auras := true
+
 ## THE COUNT: does this profile size a card-advantage spell to the hands
 ## and libraries in front of it? On, an X discard is cast for the cards
 ## its target actually holds and waits while they hold none; an X draw is

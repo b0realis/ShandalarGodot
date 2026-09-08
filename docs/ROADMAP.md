@@ -7748,6 +7748,37 @@ can create new skins if they wish!"*).**
    and `setup.txt` (where the keys and the tools are explained), and
    Forget my zips is built only in a browser — on a desktop the row
    names the folder, and deleting the zip there is the same thing.
+   **The tar at the door** (the owner, twice: *"Can we also use tar.gz
+   instead of zip on linux?"*, *"Can we use also tar.gz not only zip?
+   As an alternative for card packs and original skin file?"*): the
+   engine mounts zips and pcks and nothing else, so a tar — plain or
+   gzipped, known by its bytes, not its name — arriving at any door
+   (chosen, dropped, read in by a browser) is repacked ONCE into a zip
+   of the same name in the folder of its kind (`cards.tar.gz` →
+   `cardpacks/cards.zip`) by `game/tar_pack.gd`, a 4 MB chunk a frame
+   with the transfer line saying *"Repacking cards.tar.gz… 37%"* — the
+   193 MB card art in ~4 s with the screen alive — and from there it is
+   that zip: inspected, homed, mounted, refused by the same words. The
+   player's tar is left where it was; the shipped packs stay zips
+   (mounted in place, no repack). The owner, on seeing the repack:
+   *"(Why repacking to tar.gz - the design should be that we can use
+   and read either archive - repackage should be left to the users
+   wishes)"* — the game does read either: the repack is its own copy,
+   made once, the way a chosen zip is copied into `skins/`; the
+   player's archive is never changed or moved. A gzip stream has no
+   random access, so reading a `.tar.gz` in place would mean inflating
+   84–193 MB at every start or holding it in memory, and Godot mounts
+   nothing but zips and pcks. So the door was made complete instead:
+   beside the executable too, `skin/original_skin.tar.gz` (or `.tgz`,
+   `.tar`) and `skin/cardart.tar.gz` where the zips are looked for are
+   repacked at the first start with no zip of that kind
+   (`SkinPack.repack_beside`, one kind after the other, the title's
+   transfer line showing it) into the player's folder, read from there
+   after, the tar not touched. `mtg_assets.py --out x.tar.gz` writes
+   a tar.gz, `skin_catalogue.py --check` reads one. Tests:
+   `tests/unit/test_tar_pack.gd` (tars written by hand, no `tar` on the
+   path needed) and the skin pack's door tests, the beside-the-game
+   one among them.
    Tests: `tests/unit/test_game_paths.gd` (the keys' tidying, `~`, the
    root, a non-string, no trace left), the skin pack's (`home_for`,
    `cardpacks()`, `own_skin_zip`, the migration, the outside folder, the
@@ -7835,10 +7866,18 @@ in; the two `@PROMPT_MAIN` instructions are given while the lineup is
 owed and only then, and the blockers one had been unreachable behind
 the question's frame. The damage and end-of-combat rounds take their
 names from `@PROMPT_SPECIALFEPHASE` (`UIStrings.txt:1039`: `Damage
-Dealing`, `End of Combat`, `Choose Attackers`), the sibling table the
-original fills the same blank from, instead of answering `Main Phase`.
+Dealing`, `End of Combat`), the sibling table the original fills the
+same blank from, instead of answering `Main Phase`. The beginning of
+combat — a step the original never stopped in — borrowed that table's
+`Choose Attackers` at first, and the owner's playtest read it as an
+instruction one step early: *"when combat phase start first
+announcement is choose attackers (but you cannot as it is combat phase
+announcement). Then only you click next: new announcement: combat
+phase: choose attackers. So the first message should be modified to
+only announcement: 'Begin combat'."* It now says `Begin Combat`, in the
+capitalisation of its table neighbours (`Begin Upkeep`).
 
-Pinned in `tests/ui/test_instant_windows_2026_09_08.gd` (19 tests): the
+Pinned in `tests/ui/test_instant_windows_2026_09_08.gd` (20 tests): the
 four windows on their turn and on yours, each holding for a Bolt with an
 untapped Mountain and passing on an empty hand; your own end step and
 upkeep still passing; an owed declaration and an empty combat not
@@ -7849,6 +7888,105 @@ attack it can answer; the bar's lines; and the report end to end — their
 Gray Ogre attacks, the window holds, the Bolt is paid for from the
 Mountain and aimed at the attacker through the engine, the AI seat gets
 its say, and the Ogre is in the graveyard before blockers are asked for.
+
+## THE AURA AND ITS HOST (2026-09-08) — [s30], measured
+
+The owner, from a playtest of v0.19.0-dev: *"ai oponent had Wall of
+swords (wall cannot attack) - and the AI put 'eternal warrior' aura -
+vigilance on the wall - this is complete nonsense! Please add this to
+our Ai play engine. That particular aura should be put on valuable
+creature that can then serve as attacker and blocker"*.
+
+**What was wrong.** `AiPlayer._pick_for_spec` shopped the AI's own board
+for an aura's host by `Evaluator.permanent_value` alone, once
+`EffectIntent.aura_aim` (the 2026-09-04 targeting audit) had said which
+side of the table the aura belongs on. A 3/5 flying Wall of Swords is
+the most valuable creature on many boards, so it wore everything: the
+Eternal Warrior the owner saw, and Flight on a flyer, and a Fishliver
+Oil on a defender — a keyword the host has, or an attacker's gift to a
+creature that cannot attack, priced as if it were a gift.
+
+**Not a port.** The 1997 sources have nothing here to port from:
+`Magic-trace.c` is function names, and Manalink's `generic_aura`
+(`functions/auras.c`) picks a host through `select_target` with a flat
+`ai_modifier ± 24` by preferred controller — the same "best body" the
+port had, with no notion of what the aura grants. `card_eternal_warrior`
+(`cards/legends.c:1752`) is one such call with `SP_KEYWORD_VIGILANCE`.
+So the host rule is `[s30]`, and it is DATA rather than card names:
+`EffectIntent.aura_gifts` reads what a friendly aura grants off its own
+oracle words — vigilance, flying, first strike, reach, fear, trample,
+haste, unblockable, a landwalk — and marks each gift as an ATTACKER's
+(vigilance, fear, trample, haste, unblockable, a landwalk) or anyone's
+(flying, first strike, reach). `EffectIntent.aura_fits(aura, host)` is
+then one question: can this host use at least one gift? A keyword it
+already has is nothing to it (Flight on a Serra Angel, a second Eternal
+Warrior on the creature wearing the first); an attacker's gift is
+nothing to a creature with defender or under a can't-attack. An aura
+that grants nothing the reader knows (Giant Strength, The Brute, a pump)
+fits anyone, and the value order decides as before — the Wall, blocking,
+still gets the most from +2/+2, and Lance (first strike serves a
+blocker) still goes on it. A host that fits none is skipped; with no
+fitting host at all the aura stays in hand, since a vigilance nobody can
+use is worth less than the card.
+
+**On for every profile**, like `minds_pain`: `AiProfile.fits_auras`
+exists so the Deck Lab can run the null, not so an Apprentice can be
+told to do it. Vigilance on a Wall is not a weak play, it is no play
+(the ruling in `docs/ai-difficulty.md`: a malfunction goes on
+everywhere; a layer of play stays a rung).
+
+**MEASURED** (`DeckLab/deck_lab.sh --sweep fits_auras=on,off`, 2,000
+games a pair, seed 4242, `wizard` on seat A against `wizard` with the
+knob off on seat B, the starter five as the gauntlet, Big Green vs
+Black-Red Raiders as the control — a pair where the knob has no aura to
+fire on, so every arm must replay the null game for game; it did,
+byte-identical, 2,000 of 2,000, in all three sweeps).
+
+Centaur Warchief — the owner's shape exactly: 2 Wall of Swords, 2
+Eternal Warrior, and 4 Serra Angels who have vigilance already:
+
+| Matchup | null | candidate | delta |
+|---|---|---|---|
+| vs Big Green | 38.0% | **39.1%** | +1.1 ± 3.0 |
+| vs Black-Red Raiders | 42.7% | **42.9%** | +0.2 ± 3.1 |
+| vs Blue Skies | 18.4% | **18.6%** | +0.3 ± 2.4 |
+| vs Mountain Artillery | 28.6% | **29.1%** | +0.5 ± 2.8 |
+| vs White Knights | 38.0% | **38.6%** | +0.6 ± 3.0 |
+
+Five deltas, all positive, none clear of zero at 2,000 games — the same
+reading as the pain model: the point was never the percentage. The
+paired count is sharper, because the seeds are the same game for game:
+the knob changed the course of 2,565 of the 10,000 games (a quarter —
+the deck draws an Eternal Warrior or a Serra Angel most games), and of
+the 96 whose OUTCOME it changed, 74 went the candidate's way and 22
+against. A rule that only ever declines a host cannot make the aura
+land worse than the best body; the 22 are the games where the card
+stayed in hand a turn longer and the tempo mattered.
+
+Troll Shaman — 3 Eternal Warriors and no Wall, so the rule speaks only
+when the best body wears one already: 587 of 10,000 games changed, 15
+outcomes to the candidate against 5, every delta +0.0 to +0.2 (all five
+within ± 2.8). Warlock — 2 Fear, no Wall, no creature with fear:
+**byte-identical to the null in all 10,000 games**, which is the
+generality claim measured — a deck the rule has nothing to say to is
+left exactly as it was.
+
+Pinned in `tests/ai/test_ai_aura_hosts_2026_09_08.gd` (9 tests): the
+owner's board — the Wall the more valuable body, the Warrior on the Hill
+Giant; only Walls to wear it, the Warrior kept in hand; the second
+Warrior finding a second host; Flight passing the Angel; Lance and
+Giant Strength still taking the Wall; the reader on the cards' own
+spelling (Fishliver Oil's `island`, Invisibility's unblockable, a land
+aura and a non-aura empty); the fit per host and gift, a walk it has
+and a can't-attack included; and the null, the knob off, hanging the
+aura on the Wall as before.
+
+**Known and left:** Artifact Ward reads as an attacker's gift
+(*"can't be blocked by artifact creatures"*) and will not go on a Wall,
+though its damage prevention would serve one; Fear's and Invisibility's
+reminder text add an unblockable gift beside the keyword, harmless and
+of the same polarity. Both are the reader being literal; a row in
+`AURA_GRANTS` fixes either the day it matters.
 
 ## Standing quality gates
 

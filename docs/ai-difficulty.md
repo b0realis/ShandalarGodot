@@ -74,15 +74,18 @@ override any knob on any preset for a measurement
 | `pays_sacrifices` | off | off | on | on | an ability whose cost is one of its own permanents — Strip Mine, a Digging Team |
 | `casts_timed_spells` | off | off | on | on | a spell whose only moment is outside its own main phase — a Festival, a Siren's Call |
 | `minds_pain` | on | on | on | on | a City of Brass is not a Plains; on everywhere (see below) |
+| `fits_auras` | on | on | on | on | hangs a friendly aura only on a creature it gives something to — no vigilance on a Wall; on everywhere, for the same reason |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
 
-`minds_pain` is the one knob that is on at every rung, and the reason is
-the line between weak and broken: an Apprentice that taps City of Brass
-for its last life to cast a Grizzly Bears is not a worse player, it is a
-malfunction. It is a knob only so the Deck Lab can run the null.
+`minds_pain` and `fits_auras` are the two knobs that are on at every
+rung, and the reason is the line between weak and broken: an Apprentice
+that taps City of Brass for its last life to cast a Grizzly Bears is not
+a worse player, it is a malfunction — and so is one that puts Eternal
+Warrior on a Wall of Swords (the owner's playtest, 2026-09-08). They
+are knobs only so the Deck Lab can run the null.
 
 The Apprentice's `counter_threshold` is in brackets because it never
 reads it — with `holds_instants` off there is no counterspell to price.
@@ -160,8 +163,8 @@ Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
   the open knob question above, to be instrumented before it is touched.
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
-  (the way `minds_pain` did) goes on everywhere; anything that is a
-  layer of play stays a rung.
+  (the way `minds_pain` and `fits_auras` did) goes on everywhere;
+  anything that is a layer of play stays a rung.
 - The 1997 adventure's difficulty (gold, deck minimum, life, the creature
   bonus, Arzakon's 100/200/300/400) is not a duel-profile matter and is
   not modelled here; it belongs with the adventure.

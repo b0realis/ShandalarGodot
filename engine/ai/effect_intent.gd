@@ -492,3 +492,84 @@ static func aura_is_classified(data: CardData) -> bool:
 		return false
 	return data.aura_steals or data.aura_reanimates \
 		or data.aura_grants_protection != 0 or AURA_HOSTILE.has(data.card_name)
+
+
+## WHAT A FRIENDLY AURA GIVES ITS HOST, read off the card's own words —
+## the keywords it grants, and for each whether it is any use to a
+## creature that will never attack. The owner, from a playtest
+## (2026-09-08): *"ai oponent had Wall of swords (wall cannot attack) -
+## and the AI put 'eternal warrior' aura - vigilance on the wall - this
+## is complete nonsense! … That particular aura should be put on
+## valuable creature that can then serve as attacker and blocker"*. The
+## picker shopped its own board by [method Evaluator.permanent_value]
+## alone, and a 3/5 flying Wall is the most valuable creature on many
+## boards. An aura's effect is a Callable this code cannot look inside,
+## so, as with [constant AURA_HOSTILE], what it gives is read as DATA —
+## here from the oracle text every card carries, since the pool's
+## grants are all spelt one way ("has vigilance", "has islandwalk",
+## "can't be blocked…"). A pump ("gets +2/+2") is a gift to any
+## creature and is not a grant. [s30] — the original's AI chose hosts
+## by a valuation its sources do not show.
+##
+## Each entry: `keyword` (an [enum Mtg.Keyword], or -1), `landwalk`
+## (the land type in the engine's lower case, or ""), and `attack_only`
+## — vigilance, fear, trample, haste, landwalk and unblockability do
+## nothing for a creature that cannot attack; flying, first strike and
+## reach serve a blocker too.
+const AURA_GRANTS := {
+	"has vigilance": {"keyword": Mtg.Keyword.VIGILANCE, "attack_only": true},
+	"has flying": {"keyword": Mtg.Keyword.FLYING, "attack_only": false},
+	"has first strike": {"keyword": Mtg.Keyword.FIRST_STRIKE, "attack_only": false},
+	"has reach": {"keyword": Mtg.Keyword.REACH, "attack_only": false},
+	"has fear": {"keyword": Mtg.Keyword.FEAR, "attack_only": true},
+	"has trample": {"keyword": Mtg.Keyword.TRAMPLE, "attack_only": true},
+	"as though it had haste": {"keyword": Mtg.Keyword.HASTE, "attack_only": true},
+	"can't be blocked": {"keyword": Mtg.Keyword.UNBLOCKABLE, "attack_only": true},
+}
+const LANDWALKS := ["plains", "island", "swamp", "mountain", "forest"]
+
+static var _aura_gifts_cache: Dictionary = {}
+
+
+## The grants of [param data] — `[{keyword, landwalk, attack_only}, …]`,
+## empty for an aura that grants nothing this reader knows (a pump, a
+## ward, a punisher), and cached by name: the text is read once.
+static func aura_gifts(data: CardData) -> Array:
+	if data == null or not data.is_aura():
+		return []
+	if _aura_gifts_cache.has(data.card_name):
+		return _aura_gifts_cache[data.card_name]
+	var out: Array = []
+	var text := data.oracle_text.to_lower()
+	for phrase in AURA_GRANTS:
+		if text.contains(phrase):
+			var grant: Dictionary = AURA_GRANTS[phrase]
+			out.append({"keyword": grant["keyword"], "landwalk": "",
+				"attack_only": grant["attack_only"]})
+	for land in LANDWALKS:
+		if text.contains("has " + land + "walk"):
+			out.append({"keyword": -1, "landwalk": land, "attack_only": true})
+	_aura_gifts_cache[data.card_name] = out
+	return out
+
+
+## Would [param host] get anything from [param data]? False when every
+## grant is one the host already has or one it can never use — an
+## attacker's gift to a creature with defender, or held under a "can't
+## attack". True for an aura whose gifts are not read here (a pump), and
+## for a host that is no creature: the host's value decides those.
+static func aura_fits(data: CardData, host: CardInstance) -> bool:
+	var gifts := aura_gifts(data)
+	if gifts.is_empty() or host == null or not host.is_creature():
+		return true
+	var grounded := host.has_keyword(Mtg.Keyword.DEFENDER) or host.cur_cant_attack
+	for gift in gifts:
+		if bool(gift["attack_only"]) and grounded:
+			continue
+		var keyword := int(gift["keyword"])
+		if keyword >= 0 and host.has_keyword(keyword):
+			continue
+		if String(gift["landwalk"]) != "" and host.cur_landwalk.has(String(gift["landwalk"])):
+			continue
+		return true
+	return false

@@ -4339,6 +4339,13 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			if intent != null and intent.is_tap_utility() \
 					and not _tap_denies_something(game, inst):
 				continue
+			# ...and don't hang an aura on a creature it gives nothing
+			# to — a keyword it has, or an attacker's gift (vigilance,
+			# fear, landwalk) to a Wall: the owner's Eternal Warrior on
+			# a Wall of Swords (2026-09-08). See EffectIntent.aura_fits.
+			if not harmful and profile.fits_auras and source.data.is_aura() \
+					and not EffectIntent.aura_fits(source.data, inst):
+				continue
 			# Their permanents by what taking them costs THEM (a Stone
 			# Rain on the only Swamp, not the fourth Mountain); ours by
 			# the flat board scale.

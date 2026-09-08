@@ -1054,7 +1054,12 @@ shandalar/
 │   │                      buys; Sorcerer and Wizard. minds_pain (same
 │   │                      day) is whether a City of Brass is not a
 │   │                      Plains — on for EVERY profile, a knob only so
-│   │                      the Deck Lab can run the null.
+│   │                      the Deck Lab can run the null. fits_auras
+│   │                      (2026-09-08) is THE HOST, the same kind of
+│   │                      knob: a friendly aura goes only on a creature
+│   │                      it gives something to (EffectIntent.aura_fits)
+│   │                      — vigilance on a Wall is no play, so on
+│   │                      everywhere, off only for the null.
 │   │                      casts_timed_spells (2026-09-06) is THE WINDOW:
 │   │                      whether the profile casts a spell whose ONLY
 │   │                      legal moment is outside its own main phase —
@@ -1183,6 +1188,19 @@ shandalar/
 │   │   │                      grants protection), then the 28-name
 │   │   │                      hostile set, friendly by default, the
 │   │   │                      whole pool pinned by a coverage test.
+│   │   │                      And THE AURA'S HOST (aura_gifts / aura_fits
+│   │   │                      / AURA_GRANTS, 2026-09-08, [s30]): what a
+│   │   │                      friendly aura GRANTS, read off its own
+│   │   │                      words (vigilance, flying, first strike,
+│   │   │                      reach, fear, trample, haste, unblockable,
+│   │   │                      a landwalk), each gift marked whether it is
+│   │   │                      an ATTACKER'S — and whether a given host
+│   │   │                      can use at least one: a keyword it has
+│   │   │                      already is nothing to it, an attacker's
+│   │   │                      gift is nothing to a defender or a creature
+│   │   │                      under can't-attack. The owner's Eternal
+│   │   │                      Warrior on a Wall of Swords; a pump grants
+│   │   │                      nothing the reader knows and fits anyone.
 │   │   │                      THE WINDOW SHAPES (WINDOW_SHAPES / Shape /
 │   │   │                      .window, 2026-09-06): a SECOND table, six
 │   │   │                      rows, naming what a card-local spell whose
@@ -1244,7 +1262,13 @@ shandalar/
 │   │                          (floating mana included), value-ranked
 │   │                          casting with intent-classified targeting
 │   │                          (an AURA's side of the table comes from
-│   │                          EffectIntent.aura_aim, and a TAP from the
+│   │                          EffectIntent.aura_aim, its HOST from
+│   │                          EffectIntent.aura_fits under
+│   │                          AiProfile.fits_auras — 2026-09-08, the
+│   │                          best body by value that the aura gives
+│   │                          something to, never vigilance on a Wall,
+│   │                          the aura kept in hand with no such host —
+│   │                          and a TAP from the
 │   │                          tap policy, not from the victim's value),
 │   │                          X SIZED to the job (exact toughness, exact
 │   │                          lethal, never a plink at twenty), sweepers
@@ -1769,7 +1793,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4930 tests / ~135 000 asserts, ~300 s
+├── tests/                   GUT suite — 4978 tests / ~135 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2483,7 +2507,9 @@ shandalar/
 │    Prodigal Sorcerer hold nothing; the Done order that travels into
 │    the blocker window, the one given in a window, the Run to that
 │    stops for an attack it can answer; the bar's "Fast Effects?..."
-│    lines and the 1997 step names; and the report end to end — a Bolt
+│    lines and the 1997 step names (the beginning of combat announced
+│    as `Begin Combat`, not asked for as `Choose Attackers` a step
+│    early — the owner's playtest); and the report end to end — a Bolt
 │    cast through the engine at their declared Gray Ogre;
 │    tests/ui/test_enchanted_attacker_2026_09_06.gd — THE ATTACK THAT WAS
 │    NEVER DECLARED: an attachment is drawn as a whole card standing
@@ -2989,6 +3015,17 @@ shandalar/
 │    life a City costs yet paying a life for a card, firing from painless
 │    mana, the main phase still paying a life for a spell, and the null
 │    profile tapping the City for the sink as before;
+│    tests/ai/test_ai_aura_hosts_2026_09_08.gd — THE AURA AND ITS HOST
+│    (EffectIntent.aura_gifts / aura_fits, AiProfile.fits_auras): the
+│    owner's playtest — Eternal Warrior on a Wall of Swords — with the
+│    Wall the more valuable body, the aura goes on the Hill Giant; with
+│    only Walls to wear it, it stays in hand; Flight passes the Serra
+│    Angel for the Giant; Lance (a blocker's gift too) still takes the
+│    Wall, and so does Giant Strength (a pump grants nothing the reader
+│    knows); the gifts read as the cards spell them (Fishliver Oil's
+│    islandwalk in lower case, a land aura and a non-aura empty); the
+│    fit per host and gift, a walk it has and a can't-attack included;
+│    and the null, the knob off, hanging the aura on the Wall as before;
 │    tests/unit/test_window_caster_2026_09_06.gd — THE WINDOW
 │    (AiProfile.casts_timed_spells): rider_admits_own_main telling the
 │    window cards from the planner's and leaving the game as it found it;
@@ -3095,7 +3132,31 @@ shandalar/
 │    scratch through its key, the skins folder's zips set aside, the
 │    keys remembered and put back; nothing in flight under the editor,
 │    the file box opening
-│    somewhere real;
+│    somewhere real; THE TAR AT THE DOOR (2026-09-08): a dropped
+│    art.tar.gz repacked into cardpacks/art.zip and mounted with the card
+│    art notice — busy() and "Repacking art.tar.gz… 50%" meanwhile, no
+│    repacking.zip left, the tar itself untouched; a tar a browser read
+│    in taken under its name with .zip for the tail and the tar deleted;
+│    a tar that is no skin refused naming the tar and leaving nothing; a
+│    tar cut short refused; a file named as a tar whose bytes are none
+│    said so; the file box and PICK_JS offering tars; a tar beside the
+│    game (original_skin.tgz, then a plain cardart.tar over a chunk)
+│    repacked at boot into the skins folder under the default name —
+│    worn without a key — then the card folder, the tars left where
+│    they were and not read again while the zips stand;
+│    tests/unit/test_tar_pack.gd — THE TAR AT THE DOOR (TarPack): tars
+│    written by hand (ustar headers with their checksum, a GNU L entry,
+│    a pax x header) and gzipped with the engine's own deflate, so the
+│    contract holds with no `tar` on the path — a tar's name becoming
+│    the zip's (.tar.gz/.TGZ/.tar → .zip, only the tail, a zip left
+│    alone), a tar known by its bytes not its name (a zip named .tar.gz
+│    is a zip), every file out under its name with its bytes (a body
+│    over many blocks byte for byte, an empty file still a file,
+│    directories not files, the zip then inspected as a skin), a plain
+│    tar the same, the names handed down in pieces put together (L, x,
+│    `./`), a loose file refused by inspect's own words, a tar cut
+│    short leaving no zip behind, noise and an empty tar said so, a
+│    big tar read in steps that each make progress;
 │    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):
 │    user:// under the editor, the location seam, the banner's moment /
 │    players / seed, a game as banner + lines in the window's shape,
@@ -3680,7 +3741,66 @@ shandalar/
 │   │                          or a cut download is deleted so it is never
 │   │                          mounted; fetch_progressed feeds the title's
 │   │                          line (transfer_line: "Fetching the card
-│   │                          art… 50%" / "Reading my_skin.zip… 12%")
+│   │                          art… 50%" / "Reading my_skin.zip… 12%" /
+│   │                          "Repacking my_skin.tar.gz… 37%").
+│   │                          A TAR AT THE DOOR (2026-09-08, "Can we
+│   │                          use also tar.gz not only zip?"): a tar,
+│   │                          plain or gzipped, known by its BYTES
+│   │                          (TarPack.is_tar) at every door — adopt,
+│   │                          _take, the drop, the file box's filters,
+│   │                          PICK_JS's accept — is repacked ONCE into
+│   │                          user://skins/repacking.zip a chunk per
+│   │                          frame (_repack_start/_repack_step) and
+│   │                          then taken under the tar's name with .zip
+│   │                          for its tail (cards.tar.gz →
+│   │                          cardpacks/cards.zip): from there a zip
+│   │                          like any other, and a bad one refused by
+│   │                          the same words, naming the tar. The
+│   │                          player's own tar is never deleted; one a
+│   │                          browser read in is. A file NAMED as a tar
+│   │                          whose bytes are none is refused
+│   │                          (NOT_A_TAR), not ignored. BESIDE THE GAME
+│   │                          too (the owner: "the design should be
+│   │                          that we can use and read either
+│   │                          archive"): repack_beside(folder) /
+│   │                          tar_beside(kind, folder) — at boot, each
+│   │                          kind with no zip mounted whose tar sits
+│   │                          under the zip's name with a tar's tail
+│   │                          (skin/original_skin.tgz, skin/cardart.tar)
+│   │                          is repacked into the player's folder of
+│   │                          its kind, one kind after the other, and
+│   │                          read from there at every later start; the
+│   │                          tar is left alone. fetch_progress() is the
+│   │                          repack's while one runs.
+│   ├── tar_pack.gd          class TarPack (RefCounted) — A TAR, PLAIN OR
+│   │                          GZIPPED, READ AS A STREAM AND WRITTEN OUT
+│   │                          AS A ZIP ([QoL], 2026-09-08): the engine
+│   │                          mounts zips and pcks only, and a Linux
+│   │                          hand reaches for tar.gz. open(from, to),
+│   │                          step() (CHUNK = 4 MB of the tar per call,
+│   │                          through StreamPeerGZIP when gzipped — fed
+│   │                          as much at a time as its ring buffer holds
+│   │                          (put_partial_data) and drained between
+│   │                          puts — every finished entry streamed to
+│   │                          ZIPPacker a slice at a time, COMPRESSION_
+│   │                          FAST: a 193 MB card pack repacks in ~4 s
+│   │                          over ~46 frames of ≤120 ms, the tar never
+│   │                          held whole), progress(), convert() (the
+│   │                          loop in one go). Understands ustar/GNU
+│   │                          headers, GNU long names (L), pax path
+│   │                          records (x), `./` dropped, directories
+│   │                          and links skipped with their bodies; the
+│   │                          octal size only (a base-256 size is "a
+│   │                          header the game cannot read"). Judges
+│   │                          nothing about the names — the zip is
+│   │                          inspected afterwards exactly as a chosen
+│   │                          zip is. On any failure the half zip is
+│   │                          deleted (it would be mounted at the next
+│   │                          start). Errors in the player's words:
+│   │                          "ends before its last file does", "holds
+│   │                          no files", "is not a gzip file the game
+│   │                          can read". zip_name() / is_tar_name():
+│   │                          .tar.gz, .tgz, .tar → .zip
 │   ├── help/                THE HELP SCREEN — the main menu's Help button
 │   │   │                      (directly above Exit). The 1997 game had a
 │   │   │                      printed manual and a context-sensitive
@@ -4298,8 +4418,12 @@ shandalar/
 │       │                      declaration lines only while the lineup
 │       │                      is owed; _fe_phase_name takes the damage
 │       │                      and end-of-combat names from
-│       │                      @PROMPT_SPECIALFEPHASE. Engine and AI
-│       │                      unchanged — both had the rounds already.
+│       │                      @PROMPT_SPECIALFEPHASE, and names the
+│       │                      beginning of combat `Begin Combat` — an
+│       │                      announcement, not `Choose Attackers` a
+│       │                      step early (the owner's playtest). Engine
+│       │                      and AI unchanged — both had the rounds
+│       │                      already.
 │       │                      tests/ui/test_instant_windows_2026_09_08.gd
 │       ├── human_agent.gd   class HumanAgent — DecisionAgent for human
 │       │                      seats: pre-selection mailbox the UI fills
