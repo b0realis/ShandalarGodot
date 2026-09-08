@@ -4,10 +4,13 @@ extends RefCounted
 ## docs/duel-screen-design.md §2).
 ##
 ## The game never ships original art; tools/import_original.py copies it
-## from the player's own copy of the 1997 game into one of two places,
-## checked in order:
+## from the player's own copy of the 1997 game into one of four places,
+## checked in order ([method search_dirs]):
 ##   1. user://original_skin/          (players, exported builds)
-##   2. res://assets/original/         (development — gitignored)
+##   2. <executable>/skin/             (the loose portable copy)
+##   3. res://skin/                    (skin/original_skin.zip, mounted
+##                                      by [SkinPack] — every platform)
+##   4. res://assets/original/         (development — gitignored)
 ## Every accessor returns null when the asset is absent, and callers fall
 ## back to the clean built-in skin — so the game is complete without any
 ## original files, and dresses up automatically when they exist.
@@ -27,19 +30,55 @@ const SEARCH_DIRS := ["user://original_skin", "res://assets/original"]
 ## BESIDE THE EXECUTABLE is therefore searched too, after the player's own
 ## folder and before the checkout: unzip, run, and the art is there.
 ##
-## Empty in the editor, where `OS.get_executable_path()` is Godot itself.
+## Empty in the editor, where `OS.get_executable_path()` is Godot itself,
+## and in a browser, where there is no executable and no folder beside it.
 static func portable_dir() -> String:
-	if OS.has_feature("editor"):
+	if OS.has_feature("editor") or OS.has_feature("web"):
 		return ""
 	return OS.get_executable_path().get_base_dir().path_join("skin")
 
 
-## [constant SEARCH_DIRS] with the portable copy spliced in.
+## THE SKIN PACK — the same art as ONE ZIP, `original_skin.zip`, mounted
+## into the resource tree by [SkinPack] at boot (or the moment a player
+## drops one on the window) and read here as `res://skin/...`. This is
+## the path that exists on every platform: beside the executable on a
+## desktop, fetched or dropped in a browser, where `user://` is an
+## IndexedDB and nothing beside `index.html` can be opened. `[QoL]`,
+## 2026-09-08. Searched after the player's own folder and the loose
+## portable copy, before a development checkout.
+const PACK_DIR := "res://skin"
+
+## Whether [SkinPack] has mounted a zip at [constant PACK_DIR]. Set by it,
+## read by [method search_dirs]; nothing else writes it.
+static var pack_mounted := false
+
+
+## [constant SEARCH_DIRS] with the portable copy and the mounted pack
+## spliced in, in order of precedence.
 static func search_dirs() -> Array:
+	var out := [SEARCH_DIRS[0]]
 	var beside := portable_dir()
-	if beside == "":
-		return SEARCH_DIRS
-	return [SEARCH_DIRS[0], beside, SEARCH_DIRS[1]]
+	if beside != "":
+		out.append(beside)
+	if pack_mounted:
+		out.append(PACK_DIR)
+	out.append(SEARCH_DIRS[1])
+	return out
+
+
+## Forget every loaded asset, so the next request reads the disk again.
+## For the moment a skin pack arrives while the game is running — the
+## title screen is rebuilt on it ([method SkinPack._arrived]); the other
+## screens keep their own derived caches and are told to restart.
+static func clear_caches() -> void:
+	_texture_cache.clear()
+	_font_cache.clear()
+	_sound_cache.clear()
+	_meta_cache.clear()
+	_art_cache.clear()
+	_art_missing.clear()
+	_set_icon_cache.clear()
+	_region_cache.clear()
 
 static var _texture_cache: Dictionary = {}
 static var _font_cache: Dictionary = {}
@@ -315,14 +354,26 @@ static func _snake(card_name: String) -> String:
 ## True when any original skin directory exists (UI may mention it).
 static func is_present() -> bool:
 	for dir in search_dirs():
-		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir)):
+		if DirAccess.dir_exists_absolute(_locate(dir)):
 			return true
 	return false
 
 
+## A search directory as the filesystem sees it. The mounted pack stays
+## a `res://` path — its files live inside a zip the engine reads through
+## `res://`, and globalizing it would name a folder beside the binary
+## that does not exist. Everything else becomes an absolute path, which
+## is what makes `user://` and a gitignored checkout folder read the same
+## way in the editor, headless and exported.
+static func _locate(dir: String) -> String:
+	if dir.begins_with(PACK_DIR):
+		return dir
+	return ProjectSettings.globalize_path(dir)
+
+
 static func _find(filename: String) -> String:
 	for dir in search_dirs():
-		var global := ProjectSettings.globalize_path(dir + "/" + filename)
-		if FileAccess.file_exists(global):
-			return global
+		var path := _locate(dir + "/" + filename)
+		if FileAccess.file_exists(path):
+			return path
 	return ""

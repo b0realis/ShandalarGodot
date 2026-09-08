@@ -1,0 +1,493 @@
+THE SKIN — what original_skin.zip contains
+==========================================
+
+Shandalar dresses itself in a SKIN: the pictures, fonts, sounds, tunes,
+movies and portraits of the 1997 game, or any set drawn to the same
+shapes. Without one the game is complete and playable in its own plain
+drawing; with one, every panel, card and button wears the art. Every
+file is optional: a file that is missing falls back to the drawn
+equivalent, one file at a time.
+
+THE ZIP. A skin is one zip file named original_skin.zip with ONE folder
+inside it, skin/, and everything below in that folder:
+
+    original_skin.zip
+      skin/
+        title_background.png
+        card_back.png
+        ...
+        font_title.ttf
+        sfx_tap.wav
+        music_duel.wav
+        coin_toss_heads.png  +  coin_toss_heads.json
+        portraits/agnosia.png ...
+        cardart/lightning_bolt.jpg ...
+        movies/cointoss_heads.avi ...        (optional)
+
+Nothing may sit outside skin/ — a zip with a loose file at its top is
+refused whole, because the game mounts the zip into its own resource
+tree and a stray file would land among the game's scripts.
+
+WHERE IT GOES. The game reads the zip in place; nothing is unpacked.
+  * Beside the game: <the game's folder>/skin/original_skin.zip. The
+    packaged builds ship it there.
+  * Dropped on the window: drag any skin zip onto the running game. It is
+    copied into the game's own data folder (user://skin/) and mounted;
+    a skin dropped on the title screen shows at once, one dropped during
+    a duel shows from the next start. The dropped zip has precedence
+    over the one beside the game.
+  * In a browser: the same drop, or a zip served beside the page as
+    skin/original_skin.zip, which the game fetches once and keeps.
+  * A loose folder still works too: <the game's folder>/skin/ with the
+    same files unzipped, or user://original_skin/. The game looks in
+    user://original_skin/, then beside itself, then in the mounted zip.
+
+NAMING. Names are exact, lower case, snake_case, with the extensions
+given here. A picture is a PNG (RGB, or RGBA where a mask is wanted);
+a font is TrueType; a sound is a WAV. The sizes below are the 1997
+originals' — a skin may use other sizes where a note does not say
+otherwise, but SHEETS (files the game cuts into cells) must keep their
+grid, and frames and panels keep their proportions or the text drawn on
+them lands wrong.
+
+MASKS. Some 1997 sprites carry their transparency as a second picture:
+the file is twice as wide as the sprite, the left half the image and
+the right half its mask (or, for attack_bones, twice as tall, image over
+mask). The mask's top-left pixel is background; whichever tone it has
+means "transparent". A new skin may instead ship the sprite at half the
+size with real alpha — the game reads both.
+
+TO BUILD ONE from your own 1997 disc, or to check one you drew:
+    python3 tools/mtg_assets.py --install /path/to/the/1997/game
+    python3 tools/skin_catalogue.py --check my_skin.zip
+
+
+BACKDROPS
+---------
+
+  The title screen, stretched to the window. The menu is drawn over its right-
+  hand side.
+    title_background.png               640 x 480 px, palette
+
+  Behind the Options, Deck Builder and Gauntlet screens.
+    menu_background.png                640 x 480 px, palette
+
+  Imported from the 1997 game (Advfac64.pic) for the day the character screen
+  is built. NOT READ by the game yet.
+    character_select_background.png    640 x 480 px, RGB
+
+THE DUEL TABLE
+--------------
+
+  The table under each player's cards, one per deck colour: a wallpaper that
+  repeats. Which of the three the table wears is the player's choice (Options
+  > Territory); the opponent's side always matches its deck colour.
+    duel_pattern_white.png             721 x 381 px, palette
+    duel_pattern_blue.png              721 x 381 px, palette
+    duel_pattern_black.png             888 x 381 px, palette
+    duel_pattern_red.png               888 x 381 px, palette
+    duel_pattern_green.png             721 x 381 px, palette
+
+  The second territory choice, a picture: its middle is stretched rather than
+  repeated, keeping its own aspect.
+    duel_picture_white.png             888 x 381 px, palette
+    duel_picture_blue.png              721 x 381 px, palette
+    duel_picture_black.png             888 x 381 px, palette
+    duel_picture_red.png               721 x 381 px, palette
+    duel_picture_green.png             888 x 381 px, palette
+
+  The third territory choice, a repeating mana-symbol wallpaper.
+    duel_mana_white.png                721 x 381 px, palette
+    duel_mana_blue.png                 721 x 381 px, palette
+    duel_mana_black.png                721 x 381 px, palette
+    duel_mana_red.png                  721 x 381 px, palette
+    duel_mana_green.png                721 x 381 px, palette
+
+CARDS
+-----
+
+  The back of every face-down card: the library, a hidden hand.
+    card_back.png                      228 x 323 px, palette
+
+  The enlarged card's frame, one per colour, plus gold (multicolour), artifact
+  and one land frame per colour. Name, cost, text and art are drawn on top at
+  fixed anchors, so the layout must match the 1997 frame: art window at the
+  top, text box below.
+    card_frame_white.png               228 x 325 px, palette
+    card_frame_blue.png                228 x 325 px, palette
+    card_frame_black.png               228 x 325 px, palette
+    card_frame_red.png                 228 x 325 px, palette
+    card_frame_green.png               228 x 325 px, palette
+    card_frame_gold.png                228 x 325 px, palette
+    card_frame_artifact.png            228 x 325 px, palette
+    card_frame_land_white.png          228 x 325 px, palette
+    card_frame_land_blue.png           228 x 325 px, palette
+    card_frame_land_black.png          228 x 325 px, palette
+    card_frame_land_red.png            228 x 325 px, palette
+    card_frame_land_green.png          228 x 325 px, palette
+
+THE LIFE PANELS
+---------------
+
+  Each duelist's life plaque at the table's edge, in the deck's colour; the
+  life total is printed on it.
+    life_panel_white.png               120 x 88 px, palette
+    life_panel_blue.png                120 x 88 px, palette
+    life_panel_black.png               120 x 88 px, palette
+    life_panel_red.png                 120 x 88 px, palette
+    life_panel_green.png               120 x 88 px, palette
+
+  The portrait's frame beside the life plaque, one per colour.
+    duelist_face_white.png             120 x 88 px, palette
+    duelist_face_blue.png              120 x 88 px, palette
+    duelist_face_black.png             120 x 88 px, palette
+    duelist_face_red.png               120 x 88 px, palette
+    duelist_face_green.png             120 x 88 px, palette
+
+WINDOWS AND PANELS
+------------------
+
+  The stone slab most windows sit on (Options, the Deck Builder's menus,
+  prompts); tiled, with a 5 px margin.
+    panel_stone.png                    400 x 350 px, palette
+
+  The opening window (the two duelists face to face) — a picture, so its
+  middle is stretched, not tiled.
+    versus_background.png              659 x 394 px, palette
+
+  The 'versus' splash inside the opening window.
+    versus_splash.png                  500 x 400 px, palette
+
+  The darker slab: the match and gauntlet screens between duels.
+    panel_dark_stone.png               289 x 274 px, palette
+
+  The knotwork slab behind text-change prompts.
+    panel_knot.png                     481 x 323 px, palette
+
+  The end-of-duel window's ground.
+    panel_end_duel.png                 272 x 422 px, palette
+
+  The combat window's ground, drawn with a ruled border.
+    attack_panel.png                   888 x 316 px, palette
+
+  The mana pool window's ground.
+    mana_pool_panel.png                128 x 188 px, palette
+
+  The 1997 spell-chain window's ground. NOT READ by the game yet — the stack
+  is drawn its own way.
+    spell_chain_panel.png              139 x 200 px, palette
+
+  The one-line message strip at the bottom of the table.
+    message_panel.png                  600 x 35 px, palette
+
+  Behind the enlarged card.
+    big_card_panel.png                 552 x 402 px, palette
+
+BUTTONS
+-------
+
+  The stone button every window uses, at rest. Its top two pixel rows are the
+  bevel; text is centred on it.
+    button_normal.png                  131 x 36 px, palette
+
+  The same button pressed.
+    button_pressed.png                 131 x 36 px, palette
+
+  The same button greyed out.
+    button_disabled.png                131 x 36 px, palette
+
+  The 1997 statistics buttons sheet. NOT READ by the game yet.
+    stat_buttons.png                   768 x 48 px, palette
+
+THE PHASE BARS
+--------------
+
+  The turn's steps down the table's edge: two columns of 41 px (the lit and
+  the unlit state), rows of 41 px, each cell's picture 35x40 at x offset 2.
+  Eight slots top to bottom: untap, upkeep, draw, main, combat, second main,
+  end, cleanup.
+    phase_bar.png                      82 x 760 px, palette
+
+  The combat steps, same rows: two seats of 82 px (attacker's and defender's),
+  each a lit and an unlit column of 41 px, cell 35x40 at x offset 3.
+    combat_bar.png                     164 x 760 px, palette
+
+THE COMBAT WINDOW'S SPRITES
+---------------------------
+
+  The minimised combat window's tab.
+    attack_min.png                     39 x 70 px, palette
+
+  The attacker's sword: an IMAGE+MASK pair, the picture in the left half and
+  its mask in the right half (see 'Masks' above).
+    attack_sword.png                   56 x 132 px, palette
+
+  The blocker's shield, image+mask left/right.
+    attack_shield.png                  44 x 128 px, palette
+
+  The bone strip between attackers and blockers, image+mask TOP over BOTTOM.
+    attack_bones.png                   777 x 70 px, palette
+
+THE HAND
+--------
+
+  The hand's plaque, one per deck colour.
+    hand_panel_white.png               145 x 51 px, palette
+    hand_panel_blue.png                145 x 51 px, palette
+    hand_panel_black.png               145 x 51 px, palette
+    hand_panel_red.png                 145 x 51 px, palette
+    hand_panel_green.png               145 x 51 px, palette
+
+GRAVEYARDS
+----------
+
+  The graveyard and exile plates beside the table, one per colour.
+    grave_panel_white.png              61 x 91 px, palette
+    grave_panel_blue.png               61 x 91 px, palette
+    grave_panel_black.png              61 x 91 px, palette
+    grave_panel_red.png                61 x 91 px, palette
+    grave_panel_green.png              61 x 91 px, palette
+
+MARKS ON A CARD
+---------------
+
+  The diagonal mana stripes on a card's title bar: six rows of 21 px in the
+  order W U B R G, then colourless. Each stripe is cut 17x16 and drawn 9 px
+  apart so they interleave.
+    mana_stripes.png                   54 x 126 px, palette
+
+  The summoning-sickness spiral drawn over a creature that cannot attack yet:
+  image+mask left/right.
+    summon_sick.png                    194 x 97 px, palette
+
+  The cracks over a creature that is about to die (image+mask).
+    state_dying.png                    194 x 97 px, palette
+
+  The 'cannot be targeted' mark (image+mask).
+    state_cant_target.png              130 x 65 px, palette
+
+  The 'will untap' mark (image+mask).
+    state_will_untap.png               110 x 59 px, palette
+
+  The keyword badges on a card, ONE COLUMN of 18 square cells (22x22). Cells
+  used: 5 protection from green, 6 red, 7 blue, 8 black, 9 white, 10
+  protection from artifacts, 11 flying, 12 trample, 13 banding, 14 first
+  strike, 15 regeneration, 16 reach. Cell 17 is blank in the original and
+  stays blank.
+    ability_icons.png                  22 x 396 px, palette
+
+  The dagger on a wounded creature, image+mask left/right; the damage count is
+  printed beside it.
+    damage_marker.png                  84 x 26 px, RGBA
+
+  The mouse cursor while a target is being chosen: image+mask left/right, the
+  hotspot at the arrow's tip.
+    target_cursor.png                  122 x 61 px, palette
+
+SYMBOLS
+-------
+
+  The Deck Builder's set filter icons, one per set code (atq, arn, past, drk,
+  leg, 4ed). Black is treated as transparent.
+    set_icon_atq.png                   35 x 36 px, RGBA
+    set_icon_arn.png                   35 x 36 px, RGBA
+    set_icon_past.png                  35 x 36 px, RGBA
+    set_icon_drk.png                   35 x 36 px, RGBA
+    set_icon_4ed.png                   35 x 36 px, RGBA
+    set_icon_leg.png                   35 x 36 px, RGBA
+
+  The set symbol printed on the enlarged card: five 33x15 cells at a 66 px
+  pitch, left to right The Dark, Legends, Arabian Nights, Antiquities, Astral.
+    card_set_symbols.png               330 x 15 px, palette
+
+  Every mana symbol in one row of 19 square cells (18x18): cell 0 {X}, cells
+  1-11 {0}-{10}, 12 {W}, 13 {R}, 14 {U}, 15 {B}, 16 {G}, 17 {T} (tap). Cells
+  sit on opaque black; the symbols are round.
+    mana_symbols.png                   342 x 18 px, palette
+
+THE DECK BUILDER
+----------------
+
+  The filter bar's medallions: 9 columns x 3 rows of 40 px cells, each icon
+  34x34 inside its cell, as (row, column). Row 0: ability (0,0), gold (0,1),
+  Antiquities (0,2), Arabian Nights (0,3), artifact (0,4), artist (0,5),
+  Astral (0,6), blue (0,7), cost (0,8). Row 1: creature (1,1), The Dark (1,2),
+  enchantment (1,3), Fourth Edition (1,4), green (1,5), black (1,6), instant
+  (1,7). Row 2: land (2,0), Legends (2,1), power (2,2), rarity (2,3), red
+  (2,4), sorcery (2,6), toughness (2,7), white (2,8). The _hover and _pressed
+  sheets are the same grid in those states.
+    filter_icons.png                   360 x 120 px, palette
+    filter_icons_hover.png             360 x 120 px, RGBA
+    filter_icons_pressed.png           360 x 120 px, RGBA
+
+  The empty deck slot watermarks: 5 columns of 117 px x 2 rows of 100 px, in
+  the order black, white, red, green, blue.
+    deck_slot_plaques.png              585 x 200 px, palette
+
+  The slab the deck's name sits on.
+    deck_title_slab.png                291 x 73 px, palette
+
+  The ground under the Deck Builder's bottom bar.
+    deck_bar_ground.png                1006 x 198 px, palette
+
+  The olive tile of the 1997 Deck Builder. NOT READ by the game yet.
+    deck_tile_olive.png                32 x 32 px, palette
+
+  The Deck Builder's tiling ground (32x32, repeats).
+    deck_tile_slate.png                32 x 32 px, palette
+
+FONTS
+-----
+
+  The display face: titles, headings, the card's name (the original's
+  MagicMedieval).
+    font_title.ttf                     TrueType
+
+  The reading face: card text, menus, the log (the original's MPlantin).
+    font_body.ttf                      TrueType
+
+SOUNDS
+------
+
+  Sound effects. The names say when they play: sfx_tap, sfx_untap, sfx_draw,
+  sfx_shuffle, sfx_summon, sfx_attack, sfx_block, sfx_damage, sfx_buried (a
+  card to the graveyard), sfx_counter, sfx_discard, sfx_end_turn,
+  sfx_life_loss, sfx_button, sfx_toss (the coin), sfx_win and sfx_lose (the
+  fanfares), one sfx_cast_* per spell type, and one sfx_land_* per land colour
+  or colour pair (a dual land plays its pair; sfx_land_grey is a colourless
+  land).
+    sfx_toss.wav                       22050 Hz 16-bit stereo, 3.9 s
+    sfx_button.wav                     22050 Hz 16-bit mono, 1.7 s
+    sfx_tap.wav                        22050 Hz 16-bit mono, 0.5 s
+    sfx_untap.wav                      22050 Hz 16-bit mono, 0.6 s
+    sfx_summon.wav                     22050 Hz 16-bit mono, 2.0 s
+    sfx_attack.wav                     22050 Hz 16-bit mono, 1.9 s
+    sfx_block.wav                      22050 Hz 16-bit mono, 1.4 s
+    sfx_damage.wav                     22050 Hz 16-bit mono, 1.7 s
+    sfx_buried.wav                     22050 Hz 16-bit mono, 2.4 s
+    sfx_counter.wav                    22050 Hz 16-bit mono, 1.0 s
+    sfx_draw.wav                       22050 Hz 16-bit mono, 1.5 s
+    sfx_shuffle.wav                    22050 Hz 16-bit mono, 0.9 s
+    sfx_discard.wav                    22050 Hz 16-bit mono, 1.8 s
+    sfx_end_turn.wav                   22050 Hz 16-bit mono, 2.5 s
+    sfx_life_loss.wav                  22050 Hz 16-bit mono, 1.1 s
+    sfx_win.wav                        22050 Hz 16-bit stereo, 12.0 s
+    sfx_lose.wav                       22050 Hz 16-bit stereo, 10.3 s
+    sfx_cast_artifact.wav              22050 Hz 16-bit mono, 2.2 s
+    sfx_cast_enchantment.wav           22050 Hz 16-bit mono, 2.4 s
+    sfx_cast_instant.wav               22050 Hz 16-bit mono, 1.7 s
+    sfx_cast_sorcery.wav               22050 Hz 16-bit mono, 2.8 s
+    sfx_cast_interrupt.wav             22050 Hz 16-bit mono, 1.8 s
+    sfx_land_grey.wav                  22050 Hz 16-bit mono, 3.3 s
+    sfx_land_white.wav                 22050 Hz 16-bit mono, 3.6 s
+    sfx_land_blue.wav                  22050 Hz 16-bit mono, 2.0 s
+    sfx_land_black.wav                 22050 Hz 16-bit mono, 1.5 s
+    sfx_land_red.wav                   22050 Hz 16-bit mono, 2.7 s
+    sfx_land_green.wav                 22050 Hz 16-bit mono, 3.7 s
+    sfx_land_white_blue.wav            22050 Hz 16-bit mono, 3.6 s
+    sfx_land_blue_black.wav            22050 Hz 16-bit mono, 2.0 s
+    sfx_land_black_red.wav             22050 Hz 16-bit mono, 3.5 s
+    sfx_land_red_green.wav             22050 Hz 16-bit mono, 3.7 s
+    sfx_land_green_white.wav           22050 Hz 16-bit mono, 3.6 s
+    sfx_land_white_black.wav           22050 Hz 16-bit mono, 3.6 s
+    sfx_land_black_green.wav           22050 Hz 16-bit mono, 3.7 s
+    sfx_land_green_blue.wav            22050 Hz 16-bit mono, 3.7 s
+    sfx_land_blue_red.wav              22050 Hz 16-bit mono, 2.7 s
+    sfx_land_red_white.wav             22050 Hz 16-bit mono, 2.6 s
+
+MUSIC
+-----
+
+  The duel's tune.
+    music_duel.wav                     22050 Hz 16-bit stereo, 10.1 s
+
+  The twenty overworld location tunes, 0 to 19. The title screen and the shell
+  pick from these; Options > Music lists every tune the skin and the player's
+  own music/ folder provide.
+    music_location_0.wav               22050 Hz 16-bit stereo, 25.3 s
+    music_location_1.wav               22050 Hz 16-bit stereo, 32.1 s
+    music_location_2.wav               22050 Hz 16-bit stereo, 28.8 s
+    music_location_3.wav               22050 Hz 16-bit stereo, 30.0 s
+    music_location_4.wav               22050 Hz 16-bit stereo, 29.5 s
+    music_location_5.wav               22050 Hz 16-bit stereo, 28.8 s
+    music_location_6.wav               22050 Hz 16-bit stereo, 32.0 s
+    music_location_7.wav               22050 Hz 16-bit stereo, 29.2 s
+    music_location_8.wav               22050 Hz 16-bit stereo, 31.9 s
+    music_location_9.wav               22050 Hz 16-bit stereo, 30.0 s
+    music_location_10.wav              22050 Hz 16-bit stereo, 29.4 s
+    music_location_11.wav              22050 Hz 16-bit stereo, 38.6 s
+    music_location_12.wav              22050 Hz 16-bit stereo, 31.5 s
+    music_location_13.wav              22050 Hz 16-bit stereo, 38.9 s
+    music_location_14.wav              22050 Hz 16-bit stereo, 34.7 s
+    music_location_15.wav              22050 Hz 16-bit stereo, 36.0 s
+    music_location_16.wav              22050 Hz 16-bit stereo, 28.1 s
+    music_location_17.wav              22050 Hz 16-bit stereo, 32.2 s
+    music_location_18.wav              22050 Hz 16-bit stereo, 33.0 s
+    music_location_19.wav              22050 Hz 16-bit stereo, 36.2 s
+
+  The shell's tune for a temple.
+    music_temple.wav                   22050 Hz 16-bit stereo, 24.9 s
+
+  One shell tune per castle colour.
+    music_castle_white.wav             22050 Hz 16-bit stereo, 27.7 s
+    music_castle_blue.wav              22050 Hz 16-bit stereo, 30.0 s
+    music_castle_black.wav             22050 Hz 16-bit stereo, 31.5 s
+    music_castle_red.wav               22050 Hz 16-bit stereo, 33.0 s
+    music_castle_green.wav             22050 Hz 16-bit stereo, 32.4 s
+
+MOVIES
+------
+
+  The coin toss, as a SPRITE SHEET the game plays frame by frame: the frames
+  left to right, top to bottom, and a .json sidecar of the same name with
+  cols, rows, frames, frame_width, frame_height and fps. The sheet is what the
+  game reads; the AVI it was cut from may ride along in movies/ (see below)
+  but is not required.
+    coin_toss_heads.png                2240 x 2160 px, RGB
+    coin_toss_heads.json               cols 7, rows 9, frames 61, frame_width 320, frame_height 240, fps 15
+    coin_toss_tails.png                2240 x 2160 px, RGB
+    coin_toss_tails.json               cols 7, rows 9, frames 61, frame_width 320, frame_height 240, fps 15
+
+PORTRAITS — portraits/<id>.png
+---------
+
+  The duelists' faces, one PNG per portrait, chosen in Options > Portrait and
+  shown beside the life plaque. The file's name is the portrait's id, lower
+  case with underscores between words; the chooser shows it with the
+  underscores as spaces and each word capitalised (ali_of_willoshire.png ->
+  "Ali Of Willoshire"). Any number of files, any size close to the original's
+  — they are scaled to fit the frame. The 1997 game had 70: the 15 of its
+  character sheet (137x169) and the 55 rogues (138x170).
+
+    on this machine: 70 portraits — 55 at 138x170, 15 at 137x169
+    e.g. agnosia.png, ali_of_willoshire.png, baba_bue.png, dina_bin-barq.png ...
+
+CARD ART — cardart/<card_name>.jpg|png
+--------
+
+  The picture in the enlarged card's art window, one file per card, named by
+  the card's name in snake_case: lower case, every run of characters that is
+  not a letter or a digit replaced by one underscore, leading and trailing
+  underscores dropped ("Ali from Cairo" -> ali_from_cairo, "Jandor's
+  Saddlebags" -> jandor_s_saddlebags, "Ley Druid" -> ley_druid). PNG or JPG,
+  any size — it is fitted to the frame's art window. A card without a file
+  shows the frame's plain window. tools/fetch_card_art.py fetches the pool
+  from Scryfall.
+
+    on this machine: 1794 pictures — 1794 .jpg
+    e.g. abomination.jpg, abomination_card.jpg, abu_ja_far.jpg ...
+
+MOVIES — movies/*.avi (optional)
+------
+
+  The original coin-toss AVIs (COINTOSS_Heads.AVI, COINTOSS_Tails.AVI), kept
+  beside the sheets they were cut from so a player can re-cut them
+  (tools/mtg_assets.py --transcode-movies). The game plays the SHEETS, not the
+  AVIs; a skin that ships only the sheets is complete.
+
+    movies/cointoss_heads.avi          320 x 240, 61 frames, 15.00 fps, CRAM
+    movies/cointoss_tails.avi          320 x 240, 61 frames, 15.00 fps, CRAM
+
+------------------------------------------------------------------------------
+Generated by tools/skin_catalogue.py from the importer's manifest;
+167 named files, plus portraits/, cardart/ and movies/.

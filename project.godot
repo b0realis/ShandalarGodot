@@ -12,6 +12,10 @@ config_version=5
 [autoload]
 
 Lifecycle="*res://game/lifecycle.gd"
+; The skin as one zip, `skin/original_skin.zip`, mounted at res://skin —
+; beside the executable, dropped on the window, or fetched by the web
+; build from beside its page. Before ShellMusic, which reads the skin.
+SkinPack="*res://game/skin_pack.gd"
 ShellMusic="*res://game/shell_music.gd"
 ; The finger-as-mouse layer for tablets, phones (the web export) and touch
 ; laptops. Inert wherever there is no touchscreen unless the player turns

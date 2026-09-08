@@ -9,6 +9,9 @@
 #                                   #    into user://original_skin, so the
 #                                   #    exported build looks like the dev
 #                                   #    one (see below)
+#   ./build_release.sh --package    # + the zip a player unpacks and runs:
+#                                   #    skin/original_skin.zip and the
+#                                   #    catalogue, icon.png, shortcut.sh
 #   ./build_release.sh --web        # the "Web" preset instead ->
 #                                   #    ../shandalar-build/web/index.html
 #                                   #    and its .wasm/.pck/.js beside it;
@@ -17,6 +20,8 @@
 #                                   #    .wasm). No threads, so any static
 #                                   #    host will do — see the preset's
 #                                   #    note in export_presets.cfg.example
+#   ./build_release.sh --web --skin # + skin/original_skin.zip beside the
+#                                   #    page, which the game fetches once
 #
 # WHAT SHIPS, AND WHAT DOES NOT. The .pck carries game/, engine/, cards/
 # (scripts + cards/data/) and every deck under decks/ — about 5 MB. It
@@ -30,10 +35,19 @@
 # --dest "$HOME/.local/share/godot/app_userdata/Shandalar/original_skin"`
 # is how a player fills it from their own 1997 CD.
 #
-# THE WEB BUILD draws the clean built-in skin and no card art whatever
-# `--skin` says: a browser's `user://` is an empty IndexedDB and there is
-# no folder beside the executable. Hosting the 1997 graphics online is
-# the owner's call, and not one this script makes.
+# THE SKIN PACK (2026-09-08). The art travels as ONE ZIP,
+# `skin/original_skin.zip`, that the game mounts in place at boot
+# (`game/skin_pack.gd`) — beside the executable in the package, beside
+# `index.html` for the web build, or dropped on the running game's
+# window on either. Next to it goes `skin/SKIN.txt`, the catalogue of
+# everything the zip holds (docs/skin-catalogue.txt), so a player can
+# draw a skin of their own. Whether the 1997 art is HOSTED online is the
+# owner's call: `--web --skin` places the zip, plain `--web` removes it.
+#
+# THE ICON (2026-09-08). The package carries `icon.png` and a
+# `shortcut.sh` that writes a desktop entry pointing at the binary and
+# the icon — for the player who wants the game in their menu, and only
+# then; nothing is installed by unpacking.
 #
 # Uses the project-pinned Godot (../tools/godot), falling back to PATH.
 set -euo pipefail
@@ -51,12 +65,12 @@ while [ $# -gt 0 ]; do
 		--skin) LINK_SKIN=1; shift ;;
 		--package) PACKAGE=1; shift ;;
 		--web) WEB=1; PRESET="Web"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/web"; shift ;;
-		-h|--help) sed -n '2,38p' "$0" | sed 's/^# \?//'; exit 0 ;;
+		-h|--help) sed -n '2,50p' "$0" | sed 's/^# \?//'; exit 0 ;;
 		*) echo "build_release: unknown argument '$1'" >&2; exit 3 ;;
 	esac
 done
-if [ "$WEB" = 1 ] && [ "$LINK_SKIN$PACKAGE" != 00 ]; then
-	echo "build_release: --skin and --package are the Linux build's; the web build carries no art" >&2
+if [ "$WEB" = 1 ] && [ "$PACKAGE" = 1 ]; then
+	echo "build_release: --package is the Linux build's; the web build is served, not unpacked" >&2
 	exit 3
 fi
 
@@ -68,6 +82,33 @@ OUT="$(cd "$OUT" && pwd)"
 BIN="$OUT/Shandalar.x86_64"
 [ "$WEB" = 1 ] && BIN="$OUT/index.html"
 LOG="${TMPDIR:-/tmp}/shandalar-export.log"
+
+# THE SKIN ZIP, `original_skin.zip`: this checkout's assets/original (the
+# imported 1997 skin, whatever the owner has) with its portraits and the
+# card art, as real files under one `skin/` folder — written by the same
+# tools/mtg_assets.py a player uses on their own disc, so the two zips
+# are the same shape. Symlinks are DEREFERENCED (`cp -RL`) on the way:
+# the dev skin can be a tree of links into this checkout, and a zip of
+# links is a zip of nothing. Beside it, the catalogue.
+skin_pack() {  # skin_pack DEST_DIR
+	local dest="$1" stage
+	stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-skin.XXXXXX")"
+	if [ -d assets/original ]; then
+		cp -RLp assets/original/. "$stage/" 2>/dev/null || true
+		find "$stage" -name '*.import' -delete
+	fi
+	if [ -d assets/cardart ]; then
+		mkdir -p "$stage/cardart"
+		cp -RLp assets/cardart/. "$stage/cardart/" 2>/dev/null || true
+	fi
+	mkdir -p "$dest"
+	python3 tools/mtg_assets.py --from-skin "$stage" --out "$dest/original_skin.zip" \
+		> "${TMPDIR:-/tmp}/shandalar-skin-zip.log" 2>&1 \
+		|| { echo "BUILD FAILED: the skin zip was not written" >&2; cat "${TMPDIR:-/tmp}/shandalar-skin-zip.log" >&2; rm -rf "$stage"; exit 1; }
+	rm -rf "$stage"
+	cp -p docs/skin-catalogue.txt "$dest/SKIN.txt"
+	echo "skin pack: $dest/original_skin.zip ($(du -h "$dest/original_skin.zip" | cut -f1)) + SKIN.txt"
+}
 
 # Warm the import cache quietly (a cold checkout has no .godot/).
 timeout -k 5 900 "$GODOT" --headless --import . >/dev/null 2>&1 </dev/null || true
@@ -88,11 +129,19 @@ fi
 # THE WEB BUILD ENDS HERE: nothing to smoke-boot without a browser (the
 # template is JavaScript around a .wasm), so the check is that the three
 # files a page needs came out, and the sizes are printed for the hosting
-# question — the .wasm is the engine and gzips to a quarter.
+# question — the .wasm is the engine and gzips to a quarter. With
+# `--skin` the skin zip goes beside the page as `skin/original_skin.zip`
+# (the game fetches it from there, once); without, any earlier one is
+# removed so a build without `--skin` never hosts the art by accident.
 if [ "$WEB" = 1 ]; then
 	for f in index.html index.js index.wasm index.pck; do
 		[ -s "$OUT/$f" ] || { echo "BUILD FAILED: no $f in $OUT" >&2; exit 1; }
 	done
+	if [ "$LINK_SKIN" = 1 ]; then
+		skin_pack "$OUT/skin"
+	else
+		rm -rf "$OUT/skin"
+	fi
 	echo "ok: $(du -sh "$OUT/index.wasm" | cut -f1) engine + $(du -sh "$OUT/index.pck" | cut -f1) pack in $OUT"
 	echo "serve it with: python3 -m http.server --directory $OUT 8000   # then open http://localhost:8000/"
 	exit 0
@@ -137,16 +186,51 @@ echo "run it with: $BIN"
 # carries the game and the decks but no art (docs/player-files.md), and the
 # art normally lives in the player's own `user://` folder — which does not
 # exist on somebody else's computer. So the package puts it BESIDE THE
-# EXECUTABLE, where `GameSkin.portable_dir()` looks: unzip, run, done.
-#
-# Symlinks are DEREFERENCED (`cp -RL`): the dev skin is a tree of links
-# into this checkout, and a zip of links is a zip of nothing.
+# EXECUTABLE as `skin/original_skin.zip`, where `SkinPack` mounts it at
+# boot: unzip the package, run, done — the skin zip itself stays a zip.
 if [ "$PACKAGE" = 1 ]; then
 	VERSION="$(sed -n 's/^config\/version="\(.*\)"/\1/p' project.godot)"
 	STAGE="$(dirname "$OUT")/pkg/Shandalar-$VERSION-linux64"
 	rm -rf "$STAGE"
 	mkdir -p "$STAGE/skin"
 	cp -p "$BIN" "$OUT/Shandalar.pck" "$STAGE/"
+	# THE ICON, and the shortcut that uses it — opt-in, run by hand.
+	cp -p game/icon.png "$STAGE/icon.png"
+	cat > "$STAGE/shortcut.sh" <<'SHORTCUT'
+#!/usr/bin/env bash
+# Put Shandalar in your application menu, with its icon — or take it out.
+#
+#   ./shortcut.sh            # write ~/.local/share/applications/shandalar.desktop
+#   ./shortcut.sh --remove   # delete it again
+#
+# The entry points at THIS folder, so move the folder and run it again.
+# Nothing else is touched: no files are copied anywhere, and unpacking
+# the game never runs this.
+set -euo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+ENTRY="${XDG_DATA_HOME:-$HOME/.local/share}/applications/shandalar.desktop"
+if [ "${1:-}" = "--remove" ]; then
+	rm -f "$ENTRY"
+	echo "removed $ENTRY"
+	exit 0
+fi
+mkdir -p "$(dirname "$ENTRY")"
+cat > "$ENTRY" <<ENTRY
+[Desktop Entry]
+Type=Application
+Name=Shandalar
+Comment=A remake of the 1997 Magic: The Gathering
+Exec=$HERE/Shandalar.x86_64
+Path=$HERE
+Icon=$HERE/icon.png
+Terminal=false
+Categories=Game;CardGame;
+ENTRY
+chmod +x "$ENTRY"
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$(dirname "$ENTRY")" 2>/dev/null || true
+echo "wrote $ENTRY — Shandalar is in your menu (./shortcut.sh --remove undoes it)"
+SHORTCUT
+	chmod +x "$STAGE/shortcut.sh"
 	[ -f "$OUT/README.txt" ] && cp -p "$OUT/README.txt" "$STAGE/"
 	# THE PLAYER'S THREE FILES. setup.txt is the map of every path the
 	# built game reads or writes; the two scripts are the only way a
@@ -177,18 +261,9 @@ exec ./Shandalar.x86_64 --headless --no-header -- --deck-lab "$@"
 LAB
 	chmod +x "$STAGE/deck_lab.sh"
 	cp -p tools/mtg_assets.py tools/import_original.py \
-	      tools/fetch_card_art.py "$STAGE/"
+	      tools/fetch_card_art.py tools/skin_catalogue.py "$STAGE/"
 	echo "packaging art..."
-	# The imported 1997 skin (whatever the owner has), its portraits, and
-	# the card art, all as real files.
-	if [ -d assets/original ]; then
-		cp -RLp assets/original/. "$STAGE/skin/" 2>/dev/null || true
-		find "$STAGE/skin" -name '*.import' -delete
-	fi
-	if [ -d assets/cardart ]; then
-		mkdir -p "$STAGE/skin/cardart"
-		cp -RLp assets/cardart/. "$STAGE/skin/cardart/" 2>/dev/null || true
-	fi
+	skin_pack "$STAGE/skin"
 	cat > "$STAGE/run.sh" <<'RUNNER'
 #!/usr/bin/env bash
 # Run the game from wherever this folder happens to be.

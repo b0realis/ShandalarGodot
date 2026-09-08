@@ -35,6 +35,9 @@ const MENU_BOLD := 0.05
 ## ships beside the binary.
 const DECK_LAB_FLAG := "--deck-lab"
 
+## The corner line that reports a skin zip on its way (web builds).
+var _fetching: Label
+
 
 func _ready() -> void:
 	# BEFORE THE SCREEN IS BUILT, and before the card pool is loaded: the
@@ -173,6 +176,26 @@ func _ready() -> void:
 	version.position += Vector2(-10, -8)
 	add_child(version)
 
+	# THE ART ON ITS WAY. A web build with no skin stored fetches
+	# `skin/original_skin.zip` from beside its page ([SkinPack]); while it
+	# comes, one line above the version tag says so and how far it is,
+	# and goes away when the fetch ends either way. Bound rather than
+	# polled, and built in the corner voice like the tag it sits over.
+	var fetching := Label.new()
+	fetching.name = "Fetching"
+	_corner_label(fetching, 12)
+	fetching.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	fetching.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	fetching.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	fetching.position += Vector2(-10, -26)
+	fetching.visible = SkinPack.fetching
+	fetching.text = fetch_line(SkinPack.fetch_progress())
+	add_child(fetching)
+	_fetching = fetching
+	# A method, not a lambda: a bound method leaves the autoload's signal
+	# with the screen, a lambda would outlive it and write to a freed label.
+	SkinPack.fetch_progressed.connect(_on_fetch_progressed)
+
 	# THE WORDMARK OVER THE CARD POOL, bottom-left. Both were here before
 	# in some form — the name in this corner at 16px, the badges up in the
 	# TOP-left — and the 2026-09-03 playtest asked for them stacked: the
@@ -229,6 +252,20 @@ func _ready() -> void:
 	# with a bed of their own stop it when they start theirs, so this
 	# screen has nothing to do on the way out.
 	ShellMusic.play()
+
+
+## The fetch line's text for a [param fraction] of the skin zip that
+## has arrived — a percentage when the host said how big it is, and
+## just the fact otherwise.
+static func fetch_line(fraction: float) -> String:
+	if fraction < 0.0:
+		return "Fetching the 1997 art…"
+	return "Fetching the 1997 art… %d%%" % int(round(fraction * 100.0))
+
+
+func _on_fetch_progressed(fraction: float) -> void:
+	_fetching.visible = SkinPack.fetching
+	_fetching.text = fetch_line(fraction)
 
 
 ## Hand the rest of the command line to the Deck Lab and quit with its

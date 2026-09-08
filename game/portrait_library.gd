@@ -42,13 +42,18 @@ const DEFAULT_DIRS: Array[String] = [
 ## reason, as [method GameSkin.portable_dir]: art that travels with the
 ## build rather than living in one machine's home directory.
 static func portable_dirs() -> Array[String]:
+	var out: Array[String] = []
 	var beside := GameSkin.portable_dir()
-	if beside == "":
-		return []
-	# Both shapes work: `portraits/` beside the executable, and the
-	# `skin/portraits/` an imported skin already puts them in.
-	return [beside.get_base_dir().path_join("portraits"),
-		beside.path_join("portraits")]
+	if beside != "":
+		# Both shapes work: `portraits/` beside the executable, and the
+		# `skin/portraits/` an imported skin already puts them in.
+		out.append(beside.get_base_dir().path_join("portraits"))
+		out.append(beside.path_join("portraits"))
+	# The mounted skin pack ([SkinPack]): `skin/portraits/` inside the
+	# zip, read in place — every platform, the browser included.
+	if GameSkin.pack_mounted:
+		out.append(GameSkin.PACK_DIR.path_join("portraits"))
+	return out
 
 
 ## The folders actually searched. A VAR, and the reason is the same one

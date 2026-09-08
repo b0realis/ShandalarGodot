@@ -58,7 +58,13 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   hosting, no COOP/COEP headers) to `../shandalar-build/web/` and checks
   that index.html/.js/.wasm/.pck came out; nothing boots headless there,
   a browser does that (`python3 -m http.server --directory
-  ../shandalar-build/web`). `--skin`/`--package` are the Linux build's.
+  ../shandalar-build/web`). `--web --skin` writes the skin zip and its
+  catalogue beside the page (`web/skin/`) for the page to fetch;
+  `--package` is the Linux build's (`--skin --package` stages
+  `skin/original_skin.zip` + `SKIN.txt`, `icon.png` and `shortcut.sh`
+  into the zip). Since 2026-09-08 a built game mounts the skin as ONE
+  zip (`SkinPack`, `load_resource_pack`); `tools/skin_catalogue.py
+  --check` says whether a zip is complete.
   The build is the LOCAL step and the GitHub release is a separate one:
   a local build gets played first, and `gh release create` runs only
   when the owner asks for the release — never as the automatic tail of a

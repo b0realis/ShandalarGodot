@@ -17,13 +17,16 @@ of them is a download:
 
     python3 fetch_card_art.py --out cardart/      # 897 cards from Scryfall
 
-WHY THE ZIP HAS A `skin/` FOLDER INSIDE IT. The game looks for its art in
-three places, in order (`game/skin.gd`): the player's own
+WHY THE ZIP HAS A `skin/` FOLDER INSIDE IT. The game MOUNTS the zip
+(`game/skin_pack.gd`): placed beside the executable as
+`skin/original_skin.zip`, or dropped on the game's window, its `skin/`
+folder appears to the game as if unpacked, and nothing is unpacked. The
+same layout unzips cleanly next to the binary too, which is what the game
+looked for before it could mount a zip: the player's own
 `user://original_skin/`, then a `skin/` folder BESIDE the executable, then
-a development checkout's `assets/original/`. The middle one is the
-portable route — it makes a build you can copy to another machine on a
-stick — so the archive is built to unzip straight next to the binary with
-no path to type. See `setup.txt` in a packaged build for all of them.
+the mounted zip, then a development checkout's `assets/original/`
+(`game/skin.gd`). `skin-catalogue.txt` (SKIN.txt in a packaged build)
+lists every file the zip may hold; see `setup.txt` for every path.
 
 NOTHING HERE IS FATAL. Every asset is optional and the game is playable
 with none of them: unskinned, every panel, button and card falls back to a
@@ -278,10 +281,10 @@ def write_zip(skin: Path, out: Path,
     print(f"\narchive: {out}")
     print(f"  {count} files, {total / 1e6:.0f} MB of art"
           f" -> {size / 1e6:.0f} MB zipped")
-    print(f"\nUnzip it beside the game's executable:")
-    print(f"  unzip -o {out.name} -d /path/to/the/game/")
-    print(f"…which puts the art in <game>/skin/, the second place the")
-    print(f"game looks. See setup.txt for all three.")
+    print(f"\nPut it beside the game, AS IT IS, as skin/original_skin.zip:")
+    print(f"  mkdir -p /path/to/the/game/skin && cp {out.name} /path/to/the/game/skin/original_skin.zip")
+    print(f"…or drop the zip onto the running game's window. The game reads")
+    print(f"the zip in place; see setup.txt for every place it looks.")
     return 0
 
 

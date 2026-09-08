@@ -563,3 +563,34 @@ func test_the_menu_letters_are_emboldened_because_there_is_no_bold_cut() -> void
 		"the shell's buttons wear a synthesised weight")
 	assert_almost_eq((face as FontVariation).variation_embolden,
 		float(screen.MENU_BOLD), 0.001, "the emboldening is the one main.gd asks for")
+
+
+# ---------------------------------------------------------------------------
+# THE ART ON ITS WAY. A web build fetching its skin zip says so in the
+# corner; here nothing is fetching, so the line is built, hidden, and
+# ready to speak in the corner's voice when the download reports.
+# ---------------------------------------------------------------------------
+
+
+func test_the_fetch_line_is_silent_when_nothing_is_on_its_way() -> void:
+	var screen := await _build()
+	var line := screen.get_node_or_null("Fetching") as Label
+	assert_not_null(line, "the shell builds its fetch line")
+	assert_false(line.visible,
+		"nothing is fetching under the editor, so the line stays hidden")
+
+
+func test_the_fetch_line_says_how_far_when_the_host_said_how_big() -> void:
+	assert_eq(MainScreen.fetch_line(0.425), "Fetching the 1997 art… 43%")
+	assert_eq(MainScreen.fetch_line(1.0), "Fetching the 1997 art… 100%")
+	assert_eq(MainScreen.fetch_line(-1.0), "Fetching the 1997 art…",
+		"no content length means no percentage, not a wrong one")
+
+
+func test_the_fetch_line_follows_the_download() -> void:
+	var screen := await _build()
+	var line := screen.get_node_or_null("Fetching") as Label
+	SkinPack.fetch_progressed.emit(0.5)
+	assert_eq(line.text, "Fetching the 1997 art… 50%")
+	assert_false(line.visible,
+		"the line follows the pack's own fetching flag, not the signal alone")

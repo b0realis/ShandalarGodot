@@ -1498,6 +1498,27 @@ shandalar/
 │   │                          shandalar-art-1997.zip was built). Wraps
 │   │                          import_original.py, which must sit beside
 │   │                          it; reads the install, never writes to it.
+│   ├── skin_catalogue.py    THE SKIN'S CATALOGUE (2026-09-08) — writes
+│   │                          docs/skin-catalogue.txt (shipped as
+│   │                          skin/SKIN.txt): every MANIFEST / VIDEOS /
+│   │                          PIC_SCREENS key with its format and
+│   │                          dimensions MEASURED off assets/original
+│   │                          (PNG header, `wave`, font magic, the
+│   │                          sidecar's grid, read_avi_header), grouped
+│   │                          under a note per family (what it is for,
+│   │                          how the game cuts it: cells, pitches,
+│   │                          image+mask halves), plus portraits/,
+│   │                          cardart/ (the snake-name rule) and
+│   │                          movies/. A key with no note is an error.
+│   │                          --check ZIP_OR_DIR reports what a skin of
+│   │                          a player's own is missing
+│   ├── test_skin_catalogue.py  unittest: the measurers on files built
+│   │                          in the test (a PNG header, a `wave` WAV,
+│   │                          a font's magic, a sidecar), every manifest
+│   │                          key catalogued, the COMMITTED catalogue
+│   │                          naming every expected file, --check on a
+│   │                          zip (outside-skin/ refused, .import
+│   │                          sidecars ignored, missing + unknown listed)
 │   ├── import_original.py   1997 skin importer: copies original art/fonts
 │   │                          from the USER'S OWN game copy into
 │   │                          assets/original/ (gitignored) per its
@@ -1663,7 +1684,23 @@ shandalar/
 │                              to ../shandalar-build/web/ instead: no
 │                              smoke-boot (a browser does that), checks
 │                              index.html/.js/.wasm/.pck came out, prints
-│                              their sizes and the one-line static server
+│                              their sizes and the one-line static server.
+│                              THE SKIN PACK (2026-09-08): skin_pack()
+│                              stages assets/original + assets/cardart as
+│                              real files and writes them through
+│                              tools/mtg_assets.py --from-skin into ONE
+│                              `original_skin.zip` (the shape a player's
+│                              own disc produces) beside a copy of
+│                              docs/skin-catalogue.txt as SKIN.txt.
+│                              --package puts both in skin/ next to the
+│                              binary, plus icon.png (game/icon.png) and
+│                              shortcut.sh, the opt-in desktop entry
+│                              (~/.local/share/applications/
+│                              shandalar.desktop, --remove undoes it);
+│                              --web --skin puts them beside index.html
+│                              for SkinPack to fetch, plain --web removes
+│                              an earlier skin/ so the art is never hosted
+│                              by accident. --web --package is refused
 ├── decks/                   Shipped five-style gauntlet (.deck files —
 │   │                          format in DeckLab/README.md); a CI test
 │   │                          keeps every deck valid vs the card pool.
@@ -1713,7 +1750,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4870 tests / ~134 000 asserts, ~300 s
+├── tests/                   GUT suite — 4891 tests / ~134 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2963,6 +3000,18 @@ shandalar/
 │    "prevent 3" in SHIELD_INK centred on the art with the P/T outline,
 │    following the pool, "prevent all" at 9999, yielding to a targeting
 │    stamp, hidden face down, the tooltip's shield line;
+│    tests/unit/test_skin_pack.gd — THE SKIN PACK (SkinPack): a probe
+│    zip built with ZIPPacker (a 4x6 PNG, a sidecar, a portrait) so the
+│    contract is tested with no 1997 art on the machine — inspect()
+│    accepts everything-under-skin/ and refuses a loose entry, a `..`,
+│    an empty zip, a saved 404 page; a mount is read by GameSkin.texture
+│    and .metadata in place, adds res://skin to search_dirs after
+│    user:// and before the checkout, feeds PortraitLibrary and
+│    MusicLibrary, and is invisible again once pack_mounted is false; a
+│    drop keeps the zip at USER_ZIP, mounts it and (off the title)
+│    shows the Restart/Later notice, a bad drop is refused with an OK
+│    notice, a drop without a zip does nothing; pack_url strips query
+│    and fragment; plan_after_arrival;
 │    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):
 │    user:// under the editor, the location seam, the banner's moment /
 │    players / seed, a game as banner + lines in the window's shape,
@@ -3245,6 +3294,8 @@ shandalar/
 │   │                          while the card scripts are still loaded
 │   │                          (CardRegistry.unload) so quit() never
 │   │                          aborts in static teardown
+│   ├── (SkinPack sits between Lifecycle and ShellMusic in the autoload
+│   │    order, so the shell's first tune can come out of the zip)
 │   ├── shell_music.gd       AUTOLOAD `ShellMusic` — THE SHELL'S ONE BED
 │   │                          ([QoL], 2026-09-07: "Help and options in
 │   │                          main menu should have same music as main
@@ -3395,7 +3446,45 @@ shandalar/
 │   │                          600-art browse holds 267 MB against 608
 │   │                          unbounded; the sheets stay in
 │   │                          _texture_cache, unbounded, because they
-│   │                          are few and wanted for the whole run
+│   │                          are few and wanted for the whole run.
+│   │                          THE MOUNTED PACK (2026-09-08): search_dirs()
+│   │                          adds PACK_DIR (`res://skin`) after the
+│   │                          player's folder and the loose portable copy
+│   │                          while `pack_mounted` is true — the one flag
+│   │                          SkinPack raises; _locate() keeps `res://`
+│   │                          paths as they are (globalize_path on a pack
+│   │                          path names a folder that does not exist);
+│   │                          clear_caches() is what a pack arriving
+│   │                          mid-run calls before the title is rebuilt
+│   ├── skin_pack.gd         AUTOLOAD `SkinPack` — THE SKIN AS ONE ZIP
+│   │                          ([QoL], 2026-09-08: "a /skin/ folder …
+│   │                          the zip with our assets named
+│   │                          original_skin"). Mounts `original_skin.zip`
+│   │                          with ProjectSettings.load_resource_pack so
+│   │                          GameSkin reads `res://skin/...` straight out
+│   │                          of it — nothing unpacked, every platform.
+│   │                          Order at boot = precedence (first mount
+│   │                          wins): user://skin/original_skin.zip (the
+│   │                          one DROPPED on the window, or FETCHED by the
+│   │                          web build), then <exe>/skin/original_skin.zip
+│   │                          (shipped). inspect() refuses a zip with any
+│   │                          entry outside `skin/` (a mount would land it
+│   │                          at res://). A drop copies the zip to
+│   │                          user:// (a browser deletes the dropped file
+│   │                          when the signal returns), mounts with
+│   │                          replacement, clears the caches, refreshes
+│   │                          the libraries and — on the title — reloads
+│   │                          the scene; anywhere else a UiChrome notice
+│   │                          offers Restart (OS.set_restart_on_exit;
+│   │                          location.reload() on web, armed after
+│   │                          RELOAD_GUARD so the IDBFS sync lands) or
+│   │                          Later. On web with nothing stored it fetches
+│   │                          pack_url(location.href) — `skin/
+│   │                          original_skin.zip` beside the page — with
+│   │                          HTTPRequest.download_file, deleting a 404
+│   │                          page or a cut download so it is never
+│   │                          mounted; fetch_progressed feeds the title's
+│   │                          line
 │   ├── help/                THE HELP SCREEN — the main menu's Help button
 │   │   │                      (directly above Exit). The 1997 game had a
 │   │   │                      printed manual and a context-sensitive

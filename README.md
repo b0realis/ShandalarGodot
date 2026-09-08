@@ -85,7 +85,7 @@ cards of the eight 1997 sets, one documented file each, no stubs left.
 **M4 — AI: attacking, blocking and casting audited and measured.**
 **317 decks** ported with their provenance recorded.
 
-Verified by **4870 tests / ~134 000 assertions** across 280 scripts, running
+Verified by **4891 tests / ~134 000 assertions** across 281 scripts, running
 headless, plus a duel soak that plays whole games through the live UI.
 Adventure mode (M5) is next — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -113,10 +113,17 @@ Any static host will do — the web build runs without threads, so there
 are no COOP/COEP headers to arrange. On a touchscreen the game types the
 mouse for your finger: tap clicks, hold and lift right-clicks, drag drags,
 a swipe scrolls a list; *Options → Touch controls* is Auto / On / Off. The
-browser build draws the clean built-in skin — the 1997 graphics and the
-card art stay on your own disk (next section). The table is landscape;
-a phone held upright gets a small picture. So far this has been checked
-in a desktop browser pretending to be a tablet, not on a real one.
+table is landscape; a phone held upright gets a small picture. So far
+this has been checked in a desktop browser pretending to be a tablet,
+not on a real one.
+
+The browser wears the art the same way the desktop does — as **one skin
+zip**, `original_skin.zip`, mounted in place. Drop the zip on the page
+and the game keeps it (in the browser's own storage, across visits); or
+serve it beside the page as `skin/original_skin.zip` and the game fetches
+it once — `./build_release.sh --web --skin` places it there, plain
+`--web` never does. Whether the 1997 graphics are hosted anywhere is the
+owner's call, not the build's.
 
 ## The art, and how to reconstruct it
 
@@ -137,8 +144,17 @@ python3 tools/mtg_assets.py --install /path/to/game  # imports, writes a zip
 `--check` reports on seven groups of files separately — shell art, card
 frames and mana symbols, portraits, fonts, sounds, the card database and the
 coin-toss movies — so a partial install tells you exactly which parts stay
-drawn. `--install` writes one archive whose inner folder is `skin/`, so it
-unzips straight next to the executable.
+drawn. `--install` writes one archive whose inner folder is `skin/` — a
+**skin zip**, which the game mounts as it is: put it beside the executable
+as `skin/original_skin.zip`, or drop it onto the running game's window.
+Nothing is unpacked. (The same layout also unzips cleanly next to the
+binary, which is how it worked before the game could mount a zip.)
+
+The packaged build ships that zip beside `skin/SKIN.txt`, a generated
+catalogue (`docs/skin-catalogue.txt`, `tools/skin_catalogue.py`) of every
+picture, font, sound, tune, movie and portrait the game wears — format,
+dimensions, sheet grids and names — so a skin can be drawn from scratch
+and checked with `python3 tools/skin_catalogue.py --check my_skin.zip`.
 
 It **reads your install and never writes to it.** A genuine 1997 install is
 the best source: its raw `.SPR` and `.PIC` files hold seventy portraits, five
@@ -222,7 +238,7 @@ given away for free.
 most literal sense: a genuinely free engine, with no runtime fee, no seat, no
 licence server and no company able to change the terms afterwards — which is
 exactly what a project that intends to still be here in ten years needs. Its
-headless mode is why an entire rules engine and 4870 tests run in seconds in
+headless mode is why an entire rules engine and 4891 tests run in seconds in
 a terminal; its Compatibility renderer is why a 1997 game's look runs on the
 kind of machine people actually have; and GDScript is why a card is a
 readable twenty-line file instead of a build system. Thank you for building

@@ -383,13 +383,16 @@ static func ensure_folder() -> String:
 
 ## The player's folders, in order: `user://music` first, then a `music/`
 ## folder beside the executable — the portable copy, the same idea and the
-## same reason as [method PortraitLibrary.portable_dirs].
+## same reason as [method PortraitLibrary.portable_dirs] — then the
+## `skin/music/` inside the mounted skin pack ([SkinPack]).
 static func _search_dirs() -> Array[String]:
 	var out: Array[String] = [dirs[0]]
 	var beside := GameSkin.portable_dir()
 	if beside != "":
 		out.append(beside.get_base_dir().path_join("music"))
 		out.append(beside.path_join("music"))
+	if GameSkin.pack_mounted:
+		out.append(GameSkin.PACK_DIR.path_join("music"))
 	for i in range(1, dirs.size()):
 		out.append(dirs[i])
 	return out

@@ -7507,6 +7507,92 @@ the handler by hand passed before the fix too
 of this: the original was a mouse program, and s30's only keys are
 `A`/`D` on the card under the pointer (`edit_deck.go:459-465`).
 
+## THE SKIN PACK (2026-09-08) — [QoL]
+
+*"If I test the web build … it does not pick up the art? Should I put my
+zip with art in the same folder?"* — and then: *"this feature should be
+available also to other builds: a `/skin/` folder besides decks, music,
+portraits etc. where original art lives. In here should be the zip with
+our assets named original_skin along with a text file that catalogues
+all art, music, movies needed — their format, dimensions and naming so
+users/players can create new/free skins."* And: *"In the local and
+release builds in the future ship also the icon for the binary if the
+user wants it set."*
+
+**Why the browser had no art.** Not a bug: the page is sandboxed. There
+is no folder beside `index.html` the game can open, `user://` is an
+IndexedDB, and `Image.load_from_file` cannot read an URL. What a browser
+CAN hold is one file — dropped on the canvas (`Window.files_dropped`,
+which the web template implements), or downloaded (`HTTPRequest`, which
+the template implements too) — and what the engine can do with one zip
+is MOUNT it: `ProjectSettings.load_resource_pack` on a zip whose entries
+are `skin/...` makes them `res://skin/...`, and `FileAccess`,
+`DirAccess`, `Image.load_from_file`, `FontFile.load_dynamic_font` and
+`AudioStreamWAV.load_from_file` all read through it (checked with a
+probe before a line was written). Nothing is unpacked, nothing decoded
+ahead of need, and the same mechanism serves the desktop — so it became
+THE way the art ships, everywhere.
+
+**The pack** (`game/skin_pack.gd`, autoload `SkinPack`). One zip,
+`original_skin.zip`, a `skin/` folder inside with everything the
+catalogue lists; exactly what `tools/mtg_assets.py` already wrote from a
+player's disc, so the two zips are one shape. Mounted at boot in
+precedence order (first mount wins): the player's own at
+`user://skin/original_skin.zip` — dropped, or fetched — then the shipped
+one at `<executable>/skin/original_skin.zip`. `GameSkin.search_dirs()`
+lists the mounted folder after the player's loose `user://original_skin`
+and the loose portable `skin/` and before a dev checkout, so a file
+placed loose still overrides one in the zip. A zip with an entry outside
+`skin/` is refused whole: the mount would land it at `res://`, among the
+scripts.
+
+**The drop.** Any `.zip` dropped on the window is inspected, copied to
+`user://` (a browser deletes the dropped file the moment the signal
+returns), mounted with replacement, and the caches cleared
+(`GameSkin.clear_caches`, `PortraitLibrary.refresh`,
+`MusicLibrary.refresh`). On the title screen the scene is reloaded and
+the new art is simply there. Anywhere else the game says *"The 1997 art
+is in"* and offers **Restart now** (`OS.set_restart_on_exit`;
+`location.reload()` in a browser, armed three seconds later so the
+IndexedDB sync has landed) or **Later** — because two dozen classes keep
+textures derived from the skin they saw at start (MiniCard's masks and
+stripes, FilterBar's cells, SetBadges…) and a null cached for "no skin"
+stays null; one honest restart instead of twenty-five invalidations. A
+zip that is not a skin gets a notice saying which entry was the problem.
+
+**The fetch.** A web build with nothing stored asks for
+`skin/original_skin.zip` beside its own page (`pack_url` strips the query
+and fragment and cuts at the last slash). A 404 or a cut connection
+leaves nothing behind — whatever was written is deleted so it is never
+mounted next visit; a 200 is inspected, mounted, and kept in IndexedDB
+across visits. The title screen shows *"Fetching the 1997 art… N%"*
+while it comes. Whether the art is hosted at all stays the owner's call:
+`build_release.sh --web --skin` places the zip beside the page, plain
+`--web` removes an earlier one.
+
+**The catalogue** (`tools/skin_catalogue.py` → `docs/skin-catalogue.txt`,
+shipped as `skin/SKIN.txt`) is generated, not typed, so it cannot drift:
+the names come off the importer's MANIFEST, the dimensions are measured
+off the imported folder (PNG header, `wave`, font magic, the sidecar's
+grid, the AVI header), and each family carries a note on what it is for
+and how the game cuts it — the 19 mana cells, the 18 badge cells and
+which are blank, the set strip's 66-pixel pitch, the filter bar's
+(row, column) map, the plaques' order, the phase bars' columns, the
+image+mask halves and which way they split. A key with no note is an
+error, and a unit test holds the committed text to the manifest. The
+three keys the game imports but does not read yet are marked so. The
+same script's `--check my_skin.zip` tells a skin maker what is missing.
+
+**The icon.** The package carries `icon.png` (the game's own) and a
+`shortcut.sh` that writes `~/.local/share/applications/shandalar.desktop`
+pointing at the binary, its folder and the icon — run by hand, only by
+the player who wants it, `--remove` to undo. Unpacking installs nothing.
+
+**What did not change.** A loose `skin/` folder beside the executable,
+`user://original_skin/`, the importer, the fetcher: all as before. The
+zip is one more place the game looks, and the first one that works in a
+browser.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
