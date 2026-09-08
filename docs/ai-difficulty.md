@@ -83,6 +83,7 @@ override any knob on any preset for a measurement
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
+| `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
 
 `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` are the four
 knobs that are on at every rung, and the reason is the line between weak
@@ -136,7 +137,9 @@ the libraries (a Time Walk's extra draw step among them), keeps a
 second The Abyss in hand, animates a Factory
 only for an attack it will actually declare, and holds its Nevinyrral's
 Disk for the attack it answers — priced by the damage it keeps off the
-pilot, fired once the attackers are named and before they connect.
+pilot, fired once the attackers are named and before they connect —
+and keeps its Counterspell in hand when the creature on the stack is
+one its Abyss will eat at their upkeep.
 
 **Wizard.** No mistakes at all. The same decision code, the same
 capabilities as the Sorcerer, with twice the search (3 000), the pickiest
@@ -192,7 +195,15 @@ Walk's draw step under `paces_draws` is one card once a game and
 measures like it: the shipped Wizard before and after it, the same
 seed, differs in 40 of 1 500 games against the five starters and The
 Deck wins 11 of those it had lost against 1 the other way (+0.3, +0.3,
-0.0, +1.3, +1.3).
+0.0, +1.3, +1.3). `trusts_abyss` is a wash in the right direction
+(+0.3, +1.7, −0.3, +1.0, +1.3 against the five starters; 33 games
+flipped to a win, 21 away, of 602 that differed) with the counters
+spent about half as often — 215 Counterspells and 75 Mana Drains cast
+in 150 census games with the knob off, 122 and 40 with it on, the same
+64 wins either way: a creature the Abyss was going to eat was never
+worth the counter, and the counter kept is the one that meets the
+Disenchant. The Weissman list is byte-identical: it plays Moat, not
+The Abyss.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -222,6 +233,12 @@ Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
   untap, the attack, the land drop) is not priced, so a Walk goes off
   on an empty board when holding it for a Factory attack would have
   been the play. Open (`docs/ROADMAP.md`, the third pass).
+- `trusts_abyss` reads the table as it stands: a creature it lets
+  through because it is the next meal can be sheltered before their
+  upkeep by a cheaper creature cast after it (Blue Skies' one-drop
+  fliers, the −0.3 there), and a second copy of a creature already on
+  the table is let through as level with it although only one of the
+  two dies. Open (`docs/ROADMAP.md`, the third pass).
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` did)

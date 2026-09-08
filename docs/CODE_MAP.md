@@ -1211,6 +1211,21 @@ shandalar/
 │   │                      A wash in the right direction against the
 │   │                      starters, the Disk fired in their combat five
 │   │                      times in 150 census games where it never had.
+│   │                      trusts_abyss (2026-09-08) is THE ABYSS AS AN
+│   │                      ANSWER: the counter decision (_try_counter)
+│   │                      keeps the counterspell when the creature spell
+│   │                      on the stack is the next meal of a feeder on the
+│   │                      table (AiPlayer._is_next_meal, off
+│   │                      TriggeredAbility.kills_each_upkeep: the target
+│   │                      rule satisfied, the feeder's colours not among
+│   │                      the body's protections, no cheaper legal
+│   │                      creature of theirs to be fed first) — The Abyss
+│   │                      destroys it at their upkeep, the counter meets
+│   │                      the Disenchant. Sorcerer and Wizard. A wash in
+│   │                      the right direction against the starters, the
+│   │                      counters cast about half as often in the census
+│   │                      for the same wins; a shelter cast after the
+│   │                      let-through creature is the known gap.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -3441,6 +3456,14 @@ shandalar/
 │    cast level beyond the horizon, the null walking the race away; a
 │    second Walk needing a second spare card and spending it; the ladder
 │    from Sorcerer up
+│    tests/ai/test_ai_trusts_abyss_2026_09_08.gd — THE ABYSS AS AN
+│    ANSWER (AiProfile.trusts_abyss): the Serra Angel the Abyss will
+│    eat let through with the Counterspell kept, countered with the knob
+│    off, without the Abyss, and with their Bears on the table to be fed
+│    first; a Disenchant on the Abyss still answered; the meal the least
+│    valuable legal creature, a White Knight and a Clay Statue no meal,
+│    a protected body sheltering nothing, their own Abyss, no feeder;
+│    the ladder from Sorcerer up; the knob read by the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

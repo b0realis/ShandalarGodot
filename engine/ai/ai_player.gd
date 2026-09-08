@@ -1426,6 +1426,39 @@ func _upkeep_meals(game: MtgGame, who: int,
 	return eaten
 
 
+## THE ABYSS AS AN ANSWER (2026-09-08, [member AiProfile.trusts_abyss]):
+## would [param card], resolved onto [param who]'s battlefield as
+## printed, be the NEXT MEAL of a feeder on the table — a permanent
+## whose upkeep trigger declares an appetite ([member
+## TriggeredAbility.kills_each_upkeep]) that the body satisfies, with no
+## legal creature of theirs worth less to be fed first? The card is
+## still on the stack, so the spec's zone check cannot be asked; its
+## own filter (nonartifact, for the Abyss) and printed protection are.
+## The meal is the least valuable legal creature, the same reading
+## [method _upkeep_meals] makes of a board.
+func _is_next_meal(game: MtgGame, card: CardInstance, who: int) -> bool:
+	var worth := Evaluator.permanent_value(card)
+	for feeder in game.all_battlefield():
+		for ability in feeder.cur_triggered_abilities:
+			var spec: TargetSpec = ability.kills_each_upkeep
+			if spec == null:
+				continue
+			if spec.filter.is_valid() and not spec.filter.call(card):
+				continue
+			if (card.cur_protection & feeder.cur_colors) != 0:
+				continue
+			var sheltered := false
+			for inst in game.players[who].battlefield:
+				if not spec.is_legal(game, TargetRef.card(inst), feeder):
+					continue
+				if Evaluator.permanent_value(inst) < worth:
+					sheltered = true
+					break
+			if not sheltered:
+				return true
+	return false
+
+
 ## What a leveller (Balance: [member EffectIntent.levels]) would move,
 ## on the Evaluator's scale — theirs counting for us, ours against. Each
 ## pass measures the fewest across the two seats and every card over it
@@ -2951,6 +2984,13 @@ func _try_counter(game: MtgGame) -> String:
 			if target != null and target.controller_id == pid:
 				threat = maxf(threat, Evaluator.card_value(target.data))
 	if threat < profile.counter_threshold:
+		return ""
+	# THE ABYSS AS AN ANSWER (2026-09-08, AiProfile.trusts_abyss): a
+	# creature that will be the next meal of a feeder on the table dies
+	# at their upkeep having blocked once at most; the counter is saved
+	# for what the feeder cannot eat.
+	if profile.trusts_abyss and top.card.is_creature() \
+			and _is_next_meal(game, top.card, top.controller):
 		return ""
 	var top_ref := TargetRef.card(top.card)
 	for inst in game.players[pid].hand:
