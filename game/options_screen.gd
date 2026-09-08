@@ -525,6 +525,9 @@ func _add_music_choice(content: VBoxContainer) -> void:
 	if tracks.is_empty():
 		line += "Import your copy of the 1997 game, or drop "
 		line += "WAV/OGG/MP3 files in:\n%s" % folder
+	elif OS.has_feature("web"):
+		# No folder row under Skin in a browser (nothing to open there).
+		line += "Your own — WAV, OGG or MP3 — go in %s." % folder
 	else:
 		line += "Add your own — WAV, OGG or MP3 — in the music folder " \
 			+ "named under Skin, above."
