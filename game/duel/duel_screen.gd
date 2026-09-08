@@ -135,6 +135,10 @@ var _pass_button: Button
 ## or both, depending on the situation"* — so this one comes and goes with
 ## [method _can_cancel] (§6.11).
 var _cancel_button: Button = null
+## THE SKIP (2026-09-08, [QoL]). The bar's third button, up only at the
+## beginning of your own combat with nothing on the chain ([method
+## _skip_offer_applies]), while Done wears the word `Begin`.
+var _skip_button: Button = null
 var _hand_rows: Array[Control] = []   # [p1 hand (top), p0 hand (bottom fan)]
 var _field_rows: Dictionary = {}             # [pid][row] -> SqueezeRow
 # Every centre popup is an OriginalDialog (game/duel/original_dialog.gd)
@@ -1246,6 +1250,11 @@ func _status_message() -> String:
 					frame = "Triggered effects?..."
 			subject = "%s %s" % [verb, top.card.data.card_name]
 		return frame + subject
+	# THE BEGINNING OF YOUR OWN COMBAT, nothing on the chain: the owner's
+	# question (2026-09-08, [constant SKIP_OFFER]), in the owner's words;
+	# the two buttons beside it are the answers.
+	if _skip_offer_applies():
+		return SKIP_OFFER
 	# Our own turn, nothing waiting: the original spells out what the
 	# phase allows, and drops ", play land" once the land drop is spent.
 	if my_turn and game.priority_player == human:
@@ -3588,8 +3597,12 @@ func _withdraw_choice() -> void:
 ## the territory menu's `Go to: next phase` (§6.3) — *"ends the current
 ## phase and moves you on to the next one"* (`Duel.hlp`, **Territory**) —
 ## which is a run with the shortest possible destination: the first phase
-## key that is not this one.
-enum Advance { NONE, RUN_TO, DONE, NEXT_PHASE }
+## key that is not this one. [constant Advance.SKIP_COMBAT] is the Skip
+## button's order (2026-09-08, [QoL]): a run to the second main phase
+## that declares no attackers on the way, takes the opponent's replies at
+## once and ignores the Stops of the phase it was told to leave out —
+## see [constant SKIP_OFFER].
+enum Advance { NONE, RUN_TO, DONE, NEXT_PHASE, SKIP_COMBAT }
 
 var _advance_mode := Advance.NONE
 ## Destination of a RUN_TO, as `[half, bar, slot]`; empty for DONE.
@@ -3619,10 +3632,27 @@ var _rested_at: Array = []
 
 ## Where the duel is on the two bars right now, as `[half, bar, slot]` —
 ## the key Stops, run destinations and the `_advance_from` rule all use.
+##
+## THE BEGINNING OF COMBAT KEYS TO THE PHASE BAR'S COMBAT ICON, slot 4
+## (2026-09-08) — the bar that is actually on screen there ([method
+## CombatBar.shows_attack]), and the icon the middle of the owner's three
+## default dots sits on ([constant PhaseStops.DEFAULT_SLOTS]). Until then
+## every combat step went to the Combat Bar and that dot marked a phase
+## nothing consulted (the duel paused at combat anyway, on the
+## declaration as a required action). The owner's Skip needs the pause
+## one step EARLIER, before any lineup is asked for — *"Otherwise red dot
+## is always on here by default"* — so the dot now holds exactly the
+## moment it is drawn on. It is also where the manual puts it (p.190,
+## of the combat icon: *"when you click on [it], you are only announcing
+## your intention to attack. The attack doesn't actually start
+## immediately"*). The steps from the declaration on stay the
+## Combat Bar's, on-screen or not (with no attack the Phase Bar carries
+## them under the same icon, but a second key there would stop the same
+## dot twice — `docs/ROADMAP.md`, "THE COMBAT DOT").
 func _phase_key() -> Array:
 	var step: int = game.current_step()
 	var half := PhaseStops.half_for_seat(game.active_player, _human_seat())
-	if CombatBar.covers_step(step):
+	if CombatBar.covers_step(step) and step != Mtg.Step.COMBAT_BEGIN:
 		return [half, PhaseStops.Bar.COMBAT,
 			CombatBar.slot_for_step(step, game.awaiting_attackers,
 				game.awaiting_blockers)]
@@ -3871,13 +3901,17 @@ func _advance_stop_reason() -> String:
 		return held
 	# (3) "If you have placed a Stop on a phase, progress pauses at that
 	# phase" — but not on the phase the order was given in.
+	# ...nor for a Skip, whose every Stop on the way lies inside the phase
+	# it was told to leave out ([constant SKIP_OFFER]).
 	var here := _phase_key()
-	if _advance_moved and stops != null \
-			and stops.is_marked(here[0], here[1], here[2]):
+	if _advance_moved and _advance_mode != Advance.SKIP_COMBAT \
+			and stops != null and stops.is_marked(here[0], here[1], here[2]):
 		return "Stop"
-	# (2) the opponent did something. A run-to exception only: Done's own
-	# list weighs affordability instead (see the block comment above).
-	if _advance_mode == Advance.RUN_TO and not game.stack.is_empty():
+	# (2) the opponent did something. A run-to exception only (the Skip
+	# is a run): Done's own list weighs affordability instead (see the
+	# block comment above).
+	if (_advance_mode == Advance.RUN_TO or _advance_mode == Advance.SKIP_COMBAT) \
+			and not game.stack.is_empty():
 		var top: StackItem = game.stack.back()
 		if top.controller != _human_seat() and not _advance_seen.has(top):
 			return "%s is on the chain" % top.description
@@ -3947,13 +3981,123 @@ func _order_next_phase() -> void:
 	_begin_advance(Advance.NEXT_PHASE)
 
 
+## THE SKIP (2026-09-08, [QoL]). The owner, from a playtest of
+## v0.19.0-dev: *"before phases of combat even start you might want to
+## skip it entirely - so when we arrive at the icon of combat phase the
+## announcement should say: Begin Combat or skip? And you should have
+## two buttons: begin (takes you into declare attackers and combat
+## stages), if you click "skip", you just go into main phase 2
+## post-combat without even seeing the combat phases icons.. If you dont
+## have red dot on combat (it just skips if no creatures are on your
+## board). Otherwise red dot is always on here by default."*
+##
+## WHAT IT IS: a standing order ([constant Advance.SKIP_COMBAT]) whose
+## destination is the second main phase — a Run to, with three
+## differences. (1) It DECLARES NO ATTACKERS when the lineup is asked
+## for, where a Run to must stop (an owed declaration is a required
+## action). (2) The opponent's replies are taken AT ONCE ([method
+## _drive_advance]) instead of on the AI seat's dwell, so the whole of
+## combat is walked inside one frame and no combat-step icon is ever
+## drawn — the owner's *"without even seeing"*. (3) The Stops on the way
+## are not consulted: a Stop inside the phase you have just asked to
+## leave out is the question you have just answered. Everything else a
+## run stops for still stops it — a required action, a duel that ended,
+## the opponent putting something on the chain (manual p.116's *"requires
+## or permits a response"*, read as a Run to reads it: you see what they
+## did, whether or not you can answer it). Nothing on the chain is
+## skipped either: the original had no beginning-of-combat step, ours
+## does (Battering Ram, Johan), and a trigger of yours standing there is
+## resolved first — the offer waits for an empty chain.
+##
+## WHEN THE OFFER STANDS ([method _skip_offer_applies]): your own turn,
+## the beginning of combat, priority yours, nothing on the chain, no
+## question held open, the table in NORMAL mode. Whether the duel WAITS
+## there is the Stop's business, not the offer's: the beginning of combat
+## is keyed to the Phase Bar's combat icon ([method _phase_key],
+## 2026-09-08 — before this ruling that dot held nothing), and the dot
+## there is one of the three defaults ([method PhaseStops.default_masks])
+## — *"red dot is always on here by default"*. A Run to that came to
+## rest here is offered the same two buttons; so is a Done order the
+## Stop halted (its "Paused" flash, then the question).
+##
+## WITH THE STOP OFF ([method _auto_skip_applies]): the phase would pass
+## itself ([method _auto_pass_applies]); if besides that NOTHING OF YOURS
+## COULD ATTACK, the whole combat goes the same way instead of stopping
+## one step later to ask for a lineup nobody is in — the owner's *"it
+## just skips if no creatures are on your board"*, read as "no creature
+## that could attack": a board of Walls, of tapped or summoning-sick
+## creatures, or one under a Festival, has nothing to send either, and
+## asking would be the click with no decision that the 2026-09-03 rule
+## removed. With something able to attack, an unstopped combat runs as
+## before — to the lineup.
+##
+## NOT A 1997 FEATURE: the original's combat opened on the attackers'
+## choice, and no `UIStrings.txt` prompt offers to skip it. The line is
+## the owner's. [QoL]
+const SKIP_OFFER := "Begin Combat or skip?"
+
+
+## Is the Situation Bar asking the owner's question right now?
+func _skip_offer_applies() -> bool:
+	if game == null or game.game_over or _toss_active:
+		return false
+	if mode != Mode.NORMAL or _modal_open() or _pending_card != null:
+		return false
+	if game.current_step() != Mtg.Step.COMBAT_BEGIN:
+		return false
+	if not _is_human(game.active_player) \
+			or game.priority_player != game.active_player:
+		return false
+	if not game.stack.is_empty() or game.awaiting_choice != null:
+		return false
+	return true
+
+
+## Could anything of [param pid]'s be declared as an attacker right now?
+## The engine's own legality test, creature by creature, and its
+## turn-wide ban (Festival) first.
+func _has_a_legal_attacker(pid: int) -> bool:
+	if game.no_attacks_this_turn:
+		return false
+	var defender := game.opponent_of(pid)
+	for inst in game.players[pid].battlefield:
+		if CombatState.attack_illegality(game, inst, defender) == "":
+			return true
+	return false
+
+
+## The Stop-off case: the beginning of combat would pass itself, and
+## nothing could attack — so the whole combat goes, in one frame.
+func _auto_skip_applies() -> bool:
+	return _skip_offer_applies() and _auto_pass_applies() \
+		and not _has_a_legal_attacker(game.active_player)
+
+
+## The Skip button: the order described at [constant SKIP_OFFER].
+func _order_skip_combat() -> void:
+	if not _skip_offer_applies():
+		return
+	_begin_advance(Advance.SKIP_COMBAT)
+
+
 func _begin_advance(kind: int) -> void:
+	_arm_advance(kind)
+	_drive_advance()
+	_refresh()
+
+
+## The order's bookkeeping alone — split from [method _begin_advance] so
+## [method _drive_advance] can arm the Stop-off skip from inside itself
+## and walk it in the same call, rather than re-enter through a refresh.
+func _arm_advance(kind: int) -> void:
 	_advance_mode = kind
 	_advance_from = _phase_key()
 	_advance_moved = false
 	_advance_seen = game.stack.duplicate()
-	_drive_advance()
-	_refresh()
+	if kind == Advance.SKIP_COMBAT:
+		# The destination is the second main phase's icon on your half.
+		_run_to = [PhaseStops.half_for_seat(game.active_player, _human_seat()),
+			PhaseStops.Bar.PHASE, _phase_icon_slot(Mtg.Step.MAIN2)]
 
 
 ## Forget the order. *"your original 'destination' phase is forgotten"*
@@ -4080,6 +4224,13 @@ func _cancel_advance() -> void:
 # pass hands priority to the AI seat, whose reply rides [method
 # _maybe_schedule_ai] and its dwell. Either way the duel cannot walk a
 # whole turn inside one frame: one `DuelConfig.pace` gap per step.
+#
+# ONE EXCEPTION TO THE PACE, and it is the owner's (2026-09-08): an
+# unstopped combat of your own with nothing able to attack is not passed
+# a step at a time but left out whole, inside one frame, the way the Skip
+# button leaves it out — [method _auto_skip_applies], [constant
+# SKIP_OFFER]. *"If you dont have red dot on combat (it just skips if no
+# creatures are on your board)."*
 
 
 ## May the human's priority be passed for them right now? See the block
@@ -4163,17 +4314,23 @@ func _drive_advance() -> void:
 		_rested_at = []
 	if _advance_mode == Advance.NONE:
 		# No order standing: an unstopped phase still runs itself, on
-		# either seat's turn (see the block comment above).
-		_auto_pass_priority()
-		return
+		# either seat's turn (see the block comment above)...
+		if _auto_skip_applies():
+			# ...and an unstopped combat with nothing to send is left out
+			# whole (2026-09-08, [constant SKIP_OFFER]): the Skip button's
+			# own order, armed here and walked below in this same call.
+			_arm_advance(Advance.SKIP_COMBAT)
+		else:
+			_auto_pass_priority()
+			return
 	_advancing = true
 	# 200 is a safety net, not a design: every real run ends on an arrival
 	# or one of the three exceptions long before this.
 	for _i in 200:
 		if not _advance_moved and _phase_key() != _advance_from:
 			_advance_moved = true
-		if _advance_mode == Advance.RUN_TO and _advance_moved \
-				and _phase_key() == _run_to:
+		if (_advance_mode == Advance.RUN_TO or _advance_mode == Advance.SKIP_COMBAT) \
+				and _advance_moved and _phase_key() == _run_to:
 			_rested_at = _phase_key()
 			_cancel_advance()      # arrived: "then stops"
 			break
@@ -4183,6 +4340,23 @@ func _drive_advance() -> void:
 			_rested_at = _phase_key()
 			_cancel_advance()
 			break
+		# THE SKIP'S LINEUP IS "NONE" (2026-09-08, [constant SKIP_OFFER]),
+		# given before the stop reasons are read — to any other order an
+		# owed declaration is a required action. The refresh the step's
+		# entry ran has already put the table in ATTACKERS mode; the
+		# declaration takes it back out, as Done's confirm would.
+		if _advance_mode == Advance.SKIP_COMBAT and game.awaiting_attackers \
+				and _is_human(game.active_player):
+			var refused := game.declare_attackers(game.active_player, [])
+			if refused != "":
+				# A creature that must attack if able (Nettling Imp): the
+				# engine's own words, and the lineup is yours to make.
+				_report(refused)
+				_cancel_advance()
+				break
+			_selected_attackers = []
+			mode = Mode.NORMAL
+			continue
 		var reason := _advance_stop_reason()
 		if reason != "":
 			# The order is spent HERE, and the automatic pass must not
@@ -4207,6 +4381,15 @@ func _drive_advance() -> void:
 			_cancel_advance()
 			break
 		if not _is_human(game.priority_player):
+			# THE SKIP TAKES THE OPPONENT'S REPLY AT ONCE (2026-09-08,
+			# [constant SKIP_OFFER]): the AI seat's dwell is the pace of a
+			# turn worth watching, and this is the one walk the owner asked
+			# to see nothing of. What it did is read on the next lap — a
+			# spell it cast is "something on the chain" and halts the order.
+			if _advance_mode == Advance.SKIP_COMBAT \
+					and _ais.has(game.priority_player) \
+					and _ais[game.priority_player].act(game) != "":
+				continue
 			break                   # the AI's timer takes it from here
 		if game.pass_priority(game.priority_player) != "":
 			_cancel_advance()
@@ -4642,6 +4825,14 @@ func _refresh() -> void:
 	# situation"* (§6.11).
 	if _cancel_button != null:
 		_cancel_button.visible = _can_cancel()
+	# ...and at the beginning of your own combat Done says `Begin` and
+	# Skip stands beside it (2026-09-08, [constant SKIP_OFFER]).
+	var offer := _skip_offer_applies()
+	_pass_button.text = "Begin" if offer else "Done"
+	_pass_button.tooltip_text = "Begin combat  [Space]" if offer \
+		else "Pass priority  [Space]"
+	if _skip_button != null:
+		_skip_button.visible = offer
 	# The table-wide toggle reads back the per-territory flags the menu
 	# entries set. no_signal, or setting it here would re-enter the handler
 	# that set the flags in the first place.
@@ -5803,7 +5994,7 @@ func _rebuild_field(pid: int) -> void:
 		# [method _flush_pile] for the report that put this here.
 		var waiting: Array = []
 		for inst in _display_order(pid, by_row[row], row):
-			if not inst.attachments.is_empty():
+			if _fan_steps(inst) > 0:
 				_flush_pile(container, waiting)
 				waiting = []
 				container.add_child(_make_widget(inst))
@@ -6724,13 +6915,63 @@ func _cancel_drag() -> void:
 
 
 ## How many cards stand behind [param inst] in its fan: its attachments,
-## and the shield ghost when it wears one — the number both the widget
-## ([method _make_widget]) and the free layer's footprint
-## ([method _placement_span]) count by.
+## the chosen-type ghost when it made a choice and the shield ghost when
+## it wears one — the number both the widget ([method _make_widget]) and
+## the free layer's footprint ([method _placement_span]) count by.
 func _fan_steps(inst: CardInstance) -> int:
 	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
 		return 0
-	return inst.attachments.size() + (1 if _shield_ghost_data(inst) != null else 0)
+	return inst.attachments.size() \
+		+ (1 if _chosen_ghost_data(inst) != null else 0) \
+		+ (1 if _shield_ghost_data(inst) != null else 0)
+
+
+## The ghost cards built for the choices on the table, by chooser and
+## choice ("Aswan Jaguar|elf"), so a redraw hands the same definition
+## back and the sidebar's preview cache keeps its art.
+var _chosen_ghosts: Dictionary = {}
+
+
+## The card to draw behind [param inst] for the creature type it chose,
+## or null: [member CardData.chosen_type_key] names where the choice is
+## kept, and a creature that has made none yet (the trigger still on the
+## chain, or a library with no creature in it) shows nothing.
+##
+## The ghost is an AURA IN THE CHOOSER'S COLOUR titled with the type —
+## "Elf", "Enchantment — Aura" — which is what the owner asked to see
+## and what the fan already knows how to draw; its text says who chose.
+func _chosen_ghost_data(inst: CardInstance) -> CardData:
+	if inst == null or inst.data.chosen_type_key == "":
+		return null
+	var chosen := String(inst.memory.get(inst.data.chosen_type_key, ""))
+	if chosen == "":
+		return null
+	var key := "%s|%s" % [inst.data.card_name, chosen]
+	if not _chosen_ghosts.has(key):
+		_chosen_ghosts[key] = CardData.new(chosen.capitalize(), "",
+				Mtg.CardType.ENCHANTMENT) \
+			.with_subtypes(["aura"]) \
+			.with_colors(inst.data.color_mask()) \
+			.oracle("%s chose this creature type as it came into play." \
+				% inst.data.card_name)
+	return _chosen_ghosts[key]
+
+
+## THE CHOSEN-TYPE GHOST — the creature type an Aswan Jaguar rolled as it
+## came into play, drawn behind it like an aura for as long as it stands.
+## `[QoL]`, 2026-09-08: *"When "aswan jaguar" comes into play, it chooses
+## a random creature type from opponent deck. The chosen creature type
+## name should be present as a back mini card like aura - with creature
+## type as it name on the aura card top, so player quickly knows which
+## type was randomly chosen!"* A card built for the purpose
+## ([method _chosen_ghost_data]), with no instance behind it, no id and
+## nothing to click, its title band the one word that matters; hovering
+## it docks it in the sidebar, where the text says whose choice it is.
+## Drawn for EITHER seat's Jaguar: the opponent's chose from YOUR deck,
+## and which of your creatures it hunts is the thing you most want to
+## know.
+func _chosen_ghost(inst: CardInstance) -> MiniCard:
+	return _ghost_card(_chosen_ghost_data(inst), inst, "ChosenGhost")
 
 
 ## The card to draw behind [param inst] for the shield it carries, or
@@ -6758,12 +6999,19 @@ func _shield_ghost_data(inst: CardInstance) -> CardData:
 ## on the CREATURE's face ([method MiniCard._refresh_shield]), where it
 ## can be seen.
 func _shield_ghost(inst: CardInstance) -> MiniCard:
-	var data := _shield_ghost_data(inst)
+	return _ghost_card(_shield_ghost_data(inst), inst, "ShieldGhost")
+
+
+## A GHOST CARD for [param inst]'s fan: [param data] drawn as a whole
+## card with no instance behind it (id -1, the host's controller), named
+## [param node_name] so the tests and the eye can tell a shield from a
+## choice. Null for null data.
+func _ghost_card(data: CardData, inst: CardInstance, node_name: String) -> MiniCard:
 	if data == null:
 		return null
 	var ghost_inst := CardInstance.new(data, -1, inst.controller_id)
 	var ghost := MiniCard.new(ghost_inst)
-	ghost.name = "ShieldGhost"
+	ghost.name = node_name
 	ghost.size = MiniCard.SIZE
 	ghost.focus_mode = Control.FOCUS_NONE
 	# A Button that never presses, like the deck builder's faces: the
@@ -6814,18 +7062,27 @@ func _make_widget(inst: CardInstance) -> Control:
 	# behind whatever auras the creature wears — because it is the newest
 	# and the briefest thing there: it goes at cleanup, and nothing already
 	# on the card moves when it does. See _shield_ghost.
+	#
+	# THE CHOSEN-TYPE GHOST stands NEAREST the host, one step out, for the
+	# opposite reason: the Jaguar's choice is made as it comes into play
+	# and lasts as long as it does, so it is the oldest thing in the fan,
+	# and an aura cast on the Jaguar later lands outside it, moving
+	# nothing. See _chosen_ghost.
 	var ghost := _shield_ghost(inst) if inst.zone == Mtg.Zone.BATTLEFIELD \
 		else null
-	if (not inst.attachments.is_empty() or ghost != null) \
+	var chosen := _chosen_ghost(inst) if inst.zone == Mtg.Zone.BATTLEFIELD \
+		else null
+	if (not inst.attachments.is_empty() or ghost != null or chosen != null) \
 			and inst.zone == Mtg.Zone.BATTLEFIELD:
 		var attached: Array[CardInstance] = []
 		for id in inst.attachments:
 			var aura := game.find_instance(id)
 			if aura != null:
 				attached.append(aura)
-		if attached.is_empty() and ghost == null:
+		if attached.is_empty() and ghost == null and chosen == null:
 			return result
-		var steps := float(attached.size() + (1 if ghost != null else 0))
+		var inner := 1 if chosen != null else 0
+		var steps := float(attached.size() + inner + (1 if ghost != null else 0))
 		var wrap := Control.new()
 		# A TAPPED host is already inside its rotation holder, which is
 		# WIDER and TALLER than a card and holds the turning card centred
@@ -6879,7 +7136,7 @@ func _make_widget(inst: CardInstance) -> Control:
 			ghost.position = corner + Vector2(AURA_PEEK.x * steps, -AURA_PEEK.y * steps)
 			wrap.add_child(ghost)
 		for j in range(attached.size() - 1, -1, -1):
-			var out := float(j + 1)
+			var out := float(j + 1 + inner)
 			var back := _make_card(attached[j])
 			# NOT SHRUNK, NOT SCALED: an attachment is a card, so it is
 			# `MiniCard.SIZE` like every other card on the table and is
@@ -6888,6 +7145,9 @@ func _make_widget(inst: CardInstance) -> Control:
 			back.position = corner \
 				+ Vector2(AURA_PEEK.x * out, -AURA_PEEK.y * out)
 			wrap.add_child(back)
+		if chosen != null:
+			chosen.position = corner + Vector2(AURA_PEEK.x, -AURA_PEEK.y)
+			wrap.add_child(chosen)
 		if result == w:
 			w.size = MiniCard.SIZE
 		wrap.add_child(result)
@@ -7478,6 +7738,18 @@ func _build_ui() -> void:
 	_cancel_button.pressed.connect(_on_escape)
 	_cancel_button.visible = false
 	msg_row.add_child(_cancel_button)
+	# THE SKIP (2026-09-08, [QoL]). The owner: *"you should have two
+	# buttons: begin (takes you into declare attackers and combat
+	# stages), if you click "skip", you just go into main phase 2
+	# post-combat without even seeing the combat phases icons"*. Done is
+	# the first of the two — it wears the word `Begin` while the offer
+	# stands (_refresh) — and this is the second: the same art at the
+	# same size, up only then. See [constant SKIP_OFFER].
+	_skip_button = OriginalDialog.button("Skip", Vector2(64, 26))
+	_skip_button.tooltip_text = "Skip combat: straight to the second main phase"
+	_skip_button.pressed.connect(_order_skip_combat)
+	_skip_button.visible = false
+	msg_row.add_child(_skip_button)
 	# LARGE, PALE, with the hard one-pixel dark shadow and NOTHING ELSE —
 	# the photograph's "Main phase (before combat): cast spells" in its
 	# blue-grey. It used to carry `bold`, which weights the letters with a

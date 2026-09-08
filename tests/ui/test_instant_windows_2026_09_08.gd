@@ -414,7 +414,10 @@ func test_the_beginning_of_combat_is_announced_not_asked_for() -> void:
 	# message should be modified to only announcement: 'Begin combat'."*
 	var g := _window(0, Mtg.Step.COMBAT_BEGIN)
 	g.priority_player = 0
-	assert_eq(screen._status_message(), "Begin Combat", "your own turn, the stop holding")
+	# ...and since the same day's later ruling the announcement is the
+	# owner's question — *"the announcement should say: Begin Combat or
+	# skip?"* (DuelScreen.SKIP_OFFER; tests/ui/test_skip_combat_2026_09_08.gd).
+	assert_eq(screen._status_message(), DuelScreen.SKIP_OFFER, "your own turn, the stop holding")
 	_window(1, Mtg.Step.COMBAT_BEGIN)
 	assert_eq(screen._status_message(), "Fast Effects?...Begin Combat",
 		"their turn: the question, filled with the same name")

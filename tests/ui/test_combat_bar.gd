@@ -204,10 +204,14 @@ func test_no_attackers_means_no_combat_bar_at_all() -> void:
 	# The ENGINE was already right (CR 506.4 / 508.1 — `MtgGame`'s own
 	# "Skip blockers/damage when no attackers were declared"); it was the
 	# screen that paraded them.
-	assert_true(CombatBar.shows_attack(Mtg.Step.COMBAT_BEGIN, false, 0),
-		"combat begins: 'your next step is declaring your attack'")
+	# The beginning of combat is the Phase Bar's own moment since
+	# 2026-09-08 — its combat icon, and the owner's "Begin Combat or
+	# skip?" (`DuelScreen.SKIP_OFFER`, tests/ui/test_skip_combat_2026_09_08.gd).
+	# The Combat Bar "takes the place of the Phase Bar" at the declaration.
+	assert_false(CombatBar.shows_attack(Mtg.Step.COMBAT_BEGIN, false, 0),
+		"combat begins on the Phase Bar's combat icon, with the Skip offered")
 	assert_true(CombatBar.shows_attack(Mtg.Step.DECLARE_ATTACKERS, true, 0),
-		"...and while it is being declared")
+		"'your next step is declaring your attack': the bar is up while it is")
 	assert_false(CombatBar.shows_attack(Mtg.Step.DECLARE_ATTACKERS, false, 0),
 		"declared, and nobody attacked: no attack, no bar")
 	assert_true(CombatBar.shows_attack(Mtg.Step.DECLARE_ATTACKERS, false, 1),

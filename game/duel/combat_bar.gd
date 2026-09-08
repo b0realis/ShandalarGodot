@@ -204,13 +204,27 @@ static func covers_step(step: int) -> bool:
 ## point, the Combat Bar takes the place of the Phase Bar"*, and *"As soon
 ## as you add the first creature to the attack, the Combat window opens."*
 ##
-## So the bar is up while the attack is being DECLARED — the combat-begin
-## step and the declaration itself — and after that only while an attack
-## actually exists. Declare none and there is no attack, so the Phase Bar
-## comes back and the sub-phases the engine is skipping anyway (CR 506.4 /
-## 508.1: with no attackers the game proceeds to end of combat —
-## `MtgGame._advance_step`, *"Skip blockers/damage when no attackers were
-## declared"*) are never paraded.
+## So the bar is up while the attack is being DECLARED, and after that
+## only while an attack actually exists. Declare none and there is no
+## attack, so the Phase Bar comes back and the sub-phases the engine is
+## skipping anyway (CR 506.4 / 508.1: with no attackers the game proceeds
+## to end of combat — `MtgGame._advance_step`, *"Skip blockers/damage when
+## no attackers were declared"*) are never paraded.
+##
+## THE BEGINNING OF COMBAT IS THE PHASE BAR'S (2026-09-08). Until then
+## this answered true for `COMBAT_BEGIN` too, on *"your next step is
+## declaring your attack"*. The owner's playtest of v0.19.0-dev moved it:
+## *"when we arrive at the icon of combat phase the announcement should
+## say: Begin Combat or skip? … if you click "skip", you just go into
+## main phase 2 post-combat without even seeing the combat phases
+## icons"*. So the step the original never had (it opened combat on the
+## attackers' choice) sits on the Phase Bar's combat icon, where the
+## owner's default dot is, and this bar takes the Phase Bar's place at
+## the declaration — which is where `Duel.hlp` puts it: *"your next step
+## is declaring your attack. At this point, the Combat Bar takes the
+## place of the Phase Bar"*. `DuelScreen._phase_key` keys the step the
+## same way, so the dot on that icon is the Stop that holds it
+## (`DuelScreen.SKIP_OFFER`).
 ##
 ## [param attacker_count] is `game.combat.attackers.size()`.
 static func shows_attack(step: int, awaiting_attackers: bool,
@@ -218,7 +232,7 @@ static func shows_attack(step: int, awaiting_attackers: bool,
 	if not covers_step(step):
 		return false
 	if step == Mtg.Step.COMBAT_BEGIN:
-		return true          # "your next step is declaring your attack"
+		return false         # the Phase Bar's combat icon, and the Skip
 	if step == Mtg.Step.DECLARE_ATTACKERS and awaiting_attackers:
 		return true          # it is being declared right now
 	return attacker_count > 0

@@ -23,6 +23,21 @@ extends CardScript
 ## FAQ's "in deck or graveyard" (s30/shandalar-faq.txt) is the one witness
 ## for the graveyard, a secondary paraphrase the printed text outranks;
 ## the roll scanned four zones until 2026-09-07.
+##
+## THE CHOICE IS SHOWN (2026-09-08, `[QoL]`): `.with_chosen_type("type")`
+## tells the duel screen where the roll lives, and it draws the chosen
+## type as a ghost card behind the Jaguar, titled with the type, so the
+## player reads at a glance what the Jaguar hunts — the owner: *"The
+## chosen creature type name should be present as a back mini card like
+## aura - with creature type as it name on the aura card top, so player
+## quickly knows which type was randomly chosen!"* The engine's log line
+## below was the only witness before that.
+##
+## ONE WORD IS ENOUGH: a creature of two types is of the chosen type if
+## either matches — `has_subtype` — so a Jaguar that chose Elf takes a
+## Llanowar Elves (Elf Druid), and one that chose Druid takes it too.
+## The owner's ruling, 2026-09-08: *"if just one word matches from the
+## jaguar selection to the creature type then the jaguar can take it."*
 
 
 static func _matches_chosen(_game: MtgGame, source: CardInstance,
@@ -37,6 +52,7 @@ func build() -> CardData:
 	return CardData.new("Aswan Jaguar", "{1}{G}{G}", Mtg.CardType.CREATURE) \
 		.pt(2, 2) \
 		.with_subtypes(["jaguar"]) \
+		.with_chosen_type("type") \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.ENTERS_BATTLEFIELD, _choose_type,
 			"When Aswan Jaguar comes into play, choose a random creature type from those in target opponent's deck.",

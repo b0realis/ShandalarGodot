@@ -58,10 +58,12 @@ enum Where { HERE, NEXT_TURN, NEXT_PHASE }
 ##
 ##  * `Main phase (combat)` is the original's name for the moment the
 ##    attack is announced (`Duel.hlp`, **Combat**), so it lands on the
-##    Combat Bar's first icon rather than the Phase Bar's combat crescent
-##    — which no step of ours ever lights on its own, because
-##    [method CombatBar.covers_step] hands every combat step to the
-##    smaller bar.
+##    Combat Bar's first icon rather than the Phase Bar's combat crescent.
+##    The crescent is the beginning of combat — the step the original did
+##    not have, keyed there since 2026-09-08 (`DuelScreen._phase_key`) so
+##    the owner's default dot can hold the Skip's question
+##    (`DuelScreen.SKIP_OFFER`); a run to `Main phase (combat)` passes
+##    through it and, with that dot on, rests there first.
 ##  * `Discard phase` and `Cleanup phase` are slots 6 and 7 of the Phase
 ##    Bar in the ORIGINAL's order; ours light them from CLEANUP and END
 ##    respectively (see `DuelScreen._phase_icon_slot` and

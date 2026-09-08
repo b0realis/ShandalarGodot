@@ -2770,7 +2770,12 @@ onto the last seven `@CUECARD_PHASEBAR` entries and onto the seven icons
 drawn in `Winbk_Phasecombat.pic`. "Begin Combat" is not on the bar — it is
 the Main-phase Combat icon itself (p.190: *"when you click on [it], you
 are only announcing your intention to attack. The attack doesn't actually
-start immediately."*). Built: `game/duel/combat_bar.gd`, with the cue
+start immediately."*). Since 2026-09-08 the screen keys our
+beginning-of-combat step to exactly that icon (`DuelScreen._phase_key`;
+`CombatBar.shows_attack` is false there), so its default Stop holds the
+duel at the announcement and the Situation Bar asks the owner's `Begin
+Combat or skip?` — ROADMAP, "THE SKIP", `[QoL]`; the Combat Bar takes over
+at the declaration. Built: `game/duel/combat_bar.gd`, with the cue
 cards as tooltips and a click on a sub-phase acting as Done (manual
 p.126). **Stops and run-to landed 2026-08-31**, on both bars — `Duel.hlp`
 says the Combat Bar takes Stops as well, and the original's own

@@ -228,6 +228,26 @@ func test_aswan_jaguar_refuses_the_wrong_type() -> void:
 		"Illegal target")
 
 
+func test_aswan_jaguar_takes_a_creature_of_two_types_by_either() -> void:
+	# The owner's ruling (2026-09-08): *"if just one word matches from the
+	# jaguar selection to the creature type then the jaguar can take it —
+	# Llanowar Elves are bitten by a Jaguar that chose the Elf type"*. An
+	# Elf Druid is an Elf and a Druid both; the roll over a library of
+	# Elves alone lands on one of the two words, and the Elves are legal
+	# either way.
+	_put_library(1, "Llanowar Elves")
+	var elves := put_battlefield(1, "Llanowar Elves")
+	var jaguar := put_battlefield(0, "Aswan Jaguar")
+	resolve_stack()
+	var chosen := String(jaguar.memory.get("type", ""))
+	assert_true(chosen == "elf" or chosen == "druid", "one of its two words: %s" % chosen)
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.G, 2)
+	assert_ok(g.activate_ability(0, jaguar, 0, [TargetRef.card(elves)]))
+	resolve_stack()
+	assert_eq(elves.zone, Mtg.Zone.GRAVEYARD)
+
+
 # ---------------------------------------------------------- Pandora's Box --
 
 func test_pandoras_box_copies_a_summon_card_from_a_library() -> void:

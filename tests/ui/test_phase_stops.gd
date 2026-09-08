@@ -179,31 +179,35 @@ func test_the_three_are_the_slots_the_cue_cards_name() -> void:
 	assert_eq(PhaseBar.CUE_YOURS[5], "Your Main phase (postcombat)")
 
 
-func test_the_middle_default_is_a_dot_the_combat_bar_answers_for() -> void:
-	# WHAT SLOT 4 REALLY IS, pinned because the owner asked for "combat" to
-	# stop and this is the one of their three that a Stop cannot do on its
-	# own. Every step from COMBAT_BEGIN to COMBAT_END is keyed to the
-	# COMBAT bar ([method CombatBar.covers_step], and
-	# `DuelScreen._phase_key` follows it), so no phase key is ever
+func test_the_middle_default_holds_the_beginning_of_combat() -> void:
+	# WHAT SLOT 4 REALLY IS. Until 2026-09-08 every step from COMBAT_BEGIN
+	# to COMBAT_END was keyed to the COMBAT bar, so no phase key was ever
 	# `[half, Bar.PHASE, 4]` and the dot on the Phase Bar's combat crescent
-	# marks a phase nothing consults. It is not idle: what actually holds
-	# the duel at combat is the DECLARATION — `_required_action_reason`'s
-	# "attackers must be declared" — which stops it whether the dot is
-	# there or not, which is why the owner's combat pause works anyway.
-	# docs/ROADMAP.md, "THE COMBAT DOT".
-	for step in [Mtg.Step.COMBAT_BEGIN, Mtg.Step.DECLARE_ATTACKERS,
-			Mtg.Step.COMBAT_DAMAGE, Mtg.Step.COMBAT_END]:
+	# marked a phase nothing consulted — the duel paused at combat anyway,
+	# on the declaration as a required action, one step later. The owner's
+	# Skip (`DuelScreen.SKIP_OFFER`, tests/ui/test_skip_combat_2026_09_08.gd)
+	# needs the pause BEFORE the lineup is asked for, so the beginning of
+	# combat now keys to the icon it is drawn on, and the dot there is a
+	# Stop like the other two. The declaration onward stays the Combat
+	# Bar's. docs/ROADMAP.md, "THE COMBAT DOT".
+	_stand_in(Mtg.Step.COMBAT_BEGIN)
+	assert_eq(screen._phase_key(),
+		[PhaseStops.Half.YOURS, PhaseStops.Bar.PHASE, 4],
+		"the beginning of combat is the Phase Bar's combat icon")
+	assert_true(PhaseStops.defaults().is_marked(PhaseStops.Half.YOURS,
+		PhaseStops.Bar.PHASE, 4), "...and the default dot sits on it")
+	assert_false(screen._combat_bar != null and screen._combat_bar.visible,
+		"no Combat Bar yet: 'without even seeing the combat phases icons'")
+	for step in [Mtg.Step.DECLARE_ATTACKERS, Mtg.Step.COMBAT_DAMAGE,
+			Mtg.Step.COMBAT_END]:
 		_stand_in(step)
 		var key: Array = screen._phase_key()
 		assert_eq(key[1], PhaseStops.Bar.COMBAT,
 			"%s is keyed to the Combat Bar" % Mtg.step_name(step))
-	assert_eq(DuelScreen._phase_icon_slot(Mtg.Step.COMBAT_BEGIN), 4,
-		"...while the PHASE bar still lights slot 4 for it, which is the "
-		+ "dot the player sees")
 	_stand_in(Mtg.Step.DECLARE_ATTACKERS)
 	screen.game.awaiting_attackers = true
 	assert_eq(screen._required_action_reason(), "attackers must be declared",
-		"and this is what really pauses combat, dot or no dot")
+		"and the lineup is still a required action, dot or no dot")
 	screen.game.awaiting_attackers = false
 
 

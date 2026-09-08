@@ -796,6 +796,23 @@ func with_colors(color_mask_value: int) -> CardData:
 func color_mask() -> int:
 	return printed_colors if printed_colors >= 0 else cost.color_mask()
 
+## THE CREATURE TYPE THIS CARD CHOSE, shown behind it as a card of its
+## own (2026-09-08, `[QoL]`): the key in [member CardInstance.memory]
+## under which the card keeps the creature type it picked as it came
+## into play — Aswan Jaguar's roll over the opponent's deck — so the
+## duel screen can draw the choice as a ghost card in the fan behind the
+## creature, titled with the type (`DuelScreen._chosen_ghost`). Empty for
+## every card that chooses nothing. DECLARED here rather than read off
+## `memory["type"]` in general, because Phantasmal Terrain keeps a LAND
+## type under that very key and must not grow a ghost for it.
+var chosen_type_key: String = ""
+
+## Fluent: this card keeps the creature type it chose under
+## `memory[key]`, and the table shows the choice behind it.
+func with_chosen_type(key: String) -> CardData:
+	chosen_type_key = key
+	return self
+
 ## Printed keyword check. Rules code reads CardInstance.cur_keywords.
 func has_keyword(keyword: int) -> bool:
 	return keywords.has(keyword)

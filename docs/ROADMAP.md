@@ -4764,20 +4764,30 @@ been played, and all of them passed while the owner's bar showed one dot.
 The new ones feed `load_saved` the owner's row verbatim and then ask the
 **bar** what it draws (`PhaseBar._dots`), not the model what it holds.
 
-**THE COMBAT DOT is drawn but never consulted**, and this is worth knowing
-before anyone edits it. `DuelScreen._phase_key` sends every step from
-`COMBAT_BEGIN` to `COMBAT_END` to the **Combat** bar
-(`CombatBar.covers_step`), so no phase key is ever `[half, Bar.PHASE, 4]`
+**THE COMBAT DOT was drawn but never consulted** until 2026-09-08, and
+this is worth knowing before anyone edits it. `DuelScreen._phase_key` sent
+every step from `COMBAT_BEGIN` to `COMBAT_END` to the **Combat** bar
+(`CombatBar.covers_step`), so no phase key was ever `[half, Bar.PHASE, 4]`
 and the middle of the owner's three dots — `Your Main phase (declare
-combat)`, Phase Bar slot 4 — marks a phase nothing asks about. It is not
-missed in play: what actually holds the duel at combat is
-`_required_action_reason`'s *"attackers must be declared"*, which stops it
-dot or no dot. Pinned by
-`test_the_middle_default_is_a_dot_the_combat_bar_answers_for`. Fixing it
-properly means either keying the un-attacked combat steps to the bar that
-is actually on screen (`CombatBar.shows_attack`, not `covers_step`) or
-defaulting `Bar.COMBAT` slot 0 as well — the second would stop the duel
-twice at the same moment, so it is the first or nothing.
+combat)`, Phase Bar slot 4 — marked a phase nothing asked about. It was
+not missed in play: what held the duel at combat was
+`_required_action_reason`'s *"attackers must be declared"*, one step
+later, dot or no dot.
+
+**RESOLVED 2026-09-08, by the Skip** ("THE SKIP", below). The owner's
+*"Begin Combat or skip?"* needs the pause BEFORE any lineup is asked for,
+and *"Otherwise red dot is always on here by default"* names this dot as
+the thing that holds it. So the beginning of combat now keys to the bar
+that is actually on screen there: `CombatBar.shows_attack` answers false
+for `COMBAT_BEGIN` (the Phase Bar stays up, its combat icon lit) and
+`_phase_key` gives `[half, Bar.PHASE, 4]` for that one step — the first of
+the two fixes the previous paragraph weighed, and for the reason it gave:
+defaulting `Bar.COMBAT` slot 0 as well would have stopped the same moment
+twice. The declaration onward stays keyed to the Combat Bar even when no
+attack keeps it on screen, so a combat begun with **Begin** and then
+declared empty is not held a second time at its end. Pinned by
+`test_the_middle_default_holds_the_beginning_of_combat` (the old
+`..._is_a_dot_the_combat_bar_answers_for`, renamed for what it now says).
 
 **THE DEV TREE WRITES THE PLAYER'S PROFILE, and that is why a manual
 deletion did not stick.** `run_tests.sh`, `duel_soak.sh` and every tool
@@ -8030,6 +8040,151 @@ sensible also on a wall"*. So `AURA_GRANTS` has a row for a SHIELD —
 anyone's gift, and the Ward fits a Wall through its second line. Fear's
 and Invisibility's reminder text add an unblockable gift beside the
 keyword, harmless and of the same polarity — the reader being literal.
+
+## THE SKIP (2026-09-08) — [QoL]
+
+The owner, from a playtest of v0.19.0-dev: *"Only one QoL thing - before
+phases of combat even start you might want to skip it entirely - so when
+we arrive at the icon of combat phase the announcement should say: Begin
+Combat or skip? And you should have two buttons: begin (takes you into
+declare attackers and combat stages), if you click "skip", you just go
+into main phase 2 post-combat without even seeing the combat phases
+icons.. If you dont have red dot on combat (it just skips if no
+creatures are on your board). Otherwise red dot is always on here by
+default."*
+
+**What it is.** At the beginning of your own combat, with priority and
+an empty chain, the Situation Bar reads `Begin Combat or skip?` and the
+Done button is `Begin` with a `Skip` beside it (`DuelScreen.SKIP_OFFER`,
+`_skip_offer_applies`). `Begin` is the plain pass the button always was:
+the AI replies, the lineup is asked for, the Combat Bar takes the Phase
+Bar's place. `Skip` is a standing order (`Advance.SKIP_COMBAT`) — a Run
+to the second main phase with three differences from the Run to the
+manual describes. It DECLARES NO ATTACKERS when the lineup is asked for
+(to any other order an owed declaration is a required action); it takes
+the opponent's replies AT ONCE, through `AiPlayer.act` inside the
+driver's own loop rather than on the AI seat's dwell, so the whole of
+combat is walked in one call and no combat-step icon is ever drawn —
+*"without even seeing"*; and it does not consult the Stops on the way,
+because a Stop inside the phase you have just asked to leave out is the
+question you have just answered. Everything else that halts a run halts
+it: a required action, a duel that ended, and the opponent putting
+something on the chain — read as a Run to reads it (you see what they
+did, whether or not you can answer). A creature that must attack if able
+(Nettling Imp) refuses the empty lineup with the engine's own words, and
+the lineup is yours to make. Nothing on the chain is skipped either: the
+original had no beginning-of-combat step, ours does (Battering Ram,
+Johan), and a trigger of yours standing there resolves before the offer.
+
+**With the Stop off** (`_auto_skip_applies`): the phase would pass itself
+(`_auto_pass_applies`), and if besides that nothing of yours could attack
+— `_has_a_legal_attacker`, the engine's own `attack_illegality` creature
+by creature, and the turn-wide ban (Festival) first — the whole combat
+goes the same way, in one frame, instead of stopping a step later to ask
+for a lineup nobody is in. *"No creatures on your board"* is read as "no
+creature that could attack": a board of Walls, of tapped or summoning-sick
+creatures, has nothing to send either, and asking would be the click with
+no decision the 2026-09-03 rule removed. With something able to attack an
+unstopped combat runs as before, to the lineup.
+
+**The dot.** The owner's *"red dot on combat"* is the middle of the three
+default Stops, and until this ruling it held nothing ("THE COMBAT DOT",
+above): every combat step was keyed to the Combat Bar, and the duel paused
+at combat one step later, on the declaration. For the offer to stand by
+default the pause had to be AT the icon, so the beginning of combat now
+keys to the Phase Bar's combat icon (`_phase_key`, `CombatBar.shows_attack`
+false for `COMBAT_BEGIN`) and the dot there is a Stop like the other two.
+The Combat Bar takes over at the declaration, which is where `Duel.hlp`
+puts it. A Run to that comes to rest at the icon is offered the same two
+buttons, and so is a Done order the Stop halted.
+
+**Not a 1997 feature.** The original's combat opened on the attackers'
+choice, and no `UIStrings.txt` prompt offers to skip it. The line and the
+two buttons are the owner's. `[QoL]`, at the site.
+
+Pinned in `tests/ui/test_skip_combat_2026_09_08.gd` (14 tests): the line
+and the two buttons at your own beginning of combat with the default
+Stop; Done and no Skip anywhere else, on their turn, over a chain,
+without priority; the Skip walking to the second main phase in one call
+(no attackers, the Ogre untapped, the log's "declares no attackers", the
+order spent and resting there); Begin as the plain pass into the lineup;
+the Skip ignoring the Combat Bar's Stops where a Run to stops for them;
+halting for the opponent's Bolt; the must-attacker refusing the empty
+lineup; the Stop-off cases — a Wall of Swords skipped whole, a Gray Ogre
+still asked; `_has_a_legal_attacker` on tapped, summoning-sick and
+Festival boards; the Stop on and an empty board still waiting with Skip
+up; a Run to resting at the icon offered the buttons; and the default set
+still holding slot 4. `test_phase_stops.gd` pins the key
+(`test_the_middle_default_holds_the_beginning_of_combat`), and
+`test_combat_bar.gd` the bar staying down at the beginning of combat.
+Checked by looking: the Phase Bar up with its combat icon lit and dotted,
+`[Begin] [Skip] Begin Combat or skip?`; after Skip, the post-combat main
+lit and `Done` back.
+
+## THE JAGUAR'S CHOICE (2026-09-08) — [QoL]
+
+The owner, in the same playtest: *"When "aswan jaguar" comes into play,
+it chooses a random creature type from opponent deck. The chosen
+creature type name should be present as a back mini card like aura -
+with creature type as it name on the aura card top, so player quickly
+knows which type was randomly chosen!"*
+
+**What it was.** The roll lived in the Jaguar's own memory
+(`memory["type"]`, `RandomEffects.creature_type_of`) and the log's
+"Aswan Jaguar chooses elf" was the only witness: once that line had
+scrolled off, the type the Jaguar hunted was nowhere on the table, and
+its ability's targeting was the way to find out again.
+
+**What it is.** A card declares where its choice lives —
+`CardData.chosen_type_key`, `.with_chosen_type("type")` on the Jaguar —
+and the duel screen draws the choice as a GHOST CARD behind it
+(`DuelScreen._chosen_ghost`, `_chosen_ghost_data`): an aura in the
+chooser's colour titled with the type, "Elf" over "Enchantment — Aura",
+built for the purpose with no instance behind it, no id and nothing to
+click, exactly the shape the shield ghost of 2026-09-07 gave the fan
+(`_ghost_card` now builds both). Hovering its title band docks it in
+the sidebar, where its text says who chose. It stands NEAREST the host,
+one step out, because it is the oldest thing in the fan — made as the
+Jaguar came into play and lasting as long as it does — so an aura cast
+later lands outside it and nothing moves; the shield ghost stays
+outermost, the briefest thing there. `_fan_steps` counts all three and
+`_placement_span` reserves the room. Drawn for either seat's Jaguar:
+theirs chose from YOUR deck, and which of your creatures it hunts is
+the thing you most want to know. No choice yet (the trigger on the
+chain) or a choice of nothing (a library without a creature) shows
+nothing.
+
+**Declared, not read off memory.** Phantasmal Terrain keeps a LAND type
+under the very same key, and a generic "draw `memory["type"]`" would
+have hung a "Forest" aura on an aura. The hook is a line on the card
+that chooses, and any later card that picks a creature type as it
+enters gets the ghost by the same line.
+
+**Not a 1997 feature.** The original showed the choice nowhere the
+manual describes. `[QoL]`, at the site.
+
+**One word is enough.** The owner's ruling on a creature of two types:
+*"if just one word matches from the jaguar selection to the creature
+type then the jaguar can take it — Llanowar Elves are bitten by a Jaguar
+that chose the Elf type."* That is what `has_subtype` always did; it is
+now pinned (`test_aswan_jaguar_takes_a_creature_of_two_types_by_either`,
+`tests/cards/test_pool_wave45.gd`), and the roll itself can land on
+either of the Elves' two words, each type once.
+
+Pinned in `tests/ui/test_chosen_type_ghost_2026_09_08.gd` (12 tests):
+the ghost one step behind a Jaguar that rolled "elf", titled "Elf", id
+-1, the host at `HOST_Z`; a green aura, framed like Regeneration, typed
+"Enchantment — Aura", costless, its text naming the Jaguar; no click,
+no focus, hover previews; none before the choice, none for a choice of
+nothing; the opponent's Jaguar drawn the same; nearest the host with an
+aura outside it and the fan two steps wide; the shield outermost of the
+three; `_placement_span` and `_fan_steps` counting it; the declaration
+— Phantasmal Terrain's land type and a stray key on a Bear grow
+nothing; one definition per chooser and choice; and the engine's own
+roll through the trigger against a one-type library. Checked by
+looking: two Jaguars of yours ("Elf" behind one, "Wall" behind the
+other with a Regeneration outside it) and theirs with "Ogre" behind it
+against your Gray Ogre; the Elf ghost hovered and docked in the sidebar.
 
 ## Standing quality gates
 

@@ -98,6 +98,14 @@ shandalar/
 │   │   │                      X" — Drain Life); cast_spell pays
 │   │   │                      cost_for(x) with x_paid = 0, mirroring
 │   │   │                      ActivatedAbility.with_colored_x
+│   │   │                      .with_chosen_type(key) / chosen_type_key
+│   │   │                      (2026-09-08, [QoL]) — the memory key a
+│   │   │                      card keeps the creature type it chose as
+│   │   │                      it entered under (Aswan Jaguar's "type"),
+│   │   │                      so DuelScreen._chosen_ghost can draw the
+│   │   │                      choice behind it; declared, because
+│   │   │                      Phantasmal Terrain keeps a LAND type
+│   │   │                      under the same key
 │   │   ├── card_instance.gd class CardInstance — one copy in one game: zone,
 │   │   │                      tapped/damage/sickness/attachments, and CURRENT
 │   │   │                      characteristics cur_power/cur_toughness/
@@ -1821,7 +1829,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4978 tests / ~135 000 asserts, ~300 s
+├── tests/                   GUT suite — 5005 tests / ~135 500 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2114,7 +2122,9 @@ shandalar/
 │    1997 cue cards, the sheet geometry measured off Winbk_Phasecombat,
 │    the per-seat gold/blue halves, the black-keyed grounds, the
 │    step→icon map, and (2026-09-03) shows_attack: the bar appears
-│    "during an ATTACK", so declaring none puts the Phase Bar back;
+│    "during an ATTACK", so declaring none puts the Phase Bar back, and
+│    (2026-09-08) the beginning of combat is the Phase Bar's — the Skip
+│    is offered there, the Combat Bar takes over at the declaration;
 │    tests/ui/test_opponent_turn.gd — AN UNSTOPPED PHASE RUNS ITSELF
 │    (2026-09-03): the human's priority windows are passed for them on
 │    EITHER seat's turn, and every place 1997 says the duel must stop
@@ -2164,7 +2174,9 @@ shandalar/
 │    stored; an UNSTAMPED row is a leftover from a build that shipped no
 │    defaults, which is the 2026-09-04 defect — the owner's own
 │    PackedInt32Array(0, 0, 8, 0), pinned by what the BAR draws), that
-│    the middle default sits on a slot the Combat Bar answers for, the
+│    the middle default holds the beginning of combat (2026-09-08 — the
+│    one step keyed to the Phase Bar's combat icon; the declaration
+│    onward is the Combat Bar's), the
 │    1997 default set recorded beside ours, the four @MENU_PHASEBAR
 │    entries with the two Help ones disabled and Mark as a toggle, the
 │    red dot marking Stops rather than the current phase, and the driver — a run arriving,
@@ -2539,6 +2551,24 @@ shandalar/
 │    as `Begin Combat`, not asked for as `Choose Attackers` a step
 │    early — the owner's playtest); and the report end to end — a Bolt
 │    cast through the engine at their declared Gray Ogre;
+│    tests/ui/test_skip_combat_2026_09_08.gd — THE SKIP (2026-09-08):
+│    "Begin Combat or skip?" with [Begin] [Skip] at your own beginning of
+│    combat, Done and no Skip anywhere else; the Skip walking to the
+│    second main phase in one call with no attackers declared and the
+│    order resting there, ignoring the Combat Bar's Stops, halting for
+│    the opponent's Bolt and for a must-attacker; Begin as the plain
+│    pass into the lineup; the Stop-off cases (a Wall skipped whole, an
+│    Ogre still asked) and _has_a_legal_attacker on tapped, sick and
+│    Festival boards; the Stop on and an empty board still waiting;
+│    tests/ui/test_chosen_type_ghost_2026_09_08.gd — THE JAGUAR'S CHOICE
+│    (2026-09-08): an Aswan Jaguar that rolled "elf" wears an "Elf" ghost
+│    one step behind it (built for the purpose, id -1, a green aura typed
+│    "Enchantment — Aura", disabled, hover previews), none before the
+│    choice or for a choice of nothing, the opponent's drawn too, nearest
+│    the host with an aura outside and the shield ghost outermost,
+│    counted by _fan_steps and _placement_span, Phantasmal Terrain's land
+│    type growing nothing, one definition per choice, the engine's own
+│    roll through the trigger;
 │    tests/ui/test_enchanted_attacker_2026_09_06.gd — THE ATTACK THAT WAS
 │    NEVER DECLARED: an attachment is drawn as a whole card standing
 │    proud of its host (AURA_PEEK), so the band a player clicks on an
@@ -4453,6 +4483,43 @@ shandalar/
 │       │                      and AI unchanged — both had the rounds
 │       │                      already.
 │       │                      tests/ui/test_instant_windows_2026_09_08.gd
+│       │                      THE SKIP (2026-09-08, [QoL]): at your own
+│       │                      beginning of combat the bar asks
+│       │                      SKIP_OFFER ("Begin Combat or skip?") with
+│       │                      the Done button as `Begin` and a `Skip`
+│       │                      beside it (_skip_offer_applies). Skip is
+│       │                      Advance.SKIP_COMBAT — a Run to the second
+│       │                      main phase that declares no attackers,
+│       │                      takes the AI seat's replies at once through
+│       │                      AiPlayer.act inside _drive_advance so the
+│       │                      walk is one call and no combat icon shows,
+│       │                      and ignores the Stops on the way; a
+│       │                      required action, the duel ending or the
+│       │                      opponent's chain item still halt it. With
+│       │                      the Stop off, _auto_skip_applies arms the
+│       │                      same order when nothing could attack
+│       │                      (_has_a_legal_attacker, the engine's own
+│       │                      attack_illegality). To hold the offer by
+│       │                      default, _phase_key keys COMBAT_BEGIN to
+│       │                      the Phase Bar's combat icon (slot 4, the
+│       │                      middle default dot — consulted by nothing
+│       │                      before this) and CombatBar.shows_attack
+│       │                      is false there; the declaration onward
+│       │                      stays the Combat Bar's.
+│       │                      tests/ui/test_skip_combat_2026_09_08.gd
+│       │                      THE JAGUAR'S CHOICE (2026-09-08, [QoL]):
+│       │                      _chosen_ghost_data(inst) builds (once per
+│       │                      chooser and choice, _chosen_ghosts) an
+│       │                      aura in the chooser's colour titled with
+│       │                      the creature type kept under
+│       │                      inst.data.chosen_type_key, and
+│       │                      _chosen_ghost stands it — through
+│       │                      _ghost_card, which the shield ghost now
+│       │                      shares — as the INNERMOST step of the fan
+│       │                      (the oldest thing there; auras outside,
+│       │                      the shield ghost outermost); _fan_steps
+│       │                      counts all three; drawn for either seat.
+│       │                      tests/ui/test_chosen_type_ghost_2026_09_08.gd
 │       ├── human_agent.gd   class HumanAgent — DecisionAgent for human
 │       │                      seats: pre-selection mailbox the UI fills
 │       │                      BEFORE casting (tutor picks) plus park(),
@@ -5019,7 +5086,11 @@ shandalar/
 │       │                      cell grounds to BLACK and leaves the lit one
 │       │                      white, which is what Winbk_Phase already
 │       │                      draws. A click is Done during a declaration
-│       │                      and Run to otherwise; Stops get red dots
+│       │                      and Run to otherwise; Stops get red dots.
+│       │                      shows_attack: up while an attack is being
+│       │                      declared or exists — NOT at the beginning
+│       │                      of combat (2026-09-08), which is the Phase
+│       │                      Bar's combat icon and the Skip's question
 │       ├── combat_window.gd  class CombatWindow — THE COMBAT WINDOW
 │       │                      (manual p.126), titled `Your attack` /
 │       │                      `%s Attack` (@WINDOWTITLES). Opens on the

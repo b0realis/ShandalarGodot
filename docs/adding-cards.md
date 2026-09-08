@@ -85,6 +85,7 @@ caller supplies one `TargetRef` per slot, in the same order.
 | Something that must outlive its source | `MtgGame.schedule_end_of_combat_action` / `schedule_end_step_token`, or a graveyard trigger | glyph_of_doom.gd, hazezon_tamar.gd |
 | "Originally printed in <expansion>" | `CardRegistry.originally_printed_in(name, code)` — NEVER `data.set_code` | city_in_a_bottle.gd, golgothian_sylex.gd |
 | A colour its mana cost does not imply | `.with_colors(Mtg.ManaColor.R)` | crimson_kobolds.gd |
+| "Choose a creature type" as it enters, kept in memory | `.with_chosen_type("type")` — the table draws the choice behind the card | aswan_jaguar.gd |
 | Last known information about a dead permanent | `last_power` / `last_toughness` / `last_types` / `last_colors` (CR 608.2h) | creature_bond.gd, necropolis_of_azar.gd |
 | "As this enters, ..." (a replacement) | `.as_it_enters(cb)` | wood_elemental.gd, frankenstein_s_monster.gd |
 | "...instead of onto the battlefield" | `.enters_only_if(cb)` — the card's veto on its own arrival | frankenstein_s_monster.gd |

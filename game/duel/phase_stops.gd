@@ -111,6 +111,13 @@ const MENU_ENTRIES: Array[String] = [
 ## the answer — that a fresh profile has Stops at all, on the two main
 ## phases, and that the file only holds a value once the player changes
 ## something.
+##
+## THE COMBAT DOT holds the beginning of combat since 2026-09-08
+## (`DuelScreen._phase_key` keys that one step to this icon; before that
+## no key ever reached it and the duel paused a step later, on the
+## declaration). It is what makes the Skip's question stand by default —
+## the owner: *"Otherwise red dot is always on here by default"*
+## (`DuelScreen.SKIP_OFFER`).
 const DEFAULT_SLOTS: Array[int] = [3, 4, 5]
 
 ## The 1997 set, kept beside ours so the divergence is one edit wide and
