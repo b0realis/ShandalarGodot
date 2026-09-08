@@ -7671,14 +7671,21 @@ can create new skins if they wish!"*).**
    the game"*, *"Card art: none — cards show a plain art window"*), each
    with **Choose...**, and **Forget my zips** once the player has any. The
    rows are a VIEW of `user://skin/` — no Settings key, nothing to get
-   out of step. On the desktop Choose... is the native file box
+   out of step; a forgotten zip stays mounted for the run and its row
+   says so ("forgotten, worn until the restart") rather than "your own"
+   — found in the browser, where the forgotten row read as if the
+   file were still there. On the desktop Choose... is the native file box
    (`FileDialog`, `*.zip`, opening in Downloads); in a browser Godot 4.7
    has no file dialog at all, so `SkinPack.pick` puts up an
    `<input type=file>` through `JavaScriptBridge`, the page reads the
    file into `window.shandalarPick`, and `_process` copies it over 8 MB
    a frame (`eval` of a `subarray` comes back a `PackedByteArray`) into
    `arriving.zip` — the same path a drop takes from there. A drop still
-   works; the note under the rows says so.
+   works; the note under the rows says so. Checked by looking, headless
+   Firefox against the built page: both zips fetched once, a 231-byte
+   probe handed to `window.shandalarPick` mounted as the card art with
+   the row reading "1 picture, your own", the pick back from IndexedDB
+   after the reload, and Forget + reload fetching both again.
  * **The documentation.** `SKIN.txt` opens with the two-zip layout, the
    kind-by-content rule, the three ways in, and *"To draw your own"* —
    `zip -r my_skin.zip skin` and `skin_catalogue.py --check` — before

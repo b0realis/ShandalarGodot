@@ -194,8 +194,8 @@ class TestCheckingASkin(unittest.TestCase):
         with redirect_stdout(out):
             self.assertEqual(cat.check(path), 0)
         report = out.getvalue()
-        self.assertIn("card art, 2 pictures", report)
-        self.assertIn("notes.txt", report, "a non-picture is called out")
+        self.assertIn("card art, 1 picture\n", report)
+        self.assertIn("notes.txt", report, "a non-picture is called out, not counted")
         self.assertNotIn("title_background.png", report,
                          "card art is not held to the skin's list")
 

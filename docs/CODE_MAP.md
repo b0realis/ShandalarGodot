@@ -1769,7 +1769,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4929 tests / ~135 000 asserts, ~300 s
+├── tests/                   GUT suite — 4930 tests / ~135 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -3057,7 +3057,8 @@ shandalar/
 │    skin not counting as card art nor the reverse, a dropped card art
 │    zip kept as the player's card art with its own notice, forget()
 │    deleting both zips and offering a restart (or saying nothing when
-│    nothing is kept), the status lines' words, mounted zips read before
+│    nothing is kept), a forgotten zip worn until the restart and its
+│    row saying so, the status lines' words, mounted zips read before
 │    folders, nothing in flight under the editor, the file box opening
 │    somewhere real;
 │    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):

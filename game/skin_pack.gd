@@ -344,7 +344,9 @@ func describe(kind: String) -> Dictionary:
 			continue
 		var source := "mounted"
 		if path.begins_with(USER_DIR + "/"):
-			source = "yours"
+			# A forgotten zip stays mounted until the restart; the row says
+			# so rather than calling it the player's own still.
+			source = "yours" if FileAccess.file_exists(path) else "forgotten"
 		elif GameSkin.portable_dir() != "" and path.begins_with(GameSkin.portable_dir()):
 			source = "shipped"
 		return {"source": source, "name": path.get_file(), "files": count}
@@ -371,7 +373,7 @@ static func status_line(kind: String, about: Dictionary) -> String:
 	if source == "folder":
 		return "%s: a loose folder, %s" % [what, String(about["name"])]
 	var whose: String = {"yours": "your own", "shipped": "shipped with the game",
-		"mounted": "mounted"}[source]
+		"mounted": "mounted", "forgotten": "forgotten, worn until the restart"}[source]
 	var count := int(about["files"])
 	var unit := "picture" if kind == "cardart" else "file"
 	return "%s: %s — %d %s, %s" % [what, String(about["name"]), count,

@@ -649,8 +649,9 @@ def check(target: Path) -> int:
     portraits = [n for n in names if n.startswith("portraits/") and n.endswith(".png")]
     art = [n for n in names if n.startswith("cardart/")]
     if kind_of(names) == "cardart":
-        print("%s: card art, %d pictures" % (target, len(art)))
         odd = [n for n in art if not n.lower().endswith((".jpg", ".jpeg", ".png"))]
+        count = len(art) - len(odd)
+        print("%s: card art, %d picture%s" % (target, count, "" if count == 1 else "s"))
         if odd:
             print("  not pictures (ignored by the game):")
             for name in odd:

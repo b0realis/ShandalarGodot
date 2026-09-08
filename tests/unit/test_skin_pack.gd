@@ -324,6 +324,17 @@ func test_forgetting_deletes_the_players_zips_and_offers_a_restart() -> void:
 			"what is mounted stays mounted this run")
 
 
+func test_a_forgotten_zip_is_worn_until_the_restart_and_the_row_says_so() -> void:
+	DirAccess.make_dir_recursive_absolute(SkinPack.USER_DIR)
+	DirAccess.copy_absolute(ART, SkinPack.USER_ART_ZIP)
+	assert_true(SkinPack.mount(SkinPack.USER_ART_ZIP, true))
+	assert_eq(String(SkinPack.describe("cardart")["source"]), "yours")
+	SkinPack.forget()
+	assert_has(SkinPack.mounted, SkinPack.USER_ART_ZIP, "still mounted this run")
+	assert_eq(String(SkinPack.describe("cardart")["source"]), "forgotten",
+		"the file is gone, the mount is not — the row must not say 'your own'")
+
+
 func test_forgetting_with_nothing_kept_says_nothing() -> void:
 	SkinPack.forget()
 	assert_null(SkinPack.notice())
@@ -366,13 +377,16 @@ func test_the_status_lines_say_what_dresses_the_game() -> void:
 	assert_eq(SkinPack.status_line("skin",
 		{"source": "folder", "name": "res://assets/original", "files": 0}),
 		"1997 art: a loose folder, res://assets/original")
+	assert_eq(SkinPack.status_line("cardart",
+		{"source": "forgotten", "name": "cardart.zip", "files": 1}),
+		"Card art: cardart.zip — 1 picture, forgotten, worn until the restart")
 
 
 func test_the_rows_read_the_mounted_zips_first_and_the_folders_after() -> void:
 	# Under the editor nothing is mounted and the checkout's own folders
 	# are what the search finds (or nothing at all, in a bare checkout).
 	var skin := SkinPack.describe("skin")
-	assert_true(String(skin["source"]) in ["folder", "none", "mounted", "yours"],
+	assert_true(String(skin["source"]) in ["folder", "none", "mounted", "yours", "forgotten"],
 		"a source the line can say: " + String(skin["source"]))
 	assert_true(SkinPack.mount(GOOD, true))
 	assert_eq(String(SkinPack.describe("skin")["source"]), "mounted",
