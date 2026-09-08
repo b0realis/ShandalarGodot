@@ -7981,12 +7981,14 @@ aura and a non-aura empty); the fit per host and gift, a walk it has
 and a can't-attack included; and the null, the knob off, hanging the
 aura on the Wall as before.
 
-**Known and left:** Artifact Ward reads as an attacker's gift
-(*"can't be blocked by artifact creatures"*) and will not go on a Wall,
-though its damage prevention would serve one; Fear's and Invisibility's
-reminder text add an unblockable gift beside the keyword, harmless and
-of the same polarity. Both are the reader being literal; a row in
-`AURA_GRANTS` fixes either the day it matters.
+**Artifact Ward, the owner's call.** Its first line (*"can't be blocked
+by artifact creatures"*) reads as an attacker's gift, and the first cut
+would not put it on a Wall; the owner: *"artifact ward is somehow
+sensible also on a wall"*. So `AURA_GRANTS` has a row for a SHIELD —
+*"prevent all damage that would be dealt to enchanted creature"* — as
+anyone's gift, and the Ward fits a Wall through its second line. Fear's
+and Invisibility's reminder text add an unblockable gift beside the
+keyword, harmless and of the same polarity — the reader being literal.
 
 ## Standing quality gates
 

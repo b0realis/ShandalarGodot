@@ -525,6 +525,11 @@ const AURA_GRANTS := {
 	"has trample": {"keyword": Mtg.Keyword.TRAMPLE, "attack_only": true},
 	"as though it had haste": {"keyword": Mtg.Keyword.HASTE, "attack_only": true},
 	"can't be blocked": {"keyword": Mtg.Keyword.UNBLOCKABLE, "attack_only": true},
+	# A shield is anyone's gift — Artifact Ward's second line, which
+	# keeps it sensible on a Wall (the owner: "artifact ward is somehow
+	# sensible also on a wall"), whatever its first line says.
+	"prevent all damage that would be dealt to enchanted creature":
+		{"keyword": -1, "attack_only": false},
 }
 const LANDWALKS := ["plains", "island", "swamp", "mountain", "forest"]
 

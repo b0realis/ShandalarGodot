@@ -1193,7 +1193,9 @@ shandalar/
 │   │   │                      friendly aura GRANTS, read off its own
 │   │   │                      words (vigilance, flying, first strike,
 │   │   │                      reach, fear, trample, haste, unblockable,
-│   │   │                      a landwalk), each gift marked whether it is
+│   │   │                      a landwalk, a shield — Artifact Ward's
+│   │   │                      second line, the owner's call), each gift
+│   │   │                      marked whether it is
 │   │   │                      an ATTACKER'S — and whether a given host
 │   │   │                      can use at least one: a keyword it has
 │   │   │                      already is nothing to it, an attacker's

@@ -175,6 +175,9 @@ func test_the_gifts_are_read_as_the_cards_spell_them() -> void:
 	assert_eq(oil.size(), 1)
 	assert_eq(String(oil[0]["landwalk"]), "island", "in the engine's own lower case")
 	assert_eq(EffectIntent.aura_gifts(CardRegistry.get_card("Giant Strength")), [], "a pump grants nothing")
+	var ward: Array = EffectIntent.aura_gifts(CardRegistry.get_card("Artifact Ward"))
+	assert_eq(ward.size(), 2, "unblockable by artifacts, and a shield")
+	assert_false(bool(ward[1]["attack_only"]), "the shield is anyone's")
 	assert_eq(EffectIntent.aura_gifts(CardRegistry.get_card("Psychic Venom")), [], "a land aura grants nothing")
 	assert_eq(EffectIntent.aura_gifts(CardRegistry.get_card("Hill Giant")), [], "not an aura")
 
@@ -203,3 +206,5 @@ func test_a_host_fits_when_it_can_use_at_least_one_gift() -> void:
 	giant.cur_cant_attack = false
 	assert_true(EffectIntent.aura_fits(CardRegistry.get_card("Giant Strength"), wall),
 		"a pump fits anyone")
+	assert_true(EffectIntent.aura_fits(CardRegistry.get_card("Artifact Ward"), wall),
+		"a shield serves a Wall — the owner's call")
