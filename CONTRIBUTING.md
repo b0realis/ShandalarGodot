@@ -240,10 +240,29 @@ scratch script plays through the live screen is appended there too.
   the Linux preset with `--export-debug`: same look, same play, 0.2 MB
   more, the headless Deck Lab ~13% slower. The other cure is native
   popups, `display/window/subwindows/embed_subwindows=false` (0 lines
-  with the release template) — every tooltip an OS window, a look to
-  check on each desktop before choosing it. The web build is
-  unaffected either way. Do not "fix" it in GDScript: the connections
-  are the engine's own.
+  with the release template) — every tooltip an OS window. RULED OUT
+  by the owner (2026-09-08): the game's windows look and feel right as
+  they are, and no desktop is to be checked for a new look. The web
+  build is unaffected either way. Do not "fix" it in GDScript: the
+  connections are the engine's own.
+  THE REVERT, kept possible and not taken (2026-09-08): the debug
+  template is the slower one (the 13% above), so `LINUX_TEMPLATE=
+  release ./build_release.sh …` exports the optimized binary again
+  with nothing else changed — the preset keeps both template paths —
+  and the default is one word in `build_release.sh`. Take it when a
+  Godot release carries the fix (watch #87626) or when the speed
+  matters more than the lines; the terminal grows the lines back the
+  same day. WHY the debug template is quiet is not pinned, here or
+  upstream: the issue's thread reproduces the same split (editor,
+  debug export, web: clean; release export on every desktop: loud)
+  and names no cause, and this repository has only observed the
+  optimized binary, not read it. What differs between the templates
+  on that path is DEBUG_ENABLED — a `callable_mp` callable carries
+  its method's text only under it (the empty `callable: ''` in the
+  lines is that), and the two callables are matched by a byte
+  comparison of {instance, object id, method pointer}. Which of those
+  the optimized build gets wrong is upstream's to find; do not write
+  a cause into this file that has not been read from the binary.
 - Cite CR (Comprehensive Rules) numbers in comments for rules behavior —
   existing code shows the style.
 - Reference implementations for tricky cards/rules: the mage-go clone

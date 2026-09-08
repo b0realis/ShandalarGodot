@@ -8875,11 +8875,37 @@ connection from 'root:<Window#…>', Signal: 'focus_entered', callable:
   `custom_template/debug`), with the console wrapper off so the debug
   export adds no `Shandalar.sh` beside `run.sh`. Native popups would
   also silence it with the release template, but turn every tooltip and
-  menu into an OS window under the compositor's own rules — a look to
-  check on each desktop by looking, which this machine cannot do for
-  the owner's; it stays the documented alternative (CONTRIBUTING.md's
-  gotcha). The web build keeps the release template: it never leaves
-  embedding.
+  menu into an OS window under the compositor's own rules. **Ruled
+  out by the owner the same evening: "game windows look and feel ok"**
+  — the alternative stays written down in CONTRIBUTING.md's gotcha as
+  the road not taken, not as a plan. The web build keeps the release
+  template: it never leaves embedding.
+- **The revert, kept possible and not taken.** The debug template is
+  the slower one, so `LINUX_TEMPLATE=release ./build_release.sh …`
+  exports the optimized binary again with nothing else changed (the
+  preset keeps both template paths; the default is one word in the
+  script). The owner's ruling (2026-09-08): not now — the dev build on
+  the debug template is what gets tested; the switch is for the day a
+  Godot release carries #95100 or the speed outweighs the lines.
+  Verified the switch does what it says: a scratch export with it set
+  produces a binary byte-identical to `linux_release.x86_64`.
+- **Why the debug template is quiet — observed, not pinned.** The
+  issue's thread reproduces exactly this split (editor, debug export
+  and web clean; release export loud on every desktop, tooltips and
+  OptionButtons alike) and nobody there names the cause; this project
+  has read the engine's source, not its optimized binary. What the
+  source says: the two callables are `callable_mp(this, &Popup::
+  _parent_focused)` and `callable_mp(this, &Popup::
+  _deinitialize_visible_parents)`, built anew at connect and at
+  disconnect; a `CallableCustomMethodPointer` compares by a byte
+  comparison of {instance pointer, object id, method pointer}, and
+  carries its method's text only under `DEBUG_ENABLED` — which is the
+  empty `callable: ''` in every line. So the optimized build's second
+  callable does not compare equal to its first, for a reason that lives
+  in the optimized build and not in the game. The lines are cosmetic
+  either way; the template choice is the whole of this project's
+  answer, and no cause goes into the docs until it has been read from
+  the binary.
 - **Found on the way.** The play copy's Deck Lab printed `EloLedger:
   cannot write decks/ratings.txt` — there is no `decks/` beside an
   exported binary (the decks ride in the .pck). `EloLedger.save` now

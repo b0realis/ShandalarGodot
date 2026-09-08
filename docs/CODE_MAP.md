@@ -1843,7 +1843,10 @@ shandalar/
 │                              connection" errors on every popup close and
 │                              the pile again at quit; same look, 0.2 MB
 │                              more, the Deck Lab ~13% slower; the
-│                              CONTRIBUTING.md gotcha) — then smoke-boots
+│                              CONTRIBUTING.md gotcha; LINUX_TEMPLATE=
+│                              release in the environment exports the
+│                              optimized one again, the revert kept
+│                              possible and not taken) — then smoke-boots
 │                              the result and fails on an error line
 │                              (a preset without custom_template/debug
 │                              fails the export with a hint). --out DIR, --skin

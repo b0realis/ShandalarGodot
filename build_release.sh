@@ -40,6 +40,12 @@
 #                                   #    the catalogue, the tools, a
 #                                   #    README — NO art) and the same
 #                                   #    with the skin zip in ("-with-skin")
+#   LINUX_TEMPLATE=release ./build_release.sh …
+#                                   # the Linux export on the optimized
+#                                   #    template again — with Godot
+#                                   #    #87626's error lines in the
+#                                   #    terminal (see the export below);
+#                                   #    the default is `debug`
 #
 # WHAT SHIPS, AND WHAT DOES NOT. The .pck carries game/, engine/, cards/
 # (scripts + cards/data/) and every deck under decks/ — about 5 MB. It
@@ -268,7 +274,32 @@ timeout -k 5 900 "$GODOT" --headless --import . >/dev/null 2>&1 </dev/null || tr
 # keeps the release template: it never leaves embedding and never
 # prints the lines. Needs `custom_template/debug` set in the preset
 # (export_presets.cfg.example has both paths).
-MODE=--export-debug
+#
+# WHY THE DEBUG TEMPLATE IS QUIET is not pinned, here or upstream — the
+# issue's thread reproduces the same split (editor, debug export and
+# web clean; release export and every desktop loud) without naming a
+# cause, and this repository has not read the optimized binary's
+# behaviour, only observed it. What differs between the two templates
+# on this path is DEBUG_ENABLED: a `callable_mp` callable is built with
+# its method's text only under it (hence the empty `callable: ''` in
+# the release lines), and the two callables are matched by a byte
+# comparison of {instance, object id, method pointer}. Which of those
+# the optimized build gets wrong, and how, is upstream's to find; the
+# game just chooses the template that matches.
+#
+# THE REVERT (2026-09-08). The owner tests 0.20.0-dev on the debug
+# template; should a later Godot fix the bug — or the 13% matter more
+# than the lines — `LINUX_TEMPLATE=release ./build_release.sh …`
+# exports the optimized binary again with nothing else changed (the
+# preset keeps both template paths), and the default below is one
+# word to edit. Native popups are ruled out (2026-09-08): the owner
+# likes the game's windows as they are.
+LINUX_TEMPLATE="${LINUX_TEMPLATE:-debug}"
+case "$LINUX_TEMPLATE" in
+	debug|release) ;;
+	*) echo "LINUX_TEMPLATE must be 'debug' or 'release', not '$LINUX_TEMPLATE'" >&2; exit 2 ;;
+esac
+MODE="--export-$LINUX_TEMPLATE"
 [ "$WEB" = 1 ] && MODE=--export-release
 echo "exporting '$PRESET' ($MODE) -> $BIN"
 if ! timeout -k 5 1200 "$GODOT" --headless --path . \

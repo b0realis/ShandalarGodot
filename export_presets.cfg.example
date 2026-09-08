@@ -14,7 +14,11 @@
 ; debug export does not add a Shandalar.sh beside the binary (run.sh
 ; is the launcher the package ships). The web preset stays on the
 ; release template — a browser build never leaves embedding and never
-; prints the lines.
+; prints the lines. To go back to the optimized Linux binary (it is
+; the faster one; the lines come back with it) nothing here changes:
+; `LINUX_TEMPLATE=release ./build_release.sh …` — both template paths
+; stay set. Not taken as of 2026-09-08; native popups (embed_subwindows
+; off) are ruled out, the game's windows look right as they are.
 ;
 ; Excluded from the .pck: tests/, tools/, docs/, the addons and ALL of
 ; assets/. Nothing under game/, engine/ or cards/ references the first
