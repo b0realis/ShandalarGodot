@@ -3551,6 +3551,25 @@ could be paid for out of the **untapped** sources (`MtgGame.could_afford`)
 land into always waits. Before it, every spell the AI cast cost a Done
 click; `docs/ROADMAP.md`, "THE OPPONENT'S TURN".
 
+**The instant windows** (2026-09-08). The same test, asked at four
+moments the pass used to walk through with nothing on the chain: the
+fast-effects round after attackers are in (and the attack is not
+empty), the one after blockers, the one after first-strike damage, and
+the opponent's end step — `_instant_window_reason`, and `Duel.hlp`'s
+own two Combat Bar icons (*"Fast Effects"* / *"Fast Effects (2)"*, on
+either seat's turn). A Done or Run to that TRAVELLED into one holds
+there too; one given in a window is the pass out of it. Your own
+upkeep, draw, main and end step are not windows and still run
+themselves with an instant in hand. `_could_respond` learnt two things
+for it: a `{T}` ability needs an untapped, un-sick permanent
+(`_ability_usable` — every attacker is tapped), and a spell needs a
+legal target (`_has_something_to_aim_at` — a Counterspell over an
+empty chain holds nothing). The Situation Bar asks *"Fast
+Effects?...Assign Attackers"* / *"...Assign Blockers"* in your own
+windows now, and gives the two "Choose" instructions only while the
+lineup is owed. `docs/ROADMAP.md`, "THE INSTANT WINDOWS";
+`tests/ui/test_instant_windows_2026_09_08.gd`.
+
 **The Combat Bar follows the ATTACK, not the phase.**
 `CombatBar.shows_attack(step, awaiting_attackers, attacker_count)` is the
 screen's span where `covers_step` is the engine's. Declare no attackers and

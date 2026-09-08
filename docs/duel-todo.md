@@ -1984,7 +1984,14 @@ a time.
 
 **RUN TO** (manual p.116) and **Done as a standing instruction** (§6.20a)
 share one driver; the manual's two exception lists genuinely differ and
-both are implemented as written. Two divergences, both deliberate:
+both are implemented as written. Since 2026-09-08 both lists share one
+more entry, read off `Duel.hlp`'s *"declares an attack, or whatever"*:
+an order that travelled into one of the instant windows (the two combat
+fast-effects rounds, after first-strike damage, the opponent's end
+step) rests there when the player holds an answer — the automatic
+pass's own test (`_could_respond`), so an order and no order stop in
+the same places; `docs/ROADMAP.md`, "THE INSTANT WINDOWS". Two
+divergences, both deliberate:
 
 | | Ours | Why |
 |---|---|---|

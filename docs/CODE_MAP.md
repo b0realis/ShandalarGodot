@@ -1750,7 +1750,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4892 tests / ~134 000 asserts, ~300 s
+├── tests/                   GUT suite — 4911 tests / ~134 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2454,6 +2454,18 @@ shandalar/
 │    pick-up instead of being lifted there at all; and the three
 │    sentences @PROMPT_DEFENDWHOM speaks (`Block which attacker?`,
 │    `Illegal block.`, `That isn't an attacker.`);
+│    tests/ui/test_instant_windows_2026_09_08.gd — THE INSTANT WINDOWS
+│    (2026-09-08): the four fast-effects rounds the automatic pass
+│    walked the human through hold for a Bolt with an untapped Mountain
+│    and pass on an empty hand, on their turn and on yours; your own
+│    end step and upkeep still run themselves; an owed declaration and
+│    an empty combat are not windows; a Counterspell over an empty
+│    chain, a Giant Growth with no creature, a tapped or summoning-sick
+│    Prodigal Sorcerer hold nothing; the Done order that travels into
+│    the blocker window, the one given in a window, the Run to that
+│    stops for an attack it can answer; the bar's "Fast Effects?..."
+│    lines and the 1997 step names; and the report end to end — a Bolt
+│    cast through the engine at their declared Gray Ogre;
 │    tests/ui/test_enchanted_attacker_2026_09_06.gd — THE ATTACK THAT WAS
 │    NEVER DECLARED: an attachment is drawn as a whole card standing
 │    proud of its host (AURA_PEEK), so the band a player clicks on an
@@ -4091,6 +4103,29 @@ shandalar/
 │       │                      shielding itself gets no ghost
 │       │                      (_shield_ghost_data). tests/ui/
 │       │                      test_shield_ghost_2026_09_07.gd
+│       │                      THE INSTANT WINDOWS (2026-09-08, [QoL]):
+│       │                      _instant_window_reason names the four
+│       │                      fast-effects rounds the automatic pass
+│       │                      used to walk through — after attackers
+│       │                      are in (non-empty), after blockers, after
+│       │                      first-strike damage, the opponent's end
+│       │                      step — and the pass, and a Done/Run to
+│       │                      that TRAVELLED into one, hold there when
+│       │                      _could_respond has an answer (potential
+│       │                      mana). _ability_usable (a {T} ability's
+│       │                      permanent untapped and not summoning-
+│       │                      sick) and _has_something_to_aim_at (a
+│       │                      legal target for every required spec) keep
+│       │                      a tapped attacker and a Counterspell over
+│       │                      an empty chain from holding anything;
+│       │                      _status_message asks "Fast Effects?..."
+│       │                      in your own windows and gives the two
+│       │                      declaration lines only while the lineup
+│       │                      is owed; _fe_phase_name takes the damage
+│       │                      and end-of-combat names from
+│       │                      @PROMPT_SPECIALFEPHASE. Engine and AI
+│       │                      unchanged — both had the rounds already.
+│       │                      tests/ui/test_instant_windows_2026_09_08.gd
 │       ├── human_agent.gd   class HumanAgent — DecisionAgent for human
 │       │                      seats: pre-selection mailbox the UI fills
 │       │                      BEFORE casting (tutor picks) plus park(),

@@ -2680,7 +2680,7 @@ picker before tutor casts).
 | An until-end-of-turn LOSS beats a later grant (`ContinuousEffects._losses`) | Timestamps within CR 613 layer 6 |
 | ~~`ContinuousEffects` durations are end-of-turn and end-of-combat only~~ **DONE 2026-09-01** — every floating entry now carries a `lasts` (`ContinuousEffects.Duration`), so the pipeline knows four: end of turn, end of combat, **until your next upkeep** (`expire_upkeep_of`, called as the upkeep step opens and before its triggers stack — Xenic Poltergeist, Erhnam Djinn) and **indefinite** (Brine Hag). `add_granted_activated_ability` is the same idea for a granted ABILITY, which CR 611.2b makes durationless by default (Life Matrix). Pinned by `tests/unit/test_effect_durations.gd` | — |
 | The CR 613 layer passes have no DEPENDENCY analysis (CR 613.8); layer-4 statics run twice when two share the board, which resolves one level | Real dependency ordering |
-| ~~No POTENTIAL-mana query~~ **HALF-LIFTED 2026-09-03** — `MtgGame.could_afford(pid, data, excluded)` walks the untapped sources through the shared [ManaPlanner] and prices them with `can_afford`'s own modifiers, restricted-mana keys and `spell_payment` arithmetic, so a plan and a payment cannot disagree. The **castable highlight** now uses it, which is what makes the yellow name mean what `Duel.hlp` says it means (*"you must have enough mana available"*, topic **Hands**) and what the click-then-tap flow and the auto-cast both promise. **STILL OWED:** `DuelScreen._has_affordable_fast_effect` — the Done order's third condition — is deliberately left on the FLOATING pool, so Done and the opponent's-turn auto-pass stop only for a fast effect the player has actually floated for; its own `SIMPLIFIED` marker still says so. Moving it to `could_afford` would make both stop at every phase you hold an instant, which is the clicking the 2026-09-03 playtest was about | Point `_has_affordable_fast_effect` at `could_afford` when (and only when) the player asks for the stricter 1997 Done |
+| ~~No POTENTIAL-mana query~~ **HALF-LIFTED 2026-09-03** — `MtgGame.could_afford(pid, data, excluded)` walks the untapped sources through the shared [ManaPlanner] and prices them with `can_afford`'s own modifiers, restricted-mana keys and `spell_payment` arithmetic, so a plan and a payment cannot disagree. The **castable highlight** now uses it, which is what makes the yellow name mean what `Duel.hlp` says it means (*"you must have enough mana available"*, topic **Hands**) and what the click-then-tap flow and the auto-cast both promise. **STILL OWED:** `DuelScreen._has_affordable_fast_effect` — the Done order's third condition — is deliberately left on the FLOATING pool, so Done stops only for a fast effect the player has actually floated for; its own `SIMPLIFIED` marker still says so. Moving it to `could_afford` would make Done stop at every phase you hold an instant, which is the clicking the 2026-09-03 playtest was about. **Narrowed 2026-09-08:** the four instant windows (both combat fast-effects rounds, after first-strike damage, the opponent's end step) hold on POTENTIAL mana through `_could_respond` — see "THE INSTANT WINDOWS" | Point `_has_affordable_fast_effect` at `could_afford` when (and only when) the player asks for the stricter 1997 Done |
 | **SIMPLIFIED — `could_afford` under-reports for two cards** (`mtg_game.gd`): colour SUBSTITUTIONS (Sunglasses of Urza) and North Star's any-type charge widen only the FLOATING half of the answer, because `can_afford` is asked first and [ManaPlanner] models neither. It never over-reports, which is the safe direction for a highlight and for an auto-tapper | Teach the planner substitutions and the wildcard, or price the potential pool through `ManaPool.can_pay` once it can take a source list |
 | **SIMPLIFIED — the AI's combat maths blocks ONE creature per attacker in the FORWARD combat** (`ai_player.gd`'s `_attack_risk` / `_cohort_value` / `_damage_through_blocks`, and ply 2 of `ai/combat_search.gd`): when the AI prices its own attack, the defender's answer still puts at most one body on each attacker. **NARROWED 2026-09-05** — the DEFENSIVE half is lifted: `CombatSearch.resolve_block` puts one attacker against a whole gang (CR 509.2's damage order as `AiPlayer.order_blockers` announces it, 510.1c lethal-first down it, 702.19b trample spill, 510.4 first strike decided per assignment), and ply 4 of the crack-back search enumerates gangs, so the AI knows two bodies can hold a counter-swing one cannot. Pinned by `tests/ai/test_ai_gang_blocks_2026_09_05.gd`, including that a gang of ONE answers exactly what `_dies_to` answers. The forward half was BUILT AND MEASURED TOO and left out on the numbers: it changed 19.0% of searched declarations against the defensive half's 15.1%, but 120 of those the narrow way against 92 the wide way (the defensive half is 134 wide against 47 narrow), which is the pessimism the 2026-09-04 attack audit had just removed. Both arms measured +0.1 ± 2.0 on the win rate, so direction decided it. The 4.5% that kept the whole row until now stands: the defender gang-blocks in 46 of 1,022 logged combats | Price the same widening in `_cohort_value` and `_damage_through_blocks` — but not before the pessimism it adds is worth something a measurement can see, and not without `_cohort_value` and ply 2 moving together (they price the same board and would otherwise disagree) |
 Card-level simplifications are tracked separately in
@@ -7625,6 +7625,100 @@ the player who wants it, `--remove` to undo. Unpacking installs nothing.
 `user://original_skin/`, the importer, the fetcher: all as before. The
 zip is one more place the game looks, and the first one that works in a
 browser.
+
+## THE INSTANT WINDOWS (2026-09-08) — [QoL]
+
+*"During playtesting i found a bug: i have an instant like 'lightning
+bolt'. I cannot cast it during (my/opponent) battle turns. By the mtg
+rules: Yes, instant spells and flash cards can be played during the
+combat phase in Magic: The Gathering, provided you have priority. Please
+implement this mechanic into our game engine for all instants and also
+AI play. Do it meticulously."* — and, with it, the rule stated in full:
+priority after every spell, at the end of every phase and step, for
+both players, *"nothing happens until both players agree to pass"*.
+
+**What the engine already did.** All of it. `MtgGame` opens a priority
+round in every step but untap and cleanup (`_enter_step` →
+`_open_priority`), after each declaration (`declare_attackers` and
+`declare_blockers` both end in `_open_priority`), after first-strike
+damage and again after regular damage; `cast_spell` hands priority back
+to the caster (CR 117.3c) and a step ends only on two consecutive passes
+(`pass_priority`). The AI seat uses every one of those rounds
+(`AiPlayer._respond_action`: the defensive and offensive combat
+responses once attackers are in, the regeneration and pump answers, the
+held instant at the end of your turn). Nothing in `engine/` or
+`engine/ai/` changed for this report, so there is no sweep to show.
+
+**What was wrong** was the human's automatic pass of 2026-09-03 ("AN
+UNSTOPPED PHASE RUNS ITSELF"). Nothing on the Combat Bar is marked by
+default, its test for *"a fast effect you can afford"* was the FLOATING
+pool (deliberately — see the potential-mana row and its **STILL OWED**),
+and so with a Bolt in hand and a Mountain untapped the fast-effects
+rounds after Declare Attackers and after Declare Blockers went by on
+their own, on either turn, and so did the opponent's end step. The
+player was never refused a cast; they were never given the moment.
+
+**The 1997 licence.** `Duel.hlp`, topic **Combat Bar**: *"the sword with
+rays — Fast Effects"* after Declare Attackers, *"the shield with rays —
+Fast Effects (2)"* after Declare Blockers, shown on either seat's turn;
+`@PROMPT_CHECKFEPHASE` (`UIStrings.txt:1024`) names those rounds `Assign
+Attackers` and `Assign Blockers` in the same table as every other phase
+the *"Fast Effects?..."* question is asked in; and topic **Phase Bar**,
+exception (2), lists *"declares an attack"* among the things the
+opponent does that stop movement through phases *"so that you have a
+chance to respond"*.
+
+**The rule** (`DuelScreen._instant_window_reason`). Four moments are
+the windows: the attacker fast-effects round once attackers are in and
+the attack is not empty, the blocker fast-effects round, the round after
+first-strike damage, and the opponent's end step. In a window the
+automatic pass and a Done or Run to that TRAVELLED into it hold exactly
+when `_could_respond` says the player has an answer — the same
+potential-mana test the chain clause of 2026-09-04 makes
+(`MtgGame.could_afford`), so an order and no order rest in the same
+places. A window the order was given IN is the pass out of it. Nothing
+outside the four is a window: your own upkeep, draw, main and end step
+still run themselves with a Bolt in hand (the 2026-09-03 rule, *"it
+should go automatically EVEN FOR ME"*, is kept whole — a Bolt at your
+own end step is a Bolt you could have cast in Main 2), a combat nobody
+is fighting has no rounds to hold, and a declaration still owed is a
+required action, not a window.
+
+**Two things `_could_respond` had to learn** for that to be right,
+found while designing, both applied to the Done predicate too:
+`_ability_usable` — a `{T}` ability's permanent must be untapped and, if
+a creature, not summoning-sick, because `can_afford_cost` prices a
+tapped attacker's `{T}` at nothing and every attacker is tapped (the
+first window would have held for the very creatures attacking through
+it); and `_has_something_to_aim_at` — a Counterspell over an empty chain
+or a Giant Growth with no creature in play has nothing legal to target
+and *is not castable* (`Duel.hlp`, topic **Hands**: a card is useable
+when *"all the necessary conditions are met"*), so it holds nothing. The
+Counterspell case is the one that mattered: without it a blue hand would
+have stopped every window of every turn for a click that carries no
+decision, the very thing the automatic pass exists to remove.
+
+**The Situation Bar** asks the famous question in your own windows now —
+`Fast Effects?...Assign Attackers` / `...Assign Blockers` — where it
+used to repeat *"Combat phase: Choose attackers."* after the attack was
+in; the two `@PROMPT_MAIN` instructions are given while the lineup is
+owed and only then, and the blockers one had been unreachable behind
+the question's frame. The damage and end-of-combat rounds take their
+names from `@PROMPT_SPECIALFEPHASE` (`UIStrings.txt:1039`: `Damage
+Dealing`, `End of Combat`, `Choose Attackers`), the sibling table the
+original fills the same blank from, instead of answering `Main Phase`.
+
+Pinned in `tests/ui/test_instant_windows_2026_09_08.gd` (19 tests): the
+four windows on their turn and on yours, each holding for a Bolt with an
+untapped Mountain and passing on an empty hand; your own end step and
+upkeep still passing; an owed declaration and an empty combat not
+windows; the Counterspell and Giant Growth limits; the tapped and
+summoning-sick Prodigal Sorcerer; the Done order that travels into the
+blocker window, the one given in a window, the Run to that stops for an
+attack it can answer; the bar's lines; and the report end to end — their
+Gray Ogre attacks, the window holds, the Bolt is paid for from the
+Mountain and aimed at the attacker through the engine, the AI seat gets
+its say, and the Ogre is in the graveyard before blockers are asked for.
 
 ## Standing quality gates
 

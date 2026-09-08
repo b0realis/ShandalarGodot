@@ -1121,13 +1121,26 @@ static func _phase_icon_slot(step: int) -> int:
 ## capitalisation. The original has a real Discard phase where we run
 ## CLEANUP, and no End step at all (docs/glossary-1997.md §3), so both
 ## of ours answer with its "Discard Phase".
+##
+## THE COMBAT STEPS THAT TABLE HAS NO NAME FOR (2026-09-08) used to fall
+## through to "Main Phase", which is a wrong answer in a window the
+## duel now holds open (see [method _instant_window_reason]). They take
+## the sibling table's words instead — `@PROMPT_SPECIALFEPHASE`,
+## UIStrings.txt:1039, the names the original fills the SAME blank with
+## for its trigger windows: `Choose Attackers` (:1052), `Damage Dealing`
+## (:1043, and `Duel.hlp`'s own name for the three damage icons of the
+## Combat Bar), `End of Combat` (:1055).
 static func _fe_phase_name(step: int) -> String:
 	match step:
 		Mtg.Step.UPKEEP: return "Upkeep Phase"
 		Mtg.Step.DRAW: return "Draw Phase"
 		Mtg.Step.MAIN1, Mtg.Step.MAIN2: return "Main Phase"
+		Mtg.Step.COMBAT_BEGIN: return "Choose Attackers"
 		Mtg.Step.DECLARE_ATTACKERS: return "Assign Attackers"
 		Mtg.Step.DECLARE_BLOCKERS: return "Assign Blockers"
+		Mtg.Step.FIRST_STRIKE_DAMAGE, Mtg.Step.COMBAT_DAMAGE:
+			return "Damage Dealing"
+		Mtg.Step.COMBAT_END: return "End of Combat"
 		Mtg.Step.END, Mtg.Step.CLEANUP: return "Discard Phase"
 		_: return "Main Phase"
 
@@ -1172,13 +1185,31 @@ func _status_message() -> String:
 		if game.priority_player == human:
 			return "Fast Effects?..." + what
 		return what
+	# THE TWO DECLARATIONS, before any question about fast effects: while
+	# a lineup is owed the step is not a window yet, and the original's
+	# line for it is an instruction — `@PROMPT_MAIN` entries 5 and 8,
+	# UIStrings.txt:1063, full stops included. (What stood here borrowed
+	# the "?..." form, which belongs to @PROMPT_FASTEFFECTS and to nothing
+	# else, and so invented a question the game never asks —
+	# docs/glossary-1997.md.) The declaration modes write these lines
+	# themselves; this is the same answer for anyone asking the bar
+	# directly, and it used to be unreachable behind the frame below.
+	if game.awaiting_attackers and _is_human(game.active_player):
+		return "Combat phase: Choose attackers."
+	if game.awaiting_blockers and _is_human(game.opponent_of(game.active_player)):
+		return "Combat phase: Choose blockers."
 	# THE FAMOUS QUESTION. The player holds priority at instant speed — a
-	# spell waits on the chain, or it is not their own quiet main phase.
+	# spell waits on the chain, it is not their own quiet main phase, or
+	# their own combat is in one of the moments the Combat Bar draws a
+	# fast-effects icon for (2026-09-08, [method _instant_window_reason]:
+	# `Assign Attackers` / `Assign Blockers` are that table's names for
+	# exactly those, on either player's turn).
 	# The blank after the ellipsis is what is BEING RESPONDED TO: the
 	# original names the spell on the chain ("Cast %s") in preference to
 	# the phase, which is why its bar reads like a running commentary.
 	if game.priority_player == human \
-			and (not game.stack.is_empty() or not my_turn):
+			and (not game.stack.is_empty() or not my_turn
+				or _instant_window_reason() != ""):
 		var subject := _fe_phase_name(step)
 		# WHICH OF THE THREE FRAMES (§6.7). `@PROMPT_FASTEFFECTS`
 		# (UIStrings.txt:1018) has three, and `src/functions/events.c:396-399`
@@ -1212,11 +1243,6 @@ func _status_message() -> String:
 				if game.players[human].lands_played_this_turn >= 1:
 					return "Main phase (%s): cast spells" % when
 				return "Main phase (%s): cast spells, play land" % when
-			Mtg.Step.DECLARE_ATTACKERS:
-				return "Combat phase: Choose attackers."
-	if step == Mtg.Step.DECLARE_BLOCKERS and game.priority_player == human \
-			and not my_turn:
-		return "Combat phase: Choose blockers."
 	# Nobody is waiting on us: the referee is working.
 	if not _is_human(game.priority_player):
 		return "Still thinking..."
@@ -3626,9 +3652,57 @@ func _has_affordable_fast_effect(pid: int) -> bool:
 		# mana from a mana source is neither a spell nor an effect"
 		# (manual p.95), so it is not a fast effect either.
 		for ability in inst.cur_activated_abilities:
-			if game.can_afford_cost(pid, ability.cost):
+			if _ability_usable(inst, ability) \
+					and game.can_afford_cost(pid, ability.cost):
 				return true
 	return false
+
+
+## Is this ability of [param inst] one its controller could pay for with
+## something other than mana — i.e. is the permanent UNTAPPED if the cost
+## says {T}, and past summoning sickness if it is a creature (CR 602.5g)?
+## The same two lines the actionable-permanent cue draws
+## ([method _can_act_on]), split out so the three "has a fast effect"
+## predicates cannot drift from it.
+##
+## WITHOUT THIS (found 2026-09-08, writing the instant windows) an
+## attacker with a {T} ability held every window of its own combat open
+## — attacking taps it, and `can_afford_cost` prices a tapped {T} at
+## nothing at all — and a summoning-sick Prodigal Sorcerer stopped the
+## duel in every step of both turns.
+static func _ability_usable(inst: CardInstance, ability: ActivatedAbility) -> bool:
+	if not ability.tap_cost:
+		return true
+	if inst.tapped:
+		return false
+	return not (inst.is_creature() and inst.summoning_sick
+		and not inst.has_keyword(Mtg.Keyword.HASTE))
+
+
+## Has this instant in [param pid]'s hand anything to be cast AT? A spell
+## whose every targeting effect demands at least one target, and one of
+## them has no legal target on the board or the chain, cannot be cast at
+## all (`TargetPlan` refuses it), so it is not a response — a Counterspell
+## over an empty chain, a Giant Growth with no creature in play.
+##
+## THE LICENCE is `Duel.hlp`, topic **Hands**: a card is *"useable"* when
+## *"all the necessary conditions are met"*, and a target is one. It is
+## asked only of instants the mana could already reach, so the walk over
+## the board is rare and short; a modal spell (Healing Salve) is left as
+## a response, because its modes want different things and one may be
+## castable — the conservative answer, which costs a click and never a
+## play. Optional and "X target" slots (`target_min` 0, `target_count_is_x`)
+## are left alone for the same reason.
+func _has_something_to_aim_at(inst: CardInstance) -> bool:
+	if inst.data.is_modal():
+		return true
+	for effect in inst.data.spell_effects:
+		var spec: TargetSpec = effect.target_spec
+		if spec == null or effect.target_min <= 0 or effect.target_count_is_x:
+			continue
+		if spec.legal_targets(game, inst).is_empty():
+			return false
+	return true
 
 
 ## HAS [param pid] A RESPONSE AT ALL — an instant in hand or an activated
@@ -3650,23 +3724,90 @@ func _has_affordable_fast_effect(pid: int) -> bool:
 ## NOT the floating-pool test, deliberately: passing a window in which the
 ## player could still tap a land and answer would take a play away from
 ## them, and no saving of clicks is worth that.
+##
+## SINCE 2026-09-08 IT ANSWERS FOR THE INSTANT WINDOWS TOO ([method
+## _instant_window_reason]), where the chain is empty — so the instant
+## half now also asks whether the spell has anything to be cast at
+## ([method _has_something_to_aim_at]), and the ability half whether the
+## permanent is untapped when its cost says {T} ([method _ability_usable]).
+## Neither narrows a real response: a spell with no legal target is
+## refused by the engine, and a tapped {T} is not "handy".
 func _could_respond(pid: int) -> bool:
 	if not _is_human(pid):
 		return false
 	for inst in game.players[pid].hand:
 		if inst.data.is_type(Mtg.CardType.INSTANT) \
-				and game.could_afford(pid, inst.data, _no_auto_tap):
+				and game.could_afford(pid, inst.data, _no_auto_tap) \
+				and _has_something_to_aim_at(inst):
 			return true
 	for inst in game.all_battlefield():
 		if inst.controller_id != pid:
 			continue
 		for ability in inst.cur_activated_abilities:
-			# No potential-mana query for an ABILITY cost, so this stays on
-			# the floating pool — the conservative half of the answer, and
-			# the same one `_has_affordable_fast_effect` gives.
-			if game.can_afford_cost(pid, ability.cost):
+			# `can_afford_cost` builds the engine's own tap plan, so an
+			# ability's mana is priced the same way an instant's is:
+			# floating first, then the lands the plan could still tap.
+			if _ability_usable(inst, ability) \
+					and game.can_afford_cost(pid, ability.cost):
 				return true
 	return false
+
+
+## THE INSTANT WINDOWS (2026-09-08, [QoL]). Why a quiet duel — nothing on the
+## chain, nothing the engine is holding open — is still standing in a
+## moment a fast effect is FOR, or "" when it is not. The owner's
+## playtest, 2026-09-08: *"i have an instant like 'lightning bolt'. I
+## cannot cast it during (my/opponent) battle turns."*
+##
+## THE ENGINE WAS NEVER THE PROBLEM: it opens a priority round after
+## every declaration and every damage step, for both seats (CR 117.3b
+## and the rulebook's own words for it, *"the game automatically gives
+## you priority at the end of every single phase and step"*), and the
+## AI seat answers in every one of them (`AiPlayer.act` ->
+## `_respond_action`: the combat responders, the end-of-turn Bolt). What
+## ate the human's windows was the automatic pass of 2026-09-03: on the
+## Combat Bar nothing is marked by default, so the two fast-effects
+## icons and the damage steps passed themselves — and the opponent's end
+## step with them — unless mana had already been floated.
+##
+## THESE ARE THE 1997 GAME'S OWN WINDOWS, drawn as icons. `Duel.hlp`,
+## topic **Combat Bar**: *"the sword with rays — Fast Effects"* follows
+## Declare Attackers and *"the shield with rays — Fast Effects (2)"*
+## follows Declare Blockers, on either player's turn, and
+## `@PROMPT_CHECKFEPHASE` names them (`Assign Attackers`, `Assign
+## Blockers`) in the same table as the phases the fast-effects question
+## is asked in. The opponent's end step is the manual's *"Discard
+## Phase"* window — the last call for a held instant before your untap,
+## and the moment the AI's own `_end_of_their_turn` fires. First-strike
+## damage is a window of its own (CR 510.5): the moment between the
+## first blow and the second.
+##
+## AND ONLY WHEN THE PLAYER CAN USE ONE. The caller pairs this with
+## [method _could_respond], so the window holds when an instant or an
+## ability is payable and castable, and passes itself when there is
+## nothing to cast — the owner's 2026-09-03 rule (*"if nothing happens
+## on a phase... it should go automatically EVEN FOR ME"*) kept whole.
+## What is NOT here, on purpose: your own end step (a Bolt there is a
+## Bolt in Main 2), the beginning of combat and the end of combat (a Stop
+## covers each), the normal-damage step (the damage window of §6.8
+## already holds it when a prevention effect is in hand).
+func _instant_window_reason() -> String:
+	if game.awaiting_attackers or game.awaiting_blockers:
+		return ""      # a declaration is owed: not a window yet
+	match game.current_step():
+		Mtg.Step.DECLARE_ATTACKERS:
+			# No attack declared: the engine skips straight to the end of
+			# combat, and there is nothing in this step to respond to.
+			if not game.combat.attackers.is_empty():
+				return "attackers are declared"
+		Mtg.Step.DECLARE_BLOCKERS:
+			return "blockers are declared"
+		Mtg.Step.FIRST_STRIKE_DAMAGE:
+			return "first-strike damage has been dealt"
+		Mtg.Step.END:
+			if game.active_player != _human_seat():
+				return "their turn is ending"
+	return ""
 
 
 ## THE MANUAL'S FIRST EXCEPTION, on its own — *"If there are any required
@@ -3728,6 +3869,16 @@ func _advance_stop_reason() -> String:
 		var top: StackItem = game.stack.back()
 		if top.controller != _human_seat() and not _advance_seen.has(top):
 			return "%s is on the chain" % top.description
+	# (2) again, read as the manual lists it — *"declares an attack, or
+	# whatever"* — for an order that TRAVELLED into one of the instant
+	# windows with a response in hand (2026-09-08). Not the window the
+	# order was given in: a Done or a Run to pressed in a window IS the
+	# pass out of it. The same test the automatic pass makes, so an order
+	# and no order come to rest in the same places.
+	if _advance_moved:
+		var window := _instant_window_reason()
+		if window != "" and _could_respond(_human_seat()):
+			return window
 	# Done's third condition, which run-to does not share.
 	if _advance_mode == Advance.DONE \
 			and _has_affordable_fast_effect(_human_seat()):
@@ -3888,6 +4039,19 @@ func _cancel_advance() -> void:
 # response. That is the under-report already on `docs/ROADMAP.md`, and it
 # is what makes this feel like the owner asked rather than like a brake.
 #
+# ...EXCEPT IN THE INSTANT WINDOWS (2026-09-08, [method
+# _instant_window_reason]). The owner's next playtest found the cost of
+# that under-report: *"i have an instant like 'lightning bolt'. I cannot
+# cast it during (my/opponent) battle turns."* Nothing on the Combat Bar
+# is marked by default, so the fast-effects window after each declaration
+# — the original's own "sword with rays" and "shield with rays" — passed
+# itself unless mana was already floating, and so did the opponent's end
+# step. In those windows, and only there, the test is [method
+# _could_respond]'s POTENTIAL mana (with a target to aim at), the same
+# test (b) makes for a chain item: a Bolt in hand and a Mountain untapped
+# holds the window; an empty hand lets it go. Everywhere else the floating
+# pool still decides, and the 2026-09-03 quiet turn is untouched.
+#
 # NEVER IN A HOTSEAT DUEL, where both seats are somebody's and there is no
 # "opponent" for the screen to run on anyone's behalf.
 #
@@ -3933,6 +4097,15 @@ func _auto_pass_applies() -> bool:
 	# The test is potential mana, not floating mana, so a window you could
 	# still tap a land into always waits.
 	if not game.stack.is_empty() and _could_respond(_human_seat()):
+		return false
+	# (b) once more, for the windows the chain is EMPTY in — after an
+	# attack is declared, after blocks, after first-strike damage, at the
+	# end of the opponent's turn ([method _instant_window_reason],
+	# 2026-09-08). The same "permits" reading: the window holds when the
+	# player has a fast effect they could pay for and aim, and passes
+	# itself when they have none. This is what lets a Bolt be cast in
+	# combat at all.
+	if _instant_window_reason() != "" and _could_respond(_human_seat()):
 		return false
 	# (c) "if you have placed a Stop on a phase, progress pauses at that
 	# phase". Unconditional here, where a standing order excuses the phase
@@ -6861,9 +7034,7 @@ func _can_act_on(inst: CardInstance) -> bool:
 	if inst.controller_id != game.priority_player:
 		return false
 	for ability in inst.cur_activated_abilities:
-		if ability.tap_cost and (inst.tapped
-				or (inst.summoning_sick and inst.is_creature()
-					and not inst.has_keyword(Mtg.Keyword.HASTE))):
+		if not _ability_usable(inst, ability):
 			continue
 		if game.can_afford_cost(inst.controller_id, ability.cost):
 			return true
