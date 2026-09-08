@@ -743,11 +743,14 @@ and will…`, entries 5-6, now with `, drawing %d` on the end — ours, so the
 count is said). Seven redraws end in an empty hand and no eighth.
 
 **The sequence** (`opening_hand.gd`): the order is chosen first, then the
-winner's own mulligan loop, then the other seat's — each seat's hand in
-view while it decides. The window now sits at the TOP of the screen
-(`OpeningWindow.TOP_MARGIN`) and the duel screen lifts the stack-style hand
-over it for the duration (`DuelScreen.OPENING_HAND_Z`); the fan is below
-the window already. The last `Start the duel` click survives with the
+winner's own mulligan loop, then the other seat's — each seat's hand IN
+THE WINDOW while it decides (2026-09-08): the window sits at the centre
+like every other dialog, and `OpeningWindow.show_hand` stands a pinned
+`StackHand` on the measured gap between the two standing women
+(`HAND_GAP`), level with the antes, shown again after every redraw and
+turned round in a hotseat; the duel screen's own hand windows are hidden
+for the duration (`DuelScreen._run_opening_hand`). A hovered card shows in
+the window's own centred examine popup. The last `Start the duel` click survives with the
 2026-09-06 rule — owed only when a redraw the player has not seen came
 after their own last press; a keep costs no click.
 
@@ -2194,9 +2197,13 @@ owner's word (§1.5 quotes it) the mulligan is the **Paris** one — any hand,
 one card fewer each redraw, down to an empty hand — and each seat decides
 with its own hand in view: the winner chooses the order, then looks at
 their hand and keeps or redraws until they keep, then the other seat does
-the same. The window moved to the top of the screen so the hand has the
-room below it; the stack-style hand is lifted over the window while the
-question is open. The `Take mulligan` / `Start the duel` row is asked
+the same. The hand is IN the window (the same day, on the owner's word —
+*"card stack for mulligan decision … centered on the right besides ante
+cards between the standing ladies"*): a pinned `StackHand` on the measured
+gap between the two figures, the window itself at the centre of the
+screen, the duel's own hand windows hidden while the question is open
+(one build had the window at the top edge and the stack lifted over it;
+gone). The `Take mulligan` / `Start the duel` row is asked
 again after every redraw, and the row `Take mulligan` / `Draw first` /
 `Play first` of 2026-09-03 is gone: the order is its own question again,
 and the hand's question follows it. Entries 5-8 now carry `, drawing %d`

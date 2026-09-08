@@ -320,6 +320,11 @@ func _apply_options() -> bool:
 	config.decks[0] = deck.cards
 	config.sideboards[0] = deck.sideboard
 	config.player_names[0] = "You"
+	# The deck's name, for the splash under your portrait and the duel's
+	# sidebar — the deck you chose, or the one the run drew for you when
+	# `your_deck` was "" (nothing named it before the 2026-09-08 playtest
+	# saw the setup screen print "<random deck>" for a drawn one).
+	config.deck_names[0] = GauntletOptions.deck_title(mine)
 	config.panel_colors[0] = DuelConfig.dominant_color(deck.cards)
 	return true
 

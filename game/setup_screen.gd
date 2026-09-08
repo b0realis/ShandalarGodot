@@ -939,12 +939,7 @@ func _fill_deck_options(option: OptionButton) -> void:
 				"Let the duel's seed choose one of the %d playable decks "
 				% drawable.size() + "under %s, and nothing else." % group)
 		for path in by_group[group]:
-			var label: String = str(_deck_titles.get(path, "")).strip_edges()
-			# An untitled file loads under its bare file stem
-			# ([method DeckList.load_file]); show that the way it was
-			# always shown.
-			if label == "" or label == path.get_file().get_basename():
-				label = path.get_file().get_basename().capitalize()
+			var label := _deck_label(path)
 			# A DECK THAT CANNOT BE PLAYED SAYS SO ON ITS OWN ROW, in its
 			# own group rather than exiled to a heading of its own: it is
 			# still the player's deck and still belongs where they filed
@@ -958,6 +953,22 @@ func _fill_deck_options(option: OptionButton) -> void:
 			if not proxies.is_empty():
 				option.set_item_tooltip(option.item_count - 1,
 					ProxyCard.refusal(proxies))
+
+
+## WHAT A DECK IS CALLED — on its picker row, under the portrait on the
+## start-of-duel splash, and on the deck line of the duel's sidebar: the
+## file's own `name:` line, or its stem capitalised for an untitled file
+## (which [method DeckList.load_file] loads under the bare stem). ONE rule
+## for all three places, so the name the duel repeats is the name the row
+## showed. [param title] is the loaded deck's own name when the caller
+## holds the load; otherwise the scan's title for the path.
+func _deck_label(path: String, title := "") -> String:
+	var label := title.strip_edges()
+	if label == "":
+		label = str(_deck_titles.get(path, "")).strip_edges()
+	if label == "" or label == path.get_file().get_basename():
+		label = path.get_file().get_basename().capitalize()
+	return label
 
 
 ## The row of the pooled `<random from …>` entry for [param group], or -1.
@@ -1318,6 +1329,43 @@ static func _row_of_metadata(option: OptionButton, meta: String) -> int:
 func _start_battle() -> void:
 	if _leaving:
 		return
+	var config := _build_config()
+	if config == null:
+		return          # refused, and the refusal is on screen
+	# EVERY GATE IS BEHIND US: this duel is starting, so this is the set of
+	# choices worth opening on next time. A refused deck is not remembered
+	# — the refusal is on screen and the player is about to change it.
+	_remember_choices()
+	# The shell's tune stops HERE and not in `_exit_tree`, because `Back`
+	# leaves this screen too and the title screen it returns to is the
+	# same room, musically. The duel starts against silence, as it did.
+	_shell_music_call(&"stop")
+	var tree := get_tree()
+	# FREE PLAY GOES STRAIGHT TO THE DUEL, exactly as it always has — one
+	# screen, one duel, nothing between this and it. A match needs
+	# something to own the sequence and the record, so it gets
+	# [MatchScreen], which builds the same duel screen once per duel.
+	var screen: Control
+	if config.best_of == MatchState.FREE_PLAY:
+		var duel: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+		duel.config = config
+		screen = duel
+	else:
+		var run: MatchScreen = load("res://game/match_screen.tscn").instantiate()
+		run.config = config
+		screen = run
+	_leaving = true
+	tree.root.add_child(screen)
+	tree.current_scene = screen
+	queue_free()
+
+
+## The duel every choice on this screen adds up to, or null when a seat's
+## deck is refused — the refusal is raised here, on the screen, so `Go!`
+## has nothing to add. Its own function so the config can be READ without
+## a duel starting: the deck a seat named, the deck `<random deck>` drew
+## and the name the duel will repeat for it are all decided in here.
+func _build_config() -> DuelConfig:
 	var config := DuelConfig.new()
 	# The seed is settled BEFORE anything random happens, and travels with
 	# the duel — see the class doc. `<random deck>` reads from `picker`,
@@ -1347,7 +1395,7 @@ func _start_battle() -> void:
 		if proxied != "":
 			UiChrome.explain_popup(self,
 				"Seat %d cannot play this deck" % (pid + 1), proxied)
-			return
+			return null
 	for pid in 2:
 		var deck := DeckList.load_file(paths[pid], true)
 		# A FILE THE PARSER COULD NOT READ STOPS HERE TOO. `deck.errors`
@@ -1362,15 +1410,19 @@ func _start_battle() -> void:
 			UiChrome.explain_popup(self,
 				"Seat %d cannot play this deck" % (pid + 1),
 				"\n".join(PackedStringArray(deck.errors)))
-			return
+			return null
 		config.decks[pid] = deck.cards
 		# The `SB:` cards the file has always carried. Nothing read them
 		# until `Side&board between duels` existed (docs/ROADMAP.md).
 		config.sideboards[pid] = deck.sideboard
 		config.player_names[pid] = _name_edits[pid].text
-		# What the pre-duel splash says under each portrait.
-		config.deck_names[pid] = _deck_options[pid].get_item_text(
-			_deck_options[pid].selected).strip_edges()
+		# What the pre-duel splash says under each portrait and the duel's
+		# sidebar repeats under the piles. THE DECK'S name, by the row's
+		# own rule — not the row's text, which for `<random deck>` and
+		# `<random from …>` is the choice not to choose, and was what the
+		# splash printed until the 2026-09-08 playtest saw it: *"it
+		# writes random deck and not the actually randomly chosen deck"*.
+		config.deck_names[pid] = _deck_label(paths[pid], deck.deck_name)
 		config.portraits[pid] = String(
 			Settings.get_value(PORTRAIT_KEY % pid, ""))
 		config.lives[pid] = int(_life_spins[pid].value)
@@ -1392,33 +1444,8 @@ func _start_battle() -> void:
 		if refusal != "":
 			UiChrome.explain_popup(self, "Seat %d cannot play this deck" % (pid + 1),
 				refusal)
-			return
+			return null
 	config.best_of = best_of()
 	config.sideboard_between_duels = _sideboard_check.button_pressed \
 		and config.best_of != MatchState.FREE_PLAY
-	# EVERY GATE IS BEHIND US: this duel is starting, so this is the set of
-	# choices worth opening on next time. A refused deck is not remembered
-	# — the refusal is on screen and the player is about to change it.
-	_remember_choices()
-	# The shell's tune stops HERE and not in `_exit_tree`, because `Back`
-	# leaves this screen too and the title screen it returns to is the
-	# same room, musically. The duel starts against silence, as it did.
-	_shell_music_call(&"stop")
-	var tree := get_tree()
-	# FREE PLAY GOES STRAIGHT TO THE DUEL, exactly as it always has — one
-	# screen, one duel, nothing between this and it. A match needs
-	# something to own the sequence and the record, so it gets
-	# [MatchScreen], which builds the same duel screen once per duel.
-	var screen: Control
-	if config.best_of == MatchState.FREE_PLAY:
-		var duel: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
-		duel.config = config
-		screen = duel
-	else:
-		var run: MatchScreen = load("res://game/match_screen.tscn").instantiate()
-		run.config = config
-		screen = run
-	_leaving = true
-	tree.root.add_child(screen)
-	tree.current_scene = screen
-	queue_free()
+	return config

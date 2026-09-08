@@ -12,12 +12,18 @@ extends Control
 ##     │ You will take the first turn   Cromer has no land and    │
 ##     │                                chose to take a mulligan  │
 ##     │   Your ante:      Cromer ante:                           │
-##     │ ┌───────────┐   ┌───────────┐                            │
-##     │ │  Animate  │   │  Mountain │      the two standing      │
-##     │ │   Dead    │   │           │      figures, uncovered    │
-##     │ └───────────┘   └───────────┘                            │
+##     │ ┌───────────┐   ┌───────────┐          ┌─────────┐       │
+##     │ │  Animate  │   │  Mountain │    the   │Your hand│  the  │
+##     │ │   Dead    │   │           │   left   │ (7)     │ right │
+##     │ │           │   │           │  figure  │ Forest  │ figure│
+##     │ │           │   │           │          │ Bears   │       │
+##     │ └───────────┘   └───────────┘          └─────────┘       │
 ##     │            [ Take mulligan ]  [ Start the duel ]         │
 ##     └──────────────────────────────────────────────────────────┘
+##
+## The hand is the owner's addition (2026-09-08), and it is the seat's OWN
+## hand window — a pinned [StackHand] — standing in the picture's slack
+## between the two standing women: see [constant HAND_GAP]. `[QoL]`.
 ##
 ## ONE WINDOW, not two — and that is OURS, `[QoL]`. 1997 had two: DIALOG
 ## resource 244 (`@DIALOG_PLAYORDRAW`, `Play first` / `Draw first`, no OK)
@@ -88,11 +94,12 @@ const BUTTON_ROW_HEIGHT := 38.0
 ## the ante cards; packing left spends the whole 317 on the one side that
 ## has something to show, and covers only the empty corner. The reclining
 ## figure at bottom-left goes under the cards either way (she is 193-534
-## and a centred left card already started at 320).
+## and a centred left card already started at 320). The slack is where
+## the hand now stands, between the two women ([constant HAND_GAP]).
 ##
 ## 977x584 fits inside BOTH supported window sizes with room to spare:
-## 1280x800 leaves 151px each side and 216 below when the window sits at
-## the top; 1280x720 leaves the same 151 and 136. Pinned by
+## centred on 1280x800 it leaves 151px each side and 108 above and below;
+## on 1280x720, the same 151 and 68. Pinned by
 ## tests/ui/test_opening_hand.gd.
 const SIZE := Vector2(
 	roundf((COLUMN_MARGIN * 2.0 + HEAD_HEIGHT + BODY_SEPARATION
@@ -102,18 +109,32 @@ const SIZE := Vector2(
 		+ CAPTION_HEIGHT + CAPTION_GAP + CardPreview.SIZE.y
 		+ COLUMN_SEPARATION + BUTTON_ROW_HEIGHT)
 
-## WHERE IT SITS: at the TOP of the screen, this far down, and centred
-## across. Not the centre, where every other OriginalDialog goes — the
-## owner's playtest of 2026-09-08: *"the winning player must see his hand
-## (so first hand stack should be seen besides starting window!)"*. A
-## centred 584 covered the fan hand's name bands at the foot of a 1280x800
-## screen and most of the stack-style hand window at its default place;
-## at the top it leaves the fan whole (it begins at ~690) and only its
-## own bottom-right corner under the lifted stack (see
-## `DuelScreen._run_opening_hand`). The sidebar's showcase, where a
-## hovered hand card previews, is left of x 151 and stays uncovered
-## either way. `[QoL]`.
-const TOP_MARGIN := 8.0
+## WHERE IT SITS: the CENTRE of the screen, where every other
+## OriginalDialog goes — `create`'s own anchor, untouched. The owner,
+## 2026-09-08: *"it would be beautiful if this window would be at the
+## center … (no the window is somwtimes at the top of the screen, no!)"*.
+## For one build it hung from the top edge (a `TOP_MARGIN` of 8) so the
+## duel screen's own hand windows could be seen beside it; the hand is
+## INSIDE the window now ([method show_hand]) and nothing outside it needs
+## seeing, so it is centred like the rest. 977x584 centred on 1280x800
+## stands at (151, 108); on 1280x720 at (151, 68). `[QoL]`.
+##
+## WHERE THE HAND STANDS — in the slack, BETWEEN THE TWO STANDING WOMEN.
+## The owner, the same day: *"card stack for mulligan decision would be
+## centered on the right besides ante cards between the standing ladies"*.
+## Measured on the ground: at the stack's height (native rows 113-283) the
+## left figure's ink ends at x 449 and the right one's begins at x 583, so
+## the gap between them is native x 450-582 — 133px, which is 197px at the
+## window's 1.48x, and a [StackHand] is 154 wide. The stack's centre is the
+## gap's centre, scaled to the window; its vertical centre is the ante
+## column's (caption top to card foot, [constant HAND_CENTRE]), so it
+## stands level with the cards it is decided beside whatever its height —
+## seven cards, or the five a second redraw leaves.
+const HAND_GAP := Vector2(450.0, 583.0)
+const HAND_CENTRE := Vector2(
+	(HAND_GAP.x + HAND_GAP.y) / 2.0 * SIZE.x / GROUND.x,
+	COLUMN_MARGIN + HEAD_HEIGHT + BODY_SEPARATION
+		+ (CAPTION_HEIGHT + CAPTION_GAP + CardPreview.SIZE.y) / 2.0)
 
 ## Which button ended the wait.
 enum Answer { PLAY_FIRST, DRAW_FIRST, TAKE_MULLIGAN, START }
@@ -127,6 +148,18 @@ var _status: Label = null
 var _captions: Array[Label] = []
 var _cards: Array[CardPreview] = []
 var _buttons: Array[Button] = []
+## The deciding seat's hand window and the cards it was last shown — see
+## [method show_hand]; null until a seat has a hand to show.
+var _hand: StackHand = null
+var _hand_shown: Array = []
+## THE EXAMINE POPUP for a card in that hand: the original's centred one
+## (an undocked [CardPreview] parks itself in the middle of the screen and
+## clears the moment the pointer leaves), NOT the sidebar's docked
+## showcase — the centred window covers the showcase's right half, and a
+## card sent there would be read in two pieces. Centred, it rests on the
+## opponent's ante for as long as the pointer rests on a hand card; the
+## pointer is on the stack, which it never covers.
+var _examine: CardPreview = null
 ## What each slot is currently showing, or null for a card back.
 var _shown: Array = [null, null]
 var _pressed := -1
@@ -142,11 +175,12 @@ func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_dialog = OriginalDialog.create("", SIZE, "versus_background")
-	# Re-anchored from create's centre to the top edge: KEEP_SIZE writes
-	# the real offsets, and the margin is the gap to that edge.
-	_dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP,
-		Control.PRESET_MODE_KEEP_SIZE, int(TOP_MARGIN))
 	add_child(_dialog)
+	_examine = CardPreview.new()
+	# Over the dialog (200), the antes in it (200 + 0) and the hand window
+	# (200 + 60): the popup is the last thing drawn.
+	_examine.z_index = 270
+	add_child(_examine)
 
 	# --- the head band: who leads (left), what they just did (right) ---
 	var head := HBoxContainer.new()
@@ -184,6 +218,12 @@ func _init() -> void:
 		# there — an undocked one re-centres itself on the viewport every
 		# time it is filled.
 		card.docked = true
+		# PART OF THE PANEL, not a popup: a CardPreview is born at z 200
+		# (the examine popup's height) and, as a child of a dialog that is
+		# itself at 200, an ante left there stood at 400 and drew OVER
+		# the hand's own examine popup — the card the player was reading
+		# came up behind the opponent's ante. Checked by looking.
+		card.z_index = 0
 		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		column.add_child(card)
@@ -216,6 +256,31 @@ func show_antes(game: MtgGame, viewer: int) -> void:
 		# its top card here and the rest through `View both antes`.
 		_shown[seat] = pile[0]
 		card.show_card(pile[0])
+
+
+## THE HAND THE SEAT IS DECIDING ABOUT — the seat's own hand window
+## ([StackHand], pinned so it neither drags nor writes `hand_stack_pos`),
+## standing between the two figures at [constant HAND_CENTRE]. Called for
+## the seat the window says `Your` to, and AGAIN AFTER EVERY REDRAW,
+## because the stack is a picture of the hand and the hand has changed;
+## a hotseat calls it when the window turns round. [param color_name] is
+## the deck's colour, as the duel's own window wears it ("" keeps the
+## last, or the plain frame). Nothing in it answers a click — the opening
+## asks with its buttons — but a hovered card shows in the examine popup.
+func show_hand(game: MtgGame, pid: int, color_name := "") -> void:
+	if _hand == null:
+		_hand = StackHand.new()
+		_hand.pinned = true
+		_hand.preview = _examine
+		_dialog.add_child(_hand)
+	if color_name != "":
+		_hand.set_deck_color(color_name)
+	_hand_shown = game.players[pid].hand.duplicate()
+	_hand.populate(_hand_shown, false,
+		func(_inst: CardInstance) -> void: pass,
+		func(_inst: CardInstance) -> int: return MiniCard.Highlight.NONE)
+	# Re-centred on every call: the stack is as tall as its cards.
+	_hand.position = (HAND_CENTRE - _hand.size / 2.0).round()
 
 
 ## `@DIALOG_MULLIGAN` entries 1-2 — the window's first line.
@@ -268,11 +333,32 @@ func close() -> void:
 	queue_free()
 
 
-## Test seam: where the panel stands inside this full-rect control — its
-## top edge is [constant TOP_MARGIN] from the screen's, whatever the
-## screen's height.
+## Test seam: where the panel stands inside this full-rect control —
+## centred, whatever the screen's size.
 func panel_rect() -> Rect2:
 	return Rect2(_dialog.position, _dialog.size)
+
+
+## Test seam: where the hand window stands, in the PANEL's coordinates
+## (add [method panel_rect]'s position for the screen's); empty until
+## [method show_hand] has been called.
+func hand_rect() -> Rect2:
+	if _hand == null:
+		return Rect2()
+	return Rect2(_hand.position, _hand.size)
+
+
+## Test seam: the cards the hand window shows, top to bottom.
+func hand_names() -> PackedStringArray:
+	var out := PackedStringArray()
+	for inst in _hand_shown:
+		out.append((inst as CardInstance).data.card_name)
+	return out
+
+
+## Test seam: the hand window itself, for what it is pinned to.
+func hand_window() -> StackHand:
+	return _hand
 
 
 ## Test seam: the two ante captions, viewer's slot first.

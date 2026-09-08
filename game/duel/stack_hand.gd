@@ -66,6 +66,14 @@ const DECK_BORDERS := {
 	"green": Color8(28, 28, 28),
 }
 
+## PINNED: placed by whoever owns it and NOT by the player — no drag, no
+## clamp to the screen, and never a word to `hand_stack_pos`. The opening
+## window's copy of the hand ([method OpeningWindow.show_hand]) is pinned
+## between the two figures of its ground; the duel's own window is never
+## pinned. The ▲/▼ ends of the bar still fold and unfold it; the middle,
+## with nothing to drag, does nothing.
+var pinned := false
+
 ## The shared enlarged-card preview (owned by the DuelScreen, docked).
 var preview: CardPreview = null:
 	set(value):
@@ -318,6 +326,8 @@ func _on_title_input(event: InputEvent) -> void:
 			if local_x > _title_bg.size.x - ARROW_ZONE:
 				_set_collapsed(false)
 				return
+			if pinned:
+				return
 			_dragging = true
 			_drag_moved = false
 			_drag_from = event.global_position
@@ -387,7 +397,7 @@ func _set_collapsed(value: bool) -> void:
 
 
 func _clamp_on_screen() -> void:
-	if get_parent() == null:
+	if get_parent() == null or pinned:
 		return
 	var view := get_viewport_rect().size
 	position.x = clampf(position.x, 0.0, maxf(0.0, view.x - size.x))

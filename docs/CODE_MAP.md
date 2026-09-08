@@ -1848,7 +1848,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5034 tests / ~135 900 asserts, ~300 s
+├── tests/                   GUT suite — 5041 tests / ~136 150 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2124,9 +2124,13 @@ shandalar/
 │    player has not seen) and every @DIALOG_PLAYORDRAW / @DIALOG_MULLIGAN
 │    string, `, drawing %d` included; §6.19's window — its measured
 │    ground, that two full-size cards fit at both supported resolutions,
-│    the ante captions, that it sits at the TOP of the screen with the
-│    hand's room below, and the duel screen lifting the stack-style hand
-│    over it for the opening (OPENING_HAND_Z)
+│    the ante captions, that it sits at the CENTRE of the screen at both
+│    heights, the hand IN THE WINDOW (2026-09-08) — a pinned StackHand on
+│    the measured gap between the two standing figures (HAND_GAP), level
+│    with the ante column, every card in dealt order, a dragged title bar
+│    moving nothing and writing no hand_stack_pos, shown again one card
+│    shorter after a redraw and turned round in a hotseat — and the duel
+│    screen hiding its own hand row while the window carries the hand
 │    tests/ui/test_duel_prompts.gd — §1.1/§1.3/§1.4 through the screen:
 │    the discard phase, the `%d points left` click loop, and the choice
 │    overlay — the first ask reaching the player, the option labels for
@@ -2774,7 +2778,11 @@ shandalar/
 │    seed remembered at Go! in ONE write, read back on the next screen,
 │    a gone deck / an emptied pool / nonsense in the file falling back
 │    to the control's default, a refused deck not remembered, and
-│    forget_choices leaving no trace;
+│    forget_choices leaving no trace; and since 2026-09-08 a `<random
+│    deck>` seat NAMED BY THE DECK IT DREW (config.decks the strict load
+│    of that file, the other seat keeping its row's text, the seed
+│    replaying the name, a pooled `<random from …>` naming a deck under
+│    its pool) and the label rule one rule for the row and the duel;
 │    tests/ui/test_deck_keyboard.gd — the keyboard cursor (2026-09-08):
 │    the first arrow selects the page's first card, Left/Right walk it a
 │    card at a time and stop at the ends, Up/Down are the same walk on the
@@ -2964,7 +2972,9 @@ shandalar/
 │    words rather than silently swapped for the default (unreadable, a
 │    proxy, under forty cards), `<random deck>` drawing only from decks
 │    that pass and earning entry 1 when none do, the [QoL] difficulty
-│    formula and its five bands, and the title screen's own Gauntlet entry;
+│    formula and its five bands, the title screen's own Gauntlet entry,
+│    and YOUR deck NAMED for the splash and the sidebar (2026-09-08 — a
+│    drawn one by what it drew);
 │    tests/unit/test_decks_1997.gd — THE 1997 DECKS, PORTED
 │    (docs/decks-1997.md): the per-group counts 55/55/25/5/8/9 and
 │    76/64/15 pinned, every ported file through the real loader with no
@@ -3401,8 +3411,15 @@ shandalar/
 │   │                          half's aspect, in a place the original had
 │   │                          none; ONE control for both seats and ONE
 │   │                          value with the panel, via DuelOptions
-│   │                          Builds a DuelConfig; free play goes to the
-│   │                          duel screen, a match to MatchScreen.
+│   │                          Builds a DuelConfig (_build_config, every
+│   │                          refusal a null); free play goes to the
+│   │                          duel screen, a match to MatchScreen. A
+│   │                          seat's deck_name is the deck the seat
+│   │                          RESOLVED to, through the picker rows' own
+│   │                          rule (_deck_label: title, else filename
+│   │                          capitalised) — so `<random deck>` is named
+│   │                          by the deck it drew on the splash and in
+│   │                          the sidebar (2026-09-08, a bug).
 │   │                          Scans DeckStore.all_deck_paths(), so decks
 │   │                          saved in the Deck Builder are playable, and
 │   │                          groups the list by DeckGroups. [QoL]
@@ -4606,7 +4623,10 @@ shandalar/
 │       │                      on the owner's word ([QoL], §1.5): the
 │       │                      order first, then each seat — the toss
 │       │                      winner first — keeps or redraws one card
-│       │                      fewer with its hand in view, until it
+│       │                      fewer with its hand IN THE WINDOW
+│       │                      (show_hand after every deal, and after
+│       │                      the hotseat turn-round; the duel's own
+│       │                      hand rows hidden meanwhile), until it
 │       │                      keeps. (Duel.hlp's "Mulligan" — seven for
 │       │                      seven, only a no-land or all-land hand,
 │       │                      once — is what it replaced.)
@@ -4629,9 +4649,19 @@ shandalar/
 │       │                      button row. Sized to the cards (which are
 │       │                      never rescaled) and then to the ground's
 │       │                      own aspect: 977x584, which fits 1280x800
-│       │                      and 1280x720 alike. Anchored to the TOP
-│       │                      of the screen (TOP_MARGIN, 2026-09-08) so
-│       │                      the hand has the room below it
+│       │                      and 1280x720 alike, at the CENTRE like
+│       │                      every OriginalDialog. Since 2026-09-08 it
+│       │                      CARRIES THE DECIDING SEAT'S HAND: show_hand
+│       │                      puts a pinned StackHand on the measured
+│       │                      gap between the two standing women
+│       │                      (HAND_GAP, native x 450-582 at the stack's
+│       │                      height; HAND_CENTRE), level with the ante
+│       │                      column, re-centred at every call; a
+│       │                      hovered card shows in the window's own
+│       │                      undocked examine popup (the sidebar's
+│       │                      showcase is half under the window), the
+│       │                      antes put at z 0 under it. Seams:
+│       │                      hand_rect / hand_names / hand_window
 │       ├── mana_icons.gd    class ManaIcons — the mana-symbol glyphs the
 │       │                      mini cards and the preview draw
 │       ├── mana_text.gd     class ManaText — WRAPPED RULES TEXT WITH THE
@@ -4685,7 +4715,10 @@ shandalar/
 │       │                      listens to none of its signals (2026-09-04
 │       │                      — the owner: "the hand stack can be present
 │       │                      anywhere, only cast mini-cards are bound to
-│       │                      the playfield").
+│       │                      the playfield"). `pinned` (2026-09-08) is
+│       │                      the one PLACED by its owner — the opening
+│       │                      window's — no drag, no clamp, never a word
+│       │                      to hand_stack_pos; the arrows still fold.
 │       │                      title_plate() is THE SAME WINDOW WITH NO
 │       │                      LIST — the opponent's hand, which manual
 │       │                      p.114 shows as its title bar alone; same
@@ -5250,7 +5283,10 @@ shandalar/
 │       │                      straight through, raising neither window.
 │       │                      Your own deck is checked on `Run the
 │       │                      gauntlet` (GauntletState.your_deck_problem)
-│       │                      and a refusal puts the options window back
+│       │                      and a refusal puts the options window back.
+│       │                      Your deck is NAMED (deck_names[0], from
+│       │                      GauntletOptions.deck_title) for the splash
+│       │                      and the sidebar, every round (2026-09-08)
 │       └── fan_hand.gd      class FanHand — the 1997 fanned hand: arc,
 │                              tilt, overlap, hover-raise (plain Control —
 │                              containers reset child rotation). CARD_SIZE

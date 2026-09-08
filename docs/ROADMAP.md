@@ -8086,18 +8086,48 @@ seat's redraw after yours lands in the head band — *"Black Wizard will
 also take a mulligan, drawing 5"* — and costs one more `Start the duel`;
 an opponent who keeps after your press costs no click at all.
 
-**The hand in view.** The one window (`OpeningWindow`, 977x584) is now
-anchored to the TOP of the screen (`TOP_MARGIN` 8) so the fan is clear
-below it, and for the duration `DuelScreen._run_opening_hand` lifts the
-stack-style hand window from its ordinary z 60 to `OPENING_HAND_Z` 210,
-over the dialog's lower right, and puts it back when the window has
-faded. What the deciding seat sees is its own hand, the two antes and
-the two buttons — the 1997 screenshot, with the hand beside it, which is
-the owner's *"first hand stack should be seen besides starting
-window"*. Checked by looking, both hand styles: the window at the top
-with *"You will take the first turn"*, `Take mulligan` / `Start the
-duel`, the stack's "Your hand (7)" floating over the dialog; after a
-press, six cards; the AI's redraw in the head band; the duel begun.
+**The hand in view — IN THE WINDOW, and the window at the CENTRE.**
+The owner, the same day, on the first cut (a window hung from the top
+edge with the duel's own hand window lifted over its corner): *"it
+would be beautiful if this window would be at the center and card
+stack for mulligan decision would be centered on the right besides
+ante cards between the standing ladies in the menu (no the window is
+somwtimes at the top of the screen, no!)"*. So `OpeningWindow` sits
+where every other OriginalDialog sits — `create`'s own centre, (151,
+108) on 1280x800 and (151, 68) on 1280x720 — and carries the deciding
+seat's hand itself: `OpeningWindow.show_hand` puts a PINNED `StackHand`
+(`StackHand.pinned` — no drag, no clamp, never a word to
+`hand_stack_pos`; the ▲/▼ still fold it) in the ground's right-hand
+slack, on the gap between the two standing women. The gap is measured,
+not eyeballed: at the stack's height (native rows 113-283 of
+`Winbk_Startduel.pic`) the left figure's ink ends at x 449 and the
+right one's begins at 583 — `HAND_GAP` (450, 583), 133 native px, 197
+at the window's 1.48x, and a `StackHand` is 154 wide. The stack's
+centre is the gap's, scaled; its vertical centre is the ante column's
+(caption top to card foot), so it stands level with the cards it is
+decided beside whatever its height — `HAND_CENTRE` (766, 294). Shown
+from the window's first frame, shown AGAIN after every redraw (the
+stack is a picture of the hand; "Your hand (6)"), and turned round
+with the window in a hotseat. It wears the seat's deck colour, as the
+duel's own window does (`OpeningHand.run` takes `panel_colors`). A
+hovered card shows in the window's own centred examine popup (an
+undocked `CardPreview`, gone when the pointer leaves) rather than in
+the sidebar's docked showcase, whose right half the centred window
+covers — and the two ante previews are put at z 0 for it: a
+`CardPreview` is born at the popup's own 200 and, inside a dialog at
+200, an ante stood at 400 and drew OVER the card being read (checked
+by looking, then fixed). The duel screen's own hand windows are OUT OF
+SIGHT for the duration (`DuelScreen._run_opening_hand` hides every
+human seat's row and shows it again after the fade): one hand shown
+twice is one too many, and the stack at its remembered corner would
+have stood half under the window. `OPENING_HAND_Z` and `TOP_MARGIN`
+are gone with the build that needed them. Checked by looking, both
+hand styles at 1280x800: the window centred, the two antes, "Your hand
+(7)" white-chromed between the two women and clear of both, level with
+the cards; six after `Take mulligan`, re-centred; a hovered Plains up
+over the opponent's ante with its row lit, gone on leaving; the duel
+begun with the fan (six cards) back at the foot and the stack back at
+its corner. `[QoL]`.
 
 **The AI's judgement — `AiMulligan`, `engine/ai/ai_mulligan.gd`.** The
 question under Paris is not "is this hand bad" but "is it worse than a
@@ -8186,14 +8216,19 @@ keeping anything, lands that cast nothing, pips not generic, a
 colourless spell, the colour check waived for a five, the pilot judging
 through `AiMulligan`, the knob off falling to the plain rule, the knob a
 Lab override, the opening running the pilot down to a keep);
-`tests/ui/test_opening_hand.gd` (25: the window at the top with the
-hand clear below, the order asked first and the hand second, `Draw
-first` giving the turn away, `Take mulligan` dealing one fewer and
-asking again, seven running the hand out and the question with it, the
-opponent's redraw in the head band costing a look, a keeping opponent
-costing no click, losing the toss asking only about the hand, the AI
-winner's redraw up before you decide, the hotseat turning round, the
-duel screen lifting the stack and putting it back); and
+`tests/ui/test_opening_hand.gd` (27: the window at the centre at both
+heights, the hand standing between the two figures beside the antes —
+on the measured gap, level with the ante column, every card in dealt
+order — the hand pinned and a dragged title bar moving nothing and
+writing no `hand_stack_pos`, the order asked first and the hand
+second, `Draw first` giving the turn away, `Take mulligan` dealing one
+fewer and asking again with the smaller hand re-centred in the window,
+seven running the hand out and the question with it, the opponent's
+redraw in the head band costing a look, a keeping opponent costing no
+click, losing the toss asking only about the hand, the AI winner's
+redraw up before you decide, the hotseat turning round with the second
+seat's own hand, the duel screen hiding its own stack while the window
+carries the hand and showing it again after); and
 `tests/unit/test_ante.gd`, where the all-land deck now makes the hand a
 player WOULD throw back rather than the only one allowed to.
 
@@ -8223,6 +8258,36 @@ dots and never widening the block; the line costing the column nothing
 touching the label; an unnamed deck showing no line). Checked by
 looking: "Troll Shaman" under the opponent's piles, "Kiska-Ra - White
 Dragon of the E…" over the player's, clear of the three buttons.
+
+**`<random deck>` IS NAMED BY THE DECK IT DREW — a bug, the same day.**
+The owner: *"when choosing random deck: in the duel start below
+portraits it writes random deck and not the actually randomly chosen
+deck! The same in the duel gui!"* `SetupScreen._start_battle` copied
+the picker ROW's text into `DuelConfig.deck_names`, so a seat set to
+`<random deck>` or `<random from 1997 originals>` carried that row text
+onto the splash ("playing with <random deck>") and into the sidebar's
+new line. Now the name comes from the deck the draw RESOLVED to,
+through the one rule the picker's own rows use (`_deck_label`: the
+deck's title, else its filename capitalised — "my_brew" is "My Brew"),
+so a chosen row and a drawn deck read the same way everywhere. The
+config is built by `_build_config` (the old body of `_start_battle`,
+every refusal returning null) so the resolution can be asked headless.
+The gauntlet never named your deck at all (`GauntletScreen` set
+`player_names[0]` and nothing else) — it now names it from
+`GauntletOptions.deck_title`, and `_config_for_this_round` carries it
+into every round. Checked by looking, seed 4242, seat 1 `<random
+deck>` and seat 2 `<random from 1997 originals>`: the splash says
+"playing with Lord of Fate" / "playing with Mandurang", and the duel's
+sidebar carries "Mandurang" under the opponent's piles and "Lord of
+Fate" over the player's. Pinned in `tests/ui/test_setup_screen.gd` (4:
+a random seat named by the deck it drew, with `config.decks[0]` the
+strict load of that deck's file and the other seat keeping its row's
+text; the drawn name replaying with the seed; a pooled `<random from
+…>` seat named by a deck under that pool; the label rule one rule for
+the row and the duel, every deck row's text being `_deck_label` of its
+path) and `tests/ui/test_gauntlet_screen.gd` (1: your chosen deck
+named for the splash and the sidebar, and a drawn one named by what it
+drew). `[QoL]`.
 
 ## THE SKIP (2026-09-08) — [QoL]
 

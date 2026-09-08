@@ -631,6 +631,28 @@ func test_a_deck_of_yours_that_passes_is_the_one_you_play() -> void:
 		DeckList.load_file(DECK_A, true).cards.size(), "seat 0 holds YOUR deck")
 
 
+func test_your_deck_is_named_for_the_splash_and_the_sidebar() -> void:
+	# `DuelConfig.deck_names[0]` was never set on a gauntlet, so the
+	# splash said nothing under your portrait and the sidebar drew no
+	# deck line (2026-09-08, the day the setup screen's "<random deck>"
+	# was seen there). Chosen or drawn, the name is the deck's.
+	var screen := _screen([DECK_A, DECK_B])
+	await get_tree().process_frame
+	assert_not_null(screen._match)
+	assert_eq(screen.config.deck_names[0], "Big Green", "the deck you chose")
+	assert_eq(screen._match.config.deck_names[0], "Big Green",
+		"and the round's config carries it to the duel")
+	var drawn := _make([DECK_A, DECK_B])
+	drawn.options.your_deck = ""
+	add_child_autofree(drawn)
+	await get_tree().process_frame
+	assert_not_null(drawn._match)
+	assert_true(drawn.config.deck_names[0] in ["Big Green",
+		GauntletOptions.deck_title(DECK_B)],
+		"a drawn deck is named too: %s" % drawn.config.deck_names[0])
+	assert_ne(drawn.config.deck_names[0], "")
+
+
 func test_random_deck_never_draws_one_the_run_would_refuse() -> void:
 	# The setup screen's `_playable_paths` rule: the seed must never hand
 	# a seat a deck the next line refuses. Every unplayable deck in the

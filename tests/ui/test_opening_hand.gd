@@ -241,23 +241,120 @@ func test_the_lead_line_is_the_tables_entries_one_and_two() -> void:
 	assert_eq(OpeningHand.lead_line(game, 1, 0), "P1 will start first")
 
 
-func test_the_window_sits_at_the_top_with_the_hand_clear_below() -> void:
-	# The owner, 2026-09-08: *"the winning player must see his hand (so
-	# first hand stack should be seen besides starting window!)"*. A
-	# centred 584 covered the fan hand at the foot of a 1280x800 screen;
-	# at the top, TOP_MARGIN down, it leaves the fan (from ~690) whole.
+func test_the_window_sits_at_the_centre_of_the_screen() -> void:
+	# The owner, 2026-09-08: *"it would be beautiful if this window would
+	# be at the center … (no the window is somwtimes at the top of the
+	# screen, no!)"* — `create`'s own centre anchor, at both heights.
+	for height in [800.0, 720.0]:
+		host.size = Vector2(1280, height)
+		var window := OpeningWindow.new()
+		host.add_child(window)
+		await get_tree().process_frame
+		var rect := window.panel_rect()
+		assert_eq(rect.size, OpeningWindow.SIZE)
+		assert_almost_eq(rect.position.x, (1280.0 - OpeningWindow.SIZE.x) / 2.0, 1.0,
+			"centred across at %d" % int(height))
+		assert_almost_eq(rect.position.y, (height - OpeningWindow.SIZE.y) / 2.0, 1.0,
+			"and centred down at %d" % int(height))
+		assert_gt(rect.position.y, 0.0, "whole, with room above")
+		window.queue_free()
+		await get_tree().process_frame
+
+
+# ------------------------------------------------ the hand in the window --
+
+func test_the_hand_stands_between_the_two_figures_beside_the_antes() -> void:
+	# The owner, 2026-09-08: *"card stack for mulligan decision would be
+	# centered on the right besides ante cards between the standing
+	# ladies"*. The stack is the seat's own hand window, in the panel's
+	# right-hand slack, on the gap measured between the two figures
+	# (HAND_GAP, native ground pixels) and level with the ante column.
+	_staked()
 	host.size = Vector2(1280, 800)
 	var window := OpeningWindow.new()
 	host.add_child(window)
+	window.show_antes(game, 0)
+	assert_eq(window.hand_rect(), Rect2(), "no hand until one is shown")
+	window.show_hand(game, 0)
 	await get_tree().process_frame
-	var rect := window.panel_rect()
-	assert_eq(OpeningWindow.TOP_MARGIN, 8.0)
-	assert_eq(rect.position.y, OpeningWindow.TOP_MARGIN, "hung from the top edge")
-	assert_almost_eq(rect.position.x, (1280.0 - OpeningWindow.SIZE.x) / 2.0, 1.0,
-		"centred across")
-	assert_eq(rect.size, OpeningWindow.SIZE)
-	assert_lt(rect.end.y, 690.0, "the fan hand's row is clear of it")
-	assert_gt(rect.position.x, 150.0, "and so is the sidebar's showcase")
+	var rect := window.hand_rect()
+	assert_eq(rect.size.x, StackHand.WIDTH, "the hand window at its own width")
+	assert_gt(rect.size.y, 200.0, "seven cards tall")
+	var centre := rect.get_center()
+	assert_almost_eq(centre.x, OpeningWindow.HAND_CENTRE.x, 1.0,
+		"centred on the gap between the figures")
+	assert_almost_eq(centre.y, OpeningWindow.HAND_CENTRE.y, 1.0,
+		"and level with the ante column")
+	# Between the figures: inside the measured gap, scaled to the panel.
+	var scale := OpeningWindow.SIZE.x / OpeningWindow.GROUND.x
+	assert_gt(rect.position.x, OpeningWindow.HAND_GAP.x * scale,
+		"clear of the left figure")
+	assert_lt(rect.end.x, OpeningWindow.HAND_GAP.y * scale,
+		"clear of the right figure")
+	# Beside the antes, not on them: the second card ends at 644.
+	var antes_end := OpeningWindow.COLUMN_MARGIN + CardPreview.SIZE.x * 2.0 \
+		+ OpeningWindow.CARD_GAP
+	assert_gt(rect.position.x, antes_end + 20.0, "a clear gap after the antes")
+	assert_lt(rect.end.x, OpeningWindow.SIZE.x - OpeningWindow.COLUMN_MARGIN,
+		"inside the panel's margin")
+	# Level with the cards: inside the ante column, top to foot.
+	var column_top := OpeningWindow.COLUMN_MARGIN + OpeningWindow.HEAD_HEIGHT \
+		+ OpeningWindow.BODY_SEPARATION
+	assert_gt(rect.position.y, column_top)
+	assert_lt(rect.end.y, column_top + OpeningWindow.CAPTION_HEIGHT
+		+ OpeningWindow.CAPTION_GAP + CardPreview.SIZE.y)
+	# And it is the hand — every card, in the order dealt.
+	var expected := PackedStringArray()
+	for inst in game.players[0].hand:
+		expected.append(inst.data.card_name)
+	assert_eq(window.hand_names(), expected)
+	assert_eq(expected.size(), 7)
+	window.queue_free()
+	await get_tree().process_frame
+
+
+func test_the_hand_in_the_window_is_pinned_and_writes_no_position() -> void:
+	# The duel's own stack drags by its title bar and remembers where it
+	# was dropped (`hand_stack_pos`); the window's copy is placed by the
+	# window and must do neither.
+	_staked()
+	var had := Settings.has_value("hand_stack_pos")
+	var prior: Vector2 = Settings.hand_stack_pos()
+	var window := OpeningWindow.new()
+	host.add_child(window)
+	window.show_hand(game, 0)
+	await get_tree().process_frame
+	var stack: StackHand = window.hand_window()
+	assert_true(stack.pinned)
+	var before := stack.position
+	# A press in the middle of the bar, a long pull, a release.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = Vector2(StackHand.WIDTH / 2.0, StackHand.BAR_HEIGHT / 2.0)
+	press.global_position = stack.global_position + press.position
+	stack._on_title_input(press)
+	var move := InputEventMouseMotion.new()
+	move.position = press.position + Vector2(-200, 150)
+	move.global_position = press.global_position + Vector2(-200, 150)
+	stack._on_title_input(move)
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = move.position
+	release.global_position = move.global_position
+	stack._on_title_input(release)
+	assert_eq(stack.position, before, "did not move")
+	assert_eq(Settings.has_value("hand_stack_pos"), had, "and wrote nothing")
+	if had:
+		assert_eq(Settings.hand_stack_pos(), prior)
+	# Whatever happened, the player's own setting is as it was.
+	if had:
+		Settings.set_value("hand_stack_pos", prior)
+	else:
+		Settings.clear_value("hand_stack_pos")
+	window.queue_free()
+	await get_tree().process_frame
 
 
 func _opening_with_player(winner: int) -> OpeningHand:
@@ -328,11 +425,18 @@ func test_take_mulligan_deals_one_fewer_and_asks_again() -> void:
 	var lines: Array[String] = []
 	opening.announced.connect(func(line: String) -> void: lines.append(line))
 	await _press(window, "Play first")
+	assert_eq(window.hand_names().size(), 7, "the seven in view from the first frame")
+	var seven := window.hand_rect()
 	await _press(window, "Take mulligan")
 	assert_eq(game.players[0].hand.size(), 6, "seven back, six out")
 	assert_eq(window.button_labels(),
 		PackedStringArray(["Take mulligan", "Start the duel"]),
 		"a new hand and the same question — the duel has NOT started")
+	# The window's hand is a picture of the hand: six now, re-centred.
+	assert_eq(window.hand_names().size(), 6, "the smaller hand in the window")
+	assert_lt(window.hand_rect().size.y, seven.size.y, "one row shorter")
+	assert_almost_eq(window.hand_rect().get_center().y, seven.get_center().y, 1.0,
+		"about the same centre")
 	assert_eq(game.turn_number, 0)
 	assert_true(lines.has("P0 has no land and chose to take a mulligan, drawing 6"),
 		"named by the hand thrown away, with the count: %s" % str(lines))
@@ -444,9 +548,14 @@ func test_a_hotseat_turns_the_window_round_for_the_second_seat() -> void:
 	assert_eq(window.caption_texts(), PackedStringArray(["Your ante:", "P1 ante:"]))
 	await _press(window, "Play first")
 	await _press(window, "Start the duel")
-	# Seat 1's turn to look: the window says `Your` to them now.
+	# Seat 1's turn to look: the window says `Your` to them now, and the
+	# hand in it is THEIRS.
 	assert_eq(window.caption_texts(), PackedStringArray(["Your ante:", "P0 ante:"]))
 	assert_eq(window.lead_text(), "P0 will start first")
+	var theirs := PackedStringArray()
+	for inst in game.players[1].hand:
+		theirs.append(inst.data.card_name)
+	assert_eq(window.hand_names(), theirs, "the second seat's own hand")
 	assert_eq(window.button_labels(),
 		PackedStringArray(["Take mulligan", "Start the duel"]))
 	assert_eq(game.turn_number, 0)
@@ -458,13 +567,14 @@ func test_a_hotseat_turns_the_window_round_for_the_second_seat() -> void:
 	await get_tree().process_frame
 
 
-# ------------------------------------------------ the hand over the window --
+# ------------------------------------------ the screen's own hand, hidden --
 
-func test_the_duel_screen_lifts_the_stack_over_the_window_for_the_opening() -> void:
-	# The duel screen's half of "the hand stack should be seen besides
-	# starting window": the stack-style hand window (z 60, under an
-	# OriginalDialog's 200) is lifted over it while the opening runs and
-	# put back after.
+func test_the_duel_screen_hides_its_own_hand_while_the_window_carries_it() -> void:
+	# The duel screen's half: the window is centred and shows the hand
+	# itself, so the screen's own stack (which would peek out beside it
+	# from its remembered corner) is out of sight while the opening runs
+	# and back the moment it is over. Once it was LIFTED over a
+	# top-hung window instead; that build is gone.
 	var had := Settings.has_value("hand_style")
 	var prior: String = Settings.hand_style()
 	Settings.set_value("hand_style", "stack")
@@ -477,8 +587,8 @@ func test_the_duel_screen_lifts_the_stack_over_the_window_for_the_opening() -> v
 		Settings.clear_value("hand_style")
 	var stack: Control = screen._hand_rows[1]
 	assert_true(stack is StackHand)
-	assert_eq(stack.z_index, 60, "the ordinary height")
-	assert_gt(DuelScreen.OPENING_HAND_Z, 200, "over an OriginalDialog")
+	assert_true(stack.visible, "the ordinary state")
+	assert_false((stack as StackHand).pinned, "the duel's own window drags")
 	# Headless, the screen skipped the toss and began the duel; reopen the
 	# hands so the window has a question to ask.
 	screen.game.mulligan_open = true
@@ -486,12 +596,17 @@ func test_the_duel_screen_lifts_the_stack_over_the_window_for_the_opening() -> v
 	screen._run_opening_hand(0)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert_eq(stack.z_index, DuelScreen.OPENING_HAND_Z, "lifted while the window is up")
+	assert_false(stack.visible, "out of sight while the window is up")
 	var window: OpeningWindow = screen.find_child("OpeningWindow", true, false)
 	assert_not_null(window)
+	var mine := PackedStringArray()
+	for inst in screen.game.players[0].hand:
+		mine.append(inst.data.card_name)
+	assert_eq(window.hand_names(), mine, "and the window carries the hand")
+	assert_true(window.hand_window().pinned)
 	await _press(window, "Play first")
 	await _press(window, "Start the duel")
 	# The window fades for 0.2s before the run returns — wall-clock time,
 	# which headless frames outrun.
 	await get_tree().create_timer(0.5).timeout
-	assert_eq(stack.z_index, 60, "and put back when it is over")
+	assert_true(stack.visible, "and back when it is over")

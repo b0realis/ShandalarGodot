@@ -29,12 +29,17 @@ extends Control
 ## still not ported: every line here is the 1997 table's, with the new
 ## hand's size added by [constant MULLIGAN_COUNT].
 ##
-## THE HAND IS IN VIEW while the question is asked: the window sits at the
-## TOP of the screen so the fan is clear below it, and the duel screen
-## lifts the stack-style hand window over it for the duration
-## (`DuelScreen._run_opening_hand`). What the seat that is deciding sees is
-## its own hand, the antes, and the two buttons — which is the 1997
-## screenshot, with the hand beside it.
+## THE HAND IS IN VIEW while the question is asked — INSIDE THE WINDOW,
+## as the seat's own hand window standing between the two figures of the
+## ground ([method OpeningWindow.show_hand]), shown again after every
+## redraw and turned round with the window in a hotseat. The owner,
+## 2026-09-08: *"card stack for mulligan decision would be centered on
+## the right besides ante cards between the standing ladies"*. What the
+## seat that is deciding sees is its own hand, the antes, and the two
+## buttons — which is the 1997 screenshot, with the hand in it. The duel
+## screen's own hand windows are out of sight for the duration
+## (`DuelScreen._run_opening_hand`): the window is centred over them and
+## one hand shown twice is one too many.
 ##
 ## BEFORE IT, the toss winner CHOOSES. `Duel.hlp`, **Play or Draw Rule**:
 ## *"In every duel, one player plays first and the other draws first. Who
@@ -120,6 +125,8 @@ var _is_human := Callable()
 var _window: OpeningWindow = null
 ## The seat the window is oriented on — the one it says `Your` to.
 var _viewer := -1
+## Each seat's deck colour, for the hand window's chrome (see `run`).
+var _colors: Array = []
 
 
 func _init() -> void:
@@ -173,10 +180,15 @@ static func play_or_draw_line(game: MtgGame, winner: int, plays: bool) -> String
 ## With a human at the table this opens ONE [OpeningWindow] and keeps it up
 ## until the player has had the last word — their own `Start the duel`, or
 ## one more when the opponent redrew after it — which is the reason both
-## antes are on screen for the whole opening.
-func run(game: MtgGame, winner: int, is_human: Callable) -> void:
+## antes are on screen for the whole opening. [param colors] is each
+## seat's deck colour (`DuelConfig.panel_colors`), worn by the hand window
+## in the opening window as the duel's own wears it; empty for the plain
+## frame.
+func run(game: MtgGame, winner: int, is_human: Callable,
+		colors: Array = []) -> void:
 	_game = game
 	_is_human = is_human
+	_colors = colors
 	# The seat sitting at this screen: the one the window says `Your` to.
 	# In a hotseat both seats are human and the window re-orients onto
 	# whichever one it is asking.
@@ -189,6 +201,7 @@ func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 		_window = OpeningWindow.new()
 		add_child(_window)
 		_window.show_antes(game, _viewer)
+		_show_hand()
 
 	# THE PLAYER PRESSED LAST: -1 until they have, so a duel in which the
 	# player is never asked anything still ends on their own `Start the
@@ -222,6 +235,7 @@ func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 					_viewer = pid          # hotseat: turn the window round
 					_window.show_antes(game, _viewer)
 					_window.set_lead(lead_line(game, first_player, _viewer))
+					_show_hand()
 				took = await _ask_mulligan(pid)
 			else:
 				took = game.agents[pid].choose_mulligan(game, pid)
@@ -232,6 +246,8 @@ func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 				game.players[pid].hand.size() - 1)
 			if took:
 				game.take_mulligan(pid)
+				if pid == _viewer:
+					_show_hand()      # the stack is a picture of the hand
 			else:
 				game.decline_mulligan(pid)
 			announced.emit(line)
@@ -268,6 +284,16 @@ static func lead_line(game: MtgGame, first_player: int, viewer: int) -> String:
 
 func _human(pid: int) -> bool:
 	return _is_human.is_valid() and bool(_is_human.call(pid))
+
+
+## The viewer's hand into the window, in the viewer's deck colour.
+func _show_hand() -> void:
+	if _window == null or _viewer < 0:
+		return
+	var color := ""
+	if _viewer < _colors.size():
+		color = str(_colors[_viewer])
+	_window.show_hand(_game, _viewer, color)
 
 
 ## `@DIALOG_PLAYORDRAW` entries 4-7, asked in the opening window's own

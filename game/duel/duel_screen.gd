@@ -1059,42 +1059,35 @@ func _first_of(a: Signal, b: Signal) -> void:
 		await get_tree().process_frame
 
 
-## The hand windows' z while the opening window is up: OVER it (an
-## OriginalDialog draws at 200), so the seat deciding its mulligan sees
-## the hand it is deciding about — the owner's playtest, 2026-09-08:
-## *"the winning player must see his hand (so first hand stack should be
-## seen besides starting window!)"*. The stack-style window at its
-## default place (1062, 412) otherwise sits three-quarters under the
-## opening window; the fan is clear of it because the window sits at the
-## top ([constant OpeningWindow.TOP_MARGIN]). Restored to the ordinary 60
-## the moment the opening is over. `[QoL]`.
-const OPENING_HAND_Z := 210
-
-
 ## Play-or-draw and the mulligans, in the original's own words — see
 ## OpeningHand, which owns every string and the order of events.
+##
+## THE SCREEN'S OWN HAND WINDOWS ARE OUT OF SIGHT for the duration. The
+## opening window is centred and carries the deciding seat's hand itself
+## (`OpeningWindow.show_hand`); the fan below it, or the stack-style
+## window peeking out beside it from its remembered corner, would show
+## the same seven cards a second time. For one build they were LIFTED
+## over it instead (`OPENING_HAND_Z`, 210), when the window hung from the
+## top edge to leave them room — gone with the owner's ruling of
+## 2026-09-08 that the window sits at the centre with the hand inside it.
+## Hidden as `visible`, not faded: an invisible fan would still answer
+## the pointer with a preview. `[QoL]`.
 func _run_opening_hand(winner: int) -> void:
 	var opening := OpeningHand.new()
 	opening.announced.connect(_set_prompt)
 	add_child(opening)
-	# Every human seat's hand floats over the window for the duration:
-	# the player's stack (the fan needs no lift — the window leaves the
-	# foot of the screen to it) and, in a hotseat, the other seat's row.
-	var lifted: Array[Control] = []
+	var hidden: Array[Control] = []
 	for pid in 2:
 		if hidden_hands.has(pid) or not _is_human(pid):
 			continue
 		var row: Control = _hand_rows[1 - pid]
-		if row is StackHand or pid == 1:
-			lifted.append(row)
-	var was_z: Array[int] = []
-	for row in lifted:
-		was_z.append(row.z_index)
-		row.z_index = OPENING_HAND_Z
-	await opening.run(game, winner, _is_human)
-	for i in lifted.size():
-		if is_instance_valid(lifted[i]):
-			lifted[i].z_index = was_z[i]
+		if row != null and row.visible:
+			hidden.append(row)
+			row.visible = false
+	await opening.run(game, winner, _is_human, config.panel_colors)
+	for row in hidden:
+		if is_instance_valid(row):
+			row.visible = true
 	opening.queue_free()
 
 

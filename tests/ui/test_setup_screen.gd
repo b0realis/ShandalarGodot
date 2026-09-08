@@ -122,6 +122,121 @@ func test_a_random_seat_still_starts_a_playable_duel() -> void:
 	assert_gte(deck.cards.size(), 20, "and it is a duel-sized deck")
 
 
+# ============================================ the deck's name (2026-09-08) ==
+#
+# The owner's playtest: *"when choosing random deck: in the duel start
+# below portraits it writes random deck and not the actually randomly
+# chosen deck! The same in the duel gui!"* `_start_battle` copied the
+# picker ROW's text into `DuelConfig.deck_names`, and for `<random deck>`
+# (and `<random from …>`) the row's text is the choice not to choose.
+# The name is the DECK's now, by the row's own rule (`_deck_label`), read
+# off the config `_build_config` returns — which is why that function
+# exists apart from `Go!`.
+
+
+## The picker rows that are decks: label → path.
+func _deck_rows(pid: int) -> Dictionary:
+	var out := {}
+	var picker: OptionButton = _deck_pickers()[pid]
+	for i in picker.item_count:
+		if picker.is_item_separator(i):
+			continue
+		var meta := str(picker.get_item_metadata(i))
+		if meta != "" and not meta.begins_with(SetupScreen.GROUP_RANDOM):
+			out[picker.get_item_text(i)] = meta
+	return out
+
+
+func test_a_random_seat_is_named_by_the_deck_it_drew() -> void:
+	_deck_pickers()[0].select(0)
+	assert_eq(_deck_pickers()[0].get_item_text(0), SetupScreen.RANDOM_DECK)
+	_deck_pickers()[1].select(SetupScreen._row_of_deck(_deck_pickers()[1], 0))
+	screen._seed_edit.text = "4242"
+	var config := screen._build_config()
+	assert_not_null(config, "two playable decks: nothing refused")
+	if config == null:
+		return
+	var name: String = config.deck_names[0]
+	assert_ne(name, SetupScreen.RANDOM_DECK, "the DECK's name, not the row's")
+	var rows := _deck_rows(0)
+	assert_true(rows.has(name), "and a name a deck row shows: %s" % name)
+	if rows.has(name):
+		assert_eq(config.decks[0],
+			DeckList.load_file(String(rows[name]), true).cards,
+			"the name is the deck the seat was actually dealt")
+	# The seat that chose keeps the name it chose, as before.
+	var chosen: OptionButton = _deck_pickers()[1]
+	assert_eq(config.deck_names[1], chosen.get_item_text(chosen.selected))
+
+
+func test_the_drawn_deck_s_name_replays_with_the_seed() -> void:
+	_deck_pickers()[0].select(0)
+	_deck_pickers()[1].select(SetupScreen._row_of_deck(_deck_pickers()[1], 0))
+	screen._seed_edit.text = "4242"
+	var first := screen._build_config()
+	var again := screen._build_config()
+	assert_not_null(first)
+	assert_not_null(again)
+	if first == null or again == null:
+		return
+	assert_eq(again.deck_names[0], first.deck_names[0],
+		"the seed that chose the deck also names it")
+	assert_eq(again.decks[0], first.decks[0])
+
+
+func test_a_pooled_random_seat_is_named_by_the_deck_it_drew() -> void:
+	var picker: OptionButton = _deck_pickers()[0]
+	var row := -1
+	for i in picker.item_count:
+		if str(picker.get_item_metadata(i)).begins_with(SetupScreen.GROUP_RANDOM):
+			row = i
+			break
+	if row < 0:
+		pass_test("no group holds two playable decks — no pooled row to test")
+		return
+	picker.select(row)
+	_deck_pickers()[1].select(SetupScreen._row_of_deck(_deck_pickers()[1], 0))
+	screen._seed_edit.text = "4242"
+	var config := screen._build_config()
+	assert_not_null(config)
+	if config == null:
+		return
+	var name: String = config.deck_names[0]
+	assert_false(name.begins_with("<random"), "not the pooled row's text: %s" % name)
+	var group := str(picker.get_item_metadata(row)).substr(
+		SetupScreen.GROUP_RANDOM.length())
+	var rows := _deck_rows(0)
+	assert_true(rows.has(name), "a deck row's name: %s" % name)
+	if rows.has(name):
+		assert_true(SetupScreen.paths_in_group([String(rows[name])] as Array[String],
+			group).size() == 1, "and a deck under the pool's own heading")
+
+
+func test_the_label_rule_is_one_rule_for_the_row_and_the_duel() -> void:
+	# A titled file: its `name:` line. An untitled one: the stem
+	# capitalised, which is how the row always showed it — and what the
+	# loaded deck's bare-stem fallback name must not leak past.
+	assert_eq(screen._deck_label("res://decks/big_green.deck", "Big Green"),
+		"Big Green")
+	assert_eq(screen._deck_label("user://decks/my_brew.deck", ""), "My Brew")
+	assert_eq(screen._deck_label("user://decks/my_brew.deck", "my_brew"), "My Brew",
+		"the load's stem fallback reads as untitled")
+	assert_eq(screen._deck_label("user://decks/my_brew.deck", "  Spaced  "),
+		"Spaced")
+	# Every deck row on the picker is labelled by the same rule.
+	var picker: OptionButton = _deck_pickers()[0]
+	for i in picker.item_count:
+		if picker.is_item_separator(i):
+			continue
+		var meta := str(picker.get_item_metadata(i))
+		if meta == "" or meta.begins_with(SetupScreen.GROUP_RANDOM):
+			continue
+		var text := picker.get_item_text(i)
+		if text.ends_with(" proxy)"):
+			continue
+		assert_eq(text, screen._deck_label(meta), "row %d" % i)
+
+
 # ============================================================ the seed ==
 
 func test_a_duel_never_leaves_this_screen_unseeded() -> void:
