@@ -7809,6 +7809,25 @@ this machine, and the script says so in its output. `setup.txt`,
 `SKIN.txt`, `README.md`, `player-files.md`, `CONTRIBUTING.md` and the
 tools' own advice all say where each zip now comes from.
 
+Then, the same hour: *"Lets also make a file bundle with release +
+skin so only cards are needed to play. Also delete all previous
+releases on the online repo!! … And lets make also a zip release of
+web version."* So each package is written twice — as it is, and with
+the skin zip already in its `skin/` (`-with-skin.zip`) — and `--web
+--package`, refused until now, zips the web folder the same two ways
+(the page's files, the catalogue, the tools under `tools/`, a
+`docs/setup-web.txt` as its README; never the card art). A release
+is five zips: two Linux, two web, the skin. The four releases
+published before (v0.15.0-dev–v0.18.0-dev), whose Linux zips had
+carried the card art loose under `skin/cardart/`, were deleted on
+GitHub with their tags on the owner's word. And one thing found on
+the way: every package since the first had copied a `README.txt` the
+Linux export folder held from a 0.8.0-dev build of 2026-09-03 —
+stale, and naming the checkout's path on the builder's machine. It
+is no longer copied, the stale file is gone, and `guard_stage` greps
+every stage for the builder's home path before zipping and fails the
+build on a hit.
+
 ## THE INSTANT WINDOWS (2026-09-08) — [QoL]
 
 *"During playtesting i found a bug: i have an instant like 'lightning

@@ -1,0 +1,78 @@
+SHANDALAR — THE WEB BUILD
+=====================================================================
+
+This folder is the game as a web page: index.html and the files
+beside it. A browser plays it FROM A WEB SERVER, not from the folder —
+a .wasm opened as a file is refused by every browser. Any static
+server does, with no headers to arrange; the one that ships with
+Python is enough:
+
+    python3 -m http.server 8000        (in this folder; then open
+                                        http://localhost:8000/)
+
+On a tablet the game types the mouse for your finger: tap clicks, hold
+and lift right-clicks, drag drags, a swipe scrolls a list; Options >
+Touch controls is Auto / On / Off. The table is landscape.
+
+
+---------------------------------------------------------------------
+THE ART
+---------------------------------------------------------------------
+
+The page carries the game and, unless you took the "-with-skin" zip,
+no art. Without any the game draws its own clean skin and every card
+shows a plain art window; it plays the same. The art is two zips the
+game reads in place, never unpacked:
+
+    skin/original_skin.zip   the 1997 art (84 MB). A download of its
+                             own where you got this zip — or already
+                             in skin/ if yours is the "-with-skin"
+                             one. Put it in skin/ beside index.html
+                             and the game fetches it once and keeps
+                             it in the browser's own storage; or
+                             choose it in Options > Skin, or drop it
+                             on the page.
+
+    skin/cardart.zip         the card pictures (193 MB). NOT a
+                             download — the pictures are Scryfall's,
+                             on a licence of their own — but built in
+                             a few minutes by the scripts in tools/:
+
+        python3 tools/fetch_card_art.py --out cardart/
+        python3 tools/mtg_assets.py --from-cardart cardart/ --out cardart.zip
+
+                             Then choose cardart.zip in Options >
+                             Skin, or drop it on the page — the game
+                             keeps it. For a page served on your own
+                             machine it can sit in skin/ beside
+                             index.html too, like the skin zip. Do
+                             not put it on a server other people
+                             reach.
+
+    skin/SKIN.txt            the catalogue: every file a skin holds,
+                             its format, size and name, for drawing a
+                             skin of your own.
+
+A tar.gz (or .tgz, or a plain .tar) works at every door a zip does:
+chosen, dropped, or served beside the page. The game repacks it into a
+zip of the same name, once.
+
+What the game keeps — your zips, your settings, your decks — lives in
+the browser's storage for this page's address. Options > Skin has a
+"Forget my zips" button that deletes every zip it keeps.
+
+
+---------------------------------------------------------------------
+THE 1997 ART FROM YOUR OWN DISC
+---------------------------------------------------------------------
+
+If you own the original and would rather import it yourself than use
+the original_skin.zip download:
+
+    python3 tools/mtg_assets.py                          explains what it needs
+    python3 tools/mtg_assets.py --check   /path/to/game  looks, reports, writes nothing
+    python3 tools/mtg_assets.py --install /path/to/game  imports, writes a zip
+
+It reads your install and never writes to it. The zip it produces is
+a skin zip, the same shape as the download, and goes through the same
+doors.

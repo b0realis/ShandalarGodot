@@ -1746,21 +1746,32 @@ shandalar/
 │                              opt-in desktop entry (~/.local/share/
 │                              applications/shandalar.desktop, --remove
 │                              undoes it), run.sh, the tools; NO art),
-│                              then the skin zip beside it as its own
-│                              download (pkg/original_skin.zip) and the
-│                              card art zip under ../shandalar-build/
-│                              local/, from where nothing is uploaded,
-│                              and copies both into the staged folder's
-│                              skin/ so it is the owner's play copy —
-│                              the zip made before that has neither.
+│                              the same again with the skin zip in its
+│                              skin/ (-with-skin.zip, "so only cards
+│                              are needed to play"), the skin zip
+│                              beside them as its own download
+│                              (pkg/original_skin.zip) and the card art
+│                              zip under ../shandalar-build/local/, from
+│                              where nothing is uploaded, then copies
+│                              the card art into the staged folder's
+│                              skin/ too so it is the owner's play copy.
+│                              zip_stage() is the two zips of a stage;
+│                              guard_stage() greps a stage for the
+│                              builder's home path first and fails the
+│                              build on a hit (a stale README once
+│                              carried one into a package).
 │                              --web --skin puts the skin zip and the
 │                              catalogue beside index.html for SkinPack
 │                              to fetch; --web --skin --cardart the card
 │                              art too, for a page served locally only;
 │                              plain --web removes an earlier skin/ so
 │                              the art is never hosted by accident.
-│                              --web --package is refused, --cardart
-│                              without --web --skin too
+│                              --web --package zips the web folder the
+│                              same two ways (-web.zip, -web-with-skin
+│                              .zip: index.*, skin/SKIN.txt, the tools
+│                              under tools/, docs/setup-web.txt as
+│                              README.txt — never the card art).
+│                              --cardart without --web --skin is refused
 ├── decks/                   Shipped five-style gauntlet (.deck files —
 │   │                          format in DeckLab/README.md); a CI test
 │   │                          keeps every deck valid vs the card pool.

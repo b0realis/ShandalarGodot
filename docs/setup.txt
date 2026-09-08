@@ -46,10 +46,11 @@ the skin swappable: drop another skin zip onto the game's window and it
 is kept (section 3). The two zips the game wears:
 
     original_skin.zip    the 1997 art (84 MB) — a separate download
-                         where you got this one. Put it in skin/ beside
-                         the game, or choose it in Options > Skin, or
-                         drop it on the window; the game reads it in
-                         place, never unpacked.
+                         where you got this one, or already in skin/
+                         if yours is the "-with-skin" zip. Put it in
+                         skin/ beside the game, or choose it in
+                         Options > Skin, or drop it on the window; the
+                         game reads it in place, never unpacked.
     cardart.zip          the card pictures (193 MB). NOT downloadable
                          here — the pictures are Scryfall's, on their
                          own licence — but built in a few minutes by
