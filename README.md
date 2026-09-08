@@ -304,6 +304,10 @@ of the 317 decks here trace back to lists it preserved.
 [mp_pic_tools](https://github.com/benprew/mp_pic_tools), whose `.PIC`/`.SPR`
 decoding made the original's raw art readable at all.
 
+**The Forge team** — [Forge](https://github.com/Card-Forge/forge), the open
+Magic engine whose AI was read for what a competent player does at the
+table (`docs/forge/`).
+
 And everyone who converted, catalogued or simply archived a file so that
 somebody later could find it.
 

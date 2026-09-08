@@ -5439,11 +5439,31 @@ shandalar/
     │                          (2026-09-07) — the eight "implemented but
     │                          not turned on", each sourced, with where
     │                          it stands here and what a future pass owes
+    ├── forge/               FORGE, READ AS A REFERENCE (2026-09-08) — the
+    │   │                      open Java engine (GPL-3.0, `../forge` at
+    │   │                      b09a3d3f) read for the Wizard; every claim
+    │   │                      a file:line pointer into that commit
+    │   ├── README.md          the verdict, what Forge sees that ours
+    │   │                      does not (and the reverse), the five-wave
+    │   │                      programme of knobs, the engine pass, the
+    │   │                      do-not-copy list, ported vs inspired-by
+    │   ├── combat.md          attack, block, CreatureEvaluator vs
+    │   │                      combat_search/evaluator/ai_player; 8 knobs
+    │   ├── casting.md         the decision loop, holding mana, the
+    │   │                      per-effect AIs' thresholds, the four .ai
+    │   │                      profiles, AiCardMemory, the mulligan, the
+    │   │                      simulation AI, our pool's cards; 14 knobs
+    │   └── rules.md           stack/triggers/replacements/layers/SBA/
+    │                          combat/costs and the script DSL vs engine/;
+    │                          every ledger row and someday card checked;
+    │                          four S mechanisms; GameCopier vs
+    │                          GameSnapshot/UndoLog
     └── ROADMAP.md           v0.1 simplifications & milestone plan
 ```
 
 Sibling directories at the repo-parent level (reference material, not part of
 the game): `../s30/` (Go remake), `../shandalar-src/` (Manalink snapshot),
+`../forge/` (the Forge engine, shallow at b09a3d3f — `docs/forge/`),
 `../tools/godot` (pinned Godot 4.7.2 binary), `../docs/SHANDALAR_LORE.md`
 (game-design/lore reference), `../shandalar-packs/` (output of
 tools/build_card_packs.py: one .tar.gz per downloaded set plus the

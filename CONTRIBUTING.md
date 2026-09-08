@@ -222,6 +222,10 @@ scratch script plays through the live screen is appended there too.
   existing code shows the style.
 - Reference implementations for tricky cards/rules: the mage-go clone
   (search its `cards/` by card name) and s30 for UI/adventure design.
+  Forge (`../forge`, GPL-3.0) for AI reads and card decompositions —
+  read through `docs/forge/`, whose notes pin every pointer to one
+  commit; a ported mechanism carries a `[forge]` marker at the site
+  naming file, lines and commit, never a card name or a random roll.
 - `docs/player-files.md` is the player-facing map of every path the
   BUILT game reads or writes — decks, portraits, the imported skin, card
   art, settings, logs — and the search order when a name exists twice.

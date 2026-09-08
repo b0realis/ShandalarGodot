@@ -8434,6 +8434,67 @@ looking: two Jaguars of yours ("Elf" behind one, "Wall" behind the
 other with a Regeneration outside it) and theirs with "Ogre" behind it
 against your Gray Ogre; the Elf ghost hovered and docked in the sidebar.
 
+## FORGE, READ (2026-09-08) — a reference, not a port
+
+The day after the first release the owner set the direction: *"we will
+work on this further, mainly AI and AI engine gameplay so it feels like a
+competent human tournament-level player at top difficulty … there is an
+open source MTG very good game engine called Forge. Examine it, maybe we
+can use it as inspiration for our AI and rule engine?"*
+
+Forge (`github.com/Card-Forge/forge`, GPL-3.0, Java, every card ever
+printed) was cloned shallow beside the other references (`../forge`,
+commit `b09a3d3f`, a Tier 3 row in `Provenance.md` beside s30 and mage-go)
+and read in three slices, each an engineering note under `docs/forge/`
+with every claim pinned to that commit by file and line: `combat.md`
+(attack, block, `CreatureEvaluator`), `casting.md` (the decision loop,
+holding mana, the per-effect AIs' thresholds, the four `.ai` profiles, the
+memory, the mulligan, the simulation AI, the cards of our pool),
+`rules.md` (the engine and the script DSL, every fidelity-ledger row and
+every `difficult_cards.someday` card checked against Forge's script).
+`docs/forge/README.md` is the summary and the programme.
+
+**The verdict.** The AI is worth reading; the rules engine is not worth
+porting. Forge's AI carries fifteen years of hand-tuned reads a competent
+player makes — develop in main 2, counter by what a spell DOES, count the
+other side's open mana as pumps in combat, read the race before choosing
+how hard to attack, reinforce a block that does not kill, hold the X burn
+that is the finisher, tutor for the turn. Its engine is a string DSL
+resolved at run time, modern-rules only (no 1995 legend rule, no
+prevention step, three old-rules switches to our seven), and its
+simulation AI is off by default, copies the game by re-parsing every
+card, and reads the opponent's hand. Ours is ahead in exactly the places
+Forge's own code marks with TODOs: mana reserved for a counter, a memory
+that outlives the turn, priced chumps, a cohort-priced attack, a
+deterministic crack-back search, the hidden-information rule, and
+`GameSnapshot`/`UndoLog` where Forge has `GameCopier`.
+
+**The programme.** Twenty-two proposals, merged and ranked by what a human
+at the table notices first, each already carrying its knob, its rung, its
+size and its Deck Lab plan (candidate pair, control pair, no-harm matrix)
+in the notes: wave 1, a day of small deterministic wins (counter order and
+Power Sink's X, `reads_gaze`, `reads_manlands`, `tutors_for_the_turn`,
+`holds_x_burn`, the sweeper's next-attack test, the mulligan's low-land
+escape, a `W_HAND` sweep); wave 2, timing and the counter's mind
+(`develops_late`, `counters_by_shape` with Weissman's rule and the
+`wheels`/`extra_turns` intent fields, `reads_lethal_x`); wave 3, the
+combat reads (`reads_pumps`, `reads_race`, `reinforces_blocks`,
+`holds_tricks`, `crack_back_margin`); wave 4, the four old loops of
+`docs/arzakon.strategy` §4, which Forge does not know either
+(`counts_the_race`, `minds_the_vise`, `runs_loops`); wave 5, the one-ply
+veto (`checks_before_casting`) and the evaluator's constants (Terror on
+the Wall of Stone, not the Specter). Beside them an engine pass of four
+small mechanisms that each close a ledger row above: cost-payment
+triggers stacked ABOVE the spell, the affected player's choice among
+replacements, timestamp order within a layer, one `unless_paid` path.
+
+**What is not copied.** The random rolls, the card-name hints
+(`AILogic$`, `SpecialCardAi`, `pilotsNonAggroDeck` by deck name), the hand
+reads, the per-turn memory, the first-`WillPlay` picker, the CMC buckets,
+the game-copy simulation, the SVar DSL, the modern-only machinery. Nothing
+was ported in the reading; a port, when one comes, is a `[forge]` marker
+at the site naming file, lines and commit, on top of the Provenance row.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
