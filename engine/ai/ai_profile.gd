@@ -178,6 +178,21 @@ var fits_auras := true
 ## start. A knob only so the Deck Lab can run the null.
 var mulligans := true
 
+## THE TRIBUTE: when a card makes this profile give up one of its own —
+## The Abyss at its upkeep, a Lord of the Pit's or a Lich's tribute, a
+## Mana Vortex's land, an Elder Spawn's Island, a Sylvan Library's extra
+## draw — does it give up the LEAST valuable? Until 2026-09-08 the
+## answer to every such ask was the card the seat valued MOST
+## ([method AiPlayer.answer_card] priced every card ask as a gain), so
+## an AI under The Abyss fed it a Serra Angel and kept the Bears beside
+## it, and a Lord of the Pit ate its master's best creature every turn.
+## On, an ask that is a loss — the candidates all its own, the prompt a
+## sacrifice, a destruction or a discard — is answered with the cheapest
+## body ([method AiPlayer._own_value]) or card. On for EVERY profile,
+## like [member minds_pain]: feeding the Abyss your Angel is not a weak
+## play, it is no play. A knob only so the Deck Lab can run the null.
+var feeds_worst := true
+
 ## THE COUNT: does this profile size a card-advantage spell to the hands
 ## and libraries in front of it? On, an X discard is cast for the cards
 ## its target actually holds and waits while they hold none; an X draw is
@@ -246,13 +261,82 @@ var paces_draws := false
 ## AiPlayer._arrival_wasted]).
 var holds_duplicates := false
 
+## THE FACTORY ANIMATED FOR NOTHING: does this profile animate a
+## permanent only when the attack that pays for it would actually be
+## declared? An animation is priced by the attack it enables and nothing
+## else ([method AiPlayer._animation_value]), and until 2026-09-08 that
+## price was read off a blocker count of its own while the declaration
+## it was paying for was made by a different reader — the attack
+## legality of the whole board (our own Moat stops a Factory as surely as
+## theirs), the cohort, and the crack-back search, which held an
+## animated body home as next turn's blocker, a body that is a land
+## again at cleanup. So the pilot paid a mana a turn, sometimes two, for
+## a 2/2 that then declared nothing (docs/ROADMAP.md, "The Deck, third
+## pass"). On, the animation is tried under the journal — the body is
+## animated, the declaration made by the attack code itself, and both
+## unmade — and paid for only when it would attack; and the crack-back
+## model stops counting a body that is a creature only until end of turn
+## as a blocker on their turn. Off, the two readers disagree as before.
+## Sorcerer and Wizard, with [member plays_engines], which is the only
+## way an animation is ever bought. Nothing here names a card: the rule
+## reads [AnimateSelfEffect]'s duration and the attack code's own answer.
+var animates_to_attack := false
+
+## THE SWEEP THAT ANSWERS AN ATTACK: does this profile price a board
+## wipe by the pressure it relieves, and hold one it can activate for
+## the attack it answers? A sweeper's worth was, until 2026-09-08, the
+## board it takes minus the board it costs, on the Evaluator's scale and
+## nothing else ([method AiPlayer._sweep_value]) — which for a control
+## deck is the wrong sum: its own engines — the Tome, the Scepter, the
+## Tower — priced a board of three 2/2s as a loss to sweep, while those
+## 2/2s took the pilot from twenty to nothing with the Disk untapped
+## beside them (docs/ROADMAP.md, "The Deck, third pass": six of twenty
+## losses to Black-Red Raiders ended that way). On, two readings: the
+## damage their creatures would push through our blockers is counted
+## before and after the sweep — a creature of theirs an Abyss takes at
+## their upkeep never attacking ([method AiPlayer._upkeep_meals]) — and
+## the relief priced at the reaper's rate ([method AiPlayer._life_price]),
+## lethal-worth when the sweep is the out; and a sweeper that can be
+## ACTIVATED is offered in their combat too, once the attackers are
+## declared and before the damage — the moment the wipe is also a Fog
+## (Weissman's own Disk timing). The sweeper's own body still counts as
+## a loss: the first cut left it out as "the activation's price" and
+## fired a Disk at twenty life to kill a lone 3/3. Off, the sweep is
+## priced as a trade of permanents and fired only at the three ability
+## moments. Sorcerer and Wizard. Nothing here names a card: the rule
+## reads [member EffectIntent.sweeper], the combat maths the attack code
+## already shares, and the appetite an upkeep trigger declares
+## ([member TriggeredAbility.kills_each_upkeep]).
+var times_sweeps := false
+
+## THE ABYSS AS AN ANSWER: does this profile save a counterspell when the
+## creature spell on the stack is one its Abyss will eat? The counter
+## decision ([method AiPlayer._try_counter]) priced every opposing spell
+## by its printed worth against [member counter_threshold], so a Wizard
+## with The Abyss on the table and {U}{U} open spent its Counterspell on
+## the Serra Angel the enchantment would have destroyed at its
+## controller's next upkeep — and had nothing left for the Disenchant
+## that came for the Abyss (docs/ROADMAP.md, "The Deck, third pass"). On,
+## a creature spell whose body would be the next meal of a feeder on the
+## table — one that declares an appetite ([member
+## TriggeredAbility.kills_each_upkeep]) whose target rule the body
+## satisfies, with no cheaper legal creature of theirs to be fed first —
+## is let through: it dies at their next upkeep having done no more than
+## block once. A creature their board already shelters (a Bears to feed
+## first) is still a threat and still countered. Off, every spell is
+## priced as printed. Sorcerer and Wizard. Nothing here names a card:
+## the rule reads the appetite the trigger declares and the Evaluator's
+## own scale, so a second feeder in the pool is answered the same way.
+var trusts_abyss := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
 		p_engines := false, p_sacrifices := false, p_timed := false,
 		p_counts := false, p_levels := false, p_paces := false,
-		p_duplicates := false) -> void:
+		p_duplicates := false, p_animates := false, p_times_sweeps := false,
+		p_trusts_abyss := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -268,6 +352,9 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	levels_boards = p_levels
 	paces_draws = p_paces
 	holds_duplicates = p_duplicates
+	animates_to_attack = p_animates
+	times_sweeps = p_times_sweeps
+	trusts_abyss = p_trusts_abyss
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -315,13 +402,13 @@ static func magician() -> AiProfile:
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
 	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
-		true)
+		true, true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
 	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
-		true)
+		true, true, true, true)
 
 
 func _to_string() -> String:

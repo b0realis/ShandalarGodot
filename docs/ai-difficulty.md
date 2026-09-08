@@ -76,20 +76,29 @@ override any knob on any preset for a measurement
 | `minds_pain` | on | on | on | on | a City of Brass is not a Plains; on everywhere (see below) |
 | `fits_auras` | on | on | on | on | hangs a friendly aura only on a creature it gives something to — no vigilance on a Wall; on everywhere, for the same reason |
 | `mulligans` | on | on | on | on | judges the opening hand under the Paris rule by its lands (`AiMulligan`: none, all, too few or too many for the hand's size, or lands that cast none of its spells; nothing below four cards goes back); on everywhere — keeping a no-land seven is a malfunction, not a weakness |
+| `feeds_worst` | on | on | on | on | asked which of its own to give up when the giving is no cost it chose — The Abyss's meal, Lord of the Pit's tribute, Mana Vortex's land, a Sylvan Library's discard — it gives the least valuable, not the best; on everywhere, the same reason |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
-| `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race |
+| `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race — a Tome's tick, an Ancestral, a tutor's card, and since the third pass the extra draw step a Time Walk buys |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
+| `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
+| `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
+| `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
 
-`minds_pain`, `fits_auras` and `mulligans` are the three knobs that are
-on at every rung, and the reason is the line between weak and broken: an
-Apprentice that taps City of Brass for its last life to cast a Grizzly
-Bears is not a worse player, it is a malfunction — and so is one that
-puts Eternal Warrior on a Wall of Swords, or keeps a seven with no land
-in it (the owner's playtests, 2026-09-08). They are knobs only so the
-Deck Lab can run the null; with `mulligans` off the pilot falls back to
-`DecisionAgent`'s plain rule, which throws back only the two hands the
-1997 game named — no land, all land — down to the same floor of four.
+`minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` are the four
+knobs that are on at every rung, and the reason is the line between weak
+and broken: an Apprentice that taps City of Brass for its last life to
+cast a Grizzly Bears is not a worse player, it is a malfunction — and so
+is one that puts Eternal Warrior on a Wall of Swords, or keeps a seven
+with no land in it (the owner's playtests, 2026-09-08), or feeds its
+Serra Angel to The Abyss with a Grizzly Bears standing beside it (The
+Deck's third pass, the same day: every "choose one of yours to lose"
+that is not a cost the pilot chose to pay was answered with its BEST
+card, because the one answer for card questions was written for the
+tutors). They are knobs only so the Deck Lab can run the null; with
+`mulligans` off the pilot falls back to `DecisionAgent`'s plain rule,
+which throws back only the two hands the 1997 game named — no land, all
+land — down to the same floor of four.
 
 The Apprentice's `counter_threshold` is in brackets because it never
 reads it — with `holds_instants` off there is no counterspell to price.
@@ -124,7 +133,13 @@ resolves. Every capability is on: it activates engines and knows what
 they are worth over time, pays a Strip Mine or a Digging Team for a
 better body, casts a Festival at your upkeep and a Siren's Call before
 your attackers, sizes its X spells, prices a Balance, paces its draws to
-the libraries, and keeps a second The Abyss in hand.
+the libraries (a Time Walk's extra draw step among them), keeps a
+second The Abyss in hand, animates a Factory
+only for an attack it will actually declare, and holds its Nevinyrral's
+Disk for the attack it answers — priced by the damage it keeps off the
+pilot, fired once the attackers are named and before they connect —
+and keeps its Counterspell in hand when the creature on the stack is
+one its Abyss will eat at their upkeep.
 
 **Wizard.** No mistakes at all. The same decision code, the same
 capabilities as the Sorcerer, with twice the search (3 000), the pickiest
@@ -153,21 +168,94 @@ a Wizard 87.8% of the time, because neither seat could win and the one
 that did less took less City of Brass damage doing it — and what it
 looks like since (34.3 / 48.8 / 60.6 / 49.7; the Sorcerer-over-Wizard
 residue is the `counter_threshold` question, open). The Deck's second
-pass (2026-09-07) is the four newest capabilities: The Deck playable
-against the five starters went from 12.7% to 40.3%.
+pass (2026-09-07) is four of the capabilities: The Deck playable
+against the five starters went from 12.7% to 40.3%. The third pass
+(2026-09-08) re-measured that with the mulligan on — 40.1% — and added
+`animates_to_attack`, a wash on the totals with the wasted animations
+gone (29 of 834 before, 0 of 808 after, in the census). `feeds_worst`
+is measured from the other seat — it is the STARTERS that face The
+Deck's Abyss — and every one of the five gains against it with the knob
+on (+2.3, +2.0, +2.0, +0.3, +1.0; 26 games flipped to a win against 3
+flipped away, of 1 500), which is to say The Deck's own rate against the
+field drops by about a point and a half now that its Abyss is fed a
+Llanowar Elves instead of a War Mammoth. The starter matrix is
+byte-identical with the knob on and off: no starter owns a card that
+asks the question. `times_sweeps` is a wash on the totals in the right
+direction (+0.7, 0.0, +1.3, +0.7, +1.3 against the five starters; 16
+games flipped to a win, 4 away, of 99 that differed) with the Disk
+fired in the opponent's combat five times in 150 census games where it
+had been fired there never, and the two lethal attacks it used to sit
+through gone. Its first cut left the Disk's own body out of the sum and
+LOST (−3.7, −2.3, −0.3, −0.3, −0.3; 17 flipped to a win, 38 away): the
+sweeper went off at twenty life to kill a lone 3/3, and at one life to
+kill a Llanowar Elves its own Abyss was about to eat. The starters own
+sweepers too — Hurricane, Earthquake, Wrath of God — and their matrix
+moves by no more than two games in twelve hundred a deck. The Time
+Walk's draw step under `paces_draws` is one card once a game and
+measures like it: the shipped Wizard before and after it, the same
+seed, differs in 40 of 1 500 games against the five starters and The
+Deck wins 11 of those it had lost against 1 the other way (+0.3, +0.3,
+0.0, +1.3, +1.3). `trusts_abyss` is a wash in the right direction
+(+0.3, +1.7, −0.3, +1.0, +1.3 against the five starters; 33 games
+flipped to a win, 21 away, of 602 that differed) with the counters
+spent about half as often — 215 Counterspells and 75 Mana Drains cast
+in 150 census games with the knob off, 122 and 40 with it on, the same
+64 wins either way: a creature the Abyss was going to eat was never
+worth the counter, and the counter kept is the one that meets the
+Disenchant. The Weissman list is byte-identical: it plays Moat, not
+The Abyss. The whole third pass, the shipped Wizard against the
+gauntlet at the same seed: 40.1% before (49.7, 41.7, 48.7, 35.7,
+25.0) and 40.6% after (44.7, 41.3, 48.0, 39.0, 30.0) with the
+mulligan on, 40.3% to 40.5% with it off — a wash on the total because
+both seats got better: the tribute is the starters' gain, the Disk,
+the Factory, the Walk and the kept counter are The Deck's, and White
+Knights' +5.0 is where those land.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
-`docs/ROADMAP.md` keeps the runs. `CONTRIBUTING.md` has the rule.
+`docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
+FIRES the knob, not by what the last knob used: a pace knob's control
+holds no draw spell, tutor or Time Walk (Big Green vs White Knights),
+a sweeper's no Hurricane, Earthquake or Wrath (Blue Skies vs Black-Red
+Raiders) — the third pass's Time Walk sweep FAILED its first control
+on exactly that (Blue Skies' Ancestral Recall), and a failed control
+makes the deltas beside it no measurement at all. `CONTRIBUTING.md`
+has the rule.
 
 ## 5. Where the ladder still ends short
 
 - `counter_threshold` is an absolute evaluator number, so a Wizard on a
   deck with pain lands spends life on counters a Sorcerer keeps; that is
   the open knob question above, to be instrumented before it is touched.
+- The mana planner does not know that a Mishra's Factory, a Library or a
+  Strip Mine is worth more untapped than a Forest: among equal sources
+  it takes them in battlefield order, so a second animation can be paid
+  by tapping the first animated body when the Factories come before the
+  plain lands. `animates_to_attack` excludes the body it has already
+  animated; the tie-break itself is open (`docs/ROADMAP.md`, the third
+  pass). And no rung animates a Factory to BLOCK on the opponent's turn.
+- `times_sweeps` holds an activated sweeper only from the moment it is
+  offered in the opponent's combat; a Disk that is worth firing at its
+  own main phase still fires there, when waiting for their attack would
+  cost nothing but a Disenchant's window. The relief's "after" board is
+  the sweep's survivors under the statics as they stand — a Moat the
+  Disk takes with the board still holds the ground creatures the Disk
+  did not kill. Both open (`docs/ROADMAP.md`, the third pass).
+- Time Walk is cast for its printed worth — a generic three, the same
+  as a Hill Giant — once the pace allows it; the turn's own value (the
+  untap, the attack, the land drop) is not priced, so a Walk goes off
+  on an empty board when holding it for a Factory attack would have
+  been the play. Open (`docs/ROADMAP.md`, the third pass).
+- `trusts_abyss` reads the table as it stands: a creature it lets
+  through because it is the next meal can be sheltered before their
+  upkeep by a cheaper creature cast after it (Blue Skies' one-drop
+  fliers, the −0.3 there), and a second copy of a creature already on
+  the table is let through as level with it although only one of the
+  two dies. Open (`docs/ROADMAP.md`, the third pass).
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
-  (the way `minds_pain`, `fits_auras` and `mulligans` did) goes on everywhere;
+  (the way `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` did)
+  goes on everywhere;
   anything that is a layer of play stays a rung.
 - The 1997 adventure's difficulty (gold, deck minimum, life, the creature
   bonus, Arzakon's 100/200/300/400) is not a duel-profile matter and is

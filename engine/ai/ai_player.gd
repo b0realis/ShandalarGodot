@@ -534,14 +534,17 @@ const ABILITY_BAR_MAIN := 3.0
 const ABILITY_BAR_UPKEEP := 2.0
 const ABILITY_BAR_SINK := 0.5
 
-enum Moment { MAIN, UPKEEP, SINK }
+## COMBAT is THEIR combat with the attackers declared and the damage not
+## yet dealt (2026-09-08, [member AiProfile.times_sweeps]): the one
+## moment at which only a sweeper is offered, at the upkeep's bar.
+enum Moment { MAIN, UPKEEP, SINK, COMBAT }
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
 ## or "" when nothing does. One activation per call, like every other action.
 func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 	var bar: float = ABILITY_BAR_MAIN
-	if moment == Moment.UPKEEP:
+	if moment == Moment.UPKEEP or moment == Moment.COMBAT:
 		bar = ABILITY_BAR_UPKEEP
 	elif moment == Moment.SINK:
 		bar = ABILITY_BAR_SINK
@@ -705,6 +708,8 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int) -> Dictionary:
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 	var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+	if moment == Moment.COMBAT and intent.sweeper == null:
+		return {}   # their combat is a sweeper's moment and nobody else's
 	var me := game.players[pid]
 	var opponent := game.opponent_of(pid)
 	var them := game.players[opponent]
@@ -858,7 +863,7 @@ func _animation_payable(game: MtgGame, inst: CardInstance,
 	var surcharge := game.ability_surcharge(pid, inst)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
-	var excluded := _pain_excluded(game)
+	var excluded := _excluded_sources(game)
 	excluded[inst.id] = true
 	return not _plan_taps_from(ManaPlanner.sources(game, pid, excluded,
 		profile.minds_pain), ability.cost, surcharge).is_empty()
@@ -871,7 +876,7 @@ func _pay_without_source(game: MtgGame, inst: CardInstance,
 	var surcharge := game.ability_surcharge(pid, inst)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
-	var excluded := _pain_excluded(game)
+	var excluded := _excluded_sources(game)
 	excluded[inst.id] = true
 	var plan := _plan_taps_from(ManaPlanner.sources(game, pid, excluded,
 		profile.minds_pain), ability.cost, surcharge)
@@ -928,7 +933,51 @@ func _animation_value(game: MtgGame, inst: CardInstance,
 		if blocker.cur_power >= anim.set_toughness \
 				or anim.set_power < blocker.cur_toughness:
 			return 0.0   # it survives the block, or kills us for free
+	if profile.animates_to_attack \
+			and not _would_attack_once_animated(game, inst, anim, defender):
+		return 0.0   # the declaration would leave it home: nothing to pay for
 	return _face_damage_value(game, anim.set_power, defender)
+
+
+## THE FACTORY ANIMATED FOR NOTHING (2026-09-08,
+## [member AiProfile.animates_to_attack]). Would the attack declaration
+## send [param inst] once [param anim] has made it a creature? The
+## blocker count above is [method _animation_value]'s own reading; the
+## DECLARATION is made by [method _attack_choice] over the whole board —
+## the attack legality of every ban in play (our own Moat stops a
+## Factory as surely as theirs), the cohort, the crack-back search — and
+## the two disagreed often enough that the pilot paid a mana a turn for
+## a 2/2 that then declared nothing (docs/ROADMAP.md, "The Deck, third
+## pass"). So the question is put to the declaration itself, under the
+## journal: the body is animated the way the ability would animate it,
+## the deterministic half of the declaration is asked, and both are
+## unmade. No random stream is consumed ([method _attack_choice] has no
+## mistake roll), no log line is written (a search node is a probe), and
+## a search already in progress keeps its journal.
+func _would_attack_once_animated(game: MtgGame, inst: CardInstance,
+		anim: AnimateSelfEffect, defender: int) -> bool:
+	var owned := game.undo_log == null
+	var mark := game.make_mark()
+	game.continuous.add_until_eot_animation(inst.id, anim.add_types,
+		anim.set_power, anim.set_toughness, anim.add_subtypes, anim.combat_duration)
+	game.recalculate()
+	var would := false
+	if inst.is_creature():
+		var candidates := _attack_candidates(game, defender)
+		if candidates.has(inst):
+			would = _attack_choice(game, candidates, defender).has(inst.id)
+	game.unmake_to(mark)
+	if owned:
+		game.end_search()
+	return would
+
+
+## Is [param inst] a creature only until this turn ends — not by its
+## printed types, and by no animation that outlasts cleanup? See
+## [method ContinuousEffects.creature_until_end_of_turn].
+func _creature_until_end_of_turn(game: MtgGame, inst: CardInstance) -> bool:
+	return not inst.data.is_creature() \
+		and game.continuous.creature_until_end_of_turn(inst.id)
 
 
 ## mage-go's `cardDrawNeedAdjustment`: a thin hand wants cards, a full one
@@ -989,6 +1038,12 @@ const PACE_HORIZON := 20
 ## never counted this drew with two Tomes into a race it then lost from
 ## twenty life. Every seat that does not pace has all the slack in the
 ## world.
+##
+## TIME WALK'S DRAW STEP (2026-09-08): an extra turn already queued
+## ([member MtgGame.extra_turns]) is a draw step off its taker's library
+## before the other's comes round — ours counted against the lead,
+## theirs for it. The pilot that never counted this cast a Time Walk
+## into a race it led by nothing.
 func _library_slack(game: MtgGame) -> int:
 	if not profile.paces_draws:
 		return 1 << 20
@@ -998,6 +1053,8 @@ func _library_slack(game: MtgGame) -> int:
 	var ours_next := (game.active_player == pid and step < Mtg.Step.DRAW) \
 		or (game.active_player != pid and step >= Mtg.Step.DRAW)
 	var lead := mine - theirs - (1 if ours_next else 0)
+	for taker in game.extra_turns:
+		lead += -1 if taker == pid else 1
 	if lead < 0:
 		return 1 << 20   # the race is lost already: not ours to protect
 	return maxi(lead, mine - PACE_HORIZON - 1)
@@ -1190,46 +1247,216 @@ func _has_attackers(game: MtgGame) -> bool:
 ## a suicidal one refused. The board wipe in a creature deck's own hand
 ## (White Knights' Wrath of God) is the case this exists for: it used to be
 ## cast the turn it was affordable, whatever was on the table.
+##
+## Under [member AiProfile.times_sweeps] the sum also carries THE RELIEF
+## ([method _sweep_relief], the damage the sweep keeps off our life), so
+## a control deck's own engines no longer price the board that is killing
+## it as one not worth sweeping. The sweeper's own body, when it is a
+## permanent (a Nevinyrral's Disk), COUNTS as a loss: the first cut of
+## this left it out as "the activation's price" and the measurement
+## showed the Disk going off at twenty life to kill a lone 3/3
+## (2026-09-08, THE DECK, THIRD PASS).
 func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 	var me := game.players[pid]
 	var them := game.players[game.opponent_of(pid)]
 	var swing := 0.0
-	if effect is DestroyAllEffect:
-		for inst in game.all_battlefield():
-			var hit: bool = effect.filter.call(inst) if effect.filter.is_valid() \
-				else inst.is_creature()
-			if not hit or inst.cur_indestructible:
-				continue
-			if effect.can_regenerate and inst.regeneration_shields > 0:
-				continue
-			var worth := Evaluator.permanent_value(inst)
-			swing += -worth if inst.controller_id == pid else worth
-		return swing * Evaluator.W_BOARD
+	var n := 0   # a DamageAllEffect's amount; unused by a DestroyAllEffect
 	if effect is DamageAllEffect:
-		var n: int = x_value if effect.use_x else effect.amount
+		n = x_value if effect.use_x else effect.amount
 		if n <= 0:
 			return 0.0
-		for inst in game.all_battlefield():
-			if not inst.is_creature():
+	elif not (effect is DestroyAllEffect):
+		return 0.0
+	for inst in game.all_battlefield():
+		if not _sweep_kills(effect, inst, n):
+			continue
+		var worth := Evaluator.permanent_value(inst)
+		swing += -worth if inst.controller_id == pid else worth
+	swing *= Evaluator.W_BOARD
+	if effect is DamageAllEffect and effect.hit_players:
+		if n >= me.life:
+			return -LETHAL_WORTH   # never
+		if n >= them.life:
+			return LETHAL_WORTH
+		swing += n * Evaluator.W_LIFE           # their life
+		# Our life is dearer the lower we are.
+		var life_price := 1.0 if me.life - n > 10 else 2.0
+		swing -= n * life_price
+	if profile.times_sweeps:
+		swing += _sweep_relief(game, effect, n)
+	return swing
+
+
+## Would [param effect] (a DestroyAllEffect, or a DamageAllEffect dealing
+## [param n]) kill [param inst] as it stands? The one death rule
+## [method _sweep_value] and [method _sweep_relief] share.
+func _sweep_kills(effect: EffectBase, inst: CardInstance, n: int) -> bool:
+	if effect is DestroyAllEffect:
+		var hit: bool = effect.filter.call(inst) if effect.filter.is_valid() \
+			else inst.is_creature()
+		if not hit or inst.cur_indestructible:
+			return false
+		if effect.can_regenerate and inst.regeneration_shields > 0:
+			return false
+		return true
+	if effect is DamageAllEffect:
+		if not inst.is_creature():
+			return false
+		if effect.creature_filter.is_valid() and not effect.creature_filter.call(inst):
+			return false
+		return inst.damage + n >= inst.cur_toughness
+	return false
+
+
+## THE RELIEF (2026-09-08, AiProfile.times_sweeps): what the sweep keeps
+## off our life, on the Evaluator's scale. Their attack is read twice
+## through [method _damage_through_blocks] — the same one-blocker-per-
+## attacker maths the attack code prices its own swings by — once with
+## the board as it stands and once with what the sweep leaves, and the
+## difference is charged at the reaper's rate ([method _life_price]:
+## half a point a life at twenty, two under seven). When the attack as
+## it stands is lethal and the sweep's remainder is not, the sweep is
+## the out and worth [constant LETHAL_WORTH], the way every other lethal
+## is priced. The attack is the DECLARED one when we are in their combat
+## with the damage still to come (the attackers named, our untapped
+## bodies the blockers, or only the unblocked ones once blocks are in),
+## and otherwise the next-turn model the crack-back read uses: every
+## creature of theirs that could attack ([method _could_attack_next_turn]
+## — Defender, "can't attack" and our Moat honoured), our untapped
+## creatures the blockers. A Fog already cast leaves nothing to relieve.
+##
+## The next-turn model honours THE APPETITE ([method _upkeep_meals]): a
+## creature of theirs an Abyss takes at their upkeep never attacks, on
+## the board as it stands and on what the sweep leaves of it alike — a
+## Disk that takes the Abyss with the board takes its appetite too. The
+## first cut of this read the board without it and fired a Disk at one
+## life into a lone Llanowar Elves our own Abyss was about to eat, losing
+## two Tomes, two Scepters and the mana that went with them.
+func _sweep_relief(game: MtgGame, effect: EffectBase, n: int) -> float:
+	var me := game.players[pid]
+	var them := game.players[game.opponent_of(pid)]
+	var attackers: Array[CardInstance] = []
+	var survivors: Array[CardInstance] = []
+	var blockers: Array[CardInstance] = []
+	var left: Array[CardInstance] = []
+	var declared := game.active_player != pid and not game.combat.attackers.is_empty() \
+		and game.current_step() <= Mtg.Step.DECLARE_BLOCKERS
+	if declared:
+		if game.combat_damage_prevented:
+			return 0.0
+		var blocks_in := game.current_step() == Mtg.Step.DECLARE_BLOCKERS \
+			and not game.awaiting_blockers
+		for attacker_id in game.combat.attackers:
+			var attacker := game.find_instance(attacker_id)
+			if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD \
+					or attacker.cur_power <= 0:
 				continue
-			if effect.creature_filter.is_valid() and not effect.creature_filter.call(inst):
+			if blocks_in and game.combat.was_blocked(game.combat.band_of(attacker_id)):
+				continue   # a blocked attacker lands nothing on us (trample aside)
+			attackers.append(attacker)
+			if not _sweep_kills(effect, attacker, n):
+				survivors.append(attacker)
+		if not blocks_in:
+			for inst in me.battlefield:
+				if inst.is_creature() and not inst.tapped:
+					blockers.append(inst)
+					if not _sweep_kills(effect, inst, n):
+						left.append(inst)
+	else:
+		var board := game.all_battlefield()
+		var remains: Array[CardInstance] = []
+		for inst in board:
+			if not _sweep_kills(effect, inst, n):
+				remains.append(inst)
+		var eaten := _upkeep_meals(game, them.id, board)
+		var eaten_after := _upkeep_meals(game, them.id, remains)
+		for inst in them.battlefield:
+			if inst.cur_power <= 0 or not _could_attack_next_turn(game, inst):
 				continue
-			if inst.damage + n < inst.cur_toughness:
+			if not eaten.has(inst):
+				attackers.append(inst)
+			if remains.has(inst) and not eaten_after.has(inst):
+				survivors.append(inst)
+		for inst in me.battlefield:
+			if inst.is_creature() and not inst.tapped:
+				blockers.append(inst)
+				if not _sweep_kills(effect, inst, n):
+					left.append(inst)
+	if attackers.is_empty():
+		return 0.0
+	var before := _damage_through_blocks(game, attackers, blockers, pid)
+	var after := _damage_through_blocks(game, survivors, left, pid)
+	var relief := before - after
+	if relief <= 0:
+		return 0.0
+	var value := relief * _life_price(me.life)
+	if before >= me.life and after < me.life:
+		value += LETHAL_WORTH   # the sweep is the out
+	return value
+
+
+## THE APPETITE (2026-09-08, AiProfile.times_sweeps): the creatures
+## [param who]'s next upkeep takes from them before they can attack — one
+## per permanent whose trigger declares
+## [member TriggeredAbility.kills_each_upkeep] (The Abyss, whoever
+## controls it), the least valuable legal one each time, the choice being
+## theirs ([member AiProfile.feeds_worst] is what they answer with; a
+## human is assumed no more generous). [param alive] is the board the
+## count is made on: the battlefield as it stands, or what a sweep leaves
+## of it, so a sweep that kills the feeder kills its appetite.
+func _upkeep_meals(game: MtgGame, who: int,
+		alive: Array[CardInstance]) -> Array[CardInstance]:
+	var eaten: Array[CardInstance] = []
+	for feeder in alive:
+		for ability in feeder.cur_triggered_abilities:
+			var spec: TargetSpec = ability.kills_each_upkeep
+			if spec == null:
 				continue
-			var worth := Evaluator.permanent_value(inst)
-			swing += -worth if inst.controller_id == pid else worth
-		swing *= Evaluator.W_BOARD
-		if effect.hit_players:
-			if n >= me.life:
-				return -LETHAL_WORTH   # never
-			if n >= them.life:
-				return LETHAL_WORTH
-			swing += n * Evaluator.W_LIFE           # their life
-			# Our life is dearer the lower we are.
-			var life_price := 1.0 if me.life - n > 10 else 2.0
-			swing -= n * life_price
-		return swing
-	return 0.0
+			var meal: CardInstance = null
+			for inst in alive:
+				if inst.controller_id != who or eaten.has(inst):
+					continue
+				if not spec.is_legal(game, TargetRef.card(inst), feeder):
+					continue
+				if meal == null or Evaluator.permanent_value(inst) \
+						< Evaluator.permanent_value(meal):
+					meal = inst
+			if meal != null:
+				eaten.append(meal)
+	return eaten
+
+
+## THE ABYSS AS AN ANSWER (2026-09-08, [member AiProfile.trusts_abyss]):
+## would [param card], resolved onto [param who]'s battlefield as
+## printed, be the NEXT MEAL of a feeder on the table — a permanent
+## whose upkeep trigger declares an appetite ([member
+## TriggeredAbility.kills_each_upkeep]) that the body satisfies, with no
+## legal creature of theirs worth less to be fed first? The card is
+## still on the stack, so the spec's zone check cannot be asked; its
+## own filter (nonartifact, for the Abyss) and printed protection are.
+## The meal is the least valuable legal creature, the same reading
+## [method _upkeep_meals] makes of a board.
+func _is_next_meal(game: MtgGame, card: CardInstance, who: int) -> bool:
+	var worth := Evaluator.permanent_value(card)
+	for feeder in game.all_battlefield():
+		for ability in feeder.cur_triggered_abilities:
+			var spec: TargetSpec = ability.kills_each_upkeep
+			if spec == null:
+				continue
+			if spec.filter.is_valid() and not spec.filter.call(card):
+				continue
+			if (card.cur_protection & feeder.cur_colors) != 0:
+				continue
+			var sheltered := false
+			for inst in game.players[who].battlefield:
+				if not spec.is_legal(game, TargetRef.card(inst), feeder):
+					continue
+				if Evaluator.permanent_value(inst) < worth:
+					sheltered = true
+					break
+			if not sheltered:
+				return true
+	return false
 
 
 ## What a leveller (Balance: [member EffectIntent.levels]) would move,
@@ -1401,6 +1628,12 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	# THE PACE (2026-09-07, AiProfile.paces_draws): a search is a card off
 	# the library as much as a draw is, and the race counts it the same.
 	if intent.searches and not data.is_modal() and _library_slack(game) < 1:
+		return {}
+	# TIME WALK'S DRAW STEP (2026-09-08, AiProfile.paces_draws): an extra
+	# turn is a draw step off our library before theirs comes round, and
+	# the race counts it the way it counts a Tome.
+	if intent.extra_turns > 0 and not data.is_modal() \
+			and _library_slack(game) < intent.extra_turns:
 		return {}
 	# THE COUNT (2026-09-07, AiProfile.counts_cards): an X that draws or
 	# discards is sized to the cards it acts on, not to the mana at hand.
@@ -2752,6 +2985,13 @@ func _try_counter(game: MtgGame) -> String:
 				threat = maxf(threat, Evaluator.card_value(target.data))
 	if threat < profile.counter_threshold:
 		return ""
+	# THE ABYSS AS AN ANSWER (2026-09-08, AiProfile.trusts_abyss): a
+	# creature that will be the next meal of a feeder on the table dies
+	# at their upkeep having blocked once at most; the counter is saved
+	# for what the feeder cannot eat.
+	if profile.trusts_abyss and top.card.is_creature() \
+			and _is_next_meal(game, top.card, top.controller):
+		return ""
 	var top_ref := TargetRef.card(top.card)
 	for inst in game.players[pid].hand:
 		# Plain counterspells — but only when the spell CAN be countered by
@@ -2820,6 +3060,16 @@ func _defensive_combat_response(game: MtgGame) -> String:
 			for inst in me.hand:
 				if inst.data.card_name == "Fog":
 					return _cast_response(game, inst, [])
+	# THE SWEEP THAT ANSWERS AN ATTACK (2026-09-08, AiProfile.times_sweeps):
+	# a wipe we can activate, offered once the attackers are declared and
+	# before the damage — the moment it is also a Fog. Priced by
+	# _sweep_value with the declared attack as its relief; the upkeep's
+	# bar, because their turn is the moment's own.
+	if profile.times_sweeps and not game.combat_damage_prevented \
+			and game.current_step() <= Mtg.Step.DECLARE_BLOCKERS:
+		var swept := _try_activate(game, Moment.COMBAT)
+		if swept != "":
+			return swept
 	# Instant removal: attackers worth killing, the biggest GAIN first —
 	# but keep going down the list (the biggest may be unkillable; the
 	# specter beside it may not be — a lesson a test taught this function).
@@ -3152,17 +3402,27 @@ static func _has_effect(data: CardData, effect_class: String) -> bool:
 
 # ================================================================== combat --
 
-## Attack declaration: per-attacker favorable-trade analysis (mage-go's
-## combat heuristic, simplified), plus a lethal-push override and the
-## aggression/mistake tilts from the profile.
-func _declare_attacks(game: MtgGame) -> String:
-	var defender := game.opponent_of(pid)
+## The bodies that may be declared this turn: creatures, legal to attack
+## [param defender] under every ban on the board (our own Moat stops a
+## Factory as surely as theirs), whose attack cost is payable.
+func _attack_candidates(game: MtgGame, defender: int) -> Array[CardInstance]:
 	var candidates: Array[CardInstance] = []
 	for inst in game.players[pid].battlefield:
 		if inst.is_creature() \
 				and CombatState.attack_illegality(game, inst, defender) == "" \
 				and _attack_costs_payable(game, inst):
 			candidates.append(inst)
+	return candidates
+
+
+## THE DECLARATION ITSELF, deterministic: the lethal push or the cohort,
+## the pump rider, the crack-back search, the must-attackers. Everything
+## [method _declare_attacks] then does to it — the mistake roll, the
+## bans and the cap, the band — is either random or a restriction the
+## engine enforces, so this is the half a PROBE may ask without moving
+## the game's random stream ([method _would_attack_once_animated]).
+func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
+		defender: int) -> Array:
 	var blockers: Array[CardInstance] = []
 	for inst in game.players[defender].battlefield:
 		if inst.is_creature() and not inst.tapped:
@@ -3220,6 +3480,16 @@ func _declare_attacks(game: MtgGame) -> String:
 	for inst in candidates:
 		if _must_attack(inst) and not attackers.has(inst.id):
 			attackers.append(inst.id)
+	return attackers
+
+
+## Attack declaration: per-attacker favorable-trade analysis (mage-go's
+## combat heuristic, simplified), plus a lethal-push override and the
+## aggression/mistake tilts from the profile.
+func _declare_attacks(game: MtgGame) -> String:
+	var defender := game.opponent_of(pid)
+	var candidates := _attack_candidates(game, defender)
+	var attackers := _attack_choice(game, candidates, defender)
 	# Mistake injection: a fumbling AI leaves a good attacker home.
 	if attackers.size() > 0 and game.rng.randf() < profile.mistake_chance:
 		var drop_index := game.rng.randi_range(0, attackers.size() - 1)
@@ -3473,7 +3743,14 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.a_id[i] = inst.id
 		search.a_can_attack[i] = 1 if candidates.has(inst) else 0
 		search.a_forced[i] = 1 if (candidates.has(inst) and _must_attack(inst)) else 0
-		search.a_free[i] = 1
+		# THE FACTORY ANIMATED FOR NOTHING (2026-09-08,
+		# [member AiProfile.animates_to_attack]): a body that is a creature
+		# only until end of turn is a land again before they swing, so it
+		# is no blocker on their turn and holding it home buys nothing.
+		# The ply-4 read used to count it, and kept an animated Factory
+		# home to block with a body that would not be there.
+		search.a_free[i] = 0 if (profile.animates_to_attack
+			and _creature_until_end_of_turn(game, inst)) else 1
 		search.a_vigilant[i] = 1 if inst.has_keyword(Mtg.Keyword.VIGILANCE) else 0
 		search.a_trample[i] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
 		search.a_soak[i] = maxi(inst.cur_toughness - inst.damage, 0)
@@ -4016,7 +4293,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 func _plan_taps(game: MtgGame, cost: ManaCost, x_value: int,
 		usage_keys: Array = []) -> Array:
 	return ManaPlanner.plan(game, pid, cost, x_value, usage_keys,
-		_pain_excluded(game))
+		_excluded_sources(game))
 
 
 ## The untapped mana sources available right now — [method
@@ -4024,7 +4301,7 @@ func _plan_taps(game: MtgGame, cost: ManaCost, x_value: int,
 ## passed to [method _plan_taps_from], because one "what should I cast?"
 ## pass plans a cost for every card in hand.
 func _mana_sources(game: MtgGame) -> Array:
-	return ManaPlanner.sources(game, pid, _pain_excluded(game),
+	return ManaPlanner.sources(game, pid, _excluded_sources(game),
 		profile.minds_pain)
 
 
@@ -4068,6 +4345,42 @@ func _pain_excluded(game: MtgGame) -> Dictionary:
 	return out
 
 
+## THE ATTACKER THAT IS ALSO A LAND, left out of the plan
+## ([member AiProfile.animates_to_attack], 2026-09-08). A Mishra's
+## Factory animated in our first main phase was paid for as the attack
+## it enables ([method _animation_value]) — and to the planner it was
+## still a land, the cheapest source on the table, so the next thing the
+## pilot paid for (a Disrupting Scepter, three mana) tapped the body it
+## had just bought and the declaration found it tapped. Twenty-one of the
+## twenty-nine animations that went nowhere in 150 instrumented games
+## were this, not the attack code (docs/ROADMAP.md, "The Deck, third
+## pass"). So until the attack is declared, a body that is a creature
+## only until end of turn and could still attack is not a mana source;
+## once combat is over it taps like any land, and on their turn nothing
+## is animated. Same shape as [method _pain_excluded], and unioned with
+## it by [method _excluded_sources].
+func _attackers_excluded(game: MtgGame) -> Dictionary:
+	var out: Dictionary = {}
+	if not profile.animates_to_attack or game.active_player != pid \
+			or game.current_step() > Mtg.Step.COMBAT_BEGIN:
+		return out
+	for inst in game.players[pid].battlefield:
+		if inst.tapped or inst.summoning_sick or inst.cur_mana_abilities.is_empty():
+			continue
+		if inst.is_creature() and _creature_until_end_of_turn(game, inst):
+			out[inst.id] = true
+	return out
+
+
+## Every source the planner is to leave alone for this seat: the tap that
+## would kill us ([method _pain_excluded]) and the body animated to attack
+## ([method _attackers_excluded]).
+func _excluded_sources(game: MtgGame) -> Dictionary:
+	var out := _pain_excluded(game)
+	out.merge(_attackers_excluded(game))
+	return out
+
+
 ## [method _plan_taps] against a pre-built source list.
 func _plan_taps_from(sources: Array, cost: ManaCost, x_value: int,
 		usage_keys: Array = []) -> Array:
@@ -4080,7 +4393,7 @@ func _plan_taps_from(sources: Array, cost: ManaCost, x_value: int,
 func _plan_and_pay(game: MtgGame, cost: ManaCost, extra := 0,
 		usage_keys: Array = []) -> bool:
 	return ManaPlanner.plan_and_pay(game, pid, cost, extra, usage_keys,
-		_pain_excluded(game))
+		_excluded_sources(game))
 
 
 func _cost_is_free(cost: ManaCost) -> bool:
@@ -4091,7 +4404,7 @@ func _cost_is_free(cost: ManaCost) -> bool:
 func _max_affordable_x(game: MtgGame, cost: ManaCost, extra := 0,
 		sources: Array = [], x_color := 0, usage_keys: Array = []) -> int:
 	return ManaPlanner.max_affordable_x(game, pid, cost, extra, sources,
-		x_color, usage_keys, _pain_excluded(game))
+		x_color, usage_keys, _excluded_sources(game))
 
 
 # =============================================================== targeting --
@@ -4953,14 +5266,18 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 ## the card sorted from its controller's point of view), when the first is
 ## the answer — or the list is what a COST eats ([member
 ## PlayerChoice.is_cost]: "sacrifice a creature" for a Fallen Angel pump
-## or a Sacrifice spell), when the LEAST valuable body goes.
-func answer_card(game: MtgGame, _p_pid: int, candidates: Array[CardInstance],
-		_prompt: String) -> CardInstance:
+## or a Sacrifice spell), or a TRIBUTE ([method _tribute_ask]: The Abyss,
+## a Lord of the Pit, a Mana Vortex — the same loss without the cost
+## flag; [member AiProfile.feeds_worst]), when the LEAST valuable goes.
+func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
+		prompt: String) -> CardInstance:
 	var asked := current_choice()
 	if asked != null and (asked.adverse or asked.ordered) \
 			and not candidates.is_empty():
 		return candidates[0]
 	var paying := asked != null and asked.is_cost
+	var tribute := not paying and profile.feeds_worst \
+		and _tribute_ask(p_pid, candidates, prompt)
 	var best: CardInstance = null
 	for inst in candidates:
 		if best == null:
@@ -4971,6 +5288,51 @@ func answer_card(game: MtgGame, _p_pid: int, candidates: Array[CardInstance],
 			# so the two cannot disagree about which land goes.
 			if _own_value(game, inst) < _own_value(game, best):
 				best = inst
+		elif tribute:
+			if _tribute_value(game, inst) < _tribute_value(game, best):
+				best = inst
 		elif Evaluator.card_value(inst.data) > Evaluator.card_value(best.data):
 			best = inst
 	return best
+
+
+## THE TRIBUTE (2026-09-08, AiProfile.feeds_worst): is this card ask a
+## LOSS for the seat answering it — one of its own to sacrifice, to be
+## destroyed, or to discard — rather than the gain every other card ask
+## is (a tutor, a Regrowth, a Reanimate)? Read off the two things every
+## such ask shares: the candidates are all the seat's own, and the line
+## it is asked with says what happens to the one it names. The words are
+## [constant TRIBUTE_WORDS], the vocabulary of the pool's own prompts
+## ("Sacrifice a creature to Lord of the Pit", "The Abyss: choose a
+## nonartifact creature to be destroyed", "Select card drawn this turn
+## to discard."); an ask an OPPONENT answers about our cards (Demonic
+## Hordes' "Choose a land for X's controller to sacrifice") fails the
+## first test and stays the gain it is for them.
+func _tribute_ask(p_pid: int, candidates: Array[CardInstance], prompt: String) -> bool:
+	if candidates.is_empty():
+		return false
+	var loss := false
+	for word in TRIBUTE_WORDS:
+		if prompt.findn(word) >= 0:
+			loss = true
+			break
+	if not loss:
+		return false
+	for inst in candidates:
+		if inst.controller_id != p_pid:
+			return false
+	return true
+
+
+## The words a card ask uses when the card named is lost by the seat
+## naming it. Matched case-blind, anywhere in the prompt.
+const TRIBUTE_WORDS: Array[String] = ["sacrifice", "destroy", "discard", "bury"]
+
+
+## What a tribute costs the seat: a permanent by [method _own_value] (a
+## land's scarcity and colour counted, the way a cost's sacrifice prices
+## it), a card in hand by [method Evaluator.card_value].
+func _tribute_value(game: MtgGame, inst: CardInstance) -> float:
+	if inst.zone == Mtg.Zone.BATTLEFIELD:
+		return _own_value(game, inst)
+	return Evaluator.card_value(inst.data)

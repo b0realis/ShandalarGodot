@@ -383,7 +383,13 @@ shandalar/
 │   │   │                      payable only while it is still in hand)
 │   │   ├── triggered_ability.gd class TriggeredAbility — event_type +
 │   │   │                      optional condition + on_resolve(game, source,
-│   │   │                      event) Callable; APNAP stacking in MtgGame
+│   │   │                      event) Callable; APNAP stacking in MtgGame.
+│   │   │                      .killing_each_upkeep(spec) (2026-09-08)
+│   │   │                      declares THE APPETITE of an upkeep trigger
+│   │   │                      that takes one creature of the upkeep
+│   │   │                      player's, their choice (The Abyss); read
+│   │   │                      by nothing in the engine, by the AI's
+│   │   │                      sweep timing (AiPlayer._upkeep_meals)
 │   │   └── static_ability.gd class StaticAbility — apply(game, source)
 │   │                          Callable run every recalculation pass;
 │   │                          .changing_types() marks a CR 613 LAYER-4
@@ -837,6 +843,11 @@ shandalar/
 │   │                          it also resets the per-recalculation game
 │   │                          fields statics rebuild (nullified_landwalk,
 │   │                          max_attackers/max_blockers);
+│   │                          creature_until_end_of_turn(id) answers
+│   │                          the AI's crack-back read — an animation
+│   │                          adding CREATURE is registered and every
+│   │                          such one expires at cleanup (a Xenic
+│   │                          Poltergeist's lasts longer: false);
 │   │                          simplified CR 613,
 │   │                          upgrade path documented in the file header
 │   ├── random_effects.gd    class RandomEffects — the Astral set's random
@@ -1046,6 +1057,14 @@ shandalar/
 │   │   │                      judged by AiMulligan, on for EVERY profile
 │   │   │                      like fits_auras — a knob only for the
 │   │   │                      Deck Lab's null.
+│   │   │                      feeds_worst (2026-09-08): THE TRIBUTE —
+│   │   │                      asked which of its own to lose when the
+│   │   │                      loss is no cost it chose (The Abyss's meal,
+│   │   │                      Lord of the Pit, Mana Vortex, a Sylvan
+│   │   │                      Library's discard), the pilot gives its
+│   │   │                      least valuable; AiPlayer.answer_card used
+│   │   │                      to give its BEST, the tutors' answer. On
+│   │   │                      for every profile like mulligans.
 │   │                      combat_search_nodes is the CRACK-BACK SEARCH's
 │   │                      leaf budget, 0 for a profile that does not look
 │   │                      past its own combat (Apprentice and Magician 0,
@@ -1127,7 +1146,17 @@ shandalar/
 │   │                      this one is +3.0..+6.0 on every starter at a
 │   │                      thousand games an arm, three of five clear.
 │   │                      Sorcerer and Wizard. The Deck 31.7% -> 36.2%
-│   │                      against the starters.
+│   │                      against the starters. TIME WALK'S DRAW STEP
+│   │                      (2026-09-08, the third pass): an extra turn is
+│   │                      a draw step off its taker's library before the
+│   │                      other's comes round, so _library_slack counts
+│   │                      the turns already queued on MtgGame.extra_turns
+│   │                      (ours against the lead, theirs for it) and
+│   │                      _size_and_aim holds a spell whose
+│   │                      EffectIntent.extra_turns the slack cannot
+│   │                      cover — a Walk waits for a spare card the way a
+│   │                      Tome's tick does. One card once a game: 40 of
+│   │                      1 500 games differ, 11 flipped to a win, 1 away.
 │   │                      holds_duplicates (2026-09-07) is THE SECOND
 │   │                      LEGEND: whether a permanent whose arrival
 │   │                      would be a card thrown away stays in hand —
@@ -1142,6 +1171,61 @@ shandalar/
 │   │                      pilot cast its second and third The Abyss over
 │   │                      the first. Sorcerer and Wizard. The Deck
 │   │                      36.2% -> 39.8% against the starters.
+│   │                      animates_to_attack (2026-09-08) is THE
+│   │                      FACTORY ANIMATED FOR NOTHING: whether an
+│   │                      animation is bought only for an attack the
+│   │                      pilot would declare. AiPlayer._animation_value
+│   │                      probes the declaration on the journal
+│   │                      (_would_attack_once_animated animates the body
+│   │                      inside make_mark/unmake_to and asks
+│   │                      _attack_choice, the deterministic core of
+│   │                      _declare_attacks); _attackers_excluded keeps the
+│   │                      animated body out of every mana plan until the
+│   │                      attack is declared (21 of 29 wasted animations
+│   │                      were the planner tapping the just-animated
+│   │                      Factory for the Scepter's {3}); and the
+│   │                      crack-back model reads a creature-until-end-of-
+│   │                      turn as no blocker on their turn
+│   │                      (ContinuousEffects.creature_until_end_of_turn,
+│   │                      a_free 0). Sorcerer and Wizard. A wash on the
+│   │                      totals (40.1% either way, mulligan on), every
+│   │                      animation in the census attacking.
+│   │                      times_sweeps (2026-09-08) is THE SWEEP THAT
+│   │                      ANSWERS AN ATTACK: a board wipe priced by the
+│   │                      damage it keeps off our life as well as the
+│   │                      permanents it trades (AiPlayer._sweep_relief:
+│   │                      their attack read through
+│   │                      _damage_through_blocks before and after the
+│   │                      sweep, charged at _life_price, LETHAL_WORTH
+│   │                      when the sweep is the out; the declared attack
+│   │                      in their combat, the next-turn model otherwise,
+│   │                      a creature an Abyss will eat at their upkeep —
+│   │                      _upkeep_meals, off TriggeredAbility.
+│   │                      kills_each_upkeep — never an attacker), and an
+│   │                      activated sweeper offered in THEIR combat once
+│   │                      the attackers are declared and before the
+│   │                      damage (Moment.COMBAT, from
+│   │                      _defensive_combat_response). The sweeper's own
+│   │                      body counts as a loss: the first cut left it
+│   │                      out and lost measurably. Sorcerer and Wizard.
+│   │                      A wash in the right direction against the
+│   │                      starters, the Disk fired in their combat five
+│   │                      times in 150 census games where it never had.
+│   │                      trusts_abyss (2026-09-08) is THE ABYSS AS AN
+│   │                      ANSWER: the counter decision (_try_counter)
+│   │                      keeps the counterspell when the creature spell
+│   │                      on the stack is the next meal of a feeder on the
+│   │                      table (AiPlayer._is_next_meal, off
+│   │                      TriggeredAbility.kills_each_upkeep: the target
+│   │                      rule satisfied, the feeder's colours not among
+│   │                      the body's protections, no cheaper legal
+│   │                      creature of theirs to be fed first) — The Abyss
+│   │                      destroys it at their upkeep, the counter meets
+│   │                      the Disenchant. Sorcerer and Wizard. A wash in
+│   │                      the right direction against the starters, the
+│   │                      counters cast about half as often in the census
+│   │                      for the same wins; a shelter cast after the
+│   │                      let-through creature is the known gap.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -1177,7 +1261,9 @@ shandalar/
 │   │   ├── effect_intent.gd class EffectIntent — WHAT AN EFFECT LIST DOES,
 │   │   │                      read once into numbers the AI reasons with
 │   │   │                      (damage / X damage / self-damage / removes /
-│   │   │                      bounces / taps / draws / searches / pumps /
+│   │   │                      bounces / taps / draws / searches / extra
+│   │   │                      turns (Time Walk's draw step, for THE PACE) /
+│   │   │                      pumps /
 │   │                      regenerates
 │   │   │                      / adds mana / sweeper kept whole / the
 │   │   │                      ANIMATION kept whole for the same reason /
@@ -1848,7 +1934,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5041 tests / ~136 150 asserts, ~300 s
+├── tests/                   GUT suite — 5116 tests / ~137 240 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -3321,6 +3407,63 @@ shandalar/
 │    land_count; the pilot judging through AiMulligan; the knob off the
 │    plain rule, and apply_overrides("mulligans=off") reaching it; a
 │    whole opening run down to a keep with the 1997 line and its count
+│    tests/ai/test_ai_animates_to_attack_2026_09_08.gd — THE FACTORY
+│    ANIMATED FOR NOTHING (AiProfile.animates_to_attack): the Scepter's
+│    payment leaving the animated body alone and the attack declared, the
+│    null tapping it and attacking with nothing; the body taxed like any
+│    land after combat; a second animation paid by the plain lands, not
+│    the first body (the planner's tie-break noted open); an animated body
+│    no blocker in the crack-back read and the null holding it home; a
+│    printed creature still a blocker; creature_until_end_of_turn reading
+│    the duration and the expiry; the animation refused under our own
+│    Moat, the null buying it; an empty board animated and attacked; a
+│    blocker that eats the body refusing it; the probe leaving the RNG,
+│    the log and the journal as it found them, and surviving inside a
+│    search already open; the ladder from Sorcerer up; the knob read by
+│    the Lab
+│    tests/ai/test_ai_feeds_worst_2026_09_08.gd — THE TRIBUTE
+│    (AiProfile.feeds_worst): The Abyss fed the Bears and the null
+│    feeding the Angel, a pro-black Knight no choice at all; Lord of
+│    the Pit's tribute the Bears, the null's the Angel; the reading —
+│    a sacrifice, the Abyss's line and a Sylvan Library's discard read
+│    as losses, a tutor's and a Regrowth's as gains, Demonic Hordes'
+│    enemy naming OUR land as its gain; a land tribute priced by the
+│    own ledger (the fifth Forest before the only Island under a
+│    Counterspell); on at every rung; the knob read by the Lab
+│    tests/ai/test_ai_times_sweeps_2026_09_08.gd — THE SWEEP THAT
+│    ANSWERS AN ATTACK (AiProfile.times_sweeps): the Disk the out at
+│    three life and the null pricing it as a trade; the Disk fired after
+│    their attackers are declared and before the damage, the null
+│    waiting for their end step and taking the hit; a Fog already cast
+│    leaving nothing to relieve; their combat offering nothing but a
+│    sweeper; the Disk fired on the unblocked remainder; the sweeper's
+│    own body a loss under the knob as without it; the relief the damage
+│    through our blockers, the null without it; lethal-worth when the
+│    sweep is the out; our Moat honoured; an Earthquake's survivors
+│    counted; THE APPETITE — the Abyss's meal never an attacker, a lone
+│    Elves it will eat no reason to fire at one life, the Disk taking
+│    the appetite with the board, the appetite surviving an Earthquake,
+│    an artifact creature no meal, their own Abyss eating theirs, the
+│    card declaring it; the Wrath the out at four life and the null's
+│    two-point trade waiting; the ladder from Sorcerer up; the knob read
+│    by the Lab
+│    tests/ai/test_ai_time_walk_2026_09_08.gd — TIME WALK'S DRAW STEP
+│    (AiProfile.paces_draws): the reader counting the extra turn and no
+│    longer filing it as unknown, an Ancestral reading none; a queued
+│    turn of ours a card off the lead (two from a lead of one the race
+│    lost), theirs a card for it, the null ignoring the queue; the Walk
+│    held level with their draw next, cast on a lead of one and queued,
+│    cast level beyond the horizon, the null walking the race away; a
+│    second Walk needing a second spare card and spending it; the ladder
+│    from Sorcerer up
+│    tests/ai/test_ai_trusts_abyss_2026_09_08.gd — THE ABYSS AS AN
+│    ANSWER (AiProfile.trusts_abyss): the Serra Angel the Abyss will
+│    eat let through with the Counterspell kept, countered with the knob
+│    off, without the Abyss, and with their Bears on the table to be fed
+│    first; a Disenchant on the Abyss still answered; the meal the least
+│    valuable legal creature, a White Knight and a Clay Statue no meal,
+│    a protected body sheltering nothing, their own Abyss, no feeder;
+│    the ladder from Sorcerer up; the knob read by the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

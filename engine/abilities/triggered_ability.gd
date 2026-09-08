@@ -126,6 +126,23 @@ func as_mana_trigger() -> TriggeredAbility:
 	return self
 
 
+## THE APPETITE (2026-09-08): an upkeep trigger that takes one creature
+## from the player whose upkeep it is, of THEIR choice — The Abyss —
+## declares what it eats here: the spec the victim is a legal target of.
+## Read by nobody in the engine (the trigger's own [member on_resolve]
+## does the eating); read by the AI, which wants to know, before it fires
+## a Disk at a board, which of that board's creatures never get to attack
+## (AiPlayer._upkeep_meals). Null for every other trigger.
+var kills_each_upkeep: TargetSpec = null
+
+
+## Fluent: this upkeep trigger destroys one creature of the upkeep
+## player's, chosen by them, among the legal targets of [param spec].
+func killing_each_upkeep(spec: TargetSpec) -> TriggeredAbility:
+	kills_each_upkeep = spec
+	return self
+
+
 func _init(p_event_type: int, p_on_resolve: Callable, p_text: String = "",
 		p_condition: Callable = Callable()) -> void:
 	event_type = p_event_type

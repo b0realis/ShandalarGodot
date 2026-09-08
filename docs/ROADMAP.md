@@ -8434,6 +8434,337 @@ looking: two Jaguars of yours ("Elf" behind one, "Wall" behind the
 other with a Regeneration outside it) and theirs with "Ogre" behind it
 against your Gray Ogre; the Elf ghost hovered and docked in the sidebar.
 
+## THE DECK, THIRD PASS (2026-09-08) — five capabilities kept, one cut measured and not kept, the Angel open
+
+> *"No no, will will work on this further, mainly ai and AI engine
+> gameplay so it feels like a competent human tournament-level Player
+> at top difficulty. So first do another iteration on piloting "The
+> Deck" as planned."*
+
+The second pass (above) left six rows open: the Factory animated for
+nothing, Disk timing, the win condition, the mulligan, The Abyss as an
+answer, Time Walk's draw step. THE OPENING HAND (2026-09-08, the
+`mulligans` knob) took the fourth the same morning, so this pass took
+the other five in the order the second pass's data ranked them — and
+picked up a sixth on the way, a malfunction found while reading the
+Disk's losses. Every rule below reads the engine's own declarations
+(`TargetSpec`, `TriggeredAbility`, `EffectIntent`, the Evaluator's
+scale); none names a card.
+
+### What the data said before anything was built
+
+Two baselines, because the mulligan had just landed: the shipped
+Wizard at `306eb86`, `decks/variants/the_deck_playable.deck` against
+the five starters, seed 4242, 300 games a matchup, Wizard against
+Wizard — **40.3%** [37.8..42.8] (604–896) with the mulligan off (Big
+Green 47.3, Black-Red Raiders 42.7, Blue Skies 51.7, Mountain
+Artillery 35.3, White Knights 24.3) and **40.1%** [37.7..42.6]
+(602–898) with it on (49.7, 41.7, 48.7, 35.7, 25.0). Every sweep of
+the pass ran with the mulligan on, the setting the game ships with.
+A census of thirty logged games a matchup then said where the games
+went:
+
+* **834 Factory animations in 150 games, 29 of them for nothing** —
+  a body animated in our main phase on a turn that then declared no
+  attackers. Twenty-one were the mana planner tapping the just-animated
+  body for the Disrupting Scepter's {3}; five were the crack-back search
+  keeping the body home as a blocker it can never be (a creature until
+  end of turn is a land on their turn).
+* **The Disk sat untapped through the lethal attack.** Black-Red
+  Raiders, game 10, turn 16: The Deck at three life, the Disk untapped
+  beside the Abyss, a Tome, a Scepter, a Tower, two Moxen and a Sol
+  Ring; three creatures across the table with five power. The Disk was
+  priced at theirs minus ours on the Evaluator's scale — eleven against
+  sixteen — and the pilot took the five. Six of twenty losses to that
+  deck ended with the Disk untapped.
+* **The Abyss was being fed the Angel.** In the same logs the AI seat
+  under The Deck's Abyss handed it a Serra Angel and kept the Grizzly
+  Bears beside it, every upkeep — not a weakness of the starters but a
+  malfunction of the one answer-a-card-question routine, which was
+  written for the tutors.
+* **The counter went to the creature the Abyss would eat**, and the
+  Disenchant that came for the Abyss the turn after resolved.
+* **Time Walk's second draw step** was the one card THE PACE still
+  could not see (a tutor's card had been read since the second pass).
+
+### 1. THE FACTORY — `AiProfile.animates_to_attack` (commit ab1ca52)
+
+A Factory's animation is bought only when the attack it would declare
+sends the body. `_attackers_excluded` keeps every animated, untapped
+body out of every mana plan of ours until the attack is declared
+(through `_excluded_sources`, beside the pain-land exclusion); the
+crack-back model reads `a_free 0` for a creature-until-end-of-turn
+(`ContinuousEffects.creature_until_end_of_turn`, a new query that also
+refuses longer durations); and `_animation_value` probes the
+declaration itself on the journal — `_would_attack_once_animated`
+animates inside `make_mark`/`unmake_to` and asks `_attack_choice`, the
+deterministic core split out of `_declare_attacks` (candidates, lethal
+push, cohort, hold-back) — so the animation is refused under our own
+Moat and against a blocker that eats it, for free.
+
+Measured, `--sweep animates_to_attack=on,off`, 300 an arm, control Big
+Green vs White Knights byte-identical (183–117): Big Green 49.7 → 50.0,
+Black-Red 41.7 → 42.0, Blue Skies 48.7 → 48.7, Mountain Artillery 35.7
+→ 36.0, White Knights 25.0 → 25.7 — 0 of 10 deltas clear of zero, +5
+net of 1 500 paired games. The census with the knob on: 808
+animations, 0 wasted. Weissman's Winter 1994–95 list holds no Factory
+and replays byte-identical. Sorcerer and Wizard.
+
+### 2. THE TRIBUTE — `AiProfile.feeds_worst`, on at every rung (commit e52a92a)
+
+`AiPlayer.answer_card` priced every card ask as a gain — the most
+valuable candidate, the right answer to a Demonic Tutor and the wrong
+one to "choose a creature to be destroyed". The same answer went to a
+Lord of the Pit's tribute, a Lich's, a Mana Vortex's land and a Sylvan
+Library's discard. On, an ask whose candidates are all the seat's own
+and whose prompt says sacrifice, destroy, discard or bury is a LOSS,
+answered with the least valuable — a permanent by `_own_value` (a
+land's scarcity and colour counted), a card in hand by
+`Evaluator.card_value`. Cost sacrifices (`is_cost`) and an opponent's
+ask about our cards (Demonic Hordes) are unchanged. Always on, like
+`minds_pain`, `fits_auras` and `mulligans`: feeding the Abyss your
+Angel is no play, it is a malfunction.
+
+Measured from the seat that faces the Abyss — the STARTERS — 300 an
+arm, control Blue Skies vs Black-Red Raiders byte-identical: Big Green
++2.3, Black-Red Raiders +2.0, Blue Skies +2.0, Mountain Artillery +0.3,
+White Knights +1.0 against The Deck; 26 games flipped to a win against
+3 away, of the 376 that differed in 1 500. The 5×5 starter matrix is
+byte-identical with the knob off and on: no starter owns a card that
+asks the question. The other side of the same number is The Deck's:
+its baseline against the five fell to 43.3, 39.3, 47.0, 36.0, 26.0
+(38.3%) once its Abyss was fed a Llanowar Elves instead of a War
+Mammoth, and that is the null every later sweep of the pass is read
+against.
+
+### 3. THE SWEEP THAT ANSWERS AN ATTACK — `AiProfile.times_sweeps` (commit 435ecfa)
+
+A sweeper's value carries THE RELIEF: their attack read through
+`_damage_through_blocks` before and after the sweep, the difference
+charged at `_life_price`, `LETHAL_WORTH` when the sweep is the out
+(`AiPlayer._sweep_relief`; the declared attack in their combat, the
+next-turn crack-back model otherwise). An activated sweeper is offered
+in THEIR combat once the attackers are declared and before the damage
+(`Moment.COMBAT`, out of `_defensive_combat_response`) — Weissman's
+own Disk timing, the wipe as a Fog.
+
+**The first cut was wrong, and measured as such.** It also left the
+sweeper's own body out of its sum, and LOST: −3.7, −2.3, −0.3, −0.3,
+−0.3 against the five, 17 games flipped to a win against 38 away
+(control Blue Skies vs Black-Red Raiders byte-identical, so the loss
+was the rule's). Two readings from its losses: the Disk went off at
+twenty life to kill a lone 3/3 (the body counts again — it is a loss,
+not only a price), and at one life to kill a Llanowar Elves our own
+Abyss was about to eat. So THE APPETITE: The Abyss's trigger declares
+what it eats (`TriggeredAbility.killing_each_upkeep`, the same
+`TargetSpec` the card filters its victim through), and the relief's
+next-turn model removes the least valuable legal creature per Abyss on
+the board as it stands and on what the sweep leaves of it
+(`_upkeep_meals`).
+
+**The rule as kept**, measured 300 an arm against the post-tribute
+null, control Blue Skies vs Black-Red Raiders byte-identical (176–124):
+Big Green 43.3 → 44.0, Black-Red 39.3 → 39.3, Blue Skies 47.0 → 48.3,
+Mountain Artillery 36.0 → 36.7, White Knights 26.0 → 27.3 (+0.7, 0.0,
++1.3, +0.7, +1.3; 16 games flipped to a win, 4 away, of 99 that
+differed). In 150 census games the Disk fired in their combat five
+times where it never had, and the two lethal attacks it used to sit
+through are gone. The starters own sweepers too — Hurricane,
+Earthquake, Wrath of God — and their 5×5 matrix moves by at most two
+games in twelve hundred a deck; the Winter list is byte-identical.
+Sorcerer and Wizard.
+
+### 4. TIME WALK'S DRAW STEP — under `AiProfile.paces_draws`, no new knob (commit 369a52b)
+
+`EffectIntent.extra_turns` reads `ExtraTurnEffect` (no longer filed as
+unknown); `_library_slack` counts the turns already queued on
+`MtgGame.extra_turns`, ours against the lead and theirs for it; and
+`_size_and_aim` holds a spell whose extra turns the slack cannot cover,
+so a Time Walk waits for a spare card the way a Tome's tick does. One
+card once a game, and it measures like it: the shipped Wizard before
+and after, the same seed, differs in 40 of 1 500 games against the
+five starters, and The Deck wins 11 of those it had lost against 1 the
+other way (Big Green 132 → 133 wins of 300, Black-Red 118 → 119, Blue
+Skies 145 → 145, Mountain Artillery 110 → 114, White Knights 82 → 86:
++0.3, +0.3, 0.0, +1.3, +1.3). The census: 71 Walks cast in 150 games
+where there had been 73, the same wins.
+
+**A wrong control, kept as a lesson.** The whole pace knob was
+re-swept with the extra turn in it, first against the control pair the
+Disk used — Blue Skies vs Black-Red Raiders — and the control FAILED:
+9 of 300 games differed with the knob on. Blue Skies holds Ancestral
+Recall and Braingeyser, both optional draws THE PACE gates, so the
+knob CAN fire on that pair; the run's deltas were not a measurement
+until the control was one the knob cannot touch. Re-run against Big
+Green vs White Knights (no draw spell, no tutor, no Walk; 180–120
+byte-identical): `paces_draws` off → on is Big Green 41.7 → 44.3,
+Black-Red 36.0 → 39.7, Blue Skies 48.0 → 48.3, Mountain Artillery 33.0
+→ 38.0, White Knights 24.0 → 28.7 (+2.7, +3.7, +0.3, +5.0, +4.7; flips
+9/1, 11/0, 1/0, 18/3, 14/0) — the second pass's pace, with the Walk's
+step, still the largest single knob The Deck owns. The rule for the
+Lab, now written into `docs/ai-difficulty.md` §4: choose
+the control pair by what FIRES the knob, not by what the last knob
+used. Weissman's Winter list is byte-identical on and off: its race
+never reaches the pace's horizon.
+
+### 5. THE ABYSS AS AN ANSWER — `AiProfile.trusts_abyss` (commit c09781d)
+
+The counter decision priced every opposing spell by its printed worth
+against the profile's bar, so a Wizard with The Abyss on the table and
+{U}{U} open spent its Counterspell on the Serra Angel the enchantment
+would have destroyed at its controller's next upkeep — and had nothing
+left for the Disenchant. On, a creature spell whose body would be the
+next meal of a feeder on the table is let through.
+`AiPlayer._is_next_meal` reads the appetite the trigger declares
+(`TriggeredAbility.kills_each_upkeep`, the same reading `_upkeep_meals`
+makes of a board): the spec's own filter and the body's printed
+protection are asked of the stack card — the zone check cannot be —
+and a cheaper legal creature of theirs already on the table shelters
+it: that one is fed first, so the new body is still a threat and still
+countered.
+
+Measured 300 an arm, control Big Green vs White Knights byte-identical
+(180–120): +0.3, +1.7, −0.3, +1.0, +1.3 against the five (Big Green
+44.3 → 44.7, Black-Red 39.7 → 41.3, Blue Skies 48.3 → 48.0, Mountain
+Artillery 38.0 → 39.0, White Knights 28.7 → 30.0); 33 games flipped to
+a win, 21 away, of 602 that differed. The census, 150 games each way,
+says what the wash is made of: the counters were cast about half as
+often — 215 Counterspells and 75 Mana Drains with the knob off, 122 and
+40 with it on — for the same 64 wins. A creature the Abyss was going to
+eat was never worth the counter; the counter kept is the one that meets
+the Disenchant, and the one that rots in hand when nothing comes. The
+Winter list is byte-identical: it plays Moat, not The Abyss. Sorcerer
+and Wizard.
+
+### 6. THE ANGEL — open, with what the data says
+
+The playable list has no Serra; the pass ends without a deck that has
+one and without the "board is locked" rule the article's finisher
+needs. What the census of the shipped pilot says about the cost of
+that, 150 games with the mulligan on: The Deck's 64 wins come at turn
+31 at the earliest and turn 48 to 58 on the mean (Big Green 52.5,
+Black-Red 56.0, Blue Skies 48.9, Mountain Artillery 48.1, White
+Knights 57.9), 31 of the 64 by the opponent drawing from an empty
+library, the rest by two Factories over a board the Abyss has emptied
+— with The Deck at 32 to 74 life at the end. Its 86 losses come at turn
+15.6 to 22.1 on the mean; 42 of them by turn 16, and 35 of those 42
+were keeps of one to three lands. So the deck that cannot close is
+winning the long games it reaches and losing the short ones it does
+not: an Angel would shorten the win by ten to twenty turns and change
+nothing about the loss. The design when it is wanted: a
+`the_deck_serra.deck` variant (two Angels in for two of the four
+Factories, the Winter list's shape), and a finisher rule on the
+cast — a creature the profile's own model marks as the closer is held
+while their board can still race it, where "can still race it" is the
+crack-back search's reading of their untapped attackers against our
+life over the turns the Angel needs, and "locked" is a Moat or an
+Abyss on the table with a counter in hand. Measured the usual way, the
+control pair Big Green vs White Knights (neither casts a Serra). Open.
+
+### The whole pass, before and after
+
+The shipped Wizard — every knob at its preset, both seats — against
+the gauntlet at seed 4242, 300 games a matchup, the same command as the
+baseline (`--gauntlet decks/ --deck-a decks/variants/the_deck_playable.deck
+--mulligan on`):
+
+| The Deck (playable variant) vs | before (306eb86) | after (c09781d) |
+|---|---|---|
+| Big Green | 49.7% [44.0..55.3] (149–151) | 44.7% [39.1..50.3] (134–166) |
+| Black-Red Raiders | 41.7% [36.2..47.3] (125–175) | 41.3% [35.9..47.0] (124–176) |
+| Blue Skies | 48.7% [43.1..54.3] (146–154) | 48.0% [42.4..53.6] (144–156) |
+| Mountain Artillery | 35.7% [30.5..41.2] (107–193) | **39.0%** [33.7..44.6] (117–183) |
+| White Knights | 25.0% [20.4..30.2] (75–225) | **30.0%** [25.1..35.4] (90–210) |
+| the gauntlet | 40.1% [37.7..42.6] (602–898) | 40.6% [38.1..43.1] (609–891) |
+
+With the mulligan off, the same shape: 40.3% (604–896) before, 40.5%
+(607–893) after (43.3, 42.3, 49.3, 38.0, 29.3). Zero stalled in any of
+the four runs. The total is a wash because the pass made BOTH seats
+better: THE TRIBUTE is the starters' gain — Big Green's −5.0 and Blue
+Skies' −0.7 are a War Mammoth and a Serra no longer handed to the
+Abyss — while the Factory, the Disk, the Walk's step and the Abyss as
+an answer are The Deck's, and White Knights' +5.0 and Mountain
+Artillery's +3.3 are where those land: the fast red and white decks
+are the ones a Disk fired in combat and a counter kept for the
+Disenchant turn around. Every rung knob of the pass —
+`animates_to_attack`, `times_sweeps`, `trusts_abyss` — is on for
+Sorcerer and Wizard and off below, the ladder's shape; `feeds_worst`
+is on everywhere, as a malfunction's fix has to be; the Walk's step
+rides `paces_draws`. None was measured on the lower rungs, and the
+presets are the owner's to move.
+
+### Still open, and why
+
+* **The Angel** — above, with the census that prices it.
+* **The planner's tie-break.** The mana planner does not know that a
+  Mishra's Factory, a Library of Alexandria or a Strip Mine is worth
+  more untapped than a Forest: among equal sources it takes them in
+  battlefield order, so a second animation can be paid by tapping the
+  first animated body when the Factories come before the plain lands.
+  `animates_to_attack` excludes the body it has already animated; the
+  tie-break itself (plain land first, then the lands with abilities) is
+  the planner's, `engine/mana_planner.gd`, and is not touched here.
+* **Animating a Factory to BLOCK.** No rung animates on the opponent's
+  turn; a Factory that could eat a Savannah Lions in their combat sits
+  as a land. The read is the mirror of `_would_attack_once_animated` —
+  the blocker cohort probed with the body animated — at the moment
+  `_defensive_combat_response` already owns.
+* **Disk deferral.** `times_sweeps` holds an activated sweeper only
+  from the moment it is offered in their combat; a Disk worth firing at
+  our own main phase still fires there, when waiting for their attack
+  would have cost nothing but a Disenchant's window. And the relief's
+  "after" board is the sweep's survivors under the statics as they
+  stand: a Moat the Disk takes with the board still holds the ground
+  creatures the Disk did not kill.
+* **Time Walk's worth beyond the draw.** It is cast for its printed
+  value — a generic three, a Hill Giant — once the pace allows it; the
+  untap, the attack and the land drop are not priced, so a Walk goes off
+  on an empty board when holding it for a Factory attack was the play.
+* **`trusts_abyss` reads the table as it stands.** A creature let
+  through as the next meal can be sheltered before their upkeep by a
+  cheaper creature cast after it (Blue Skies' one-drop fliers, the −0.3
+  there), and a second copy of a creature already on the table is let
+  through as level with it although only one of the two dies.
+* **The Weissman lists.** The Winter 1994–95 list is playable and was
+  the no-harm control of every knob here (byte-identical each time:
+  no Factory, no Abyss, no sweeper, a race that never reaches the pace
+  horizon); the 1995-05 and 1996 lists refused to load here — each
+  holds one proxy, Chaos Orb (a dexterity card the pool does not hold)
+  and Zuran Orb (Ice Age, outside the eight sets), the Lab's proxy
+  message, a pool fact and not a bug — so the Winter list was the only
+  Weissman control of the pass.
+* **The short losses.** 35 of the 42 losses by turn 16 in the census
+  were keeps of one to three lands, inside THE OPENING HAND's range
+  (two of seven, one of five). Whether a control deck's keep should
+  want three is a mulligan question with a deck in it, not a pilot
+  question, and it was not measured here.
+
+### Gates
+
+The AI suites (`tests/ai/`, the capability's own script and its
+neighbours) after each capability, and the full suite after the last:
+**5 116 tests / 137 239 asserts across 294 scripts**, exit 0; both
+soaks (`--rules fifth`, `--rules modern`, six duels each, exit 0, no
+"SOAK IS NOT CLEAN"); `python3 -m unittest discover -s tools`, 114
+tests, OK. The Disk's first cut's tests passed and went with it. A
+worktree lesson for the next branch: the first full run failed 24 UI
+tests (medallions, cost plates, badges, the 1997 button face) and one
+pool test, all of them reading what git does not carry —
+`assets/original/` (ignored, the 1997 game's own files) and the eight
+empty `cards/todo/` set folders; a symlink to the checkout's `assets`
+and `mkdir` of the eight, then `godot --headless --import`, and the
+same suite passed whole. Neither is staged.
+The measurements are some 100 000 Deck Lab games — the four gauntlets
+(two baselines, two finals), eight sweeps at 300 an arm with their
+controls, six no-harm runs over the Winter list, four 5×5 starter
+matrices, the reversed-seat runs of THE TRIBUTE, and a dozen censuses
+of thirty logged games a matchup — zero stalled, zero engine errors.
+The counts in `README.md` and `docs/CODE_MAP.md` are from the last
+gate. Every `-s`
+run in this worktree still prints `Compile Error: Identifier not
+found: ShellMusic at res://game/setup_screen.gd:217` before Godot
+retries and the run completes with exit 0 (`game/`, not touched here).
+
 ## FORGE, READ (2026-09-08) — a reference, not a port
 
 The day after the first release the owner set the direction: *"we will
@@ -8494,6 +8825,7 @@ reads, the per-turn memory, the first-`WillPlay` picker, the CMC buckets,
 the game-copy simulation, the SVar DSL, the modern-only machinery. Nothing
 was ported in the reading; a port, when one comes, is a `[forge]` marker
 at the site naming file, lines and commit, on top of the Provenance row.
+
 
 ## Standing quality gates
 
