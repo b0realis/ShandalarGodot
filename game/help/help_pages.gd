@@ -1328,6 +1328,16 @@ static func _page_builder() -> Dictionary:
 			+ "keeps a card's text box at its printed size, full grows it "
 			+ "to fit."),
 		_heading("The keys [QoL]"),
+		_text("The arrow keys walk a yellow ring along the cards — Left and "
+			+ "Right along the Inventory, all four across the deck — and "
+			+ "the row scrolls to keep the ring in view; PageUp, PageDown, "
+			+ "Home and End carry it by the page and to the ends. Enter is "
+			+ "a click on the ringed card: into the deck from the Inventory, "
+			+ "out of it from the deck, and Shift+Enter sends it to the "
+			+ "sideboard. With nothing ringed, Enter takes the first card "
+			+ "shown. The keys belong to the surface you last clicked, or to "
+			+ "the Inventory when you have clicked none — only the type-ahead "
+			+ "box keeps them for itself while it holds the keyboard."),
 		_text("Ctrl+S saves the deck, Ctrl+O loads one, Ctrl+N starts a "
 			+ "new one, Ctrl+Z undoes the last change, Ctrl+L adds a basic "
 			+ "land, Ctrl+E exports the deck, and Ctrl+F puts the cursor in "

@@ -7460,6 +7460,53 @@ Identifier not found: ShellMusic at res://game/setup_screen.gd:217` and
 and the run completes with exit 0 — the autoload named directly from a
 script before the autoloads register (`game/`, not touched here).
 
+## THE DECK BUILDER'S KEYBOARD CURSOR (2026-09-08) — [QoL]
+
+*"In the deck builder, left and right arrow should select cards in the
+below strip and scroll to new cards left and right. Enter button should
+add a card to the deck. (We had this enter to add but it is not working
+now?)"*
+
+**Why Enter was not working.** Item 18 above wired Enter to the
+type-ahead box alone (`LineEdit.text_submitted`), so it added a card only
+while the box held the keyboard — and the first click on a card, a stone
+or the sort button took the keyboard away from it. From a focused stone
+Godot then spent the arrows on hopping the focus from button to button
+and Enter on pressing the stone again. Nothing was broken in the sense
+of a regression; the key simply never reached anything that would act.
+
+**The cursor** (`CardArea.handle_key`, one implementation for the Deck,
+the Inventory and the Sideboard) is a ring the arrows walk along the
+cards — one card across the flow, one step (a row on the Deck, a column
+on the Inventory, so on the one-row strip all four move a card) along
+the bar — with the page turning the shortest way that keeps the ring in
+view. PageUp/PageDown carry the ring in its slot, Home and End go to the
+list's ends; without a ring the paging keys scroll as they always did.
+Enter is a click on the ringed card (`card_activated`: in from the
+Inventory, out from the Deck), Shift+Enter a Shift-click (the sideboard),
+once per press so a held Enter cannot pour copies in; with no ring on
+the page it takes the page's first card, the type-ahead's own rule. A
+click stands the ring on the card it hit, the Showcase follows the ring
+as it follows the pointer, and a relist keeps the ring by card name (the
+Deck is relisted on every add and remove). The ring is the duel's own
+"you may" yellow at the duel's "chosen" width — two pixels vanished
+against a blue frame, checked by looking — half a gap outside the card,
+shown only while its surface has the keyboard.
+
+**Who gets the keys** (`DeckBuilderScreen._input`): the cards, unless
+something that genuinely reads them has the keyboard — a text field (the
+box, a finder, the deck's name; Enter in the box still adds the first
+match), a card surface (the one last clicked, as the wheel already
+works), an open dialog, the Q/Esc menu. With a button or nothing focused
+they go to the Inventory, *"the below strip"*. `_input` rather than
+`_unhandled_key_input` because Godot's focus hop sits between the two
+and would eat the arrow first. Pinned through `Viewport.push_input` —
+focus owner, hop and `ui_accept` included — because a test that called
+the handler by hand passed before the fix too
+(`tests/ui/test_deck_keyboard.gd`, 30 tests). Nothing in 1997 did any
+of this: the original was a mouse program, and s30's only keys are
+`A`/`D` on the card under the pointer (`edit_deck.go:459-465`).
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

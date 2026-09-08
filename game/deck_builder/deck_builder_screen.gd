@@ -1141,7 +1141,9 @@ func _add_one(card_name: String) -> bool:
 ## and Esc hands the keyboard back ([method _on_escape]). What is added
 ## is the first card the Inventory SHOWS — the type-ahead narrowed by
 ## every other filter on the strip, in the sort the player chose — so
-## what you see first is what you get.
+## what you see first is what you get. This is Enter IN THE BOX; Enter
+## anywhere else is the keyboard cursor's ([method CardArea.handle_key],
+## routed by [method _input] since 2026-09-08).
 func _add_first_match(_typed: String) -> void:
 	var first := _inventory.first_entry()
 	if first == null:
@@ -4667,6 +4669,41 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_filter_bar.search_field.grab_focus()
 		_filter_bar.search_field.select_all()
 		accept_event()
+
+
+## [QoL] THE CARDS OWN THE ARROWS AND ENTER. The owner, 2026-09-08: *"In
+## the deck builder, left and right arrow should select cards in the
+## below strip and scroll to new cards left and right. Enter button should
+## add a card to the deck. (We had this enter to add but it is not working
+## now?)"* — and it was not: Enter added a card only while the type-ahead
+## box held the keyboard ([method _add_first_match]), and the first click
+## on a card, a stone or the sort button took the keyboard away from the
+## box. From a stone, Godot then spent the arrows on hopping the focus
+## from button to button and Enter on pressing the stone again — nothing
+## a builder ever asked of either key.
+##
+## So the keys go to the CARDS unless something that genuinely reads them
+## has the keyboard: a text field (the type-ahead, a finder, the deck's
+## name — Enter there still adds the first match), a card surface (it
+## answers them itself, [method CardArea.handle_key] — the surface last
+## clicked, exactly as the wheel already works), an open dialog or the
+## Q/Esc menu. With a button or nothing at all focused they go to the
+## Inventory, *"the below strip"*, which takes the keyboard with them.
+## `_input` rather than [method _unhandled_key_input] because the focus
+## hop happens between the two and would eat the arrow first.
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed) or not CardArea.owns_key(event):
+		return
+	if _dialog_busy() or is_menu_open():
+		return
+	var owner := get_viewport().gui_get_focus_owner()
+	if owner is LineEdit or owner is TextEdit or owner is CardArea:
+		return
+	if owner != null and not is_ancestor_of(owner):
+		return
+	_inventory.grab_focus()
+	_inventory.handle_key(event)
+	get_viewport().set_input_as_handled()
 
 
 ## `Esc` in order of what is in the way: the Q/Esc menu first, then an

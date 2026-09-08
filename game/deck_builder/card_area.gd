@@ -38,6 +38,17 @@ extends Control
 ## A SINGLE click does the same thing — a modern affordance we owe the
 ## player, since a double-click-only surface feels broken today — and a
 ## right-click takes the whole stack of copies at once.
+##
+## [QoL] THE KEYBOARD CURSOR. The owner, 2026-09-08: *"In the deck
+## builder, left and right arrow should select cards in the below strip
+## and scroll to new cards left and right. Enter button should add a card
+## to the deck."* Nothing in 1997 did this — the original was a mouse
+## program, and s30's only keys are `A`/`D` on the card under the pointer
+## (`edit_deck.go:459-465`) — so it is written once, here, for all three
+## surfaces: the arrows walk a ring along the cards, the page turns to
+## keep the ring in view, and Enter is a click on the ringed card
+## ([signal card_activated] — into the deck from the Inventory, out of it
+## from the Deck). See [method handle_key].
 
 ## One copy in or out (click, double-click, or the keyboard).
 signal card_activated(card_name: String)
@@ -297,6 +308,23 @@ const RARITY_PLATE := Vector2(18, 18)
 ## The cost plate's symbol size and the room around the row of them.
 const COST_ICON := 16
 const COST_PAD := Vector2(8, 6)
+## [QoL] THE CURSOR'S RING is the duel table's own "you may act on this"
+## ink — [constant MiniCard.HIGHLIGHT_COLORS] at `OPTIONAL` — so the one
+## colour means the one thing on both screens: this is the card the next
+## key acts on. At the duel's CHOSEN width rather than its "may" width:
+## the strip's cards wear busy frames of every colour and two pixels of
+## yellow vanished against a blue one (checked by looking, 2026-09-08).
+## It stands half a gap OUTSIDE the card, framing the face rather than
+## covering its rim (the deck's quilt leads by exactly that much, [method
+## _lead], so the first column's ring is never clipped), and it is drawn
+## over every cell — `z_index` above the pile marker's 3 — while taking
+## no click at all.
+const RING_WIDTH := 3
+const RING_OUT := GAP.x / 2.0
+const RING_Z := 4
+## The keys [method handle_key] answers — what [method owns_key] tests.
+const KEYS: Array[Key] = [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN,
+	KEY_PAGEUP, KEY_PAGEDOWN, KEY_HOME, KEY_END, KEY_ENTER, KEY_KP_ENTER]
 
 var _entries: Array = []          ## [[CardData, count], ...] in display order
 ## [member _entries] with every copy on its own face, built only while
@@ -337,6 +365,15 @@ var _right_arrow: Button = null
 var _held := 0
 ## Seconds until the held arrow steps again.
 var _repeat_in := 0.0
+## [QoL] WHERE THE KEYBOARD CURSOR STANDS — an index into the list
+## ([method _visible_entries]), or -1 for none. The LIST, not the page:
+## the page turns under it and the ring is simply hidden while the cursor
+## is off the page ([method _place_cursor]).
+var _cursor := -1
+## The ring round the cursor's card: one node, moved, never rebuilt.
+var _cursor_ring: Panel = null
+## How many cells the last [method _rebuild] left showing.
+var _shown := 0
 
 
 func _init(vertical_bar := true) -> void:
@@ -348,6 +385,12 @@ func _init(vertical_bar := true) -> void:
 	_grid = Control.new()
 	_grid.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(_grid)
+	_cursor_ring = _make_cursor_ring()
+	_grid.add_child(_cursor_ring)
+	# The ring is a promise about the NEXT KEY, and a surface without the
+	# keyboard can make none — so it shows only while this one has it.
+	focus_entered.connect(_place_cursor)
+	focus_exited.connect(_place_cursor)
 	_bar = VScrollBar.new() if vertical_bar else HScrollBar.new()
 	_bar.value_changed.connect(func(value: float) -> void:
 		scroll_to(int(value) * scroll_step()))
@@ -715,8 +758,22 @@ class Arrow extends Control:
 ## carousel only when a FILTER changes (`edit_deck.go:391-396`), and so do
 ## we, by calling [method reset_scroll] there and nowhere else.
 func set_entries(entries: Array) -> void:
+	var held := cursor_entry()
 	_entries = entries
 	_expanded.clear()
+	# THE CURSOR FOLLOWS ITS CARD INTO THE NEW LIST. The Deck is relisted
+	# on every add and remove ([method DeckBuilderScreen.refresh]), and a
+	# cursor that went back to nothing on each Enter would make Enter a
+	# one-shot. A card no longer listed — its last copy placed, or
+	# filtered away — takes the cursor with it; the next arrow starts
+	# again from the page's first card.
+	_cursor = -1
+	if held != null:
+		var shown := _visible_entries()
+		for i in shown.size():
+			if shown[i][0].card_name == held.card_name:
+				_cursor = i
+				break
 	_rebuild()
 
 
@@ -738,6 +795,149 @@ func copies_shown() -> int:
 func first_entry() -> CardData:
 	var shown := _visible_entries()
 	return shown[0][0] if not shown.is_empty() else null
+
+
+## [QoL] Where the keyboard cursor stands in the list, or -1.
+func cursor_index() -> int:
+	return _cursor
+
+
+## [QoL] The card under the keyboard cursor, or null.
+func cursor_entry() -> CardData:
+	var shown := _visible_entries()
+	return shown[_cursor][0] if _cursor >= 0 and _cursor < shown.size() else null
+
+
+## [QoL] Stand the keyboard cursor on card [param index] of the list
+## (-1 clears it), turning the page so it is in view, and ring it.
+func set_cursor(index: int) -> void:
+	_cursor = clampi(index, -1, _visible_entries().size() - 1)
+	if _cursor >= 0:
+		_reveal(_cursor)
+	_place_cursor()
+
+
+## Is card [param index] on the page now showing?
+func _on_page(index: int) -> bool:
+	return index >= _offset and index < _offset + _shown
+
+
+## Turn the page the shortest way that puts card [param index] on it —
+## nothing when it already is.
+func _reveal(index: int) -> void:
+	if index < _offset:
+		scroll_to(index)
+	elif index >= _offset + page_size():
+		# The lowest step multiple that still shows it: `scroll_to` floors
+		# to a step, and this is one step less than a page short of it.
+		scroll_to(index - page_size() + scroll_step())
+
+
+## Move the cursor AND show its card in the Showcase — the keyboard's
+## way of *"whatever card the mouse cursor is hovering over"*. After the
+## page has turned, so the Showcase ends on the cursor's card and not on
+## whatever slid under the pointer ([method _settle_hover]).
+func _step_to(index: int) -> void:
+	set_cursor(index)
+	var data := cursor_entry()
+	if data != null:
+		card_hovered.emit(data)
+
+
+## [QoL] Is [param event] a key the surfaces answer — one of
+## [constant KEYS], without Ctrl, Alt or Meta on it (Shift is Shift+Enter's)?
+static func owns_key(event: InputEvent) -> bool:
+	if not (event is InputEventKey):
+		return false
+	var key := event as InputEventKey
+	return key.keycode in KEYS and not key.ctrl_pressed \
+		and not key.alt_pressed and not key.meta_pressed
+
+
+## [QoL] THE KEYS, answered while this surface has the keyboard — and
+## when the screen hands them over because nothing else reads them
+## ([method DeckBuilderScreen._input]). True when the key was one of
+## [constant KEYS]; false hands it back.
+##
+## THE ARROWS move the cursor by one card across the flow and by one
+## STEP along the bar — a row on the Deck, a column on the Inventory — so
+## on the one-row Inventory all four move one card and Left/Right are
+## the pair that reads naturally. An arrow with no cursor on the page
+## (none yet, or one the type-ahead has scrolled away from) stands it on
+## the page's first card and moves nothing: the keys act on what is in
+## view. PageUp/PageDown turn the page and carry the cursor with it, in
+## its slot; Home and End go to the ends of the list. Without a cursor
+## the paging keys scroll as they always did — the manual's list-window
+## words hold: *"You can use the up and down arrow keys and the scroll
+## bar to move through the list."*
+##
+## ENTER is a click on the ringed card, Shift+Enter a Shift-click
+## ([signal card_shifted]); with no cursor on the page it takes the
+## page's first card, the type-ahead's own rule (*"what you see first is
+## what you get"*). ONCE PER PRESS: a held arrow may run along the row,
+## a held Enter must not pour copies in.
+func handle_key(event: InputEventKey) -> bool:
+	if not event.pressed:
+		return false
+	var count := _visible_entries().size()
+	match event.keycode:
+		KEY_ENTER, KEY_KP_ENTER:
+			if event.is_echo() or count == 0:
+				return true
+			if not _on_page(_cursor):
+				_step_to(_offset)
+			var data := cursor_entry()
+			if data == null:
+				return true
+			if event.shift_pressed:
+				card_shifted.emit(data.card_name)
+			else:
+				card_activated.emit(data.card_name)
+			return true
+		KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN:
+			if count == 0:
+				return true
+			if not _on_page(_cursor):
+				_step_to(_offset)
+				return true
+			var along := scroll_step()
+			var delta := 0
+			match event.keycode:
+				KEY_LEFT:
+					delta = -1 if _vertical_bar else -along
+				KEY_RIGHT:
+					delta = 1 if _vertical_bar else along
+				KEY_UP:
+					delta = -along if _vertical_bar else -1
+				KEY_DOWN:
+					delta = along if _vertical_bar else 1
+			_step_to(clampi(_cursor + delta, 0, count - 1))
+			return true
+		KEY_PAGEUP, KEY_PAGEDOWN:
+			var was_on_page := _on_page(_cursor)
+			var before := _offset
+			if event.keycode == KEY_PAGEUP:
+				page_up()
+			else:
+				page_down()
+			if was_on_page:
+				_step_to(clampi(_cursor + _offset - before, 0, count - 1))
+			elif _cursor >= 0 and count > 0:
+				_step_to(_offset)
+			return true
+		KEY_HOME:
+			if _cursor >= 0 and count > 0:
+				_step_to(0)
+			else:
+				home()
+			return true
+		KEY_END:
+			if _cursor >= 0 and count > 0:
+				_step_to(count - 1)
+			else:
+				end()
+			return true
+	return false
 
 
 ## The page's live widgets, in display order. For tests and for the
@@ -795,6 +995,7 @@ func _rebuild(shifted := 0) -> void:
 	_columns = cols
 	queue_redraw()
 	var shown: int = mini(per_page, maxi(0, entries.size() - _offset))
+	_shown = shown
 	for i in maxi(shown, _cells.size()):
 		if i >= shown:
 			_cells[i].visible = false
@@ -815,6 +1016,7 @@ func _rebuild(shifted := 0) -> void:
 			lead.y + row * (_cell.y + GAP.y))
 		cell.visible = true
 	_settle_hover(shown)
+	_place_cursor()
 
 
 ## HAND THE HOVER TO WHOEVER IS IN THE SLOT NOW. The pointer has not moved,
@@ -835,6 +1037,36 @@ func _settle_hover(shown: int) -> void:
 	if cell.data != null and cell.card_name != _hovered_card:
 		_hovered_card = cell.card_name
 		card_hovered.emit(cell.data)
+
+
+## The ring itself — see [constant RING_WIDTH].
+func _make_cursor_ring() -> Panel:
+	var ring := Panel.new()
+	var box := StyleBoxFlat.new()
+	box.draw_center = false
+	box.border_color = MiniCard.HIGHLIGHT_COLORS[MiniCard.Highlight.OPTIONAL]
+	box.set_border_width_all(RING_WIDTH)
+	box.set_corner_radius_all(3)
+	ring.add_theme_stylebox_override("panel", box)
+	ring.size = _cell + Vector2(RING_OUT, RING_OUT) * 2.0
+	ring.z_index = RING_Z
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.visible = false
+	return ring
+
+
+## Put the ring on the cursor's card, or hide it: no cursor, the cursor
+## off the page, or the keyboard elsewhere.
+func _place_cursor() -> void:
+	if _cursor_ring == null:
+		return
+	var slot := _cursor - _offset
+	if _cursor < 0 or not _on_page(_cursor) or slot >= _cells.size() \
+			or not has_focus():
+		_cursor_ring.visible = false
+		return
+	_cursor_ring.position = _cells[slot].position - Vector2(RING_OUT, RING_OUT)
+	_cursor_ring.visible = true
 
 
 ## SLIDE THE PAGE'S WIDGETS ALONG INSTEAD OF REFILLING THEM — the second
@@ -1334,7 +1566,10 @@ func _on_cell_input(event: InputEvent, cell: Cell) -> void:
 			accept_event()
 		return
 	if event.button_index == MOUSE_BUTTON_LEFT:
-		grab_focus()      # so the arrow keys page the surface just clicked
+		grab_focus()      # so the arrow keys walk the surface just clicked
+		# [QoL] and the click stands the cursor on the card, BEFORE the
+		# signal: the relist the signal causes keeps a cursor by name.
+		set_cursor(_offset + _cells.find(cell))
 		# [QoL] SHIFT sends the card to the other pile instead of moving it
 		# in or out of this one — see [signal card_shifted].
 		if event.shift_pressed:
@@ -1343,11 +1578,14 @@ func _on_cell_input(event: InputEvent, cell: Cell) -> void:
 			card_activated.emit(cell.card_name)
 		accept_event()
 	elif event.button_index == MOUSE_BUTTON_RIGHT:
+		grab_focus()
+		set_cursor(_offset + _cells.find(cell))
 		card_bulk.emit(cell.card_name)
 		accept_event()
 
 
-## The wheel scrolls one step of cards on either surface.
+## The wheel scrolls one step of cards on either surface; the keys walk
+## the cursor.
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -1359,24 +1597,10 @@ func _gui_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			grab_focus()
 		return
-	# The manual's own list-window keys: *"You can use the up and down
-	# arrow keys and the scroll bar to move through the list."*
-	if event is InputEventKey and event.pressed:
-		match event.keycode:
-			KEY_LEFT, KEY_UP:
-				scroll_by(-1)
-			KEY_RIGHT, KEY_DOWN:
-				scroll_by(1)
-			KEY_PAGEUP:
-				page_up()
-			KEY_PAGEDOWN:
-				page_down()
-			KEY_HOME:
-				home()
-			KEY_END:
-				end()
-			_:
-				return
+	# The manual's own list-window keys — *"You can use the up and down
+	# arrow keys and the scroll bar to move through the list."* — and the
+	# [QoL] cursor's: see [method handle_key].
+	if event is InputEventKey and owns_key(event) and handle_key(event):
 		accept_event()
 
 

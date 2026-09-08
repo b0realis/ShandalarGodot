@@ -1713,7 +1713,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4840 tests / ~134 000 asserts, ~300 s
+├── tests/                   GUT suite — 4870 tests / ~134 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2579,6 +2579,22 @@ shandalar/
 │    a gone deck / an emptied pool / nonsense in the file falling back
 │    to the control's default, a refused deck not remembered, and
 │    forget_choices leaving no trace;
+│    tests/ui/test_deck_keyboard.gd — the keyboard cursor (2026-09-08):
+│    the first arrow selects the page's first card, Left/Right walk it a
+│    card at a time and stop at the ends, Up/Down are the same walk on the
+│    one-row strip and a ROW on the deck, the ring is on the cursor's card
+│    (half a gap out, the duel's OPTIONAL ink, RING_Z, IGNORE) and only
+│    while the surface has the keyboard, walking off either edge turns
+│    the page by a step, a cursor the type-ahead scrolled away from is
+│    not dragged back to, End/Home and PageDown/PageUp carry it, the
+│    Showcase follows it, a click stands it; Enter adds the ringed card
+│    (keypad Enter too), a held Enter adds once, no ring takes the page's
+│    first, Shift+Enter is the sideboard, Enter on the Deck removes and
+│    the relist keeps the ring by name; and WHO GETS THE KEYS driven
+│    through Viewport.push_input — nothing focused, a focused stone (the
+│    arrow goes to the strip, not the next stone; Enter adds and leaves
+│    the stone alone), the type-ahead keeping its own keys, click-then-
+│    Enter, an open dialog and the Q menu keeping theirs;
 │    tests/ui/test_deck_scroll.gd — the two scroll arrows and the corner
 │    count: an arrow at each end running the full height, the bar and the
 │    cards both INSIDE them, the triangle MOUSE_FILTER_IGNORE, one press
@@ -3803,7 +3819,27 @@ shandalar/
 │   │   │                      CENTRE, the one spot the count disc (bottom
 │   │   │                      left) and the P/T (bottom right) leave
 │   │   │                      free; `rarity_key` is DeckStats.rarity_tier,
-│   │   │                      so the letter and the Stats bars agree
+│   │   │                      so the letter and the Stats bars agree.
+│   │   │                      **[QoL]** THE KEYBOARD CURSOR (2026-09-08,
+│   │   │                      `handle_key`): the arrows walk a ring along
+│   │   │                      the cards — one card across the flow, one
+│   │   │                      step along the bar — and the page turns the
+│   │   │                      shortest way that keeps it in view;
+│   │   │                      PageUp/PageDown carry it in its slot, Home/
+│   │   │                      End go to the ends, and without a ring the
+│   │   │                      paging keys scroll as before. Enter is a
+│   │   │                      click on the ringed card, Shift+Enter a
+│   │   │                      Shift-click, once per press; no ring on the
+│   │   │                      page and it takes the page's first card. A
+│   │   │                      click stands the ring on its card, the
+│   │   │                      Showcase follows it, `set_entries` keeps it
+│   │   │                      by NAME across the Deck's relist on every
+│   │   │                      add. The ring is the duel's "you may" yellow
+│   │   │                      at its "chosen" width, half a gap outside
+│   │   │                      the card, z above the pile marker, shown
+│   │   │                      only while the surface has the keyboard.
+│   │   │                      `owns_key`/`KEYS` name the keys for the
+│   │   │                      screen's routing (DeckBuilderScreen._input)
 │   │   ├── proxy_face.gd    class ProxyFace — **[QoL]** THE PROXY CARD,
 │   │   │                      DRAWN: a card-shaped, card-sized piece of
 │   │   │                      plain paper carrying the name and the word
