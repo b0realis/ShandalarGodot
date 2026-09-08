@@ -8885,6 +8885,16 @@ connection from 'root:<Window#…>', Signal: 'focus_entered', callable:
   exported binary (the decks ride in the .pck). `EloLedger.save` now
   makes the ledger's folder first, as DeckLab/README.md always said
   ("created on first rated run").
+- **Found on the way, twice.** The rebuild after the fix wrote a card
+  art zip of 91 MB where 184 MB was due: 897 pictures of 0 bytes. The
+  packs were staged under `$TMPDIR` — a tmpfs, that evening nearly
+  full of scratch — and the copy's errors were dropped (`cp … 2>/dev/null
+  || true`), so "No space left on device" went unheard and the zip was
+  made from the stumps. `build_release.sh` now stages beside the build
+  output on disk (`../shandalar-build/tmp/`), a copy that fails fails
+  the build, and a 0-byte file in a stage does too (`stage_copy`). The
+  play copy of 20:12 that evening carried the short zip; the one after
+  it does not (1794 files, none empty, 184 MB).
 - **Gate.** Re-exported; the exported game boots headless with 0
   error lines; the repro project's flow under the debug template prints
   0; the owner confirms on the other machine from a terminal — that is

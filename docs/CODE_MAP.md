@@ -1885,6 +1885,12 @@ shandalar/
 │                              where nothing is uploaded, then copies
 │                              the card art into the staged folder's
 │                              skin/ too so it is the owner's play copy.
+│                              The packs are staged on disk beside the
+│                              output (../shandalar-build/tmp/), never
+│                              under $TMPDIR, and a copy that fails or
+│                              leaves a 0-byte file fails the build
+│                              (stage_copy; 2026-09-08, when a full
+│                              tmpfs made a card art zip of stumps).
 │                              zip_stage() is the two zips of a stage;
 │                              guard_stage() greps a stage for the
 │                              builder's home path first and fails the

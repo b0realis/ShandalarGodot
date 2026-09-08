@@ -141,18 +141,43 @@ LOG="${TMPDIR:-/tmp}/shandalar-export.log"
 # the skin zip beside the package as a download of its own, the card
 # art zip under ../shandalar-build/local/ where nothing is uploaded
 # from — and copied to where a build wants it.
+# THE STAGE IS ON DISK, AND A SHORT COPY FAILS THE BUILD (2026-09-08).
+# The packs were staged under $TMPDIR — a tmpfs here — with the copy's
+# errors dropped (`2>/dev/null || true`); the evening /tmp was nearly
+# full, `cp` stopped at "No space left on device" unheard, and the
+# card art zip shipped 897 pictures of 0 bytes (91 MB where 184 MB was
+# due). Now the stage is a folder beside the build output, on the same
+# disk as everything else, the copy's error is the build's, and a
+# 0-byte file in the stage is one too — a picture is never empty.
+stage_copy() {  # stage_copy SRC_DIR STAGE_DIR — copy SRC_DIR/. into STAGE_DIR, whole or not at all
+	local src="$1" stage="$2" short
+	if ! cp -RLp "$src/." "$stage/" 2> "$stage.cp.log"; then
+		echo "BUILD FAILED: could not stage $src (disk full?):" >&2
+		tail -5 "$stage.cp.log" >&2
+		rm -rf "$stage" "$stage.cp.log"; exit 1
+	fi
+	rm -f "$stage.cp.log"
+	find "$stage" -name '.gdignore' -delete
+	short="$(find "$stage" -type f -size 0 | head -3)"
+	if [ -n "$short" ]; then
+		echo "BUILD FAILED: empty files in the staged copy of $src (disk full?):" >&2
+		echo "$short" >&2
+		rm -rf "$stage"; exit 1
+	fi
+}
+
 skin_zip() {  # skin_zip DEST_FILE — the 1997 material, or nothing without assets/original
 	local out="$1" stage log
-	log="${TMPDIR:-/tmp}/shandalar-skin-zip.log"
+	log="$WORK_DIR/shandalar-skin-zip.log"
 	rm -f "$out"
 	[ -d assets/original ] || return 0
-	mkdir -p "$(dirname "$out")"
-	stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-skin.XXXXXX")"
-	cp -RLp assets/original/. "$stage/" 2>/dev/null || true
+	mkdir -p "$(dirname "$out")" "$WORK_DIR"
+	stage="$(mktemp -d "$WORK_DIR/shandalar-skin.XXXXXX")"
+	stage_copy assets/original "$stage"
 	# .import sidecars and the checkout's .gdignore are the editor's, not
 	# the skin's; any pictures in the dev skin folder belong to the
 	# second zip.
-	find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
+	find "$stage" -name '*.import' -delete
 	rm -rf "$stage/cardart"
 	python3 tools/mtg_assets.py --from-skin "$stage" --out "$out" > "$log" 2>&1 \
 		|| { echo "BUILD FAILED: the skin zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
@@ -162,13 +187,13 @@ skin_zip() {  # skin_zip DEST_FILE — the 1997 material, or nothing without ass
 
 cardart_zip() {  # cardart_zip DEST_FILE — the card pictures, or nothing without assets/cardart
 	local out="$1" stage log
-	log="${TMPDIR:-/tmp}/shandalar-cardart-zip.log"
+	log="$WORK_DIR/shandalar-cardart-zip.log"
 	rm -f "$out"
 	[ -d assets/cardart ] || return 0
-	mkdir -p "$(dirname "$out")"
-	stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-cardart.XXXXXX")"
-	cp -RLp assets/cardart/. "$stage/" 2>/dev/null || true
-	find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
+	mkdir -p "$(dirname "$out")" "$WORK_DIR"
+	stage="$(mktemp -d "$WORK_DIR/shandalar-cardart.XXXXXX")"
+	stage_copy assets/cardart "$stage"
+	find "$stage" -name '*.import' -delete
 	python3 tools/mtg_assets.py --from-cardart "$stage" --out "$out" > "$log" 2>&1 \
 		|| { echo "BUILD FAILED: the card art zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
 	rm -rf "$stage"
@@ -176,9 +201,11 @@ cardart_zip() {  # cardart_zip DEST_FILE — the card pictures, or nothing witho
 }
 
 # Where the packs are built: the skin zip with the package, the card art
-# zip apart from everything that is uploaded.
+# zip apart from everything that is uploaded, and the staging folder
+# beside them on disk (stage_copy above; each stage removed once zipped).
 PKG_DIR="$(cd "$(dirname "$OUT")" && pwd)/pkg"
 LOCAL_DIR="$(cd "$(dirname "$OUT")" && pwd)/local"
+WORK_DIR="$(cd "$(dirname "$OUT")" && pwd)/tmp"
 
 # NOTHING OF THIS MACHINE IN A PACKAGE. A staged folder is searched for
 # the builder's home path before it is zipped — a text file written
