@@ -13,6 +13,7 @@ each is told which name to take beside the game.
 
 import io
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -62,6 +63,21 @@ class TestWriteZip(unittest.TestCase):
                              ["skin/cardart/ley_druid.png", "skin/cardart/serra_angel.jpg"])
         self.assertIn("skin/cardart.zip", report.getvalue())
         self.assertNotIn("skin/original_skin.zip", report.getvalue())
+
+    def test_a_tar_gz_name_writes_a_tar_gz_of_the_same_entries(self):
+        art = self._folder("cardart2", {"serra_angel.jpg": b"jpg", "ley_druid.png": b"png"})
+        out = self.dir / "b.tar.gz"
+        report = io.StringIO()
+        with redirect_stdout(report):
+            self.assertEqual(mtg_assets.write_zip(art, out, inner="cardart"), 0)
+        with tarfile.open(out, "r:gz") as tf:
+            self.assertEqual(sorted(m.name for m in tf.getmembers() if m.isfile()),
+                             ["skin/cardart/ley_druid.png", "skin/cardart/serra_angel.jpg"])
+            self.assertEqual(tf.extractfile("skin/cardart/ley_druid.png").read(), b"png")
+        self.assertIn("repacks it into a zip once, as\n  b.zip\n", report.getvalue())
+        self.assertNotIn("cp b.tar.gz", report.getvalue(), "not for beside the game")
+        self.assertTrue(mtg_assets.is_tar_name("Skin.TGZ"))
+        self.assertFalse(mtg_assets.is_tar_name("skin.zip"))
 
     def test_an_empty_folder_is_refused(self):
         empty = self.dir / "empty"

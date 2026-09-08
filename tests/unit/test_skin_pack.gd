@@ -24,6 +24,10 @@ const OUTSIDE := SCRATCH + "/outside.zip"
 const CLIMBING := SCRATCH + "/climbing.zip"
 const EMPTY := SCRATCH + "/empty.zip"
 const NOT_A_ZIP := SCRATCH + "/not_a_zip.zip"
+## Card pictures as a tar.gz — the same door, another wrapping.
+const ART_TAR := SCRATCH + "/art.tar.gz"
+## The tar writer lives with the tar's own tests.
+const TarTest := preload("res://tests/unit/test_tar_pack.gd")
 ## Where the skins folder's zips wait while a test stores its own there.
 const ASIDE := SCRATCH + "/aside"
 ## The card folder, pointed at scratch through its own key so a pack the
@@ -71,7 +75,7 @@ func after_each() -> void:
 			Settings.clear_value(key)
 		else:
 			Settings.set_value(key, _saved[key])
-	for folder in [PACKS, ASIDE, SCRATCH + "/old_skin", SCRATCH + "/theirs"]:
+	for folder in [PACKS, ASIDE, SCRATCH + "/old_skin", SCRATCH + "/theirs", SCRATCH + "/beside"]:
 		if not DirAccess.dir_exists_absolute(folder):
 			continue
 		for name in DirAccess.get_files_at(folder):
@@ -119,6 +123,10 @@ func _write_probe() -> void:
 		"skin/music/README.txt": "not a tune",
 	})
 	_zip(ART, {"skin/cardart/zz_probe_card.png": _png()})
+	var tar := FileAccess.open(ART_TAR, FileAccess.WRITE)
+	tar.store_buffer(TarTest._tar([["skin/cardart/zz_probe_card.png", _png()]])
+		.compress(FileAccess.COMPRESSION_GZIP))
+	tar.close()
 	_zip(BOTH, {"skin/zz_pack_probe.png": _png(),
 		"skin/cardart/zz_probe_card.png": _png()})
 	_zip(OUTSIDE, {"skin/zz_x.png": _png(), "readme.txt": "loose"})
@@ -395,6 +403,83 @@ func test_a_dropped_card_art_zip_is_kept_as_the_players_card_art() -> void:
 	elsewhere.queue_free()
 
 
+## The owner: *"Can we use also tar.gz not only zip? As an alternative
+## for card packs and original skin file?"* — a tar.gz dropped is
+## repacked into a zip of its name in the folder of its kind, a chunk a
+## frame, and then taken as the zip would have been.
+func test_a_dropped_tar_gz_is_repacked_into_the_zip_of_its_name() -> void:
+	var was := get_tree().current_scene
+	var elsewhere := Node.new()
+	get_tree().root.add_child(elsewhere)
+	get_tree().current_scene = elsewhere
+	SkinPack._on_files_dropped(PackedStringArray([ProjectSettings.globalize_path(ART_TAR)]))
+	assert_true(SkinPack.busy(), "the repack is under way")
+	assert_eq(SkinPack.transfer_line(0.5), "Repacking art.tar.gz… 50%")
+	assert_eq(SkinPack.transfer_line(-1.0), "Repacking art.tar.gz…")
+	await wait_for_signal(SkinPack.changed, 3.0)
+	assert_false(SkinPack.busy())
+	assert_true(FileAccess.file_exists(PACKS + "/art.zip"),
+		"a zip under the tar's name, in the card folder by what it holds")
+	assert_false(FileAccess.file_exists(SkinPack.REPACKING), "nothing in flight left")
+	assert_false(FileAccess.file_exists(PACKS + "/art.tar.gz"), "the tar is not copied")
+	assert_true(FileAccess.file_exists(ART_TAR), "the player's own tar is theirs")
+	assert_has(SkinPack.mounted, PACKS + "/art.zip")
+	assert_eq(String(SkinPack.describe("cardart")["source"]), "yours")
+	assert_not_null(SkinPack.notice())
+	if SkinPack.notice() != null:
+		var head := _first_label(SkinPack.notice())
+		assert_eq(head.text if head != null else "", "The card art is in.")
+	get_tree().current_scene = was
+	elsewhere.queue_free()
+
+
+## A tar read in from a browser lands under a passing name in the skins
+## folder ([method SkinPack._take]); it is the game's to delete once
+## the zip is made of it.
+func test_a_tar_read_in_from_the_page_is_repacked_and_the_tar_deleted() -> void:
+	var landed := SkinPack.ARRIVING
+	DirAccess.make_dir_recursive_absolute(SkinPack.USER_DIR)
+	DirAccess.copy_absolute(ART_TAR, landed)
+	assert_true(SkinPack._take(landed, "Cards Of Mine.tgz"))
+	await wait_for_signal(SkinPack.changed, 3.0)
+	assert_true(FileAccess.file_exists(PACKS + "/Cards Of Mine.zip"),
+		"the browser's name, with .zip for its tail")
+	assert_false(FileAccess.file_exists(landed), "the tar read in is gone")
+	assert_false(FileAccess.file_exists(SkinPack.REPACKING))
+
+
+func test_a_dropped_tar_that_is_no_skin_is_refused_and_leaves_nothing() -> void:
+	var loose := SCRATCH + "/loose.tar"
+	var f := FileAccess.open(loose, FileAccess.WRITE)
+	f.store_buffer(TarTest._tar([["skin/zz.png", _png()], ["readme.txt", "loose"]]))
+	f.close()
+	SkinPack._on_files_dropped(PackedStringArray([ProjectSettings.globalize_path(loose)]))
+	assert_true(SkinPack.busy())
+	await wait_frames(4)
+	assert_false(SkinPack.busy())
+	assert_false(FileAccess.file_exists(SkinPack.REPACKING), "the half zip is deleted")
+	assert_eq(SkinPack.cardpacks().size(), 0, "nothing kept")
+	assert_not_null(SkinPack.notice(), "and the player is told")
+	if SkinPack.notice() != null:
+		var head := _first_label(SkinPack.notice())
+		assert_eq(head.text if head != null else "", "loose.tar is not a skin.")
+		assert_null(SkinPack.notice().find_child("Restart", true, false))
+
+
+func test_a_tar_cut_short_is_refused_with_its_reason() -> void:
+	var short := SCRATCH + "/short.tar.gz"
+	var whole: PackedByteArray = TarTest._tar([["skin/cardart/zz.png", _png()]])
+	var f := FileAccess.open(short, FileAccess.WRITE)
+	f.store_buffer(whole.slice(0, 600).compress(FileAccess.COMPRESSION_GZIP))
+	f.close()
+	SkinPack._on_files_dropped(PackedStringArray([ProjectSettings.globalize_path(short)]))
+	await wait_frames(4)
+	assert_false(SkinPack.busy())
+	assert_false(FileAccess.file_exists(SkinPack.REPACKING))
+	assert_eq(SkinPack.cardpacks().size(), 0)
+	assert_not_null(SkinPack.notice())
+
+
 func test_forgetting_deletes_the_players_zips_and_offers_a_restart() -> void:
 	DirAccess.make_dir_recursive_absolute(SkinPack.USER_DIR)
 	DirAccess.copy_absolute(GOOD, SkinPack.USER_ZIP)
@@ -469,7 +554,24 @@ func test_a_drop_without_a_zip_does_nothing() -> void:
 	SkinPack._on_files_dropped(PackedStringArray([
 		ProjectSettings.globalize_path(SCRATCH + "/notes.txt")]))
 	assert_false(FileAccess.file_exists(SkinPack.USER_ZIP))
+	assert_false(SkinPack.busy(), "a file that is neither zip nor tar starts nothing")
 	assert_null(SkinPack.notice())
+
+
+func test_a_file_named_as_a_tar_that_is_none_is_said_so() -> void:
+	var noise := SCRATCH + "/noise.tar.gz"
+	var f := FileAccess.open(noise, FileAccess.WRITE)
+	f.store_string("this is no tar at all")
+	f.close()
+	SkinPack._on_files_dropped(PackedStringArray([ProjectSettings.globalize_path(noise)]))
+	assert_false(SkinPack.busy(), "nothing to repack")
+	assert_not_null(SkinPack.notice())
+	if SkinPack.notice() != null:
+		var head := _first_label(SkinPack.notice())
+		assert_eq(head.text if head != null else "", "noise.tar.gz is not a skin.")
+		var lines := SkinPack.notice().find_children("*", "Label", true, false)
+		assert_true(lines.size() > 1 and String(lines[1].text).begins_with(
+			"Is not a tar the game can read."), "the reason")
 
 
 # ------------------------------------------------------- the options rows --
@@ -567,6 +669,73 @@ func test_the_skin_folder_instead_of_the_zip_is_what_the_row_says() -> void:
 	assert_eq(String(about["name"]), GamePaths.shown(SCRATCH))
 	assert_eq(int(about["files"]), SkinPack.files_at(SCRATCH), "the probes lie flat in it")
 	assert_true(int(about["files"]) >= 7)
+
+
+func test_the_file_box_offers_tars_beside_zips() -> void:
+	assert_has(SkinPack.IN_FLIGHT, "repacking.zip", "a repack in flight is never listed")
+	assert_string_contains(SkinPack.PICK_JS, ".tar.gz", "the browser's box too")
+
+
+## A TAR BESIDE THE GAME, under the zip's name (the owner: *"the design
+## should be that we can use and read either archive"*): at boot, each
+## kind with no zip mounted whose tar sits there is repacked into the
+## player's folder of its kind, one after the other, the tars left
+## where they were and not read again while the zips stand.
+func test_a_tar_beside_the_game_is_repacked_once_into_the_players_folder() -> void:
+	var beside := SCRATCH + "/beside"
+	DirAccess.make_dir_recursive_absolute(beside)
+	var skin_tar := beside + "/original_skin.tgz"
+	TarTest._write(skin_tar, TarTest._tar([["skin/zz_beside_probe.txt", "probe"]])
+		.compress(FileAccess.COMPRESSION_GZIP))
+	# Card art in a plain tar over a chunk long, so its repack takes
+	# more than one frame.
+	var body := PackedByteArray()
+	body.resize(TarPack.CHUNK + 4096)
+	body.fill(0)
+	var art_tar := beside + "/cardart.tar"
+	TarTest._write(art_tar, TarTest._tar([["skin/cardart/zz_beside_card.png", body]]))
+	assert_eq(SkinPack.tar_beside("skin", beside), skin_tar, "the zip's name, a tar's tail")
+	assert_eq(SkinPack.tar_beside("cardart", beside), art_tar)
+	assert_eq(SkinPack.tar_beside("skin", ""), "", "nowhere beside a browser or the editor")
+	assert_eq(SkinPack.tar_beside("skin", SCRATCH), "", "none there")
+	# As at a boot with nothing mounted: the bookkeeping aside meanwhile.
+	var was_mounted := SkinPack.mounted.duplicate()
+	var was_reports := SkinPack._reports.duplicate()
+	SkinPack.mounted.clear()
+	SkinPack._reports.clear()
+	var was := get_tree().current_scene
+	var elsewhere := Node.new()
+	get_tree().root.add_child(elsewhere)
+	get_tree().current_scene = elsewhere
+	assert_true(SkinPack.repack_beside(beside), "the skin's tar first")
+	assert_true(SkinPack.busy())
+	assert_eq(SkinPack.transfer_line(-1.0), "Repacking original_skin.tgz…")
+	await wait_for_signal(SkinPack.changed, 3.0)
+	assert_true(FileAccess.file_exists(SkinPack.USER_ZIP),
+		"the skin under its default name, in the skins folder")
+	assert_false(Settings.has_value(GamePaths.KEY_SKIN_ZIP), "worn without a key, as the default")
+	assert_true(SkinPack.busy(), "the card art's tar follows")
+	assert_eq(SkinPack.transfer_line(-1.0), "Repacking cardart.tar…")
+	await wait_until(func() -> bool: return not SkinPack.busy(), 3.0)
+	assert_false(SkinPack.busy())
+	assert_true(FileAccess.file_exists(PACKS + "/cardart.zip"), "the card art in the card folder")
+	assert_true(SkinPack.has("skin") and SkinPack.has("cardart"), "both mounted")
+	assert_false(FileAccess.file_exists(SkinPack.REPACKING), "nothing in flight left")
+	assert_true(FileAccess.file_exists(skin_tar) and FileAccess.file_exists(art_tar),
+		"the tars are left where they were")
+	assert_false(SkinPack.repack_beside(beside), "with both zips standing they are not read again")
+	assert_false(SkinPack.busy())
+	var now := SkinPack.mounted.duplicate()
+	SkinPack.mounted.clear()
+	SkinPack.mounted.append_array(was_mounted)
+	for path in now:
+		if not SkinPack.mounted.has(path):
+			SkinPack.mounted.append(path)
+	for path in was_reports:
+		if not SkinPack._reports.has(path):
+			SkinPack._reports[path] = was_reports[path]
+	get_tree().current_scene = was
+	elsewhere.queue_free()
 
 
 func test_nothing_is_in_flight_under_the_editor() -> void:

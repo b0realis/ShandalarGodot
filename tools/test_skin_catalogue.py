@@ -15,6 +15,7 @@ rather than going undocumented.
 import io
 import struct
 import sys
+import tarfile
 import tempfile
 import unittest
 import wave
@@ -161,6 +162,27 @@ class TestCheckingASkin(unittest.TestCase):
                                     "skin/portraits/x.png": png_bytes(2, 2),
                                     "skin/": b""})
         self.assertEqual(cat.names_in(path), ["card_back.png", "portraits/x.png"])
+
+    def test_a_tar_gz_is_read_as_the_zip_it_becomes(self):
+        path = self.dir / "ok.tar.gz"
+        with tarfile.open(path, "w:gz") as tf:
+            for entry, body in {"./skin/card_back.png": png_bytes(2, 2),
+                                "skin/portraits/x.png": png_bytes(2, 2)}.items():
+                info = tarfile.TarInfo(entry)
+                info.size = len(body)
+                tf.addfile(info, io.BytesIO(body))
+            folder = tarfile.TarInfo("skin/")
+            folder.type = tarfile.DIRTYPE
+            tf.addfile(folder)
+        self.assertEqual(cat.names_in(path), ["card_back.png", "portraits/x.png"])
+        loose = self.dir / "loose.tar"
+        with tarfile.open(loose, "w") as tf:
+            info = tarfile.TarInfo("readme.txt")
+            info.size = 1
+            tf.addfile(info, io.BytesIO(b"x"))
+        with redirect_stdout(io.StringIO()):
+            self.assertIsNone(cat.names_in(loose))
+        self.assertIsNone(cat.names_in(self.dir / "not_there.tar.gz"))
 
     def test_an_entry_outside_skin_refuses_the_zip(self):
         path = self._zip("bad.zip", {"skin/card_back.png": b"", "readme.txt": b""})

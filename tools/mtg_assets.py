@@ -47,6 +47,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -78,7 +79,7 @@ DECODERS = ["ffmpeg", "gst-launch-1.0"]
 ## checkout, meaningless in a shipped skin, and it was going into the
 ## archive until 2026-09-04 — `build_release.sh` had always stripped it and
 ## this path had not.
-ZIP_SKIP = (".import", ".DS_Store", "Thumbs.db")
+ZIP_SKIP = (".import", ".gdignore", ".DS_Store", "Thumbs.db")
 
 ## WHERE THE SOURCE MOVIES RIDE. The coin toss reaches the game as two
 ## sprite sheets, because neither Python nor Godot can decode the AVIs —
@@ -179,7 +180,10 @@ WHAT IT PRODUCES
 
   One zip, default name shandalar-art.zip, with a `skin/` folder inside.
   Unzip it beside the game's executable and the 1997 look appears
-  everywhere. Nothing else to configure.
+  everywhere. Nothing else to configure. Name --out with .tar.gz (or
+  .tgz) and a tar.gz is written instead — the game takes one at any of
+  its doors, beside the executable included, and repacks it into a zip
+  once, since only a zip can be mounted.
 
 WHAT IT DOES NOT PRODUCE
 
@@ -254,6 +258,22 @@ def run_importer(sources: list[Path], dest: Path, videos: bool) -> int:
     return subprocess.call(argv)
 
 
+TAR_TAILS = (".tar.gz", ".tgz")
+
+
+def tar_tail(name: str) -> str:
+    """The tar.gz tail of [param name], or "" when it has none."""
+    lower = name.lower()
+    for tail in TAR_TAILS:
+        if lower.endswith(tail):
+            return tail
+    return ""
+
+
+def is_tar_name(name: str) -> bool:
+    return tar_tail(name) != ""
+
+
 def write_zip(skin: Path, out: Path,
               extras: list[tuple[Path, str]] | None = None,
               inner: str = "") -> int:
@@ -267,7 +287,11 @@ def write_zip(skin: Path, out: Path,
     were expected (caught 2026-09-04 by comparing the count).
 
     [param inner] puts the folder's files under `skin/<inner>/` instead of
-    `skin/` — how a folder of card pictures becomes `cardart.zip`."""
+    `skin/` — how a folder of card pictures becomes `cardart.zip`.
+
+    A [param out] named `.tar.gz` or `.tgz` is written as a tar.gz with
+    the same entries (`tarfile`); the game repacks such a file into a
+    zip once, at the door (`game/tar_pack.gd`)."""
     files = sorted(p for p in skin.rglob("*")
                    if p.is_file() and not p.name.endswith(ZIP_SKIP))
     if not files:
@@ -277,18 +301,25 @@ def write_zip(skin: Path, out: Path,
     total = 0
     root = Path("skin") / inner if inner else Path("skin")
     names: list[Path] = []
-    # ZIP_DEFLATED on art that is already PNG/JPG buys a few percent, but
-    # it costs nothing to ask and some of these are raw sheets.
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-        for path in files:
-            names.append(root / path.relative_to(skin))
-            zf.write(path, names[-1])
-            total += path.stat().st_size
-        for path, name in (extras or []):
-            names.append(Path("skin") / name)
-            zf.write(path, names[-1])
-            total += path.stat().st_size
-    count = len(files) + len(extras or [])
+    entries: list[tuple[Path, Path]] = []
+    for path in files:
+        entries.append((path, root / path.relative_to(skin)))
+    for path, name in (extras or []):
+        entries.append((path, Path("skin") / name))
+    names = [name for _, name in entries]
+    if is_tar_name(out.name):
+        with tarfile.open(out, "w:gz", compresslevel=6) as tf:
+            for path, name in entries:
+                tf.add(path, str(name), recursive=False)
+                total += path.stat().st_size
+    else:
+        # ZIP_DEFLATED on art that is already PNG/JPG buys a few percent,
+        # but it costs nothing to ask and some of these are raw sheets.
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+            for path, name in entries:
+                zf.write(path, name)
+                total += path.stat().st_size
+    count = len(entries)
     size = out.stat().st_size
     # What the game will take it for: card art when every entry is a card
     # picture (the rule `SkinPack.inspect` applies), a skin otherwise.
@@ -296,7 +327,15 @@ def write_zip(skin: Path, out: Path,
         else "original_skin.zip"
     print(f"\narchive: {out}")
     print(f"  {count} files, {total / 1e6:.0f} MB of art"
-          f" -> {size / 1e6:.0f} MB zipped")
+          f" -> {size / 1e6:.0f} MB packed")
+    if is_tar_name(out.name):
+        zipped = out.name[:-len(tar_tail(out.name))] + ".zip"
+        print(f"\nA tar.gz: choose it in Options > Skin, or drop it onto the running")
+        print(f"game's window — the game repacks it into a zip once, as")
+        print(f"  {zipped}")
+        print(f"in the folder of its kind, and reads that. Beside the game the")
+        print(f"same: as skin/{shipped[:-4]}{tar_tail(out.name)} it is repacked at the first start.")
+        return 0
     print(f"\nPut it beside the game, AS IT IS, as skin/{shipped}:")
     print(f"  mkdir -p /path/to/the/game/skin && cp {out.name} /path/to/the/game/skin/{shipped}")
     print(f"…or choose it in Options > Skin, or drop it onto the running game's")
@@ -324,7 +363,9 @@ def main() -> int:
                         help="archive a folder of card pictures (fetch_card_art.py "
                              "--out DIR) as cardart.zip: skin/cardart/<name>.jpg")
     parser.add_argument("--out", default="shandalar-art.zip", metavar="FILE",
-                        help="archive to write (default: shandalar-art.zip)")
+                        help="archive to write (default: shandalar-art.zip; "
+                             "a .tar.gz name writes a tar.gz, which the game "
+                             "repacks into a zip once)")
     parser.add_argument("--keep", metavar="DIR",
                         help="keep the imported files here as well as zipping")
     parser.add_argument("--no-videos", action="store_true",

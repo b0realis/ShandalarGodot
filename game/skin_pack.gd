@@ -63,6 +63,25 @@ extends Node
 ## A zip that arrives while the game runs is mounted with replacement,
 ## so a second drop supersedes the first.
 ##
+## A TAR AT THE DOOR. The engine mounts zips alone, and a Linux hand
+## reaches for tar.gz (the owner: *"Can we use also tar.gz not only
+## zip? As an alternative for card packs and original skin file?"*): a
+## tar, plain or gzipped, that is chosen, dropped or picked is repacked
+## ONCE into a zip of the same name ([TarPack], a chunk a frame so the
+## screen stays alive, the transfer line saying "Repacking…") and then
+## taken exactly as the zip would have been — by content, so a refusal
+## comes in the same words, naming the tar. A tar is known by its BYTES
+## (a zip named `.tar.gz` is a zip); one named as a tar whose bytes are
+## none is refused ([const NOT_A_TAR]), not ignored. The player's own
+## tar is left where it was; one a browser read in is deleted with the
+## zip made. Beside the game too: where `skin/original_skin.zip` and
+## `skin/cardart.zip` are looked for, a tar under either name (with a
+## tar's tail) is taken the same way at boot when no zip of its kind is
+## mounted — repacked once into the player's folder of that kind
+## ([method repack_beside]), from where every later start mounts it,
+## the tar read no more while that zip stands. The shipped packs stay
+## zips: the game itself repacks nothing it ships.
+##
 ## THE MOMENT ONE ARRIVES. Mounting is instant, but two dozen classes
 ## keep textures they derived from the skin they saw at start
 ## ([MiniCard]'s masks and stripes, [FilterBar]'s cells, [SetBadges]…),
@@ -104,7 +123,7 @@ const USER_ZIP := USER_DIR + "/" + FILE_NAME
 ## zips; [method _migrate] moves them out once.
 const OLD_USER_DIR := "user://skin"
 ## Names in the skins folder that are a transfer, never a skin.
-const IN_FLIGHT: Array[String] = ["fetching.zip", "arriving.zip"]
+const IN_FLIGHT: Array[String] = ["fetching.zip", "arriving.zip", "repacking.zip"]
 ## Every entry inside a valid zip starts with this; every entry of a
 ## card art zip with the second.
 const PREFIX := "skin/"
@@ -127,6 +146,10 @@ const PICK_CHUNK := 8 << 20
 ## read into the second name too.
 const FETCHING := USER_DIR + "/fetching.zip"
 const ARRIVING := USER_DIR + "/arriving.zip"
+## Where a tar is written out as a zip while it is read ([TarPack]).
+const REPACKING := USER_DIR + "/repacking.zip"
+## Said of a file named as a tar whose bytes are none.
+const NOT_A_TAR := "is not a tar the game can read"
 ## The page-side half of the browser's chooser: an `<input type=file>`
 ## opened for the player, its file read whole into `window.shandalarPick`
 ## as a Uint8Array, which [method _read_pick] then pulls across a slice
@@ -137,7 +160,7 @@ const PICK_JS := """
 	window.shandalarPick = {state: "open"};
 	var input = document.createElement("input");
 	input.type = "file";
-	input.accept = ".zip,application/zip";
+	input.accept = ".zip,.tar.gz,.tgz,.tar,application/zip,application/gzip,application/x-tar";
 	input.style.display = "none";
 	document.body.appendChild(input);
 	var done = function (result) {
@@ -180,6 +203,16 @@ var _pick_name := ""
 var _pick_size := 0
 var _pick_offset := 0
 var _pick_file: FileAccess = null
+## A tar being repacked into a zip, the name the player knows it by,
+## and whether the tar itself is the game's to delete afterwards (one
+## read in from a browser is; one the player chose or dropped is theirs).
+var _repack: TarPack = null
+var _repack_shown := ""
+var _repack_source := ""
+var _repack_disposable := false
+## The folder beside the game a boot-time repack came from, so the next
+## kind's tar there is taken when this one is done; "" otherwise.
+var _beside := ""
 var _notice: CanvasLayer = null
 var _arrived_at := 0.0
 
@@ -196,13 +229,15 @@ func _ready() -> void:
 	if not folder_instead:
 		_mount_if_present(portable_zip("skin"), false)
 	_mount_if_present(portable_zip("cardart"), false)
+	# A tar beside the game, where a zip was looked for and none found.
+	repack_beside(GameSkin.portable_dir())
 	get_tree().root.files_dropped.connect(_on_files_dropped)
 	if OS.has_feature("web"):
 		for kind in KINDS:
 			if not has(kind) and not (kind == "skin" and folder_instead):
 				_queue.append(kind)
 		_fetch_next()
-	set_process(fetching)
+	set_process(fetching or _repack != null)
 
 
 ## The first two-zip build kept `original_skin.zip` and `cardart.zip`
@@ -240,6 +275,9 @@ func _migrate() -> void:
 ## know the length and never hit the branch; the rename is harmless
 ## there, and [method _on_fetched] accepts either name.
 func _process(_delta: float) -> void:
+	if _repack != null:
+		_repack_step()
+		return
 	if picking:
 		_read_pick()
 		return
@@ -372,6 +410,41 @@ static func portable_zip(kind: String = "skin") -> String:
 	if beside == "":
 		return ""
 	return beside.path_join(file_name(kind))
+
+
+## A TAR BESIDE THE GAME: the first kind with no zip mounted whose tar
+## sits in [param beside] under the zip's name with a tar's tail
+## (`original_skin.tar.gz`, `cardart.tgz`…) is repacked into the
+## player's folder of that kind — the zip a chosen tar of that name
+## would leave there, worn from now on and mounted at every later
+## start, so the tar is read once. The kinds go one at a time; the next
+## is looked for when the first is done ([method _repack_step]). True
+## when a repack was started.
+func repack_beside(beside: String) -> bool:
+	_beside = ""
+	if beside == "" or _repack != null:
+		return false
+	for kind in KINDS:
+		if has(kind) or (kind == "skin" and GamePaths.use_skin_folder()):
+			continue
+		var tar := tar_beside(kind, beside)
+		if tar != "" and _repack_start(tar, tar.get_file(), false):
+			_beside = beside
+			return true
+	return false
+
+
+## The tar of [param kind] in [param beside]: the zip's name with each
+## tar tail in turn, the first whose bytes are a tar's; "" when none.
+static func tar_beside(kind: String, beside: String) -> String:
+	if beside == "":
+		return ""
+	var stem := file_name(kind).get_basename()
+	for tail in TarPack.TAILS:
+		var path := beside.path_join(stem + tail)
+		if TarPack.is_tar(path):
+			return path
+	return ""
 
 
 ## Whether [param path] is a skin zip: `{ok, kind, files, art, why}`.
@@ -593,6 +666,11 @@ static func _count(n: int, unit: String) -> String:
 ## deletes the dropped file the moment the signal returns, and `user://`
 ## is the one place it keeps.
 func adopt(source: String) -> bool:
+	if TarPack.is_tar(source):
+		return _repack_start(source, source.get_file(), false)
+	if TarPack.is_tar_name(source.get_file()):
+		_complain(source.get_file(), NOT_A_TAR)
+		return false
 	var report := inspect(source)
 	if not report["ok"]:
 		_complain(source.get_file(), String(report["why"]))
@@ -627,15 +705,27 @@ static func _wear(kind: String, dest: String) -> void:
 
 ## The same for a file that is already in `user://` under a passing name
 ## (a download, a chosen file read in): moved, not copied. [param shown]
-## is the name the player knows it by, for the notice.
-func _take(landed: String, shown: String) -> bool:
+## is the name the player knows it by, for the notice; [param named]
+## the name the file takes in its folder, when that is not the same
+## (a tar's zip: `cards.tar.gz` told of, `cards.zip` kept).
+func _take(landed: String, shown: String, named := "") -> bool:
+	if named == "":
+		# Fresh at the door: a tar goes to the repack first; a name that
+		# says tar over bytes that are none is refused.
+		if TarPack.is_tar(landed):
+			return _repack_start(landed, shown, true)
+		if TarPack.is_tar_name(shown):
+			_complain(shown, NOT_A_TAR)
+			DirAccess.remove_absolute(landed)
+			return false
+		named = shown
 	var report := inspect(landed)
 	if not report["ok"]:
 		_complain(shown, String(report["why"]))
 		DirAccess.remove_absolute(landed)
 		return false
 	var kind := String(report["kind"])
-	var dest := home_for(kind, shown)
+	var dest := home_for(kind, named)
 	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
 	if FileAccess.file_exists(dest):
 		DirAccess.remove_absolute(dest)
@@ -645,6 +735,56 @@ func _take(landed: String, shown: String) -> bool:
 	_wear(kind, dest)
 	_arrived(kind)
 	return true
+
+
+## A tar arrived: start turning it into [const REPACKING], a chunk per
+## frame ([method _repack_step]); the zip is then taken by [method
+## _take] under the tar's name with `.zip` for its tail. True when the
+## repack is under way — what it came to is said later, through the
+## notice and [signal changed], as a chosen file's is.
+func _repack_start(source: String, shown: String, disposable: bool) -> bool:
+	if _repack != null:
+		_complain(shown, "arrived while another pack was still being repacked")
+		return false
+	DirAccess.make_dir_recursive_absolute(USER_DIR)
+	var job := TarPack.new()
+	if not job.open(source, REPACKING):
+		_complain(shown, job.why)
+		if disposable:
+			DirAccess.remove_absolute(source)
+		return false
+	_repack = job
+	_repack_shown = shown
+	_repack_source = source
+	_repack_disposable = disposable
+	set_process(true)
+	fetch_progressed.emit(0.0)
+	return true
+
+
+## One frame of the repack; the last one hands the zip on.
+func _repack_step() -> void:
+	if _repack.step():
+		fetch_progressed.emit(_repack.progress())
+		return
+	var job := _repack
+	var shown := _repack_shown
+	var source := _repack_source
+	var disposable := _repack_disposable
+	_repack = null
+	_repack_shown = ""
+	_repack_source = ""
+	_repack_disposable = false
+	set_process(picking or fetching)
+	fetch_progressed.emit(-1.0)
+	if disposable:
+		DirAccess.remove_absolute(source)
+	if job.ok:
+		_take(REPACKING, shown, TarPack.zip_name(shown))
+	else:
+		_complain(shown, job.why)
+	if _beside != "":
+		repack_beside(_beside)
 
 
 ## Options > Skin > "Forget my zips" — built in a browser only, where
@@ -714,7 +854,8 @@ func restart() -> void:
 
 func _on_files_dropped(files: PackedStringArray) -> void:
 	for path in files:
-		if path.get_extension().to_lower() == "zip":
+		if path.get_extension().to_lower() == "zip" or TarPack.is_tar_name(path) \
+				or TarPack.is_tar(path):
 			adopt(path)
 			return
 
@@ -754,7 +895,8 @@ func pick(kind: String) -> void:
 	# After the mode: setting the mode retitles the box ("Open a File").
 	box.title = "Choose the card art zip" if kind == "cardart" else "Choose a skin zip"
 	box.access = FileDialog.ACCESS_FILESYSTEM
-	box.filters = PackedStringArray(["*.zip ; Zip files"])
+	box.filters = PackedStringArray(["*.zip, *.tar.gz, *.tgz, *.tar ; Skin and card packs",
+		"*.zip ; Zip files", "*.tar.gz, *.tgz, *.tar ; Tar archives"])
 	box.use_native_dialog = true
 	box.size = Vector2i(760, 520)
 	box.current_dir = pick_start_dir()
@@ -847,9 +989,11 @@ static func pack_url(href: String, kind: String = "skin") -> String:
 	return base.left(base.rfind("/") + 1) + PREFIX + file_name(kind)
 
 
-## The fraction downloaded, or -1 when nothing is in flight or the host
-## did not say how big the file is.
+## The fraction downloaded — or repacked — or -1 when nothing is in
+## flight or the host did not say how big the file is.
 func fetch_progress() -> float:
+	if _repack != null:
+		return _repack.progress()
 	if _request == null:
 		return -1.0
 	var total := _expected if _expected > 0 else _request.get_body_size()
@@ -871,6 +1015,10 @@ static func fetch_line(fraction: float, kind: String = "skin") -> String:
 ## What is on its way right now, for a label: the download's line, a
 ## chosen file's, or "" when nothing is.
 func transfer_line(fraction: float) -> String:
+	if _repack != null:
+		if fraction < 0.0:
+			return "Repacking %s…" % _repack_shown
+		return "Repacking %s… %d%%" % [_repack_shown, int(round(fraction * 100.0))]
 	if picking:
 		if _pick_file == null:
 			return ""
@@ -884,7 +1032,7 @@ func transfer_line(fraction: float) -> String:
 
 ## Whether a download or a read is in flight — what shows a progress line.
 func busy() -> bool:
-	return fetching or (picking and _pick_file != null)
+	return fetching or (picking and _pick_file != null) or _repack != null
 
 
 ## Ask the host how big the next zip is (HEAD), then fetch it. Two
@@ -982,7 +1130,8 @@ func _on_fetched(result: int, code: int, _headers: PackedStringArray,
 func _complain(shown: String, why: String) -> void:
 	push_warning("skin pack: %s refused — %s" % [shown, why])
 	_show_notice("%s is not a skin." % shown,
-		why.capitalize() + ". A skin zip has a skin/ folder inside it.", false)
+		why[0].to_upper() + why.substr(1)
+		+ ". A skin zip (or tar.gz) has a skin/ folder inside it.", false)
 
 
 ## The overlay over whatever screen is up: a stone panel with a line or

@@ -53,6 +53,14 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
     Forget my zips (there is no folder to open) deletes them all.
   * Dropped on the window: drag any zip onto the running game. The
     same as choosing it.
+  * A tar.gz (or .tgz, or a plain .tar) works at every door a zip
+    does — chosen, dropped, or read in by a browser. The game cannot
+    mount a tar, so it repacks one into a zip of the same name, once,
+    in the folder of its kind (my_skin.tar.gz -> skins/my_skin.zip),
+    and from then on it is that zip; the tar itself is left where it
+    was. Beside the game the same: skin/original_skin.tar.gz (or
+    skin/cardart.tar.gz) where the zip would go is repacked at the
+    first start into the game's own folder and read from there.
   * A zip of your own (chosen, dropped or fetched) has precedence over
     the one beside the game. One chosen on the title screen shows at
     once; one chosen anywhere else shows from the next start.
@@ -91,6 +99,7 @@ exact names below, whatever you have drawn — a few files or all of
 them; the game draws its own for each one missing. Zip the folder so
 that skin/ is the top of the zip (from the folder above it:
     zip -r my_skin.zip skin
+or, just as well, tar czf my_skin.tar.gz skin
 ) and check it:
     python3 tools/skin_catalogue.py --check my_skin.zip
 then choose it in Options > Skin, or drop it on the game's window. Card

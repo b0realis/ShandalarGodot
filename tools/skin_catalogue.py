@@ -34,6 +34,7 @@ import struct
 import sys
 import textwrap
 import wave
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -316,6 +317,14 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
     Forget my zips (there is no folder to open) deletes them all.
   * Dropped on the window: drag any zip onto the running game. The
     same as choosing it.
+  * A tar.gz (or .tgz, or a plain .tar) works at every door a zip
+    does — chosen, dropped, or read in by a browser. The game cannot
+    mount a tar, so it repacks one into a zip of the same name, once,
+    in the folder of its kind (my_skin.tar.gz -> skins/my_skin.zip),
+    and from then on it is that zip; the tar itself is left where it
+    was. Beside the game the same: skin/original_skin.tar.gz (or
+    skin/cardart.tar.gz) where the zip would go is repacked at the
+    first start into the game's own folder and read from there.
   * A zip of your own (chosen, dropped or fetched) has precedence over
     the one beside the game. One chosen on the title screen shows at
     once; one chosen anywhere else shows from the next start.
@@ -354,6 +363,7 @@ exact names below, whatever you have drawn — a few files or all of
 them; the game draws its own for each one missing. Zip the folder so
 that skin/ is the top of the zip (from the folder above it:
     zip -r my_skin.zip skin
+or, just as well, tar czf my_skin.tar.gz skin
 ) and check it:
     python3 tools/skin_catalogue.py --check my_skin.zip
 then choose it in Options > Skin, or drop it on the game's window. Card
@@ -626,23 +636,31 @@ def render(skin: Path, cardart: Path) -> str:
 # -------------------------------------------------------------- checking --
 
 def names_in(target: Path) -> list[str] | None:
-    """The files a skin zip or folder holds, relative to skin/; None
-    when the target is neither, or the zip has an entry outside skin/."""
+    """The files a skin zip, tar (plain or gzipped) or folder holds,
+    relative to skin/; None when the target is none of those, or the
+    archive has an entry outside skin/."""
     if target.is_dir():
         return sorted(str(p.relative_to(target)).replace("\\", "/")
                       for p in target.rglob("*")
                       if p.is_file() and not p.name.endswith(".import"))
-    if not zipfile.is_zipfile(target):
+    if zipfile.is_zipfile(target):
+        with zipfile.ZipFile(target) as zf:
+            names = [n for n in zf.namelist() if not n.endswith("/")]
+    elif target.is_file() and tarfile.is_tarfile(target):
+        # The game repacks a tar into a zip at the door (game/tar_pack.gd)
+        # with the same names — `./` at the front dropped — so a tar is
+        # checked as the zip it will become.
+        with tarfile.open(target) as tf:
+            names = [m.name[2:] if m.name.startswith("./") else m.name
+                     for m in tf.getmembers() if m.isfile() and not m.name.endswith("/")]
+    else:
         return None
     out = []
-    with zipfile.ZipFile(target) as zf:
-        for name in zf.namelist():
-            if name.endswith("/"):
-                continue
-            if not name.startswith(PREFIX) or ".." in name:
-                print("!! %s: entry outside skin/: %s" % (target.name, name))
-                return None
-            out.append(name[len(PREFIX):])
+    for name in names:
+        if not name.startswith(PREFIX) or ".." in name:
+            print("!! %s: entry outside skin/: %s" % (target.name, name))
+            return None
+        out.append(name[len(PREFIX):])
     return sorted(out)
 
 

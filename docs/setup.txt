@@ -105,6 +105,18 @@ its top and everything inside that folder, or it is refused whole (the
 game says so). SKIN.txt lists what goes in; `python3 skin_catalogue.py
 --check my_skin.zip` reports what a zip of yours is missing.
 
+A TAR.GZ WORKS AT THE SAME DOORS (.tgz and a plain .tar too): choose it
+or drop it, and the game — which can only mount a zip — repacks it into
+a zip of the same name, once, in the folder of its kind
+(my_skin.tar.gz -> skins/my_skin.zip, cards.tar.gz -> cardpacks/
+cards.zip; the Skin section shows "Repacking my_skin.tar.gz… 37%" while
+it does, a few seconds for the card art), and from then on wears that
+zip. Your tar is left where it was. Beside the game the same: put
+skin/original_skin.tar.gz (or .tgz, .tar) or skin/cardart.tar.gz where
+the zip would go, and the first start with no zip of that kind repacks
+it into the game's own skins/ or cardpacks/ folder, from where every
+later start reads it — the tar is read once and left alone.
+
 THE SKIN FOLDER INSTEAD OF THE ZIP: if you would rather work with loose
 files — `python3 import_original.py /path/to/1997/game` beside this file
 fills original_skin/ from your own copy — tick "Use the skin folder
@@ -119,7 +131,8 @@ mounted when the game starts, in name order, the first to hold a
 picture winning. A pack holds skin/cardart/<card_name_in_snake_case>.jpg
 or .png. Choose one in Options > Skin (the Card folder row names the
 folder and every pack in it) or drop it on the window; it is copied
-into the folder under its own name. Loose pictures in a `cardart/`
+into the folder under its own name (a tar.gz is repacked into a zip
+there — see section 3). Loose pictures in a `cardart/`
 subfolder of any of the places above are read too:
 
     <this folder>/skin/cardart/serra_angel.jpg      (loose)
