@@ -3490,6 +3490,14 @@ shandalar/
 │    valuable legal creature, a White Knight and a Clay Statue no meal,
 │    a protected body sheltering nothing, their own Abyss, no feeder;
 │    the ladder from Sorcerer up; the knob read by the Lab
+│    tests/cards/test_osai_vultures_2026_09_08.gd — THE VULTURES UNDER
+│    HOLY STRENGTH (the owner's "really deal 3 instead of two?"): the
+│    dressed 1/1 is a 2/3 and deals 2 on every road to a doubled bonus
+│    — recalculation, cleanup, a zone change beside it, the real cast
+│    path, snapshot restore, the search journal, the pre-flight probe,
+│    the 1997 prevention window, a Wall of Air, the label — and 3 only
+│    with two carrion counters spent, once; every case reads the life
+│    lost or the damage marked, never cur_power
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

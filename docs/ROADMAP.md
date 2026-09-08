@@ -8927,6 +8927,42 @@ connection from 'root:<Window#…>', Signal: 'focus_entered', callable:
   the only place the flood was ever visible.
 
 
+## THE EVENING'S PLAYTEST (2026-09-08) — two reports from the table
+
+The owner played 0.20.0-dev and sent two things seen, each taken as a
+question to the engine and not as a fact about it.
+
+- **"Osai Vultures with Holy Strength really deal 3 damage instead of
+  two?"** — NOT A BUG, by test. A 1/1 flier in a +1/+2 aura is a 2/3
+  and deals 2 on every road to a doubled bonus that
+  `tests/cards/test_osai_vultures_2026_09_08.gd` walks (14 cases):
+  `continuous.gd`'s recalculation starts from the printed body each
+  pass (CR 613, nothing accumulates), the cleanup step expires the
+  pump (CR 514.2), a zone change beside it, the real cast path, a
+  `GameSnapshot` restore, the search journal's rewind, the pre-flight
+  probe, the 1997 prevention window, a Wall of Air, and the P/T label —
+  2 on all of them, and every case reads the life lost or the damage
+  marked, never `cur_power`. The only 3 is the Vultures' own pump, two
+  carrion counters spent once — which the AI never activates
+  (`AiPlayer._ability_available` refuses every counter cost). The
+  table the report came from is almost certainly Lord of Fate's
+  (`decks/1997/originals/lord_of_fate.deck`: 3 Vultures, 3 Holy
+  Strength, 3 **Unholy Strength** — a 3/2 Vultures — 3 Pestilence, whose
+  point lands in the same turn the Vultures connect for 2). The one
+  thing the table cannot show is WHY: **no small card draws its
+  counters** (`docs/card-states.md` §3.7 — the 1997 set ships
+  `Cardcounters.pic` and a cue card per counter kind,
+  `@CUECARD_COUNTERS_OsaiVultures` "Carrion counters: %d",
+  `UIStrings.txt:745-`, none of it imported), so a player's own two
+  carrion counters and the pump they buy are invisible — a [1997] gap
+  for the owner to schedule, and the free counter-cost ability is the
+  only item in the card's click menu, so a double-click spends it
+  unseen. `duel_log.txt` of the game would settle the report ("removes
+  2 carrion counter(s)", or Unholy Strength's cast).
+- **"Opponent cast Detonate on its own artifact (Mana Vault)."** —
+  under examination (the AI's own target choice; the ruling and the
+  knob land here when measured).
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
