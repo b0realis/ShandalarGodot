@@ -4557,6 +4557,21 @@ func _extra_targets(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# creatures", not just the first (Word of Binding).
 			if tap_only and not _tap_denies_something(game, found):
 				continue
+			# THE WRONG SIDE OF THE TABLE (2026-09-08, AiProfile.spares_own).
+			# `rest` is the other side's permanents, and for a harmful
+			# effect the other side is OURS: once their board ran out of
+			# creatures, a Winter Blast for four was filled out with our own
+			# and priced as if that cost nothing ([method _cast_value]
+			# credits an enemy victim and charges nothing for ours). A
+			# permanent of ours is offered to a harmful slot only when
+			# giving it up is worth less than nothing to us — a liability
+			# by the evaluator's reading, never by a card's name — and
+			# otherwise the slot stays empty, which the engine's refusal
+			# turns into "not now" ([method MtgGame.cast_refusal] asks for
+			# the count before a land is tapped).
+			if harmful and found != null and owner_pid == pid \
+					and profile.spares_own and _own_value(game, found) >= 0.0:
+				continue
 		if owner_pid == wanted_pid:
 			preferred.append(ref)
 		else:
@@ -4627,6 +4642,18 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 	# its own source filter, the filter is the better authority: look at
 	# our side before giving up. A KNOWN harmful effect never reaches this
 	# — only one the reader could not classify.
+	#
+	# It is also a guess about the FILTER, and the filter can be about
+	# something other than the side of the table: Detonate's "with mana
+	# value X" (TargetSpec.source_filter reading [method MtgGame.casting_x])
+	# emptied their side for want of an artifact of the right cost, this
+	# fallback shopped ours, and the AI Detonated its own Mana Vault
+	# (2026-09-08). The reader has a row for Detonate now; the general
+	# rule — our permanents are not offered to a harmful reading unless
+	# the evaluator prices them below zero, AiProfile.spares_own — lives
+	# where slots are padded ([method _extra_targets]). Here it cannot,
+	# because the harmful reading is the very thing this pool doubts, and
+	# a filter that says "you control" is still the better authority.
 	if harmful and intent != null and intent.unknown \
 			and spec.source_filter.is_valid():
 		pools.append(game.opponent_of(pool_pid))

@@ -1070,6 +1070,18 @@ shandalar/
 │   │   │                      least valuable; AiPlayer.answer_card used
 │   │   │                      to give its BEST, the tutors' answer. On
 │   │   │                      for every profile like mulligans.
+│   │   │                      spares_own (2026-09-08): THE WRONG SIDE OF
+│   │   │                      THE TABLE — a permanent of ours fills a
+│   │   │                      harmful spell's slot only when the
+│   │   │                      evaluator prices giving it up below zero
+│   │   │                      (AiPlayer._extra_targets, _own_value; no
+│   │   │                      card name): a Winter Blast for four no
+│   │   │                      longer padded with the caster's own
+│   │   │                      creatures. The owner's Detonate on its own
+│   │   │                      Mana Vault was the reader's fault first
+│   │   │                      (EffectIntent.CARD_LOCAL's Detonate row
+│   │   │                      closes it). On for every profile like
+│   │   │                      feeds_worst.
 │   │                      combat_search_nodes is the CRACK-BACK SEARCH's
 │   │                      leaf budget, 0 for a profile that does not look
 │   │                      past its own combat (Apprentice and Magician 0,
@@ -1325,7 +1337,12 @@ shandalar/
 │   │   │                      coin flip). pump_keywords is every keyword
 │   │   │                      the pumps grant, so Teleport (a 0/0 pump
 │   │   │                      granting unblockable) is read structurally
-│   │   │                      and needs no row.
+│   │   │                      and needs no row. Detonate has one since
+│   │   │                      2026-09-08 (removes, ignores regeneration;
+│   │   │                      not damage_x — the X sizes the target):
+│   │   │                      without it the destroy read as unknown and
+│   │   │                      the picker's own-side fallback found the
+│   │   │                      AI's own Mana Vault (the owner's playtest).
 │   │   ├── combat_search.gd
 │   │   │                    class CombatSearch — THE CRACK-BACK SEARCH
 │   │   │                      (M4 phase 3's first landing, 2026-09-05):
@@ -3490,6 +3507,15 @@ shandalar/
 │    valuable legal creature, a White Knight and a Clay Statue no meal,
 │    a protected body sheltering nothing, their own Abyss, no feeder;
 │    the ladder from Sorcerer up; the knob read by the Lab
+│    tests/ai/test_ai_spares_own_2026_09_08.gd — THE WRONG SIDE OF THE
+│    TABLE (AiProfile.spares_own and the Detonate row): the reader's row;
+│    the AI's own untapped and tapped Mana Vault not Detonated, the
+│    enemy Sol Ring still Detonated at X=1, the Vault spared with the
+│    knob off too (the row, not the knob, closes the report); Winter
+│    Blast for four with one enemy creature not padded with three of
+│    ours and waiting in hand with no land tapped, cast at four of
+│    theirs, the null padding 1/3; Simulacrum still aimed at our own
+│    creature
 │    tests/cards/test_osai_vultures_2026_09_08.gd — THE VULTURES UNDER
 │    HOLY STRENGTH (the owner's "really deal 3 instead of two?"): the
 │    dressed 1/1 is a 2/3 and deals 2 on every road to a doubled bonus

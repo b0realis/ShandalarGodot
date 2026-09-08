@@ -193,6 +193,35 @@ var mulligans := true
 ## play, it is no play. A knob only so the Deck Lab can run the null.
 var feeds_worst := true
 
+## THE WRONG SIDE OF THE TABLE: does this profile keep its own permanents
+## out of the slots of a spell it reads as harmful? Off, a slot the
+## opponent's board cannot fill is filled from ours and the cast priced
+## as if that cost nothing — "tap X target creatures" padded with our own
+## creatures once theirs run out (Winter Blast: 112 of the 293 creatures
+## it named in sixty Ape Lord games were the caster's own, 2026-09-08),
+## "destroy X target Mountains" with our own Mountains. The owner's
+## playtest (2026-09-08): *"Opponent cast Detonate on its own artifact??
+## (Artifact was not harming, it was Mana Vault)"* — {1}{R} paid to
+## destroy its own untapped Mana Vault and take one damage. That cast was
+## the reader's fault first: Detonate had no row in [constant
+## EffectIntent.CARD_LOCAL], so the picker's fallback for an effect it
+## could not classify shopped our side, and the row is what closes it.
+## This knob is the rule that fallback was the one exception to, stated
+## where the slots are filled ([method AiPlayer._extra_targets]): a
+## permanent of ours goes into a harmful slot only when the evaluator
+## prices giving it up BELOW ZERO ([method AiPlayer._own_value]) — a
+## liability, which no reading of this evaluator produces today, so the
+## slot stays empty and the spell waits for a board that fills it. The
+## reading is the evaluator's; no card name is asked. Two places the
+## picker looks at our side on purpose are not this knob's: a slot
+## stated relative to an earlier pick (Glyph of Delusion's Wall,
+## TargetSpec.sibling_filter — a partner, not a victim) and the
+## 2026-09-04 fallback itself, where the harmful reading is the thing
+## doubted. On for EVERY profile, like [member feeds_worst]: tapping
+## your own creatures to fill out a Winter Blast is not a weak play, it
+## is no play. A knob only so the Deck Lab can run the null.
+var spares_own := true
+
 ## THE COUNT: does this profile size a card-advantage spell to the hands
 ## and libraries in front of it? On, an X discard is cast for the cards
 ## its target actually holds and waits while they hold none; an X draw is

@@ -8959,9 +8959,48 @@ question to the engine and not as a fact about it.
   only item in the card's click menu, so a double-click spends it
   unseen. `duel_log.txt` of the game would settle the report ("removes
   2 carrion counter(s)", or Unholy Strength's cast).
-- **"Opponent cast Detonate on its own artifact (Mana Vault)."** —
-  under examination (the AI's own target choice; the ruling and the
-  knob land here when measured).
+- **"Opponent cast Detonate on its own artifact?? (Artifact was not
+  harming, it was Mana Vault)."** — A BUG, two faults on one path, both
+  in `engine/ai/`. The reader had no `CARD_LOCAL` row for Detonate
+  (`effect_intent.gd`), so a card-local destroy read as `unknown`; and
+  the picker's 2026-09-04 fallback for an unclassified effect with a
+  source filter (`AiPlayer._pick_for_spec`, written for Simulacrum's
+  "creature you control") cannot tell a filter that says "you control"
+  from one that says "with mana value X" — Detonate's reads the cast's
+  X — so when their side held no artifact of cost one and ours held the
+  Vault, X=1 found it, `_victim_value` priced it as a gain and
+  `_cast_value` charged nothing for the Vault or the point of damage.
+  Reproduced with the AI holding Detonate and its own untapped Vault
+  (cast, X=1, at itself); over sixty seeded War Mage vs Crag Hydra
+  duels, 15 of 25 Detonates went at the caster's own artifact. **The
+  row closes it** (`"Detonate": removes, ignores_regeneration` — not
+  `damage_x`: the X sizes the target, CR 601.2b): 15 → 0, the enemy
+  Detonates 10 → 18. **The rule the fallback was the one exception to**
+  is `AiProfile.spares_own` (on at every rung, a knob only for the
+  null, like `feeds_worst`): a permanent of ours fills a harmful
+  spell's slot only when the evaluator prices giving it up BELOW ZERO
+  (`_own_value`, never a card's name), stated where variable-count
+  slots are padded (`_extra_targets`) — a Winter Blast for four with
+  one enemy creature to tap used to be filled out with three of our
+  own, 112 of the 293 creatures it named in sixty Ape Lord vs Elvish
+  Magi games; now none, and the spell waits in hand (the engine's
+  refusal, no land tapped) for a board that fills it. Measured: Ape
+  Lord vs Elvish Magi 1,000 games/arm 55.9% → 59.8% (+3.9 ± 4.3, not
+  yet decided, control pair byte-identical 1000/1000); War Mage vs
+  Hydra 500/arm +0.0 (the knob is exactly null on the Detonate pair,
+  by design — the row does that work); the row alone, both seats
+  fixed, 1,000 games: War Mage vs Hydra 38.1% → 36.0%, vs Big Green
+  21.5% → 22.9%, both inside the interval. Tests:
+  `tests/ai/test_ai_spares_own_2026_09_08.gd` (0/9 before, 9/9 after);
+  all thirty AI scripts 429/429. Open, from the same look: the
+  evaluator has no LIABILITY reading (a tapped Vault it cannot untap, a
+  Lich, an Illusions of Grandeur all price at or above zero, so the
+  below-zero branch never fires today); the reader has no field for
+  "damage to the target's controller" (an enemy Detonate's X is an
+  unpriced bonus); `_cast_value` credits enemy victims and charges
+  nothing for own-side ones, the picker being the only gate; Volcanic
+  Eruption resolved no cast in sixty games either way (0/0), worth a
+  look of its own.
 
 ## Standing quality gates
 

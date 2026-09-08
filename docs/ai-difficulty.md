@@ -77,6 +77,7 @@ override any knob on any preset for a measurement
 | `fits_auras` | on | on | on | on | hangs a friendly aura only on a creature it gives something to — no vigilance on a Wall; on everywhere, for the same reason |
 | `mulligans` | on | on | on | on | judges the opening hand under the Paris rule by its lands (`AiMulligan`: none, all, too few or too many for the hand's size, or lands that cast none of its spells; nothing below four cards goes back); on everywhere — keeping a no-land seven is a malfunction, not a weakness |
 | `feeds_worst` | on | on | on | on | asked which of its own to give up when the giving is no cost it chose — The Abyss's meal, Lord of the Pit's tribute, Mana Vortex's land, a Sylvan Library's discard — it gives the least valuable, not the best; on everywhere, the same reason |
+| `spares_own` | on | on | on | on | never fills a harmful spell's slots with its own permanents unless the evaluator prices giving them up below zero — no Detonate on its own Mana Vault, no Winter Blast padded with its own creatures (the owner's playtest, 2026-09-08); on everywhere, the same reason |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race — a Tome's tick, an Ancestral, a tutor's card, and since the third pass the extra draw step a Time Walk buys |
@@ -85,17 +86,24 @@ override any knob on any preset for a measurement
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
 
-`minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` are the four
-knobs that are on at every rung, and the reason is the line between weak
-and broken: an Apprentice that taps City of Brass for its last life to
-cast a Grizzly Bears is not a worse player, it is a malfunction — and so
-is one that puts Eternal Warrior on a Wall of Swords, or keeps a seven
-with no land in it (the owner's playtests, 2026-09-08), or feeds its
-Serra Angel to The Abyss with a Grizzly Bears standing beside it (The
-Deck's third pass, the same day: every "choose one of yours to lose"
-that is not a cost the pilot chose to pay was answered with its BEST
-card, because the one answer for card questions was written for the
-tutors). They are knobs only so the Deck Lab can run the null; with
+`minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and `spares_own`
+are the five knobs that are on at every rung, and the reason is the
+line between weak and broken: an Apprentice that taps City of Brass for
+its last life to cast a Grizzly Bears is not a worse player, it is a
+malfunction — and so is one that puts Eternal Warrior on a Wall of
+Swords, or keeps a seven with no land in it (the owner's playtests,
+2026-09-08), or feeds its Serra Angel to The Abyss with a Grizzly Bears
+standing beside it (The Deck's third pass, the same day: every "choose
+one of yours to lose" that is not a cost the pilot chose to pay was
+answered with its BEST card, because the one answer for card questions
+was written for the tutors), or pays {1}{R} to Detonate its own Mana
+Vault (the owner's playtest that evening: the reader had no row for the
+card and the picker's fallback for an unclassified effect shopped its
+own side; the row closes the Detonate, and `spares_own` is the rule the
+fallback was the one exception to, keeping a Winter Blast from being
+filled out with the caster's own creatures — 112 of the 293 it named in
+sixty Ape Lord games, then none). They are knobs only so the Deck Lab
+can run the null; with
 `mulligans` off the pilot falls back to `DecisionAgent`'s plain rule,
 which throws back only the two hands the 1997 game named — no land, all
 land — down to the same floor of four.
@@ -254,7 +262,8 @@ has the rule.
   two dies. Open (`docs/ROADMAP.md`, the third pass).
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
-  (the way `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` did)
+  (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and
+  `spares_own` did)
   goes on everywhere;
   anything that is a layer of play stays a rung.
 - The 1997 adventure's difficulty (gold, deck minimum, life, the creature

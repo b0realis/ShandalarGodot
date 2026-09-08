@@ -99,6 +99,8 @@ the loop first runs, from `games.csv`, beside the win rate.
 |---|---|---|---|
 | `checks_before_casting` | casting P8 | Wizard | Forge's one-ply safety veto on `Evaluator.position_score` with a projected position — no game copy |
 | evaluator constants | combat P6 | all, no knob | Terror on the Wall of Stone (7.0) instead of the Hypnotic Specter (5.5): a toughness-scaled defender discount, +0.5 per ability; L for the measurement at every preset |
+| a liability reading | the owner's Detonate, 2026-09-08 | all, no knob | `Evaluator.permanent_value` never goes below zero, so `spares_own`'s one door — a permanent of ours a harmful spell may take because giving it up is worth LESS than nothing — never opens: a tapped Mana Vault with no {4} to untap it, a Lich, an Illusions of Grandeur, a Pestilence with no creature of ours, price at or above zero. With it, Detonate on one's own dead Vault becomes the play it sometimes is; with it, `_cast_value` can charge an own-side victim what it is worth instead of nothing (the picker is the only gate today) |
+| `EffectIntent` controller damage | the same look | reader, no knob | no field says "damage to the target's controller"; an enemy Detonate's X is an unpriced bonus and Detonate is a plain removal row |
 
 Here too **the planner's tie-break** from the third pass — a Factory, a
 Library of Alexandria or a Strip Mine worth more untapped than a Forest;

@@ -155,6 +155,21 @@ const CARD_LOCAL := {
 	"Swords to Plowshares": {"removes": true, "ignores_regeneration": true},
 	"Drain Life": {"damage_x": true},
 	"Disintegrate": {"damage_x": true, "ignores_regeneration": true},
+	# "Destroy target artifact with mana value X. It can't be regenerated.
+	# Detonate deals X damage to that artifact's controller." Removal, of
+	# the no-regeneration kind; the X sizes the TARGET, not the damage
+	# (the spec's source filter reads the cast's X, CR 601.2b), so this is
+	# not a `damage_x` row. Without it the reader called Detonate `unknown`
+	# and the picker's own-side fallback ([method AiPlayer._pick_for_spec],
+	# 2026-09-04) — which cannot tell a source filter that says "you
+	# control" from one that says "with mana value X" — shopped OUR
+	# artifacts when theirs held nothing of the right cost: the owner's
+	# opponent paid {1}{R} to Detonate its own untapped Mana Vault for one
+	# damage to itself (2026-09-08). The damage to the target's controller
+	# has no field here — for an enemy target it is a bonus, and a slot of
+	# a harmful reading is no longer filled with a permanent of our own
+	# ([member AiProfile.spares_own]).
+	"Detonate": {"removes": true, "ignores_regeneration": true},
 	# "You may tap OR untap target ..." — the mode is chosen on resolution,
 	# so the reader records both and the AI's tap policy decides which
 	# reading it is buying ([method AiPlayer._size_tap]). Without this row
