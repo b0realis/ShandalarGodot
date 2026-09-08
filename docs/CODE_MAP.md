@@ -15,11 +15,16 @@ shandalar/
 │                              minimum_display_time=1000 ms since 2026-09-04,
 │                              not by a scene)
 ├── export_presets.cfg       Export presets. "Linux 64" (x86_64, GL
-│                              compatibility): the release template is named
-│                              by PATH because this machine's templates are
-│                              4.7.stable and the pinned engine is 4.7.2.
-│                              Ships scripts, cards/data/ and every .deck;
-│                              ships NO art (see build_release.sh). "Web"
+│                              compatibility): both templates are named by
+│                              PATH because this machine's templates are
+│                              4.7.stable and the pinned engine is 4.7.2,
+│                              and build_release.sh exports it with the
+│                              DEBUG one (2026-09-08: the release template
+│                              prints Godot #87626's "nonexistent
+│                              connection" errors on every popup close —
+│                              CONTRIBUTING.md's gotcha). Ships scripts,
+│                              cards/data/ and every .deck; ships NO art
+│                              (see build_release.sh). "Web"
 │                              (2026-09-07): the same pack in the
 │                              web_nothreads template — static hosting,
 │                              no COOP/COEP; adaptive canvas, focus on
@@ -1816,7 +1821,11 @@ shandalar/
 │   │                          (win-rate bars + CI whiskers, turn
 │   │                          histograms, matrix heatmap)
 │   ├── elo_ledger.gd        class EloLedger — decks/ratings.txt, the Deck
-│   │                          Lab's running Elo (K=8 per game)
+│   │                          Lab's running Elo (K=8 per game); read and
+│   │                          written through an absolute on-disk path
+│   │                          (2026-09-08: a relative one is served from
+│   │                          the .pck first, so a play copy's ledger never
+│   │                          accumulated), the folder made on first save
 │   ├── README.md            The manual (methodology, every switch, the
 │   │                          measured experiments, the sweep)
 │   └── results/             Where a run writes unless --out says otherwise
@@ -1828,8 +1837,16 @@ shandalar/
 │                              argument, 124 timeout (manual in the file)
 ├── deck_convert.sh          Deck-format converter entry point
 ├── build_release.sh         Release build: exports the "Linux 64" preset with
-│                              the pinned Godot, then smoke-boots the result
-│                              and fails on an error line. --out DIR, --skin
+│                              the pinned Godot — with the DEBUG template
+│                              (--export-debug, 2026-09-08: the optimized
+│                              one prints Godot #87626's two "nonexistent
+│                              connection" errors on every popup close and
+│                              the pile again at quit; same look, 0.2 MB
+│                              more, the Deck Lab ~13% slower; the
+│                              CONTRIBUTING.md gotcha) — then smoke-boots
+│                              the result and fails on an error line
+│                              (a preset without custom_template/debug
+│                              fails the export with a hint). --out DIR, --skin
 │                              (links assets/ into user://original_skin so an
 │                              exported build looks like a dev checkout).
 │                              Default output ../shandalar-build/linux64/.
@@ -5601,6 +5618,15 @@ shandalar/
     │                          every ledger row and someday card checked;
     │                          four S mechanisms; GameCopier vs
     │                          GameSnapshot/UndoLog
+    ├── AI-next-wave.md      THE NEXT WAVE OF THE AI (2026-09-08) — the
+    │                          plan, not the work: the Forge programme's
+    │                          five waves and the engine pass with the
+    │                          third pass's open rows (the Angel, the
+    │                          Factory block, the Disk deferral, the
+    │                          planner's tie-break) folded in, each item
+    │                          with its knob, rung, designing paragraph
+    │                          and Deck Lab pairs; starts on the owner's
+    │                          word
     └── ROADMAP.md           v0.1 simplifications & milestone plan
 ```
 

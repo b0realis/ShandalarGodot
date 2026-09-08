@@ -8827,6 +8827,70 @@ was ported in the reading; a port, when one comes, is a `[forge]` marker
 at the site naming file, lines and commit, on top of the Provenance row.
 
 
+## THE NEXT WAVE OF THE AI (2026-09-08) — planned, not started
+
+Written down, on the owner's word ("document next wave of ai … we will
+do it later"), as `docs/AI-next-wave.md`: the Forge programme's five
+waves and the engine pass (`docs/forge/README.md`), with the third
+pass's open rows folded into the wave each belongs to — the Factory
+block and the Abyss shelter with wave 1, Time Walk's worth with wave 2,
+the Disk deferral with wave 3, the planner's tie-break with wave 5, the
+Angel as its own item with the census that prices it. Every row names
+its knob, its rung, the paragraph that designed it and its Deck Lab
+pairs. Nothing built.
+
+
+## GODOT'S POPUP SPAM (2026-09-08) — the release template, not the game
+
+The owner ran 0.19.0 from a terminal on the other machine and got, after
+a game, a screen of `ERROR: Attempt to disconnect a nonexistent
+connection from 'root:<Window#…>', Signal: 'focus_entered', callable:
+''` and the same for `tree_exited`, each `at: _disconnect
+(core/object/object.cpp:1643)`. Examined, not guessed at:
+
+- **Whose it is.** Godot's. `scene/gui/popup.cpp`,
+  `Popup::_initialize_visible_parents`, connects those two signals on
+  every parent window of an embedded popup, and
+  `_deinitialize_visible_parents` disconnects them on hide; in the
+  optimized export template the disconnect no longer matches the
+  connect, so every close prints two lines, every reopen of a
+  persistent popup (an OptionButton's menu) two "already connected",
+  and at quit the root's `tree_exited` fires every stale callback — the
+  screen the owner saw. godotengine/godot #87626 (with #89657), open
+  since 4.2; PR #95100 adds the `is_connected` guards and is unmerged as
+  of 4.7.2 (master's popup.cpp unchanged). The stale connections do
+  nothing; no click, tooltip or menu misbehaves.
+- **Why the gate never saw it.** The editor binary is `DEBUG_ENABLED`
+  and does not print it; nor does the debug template; nor a web export;
+  nor a build with `display/window/subwindows/embed_subwindows=false`
+  (a native popup has no embedder, so the code never runs). A scratch
+  project with one OptionButton and one tooltip, exported with the
+  4.7.stable templates and driven under Xvfb: release 14 "nonexistent"
+  + 6 "already connected"; debug 0; native subwindows 0.
+- **The fix, and the one not chosen.** `build_release.sh` exports the
+  Linux preset with `--export-debug` — the same engine with the checks
+  in, the same look and play, 0.2 MB more, the headless Deck Lab about
+  13% slower (600 games, one job: 6.4 s → 7.3 s here) — and the preset
+  names both templates by path (`export_presets.cfg.example`,
+  `custom_template/debug`), with the console wrapper off so the debug
+  export adds no `Shandalar.sh` beside `run.sh`. Native popups would
+  also silence it with the release template, but turn every tooltip and
+  menu into an OS window under the compositor's own rules — a look to
+  check on each desktop by looking, which this machine cannot do for
+  the owner's; it stays the documented alternative (CONTRIBUTING.md's
+  gotcha). The web build keeps the release template: it never leaves
+  embedding.
+- **Found on the way.** The play copy's Deck Lab printed `EloLedger:
+  cannot write decks/ratings.txt` — there is no `decks/` beside an
+  exported binary (the decks ride in the .pck). `EloLedger.save` now
+  makes the ledger's folder first, as DeckLab/README.md always said
+  ("created on first rated run").
+- **Gate.** Re-exported; the exported game boots headless with 0
+  error lines; the repro project's flow under the debug template prints
+  0; the owner confirms on the other machine from a terminal — that is
+  the only place the flood was ever visible.
+
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

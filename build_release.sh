@@ -217,9 +217,35 @@ zip_stage() {  # zip_stage STAGE_DIR NAME — writes PKG_DIR/NAME.zip and NAME-w
 # Warm the import cache quietly (a cold checkout has no .godot/).
 timeout -k 5 900 "$GODOT" --headless --import . >/dev/null 2>&1 </dev/null || true
 
-echo "exporting '$PRESET' -> $BIN"
+# THE DESKTOP BUILD USES THE DEBUG TEMPLATE (2026-09-08), ON PURPOSE.
+# Godot's optimized (release) templates carry a bug in embedded popups
+# — godotengine/godot #87626 (open since 4.2; the fix in PR #95100 is
+# unmerged as of 4.7.2): `Popup::_initialize_visible_parents` connects
+# two signals on the parent window, and in the release template the
+# disconnect on close no longer matches them, so EVERY tooltip, menu
+# and dropdown prints two "Attempt to disconnect a nonexistent
+# connection … Signal: 'focus_entered' / 'tree_exited', callable: ''"
+# lines on close, two "already connected" on reopen, and at quit the
+# whole pile again as the root's tree_exited fires the stale ones —
+# the owner's terminal after a game of 0.19.0 (2026-09-08). Nothing
+# in the game misbehaves; the connections are no-ops. Reproduced with
+# a two-widget project (an OptionButton and a tooltip) exported with
+# the 4.7.stable templates: release 14 + 6 lines, debug 0. The debug
+# template is the same engine with DEBUG_ENABLED — the build the gate
+# tests (the editor binary is one), the same look and the same
+# behaviour, 0.2 MB larger, and the headless Deck Lab ~13% slower
+# (600 games: 6.4 s -> 7.3 s here). The other cure, native popups
+# (`display/window/subwindows/embed_subwindows=false`, 0 lines with
+# the release template), makes every tooltip an OS window — a look to
+# check on each desktop, not a change to make blind. The web build
+# keeps the release template: it never leaves embedding and never
+# prints the lines. Needs `custom_template/debug` set in the preset
+# (export_presets.cfg.example has both paths).
+MODE=--export-debug
+[ "$WEB" = 1 ] && MODE=--export-release
+echo "exporting '$PRESET' ($MODE) -> $BIN"
 if ! timeout -k 5 1200 "$GODOT" --headless --path . \
-		--export-release "$PRESET" "$BIN" > "$LOG" 2>&1 </dev/null; then
+		"$MODE" "$PRESET" "$BIN" > "$LOG" 2>&1 </dev/null; then
 	echo "BUILD FAILED: the export did not finish (log: $LOG)" >&2
 	tail -20 "$LOG" >&2
 	exit 1
@@ -227,6 +253,10 @@ fi
 if grep -qiE '^(ERROR|SCRIPT ERROR)|Cannot export project|export template' "$LOG"; then
 	echo "BUILD FAILED: the export reported errors (log: $LOG)" >&2
 	grep -inE '^(ERROR|SCRIPT ERROR)|Cannot export project|export template' "$LOG" | head -5 >&2
+	if grep -q 'Failed to copy export template' "$LOG"; then
+		echo "hint: the preset must name BOTH templates by path (custom_template/debug and" >&2
+		echo "      custom_template/release) — see export_presets.cfg.example" >&2
+	fi
 	exit 1
 fi
 
@@ -368,7 +398,7 @@ SHORTCUT
 	cp -p docs/setup.txt "$STAGE/setup.txt"
 	# THE DECK LAB, SHIPPED. The scripts ride inside the .pck (the export
 	# preset no longer excludes DeckLab/), and the game binary hosts them
-	# through its own `--deck-lab` flag — a release template ignores
+	# through its own `--deck-lab` flag — an export template ignores
 	# `--script`, so that is the only way in. This launcher is the same
 	# one-liner the repo's DeckLab/deck_lab.sh wraps, minus everything
 	# that only makes sense in a checkout.

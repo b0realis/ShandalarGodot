@@ -52,8 +52,12 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   every `.deck` — never art: `GameSkin` reads art off the filesystem
   (`user://` first), so the original 1997 files stay the player's own
   copy. The export templates here are `4.7.stable` while the pinned engine
-  is 4.7.2, so the preset names the release template by path — which is
+  is 4.7.2, so the preset names both Linux templates by path — which is
   why the preset itself is gitignored and only the example is committed.
+  The Linux export is `--export-debug` ON PURPOSE (2026-09-08): Godot's
+  optimized template prints two "nonexistent connection" errors on
+  every popup close and the pile again at quit (Godot #87626, see the
+  gotcha below); the debug template prints none and looks the same.
   `--web` exports the `Web` preset (the `web_nothreads` template: static
   hosting, no COOP/COEP headers) to `../shandalar-build/web/` and checks
   that index.html/.js/.wasm/.pck came out; nothing boots headless there,
@@ -218,6 +222,28 @@ scratch script plays through the live screen is appended there too.
   (`get_node_or_null(^"/root/ShellMusic")`), and a scratch `-s` script
   keeps its screen variables untyped (`var duel = load(...).instantiate()`).
   The soak is the gate that catches it: run it after touching a screen.
+- GODOT'S POPUP SPAM IN THE RELEASE TEMPLATE (2026-09-08). A game built
+  with the optimized Linux template prints, on every tooltip, menu or
+  dropdown close, `ERROR: Attempt to disconnect a nonexistent
+  connection from 'root:<Window#…>', Signal: 'focus_entered', callable:
+  ''` and the same for `tree_exited`; "already connected" on reopen;
+  and the whole pile again at quit — the owner's terminal after a game
+  of 0.19.0. It is Godot's (godotengine/godot #87626, open since 4.2,
+  the fix in PR #95100 unmerged as of 4.7.2): `Popup::
+  _initialize_visible_parents` connects two signals per parent window
+  and the release build's disconnect does not match them; nothing in
+  the game is wrong and the stale connections do nothing. The editor
+  binary and the debug template (both DEBUG_ENABLED) never print it —
+  which is why the gate cannot see it and a fresh repro project with
+  one OptionButton and one tooltip, exported both ways, is the test
+  (release: 20 lines; debug: 0). `build_release.sh` therefore exports
+  the Linux preset with `--export-debug`: same look, same play, 0.2 MB
+  more, the headless Deck Lab ~13% slower. The other cure is native
+  popups, `display/window/subwindows/embed_subwindows=false` (0 lines
+  with the release template) — every tooltip an OS window, a look to
+  check on each desktop before choosing it. The web build is
+  unaffected either way. Do not "fix" it in GDScript: the connections
+  are the engine's own.
 - Cite CR (Comprehensive Rules) numbers in comments for rules behavior —
   existing code shows the style.
 - Reference implementations for tricky cards/rules: the mage-go clone

@@ -1,8 +1,20 @@
 ; Export presets — see docs/CODE_MAP.md and the "Release build" section of
-; CLAUDE.md. The pinned engine is ../tools/godot (4.7.2); the export
+; CONTRIBUTING.md. The pinned engine is ../tools/godot (4.7.2); the export
 ; templates on this machine are the 4.7.stable set, so the preset names
-; the release template by path instead of relying on the version folder
+; both Linux templates by path instead of relying on the version folder
 ; Godot would look for (4.7.2.stable, which does not exist here).
+;
+; THE LINUX BUILD IS EXPORTED WITH THE DEBUG TEMPLATE (2026-09-08):
+; build_release.sh passes --export-debug for this preset because the
+; optimized template prints two "Attempt to disconnect a nonexistent
+; connection" errors on every popup close (Godot #87626, embedded
+; popups, open since 4.2) and the whole pile again at quit; the debug
+; template prints none, looks and plays the same. So custom_template/
+; debug must be set too. debug/export_console_wrapper is 0 so the
+; debug export does not add a Shandalar.sh beside the binary (run.sh
+; is the launcher the package ships). The web preset stays on the
+; release template — a browser build never leaves embedding and never
+; prints the lines.
 ;
 ; Excluded from the .pck: tests/, tools/, docs/, the addons and ALL of
 ; assets/. Nothing under game/, engine/ or cards/ references the first
@@ -59,9 +71,9 @@ script_export_mode=2
 
 [preset.0.options]
 
-custom_template/debug=""
+custom_template/debug="<YOUR HOME>/.local/share/godot/export_templates/4.7.stable/linux_debug.x86_64"
 custom_template/release="<YOUR HOME>/.local/share/godot/export_templates/4.7.stable/linux_release.x86_64"
-debug/export_console_wrapper=1
+debug/export_console_wrapper=0
 binary_format/embed_pck=false
 texture_format/s3tc_bptc=true
 texture_format/etc2_astc=false

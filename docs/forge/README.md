@@ -167,7 +167,9 @@ Recorded so nobody "fixes" them toward Forge.
 
 ## The programme for the Wizard
 
-Twenty-two proposals across the two AI notes, merged and de-duplicated
+Scheduled, with the third pass's open rows folded in, as
+`docs/AI-next-wave.md` (2026-09-08) — the file to open when the work
+starts. Twenty-two proposals across the two AI notes, merged and de-duplicated
 (`holds_tricks` was proposed by both), ordered by the owner's measure —
 what a human at the table notices first — with the cheapest deterministic
 work first inside each wave. Sizes: S a day, M a week, L more. Each note

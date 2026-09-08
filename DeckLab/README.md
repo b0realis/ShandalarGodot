@@ -64,7 +64,11 @@ valid as the pool evolves.
 Unless `--no-elo`, every run folds its results into a persistent,
 human-readable, commit-friendly text ledger (default `decks/ratings.txt`;
 `--elo-file` overrides), so each deck's rating and lifetime record
-accumulate ACROSS runs:
+accumulate ACROSS runs. In the built game the path is beside the
+executable — `decks/` is made on the first rated run, every deck starting
+at 1500, and the file is read from disk from then on (2026-09-08: before
+that the pack's own copy of this checkout's ledger shadowed it and
+nothing accumulated):
 
 ```
 # deck | elo | games | wins | losses | updated

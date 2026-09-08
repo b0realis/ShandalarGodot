@@ -30,7 +30,7 @@ var entries: Dictionary = {}
 static func load_from(p_path: String) -> EloLedger:
 	var ledger := EloLedger.new()
 	ledger.path = p_path
-	var file := FileAccess.open(p_path, FileAccess.READ)
+	var file := FileAccess.open(_on_disk(p_path), FileAccess.READ)
 	if file == null:
 		return ledger   # first run: empty ledger, created on save
 	for raw_line in file.get_as_text().split("\n"):
@@ -50,8 +50,33 @@ static func load_from(p_path: String) -> EloLedger:
 	return ledger
 
 
+## THE LEDGER IS A FILE ON DISK, NEVER THE PACK'S COPY (2026-09-08). The
+## exported game carries decks/ratings.txt inside its .pck (the `*.txt`
+## rule that ships dck_ids.txt), and FileAccess reads a RELATIVE path
+## out of the pack before it looks on disk — so the play copy's Deck Lab
+## started every run from the shipped ledger and never accumulated
+## (20172 games, +4, 20176; again 20176). An absolute path is never
+## looked up in the pack, and the working directory is the same folder
+## the relative path meant: Godot sets it to the project (a checkout)
+## or the executable's folder (an export) before a script runs. A play
+## copy's first rated run therefore starts every deck at 1500 — its
+## own record, not this checkout's.
+static func _on_disk(p: String) -> String:
+	if p.is_absolute_path() or p.begins_with("res://") or p.begins_with("user://"):
+		return p
+	var here := DirAccess.open(".")
+	return here.get_current_dir().path_join(p) if here else p
+
+
 func save() -> void:
-	var file := FileAccess.open(path, FileAccess.WRITE)
+	# The exported game has no decks/ beside its binary (the decks ride
+	# in the .pck), so the default ledger's folder is made on the first
+	# rated run — as DeckLab/README.md promises. Fails quietly where it
+	# already exists, and open() below reports a folder it cannot make.
+	var on_disk := _on_disk(path)
+	if not on_disk.get_base_dir().is_empty():
+		DirAccess.make_dir_recursive_absolute(on_disk.get_base_dir())
+	var file := FileAccess.open(on_disk, FileAccess.WRITE)
 	if file == null:
 		push_error("EloLedger: cannot write %s" % path)
 		return
