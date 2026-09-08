@@ -53,6 +53,12 @@ var draws_use_x: bool = false
 ## needs to know; the value of the search is priced by card_value.
 var searches: bool = false
 
+## Extra turns the caster takes (Time Walk: one). Each is a draw step off
+## our own library before theirs comes round again, which is what THE
+## PACE ([member AiProfile.paces_draws]) reads it for (2026-09-08); the
+## turn's worth beyond the draw is priced by card_value.
+var extra_turns: int = 0
+
 ## Targeted or self pump. [member pump_self] for the firebreathing shape;
 ## [member pump_uses_x] when the power bonus is the spell's X (Howl from
 ## Beyond) — [member pump_power] then holds only the printed part.
@@ -261,6 +267,8 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.animates = e
 		elif e is SearchLibraryEffect:
 			intent.searches = true   # priced by card_value; a card off the library
+		elif e is ExtraTurnEffect:
+			intent.extra_turns += 1   # priced by card_value; a draw step off the library
 		elif e is MassPumpEffect \
 				or e is ReturnFromGraveyardEffect or e is PreventDamageEffect \
 				or e is PreventDamageShieldEffect or e is MillEffect:

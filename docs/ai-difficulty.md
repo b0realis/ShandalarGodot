@@ -79,7 +79,7 @@ override any knob on any preset for a measurement
 | `feeds_worst` | on | on | on | on | asked which of its own to give up when the giving is no cost it chose — The Abyss's meal, Lord of the Pit's tribute, Mana Vortex's land, a Sylvan Library's discard — it gives the least valuable, not the best; on everywhere, the same reason |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
-| `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race |
+| `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race — a Tome's tick, an Ancestral, a tutor's card, and since the third pass the extra draw step a Time Walk buys |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
@@ -132,7 +132,8 @@ resolves. Every capability is on: it activates engines and knows what
 they are worth over time, pays a Strip Mine or a Digging Team for a
 better body, casts a Festival at your upkeep and a Siren's Call before
 your attackers, sizes its X spells, prices a Balance, paces its draws to
-the libraries, keeps a second The Abyss in hand, animates a Factory
+the libraries (a Time Walk's extra draw step among them), keeps a
+second The Abyss in hand, animates a Factory
 only for an attack it will actually declare, and holds its Nevinyrral's
 Disk for the attack it answers — priced by the damage it keeps off the
 pilot, fired once the attackers are named and before they connect.
@@ -186,7 +187,12 @@ LOST (−3.7, −2.3, −0.3, −0.3, −0.3; 17 flipped to a win, 38 away): the
 sweeper went off at twenty life to kill a lone 3/3, and at one life to
 kill a Llanowar Elves its own Abyss was about to eat. The starters own
 sweepers too — Hurricane, Earthquake, Wrath of God — and their matrix
-moves by no more than two games in twelve hundred a deck.
+moves by no more than two games in twelve hundred a deck. The Time
+Walk's draw step under `paces_draws` is one card once a game and
+measures like it: the shipped Wizard before and after it, the same
+seed, differs in 40 of 1 500 games against the five starters and The
+Deck wins 11 of those it had lost against 1 the other way (+0.3, +0.3,
+0.0, +1.3, +1.3).
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -211,6 +217,11 @@ Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
   the sweep's survivors under the statics as they stand — a Moat the
   Disk takes with the board still holds the ground creatures the Disk
   did not kill. Both open (`docs/ROADMAP.md`, the third pass).
+- Time Walk is cast for its printed worth — a generic three, the same
+  as a Hill Giant — once the pace allows it; the turn's own value (the
+  untap, the attack, the land drop) is not priced, so a Walk goes off
+  on an empty board when holding it for a Factory attack would have
+  been the play. Open (`docs/ROADMAP.md`, the third pass).
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` did)

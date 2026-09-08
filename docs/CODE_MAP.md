@@ -1146,7 +1146,17 @@ shandalar/
 │   │                      this one is +3.0..+6.0 on every starter at a
 │   │                      thousand games an arm, three of five clear.
 │   │                      Sorcerer and Wizard. The Deck 31.7% -> 36.2%
-│   │                      against the starters.
+│   │                      against the starters. TIME WALK'S DRAW STEP
+│   │                      (2026-09-08, the third pass): an extra turn is
+│   │                      a draw step off its taker's library before the
+│   │                      other's comes round, so _library_slack counts
+│   │                      the turns already queued on MtgGame.extra_turns
+│   │                      (ours against the lead, theirs for it) and
+│   │                      _size_and_aim holds a spell whose
+│   │                      EffectIntent.extra_turns the slack cannot
+│   │                      cover — a Walk waits for a spare card the way a
+│   │                      Tome's tick does. One card once a game: 40 of
+│   │                      1 500 games differ, 11 flipped to a win, 1 away.
 │   │                      holds_duplicates (2026-09-07) is THE SECOND
 │   │                      LEGEND: whether a permanent whose arrival
 │   │                      would be a card thrown away stays in hand —
@@ -1236,7 +1246,9 @@ shandalar/
 │   │   ├── effect_intent.gd class EffectIntent — WHAT AN EFFECT LIST DOES,
 │   │   │                      read once into numbers the AI reasons with
 │   │   │                      (damage / X damage / self-damage / removes /
-│   │   │                      bounces / taps / draws / searches / pumps /
+│   │   │                      bounces / taps / draws / searches / extra
+│   │   │                      turns (Time Walk's draw step, for THE PACE) /
+│   │   │                      pumps /
 │   │                      regenerates
 │   │   │                      / adds mana / sweeper kept whole / the
 │   │   │                      ANIMATION kept whole for the same reason /
@@ -3420,6 +3432,15 @@ shandalar/
 │    card declaring it; the Wrath the out at four life and the null's
 │    two-point trade waiting; the ladder from Sorcerer up; the knob read
 │    by the Lab
+│    tests/ai/test_ai_time_walk_2026_09_08.gd — TIME WALK'S DRAW STEP
+│    (AiProfile.paces_draws): the reader counting the extra turn and no
+│    longer filing it as unknown, an Ancestral reading none; a queued
+│    turn of ours a card off the lead (two from a lead of one the race
+│    lost), theirs a card for it, the null ignoring the queue; the Walk
+│    held level with their draw next, cast on a lead of one and queued,
+│    cast level beyond the horizon, the null walking the race away; a
+│    second Walk needing a second spare card and spending it; the ladder
+│    from Sorcerer up
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

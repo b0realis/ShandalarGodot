@@ -1038,6 +1038,12 @@ const PACE_HORIZON := 20
 ## never counted this drew with two Tomes into a race it then lost from
 ## twenty life. Every seat that does not pace has all the slack in the
 ## world.
+##
+## TIME WALK'S DRAW STEP (2026-09-08): an extra turn already queued
+## ([member MtgGame.extra_turns]) is a draw step off its taker's library
+## before the other's comes round — ours counted against the lead,
+## theirs for it. The pilot that never counted this cast a Time Walk
+## into a race it led by nothing.
 func _library_slack(game: MtgGame) -> int:
 	if not profile.paces_draws:
 		return 1 << 20
@@ -1047,6 +1053,8 @@ func _library_slack(game: MtgGame) -> int:
 	var ours_next := (game.active_player == pid and step < Mtg.Step.DRAW) \
 		or (game.active_player != pid and step >= Mtg.Step.DRAW)
 	var lead := mine - theirs - (1 if ours_next else 0)
+	for taker in game.extra_turns:
+		lead += -1 if taker == pid else 1
 	if lead < 0:
 		return 1 << 20   # the race is lost already: not ours to protect
 	return maxi(lead, mine - PACE_HORIZON - 1)
@@ -1587,6 +1595,12 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	# THE PACE (2026-09-07, AiProfile.paces_draws): a search is a card off
 	# the library as much as a draw is, and the race counts it the same.
 	if intent.searches and not data.is_modal() and _library_slack(game) < 1:
+		return {}
+	# TIME WALK'S DRAW STEP (2026-09-08, AiProfile.paces_draws): an extra
+	# turn is a draw step off our library before theirs comes round, and
+	# the race counts it the way it counts a Tome.
+	if intent.extra_turns > 0 and not data.is_modal() \
+			and _library_slack(game) < intent.extra_turns:
 		return {}
 	# THE COUNT (2026-09-07, AiProfile.counts_cards): an X that draws or
 	# discards is sized to the cards it acts on, not to the mana at hand.
