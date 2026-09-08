@@ -7691,6 +7691,70 @@ can create new skins if they wish!"*).**
    `zip -r my_skin.zip skin` and `skin_catalogue.py --check` — before
    the catalogue proper; the catalogue is generated, so every name,
    format and size in it is measured off the real files.
+ * **The places (later the same day).** The owner, on seeing the rows:
+   *"in the settings: it writes original skin, it should just say
+   'skin', point to skin zip in skins folder. Then it should be a
+   checkbox — 'use art folder instead of zip' (the default folder
+   location should be shown in settings but can also be changed in
+   cfg) it should be pointing to an original skin folder like we have
+   currently now as default! (The user wants to use this and not zip!).
+   Also there should be setting: additional music folder: user sees
+   there is a folder he can put music in. Setting: Additional Portraits
+   folder. Setting: Card folder. (Therein cardpacks as zip are placed;
+   support for future card packs). Write in settings also that these
+   folder locations can be changed in the cfg file! Go. (And we supply
+   tools to generate these packs from Original data also!)"* — and on
+   what the two folders mean: *"Music by user is added to original
+   scores and played, and portraits by the user are added to originals
+   and displayed on portrait selection."* So: `game/paths.gd`
+   (`GamePaths`) is the ONE place the player's places and their
+   `settings.cfg` keys live — `skin_zip`, `use_skin_folder`,
+   `skin_folder`, `cardpacks_folder`, `portraits_folder`, `music_folder`
+   under `[options]`, none ever written as a default (the "fan" lesson
+   again). The skin zip moved from `user://skin/original_skin.zip` to a
+   **skins folder**, `user://skins/`, where a chosen zip keeps its own
+   name and the key names the one worn; the card art zip became the
+   first of any number of **card packs** in `user://cardpacks/`, every
+   one of which is mounted at boot in name order — a pack for a card set
+   of the future sits beside the first, and `fetch_card_art.py` +
+   `mtg_assets.py --from-cardart` make one. The first build's
+   `user://skin/` zips are moved across once at the next start. The
+   Options rows now read *"Skin: <path> — 235 files, shipped with the
+   game"* and *"Card folder: <path> — cardart.zip (1795 pictures, …)"*;
+   under the Skin row a **Use the skin folder instead of the zip** switch
+   (off by default: the zip worn, a loose file still overriding; on: the
+   zip stays closed and the folder alone dresses the game, from the
+   next start — the row says so the moment it is ticked) and a *Skin
+   folder:* row naming `user://original_skin` — what
+   `import_original.py` fills, and its default destination beside the
+   packaged game now that it ships there; then *Additional portraits
+   folder:* and *Additional music folder:* rows naming each place with
+   how many of the player's own are in it, in the words of the quote
+   above (a face **joins** the 1997 faces in the chooser, a tune
+   **plays among** the 1997 tunes — which is how the two libraries
+   always searched; only the rows are new). Every folder exists from
+   the first look at the screen, README and all, so the path shown can
+   be opened. In a browser there is no path to open and no file to
+   edit: the folder rows and the note's cfg sentence stay off. Forget
+   my zips deletes only under `user://` — a card folder the player
+   pointed elsewhere is theirs to empty.
+   The first look at the rows, by the owner: *"Folders — it is in home
+   folder default location! Buttons too big! Too much text under
+   forget my zips! (Do we need forget my zips button? All this info
+   document in text files not here in the gui)"* — so every path is
+   shown with the home folder as `~` (`GamePaths.shown`), Choose... is
+   a row-height button, each place is ONE line with what goes there in
+   its tooltip, the note is one greyed line pointing at `settings.cfg`
+   and `setup.txt` (where the keys and the tools are explained), and
+   Forget my zips is built only in a browser — on a desktop the row
+   names the folder, and deleting the zip there is the same thing.
+   Tests: `tests/unit/test_game_paths.gd` (the keys' tidying, `~`, the
+   root, a non-string, no trace left), the skin pack's (`home_for`,
+   `cardpacks()`, `own_skin_zip`, the migration, the outside folder, the
+   "missing" row) and the rows' (every place by its path, the switch
+   writing its key, the note naming every key) — all pointing the card
+   folder and the two libraries at scratch through the keys, remembered
+   and put back.
 
 ## THE INSTANT WINDOWS (2026-09-08) — [QoL]
 

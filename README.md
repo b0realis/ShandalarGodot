@@ -148,10 +148,20 @@ frames and mana symbols, portraits, fonts, sounds, the card database and the
 coin-toss movies — so a partial install tells you exactly which parts stay
 drawn. `--install` writes one archive whose inner folder is `skin/` — a
 **skin zip**, which the game mounts as it is: put it beside the executable
-as `skin/original_skin.zip`, choose it in *Options → Skin*, or drop it
-onto the running game's window. Nothing is unpacked. (The same layout
-also unzips cleanly next to the binary, which is how it worked before
-the game could mount a zip.)
+as `skin/original_skin.zip`, choose it in *Options → Skin* (it is kept in
+the game's `skins/` folder under its own name and worn from then on), or
+drop it onto the running game's window. Nothing is unpacked. Would you
+rather have loose files? `tools/import_original.py --source /path/to/game`
+fills the **skin folder** (`user://original_skin/`) instead, and *Use the
+skin folder instead of the zip* on the same screen wears it alone.
+
+*Options → Skin* shows every place the game reads for you by its path —
+the skin zip, the skin folder, the card folder, the portraits folder and
+the music folder — with what is in each; a face or a tune of your own is
+**added** to the 1997 ones, never put in their place. Each place is a key
+in `settings.cfg` (`skin_zip`, `skin_folder`, `cardpacks_folder`,
+`portraits_folder`, `music_folder` under `[options]`), so any of them can
+live wherever you like; the screen names the file.
 
 The packaged build ships that zip, and the card art's (below), beside
 `skin/SKIN.txt`, a generated catalogue (`docs/skin-catalogue.txt`,
@@ -194,10 +204,13 @@ the API, **skips what it already has** so an interrupted run just carries on,
 and prints what it could not fetch rather than stopping. Run beside a shipped
 binary — where `cards/data/` lives inside the `.pck` and cannot be opened as
 a file — it asks Scryfall for the pool instead, one paged search per set.
-The second line zips the folder as `skin/cardart/<card_name>.jpg` — the
-**card art zip**, kept apart from the skin zip because it is twice the
-size and on another licence; it goes beside the executable as
-`skin/cardart.zip`, or through the same *Options → Skin* row and drop.
+The second line zips the folder as `skin/cardart/<card_name>.jpg` — a
+**card pack**, kept apart from the skin zip because it is twice the size
+and on another licence; it goes beside the executable as
+`skin/cardart.zip`, or through the same *Options → Skin* row and drop
+into the **card folder** (`user://cardpacks/`), where every zip is worn —
+one per card set, as many as you like, the first to hold a picture
+winning.
 
 ### 3. Everything else
 

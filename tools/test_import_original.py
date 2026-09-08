@@ -704,5 +704,46 @@ class TestSoundManifest(unittest.TestCase):
         self.assertEqual(out, "", "no sounds, nothing to say")
 
 
+class TestDefaultDestination(unittest.TestCase):
+    """Where the loose skin goes when nobody says: the checkout's
+    assets/original next to a project.godot, else the player's skin
+    folder — the default of the game's `skin_folder` key, the place
+    Options > Skin names (the owner, 2026-09-08: *"pointing to an
+    original skin folder like we have currently now as default"*)."""
+
+    def test_in_the_checkout_it_is_assets_original(self):
+        dest = imp.default_dest()
+        self.assertEqual(dest.name, "original")
+        self.assertEqual(dest.parent.name, "assets")
+        self.assertTrue((dest.parent.parent / "project.godot").exists())
+
+    def test_beside_the_packaged_game_it_is_the_skin_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            was = imp.__file__
+            try:
+                imp.__file__ = str(Path(tmp) / "pkg" / "import_original.py")
+                dest = imp.default_dest()
+            finally:
+                imp.__file__ = was
+        self.assertEqual(dest, imp.godot_user_dir() / "original_skin")
+
+    def test_the_user_dir_is_the_engines_own_on_linux(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("Linux paths")
+        was = os.environ.get("XDG_DATA_HOME")
+        try:
+            os.environ["XDG_DATA_HOME"] = "/srv/data"
+            self.assertEqual(imp.godot_user_dir(),
+                             Path("/srv/data/godot/app_userdata/Shandalar"))
+            del os.environ["XDG_DATA_HOME"]
+            self.assertEqual(imp.godot_user_dir(),
+                             Path.home() / ".local/share/godot/app_userdata/Shandalar")
+        finally:
+            if was is None:
+                os.environ.pop("XDG_DATA_HOME", None)
+            else:
+                os.environ["XDG_DATA_HOME"] = was
+
+
 if __name__ == "__main__":
     unittest.main()

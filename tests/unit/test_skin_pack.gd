@@ -24,20 +24,35 @@ const OUTSIDE := SCRATCH + "/outside.zip"
 const CLIMBING := SCRATCH + "/climbing.zip"
 const EMPTY := SCRATCH + "/empty.zip"
 const NOT_A_ZIP := SCRATCH + "/not_a_zip.zip"
-## Kept aside while a test stores its own zips where the player's go.
-const ASIDE := SCRATCH + "/aside_%s.zip"
+## Where the skins folder's zips wait while a test stores its own there.
+const ASIDE := SCRATCH + "/aside"
+## The card folder, pointed at scratch through its own key so a pack the
+## owner keeps never counts as a test's.
+const PACKS := SCRATCH + "/cardpacks"
+## The keys a test may write; remembered and put back, never written
+## back as a default (see tests/ui/test_game_audio.gd on why).
+const KEYS: Array[String] = [GamePaths.KEY_CARDPACKS, GamePaths.KEY_SKIN_ZIP,
+	GamePaths.KEY_USE_SKIN_FOLDER, GamePaths.KEY_SKIN_FOLDER]
 
 var _was_mounted := false
-var _had_user_zip: Dictionary = {}
+var _aside: Array[String] = []
+var _saved: Dictionary = {}
 
 
 func before_each() -> void:
 	_was_mounted = GameSkin.pack_mounted
 	DirAccess.make_dir_recursive_absolute(SCRATCH)
-	for kind in SkinPack.KINDS:
-		_had_user_zip[kind] = FileAccess.file_exists(SkinPack.user_zip(kind))
-		if _had_user_zip[kind]:
-			DirAccess.rename_absolute(SkinPack.user_zip(kind), ASIDE % kind)
+	DirAccess.make_dir_recursive_absolute(ASIDE)
+	DirAccess.make_dir_recursive_absolute(PACKS)
+	_saved = {}
+	for key in KEYS:
+		_saved[key] = Settings.get_value(key, null) if Settings.has_value(key) else null
+		Settings.clear_value(key)
+	Settings.set_value(GamePaths.KEY_CARDPACKS, PACKS)
+	_aside = []
+	for path in SkinPack._zips_in(SkinPack.USER_DIR):
+		DirAccess.rename_absolute(path, ASIDE.path_join(path.get_file()))
+		_aside.append(path)
 	_write_probe()
 
 
@@ -47,11 +62,21 @@ func after_each() -> void:
 	PortraitLibrary.refresh()
 	MusicLibrary.refresh()
 	SkinPack._hide_notice()
-	for kind in SkinPack.KINDS:
-		if FileAccess.file_exists(SkinPack.user_zip(kind)):
-			DirAccess.remove_absolute(SkinPack.user_zip(kind))
-		if _had_user_zip[kind]:
-			DirAccess.rename_absolute(ASIDE % kind, SkinPack.user_zip(kind))
+	for path in SkinPack._zips_in(SkinPack.USER_DIR):
+		DirAccess.remove_absolute(path)
+	for path in _aside:
+		DirAccess.rename_absolute(ASIDE.path_join(path.get_file()), path)
+	for key in KEYS:
+		if _saved[key] == null:
+			Settings.clear_value(key)
+		else:
+			Settings.set_value(key, _saved[key])
+	for folder in [PACKS, ASIDE, SCRATCH + "/old_skin", SCRATCH + "/theirs"]:
+		if not DirAccess.dir_exists_absolute(folder):
+			continue
+		for name in DirAccess.get_files_at(folder):
+			DirAccess.remove_absolute(folder.path_join(name))
+		DirAccess.remove_absolute(folder)
 	for name in DirAccess.get_files_at(SCRATCH):
 		DirAccess.remove_absolute(SCRATCH.path_join(name))
 	DirAccess.remove_absolute(SCRATCH)
@@ -135,8 +160,68 @@ func test_a_skin_that_carries_card_pictures_is_still_a_skin() -> void:
 func test_the_zips_are_named_for_their_kind() -> void:
 	assert_eq(SkinPack.file_name("skin"), "original_skin.zip")
 	assert_eq(SkinPack.file_name("cardart"), "cardart.zip")
-	assert_eq(SkinPack.user_zip("cardart"), "user://skin/cardart.zip")
-	assert_eq(SkinPack.USER_ART_ZIP, "user://skin/cardart.zip")
+	assert_eq(SkinPack.user_zip("skin"), "user://skins/original_skin.zip",
+		"the skins folder")
+	assert_eq(SkinPack.user_zip("cardart"), PACKS + "/cardart.zip",
+		"the card folder, wherever the key points")
+	Settings.clear_value(GamePaths.KEY_CARDPACKS)
+	assert_eq(SkinPack.user_zip("cardart"), "user://cardpacks/cardart.zip",
+		"user://cardpacks by default")
+
+
+## The owner, 2026-09-08: *"point to skin zip in skins folder … Card
+## folder (therein cardpacks as zip are placed; support for future card
+## packs)"* — a zip that arrives is kept under its own name in the
+## folder of its kind, and a name a browser might report that is no
+## file name at all falls back to the kind's own.
+func test_an_arriving_zip_is_kept_under_its_own_name_in_the_folder_of_its_kind() -> void:
+	assert_eq(SkinPack.home_for("skin", "/home/me/Downloads/my_skin.zip"),
+		"user://skins/my_skin.zip")
+	assert_eq(SkinPack.home_for("cardart", "more_art.zip"), PACKS + "/more_art.zip")
+	assert_eq(SkinPack.home_for("skin", "notes.txt"), "user://skins/original_skin.zip",
+		"not a zip name: the kind's own")
+	assert_eq(SkinPack.home_for("cardart", ""), PACKS + "/cardart.zip")
+	assert_eq(SkinPack.home_for("skin", "a:b?.zip"), "user://skins/original_skin.zip",
+		"not a file name: the kind's own")
+
+
+func test_every_zip_in_the_card_folder_is_a_pack_by_name() -> void:
+	assert_eq(SkinPack.cardpacks(), [] as Array[String], "an empty folder")
+	DirAccess.copy_absolute(ART, PACKS + "/zebra.zip")
+	DirAccess.copy_absolute(ART, PACKS + "/apple.zip")
+	DirAccess.copy_absolute(ART, PACKS + "/fetching.zip")
+	var notes := FileAccess.open(PACKS + "/README.txt", FileAccess.WRITE)
+	notes.store_string("not a zip")
+	notes.close()
+	assert_eq(SkinPack.cardpacks(), [PACKS + "/apple.zip", PACKS + "/zebra.zip"] as Array[String],
+		"by name, zips only, a transfer in flight left out")
+	Settings.set_value(GamePaths.KEY_CARDPACKS, SCRATCH + "/nowhere")
+	assert_eq(SkinPack.cardpacks(), [] as Array[String], "a folder that is not there")
+
+
+## The `skin_zip` key names the skin worn; a missing file falls back to
+## the player's own default, and the default to the shipped one.
+func test_the_skin_zip_key_names_the_zip_worn() -> void:
+	assert_eq(SkinPack.own_skin_zip(), SkinPack.USER_ZIP, "no key: the default")
+	Settings.set_value(GamePaths.KEY_SKIN_ZIP, GOOD)
+	assert_eq(SkinPack.own_skin_zip(), GOOD)
+	Settings.set_value(GamePaths.KEY_SKIN_ZIP, SCRATCH + "/gone.zip")
+	assert_eq(SkinPack.own_skin_zip(), SkinPack.USER_ZIP, "a key naming nothing is ignored")
+
+
+## The first two-zip build kept both zips in `user://skin/`; the next
+## start moves them where this build looks, once, and never over a newer one.
+func test_the_first_builds_zips_are_moved_to_the_new_folders_once() -> void:
+	var old := SCRATCH + "/old_skin"
+	DirAccess.make_dir_recursive_absolute(old)
+	# The autoload's own OLD_USER_DIR is the player's real folder, which a
+	# test must not touch; the move is exercised through its pieces.
+	assert_eq(SkinPack.OLD_USER_DIR, "user://skin")
+	assert_eq(SkinPack.USER_DIR, "user://skins")
+	DirAccess.copy_absolute(ART, old + "/cardart.zip")
+	assert_eq(DirAccess.rename_absolute(old + "/cardart.zip", SkinPack.user_zip("cardart")), OK,
+		"a rename inside user:// is what _migrate does")
+	assert_true(FileAccess.file_exists(PACKS + "/cardart.zip"))
 
 
 func test_an_entry_outside_skin_refuses_the_whole_zip() -> void:
@@ -269,8 +354,13 @@ func test_a_dropped_zip_is_kept_as_the_players_own_and_mounted() -> void:
 	SkinPack._on_files_dropped(PackedStringArray([
 		ProjectSettings.globalize_path(SCRATCH + "/notes.txt"),
 		ProjectSettings.globalize_path(GOOD)]))
-	assert_true(FileAccess.file_exists(SkinPack.USER_ZIP), "copied where the player's zip lives")
-	assert_has(SkinPack.mounted, SkinPack.USER_ZIP)
+	var kept := SkinPack.USER_DIR + "/probe.zip"
+	assert_true(FileAccess.file_exists(kept), "copied into the skins folder, under its own name")
+	assert_has(SkinPack.mounted, kept)
+	assert_eq(String(Settings.get_value(GamePaths.KEY_SKIN_ZIP, "")), kept,
+		"and the key names it, so it is the one worn from now on")
+	assert_eq(SkinPack.own_skin_zip(), kept)
+	assert_eq(String(SkinPack.describe("skin")["source"]), "yours")
 	assert_true(GameSkin.pack_mounted)
 	assert_not_null(SkinPack.notice(), "off the title screen, the game offers a restart")
 	var later := SkinPack.notice().find_child("Later", true, false) as Button
@@ -288,11 +378,13 @@ func test_a_dropped_card_art_zip_is_kept_as_the_players_card_art() -> void:
 	get_tree().root.add_child(elsewhere)
 	get_tree().current_scene = elsewhere
 	SkinPack._on_files_dropped(PackedStringArray([ProjectSettings.globalize_path(ART)]))
-	assert_true(FileAccess.file_exists(SkinPack.USER_ART_ZIP), "kept as cardart.zip, by what it holds")
+	assert_true(FileAccess.file_exists(PACKS + "/art.zip"),
+		"kept in the card folder under its own name, by what it holds")
 	assert_false(FileAccess.file_exists(SkinPack.USER_ZIP), "not as the skin")
-	assert_has(SkinPack.mounted, SkinPack.USER_ART_ZIP)
+	assert_has(SkinPack.mounted, PACKS + "/art.zip")
 	assert_true(SkinPack.has_own())
 	assert_eq(String(SkinPack.describe("cardart")["source"]), "yours")
+	assert_false(Settings.has_value(GamePaths.KEY_SKIN_ZIP), "a card pack needs no key")
 	assert_not_null(SkinPack.notice())
 	if SkinPack.notice() != null:
 		var head := _first_label(SkinPack.notice())
@@ -306,8 +398,11 @@ func test_a_dropped_card_art_zip_is_kept_as_the_players_card_art() -> void:
 func test_forgetting_deletes_the_players_zips_and_offers_a_restart() -> void:
 	DirAccess.make_dir_recursive_absolute(SkinPack.USER_DIR)
 	DirAccess.copy_absolute(GOOD, SkinPack.USER_ZIP)
-	DirAccess.copy_absolute(ART, SkinPack.USER_ART_ZIP)
+	DirAccess.copy_absolute(GOOD, SkinPack.USER_DIR + "/other.zip")
+	DirAccess.copy_absolute(ART, SkinPack.user_zip("cardart"))
+	Settings.set_value(GamePaths.KEY_SKIN_ZIP, SkinPack.USER_DIR + "/other.zip")
 	assert_true(SkinPack.has_own())
+	assert_eq(SkinPack.own_zips().size(), 3, "both folders, every zip")
 	var told := [0]   # a lambda captures a number by value, an array by reference
 	var count := func(_kind: String) -> void:
 		told[0] += 1
@@ -315,8 +410,10 @@ func test_forgetting_deletes_the_players_zips_and_offers_a_restart() -> void:
 	SkinPack.forget()
 	SkinPack.changed.disconnect(count)
 	assert_false(FileAccess.file_exists(SkinPack.USER_ZIP))
-	assert_false(FileAccess.file_exists(SkinPack.USER_ART_ZIP))
+	assert_false(FileAccess.file_exists(SkinPack.USER_DIR + "/other.zip"))
+	assert_false(FileAccess.file_exists(SkinPack.user_zip("cardart")))
 	assert_false(SkinPack.has_own())
+	assert_false(Settings.has_value(GamePaths.KEY_SKIN_ZIP), "the key goes with the zip")
 	assert_eq(told[0], 1, "the rows are told once")
 	assert_not_null(SkinPack.notice())
 	if SkinPack.notice() != null:
@@ -325,14 +422,30 @@ func test_forgetting_deletes_the_players_zips_and_offers_a_restart() -> void:
 
 
 func test_a_forgotten_zip_is_worn_until_the_restart_and_the_row_says_so() -> void:
-	DirAccess.make_dir_recursive_absolute(SkinPack.USER_DIR)
-	DirAccess.copy_absolute(ART, SkinPack.USER_ART_ZIP)
-	assert_true(SkinPack.mount(SkinPack.USER_ART_ZIP, true))
+	var pack := SkinPack.user_zip("cardart")
+	DirAccess.copy_absolute(ART, pack)
+	assert_true(SkinPack.mount(pack, true))
 	assert_eq(String(SkinPack.describe("cardart")["source"]), "yours")
 	SkinPack.forget()
-	assert_has(SkinPack.mounted, SkinPack.USER_ART_ZIP, "still mounted this run")
+	assert_has(SkinPack.mounted, pack, "still mounted this run")
 	assert_eq(String(SkinPack.describe("cardart")["source"]), "forgotten",
 		"the file is gone, the mount is not — the row must not say 'your own'")
+
+
+## A card folder the player pointed OUTSIDE the game's home is theirs:
+## its packs are worn, but "Forget my zips" does not delete them.
+func test_forgetting_leaves_a_card_folder_outside_the_games_home_alone() -> void:
+	var theirs := ProjectSettings.globalize_path(SCRATCH).path_join("theirs")
+	DirAccess.make_dir_recursive_absolute(theirs)
+	Settings.set_value(GamePaths.KEY_CARDPACKS, theirs)
+	assert_eq(SkinPack.cardpacks().size(), 0)
+	DirAccess.copy_absolute(ART, theirs.path_join("keep.zip"))
+	assert_eq(SkinPack.cardpacks(), [theirs.path_join("keep.zip")] as Array[String],
+		"worn all the same")
+	assert_false(SkinPack.has_own(), "but not the game's to delete")
+	SkinPack.forget()
+	assert_true(FileAccess.file_exists(theirs.path_join("keep.zip")))
+	assert_null(SkinPack.notice())
 
 
 func test_forgetting_with_nothing_kept_says_nothing() -> void:
@@ -362,24 +475,44 @@ func test_a_drop_without_a_zip_does_nothing() -> void:
 # ------------------------------------------------------- the options rows --
 
 ## The words the Options screen's `Skin:` rows say, for each thing
-## [method SkinPack.describe] can find.
+## [method SkinPack.describe] can find. The owner, 2026-09-08: *"it
+## should just say 'skin', point to skin zip in skins folder"* — the row
+## names the zip by its path, and the card row names the folder and
+## every pack in it.
 func test_the_status_lines_say_what_dresses_the_game() -> void:
 	assert_eq(SkinPack.status_line("skin", {"source": "none", "name": "", "files": 0}),
-		"1997 art: none — the game draws its own")
-	assert_eq(SkinPack.status_line("cardart", {"source": "none", "name": "", "files": 0}),
-		"Card art: none — cards show a plain art window")
+		"Skin: none — the game draws its own")
 	assert_eq(SkinPack.status_line("skin",
-		{"source": "yours", "name": "original_skin.zip", "files": 235}),
-		"1997 art: original_skin.zip — 235 files, your own")
-	assert_eq(SkinPack.status_line("cardart",
-		{"source": "shipped", "name": "cardart.zip", "files": 1795}),
-		"Card art: cardart.zip — 1795 pictures, shipped with the game")
+		{"source": "yours", "name": "/home/me/.local/share/godot/app_userdata/Shandalar/skins/original_skin.zip",
+		"files": 235}),
+		"Skin: /home/me/.local/share/godot/app_userdata/Shandalar/skins/original_skin.zip — 235 files, your own")
 	assert_eq(SkinPack.status_line("skin",
-		{"source": "folder", "name": "res://assets/original", "files": 0}),
-		"1997 art: a loose folder, res://assets/original")
+		{"source": "shipped", "name": "/opt/shandalar/skin/original_skin.zip", "files": 1}),
+		"Skin: /opt/shandalar/skin/original_skin.zip — 1 file, shipped with the game")
+	assert_eq(SkinPack.status_line("skin",
+		{"source": "folder", "name": "/home/me/original_skin", "files": 236}),
+		"Skin: a loose folder, /home/me/original_skin — 236 files")
+	assert_eq(SkinPack.status_line("skin",
+		{"source": "missing", "name": "/home/me/original_skin", "files": 0}),
+		"Skin: none — /home/me/original_skin is not there; the game draws its own")
+	assert_eq(SkinPack.status_line("skin",
+		{"source": "forgotten", "name": "/x/skins/original_skin.zip", "files": 2}),
+		"Skin: /x/skins/original_skin.zip — 2 files, forgotten, worn until the restart")
+	var folder := "/home/me/.local/share/godot/app_userdata/Shandalar/cardpacks"
 	assert_eq(SkinPack.status_line("cardart",
-		{"source": "forgotten", "name": "cardart.zip", "files": 1}),
-		"Card art: cardart.zip — 1 picture, forgotten, worn until the restart")
+		{"source": "none", "name": "", "files": 0, "folder": folder, "packs": []}),
+		"Card folder: %s — no card pack yet; cards show a plain art window" % folder)
+	assert_eq(SkinPack.status_line("cardart",
+		{"source": "folder", "name": "/dev/assets/cardart", "files": 0, "folder": folder, "packs": []}),
+		"Card folder: %s — no card pack; a loose folder, /dev/assets/cardart" % folder)
+	assert_eq(SkinPack.status_line("cardart",
+		{"source": "yours", "name": "cardart.zip", "files": 1795, "folder": folder, "packs": [
+			{"name": "cardart.zip", "files": 1795, "source": "yours"},
+			{"name": "more.zip", "files": 1, "source": "forgotten"},
+			{"name": "cardart.zip", "files": 1795, "source": "shipped"}]}),
+		"Card folder: %s — cardart.zip (1795 pictures, your own); " % folder
+		+ "more.zip (1 picture, forgotten, worn until the restart); "
+		+ "cardart.zip (1795 pictures, shipped with the game)")
 
 
 func test_the_rows_read_the_mounted_zips_first_and_the_folders_after() -> void:
@@ -392,6 +525,48 @@ func test_the_rows_read_the_mounted_zips_first_and_the_folders_after() -> void:
 	assert_eq(String(SkinPack.describe("skin")["source"]), "mounted",
 		"a mounted zip outranks a folder")
 	assert_eq(int(SkinPack.describe("skin")["files"]), 4)
+	assert_eq(String(SkinPack.describe("skin")["name"]), GamePaths.shown(GOOD),
+		"named by a path a player can open")
+
+
+## The card row lists every mounted pack, in precedence order, and
+## names the card folder whatever is in it.
+func test_the_card_row_names_the_folder_and_every_pack() -> void:
+	var about := SkinPack.describe("cardart")
+	assert_eq(String(about["folder"]), GamePaths.shown(PACKS))
+	var before: int = about["packs"].size()
+	DirAccess.copy_absolute(ART, PACKS + "/zz_probe_pack.zip")
+	assert_true(SkinPack.mount(PACKS + "/zz_probe_pack.zip", true))
+	about = SkinPack.describe("cardart")
+	assert_eq(about["packs"].size(), before + 1)
+	assert_eq(about["packs"][0], {"name": "zz_probe_pack.zip", "files": 1, "source": "yours"},
+		"a replacing mount goes to the front")
+	assert_eq(String(about["source"]), "yours")
+	assert_string_contains(SkinPack.status_line("cardart", about),
+		"zz_probe_pack.zip (1 picture, your own)")
+
+
+## Options > Skin > "Use the skin folder instead of the zip": with the
+## key on and no zip mounted, the row names the folder — or says it is
+## not there. The owner: *"(The user wants to use this and not zip!)"*
+func test_the_skin_folder_instead_of_the_zip_is_what_the_row_says() -> void:
+	if not SkinPack.mounted.is_empty():
+		pass_test("a zip is mounted for the run; the folder rows are pinned in test_options_skin")
+		return
+	Settings.set_value(GamePaths.KEY_USE_SKIN_FOLDER, true)
+	Settings.set_value(GamePaths.KEY_SKIN_FOLDER, SCRATCH + "/no_such_folder")
+	var about := SkinPack.describe("skin")
+	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("res://assets/original")):
+		assert_eq(String(about["source"]), "folder", "a checkout's own folder is still found")
+	else:
+		assert_eq(String(about["source"]), "missing")
+		assert_eq(String(about["name"]), GamePaths.shown(SCRATCH + "/no_such_folder"))
+	Settings.set_value(GamePaths.KEY_SKIN_FOLDER, SCRATCH)
+	about = SkinPack.describe("skin")
+	assert_eq(String(about["source"]), "folder")
+	assert_eq(String(about["name"]), GamePaths.shown(SCRATCH))
+	assert_eq(int(about["files"]), SkinPack.files_at(SCRATCH), "the probes lie flat in it")
+	assert_true(int(about["files"]) >= 7)
 
 
 func test_nothing_is_in_flight_under_the_editor() -> void:

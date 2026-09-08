@@ -40,11 +40,17 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
   * Beside the game: <the game's folder>/skin/original_skin.zip and
     <the game's folder>/skin/cardart.zip. The packaged builds ship
     them there.
-  * Chosen in Options > Skin: two rows, one per zip, each saying what
-    dresses the game now and carrying a Choose... button that opens a
-    file box. The zip chosen is copied into the game's own data folder
-    (user://skin/) and mounted; Forget my zips goes back to what
-    shipped. In a browser the file box is the browser's own.
+  * Chosen in Options > Skin: the Skin row says which zip dresses the
+    game now, by its path, and its Choose... button opens a file box.
+    A skin zip chosen is copied into the game's skins folder
+    (user://skins/, under its own name) and worn from then on; a card
+    art zip goes into the card folder (user://cardpacks/), where EVERY
+    zip is a pack the game wears, in name order, the first to hold a
+    picture winning — so packs for card sets of the future sit beside
+    the first. The Card folder row names the folder and every pack in
+    it; to go back to what shipped, delete the zip from the folder the
+    row names. In a browser the file box is the browser's own, and
+    Forget my zips (there is no folder to open) deletes them all.
   * Dropped on the window: drag any zip onto the running game. The
     same as choosing it.
   * A zip of your own (chosen, dropped or fetched) has precedence over
@@ -54,9 +60,16 @@ WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
     beside the page as skin/original_skin.zip and skin/cardart.zip,
     which the game fetches once and keeps.
   * A loose folder still works too: <the game's folder>/skin/ with the
-    same files unzipped, or user://original_skin/. The game looks in
-    user://original_skin/, then beside itself, then in the mounted
-    zips.
+    same files unzipped, or the skin folder, user://original_skin/
+    (what import_original.py fills). The game looks in the skin
+    folder, then beside itself, then in the mounted zips. "Use the
+    skin folder instead of the zip" in Options > Skin leaves the skin
+    zip closed and lets the folder alone dress the game.
+  * Every one of those places — the skin zip, the skin folder, the
+    card folder, and the portraits and music folders — is shown by
+    its path in Options > Skin and can be moved in settings.cfg
+    (skin_zip, skin_folder, cardpacks_folder, portraits_folder,
+    music_folder under [options]); the screen names the file.
 
 NAMING. Names are exact, lower case, snake_case, with the extensions
 given here. A picture is a PNG (RGB, or RGBA where a mask is wanted);
@@ -81,7 +94,8 @@ that skin/ is the top of the zip (from the folder above it:
 ) and check it:
     python3 tools/skin_catalogue.py --check my_skin.zip
 then choose it in Options > Skin, or drop it on the game's window. Card
-pictures go the same way, under skin/cardart/, in a zip of their own.
+pictures go the same way, under skin/cardart/, in a zip of their own —
+a card pack, one of any number in the card folder.
 
 TO BUILD THE 1997 ONES from your own disc, and the card art:
     python3 tools/mtg_assets.py --install /path/to/the/1997/game

@@ -820,7 +820,7 @@ func _no_portraits_at_all() -> void:
 
 
 func _restore_portraits() -> void:
-	PortraitLibrary.dirs = PortraitLibrary.DEFAULT_DIRS.duplicate()
+	PortraitLibrary.dirs = PortraitLibrary.default_dirs()
 	PortraitLibrary.refresh()
 
 

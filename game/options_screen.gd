@@ -174,19 +174,42 @@ func _add_display_section(content: VBoxContainer) -> void:
 	content.add_child(touch_row)
 
 
-## THE SKIN — `[QoL]`, and the owner's ask of 2026-09-08: *"we should
-## have a menu options to select asset art skin by file choosing."*
+## THE SKIN AND THE PLAYER'S FOLDERS — `[QoL]`, and the owner's asks of
+## 2026-09-08: *"we should have a menu options to select asset art skin
+## by file choosing"*, then: *"it should just say 'skin', point to skin
+## zip in skins folder. Then it should be a checkbox — 'use art folder
+## instead of zip' (the default folder location should be shown in
+## settings but can also be changed in cfg) … additional music folder …
+## Additional Portraits folder … Card folder (therein cardpacks as zip
+## are placed; support for future card packs). Write in settings also
+## that these folder locations can be changed in the cfg file!"* — and,
+## on seeing the first draft: *"Buttons too big! Too much text under
+## forget my zips! (Do we need forget my zips button? All this info
+## document in text files not here in the gui)"*. So: small buttons,
+## one line per place, the long form in the tooltips, and the tools and
+## the keys explained in setup.txt, not here.
 ##
-## Two rows, one per zip ([SkinPack]): the 1997 art in
-## `original_skin.zip` and the card pictures in `cardart.zip`. Each row
-## says what dresses the game NOW — the player's own zip, the one that
-## shipped, a loose folder, or nothing — and its `Choose...` opens a file
-## box for a zip. The zip chosen is kept as the player's own and mounted
-## the way a zip dropped on the window is; it wins over the shipped one
-## from then on, and `Forget my zips` (shown only while there is one)
-## goes back to what shipped. Nothing here is a [Settings] key: the
-## setting IS the file in `user://skin/`, and this screen is a view of
-## the folder like every other row is a view of its key.
+## The rows, top to bottom, every one a VIEW of a place ([GamePaths]):
+##   * `Skin:` — the skin zip worn, by its path ([method SkinPack.describe]),
+##     with `Choose...`: a file box for a zip, kept in the skins folder
+##     and mounted the way a zip dropped on the window is; the
+##     `skin_zip` key names it from then on.
+##   * `Use the skin folder instead of the zip` — the `use_skin_folder`
+##     key, and under it the skin folder's path and what is in it. On,
+##     the zip stays closed from the next start; the loose folder
+##     `import_original.py` fills is the skin (the owner: *"the user
+##     wants to use this and not zip!"*).
+##   * `Card folder:` — the folder every card pack is mounted from, and
+##     the packs found; `Choose...` copies a zip in.
+##   * `Additional portraits folder:` and `Additional music folder:` —
+##     the player's own, joining the 1997 faces and tunes.
+##   * One greyed line: the places can be moved in settings.cfg, and
+##     setup.txt says how.
+## In a browser only the two zip rows show — there is no folder a
+## player could open, and no file to edit — and `Forget my zips` is
+## the way back to what shipped, because there is no file to delete by
+## hand either. On the desktop the row names the folder; deleting the
+## zip there is the same thing, so the button is not built.
 ##
 ## The rows re-read themselves when a pack arrives ([signal
 ## SkinPack.changed]), because the box's answer comes back through the
@@ -195,48 +218,72 @@ func _add_display_section(content: VBoxContainer) -> void:
 ## ([method SkinPack.transfer_line]).
 func _add_skin_section(content: VBoxContainer) -> void:
 	content.add_child(UiChrome.body_label("Skin:"))
-	for kind in SkinPack.KINDS:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
-		var status := UiChrome.body_label(SkinPack.status_line(kind, SkinPack.describe(kind)), 13)
-		status.name = "SkinStatus_" + kind
-		status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		row.add_child(status)
-		# Three dots, as `Sideboard...` and `Help...`: the menu font has no
-		# ellipsis glyph, and `Choose…` drew bare (checked by looking).
-		var choose := UiChrome.menu_button("Choose...", Vector2(120, 34), 16)
-		choose.name = "Choose_" + kind
-		choose.tooltip_text = ("Pick a card art zip: skin/cardart/<card_name>.jpg inside it."
-			if kind == "cardart"
-			else "Pick a skin zip: a skin/ folder inside it with the 1997 art, " \
-				+ "or your own drawn to the same names. SKIN.txt beside the game " \
-				+ "lists every file.")
-		choose.pressed.connect(func() -> void:
-			SkinPack.pick(kind))
-		row.add_child(choose)
-		content.add_child(row)
-	var forget := UiChrome.menu_button("Forget my zips", Vector2(180, 34), 16)
-	forget.name = "ForgetSkins"
-	forget.tooltip_text = "Delete the zips you chose or dropped; the game wears " \
-		+ "what shipped from the next start."
-	forget.visible = SkinPack.has_own()
-	forget.pressed.connect(SkinPack.forget)
-	var forget_row := HBoxContainer.new()
-	forget_row.alignment = BoxContainer.ALIGNMENT_END
-	forget_row.add_child(forget)
-	content.add_child(forget_row)
+	var web := OS.has_feature("web")
+	content.add_child(_zip_row("skin", "Pick a skin zip: a skin/ folder inside it "
+		+ "with the 1997 art, or your own drawn to the same names. It is kept in "
+		+ "the skins folder and worn from then on. SKIN.txt beside the game lists "
+		+ "every file."))
+	if not web:
+		var use_folder := CheckButton.new()
+		use_folder.name = "UseSkinFolder"
+		use_folder.text = "Use the skin folder instead of the zip"
+		use_folder.tooltip_text = "On: the folder below alone dresses the game and " \
+			+ "the zip stays closed — a file missing from the folder is drawn by " \
+			+ "the game, not taken from the zip. Off: the zip is worn, and a file " \
+			+ "in the folder still overrides the same file in the zip. Takes " \
+			+ "effect at the next start."
+		use_folder.button_pressed = GamePaths.use_skin_folder()
+		use_folder.toggled.connect(func(on: bool) -> void:
+			GamePaths.set_use_skin_folder(on)
+			var hint := find_child("SkinHint", true, false) as Label
+			if hint != null:
+				hint.text = ("The folder is worn from the next start; the zip stays closed."
+					if on else "The zip is worn from the next start.")
+				hint.visible = true
+			_on_skin_changed("skin"))
+		UiChrome.shadowed_button(use_folder)
+		content.add_child(use_folder)
+		content.add_child(_place_label("SkinFolder", "Loose skin files, the way "
+			+ "import_original.py beside the game lays them out from your copy of "
+			+ "the 1997 game. A file here overrides the same file in the zip."))
+		var hint := UiChrome.body_label("", 12)
+		hint.name = "SkinHint"
+		hint.visible = false
+		content.add_child(hint)
+	content.add_child(_zip_row("cardart", "Pick a card art zip: "
+		+ "skin/cardart/<card_name>.jpg inside it. It is copied into the card "
+		+ "folder, where every zip is worn."))
+	if not web:
+		# The card folder exists from the first look at this screen, README
+		# and all, so the path the row names can be opened — the same
+		# gesture as the music and portrait folders.
+		SkinPack.ensure_card_folder()
+		content.add_child(_place_label("PortraitsFolder", "A PNG, JPG or WEBP "
+			+ "placed here joins the 1997 faces in the portrait chooser; the file "
+			+ "name is the name."))
+		content.add_child(_place_label("MusicFolder", "A WAV, OGG or MP3 placed "
+			+ "here plays among the 1997 tunes; the file name is the name."))
+	else:
+		var forget := UiChrome.menu_button("Forget my zips", Vector2(150, 28), 14)
+		forget.name = "ForgetSkins"
+		forget.tooltip_text = "Delete the zips you chose or dropped; the game " \
+			+ "wears what came with the page from the next start."
+		forget.visible = SkinPack.has_own()
+		forget.pressed.connect(SkinPack.forget)
+		var forget_row := HBoxContainer.new()
+		forget_row.alignment = BoxContainer.ALIGNMENT_END
+		forget_row.add_child(forget)
+		content.add_child(forget_row)
 	var transfer := UiChrome.body_label("", 12)
 	transfer.name = "SkinTransfer"
 	transfer.visible = false
 	content.add_child(transfer)
-	var note := UiChrome.body_label("A zip dropped on the game window works too. "
-		+ "What a zip holds — names, sizes, formats — is in SKIN.txt beside "
-		+ "the game (docs/skin-catalogue.txt in the repository).", 12)
+	var note := UiChrome.body_label(places_note(web), 12)
+	note.name = "SkinNote"
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.modulate.a = 0.65
 	content.add_child(note)
+	_on_skin_changed("")
 	# Bound methods, not lambdas: a bound method leaves the autoload's
 	# signals with the screen, a lambda would outlive it and write to a
 	# freed label.
@@ -244,13 +291,96 @@ func _add_skin_section(content: VBoxContainer) -> void:
 	SkinPack.fetch_progressed.connect(_on_skin_transfer)
 
 
-## A pack arrived, or the player's zips were forgotten: the rows re-read
-## what dresses the game.
+## One zip row: what dresses the game for [param kind], and `Choose...`.
+func _zip_row(kind: String, tip: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var status := UiChrome.body_label("", 13)
+	status.name = "SkinStatus_" + kind
+	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(status)
+	# Three dots, as `Sideboard...` and `Help...`: the menu font has no
+	# ellipsis glyph, and `Choose…` drew bare (checked by looking). Row
+	# height, not menu height — *"Buttons too big!"*
+	var choose := UiChrome.menu_button("Choose...", Vector2(84, 26), 13)
+	choose.name = "Choose_" + kind
+	choose.tooltip_text = tip
+	choose.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	choose.pressed.connect(func() -> void:
+		SkinPack.pick(kind))
+	row.add_child(choose)
+	return row
+
+
+## One folder row, filled by [method _on_skin_changed]; the long form
+## of what goes there is the tooltip, so the row itself stays a line.
+static func _place_label(node_name: String, tip: String) -> Label:
+	var label := UiChrome.body_label("", 13)
+	label.name = node_name
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.tooltip_text = tip
+	label.mouse_filter = Control.MOUSE_FILTER_PASS   # a label ignores the mouse by default: no tooltip
+	return label
+
+
+## The `Skin folder:` row's words.
+static func skin_folder_line(shown: String, there: bool, files: int) -> String:
+	if not there:
+		return "Skin folder: %s — not there yet" % shown
+	return "Skin folder: %s — %d file%s" % [shown, files, "" if files == 1 else "s"]
+
+
+## The `Additional portraits folder:` row's words. The owner: *"portraits
+## by the user are added to originals and displayed on portrait
+## selection"* — the how is the tooltip.
+static func portraits_line(shown: String, count: int) -> String:
+	if count == 0:
+		return "Additional portraits folder: %s — none yet" % shown
+	return "Additional portraits folder: %s — %d of yours" % [shown, count]
+
+
+## The `Additional music folder:` row's words. The owner: *"Music by
+## user is added to original scores and played"*.
+static func music_line(shown: String, count: int) -> String:
+	if count == 0:
+		return "Additional music folder: %s — none yet" % shown
+	return "Additional music folder: %s — %d track%s of yours" \
+		% [shown, count, "" if count == 1 else "s"]
+
+
+## The one greyed line under the rows. The keys, the tools and what a
+## zip holds are setup.txt's and SKIN.txt's to explain, not this
+## screen's; a browser has no file to edit, so its line keeps to the drop.
+static func places_note(web: bool) -> String:
+	if web:
+		return "A zip dropped on the page works too."
+	return "Every place above can be moved in settings.cfg — setup.txt beside " \
+		+ "the game says how. A zip dropped on the window works too."
+
+
+## A pack arrived, the player's zips were forgotten, or the folder switch
+## moved: every row re-reads its place.
 func _on_skin_changed(_kind: String) -> void:
 	for kind in SkinPack.KINDS:
 		var status := find_child("SkinStatus_" + kind, true, false) as Label
 		if status != null:
 			status.text = SkinPack.status_line(kind, SkinPack.describe(kind))
+	var folder := find_child("SkinFolder", true, false) as Label
+	if folder != null:
+		var place := GamePaths.skin_folder()
+		var there := DirAccess.dir_exists_absolute(GameSkin.locate(place))
+		folder.text = skin_folder_line(GamePaths.shown(place), there,
+			SkinPack.files_at(place) if there else 0)
+	var portraits := find_child("PortraitsFolder", true, false) as Label
+	if portraits != null:
+		portraits.text = portraits_line(GamePaths.shown(PortraitLibrary.ensure_folder()),
+			PortraitLibrary.own_count())
+	var music := find_child("MusicFolder", true, false) as Label
+	if music != null:
+		music.text = music_line(GamePaths.shown(MusicLibrary.ensure_folder()),
+			MusicLibrary.own_count())
 	var forget := find_child("ForgetSkins", true, false) as Button
 	if forget != null:
 		forget.visible = SkinPack.has_own()
@@ -396,7 +526,8 @@ func _add_music_choice(content: VBoxContainer) -> void:
 		line += "Import your copy of the 1997 game, or drop "
 		line += "WAV/OGG/MP3 files in:\n%s" % folder
 	else:
-		line += "Add your own — WAV, OGG or MP3 — in:\n%s" % folder
+		line += "Add your own — WAV, OGG or MP3 — in the music folder " \
+			+ "named under Skin, above."
 	var why := UiChrome.body_label(line, 12)
 	why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	why.custom_minimum_size.x = PANEL_WIDTH - 64.0

@@ -44,11 +44,14 @@ extends RefCounted
 ## is the [AudioStreamPlaylist] currently playing. [MusicPlayer.MAX_TRACKS]
 ## is what bounds that.
 
-## The player's own folder. A `var` for the same reason
+## The player's own folder — `user://music` unless the `music_folder`
+## key moved it ([method GamePaths.music_folder]); its tunes play AMONG
+## the 1997 ones (the owner, 2026-09-08: *"Music by user is added to
+## original scores and played"*). A `var` for the same reason
 ## [PortraitLibrary.dirs] is one: a machine that HAS the original imported
 ## cannot otherwise exercise the code paths for a machine that does not.
 ## Tests point this at a scratch folder and put it back.
-static var dirs: Array[String] = ["user://music"]
+static var dirs: Array[String] = [GamePaths.music_folder()]
 
 ## Where an IMPORTED track is looked for. `null` means "ask [GameSkin]",
 ## which is what ships. A test sets it — to a scratch folder, or to `[]`
@@ -362,6 +365,12 @@ static func title_of(id: String) -> String:
 	for word in words.split(" ", false):
 		out.append(word.substr(0, 1).to_upper() + word.substr(1))
 	return " ".join(out)
+
+
+## How many tunes the player put in their own folder — the Options
+## screen's row says so.
+static func own_count() -> int:
+	return _files_in(dirs[0]).size()
 
 
 ## The player's own folder, created if it is not there, with the README in

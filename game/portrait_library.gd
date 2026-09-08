@@ -18,7 +18,12 @@ extends RefCounted
 ##   3. `res://assets/original/portraits/` the same, in a dev checkout
 ##
 ## The player's folder comes first ON PURPOSE: someone who drops in a face
-## named like an imported one means to replace it.
+## named like an imported one means to replace it. The first two are
+## only the defaults — the `portraits_folder` and `skin_folder` keys
+## move them ([GamePaths]); what is found in all of them is ONE list,
+## so a face of the player's own sits beside the 1997 ones in the
+## chooser (the owner, 2026-09-08: *"portraits by the user are added to
+## originals and displayed on portrait selection"*).
 ##
 ## LOADING BYPASSES THE IMPORT PIPELINE (`Image.load_from_file`), exactly
 ## as [GameSkin] does and for the same reason — a file dropped into
@@ -31,12 +36,20 @@ extends RefCounted
 ## player's own copy, never this repository's, so an unskinned install
 ## finds nothing here and the chooser says where to put some.
 
-## Searched in order; see the class doc.
+## Searched in order; see the class doc. The built-in places —
+## [method default_dirs] is the same list with the player's keys read.
 const DEFAULT_DIRS: Array[String] = [
 	"user://portraits",
 	"user://original_skin/portraits",
 	"res://assets/original/portraits",
 ]
+
+
+## [constant DEFAULT_DIRS] as the player's settings have them: their
+## own folder, the skin folder's `portraits/`, the checkout.
+static func default_dirs() -> Array[String]:
+	return [GamePaths.portraits_folder(),
+		GamePaths.skin_folder().path_join("portraits"), DEFAULT_DIRS[2]]
 
 ## The portable copy, beside the executable — the same idea, and the same
 ## reason, as [method GameSkin.portable_dir]: art that travels with the
@@ -62,7 +75,7 @@ static func portable_dirs() -> Array[String]:
 ## does not, and "what happens with no portraits at all" is exactly the
 ## state a player meets first. Tests point this at a scratch folder and
 ## put it back; nothing else touches it.
-static var dirs: Array[String] = DEFAULT_DIRS.duplicate()
+static var dirs: Array[String] = default_dirs()
 
 ## What counts as a portrait. `Image.load_from_file` reads all four.
 const EXTENSIONS: Array[String] = ["png", "jpg", "jpeg", "webp"]
@@ -167,6 +180,12 @@ static func title_of(id: String) -> String:
 	for word in words.split(" ", false):
 		out.append(word.substr(0, 1).to_upper() + word.substr(1))
 	return " ".join(out)
+
+
+## How many faces the player put in their own folder — the Options
+## screen's row says so.
+static func own_count() -> int:
+	return _files_in(dirs[0]).size()
 
 
 ## The player's own folder, created if it is not there, with the README in

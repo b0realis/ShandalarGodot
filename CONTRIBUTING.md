@@ -66,8 +66,13 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   the skin as TWO zips (`SkinPack`, `load_resource_pack`): the 1997
   material and, apart, the card art — a zip's kind is what it holds,
   not its name. A player chooses either in Options → Skin, or drops it
-  on the window; `tools/skin_catalogue.py --check` says whether a zip
-  is complete.
+  on the window: a skin zip lands in `user://skins/` (the `skin_zip` key
+  names the one worn), a card pack in `user://cardpacks/`, where every
+  zip is mounted. The five places a player can fill — and their
+  `settings.cfg` keys — live in ONE file, `game/paths.gd` (`GamePaths`);
+  read a place through it, never through a literal `user://...`, and
+  never write a key as a default. `tools/skin_catalogue.py --check`
+  says whether a zip is complete.
   The build is the LOCAL step and the GitHub release is a separate one:
   a local build gets played first, and `gh release create` runs only
   when the owner asks for the release — never as the automatic tail of a

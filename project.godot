@@ -12,10 +12,13 @@ config_version=5
 [autoload]
 
 Lifecycle="*res://game/lifecycle.gd"
-; The skin as two zips, `skin/original_skin.zip` and `skin/cardart.zip`,
-; mounted at res://skin — beside the executable, chosen in Options,
+; The skin as zips mounted at res://skin — the player's skin zip
+; (`user://skins/`, the `skin_zip` key) and every card pack in the card
+; folder (`user://cardpacks/`), then `skin/original_skin.zip` and
+; `skin/cardart.zip` beside the executable; chosen in Options > Skin,
 ; dropped on the window, or fetched by the web build from beside its
-; page. Before ShellMusic, which reads the skin.
+; page. Where the places are is `game/paths.gd`. Before ShellMusic,
+; which reads the skin.
 SkinPack="*res://game/skin_pack.gd"
 ShellMusic="*res://game/shell_music.gd"
 ; The finger-as-mouse layer for tablets, phones (the web export) and touch

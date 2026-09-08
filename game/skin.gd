@@ -6,10 +6,14 @@ extends RefCounted
 ## The game never ships original art; tools/import_original.py copies it
 ## from the player's own copy of the 1997 game into one of four places,
 ## checked in order ([method search_dirs]):
-##   1. user://original_skin/          (players, exported builds)
+##   1. user://original_skin/          (players, exported builds — the
+##                                      SKIN FOLDER, movable through the
+##                                      `skin_folder` key, [GamePaths])
 ##   2. <executable>/skin/             (the loose portable copy)
 ##   3. res://skin/                    (skin/original_skin.zip, mounted
-##                                      by [SkinPack] — every platform)
+##                                      by [SkinPack] — every platform;
+##                                      left closed when the player set
+##                                      `use_skin_folder`)
 ##   4. res://assets/original/         (development — gitignored)
 ## Every accessor returns null when the asset is absent, and callers fall
 ## back to the clean built-in skin — so the game is complete without any
@@ -19,8 +23,10 @@ extends RefCounted
 ## import pipeline entirely — that is what lets gitignored and user://
 ## files work identically in editor, headless, and exported builds.
 
-## Where a skin may live, in order. `user://` is the player's own and
-## always wins; `res://` is a development checkout.
+## Where a skin may live, in order, as built in. `user://` is the
+## player's own and always wins; `res://` is a development checkout. The
+## first is only the default: [method search_dirs] reads the folder the
+## player named ([method GamePaths.skin_folder]).
 const SEARCH_DIRS := ["user://original_skin", "res://assets/original"]
 
 ## THE PORTABLE COPY. A build handed to somebody on a USB stick has no
@@ -56,7 +62,7 @@ static var pack_mounted := false
 ## [constant SEARCH_DIRS] with the portable copy and the mounted pack
 ## spliced in, in order of precedence.
 static func search_dirs() -> Array:
-	var out := [SEARCH_DIRS[0]]
+	var out := [GamePaths.skin_folder()]
 	var beside := portable_dir()
 	if beside != "":
 		out.append(beside)

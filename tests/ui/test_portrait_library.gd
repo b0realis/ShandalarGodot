@@ -21,7 +21,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	PortraitLibrary.dirs = PortraitLibrary.DEFAULT_DIRS.duplicate()
+	PortraitLibrary.dirs = PortraitLibrary.default_dirs()
 	for path in _made:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	_made = []
@@ -108,6 +108,11 @@ func test_the_players_own_folder_outranks_an_imported_face() -> void:
 		"the player's folder is searched first")
 	assert_eq(PortraitLibrary.DEFAULT_DIRS.size(), 3,
 		"player, imported skin, dev checkout")
+	# The player's settings move the first two (Options > Skin names the
+	# keys); with none written the search is the built-in one.
+	if not Settings.has_value(GamePaths.KEY_PORTRAITS) \
+			and not Settings.has_value(GamePaths.KEY_SKIN_FOLDER):
+		assert_eq(PortraitLibrary.default_dirs(), PortraitLibrary.DEFAULT_DIRS)
 
 
 func test_a_portable_build_looks_beside_its_own_executable() -> void:
@@ -119,5 +124,5 @@ func test_a_portable_build_looks_beside_its_own_executable() -> void:
 		"in the editor there is nothing beside the executable but Godot")
 	assert_eq(PortraitLibrary.portable_dirs(), [] as Array[String])
 	# The order is the contract: the player's own folder still wins.
-	assert_eq(GameSkin.search_dirs()[0], "user://original_skin")
+	assert_eq(GameSkin.search_dirs()[0], GamePaths.skin_folder())
 	assert_eq(GameSkin.SEARCH_DIRS.size(), 2, "and res:// is still last")

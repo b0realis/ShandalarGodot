@@ -55,7 +55,7 @@ func after_each() -> void:
 	_made = []
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(PLAYER_DIR))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SKIN_DIR))
-	MusicLibrary.dirs = ["user://music"]
+	MusicLibrary.dirs = [GamePaths.music_folder()]
 	MusicLibrary.skin_dirs = null
 	MusicLibrary.refresh()
 	MusicPlayer.reset_order()

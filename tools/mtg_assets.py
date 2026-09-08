@@ -300,8 +300,13 @@ def write_zip(skin: Path, out: Path,
     print(f"\nPut it beside the game, AS IT IS, as skin/{shipped}:")
     print(f"  mkdir -p /path/to/the/game/skin && cp {out.name} /path/to/the/game/skin/{shipped}")
     print(f"…or choose it in Options > Skin, or drop it onto the running game's")
-    print(f"window. The game reads the zip in place; see setup.txt for every")
-    print(f"place it looks.")
+    print(f"window: a skin zip is kept in the game's skins folder and worn, a")
+    if shipped == "cardart.zip":
+        print(f"card pack in its card folder, where every zip is worn — this one")
+        print(f"can sit beside packs for other card sets. The game reads the zip")
+    else:
+        print(f"card pack in its card folder. The game reads the zip")
+    print(f"in place; see setup.txt for every place it looks.")
     return 0
 
 

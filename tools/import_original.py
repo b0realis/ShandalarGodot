@@ -16,9 +16,13 @@ Accepted --source directories (searched recursively, case-insensitive):
                                exist in no conversion)
 Multiple --source flags may be given; first match per file wins.
 
-Default destination is <project>/assets/original (gitignored — dev builds
-load it via res://). For EXPORTED builds, players import into Godot's user
-dir instead:  --dest "$HOME/.local/share/godot/app_userdata/Shandalar/original_skin"
+Default destination: in a checkout, <project>/assets/original (gitignored —
+dev builds load it via res://); beside the packaged game, the player's
+SKIN FOLDER in Godot's user dir — on Linux
+$HOME/.local/share/godot/app_userdata/Shandalar/original_skin — which is
+the place Options > Skin names and the default of its `skin_folder` key
+(so a player who moved the folder passes --dest). "Use the skin folder
+instead of the zip" on that screen then wears these loose files alone.
 
 The MANIFEST below is the single place that maps skin keys (what the game
 asks for) to original filenames (what the importer hunts for). Extending
@@ -49,6 +53,7 @@ speed and for the standard library, verified byte for byte against it.
 """
 
 import argparse
+import os
 import datetime
 import json
 import math
@@ -2333,14 +2338,36 @@ def report_audio_dates(chosen: dict[str, Path]) -> None:
     print("  Example: %s <- %s" % (later[0], sounds[later[0]]))
 
 
+def godot_user_dir() -> Path:
+    """Godot's `user://` for this game, the way the engine itself finds
+    it on each desktop (core/os: XDG on Linux, Application Support on
+    macOS, APPDATA on Windows) — the folder Options > Skin shows."""
+    app = Path("godot") / "app_userdata" / "Shandalar"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Godot" \
+            / "app_userdata" / "Shandalar"
+    if sys.platform.startswith("win"):
+        return Path(os.environ.get("APPDATA", str(Path.home()))) / "Godot" \
+            / "app_userdata" / "Shandalar"
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / app
+
+
+def default_dest() -> Path:
+    """assets/original in a checkout; the player's skin folder beside the
+    packaged game (see the docstring)."""
+    here = Path(__file__).resolve().parent
+    if (here.parent / "project.godot").exists():
+        return here.parent / "assets" / "original"
+    return godot_user_dir() / "original_skin"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", action="append", required=True,
                         help="directory to search (repeatable)")
-    parser.add_argument("--dest",
-                        default=str(Path(__file__).resolve().parent.parent
-                                    / "assets" / "original"),
-                        help="skin output directory")
+    parser.add_argument("--dest", default=str(default_dest()),
+                        help="skin output directory (default: %(default)s)")
     parser.add_argument("--no-videos", action="store_true",
                         help="skip the AVI transcoding step (see VIDEOS)")
     args = parser.parse_args()

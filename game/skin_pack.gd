@@ -48,10 +48,17 @@ extends Node
 ## WHERE THE ZIPS ARE, in the order they are mounted; on a collision the
 ## FIRST mount wins (`replace_files = false`), so the order is the
 ## precedence:
-##   1. `user://skin/original_skin.zip`, `user://skin/cardart.zip` — the
-##      ones the player dropped, chose or the browser fetched. Theirs,
-##      so they win.
-##   2. `<executable>/skin/original_skin.zip`, `<executable>/skin/
+##   1. The player's SKIN ZIP: the one the `skin_zip` key names
+##      ([GamePaths]), else `user://skins/original_skin.zip` — chosen,
+##      dropped or fetched by the browser. Theirs, so it wins. Left
+##      closed when the player set `use_skin_folder`: then the loose
+##      skin folder alone dresses the game.
+##   2. EVERY ZIP IN THE CARD FOLDER, `user://cardpacks/` unless the
+##      `cardpacks_folder` key moved it, by name — `cardart.zip` is what
+##      a chosen or fetched one is called, and a player may place more
+##      (the owner, 2026-09-08: *"Card folder. Therein cardpacks as zip
+##      are placed; support for future card packs"*).
+##   3. `<executable>/skin/original_skin.zip`, `<executable>/skin/
 ##      cardart.zip` — the ones that shipped.
 ## A zip that arrives while the game runs is mounted with replacement,
 ## so a second drop supersedes the first.
@@ -88,10 +95,16 @@ const KINDS: Array[String] = ["skin", "cardart"]
 ## The zips' names, wherever they live.
 const FILE_NAME := "original_skin.zip"
 const ART_FILE_NAME := "cardart.zip"
-## The player's own copies: dropped, chosen or fetched.
-const USER_DIR := "user://skin"
+## The player's own SKIN zips: dropped, chosen or fetched; the one worn
+## is [method own_skin_zip]. Card packs go in the card folder instead
+## ([method GamePaths.cardpacks_folder]).
+const USER_DIR := "user://skins"
 const USER_ZIP := USER_DIR + "/" + FILE_NAME
-const USER_ART_ZIP := USER_DIR + "/" + ART_FILE_NAME
+## Where the first two-zip build (the morning of 2026-09-08) kept both
+## zips; [method _migrate] moves them out once.
+const OLD_USER_DIR := "user://skin"
+## Names in the skins folder that are a transfer, never a skin.
+const IN_FLIGHT: Array[String] = ["fetching.zip", "arriving.zip"]
 ## Every entry inside a valid zip starts with this; every entry of a
 ## card art zip with the second.
 const PREFIX := "skin/"
@@ -172,19 +185,37 @@ var _arrived_at := 0.0
 
 
 func _ready() -> void:
-	for kind in KINDS:
-		_mount_if_present(user_zip(kind), false)
-	for kind in KINDS:
-		var beside := portable_zip(kind)
-		if beside != "":
-			_mount_if_present(beside, false)
+	_migrate()
+	# The skin folder instead of the zip: no skin zip is opened, the
+	# player's or the shipped one — [GameSkin] reads the folder.
+	var folder_instead := GamePaths.use_skin_folder()
+	if not folder_instead:
+		_mount_if_present(own_skin_zip(), false)
+	for path in cardpacks():
+		_mount_if_present(path, false)
+	if not folder_instead:
+		_mount_if_present(portable_zip("skin"), false)
+	_mount_if_present(portable_zip("cardart"), false)
 	get_tree().root.files_dropped.connect(_on_files_dropped)
 	if OS.has_feature("web"):
 		for kind in KINDS:
-			if not has(kind):
+			if not has(kind) and not (kind == "skin" and folder_instead):
 				_queue.append(kind)
 		_fetch_next()
 	set_process(fetching)
+
+
+## The first two-zip build kept `original_skin.zip` and `cardart.zip`
+## together in `user://skin/`; a player who ran it finds them where this
+## build looks — moved, not copied, and only where nothing newer sits.
+func _migrate() -> void:
+	for kind in KINDS:
+		var old := OLD_USER_DIR.path_join(file_name(kind))
+		var now := user_zip(kind)
+		if FileAccess.file_exists(old) and not FileAccess.file_exists(now):
+			DirAccess.make_dir_recursive_absolute(now.get_base_dir())
+			if DirAccess.rename_absolute(old, now) == OK:
+				print("skin pack: moved %s to %s" % [old, now])
 
 
 ## While a transfer is in flight: report how far it is, and for a
@@ -227,9 +258,111 @@ static func file_name(kind: String) -> String:
 	return ART_FILE_NAME if kind == "cardart" else FILE_NAME
 
 
-## The player's own zip of [param kind], under `user://`.
+## Where a zip of [param kind] the player chose, dropped or fetched goes
+## by default: the skins folder, or the card folder.
 static func user_zip(kind: String) -> String:
-	return USER_DIR + "/" + file_name(kind)
+	if kind == "cardart":
+		return GamePaths.cardpacks_folder().path_join(ART_FILE_NAME)
+	return USER_ZIP
+
+
+## Where a zip of [param kind] arriving under [param name] is kept: in
+## the skins folder or the card folder, under its own name — a card
+## folder holds many, and a skins folder may too, the `skin_zip` key
+## saying which is worn. A name that is not a file name (a browser
+## may report anything) falls back to the kind's own.
+static func home_for(kind: String, name: String) -> String:
+	var file := name.get_file()
+	if file.get_extension().to_lower() != "zip" or not file.is_valid_filename():
+		file = file_name(kind)
+	return user_zip(kind).get_base_dir().path_join(file)
+
+
+## The skin zip the player wears: the one the `skin_zip` key names, when
+## it is there, else their own `skins/original_skin.zip` (which may not
+## be there either — then the shipped one is what [method _ready] finds).
+static func own_skin_zip() -> String:
+	var named := GamePaths.skin_zip()
+	if named != "" and FileAccess.file_exists(named):
+		return named
+	return USER_ZIP
+
+
+## Every zip in the card folder, by name — the order they are mounted.
+static func cardpacks() -> Array[String]:
+	return _zips_in(GamePaths.cardpacks_folder())
+
+
+## The instructions the game writes into the card folder, the way
+## [PortraitLibrary] and [MusicLibrary] explain theirs.
+const CARD_README_NAME := "README.txt"
+const CARD_README := """CARD PACKS — the pictures on the cards
+
+Every zip in this folder is worn by the game from its next start, in
+name order; where two hold the same picture the first wins. A card
+pack is a zip with skin/cardart/<card_name>.jpg (or .png) inside it —
+"mishra_s_factory.jpg" for Mishra's Factory — and nothing outside
+skin/. The one the game fetches or you choose in Options is called
+cardart.zip; add others beside it under any name.
+
+To build one: fetch_card_art.py beside the game downloads the pictures,
+then mtg_assets.py --from-cardart <folder> --out cardart.zip packs them.
+SKIN.txt beside the game lists every name the game looks for.
+
+This folder can be moved: the cardpacks_folder key in settings.cfg.
+"""
+
+
+## The card folder, created if it is not there, with the README in it.
+## Returns the path a human can be told to open, as
+## [method PortraitLibrary.ensure_folder] does.
+static func ensure_card_folder() -> String:
+	var folder := GamePaths.cardpacks_folder()
+	var global := ProjectSettings.globalize_path(folder)
+	DirAccess.make_dir_recursive_absolute(global)
+	var readme := folder.path_join(CARD_README_NAME)
+	if not FileAccess.file_exists(readme):
+		var file := FileAccess.open(readme, FileAccess.WRITE)
+		if file != null:
+			file.store_string(CARD_README)
+			file.close()
+	return global
+
+
+## The zips in one folder, sorted, a transfer in flight left out.
+static func _zips_in(folder: String) -> Array[String]:
+	var out: Array[String] = []
+	var dir := DirAccess.open(folder)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var file := dir.get_next()
+	while file != "":
+		if not dir.current_is_dir() and file.get_extension().to_lower() == "zip" \
+				and not IN_FLIGHT.has(file):
+			out.append(folder.path_join(file))
+		file = dir.get_next()
+	dir.list_dir_end()
+	out.sort()
+	return out
+
+
+## How many files sit at the top of [param folder] — the Options rows
+## count a loose skin folder that way (its sheets and sounds lie flat;
+## `cardart/` and `portraits/` are folders beside them).
+static func files_at(folder: String) -> int:
+	var dir := DirAccess.open(folder)
+	if dir == null:
+		return 0
+	var count := 0
+	dir.list_dir_begin()
+	var file := dir.get_next()
+	while file != "":
+		if not dir.current_is_dir():
+			count += 1
+		file = dir.get_next()
+	dir.list_dir_end()
+	return count
 
 
 ## The shipped zip's path beside the executable, or "" where there is no
@@ -324,60 +457,135 @@ func has(kind: String) -> bool:
 	return false
 
 
+## The zips of the player's own — the ones the browser's "Forget my
+## zips" deletes (a desktop names the folder, and the player deletes
+## the zip there): every zip in the skins folder, and every zip in the card folder
+## while that folder is inside the game's own home. A card folder the
+## player pointed elsewhere is theirs to empty ([method GamePaths.is_own]).
+static func own_zips() -> Array[String]:
+	var out := _zips_in(USER_DIR)
+	if GamePaths.is_own(GamePaths.cardpacks_folder()):
+		out.append_array(cardpacks())
+	return out
+
+
 ## Whether the player keeps a zip of their own, of either kind.
 static func has_own() -> bool:
-	for kind in KINDS:
-		if FileAccess.file_exists(user_zip(kind)):
-			return true
-	return false
+	return not own_zips().is_empty()
+
+
+## Whose a mounted zip is: "yours" for one in the skins folder, in the
+## card folder or named by the `skin_zip` key — "forgotten" when that
+## file is gone but the mount remains — "shipped" beside the executable,
+## "mounted" for anything else.
+static func source_of(path: String) -> String:
+	if path.begins_with(USER_DIR + "/") \
+			or path.begins_with(GamePaths.cardpacks_folder() + "/") \
+			or path == GamePaths.skin_zip():
+		# A forgotten zip stays mounted until the restart; the row says
+		# so rather than calling it the player's own still.
+		return "yours" if FileAccess.file_exists(path) else "forgotten"
+	var beside := GameSkin.portable_dir()
+	if beside != "" and path.begins_with(beside):
+		return "shipped"
+	return "mounted"
 
 
 ## What dresses the game for [param kind], for the Options screen:
-## `{source, name, files}`. The source is "yours" (the player's own
-## zip), "shipped" (the one beside the executable), "mounted" (a zip
-## from elsewhere), "folder" (loose files in a search folder, the way a
-## checkout or an unzipped skin reads) or "none".
+## `{source, name, files}` — and for the card packs `folder` (the card
+## folder, as shown) and `packs`, one `{name, files, source}` per
+## mounted zip that holds card pictures, in precedence order. The
+## source is "yours" (the player's own zip), "shipped" (the one beside
+## the executable), "mounted" (a zip from elsewhere), "forgotten" (the
+## player's, deleted, worn until the restart), "folder" (loose files in
+## a search folder, the way a checkout or an unzipped skin reads),
+## "missing" (the skin folder is to be worn instead of the zip and is
+## not there) or "none". Names are as [method GamePaths.shown] has them:
+## a path a player can open.
 func describe(kind: String) -> Dictionary:
+	if kind == "cardart":
+		return _describe_packs()
 	for path in mounted:
 		var count := _holds(path, kind)
-		if count <= 0:
-			continue
-		var source := "mounted"
-		if path.begins_with(USER_DIR + "/"):
-			# A forgotten zip stays mounted until the restart; the row says
-			# so rather than calling it the player's own still.
-			source = "yours" if FileAccess.file_exists(path) else "forgotten"
-		elif GameSkin.portable_dir() != "" and path.begins_with(GameSkin.portable_dir()):
-			source = "shipped"
-		return {"source": source, "name": path.get_file(), "files": count}
+		if count > 0:
+			return {"source": source_of(path), "name": GamePaths.shown(path),
+				"files": count}
 	for dir in GameSkin.search_dirs():
 		if dir == GameSkin.PACK_DIR:
 			continue
-		var folder: String = dir.path_join("cardart") if kind == "cardart" else dir
-		if DirAccess.dir_exists_absolute(GameSkin.locate(folder)):
-			return {"source": "folder", "name": folder, "files": 0}
-	if kind == "cardart" and DirAccess.dir_exists_absolute(
-			ProjectSettings.globalize_path("res://assets/cardart")):
-		return {"source": "folder", "name": "res://assets/cardart", "files": 0}
+		if DirAccess.dir_exists_absolute(GameSkin.locate(dir)):
+			return {"source": "folder", "name": GamePaths.shown(dir),
+				"files": files_at(dir)}
+	if GamePaths.use_skin_folder():
+		return {"source": "missing", "name": GamePaths.shown(GamePaths.skin_folder()),
+			"files": 0}
 	return {"source": "none", "name": "", "files": 0}
 
 
+func _describe_packs() -> Dictionary:
+	var about := {"source": "none", "name": "", "files": 0,
+		"folder": GamePaths.shown(GamePaths.cardpacks_folder()), "packs": []}
+	for path in mounted:
+		var count := _holds(path, "cardart")
+		if count > 0:
+			about["packs"].append({"name": path.get_file(), "files": count,
+				"source": source_of(path)})
+	if not about["packs"].is_empty():
+		var first: Dictionary = about["packs"][0]
+		about["source"] = first["source"]
+		about["name"] = first["name"]
+		about["files"] = first["files"]
+		return about
+	for dir in GameSkin.search_dirs():
+		if dir == GameSkin.PACK_DIR:
+			continue
+		var folder: String = dir.path_join("cardart")
+		if DirAccess.dir_exists_absolute(GameSkin.locate(folder)):
+			about["source"] = "folder"
+			about["name"] = GamePaths.shown(folder)
+			return about
+	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("res://assets/cardart")):
+		about["source"] = "folder"
+		about["name"] = GamePaths.shown("res://assets/cardart")
+	return about
+
+
+## The words for whose a zip is, by [method source_of]'s answer.
+const WHOSE := {"yours": "your own", "shipped": "shipped with the game",
+	"mounted": "mounted", "forgotten": "forgotten, worn until the restart"}
+
+
 ## The Options screen's line for [param kind], from what [method describe]
-## found — a static so the words can be tested against any report.
+## found — a static so the words can be tested against any report. The
+## skin row names the zip worn, by its path; the card row names the card
+## folder and every pack in it.
 static func status_line(kind: String, about: Dictionary) -> String:
-	var what := "Card art" if kind == "cardart" else "1997 art"
 	var source := String(about["source"])
+	if kind == "cardart":
+		var head := "Card folder: %s — " % String(about.get("folder", ""))
+		var packs: Array = about.get("packs", [])
+		if packs.is_empty():
+			if source == "folder":
+				return head + "no card pack; a loose folder, %s" % String(about["name"])
+			return head + "no card pack yet; cards show a plain art window"
+		var named := PackedStringArray()
+		for pack in packs:
+			named.append("%s (%s, %s)" % [String(pack["name"]),
+				_count(int(pack["files"]), "picture"), WHOSE[String(pack["source"])]])
+		return head + "; ".join(named)
 	if source == "none":
-		return what + ": none — " + ("cards show a plain art window"
-			if kind == "cardart" else "the game draws its own")
+		return "Skin: none — the game draws its own"
+	if source == "missing":
+		return "Skin: none — %s is not there; the game draws its own" % String(about["name"])
 	if source == "folder":
-		return "%s: a loose folder, %s" % [what, String(about["name"])]
-	var whose: String = {"yours": "your own", "shipped": "shipped with the game",
-		"mounted": "mounted", "forgotten": "forgotten, worn until the restart"}[source]
-	var count := int(about["files"])
-	var unit := "picture" if kind == "cardart" else "file"
-	return "%s: %s — %d %s, %s" % [what, String(about["name"]), count,
-		unit if count == 1 else unit + "s", whose]
+		return "Skin: a loose folder, %s — %s" % [String(about["name"]),
+			_count(int(about["files"]), "file")]
+	return "Skin: %s — %s, %s" % [String(about["name"]),
+		_count(int(about["files"]), "file"), WHOSE[source]]
+
+
+static func _count(n: int, unit: String) -> String:
+	return "%d %s" % [n, unit if n == 1 else unit + "s"]
 
 
 ## Keep [param source] as the player's own zip of whatever kind it is,
@@ -390,15 +598,31 @@ func adopt(source: String) -> bool:
 		_complain(source.get_file(), String(report["why"]))
 		return false
 	var kind := String(report["kind"])
-	var dest := user_zip(kind)
-	DirAccess.make_dir_recursive_absolute(USER_DIR)
-	if source != dest and DirAccess.copy_absolute(source, dest) != OK:
+	var dest := home_for(kind, source)
+	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
+	if ProjectSettings.globalize_path(source) != ProjectSettings.globalize_path(dest) \
+			and DirAccess.copy_absolute(source, dest) != OK:
 		_complain(source.get_file(), "could not be copied into the game's folder")
 		return false
 	if not mount(dest, true):
 		return false
+	_wear(kind, dest)
 	_arrived(kind)
 	return true
+
+
+## A skin zip that arrived is the one worn from now on: the `skin_zip`
+## key names it — unless it is the default pick itself, when the key is
+## cleared instead, so no default is written into the file and an older
+## choice stops winning over it. A card pack needs no key: every zip in
+## the card folder is worn.
+static func _wear(kind: String, dest: String) -> void:
+	if kind != "skin":
+		return
+	if dest == USER_ZIP:
+		Settings.clear_value(GamePaths.KEY_SKIN_ZIP)
+	else:
+		Settings.set_value(GamePaths.KEY_SKIN_ZIP, dest)
 
 
 ## The same for a file that is already in `user://` under a passing name
@@ -411,27 +635,33 @@ func _take(landed: String, shown: String) -> bool:
 		DirAccess.remove_absolute(landed)
 		return false
 	var kind := String(report["kind"])
-	var dest := user_zip(kind)
+	var dest := home_for(kind, shown)
+	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
 	if FileAccess.file_exists(dest):
 		DirAccess.remove_absolute(dest)
 	if DirAccess.rename_absolute(landed, dest) != OK or not mount(dest, true):
 		DirAccess.remove_absolute(landed)
 		return false
+	_wear(kind, dest)
 	_arrived(kind)
 	return true
 
 
-## Options > Skin > "Forget my zips": the player's own zips are deleted,
-## so the next start dresses the game in what shipped. What is mounted
-## stays mounted for this run (the engine has no unmount), hence the
-## restart on offer.
+## Options > Skin > "Forget my zips" — built in a browser only, where
+## there is no folder to open (the owner: *"Do we need forget my zips
+## button?"* — on a desktop the row names the folder, and deleting the
+## zip there is the same): the player's own zips are deleted
+## ([method own_zips]) and the `skin_zip` key cleared, so the next start
+## dresses the game in what shipped. What is mounted stays mounted for
+## this run (the engine has no unmount), hence the restart on offer.
 func forget() -> void:
 	var gone := 0
-	for kind in KINDS:
-		if FileAccess.file_exists(user_zip(kind)):
-			DirAccess.remove_absolute(user_zip(kind))
+	for path in own_zips():
+		if DirAccess.remove_absolute(path) == OK:
 			gone += 1
-	if gone == 0:
+	var named := Settings.has_value(GamePaths.KEY_SKIN_ZIP)
+	Settings.clear_value(GamePaths.KEY_SKIN_ZIP)
+	if gone == 0 and not named:
 		return
 	changed.emit("")
 	_show_notice("Your own %s forgotten." % ("zip is" if gone == 1 else "zips are"),
@@ -492,8 +722,9 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 # ----------------------------------------------------------- the picker --
 
 ## Options > Skin > "Choose...": a file box for a skin or card art zip,
-## which is then kept and mounted exactly as a drop is ([method adopt]).
-## [param kind] only titles the box — the zip is kept as what it HOLDS.
+## which is then kept and mounted exactly as a drop is ([method adopt]):
+## in the skins folder or the card folder, by what it HOLDS — [param kind]
+## only titles the box.
 ##
 ## On a desktop it is the platform's own file box where the engine has
 ## one (`FileDialog.use_native_dialog`; on Linux through the desktop

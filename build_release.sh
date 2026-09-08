@@ -43,7 +43,10 @@
 # card, 193 MB, from Scryfall and so on another licence) — beside the
 # executable in the package, beside `index.html` for the web build, or
 # chosen in Options > Skin / dropped on the running game's window on
-# either. Next to them goes `skin/SKIN.txt`, the catalogue of everything
+# either (a skin zip lands in `user://skins/`, a card pack in
+# `user://cardpacks/` where every zip is worn — the places and their
+# settings.cfg keys are `game/paths.gd`). Next to them goes
+# `skin/SKIN.txt`, the catalogue of everything
 # the zips hold (docs/skin-catalogue.txt), so a player can draw a skin
 # of their own. Whether the art is HOSTED online is the owner's call:
 # `--web --skin` places the zips, plain `--web` removes them.

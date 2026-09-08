@@ -2543,11 +2543,23 @@ shandalar/
 │    above Sound, borderless not exclusive, applying silent headless,
 │    and the Lifecycle autoload applying it at boot;
 │    tests/ui/test_options_skin.gd — [QoL] the Skin rows (2026-09-08):
-│    one row per zip kind, each a status line + Choose... button, the
-│    Skin row between Display and Sound, "Forget my zips" hidden under
-│    the editor, the rows re-read after SkinPack.adopt (a card art probe
-│    reads "your own" and "1 picture"), the transfer line staying down,
-│    leaving the screen dropping the pack's signal connections;
+│    one row per zip kind, each a status line ("Skin:" / "Card folder:")
+│    + Choose... button, the card row naming the card folder (which
+│    exists from the first look, README and all), the Skin row between
+│    Display and Sound, every place named by its path (the portraits and
+│    music rows against their statics, the folders' READMEs written),
+│    the folder lines' words against any count (one line each, the how
+│    in the tooltip), the rows counting what was put there, the folder
+│    switch writing its key and showing when it takes effect (and
+│    opening on what the key says), the note one line naming
+│    settings.cfg and setup.txt (the web note without the file), no
+│    "Forget my zips" on the desktop (the row names the folder), the
+│    Choose... buttons row-sized, the rows
+│    re-read after SkinPack.adopt (a card art probe lands in the card
+│    folder by name and reads "art.zip (1 picture, your own)"), the
+│    transfer line staying down, leaving the screen dropping the pack's
+│    signal connections — the card folder, the portraits and music
+│    folders pointed at scratch, the keys remembered and put back;
 │    tests/unit/test_touch_gestures.gd — THE GESTURE VOCABULARY
 │    (TouchGestures, 2026-09-07) walked with a hand-held clock: a tap at
 │    the down point under a 12-px wobble, the double within 300 ms and 30
@@ -3037,6 +3049,15 @@ shandalar/
 │    "prevent 3" in SHIELD_INK centred on the art with the P/T outline,
 │    following the pool, "prevent all" at 9999, yielding to a targeting
 │    stamp, hidden face down, the tooltip's shield line;
+│    tests/unit/test_game_paths.gd — THE PLAYER'S PLACES (GamePaths,
+│    2026-09-08): the built-in places with no key written (and reading
+│    leaves no trace), a key moving its place (trailing slash dropped,
+│    edges trimmed, ~ the home folder), an empty or wrong-typed key
+│    falling back (the root keeping its one slash), the folder switch a
+│    key written only when moved (a hand-typed "yes" read as on), expand
+│    touching only a leading tilde, shown() a path a human can open,
+│    is_own() only under user://, PLACE_KEYS the ones the Options note
+│    names — every key remembered and put back;
 │    tests/unit/test_skin_pack.gd — THE SKIN PACK (SkinPack): a probe
 │    zip built with ZIPPacker (a 4x6 PNG, a sidecar, a portrait) so the
 │    contract is tested with no 1997 art on the machine — inspect()
@@ -3056,10 +3077,24 @@ shandalar/
 │    for their kind, a mounted art pack supplying GameSkin.card_art, a
 │    skin not counting as card art nor the reverse, a dropped card art
 │    zip kept as the player's card art with its own notice, forget()
-│    deleting both zips and offering a restart (or saying nothing when
-│    nothing is kept), a forgotten zip worn until the restart and its
-│    row saying so, the status lines' words, mounted zips read before
-│    folders, nothing in flight under the editor, the file box opening
+│    deleting every zip in both folders and the skin_zip key and
+│    offering a restart (or saying nothing when nothing is kept), a
+│    forgotten zip worn until the restart and its row saying so, the
+│    status lines' words ("Skin: <path> — n files, whose"; "Card folder:
+│    <folder> — pack (n pictures, whose); …"; "missing" when the folder
+│    switch is on and the folder gone), mounted zips read before
+│    folders, THE PLACES (2026-09-08): user_zip per kind (skins folder /
+│    card folder, wherever the key points), home_for keeping a zip
+│    under its own name with the kind's name as the fallback,
+│    cardpacks() sorted with a transfer in flight left out, own_skin_zip
+│    following the skin_zip key when the file exists, an adopted skin
+│    writing the key, the card row naming the folder and every pack in
+│    precedence order, a card folder outside user:// worn but never
+│    deleted, the first build's user://skin/ zips moving once, the skin
+│    folder switch's "folder"/"missing" — the card folder pointed at
+│    scratch through its key, the skins folder's zips set aside, the
+│    keys remembered and put back; nothing in flight under the editor,
+│    the file box opening
 │    somewhere real;
 │    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):
 │    user:// under the editor, the location seam, the banner's moment /
@@ -3277,8 +3312,11 @@ shandalar/
 │   ├── music_library.gd     class MusicLibrary — EVERY TUNE THE GAME CAN
 │   │                          PLAY. The original's 27 loopable beds
 │   │                          (Dueltune, LocMus0..19, Tmplmus1, five
-│   │                          castles) plus user://music/*.{wav,ogg,mp3},
-│   │                          the player's own — same search order and
+│   │                          castles) plus the player's music folder
+│   │                          (GamePaths, user://music/*.{wav,ogg,mp3}),
+│   │                          the player's own, ADDED to the 1997 scores
+│   │                          (own_count() is the Options row's number) —
+│   │                          same search order and
 │   │                          same byte-level loading as PortraitLibrary,
 │   │                          and it writes the README that documents the
 │   │                          format. Owns `music_choice` (shuffle / the
@@ -3316,10 +3354,33 @@ shandalar/
 │   │                          (2026-09-08, "a menu options to select
 │   │                          asset art skin by file choosing"): per zip
 │   │                          kind a SkinPack.status_line + Choose...
-│   │                          (SkinPack.pick — a file box), "Forget my
-│   │                          zips", a transfer line while a zip is read
-│   │                          or fetched, a VIEW of user://skin/ with no
-│   │                          Settings key, re-read on SkinPack.changed;
+│   │                          (SkinPack.pick — a file box); redrawn the
+│   │                          same day ("it should just say 'skin', point
+│   │                          to skin zip in skins folder … a checkbox —
+│   │                          'use art folder instead of zip' … additional
+│   │                          music folder … Additional Portraits folder
+│   │                          … Card folder … Write in settings also that
+│   │                          these folder locations can be changed in
+│   │                          the cfg file!"): the Skin row names the zip
+│   │                          worn by its path, `UseSkinFolder` writes
+│   │                          GamePaths.set_use_skin_folder and shows a
+│   │                          "from the next start" hint, `SkinFolder` /
+│   │                          `PortraitsFolder` / `MusicFolder` rows show
+│   │                          each place by its path with what is in it
+│   │                          (skin_folder_line / portraits_line /
+│   │                          music_line — statics, one line each, the
+│   │                          how in the row's tooltip; the owner: "Too
+│   │                          much text"), the Card folder row names
+│   │                          every pack, "Forget my zips" in a browser
+│   │                          only (a desktop names the folder), a
+│   │                          transfer line while a zip is read or
+│   │                          fetched, and `SkinNote` (places_note) —
+│   │                          one greyed line naming settings.cfg and
+│   │                          setup.txt, where the keys and tools are
+│   │                          explained ("document in text files not
+│   │                          here in the gui"); all re-read on
+│   │                          SkinPack.changed; the folder rows are
+│   │                          desktop-only (a browser has no path);
 │   │                          Music and Sound Effects switches
 │   │                          (the deck builder's mini-menu carries the
 │   │                          same two keys), music/sfx volume sliders
@@ -3435,13 +3496,38 @@ shandalar/
 │   │                          ONE place for the game's window look
 │   │                          (player-facing summary of every path:
 │   │                          docs/player-files.md)
+│   ├── paths.gd             class GamePaths — THE PLAYER'S PLACES ([QoL],
+│   │                          2026-09-08: "the default folder location
+│   │                          should be shown in settings but can also be
+│   │                          changed in cfg"): six settings.cfg keys under
+│   │                          [options] — skin_zip, use_skin_folder,
+│   │                          skin_folder (user://original_skin),
+│   │                          cardpacks_folder (user://cardpacks),
+│   │                          portraits_folder (user://portraits),
+│   │                          music_folder (user://music) — NONE written
+│   │                          until the player changes it (a default
+│   │                          materialised can never change). A value is
+│   │                          absolute, user://, or ~/…; _place tidies it
+│   │                          (expand, edges, a trailing slash) and falls
+│   │                          back on a non-string; shown() is the path a
+│   │                          human can open (globalized on the desktop,
+│   │                          the home folder as `~`, the user:// name in
+│   │                          a browser); is_own() is what the browser's
+│   │                          "Forget my zips" may delete. Read by
+│   │                          SkinPack, GameSkin.search_dirs,
+│   │                          PortraitLibrary.default_dirs and
+│   │                          MusicLibrary.dirs; shown by Options > Skin
 │   ├── portrait_library.gd  class PortraitLibrary — THE PLAYER'S OWN FACE
 │   │                          (the duelist above it is DERIVED from the
 │   │                          deck's colour; this one is CHOSEN). Scans
-│   │                          user://portraits, then the imported skin's
+│   │                          the player's portraits folder (GamePaths,
+│   │                          user://portraits), then the skin folder's
 │   │                          portraits/, then res://assets/original/
 │   │                          portraits/ — first wins, so a player's own
-│   │                          file replaces an imported one. Reads bytes
+│   │                          file replaces an imported one and a new
+│   │                          name JOINS the 1997 faces (default_dirs()
+│   │                          reads the keys; own_count() is the Options
+│   │                          row's number). Reads bytes
 │   │                          (Image.load_from_file, through
 │   │                          GameSkin.locate so a portrait inside the
 │   │                          mounted skin pack keeps its res://skin
@@ -3533,28 +3619,44 @@ shandalar/
 │   │                          of it — nothing unpacked, every platform.
 │   │                          `mounted` is kept in PRECEDENCE order
 │   │                          (a replacing mount goes to the front, a
-│   │                          boot mount to the back): user://skin/<kind>
-│   │                          .zip (CHOSEN in Options > Skin, DROPPED on
-│   │                          the window, or FETCHED by the web build)
-│   │                          before <exe>/skin/<kind>.zip (shipped).
+│   │                          boot mount to the back): the player's skin
+│   │                          zip — user://skins/<its own name>.zip, the
+│   │                          `skin_zip` key naming the one worn
+│   │                          (original_skin.zip with no key), closed
+│   │                          under `use_skin_folder` — then EVERY zip in
+│   │                          the card folder (user://cardpacks/, name
+│   │                          order: card packs for card sets to come sit
+│   │                          beside the first), all CHOSEN in Options >
+│   │                          Skin, DROPPED on the window, or FETCHED by
+│   │                          the web build, before <exe>/skin/<kind>.zip
+│   │                          (shipped). The places and their keys are
+│   │                          GamePaths (game/paths.gd); _migrate moves
+│   │                          the first build's user://skin/ zips once;
+│   │                          ensure_card_folder writes the card folder
+│   │                          and its README.
 │   │                          inspect() refuses a zip with any entry
 │   │                          outside `skin/` (a mount would land it at
 │   │                          res://) and reports the kind. describe()/
 │   │                          status_line() are the Options rows' words
-│   │                          ("1997 art: original_skin.zip — 235 files,
-│   │                          your own"; "Card art: none — cards show a
-│   │                          plain art window"), mounted zips first,
+│   │                          ("Skin: <path> — 235 files, your own";
+│   │                          "Card folder: <path> — cardart.zip (1795
+│   │                          pictures, shipped with the game)"; "Skin:
+│   │                          none — <folder> is not there" when the
+│   │                          folder switch is on), mounted zips first,
 │   │                          loose folders after. adopt(path) is a drop
-│   │                          and a pick alike: copy the zip to its
-│   │                          kind's user:// slot (a browser deletes the
-│   │                          dropped file when the signal returns),
+│   │                          and a pick alike: copy the zip into its
+│   │                          kind's folder under its own name (home_for;
+│   │                          a browser deletes the dropped file when the
+│   │                          signal returns), a skin writing skin_zip,
 │   │                          mount with replacement, clear the caches,
 │   │                          refresh the libraries and — on the title —
 │   │                          reload the scene; anywhere else a UiChrome
 │   │                          notice offers Restart (OS.set_restart_on_
 │   │                          exit; location.reload() on web, armed after
 │   │                          RELOAD_GUARD so the IDBFS sync lands) or
-│   │                          Later. forget() deletes both user zips.
+│   │                          Later. forget() deletes every zip in the
+│   │                          skins folder and the card folder (only
+│   │                          under user://) and clears skin_zip.
 │   │                          pick(kind): a native FileDialog on the
 │   │                          desktop (*.zip, starts in Downloads); on
 │   │                          web — where Godot 4.7 has no file dialog —
