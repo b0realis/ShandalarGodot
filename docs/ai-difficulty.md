@@ -203,11 +203,24 @@ in 150 census games with the knob off, 122 and 40 with it on, the same
 64 wins either way: a creature the Abyss was going to eat was never
 worth the counter, and the counter kept is the one that meets the
 Disenchant. The Weissman list is byte-identical: it plays Moat, not
-The Abyss.
+The Abyss. The whole third pass, the shipped Wizard against the
+gauntlet at the same seed: 40.1% before (49.7, 41.7, 48.7, 35.7,
+25.0) and 40.6% after (44.7, 41.3, 48.0, 39.0, 30.0) with the
+mulligan on, 40.3% to 40.5% with it off — a wash on the total because
+both seats got better: the tribute is the starters' gain, the Disk,
+the Factory, the Walk and the kept counter are The Deck's, and White
+Knights' +5.0 is where those land.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
-`docs/ROADMAP.md` keeps the runs. `CONTRIBUTING.md` has the rule.
+`docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
+FIRES the knob, not by what the last knob used: a pace knob's control
+holds no draw spell, tutor or Time Walk (Big Green vs White Knights),
+a sweeper's no Hurricane, Earthquake or Wrath (Blue Skies vs Black-Red
+Raiders) — the third pass's Time Walk sweep FAILED its first control
+on exactly that (Blue Skies' Ancestral Recall), and a failed control
+makes the deltas beside it no measurement at all. `CONTRIBUTING.md`
+has the rule.
 
 ## 5. Where the ladder still ends short
 
