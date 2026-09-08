@@ -27,7 +27,10 @@ your home directory.
     Shandalar.pck        its code, the 897 cards' rules, and 317 decks
     skin/original_skin.zip   the 1997 art, as one zip the game reads
                              in place — never unpacked
-    skin/SKIN.txt        the catalogue: every file the zip holds, its
+    skin/cardart.zip     the card pictures, a second zip read the same
+                         way (apart, because it is twice the size and
+                         from another source)
+    skin/SKIN.txt        the catalogue: every file the zips hold, its
                          format, size and name, for drawing a skin of
                          your own
     icon.png             the game's icon
@@ -61,15 +64,17 @@ and inside it:
     portraits/                your own portraits    (*.png, *.jpg)
     music/                    your own music        (*.wav, *.ogg, *.mp3)
     original_skin/            an imported 1997 skin, as loose files
-    skin/original_skin.zip    a skin zip you dropped on the game
+    skin/original_skin.zip    a skin zip you chose or dropped on the game
+    skin/cardart.zip          a card art zip you chose or dropped
     logs/                     crash and error logs
 
 ART IS SEARCHED IN FOUR PLACES, FIRST MATCH WINS:
 
     1. ~/.local/share/godot/app_userdata/Shandalar/original_skin/
     2. <this folder>/skin/               loose files beside the game
-    3. the mounted skin zip              <this folder>/skin/original_skin.zip,
-                                         or the one you dropped (which wins)
+    3. the mounted zips                  <this folder>/skin/original_skin.zip
+                                         and skin/cardart.zip, or the ones
+                                         you chose or dropped (which win)
     4. (a development checkout's assets/original/, not present here)
 
 So anything you put in (1) or (2) overrides what shipped in (3). Portraits
@@ -78,21 +83,26 @@ and music are searched slightly differently, because your own come first:
     portraits:  user portraits/ -> original_skin/portraits/ -> skin/portraits/ -> the zip's
     music:      user music/     -> original_skin/           -> skin/           -> the zip's
 
-THE SKIN ZIP is read where it lies; nothing is unpacked, ever. To wear a
-different skin, DROP ITS ZIP ONTO THE GAME'S WINDOW: it is copied into
-the user directory above (skin/original_skin.zip) and mounted — on the
-title screen the new art shows at once; during a duel the game says the
-art is in and offers a restart. The dropped zip takes precedence over the
-one that shipped; drop another to replace it, or delete the file to go
-back. A zip must have a `skin/` folder at its top and everything inside
-that folder, or it is refused whole (the game says so). SKIN.txt lists
-what goes in; `python3 skin_catalogue.py --check my_skin.zip` reports
-what a zip of yours is missing.
+THE ZIPS are read where they lie; nothing is unpacked, ever. To wear a
+different skin, CHOOSE ITS ZIP IN OPTIONS > SKIN (two rows, one per
+zip, each saying what dresses the game now, each with a Choose...
+button that opens a file box) or DROP THE ZIP ONTO THE GAME'S WINDOW:
+it is copied into the user directory above (skin/original_skin.zip or
+skin/cardart.zip, by what it holds) and mounted — on the title screen
+the new art shows at once; anywhere else the game says the art is in
+and offers a restart. Your zip takes precedence over the one that
+shipped; choose another to replace it, or "Forget my zips" on the same
+rows to go back. A zip must have a `skin/` folder at its top and
+everything inside that folder, or it is refused whole (the game says
+so). SKIN.txt lists what goes in; `python3 skin_catalogue.py --check
+my_skin.zip` reports what a zip of yours is missing.
 
-CARD ART sits in a `cardart/` subfolder of any of those, as
-<card_name_in_snake_case>.jpg or .png:
+CARD ART is the second zip: skin/cardart.zip, holding
+skin/cardart/<card_name_in_snake_case>.jpg or .png. Loose pictures in a
+`cardart/` subfolder of any of the places above are read too:
 
-    <this folder>/skin/cardart/serra_angel.jpg      (loose, or inside the zip)
+    <this folder>/skin/cardart/serra_angel.jpg      (loose)
+    skin/cardart.zip -> skin/cardart/serra_angel.jpg (the zip)
 
 DECKS the game shipped are read-only, and a deck of yours may not take
 one of their names. That is the 1997 manual's own rule (p.148): "If you
@@ -108,13 +118,15 @@ into Save As, with the new name already filled in.
 897 cards. The art is not in the 1997 install in any usable form, so it
 is downloaded from Scryfall by a script that ships beside this file:
 
-    python3 fetch_card_art.py --out skin/cardart/
+    python3 fetch_card_art.py --out cardart/
+    python3 mtg_assets.py --from-cardart cardart/ --out skin/cardart.zip
 
 Needs Python 3 and a network connection, nothing else. It takes a few
 minutes (it is deliberately polite to the API — about eight requests a
 second), it SKIPS what it already has, so an interrupted run just carries
 on where it stopped, and it prints what it could not fetch rather than
-stopping.
+stopping. The second line zips the folder the way the game reads it;
+the zip can also be chosen in Options > Skin or dropped on the window.
 
 Without it, cards draw with a clean placeholder and are perfectly
 playable — every name, cost, type, rules text and picture frame is there,
@@ -133,8 +145,8 @@ zip that shipped here:
     python3 mtg_assets.py --install /path/to/game  imports, writes a zip
 
 It reads your install and never writes to it. The zip it produces is a
-skin zip — a `skin/` folder inside — so either drop it onto the game's
-window, or put it where the shipped one is:
+skin zip — a `skin/` folder inside — so choose it in Options > Skin, drop
+it onto the game's window, or put it where the shipped one is:
 
     cp shandalar-art.zip <this folder>/skin/original_skin.zip
 

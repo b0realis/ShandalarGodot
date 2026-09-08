@@ -10,7 +10,8 @@
 #                                   #    exported build looks like the dev
 #                                   #    one (see below)
 #   ./build_release.sh --package    # + the zip a player unpacks and runs:
-#                                   #    skin/original_skin.zip and the
+#                                   #    skin/original_skin.zip,
+#                                   #    skin/cardart.zip and the
 #                                   #    catalogue, icon.png, shortcut.sh
 #   ./build_release.sh --web        # the "Web" preset instead ->
 #                                   #    ../shandalar-build/web/index.html
@@ -20,8 +21,9 @@
 #                                   #    .wasm). No threads, so any static
 #                                   #    host will do — see the preset's
 #                                   #    note in export_presets.cfg.example
-#   ./build_release.sh --web --skin # + skin/original_skin.zip beside the
-#                                   #    page, which the game fetches once
+#   ./build_release.sh --web --skin # + skin/original_skin.zip and
+#                                   #    skin/cardart.zip beside the page,
+#                                   #    which the game fetches once
 #
 # WHAT SHIPS, AND WHAT DOES NOT. The .pck carries game/, engine/, cards/
 # (scripts + cards/data/) and every deck under decks/ — about 5 MB. It
@@ -35,14 +37,16 @@
 # --dest "$HOME/.local/share/godot/app_userdata/Shandalar/original_skin"`
 # is how a player fills it from their own 1997 CD.
 #
-# THE SKIN PACK (2026-09-08). The art travels as ONE ZIP,
-# `skin/original_skin.zip`, that the game mounts in place at boot
-# (`game/skin_pack.gd`) — beside the executable in the package, beside
-# `index.html` for the web build, or dropped on the running game's
-# window on either. Next to it goes `skin/SKIN.txt`, the catalogue of
-# everything the zip holds (docs/skin-catalogue.txt), so a player can
-# draw a skin of their own. Whether the 1997 art is HOSTED online is the
-# owner's call: `--web --skin` places the zip, plain `--web` removes it.
+# THE SKIN PACKS (2026-09-08). The art travels as TWO ZIPS the game
+# mounts in place at boot (`game/skin_pack.gd`): `skin/original_skin.zip`
+# (the 1997 material, 84 MB) and `skin/cardart.zip` (one picture per
+# card, 193 MB, from Scryfall and so on another licence) — beside the
+# executable in the package, beside `index.html` for the web build, or
+# chosen in Options > Skin / dropped on the running game's window on
+# either. Next to them goes `skin/SKIN.txt`, the catalogue of everything
+# the zips hold (docs/skin-catalogue.txt), so a player can draw a skin
+# of their own. Whether the art is HOSTED online is the owner's call:
+# `--web --skin` places the zips, plain `--web` removes them.
 #
 # THE ICON (2026-09-08). The package carries `icon.png` and a
 # `shortcut.sh` that writes a desktop entry pointing at the binary and
@@ -83,31 +87,49 @@ BIN="$OUT/Shandalar.x86_64"
 [ "$WEB" = 1 ] && BIN="$OUT/index.html"
 LOG="${TMPDIR:-/tmp}/shandalar-export.log"
 
-# THE SKIN ZIP, `original_skin.zip`: this checkout's assets/original (the
-# imported 1997 skin, whatever the owner has) with its portraits and the
-# card art, as real files under one `skin/` folder — written by the same
-# tools/mtg_assets.py a player uses on their own disc, so the two zips
-# are the same shape. Symlinks are DEREFERENCED (`cp -RL`) on the way:
-# the dev skin can be a tree of links into this checkout, and a zip of
-# links is a zip of nothing. Beside it, the catalogue.
+# THE SKIN ZIPS, `original_skin.zip` and `cardart.zip`: this checkout's
+# assets/original (the imported 1997 skin, whatever the owner has) with
+# its portraits, as real files under one `skin/` folder; and the card
+# art apart from it, as `skin/cardart/` — the owner, 2026-09-08: "the
+# skin assets should be a separate zip, card art pack should be
+# separate!" Both written by the same tools/mtg_assets.py a player uses
+# on their own disc, so a player's zips and the shipped ones are the
+# same shape. Symlinks are DEREFERENCED (`cp -RL`) on the way: the dev
+# skin can be a tree of links into this checkout, and a zip of links is
+# a zip of nothing. Beside them, the catalogue.
 skin_pack() {  # skin_pack DEST_DIR
-	local dest="$1" stage
+	local dest="$1" stage log
+	log="${TMPDIR:-/tmp}/shandalar-skin-zip.log"
 	stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-skin.XXXXXX")"
+	mkdir -p "$dest"
+	rm -f "$dest/original_skin.zip" "$dest/cardart.zip"
 	if [ -d assets/original ]; then
 		cp -RLp assets/original/. "$stage/" 2>/dev/null || true
-		find "$stage" -name '*.import' -delete
+		find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
+		# Any pictures in the dev skin folder belong to the second zip.
+		rm -rf "$stage/cardart"
+		python3 tools/mtg_assets.py --from-skin "$stage" --out "$dest/original_skin.zip" \
+			> "$log" 2>&1 \
+			|| { echo "BUILD FAILED: the skin zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
 	fi
-	if [ -d assets/cardart ]; then
-		mkdir -p "$stage/cardart"
-		cp -RLp assets/cardart/. "$stage/cardart/" 2>/dev/null || true
-	fi
-	mkdir -p "$dest"
-	python3 tools/mtg_assets.py --from-skin "$stage" --out "$dest/original_skin.zip" \
-		> "${TMPDIR:-/tmp}/shandalar-skin-zip.log" 2>&1 \
-		|| { echo "BUILD FAILED: the skin zip was not written" >&2; cat "${TMPDIR:-/tmp}/shandalar-skin-zip.log" >&2; rm -rf "$stage"; exit 1; }
 	rm -rf "$stage"
+	if [ -d assets/cardart ]; then
+		stage="$(mktemp -d "${TMPDIR:-/tmp}/shandalar-cardart.XXXXXX")"
+		cp -RLp assets/cardart/. "$stage/" 2>/dev/null || true
+		# .import sidecars and the checkout's .gdignore are the editor's,
+		# not the skin's.
+		find "$stage" \( -name '*.import' -o -name '.gdignore' \) -delete
+		python3 tools/mtg_assets.py --from-cardart "$stage" --out "$dest/cardart.zip" \
+			> "$log" 2>&1 \
+			|| { echo "BUILD FAILED: the card art zip was not written" >&2; cat "$log" >&2; rm -rf "$stage"; exit 1; }
+		rm -rf "$stage"
+	fi
 	cp -p docs/skin-catalogue.txt "$dest/SKIN.txt"
-	echo "skin pack: $dest/original_skin.zip ($(du -h "$dest/original_skin.zip" | cut -f1)) + SKIN.txt"
+	local said="" f
+	for f in original_skin.zip cardart.zip; do
+		[ -f "$dest/$f" ] && said="$said $f ($(du -h "$dest/$f" | cut -f1))"
+	done
+	echo "skin pack: $dest/ —${said:- nothing to zip} + SKIN.txt"
 }
 
 # Warm the import cache quietly (a cold checkout has no .godot/).
@@ -130,9 +152,10 @@ fi
 # template is JavaScript around a .wasm), so the check is that the three
 # files a page needs came out, and the sizes are printed for the hosting
 # question — the .wasm is the engine and gzips to a quarter. With
-# `--skin` the skin zip goes beside the page as `skin/original_skin.zip`
-# (the game fetches it from there, once); without, any earlier one is
-# removed so a build without `--skin` never hosts the art by accident.
+# `--skin` the two zips go beside the page as `skin/original_skin.zip`
+# and `skin/cardart.zip` (the game fetches each it lacks from there,
+# once); without, any earlier ones are removed so a build without
+# `--skin` never hosts the art by accident.
 if [ "$WEB" = 1 ]; then
 	for f in index.html index.js index.wasm index.pck; do
 		[ -s "$OUT/$f" ] || { echo "BUILD FAILED: no $f in $OUT" >&2; exit 1; }
@@ -186,8 +209,9 @@ echo "run it with: $BIN"
 # carries the game and the decks but no art (docs/player-files.md), and the
 # art normally lives in the player's own `user://` folder — which does not
 # exist on somebody else's computer. So the package puts it BESIDE THE
-# EXECUTABLE as `skin/original_skin.zip`, where `SkinPack` mounts it at
-# boot: unzip the package, run, done — the skin zip itself stays a zip.
+# EXECUTABLE as `skin/original_skin.zip` and `skin/cardart.zip`, where
+# `SkinPack` mounts them at boot: unzip the package, run, done — the
+# zips themselves stay zips.
 if [ "$PACKAGE" = 1 ]; then
 	VERSION="$(sed -n 's/^config\/version="\(.*\)"/\1/p' project.godot)"
 	STAGE="$(dirname "$OUT")/pkg/Shandalar-$VERSION-linux64"

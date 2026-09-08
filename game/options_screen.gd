@@ -8,7 +8,8 @@ extends Control
 ## in the Duel Options panel. One value, one storage, many views — never a
 ## parallel copy.
 ##
-## Full screen, sound on/off (music and effects separately, as the
+## Full screen, the skin (which zips dress the game, and a file box to
+## choose one), sound on/off (music and effects separately, as the
 ## original separated them), music & effects volume, hand display, the
 ## rules forks, AI pace — persisted immediately through Settings
 ## (user://settings.cfg), so every one of them is the default of the next
@@ -85,6 +86,8 @@ func _ready() -> void:
 	content.add_child(title)
 
 	_add_display_section(content)
+
+	_add_skin_section(content)
 
 	_add_sound_section(content)
 
@@ -169,6 +172,96 @@ func _add_display_section(content: VBoxContainer) -> void:
 	UiChrome.shadowed_button(touch)
 	touch_row.add_child(touch)
 	content.add_child(touch_row)
+
+
+## THE SKIN — `[QoL]`, and the owner's ask of 2026-09-08: *"we should
+## have a menu options to select asset art skin by file choosing."*
+##
+## Two rows, one per zip ([SkinPack]): the 1997 art in
+## `original_skin.zip` and the card pictures in `cardart.zip`. Each row
+## says what dresses the game NOW — the player's own zip, the one that
+## shipped, a loose folder, or nothing — and its `Choose...` opens a file
+## box for a zip. The zip chosen is kept as the player's own and mounted
+## the way a zip dropped on the window is; it wins over the shipped one
+## from then on, and `Forget my zips` (shown only while there is one)
+## goes back to what shipped. Nothing here is a [Settings] key: the
+## setting IS the file in `user://skin/`, and this screen is a view of
+## the folder like every other row is a view of its key.
+##
+## The rows re-read themselves when a pack arrives ([signal
+## SkinPack.changed]), because the box's answer comes back through the
+## pack, not through this screen — and in a browser the chosen file is
+## read in over a few frames, which the line under the rows reports
+## ([method SkinPack.transfer_line]).
+func _add_skin_section(content: VBoxContainer) -> void:
+	content.add_child(UiChrome.body_label("Skin:"))
+	for kind in SkinPack.KINDS:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		var status := UiChrome.body_label(SkinPack.status_line(kind, SkinPack.describe(kind)), 13)
+		status.name = "SkinStatus_" + kind
+		status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(status)
+		# Three dots, as `Sideboard...` and `Help...`: the menu font has no
+		# ellipsis glyph, and `Choose…` drew bare (checked by looking).
+		var choose := UiChrome.menu_button("Choose...", Vector2(120, 34), 16)
+		choose.name = "Choose_" + kind
+		choose.tooltip_text = ("Pick a card art zip: skin/cardart/<card_name>.jpg inside it."
+			if kind == "cardart"
+			else "Pick a skin zip: a skin/ folder inside it with the 1997 art, " \
+				+ "or your own drawn to the same names. SKIN.txt beside the game " \
+				+ "lists every file.")
+		choose.pressed.connect(func() -> void:
+			SkinPack.pick(kind))
+		row.add_child(choose)
+		content.add_child(row)
+	var forget := UiChrome.menu_button("Forget my zips", Vector2(180, 34), 16)
+	forget.name = "ForgetSkins"
+	forget.tooltip_text = "Delete the zips you chose or dropped; the game wears " \
+		+ "what shipped from the next start."
+	forget.visible = SkinPack.has_own()
+	forget.pressed.connect(SkinPack.forget)
+	var forget_row := HBoxContainer.new()
+	forget_row.alignment = BoxContainer.ALIGNMENT_END
+	forget_row.add_child(forget)
+	content.add_child(forget_row)
+	var transfer := UiChrome.body_label("", 12)
+	transfer.name = "SkinTransfer"
+	transfer.visible = false
+	content.add_child(transfer)
+	var note := UiChrome.body_label("A zip dropped on the game window works too. "
+		+ "What a zip holds — names, sizes, formats — is in SKIN.txt beside "
+		+ "the game (docs/skin-catalogue.txt in the repository).", 12)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.modulate.a = 0.65
+	content.add_child(note)
+	# Bound methods, not lambdas: a bound method leaves the autoload's
+	# signals with the screen, a lambda would outlive it and write to a
+	# freed label.
+	SkinPack.changed.connect(_on_skin_changed)
+	SkinPack.fetch_progressed.connect(_on_skin_transfer)
+
+
+## A pack arrived, or the player's zips were forgotten: the rows re-read
+## what dresses the game.
+func _on_skin_changed(_kind: String) -> void:
+	for kind in SkinPack.KINDS:
+		var status := find_child("SkinStatus_" + kind, true, false) as Label
+		if status != null:
+			status.text = SkinPack.status_line(kind, SkinPack.describe(kind))
+	var forget := find_child("ForgetSkins", true, false) as Button
+	if forget != null:
+		forget.visible = SkinPack.has_own()
+
+
+func _on_skin_transfer(fraction: float) -> void:
+	var line := find_child("SkinTransfer", true, false) as Label
+	if line == null:
+		return
+	line.text = SkinPack.transfer_line(fraction)
+	line.visible = SkinPack.busy()
 
 
 ## SOUND — TWO SWITCHES AND TWO SLIDERS, and only the switches are 1997's.
@@ -486,3 +579,7 @@ static func _flush_when_the_drag_ends(slider: HSlider) -> void:
 
 func _exit_tree() -> void:
 	Settings.flush()
+	if SkinPack.changed.is_connected(_on_skin_changed):
+		SkinPack.changed.disconnect(_on_skin_changed)
+	if SkinPack.fetch_progressed.is_connected(_on_skin_transfer):
+		SkinPack.fetch_progressed.disconnect(_on_skin_transfer)

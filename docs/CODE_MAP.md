@@ -1495,9 +1495,18 @@ shandalar/
 │   │                          folder is `skin/` so it unpacks beside the
 │   │                          binary with no path to type. --from-skin
 │   │                          archives an already-imported folder (how
-│   │                          shandalar-art-1997.zip was built). Wraps
+│   │                          shandalar-art-1997.zip was built);
+│   │                          --from-cardart archives a folder of card
+│   │                          pictures under skin/cardart/ as the
+│   │                          separate cardart.zip (2026-09-08). Wraps
 │   │                          import_original.py, which must sit beside
 │   │                          it; reads the install, never writes to it.
+│   ├── test_mtg_assets.py   unittest: write_zip on folders built in the
+│   │                          test — a skin folder lands under skin/ and
+│   │                          is announced as skin/original_skin.zip, a
+│   │                          card art folder (inner="cardart") under
+│   │                          skin/cardart/ as skin/cardart.zip, an empty
+│   │                          folder refused
 │   ├── skin_catalogue.py    THE SKIN'S CATALOGUE (2026-09-08) — writes
 │   │                          docs/skin-catalogue.txt (shipped as
 │   │                          skin/SKIN.txt): every MANIFEST / VIDEOS /
@@ -1510,8 +1519,13 @@ shandalar/
 │   │                          image+mask halves), plus portraits/,
 │   │                          cardart/ (the snake-name rule) and
 │   │                          movies/. A key with no note is an error.
-│   │                          --check ZIP_OR_DIR reports what a skin of
-│   │                          a player's own is missing
+│   │                          Opens with the TWO-ZIP layout (original_
+│   │                          skin.zip / cardart.zip, kind by what a zip
+│   │                          holds), where they go (Options > Skin, a
+│   │                          drop, beside the binary) and "TO DRAW YOUR
+│   │                          OWN". --check ZIP_OR_DIR reports what a skin
+│   │                          of a player's own is missing, or counts the
+│   │                          pictures of a card art zip
 │   ├── test_skin_catalogue.py  unittest: the measurers on files built
 │   │                          in the test (a PNG header, a `wave` WAV,
 │   │                          a font's magic, a sidecar), every manifest
@@ -1686,15 +1700,20 @@ shandalar/
 │                              index.html/.js/.wasm/.pck came out, prints
 │                              their sizes and the one-line static server.
 │                              THE SKIN PACK (2026-09-08): skin_pack()
-│                              stages assets/original + assets/cardart as
-│                              real files and writes them through
-│                              tools/mtg_assets.py --from-skin into ONE
-│                              `original_skin.zip` (the shape a player's
-│                              own disc produces) beside a copy of
+│                              stages assets/original (minus cardart/) and
+│                              assets/cardart as real files and writes TWO
+│                              zips through tools/mtg_assets.py:
+│                              `original_skin.zip` (--from-skin, the shape
+│                              a player's own disc produces, ~84 MB) and
+│                              `cardart.zip` (--from-cardart, the Scryfall
+│                              crops under skin/cardart/, ~190 MB — apart
+│                              since 2026-09-08, "the skin assets should
+│                              be a separate zip, card art pack should be
+│                              separate"), beside a copy of
 │                              docs/skin-catalogue.txt as SKIN.txt.
-│                              --package puts both in skin/ next to the
-│                              binary, plus icon.png (game/icon.png) and
-│                              shortcut.sh, the opt-in desktop entry
+│                              --package puts the three in skin/ next to
+│                              the binary, plus icon.png (game/icon.png)
+│                              and shortcut.sh, the opt-in desktop entry
 │                              (~/.local/share/applications/
 │                              shandalar.desktop, --remove undoes it);
 │                              --web --skin puts them beside index.html
@@ -1750,7 +1769,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 4911 tests / ~134 000 asserts, ~300 s
+├── tests/                   GUT suite — 4929 tests / ~135 000 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2523,6 +2542,12 @@ shandalar/
 │    writes to disk at once, survives Settings.reload), the Display row
 │    above Sound, borderless not exclusive, applying silent headless,
 │    and the Lifecycle autoload applying it at boot;
+│    tests/ui/test_options_skin.gd — [QoL] the Skin rows (2026-09-08):
+│    one row per zip kind, each a status line + Choose... button, the
+│    Skin row between Display and Sound, "Forget my zips" hidden under
+│    the editor, the rows re-read after SkinPack.adopt (a card art probe
+│    reads "your own" and "1 picture"), the transfer line staying down,
+│    leaving the screen dropping the pack's signal connections;
 │    tests/unit/test_touch_gestures.gd — THE GESTURE VOCABULARY
 │    (TouchGestures, 2026-09-07) walked with a hand-held clock: a tap at
 │    the down point under a 12-px wobble, the double within 300 ms and 30
@@ -3026,6 +3051,15 @@ shandalar/
 │    tree's current scene to a stand-in, since an earlier suite's Back
 │    button leaves the title there); pack_url strips query and
 │    fragment; plan_after_arrival; content_length reads the HEAD answer;
+│    the TWO KINDS (2026-09-08): a zip of card pictures alone is card
+│    art, a skin carrying pictures is still a skin, the user zips named
+│    for their kind, a mounted art pack supplying GameSkin.card_art, a
+│    skin not counting as card art nor the reverse, a dropped card art
+│    zip kept as the player's card art with its own notice, forget()
+│    deleting both zips and offering a restart (or saying nothing when
+│    nothing is kept), the status lines' words, mounted zips read before
+│    folders, nothing in flight under the editor, the file box opening
+│    somewhere real;
 │    tests/unit/test_duel_log_file.gd — THE RUNNING FILE (DuelLogFile):
 │    user:// under the editor, the location seam, the banner's moment /
 │    players / seed, a game as banner + lines in the window's shape,
@@ -3277,8 +3311,15 @@ shandalar/
 │   │                          screen): the Display row's `Full screen`
 │   │                          switch (GameDisplay, 2026-09-07) and its
 │   │                          `Touch controls: Auto / On / Off` choice
-│   │                          (TouchControls, 2026-09-07), Music
-│   │                          and Sound Effects switches
+│   │                          (TouchControls, 2026-09-07), the SKIN rows
+│   │                          (2026-09-08, "a menu options to select
+│   │                          asset art skin by file choosing"): per zip
+│   │                          kind a SkinPack.status_line + Choose...
+│   │                          (SkinPack.pick — a file box), "Forget my
+│   │                          zips", a transfer line while a zip is read
+│   │                          or fetched, a VIEW of user://skin/ with no
+│   │                          Settings key, re-read on SkinPack.changed;
+│   │                          Music and Sound Effects switches
 │   │                          (the deck builder's mini-menu carries the
 │   │                          same two keys), music/sfx volume sliders
 │   │                          (ours — 1997 had no volume anywhere), the
@@ -3473,31 +3514,58 @@ shandalar/
 │   │                          path names a folder that does not exist);
 │   │                          clear_caches() is what a pack arriving
 │   │                          mid-run calls before the title is rebuilt
-│   ├── skin_pack.gd         AUTOLOAD `SkinPack` — THE SKIN AS ONE ZIP
+│   ├── skin_pack.gd         AUTOLOAD `SkinPack` — THE SKIN AS TWO ZIPS
 │   │                          ([QoL], 2026-09-08: "a /skin/ folder …
 │   │                          the zip with our assets named
-│   │                          original_skin"). Mounts `original_skin.zip`
-│   │                          with ProjectSettings.load_resource_pack so
+│   │                          original_skin"; then "the skin assets
+│   │                          should be a separate zip, card art pack
+│   │                          should be separate"). Two KINDS —
+│   │                          `skin` (original_skin.zip, the 1997
+│   │                          material) and `cardart` (cardart.zip,
+│   │                          skin/cardart/*.jpg|png) — a zip's kind is
+│   │                          what it HOLDS (every entry under cardart/
+│   │                          → card art), never its name, so a skin
+│   │                          that carries pictures is still a skin.
+│   │                          Mounts each with
+│   │                          ProjectSettings.load_resource_pack so
 │   │                          GameSkin reads `res://skin/...` straight out
 │   │                          of it — nothing unpacked, every platform.
-│   │                          Order at boot = precedence (first mount
-│   │                          wins): user://skin/original_skin.zip (the
-│   │                          one DROPPED on the window, or FETCHED by the
-│   │                          web build), then <exe>/skin/original_skin.zip
-│   │                          (shipped). inspect() refuses a zip with any
-│   │                          entry outside `skin/` (a mount would land it
-│   │                          at res://). A drop copies the zip to
-│   │                          user:// (a browser deletes the dropped file
-│   │                          when the signal returns), mounts with
-│   │                          replacement, clears the caches, refreshes
-│   │                          the libraries and — on the title — reloads
-│   │                          the scene; anywhere else a UiChrome notice
-│   │                          offers Restart (OS.set_restart_on_exit;
-│   │                          location.reload() on web, armed after
+│   │                          `mounted` is kept in PRECEDENCE order
+│   │                          (a replacing mount goes to the front, a
+│   │                          boot mount to the back): user://skin/<kind>
+│   │                          .zip (CHOSEN in Options > Skin, DROPPED on
+│   │                          the window, or FETCHED by the web build)
+│   │                          before <exe>/skin/<kind>.zip (shipped).
+│   │                          inspect() refuses a zip with any entry
+│   │                          outside `skin/` (a mount would land it at
+│   │                          res://) and reports the kind. describe()/
+│   │                          status_line() are the Options rows' words
+│   │                          ("1997 art: original_skin.zip — 235 files,
+│   │                          your own"; "Card art: none — cards show a
+│   │                          plain art window"), mounted zips first,
+│   │                          loose folders after. adopt(path) is a drop
+│   │                          and a pick alike: copy the zip to its
+│   │                          kind's user:// slot (a browser deletes the
+│   │                          dropped file when the signal returns),
+│   │                          mount with replacement, clear the caches,
+│   │                          refresh the libraries and — on the title —
+│   │                          reload the scene; anywhere else a UiChrome
+│   │                          notice offers Restart (OS.set_restart_on_
+│   │                          exit; location.reload() on web, armed after
 │   │                          RELOAD_GUARD so the IDBFS sync lands) or
-│   │                          Later. On web with nothing stored it fetches
-│   │                          pack_url(location.href) — `skin/
-│   │                          original_skin.zip` beside the page — a HEAD
+│   │                          Later. forget() deletes both user zips.
+│   │                          pick(kind): a native FileDialog on the
+│   │                          desktop (*.zip, starts in Downloads); on
+│   │                          web — where Godot 4.7 has no file dialog —
+│   │                          PICK_JS puts an <input type=file> up and
+│   │                          reads the file into window.shandalarPick,
+│   │                          which _process copies over in PICK_CHUNK
+│   │                          slices (JavaScriptBridge.eval of a
+│   │                          subarray → PackedByteArray) into
+│   │                          arriving.zip and adopts. On web each kind
+│   │                          with nothing stored is fetched in turn
+│   │                          from pack_url(location.href, kind) —
+│   │                          `skin/<kind>.zip` beside the page — a HEAD
 │   │                          for the size (content_length(); the web
 │   │                          client never knows a body's length), then
 │   │                          HTTPRequest.download_file into fetching.zip,
@@ -3508,7 +3576,8 @@ shandalar/
 │   │                          never sets download_complete). A 404 page
 │   │                          or a cut download is deleted so it is never
 │   │                          mounted; fetch_progressed feeds the title's
-│   │                          line
+│   │                          line (transfer_line: "Fetching the card
+│   │                          art… 50%" / "Reading my_skin.zip… 12%")
 │   ├── help/                THE HELP SCREEN — the main menu's Help button
 │   │   │                      (directly above Exit). The 1997 game had a
 │   │   │                      printed manual and a context-sensitive

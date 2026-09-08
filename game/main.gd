@@ -177,10 +177,11 @@ func _ready() -> void:
 	add_child(version)
 
 	# THE ART ON ITS WAY. A web build with no skin stored fetches
-	# `skin/original_skin.zip` from beside its page ([SkinPack]); while it
-	# comes, one line above the version tag says so and how far it is,
-	# and goes away when the fetch ends either way. Bound rather than
-	# polled, and built in the corner voice like the tag it sits over.
+	# `skin/original_skin.zip`, then `skin/cardart.zip`, from beside its
+	# page ([SkinPack]); while one comes, one line above the version tag
+	# says which and how far it is, and goes away when the fetch ends
+	# either way. Bound rather than polled, and built in the corner
+	# voice like the tag it sits over.
 	var fetching := Label.new()
 	fetching.name = "Fetching"
 	_corner_label(fetching, 12)
@@ -188,8 +189,8 @@ func _ready() -> void:
 	fetching.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	fetching.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	fetching.position += Vector2(-10, -26)
-	fetching.visible = SkinPack.fetching
-	fetching.text = fetch_line(SkinPack.fetch_progress())
+	fetching.visible = SkinPack.busy()
+	fetching.text = SkinPack.transfer_line(SkinPack.fetch_progress())
 	add_child(fetching)
 	_fetching = fetching
 	# A method, not a lambda: a bound method leaves the autoload's signal
@@ -254,18 +255,11 @@ func _ready() -> void:
 	ShellMusic.play()
 
 
-## The fetch line's text for a [param fraction] of the skin zip that
-## has arrived — a percentage when the host said how big it is, and
-## just the fact otherwise.
-static func fetch_line(fraction: float) -> String:
-	if fraction < 0.0:
-		return "Fetching the 1997 art…"
-	return "Fetching the 1997 art… %d%%" % int(round(fraction * 100.0))
-
-
+## The fetch line follows the pack's own flag, not the signal alone: a
+## -1 at the end of a download is "gone", not "unknown".
 func _on_fetch_progressed(fraction: float) -> void:
-	_fetching.visible = SkinPack.fetching
-	_fetching.text = fetch_line(fraction)
+	_fetching.visible = SkinPack.busy()
+	_fetching.text = SkinPack.transfer_line(fraction)
 
 
 ## Hand the rest of the command line to the Deck Lab and quit with its

@@ -581,16 +581,27 @@ func test_the_fetch_line_is_silent_when_nothing_is_on_its_way() -> void:
 
 
 func test_the_fetch_line_says_how_far_when_the_host_said_how_big() -> void:
-	assert_eq(MainScreen.fetch_line(0.425), "Fetching the 1997 art… 43%")
-	assert_eq(MainScreen.fetch_line(1.0), "Fetching the 1997 art… 100%")
-	assert_eq(MainScreen.fetch_line(-1.0), "Fetching the 1997 art…",
+	assert_eq(SkinPack.fetch_line(0.425), "Fetching the 1997 art… 43%")
+	assert_eq(SkinPack.fetch_line(1.0), "Fetching the 1997 art… 100%")
+	assert_eq(SkinPack.fetch_line(0.5, "cardart"), "Fetching the card art… 50%",
+		"the second zip is named for what it is")
+	assert_eq(SkinPack.fetch_line(-1.0), "Fetching the 1997 art…",
 		"no content length means no percentage, not a wrong one")
 
 
 func test_the_fetch_line_follows_the_download() -> void:
 	var screen := await _build()
 	var line := screen.get_node_or_null("Fetching") as Label
+	# Nothing downloads under the editor; the flags are set by hand and
+	# put back, so the line is seen following them.
+	SkinPack.fetching = true
+	SkinPack.fetching_kind = "cardart"
 	SkinPack.fetch_progressed.emit(0.5)
-	assert_eq(line.text, "Fetching the 1997 art… 50%")
+	assert_eq(line.text, "Fetching the card art… 50%")
+	assert_true(line.visible, "shown while the pack says a download is in flight")
+	SkinPack.fetching = false
+	SkinPack.fetching_kind = ""
+	SkinPack.fetch_progressed.emit(-1.0)
 	assert_false(line.visible,
 		"the line follows the pack's own fetching flag, not the signal alone")
+	assert_eq(line.text, "", "and says nothing when nothing is on its way")

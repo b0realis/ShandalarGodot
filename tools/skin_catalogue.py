@@ -3,11 +3,14 @@
 
 A SKIN is one zip, `original_skin.zip`, with a `skin/` folder inside it
 and every picture, font, sound, tune, movie and portrait the game dresses
-itself in. The game mounts the zip in place (`game/skin_pack.gd`) and
-reads from it as if the files were on disk; nothing is unpacked. The
-owner, 2026-09-08: *"a text file that catalogues all art, music, movies
-needed — their format, dimensions and naming so users/players can create
-new/free skins for the project that contain everything the game needs."*
+itself in; the CARD ART is a second zip, `cardart.zip`, with one picture
+per card under `skin/cardart/`. The game mounts both in place
+(`game/skin_pack.gd`) and reads from them as if the files were on disk;
+nothing is unpacked. The owner, 2026-09-08: *"a text file that
+catalogues all art, music, movies needed — their format, dimensions and
+naming so users/players can create new/free skins for the project that
+contain everything the game needs."* And later that day: *"the skin
+assets should be a separate zip, card art pack should be separate!"*
 
 The catalogue is GENERATED, not typed, so it cannot drift from the code:
 the names come from `import_original.py`'s MANIFEST (the one list the
@@ -44,7 +47,9 @@ DEFAULT_CARDART = ROOT / "assets" / "cardart"
 DEFAULT_OUT = ROOT / "docs" / "skin-catalogue.txt"
 
 ZIP_NAME = "original_skin.zip"
+ART_ZIP_NAME = "cardart.zip"
 PREFIX = "skin/"
+ART_PREFIX = "skin/cardart/"
 WIDTH = 78
 
 
@@ -256,8 +261,8 @@ SECTION_ORDER = [
 ]
 
 PREAMBLE = """\
-THE SKIN — what original_skin.zip contains
-==========================================
+THE SKIN — what original_skin.zip and cardart.zip contain
+=========================================================
 
 Shandalar dresses itself in a SKIN: the pictures, fonts, sounds, tunes,
 movies and portraits of the 1997 game, or any set drawn to the same
@@ -266,10 +271,12 @@ drawing; with one, every panel, card and button wears the art. Every
 file is optional: a file that is missing falls back to the drawn
 equivalent, one file at a time.
 
-THE ZIP. A skin is one zip file named original_skin.zip with ONE folder
-inside it, skin/, and everything below in that folder:
+TWO ZIPS. The skin and the card art travel apart, because they come
+from different places (a 1997 disc; a download) and are different
+sizes (84 MB; 193 MB). Each is a zip with ONE folder inside it, skin/,
+and nothing outside that folder:
 
-    original_skin.zip
+    original_skin.zip                   the 1997 art
       skin/
         title_background.png
         card_back.png
@@ -279,26 +286,40 @@ inside it, skin/, and everything below in that folder:
         music_duel.wav
         coin_toss_heads.png  +  coin_toss_heads.json
         portraits/agnosia.png ...
-        cardart/lightning_bolt.jpg ...
         movies/cointoss_heads.avi ...        (optional)
 
-Nothing may sit outside skin/ — a zip with a loose file at its top is
-refused whole, because the game mounts the zip into its own resource
-tree and a stray file would land among the game's scripts.
+    cardart.zip                         one picture per card
+      skin/
+        cardart/lightning_bolt.jpg ...
 
-WHERE IT GOES. The game reads the zip in place; nothing is unpacked.
-  * Beside the game: <the game's folder>/skin/original_skin.zip. The
-    packaged builds ship it there.
-  * Dropped on the window: drag any skin zip onto the running game. It is
-    copied into the game's own data folder (user://skin/) and mounted;
-    a skin dropped on the title screen shows at once, one dropped during
-    a duel shows from the next start. The dropped zip has precedence
-    over the one beside the game.
-  * In a browser: the same drop, or a zip served beside the page as
-    skin/original_skin.zip, which the game fetches once and keeps.
+The game tells the two apart by what they HOLD, not by their names: a
+zip whose every entry is under skin/cardart/ is card art, any other is
+a skin. (A skin zip that carries a cardart/ folder of its own is still
+a skin, and its pictures are read too.) A zip with a loose file at its
+top is refused whole, because the game mounts the zip into its own
+resource tree and a stray file would land among the game's scripts.
+
+WHERE THEY GO. The game reads the zips in place; nothing is unpacked.
+  * Beside the game: <the game's folder>/skin/original_skin.zip and
+    <the game's folder>/skin/cardart.zip. The packaged builds ship
+    them there.
+  * Chosen in Options > Skin: two rows, one per zip, each saying what
+    dresses the game now and carrying a Choose... button that opens a
+    file box. The zip chosen is copied into the game's own data folder
+    (user://skin/) and mounted; Forget my zips goes back to what
+    shipped. In a browser the file box is the browser's own.
+  * Dropped on the window: drag any zip onto the running game. The
+    same as choosing it.
+  * A zip of your own (chosen, dropped or fetched) has precedence over
+    the one beside the game. One chosen on the title screen shows at
+    once; one chosen anywhere else shows from the next start.
+  * In a browser: the same choosing and dropping, or the zips served
+    beside the page as skin/original_skin.zip and skin/cardart.zip,
+    which the game fetches once and keeps.
   * A loose folder still works too: <the game's folder>/skin/ with the
     same files unzipped, or user://original_skin/. The game looks in
-    user://original_skin/, then beside itself, then in the mounted zip.
+    user://original_skin/, then beside itself, then in the mounted
+    zips.
 
 NAMING. Names are exact, lower case, snake_case, with the extensions
 given here. A picture is a PNG (RGB, or RGBA where a mask is wanted);
@@ -315,9 +336,20 @@ mask). The mask's top-left pixel is background; whichever tone it has
 means "transparent". A new skin may instead ship the sprite at half the
 size with real alpha — the game reads both.
 
-TO BUILD ONE from your own 1997 disc, or to check one you drew:
-    python3 tools/mtg_assets.py --install /path/to/the/1997/game
+TO DRAW YOUR OWN. Make a folder named skin/ and put in it, under the
+exact names below, whatever you have drawn — a few files or all of
+them; the game draws its own for each one missing. Zip the folder so
+that skin/ is the top of the zip (from the folder above it:
+    zip -r my_skin.zip skin
+) and check it:
     python3 tools/skin_catalogue.py --check my_skin.zip
+then choose it in Options > Skin, or drop it on the game's window. Card
+pictures go the same way, under skin/cardart/, in a zip of their own.
+
+TO BUILD THE 1997 ONES from your own disc, and the card art:
+    python3 tools/mtg_assets.py --install /path/to/the/1997/game
+    python3 tools/fetch_card_art.py --out cardart/
+    python3 tools/mtg_assets.py --from-cardart cardart/ --out cardart.zip
 """
 
 PORTRAITS_NOTE = """\
@@ -337,8 +369,10 @@ that is not a letter or a digit replaced by one underscore, leading and
 trailing underscores dropped ("Ali from Cairo" -> ali_from_cairo,
 "Jandor's Saddlebags" -> jandor_s_saddlebags, "Ley Druid" -> ley_druid).
 PNG or JPG, any size — it is fitted to the frame's art window. A card
-without a file shows the frame's plain window. tools/fetch_card_art.py
-fetches the pool from Scryfall."""
+without a file shows the frame's plain window. These travel in their
+own zip, cardart.zip, as skin/cardart/<card_name>.jpg;
+tools/fetch_card_art.py fetches the pool from Scryfall and
+tools/mtg_assets.py --from-cardart zips it."""
 
 MOVIES_NOTE = """\
 The original coin-toss AVIs (COINTOSS_Heads.AVI, COINTOSS_Tails.AVI),
@@ -542,7 +576,7 @@ def render(skin: Path, cardart: Path) -> str:
                                   for (w, h), n in sorted(sizes.items(), key=lambda i: -i[1]))))
         lines.append("    e.g. " + ", ".join(p.name for p in faces[:4]) + " ...")
     lines.append("")
-    lines.append("CARD ART — cardart/<card_name>.jpg|png")
+    lines.append("CARD ART — cardart.zip: cardart/<card_name>.jpg|png")
     lines.append("--------")
     lines.append("")
     lines.extend(wrap(CARDART_NOTE.replace("\n", " "), 2))
@@ -569,7 +603,9 @@ def render(skin: Path, cardart: Path) -> str:
     lines.append("")
     lines.append("-" * WIDTH)
     lines.append("Generated by tools/skin_catalogue.py from the importer's manifest;")
-    lines.append("%d named files, plus portraits/, cardart/ and movies/." % len(expected_files()))
+    lines.append("%d named files, plus portraits/ and movies/ in original_skin.zip,"
+                 % len(expected_files()))
+    lines.append("and cardart/ in cardart.zip.")
     return "\n".join(lines) + "\n"
 
 
@@ -596,16 +632,32 @@ def names_in(target: Path) -> list[str] | None:
     return sorted(out)
 
 
+def kind_of(names: list[str]) -> str:
+    """"cardart" when every file is a card picture, else "skin" — the
+    same rule the game applies (`SkinPack.inspect`)."""
+    if names and all(n.startswith("cardart/") for n in names):
+        return "cardart"
+    return "skin"
+
+
 def check(target: Path) -> int:
     names = names_in(target)
     if names is None:
         print("!! %s is not a skin zip or folder" % target)
         return 1
     have = set(names)
-    missing = [f for f in expected_files() if f not in have]
     portraits = [n for n in names if n.startswith("portraits/") and n.endswith(".png")]
     art = [n for n in names if n.startswith("cardart/")]
-    print("%s: %d files" % (target, len(names)))
+    if kind_of(names) == "cardart":
+        print("%s: card art, %d pictures" % (target, len(art)))
+        odd = [n for n in art if not n.lower().endswith((".jpg", ".jpeg", ".png"))]
+        if odd:
+            print("  not pictures (ignored by the game):")
+            for name in odd:
+                print("    " + name)
+        return 0
+    missing = [f for f in expected_files() if f not in have]
+    print("%s: skin, %d files" % (target, len(names)))
     print("  %d of %d named files present, %d portraits, %d card pictures"
           % (len(expected_files()) - len(missing), len(expected_files()),
              len(portraits), len(art)))

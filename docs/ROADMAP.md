@@ -7643,10 +7643,47 @@ it. `test_skin_pack.gd` now asks for the probe portrait's TEXTURE, and
 failed on the old code.
 
 **The size.** 277 MB, not the 84 MB of the earlier art zip, because the
-pack carries `cardart/` — 1 795 art crops, 193 MB of JPEG — beside the
+pack carried `cardart/` — 1 795 art crops, 193 MB of JPEG — beside the
 1997 material (8 MB of sheets, 79 MB of WAV, the two movies, the
-portraits). Whether to ship the card art in the same zip, in a second
-one, re-encoded smaller, or not at all is the owner's call.
+portraits).
+
+**Two zips and a chooser (2026-09-08, the owner's ruling: *"the skin
+assets should be a separate zip, card art pack should be separate!
+Similar as local linux build. And we should have a menu options to
+select asset art skin by file choosing. The asset zip should be
+documented on what formats, sizes and names the game expects so users
+can create new skins if they wish!"*).**
+
+ * **Two zips.** `original_skin.zip` (the 1997 material, 84 MB) and
+   `cardart.zip` (`skin/cardart/*.jpg|png`, 193 MB) — the shape the
+   Linux package already had beside the binary, now the web build's
+   too. `SkinPack` knows two KINDS, `skin` and `cardart`, and a zip's
+   kind is what it HOLDS — every entry under `cardart/` makes it card
+   art — never its name: the 277 MB zip of the night before is still a
+   skin, and its pictures are read. Each kind has its own slot under
+   `user://skin/`, its own fetch (the browser asks for the two in turn,
+   *"Fetching the 1997 art…"* then *"Fetching the card art…"*), its own
+   arrival notice. `build_release.sh` writes both through
+   `mtg_assets.py --from-skin` and the new `--from-cardart`; a mounted
+   art pack supplies `GameSkin.card_art` (tested with a 4×6 probe).
+ * **The chooser.** Options → Skin: a row per zip saying what dresses
+   the game now (*"1997 art: original_skin.zip — 235 files, shipped with
+   the game"*, *"Card art: none — cards show a plain art window"*), each
+   with **Choose...**, and **Forget my zips** once the player has any. The
+   rows are a VIEW of `user://skin/` — no Settings key, nothing to get
+   out of step. On the desktop Choose... is the native file box
+   (`FileDialog`, `*.zip`, opening in Downloads); in a browser Godot 4.7
+   has no file dialog at all, so `SkinPack.pick` puts up an
+   `<input type=file>` through `JavaScriptBridge`, the page reads the
+   file into `window.shandalarPick`, and `_process` copies it over 8 MB
+   a frame (`eval` of a `subarray` comes back a `PackedByteArray`) into
+   `arriving.zip` — the same path a drop takes from there. A drop still
+   works; the note under the rows says so.
+ * **The documentation.** `SKIN.txt` opens with the two-zip layout, the
+   kind-by-content rule, the three ways in, and *"To draw your own"* —
+   `zip -r my_skin.zip skin` and `skin_catalogue.py --check` — before
+   the catalogue proper; the catalogue is generated, so every name,
+   format and size in it is measured off the real files.
 
 ## THE INSTANT WINDOWS (2026-09-08) — [QoL]
 

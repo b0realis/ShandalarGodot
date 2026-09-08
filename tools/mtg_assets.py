@@ -11,22 +11,25 @@ This is the script a PLAYER runs. It has three jobs, in this order:
     python3 mtg_assets.py --check  /path/to/game  # look, report, write nothing
     python3 mtg_assets.py --install /path/to/game # import and build the zip
 
-Card art is NOT in here. That is a separate script and a separate
-question, because the two kinds of art come from different places and one
-of them is a download:
+Card art is NOT in here. That is a separate script, a separate download
+and a SEPARATE ZIP (`cardart.zip`), because the two kinds of art come
+from different places, on different licences, and the pictures are twice
+the size of everything else:
 
     python3 fetch_card_art.py --out cardart/      # 897 cards from Scryfall
+    python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
 
 WHY THE ZIP HAS A `skin/` FOLDER INSIDE IT. The game MOUNTS the zip
 (`game/skin_pack.gd`): placed beside the executable as
-`skin/original_skin.zip`, or dropped on the game's window, its `skin/`
-folder appears to the game as if unpacked, and nothing is unpacked. The
-same layout unzips cleanly next to the binary too, which is what the game
+`skin/original_skin.zip` (the card art as `skin/cardart.zip`), chosen in
+Options > Skin, or dropped on the game's window, its `skin/` folder
+appears to the game as if unpacked, and nothing is unpacked. The same
+layout unzips cleanly next to the binary too, which is what the game
 looked for before it could mount a zip: the player's own
 `user://original_skin/`, then a `skin/` folder BESIDE the executable, then
-the mounted zip, then a development checkout's `assets/original/`
+the mounted zips, then a development checkout's `assets/original/`
 (`game/skin.gd`). `skin-catalogue.txt` (SKIN.txt in a packaged build)
-lists every file the zip may hold; see `setup.txt` for every path.
+lists every file the zips may hold; see `setup.txt` for every path.
 
 NOTHING HERE IS FATAL. Every asset is optional and the game is playable
 with none of them: unskinned, every panel, button and card falls back to a
@@ -181,11 +184,12 @@ WHAT IT PRODUCES
 WHAT IT DOES NOT PRODUCE
 
   Card art. There are 897 cards and their art is not in the 1997 install
-  in any usable form, so it is downloaded separately:
+  in any usable form, so it is downloaded separately and zipped apart:
 
       python3 fetch_card_art.py --out cardart/
+      python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
 
-  and the result goes in the same `skin/` folder.
+  and cardart.zip goes beside original_skin.zip.
 
 TRY IT
 
@@ -251,7 +255,8 @@ def run_importer(sources: list[Path], dest: Path, videos: bool) -> int:
 
 
 def write_zip(skin: Path, out: Path,
-              extras: list[tuple[Path, str]] | None = None) -> int:
+              extras: list[tuple[Path, str]] | None = None,
+              inner: str = "") -> int:
     """Zip a skin folder as `skin/...`, so it unpacks beside the binary.
 
     [param extras] adds files from OUTSIDE that folder, each with the name
@@ -259,7 +264,10 @@ def write_zip(skin: Path, out: Path,
     of `--movies-from` built a symlink overlay instead, and `Path.rglob`
     does not descend into a symlinked DIRECTORY — which silently dropped
     all seventy portraits and shipped an archive of 169 files where 237
-    were expected (caught 2026-09-04 by comparing the count)."""
+    were expected (caught 2026-09-04 by comparing the count).
+
+    [param inner] puts the folder's files under `skin/<inner>/` instead of
+    `skin/` — how a folder of card pictures becomes `cardart.zip`."""
     files = sorted(p for p in skin.rglob("*")
                    if p.is_file() and not p.name.endswith(ZIP_SKIP))
     if not files:
@@ -267,24 +275,33 @@ def write_zip(skin: Path, out: Path,
         return 1
     out.parent.mkdir(parents=True, exist_ok=True)
     total = 0
+    root = Path("skin") / inner if inner else Path("skin")
+    names: list[Path] = []
     # ZIP_DEFLATED on art that is already PNG/JPG buys a few percent, but
     # it costs nothing to ask and some of these are raw sheets.
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for path in files:
-            zf.write(path, Path("skin") / path.relative_to(skin))
+            names.append(root / path.relative_to(skin))
+            zf.write(path, names[-1])
             total += path.stat().st_size
         for path, name in (extras or []):
-            zf.write(path, Path("skin") / name)
+            names.append(Path("skin") / name)
+            zf.write(path, names[-1])
             total += path.stat().st_size
     count = len(files) + len(extras or [])
     size = out.stat().st_size
+    # What the game will take it for: card art when every entry is a card
+    # picture (the rule `SkinPack.inspect` applies), a skin otherwise.
+    shipped = "cardart.zip" if all(n.parts[:2] == ("skin", "cardart") for n in names) \
+        else "original_skin.zip"
     print(f"\narchive: {out}")
     print(f"  {count} files, {total / 1e6:.0f} MB of art"
           f" -> {size / 1e6:.0f} MB zipped")
-    print(f"\nPut it beside the game, AS IT IS, as skin/original_skin.zip:")
-    print(f"  mkdir -p /path/to/the/game/skin && cp {out.name} /path/to/the/game/skin/original_skin.zip")
-    print(f"…or drop the zip onto the running game's window. The game reads")
-    print(f"the zip in place; see setup.txt for every place it looks.")
+    print(f"\nPut it beside the game, AS IT IS, as skin/{shipped}:")
+    print(f"  mkdir -p /path/to/the/game/skin && cp {out.name} /path/to/the/game/skin/{shipped}")
+    print(f"…or choose it in Options > Skin, or drop it onto the running game's")
+    print(f"window. The game reads the zip in place; see setup.txt for every")
+    print(f"place it looks.")
     return 0
 
 
@@ -298,6 +315,9 @@ def main() -> int:
                         help="report on an install and write nothing")
     parser.add_argument("--from-skin", metavar="DIR",
                         help="archive an ALREADY imported skin folder")
+    parser.add_argument("--from-cardart", metavar="DIR",
+                        help="archive a folder of card pictures (fetch_card_art.py "
+                             "--out DIR) as cardart.zip: skin/cardart/<name>.jpg")
     parser.add_argument("--out", default="shandalar-art.zip", metavar="FILE",
                         help="archive to write (default: shandalar-art.zip)")
     parser.add_argument("--keep", metavar="DIR",
@@ -321,6 +341,16 @@ def main() -> int:
         for source in args.check:
             report(Path(source).expanduser())
         return 0
+
+    if args.from_cardart:
+        art = Path(args.from_cardart).expanduser()
+        if not art.is_dir():
+            print(f"!! {art} is not a directory")
+            return 2
+        out = Path(args.out).expanduser()
+        if args.out == parser.get_default("out"):
+            out = Path("cardart.zip")
+        return write_zip(art, out, inner="cardart")
 
     if args.from_skin:
         skin = Path(args.from_skin).expanduser()

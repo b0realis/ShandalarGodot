@@ -85,7 +85,7 @@ cards of the eight 1997 sets, one documented file each, no stubs left.
 **M4 — AI: attacking, blocking and casting audited and measured.**
 **317 decks** ported with their provenance recorded.
 
-Verified by **4911 tests / ~134 000 assertions** across 282 scripts, running
+Verified by **4929 tests / ~135 000 assertions** across 283 scripts, running
 headless, plus a duel soak that plays whole games through the live UI.
 Adventure mode (M5) is next — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -117,13 +117,15 @@ table is landscape; a phone held upright gets a small picture. So far
 this has been checked in a desktop browser pretending to be a tablet,
 not on a real one.
 
-The browser wears the art the same way the desktop does — as **one skin
-zip**, `original_skin.zip`, mounted in place. Drop the zip on the page
-and the game keeps it (in the browser's own storage, across visits); or
-serve it beside the page as `skin/original_skin.zip` and the game fetches
-it once — `./build_release.sh --web --skin` places it there, plain
-`--web` never does. Whether the 1997 graphics are hosted anywhere is the
-owner's call, not the build's.
+The browser wears the art the same way the desktop does — as **two
+zips** mounted in place: `original_skin.zip` (the 1997 material) and
+`cardart.zip` (the card pictures). Choose either in *Options → Skin* or
+drop it on the page, and the game keeps it (in the browser's own
+storage, across visits); or serve them beside the page as
+`skin/original_skin.zip` and `skin/cardart.zip` and the game fetches
+each it lacks, once — `./build_release.sh --web --skin` places them
+there, plain `--web` never does. Whether the 1997 graphics are hosted
+anywhere is the owner's call, not the build's.
 
 ## The art, and how to reconstruct it
 
@@ -146,15 +148,20 @@ frames and mana symbols, portraits, fonts, sounds, the card database and the
 coin-toss movies — so a partial install tells you exactly which parts stay
 drawn. `--install` writes one archive whose inner folder is `skin/` — a
 **skin zip**, which the game mounts as it is: put it beside the executable
-as `skin/original_skin.zip`, or drop it onto the running game's window.
-Nothing is unpacked. (The same layout also unzips cleanly next to the
-binary, which is how it worked before the game could mount a zip.)
+as `skin/original_skin.zip`, choose it in *Options → Skin*, or drop it
+onto the running game's window. Nothing is unpacked. (The same layout
+also unzips cleanly next to the binary, which is how it worked before
+the game could mount a zip.)
 
-The packaged build ships that zip beside `skin/SKIN.txt`, a generated
-catalogue (`docs/skin-catalogue.txt`, `tools/skin_catalogue.py`) of every
-picture, font, sound, tune, movie and portrait the game wears — format,
-dimensions, sheet grids and names — so a skin can be drawn from scratch
-and checked with `python3 tools/skin_catalogue.py --check my_skin.zip`.
+The packaged build ships that zip, and the card art's (below), beside
+`skin/SKIN.txt`, a generated catalogue (`docs/skin-catalogue.txt`,
+`tools/skin_catalogue.py`) of every picture, font, sound, tune, movie and
+portrait the game wears — format, dimensions, sheet grids and names — so
+a skin can be drawn from scratch and checked with
+`python3 tools/skin_catalogue.py --check my_skin.zip`. The catalogue's
+*To draw your own* says how a zip is put together: a `skin/` folder at
+the top, the files under the names listed, and whatever is missing the
+game draws for itself.
 
 It **reads your install and never writes to it.** A genuine 1997 install is
 the best source: its raw `.SPR` and `.PIC` files hold seventy portraits, five
@@ -179,6 +186,7 @@ python3 tools/mtg_assets.py --transcode-movies /path/to/the/game/skin
 
 ```sh
 python3 tools/fetch_card_art.py --out assets/cardart/
+python3 tools/mtg_assets.py --from-cardart assets/cardart/ --out cardart.zip
 ```
 
 Python 3 and a network connection, nothing else. It is deliberately polite to
@@ -186,6 +194,10 @@ the API, **skips what it already has** so an interrupted run just carries on,
 and prints what it could not fetch rather than stopping. Run beside a shipped
 binary — where `cards/data/` lives inside the `.pck` and cannot be opened as
 a file — it asks Scryfall for the pool instead, one paged search per set.
+The second line zips the folder as `skin/cardart/<card_name>.jpg` — the
+**card art zip**, kept apart from the skin zip because it is twice the
+size and on another licence; it goes beside the executable as
+`skin/cardart.zip`, or through the same *Options → Skin* row and drop.
 
 ### 3. Everything else
 
@@ -238,7 +250,7 @@ given away for free.
 most literal sense: a genuinely free engine, with no runtime fee, no seat, no
 licence server and no company able to change the terms afterwards — which is
 exactly what a project that intends to still be here in ten years needs. Its
-headless mode is why an entire rules engine and 4911 tests run in seconds in
+headless mode is why an entire rules engine and 4929 tests run in seconds in
 a terminal; its Compatibility renderer is why a 1997 game's look runs on the
 kind of machine people actually have; and GDScript is why a card is a
 readable twenty-line file instead of a build system. Thank you for building

@@ -61,10 +61,13 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   ../shandalar-build/web`). `--web --skin` writes the skin zip and its
   catalogue beside the page (`web/skin/`) for the page to fetch;
   `--package` is the Linux build's (`--skin --package` stages
-  `skin/original_skin.zip` + `SKIN.txt`, `icon.png` and `shortcut.sh`
-  into the zip). Since 2026-09-08 a built game mounts the skin as ONE
-  zip (`SkinPack`, `load_resource_pack`); `tools/skin_catalogue.py
-  --check` says whether a zip is complete.
+  `skin/original_skin.zip` + `skin/cardart.zip` + `SKIN.txt`, `icon.png`
+  and `shortcut.sh` into the zip). Since 2026-09-08 a built game mounts
+  the skin as TWO zips (`SkinPack`, `load_resource_pack`): the 1997
+  material and, apart, the card art — a zip's kind is what it holds,
+  not its name. A player chooses either in Options → Skin, or drops it
+  on the window; `tools/skin_catalogue.py --check` says whether a zip
+  is complete.
   The build is the LOCAL step and the GitHub release is a separate one:
   a local build gets played first, and `gh release create` runs only
   when the owner asks for the release — never as the automatic tail of a

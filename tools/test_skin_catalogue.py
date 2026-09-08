@@ -129,7 +129,8 @@ class TestTheManifestIsCatalogued(unittest.TestCase):
         text = (ROOT / "docs" / "skin-catalogue.txt").read_text(encoding="utf-8")
         missing = [f for f in cat.expected_files() if ("    %s" % f) not in text]
         self.assertEqual(missing, [], "regenerate: python3 tools/skin_catalogue.py")
-        for heading in ("PORTRAITS", "CARD ART", "MOVIES", "original_skin.zip"):
+        for heading in ("PORTRAITS", "CARD ART", "MOVIES", "original_skin.zip",
+                        "cardart.zip", "Options > Skin", "TO DRAW YOUR OWN"):
             self.assertIn(heading, text)
 
     def test_rendering_needs_no_art_on_the_machine(self):
@@ -182,6 +183,21 @@ class TestCheckingASkin(unittest.TestCase):
         self.assertIn("1 of %d named files present" % len(cat.expected_files()), report)
         self.assertIn("title_background.png", report)
         self.assertIn("extra.png", report)
+
+    def test_a_zip_of_card_pictures_alone_is_card_art(self):
+        path = self._zip("art.zip", {"skin/cardart/serra_angel.jpg": b"\xff\xd8",
+                                     "skin/cardart/notes.txt": b"x"})
+        self.assertEqual(cat.kind_of(cat.names_in(path)), "cardart")
+        self.assertEqual(cat.kind_of(["card_back.png", "cardart/x.jpg"]), "skin")
+        self.assertEqual(cat.kind_of([]), "skin")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(cat.check(path), 0)
+        report = out.getvalue()
+        self.assertIn("card art, 2 pictures", report)
+        self.assertIn("notes.txt", report, "a non-picture is called out")
+        self.assertNotIn("title_background.png", report,
+                         "card art is not held to the skin's list")
 
     def test_check_refuses_what_is_not_a_skin(self):
         path = self.dir / "page.zip"
