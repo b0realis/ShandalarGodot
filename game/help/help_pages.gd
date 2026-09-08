@@ -609,10 +609,14 @@ static func _page_start_finish() -> Dictionary:
 			+ "The player who gets First Play does not draw a card during "
 			+ "her first turn.", "Duel.hlp, topic \"Play or Draw Rule\""),
 		_heading("The mulligan"),
-		_text("This game's mulligan is not the modern one, and it is worth "
-			+ "knowing exactly: you may redraw only if your seven cards "
-			+ "contain no land or nothing but land, you get seven fresh "
-			+ "cards rather than one fewer, and you get one chance."),
+		_text("After the toss winner has chosen the order, each player looks "
+			+ "at their hand — the winner first — and keeps it or throws it "
+			+ "back. Every redraw is one card fewer: seven, then six, then "
+			+ "five, down to an empty hand if you insist, and you are asked "
+			+ "again after each one. The hand stays in view beside the "
+			+ "window while you decide. (The 1997 game's own rule was "
+			+ "narrower — one redraw of seven for seven, and only of a hand "
+			+ "with no land or nothing but land; this is a house rule.)"),
 		_quote("If either player draws no land in this seven cards or draws "
 			+ "all land, then that player has the option to declare a "
 			+ "mulligan… If either player declares a mulligan, that player "

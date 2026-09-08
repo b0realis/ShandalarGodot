@@ -953,7 +953,9 @@ shandalar/
 │   │                          player" switches — wants_to_choose_discard
 │   │                          (§1.1), wants_to_assign_combat_damage and
 │   │                          order_blockers/assign_combat_damage (§1.4),
-│   │                          choose_mulligan (§1.5) — and accept_answer,
+│   │                          choose_mulligan (§1.5; the plain rule —
+│   │                          the two 1997 hands go back, down to
+│   │                          MULLIGAN_FLOOR) — and accept_answer,
 │   │                          how the engine hands back an answer to a
 │   │                          question it held a resolution open on (§1.3).
 │   │                          choose_option/answer_option is the fifth
@@ -1040,6 +1042,10 @@ shandalar/
 │   │   │                      here. sideboard_swaps says how many cards a
 │   │   │                      profile may move between duels (Apprentice
 │   │   │                      0 — it does not sideboard at all).
+│   │   │                      mulligans (2026-09-08): the opening hand
+│   │   │                      judged by AiMulligan, on for EVERY profile
+│   │   │                      like fits_auras — a knob only for the
+│   │   │                      Deck Lab's null.
 │   │                      combat_search_nodes is the CRACK-BACK SEARCH's
 │   │                      leaf budget, 0 for a profile that does not look
 │   │                      past its own combat (Apprentice and Magician 0,
@@ -1266,6 +1272,19 @@ shandalar/
 │   │   │                      second rules model.
 │   │   │                      tests/ai/test_ai_crack_back_2026_09_05.gd,
 │   │   │                      tests/ai/test_ai_gang_blocks_2026_09_05.gd
+│   │   ├── ai_mulligan.gd   class AiMulligan — THE OPENING HAND
+│   │   │                      (2026-09-08, docs/duel-todo.md §1.5): the
+│   │   │                      pilot's keep-or-redraw under the Paris
+│   │   │                      rule, by the lands. No land and all land
+│   │   │                      go back; a hand whose land count falls
+│   │   │                      outside KEEP_LANDS for its size (7: 2-5,
+│   │   │                      6: 2-4, 5: 1-4) goes back; a seven or six
+│   │   │                      whose lands cast none of its spells (the
+│   │   │                      mana abilities' colours against every
+│   │   │                      spell's coloured pips) goes back; nothing
+│   │   │                      below FLOOR (4) is thrown back. reason()
+│   │   │                      words the judgement for the log.
+│   │   │                      tests/ai/test_ai_mulligan_2026_09_08.gd
 │   │   └── ai_player.gd     class AiPlayer extends DecisionAgent — one
 │   │                          act() per call through the PUBLIC API:
 │   │                          colour-aware land drops, mana tap planning
@@ -1829,7 +1848,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5005 tests / ~135 500 asserts, ~300 s
+├── tests/                   GUT suite — 5034 tests / ~135 900 asserts, ~300 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -1887,9 +1906,12 @@ shandalar/
 │   │   ├── test_damage_assignment.gd  §1.4: the attacker orders and
 │   │   │                      divides its combat damage; the modern
 │   │   │                      order vs the 1997 free-division fork
-│   │   ├── test_mulligan.gd  §1.5: the Shandalar mulligan — no-land or
-│   │   │                      all-land only, seven for seven, once each,
-│   │   │                      and the opponent may follow
+│   │   ├── test_mulligan.gd  §1.5: the PARIS mulligan (2026-09-08, on
+│   │   │                      the owner's word) — any hand, one card
+│   │   │                      fewer each redraw down to an empty hand
+│   │   │                      and no eighth, a keep final, the seats
+│   │   │                      independent, the log's count, the 1997
+│   │   │                      names still naming the two hands
 │   │   ├── test_ante.gd      §6.19: the OPENING STAKE — one card each off
 │   │   │                      the deck before the deal, deterministic on
 │   │   │                      game.rng, Shandalar's basic-land exemption
@@ -2097,10 +2119,14 @@ shandalar/
 │    of the exile plate with its name above it for the player and below it
 │    for the opponent, ellipsized so a long name never widens the sidebar
 │    tests/ui/test_opening_hand.gd — §1.5: the play-or-draw and mulligan
-│    sequence and every @DIALOG_PLAYORDRAW / @DIALOG_MULLIGAN string;
-│    §6.19's window — its measured ground, that two full-size cards fit at
-│    both supported resolutions, the ante captions, and the whole opening
-│    running inside that one panel
+│    sequence (the order first, then the winner's hand until it keeps,
+│    then the other seat's; the last look owed only for a redraw the
+│    player has not seen) and every @DIALOG_PLAYORDRAW / @DIALOG_MULLIGAN
+│    string, `, drawing %d` included; §6.19's window — its measured
+│    ground, that two full-size cards fit at both supported resolutions,
+│    the ante captions, that it sits at the TOP of the screen with the
+│    hand's room below, and the duel screen lifting the stack-style hand
+│    over it for the opening (OPENING_HAND_Z)
 │    tests/ui/test_duel_prompts.gd — §1.1/§1.3/§1.4 through the screen:
 │    the discard phase, the `%d points left` click loop, and the choice
 │    overlay — the first ask reaching the player, the option labels for
@@ -3275,6 +3301,16 @@ shandalar/
 │    Karakas not played over the first and the null playing it into the
 │    graveyard, Tobias Andrion cast beside a different legend; the
 │    ladder from Sorcerer up; the knob read by the Lab
+│    tests/ai/test_ai_mulligan_2026_09_08.gd — THE OPENING HAND
+│    (AiMulligan, AiProfile.mulligans): the keep ranges and the floor;
+│    no land and all land back; one land in seven back and two kept;
+│    six in seven back and five kept; the ranges narrowing with the
+│    hand; the floor keeping anything; Islands under red cards back and
+│    a Mountain mending it; pips, not generic cost; colourless spells
+│    castable by anything; five cards waiving the colour check;
+│    land_count; the pilot judging through AiMulligan; the knob off the
+│    plain rule, and apply_overrides("mulligans=off") reaching it; a
+│    whole opening run down to a keep with the 1997 line and its count
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see
@@ -4410,7 +4446,14 @@ shandalar/
 │       │                      pre-duel splash cannot disagree — under
 │       │                      (player) or over (opponent) an ellipsized
 │       │                      name. The four columns spend the row's 185
-│       │                      exactly (50+5+40+5+40+5+40), and the deck
+│       │                      exactly (50+5+40+5+40+5+40); THE DECK'S
+│       │                      NAME (_deck_name_label, 2026-09-08) is one
+│       │                      tan line of that width on the black —
+│       │                      under the piles for the opponent, over
+│       │                      them for the player — riding the slack
+│       │                      the block already has so nothing below
+│       │                      moves, trimmed with the dots (the owner's
+│       │                      photo of the 1997 column); and the deck
 │       │                      is redrawn as a STACK whose depth tracks
 │       │                      the library — LIBRARY_STEPS /
 │       │                      library_thickness / _dress_deck_stack, the
@@ -4559,10 +4602,14 @@ shandalar/
 │       │                      dissolving into the void. No skin, no
 │       │                      plate: the two piles come and go together
 │       ├── opening_hand.gd  class OpeningHand — play-or-draw and the
-│       │                      SHANDALAR mulligan (Duel.hlp topics "Play
-│       │                      or Draw Rule" and "Mulligan"): seven for
-│       │                      seven, only a no-land or all-land hand, one
-│       │                      chance each, and the opponent may follow.
+│       │                      mulligan. Since 2026-09-08 the PARIS rule
+│       │                      on the owner's word ([QoL], §1.5): the
+│       │                      order first, then each seat — the toss
+│       │                      winner first — keeps or redraws one card
+│       │                      fewer with its hand in view, until it
+│       │                      keeps. (Duel.hlp's "Mulligan" — seven for
+│       │                      seven, only a no-land or all-land hand,
+│       │                      once — is what it replaced.)
 │       │                      Owns every @DIALOG_PLAYORDRAW and
 │       │                      @DIALOG_MULLIGAN string (§1.5, §6.2), the
 │       │                      ante captions included. The SEQUENCER only:
@@ -4582,7 +4629,9 @@ shandalar/
 │       │                      button row. Sized to the cards (which are
 │       │                      never rescaled) and then to the ground's
 │       │                      own aspect: 977x584, which fits 1280x800
-│       │                      and 1280x720 alike
+│       │                      and 1280x720 alike. Anchored to the TOP
+│       │                      of the screen (TOP_MARGIN, 2026-09-08) so
+│       │                      the hand has the room below it
 │       ├── mana_icons.gd    class ManaIcons — the mana-symbol glyphs the
 │       │                      mini cards and the preview draw
 │       ├── mana_text.gd     class ManaText — WRAPPED RULES TEXT WITH THE

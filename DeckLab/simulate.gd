@@ -222,8 +222,9 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
                       default field stays the five starter decks. A DIR
                       deck that holds proxies is skipped with a note on
                       stderr (a named file is never skipped).
-  --mulligan on|off   Offer the Shandalar mulligan before turn 1 — a hand
-                      with no land or all land, plus the courtesy offer
+  --mulligan on|off   Offer the mulligan before turn 1 — the Paris one,
+                      each seat keeping or redrawing one card fewer until
+                      it keeps, judged by its pilot (AiProfile.mulligans)
                       (default OFF; see DeckLab/README.md for why, and for
                       the measured cost of leaving it off).
   --best-of N         The original's `&Best of:` — play MATCHES of up to N
@@ -1208,17 +1209,14 @@ func _play_duel(seat_decks: Array, seat_profiles: Array, duel_seed: int,
 	# `start_duel()`, so the two paths were never actually different — what
 	# the Lab lacked was the MULLIGAN OFFER the duel screen makes between
 	# them (`OpeningHand.run`). With --mulligan on, the AI branch of that
-	# loop is reproduced here, in its order: first player first, twice
-	# round, because "the other player has the option to do so as well".
+	# loop is reproduced here, in its order: the toss winner (seat 0, who
+	# plays first here) keeps or redraws until it keeps — the Paris
+	# mulligan since 2026-09-08, one card fewer each time — then seat 1.
 	game.deal_opening_hands(7)
 	if bool(_duel_opts.get("mulligan", false)):
-		for _round in 2:
-			for step in 2:
-				var pid := 0 if step == 0 else 1
-				if not game.may_mulligan(pid):
-					continue
-				var forced := game.hand_is_a_mulligan_hand(pid)
-				if game.agents[pid].choose_mulligan(game, pid, forced):
+		for pid in 2:
+			while game.may_mulligan(pid):
+				if game.agents[pid].choose_mulligan(game, pid):
 					game.take_mulligan(pid)
 				else:
 					game.decline_mulligan(pid)
@@ -1544,7 +1542,7 @@ const FLAG_HINTS := {
 	"--names": "--names A,B: the two seat names, default SeatZero,SeatOne",
 	"--format": "--format NAME: unrestricted|wild|type1|type1.5|highlander",
 	"--group": "--group NAME: keep one deck group when a folder is expanded",
-	"--mulligan": "--mulligan on|off: offer the Shandalar mulligan, default off",
+	"--mulligan": "--mulligan on|off: offer the mulligan before turn 1, default off",
 	"--rules": "--rules fifth|modern: which ruleset, default modern",
 	"--rule": "--rule KEY=on|off: override one rules fork; repeatable",
 	"--best-of": "--best-of N: play matches of 1, 3 or 5 duels instead of single duels",

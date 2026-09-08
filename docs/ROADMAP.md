@@ -2662,7 +2662,7 @@ picker before tutor casts).
 | "X target creatures" takes as many as exist when fewer than X are legal (`target_plan.gd`) | Force the caster to pick a smaller X instead (CR 601.2c) |
 | The duel UI still prompts for ONE target per effect (`duel_screen.gd`) | A multi-pick + damage-division prompt (main session's domain) |
 | ~~Cleanup discard is automatic~~ **DONE 2026-08-31** — the cleanup step HOLDS OPEN (`MtgGame.awaiting_discard` / `discard_to_hand_size`) for any seat whose agent says `wants_to_choose_discard`. The AI and the heuristic agent still answer their own. | — |
-| ~~No mulligan~~ **DONE 2026-08-31** — the SHANDALAR rule (`Duel.hlp`): `deal_opening_hands` / `may_mulligan` / `take_mulligan` / `decline_mulligan` / `start_duel`. Seven for seven, only a no-land or all-land hand, one chance each, and the opponent may follow. The toss winner also chooses play or draw. | — |
+| ~~No mulligan~~ **DONE 2026-08-31** — the SHANDALAR rule (`Duel.hlp`): `deal_opening_hands` / `may_mulligan` / `take_mulligan` / `decline_mulligan` / `start_duel`. Seven for seven, only a no-land or all-land hand, one chance each, and the opponent may follow. The toss winner also chooses play or draw. **REPLACED 2026-09-08 on the owner's word by the PARIS rule** — any hand, one card fewer each redraw, down to empty; `[QoL]`, see "THE OPENING HAND (2026-09-08)" below, which also measures the AI's judgement of a hand. | — |
 | Simplified layers (`ContinuousEffects.recalculate`) | Full CR 613 layer/timestamp/dependency system — contained in that one method |
 | ~~Triggers can't target (`TriggeredAbility`)~~ **DONE 2026-09-02** — `TriggeredAbility.targeting(spec, order, prompt)` gives a trigger a real target, chosen by its controller AS IT GOES ON THE STACK (CR 603.3d; `MtgGame._arm_trigger_targets`): the controller's seat is asked through the `DecisionAgent` funnel (a human seat is HELD on the question through the cost mailbox, provisional pick on the stack meanwhile — `StackItem.target_held`), the pick is shown in the stack description for the opponent to respond to, shroud keeps a creature off the list, and the trigger fizzles on resolution when the target has left (CR 608.2b) or never goes on the stack with nothing legal. `.modal(labels, hint, prompt)` announces a MODE before the target the same way (CR 603.3c; `MtgGame.current_mode()`). Triggers fired by a player's own action (cast, activate, tap for mana) reach that hold through `MtgGame._resume_priority` (CR 117.3c). Lifted the eight-card "triggers that pick their own victim" row (Oubliette, Halfdane, Dance of Many, Blazing Effigy, Axelrod Gunnarson, Floral Spuzzem, Relic Bind, Erhnam Djinn). Pinned by `tests/unit/test_targeted_triggers.gd` and `tests/cards/test_fidelity_2026_09_02_targeted_triggers.gd` | One target spec per trigger — enough for the 1997 pool |
 | Triggered payments (`MtgGame.try_pay`) auto-tap LANDS only, greedy pick (basics first) | Let the payer choose sources; include artifact mana (Sol Ring) in the auto-plan |
@@ -8040,6 +8040,189 @@ sensible also on a wall"*. So `AURA_GRANTS` has a row for a SHIELD —
 anyone's gift, and the Ward fits a Wall through its second line. Fear's
 and Invisibility's reminder text add an unblockable gift beside the
 keyword, harmless and of the same polarity — the reader being literal.
+
+## THE OPENING HAND (2026-09-08) — [QoL], measured
+
+The owner, from a playtest of v0.19.0-dev: *"All plays ok, except one
+thing at the beginning of the duel. There is a coin toss, and then
+winning player decides play or draw first! But!! Then, the winning
+player must see his hand (so first hand stack should be seen besides
+starting window! and only then can he decide (ai or human) to mulligan
+or not! And then second player should also be able to take a mulligan
+again by seeing his hand. After each mulligan you draw one card less (up
+to seven mulligans where you start with empty hand) If you have no lands
+or all lands in hand, the ai or human decision to take mulligan is
+almost automatic - no special rules needed - ok maybe for ai lets write
+some mulliganning logic!) go!"*
+
+**What it was.** The SHANDALAR rule of `Duel.hlp`, topic **Mulligan**,
+ported 2026-08-31 and cited in full in docs/duel-todo.md §6.2: a hand
+could go back only if it held no land or nothing but land, the redraw
+was seven for seven, and each seat had the one chance. The window that
+asked sat in the middle of the screen over the hand it was asking
+about, and a seat whose hand did not qualify was never asked at all.
+
+**What it is — the PARIS rule, on the owner's word.** Any hand may be
+thrown back; each redraw is one card fewer; the question comes back to
+the smaller hand until the seat keeps; seven redraws end in an empty
+hand and no eighth. `MtgGame.may_mulligan` is true of any open hand
+that is not yet empty, `take_mulligan` shuffles the hand back and deals
+`hand.size() - 1`, `mulligans_taken[pid]` counts, and the log line
+carries the count: *"%s has chosen to take a mulligan, drawing %d"* —
+the 1997 line with the number added, because *"%s mulligans to %d"*
+(`UIStrings.txt:551-556`) is Manalink 3's string, not the original's,
+and still not ported. `hand_is_a_mulligan_hand` survives as what it
+always was, the 1997 NAME of a no-land or all-land hand — it no longer
+gates anything. The engine's own history of the old rule stays above
+`take_mulligan`. `[QoL]` at the site; the ledger row in
+docs/duel-todo.md §1.5 and §6.2 is marked replaced, not deleted.
+
+**The order of events** (`OpeningHand`, `game/duel/opening_hand.gd`):
+the toss winner chooses `Play first` / `Draw first` (an AI winner takes
+the play); the toss winner looks at their hand and keeps it or throws it
+back, as often as they like; the other seat does the same; the duel
+begins. A hotseat turns the window round for the second seat. The other
+seat's redraw after yours lands in the head band — *"Black Wizard will
+also take a mulligan, drawing 5"* — and costs one more `Start the duel`;
+an opponent who keeps after your press costs no click at all.
+
+**The hand in view.** The one window (`OpeningWindow`, 977x584) is now
+anchored to the TOP of the screen (`TOP_MARGIN` 8) so the fan is clear
+below it, and for the duration `DuelScreen._run_opening_hand` lifts the
+stack-style hand window from its ordinary z 60 to `OPENING_HAND_Z` 210,
+over the dialog's lower right, and puts it back when the window has
+faded. What the deciding seat sees is its own hand, the two antes and
+the two buttons — the 1997 screenshot, with the hand beside it, which is
+the owner's *"first hand stack should be seen besides starting
+window"*. Checked by looking, both hand styles: the window at the top
+with *"You will take the first turn"*, `Take mulligan` / `Start the
+duel`, the stack's "Your hand (7)" floating over the dialog; after a
+press, six cards; the AI's redraw in the head band; the duel begun.
+
+**The AI's judgement — `AiMulligan`, `engine/ai/ai_mulligan.gd`.** The
+question under Paris is not "is this hand bad" but "is it worse than a
+random hand one card smaller", and the answer here reads the hand and
+nothing else — not the library, not the opponent. Three rules, in
+order: a hand of `FLOOR` (4) cards or fewer is kept whatever it holds;
+the land count must sit in a keep range that narrows with the hand
+(`KEEP_LANDS`: 2–5 of seven, 2–4 of six, 1–4 of five — no land is no
+game, all land is no game, one land in seven is a gamble); and for a
+seven or a six inside the range the lands must be able to CAST at least
+one of the hand's spells by its coloured pips, the generic part ignored
+(two Islands under five red cards is no better than no land). The
+reason is worded (`AiMulligan.reason`: "no land", "1 land in 7", "the
+lands cast none of the spells") for the tests and the Lab; the
+announcement keeps its 1997 lines. Behind `AiProfile.mulligans`, ON at
+every rung — the AI keeping a one-lander is the malfunction a playtest
+reports, not a weaker layer of play — and with it off the seat falls
+back to the plain rule every agent has (`DecisionAgent.choose_mulligan`:
+no land or all land goes back down to `MULLIGAN_FLOOR` 4). Colour is
+what `AiPlayer._colour_shortfall` already reads off
+`CardData.mana_abilities`; curve, spell quality and the matchup are
+deliberately not here — a second evaluator, and the measure below is
+the answer to whether one is wanted.
+
+**Not a port.** `Magic-trace.c:2824` names 1997's
+`assess_mulligan_oldstyle(player0_can_mulligan, player1_can_mulligan,
+player1_should_mulligan)` — the AI's opinion was one out-parameter of
+the call that decided who MAY, which under the old rule could only be
+the no-land/all-land test, and the body is the exe's. Manalink's
+Shandalar (`Shandalar - default dungeons.ini`) judges by speculation:
+the current hand's worth against *"the putative new hands it'll be
+compared against"*, biased by `AiMulliganBiasConstant` 5 and
+`AiMulliganBiasPerMulligan` 2 — a hand evaluator this AI does not have
+and this pass did not write. Manalink's own Paris loop
+(`rules_engine.c:2119-2138`, " Keep\n Mulligan", `cards--`) is the
+Serum Powder path and asks the human only. So the rules above are
+`[s30]`-shaped judgement in a `[QoL]` rule.
+
+**MEASURED** (`DeckLab/deck_lab.sh --sweep mulligans=on`, seed 11,
+`--mulligan on`, `wizard` on both seats: seat A judges by `AiMulligan`
+in the candidate and by the plain rule in the null, seat B by the plain
+rule throughout, so the delta is what the judgement does for the deck
+that has it. Control All Forest vs All Plains, where no hand is ever
+thrown back either way — the all-land hand goes back under both rules,
+to the same four cards; every arm replayed the null game for game,
+byte-identical, in every sweep).
+
+First pass, 1,000 games, `mulligans=on,off`, Big Green vs White
+Knights: null 53.3%, on 53.5% (+0.2 ± 4.4), off 53.3% (+0.0, the null's
+own twin); 137 of 1,000 games changed course, 26 outcomes to the
+candidate and 24 against; mean turns 19.22 → 19.33.
+
+Second pass, 2,000 games a pair:
+
+| Pair | null (plain rule) | `AiMulligan` | delta | changed | outcomes for / against |
+|---|---|---|---|---|---|
+| Big Green vs White Knights | 54.1% | 53.8% | −0.3 ± 3.1 | 282 | 44 / 50 |
+| Blue Skies vs Mountain Artillery | 64.6% | 64.6% | +0.0 ± 3.0 | 169 | 36 / 36 |
+| Black-Red Raiders vs Blue Skies | 40.5% | 40.9% | +0.5 ± 3.0 | 236 | 42 / 32 |
+
+Three deltas within a point of zero, and the paired count says why:
+the judgement changed the course of 687 of the 6,000 games — the
+one-landers, the six-landers and the colour-screwed sevens the plain
+rule keeps — and of the 240 whose OUTCOME it changed, 122 went the
+candidate's way and 118 against. A WASH, and an honest one: in a
+40-card deck a one-land seven draws into its second land often enough
+that throwing it back for a random six buys nothing on average, and
+the hands where both rules agree (no land, all land) are most of what
+a mulligan is. The null and the candidate are the same win rate to the
+resolution of 6,000 games; mean turns 19.0 → 19.0 (each pair within
+0.1). Kept ON because the owner asked for the logic and because the
+alternative is the malfunction: an AI that keeps one land in seven with
+a smile. The measure is the standing answer to a second evaluator —
+not wanted by the numbers; if the owner would rather the plain rule,
+`AiProfile.mulligans := false` is the whole change.
+
+Pinned in `tests/unit/test_mulligan.gd` (15 tests: any hand may go
+back, the 1997 names still name the hand, one fewer and shuffled back,
+the question returns to the smaller hand, seven end in an empty hand
+and no eighth, a keep is final, the seats independent, the refusals
+worded, the log's count, the duel starts after, a second deal resets,
+the default agent's floor); `tests/ai/test_ai_mulligan_2026_09_08.gd`
+(15: the ranges and the floor, no land and all land, one in seven back
+and two keep, six back and five keep, the range narrowing, the floor
+keeping anything, lands that cast nothing, pips not generic, a
+colourless spell, the colour check waived for a five, the pilot judging
+through `AiMulligan`, the knob off falling to the plain rule, the knob a
+Lab override, the opening running the pilot down to a keep);
+`tests/ui/test_opening_hand.gd` (25: the window at the top with the
+hand clear below, the order asked first and the hand second, `Draw
+first` giving the turn away, `Take mulligan` dealing one fewer and
+asking again, seven running the hand out and the question with it, the
+opponent's redraw in the head band costing a look, a keeping opponent
+costing no click, losing the toss asking only about the hand, the AI
+winner's redraw up before you decide, the hotseat turning round, the
+duel screen lifting the stack and putting it back); and
+`tests/unit/test_ante.gd`, where the all-land deck now makes the hand a
+player WOULD throw back rather than the only one allowed to.
+
+**THE DECK'S NAME IN THE SIDEBAR — the same playtest, `[QoL]`.** The
+owner, with a photo of the 1997 column: *"just below the card stack
+should be the deck name in light brown small letter: if the name is
+longer than the black space available shorten it with … at the end.
+The same for bottom player: deck name just above the stack - but do
+not interfere with QoL icons below the large card!"* The 1997 column
+had the black space and no line in it, so this is `[QoL]`:
+`DuelScreen._deck_name_label` draws `config.deck_names[pid]` in
+11-point tan (`DECK_NAME_INK` 0.80/0.66/0.46) under the opponent's
+piles and over the player's, cut with the dots
+(`OVERRUN_TRIM_ELLIPSIS_FORCE`, the whole name in the tooltip), and
+hidden when the deck has no name. Where it lives is the point: NOT a
+row of the seat block's VBox — that grew each block from 160 to 169 and
+left the QoL reserve 22 px for its 34 px of buttons, which is exactly
+the interference the owner forbade — but a Label anchored inside the
+block's existing 11 px `slack` Control, a 16 px line that overhangs
+into the sidebar's 4 px gap on the side away from the piles and moves
+nothing: the preview dock, `_qol_reserve` and each QoL button measure
+the same with the line and without it. Pinned in
+`tests/ui/test_zone_column.gd` (5 tests: under the opponent's piles and
+over the player's; small light-brown letters; a long name cut with the
+dots and never widening the block; the line costing the column nothing
+— dock, reserve and every QoL button's rect unchanged and none of them
+touching the label; an unnamed deck showing no line). Checked by
+looking: "Troll Shaman" under the opponent's piles, "Kiska-Ra - White
+Dragon of the E…" over the player's, clear of the three buttons.
 
 ## THE SKIP (2026-09-08) — [QoL]
 

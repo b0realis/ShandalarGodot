@@ -61,7 +61,7 @@ marked; the reasoning and the exact wording are in the sections cited.
 | 5 | **Sort the hand and the battlefield.** DONE 2026-08-31 — and the tag was wrong: the 1997 game has no auto-sort but ships an on-demand `Arrange Cards`, so the owner's toggle is `[1997]` with an `[s30]` order. | — | UI | 2.3 |
 | 6 | **The arrows.** DONE 2026-08-31. | — | UI | 2.1 |
 | 7 | **Manual combat damage assignment.** DONE 2026-08-31, with the original's `%d points left` loop. | — | both | 1.4, 6.9 |
-| 8 | **The mulligan** — the Shandalar rule. DONE 2026-08-31. | — | both | 1.5, 6.2 |
+| 8 | **The mulligan** — the Shandalar rule. DONE 2026-08-31. **REPLACED 2026-09-08 by the Paris rule on the owner's word** (any hand, one card fewer each time, down to empty; the hand in view; an AI that judges its lands) — `[QoL]`, §1.5, §6.2, `docs/ROADMAP.md`. | — | both | 1.5, 6.2 |
 | 9 | ~~**A damage-prevention window**, and damage as a targetable object.~~ **BUILT 2026-09-01**, all four slices of §6.8a, as the seventh `RulesOptions` fork (`damage_prevention_window`, default modern). What remains is the damage-MARKER widget, which is UI and is ledgered in `docs/ROADMAP.md`. | XL | both | 6.8, 6.20b |
 | 10 | **Stops and a real "run to phase"**, replacing the blind pass loop. DONE 2026-08-31, on BOTH bars. | — | UI | 6.1, 6.3 |
 
@@ -717,6 +717,53 @@ antes as full cards — see §6.2.
 
 Pinned by `tests/unit/test_mulligan.gd` (the rule) and
 `tests/ui/test_opening_hand.gd` (the sequence and every string).
+
+#### THE RULE IS NO LONGER 1997'S — the owner's ruling of 2026-09-08 `[QoL]`
+
+From a playtest: *"There is a coin toss, and then winning player decides
+play or draw first! But!! Then, the winning player must see his hand (so
+first hand stack should be seen besides starting window! and only then can
+he decide (ai or human) to mulligan or not! And then second player should
+also be able to take a mulligan again by seeing his hand. After each
+mulligan you draw one card less (up to seven mulligans where you start
+with empty hand) If you have no lands or all lands in hand, the ai or human
+decision to take mulligan is almost automatic - no special rules needed -
+ok maybe for ai lets write some mulliganning logic!"*
+
+That is the **Paris** mulligan (any hand may be thrown back; each redraw
+is one card fewer; a keep is final), not `Duel.hlp`'s (only a no-land or
+all-land hand, seven for seven, once). The engine's API kept its names and
+changed its answers: `may_mulligan` is now "the opening hand is open, this
+seat has not kept, and it holds a card"; `take_mulligan` deals
+`hand.size() - 1` and logs `%s has chosen to take a mulligan, drawing %d`;
+`decline_mulligan` is the keep; `mulligans_taken` counts per seat;
+`hand_is_a_mulligan_hand` survives only as the 1997 NAME for the two hands
+the announcements single out (`%s has no land and chose…`, `%s has all land
+and will…`, entries 5-6, now with `, drawing %d` on the end — ours, so the
+count is said). Seven redraws end in an empty hand and no eighth.
+
+**The sequence** (`opening_hand.gd`): the order is chosen first, then the
+winner's own mulligan loop, then the other seat's — each seat's hand in
+view while it decides. The window now sits at the TOP of the screen
+(`OpeningWindow.TOP_MARGIN`) and the duel screen lifts the stack-style hand
+over it for the duration (`DuelScreen.OPENING_HAND_Z`); the fan is below
+the window already. The last `Start the duel` click survives with the
+2026-09-06 rule — owed only when a redraw the player has not seen came
+after their own last press; a keep costs no click.
+
+**The AI's judgement** is `engine/ai/ai_mulligan.gd` (`AiProfile.mulligans`,
+on for every profile; the Deck Lab's null is the plain rule): no land and
+all land go back, so does a hand whose land count falls outside
+`KEEP_LANDS` for its size (7: 2-5, 6: 2-4, 5: 1-4), and a seven or six
+whose lands cast none of its spells; nothing below four cards is thrown
+back (`FLOOR`). Measured 2026-09-08, `docs/ROADMAP.md`. Manalink 3's
+`%s mulligans to %d` strings are still not ported — the count rides the
+1997 line instead.
+
+Pinned by `tests/unit/test_mulligan.gd` (the rule),
+`tests/ai/test_ai_mulligan_2026_09_08.gd` (the judgement) and
+`tests/ui/test_opening_hand.gd` (the sequence, the window at the top, the
+lifted stack, every string).
 
 ### 1.6 [1997] First-strike damage has no priority window — DONE (2026-08-31)
 
@@ -1998,7 +2045,7 @@ divergences, both deliberate:
 | un-marking | the same `Mark this phase to always stop` entry, as a CHECK item that toggles | the 1997 table ships **no unmark string** — searched `Program/UIStrings.txt`, `Program/Text.res` and `Duel.hlp`. The tick is the only affordance the table leaves room for |
 | the two `Help` entries | present and **disabled** | there is no Dueling Help yet (§6.20l). Greying them says the menu is complete and the help is missing; dropping them would say the original's menu had two items |
 
-### 6.2 [1997] The mulligan is the SHANDALAR rule, and you choose play or draw — DONE (2026-08-31; the opening WINDOW 2026-09-01)
+### 6.2 [1997] The mulligan is the SHANDALAR rule, and you choose play or draw — DONE (2026-08-31; the opening WINDOW 2026-09-01) — **the RULE replaced 2026-09-08, see the foot of this item**
 
 `UIStrings.txt:499` `@DIALOG_MULLIGAN`, 12 entries:
 
@@ -2138,6 +2185,23 @@ a new hand and asks again; losing the toss still ends on `Start the duel`;
 and an opponent who redraws *after* your order still buys you the last
 look. Pinned by five tests under `tests/ui/test_opening_hand.gd`'s
 `one decision, one click` banner.
+
+#### THE SHANDALAR RULE IS GONE — the owner's ruling of 2026-09-08 `[QoL]`
+
+Everything above about the 1997 strings, the two templates and the single
+click still stands; what changed is the RULE the window asks about. On the
+owner's word (§1.5 quotes it) the mulligan is the **Paris** one — any hand,
+one card fewer each redraw, down to an empty hand — and each seat decides
+with its own hand in view: the winner chooses the order, then looks at
+their hand and keeps or redraws until they keep, then the other seat does
+the same. The window moved to the top of the screen so the hand has the
+room below it; the stack-style hand is lifted over the window while the
+question is open. The `Take mulligan` / `Start the duel` row is asked
+again after every redraw, and the row `Take mulligan` / `Draw first` /
+`Play first` of 2026-09-03 is gone: the order is its own question again,
+and the hand's question follows it. Entries 5-8 now carry `, drawing %d`
+(ours) so the count is said. Manalink 3's `%s will mulligan to %d` /
+`%s keeps %s hand of %d` (`UIStrings.txt:551-556`) are still not ported.
 
 ### 6.3 [1997] The Territory menu — the duel's master control — DONE (2026-09-01; the `Go to:` list 2026-08-31). Two entries stay greyed, both with a reason
 

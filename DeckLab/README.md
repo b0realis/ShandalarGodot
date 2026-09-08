@@ -221,7 +221,7 @@ that runs a thousand games.
 | `--names A,B` | seat names in the log | `SeatZero,SeatOne` |
 | `--format NAME` | require a deck format: `unrestricted`, `wild`, `type1`, `type1.5`, `highlander`. An illegal deck **fails at parse time**, naming the card. Since 2026-09-01 the check counts the deck's `SB:` SIDEBOARD with its maindeck — which is also what keeps a sideboarded deck legal at duel 2, since a one-for-one swap leaves the union of the two piles alone | none |
 | `--group NAME` | when a DIR is expanded, keep only one deck group: `originals`, `ancients`, `planeswalkers`, `coyote_tex`, `kevin_bane`, `other`, `starter`, `tournament`, `community`, `extended_community`, `user` (one per `DeckGroups.ORDER` heading). Since 2026-09-02 a DIR given with `--group` is walked **into its subfolders** — that is how the 312 ported decks under `decks/1997/<group>/`, `decks/tournament/`, `decks/community/` and `decks/extended_community/` ([decks-1997.md](decks-1997.md)) are reached: `--gauntlet decks/ --group originals` is the 55 enemy decks of the 1997 game, `--group community` the 48 proxy-free community decks. Without `--group` a DIR is its own files only, so the default field is still the five starter decks. A DIR deck that holds proxy cards is skipped with a note on stderr (a named file is never skipped; the loader refuses it and says why) | all |
-| `--mulligan on\|off` | offer the Shandalar mulligan before turn 1 | **off** — see below |
+| `--mulligan on\|off` | offer the mulligan before turn 1 — since 2026-09-08 the PARIS one (any hand, one card fewer each redraw, until the seat keeps), each seat judged by its pilot (`AiProfile.mulligans`; the plain rule when that knob is off) | **off** — see below |
 | `--rules NAME` | `fifth` or `modern`; `fifth` turns every fork to the 1997 answer | `modern` |
 | `--rule KEY=on\|off` | override one fork on top of `--rules`; repeatable | — |
 | `--best-of N` | play MATCHES of up to N duels (1, 3 or 5) instead of single duels — the original's `&Best of:` | 0 (`&Free play`) |
@@ -399,6 +399,18 @@ at all, or nothing but land**, not the modern keep-or-mull decision — and a
 answer to "how much has the Lab been lying to us" is: for decks with a sane
 mana base, not measurably. It would matter more for a deck with a bad one,
 which is the case worth re-measuring if the default ever flips.
+
+**Since 2026-09-08 the rule is the Paris mulligan** (the owner's ruling,
+`docs/duel-todo.md` §1.5): any hand may go back, one card fewer each
+time, and the pilot judges by `AiMulligan` — no land, all land, a land
+count outside the keep range for the hand's size, or lands that cast
+none of the spells. That is a wider filter than the 1997 one, so the
+table above is the old rule's; the default stays **off** for the same
+reason as before (the baseline), and the judgement itself is measured in
+`docs/ROADMAP.md`, "THE OPENING HAND (2026-09-08)": `--sweep
+mulligans=on --mulligan on`, with two all-land decks as the control —
+both rules throw an all-land hand back down to the same floor, so the
+control replays the null byte for byte.
 
 Deck paths are tried as given, then under `decks/`. **A deck argument is a
 PATH, not a deck's name** — `--deck-a decks/big_green.deck`, never

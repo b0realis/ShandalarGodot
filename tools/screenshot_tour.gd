@@ -986,8 +986,9 @@ func _await_opening_window(duel: DuelScreen) -> OpeningWindow:
 ## The opening window in the state the owner's 1997 screenshot froze:
 ## `You will take the first turn` on the left, the opponent's mulligan on
 ## the right, both antes as full cards, and both buttons live. A real duel
-## reaches it only when a hand has no land or all land, so the tour stages
-## it rather than waiting for the shuffle to oblige.
+## shows the opponent's line only when their shuffle dealt them a hand
+## they threw back, so the tour stages it rather than waiting for the
+## shuffle to oblige.
 func _capture_mulligan_offer(duel: DuelScreen) -> void:
 	var window := OpeningWindow.new()
 	duel.add_child(window)

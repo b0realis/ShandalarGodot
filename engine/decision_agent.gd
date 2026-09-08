@@ -198,14 +198,25 @@ func assign_combat_damage(game: MtgGame, source: CardInstance,
 		free_order)
 
 
-## Take the one mulligan the Shandalar rule allows (docs/duel-todo.md
-## §1.5)? [param own_hand_qualifies] is true when this seat's own hand is a
-## mulligan hand (no land or all land) and false when the offer exists only
-## because the opponent redrew — `Duel.hlp`'s *"The other player has the
-## option to do so as well"*.
-## Default: redraw a mulligan hand, keep an ordinary one.
-func choose_mulligan(_game: MtgGame, _pid: int, own_hand_qualifies: bool) -> bool:
-	return own_hand_qualifies
+## Throw this hand back? Asked by the opening (`OpeningHand.run`, the
+## Deck Lab's `--mulligan on`) as often as [method MtgGame.may_mulligan]
+## allows — the mulligan is the Paris one since 2026-09-08, one card fewer
+## each time, so "yes" is asked again of the smaller hand until "no".
+##
+## Default, THE PLAIN RULE: redraw a hand with no land or nothing but land
+## (the 1997 game's own two reasons, [method MtgGame.hand_is_a_mulligan_hand])
+## while it still has more than [constant MULLIGAN_FLOOR] cards; keep
+## anything else. [AiPlayer] judges the hand properly ([AiMulligan]).
+func choose_mulligan(game: MtgGame, pid: int) -> bool:
+	return game.hand_is_a_mulligan_hand(pid) \
+		and game.players[pid].hand.size() > MULLIGAN_FLOOR
+
+
+## The hand size below which no agent throws a hand back on the plain
+## rule: a four-card no-lander is bad, and the three that would replace
+## it are worse on average. [AiMulligan.FLOOR] is the same number for the
+## same reason.
+const MULLIGAN_FLOOR := 4
 
 
 ## Yes/no decision ("Pay {4} to untap?"). [param hint] is the caller's

@@ -167,6 +167,17 @@ var minds_pain := true
 ## Lab can run the null.
 var fits_auras := true
 
+## THE OPENING HAND: does this profile judge its own opening hand, or
+## throw back only the hand with no land or nothing but land? On, the
+## judgment is [AiMulligan]'s — lands against a keep range that narrows
+## with the hand, then whether those lands cast anything; off, the plain
+## rule every agent has ([method DecisionAgent.choose_mulligan]). The
+## owner's playtest (2026-09-08): *"ok maybe for ai lets write some
+## mulliganning logic!"* On for EVERY profile, like [member fits_auras]:
+## keeping one Island under six red cards is not a weak start, it is no
+## start. A knob only so the Deck Lab can run the null.
+var mulligans := true
+
 ## THE COUNT: does this profile size a card-advantage spell to the hands
 ## and libraries in front of it? On, an X discard is cast for the cards
 ## its target actually holds and waits while they hold none; an X draw is

@@ -3,16 +3,38 @@ extends Control
 ## THE OPENING HAND — play or draw, then the mulligans (docs/duel-todo.md
 ## §1.5, §6.2). Runs between the coin toss and turn 1.
 ##
-## THE RULE IS SHANDALAR'S, and it is neither Paris nor London. `Duel.hlp`,
-## topic **Mulligan**, verbatim: *"If either player draws no land in this
-## seven cards or draws all land, then that player has the option to
-## declare a mulligan… that player must shuffle her hand back into her
-## library and draw seven new cards… The other player has the option to do
-## so as well… Each player has only one chance to redraw, and once that's
-## used or waived, the duel begins."* Seven for seven, no bottoming, no
-## descending count. The `mulligan to %d` strings in the top-level string
-## table are Manalink 3's and are not ported; s30's London mulligan
-## (`duel.go:3918-4074`) is [s30] and is not ported either.
+## THE ORDER OF EVENTS is the owner's, from the playtest of 2026-09-08:
+## *"There is a coin toss, and then winning player decides play or draw
+## first! But!! Then, the winning player must see his hand (so first hand
+## stack should be seen besides starting window!) and only then can he
+## decide (ai or human) to mulligan or not! And then second player should
+## also be able to take a mulligan again by seeing his hand. After each
+## mulligan you draw one card less."* So:
+##
+##   1. the toss winner chooses the order (`Play first` / `Draw first`;
+##      an AI winner takes the play, as both references do);
+##   2. the toss winner looks at their hand and keeps it or throws it back,
+##      as often as they like — each redraw is one card fewer (the PARIS
+##      mulligan, `MtgGame.take_mulligan`), and the question is asked
+##      again of the smaller hand until they keep;
+##   3. the other seat does the same;
+##   4. the duel begins.
+##
+## THE RULE IS NO LONGER 1997'S. `Duel.hlp`, topic **Mulligan**, allowed one
+## redraw of seven for seven, and only of a hand with no land or nothing
+## but land; the engine's own history of that rule is in `MtgGame`, above
+## `take_mulligan`, and docs/ROADMAP.md carries the owner's ruling and the
+## Deck Lab's measure of it. `[QoL]`. The `mulligan to %d` strings in the
+## top-level string table (`UIStrings.txt:551-556`) are Manalink 3's, and
+## still not ported: every line here is the 1997 table's, with the new
+## hand's size added by [constant MULLIGAN_COUNT].
+##
+## THE HAND IS IN VIEW while the question is asked: the window sits at the
+## TOP of the screen so the fan is clear below it, and the duel screen
+## lifts the stack-style hand window over it for the duration
+## (`DuelScreen._run_opening_hand`). What the seat that is deciding sees is
+## its own hand, the antes, and the two buttons — which is the 1997
+## screenshot, with the hand beside it.
 ##
 ## BEFORE IT, the toss winner CHOOSES. `Duel.hlp`, **Play or Draw Rule**:
 ## *"In every duel, one player plays first and the other draws first. Who
@@ -23,13 +45,6 @@ extends Control
 ## or `@DIALOG_MULLIGAN` (:499), quoted exactly — see [constant PLAY_OR_DRAW]
 ## and [constant MULLIGAN].
 ##
-## THE TOSS WINNER IS ASKED ONCE. When the player wins, the window's row
-## is `Take mulligan` / `Draw first` / `Play first` together, because the
-## redraw and the order are one decision about the same seven cards; when
-## the AI wins it takes the play and the player's row is `Take mulligan` /
-## `Start the duel` (see [method _ask_lead_and_mulligan], and the owner's
-## correction it records).
-##
 ## IT ALL HAPPENS IN ONE WINDOW ([OpeningWindow]), AND THAT IS OUR OWN
 ## COMPOSITION — `[QoL]`, not `[1997]`. **1997 had two windows.**
 ## `@DIALOG_PLAYORDRAW` is `Magic.exe`'s DIALOG resource 244 — four
@@ -38,18 +53,21 @@ extends Control
 ## the first-turn line, both ante slots, `Mulligan`, and `Start the duel`
 ## at control id 1 (IDOK) — on `Winbk_Startduel.pic` (659x394). Two
 ## loaders in Manalink's `src/functions/windows.c:1338-1369` bind each
-## ground to its dialog. So the original really did take two clicks: the
-## order dismissed the first window, and the duel began on `Start the
-## duel` in the second — which was the first place the player saw the
-## antes and who leads. The full citation is docs/duel-todo.md §6.2,
-## "THE COMPOSITION CLAIM ABOVE IS WRONG".
+## ground to its dialog. The full citation is docs/duel-todo.md §6.2,
+## "THE COMPOSITION CLAIM ABOVE IS WRONG". Our one window asks each
+## question in its own button row — the order, then `Take mulligan` /
+## `Start the duel` for as long as the seat keeps redrawing — with both
+## antes up from the first frame.
 ##
-## WE MERGED THEM, SO THE SECOND CLICK HAS NOTHING LEFT TO SHOW. Both
-## antes are up from the first frame, so choosing the order IS the last
-## word and [method run] starts the duel on it (the 2026-09-06 playtest).
-## The window still holds for one `Start the duel` whenever something
-## happened after that press — see [member OpeningWindow.status_serial]
-## and `run`'s `pressed_serial`, which is the whole of that rule.
+## THE LAST LOOK. The window closes on the player's own press. When the
+## opponent throws a hand back AFTER that press, the head band says so
+## ("Cromer has no land and chose to take a mulligan", the 1997
+## screenshot) and the window holds for one more `Start the duel` so the
+## player actually reads it — [member OpeningWindow.status_serial] against
+## `run`'s `pressed_serial` is the whole of that rule. An opponent who
+## merely KEEPS after the press changes nothing the player needs to see,
+## so it costs no click (the 2026-09-06 playtest's "one decision, one
+## click").
 ##
 ## The engine half is MtgGame.stake_ante / deal_opening_hands / may_mulligan
 ## / take_mulligan / decline_mulligan / start_duel; this only asks.
@@ -87,6 +105,11 @@ const MULLIGAN := {
 	"start": "Start the duel",
 }
 
+## `[QoL]` — the size of the hand a redraw deals, said after the 1997
+## line: "Cromer has no land and chose to take a mulligan, drawing 6". The
+## 1997 table has no count because the 1997 redraw was always seven.
+const MULLIGAN_COUNT := ", drawing %d"
+
 ## The whole sequence is over; [param first_player] plays first.
 signal finished(first_player: int)
 ## One announcement to put in the Situation Bar as the sequence runs.
@@ -106,26 +129,35 @@ func _init() -> void:
 
 
 ## Which `@DIALOG_MULLIGAN` line describes what [param pid] just decided.
-## [param courtesy] is true for the second offer — the one that exists only
-## because the opponent redrew, which is the pair of strings the table
-## keeps apart from the first four.
+## [param courtesy] is true when the OTHER seat has already thrown a hand
+## back — the pair of strings the table keeps apart from the first four
+## ("will also take", "decided not to"). [param drawing], when not negative,
+## is the size of the hand the redraw deals and is said after the line
+## ([constant MULLIGAN_COUNT]); build the line BEFORE `take_mulligan`, which
+## replaces the hand the line names.
 static func announcement(game: MtgGame, pid: int, took: bool,
-		courtesy: bool) -> String:
+		courtesy: bool, drawing := -1) -> String:
 	var who: String = game.players[pid].player_name
+	var line: String
 	if courtesy:
-		return (MULLIGAN["also"] if took else MULLIGAN["also_declined"]) % who
-	if not took:
-		return MULLIGAN["declined"] % who
-	var lands := 0
-	for inst in game.players[pid].hand:
-		if inst.is_land():
-			lands += 1
-	# The table has a line for each of the two mulligan hands by name.
-	if lands == 0:
-		return MULLIGAN["no_land"] % who
-	if lands == game.players[pid].hand.size():
-		return MULLIGAN["all_land"] % who
-	return MULLIGAN["chose"] % who
+		line = (MULLIGAN["also"] if took else MULLIGAN["also_declined"]) % who
+	elif not took:
+		line = MULLIGAN["declined"] % who
+	else:
+		var lands := 0
+		for inst in game.players[pid].hand:
+			if inst.is_land():
+				lands += 1
+		# The table has a line for each of the two mulligan hands by name.
+		if lands == 0:
+			line = MULLIGAN["no_land"] % who
+		elif lands == game.players[pid].hand.size():
+			line = MULLIGAN["all_land"] % who
+		else:
+			line = MULLIGAN["chose"] % who
+	if took and drawing >= 0:
+		line += MULLIGAN_COUNT % drawing
+	return line
 
 
 ## Which line reports the toss winner's decision to the other seat.
@@ -139,9 +171,9 @@ static func play_or_draw_line(game: MtgGame, winner: int, plays: bool) -> String
 ## nothing is drawn, which is what makes the sequence testable headless.
 ##
 ## With a human at the table this opens ONE [OpeningWindow] and keeps it up
-## until the player has had the last word — the order they chose, or a
-## `Start the duel` when anything happened after it — which is the reason
-## both antes are on screen for the whole opening.
+## until the player has had the last word — their own `Start the duel`, or
+## one more when the opponent redrew after it — which is the reason both
+## antes are on screen for the whole opening.
 func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 	_game = game
 	_is_human = is_human
@@ -158,42 +190,32 @@ func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 		add_child(_window)
 		_window.show_antes(game, _viewer)
 
-	# THE PLAYER PRESSED LAST: -1 until they have, so a duel in which nobody
-	# is ever offered a mulligan still ends on their own `Start the duel`
-	# — which is exactly what the original's window is for.
+	# THE PLAYER PRESSED LAST: -1 until they have, so a duel in which the
+	# player is never asked anything still ends on their own `Start the
+	# duel` — which is exactly what the original's window is for.
 	var pressed_serial := -1
 
+	# 1. THE ORDER. The AI takes the play, which is what both references do
+	# and what the 1997 opponent does: the tempo is worth more than the
+	# extra card.
 	var plays_first := true
 	if _human(winner):
-		plays_first = await _ask_lead_and_mulligan(winner)
-		# **CHOOSING THE ORDER IS A PRESS** (playtest, 2026-09-06: *"if you
-		# click either button the duel should start — now you have to click
-		# an additional 'start duel' button, but you already decided in the
-		# previous button"*). This line is the whole of that fix: the rule
-		# below was always "hold for one more look only if something
-		# happened since the player last pressed", and `Draw first` /
-		# `Play first` never counted as pressing, so the counter sat at its
-		# never-pressed -1 and the window always found itself owing a look
-		# nobody was owed. `Take mulligan` cannot reach here — it loops
-		# inside [method _ask_lead_and_mulligan] until an order is chosen —
-		# so the asymmetry survives: a redraw deals again and asks again.
+		plays_first = await _ask_order(winner)
 		if _window != null:
 			pressed_serial = _window.status_serial
-	# The AI takes the play, which is what both references do and what the
-	# 1997 opponent does: the tempo is worth more than the extra card.
 	var first_player := winner if plays_first else game.opponent_of(winner)
 	announced.emit(play_or_draw_line(game, winner, plays_first))
 	if _window != null:
 		_window.set_lead(lead_line(game, first_player, _viewer))
 
-	# The offers, first player first — and then round two, which exists
-	# because "the other player has the option to do so as well".
-	for round_index in 2:
-		for step in 2:
-			var pid := first_player if step == 0 else game.opponent_of(first_player)
-			if not game.may_mulligan(pid):
-				continue
-			var courtesy := not game.hand_is_a_mulligan_hand(pid)
+	# 2-3. THE HANDS, the toss winner's first. Each seat looks at its own
+	# hand and keeps or redraws until it keeps; a redraw deals one fewer
+	# and asks again (the owner: "after each mulligan you draw one card
+	# less"), down to the empty hand that nobody is asked about.
+	for step in 2:
+		var pid := winner if step == 0 else game.opponent_of(winner)
+		while game.may_mulligan(pid):
+			var courtesy := game.has_mulliganed(game.opponent_of(pid))
 			var took := false
 			if _human(pid):
 				if _window != null and pid != _viewer:
@@ -202,11 +224,12 @@ func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 					_window.set_lead(lead_line(game, first_player, _viewer))
 				took = await _ask_mulligan(pid)
 			else:
-				took = game.agents[pid].choose_mulligan(game, pid, not courtesy)
+				took = game.agents[pid].choose_mulligan(game, pid)
 			# NAME THE HAND BEFORE IT IS GONE. `%s has no land…` describes
 			# the hand that was thrown away, and take_mulligan has already
 			# replaced it by the time the line would otherwise be built.
-			var line := announcement(game, pid, took, courtesy)
+			var line := announcement(game, pid, took, courtesy,
+				game.players[pid].hand.size() - 1)
 			if took:
 				game.take_mulligan(pid)
 			else:
@@ -215,13 +238,14 @@ func run(game: MtgGame, winner: int, is_human: Callable) -> void:
 			if _window != null:
 				if pid == _viewer:
 					pressed_serial = _window.status_serial
-				else:
+				elif took:
 					# The head band's right half — "Cromer has no land and
-					# chose to take a mulligan", as the 1997 screenshot has it.
+					# chose to take a mulligan", as the 1997 screenshot has
+					# it. A keep is not news and does not land there.
 					_window.set_status(line)
-	# The last word is always the player's: if anything happened after their
-	# last press (or they were never asked anything), the window waits on one
-	# more `Start the duel` so they actually see it.
+	# 4. The last word is always the player's: if anything happened after
+	# their last press (or they were never asked anything), the window
+	# waits on one more `Start the duel` so they actually see it.
 	if _window != null and _window.status_serial != pressed_serial:
 		await _window.ask([{"answer": OpeningWindow.Answer.START,
 			"label": MULLIGAN["start"]}])
@@ -247,60 +271,36 @@ func _human(pid: int) -> bool:
 
 
 ## `@DIALOG_PLAYORDRAW` entries 4-7, asked in the opening window's own
-## button row rather than in a popup of its own.
-## ONE ROW, NOT TWO. The toss winner is asked their order and their
-## mulligan TOGETHER — `Take mulligan`, `Draw first`, `Play first` — and
-## the row shows the mulligan only while the rule allows one (`Duel.hlp`,
-## **Mulligan**: a no-land or all-land hand, or the courtesy after the
-## opponent redrew).
-##
-## The owner's correction, 2026-09-03: asking the order first and the
-## mulligan second put the player through two button rows where the 1997
-## window has one, and made a redraw feel like a different question from
-## the choice it belongs to. Taking the mulligan re-asks — the order has
-## not been chosen yet — and choosing the order is also the decline, which
-## is why this returns having already spent the seat's one chance.
-func _ask_lead_and_mulligan(pid: int) -> bool:
+## button row rather than in a popup of its own: `Draw first` / `Play
+## first`, and nothing else in the row. The hand is not part of this
+## question — the owner's order of 2026-09-08 has the winner choose the
+## order FIRST and look at their hand second — so the row of 2026-09-03
+## (`Take mulligan` beside the order) is gone with the rule it served.
+## Returns true for the play.
+func _ask_order(_pid: int) -> bool:
 	if _window == null:
 		return true
 	_window.set_lead("%s\n%s" % [PLAY_OR_DRAW["you_won"], PLAY_OR_DRAW["ask"]])
-	while true:
-		var options: Array = []
-		if _game.may_mulligan(pid):
-			options.append({"answer": OpeningWindow.Answer.TAKE_MULLIGAN,
-				"label": MULLIGAN["take"]})
-		options.append({"answer": OpeningWindow.Answer.DRAW_FIRST,
-			"label": PLAY_OR_DRAW["draw_first"]})
-		options.append({"answer": OpeningWindow.Answer.PLAY_FIRST,
-			"label": PLAY_OR_DRAW["play_first"]})
-		var answer := await _window.ask(options)
-		if answer == OpeningWindow.Answer.TAKE_MULLIGAN:
-			# NAME THE HAND BEFORE IT IS GONE — take_mulligan replaces it.
-			var line := announcement(_game, pid, true,
-				not _game.hand_is_a_mulligan_hand(pid))
-			_game.take_mulligan(pid)
-			announced.emit(line)
-			continue          # the order is still unanswered
-		# Choosing the order waives the redraw, and the table has a line
-		# for that too.
-		if _game.may_mulligan(pid):
-			var declined := announcement(_game, pid, false,
-				not _game.hand_is_a_mulligan_hand(pid))
-			_game.decline_mulligan(pid)
-			announced.emit(declined)
-		return answer != OpeningWindow.Answer.DRAW_FIRST
-	return true
+	var answer := await _window.ask([
+		{"answer": OpeningWindow.Answer.DRAW_FIRST,
+			"label": PLAY_OR_DRAW["draw_first"]},
+		{"answer": OpeningWindow.Answer.PLAY_FIRST,
+			"label": PLAY_OR_DRAW["play_first"]},
+	])
+	return answer != OpeningWindow.Answer.DRAW_FIRST
 
 
 ## `Take mulligan` / `Start the duel` — the window's own two buttons
-## (`@DIALOG_MULLIGAN` entries 11-12).
+## (`@DIALOG_MULLIGAN` entries 11-12), put up once per look at the hand:
+## a redraw brings the row straight back over the smaller hand, and
+## `Start the duel` is the keep.
 ##
-## THE COURTESY OFFER NEEDS NO EXTRA LINE. It exists only because the
-## opponent redrew, and the head band is already saying so — `%s has no
-## land and chose to take a mulligan`, which is precisely the state the
-## owner's 1997 screenshot froze. Entries 9-10 (`%s will also take a
-## mulligan` / `%s decided not to take a mulligan`) REPORT the second
-## player's decision afterwards; they are not a prompt.
+## THE COURTESY OFFER NEEDS NO EXTRA LINE. When the opponent redrew, the
+## head band is already saying so — `%s has no land and chose to take a
+## mulligan`, which is precisely the state the owner's 1997 screenshot
+## froze. Entries 9-10 (`%s will also take a mulligan` / `%s decided not to
+## take a mulligan`) REPORT the second player's decision afterwards; they
+## are not a prompt.
 func _ask_mulligan(_pid: int) -> bool:
 	if _window == null:
 		return false

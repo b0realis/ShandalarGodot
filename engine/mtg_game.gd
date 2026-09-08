@@ -864,42 +864,63 @@ func start(opening_hand := 7, first_player := 0) -> void:
 
 # ------------------------------------------------------- the opening hand --
 #
-# THE SHANDALAR MULLIGAN (docs/duel-todo.md §1.5, §6.2). `Duel.hlp`, topic
-# "Mulligan": *"If either player draws no land in this seven cards or draws
-# all land, then that player has the option to declare a mulligan… that
-# player must shuffle her hand back into her library and draw seven new
-# cards… The other player has the option to do so as well… Each player has
-# only one chance to redraw, and once that's used or waived, the duel
-# begins."*
+# THE MULLIGAN. Two rules have stood here, and the second replaced the
+# first on the owner's word (2026-09-08), so both are written down.
 #
-# Seven for seven. No bottoming, no descending count: this is neither the
-# Paris nor the London mulligan, and the `mulligan to %d` strings in the
-# top-level string table are Manalink 3's, not the 1997 game's.
+# THE 1997 RULE, `Duel.hlp`, topic "Mulligan": *"If either player draws no
+# land in this seven cards or draws all land, then that player has the
+# option to declare a mulligan… that player must shuffle her hand back
+# into her library and draw seven new cards… The other player has the
+# option to do so as well… Each player has only one chance to redraw, and
+# once that's used or waived, the duel begins."* Seven for seven, once,
+# and only a hand with no land or nothing but land. That is what this
+# block did until today.
+#
+# THE RULE NOW — `[QoL]`, the owner's playtest of 2026-09-08: *"After
+# each mulligan you draw one card less (up to seven mulligans where you
+# start with empty hand). If you have no lands or all lands in hand, the
+# ai or human decision to take mulligan is almost automatic - no special
+# rules needed."* So: ANY hand may be thrown back, as many times as its
+# owner likes, and each redraw is ONE CARD FEWER — seven, six, five …
+# down to an empty hand after the seventh. No bottoming: this is the
+# PARIS mulligan (the tournament rule of 1997-2015), not the London one,
+# and not the game's own. The no-land / all-land test survives only as
+# advice — [method hand_is_a_mulligan_hand] names the hand for the
+# announcement and is the plain agent's whole reason to redraw.
+#
+# WHO DECIDES WHEN is the opening window's business (`OpeningHand.run`):
+# the toss winner first, with their hand in view, then the other seat.
+# The engine only keeps the count and the door.
 
 ## True while the opening-hand phase is running and mulligans may be taken.
 var mulligan_open := false
 
-## Whether each seat's ONE chance is gone — spent by redrawing or waived.
-var mulligan_used: Array[bool] = [false, false]
+## How many hands each seat has thrown back this opening (0..7). Each
+## redraw is one card fewer than the hand it replaces, so the count also
+## says how big the hand is: `7 - mulligans_taken[pid]`.
+var mulligans_taken: Array[int] = [0, 0]
 
-## Whether each seat actually redrew. Read by [method may_mulligan], which
-## is what opens the offer to the other player.
-var mulligan_taken: Array[bool] = [false, false]
+## Whether each seat has KEPT — said no to the offer. A keep is final:
+## the offer does not come back to a seat that declined it, whatever the
+## other seat does next.
+var mulligan_kept: Array[bool] = [false, false]
 
 
 ## Deal both opening hands and open the mulligan phase. The duel does not
 ## begin until [method start_duel].
 func deal_opening_hands(opening_hand := 7) -> void:
-	mulligan_used.fill(false)
-	mulligan_taken.fill(false)
+	mulligans_taken.fill(0)
+	mulligan_kept.fill(false)
 	mulligan_open = true
 	for p in players:
 		draw_cards(p.id, opening_hand)
 	_emit_state()
 
 
-## Does [param pid]'s hand qualify on its own account — no land at all, or
-## nothing but land? (An empty hand qualifies for neither.)
+## Is [param pid]'s hand the kind the 1997 rule spoke of — no land at all,
+## or nothing but land? (An empty hand is neither.) No longer a gate on
+## the redraw, only the reason the announcement names and the plain
+## agent's rule of thumb.
 func hand_is_a_mulligan_hand(pid: int) -> bool:
 	var hand := players[pid].hand
 	if hand.is_empty():
@@ -911,46 +932,52 @@ func hand_is_a_mulligan_hand(pid: int) -> bool:
 	return lands == 0 or lands == hand.size()
 
 
-## May [param pid] still redraw? Their own hand qualifies, OR the opponent
-## has already redrawn and this is the courtesy offer — and either way only
-## while their one chance is unspent.
+## Whether [param pid] has thrown a hand back at all this opening — what
+## turns the other seat's announcement into "will ALSO take a mulligan".
+func has_mulliganed(pid: int) -> bool:
+	return pid >= 0 and pid < players.size() and mulligans_taken[pid] > 0
+
+
+## May [param pid] still redraw? While the opening is open, until they
+## keep, and while there is a hand left to throw back — the seventh
+## mulligan draws nothing, and nothing cannot be shuffled away again.
 func may_mulligan(pid: int) -> bool:
 	if not mulligan_open or game_over:
 		return false
-	if pid < 0 or pid >= players.size() or mulligan_used[pid]:
+	if pid < 0 or pid >= players.size() or mulligan_kept[pid]:
 		return false
-	return hand_is_a_mulligan_hand(pid) or mulligan_taken[opponent_of(pid)]
+	return not players[pid].hand.is_empty()
 
 
-## Take the mulligan: the whole hand is shuffled back and the same number
-## of cards drawn again. "" on success, else a refusal string.
+## Take the mulligan: the whole hand is shuffled back and ONE CARD FEWER
+## drawn in its place. "" on success, else a refusal string.
 func take_mulligan(pid: int) -> String:
 	if not may_mulligan(pid):
 		return "no mulligan is available to %s" % players[pid].player_name \
 			if pid >= 0 and pid < players.size() else "no such player"
 	var p := players[pid]
-	var count := p.hand.size()
+	var count := p.hand.size() - 1
 	for inst in p.hand:
 		inst.zone = Mtg.Zone.LIBRARY
 		p.library.append(inst)
 	p.hand.clear()
 	_shuffle(p.library)
 	draw_cards(pid, count)
-	mulligan_used[pid] = true
-	mulligan_taken[pid] = true
-	# `@DIALOG_MULLIGAN` entry 7, Program/UIStrings.txt:499.
-	log_line("%s has chosen to take a mulligan" % p.player_name)
+	mulligans_taken[pid] += 1
+	# `@DIALOG_MULLIGAN` entry 7, Program/UIStrings.txt:499 — with the
+	# count that is ours, because the 1997 line never had one to give.
+	log_line("%s has chosen to take a mulligan, drawing %d" % [p.player_name, count])
 	_emit_state()
 	return ""
 
 
-## Waive the chance. Per `Duel.hlp` a waiver is as final as a redraw.
+## Keep the hand. Final for this seat: the offer does not return to it.
 func decline_mulligan(pid: int) -> String:
 	if not mulligan_open:
 		return "the opening hand is already settled"
 	if pid < 0 or pid >= players.size():
 		return "no such player"
-	mulligan_used[pid] = true
+	mulligan_kept[pid] = true
 	# `@DIALOG_MULLIGAN` entry 8.
 	log_line("%s did not take a mulligan" % players[pid].player_name)
 	_emit_state()

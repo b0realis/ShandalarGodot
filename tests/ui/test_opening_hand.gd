@@ -1,6 +1,8 @@
 extends GutTest
-## §1.5 / §6.2 of docs/duel-todo.md — the OPENING HAND sequence: the toss
-## winner chooses play or draw, then the Shandalar mulligan is offered.
+## §1.5 / §6.2 of docs/duel-todo.md — the OPENING HAND sequence, in the
+## owner's order of 2026-09-08: the toss winner chooses play or draw, then
+## looks at their hand and keeps or redraws (one card fewer each time,
+## until they keep), then the other seat does the same, then the duel.
 ##
 ## Every string here is `@DIALOG_PLAYORDRAW` (Program/UIStrings.txt:487) or
 ## `@DIALOG_MULLIGAN` (:499). The rule itself is pinned in the engine suite
@@ -71,6 +73,19 @@ func test_each_kind_of_hand_gets_its_own_announcement() -> void:
 		"P1 decided not to take a mulligan")
 
 
+func test_a_redraw_says_how_many_it_deals() -> void:
+	# `[QoL]` — the 1997 table has no count because its redraw was always
+	# seven; ours is one fewer each time, and the line says so.
+	_deal(_deck(30, 0), _deck(0, 30))
+	assert_eq(OpeningHand.MULLIGAN_COUNT, ", drawing %d")
+	assert_eq(OpeningHand.announcement(game, 0, true, false, 6),
+		"P0 has all land and will take a mulligan, drawing 6")
+	assert_eq(OpeningHand.announcement(game, 1, true, true, 5),
+		"P1 will also take a mulligan, drawing 5")
+	assert_eq(OpeningHand.announcement(game, 0, false, false, 6),
+		"P0 did not take a mulligan", "a keep deals nothing")
+
+
 func test_the_toss_winners_decision_is_reported_in_the_tables_words() -> void:
 	_deal(_deck(15, 15), _deck(15, 15))
 	assert_eq(OpeningHand.play_or_draw_line(game, 1, true), "P1 will play first.")
@@ -78,44 +93,61 @@ func test_the_toss_winners_decision_is_reported_in_the_tables_words() -> void:
 		"P1 has chosen to draw first.")
 
 
-func test_the_sequence_runs_and_starts_the_duel() -> void:
-	_deal(_deck(30, 0), _deck(15, 15))
+func _run_headless(winner: int) -> Array[String]:
 	var opening := OpeningHand.new()
 	host.add_child(opening)
 	var lines: Array[String] = []
 	opening.announced.connect(func(line: String) -> void: lines.append(line))
 	# Neither seat is human: every offer is answered by its DecisionAgent
 	# and no dialog is drawn, which is the whole sequence with no waiting.
-	await opening.run(game, 1, func(_pid: int) -> bool: return false)
+	await opening.run(game, winner, func(_pid: int) -> bool: return false)
+	return lines
+
+
+func test_the_sequence_runs_and_starts_the_duel() -> void:
+	_deal(_deck(30, 0), _deck(15, 15))
+	var lines := await _run_headless(1)
 	assert_eq(game.turn_number, 1, "the duel began")
 	assert_eq(game.active_player, 1, "the toss winner took the play")
 	assert_false(game.may_mulligan(0), "and the opening hand is settled")
 	assert_false(game.may_mulligan(1))
 	assert_true(lines.has("P1 will play first."))
-	assert_true(lines.has("P0 has all land and will take a mulligan"),
+	# The plain agent throws an all-land hand back until its floor: seven
+	# Forests, six, five — and keeps four.
+	assert_true(lines.has("P0 has all land and will take a mulligan, drawing 6"),
 		"the heuristic agent redrew its all-land hand: %s" % str(lines))
+	assert_true(lines.has("P0 has all land and will take a mulligan, drawing 4"))
+	assert_false(lines.has("P0 has all land and will take a mulligan, drawing 3"))
+	assert_eq(game.players[0].hand.size(), DecisionAgent.MULLIGAN_FLOOR)
+	assert_eq(game.mulligans_taken, [3, 0])
 
 
-func test_the_opponent_gets_the_courtesy_offer_after_a_redraw() -> void:
+func test_the_toss_winner_decides_first_and_the_other_seat_follows() -> void:
 	_deal(_deck(30, 0), _deck(15, 15))
-	var opening := OpeningHand.new()
-	host.add_child(opening)
-	var lines: Array[String] = []
-	opening.announced.connect(func(line: String) -> void: lines.append(line))
-	await opening.run(game, 0, func(_pid: int) -> bool: return false)
-	# P0 redrew, so P1 was offered one too — and the default agent keeps a
-	# perfectly good hand.
+	var lines := await _run_headless(1)
+	# P1 won and is asked first — before P0's redraws, so its line is the
+	# plain one; P0's keep comes after P1's, and is the last line.
+	assert_eq(lines[0], "P1 will play first.")
+	assert_eq(lines[1], "P1 did not take a mulligan")
+	assert_eq(lines[-1], "P0 did not take a mulligan")
+
+
+func test_the_other_seat_gets_the_courtesy_words_after_a_redraw() -> void:
+	_deal(_deck(30, 0), _deck(15, 15))
+	var lines := await _run_headless(0)
+	# P0 redrew, so P1's decision is told in the table's second pair — and
+	# the default agent keeps a perfectly good hand.
 	assert_true(lines.has("P1 decided not to take a mulligan"), str(lines))
+	assert_false(lines.has("P1 did not take a mulligan"))
 
 
-func test_nobody_is_offered_anything_when_both_hands_are_ordinary() -> void:
+func test_both_seats_are_asked_even_with_ordinary_hands() -> void:
+	# Any hand may go back now, so every seat is asked and every keep is
+	# announced: the order line and the two keeps, nothing else.
 	_deal(_deck(15, 15), _deck(15, 15))
-	var opening := OpeningHand.new()
-	host.add_child(opening)
-	var lines: Array[String] = []
-	opening.announced.connect(func(line: String) -> void: lines.append(line))
-	await opening.run(game, 0, func(_pid: int) -> bool: return false)
-	assert_eq(lines.size(), 1, "only the play-or-draw line: %s" % str(lines))
+	var lines := await _run_headless(0)
+	assert_eq(lines, ["P0 will play first.", "P0 did not take a mulligan",
+		"P1 did not take a mulligan"] as Array[String])
 	assert_eq(game.turn_number, 1)
 
 
@@ -209,234 +241,257 @@ func test_the_lead_line_is_the_tables_entries_one_and_two() -> void:
 	assert_eq(OpeningHand.lead_line(game, 1, 0), "P1 will start first")
 
 
-func test_the_whole_opening_happens_in_that_one_window() -> void:
-	_staked()
+func test_the_window_sits_at_the_top_with_the_hand_clear_below() -> void:
+	# The owner, 2026-09-08: *"the winning player must see his hand (so
+	# first hand stack should be seen besides starting window!)"*. A
+	# centred 584 covered the fan hand at the foot of a 1280x800 screen;
+	# at the top, TOP_MARGIN down, it leaves the fan (from ~690) whole.
+	host.size = Vector2(1280, 800)
+	var window := OpeningWindow.new()
+	host.add_child(window)
+	await get_tree().process_frame
+	var rect := window.panel_rect()
+	assert_eq(OpeningWindow.TOP_MARGIN, 8.0)
+	assert_eq(rect.position.y, OpeningWindow.TOP_MARGIN, "hung from the top edge")
+	assert_almost_eq(rect.position.x, (1280.0 - OpeningWindow.SIZE.x) / 2.0, 1.0,
+		"centred across")
+	assert_eq(rect.size, OpeningWindow.SIZE)
+	assert_lt(rect.end.y, 690.0, "the fan hand's row is clear of it")
+	assert_gt(rect.position.x, 150.0, "and so is the sidebar's showcase")
+
+
+func _opening_with_player(winner: int) -> OpeningHand:
 	var opening := OpeningHand.new()
 	host.add_child(opening)
 	# Seat 0 is the player; seat 1 answers through its DecisionAgent.
-	opening.run(game, 0, func(pid: int) -> bool: return pid == 0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var window := opening.window()
-	assert_not_null(window, "one window, opened after the toss")
-	# ONE ROW for the toss winner (the owner's correction, 2026-09-03):
-	# the order and the redraw are the same decision about the same seven
-	# cards. Neither hand qualifies here, so no `Take mulligan` — the row
-	# offers it only while the rule allows one.
-	assert_eq(window.button_labels(),
-		PackedStringArray(["Draw first", "Play first"]))
-	assert_eq(window.card_names().size(), 2, "with both antes already up")
-	assert_true(window.press("Play first"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	# Neither hand qualifies and nothing has happened since the press, so
-	# that press was the last word and the duel begins on it. This used to
-	# assert a second `Start the duel` row here; it was the 2026-09-06
-	# defect, and the tests below this file's `one decision, one click`
-	# banner carry the reasoning.
-	assert_eq(window.lead_text(), "You will take the first turn")
-	assert_eq(game.turn_number, 1, "and the duel began")
-	assert_eq(game.active_player, 0)
-
-
-func test_the_opponents_mulligan_lands_in_the_head_band() -> void:
-	# The owner's 1997 screenshot: `Cromer has no land and chose to take a
-	# mulligan` on the right, `Take mulligan` / `Start the duel` below.
-	_deal(_deck(15, 15), _deck(0, 30))   # seat 1 draws no land at all
-	game.stake_ante(0)
-	game.stake_ante(1)
-	var opening := OpeningHand.new()
-	host.add_child(opening)
-	opening.run(game, 0, func(pid: int) -> bool: return pid == 0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var window := opening.window()
-	assert_true(window.press("Play first"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_eq(window.status_text(),
-		"P1 has no land and chose to take a mulligan",
-		"named by the hand they threw away, not the one they drew")
-	assert_eq(window.button_labels(),
-		PackedStringArray(["Take mulligan", "Start the duel"]),
-		"and the courtesy offer is ours to take")
-	assert_true(window.press("Start the duel"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_eq(game.turn_number, 1)
-
-
-func test_the_toss_winner_is_asked_the_order_and_the_redraw_together() -> void:
-	# The owner's 2026-09-03 correction, in full: win the toss with a hand
-	# the rule lets you throw back, and the window's ONE row is
-	# `Take mulligan`, `Draw first`, `Play first`.
-	_deal(_deck(0, 30), _deck(15, 15))    # seat 0 draws no land at all
-	game.stake_ante(0)
-	game.stake_ante(1)
-	var opening := OpeningHand.new()
-	host.add_child(opening)
-	opening.run(game, 0, func(pid: int) -> bool: return pid == 0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var window := opening.window()
-	assert_eq(window.button_labels(), PackedStringArray(
-		["Take mulligan", "Draw first", "Play first"]))
-	# Redrawing does not answer the order, so the row comes back — without
-	# the mulligan, which is spent.
-	assert_true(window.press("Take mulligan"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_eq(window.button_labels(),
-		PackedStringArray(["Draw first", "Play first"]))
-	assert_true(window.press("Draw first"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	# Seat 1 now gets the courtesy offer (its opponent redrew) and answers
-	# through its own agent; the window then waits on the player's last
-	# word, which is what the original's window closes on.
-	assert_eq(window.button_labels(), PackedStringArray(["Start the duel"]))
-	assert_true(window.press("Start the duel"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_eq(game.active_player, 1, "drawing first gives the turn away")
-
-
-func test_choosing_the_order_also_waives_the_redraw() -> void:
-	# Pressing `Play first` on a hand you were allowed to throw back is
-	# the decline: one chance, used or waived (Duel.hlp, Mulligan).
-	_deal(_deck(0, 30), _deck(15, 15))
-	game.stake_ante(0)
-	game.stake_ante(1)
-	var opening := OpeningHand.new()
-	host.add_child(opening)
-	opening.run(game, 0, func(pid: int) -> bool: return pid == 0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var window := opening.window()
-	assert_true(window.press("Play first"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_false(game.may_mulligan(0), "the chance is spent")
-	assert_eq(game.active_player, 0)
-
-
-# ------------------------------------------- one decision, one click (§6.19) --
-#
-# THE DEFECT (playtest, 2026-09-06): *"In the duel, if you win the coin toss
-# you get a choice of draw first or play first. If you click either button
-# the duel should start — now you have to click an additional 'start duel'
-# button, but you already decided in the previous button."*
-#
-# `OpeningHand.run`'s rule was right and its bookkeeping was not. The window
-# owes the player a LAST LOOK — one more `Start the duel` whenever something
-# happened after their last press, because the opponent's redraw lands in the
-# head band and they must be able to read it. That is what `pressed_serial`
-# is for. But `_ask_lead_and_mulligan` never wrote to it, so choosing the
-# order left the counter at its "never pressed anything" -1 and the window
-# always found itself owing a look nobody was owed.
-#
-# So the fix is not to drop the second row: it is to count the order button
-# as the press it is. Both tests below are the same window; only what the
-# opponent does between them differs.
-
-func _straight_opening(winner: int) -> OpeningHand:
-	var opening := OpeningHand.new()
-	host.add_child(opening)
 	opening.run(game, winner, func(pid: int) -> bool: return pid == 0)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	return opening
 
 
-func test_choosing_the_order_starts_the_duel_with_no_second_click() -> void:
-	# Nothing happens after the press — neither hand may be thrown back —
-	# so `Play first` IS the last word and the duel begins on it.
-	_deal(_deck(15, 15), _deck(15, 15))
-	game.stake_ante(0)
-	game.stake_ante(1)
-	var opening: OpeningHand = await _straight_opening(0)
+func _press(window: OpeningWindow, label: String) -> void:
+	assert_true(window.press(label), "no such button up: %s" % label)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func test_the_order_is_asked_first_and_the_hand_second() -> void:
+	# The owner's order of events, whole: `Draw first` / `Play first`
+	# alone in the first row; then, over the hand, `Take mulligan` /
+	# `Start the duel`; and the duel on the keep.
+	_staked()
+	var opening: OpeningHand = await _opening_with_player(0)
 	var window := opening.window()
+	assert_not_null(window, "one window, opened after the toss")
+	assert_eq(window.lead_text(), "You won the coin toss.\nWould you like to:")
 	assert_eq(window.button_labels(),
-		PackedStringArray(["Draw first", "Play first"]))
-	assert_true(window.press("Play first"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	# The window never puts a second row up — it closes. (`ask` replaces
-	# the row it is asked for; with nothing more to ask, the buttons the
-	# player just answered are simply the last ones the window ever had.)
-	assert_false(window.button_labels().has("Start the duel"),
-		"no second row: the decision was made in the previous button")
-	assert_eq(game.turn_number, 1, "the duel started on that one click")
+		PackedStringArray(["Draw first", "Play first"]),
+		"the order, and nothing else, in the first row")
+	assert_eq(window.card_names().size(), 2, "with both antes already up")
+	await _press(window, "Play first")
+	assert_eq(window.lead_text(), "You will take the first turn")
+	assert_eq(window.button_labels(),
+		PackedStringArray(["Take mulligan", "Start the duel"]),
+		"then the hand: keep it or throw it back")
+	assert_eq(game.turn_number, 0, "the duel waits on the hand")
+	assert_true(game.may_mulligan(0), "any hand may go back")
+	await _press(window, "Start the duel")
+	assert_false(game.may_mulligan(0), "kept")
+	# Seat 1's plain agent keeps its ordinary hand, which is not news: no
+	# status line, no last look, the duel begins on the player's own press.
+	assert_eq(window.status_text(), "")
+	assert_eq(game.turn_number, 1, "and the duel began")
 	assert_eq(game.active_player, 0)
 
 
-func test_draw_first_starts_the_duel_on_its_own_click_too() -> void:
-	# The other half of the same row, and the seat it hands the turn to.
+func test_draw_first_gives_the_turn_away() -> void:
 	_deal(_deck(15, 15), _deck(15, 15))
-	var opening: OpeningHand = await _straight_opening(0)
+	var opening: OpeningHand = await _opening_with_player(0)
 	var window := opening.window()
-	assert_true(window.press("Draw first"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_false(window.button_labels().has("Start the duel"))
+	await _press(window, "Draw first")
+	assert_eq(window.lead_text(), "P1 will start first")
+	assert_eq(window.button_labels(),
+		PackedStringArray(["Take mulligan", "Start the duel"]),
+		"the hand is still the winner's to judge, whoever leads")
+	await _press(window, "Start the duel")
 	assert_eq(game.turn_number, 1)
 	assert_eq(game.active_player, 1, "drawing first gives the turn away")
 
 
-func test_take_mulligan_still_deals_again_and_asks_again() -> void:
-	# THE ASYMMETRY THAT MUST SURVIVE. `Take mulligan` is not a decision
-	# about the order, so it deals a new hand and comes straight back with
-	# the row — minus the redraw, which is spent (`Duel.hlp`, **Mulligan**:
-	# one chance, used or waived).
+func test_take_mulligan_deals_one_fewer_and_asks_again() -> void:
+	# *"After each mulligan you draw one card less"* — and the row comes
+	# straight back over the smaller hand, as often as the player likes.
 	_deal(_deck(0, 30), _deck(15, 15))    # seat 0 draws no land at all
-	var opening: OpeningHand = await _straight_opening(0)
+	var opening: OpeningHand = await _opening_with_player(0)
 	var window := opening.window()
-	assert_eq(window.button_labels(), PackedStringArray(
-		["Take mulligan", "Draw first", "Play first"]))
-	assert_true(window.press("Take mulligan"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_eq(window.button_labels(),
-		PackedStringArray(["Draw first", "Play first"]),
-		"a new hand and the same question — the duel has NOT started")
-	assert_eq(game.turn_number, 0, "and no turn has begun")
-
-
-func test_the_last_look_survives_an_opponent_who_acts_after_the_press() -> void:
-	# The rule `pressed_serial` exists for, and the one this fix must not
-	# break: the opponent redrew AFTER `Play first`, the head band says so,
-	# and the window holds for one `Start the duel` so the player reads it.
-	_deal(_deck(15, 15), _deck(0, 30))    # seat 1 draws no land at all
-	var opening: OpeningHand = await _straight_opening(0)
-	var window := opening.window()
-	assert_true(window.press("Play first"))
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_eq(window.status_text(),
-		"P1 has no land and chose to take a mulligan")
+	var lines: Array[String] = []
+	opening.announced.connect(func(line: String) -> void: lines.append(line))
+	await _press(window, "Play first")
+	await _press(window, "Take mulligan")
+	assert_eq(game.players[0].hand.size(), 6, "seven back, six out")
 	assert_eq(window.button_labels(),
 		PackedStringArray(["Take mulligan", "Start the duel"]),
-		"the courtesy offer, which is a question and not a repeat")
-	assert_eq(game.turn_number, 0, "the duel waits on it")
-	assert_true(window.press("Start the duel"))
-	await get_tree().process_frame
-	await get_tree().process_frame
+		"a new hand and the same question — the duel has NOT started")
+	assert_eq(game.turn_number, 0)
+	assert_true(lines.has("P0 has no land and chose to take a mulligan, drawing 6"),
+		"named by the hand thrown away, with the count: %s" % str(lines))
+	await _press(window, "Take mulligan")
+	assert_eq(game.players[0].hand.size(), 5)
+	assert_eq(window.button_labels(),
+		PackedStringArray(["Take mulligan", "Start the duel"]))
+	await _press(window, "Start the duel")
+	assert_eq(game.mulligans_taken[0], 2)
 	assert_eq(game.turn_number, 1)
+	assert_eq(game.players[0].hand.size(), 5, "and plays on with five")
 
 
-func test_losing_the_toss_still_ends_on_start_the_duel() -> void:
-	# The other asymmetry, unchanged: a seat that did not win the toss is
-	# never asked the order, so its one press is `Start the duel` — the
-	# button the 1997 window closes on, and the reason the antes are up.
+func test_seven_mulligans_run_the_hand_out_and_the_question_with_it() -> void:
+	_deal(_deck(0, 30), _deck(15, 15))
+	var opening: OpeningHand = await _opening_with_player(0)
+	var window := opening.window()
+	await _press(window, "Play first")
+	for expected in [6, 5, 4, 3, 2, 1, 0]:
+		await _press(window, "Take mulligan")
+		assert_eq(game.players[0].hand.size(), expected)
+	# Nothing is left to throw back, so the question is not asked again;
+	# seat 1 keeps, and the window owes the player nothing more.
+	assert_false(game.may_mulligan(0), "an empty hand is not offered a mulligan")
+	assert_eq(game.mulligans_taken[0], 7)
+	assert_eq(game.turn_number, 1)
+	assert_eq(game.players[0].hand.size(), 0)
+
+
+func test_the_opponents_mulligan_lands_in_the_head_band_and_costs_a_look() -> void:
+	# The owner's 1997 screenshot: `Cromer has no land and chose to take a
+	# mulligan` on the right, the two buttons below. The opponent decides
+	# AFTER the player's keep here, so the window holds for one more
+	# `Start the duel` — the player must be able to read it.
+	_deal(_deck(15, 15), _deck(0, 30))   # seat 1 draws no land at all
+	game.stake_ante(0)
+	game.stake_ante(1)
+	var opening: OpeningHand = await _opening_with_player(0)
+	var window := opening.window()
+	await _press(window, "Play first")
+	await _press(window, "Start the duel")
+	# The plain agent threw back seven, six and five of no land and kept
+	# four: the band shows the LAST redraw, with its count.
+	assert_eq(window.status_text(),
+		"P1 has no land and chose to take a mulligan, drawing 4",
+		"named by the hand they threw away, not the one they drew")
+	assert_eq(window.button_labels(), PackedStringArray(["Start the duel"]),
+		"the last look")
+	assert_eq(game.turn_number, 0, "the duel waits on it")
+	await _press(window, "Start the duel")
+	assert_eq(game.turn_number, 1)
+	assert_eq(game.players[1].hand.size(), 4)
+
+
+func test_an_opponent_who_keeps_after_the_press_costs_no_click() -> void:
+	# "One decision, one click" (the 2026-09-06 playtest): a keep is not
+	# news, so it neither lands in the band nor holds the window.
 	_deal(_deck(15, 15), _deck(15, 15))
 	game.stake_ante(0)
 	game.stake_ante(1)
-	var opening: OpeningHand = await _straight_opening(1)
+	var opening: OpeningHand = await _opening_with_player(0)
 	var window := opening.window()
-	assert_eq(window.button_labels(), PackedStringArray(["Start the duel"]))
+	await _press(window, "Play first")
+	await _press(window, "Start the duel")
+	assert_eq(window.status_text(), "")
+	assert_eq(game.turn_number, 1, "the duel started on that click")
+
+
+func test_losing_the_toss_asks_only_about_the_hand() -> void:
+	# A seat that did not win the toss is never asked the order: the AI
+	# winner takes the play and judges its own hand first, then the
+	# player's one row is the hand's — over the antes, as the 1997 window.
+	_deal(_deck(15, 15), _deck(15, 15))
+	game.stake_ante(0)
+	game.stake_ante(1)
+	var opening: OpeningHand = await _opening_with_player(1)
+	var window := opening.window()
 	assert_eq(window.lead_text(), "P1 will start first")
-	assert_true(window.press("Start the duel"))
-	await get_tree().process_frame
-	await get_tree().process_frame
+	assert_eq(window.button_labels(),
+		PackedStringArray(["Take mulligan", "Start the duel"]))
+	assert_false(game.may_mulligan(1), "the AI has already kept")
+	await _press(window, "Start the duel")
 	assert_eq(game.turn_number, 1)
 	assert_eq(game.active_player, 1)
+
+
+func test_the_ai_winners_redraw_is_up_before_the_player_decides() -> void:
+	# When the AI wins and throws its hand back, the band already says so
+	# by the time the player is asked — and their press is the last word.
+	_deal(_deck(15, 15), _deck(0, 30))
+	var opening: OpeningHand = await _opening_with_player(1)
+	var window := opening.window()
+	assert_eq(window.status_text(),
+		"P1 has no land and chose to take a mulligan, drawing 4")
+	assert_eq(window.button_labels(),
+		PackedStringArray(["Take mulligan", "Start the duel"]))
+	await _press(window, "Start the duel")
+	assert_eq(game.turn_number, 1, "no second look: nothing happened after the press")
+
+
+func test_a_hotseat_turns_the_window_round_for_the_second_seat() -> void:
+	_staked()
+	var opening := OpeningHand.new()
+	host.add_child(opening)
+	opening.run(game, 0, func(_pid: int) -> bool: return true)   # both human
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var window := opening.window()
+	assert_eq(window.caption_texts(), PackedStringArray(["Your ante:", "P1 ante:"]))
+	await _press(window, "Play first")
+	await _press(window, "Start the duel")
+	# Seat 1's turn to look: the window says `Your` to them now.
+	assert_eq(window.caption_texts(), PackedStringArray(["Your ante:", "P0 ante:"]))
+	assert_eq(window.lead_text(), "P0 will start first")
+	assert_eq(window.button_labels(),
+		PackedStringArray(["Take mulligan", "Start the duel"]))
+	assert_eq(game.turn_number, 0)
+	await _press(window, "Take mulligan")
+	assert_eq(game.players[1].hand.size(), 6)
+	await _press(window, "Start the duel")
+	assert_eq(game.turn_number, 1, "the second seat's press is the last word")
+	assert_eq(game.active_player, 0)
+	await get_tree().process_frame
+
+
+# ------------------------------------------------ the hand over the window --
+
+func test_the_duel_screen_lifts_the_stack_over_the_window_for_the_opening() -> void:
+	# The duel screen's half of "the hand stack should be seen besides
+	# starting window": the stack-style hand window (z 60, under an
+	# OriginalDialog's 200) is lifted over it while the opening runs and
+	# put back after.
+	var had := Settings.has_value("hand_style")
+	var prior: String = Settings.hand_style()
+	Settings.set_value("hand_style", "stack")
+	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	if had:
+		Settings.set_value("hand_style", prior)
+	else:
+		Settings.clear_value("hand_style")
+	var stack: Control = screen._hand_rows[1]
+	assert_true(stack is StackHand)
+	assert_eq(stack.z_index, 60, "the ordinary height")
+	assert_gt(DuelScreen.OPENING_HAND_Z, 200, "over an OriginalDialog")
+	# Headless, the screen skipped the toss and began the duel; reopen the
+	# hands so the window has a question to ask.
+	screen.game.mulligan_open = true
+	screen.game.mulligan_kept = [false, true]   # the AI seat has kept
+	screen._run_opening_hand(0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(stack.z_index, DuelScreen.OPENING_HAND_Z, "lifted while the window is up")
+	var window: OpeningWindow = screen.find_child("OpeningWindow", true, false)
+	assert_not_null(window)
+	await _press(window, "Play first")
+	await _press(window, "Start the duel")
+	# The window fades for 0.2s before the run returns — wall-clock time,
+	# which headless frames outrun.
+	await get_tree().create_timer(0.5).timeout
+	assert_eq(stack.z_index, 60, "and put back when it is over")

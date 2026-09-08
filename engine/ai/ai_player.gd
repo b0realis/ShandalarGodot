@@ -4837,6 +4837,19 @@ func _effects_regenerate(game: MtgGame, effects: Array, victim: CardInstance,
 
 # ======================================================= DecisionAgent side --
 
+## THE OPENING HAND. Behind [member AiProfile.mulligans] the seat judges
+## its hand — lands against a keep range, then whether those lands cast
+## anything ([AiMulligan]); with the knob off it throws back only the
+## hand with no land or nothing but land, the plain rule every agent has.
+## Asked again after every redraw by whoever runs the opening (the
+## OpeningWindow at the table, the Deck Lab's `--mulligan on`), and
+## answering false is the keep.
+func choose_mulligan(game: MtgGame, p_pid: int) -> bool:
+	if profile.mulligans:
+		return AiMulligan.wants_mulligan(game, p_pid)
+	return super(game, p_pid)
+
+
 ## Discard the least valuable cards. A land is the cheapest card in hand
 ## only once we have lands enough; short of them it outranks any spell
 ## we could not cast anyway.

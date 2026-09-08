@@ -123,11 +123,13 @@ func test_the_stake_is_never_dealt_into_the_opening_hand() -> void:
 
 func test_a_mulligan_does_not_shuffle_the_stake_back_in() -> void:
 	var game := MtgGame.new()
-	# An all-land deck guarantees a mulligan hand for seat 0.
+	# Any dealt hand may be thrown back (the Paris rule since 2026-09-08);
+	# the all-land deck only makes it the hand a player WOULD throw back.
 	game.setup(_deck(40, 0), _deck(), "P0", "P1", 20, 20, 7)
 	var staked := game.stake_ante(0)[0]
 	game.deal_opening_hands(7)
-	assert_true(game.may_mulligan(0), "all land — the Shandalar rule")
+	assert_true(game.may_mulligan(0), "the opening hand is open")
+	assert_true(game.hand_is_a_mulligan_hand(0), "all land — the 1997 name for it")
 	assert_eq(game.take_mulligan(0), "")
 	assert_eq(staked.zone, Mtg.Zone.ANTE, "the stake stayed staked")
 	assert_eq(game.players[0].ante.size(), 1)

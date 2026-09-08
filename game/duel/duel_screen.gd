@@ -279,6 +279,32 @@ const DECK_STACK := Vector2(50, 61)
 const SEAT_PORTRAIT := Vector2(40, 50)
 const SEAT_NAME_FONT_SIZE := 10
 const SEAT_NAME_HEIGHT := 13
+# ----------------------------------------------------- THE DECK'S NAME --
+#
+# The owner (2026-09-08, with a photo of the 1997 column): *"just below
+# the card stack should be the deck name in light brown small letter: if
+# the name is longer than the black space available shorten it with … at
+# the end. The same for bottom player: deck name just above the stack -
+# but do not interfere with QoL icons below the large card!"*
+#
+# One line of tan on the black, the full width of the piles block (the
+# 185 that ends at the mana panel), flush with the deck stack's own left
+# edge: under the piles for the opponent, over them for the player. It
+# rides the SLACK each seat's block already has — the mana panel beside
+# the piles is 160 tall, life + piles + gaps are 149 — so the block does
+# not grow by a pixel and the QoL reserve between the examined card and
+# the player's block keeps every one of its 40. (Adding the line as a
+# row of its own grew each block by 9 and left the reserve 22 for its
+# 34px of buttons; measured 2026-09-08.) Empty when nobody named the
+# deck (a scene run, a test): the label is then hidden, not blank.
+# [QoL]: the 1997 column had no such line; docs/ROADMAP.md carries the row.
+const DECK_NAME_INK := Color(0.80, 0.66, 0.46)
+const DECK_NAME_FONT_SIZE := 11
+## The line's box: an 11px face's line height. The slack it rides is
+## 11 tall, so the box overhangs it by 5 on the side AWAY from the piles
+## — into the sidebar's own 4px gap, where there is nothing to cover,
+## and the glyphs themselves stay well inside.
+const DECK_NAME_HEIGHT := 16
 #
 # 1997 PRINTED NO COUNTS AT ALL, and that is a divergence this screen
 # already carried before today. `Duel.hlp`, topic **Library**: *"The number
@@ -308,6 +334,9 @@ var _exile_labels: Array[Label] = []        # per-seat exile count
 ## 2026-09-03. See [method _seat_portrait_block] for the whole record.
 var _seat_portraits: Array[TextureRect] = []
 var _seat_name_labels: Array[Label] = []
+## The deck's name under (opponent) / over (player) the piles — the
+## owner's ask of 2026-09-08. See [constant DECK_NAME_INK].
+var _deck_name_labels: Array[Label] = []
 ## The pile the open graveyard view was opened from, -1 while it is shut
 ## (docs/duel-todo.md §1.2). Clicking the same pile again closes it, which
 ## is s30's handleGraveyardClick and needs this to know which "same".
@@ -1030,13 +1059,42 @@ func _first_of(a: Signal, b: Signal) -> void:
 		await get_tree().process_frame
 
 
-## Play-or-draw and the Shandalar mulligan, in the original's own words —
-## see OpeningHand, which owns every string.
+## The hand windows' z while the opening window is up: OVER it (an
+## OriginalDialog draws at 200), so the seat deciding its mulligan sees
+## the hand it is deciding about — the owner's playtest, 2026-09-08:
+## *"the winning player must see his hand (so first hand stack should be
+## seen besides starting window!)"*. The stack-style window at its
+## default place (1062, 412) otherwise sits three-quarters under the
+## opening window; the fan is clear of it because the window sits at the
+## top ([constant OpeningWindow.TOP_MARGIN]). Restored to the ordinary 60
+## the moment the opening is over. `[QoL]`.
+const OPENING_HAND_Z := 210
+
+
+## Play-or-draw and the mulligans, in the original's own words — see
+## OpeningHand, which owns every string and the order of events.
 func _run_opening_hand(winner: int) -> void:
 	var opening := OpeningHand.new()
 	opening.announced.connect(_set_prompt)
 	add_child(opening)
+	# Every human seat's hand floats over the window for the duration:
+	# the player's stack (the fan needs no lift — the window leaves the
+	# foot of the screen to it) and, in a hotseat, the other seat's row.
+	var lifted: Array[Control] = []
+	for pid in 2:
+		if hidden_hands.has(pid) or not _is_human(pid):
+			continue
+		var row: Control = _hand_rows[1 - pid]
+		if row is StackHand or pid == 1:
+			lifted.append(row)
+	var was_z: Array[int] = []
+	for row in lifted:
+		was_z.append(row.z_index)
+		row.z_index = OPENING_HAND_Z
 	await opening.run(game, winner, _is_human)
+	for i in lifted.size():
+		if is_instance_valid(lifted[i]):
+			lifted[i].z_index = was_z[i]
 	opening.queue_free()
 
 
@@ -8083,6 +8141,10 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	# bottom edge and the piles sat too high (the owner caught the gap).
 	var slack := Control.new()
 	slack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# THE DECK'S NAME rides the slack, hugging the piles' middle side —
+	# under them for the opponent, over them for the player. See
+	# [constant DECK_NAME_INK] for the owner's words and the arithmetic.
+	slack.add_child(_deck_name_label(pid, life_first))
 	if life_first:
 		left.add_child(life)
 		left.add_child(piles_row)
@@ -8095,6 +8157,47 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	row.add_child(left)
 	row.add_child(_mana_column(pid))
 	return row
+
+
+## THE DECK'S NAME, one small tan line on the black beside the piles —
+## the owner's ask of 2026-09-08 ([constant DECK_NAME_INK] has the words).
+## Anchored inside the seat's slack: to its top when the piles are above
+## ([param below_piles], the opponent), to its bottom when they are below
+## (the player), the slack's whole width either way. Trimmed with the
+## dots when it outruns the block, like the seat's name beside its
+## portrait, and never wider than the block: a Label's minimum width is
+## its whole string, and "Kiska-Ra - White Dragon" untrimmed would push
+## the mana panel off the sidebar. Hidden when the deck has no name (a
+## scene run, a test).
+func _deck_name_label(pid: int, below_piles: bool) -> Label:
+	var deck_name := String(config.deck_names[pid]) if config != null else ""
+	var label := Label.new()
+	label.text = deck_name
+	label.anchor_left = 0.0
+	label.anchor_right = 1.0
+	label.anchor_top = 0.0 if below_piles else 1.0
+	label.anchor_bottom = label.anchor_top
+	label.offset_left = 0.0
+	label.offset_right = 0.0
+	label.offset_top = 0.0 if below_piles else -DECK_NAME_HEIGHT
+	label.offset_bottom = DECK_NAME_HEIGHT if below_piles else 0.0
+	label.grow_vertical = Control.GROW_DIRECTION_END if below_piles else Control.GROW_DIRECTION_BEGIN
+	label.add_theme_font_size_override("font_size", DECK_NAME_FONT_SIZE)
+	label.add_theme_color_override("font_color", DECK_NAME_INK)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# ..._FORCE, for the same reason as the seat's name: the plain
+	# behaviour drops the dots at this size and a cut name reads whole.
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS_FORCE
+	label.clip_text = true
+	# PASS, not IGNORE: the whole name is in the tooltip, which needs the
+	# mouse to reach the label; there is nothing under it to click.
+	label.tooltip_text = deck_name
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	label.visible = deck_name != ""
+	_deck_name_labels.resize(2)
+	_deck_name_labels[pid] = label
+	return label
 
 
 ## ONE PILE'S COUNT, in the bottom-right corner of the art it belongs to.

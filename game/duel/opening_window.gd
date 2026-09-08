@@ -91,8 +91,9 @@ const BUTTON_ROW_HEIGHT := 38.0
 ## and a centred left card already started at 320).
 ##
 ## 977x584 fits inside BOTH supported window sizes with room to spare:
-## 1280x800 leaves 151px each side and 108 above and below; 1280x720 leaves
-## the same 151 and 68. Pinned by tests/ui/test_opening_hand.gd.
+## 1280x800 leaves 151px each side and 216 below when the window sits at
+## the top; 1280x720 leaves the same 151 and 136. Pinned by
+## tests/ui/test_opening_hand.gd.
 const SIZE := Vector2(
 	roundf((COLUMN_MARGIN * 2.0 + HEAD_HEIGHT + BODY_SEPARATION
 		+ CAPTION_HEIGHT + CAPTION_GAP + CardPreview.SIZE.y
@@ -100,6 +101,19 @@ const SIZE := Vector2(
 	COLUMN_MARGIN * 2.0 + HEAD_HEIGHT + BODY_SEPARATION
 		+ CAPTION_HEIGHT + CAPTION_GAP + CardPreview.SIZE.y
 		+ COLUMN_SEPARATION + BUTTON_ROW_HEIGHT)
+
+## WHERE IT SITS: at the TOP of the screen, this far down, and centred
+## across. Not the centre, where every other OriginalDialog goes — the
+## owner's playtest of 2026-09-08: *"the winning player must see his hand
+## (so first hand stack should be seen besides starting window!)"*. A
+## centred 584 covered the fan hand's name bands at the foot of a 1280x800
+## screen and most of the stack-style hand window at its default place;
+## at the top it leaves the fan whole (it begins at ~690) and only its
+## own bottom-right corner under the lifted stack (see
+## `DuelScreen._run_opening_hand`). The sidebar's showcase, where a
+## hovered hand card previews, is left of x 151 and stays uncovered
+## either way. `[QoL]`.
+const TOP_MARGIN := 8.0
 
 ## Which button ended the wait.
 enum Answer { PLAY_FIRST, DRAW_FIRST, TAKE_MULLIGAN, START }
@@ -128,6 +142,10 @@ func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_dialog = OriginalDialog.create("", SIZE, "versus_background")
+	# Re-anchored from create's centre to the top edge: KEEP_SIZE writes
+	# the real offsets, and the margin is the gap to that edge.
+	_dialog.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP,
+		Control.PRESET_MODE_KEEP_SIZE, int(TOP_MARGIN))
 	add_child(_dialog)
 
 	# --- the head band: who leads (left), what they just did (right) ---
@@ -248,6 +266,13 @@ func close() -> void:
 	fade.tween_property(self, "modulate:a", 0.0, 0.2)
 	await fade.finished
 	queue_free()
+
+
+## Test seam: where the panel stands inside this full-rect control — its
+## top edge is [constant TOP_MARGIN] from the screen's, whatever the
+## screen's height.
+func panel_rect() -> Rect2:
+	return Rect2(_dialog.position, _dialog.size)
 
 
 ## Test seam: the two ante captions, viewer's slot first.

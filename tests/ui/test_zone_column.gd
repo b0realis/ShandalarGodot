@@ -31,7 +31,8 @@ func before_each() -> void:
 	await get_tree().process_frame
 
 
-func _screen(names := ["Player 1", "Player 2"], portraits := ["", ""]) -> DuelScreen:
+func _screen(names := ["Player 1", "Player 2"], portraits := ["", ""],
+		decks := ["", ""]) -> DuelScreen:
 	var made: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
 	var config := DuelConfig.hotseat_default()
 	config.rng_seed = 909
@@ -39,6 +40,8 @@ func _screen(names := ["Player 1", "Player 2"], portraits := ["", ""]) -> DuelSc
 	config.player_names[1] = names[1]
 	config.portraits[0] = portraits[0]
 	config.portraits[1] = portraits[1]
+	config.deck_names[0] = decks[0]
+	config.deck_names[1] = decks[1]
 	made.config = config
 	add_child_autofree(made)
 	return made
@@ -380,3 +383,111 @@ func test_the_portrait_block_neither_blocks_clicks_nor_distorts_the_face() -> vo
 			TextureRect.STRETCH_KEEP_ASPECT_COVERED,
 			"it fills its box at its own aspect rather than letterboxing")
 		assert_eq(screen._seat_portraits[pid].size, DuelScreen.SEAT_PORTRAIT)
+
+
+# ------------------------------------------------------ the deck's name --
+# The owner (2026-09-08, with a photo of the 1997 column): *"just below the
+# card stack should be the deck name in light brown small letter: if the
+# name is longer than the black space available shorten it with … at the
+# end. The same for bottom player: deck name just above the stack - but do
+# not interfere with QoL icons below the large card!"*
+
+const LONG_DECK := "Kiska-Ra - White Dragon of the Endless Marches"
+
+
+func _named() -> DuelScreen:
+	return _screen(["Player 1", "Player 2"], ["", ""], [LONG_DECK, "Troll Shaman"])
+
+
+func test_the_deck_s_name_is_under_the_opponent_s_piles_and_over_the_player_s() -> void:
+	var named := _named()
+	await get_tree().process_frame
+	var top: Label = named._deck_name_labels[1]
+	var bottom: Label = named._deck_name_labels[0]
+	assert_eq(top.text, "Troll Shaman")
+	assert_eq(bottom.text, LONG_DECK)
+	assert_true(top.visible and bottom.visible)
+	var top_piles: Control = named._seat_portraits[1].get_parent().get_parent()
+	var bottom_piles: Control = named._seat_portraits[0].get_parent().get_parent()
+	assert_gte(top.global_position.y, top_piles.get_global_rect().end.y,
+		"the opponent's deck name begins where his piles end")
+	assert_lte(top.global_position.y - top_piles.get_global_rect().end.y, 6.0,
+		"and hugs them")
+	assert_lte(top.get_global_rect().end.y, named._preview_dock.global_position.y + 1.0,
+		"and stops at the examined card")
+	assert_lte(bottom.get_global_rect().end.y, bottom_piles.global_position.y,
+		"the player's deck name ends where his piles begin")
+	assert_lte(bottom_piles.global_position.y - bottom.get_global_rect().end.y, 6.0,
+		"and hugs them")
+	# Flush with the deck stack's own left edge, the whole block's width.
+	assert_eq(top.global_position.x, named._deck_stacks[1].global_position.x)
+	assert_eq(top.size.x, top_piles.size.x, "the black space available")
+	assert_eq(top.horizontal_alignment, HORIZONTAL_ALIGNMENT_LEFT)
+
+
+func test_the_deck_s_name_is_small_light_brown_letters() -> void:
+	var named := _named()
+	await get_tree().process_frame
+	for pid in 2:
+		var label: Label = named._deck_name_labels[pid]
+		assert_eq(label.get_theme_color("font_color"), DuelScreen.DECK_NAME_INK)
+		assert_lte(label.get_theme_font_size("font_size"), 11, "small")
+		assert_ne(label.get_theme_color("font_color"), DuelScreen.PILE_COUNT_INK,
+			"its own voice, not the counts' yellow")
+	# Light brown: more red than green, more green than blue, and light.
+	var ink := DuelScreen.DECK_NAME_INK
+	assert_gt(ink.r, ink.g)
+	assert_gt(ink.g, ink.b)
+	assert_gt(ink.v, 0.6)
+
+
+func test_a_long_deck_name_is_cut_with_the_dots_and_never_widens_the_block() -> void:
+	var named := _named()
+	await get_tree().process_frame
+	var label: Label = named._deck_name_labels[0]
+	assert_eq(label.text, LONG_DECK, "the full name is still what it holds")
+	assert_lte(label.get_combined_minimum_size().x, 1.0,
+		"it asks for no width of its own")
+	assert_eq(label.text_overrun_behavior, TextServer.OVERRUN_TRIM_ELLIPSIS_FORCE,
+		"cut WITH the dots at the end")
+	assert_true(label.clip_text)
+	assert_eq(label.tooltip_text, LONG_DECK, "the whole name is a hover away")
+	assert_ne(label.mouse_filter, Control.MOUSE_FILTER_IGNORE,
+		"which needs the mouse to reach it")
+	var row: Control = named._seat_portraits[0].get_parent().get_parent()
+	assert_lte(row.get_parent().get_combined_minimum_size().x, 185.0,
+		"the block still fits beside the mana panel")
+
+
+func test_the_deck_s_name_costs_the_column_nothing() -> void:
+	# The line rides the slack each block already has, so the examined
+	# card, the QoL reserve and its buttons stand exactly where they stood
+	# with no name at all — "do not interfere with QoL icons".
+	var named := _named()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(named._preview_dock.global_position, screen._preview_dock.global_position,
+		"the examined card has not moved")
+	assert_eq(named._qol_reserve.get_global_rect(), screen._qol_reserve.get_global_rect(),
+		"the reserve is as tall as it was")
+	assert_gt(named._qol_reserve.get_child_count(), 0)
+	for i in named._qol_reserve.get_child_count():
+		var mine: Control = named._qol_reserve.get_child(i)
+		var theirs: Control = screen._qol_reserve.get_child(i)
+		assert_eq(mine.get_global_rect(), theirs.get_global_rect(),
+			"QoL button %d stands where it stood" % i)
+		for pid in 2:
+			assert_false(mine.get_global_rect().intersects(
+				named._deck_name_labels[pid].get_global_rect()),
+				"and seat %d's deck name keeps clear of it" % pid)
+	for pid in 2:
+		var panel: Control = named._life_buttons[pid].get_parent().get_parent()
+		var bare: Control = screen._life_buttons[pid].get_parent().get_parent()
+		assert_eq(panel.size, bare.size, "seat %d's block has not grown" % pid)
+
+
+func test_an_unnamed_deck_shows_no_line() -> void:
+	# A scene run or a test names no deck; the label is hidden, not blank.
+	for pid in 2:
+		assert_eq(screen._deck_name_labels[pid].text, "")
+		assert_false(screen._deck_name_labels[pid].visible)
