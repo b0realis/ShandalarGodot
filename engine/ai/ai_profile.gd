@@ -246,13 +246,34 @@ var paces_draws := false
 ## AiPlayer._arrival_wasted]).
 var holds_duplicates := false
 
+## THE FACTORY ANIMATED FOR NOTHING: does this profile animate a
+## permanent only when the attack that pays for it would actually be
+## declared? An animation is priced by the attack it enables and nothing
+## else ([method AiPlayer._animation_value]), and until 2026-09-08 that
+## price was read off a blocker count of its own while the declaration
+## it was paying for was made by a different reader — the attack
+## legality of the whole board (our own Moat stops a Factory as surely as
+## theirs), the cohort, and the crack-back search, which held an
+## animated body home as next turn's blocker, a body that is a land
+## again at cleanup. So the pilot paid a mana a turn, sometimes two, for
+## a 2/2 that then declared nothing (docs/ROADMAP.md, "The Deck, third
+## pass"). On, the animation is tried under the journal — the body is
+## animated, the declaration made by the attack code itself, and both
+## unmade — and paid for only when it would attack; and the crack-back
+## model stops counting a body that is a creature only until end of turn
+## as a blocker on their turn. Off, the two readers disagree as before.
+## Sorcerer and Wizard, with [member plays_engines], which is the only
+## way an animation is ever bought. Nothing here names a card: the rule
+## reads [AnimateSelfEffect]'s duration and the attack code's own answer.
+var animates_to_attack := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
 		p_engines := false, p_sacrifices := false, p_timed := false,
 		p_counts := false, p_levels := false, p_paces := false,
-		p_duplicates := false) -> void:
+		p_duplicates := false, p_animates := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -268,6 +289,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	levels_boards = p_levels
 	paces_draws = p_paces
 	holds_duplicates = p_duplicates
+	animates_to_attack = p_animates
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -315,13 +337,13 @@ static func magician() -> AiProfile:
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
 	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
-		true)
+		true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
 	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
-		true)
+		true, true)
 
 
 func _to_string() -> String:

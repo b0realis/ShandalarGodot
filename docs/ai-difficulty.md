@@ -80,6 +80,7 @@ override any knob on any preset for a measurement
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
+| `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 
 `minds_pain`, `fits_auras` and `mulligans` are the three knobs that are
 on at every rung, and the reason is the line between weak and broken: an
@@ -124,7 +125,8 @@ resolves. Every capability is on: it activates engines and knows what
 they are worth over time, pays a Strip Mine or a Digging Team for a
 better body, casts a Festival at your upkeep and a Siren's Call before
 your attackers, sizes its X spells, prices a Balance, paces its draws to
-the libraries, and keeps a second The Abyss in hand.
+the libraries, keeps a second The Abyss in hand, and animates a
+Factory only for an attack it will actually declare.
 
 **Wizard.** No mistakes at all. The same decision code, the same
 capabilities as the Sorcerer, with twice the search (3 000), the pickiest
@@ -153,8 +155,11 @@ a Wizard 87.8% of the time, because neither seat could win and the one
 that did less took less City of Brass damage doing it — and what it
 looks like since (34.3 / 48.8 / 60.6 / 49.7; the Sorcerer-over-Wizard
 residue is the `counter_threshold` question, open). The Deck's second
-pass (2026-09-07) is the four newest capabilities: The Deck playable
-against the five starters went from 12.7% to 40.3%.
+pass (2026-09-07) is four of the capabilities: The Deck playable
+against the five starters went from 12.7% to 40.3%. The third pass
+(2026-09-08) re-measured that with the mulligan on — 40.1% — and added
+`animates_to_attack`, a wash on the totals with the wasted animations
+gone (29 of 834 before, 0 of 808 after, in the census).
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -165,6 +170,13 @@ Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 - `counter_threshold` is an absolute evaluator number, so a Wizard on a
   deck with pain lands spends life on counters a Sorcerer keeps; that is
   the open knob question above, to be instrumented before it is touched.
+- The mana planner does not know that a Mishra's Factory, a Library or a
+  Strip Mine is worth more untapped than a Forest: among equal sources
+  it takes them in battlefield order, so a second animation can be paid
+  by tapping the first animated body when the Factories come before the
+  plain lands. `animates_to_attack` excludes the body it has already
+  animated; the tie-break itself is open (`docs/ROADMAP.md`, the third
+  pass). And no rung animates a Factory to BLOCK on the opponent's turn.
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras` and `mulligans` did) goes on everywhere;

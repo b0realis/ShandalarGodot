@@ -837,6 +837,11 @@ shandalar/
 │   │                          it also resets the per-recalculation game
 │   │                          fields statics rebuild (nullified_landwalk,
 │   │                          max_attackers/max_blockers);
+│   │                          creature_until_end_of_turn(id) answers
+│   │                          the AI's crack-back read — an animation
+│   │                          adding CREATURE is registered and every
+│   │                          such one expires at cleanup (a Xenic
+│   │                          Poltergeist's lasts longer: false);
 │   │                          simplified CR 613,
 │   │                          upgrade path documented in the file header
 │   ├── random_effects.gd    class RandomEffects — the Astral set's random
@@ -1142,6 +1147,25 @@ shandalar/
 │   │                      pilot cast its second and third The Abyss over
 │   │                      the first. Sorcerer and Wizard. The Deck
 │   │                      36.2% -> 39.8% against the starters.
+│   │                      animates_to_attack (2026-09-08) is THE
+│   │                      FACTORY ANIMATED FOR NOTHING: whether an
+│   │                      animation is bought only for an attack the
+│   │                      pilot would declare. AiPlayer._animation_value
+│   │                      probes the declaration on the journal
+│   │                      (_would_attack_once_animated animates the body
+│   │                      inside make_mark/unmake_to and asks
+│   │                      _attack_choice, the deterministic core of
+│   │                      _declare_attacks); _attackers_excluded keeps the
+│   │                      animated body out of every mana plan until the
+│   │                      attack is declared (21 of 29 wasted animations
+│   │                      were the planner tapping the just-animated
+│   │                      Factory for the Scepter's {3}); and the
+│   │                      crack-back model reads a creature-until-end-of-
+│   │                      turn as no blocker on their turn
+│   │                      (ContinuousEffects.creature_until_end_of_turn,
+│   │                      a_free 0). Sorcerer and Wizard. A wash on the
+│   │                      totals (40.1% either way, mulligan on), every
+│   │                      animation in the census attacking.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -3321,6 +3345,20 @@ shandalar/
 │    land_count; the pilot judging through AiMulligan; the knob off the
 │    plain rule, and apply_overrides("mulligans=off") reaching it; a
 │    whole opening run down to a keep with the 1997 line and its count
+│    tests/ai/test_ai_animates_to_attack_2026_09_08.gd — THE FACTORY
+│    ANIMATED FOR NOTHING (AiProfile.animates_to_attack): the Scepter's
+│    payment leaving the animated body alone and the attack declared, the
+│    null tapping it and attacking with nothing; the body taxed like any
+│    land after combat; a second animation paid by the plain lands, not
+│    the first body (the planner's tie-break noted open); an animated body
+│    no blocker in the crack-back read and the null holding it home; a
+│    printed creature still a blocker; creature_until_end_of_turn reading
+│    the duration and the expiry; the animation refused under our own
+│    Moat, the null buying it; an empty board animated and attacked; a
+│    blocker that eats the body refusing it; the probe leaving the RNG,
+│    the log and the journal as it found them, and surviving inside a
+│    search already open; the ladder from Sorcerer up; the knob read by
+│    the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

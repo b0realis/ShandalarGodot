@@ -463,6 +463,28 @@ func forget_instance(instance_id: int) -> void:
 				list.remove_at(i)
 
 
+## Is [param instance_id] a creature only until this turn ends? True when
+## an animation that adds the creature type is registered on it and every
+## such animation expires at cleanup or at end of combat — so the body
+## attacks now and is a land (or an artifact) again before the opponent's
+## turn. A permanent whose animation lasts longer (Xenic Poltergeist's
+## "until your next upkeep") or that is a creature by its printed types
+## or by a static is not. Read by the AI's crack-back model, which
+## otherwise counted an animated Mishra's Factory held home as a blocker
+## for a turn on which it would not be a creature
+## ([method AiPlayer._build_combat_model], 2026-09-08).
+func creature_until_end_of_turn(instance_id: int) -> bool:
+	var found := false
+	for animation in _animations:
+		if int(animation["instance_id"]) != instance_id \
+				or (int(animation["add_types"]) & Mtg.CardType.CREATURE) == 0:
+			continue
+		if int(animation.get("lasts", Duration.END_OF_TURN)) != Duration.END_OF_TURN:
+			return false
+		found = true
+	return found
+
+
 ## Every floating list, so the expiry passes do not have to name them
 ## twice and a new one cannot be forgotten by half of them.
 func _all_lists() -> Array:

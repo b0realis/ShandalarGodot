@@ -858,7 +858,7 @@ func _animation_payable(game: MtgGame, inst: CardInstance,
 	var surcharge := game.ability_surcharge(pid, inst)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
-	var excluded := _pain_excluded(game)
+	var excluded := _excluded_sources(game)
 	excluded[inst.id] = true
 	return not _plan_taps_from(ManaPlanner.sources(game, pid, excluded,
 		profile.minds_pain), ability.cost, surcharge).is_empty()
@@ -871,7 +871,7 @@ func _pay_without_source(game: MtgGame, inst: CardInstance,
 	var surcharge := game.ability_surcharge(pid, inst)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
-	var excluded := _pain_excluded(game)
+	var excluded := _excluded_sources(game)
 	excluded[inst.id] = true
 	var plan := _plan_taps_from(ManaPlanner.sources(game, pid, excluded,
 		profile.minds_pain), ability.cost, surcharge)
@@ -928,7 +928,51 @@ func _animation_value(game: MtgGame, inst: CardInstance,
 		if blocker.cur_power >= anim.set_toughness \
 				or anim.set_power < blocker.cur_toughness:
 			return 0.0   # it survives the block, or kills us for free
+	if profile.animates_to_attack \
+			and not _would_attack_once_animated(game, inst, anim, defender):
+		return 0.0   # the declaration would leave it home: nothing to pay for
 	return _face_damage_value(game, anim.set_power, defender)
+
+
+## THE FACTORY ANIMATED FOR NOTHING (2026-09-08,
+## [member AiProfile.animates_to_attack]). Would the attack declaration
+## send [param inst] once [param anim] has made it a creature? The
+## blocker count above is [method _animation_value]'s own reading; the
+## DECLARATION is made by [method _attack_choice] over the whole board —
+## the attack legality of every ban in play (our own Moat stops a
+## Factory as surely as theirs), the cohort, the crack-back search — and
+## the two disagreed often enough that the pilot paid a mana a turn for
+## a 2/2 that then declared nothing (docs/ROADMAP.md, "The Deck, third
+## pass"). So the question is put to the declaration itself, under the
+## journal: the body is animated the way the ability would animate it,
+## the deterministic half of the declaration is asked, and both are
+## unmade. No random stream is consumed ([method _attack_choice] has no
+## mistake roll), no log line is written (a search node is a probe), and
+## a search already in progress keeps its journal.
+func _would_attack_once_animated(game: MtgGame, inst: CardInstance,
+		anim: AnimateSelfEffect, defender: int) -> bool:
+	var owned := game.undo_log == null
+	var mark := game.make_mark()
+	game.continuous.add_until_eot_animation(inst.id, anim.add_types,
+		anim.set_power, anim.set_toughness, anim.add_subtypes, anim.combat_duration)
+	game.recalculate()
+	var would := false
+	if inst.is_creature():
+		var candidates := _attack_candidates(game, defender)
+		if candidates.has(inst):
+			would = _attack_choice(game, candidates, defender).has(inst.id)
+	game.unmake_to(mark)
+	if owned:
+		game.end_search()
+	return would
+
+
+## Is [param inst] a creature only until this turn ends — not by its
+## printed types, and by no animation that outlasts cleanup? See
+## [method ContinuousEffects.creature_until_end_of_turn].
+func _creature_until_end_of_turn(game: MtgGame, inst: CardInstance) -> bool:
+	return not inst.data.is_creature() \
+		and game.continuous.creature_until_end_of_turn(inst.id)
 
 
 ## mage-go's `cardDrawNeedAdjustment`: a thin hand wants cards, a full one
@@ -3152,17 +3196,27 @@ static func _has_effect(data: CardData, effect_class: String) -> bool:
 
 # ================================================================== combat --
 
-## Attack declaration: per-attacker favorable-trade analysis (mage-go's
-## combat heuristic, simplified), plus a lethal-push override and the
-## aggression/mistake tilts from the profile.
-func _declare_attacks(game: MtgGame) -> String:
-	var defender := game.opponent_of(pid)
+## The bodies that may be declared this turn: creatures, legal to attack
+## [param defender] under every ban on the board (our own Moat stops a
+## Factory as surely as theirs), whose attack cost is payable.
+func _attack_candidates(game: MtgGame, defender: int) -> Array[CardInstance]:
 	var candidates: Array[CardInstance] = []
 	for inst in game.players[pid].battlefield:
 		if inst.is_creature() \
 				and CombatState.attack_illegality(game, inst, defender) == "" \
 				and _attack_costs_payable(game, inst):
 			candidates.append(inst)
+	return candidates
+
+
+## THE DECLARATION ITSELF, deterministic: the lethal push or the cohort,
+## the pump rider, the crack-back search, the must-attackers. Everything
+## [method _declare_attacks] then does to it — the mistake roll, the
+## bans and the cap, the band — is either random or a restriction the
+## engine enforces, so this is the half a PROBE may ask without moving
+## the game's random stream ([method _would_attack_once_animated]).
+func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
+		defender: int) -> Array:
 	var blockers: Array[CardInstance] = []
 	for inst in game.players[defender].battlefield:
 		if inst.is_creature() and not inst.tapped:
@@ -3220,6 +3274,16 @@ func _declare_attacks(game: MtgGame) -> String:
 	for inst in candidates:
 		if _must_attack(inst) and not attackers.has(inst.id):
 			attackers.append(inst.id)
+	return attackers
+
+
+## Attack declaration: per-attacker favorable-trade analysis (mage-go's
+## combat heuristic, simplified), plus a lethal-push override and the
+## aggression/mistake tilts from the profile.
+func _declare_attacks(game: MtgGame) -> String:
+	var defender := game.opponent_of(pid)
+	var candidates := _attack_candidates(game, defender)
+	var attackers := _attack_choice(game, candidates, defender)
 	# Mistake injection: a fumbling AI leaves a good attacker home.
 	if attackers.size() > 0 and game.rng.randf() < profile.mistake_chance:
 		var drop_index := game.rng.randi_range(0, attackers.size() - 1)
@@ -3473,7 +3537,14 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.a_id[i] = inst.id
 		search.a_can_attack[i] = 1 if candidates.has(inst) else 0
 		search.a_forced[i] = 1 if (candidates.has(inst) and _must_attack(inst)) else 0
-		search.a_free[i] = 1
+		# THE FACTORY ANIMATED FOR NOTHING (2026-09-08,
+		# [member AiProfile.animates_to_attack]): a body that is a creature
+		# only until end of turn is a land again before they swing, so it
+		# is no blocker on their turn and holding it home buys nothing.
+		# The ply-4 read used to count it, and kept an animated Factory
+		# home to block with a body that would not be there.
+		search.a_free[i] = 0 if (profile.animates_to_attack
+			and _creature_until_end_of_turn(game, inst)) else 1
 		search.a_vigilant[i] = 1 if inst.has_keyword(Mtg.Keyword.VIGILANCE) else 0
 		search.a_trample[i] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
 		search.a_soak[i] = maxi(inst.cur_toughness - inst.damage, 0)
@@ -4016,7 +4087,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 func _plan_taps(game: MtgGame, cost: ManaCost, x_value: int,
 		usage_keys: Array = []) -> Array:
 	return ManaPlanner.plan(game, pid, cost, x_value, usage_keys,
-		_pain_excluded(game))
+		_excluded_sources(game))
 
 
 ## The untapped mana sources available right now — [method
@@ -4024,7 +4095,7 @@ func _plan_taps(game: MtgGame, cost: ManaCost, x_value: int,
 ## passed to [method _plan_taps_from], because one "what should I cast?"
 ## pass plans a cost for every card in hand.
 func _mana_sources(game: MtgGame) -> Array:
-	return ManaPlanner.sources(game, pid, _pain_excluded(game),
+	return ManaPlanner.sources(game, pid, _excluded_sources(game),
 		profile.minds_pain)
 
 
@@ -4068,6 +4139,42 @@ func _pain_excluded(game: MtgGame) -> Dictionary:
 	return out
 
 
+## THE ATTACKER THAT IS ALSO A LAND, left out of the plan
+## ([member AiProfile.animates_to_attack], 2026-09-08). A Mishra's
+## Factory animated in our first main phase was paid for as the attack
+## it enables ([method _animation_value]) — and to the planner it was
+## still a land, the cheapest source on the table, so the next thing the
+## pilot paid for (a Disrupting Scepter, three mana) tapped the body it
+## had just bought and the declaration found it tapped. Twenty-one of the
+## twenty-nine animations that went nowhere in 150 instrumented games
+## were this, not the attack code (docs/ROADMAP.md, "The Deck, third
+## pass"). So until the attack is declared, a body that is a creature
+## only until end of turn and could still attack is not a mana source;
+## once combat is over it taps like any land, and on their turn nothing
+## is animated. Same shape as [method _pain_excluded], and unioned with
+## it by [method _excluded_sources].
+func _attackers_excluded(game: MtgGame) -> Dictionary:
+	var out: Dictionary = {}
+	if not profile.animates_to_attack or game.active_player != pid \
+			or game.current_step() > Mtg.Step.COMBAT_BEGIN:
+		return out
+	for inst in game.players[pid].battlefield:
+		if inst.tapped or inst.summoning_sick or inst.cur_mana_abilities.is_empty():
+			continue
+		if inst.is_creature() and _creature_until_end_of_turn(game, inst):
+			out[inst.id] = true
+	return out
+
+
+## Every source the planner is to leave alone for this seat: the tap that
+## would kill us ([method _pain_excluded]) and the body animated to attack
+## ([method _attackers_excluded]).
+func _excluded_sources(game: MtgGame) -> Dictionary:
+	var out := _pain_excluded(game)
+	out.merge(_attackers_excluded(game))
+	return out
+
+
 ## [method _plan_taps] against a pre-built source list.
 func _plan_taps_from(sources: Array, cost: ManaCost, x_value: int,
 		usage_keys: Array = []) -> Array:
@@ -4080,7 +4187,7 @@ func _plan_taps_from(sources: Array, cost: ManaCost, x_value: int,
 func _plan_and_pay(game: MtgGame, cost: ManaCost, extra := 0,
 		usage_keys: Array = []) -> bool:
 	return ManaPlanner.plan_and_pay(game, pid, cost, extra, usage_keys,
-		_pain_excluded(game))
+		_excluded_sources(game))
 
 
 func _cost_is_free(cost: ManaCost) -> bool:
@@ -4091,7 +4198,7 @@ func _cost_is_free(cost: ManaCost) -> bool:
 func _max_affordable_x(game: MtgGame, cost: ManaCost, extra := 0,
 		sources: Array = [], x_color := 0, usage_keys: Array = []) -> int:
 	return ManaPlanner.max_affordable_x(game, pid, cost, extra, sources,
-		x_color, usage_keys, _pain_excluded(game))
+		x_color, usage_keys, _excluded_sources(game))
 
 
 # =============================================================== targeting --
