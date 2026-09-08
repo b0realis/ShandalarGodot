@@ -82,6 +82,7 @@ override any knob on any preset for a measurement
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
+| `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 
 `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` are the four
 knobs that are on at every rung, and the reason is the line between weak
@@ -131,8 +132,10 @@ resolves. Every capability is on: it activates engines and knows what
 they are worth over time, pays a Strip Mine or a Digging Team for a
 better body, casts a Festival at your upkeep and a Siren's Call before
 your attackers, sizes its X spells, prices a Balance, paces its draws to
-the libraries, keeps a second The Abyss in hand, and animates a
-Factory only for an attack it will actually declare.
+the libraries, keeps a second The Abyss in hand, animates a Factory
+only for an attack it will actually declare, and holds its Nevinyrral's
+Disk for the attack it answers — priced by the damage it keeps off the
+pilot, fired once the attackers are named and before they connect.
 
 **Wizard.** No mistakes at all. The same decision code, the same
 capabilities as the Sorcerer, with twice the search (3 000), the pickiest
@@ -173,7 +176,17 @@ flipped away, of 1 500), which is to say The Deck's own rate against the
 field drops by about a point and a half now that its Abyss is fed a
 Llanowar Elves instead of a War Mammoth. The starter matrix is
 byte-identical with the knob on and off: no starter owns a card that
-asks the question.
+asks the question. `times_sweeps` is a wash on the totals in the right
+direction (+0.7, 0.0, +1.3, +0.7, +1.3 against the five starters; 16
+games flipped to a win, 4 away, of 99 that differed) with the Disk
+fired in the opponent's combat five times in 150 census games where it
+had been fired there never, and the two lethal attacks it used to sit
+through gone. Its first cut left the Disk's own body out of the sum and
+LOST (−3.7, −2.3, −0.3, −0.3, −0.3; 17 flipped to a win, 38 away): the
+sweeper went off at twenty life to kill a lone 3/3, and at one life to
+kill a Llanowar Elves its own Abyss was about to eat. The starters own
+sweepers too — Hurricane, Earthquake, Wrath of God — and their matrix
+moves by no more than two games in twelve hundred a deck.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -191,6 +204,13 @@ Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
   plain lands. `animates_to_attack` excludes the body it has already
   animated; the tie-break itself is open (`docs/ROADMAP.md`, the third
   pass). And no rung animates a Factory to BLOCK on the opponent's turn.
+- `times_sweeps` holds an activated sweeper only from the moment it is
+  offered in the opponent's combat; a Disk that is worth firing at its
+  own main phase still fires there, when waiting for their attack would
+  cost nothing but a Disenchant's window. The relief's "after" board is
+  the sweep's survivors under the statics as they stand — a Moat the
+  Disk takes with the board still holds the ground creatures the Disk
+  did not kill. Both open (`docs/ROADMAP.md`, the third pass).
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans` and `feeds_worst` did)

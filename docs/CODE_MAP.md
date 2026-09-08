@@ -383,7 +383,13 @@ shandalar/
 │   │   │                      payable only while it is still in hand)
 │   │   ├── triggered_ability.gd class TriggeredAbility — event_type +
 │   │   │                      optional condition + on_resolve(game, source,
-│   │   │                      event) Callable; APNAP stacking in MtgGame
+│   │   │                      event) Callable; APNAP stacking in MtgGame.
+│   │   │                      .killing_each_upkeep(spec) (2026-09-08)
+│   │   │                      declares THE APPETITE of an upkeep trigger
+│   │   │                      that takes one creature of the upkeep
+│   │   │                      player's, their choice (The Abyss); read
+│   │   │                      by nothing in the engine, by the AI's
+│   │   │                      sweep timing (AiPlayer._upkeep_meals)
 │   │   └── static_ability.gd class StaticAbility — apply(game, source)
 │   │                          Callable run every recalculation pass;
 │   │                          .changing_types() marks a CR 613 LAYER-4
@@ -1174,6 +1180,27 @@ shandalar/
 │   │                      a_free 0). Sorcerer and Wizard. A wash on the
 │   │                      totals (40.1% either way, mulligan on), every
 │   │                      animation in the census attacking.
+│   │                      times_sweeps (2026-09-08) is THE SWEEP THAT
+│   │                      ANSWERS AN ATTACK: a board wipe priced by the
+│   │                      damage it keeps off our life as well as the
+│   │                      permanents it trades (AiPlayer._sweep_relief:
+│   │                      their attack read through
+│   │                      _damage_through_blocks before and after the
+│   │                      sweep, charged at _life_price, LETHAL_WORTH
+│   │                      when the sweep is the out; the declared attack
+│   │                      in their combat, the next-turn model otherwise,
+│   │                      a creature an Abyss will eat at their upkeep —
+│   │                      _upkeep_meals, off TriggeredAbility.
+│   │                      kills_each_upkeep — never an attacker), and an
+│   │                      activated sweeper offered in THEIR combat once
+│   │                      the attackers are declared and before the
+│   │                      damage (Moment.COMBAT, from
+│   │                      _defensive_combat_response). The sweeper's own
+│   │                      body counts as a loss: the first cut left it
+│   │                      out and lost measurably. Sorcerer and Wizard.
+│   │                      A wash in the right direction against the
+│   │                      starters, the Disk fired in their combat five
+│   │                      times in 150 census games where it never had.
 │   │                      apply_overrides("knob=value,...") is what the
 │   │                      Deck Lab's `wizard:pays_sacrifices=off` spells
 │   │                      out — the candidate against its own null with
@@ -3376,6 +3403,23 @@ shandalar/
 │    enemy naming OUR land as its gain; a land tribute priced by the
 │    own ledger (the fifth Forest before the only Island under a
 │    Counterspell); on at every rung; the knob read by the Lab
+│    tests/ai/test_ai_times_sweeps_2026_09_08.gd — THE SWEEP THAT
+│    ANSWERS AN ATTACK (AiProfile.times_sweeps): the Disk the out at
+│    three life and the null pricing it as a trade; the Disk fired after
+│    their attackers are declared and before the damage, the null
+│    waiting for their end step and taking the hit; a Fog already cast
+│    leaving nothing to relieve; their combat offering nothing but a
+│    sweeper; the Disk fired on the unblocked remainder; the sweeper's
+│    own body a loss under the knob as without it; the relief the damage
+│    through our blockers, the null without it; lethal-worth when the
+│    sweep is the out; our Moat honoured; an Earthquake's survivors
+│    counted; THE APPETITE — the Abyss's meal never an attacker, a lone
+│    Elves it will eat no reason to fire at one life, the Disk taking
+│    the appetite with the board, the appetite surviving an Earthquake,
+│    an artifact creature no meal, their own Abyss eating theirs, the
+│    card declaring it; the Wrath the out at four life and the null's
+│    two-point trade waiting; the ladder from Sorcerer up; the knob read
+│    by the Lab
 │
 ├── game/                    ← PRESENTATION LAYER (playable duels, 3 modes)
 │   ├── main.tscn / main.gd  Title (its music is ShellMusic's, see

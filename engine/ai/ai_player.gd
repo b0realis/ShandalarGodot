@@ -534,14 +534,17 @@ const ABILITY_BAR_MAIN := 3.0
 const ABILITY_BAR_UPKEEP := 2.0
 const ABILITY_BAR_SINK := 0.5
 
-enum Moment { MAIN, UPKEEP, SINK }
+## COMBAT is THEIR combat with the attackers declared and the damage not
+## yet dealt (2026-09-08, [member AiProfile.times_sweeps]): the one
+## moment at which only a sweeper is offered, at the upkeep's bar.
+enum Moment { MAIN, UPKEEP, SINK, COMBAT }
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
 ## or "" when nothing does. One activation per call, like every other action.
 func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 	var bar: float = ABILITY_BAR_MAIN
-	if moment == Moment.UPKEEP:
+	if moment == Moment.UPKEEP or moment == Moment.COMBAT:
 		bar = ABILITY_BAR_UPKEEP
 	elif moment == Moment.SINK:
 		bar = ABILITY_BAR_SINK
@@ -705,6 +708,8 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int) -> Dictionary:
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 	var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+	if moment == Moment.COMBAT and intent.sweeper == null:
+		return {}   # their combat is a sweeper's moment and nobody else's
 	var me := game.players[pid]
 	var opponent := game.opponent_of(pid)
 	var them := game.players[opponent]
@@ -1234,46 +1239,183 @@ func _has_attackers(game: MtgGame) -> bool:
 ## a suicidal one refused. The board wipe in a creature deck's own hand
 ## (White Knights' Wrath of God) is the case this exists for: it used to be
 ## cast the turn it was affordable, whatever was on the table.
+##
+## Under [member AiProfile.times_sweeps] the sum also carries THE RELIEF
+## ([method _sweep_relief], the damage the sweep keeps off our life), so
+## a control deck's own engines no longer price the board that is killing
+## it as one not worth sweeping. The sweeper's own body, when it is a
+## permanent (a Nevinyrral's Disk), COUNTS as a loss: the first cut of
+## this left it out as "the activation's price" and the measurement
+## showed the Disk going off at twenty life to kill a lone 3/3
+## (2026-09-08, THE DECK, THIRD PASS).
 func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 	var me := game.players[pid]
 	var them := game.players[game.opponent_of(pid)]
 	var swing := 0.0
-	if effect is DestroyAllEffect:
-		for inst in game.all_battlefield():
-			var hit: bool = effect.filter.call(inst) if effect.filter.is_valid() \
-				else inst.is_creature()
-			if not hit or inst.cur_indestructible:
-				continue
-			if effect.can_regenerate and inst.regeneration_shields > 0:
-				continue
-			var worth := Evaluator.permanent_value(inst)
-			swing += -worth if inst.controller_id == pid else worth
-		return swing * Evaluator.W_BOARD
+	var n := 0   # a DamageAllEffect's amount; unused by a DestroyAllEffect
 	if effect is DamageAllEffect:
-		var n: int = x_value if effect.use_x else effect.amount
+		n = x_value if effect.use_x else effect.amount
 		if n <= 0:
 			return 0.0
-		for inst in game.all_battlefield():
-			if not inst.is_creature():
+	elif not (effect is DestroyAllEffect):
+		return 0.0
+	for inst in game.all_battlefield():
+		if not _sweep_kills(effect, inst, n):
+			continue
+		var worth := Evaluator.permanent_value(inst)
+		swing += -worth if inst.controller_id == pid else worth
+	swing *= Evaluator.W_BOARD
+	if effect is DamageAllEffect and effect.hit_players:
+		if n >= me.life:
+			return -LETHAL_WORTH   # never
+		if n >= them.life:
+			return LETHAL_WORTH
+		swing += n * Evaluator.W_LIFE           # their life
+		# Our life is dearer the lower we are.
+		var life_price := 1.0 if me.life - n > 10 else 2.0
+		swing -= n * life_price
+	if profile.times_sweeps:
+		swing += _sweep_relief(game, effect, n)
+	return swing
+
+
+## Would [param effect] (a DestroyAllEffect, or a DamageAllEffect dealing
+## [param n]) kill [param inst] as it stands? The one death rule
+## [method _sweep_value] and [method _sweep_relief] share.
+func _sweep_kills(effect: EffectBase, inst: CardInstance, n: int) -> bool:
+	if effect is DestroyAllEffect:
+		var hit: bool = effect.filter.call(inst) if effect.filter.is_valid() \
+			else inst.is_creature()
+		if not hit or inst.cur_indestructible:
+			return false
+		if effect.can_regenerate and inst.regeneration_shields > 0:
+			return false
+		return true
+	if effect is DamageAllEffect:
+		if not inst.is_creature():
+			return false
+		if effect.creature_filter.is_valid() and not effect.creature_filter.call(inst):
+			return false
+		return inst.damage + n >= inst.cur_toughness
+	return false
+
+
+## THE RELIEF (2026-09-08, AiProfile.times_sweeps): what the sweep keeps
+## off our life, on the Evaluator's scale. Their attack is read twice
+## through [method _damage_through_blocks] — the same one-blocker-per-
+## attacker maths the attack code prices its own swings by — once with
+## the board as it stands and once with what the sweep leaves, and the
+## difference is charged at the reaper's rate ([method _life_price]:
+## half a point a life at twenty, two under seven). When the attack as
+## it stands is lethal and the sweep's remainder is not, the sweep is
+## the out and worth [constant LETHAL_WORTH], the way every other lethal
+## is priced. The attack is the DECLARED one when we are in their combat
+## with the damage still to come (the attackers named, our untapped
+## bodies the blockers, or only the unblocked ones once blocks are in),
+## and otherwise the next-turn model the crack-back read uses: every
+## creature of theirs that could attack ([method _could_attack_next_turn]
+## — Defender, "can't attack" and our Moat honoured), our untapped
+## creatures the blockers. A Fog already cast leaves nothing to relieve.
+##
+## The next-turn model honours THE APPETITE ([method _upkeep_meals]): a
+## creature of theirs an Abyss takes at their upkeep never attacks, on
+## the board as it stands and on what the sweep leaves of it alike — a
+## Disk that takes the Abyss with the board takes its appetite too. The
+## first cut of this read the board without it and fired a Disk at one
+## life into a lone Llanowar Elves our own Abyss was about to eat, losing
+## two Tomes, two Scepters and the mana that went with them.
+func _sweep_relief(game: MtgGame, effect: EffectBase, n: int) -> float:
+	var me := game.players[pid]
+	var them := game.players[game.opponent_of(pid)]
+	var attackers: Array[CardInstance] = []
+	var survivors: Array[CardInstance] = []
+	var blockers: Array[CardInstance] = []
+	var left: Array[CardInstance] = []
+	var declared := game.active_player != pid and not game.combat.attackers.is_empty() \
+		and game.current_step() <= Mtg.Step.DECLARE_BLOCKERS
+	if declared:
+		if game.combat_damage_prevented:
+			return 0.0
+		var blocks_in := game.current_step() == Mtg.Step.DECLARE_BLOCKERS \
+			and not game.awaiting_blockers
+		for attacker_id in game.combat.attackers:
+			var attacker := game.find_instance(attacker_id)
+			if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD \
+					or attacker.cur_power <= 0:
 				continue
-			if effect.creature_filter.is_valid() and not effect.creature_filter.call(inst):
+			if blocks_in and game.combat.was_blocked(game.combat.band_of(attacker_id)):
+				continue   # a blocked attacker lands nothing on us (trample aside)
+			attackers.append(attacker)
+			if not _sweep_kills(effect, attacker, n):
+				survivors.append(attacker)
+		if not blocks_in:
+			for inst in me.battlefield:
+				if inst.is_creature() and not inst.tapped:
+					blockers.append(inst)
+					if not _sweep_kills(effect, inst, n):
+						left.append(inst)
+	else:
+		var board := game.all_battlefield()
+		var remains: Array[CardInstance] = []
+		for inst in board:
+			if not _sweep_kills(effect, inst, n):
+				remains.append(inst)
+		var eaten := _upkeep_meals(game, them.id, board)
+		var eaten_after := _upkeep_meals(game, them.id, remains)
+		for inst in them.battlefield:
+			if inst.cur_power <= 0 or not _could_attack_next_turn(game, inst):
 				continue
-			if inst.damage + n < inst.cur_toughness:
+			if not eaten.has(inst):
+				attackers.append(inst)
+			if remains.has(inst) and not eaten_after.has(inst):
+				survivors.append(inst)
+		for inst in me.battlefield:
+			if inst.is_creature() and not inst.tapped:
+				blockers.append(inst)
+				if not _sweep_kills(effect, inst, n):
+					left.append(inst)
+	if attackers.is_empty():
+		return 0.0
+	var before := _damage_through_blocks(game, attackers, blockers, pid)
+	var after := _damage_through_blocks(game, survivors, left, pid)
+	var relief := before - after
+	if relief <= 0:
+		return 0.0
+	var value := relief * _life_price(me.life)
+	if before >= me.life and after < me.life:
+		value += LETHAL_WORTH   # the sweep is the out
+	return value
+
+
+## THE APPETITE (2026-09-08, AiProfile.times_sweeps): the creatures
+## [param who]'s next upkeep takes from them before they can attack — one
+## per permanent whose trigger declares
+## [member TriggeredAbility.kills_each_upkeep] (The Abyss, whoever
+## controls it), the least valuable legal one each time, the choice being
+## theirs ([member AiProfile.feeds_worst] is what they answer with; a
+## human is assumed no more generous). [param alive] is the board the
+## count is made on: the battlefield as it stands, or what a sweep leaves
+## of it, so a sweep that kills the feeder kills its appetite.
+func _upkeep_meals(game: MtgGame, who: int,
+		alive: Array[CardInstance]) -> Array[CardInstance]:
+	var eaten: Array[CardInstance] = []
+	for feeder in alive:
+		for ability in feeder.cur_triggered_abilities:
+			var spec: TargetSpec = ability.kills_each_upkeep
+			if spec == null:
 				continue
-			var worth := Evaluator.permanent_value(inst)
-			swing += -worth if inst.controller_id == pid else worth
-		swing *= Evaluator.W_BOARD
-		if effect.hit_players:
-			if n >= me.life:
-				return -LETHAL_WORTH   # never
-			if n >= them.life:
-				return LETHAL_WORTH
-			swing += n * Evaluator.W_LIFE           # their life
-			# Our life is dearer the lower we are.
-			var life_price := 1.0 if me.life - n > 10 else 2.0
-			swing -= n * life_price
-		return swing
-	return 0.0
+			var meal: CardInstance = null
+			for inst in alive:
+				if inst.controller_id != who or eaten.has(inst):
+					continue
+				if not spec.is_legal(game, TargetRef.card(inst), feeder):
+					continue
+				if meal == null or Evaluator.permanent_value(inst) \
+						< Evaluator.permanent_value(meal):
+					meal = inst
+			if meal != null:
+				eaten.append(meal)
+	return eaten
 
 
 ## What a leveller (Balance: [member EffectIntent.levels]) would move,
@@ -2864,6 +3006,16 @@ func _defensive_combat_response(game: MtgGame) -> String:
 			for inst in me.hand:
 				if inst.data.card_name == "Fog":
 					return _cast_response(game, inst, [])
+	# THE SWEEP THAT ANSWERS AN ATTACK (2026-09-08, AiProfile.times_sweeps):
+	# a wipe we can activate, offered once the attackers are declared and
+	# before the damage — the moment it is also a Fog. Priced by
+	# _sweep_value with the declared attack as its relief; the upkeep's
+	# bar, because their turn is the moment's own.
+	if profile.times_sweeps and not game.combat_damage_prevented \
+			and game.current_step() <= Mtg.Step.DECLARE_BLOCKERS:
+		var swept := _try_activate(game, Moment.COMBAT)
+		if swept != "":
+			return swept
 	# Instant removal: attackers worth killing, the biggest GAIN first —
 	# but keep going down the list (the biggest may be unkillable; the
 	# specter beside it may not be — a lesson a test taught this function).

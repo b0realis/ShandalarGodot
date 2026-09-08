@@ -15,6 +15,11 @@ extends CardScript
 ## shroud take a creature out of the running entirely, and the player then
 ## offers the best of what is left. The Abyss's own TargetSpec decides,
 ## exactly as it would for a spell.
+##
+## The trigger DECLARES its appetite (TriggeredAbility.killing_each_upkeep,
+## the same spec) so the AI can read, without knowing this card, that a
+## creature of theirs the Abyss will take at their upkeep is not one it
+## needs a Disk for (AiPlayer._upkeep_meals, 2026-09-08).
 
 
 static func _is_nonartifact_creature(inst: CardInstance) -> bool:
@@ -35,7 +40,8 @@ func build() -> CardData:
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _devour,
 			"At the beginning of each player's upkeep, destroy target nonartifact "
-			+ "creature that player controls of their choice. It can't be regenerated.")) \
+			+ "creature that player controls of their choice. It can't be regenerated.")
+			.killing_each_upkeep(_abyss_spec())) \
 		.oracle("At the beginning of each player's upkeep, destroy target nonartifact "
 			+ "creature that player controls of their choice. It can't be regenerated.")
 

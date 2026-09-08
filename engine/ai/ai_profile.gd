@@ -282,13 +282,40 @@ var holds_duplicates := false
 ## reads [AnimateSelfEffect]'s duration and the attack code's own answer.
 var animates_to_attack := false
 
+## THE SWEEP THAT ANSWERS AN ATTACK: does this profile price a board
+## wipe by the pressure it relieves, and hold one it can activate for
+## the attack it answers? A sweeper's worth was, until 2026-09-08, the
+## board it takes minus the board it costs, on the Evaluator's scale and
+## nothing else ([method AiPlayer._sweep_value]) — which for a control
+## deck is the wrong sum: its own engines — the Tome, the Scepter, the
+## Tower — priced a board of three 2/2s as a loss to sweep, while those
+## 2/2s took the pilot from twenty to nothing with the Disk untapped
+## beside them (docs/ROADMAP.md, "The Deck, third pass": six of twenty
+## losses to Black-Red Raiders ended that way). On, two readings: the
+## damage their creatures would push through our blockers is counted
+## before and after the sweep — a creature of theirs an Abyss takes at
+## their upkeep never attacking ([method AiPlayer._upkeep_meals]) — and
+## the relief priced at the reaper's rate ([method AiPlayer._life_price]),
+## lethal-worth when the sweep is the out; and a sweeper that can be
+## ACTIVATED is offered in their combat too, once the attackers are
+## declared and before the damage — the moment the wipe is also a Fog
+## (Weissman's own Disk timing). The sweeper's own body still counts as
+## a loss: the first cut left it out as "the activation's price" and
+## fired a Disk at twenty life to kill a lone 3/3. Off, the sweep is
+## priced as a trade of permanents and fired only at the three ability
+## moments. Sorcerer and Wizard. Nothing here names a card: the rule
+## reads [member EffectIntent.sweeper], the combat maths the attack code
+## already shares, and the appetite an upkeep trigger declares
+## ([member TriggeredAbility.kills_each_upkeep]).
+var times_sweeps := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
 		p_engines := false, p_sacrifices := false, p_timed := false,
 		p_counts := false, p_levels := false, p_paces := false,
-		p_duplicates := false, p_animates := false) -> void:
+		p_duplicates := false, p_animates := false, p_times_sweeps := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -305,6 +332,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	paces_draws = p_paces
 	holds_duplicates = p_duplicates
 	animates_to_attack = p_animates
+	times_sweeps = p_times_sweeps
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -352,13 +380,13 @@ static func magician() -> AiProfile:
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
 	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
-		true, true)
+		true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
 	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
-		true, true)
+		true, true, true)
 
 
 func _to_string() -> String:
