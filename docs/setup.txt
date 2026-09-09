@@ -133,8 +133,8 @@ it into the game's own skins/ or cardpacks/ folder, from where every
 later start reads it — the tar is read once and left alone.
 
 THE SKIN FOLDER INSTEAD OF THE ZIP: if you would rather work with loose
-files — `python3 import_original.py /path/to/1997/game` beside this file
-fills original_skin/ from your own copy — tick "Use the skin folder
+files — `python3 import_original.py --source /path/to/1997/game` beside
+this file fills original_skin/ from your own copy — tick "Use the skin folder
 instead of the zip" in Options > Skin. From the next start the folder
 alone dresses the game and the zip stays closed: a file missing from
 the folder is drawn by the game, not taken from the zip. Unticked, the
@@ -231,8 +231,8 @@ the game's window, or put it where the download goes:
 To have the same material as loose files instead — the skin folder,
 section 3, for the "Use the skin folder instead of the zip" tick box:
 
-    python3 import_original.py --check   /path/to/game
-    python3 import_original.py           /path/to/game
+    python3 mtg_assets.py      --check  /path/to/game
+    python3 import_original.py --source /path/to/game
 
 A partial install makes a partial archive and that is fine — every asset
 is independent. To draw a skin of your own, SKIN.txt is the list of
