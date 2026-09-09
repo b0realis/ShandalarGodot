@@ -533,18 +533,29 @@ MANIFEST: dict[str, list[str]] = {
     # type strip. Unlimited (2ed) and the promos have no symbol, exactly
     # as the printed cards don't.
     #
-    # `[1997]`: the raw `.pic` leads each row since the day every skin key
-    # decoded (2026-09-09), so a genuine install gives the 1997 drawing —
-    # a blue-grey stone tile, a gold ring on it, a black glyph inside the
-    # ring — and only a Manalink source falls through to the 35x36
-    # greyscale restyle beside it. `GameSkin.cut_set_icon` takes the tile
-    # away by cutting to the ring's circle and the restyle's grey away by
-    # keying it, choosing between them on the file's own four corners.
-    "set_icon_atq":          ["Antiquit.pic", "Antiquit.pic.png"],
-    "set_icon_arn":          ["ArabNite.pic", "ArabNite.pic.png"],
-    "set_icon_past":         ["Astral.pic", "Astral.pic.png"],
-    "set_icon_drk":          ["Dark.pic", "Dark.pic.png"],
-    "set_icon_4ed":          ["Fourth.pic", "Fourth.pic.png"],
+    # WHICH SYMBOL, DECIDED BY LOOKING (the owner, 2026-09-09: *"the
+    # edition on the cards i like our current golden image of edition or
+    # only writing as we had in 19 release"*). Both installs carry these
+    # six and they are different drawings. The 1997 file is 40x40: a
+    # blue-grey STONE TILE with a gold ring and a black glyph inside the
+    # ring, so on a card's 14px icon box the glyph is only the ring's
+    # inner half and reads small. Manalink's `Program/DBArt/` restyle is
+    # 35x36 and is the GOLD GLYPH ALONE, which fills the box — what
+    # v0.19.0 shipped and what the owner kept. MANALINK'S LEADS,
+    # therefore, and the 1997 medallion is the fallback for a disc-only
+    # install: `GameSkin.cut_set_icon` reads the file's own four corners
+    # and cuts the stone tile to its ring, or keys the restyle's flat
+    # grey, so both arrive clean and neither needs a name here.
+    "set_icon_atq":          ["program/dbart/antiquit.pic", "Antiquit.pic",
+                              "Antiquit.pic.png"],
+    "set_icon_arn":          ["program/dbart/arabnite.pic", "ArabNite.pic",
+                              "ArabNite.pic.png"],
+    "set_icon_past":         ["program/dbart/astral.pic", "Astral.pic",
+                              "Astral.pic.png"],
+    "set_icon_drk":          ["program/dbart/dark.pic", "Dark.pic",
+                              "Dark.pic.png"],
+    "set_icon_4ed":          ["program/dbart/fourth.pic", "Fourth.pic",
+                              "Fourth.pic.png"],
     # THE 1997 EXPANSION-SYMBOL STRIP — the sheet the game stamps on CARDS,
     # as opposed to the `set_icon_*` medallions above, which are the Deck
     # Builder's filter buttons. 330x15 = five 66-wide slots, each an image
@@ -557,7 +568,8 @@ MANIFEST: dict[str, list[str]] = {
     # Unlimited, Fourth Edition and the promos carried no expansion symbol,
     # which is why `SetBadges` letters those three instead.
     "card_set_symbols":      ["Cardsets.pic", "Cardsets.pic.png"],
-    "set_icon_leg":          ["Legends.pic", "Legends.pic.png"],
+    "set_icon_leg":          ["program/dbart/legends.pic", "Legends.pic",
+                              "Legends.pic.png"],
     # --------------------------------------------------- THE DECK BUILDER --
     # The 1997 Deck Builder was its own module (Program/Deckdll.dll), so
     # there is no C source for it — but its ART survives, and the manual's
@@ -780,7 +792,19 @@ MANIFEST: dict[str, list[str]] = {
     # background / black silhouette), while the converted copy is a
     # different size and decodes as neither a sprite nor a pair.
     # Cue card: "Damage: %d".
-    "damage_marker":         ["Damage.pic", "Damage.pic.png"],
+    # WHICH DAGGER, DECIDED BY LOOKING (the owner, 2026-09-09). Both
+    # installs carry one and they are not the same drawing: the 1997
+    # `Damage.pic` decodes to 94x20 — a long, needle-thin, dark blood-red
+    # blade lying almost flat, which at a 132px card reads as a SCRATCH —
+    # while Manalink's `Program/CardArt/Damage.pic` (a PNG wearing a
+    # `.pic` extension, Provenance's third rule) is 84x26: shorter,
+    # fatter, bright salmon, at a clear diagonal with a modelled hilt,
+    # and it reads as a dagger at a glance. Shot side by side on the same
+    # three wounded creatures and chosen for legibility, so MANALINK'S
+    # LEADS and the 1997 file is the fallback for a disc-only install.
+    # `masked_sprite` has no hard-coded size and cuts either one right.
+    "damage_marker":         ["program/cardart/damage.pic", "Damage.pic",
+                              "Damage.pic.png"],
     # THE COUNTER STONES, Cardcounters.pic — 24x750, ONE COLUMN of 25
     # cells at a 30 px pitch (Magic.exe 0x4d3d20 divides the bitmap's
     # height by 25): rows 0-23 the oval "stone" a permanent's counters
@@ -855,7 +879,17 @@ MANIFEST: dict[str, list[str]] = {
     # the two names on that row; nothing else depends on the order.
     "font_title.ttf":        ["Magim___.ttf", "MagicMedieval.ttf",
                               "GoudyMedieval-Pre8th.ttf"],
-    "font_body.ttf":         ["Tt0298m_.ttf", "MPlantin-Regular.ttf",
+    # THE BODY FACE, DECIDED BY LOOKING (the owner, 2026-09-09).
+    # `Duelart/Duel.dat`'s own `[fonts]` table names `MPZurich Cn BT`
+    # (`Tt0298m_.ttf`) for the rules text, and it IS the 1997 face — but
+    # it is a narrow grey sans, and the card's auto-fit lands it at 15pt
+    # where MPlantin gets 18pt, so the same rules text comes out a third
+    # smaller and much lighter, going grey against a red plate and
+    # leaving the text box half empty. Shot side by side on three cards
+    # and chosen for legibility: MPLANTIN LEADS, the 1997 face is the
+    # fallback. (The auto-fit's own part in that is a separate defect,
+    # `docs/ROADMAP.md`.)
+    "font_body.ttf":         ["MPlantin-Regular.ttf", "Tt0298m_.ttf",
                               "Garamond.ttf"],
     # sounds (the original's Duelsounds/ and Sound/ folders). Keys are
     # what GameSkin.sound() serves; game/duel/duel_audio.gd maps game

@@ -975,8 +975,20 @@ class TestDamageMarkerPair(RawStepCase):
     deliver is a fully opaque pair with both tones intact.
     """
 
-    def test_the_row_is_raw_first(self):
-        self.assertEqual(imp.MANIFEST["damage_marker"][0], "Damage.pic")
+    def test_manalinks_dagger_leads_and_the_1997_one_is_the_fallback(self):
+        """THE OWNER'S RULING, 2026-09-09, made by looking at both on the
+        same three wounded creatures: the 1997 `Damage.pic` decodes to a
+        long needle-thin blade that reads as a scratch at a 132px card,
+        Manalink's `Program/CardArt/Damage.pic` to a shorter, fatter,
+        brighter dagger that reads as one at a glance, and the brighter
+        one is what the game wears. The 1997 file stays in the row so a
+        disc-only install still gets a dagger — which the pair test below
+        is about — and the Manalink candidate is PATH-QUALIFIED because a
+        1997 install has a `Cardart/Damage.pic` of its own and the bare
+        name would find that one first."""
+        row = imp.MANIFEST["damage_marker"]
+        self.assertEqual(row[0], "program/cardart/damage.pic")
+        self.assertIn("Damage.pic", row, "the disc's own file is the fallback")
 
     def test_the_pair_arrives_whole_with_the_mask_readable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1029,9 +1041,21 @@ class TestSetIcons(RawStepCase):
              "set_icon_past": "Astral.pic", "set_icon_drk": "Dark.pic",
              "set_icon_4ed": "Fourth.pic", "set_icon_leg": "Legends.pic"}
 
-    def test_every_row_names_its_raw_dbart_file_first(self):
+    def test_manalinks_gold_glyph_leads_and_the_1997_medallion_follows(self):
+        """THE OWNER'S RULING, 2026-09-09: *"the edition on the cards i
+        like our current golden image of edition or only writing as we had
+        in 19 release"*. The 1997 file is the 40x40 stone medallion, whose
+        glyph is only the gold ring's inner half and therefore draws small
+        in a card's 14px icon box; Manalink's 35x36 restyle is the gold
+        glyph alone and fills it, which is what v0.19.0 shipped. So the
+        restyle leads, PATH-QUALIFIED (a 1997 install has `Dbart/` files
+        of the same bare names), and the disc's own medallion is the
+        fallback — `GameSkin.cut_set_icon` reads the corners and serves
+        either one clean."""
         for key, raw in self.NAMES.items():
-            self.assertEqual(imp.MANIFEST[key][0], raw)
+            row = imp.MANIFEST[key]
+            self.assertTrue(row[0].startswith("program/dbart/"), row[0])
+            self.assertIn(raw, row, "the disc's own medallion is the fallback")
 
     def test_a_raw_dbart_icon_decodes_at_its_own_size(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1264,7 +1288,14 @@ class TestEveryKeyIsReachableFromA1997Install(unittest.TestCase):
         the `MPZurich Cn BT` that `Duelart/Duel.dat`'s `[fonts]` section
         puts on the rules text and the message strip."""
         self.assertEqual(imp.MANIFEST["font_title.ttf"][0], "Magim___.ttf")
-        self.assertEqual(imp.MANIFEST["font_body.ttf"][0], "Tt0298m_.ttf")
+        # THE BODY FACE IS THE ONE EXCEPTION, and it is a ruling rather
+        # than a fact about the disc (the owner, 2026-09-09, from a
+        # side-by-side shot): the 1997 face is a narrow grey sans the
+        # card's auto-fit lands three points smaller, so MPlantin leads
+        # and `Tt0298m_.ttf` is the fallback a disc-only install reaches.
+        self.assertEqual(imp.MANIFEST["font_body.ttf"][0],
+                         "MPlantin-Regular.ttf")
+        self.assertIn("Tt0298m_.ttf", imp.MANIFEST["font_body.ttf"])
 
     def test_the_readback_is_the_inverse_of_write_png(self):
         """`import_derived_sheets` reads a sheet back off disk, so the
