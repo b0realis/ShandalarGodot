@@ -310,10 +310,21 @@ func _quote(block: Dictionary) -> Control:
 	return margin
 
 
-## ONE ICON AND ITS EXPLANATION: the real texture on the left at a
+## Between two pictures of a FAMILY entry — see [method _icon_row].
+const ICON_STRIP_GAP := 4
+
+
+## ONE ENTRY AND ITS EXPLANATION: the real texture on the left at a
 ## readable size, the original's name for it and what it means on the
 ## right. Without the 1997 skin the texture is absent and the entry's own
 ## short ALT string stands in, so the reference still reads.
+##
+## An entry may carry SEVERAL pictures ([method HelpPages._icon_family]:
+## the five Mana Battery stones, which differ only in color) and they are
+## laid out as one strip in the picture column, which grows to hold them.
+## That is why a family entry belongs in an icons block of its own — a
+## block that mixed one-picture and five-picture rows would step its
+## names in and out.
 func _icon_row(entry: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
@@ -321,11 +332,15 @@ func _icon_row(entry: Dictionary) -> Control:
 
 	var slot := CenterContainer.new()
 	slot.custom_minimum_size = Vector2(ICON_COLUMN, 0)
-	var texture := HelpPages.icon_texture(entry.get("icon", {}))
-	if texture != null:
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", ICON_STRIP_GAP)
+	var wide: float = float(entry.get("size", ICON_SIZE))
+	for spec in HelpPages.icon_specs(entry):
+		var texture := HelpPages.icon_texture(spec)
+		if texture == null:
+			continue
 		var icon := TextureRect.new()
 		icon.texture = texture
-		var wide: float = float(entry.get("size", ICON_SIZE))
 		var aspect := float(texture.get_width()) / maxf(1.0, float(texture.get_height()))
 		icon.custom_minimum_size = Vector2(wide, wide / maxf(0.05, aspect))
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -333,8 +348,14 @@ func _icon_row(entry: Dictionary) -> Control:
 		# The 1997 art is small pixel art shown BIGGER here; nearest keeps
 		# a 17px stripe or a 22px badge crisp instead of smearing it.
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		slot.add_child(icon)
+		strip.add_child(icon)
+	if strip.get_child_count() > 0:
+		slot.add_child(strip)
 	else:
+		# A code-drawn entry has no picture at all, so the strip is never
+		# parented and would be an orphan at exit — the suite fails on
+		# those (CONTRIBUTING, the leaked-ObjectDB line).
+		strip.free()
 		var alt := UiChrome.body_label(String(entry.get("alt", "?")), NAME_SIZE + 2)
 		alt.add_theme_color_override("font_color", ACCENT)
 		slot.add_child(alt)

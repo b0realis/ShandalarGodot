@@ -1635,6 +1635,29 @@ func _points_left() -> int:
 	return int(request["amount"]) - spent
 
 
+## How many points the player has put on the permanent [param id] in the
+## division under way — the combat one ([member _damage_picks], while
+## the engine is waiting for an assignment) or the current DIVIDED slot
+## of the spell being cast (a Pyrotechnics' `Select (2nd of 4)`, whose
+## shares live on the slot's [TargetRef]s). Zero outside either. Every
+## small card is handed this on the rebuild that follows each click
+## ([method _make_card] → [member MiniCard.pending_damage]), and the
+## rebuild after the submit — `_damage_picks` emptied, the slot advanced
+## — hands out zeros again, which is what clears the marks. [QoL],
+## 2026-09-08; both divisions are kept UI-side, so no engine query.
+func _pending_damage_for(id: int) -> int:
+	if game != null and game.awaiting_damage_assignment:
+		return int(_damage_picks.get(id, 0))
+	if _pending_card != null and _pending_slot < _pending_slots.size() \
+			and _pending_slot < _pending_groups.size():
+		if int(_pending_slots[_pending_slot]["divided"]) > 0:
+			for ref in _pending_groups[_pending_slot]:
+				if not ref.is_player and not ref.is_damage \
+						and ref.instance_id == id:
+					return maxi(int(ref.amount), 1)
+	return 0
+
+
 func _assign_one_point(id: int) -> void:
 	var request := game.damage_assignment_request()
 	if request.is_empty() or _points_left() <= 0:
@@ -1769,6 +1792,45 @@ func _click_hand_card(inst: CardInstance) -> void:
 	var pid := inst.owner_id
 	if inst.is_land():
 		_report(game.play_land(pid, inst))
+		return
+	# A CAST THE STEP FORBIDS IS REFUSED BEFORE IT COSTS ANYTHING —
+	# `[QoL]`, 2026-09-09. The owner's playtest of 2026-09-08: *"If you
+	# are in draw phase and you double click on creature - you are warned
+	# you cannot cast but lands still tap and mana is lost !!! Lands should
+	# not automatically tap upon double click in draw phase - QoL."*
+	#
+	# A card that needs NO choice was always safe here: it went straight to
+	# the engine, came back refused, and nothing had been tapped for it. A
+	# card that stops for a choice FIRST did not — every Aura, every
+	# targeted sorcery and every X spell that then takes aim, 112 of them
+	# in the pool — because the chain parked in [constant Mode.TARGETING]
+	# without ever reaching the engine, and the double-click's
+	# [method _auto_tap_for_pending] then paid, in full, for a cast the
+	# engine was always going to refuse. The lands tapped, the refusal
+	# arrived only once the player had aimed, and the stranded pool burned
+	# a life at the step change under the 1997 ruleset
+	# (RulesOptions.mana_burn).
+	#
+	# So the engine is asked for the refusals no choice and no payment can
+	# fix — the step, whose turn it is, the hand lock, the ban, the card's
+	# own "Cast this spell only ..." rider ([method
+	# MtgGame.cast_timing_refusal]) — before the chain starts at all. That
+	# puts every card in the hand on the plain creature's footing: one
+	# sentence on the bar, no crosshair, no window, nothing tapped.
+	#
+	# TWO REFUSALS ARE DELIBERATELY LEFT TO THE END OF THE CHAIN, because
+	# both can still come good while the player is holding the card. THE
+	# MANA: a spell the seat cannot afford walks the whole chain and is
+	# refused by the engine at the end of it, because the player may yet
+	# make the mana ([method _pending_is_reachable] is the mode that waits
+	# for them). And PRIORITY, which the query does not answer at all: it
+	# crosses the table between one paced beat and the next, and a player
+	# who reaches for a card while the other seat is still finishing has
+	# always been allowed to start aiming and land the cast when it
+	# arrives.
+	var when_why := game.cast_timing_refusal(pid, inst)
+	if when_why != "":
+		_report(when_why)
 		return
 	_pending_card = inst
 	_pending_ability_index = -1
@@ -6042,10 +6104,17 @@ func _rebuild_field(pid: int) -> void:
 		# their membership every time a land taps.
 		#
 		# ...EXCEPT AN ENCHANTED ONE, which keeps a slot of its own — see
-		# [method _flush_pile] for the report that put this here.
+		# [method _flush_pile] for the report that put this here — AND ONE
+		# CARRYING COUNTERS (2026-09-08): the counter stones ride just
+		# under the title bar ([method MiniCard._rebuild_counter_chips]),
+		# which is the strip a covered card in a pile does NOT show
+		# ([constant CardPile.OVERLAP] leaves only the bar), and a Time
+		# Vault's turn counter or an Armageddon Clock's doom count is the
+		# one thing about that card the player must be able to read. Same
+		# remedy as the aura's: a slot of its own.
 		var waiting: Array = []
 		for inst in _display_order(pid, by_row[row], row):
-			if _fan_steps(inst) > 0:
+			if _fan_steps(inst) > 0 or _carries_counters(inst):
 				_flush_pile(container, waiting)
 				waiting = []
 				container.add_child(_make_widget(inst))
@@ -6361,6 +6430,16 @@ func _clear_placements(pid: int) -> void:
 		_placements.erase(inst.id)
 
 
+## Whether [param inst] has any counter on it at all — the pile rule's
+## question (see [method _rebuild_field]). A kind left at zero in the
+## dictionary is not a counter.
+func _carries_counters(inst: CardInstance) -> bool:
+	for kind in inst.counters:
+		if int(inst.counters[kind]) > 0:
+			return true
+	return false
+
+
 ## ONE small card, fully wired: highlighted, cued, clickable, and hooked
 ## to the sidebar's enlarged view. Split out of [method _make_widget] in
 ## the forty-first pass because an ATTACHED card is a card too — it gets
@@ -6395,6 +6474,9 @@ func _make_card(inst: CardInstance, chain_item: StackItem = null) -> MiniCard:
 	# takes the only reading that cannot leak. See [member
 	# MiniCard.face_down] for what changes the day the engine can answer.
 	w.face_down = inst.face_down
+	# The points of a division dialled onto this card so far — see
+	# [member MiniCard.pending_damage] and [method _pending_damage_for].
+	w.pending_damage = _pending_damage_for(inst.id)
 	# A card the flight layer is carrying is not drawn where it is going
 	# until it gets there — s30's `spellIsAnimating` skip (§2.4). It keeps
 	# its slot, so nothing on the board shuffles under the animation.

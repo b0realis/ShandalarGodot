@@ -3762,6 +3762,68 @@ texture-format change, +33% (about 0.25 MB) per art actually drawn. The
 filter is set on the SMALL CARD only, so the Showcase still draws mip 0
 and is unchanged.
 
+## 5e. The counter stones and the points already placed (2026-09-08)
+
+Two things the small card did not draw, one from 1997 and one of ours.
+
+**THE COUNTER STONES `[1997]`.** `docs/card-states.md §3.7` had recorded, as
+a deliberate omission, that no small card drew its counters — and the
+original drew them, on a strip nothing here had imported. `Cardcounters.pic`
+is ONE column of 25 cells at 24x30: 24 oval stones and, in the 25th, the one
+mask they all share (not an image+mask pair like every other card overlay;
+`Magic.exe 0x4d3d20` divides the strip's height by 25). Which stone a card
+wears comes from two exe tables: `0x4d4ca0` maps a card id to its stone (the
+scythe for Armageddon Clock, a lightning bolt per battery, a bird for Osai
+Vultures, tombstones for the Ghoul, the grapes for Lucky Charms…) and
+`0x4d3cc0` fixes the five counters other cards put down, by their SOURCE
+(the Weaponsmith's +1/+1 and the Catapult's -0/-1 on the red yin-yang,
+Unstable Mutation's -1/-1 on the blue, Spirit Shackle's -0/-2 on the grey,
+Ashnod's Transmogrant's +1/+1 on the artifact one). Both tables and every
+`@CUECARD_COUNTERS_*` string (`UIStrings.txt:745-840`, verbatim, cited by
+line — no runtime read of any 1997 file) live in
+`game/duel/counter_marks.gd`; `MiniCard._rebuild_counter_chips` draws them.
+
+Three readings of our own, each written down in the catalogue:
+
+* **One stone per KIND, with the count beside it**, where 1997 drew one
+  oval per counter and let a twelve-counter Hydra run off the card. Our
+  card is 132x106; the count is what the player reads.
+* **A row under the title bar, LEFT-aligned at (5, 20)**, native 22x28 (the
+  original's band was 27% of the card's height — 28 px at 106 — so the
+  stones are not scaled). The right end of that band belongs to the
+  `WILL_UNTAP` arrow and the ID tag, so the row clips at `SIZE.x -
+  (CORNER_MARK + 8)` and the STATUS word ("stolen") slides right of the
+  last chip. The ID tag keeps its corner: it is the debugging handle the
+  duel log and the tests key on, and a stone under it would be a stone the
+  reader cannot tell from the tag.
+* **A permanent carrying counters leaves its pile** (`DuelScreen
+  ._carries_counters`, next to the aura rule in `_rebuild_field`) — a pile
+  clips to the title bars, which is exactly the band the stones sit in.
+
+Without the skin the chip is a drawn pill of the same footprint with the
+count inside, so a clean install reads "2" where the skinned one reads a
+yin-yang and "2". The tooltip carries the 1997 cue under the state cues
+(`Carrion counters: 1`; a kind with no 1997 row falls back to
+`<Kind> counters: %d`).
+
+**THE PENDING-DAMAGE MARK `[QoL]`.** Dividing combat damage (or
+Pyrotechnics) is a click loop, and until this pass the only trace of the
+points already placed was the prompt's `N points left` — the player could
+not see WHICH blocker had them. Each candidate's small card now shows its
+running share in the damage marker's place (bottom-right, over the P/T
+box): the same dagger re-inked ice-blue with the count beside it
+(`MiniCard.pending_damage`, `PENDING_COLOR`), lifted one row when the
+creature already wears real damage so the two never overprint. It updates
+per click and clears on submission, and the same widget serves the
+`N damage divided among` spell prompt. The engine needed no new query —
+both divisions are the screen's own (`_damage_picks`, `TargetRef.amount`);
+`DuelScreen._pending_damage_for` reads whichever is open. The 1997 game
+showed nothing here, which is why the mark is `[QoL]` and blue rather than
+the damage marker's own pink.
+
+Tests: `tests/ui/test_counter_marks.gd` (12) and
+`tests/ui/test_pending_damage.gd` (3).
+
 ## 6. What the duel screen must NEVER do
 
 - Mutate game state directly (it calls MtgGame's public API, full stop).
@@ -3785,6 +3847,7 @@ and is unchanged.
 | card_menu.gd | THE REST OF THE `@MENU_*` FAMILY (`duel-todo.md §6.12`): `@MENU_SMALLCARD`, `@MENU_LIBRARY`, `@MENU_HAND`, `@MENU_MANAPOOL`, `@MENU_FULLCARD`, and the four WINDOW menus the item's own table omitted. Every table verbatim and complete, greyed where we cannot offer it — the forty-seventh pass |
 | fireball_dialog.gd | `@DIALOG_FIREBALL` — the X dialog, and for Fireball the target count and the arithmetic between them. NOT the divided-damage dial (`@PYROTECHNICS` is, and it is a click loop) — the forty-seventh pass |
 | death_mark.gd | THE DYING MARK: `@CUECARD_SMALLCARD`'s `Dying` — a ghost MiniCard wearing `Dying.pic`'s silver cracks, held for a beat over the square a DESTROYED permanent has just left. 1997's predicate is `kill_code == KILL_DESTROY` (`windows.c:724`), the same one regeneration targets; raised off `Mtg.EventType.DIES` so a REGENERATED creature can never wear it. HOLD+FADE are `[QoL]` — the fifty-second pass |
+| counter_marks.gd | THE COUNTER STONES `[1997]`: `Cardcounters.pic` (one column of 25 cells, 24 stones and their shared mask), the exe's card-to-stone table (`0x4d4ca0`) and its four standard kinds (`0x4d3cc0`), and every `@CUECARD_COUNTERS_*` string (`UIStrings.txt:745-840`) as constants; `MiniCard._rebuild_counter_chips` draws one stone per KIND with the count beside it, left-aligned under the title bar; a drawn pill of the same footprint without the skin — 2026-09-08, §5e |
 | spell_flight.gd | THE SPELL-CAST ANIMATION: a ghost MiniCard from the hand slot to the Spell Chain window and on to where it lands. s30's `duel_spell_animation.go` with the 1997 destination — the forty-seventh pass, `duel-todo.md §2.4` |
 | duel_log.gd | THE DUEL LOG (`L`) — `[QoL]`, 2026-09-06: the engine's audit trail in a window on the Combat window's pattern (knot ground, Situation-Bar title, drag by the bar, clamped on screen, position remembered), the text inset on the library picker's dark stone, turn headers lit, `bbcode_enabled` off so a bracket is text. Not a modal — the duel runs on under it. Copy to clipboard; Save to `user://duel_log_<ticks>.txt`. Its strip button (`DuelLog.button`, the page-of-lines glyph beside Expand) follows the window whichever door closed it |
 | card_pile.gd | The original's strip-stack window: overlapping MiniCards clipped to their title bars, the top one whole. `glow_actionable` (2026-09-03) lets a BATTLEFIELD pile wear the "you may act on this" ring an unpiled permanent already wears — which is what shows the mana sources while a cast waits for them |

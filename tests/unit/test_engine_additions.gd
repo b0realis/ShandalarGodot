@@ -567,3 +567,95 @@ func test_a_replacement_runs_before_a_prevention_shield() -> void:
 	})
 	g.deal_damage(bear, TargetRef.player(0), 3)
 	assert_eq(g.players[0].damage_prevention, 5, "the pool was never touched")
+
+
+# ------------------------------- MtgGame.cast_timing_refusal (2026-09-09) --
+#
+# The half of `cast_refusal` that can be asked with NOTHING decided — no
+# mode, no target, no X, no mana. The screen's hand asks it before it
+# starts a cast chain, so a card that stops for a choice cannot walk into
+# a payment for a cast the step was never going to allow.
+#
+# The duel begins in turn one's UPKEEP (test_turn_and_stack pins that), so
+# every case that wants the sorcery window says so first.
+
+func test_timing_refusal_allows_a_sorcery_in_its_own_main_phase() -> void:
+	var bears := give_hand(0, "Grizzly Bears")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(g.cast_timing_refusal(0, bears), "",
+		"the main phase leaves only the choices and the mana")
+
+
+func test_timing_refusal_says_nothing_about_the_mana() -> void:
+	# The seat has no land at all: the cast is unaffordable and the query
+	# still allows the ANNOUNCEMENT, because the player may yet make mana.
+	var bears := give_hand(0, "Grizzly Bears")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(g.players[0].mana_pool.total(), 0)
+	assert_eq(g.cast_timing_refusal(0, bears), "")
+	assert_string_contains(g.cast_spell(0, bears), "not enough mana",
+		"the engine still refuses the cast itself")
+
+
+func test_timing_refusal_names_the_step_outside_the_main_phase() -> void:
+	var bears := give_hand(0, "Grizzly Bears")
+	advance_to_step(Mtg.Step.END)
+	assert_string_contains(g.cast_timing_refusal(0, bears), "main phase")
+
+
+func test_timing_refusal_lets_an_instant_through_outside_it() -> void:
+	var bolt := give_hand(0, "Lightning Bolt")
+	advance_to_step(Mtg.Step.END)
+	assert_eq(g.cast_timing_refusal(0, bolt), "",
+		"an instant has every step")
+
+
+func test_timing_refusal_refuses_a_sorcery_on_the_opponents_turn() -> void:
+	var bears := give_hand(0, "Grizzly Bears")
+	advance_to_next_turn()
+	assert_eq(g.active_player, 1)
+	assert_ok(g.pass_priority(1))
+	assert_eq(g.priority_player, 0, "and now it is ours to hold")
+	assert_string_contains(g.cast_timing_refusal(0, bears), "main phase")
+
+
+func test_timing_refusal_carries_the_cards_own_rider() -> void:
+	# "Cast this spell only during ..." — Siren's Call has no moment on its
+	# caster's own turn at all, and the rider says so before anything is
+	# aimed or paid.
+	var call := give_hand(0, "Siren's Call")
+	assert_ne(g.cast_timing_refusal(0, call), "",
+		"the rider refuses our own main phase")
+
+
+func test_timing_refusal_ignores_the_targets_cast_refusal_demands() -> void:
+	# THE WHOLE POINT OF THE QUERY. `cast_refusal` judges the target plan,
+	# so a spell asked about before a target is named is refused for the
+	# missing target — an answer that says nothing about whether the step
+	# allows the cast. The timing query is silent on it.
+	var rain := give_hand(0, "Stone Rain")
+	put_battlefield(1, "Forest")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_ne(g.cast_refusal(0, rain), "",
+		"no target named yet: the full query refuses")
+	assert_eq(g.cast_timing_refusal(0, rain), "",
+		"but the step itself allows the announcement")
+
+
+func test_timing_refusal_refuses_a_card_that_is_not_in_hand() -> void:
+	var bears := put_battlefield(0, "Grizzly Bears")
+	assert_string_contains(g.cast_timing_refusal(0, bears), "not in your hand")
+
+
+func test_timing_refusal_is_silent_about_priority() -> void:
+	# THE ONE PLACE IT IS NARROWER THAN THE CAST. Priority is a moment,
+	# not a property of the card or of the clock, and it crosses the table
+	# between one paced beat and the next — so a seat that has not been
+	# handed it yet may still START a cast, and the engine refuses the
+	# SUBMISSION if it never arrived.
+	var bolt := give_hand(0, "Lightning Bolt")
+	g.priority_player = 1
+	assert_eq(g.cast_timing_refusal(0, bolt), "",
+		"the announcement may be started")
+	assert_string_contains(g.cast_refusal(0, bolt, [TargetRef.player(1)]),
+		"priority", "and the cast itself is still the referee")

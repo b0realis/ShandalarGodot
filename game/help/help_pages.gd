@@ -87,6 +87,7 @@ const SRC_COMBAT := "combat"   ## `slot` — one Combat Bar icon.
 const SRC_FILTER := "filter"   ## `row`/`col` — a deck-builder medallion.
 const SRC_SET := "set"         ## `code` — a set symbol.
 const SRC_CURSOR := "cursor"   ## the targeting cursor.
+const SRC_COUNTER := "counter" ## `row` — one counter stone off the 1997 strip.
 const SRC_DRAWN := "drawn"     ## no texture: the game draws this in code.
 
 
@@ -112,6 +113,8 @@ static func pages() -> Array:
 		_page_icons_abilities(),
 		_page_icons_protection(),
 		_page_icons_small_card(),
+		_page_icons_counters(),
+		_page_icons_counters_more(),
 		_page_icons_stripes(),
 		_page_icons_phase_bar(),
 		_page_icons_phase_marks(),
@@ -548,6 +551,14 @@ static func _page_combat() -> Dictionary:
 		_text("TRAMPLE lets a blocked attacker push the surplus through — "
 			+ "give each blocker lethal damage and the excess spills onto "
 			+ "the defending player. It does nothing while blocking."),
+		_text("While you are dividing an attacker's damage among several "
+			+ "blockers, each one shows what you have put on it so far: "
+			+ "the damage dagger in ICE BLUE with a running number beside "
+			+ "it. It is not a counter and it is not damage yet — it is "
+			+ "your own arithmetic, and it clears the moment you press "
+			+ "Done. The damage that lands a moment later is drawn in the "
+			+ "same place in salmon, which is the marked damage the small "
+			+ "card carries until cleanup."),
 	]}
 
 
@@ -1028,6 +1039,263 @@ static func _page_icons_small_card() -> Dictionary:
 				+ "turns yellow under the pointer.",
 				{"src": SRC_DRAWN}, "Aa"),
 		]},
+	]}
+
+
+## THE COUNTER STONES, the owner's ask of 2026-09-09: *"Can you show me
+## what individual counter stones mean? Also document this in help with
+## pictures!"* Every stone is fetched BY CARD NAME out of
+## [constant CounterMarks.TILE_BY_CARD] and by kind out of
+## [constant CounterMarks.TILE_BY_KIND] — the very tables the small card
+## picks its stone from — so a row that drifts breaks this page and the
+## duel screen together, and no index is typed here at all. The wording
+## quoted for each stone is its `@CUECARD_COUNTERS_*` line, [1997].
+##
+## It is TWO PAGES of its own rather than a block on the small-card page:
+## that page already carries eleven marks, and this material is sixteen
+## rows. One page held them all at 2174 px against a 618 px viewport —
+## three and a half screens, half again as tall as the longest page the
+## reference had (the Deck Builder's filters, 1567). Split at the
+## headings, both halves land where the rest of the book already is.
+##
+## THE FAMILIES — the five Mana Batteries and the five lucky charms —
+## are ONE ENTRY EACH, a strip of five stones ([method _icon_family]),
+## because five rows differing only in color teach nothing five times.
+## A family entry lives in a BLOCK OF ITS OWN; see that method. The strip
+## is ours, [QoL] 2026-09-09; so is the note that the ankh stones can
+## never appear in play, our lucky charms banking no `life` counters.
+static func _page_icons_counters() -> Dictionary:
+	return {"title": "Icons — the counter stones", "blocks": [
+		_text("Some cards keep a running number on themselves: the +1/+1 a "
+			+ "Fungusaur grows when something hurts it, the charge a Mana "
+			+ "Battery stores, the corpses a Scavenging Ghoul eats. Those "
+			+ "numbers are COUNTERS, and a card in play wears one small "
+			+ "oval STONE for each KIND of counter on it, in a row just "
+			+ "under its title bar, with the count in white beside it."),
+		_text("The stone says WHICH counter, the number says HOW MANY, and "
+			+ "resting the pointer on the card spells both out in the "
+			+ "game's own words — \"Carrion counters: 2\". A stone belongs "
+			+ "to the CARD rather than to the counter, which is why a "
+			+ "Sengir Vampire's +1/+1 and a Rock Hydra's are not the same "
+			+ "picture: the original handed out twenty-four stones by "
+			+ "name, and those twenty-four are all there are."),
+		_text("The original put down one stone for every single counter and "
+			+ "let them overlap when the row ran out of room. Our cards on "
+			+ "the table are smaller, and a Rock Hydra's six heads would "
+			+ "be six smudges, so we draw ONE stone per kind and let the "
+			+ "number do the counting."),
+		_heading("Counters that change a creature"),
+		_text("A yin-yang is a counter that changes a creature's power and "
+			+ "toughness. A card that grows its own wears one in its own "
+			+ "color; a counter put on a creature by something ELSE wears "
+			+ "the color of whatever put it there."),
+		{"kind": ICONS, "entries": [
+			_icon("A green yin-yang — +1/+1",
+				"Cue card: \"+1/+1 counters: 1\". Each one makes the "
+				+ "creature one bigger in both directions for as long as it "
+				+ "stays there. Fungusaur takes one every time it is dealt "
+				+ "damage and lives; Citanul Druid takes one whenever an "
+				+ "opponent casts an artifact; Whirling Dervish takes one "
+				+ "at the end of any turn in which it hurt an opponent.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Fungusaur"]},
+				"+1/+1", 44.0),
+			_icon("A black yin-yang — +1/+1",
+				"The same counter, on a black creature. Sengir Vampire "
+				+ "takes one whenever a creature it damaged this turn "
+				+ "dies; Khabál Ghoul takes one for every creature that "
+				+ "died this turn, at the end of both players' turns.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Sengir Vampire"]},
+				"+1/+1", 44.0),
+			_icon("An olive yin-yang — +1/+1",
+				"The artifact one, a dull olive rather than the Fungusaur "
+				+ "stone's vivid green. Triskelion enters play with three "
+				+ "of them, and each one you take off is a point of damage "
+				+ "it shoots at anything you choose.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Triskelion"]},
+				"+1/+1", 44.0),
+			_icon("A red yin-yang — +1/+1, and -0/-1",
+				"Rock Hydra's heads: it enters with X of them, and each 1 "
+				+ "damage it would take pulls one off instead. It is also "
+				+ "the stone EVERY OTHER +1/+1 wears here, because the "
+				+ "engine does not remember which card put a counter down "
+				+ "— Dwarven Weaponsmith's upkeep gift is this stone. So "
+				+ "is the counter Orcish Catapult scatters, whose cue card "
+				+ "reads \"Damage (-0/-1) counters\" and which takes a "
+				+ "point of toughness rather than giving one.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Rock Hydra"]},
+				"+1/+1", 44.0),
+			_icon("The Tetravus — drones",
+				"Cue card: \"Drone (+1/+1) counters\", and the stone is a "
+				+ "picture of the machine itself. Tetravus enters with "
+				+ "three; at your upkeep you may turn any number of them "
+				+ "into 1/1 flying Tetravite tokens, and turn the tokens "
+				+ "back into counters the same way.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Tetravus"]},
+				"drone", 44.0),
+			_icon("A gear — +1/+0",
+				"Cue card: \"Clockwork (+1/+0) counters\". Clockwork Beast "
+				+ "enters with seven and Clockwork Avian with four; each "
+				+ "one is a point of power, and one comes off at the end "
+				+ "of any combat the machine took part in. You can wind "
+				+ "them back up during your upkeep. The same gear stood "
+				+ "for Time Vault's \"Turn counters\" in 1997; our Vault "
+				+ "follows the modern wording and keeps no counters, so "
+				+ "the two Clockworks are where you will meet it.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Clockwork Beast"]},
+				"+1/+0", 44.0),
+			_icon("A pale yin-yang — -0/-2",
+				"Cue card: \"Shackle (-0/-2) counters\", and it is Spirit "
+				+ "Shackle's. The creature it enchants takes one every "
+				+ "time it becomes tapped, and each one is two toughness "
+				+ "gone for good: attack twice with a 2/2 and it has "
+				+ "killed itself.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_KIND["-0/-2"]},
+				"-0/-2", 44.0),
+			_icon("A blue yin-yang — -1/-1",
+				"Cue card: \"Mutation (-1/-1) counters\", and it is "
+				+ "Unstable Mutation's. The aura hands the creature +3/+3 "
+				+ "at once, then puts one of these on it at the start of "
+				+ "every one of its controller's upkeeps until the bargain "
+				+ "comes due.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_KIND["-1/-1"]},
+				"-1/-1", 44.0),
+		]},
+		_text("The rest of the stones — the ones a permanent keeps count "
+			+ "with, and the two families of five — are on the next page."),
+	]}
+
+
+## The second half; see [method _page_icons_counters] for why there are
+## two. The families' strips are built here, where they are shown.
+static func _page_icons_counters_more() -> Dictionary:
+	# The two families, in the strip's own order, taken by card name.
+	var batteries: Array = []
+	for card_name in ["Black Mana Battery", "Blue Mana Battery",
+			"Green Mana Battery", "Red Mana Battery", "White Mana Battery"]:
+		batteries.append({"src": SRC_COUNTER,
+			"row": CounterMarks.TILE_BY_CARD[card_name]})
+	var charms: Array = []
+	for card_name in ["Throne of Bone", "Crystal Rod", "Wooden Sphere",
+			"Iron Star", "Ivory Cup"]:
+		charms.append({"src": SRC_COUNTER,
+			"row": CounterMarks.TILE_BY_CARD[card_name]})
+	return {"title": "Icons — the counter stones, continued", "blocks": [
+		_heading("Counters a permanent keeps for itself"),
+		_text("These are tallies rather than sizes: the card counts "
+			+ "something up and then spends it, and the number beside the "
+			+ "stone is the whole of the information."),
+		{"kind": ICONS, "entries": [
+			_icon("A scythe — doom",
+				"Cue card: \"Doom counters: 1\". Armageddon Clock puts one "
+				+ "on itself at each of your upkeeps, and at your draw "
+				+ "step it deals that much damage to BOTH players. Any "
+				+ "player may pay {4} during any upkeep to take one back "
+				+ "off, which is the only brake there is.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Armageddon Clock"]},
+				"doom", 44.0),
+			_icon("Grapes — vitality",
+				"Cue card: \"Vitality counters: 1\". Living Artifact is an "
+				+ "aura on an artifact: whenever YOU are dealt damage it "
+				+ "takes that many counters, and at your upkeep you may "
+				+ "spend one of them to gain a life back.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Living Artifact"]},
+				"vitality", 44.0),
+			_icon("A bird — carrion",
+				"Cue card: \"Carrion counters: 1\". Osai Vultures takes one "
+				+ "at the end of any turn a creature died in, and two of "
+				+ "them, removed, pump it +1/+1 until end of turn.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Osai Vultures"]},
+				"carrion", 44.0),
+			_icon("A tombstone — corpse",
+				"Cue card: \"Corpse counters: 1\". Scavenging Ghoul takes "
+				+ "one at the end of every turn for each creature that "
+				+ "died in it, and spends one to regenerate itself.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Scavenging Ghoul"]},
+				"corpse", 44.0),
+			_icon("The same tombstone — husk",
+				"Cue card: \"Husk counters: 1\". Necropolis of Azar takes "
+				+ "one whenever a non-black creature reaches a graveyard, "
+				+ "and {5} plus one of them makes a Spawn of Azar. The "
+				+ "1997 strip carries the tombstone twice, once for each "
+				+ "card, and the two are the same picture — so the cue "
+				+ "card is what tells you which counter you are reading.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Necropolis of Azar"]},
+				"husk", 44.0),
+			_icon("A whirlwind — wind",
+				"Cue card: \"Wind counters: 1\". Cyclone takes one at each "
+				+ "of your upkeeps and then charges you {G} for every "
+				+ "counter on it or it is sacrificed. Pay, and it deals "
+				+ "that much damage to every creature and every player, "
+				+ "yours and you included.",
+				{"src": SRC_COUNTER,
+					"row": CounterMarks.TILE_BY_CARD["Cyclone"]},
+				"wind", 44.0),
+		]},
+		_heading("Two families of five"),
+		_text("Two cycles of five cards share one counter between them, and "
+			+ "the strip gives every member its own stone in its own "
+			+ "color. The order below is the strip's: black, blue, green, "
+			+ "red, white."),
+		{"kind": ICONS, "entries": [
+			_icon_family("Lightning bolts — charge",
+				"Cue card: \"Charge counters: 1\". One bolt for each of "
+				+ "the five batteries — Black Mana Battery, Blue Mana "
+				+ "Battery, Green Mana Battery, Red Mana Battery, White "
+				+ "Mana Battery — in that battery's own color. {2} and a "
+				+ "tap stores a counter; tapping the "
+				+ "battery and taking any number of them off pours that "
+				+ "much mana of its own color into your pool at once, "
+				+ "which is how a four-mana artifact pays for a spell it "
+				+ "could never have paid for in one turn.",
+				batteries, "charge", 44.0),
+			_icon_family("Ankhs — life",
+				"Cue card: \"Life counters: 1\". The five lucky charms — "
+				+ "Throne of Bone, Crystal Rod, Wooden Sphere, Iron Star "
+				+ "and Ivory Cup — one ankh each, in the color of the "
+				+ "spells that charm watches for. THESE FIVE YOU WILL NOT "
+				+ "MEET: the 1997 game banked the life they earned as "
+				+ "counters on the charm itself, and ours follow the "
+				+ "modern wording and hand you the life as it happens. "
+				+ "They are here because the strip carries them and "
+				+ "because a card that revives the older wording would "
+				+ "wear them.",
+				charms, "life", 44.0),
+		]},
+		_heading("When a counter has no stone"),
+		_text("Twenty-four stones is all the original drew. Our card pool "
+			+ "is larger than the one it shipped with, and cards out of "
+			+ "Legends and The Dark bring counters it never had a picture "
+			+ "for — pupa, glyph, sleep, mire, hatchling. A counter with "
+			+ "no stone of its own wears a plain dark chip of the same "
+			+ "size with the number inside it, and its cue card names it "
+			+ "in the ordinary way: \"Pupa counters: 1\". We would rather "
+			+ "show you a blank chip than invent a picture and pass it "
+			+ "off as the original's. A few counters that DO change a "
+			+ "creature are in that group too — 1997 had no stone for a "
+			+ "+0/+1 — so read the cue card whenever the chip is blank."),
+		_text("The same dark chip stands in for every stone if you are "
+			+ "playing without the 1997 graphics. The count is always "
+			+ "there either way; it is only the picture that needs the "
+			+ "original files."),
+		_heading("One thing that is not a counter"),
+		_text("While you are dividing combat damage, every creature you "
+			+ "have put points on shows an ICE-BLUE dagger with a running "
+			+ "number beside it. That is not a counter and it is not "
+			+ "damage yet — it is your own arithmetic, and it clears the "
+			+ "moment you press Done. The Combat page says more about it."),
 	]}
 
 
@@ -1601,6 +1869,10 @@ static func icon_texture(spec: Dictionary) -> Texture2D:
 			return MiniCard.stripe_texture(int(spec.get("color", 0)))
 		SRC_SPRITE:
 			return MiniCard.masked_sprite(String(spec.get("key", "")))
+		SRC_COUNTER:
+			# One oval off `Cardcounters.pic`, cut and masked by the same
+			# accessor the small card's counter row draws with.
+			return CounterMarks.tile(int(spec.get("row", -1)))
 		SRC_TEXTURE:
 			return GameSkin.texture(String(spec.get("key", "")))
 		SRC_PHASE:
@@ -1631,6 +1903,16 @@ static func icon_texture(spec: Dictionary) -> Texture2D:
 			var side := sheet.get_height()
 			return GameSkin.region("target_cursor", Rect2i(0, 0, side, side))
 	return null
+
+
+## Every icon spec ONE ENTRY draws: one for an ordinary entry, several
+## for a family entry ([method _icon_family]). The screen and the tests
+## both walk this rather than reaching for `icon` themselves, so a family
+## row is never half-drawn or half-checked.
+static func icon_specs(entry: Dictionary) -> Array:
+	if entry.has("icons"):
+		return entry["icons"]
+	return [entry.get("icon", {})]
 
 
 ## Every icon entry on every page, flat — the inventory the tests walk.
@@ -1677,6 +1959,19 @@ static func _quote(text: String, cite: String) -> Dictionary:
 static func _icon(name: String, text: String, icon: Dictionary, alt: String,
 		size := 34.0) -> Dictionary:
 	return {"name": name, "text": text, "icon": icon, "alt": alt, "size": size}
+
+
+## A FAMILY of icons on ONE entry — a set that differs only in color,
+## shown as a strip so that five near-identical rows become one row.
+##
+## A family entry LIVES IN A BLOCK OF ITS OWN, and the test says so: the
+## screen sizes an icon row's picture column to the widest picture in it,
+## so a block holding both one-icon and five-icon entries would step its
+## names in and out. [param size] is each icon's width, as for
+## [method _icon].
+static func _icon_family(name: String, text: String, icons: Array, alt: String,
+		size := 34.0) -> Dictionary:
+	return {"name": name, "text": text, "icons": icons, "alt": alt, "size": size}
 
 
 ## An ability badge, addressed by the KEYWORD the mini card draws it for —

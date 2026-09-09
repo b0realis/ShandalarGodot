@@ -22,6 +22,15 @@ func before_each() -> void:
 	screen = load("res://game/duel/duel_screen.tscn").instantiate()
 	add_child_autofree(screen)
 	await get_tree().process_frame
+	# OUR OWN MAIN PHASE — where a player stands when they cast a sorcery,
+	# and since 2026-09-09 where the hand insists on standing: it asks the
+	# engine whether the step allows the cast before it opens a chain at
+	# all (`DuelScreen._click_hand_card`). A duel begins in turn one's
+	# UPKEEP, so the sorceries below used to open their windows from a
+	# moment that could never have cast them.
+	var g: MtgGame = screen.game
+	g.active_player = 0
+	g._enter_step(Mtg.STEP_ORDER.find(Mtg.Step.MAIN1))
 
 
 func _give(card_name: String, pid := 0) -> CardInstance:

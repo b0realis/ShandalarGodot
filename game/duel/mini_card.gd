@@ -16,6 +16,13 @@ extends Button
 ##   art of a creature that can't act yet,
 ## - power/toughness at the art's bottom-right corner,
 ## - the 1997 SMALL-CARD STATE overlays (see [enum State]),
+## - the COUNTER STONES (the original's `Cardcounters.pic`) in a row just
+##   under the title bar, one stone per KIND of counter with the count
+##   beside it, and the `@CUECARD_COUNTERS_*` line on the cue card —
+##   [CounterMarks], [method _rebuild_counter_chips]; 2026-09-08 [1997],
+## - while combat damage is being divided, the points ASSIGNED SO FAR to
+##   this card, in the damage marker's place and its own colour — [member
+##   pending_damage]; 2026-09-08 [QoL], the 1997 game showed nothing,
 ## - and, when the card it draws is DESTROYED, the `Dying` cracks over the
 ##   square it is swept from — [DeathMark], raised from this widget's own
 ##   [method _on_game_event] because by the next frame there is no widget
@@ -145,6 +152,59 @@ var face_down := false:
 ## cracks on every card in it.
 var force_dying := false
 
+## COMBAT DAMAGE ASSIGNED TO THIS CARD SO FAR, while the player is still
+## dividing it — the running count [DuelScreen] keeps in `_damage_picks`
+## (and, for a *"divided as you choose"* spell, the dialled amount on the
+## slot's [TargetRef]). Drawn in the damage marker's place, dagger and
+## number both in [constant PENDING_COLOR], so the eye that knows the
+## salmon "2" beside the dagger means *wounded* reads the ice-blue "2" as
+## *about to be*. Zero draws nothing; the screen sets it on every rebuild
+## ([method DuelScreen._make_card]) and it goes back to zero with the
+## rebuild that follows the submit. [QoL], 2026-09-08 — the owner's
+## note: *"during combat and I have to distribute combat damage amongst
+## creatures I cannot see which point went where"*. The 1997 game did
+## not show it either; nothing here is a port.
+var pending_damage := 0:
+	set(value):
+		if pending_damage == value:
+			return
+		pending_damage = value
+		if _pending_count != null:
+			_refresh_pending()
+
+## The colour of the damage still to come — cool where marked damage is
+## warm ([member _damage_count]'s salmon), and not the yellow of the
+## OPTIONAL ring the same card is wearing while it is a candidate.
+const PENDING_COLOR := Color(0.45, 0.88, 1.0)
+
+## The damage marker's dagger RE-INKED in [constant PENDING_COLOR]:
+## each opaque pixel's brightness kept, its hue replaced. A `modulate`
+## over the pink blade came out grey and read as the ordinary dagger at
+## a glance, which is the one thing this mark must not do. One texture
+## for every card, cut once.
+static var _pending_dagger: Texture2D = null
+
+static func pending_dagger() -> Texture2D:
+	if _pending_dagger != null:
+		return _pending_dagger
+	var plain := masked_sprite(STATE_SPRITE[State.DAMAGE])
+	if plain == null:
+		return null
+	var img := plain.get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	for y in img.get_height():
+		for x in img.get_width():
+			var px := img.get_pixel(x, y)
+			if px.a <= 0.0:
+				continue
+			# 0.25..1.0 of the colour, so the dark edges of the blade stay
+			# an outline and never vanish into the art.
+			var lum := 0.25 + 0.75 * px.get_luminance()
+			img.set_pixel(x, y, Color(PENDING_COLOR.r * lum,
+				PENDING_COLOR.g * lum, PENDING_COLOR.b * lum, px.a))
+	_pending_dagger = ImageTexture.create_from_image(img)
+	return _pending_dagger
+
 var _highlight: int = Highlight.NONE
 
 # Child controls of the mini-card face (built once in _init): the original
@@ -162,6 +222,11 @@ var _status_label: Label = null
 var _sick_spiral: TextureRect = null
 var _damage_icon: TextureRect = null
 var _damage_count: Label = null
+## THE COUNTER ROW under the title bar — see [method _rebuild_counter_chips].
+var _counter_row: Control = null
+## The damage-division preview, dagger and number — see [member pending_damage].
+var _pending_icon: TextureRect = null
+var _pending_count: Label = null
 ## "prevent 3" over the art while the card carries a prevention pool —
 ## see [method _refresh_shield]. Built on first need.
 var _shield_words: Label = null
@@ -635,8 +700,31 @@ func _build_face() -> void:
 	_badges.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_badges)
 
-	# Status text (damage, counters) rides just under the title bar so it
-	# never collides with the badges.
+	# THE COUNTER ROW — the stones a permanent's counters wear, just under
+	# the title bar where the 1997 renderer put them (`Magic.exe`
+	# 0x4d3a00 draws its ovals in a band starting 20/256 of the card down,
+	# 27% of the card tall — at our 106 px that is the stone's own 28 px,
+	# so the stones are blitted at their native size, never scaled).
+	# LEFT-aligned where the original right-aligned: the right end of that
+	# band is the WILL_UNTAP arrow's ([method _ensure_overlay]) and the ID
+	# tag's, and the left end was only ever the status text's, which now
+	# follows the stones. Built empty; [method _rebuild_counter_chips]
+	# fills it on every refresh. z 1 like the P/T: readable over the
+	# DYING cracks and the summoning spiral.
+	_counter_row = Control.new()
+	_counter_row.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_counter_row.offset_left = COUNTER_ROW_LEFT
+	_counter_row.offset_top = COUNTER_ROW_TOP
+	_counter_row.offset_right = SIZE.x - (CORNER_MARK + 8)
+	_counter_row.offset_bottom = COUNTER_ROW_TOP + CounterMarks.STONE.size.y
+	_counter_row.clip_contents = true
+	_counter_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_counter_row.z_index = 1
+	add_child(_counter_row)
+
+	# Status text ("stolen") rides just under the title bar so it never
+	# collides with the badges — and to the RIGHT of the counter stones
+	# when there are any ([method _rebuild_counter_chips] moves it).
 	_status_label = Label.new()
 	_status_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_status_label.offset_left = 5
@@ -677,6 +765,31 @@ func _build_face() -> void:
 	_damage_count.add_theme_constant_override("shadow_offset_y", 1)
 	_damage_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_damage_count)
+	# PENDING DAMAGE [QoL] — the same dagger and the same box, in
+	# [constant PENDING_COLOR]. Placed by [method _refresh_pending]: in the
+	# marker's own place while the card is unwounded, one row above it
+	# when a real "2" is already there (first-strike damage marked before
+	# the regular step's division), so the two numbers never overprint.
+	_pending_icon = TextureRect.new()
+	_pending_icon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_pending_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_pending_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_pending_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pending_icon.visible = false
+	_pending_icon.z_index = 1
+	add_child(_pending_icon)
+	_pending_count = Label.new()
+	_pending_count.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_pending_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_pending_count.add_theme_font_size_override("font_size", 16)
+	_pending_count.add_theme_color_override("font_color", PENDING_COLOR)
+	_pending_count.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	_pending_count.add_theme_constant_override("outline_size", 3)
+	_pending_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pending_count.visible = false
+	_pending_count.z_index = 1
+	add_child(_pending_count)
+	_refresh_pending()
 
 	# THE ID TAG — `Show ID tags\tCtrl+T` (`@MENU_TERRITORY` entry 18 and
 	# `@MENU_SMALLCARD` entry 5, `docs/duel-todo.md` §6.3/§6.12), off by
@@ -964,7 +1077,7 @@ func refresh() -> void:
 		# and the mana a card taps for is exactly the information a card
 		# back exists to withhold. Same reason the state overlays are
 		# hidden two lines down.
-		for child in [_name_label, _name_band, _band_texture, _art, _art_frame, _art_placeholder, _pt_label, _status_label, _badges, _damage_count, _stripes, _tap_wash, _tap_mark, _shield_words]:
+		for child in [_name_label, _name_band, _band_texture, _art, _art_frame, _art_placeholder, _pt_label, _status_label, _badges, _damage_count, _stripes, _tap_wash, _tap_mark, _shield_words, _counter_row, _pending_icon, _pending_count]:
 			if child != null:
 				child.visible = false
 		# EVERY state overlay too (the dagger and the spiral included): a
@@ -1018,6 +1131,8 @@ func refresh() -> void:
 	_apply_states(states)
 	_refresh_shield(_centre_stamp(states) != -1)
 	_refresh_status(states)
+	_rebuild_counter_chips()
+	_refresh_pending()
 	_refresh_tap_mark()
 	# The card's tooltip is name + rules + THE 1997 CUE CARDS for whatever
 	# it is currently wearing. The overlays are mouse-transparent so the
@@ -1034,6 +1149,10 @@ func refresh() -> void:
 	if DuelOptions.toggle("ShowCueCards"):
 		for line in state_cues(states):
 			tooltip_text += "\n" + line
+		# ...and the `@CUECARD_COUNTERS_<Card>` line per kind of counter,
+		# which is a cue card too and goes with the same switch.
+		for line in counter_cues():
+			tooltip_text += "\n" + line
 	_apply_modulate()
 	_apply_style()
 
@@ -1046,6 +1165,169 @@ func state_cues(states: Array[int]) -> PackedStringArray:
 		var cue: String = STATE_CUE[state]
 		out.append(cue % instance.damage if cue.contains("%d") else cue)
 	return out
+
+
+## The 1997 cue-card line for each kind of counter on the card, in the
+## order the kinds were put there ([member CardInstance.counters] keeps
+## insertion order): `Carrion counters: 2`, `+1/+1 counters: 1`.
+## [method CounterMarks.cue] has the wording and the citations.
+func counter_cues() -> PackedStringArray:
+	var out := PackedStringArray()
+	if instance == null:
+		return out
+	for kind in instance.counters:
+		var count := int(instance.counters[kind])
+		if count > 0:
+			out.append(CounterMarks.cue(instance.data.card_name, str(kind), count))
+	return out
+
+
+## What the counter row is showing, one entry per chip in row order:
+## `{kind, count, stone}` — `stone` true when the 1997 oval is on it,
+## false for the lettered chip of the clean skin (or of a kind the 1997
+## game never had). For tests; the row itself is the picture.
+func counter_chips() -> Array:
+	var out: Array = []
+	if _counter_row == null:
+		return out
+	for chip in _counter_row.get_children():
+		out.append(chip.get_meta("chip"))
+	return out
+
+
+## Where the counter row starts: the same 5 px in from the frame as the
+## status text, and the same 20 px down — the art's top edge, so the
+## stones stand on the art as the 1997 ones did and stay clear of the
+## title bar's name.
+const COUNTER_ROW_LEFT := 5
+const COUNTER_ROW_TOP := 20
+## Between one chip and the next, and between a stone and its count.
+const COUNTER_GAP := 3
+const COUNTER_COUNT_FONT := 13
+
+## ONE CHIP PER KIND OF COUNTER, count beside it — rebuilt whole on every
+## refresh like the badges, because the row is small and a counter comes
+## and goes with the turn. [1997], 2026-09-08.
+##
+## With the skin: the card's stone ([method CounterMarks.tile_for],
+## which is the executable's own table) at its native 22x28 and the
+## count to its right in white with a black outline, the P/T's dress at
+## half the size, because the count stands on the art like the P/T does.
+## Without the skin, or for a kind the 1997 game never drew (a Pupa's
+## pupae, Glyph of Delusion's glyphs): the SAME 22x28 footprint as a
+## rounded chip in the clean skin's own colours — the frame's bevel gold
+## on a dark fill — with the count INSIDE it. Same size, same place, so
+## a skin arriving changes the picture and not the layout.
+##
+## ONE stone per kind, not one per counter: the 1997 renderer put down
+## one oval per counter and spaced them to fit (`Magic.exe` 0x4d3a00),
+## which on a 132 px card would stack a Rock Hydra's six heads eleven
+## pixels apart. The count is the thing a player needs to read.
+##
+## The status text ("stolen") is moved to the right of the last chip, so
+## the two never overprint; with no chips it stays at its old place. A
+## third kind on one card (a Sengir Vampire under both Unstable Mutation
+## and Spirit Shackle) runs past the row's right edge, which is where the
+## WILL_UNTAP arrow lives, and is CLIPPED there rather than drawn over
+## the arrow — the cue card still names every kind.
+func _rebuild_counter_chips() -> void:
+	if _counter_row == null:
+		return
+	for child in _counter_row.get_children():
+		_counter_row.remove_child(child)
+		child.queue_free()
+	var x := 0
+	if instance != null:
+		var stone_h: int = CounterMarks.STONE.size.y
+		var stone_w: int = CounterMarks.STONE.size.x
+		for kind in instance.counters:
+			var count := int(instance.counters[kind])
+			if count <= 0:
+				continue
+			var name := instance.data.card_name
+			var tile := CounterMarks.tile(CounterMarks.tile_for(name, str(kind)))
+			var chip := Control.new()
+			chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			chip.position = Vector2(x, 0)
+			var count_label := Label.new()
+			count_label.text = str(count)
+			count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			count_label.add_theme_color_override("font_color", Color.WHITE)
+			count_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+			count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var width := stone_w
+			if tile != null:
+				var stone := TextureRect.new()
+				stone.texture = tile
+				stone.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				stone.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				stone.position = Vector2.ZERO
+				stone.size = Vector2(stone_w, stone_h)
+				stone.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				chip.add_child(stone)
+				# A digit is 8 px wide at this size; the box is sized to the
+				# number so the next chip follows close behind.
+				var count_w := 4 + 8 * str(count).length()
+				count_label.add_theme_font_size_override("font_size", COUNTER_COUNT_FONT)
+				count_label.add_theme_constant_override("outline_size", 3)
+				count_label.position = Vector2(stone_w + 1, 0)
+				count_label.size = Vector2(count_w, stone_h)
+				width = stone_w + 1 + count_w
+			else:
+				var pill := Panel.new()
+				var style := StyleBoxFlat.new()
+				style.bg_color = Color(0.10, 0.08, 0.12, 0.92)
+				style.border_color = ART_BEVEL
+				style.set_border_width_all(1)
+				style.set_corner_radius_all(stone_w / 2)
+				pill.add_theme_stylebox_override("panel", style)
+				pill.position = Vector2.ZERO
+				pill.size = Vector2(stone_w, stone_h)
+				pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				chip.add_child(pill)
+				count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				count_label.add_theme_font_size_override("font_size",
+					COUNTER_COUNT_FONT if count < 10 else COUNTER_COUNT_FONT - 4)
+				count_label.add_theme_constant_override("outline_size", 2)
+				count_label.position = Vector2.ZERO
+				count_label.size = Vector2(stone_w, stone_h)
+			chip.add_child(count_label)
+			chip.size = Vector2(width, stone_h)
+			chip.set_meta("chip", {"kind": str(kind), "count": count, "stone": tile != null})
+			_counter_row.add_child(chip)
+			x += width + COUNTER_GAP
+	_counter_row.visible = x > 0
+	_status_label.offset_left = COUNTER_ROW_LEFT + x
+
+
+## Show or hide [member pending_damage] — see the member's note for what
+## it means and where it goes.
+func _refresh_pending() -> void:
+	if _pending_icon == null or _pending_count == null:
+		return
+	var showing := pending_damage > 0 and not face_down
+	_pending_icon.visible = showing and _pending_icon.texture != null
+	_pending_count.visible = showing
+	if not showing:
+		return
+	_pending_count.text = str(pending_damage)
+	# The dagger is the DAMAGE overlay's own sprite in the pending colour
+	# — fetched on first need, since a card never in a division never
+	# pays for the decode.
+	if _pending_icon.texture == null:
+		_pending_icon.texture = pending_dagger()
+		_pending_icon.visible = _pending_icon.texture != null
+	# One row (20 px) above the marker when a real count is already
+	# showing there; the marker's own place otherwise.
+	var lift := 20 if _damage_count.visible else 0
+	_pending_icon.offset_left = -58
+	_pending_icon.offset_top = -(PT_BOX.y + PT_INSET.y + 18 + lift)
+	_pending_icon.offset_right = -30
+	_pending_icon.offset_bottom = -(PT_BOX.y + PT_INSET.y + lift)
+	_pending_count.offset_left = -30
+	_pending_count.offset_top = -(PT_BOX.y + PT_INSET.y + 20 + lift)
+	_pending_count.offset_right = -6
+	_pending_count.offset_bottom = -(PT_BOX.y + PT_INSET.y + lift)
 
 
 ## The one centre stamp [param states] earns, in [constant CENTRE_STAMPS]

@@ -62,13 +62,16 @@ the `(T)` a 2, so the lazily-added overlays cannot land over them.
  +--------------------------------------------------+
  | (T)  Card Name                        \ \ \ \ \ \ |  title bar (y 2..18)
  +--------------------------------------------------+  (T) left, stripes right
- | stolen                            [12]      /|\   |  status line / ID tag
+ | (o)2 (o)1 stolen                  [12]      /|\   |  counter stones, status, ID tag
  |                                              |    |  will-untap arrow (top-R)
  |                 THE ART WINDOW                    |  7.5%..92.5% x 19%..91.7%
  |            spiral / cracks / crosshair            |  the whole window
  |                                                   |
  |  (o)(o)(o)(o)                  |x 3               |  badges (bottom-L)
  |                                     6/4           |  dagger + number, then P/T
+ |                                                   |  (a division in progress
+ |                                                   |   puts its blue dagger + count
+ |                                                   |   in the dagger's place)
  +--------------------------------------------------+
 ```
 
@@ -217,6 +220,8 @@ imported sheet at 4x. The art is **1997**'s.
 | **The graveyard-view target ring** | — (same look as `35_pile_glow`) | The same 2px ring, added as a real child of the card, on a legal target inside the graveyard / exile / ante overlay. An ILLEGAL card there gets no stamp at all. | `GraveyardView`, while the screen is in `Mode.TARGETING`. | `game/duel/graveyard_view.gd:395-419` | **Ours** (s30 draws the same outline, `duel.go:3699-3712`). |
 | **The aura peek** | `36_aura_peek` | Each enchantment attached to a permanent is drawn as a WHOLE card stepping out behind it — up 18px and right 6px per attachment, furthest first, the host on top — so the title bar of every aura is readable and each one is separately hoverable and clickable. | Any attachment. | `DuelScreen.AURA_PEEK`, `_make_widget` | **Ours.** It replaced a `+N aura` chip that was written across the host's art (the forty-first pass). |
 | **The shield ghost and the shield words** | — | The card whose effect filled a creature's damage-prevention pool (Healing Salve, Samite Healer, Guardian Angel's paid point, Indestructible Aura …) drawn behind the creature as the OUTERMOST step of its aura peek — a whole card built from the definition, since the instant is in the graveyard; no click, hover docks it in the sidebar — and *"prevent 3"* in red, outlined like the P/T, over the centre of the creature's own art, following the pool as damage drains it and *"prevent all"* from 9999 up. A creature shielding itself (Rock Hydra's `{R}`) gets the words alone. | While `CardInstance.prevention` holds — this turn only; both go at cleanup. | `DuelScreen._shield_ghost`, `_fan_steps`; `MiniCard._refresh_shield`, `SHIELD_INK` | **Ours**, `[QoL]` 2026-09-07 — the owner asked for *"like an aura (mini card behind a creature), just last only one turn"* with *""prevent 3" red letter in center of the card"*. |
+| **The counter stones** | — | One oval STONE per KIND of counter the permanent carries, at its native 22x28, in a row just under the title bar starting at the art's left edge, the COUNT in white beside it — the 1997 game's `Cardcounters.pic`, whose 24 stones the executable picks BY CARD (`Magic.exe` 0x4d4ca0: a scythe for Armageddon Clock, a bolt per Mana Battery, a gear for Time Vault and the Clockworks, an ankh per lucky charm, a bird for Osai Vultures, tombstones for Scavenging Ghoul and Necropolis, the yin-yang for every +1/+1 in the card's own colour) and, for the five counters other cards put down, by the SOURCE (0x4d3cc0: Unstable Mutation's blue, Spirit Shackle's grey, the Weaponsmith's and Catapult's red). The cue card names them the 1997 way: `Carrion counters: 1` (`@CUECARD_COUNTERS_OsaiVultures`, `UIStrings.txt:745-840`, verbatim, under the *Show cue cards* switch). A kind the 1997 game never drew (pupa, glyph, sleep …), or any kind with no skin, wears a dark rounded chip of the same footprint with the count inside, and a generic `<Kind> counters: %d`. Hidden with the rest of the face on a face-down card. | Any `CardInstance.counters` entry above zero. | `game/duel/counter_marks.gd` (the tables, the cut), `MiniCard._rebuild_counter_chips`, `counter_cues` | The stones and the strings are **1997** (2026-09-08). **One stone per kind with the count** is ours: the original blitted one oval PER COUNTER across the band and let them overlap, which at 132 px would put a Rock Hydra's heads eleven pixels apart. **Documented in the game's own Help since 2026-09-09** — two pages, *Icons — the counter stones* and its *continued*, one entry per stone with the picture cut by `CounterMarks.tile`, the card that wears it and its `@CUECARD_COUNTERS_*` wording; the five Mana Battery bolts and the five charm ankhs are one strip each (`HelpPages._icon_family`). Two things came out of writing it: `Khabál Ghoul` was keyed in both tables WITHOUT its accent, so it fell through to the kind table and wore Dwarven Weaponsmith's red yin-yang instead of its own black one (fixed, and every key is now pinned to the registry by `test_every_card_the_tables_name_is_in_the_pool`); and the ankh stones (rows 7-11) can never appear in play, since our lucky charms follow the Oracle wording and bank no `life` counters — the page says so rather than promising them. |
+| **The pending-damage mark** | — | While the player is dividing combat damage (or a *"divided as you choose"* spell's points), each candidate shows the points ALREADY PUT ON IT: the damage dagger re-inked ice-blue with the running count beside it, in the dagger's own place — or one row above it when a real (salmon) count is already there, so the two never overprint. Zero draws nothing; the rebuild after the submit clears every mark, and what the cards show then is the damage itself. | `DuelScreen._damage_picks` while `awaiting_damage_assignment`; the current divided slot's `TargetRef.amount` while casting. | `MiniCard.pending_damage`, `pending_dagger`, `DuelScreen._pending_damage_for` | **[QoL]**, 2026-09-08 — the owner's *"I cannot see which point went where"*. The 1997 game showed only its `%d points left` counter, which the prompt still carries. |
 | **The spell-flight ghost** | — | While a spell is animating from hand to the table, its home slot holds the space with `modulate.a = 0` and a ghost `MiniCard` is tweened across the screen. | `SpellFlight.is_flying(inst.id)`. | `game/duel/spell_flight.gd` | **[s30]**'s `spellIsAnimating` skip. |
 | **Target arrows** | — | Drawn BETWEEN cards, not on them: source to target, anchored on live `MiniCard` rects. | While the stack holds a targeted item. | `game/duel/target_arrows.gd` | — |
 | **The combat window's sword / shield / bones** | — | Lane markers in the Combat window — **one per side, not per card**. A creature in a combat lane wears nothing but its `COMMITTED` highlight. | — | `game/duel/combat_window.gd:225-230` | **1997** (`Winbk_Attackbones` and friends) |
@@ -233,16 +238,25 @@ imported sheet at 4x. The art is **1997**'s.
   Antiquities, Astral), is imported and used by those. Only five sets ever
   had a symbol; Unlimited, Fourth Edition and the promos are **lettered**
   instead, which is the printed truth rather than a gap.
-* **Counters.** There is **no +1/+1 counter, charge counter or poison
-  marking on any small card**. The 1997 set ships `Cardcounters.pic` and
-  `Poison.pic` for exactly this, and neither is imported:
-  `Cardcounters.pic` has no MANIFEST row at all, and `Poison.pic` was
-  surveyed and rejected because s30's conversion is 42x26 with an
-  **all-black right half** — a dead mask that decodes to a fully
-  transparent sprite. Only Manalink's 60x30 rescale has a working mask, and
-  whoever builds the poison counter takes that one. The counter cue cards
-  exist and are unused (`@CUECARD_COUNTERS_ArmageddonClock`,
-  `@CUECARD_COUNTERS_ManaBattery`, `UIStrings.txt:745-751`).
+* **Poison.** There is no poison marking on any card or player. The 1997
+  set ships `Poison.pic` for it, surveyed and rejected because s30's
+  conversion is 42x26 with an **all-black right half** — a dead mask that
+  decodes to a fully transparent sprite. Only Manalink's 60x30 rescale has
+  a working mask, and whoever builds the poison counter takes that one.
+  **Counters themselves are no longer on this list** (2026-09-08): this
+  bullet used to say *"no +1/+1 counter, charge counter … on any small
+  card"*, `Cardcounters.pic` had no MANIFEST row and the
+  `@CUECARD_COUNTERS_*` strings were unused. The owner called it a
+  `[1997]` item and it is built — §3.6, *The counter stones*; the strip
+  is `card_counters` in §7. What was decided in building it: the row is
+  LEFT-aligned under the title bar (the 1997 band's right end is our
+  will-untap arrow's and ID tag's corner, and the ID tag is off by
+  default — a corner nothing claims when the tag is off is still that
+  tag's the moment it is on); one stone per KIND with the count, not one
+  per counter; and a permanent carrying counters keeps a slot of its own
+  in the lands/other rows rather than folding into a strip pile, whose
+  covered rows show only the title bar (`DuelScreen._rebuild_field`, the
+  same remedy as the enchanted permanent's).
 * **Rarity.** No such concept anywhere in `game/`.
 * **The mana cost.** Shown only on the enlarged card in the Showcase — the
   small card carries the stripes instead.
@@ -533,6 +547,7 @@ conversion is preferred.
 | `state_cant_target` | `CantTarget.pic` | 130x65 | the refusal circle-slash |
 | `target_cursor` | `Target.pic` | 122x61 | the crosshair AND the duel screen's targeting cursor — one file, two uses, imported once |
 | `ability_icons` | `Abilities.pic` | 22x396 | all 18 badge cells |
+| `card_counters` | `Cardcounters.pic` | 24x750 | the 24 counter stones — ONE column of 25 cells at 30 px, the 25th the mask they all share (not an image+mask pair) |
 | `mana_stripes` | `Manastripes.pic` | 54x126 | the six colour slashes |
 | `card_frame_*` (12) | `Cardbk_*.pic` | 228x325 | the frames and their title-bar strips |
 | `card_back` | `Cardback.pic` | 228x323 | the face-down card |
@@ -545,5 +560,5 @@ theirs black. `MiniCard.masked_sprite` therefore MEASURES the polarity
 from the mask's own top-left pixel (which is background by construction)
 rather than carrying a per-file table.
 
-`Poison.pic` and `Cardcounters.pic` are the two card overlays the original
-ships that we do not import; see §3.7.
+`Poison.pic` is the one card overlay the original ships that we do not
+import; see §3.7. (`Cardcounters.pic` was the other until 2026-09-08.)

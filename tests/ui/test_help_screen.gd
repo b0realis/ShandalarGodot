@@ -152,15 +152,18 @@ func test_every_icon_entry_resolves_to_a_real_texture() -> void:
 		pass_test("no 1997 skin imported — the alt strings are the render")
 		return
 	for entry in HelpPages.icon_entries():
-		var spec: Dictionary = entry.get("icon", {})
-		if String(spec.get("src", "")) == HelpPages.SRC_DRAWN:
-			continue     # code-drawn marks (the Stop dot, the count badge)
-		var texture := HelpPages.icon_texture(spec)
-		assert_not_null(texture,
-			"'%s' resolves (%s)" % [String(entry.get("name", "")), spec])
-		if texture != null:
-			assert_gt(texture.get_width(), 0, String(entry.get("name", "")))
-			assert_gt(texture.get_height(), 0, String(entry.get("name", "")))
+		# EVERY spec of the entry: a family entry carries five of them
+		# (the Mana Battery stones), and a half-drawn strip is the same
+		# hole in the page as a missing icon.
+		for spec in HelpPages.icon_specs(entry):
+			if String(spec.get("src", "")) == HelpPages.SRC_DRAWN:
+				continue     # code-drawn marks (the Stop dot, the count badge)
+			var texture := HelpPages.icon_texture(spec)
+			assert_not_null(texture,
+				"'%s' resolves (%s)" % [String(entry.get("name", "")), spec])
+			if texture != null:
+				assert_gt(texture.get_width(), 0, String(entry.get("name", "")))
+				assert_gt(texture.get_height(), 0, String(entry.get("name", "")))
 
 
 func test_an_unknown_icon_source_resolves_to_null_rather_than_erroring() -> void:
@@ -249,6 +252,194 @@ func test_every_mana_symbol_on_the_1997_sheet_is_explained() -> void:
 			shown.append(String(spec["sym"]))
 	for symbol in ["W", "U", "B", "R", "G", "X", "T"]:
 		assert_true(shown.has(symbol), "{%s} is explained" % symbol)
+
+
+# ==================================================== the counter stones ==
+#
+# The owner's ask of 2026-09-09 — *"Can you show me what individual counter
+# stones mean? Also document this in help with pictures!"* Every one of
+# these asserts against [CounterMarks]' own tables rather than against a
+# copy of the numbers, so a stone that moves breaks the help and the small
+# card in the same run.
+
+## Both halves — the stones are two pages (see `_page_icons_counters`).
+func _counter_pages() -> Array:
+	var out: Array = []
+	for page in HelpPages.pages():
+		if String(page["title"]).contains("counter stones"):
+			out.append(page)
+	return out
+
+
+func _counter_text() -> String:
+	var parts := PackedStringArray()
+	for page in _counter_pages():
+		parts.append(_page_text(page))
+	return "\n".join(parts)
+
+
+func _page_text(page: Dictionary) -> String:
+	var parts := PackedStringArray([String(page.get("title", ""))])
+	for block in page.get("blocks", []):
+		parts.append(String(block.get("text", "")))
+		for entry in block.get("entries", []):
+			parts.append(String(entry.get("name", "")))
+			parts.append(String(entry.get("text", "")))
+	return "\n".join(parts)
+
+
+func _counter_rows() -> Array:
+	var out: Array = []
+	for entry in HelpPages.icon_entries():
+		for spec in HelpPages.icon_specs(entry):
+			if String(spec.get("src", "")) == HelpPages.SRC_COUNTER:
+				out.append(int(spec.get("row", -1)))
+	return out
+
+
+func test_there_are_pages_for_the_counter_stones() -> void:
+	assert_eq(_counter_pages().size(), 2,
+		"the stones are two pages — one page of them ran to three and a "
+		+ "half screens, half again as tall as anything else in the book")
+
+
+func test_every_counter_stone_the_game_can_draw_is_shown_once() -> void:
+	# The two tables are the executable's own (`Magic.exe` 0x4d4ca0 and
+	# 0x4d3cc0) and between them they reach all 24 rows of the strip. Every
+	# row a card can wear is on the page, no row is shown twice, and no row
+	# is invented — the page cannot drift from what MiniCard draws.
+	var shown := _counter_rows()
+	var mapped: Array = []
+	for card_name in CounterMarks.TILE_BY_CARD:
+		mapped.append(int(CounterMarks.TILE_BY_CARD[card_name]))
+	for kind in CounterMarks.TILE_BY_KIND:
+		mapped.append(int(CounterMarks.TILE_BY_KIND[kind]))
+	for card_name in CounterMarks.TILE_BY_CARD:
+		assert_true(shown.has(int(CounterMarks.TILE_BY_CARD[card_name])),
+			"%s's stone (row %d) is on the page"
+			% [card_name, CounterMarks.TILE_BY_CARD[card_name]])
+	for kind in CounterMarks.TILE_BY_KIND:
+		assert_true(shown.has(int(CounterMarks.TILE_BY_KIND[kind])),
+			"the %s stone (row %d) is on the page"
+			% [kind, CounterMarks.TILE_BY_KIND[kind]])
+	for row in shown:
+		assert_true(mapped.has(row),
+			"row %d is a stone some card actually wears" % row)
+	assert_eq(shown.size(), CounterMarks.STONE_COUNT,
+		"one picture per row of the strip, each shown once")
+	shown.sort()
+	assert_eq(shown, range(CounterMarks.STONE_COUNT),
+		"and they are rows 0..23 with none repeated")
+
+
+func test_every_counter_stone_resolves_to_a_real_stone() -> void:
+	# Through CounterMarks.tile — the same cut the small card draws with,
+	# at its native 22x28.
+	if GameSkin.texture(CounterMarks.SKIN_KEY) == null:
+		pass_test("no card_counters.png in this checkout — the alts stand in")
+		return
+	for entry in HelpPages.icon_entries():
+		for spec in HelpPages.icon_specs(entry):
+			if String(spec.get("src", "")) != HelpPages.SRC_COUNTER:
+				continue
+			var stone := HelpPages.icon_texture(spec)
+			assert_not_null(stone,
+				"'%s' cuts row %d" % [entry.get("name", ""), spec.get("row", -1)])
+			if stone == null:
+				continue
+			assert_eq(stone.get_width(), CounterMarks.STONE.size.x)
+			assert_eq(stone.get_height(), CounterMarks.STONE.size.y)
+
+
+func test_every_counter_entry_has_a_stand_in_for_the_clean_skin() -> void:
+	for entry in HelpPages.icon_entries():
+		var counter := false
+		for spec in HelpPages.icon_specs(entry):
+			counter = counter or String(spec.get("src", "")) == HelpPages.SRC_COUNTER
+		if counter:
+			assert_ne(String(entry.get("alt", "")), "",
+				"'%s' reads without the 1997 art" % entry.get("name", ""))
+
+
+func test_the_page_names_every_card_that_wears_a_stone() -> void:
+	# A stone is chosen BY CARD, so a page that shows one without naming
+	# the card it belongs to has explained nothing.
+	var text := _counter_text()
+	for card_name in CounterMarks.TILE_BY_CARD:
+		assert_true(text.contains(card_name), "%s is named" % card_name)
+		assert_true(CardRegistry.has_card(card_name),
+			"%s is in the pool, so the page is not promising air" % card_name)
+
+
+func test_the_page_says_the_1997_cue_line_for_every_stone() -> void:
+	# `@CUECARD_COUNTERS_*`, UIStrings.txt:745-840 — the words the game
+	# itself shows, said the way the cue card says them.
+	var text := _counter_text()
+	for row in CounterMarks.CUE_ROWS:
+		var words := String(row[2]).replace(": %d", "")
+		assert_true(text.contains(words),
+			"the cue card's own wording: '%s'" % words)
+
+
+func test_the_page_explains_a_counter_kind_the_1997_game_never_drew() -> void:
+	# Pupa, glyph and their kin have no stone and MUST NOT get an invented
+	# one; the page says what the player sees instead.
+	var text := _counter_text().to_lower()
+	for kind in ["pupa", "glyph"]:
+		assert_eq(CounterMarks.tile_for("Grizzly Bears", kind), -1,
+			"%s really has no stone" % kind)
+		assert_true(text.contains(kind), "the page names %s" % kind)
+	assert_true(text.contains("chip"), "and names what stands in for one")
+
+
+func test_the_ice_blue_dagger_is_taught_as_not_being_a_counter() -> void:
+	# MiniCard.pending_damage. It sits on a card, carries a number and is
+	# the one mark a player will read as a counter, so both pages say so.
+	var combat := ""
+	for page in HelpPages.pages():
+		if String(page["title"]) == "Combat":
+			combat = _page_text(page)
+	assert_ne(combat, "", "there is a Combat page")
+	assert_true(combat.contains("ICE BLUE"), "the Combat page teaches it")
+	assert_true(combat.contains("not a counter"), "as what it is not")
+	assert_true(_counter_text().contains("ICE-BLUE"),
+		"and the counter pages point at it")
+
+
+func test_a_family_of_stones_keeps_a_block_to_itself() -> void:
+	# THE LAYOUT RULE. `HelpScreen._icon_row` sizes the picture column to
+	# the widest picture in the row, so a block holding both a one-stone
+	# entry and a five-stone family would step its names in and out.
+	for page in HelpPages.pages():
+		for block in page["blocks"]:
+			if String(block.get("kind", "")) != HelpPages.ICONS:
+				continue
+			var first := -1
+			for entry in block["entries"]:
+				var count := HelpPages.icon_specs(entry).size()
+				if first < 0:
+					first = count
+				assert_eq(count, first,
+					"'%s': one block, one picture count" % entry.get("name", ""))
+
+
+func test_the_counter_page_draws_every_stone_on_screen() -> void:
+	if GameSkin.texture(CounterMarks.SKIN_KEY) == null:
+		pass_test("no card_counters.png in this checkout")
+		return
+	var stones := 0
+	for i in HelpPages.pages().size():
+		if not String(HelpPages.pages()[i]["title"]).contains("counter stones"):
+			continue
+		screen.go_to(i)
+		await get_tree().process_frame
+		for node in _walk(screen):
+			if node is TextureRect and (node as TextureRect).texture != null \
+					and (node as TextureRect).texture.get_width() \
+						== CounterMarks.STONE.size.x:
+				stones += 1
+	assert_eq(stones, CounterMarks.STONE_COUNT,
+		"all 24 stones are on the two pages as real art")
 
 
 # =========================================================== the screen ==

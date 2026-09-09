@@ -1753,6 +1753,62 @@ func cast_refusal(pid: int, inst: CardInstance, targets: Array = [],
 	return String(_cast_checks(pid, inst, targets, x_value, mode)["error"])
 
 
+## Would [method cast_spell] refuse this announcement for a reason no
+## CHOICE and no PAYMENT can fix — the zone, the hand lock, the ban list,
+## the sorcery-speed window and the card's own "Cast this spell only ..."
+## rider? "" means the announcement may be STARTED: the mode, the targets,
+## X and the mana are all still ahead of it, and any of them may refuse it
+## yet.
+##
+## It is the half of [method cast_refusal] that can be asked with NOTHING
+## decided. `cast_refusal` wants the whole plan, so a spell whose targets
+## have not been chosen yet is refused by it for the missing targets —
+## which says nothing about whether the step allows the cast at all. A
+## caller standing at the START of a cast — before a target has been
+## named, before X has been asked for — asks this one instead.
+##
+## PRIORITY IS DELIBERATELY NOT AMONG THEM, and that is the one place this
+## is narrower than the cast itself. Priority is a MOMENT, not a property
+## of the card or of the clock: it crosses the table between one paced
+## beat and the next, and a player who reaches for a card while the other
+## seat is still finishing has always been allowed to start aiming and
+## land the cast when it arrives. [method cast_spell] is still the referee
+## on it, and refuses the submission if it never came.
+func cast_timing_refusal(pid: int, inst: CardInstance) -> String:
+	var err := _act_precheck(pid)
+	if err != "":
+		return err
+	return _cast_announce_checks(pid, inst)
+
+
+## The block of [method _cast_checks] that judges the CARD and the CLOCK,
+## lifted out whole so that [method cast_timing_refusal] runs the SAME
+## code the cast runs rather than a copy of it that can drift. Nothing in
+## here reads the mode, the targets, X or the pool, which is what lets it
+## be asked before any of them exists.
+func _cast_announce_checks(pid: int, inst: CardInstance) -> String:
+	if inst.zone != Mtg.Zone.HAND or inst.owner_id != pid:
+		return "%s is not in your hand" % inst.data.card_name
+	var locked_why := hand_lock_reason(inst)
+	if locked_why != "":
+		return locked_why
+	if inst.is_land():
+		return "lands are played, not cast"
+	var banned_by := play_banned(pid, inst.data)
+	if banned_by != "":
+		return "%s can't be cast (%s)" % [inst.data.card_name, banned_by]
+	if not inst.is_type(Mtg.CardType.INSTANT):
+		if pid != active_player or not Mtg.is_main_step(current_step()) or not stack.is_empty():
+			return "%s can only be cast in your main phase with an empty stack" \
+				% inst.data.card_name
+	# "Cast this spell only ..." timing riders (Reset, Berserk, Teleport).
+	if inst.data.cast_condition.is_valid():
+		var when_why: String = inst.data.cast_condition.call(self, pid)
+		if when_why != "":
+			return when_why
+	return ""
+
+
 ## The validation half of [method cast_spell]: `{error, plan, bodies}`.
 ## Pays nothing, moves nothing, rolls nothing and asks nothing — the rolls
 ## (CR 601.2c) and the cost questions come after every refusal, in
@@ -1768,31 +1824,10 @@ func _cast_checks(pid: int, inst: CardInstance, targets: Array,
 	if priority_player != pid:
 		out["error"] = "you don't have priority"
 		return out
-	if inst.zone != Mtg.Zone.HAND or inst.owner_id != pid:
-		out["error"] = "%s is not in your hand" % inst.data.card_name
+	var announce_why := _cast_announce_checks(pid, inst)
+	if announce_why != "":
+		out["error"] = announce_why
 		return out
-	var locked_why := hand_lock_reason(inst)
-	if locked_why != "":
-		out["error"] = locked_why
-		return out
-	if inst.is_land():
-		out["error"] = "lands are played, not cast"
-		return out
-	var banned_by := play_banned(pid, inst.data)
-	if banned_by != "":
-		out["error"] = "%s can't be cast (%s)" % [inst.data.card_name, banned_by]
-		return out
-	if not inst.is_type(Mtg.CardType.INSTANT):
-		if pid != active_player or not Mtg.is_main_step(current_step()) or not stack.is_empty():
-			out["error"] = "%s can only be cast in your main phase with an empty stack" \
-				% inst.data.card_name
-			return out
-	# "Cast this spell only ..." timing riders (Reset, Berserk, Teleport).
-	if inst.data.cast_condition.is_valid():
-		var when_why: String = inst.data.cast_condition.call(self, pid)
-		if when_why != "":
-			out["error"] = when_why
-			return out
 	# --- mode (modal spells: chosen while casting, CR 601.2b / 700.2) ---
 	if inst.data.is_modal():
 		if mode < 0 or mode >= inst.data.modes.size():

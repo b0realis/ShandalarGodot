@@ -9002,6 +9002,235 @@ question to the engine and not as a fact about it.
   Eruption resolved no cast in sixty games either way (0/0), worth a
   look of its own.
 
+## THE COUNTER STONES AND THE DIVISION IN PROGRESS (2026-09-08) — [1997] + [QoL]
+
+Straight from the same playtest: the Osai Vultures report turned on two
+carrion counters nobody could see, and the owner's second note was
+*"during combat and I have to distribute combat damage amongst creatures
+I cannot see which point went where"*.
+
+- **The stones are the 1997 game's own.** `Cardcounters.pic` (24x750, s30's
+  clean conversion) is ONE COLUMN of 25 cells: 24 oval stones and, in the
+  25th, the single mask they all share — not the side-by-side image+mask
+  pair every other sprite of the set is, which is why it had never been
+  imported. The executable picks the stone BY CARD (`Magic.exe` 0x4d4ca0,
+  a switch on the csv id: a scythe for Armageddon Clock's doom, a bolt per
+  Mana Battery, a gear for Time Vault and the two Clockworks, an ankh per
+  lucky charm, grapes for Living Artifact, a bird for Osai Vultures, a
+  tombstone for Scavenging Ghoul and Necropolis of Azar, the Tetravus for
+  its drones, a whirl for Cyclone, and a yin-yang for every +1/+1 in its
+  card's own colour) and by the SOURCE for the five kinds other cards put
+  down (0x4d3cc0: Unstable Mutation's blue, Spirit Shackle's grey, the
+  Weaponsmith's and the Catapult's red). Both tables are transcribed in
+  `game/duel/counter_marks.gd` with the 24 `@CUECARD_COUNTERS_*` lines
+  verbatim (`UIStrings.txt:745-840`), so a Vultures' cue card now reads
+  `Carrion counters: 1` exactly as it did in 1997. `docs/card-states.md`
+  §3.7 carried counters as a deliberate gap; that bullet is now the
+  record of the day it closed, and poison is what is left on the list.
+- **One stone per KIND, with the count** — ours, and the only place this
+  parts from the original, which blitted one oval per counter across the
+  band and let them overlap: at our 132 px a Rock Hydra's six heads would
+  be six stones eleven pixels apart with unreadable glyphs. A kind 1997
+  never had (pupa, glyph, sleep …) and any card on a skin without the
+  strip wear a lettered chip of the same footprint instead, so the clean
+  skin shows counters too.
+- **The division in progress** ([QoL] — the 1997 game showed only its
+  `%d points left`, which the prompt still carries): every candidate now
+  wears the points already put on it, the damage dagger re-inked ice-blue
+  with the running count, in the dagger's own place or one row above it
+  when a real (salmon) count is already there. It serves the combat
+  assignment and a *"divided as you choose"* spell alike, and the rebuild
+  after the submit clears it — what the cards show then is the damage.
+- **Checked by looking**, not only asserted: a Sengir Vampire with two
+  +1/+1, an Osai Vultures with one carrion, a Grizzly Bears wearing two
+  foreign kinds at once, tapped and untapped, on the skin and on the
+  clean one; and a Hill Giant's three points being divided across two
+  Bears. A permanent carrying counters also gets a slot of its own in a
+  pile now, like an enchanted one: the stones ride in the strip a covered
+  card does not show, and a Time Vault's turn counter is the one thing
+  about that card the player must be able to read.
+- **The player's own tools reach them too (2026-09-09).**
+  `Cardcounters.pic` is now the one MANIFEST row the importer DECODES
+  rather than copies: the raw 1997 file carries no palette block, so
+  `import_counter_stones` reads it against `Duelpalall.tr` and writes
+  RGBA with index 255 clear — and the result is RGBA-identical, all
+  72 000 bytes, to s30's `card/` conversion (checked against the owner's
+  own install; the palette agrees with that PNG on all 109 indices the
+  strip uses), so `CounterMarks.tile` takes the same polarity branch for
+  either file and a player whose only source is their 1997 disc gets the
+  stones instead of a "missing" line. `mtg_assets.py --check` gained a
+  counter-stones group of its own and, with it, the CONVERTED names
+  every group had been missing: an s30 checkout used to print "Nothing
+  recognisable here" and be refused by `--install` with "nothing to
+  import from that folder", though the importer takes ninety keys out of
+  that tree. Run end to end: raw install alone 65/163 → 66/163 with the
+  strip decoded; s30 alone refused → 90/163; the three sources together
+  156/163, the zip's `skin/card_counters.png` byte-identical to its
+  source at 24x750, `skin_catalogue.py --check` no longer naming it, and
+  the game mounting that zip and cutting Osai Vultures' bird out of it
+  (22x28, `Carrion counters: 3`). The tools' suite 116 → 129.
+- **AND THE RULING THAT CAME OUT OF IT (2026-09-09).** The same pass had
+  also taught `mtg_assets.py` to recognise an s30 checkout as an install,
+  and the owner stopped it: *"our original skin/art creation tool should
+  only use original 1997 install and NOT s30 that is reimplementation
+  project itself"*. Reverted, and pinned by a test rather than left to
+  memory: every landmark is a raw 1997 name, a tree of `.pic.png` is not
+  an install, `--check` on one says "Nothing recognisable here" and
+  `--install` refuses it. In the importer the same door is shut by
+  default and kept for one reader — `--allow-conversions`, the
+  maintainer's way of filling this checkout's gitignored
+  `assets/original/` while a raw decoder is written, which the player's
+  front door never passes. The player-facing guide now names TWO kinds of
+  folder, a 1997 install and a Manalink one, and says why: *"the skin it
+  builds is yours because the game it came from is yours"*.
+- **THE DECODERS STILL TO WRITE — the owner's standing goal (2026-09-09):
+  *"all art should be available in original install"***, anything of our
+  own supplied by us and declared as ours. With the door shut, a 1997
+  disc plus a Manalink install reaches **68 of 163 keys**, and the
+  importer now PRINTS the other 84 by name with the 1997 file each one
+  waits on (`title_background` ← `Title.pic`, `menu_background` ←
+  `Menubak.pic`, the ten `duel_pattern_*` / `duel_picture_*` territory
+  plates, and so on) — the to-do list is the tool's own output rather
+  than a document that can drift. Each is the treatment `card_counters`
+  just had: read the raw `.pic` against its palette and write the PNG.
+  Two keys are known to be harder and are named in the same pass:
+  `damage_marker`, whose row is raw-first so the conversion is never
+  tried, and whose s30 conversion is 94x20 where the game wants the
+  84x26 image+mask pair; and the six `set_icon_*`, of which s30 carries
+  no conversion at all. Not started.
+- **And they are in the game's own Help, with pictures (2026-09-09).**
+  The owner asked to be shown what the individual stones mean: the
+  reference gained two pages, *Icons — the counter stones* and its
+  *continued*, every stone with the card that wears it and its
+  `@CUECARD_COUNTERS_*` wording verbatim, the two cycles of five as one
+  strip each, cut by `CounterMarks.tile` — the same accessor the small
+  card draws with, so an index that drifts breaks the help and the table
+  together. Two pages rather than one because a single page measured
+  2174 px against a 618 px viewport; split at the headings it is 1016 +
+  1228, inside the book's own range. Writing it found two things worth
+  more than the page: **Khabál Ghoul was keyed without its accent** in
+  both stone tables, so it silently wore Dwarven Weaponsmith's red
+  yin-yang instead of its own black one — fixed, and every key in both
+  tables is now pinned to `CardRegistry` — and the five ankh stones can
+  never appear in play at all, our lucky charms following the Oracle
+  wording and banking no life counters, which the page says out loud
+  rather than promising them. `test_help_screen.gd` 35 → 45.
+- **Gate.** `tests/ui/test_counter_marks.gd` 12/12,
+  `tests/ui/test_pending_damage.gd` 3/3, and the widget's neighbours
+  unmoved (`test_mini_card.gd` 85/85, `test_duel_screen.gd` 57/57,
+  `test_card_pile.gd` 17/17, `test_skin_pack.gd` 46/46, the tools' 114).
+
+## THE DOUBLE-CLICK THAT PAID FOR A CAST THE STEP FORBADE (2026-09-09) — [QoL]
+
+The owner, from the table: *"If you are in draw phase and you double
+click on creature - you are warned you cannot cast but lands still tap
+and mana is lost !!! Lands should not automatically tap upon double
+click in draw phase."*
+
+- **Which cards, and why the first test could not see it.** A card that
+  needs NO choice was always safe: it went to the engine, came back
+  refused, and nothing had been tapped for it — which is why a first
+  test written with Grizzly Bears passed on HEAD and reproduced nothing.
+  A card that stops for a choice FIRST never reached the engine at all:
+  the chain parked in `Mode.TARGETING` and the double-click's
+  `_auto_tap_for_pending` then paid the whole cost of a cast that could
+  never be made. Measured on the untouched tree: Holy Strength 1 Plains,
+  Stone Rain 3 Mountains, Braingeyser the entire board — the gesture's
+  answer to X is *"all of the mana you have available"* — a tutor's
+  library picker opened, and the same in the upkeep and on the
+  opponent's turn. A classification of the whole pool puts it at **112
+  cards**: 76 targeted or aura creatures, 24 targeted sorceries, 11 X
+  spells that then take aim, and Venarian Gold.
+- **And it cost life, not only mana.** Under the 1997 ruleset
+  (`RulesOptions.mana_burn`) the stranded pool burned at the step
+  change: 20 → 19, measured.
+- **The fix.** `MtgGame.cast_timing_refusal` — the half of
+  `cast_refusal` that can be answered with no mode, no target, no X and
+  no mana: the zone, the hand lock, the ban list, the sorcery-speed
+  window and the card's own *"Cast this spell only …"* rider. It is the
+  first block of `_cast_checks` LIFTED OUT WHOLE rather than copied, so
+  the query runs the same code the cast runs and cannot drift from it;
+  the engine's own behaviour is unchanged. `_click_hand_card` — the one
+  door both clicks go through — asks it before opening a chain, so every
+  card in the hand is now refused on the plain creature's footing: one
+  sentence on the bar, no crosshair, no window, nothing tapped.
+- **What it deliberately does NOT pre-empt**, both documented at the
+  site: the MANA (a spell the seat cannot afford still walks the chain
+  and is refused at the end, because the player may yet produce it) and
+  PRIORITY (a moment, not a property of the card — blocking on it would
+  take away "start aiming while the other seat finishes"). The narrow
+  case that remains is an instant double-clicked while the other seat
+  holds priority; it still taps and is refused at submit.
+- **Found on the way.** Three screen tests (`test_cancel_contract`,
+  `test_duel_pause`, `test_situation_bar`) cast SORCERIES from a
+  freshly-started duel — turn one's UPKEEP, a moment that could never
+  have cast them — and only passed because nothing checked. Their
+  staging now stands in our own main phase. And `DuelConfig.rng_seed`
+  defaults to 0, so every screen-level test rolls a real coin toss and
+  half of them begin on the opponent's turn: the reason a suite's
+  failure set can move between runs.
+- **Gate.** The rewritten `tests/ui/test_draw_step_double_click_2026_09_08.gd`
+  9/16 before the guard, 16/16 after (proved by deleting the hunk and
+  re-running); `test_engine_additions.gd` 50 → 59; the casting neighbours
+  green (`test_casting_flow` 20/20, `test_tutor_payment` 2/2,
+  `test_x_dialog` 18/18, `test_duel_screen` 57/57, `test_stack_hand`
+  47/47 and a dozen more); `./duel_soak.sh --mode human --count 6` clean.
+
+## THE FIREBREATHER THAT NEVER SWUNG (2026-09-09) — measured, and the largest single knob yet
+
+The owner, from the table: *"when creatures can have greater power or
+defense by some action (like paying mana), the ai opponent does not use
+this before attack ... In other words: Opponent does not pump Carrion
+Ants :)"*.
+
+- **It was the DECLARATION, and only that.** `_choose_attack_cohort`
+  opens with `if inst.cur_power <= 0: continue`, and every pricing
+  routine after it reads `cur_power`, so a Carrion Ants with four Swamps
+  untapped — a 4/5 for the asking — was a 0/1 that could never be worth
+  sending. Reproduced on the untouched tree: Ants with four Swamps and an
+  empty enemy board, `declared 0 attacker(s)`; the same against a Grizzly
+  Bears; Frozen Shade and Killer Bees the same. What happens AFTER the
+  declaration was already right — an unblocked attacker breathes fire
+  (`_offensive_combat_response`) and a blocked one pumps to win its trade
+  (`_combat_self_pumps`), and a Shivan Dragon with three Mountains open
+  did burn the opponent from 4 to −4. The two routines had simply never
+  been handed an attacker.
+- **`pumps_to_attack`** (Sorcerer and Wizard, like `animates_to_attack`
+  and for the same reason — mana spent before the declaration to make an
+  attack that does not otherwise exist). The declaration is made under
+  the journal with every candidate grown to the size its share of the
+  open mana can reach, one shared pool, the body that needs it most
+  first; the second main phase's best cast and the held instant are kept
+  whole, so a Counterspell's mana is never a point of trample damage;
+  and an ability with a per-turn cap is counted at its cap rather than
+  at the mana — a Fire Drake with five Mountains is a 2/2, not a 6/2,
+  which was a misreading everywhere reach was counted. Nothing names a
+  card: the shape is `EffectIntent.pump_self`, and a pump whose cost is a
+  body or a counter stays invisible.
+- **The numbers.** Vampire Lord (the 1997 list: four Carrion Ants, four
+  Vampire Bats) against the five starters, 1,000 games an arm, seed 11:
+  19.8 → 24.6 (+4.8 ±3.6), 28.7 → 34.7 (+6.0 ±4.1), 5.7 → 13.0
+  (+7.3 ±2.5), 18.0 → 25.7 (+7.7 ±3.6), 5.8 → 12.8 (+7.0 ±2.5) — every
+  one clear of zero. Warlock's two Frozen Shades +0.7/+4.0/+3.7/+4.9/+2.5,
+  three of them clear; Mountain Artillery's lone Shivan a wash, as it
+  should be. **Control (Big Green vs White Knights, which hold nothing
+  the reader can see) byte-identical in every arm of all three runs**,
+  and the `off` arm reproduces the null exactly. `tests/ai/` 460/460
+  across 31 scripts, the new script 31 tests (0 of 31 could even LOAD on
+  HEAD).
+- **Open, from the same look.** The BLOCK is still declared at printed
+  size — a Carrion Ants with four Swamps chump-blocks a Craw Wurm it
+  could have eaten, and `_combat_self_pumps` only saves it afterwards;
+  the mirror of this probe on `_plan_blocks` is the obvious next half.
+  Three firebreathers are invisible to the reader entirely (Dragon
+  Whelp, Nalathni Dragon, Rainbow Knights pump through card-local
+  effects, so `pump_self` is false and no pump path has ever touched
+  them) — deliberately not given a `CARD_LOCAL` row here, because
+  readings there are ungated and the null would stop being HEAD.
+  `_save_from_the_stack` still never buys toughness with an ability, so
+  a Frozen Shade with Swamps open dies to a Bolt it could have grown out
+  of. All three are written into `docs/ai-difficulty.md` §5.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

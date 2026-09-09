@@ -536,6 +536,21 @@ shandalar/
 │   │                          is left to find. The X stamp moved BELOW
 │   │                          those checks, so a refused announcement now
 │   │                          leaves memory as it was (CR 601.2h).
+│   │                          cast_timing_refusal(pid, inst) (2026-09-09)
+│   │                          is the half of it askable with NOTHING
+│   │                          decided — no mode, no target, no X, no mana
+│   │                          — for the caller standing at the START of a
+│   │                          cast: zone, hand lock, land, ban list, the
+│   │                          sorcery-speed window and the card's own
+│   │                          "Cast this spell only ..." rider, sharing
+│   │                          _cast_announce_checks with the cast itself
+│   │                          (lifted out whole, not copied). PRIORITY is
+│   │                          deliberately outside it — a moment, not a
+│   │                          property of the card. The hand asks it
+│   │                          before opening a cast chain, so a
+│   │                          double-click in the draw step taps nothing
+│   │                          (DuelScreen._click_hand_card, the owner's
+│   │                          playtest).
 │   │                          rider_admits_own_main(pid, inst)
 │   │                          (2026-09-06) is the probe behind the
 │   │                          window caster: would the card's "Cast this
@@ -1070,6 +1085,27 @@ shandalar/
 │   │   │                      least valuable; AiPlayer.answer_card used
 │   │   │                      to give its BEST, the tutors' answer. On
 │   │   │                      for every profile like mulligans.
+│   │   │                      pumps_to_attack (2026-09-09): THE
+│   │   │                      FIREBREATHER THAT NEVER SWUNG — the attack
+│   │   │                      declaration made under the journal with
+│   │   │                      every candidate grown to the size its share
+│   │   │                      of the open mana can reach
+│   │   │                      (AiPlayer._attack_choice_once_pumped /
+│   │   │                      _reachable_pumps / _self_pump_of, off
+│   │   │                      EffectIntent.pump_self — one pool, the body
+│   │   │                      that needs it most first), the mana counted
+│   │   │                      with the second main phase's cast and the
+│   │   │                      held instant kept whole (_pump_reserve),
+│   │   │                      and an ability's per-turn cap counted
+│   │   │                      wherever reach is read (_activations_left,
+│   │   │                      threaded into _pumps_in_reach,
+│   │   │                      _combat_self_pumps and _pumps_are_lethal).
+│   │   │                      Sorcerer and Wizard, like
+│   │   │                      animates_to_attack. The owner's Carrion
+│   │   │                      Ants: Vampire Lord +4.8 to +7.7 against
+│   │   │                      the five starters, control byte-identical.
+│   │   │                      The block mirror and the card-local
+│   │   │                      breaths (Dragon Whelp) are open.
 │   │   │                      spares_own (2026-09-08): THE WRONG SIDE OF
 │   │   │                      THE TABLE — a permanent of ours fills a
 │   │   │                      harmful spell's slot only when the
@@ -1651,7 +1687,15 @@ shandalar/
 │   ├── mtg_assets.py       THE PLAYER'S FRONT DOOR to the art (2026-09-04).
 │   │                          Three jobs in one script: say what kind of
 │   │                          1997 install is needed, --check one and
-│   │                          report on six groups of files separately,
+│   │                          report on EIGHT groups of files separately
+│   │                          — every landmark a RAW 1997 name, on
+│   │                          purpose (the owner, 2026-09-09: the tool
+│   │                          imports from the player's own 1997 install
+│   │                          and NOT from a reimplementation's converted
+│   │                          art), so a tree of .pic.png is not an
+│   │                          install here and --install refuses it;
+│   │                          "the counter stones" is its own group, the
+│   │                          one row the importer decodes,
 │   │                          and --install it into ONE zip whose inner
 │   │                          folder is `skin/` so it unpacks beside the
 │   │                          binary with no path to type. --from-skin
@@ -1662,7 +1706,14 @@ shandalar/
 │   │                          separate cardart.zip (2026-09-08). Wraps
 │   │                          import_original.py, which must sit beside
 │   │                          it; reads the install, never writes to it.
-│   ├── test_mtg_assets.py   unittest: write_zip on folders built in the
+│   ├── test_mtg_assets.py   unittest (TestLandmarks, 2026-09-09: what
+│   │                          --check recognises is what --install will
+│   │                          import from; a tree of conversions is NOT
+│   │                          an install and is refused, the counter
+│   │                          group names the raw .pic and no .png; and
+│   │                          the strip through write_zip byte for byte
+│   │                          at 24x750):
+│   │                          write_zip on folders built in the
 │   │                          test — a skin folder lands under skin/ and
 │   │                          is announced as skin/original_skin.zip, a
 │   │                          card art folder (inner="cardart") under
@@ -1704,6 +1755,28 @@ shandalar/
 │   │                          every file in a Manalink install's
 │   │                          Program/DBArt/ is a PNG wearing a .pic
 │   │                          extension, so check the magic bytes, not
+│   │                          THE COUNTER STONES (2026-09-09) are the one
+│   │                          MANIFEST row it DECODES rather than copies:
+│   │                          Cardart/Cardcounters.pic has no palette
+│   │                          block, so import_counter_stones reads it
+│   │                          against Duelpalall.tr and writes RGBA with
+│   │                          index 255 — the glyph's ink AND the mask
+│   │                          cell's outside — clear, RGBA-identical to
+│   │                          s30's card/ conversion so CounterMarks.tile
+│   │                          takes the same polarity branch either way;
+│   │                          it runs only when the copy loop found
+│   │                          nothing, and before the summary counts.
+│   │                          THE CONVERSION DOOR (2026-09-09): a
+│   │                          candidate ending .png is a reimplementation's
+│   │                          export of a 1997 file, not a 1997 file, and
+│   │                          is refused unless --allow-conversions is
+│   │                          passed — the maintainer's door for filling
+│   │                          the gitignored assets/original/ while a raw
+│   │                          decoder is written, which mtg_assets.py
+│   │                          never passes. 68/163 keys from a 1997 disc
+│   │                          + Manalink today; the summary NAMES the 84
+│   │                          that only a conversion can serve, which is
+│   │                          the list of decoders still to write.
 │   │                          the extension.
 │   │                          IT ALSO DECODES BOTH 1997 ART FORMATS with
 │   │                          the standard library: decode_spr (.SPR) and,
@@ -1749,7 +1822,17 @@ shandalar/
 │   │                          downloads (it is not the bulk art fetcher).
 │   │                          Layout: docs/set-packages-plan.md
 │   │                          "Implemented: pack format v1"
-│   ├── test_import_original.py  unittest for the raw 1997 decoders (no
+│   ├── test_import_original.py  unittest for the raw 1997 decoders, and
+│   │                          since 2026-09-09 TestCounterStones: the
+│   │                          strip arrives WHOLE and unscaled (its 25th
+│   │                          cell is the mask all 24 stones share, so a
+│   │                          split or a rescale is a silent break), the
+│   │                          card/ conversion beats the screens/duel/
+│   │                          one and lands byte for byte, a raw-only
+│   │                          tree decodes against the .tr, 255 is the
+│   │                          ONLY transparent index, and a wrong size or
+│   │                          a missing palette is reported, never raised
+│   │                          (no
 │   │                          original bytes: every fixture is built by
 │   │                          encoder helpers that invert the decoder).
 │   │                          Pins the LZW bit packing and its width
@@ -3056,6 +3139,13 @@ shandalar/
 │    the version tag, and — the one that matters most — EVERY ICON ENTRY
 │    RESOLVES TO A REAL TEXTURE whenever the 1997 skin is imported, with
 │    the badge/filter inventories checked against MiniCard.BADGE_SLOT,
+│    and THE COUNTER STONES (2026-09-09): all 24 rows of the strip shown
+│    exactly once and checked against CounterMarks' own tables, every
+│    stone cut at 22x28, every card named AND present in the registry
+│    (the guard that caught Khabál Ghoul keyed without its accent, which
+│    had silently put the Weaponsmith's red stone on it), all 24 CUE_ROWS
+│    quoted verbatim, the stone-less kinds named, and the ice-blue
+│    division dagger taught on the Combat page as not being a counter;
 │    PROTECTION_SLOT and FilterBar's own cell maps so a moved cell fails
 │    here too (the funnel, dice, eye, gem and palette included); the Deck
 │    Builder page names every command in COMMANDS / MENU_COMMANDS /
@@ -3507,6 +3597,38 @@ shandalar/
 │    valuable legal creature, a White Knight and a Clay Statue no meal,
 │    a protected body sheltering nothing, their own Abyss, no feeder;
 │    the ladder from Sorcerer up; the knob read by the Lab
+│    tests/ui/test_draw_step_double_click_2026_09_08.gd — the double-click
+│    OUTSIDE the main phase (the owner, 2026-09-08): a cast the engine
+│    refuses for a reason no choice and no payment can fix taps NOTHING
+│    and opens no window — the plain creature, the Aura, the targeted
+│    sorcery, the X spell and the tutor, in the draw step, the upkeep and
+│    on the opponent's turn — with nothing left floating for mana burn to
+│    charge at the step change; and the legal gestures unmoved (instant,
+│    targeted instant, creature and Aura in the main phase, and the X
+│    double-click still spending everything available);
+│    tests/ui/test_counter_marks.gd — THE COUNTER STONES: the cue line
+│    by card and by kind, the generic fallback, the stone cut from the
+│    strip's column, one chip per KIND with its count, the row left of
+│    the status text and short of the arrow's corner, a face-down card
+│    wearing none, and the lettered chip when the skin has no strip;
+│    tests/ui/test_pending_damage.gd — THE DIVISION IN PROGRESS: the
+│    points put on each candidate shown on its own card, cleared by the
+│    rebuild after the submit, and lifted a row when real damage is
+│    already marked there so the two never overprint;
+│    tests/ai/test_ai_pumps_to_attack_2026_09_09.gd — THE FIREBREATHER
+│    THAT NEVER SWUNG (AiProfile.pumps_to_attack): the owner's Carrion
+│    Ants sent at 4/5 and breathing four times, sent into a Grizzly Bears
+│    and buying exactly the two breaths that win it, home with the knob
+│    off; Frozen Shade and Killer Bees the same reading; no mana, no
+│    attack; one pool grows one Shade; the Counterspell's mana refused,
+│    an unpayable one reserving nothing, the second main phase's Specter
+│    kept whole; the Fire Drake counted at one and the Bats at two, the
+│    lethal probe reading the cap, the null still counting mana; Dragon
+│    Whelp's fuse never lit because it is never read; the Wall, the sick
+│    body, the opponent's Shade, the counter cost, the body cost, the
+│    Eel's unpriced rider and the +0/+1 all refused; the probe leaving
+│    rng, log, journal and every Swamp untouched, nothing left floating;
+│    the ladder from Sorcerer up; the knob read by the Lab;
 │    tests/ai/test_ai_spares_own_2026_09_08.gd — THE WRONG SIDE OF THE
 │    TABLE (AiProfile.spares_own and the Detonate row): the reader's row;
 │    the AI's own untapped and tapped Mana Vault not Detonated, the
@@ -4121,7 +4243,7 @@ shandalar/
 │   │   │                      "Dueling Help" reached by right-clicking the
 │   │   │                      table (manual p.14/112); we have neither, so
 │   │   │                      this is the front door for both
-│   │   ├── help_screen.gd/.tscn  class HelpScreen — the RENDERER: 24 pages
+│   │   ├── help_screen.gd/.tscn  class HelpScreen — the RENDERER: 29 pages
 │   │   │                      on the menu's own UiChrome stone panel,
 │   │   │                      turned with ◀/▶, Left/Right, PageUp/PageDown
 │   │   │                      and Home/End (read in _input and marked
@@ -4147,8 +4269,20 @@ shandalar/
 │   │                          moment it breaks that screen. The word
 │   │                          "interrupt" is banned here per
 │   │                          glossary-1997.md §5 and a test enforces it.
-│   │                          Twenty-seven pages: the primer, the duel's
-│   │                          icons, then THE DECK BUILDER — its own page
+│   │                          Twenty-nine pages: the primer, the duel's
+│   │                          icons — including THE COUNTER STONES
+│   │                          (2026-09-09), two pages of their own with
+│   │                          all 24 stones, every one addressed by CARD
+│   │                          NAME through CounterMarks.TILE_BY_CARD /
+│   │                          TILE_BY_KIND and cut by CounterMarks.tile,
+│   │                          the accessor the small card draws with, so
+│   │                          no index is typed here and a drift breaks
+│   │                          the help and the table together (the two
+│   │                          cycles of five are one strip each:
+│   │                          HelpPages.icon_specs, and a family entry
+│   │                          keeps its icons block to itself since the
+│   │                          picture column grows to its widest row) —
+│   │                          then THE DECK BUILDER — its own page
 │   │                          (the bar, the box, the keys, held to the
 │   │                          screen's COMMANDS/SHORTCUTS by a test) and
 │   │                          three icon pages, the last teaching the
@@ -5078,6 +5212,38 @@ shandalar/
 │       │                      end up on a LIVE neighbour. HOLD+FADE are
 │       │                      [QoL] — 1997's regeneration step is as long
 │       │                      as the player takes to pass it
+│       ├── counter_marks.gd class CounterMarks — THE COUNTER STONES
+│       │                      ([1997], 2026-09-08, the owner: *"no small
+│       │                      card draws its counters ... That's a
+│       │                      [1997] item"*). Two tables the executable
+│       │                      keeps apart, transcribed here: which of
+│       │                      Cardcounters.pic's 24 oval stones a card's
+│       │                      OWN counters wear (Magic.exe 0x4d4ca0, a
+│       │                      switch on the csv id — 27 cards on 22
+│       │                      stones: a scythe for the Clock's doom, a
+│       │                      bolt per Mana Battery, a bird for Osai
+│       │                      Vultures' carrion, the yin-yang for every
+│       │                      +1/+1 in its card's colour) and the fixed
+│       │                      stone per SOURCE for the five kinds other
+│       │                      cards put down (0x4d3cc0 — Unstable
+│       │                      Mutation blue, Spirit Shackle grey, the
+│       │                      Weaponsmith and the Catapult red), plus
+│       │                      the 24 @CUECARD_COUNTERS_* lines VERBATIM
+│       │                      (UIStrings.txt:745-840, s30's clean copy;
+│       │                      the tag AshnodsTransmorgrant is misspelled
+│       │                      in the original and kept). cue()/
+│       │                      cue_template() answer by card name first
+│       │                      and by kind second, falling back to a
+│       │                      generic "<Kind> counters: %d" for a kind
+│       │                      1997 never had (pupa, glyph, sleep …);
+│       │                      tile() cuts one 22x28 stone out of the
+│       │                      strip's column and masks it with row 24,
+│       │                      the ONE mask all 24 share — not the
+│       │                      side-by-side pair every other sprite is —
+│       │                      forcing the glyph's ink back opaque first
+│       │                      (index 255 is the s30 conversion's tRNS).
+│       │                      No stone, or no skin: MiniCard letters a
+│       │                      chip instead.
 │       ├── target_arrows.gd class TargetArrows — the arrow overlay above
 │       │                      the board (s30 duel.go:3449-3554): RED from
 │       │                      each blocker's top-centre to its attacker's
