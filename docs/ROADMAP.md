@@ -9502,6 +9502,57 @@ sheet; this is what it took to make that choice true on a machine with no
   be uniformly sans and is now mixed. Dressing the buttons is a look
   ruling and belongs to the owner.
 
+## THE CONVERTED FOREST THAT WAS STILL A PLAINS (2026-09-09)
+
+The owner, from the table: *"If i cast phantasmal terrain on a land of
+opponent to convert to forest for example. And then cast lifetap. I dont
+get life when opponent taps this 'converted forest'."*
+
+- **Not Lifetap, and not the engine.** Every road was checked before a
+  line was changed: all five `BECAME_TAPPED` dispatch sites carry
+  `data["instance"]`, Lifetap's filter reads `cur_subtypes` through
+  `has_subtype` (the live read, not the printed card), layer 4 re-applies
+  before the event, and the trigger index does register an enchantment's
+  watcher. A 30-duel AI-vs-AI fuzz with Lifetap and Phantasmal Terrain in
+  one deck took 92 taps of an enchanted land and 170 Lifetap-eligible
+  taps with not one miss. The closed loop was never broken.
+- **The WINDOW was.** Phantasmal Terrain modelled *"As this Aura enters,
+  choose a basic land type"* — a REPLACEMENT effect, CR 614.1c — as an
+  `ENTERS_BATTLEFIELD` trigger. A trigger is a stack object, so between
+  the Aura arriving and the naming resolving BOTH PLAYERS HELD PRIORITY
+  over a land that was still its printed self. A mana ability may be
+  activated whenever a cost could be paid (CR 605.3a), so that window is
+  a real one: the opponent taps the Plains you have already decided is a
+  Forest, takes {W} out of it, and Lifetap — tested against the state at
+  the moment of the event (CR 603.2) — sees a Plains and pays nothing.
+  The land becomes a Forest a beat later, which is why the board looked
+  right afterwards and the report read as impossible.
+- **The fix is the hook the engine already had.** `CardData.as_it_enters`
+  runs inside `_put_on_battlefield` once the permanent is on the
+  battlefield and its `attached_to` is set, before state-based actions
+  and before any arrival trigger, and recalculates straight afterwards;
+  six cards already use it. The comment that had kept Phantasmal Terrain
+  off it claimed an Aura's `attached_to` is set only after arrival — it
+  is set at the top of the same function, before the hook runs, and the
+  claim was simply wrong. The human is still asked exactly as before, one
+  beat earlier, with nothing able to act in between.
+- **Six cards share the shape and not the bug**, left as they are until
+  one of them is reported: Jihad, Black Vise, Lich, Cursed Rack, Psychic
+  Allergy and The Rack all put an "As … enters" clause on a trigger. The
+  three that choose an OPPONENT have one legal answer in a two-player
+  duel; Jihad and Psychic Allergy guard their statics with
+  `memory.has(...)` and do nothing until the trigger resolves. Only
+  Phantasmal Terrain answered WRONG during its window rather than not at
+  all. **Lich is the one still worth a look**: "you lose life equal to
+  your life total" as a trigger can be responded to, and should not be.
+- **Gate.** `tests/cards/test_lifetap_terrain_2026_09_09.gd` 12/15 before
+  the fix, 15/15 after; the aura, audit, fidelity and pool-wave
+  neighbours all green (thirty-odd scripts), boot clean.
+- **Found on the way, not fixed.** `event.data["controller"]` is
+  inconsistent across the five `BECAME_TAPPED` dispatches — two send the
+  activating player, three send `inst.controller_id`. No card reads that
+  key today, so nothing is broken; the next one to read it will be.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

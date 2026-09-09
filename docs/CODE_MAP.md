@@ -3736,6 +3736,16 @@ shandalar/
 │    ours and waiting in hand with no land tapped, cast at four of
 │    theirs, the null padding 1/3; Simulacrum still aimed at our own
 │    creature
+│    tests/cards/test_lifetap_terrain_2026_09_09.gd — THE CONVERTED FOREST
+│    (the owner's *"I dont get life when opponent taps this 'converted
+│    forest'"*): the type is named AS the Aura enters, with nothing of its
+│    own on the stack and the land already making {G} (CR 614.1c), so the
+│    opponent's earliest possible tap is a Forest tap and Lifetap pays; a
+│    printed Forest still pays, our own does not, a Terrain naming Swamp
+│    pays nothing, the aura leaving stops it, and an Icy tap, an animated
+│    land attacking and two turns running all pay — with Gaea's Liege,
+│    Evil Presence and Blood Moon beside them; the Aura is CAST and the
+│    type answered through the held question, never written into memory;
 │    tests/cards/test_osai_vultures_2026_09_08.gd — THE VULTURES UNDER
 │    HOLY STRENGTH (the owner's "really deal 3 instead of two?"): the
 │    dressed 1/1 is a 2/3 and deals 2 on every road to a doubled bonus

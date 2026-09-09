@@ -9,30 +9,44 @@ extends CardScript
 ## clears when the aura leaves the battlefield), then applied by the same
 ## become_basic_land_type static.
 ##
-## "As this Aura enters, choose a basic land type" is the CASTER's choice,
-## asked through their DecisionAgent on the arrival trigger — which is
-## where it has to be asked, because an Aura's `attached_to` is only set
-## after it is on the battlefield, and the static below runs on every
-## recalculation and must never ask anything. Until that trigger resolves
-## the static falls back to the hint (the type the host's controller has
-## fewest of) WITHOUT caching it, so the player's answer still lands.
+## "As this Aura enters, choose a basic land type" is a REPLACEMENT effect
+## (CR 614.1c): it is applied AS the Aura enters, uses no stack, and there
+## is no moment at which the Aura is on the battlefield and the land is
+## still what it was. So it lives in CardData.as_it_enters — the hook
+## MtgGame._put_on_battlefield runs once the permanent is on the
+## battlefield and its `attached_to` is set, but before state-based
+## actions and before any ENTERS_BATTLEFIELD trigger sees it, and which
+## recalculates straight afterwards to publish what the callback wrote.
+##
+## IT USED TO BE A TRIGGER (fixed 2026-09-09, the owner's playtest:
+## *"If i cast phantasmal terrain on a land of opponent to convert to
+## forest ... I dont get life when opponent taps this 'converted
+## forest'"*). A trigger goes on the stack, so between the Aura arriving
+## and the choice being made BOTH PLAYERS GOT PRIORITY over a land that
+## was still its printed self: it tapped for its old colour, and a
+## Lifetap watching for "a Forest an opponent controls becomes tapped"
+## (CR 603.2 — a trigger is tested against the game state at the moment
+## of the event) saw a Plains and paid nothing. The comment that stood
+## here said the choice could not be made on arrival because an Aura's
+## `attached_to` is only set afterwards; it is set at the top of
+## _put_on_battlefield, before this hook runs, and the assertion was
+## simply wrong.
 
 
 const TYPES := ["plains", "island", "swamp", "mountain", "forest"]
 const COLORS := [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B,
 	Mtg.ManaColor.R, Mtg.ManaColor.G]
+const LABELS: Array[String] = ["Plains", "Island", "Swamp", "Mountain",
+	"Forest"]
 
 
 func build() -> CardData:
 	return CardData.new("Phantasmal Terrain", "{U}{U}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target land", _is_land)) \
+		.as_it_enters(_name_the_type) \
 		.static_ability(StaticAbility.new(
 			_apply, "Enchanted land is the chosen basic land type.") \
 			.changing_land_types()) \
-		.triggered(TriggeredAbility.new(
-			Mtg.EventType.ENTERS_BATTLEFIELD, _name_the_type,
-			"As this Aura enters, choose a basic land type.",
-			_is_self)) \
 		.oracle("Enchant land\nAs this Aura enters, choose a basic land type.\n"
 			+ "Enchanted land is the chosen type.")
 
@@ -41,6 +55,8 @@ static func _is_land(inst: CardInstance) -> bool:
 	return inst.is_land()
 
 
+## The type a player would name: whichever the host's controller has least
+## of, so the land they were counting on is the one that stops being it.
 static func _choose(game: MtgGame, host: CardInstance) -> int:
 	var counts := [0, 0, 0, 0, 0]
 	for inst in game.all_battlefield():
@@ -56,14 +72,11 @@ static func _choose(game: MtgGame, host: CardInstance) -> int:
 	return best
 
 
-static func _is_self(_game: MtgGame, source: CardInstance, event: GameEvent) -> bool:
-	return event.data.get("instance") == source
-
-
-## The arrival trigger, where the choice can be a real question: by now the
-## Aura is attached, so the candidates can be judged against the host.
+## THE REPLACEMENT (CR 614.1c), run as the Aura arrives: by now it is
+## attached, so the candidates can be judged against the host, and nothing
+## has had priority over the land in its old state.
 static func _name_the_type(game: MtgGame, source: CardInstance,
-		_event: GameEvent) -> void:
+		_controller: int) -> void:
 	if source.attached_to == -1:
 		return
 	var host := game.find_instance(source.attached_to)
@@ -71,10 +84,8 @@ static func _name_the_type(game: MtgGame, source: CardInstance,
 		return
 	var pid := source.controller_id
 	source.memory["type"] = game.agents[pid].choose_option(game, pid,
-		["Plains", "Island", "Swamp", "Mountain", "Forest"],
-		"Choose a basic land type for %s" % source.data.card_name,
+		LABELS, "Choose a basic land type for %s" % source.data.card_name,
 		_choose(game, host))
-	game.recalculate()
 
 
 static func _apply(game: MtgGame, source: CardInstance) -> void:
@@ -83,7 +94,10 @@ static func _apply(game: MtgGame, source: CardInstance) -> void:
 	var host := game.find_instance(source.attached_to)
 	if host == null or host.zone != Mtg.Zone.BATTLEFIELD:
 		return
-	# NOT cached: the arrival trigger has not asked yet, and writing the
-	# hint here would answer the question before the player sees it.
+	# The hint is the fallback for the one recalculation that runs BEFORE
+	# the replacement above (MtgGame._put_on_battlefield recalculates once
+	# on arrival and again after `as_enters`), and for an Aura put onto the
+	# battlefield by a path that never ran it. Not cached either way: the
+	# answer belongs to the player, not to a pass of the pipeline.
 	var index: int = int(source.memory.get("type", _choose(game, host)))
 	host.become_basic_land_type(TYPES[index], COLORS[index])
