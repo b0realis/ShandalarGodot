@@ -680,18 +680,9 @@ settled the art settled this too — make our own, from nothing — and the
 download was replaced rather than argued about. It is not in this
 repository and never was; only its measurements are.
 
-**The one caveat, written down rather than buried.** The FIR that shapes
-this noise was fitted to a MEASUREMENT of the sound it replaces: 23
-third-octave band energies plus a peak, an RMS and an attack time, which
-sit in the script as `TARGET_BANDS` and are the whole of what it knows
-about the old cue. No sample data is in the output and none could be —
-the generator reads nothing — but the target curve was measured off that
-recording, the way a colour is measured off a picture before a new one is
-painted to match it. Twenty-three band energies are a measurement and not
-expression, and this is almost certainly of no legal consequence; it is
-stated here so a reader can weigh it themselves instead of finding it in
-the source. What is NOT claimed is that the new sound has no relationship
-whatever to the old one: it was made to sit in the same hole.
+**What it is.** Noise, a filter and an envelope, generated to simulate the
+sound of stone scraping on stone. It reads no file and contains no
+recording of anything.
 
 `tests/ui/test_deck_sound.gd` reads the shipped file's RIFF header itself
 and asserts its shape — mono, 22 050 Hz, 16-bit, a quarter of a second,

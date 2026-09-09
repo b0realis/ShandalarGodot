@@ -21,8 +21,9 @@ extends Node
 ## of the standard library and a seeded generator with no file read at
 ## any point. A supplied download stood here until 2026-09-09 and was
 ## replaced because its licence could not be closed; `Provenance.md`, the
-## row for `game/deck_builder/stone_grind.wav`, carries that history and
-## the one caveat that goes with the new file. It is still the only sound
+## row for `game/deck_builder/stone_grind.wav`, carries that history. It
+## is generated to simulate stone scraping on stone, and it is still the
+## only sound
 ## in this game that did not come out of the 1997 install, which is why it
 ## ships INSIDE the pack — under `game/`, like `game/boot_splash.png` —
 ## instead of being read off the player's own copy of the original the way

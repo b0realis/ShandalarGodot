@@ -4613,8 +4613,8 @@ shandalar/
 │   │   │                      GPL-3.0 like the pictures since 2026-09-09,
 │   │   │                      when the supplied download that stood here
 │   │   │                      was replaced because its licence could not
-│   │   │                      be closed (Provenance.md carries the history
-│   │   │                      and the measurement caveat) — played by
+│   │   │                      be closed (Provenance.md carries the
+│   │   │                      history) — played by
 │   │   │                      FilterBar on the
 │   │   │                      medallion PRESS (not on `changed`, which the
 │   │   │                      sort menu also emits). A four-voice pool

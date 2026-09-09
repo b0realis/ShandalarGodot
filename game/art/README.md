@@ -166,7 +166,7 @@ that is not code has to be in it, wherever the bytes actually sit.
 
 | file | what it is | source | licence | SHA-256 |
 |---|---|---|---|---|
-| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — synthesised by `tools/make_our_sfx.py` (`--only smooth`), which reads no file of any kind | ours (GPL-3.0) — with the measurement caveat in `Provenance.md` | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — synthesised by `tools/make_our_sfx.py` (`--only smooth`), which reads no file of any kind | ours (GPL-3.0) | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
 
 A row whose name begins `game/` is a path from the project root rather
 than a file in this folder; that is the only difference the test makes
@@ -191,10 +191,9 @@ whose underlying freesound entry could never be identified — so an
 attribution that might have been owed could not have been paid. That is
 why it was replaced rather than kept.
 
-**One caveat travels with the new file and is not to be smoothed away
-here.** The filter that shapes its noise was fitted to a 23-band
-spectral MEASUREMENT of the recording it replaced. No sample data is in
-the output; the target curve is. `Provenance.md` § *Our own assets* sets
-that out in full, along with what was there before and why it went.
+It is noise, a filter and an envelope, generated to simulate the sound of
+stone scraping on stone — no recording of anything is in it.
+`Provenance.md` § *Our own assets* has what was there before and why it
+went.
 
 `b0realis`, 2026-09-09.

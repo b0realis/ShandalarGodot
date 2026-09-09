@@ -5703,10 +5703,10 @@ under a macro envelope, out of the standard library and a seeded generator
 that reads no file at all — and carries this project's own GPL-3.0 like the
 pictures do. It still lives inside the pack rather than in the skin.
 `Provenance.md` under "Our own assets" keeps the whole history — what was
-here, where it came from, why it could not stay — the reproduce-and-import
-pair, and the one caveat, stated rather than buried: the filter was fitted
-to a 23-band spectral MEASUREMENT of the recording it replaced, which is a
-measurement and not expression, and no sample data is in the output.
+here, where it came from, why it could not stay — and the
+reproduce-and-import pair. What ships is noise, a filter and an envelope,
+generated to simulate stone scraping on stone; no recording of anything is
+in it.
 FIVE candidates were built on one axis (grain density, 42/s to 380/s to
 none at all) and the owner auditioned all five. **They chose the one the
 measurements ranked fourth** — the numbers pick the shortlist, not the

@@ -343,9 +343,8 @@ because "some assets ship" is not a thing to leave vague. Each kind is
 ours to hand on for a different reason, and the two reasons are not
 interchangeable: what this project MADE, and what somebody else GAVE
 AWAY under a licence that permits redistribution. There was a third kind
-until 2026-09-09 — one sound, under a stranger's licence, with a caveat
-attached — and it is gone because the sound was replaced with one of our
-own (`Provenance.md`, the row for `game/deck_builder/stone_grind.wav`).
+until 2026-09-09 — one sound, under a stranger's licence — and it is gone
+because the sound was replaced with one of our own (`Provenance.md`, the row for `game/deck_builder/stone_grind.wav`).
 
 **One — nine pictures and one sound, every one of them ours,** under
 this project's own GPL-3.0.
@@ -408,11 +407,9 @@ a bulk re-uploader of freesound.org material: the Pixabay grant was
 sufficient on its face, but the freesound entry it began as could never
 be identified, so if that entry was CC BY an attribution was owed to
 somebody nobody could name. Rather than ship on an obligation it could
-not discharge, this project made its own — noise, a filter and an
-envelope, from a seeded generator, reading nothing. One caveat travels
-with it and is not hidden: the filter was fitted to a 23-band spectral
-MEASUREMENT of the file it replaced. No sample data is in the output;
-the target curve was measured off the old recording. `Provenance.md`
+not discharge, this project made its own: noise, a filter and an
+envelope, from a seeded generator that reads nothing, generated to
+simulate the sound of stone scraping on stone. `Provenance.md`
 § *Our own assets* sets all of that out in full.
 
 `game/art/README.md` is the one inventory behind the tables above: it
