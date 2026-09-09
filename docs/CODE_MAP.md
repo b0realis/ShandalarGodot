@@ -3695,6 +3695,16 @@ shandalar/
 │    points put on each candidate shown on its own card, cleared by the
 │    rebuild after the submit, and lifted a row when real damage is
 │    already marked there so the two never overprint;
+│    tests/ai/test_ai_pump_plan_2026_09_09.gd — WHAT THE PROBE PROMISES,
+│    THE RECOVERY DELIVERS (the third pass at AiProfile.pumps_to_attack):
+│    a trampler's overflow priced against the breaths the recovery will
+│    actually buy (AiPlayer._absorbed_by — the pilot used to read a
+│    five-point swing as nought through and die of it), the one mana pool
+│    spent as the declaration allotted it (_pump_plan / _pump_shares,
+│    written down at the declaration and spent one activation at a time,
+│    with an uncapped second pass so a Gargoyle's +0/+1 is not locked out),
+│    and Rainbow Knights' random bonus pinned at its floor — every
+│    behaviour on both arms of the knob;
 │    tests/ai/test_ai_pumps_to_block_2026_09_09.gd — THE BLOCK STILL
 │    DECLARED AT PRINTED SIZE, and the firebreathers the reader could not
 │    see (AiProfile.pumps_to_attack, its second half): the Carrion Ants

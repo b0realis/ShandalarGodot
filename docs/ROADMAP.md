@@ -9553,6 +9553,80 @@ get life when opponent taps this 'converted forest'."*
   activating player, three send `inst.controller_id`. No card reads that
   key today, so nothing is broken; the next one to read it will be.
 
+## WHAT THE PROBE PROMISES, THE RECOVERY DELIVERS (2026-09-09) — the third pass at pumps_to_attack
+
+Both halves of the knob left the same seam, and their own notes named it:
+a declaration probe hangs the WHOLE bonus a body's share of the pool can
+reach, and `_combat_self_pumps` then buys FEWER — toughness only when it
+saves the body, power only when it wins the trade. Where the ladder asks
+a kill-or-survive question the two agree by construction. Where it reads
+a MAGNITUDE they did not, and there were exactly two such readings. Both
+were `docs/ai-difficulty.md` §5 items; both are closed.
+
+- **The trampler's overflow, and it was worse than the note said.** The
+  panic line and the chump rung's price both measured a trampler's
+  surplus against the toughness the PROBE put on the blocker. The note
+  said "up to one pump"; it is up to the whole reach, because
+  `_combat_self_pumps` asks each blocker whether it kills the attacker
+  ALONE — in a gang neither does, so nothing is bought at all. A Carrion
+  Ants and a Scathe Zombies in front of a Force of Nature read the swing
+  as NOUGHT through and took five, with all six Swamps still up; put a
+  Hill Giant beside it and stand the pilot at eight life and it keeps its
+  spare body, takes eight and DIES. Under-reading lethal is the direction
+  that kills. `_absorbed_by` asks the recovery's own ladder instead — the
+  probe's toughness when the probe's size saves the body, the fewest
+  breaths that kill when it does not, nothing when nothing it can reach
+  kills. Pricing against the UNPUMPED toughness was the other candidate
+  and is wrong: it would read a 6/7 that eats a Craw Wurm as absorbing
+  one, and chump AND value-block with the same bodies — the one
+  combination the block half exists to prevent.
+- **The one pool, and the fix is in the RECOVERY.** `_pump_shares`
+  divides the pool among the bodies and the declaration is made on that
+  division; the recovery priced every body against the whole remaining
+  pool, so the first body down the battlefield spent what the second was
+  priced with — four Swamps split two and two, the Ants taking three to
+  save itself (a save no rung asked for) while the Vampire Bats beside it
+  stayed a 0/1 and died for nothing. Not in the probe, which already
+  reserves per body: a second reservation beside it is two plans that can
+  disagree. And not re-derived either — re-deriving after a breath
+  resolves gives a DIFFERENT split, because the body that just bought one
+  is no longer the mute one. So it is written down where the declaration
+  is made (`_pump_plan`, stamped with the turn) and spent one activation
+  at a time, with a second uncapped pass so mana no plan wanted is still
+  spent: a Granite Gargoyle's `{R}: +0/+1` is never priced by
+  `_pump_shares` and would otherwise be locked out of its own pool.
+- **Rainbow Knights: CLOSED AS RULED, not built.** The floor, and
+  therefore no row. Every reader of `EffectIntent.CARD_LOCAL_PUMPS` is a
+  DECLARATION; a declaration cannot be un-made once the roll happens; and
+  the blunder rate of any number above the floor is the probability mass
+  below it — a third, at the mean of a uniform roll of three. The floor
+  is +0, and `_self_pump_of` already refuses a bonus with no power, so
+  the honest row and no row are the same behaviour and no row is the one
+  that does not pretend. A DISTRIBUTION is not one card's work and is not
+  blocked on this card: `_dies_to`, `_damage_from` and the search's power
+  arrays are integers.
+- **The numbers: a WASH, and the census says why.** Seed 11, 1,000 games
+  an arm, four live pairs each run TWICE — on the morning's tree and on
+  this one — so the `on` arms lie side by side. Vampire Lord vs Big Green
+  24.0% → 23.9% (3 games of 1,000 different); Kzzy'n vs Big Green 18.4%
+  either way; Vampire Lord vs Summoner, the pool's trampler deck — three
+  Force of Nature, two Colossus, four War Mammoth — 53.3% either way;
+  vs War Mage's four Ball Lightning 56.0% either way, 0 games different.
+  **Control PASS in every arm of all eight runs — 525-475,
+  byte-identical to its null, 1,000 of 1,000 — and every NULL arm is
+  identical between the two trees game for game.** The census: over 200
+  games the trample reading returns a different number 19 times and the
+  plan's cap binds a breath 55 times, about one every ten games and one
+  every three, and two or three of a thousand games end differently for
+  it. Shipped as a wash for the block half's reason: what it fixes is
+  what the table sees — a pilot reading a five-point trampling swing as
+  zero and dying of it.
+- **Open, from the same look**, both in `docs/ai-difficulty.md` §5: a
+  body in a GANG is priced at no breath, because that is the question the
+  recovery asks it (errs safe, named at the site); and
+  `_offensive_combat_response` breathes on an unblocked attacker after
+  the recovery and spends the leftovers without consulting the plan.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

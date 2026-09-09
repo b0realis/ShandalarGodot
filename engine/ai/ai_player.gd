@@ -64,6 +64,32 @@ var profile: AiProfile
 var _refused: Dictionary = {}
 var _refused_stamp: String = ""
 
+## THE SPLIT THE DECLARATION WAS MADE ON (2026-09-09,
+## [member AiProfile.pumps_to_attack]), `{instance id: activations}` —
+## how many breaths each of our bodies was priced with when the attack or
+## the block was declared, and the number [method _combat_self_pumps]
+## then has to deliver.
+##
+## WHY IT HAS TO BE REMEMBERED RATHER THAN ASKED AGAIN. [method
+## _pump_shares] divides ONE mana pool among several bodies, in a fixed
+## order — the body with no power at all first, then by what the
+## evaluator thinks each is worth. Re-deriving that split after the first
+## breath has resolved gives a DIFFERENT split, because the body that
+## just bought a breath is no longer the mute one and drops down the
+## order; the pool would then be re-allotted mid-combat to whichever body
+## happens to be smallest, which is not the block that was declared. So
+## the split is written down once, where the declaration is made, and
+## spent down one activation at a time.
+##
+## Stamped with the turn it was made on ([method _pump_plan_for]): a plan
+## older than that is no plan, and the recovery falls back to the reading
+## it had before this knob existed. A stale plan can only ever hold a
+## breath BACK — [method _pumps_in_reach] still prices every activation
+## against the mana actually on the table — so being wrong here costs a
+## pump and never an illegal one.
+var _pump_plan: Dictionary = {}
+var _pump_plan_turn := -1
+
 
 func _init(p_pid: int, p_profile: AiProfile = null) -> void:
 	pid = p_pid
@@ -2619,9 +2645,42 @@ func _find_bounce_for(game: MtgGame, victim: CardInstance) -> CardInstance:
 ## Unblocked attackers get their firebreathing in
 ## _offensive_combat_response. Bounded: each call spends mana, and the
 ## pump already on the stack counts as if it had resolved.
+##
+## THE PLAN'S SHARE FIRST, THE LEFTOVERS AFTER (2026-09-09,
+## [member AiProfile.pumps_to_attack]). The declaration probes divide ONE
+## mana pool among several bodies ([method _pump_shares]) and then declare
+## the attack — or the block — on the sizes that division bought. This
+## routine priced every body against the WHOLE remaining pool and bought
+## one activation at a time, so the first body down the battlefield could
+## spend the mana the second was priced with, and the block that happened
+## was not the block that was planned. Measured on 2026-09-09: a Carrion
+## Ants and a Vampire Bats behind four Swamps, the probe splitting them
+## two and two, the Ants blocking a 3/2 and the Bats a 2/2 flier — the
+## Ants took three of the four Swamps to save ITSELF (a save the plan had
+## never priced and the ladder had not blocked for), the Bats stayed a
+## 0/1, killed nothing, and died for nothing.
+##
+## So the plan is delivered first: one pass in which every body may buy
+## only what it was allotted ([member _pump_plan]), and — because mana a
+## body declines is mana wasted, which is what this routine would have
+## spent it on before — a second, uncapped pass that runs only when the
+## first found nothing left to buy. With the knob off there is no plan
+## and the second pass is the only one, which is the null exactly.
 func _combat_self_pumps(game: MtgGame) -> String:
 	if game.current_step() != Mtg.Step.DECLARE_BLOCKERS:
 		return ""
+	if not profile.pumps_to_attack:
+		return _self_pump_once(game, false)
+	var planned := _self_pump_once(game, true)
+	return planned if planned != "" else _self_pump_once(game, false)
+
+
+## One activation of [method _combat_self_pumps]'s search. With
+## [param honour_plan] the pass serves only the bodies the declaration
+## allotted breaths to, and only up to the allotment; without it, every
+## body against every point of open mana — the reading this had before
+## [member AiProfile.pumps_to_attack] existed.
+func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 	var sources := _mana_sources(game)
 	for inst in game.players[pid].battlefield:
 		if not inst.is_creature():
@@ -2651,12 +2710,21 @@ func _combat_self_pumps(game: MtgGame) -> String:
 			if not _ability_available(game, inst, index):
 				continue
 			var pending := _pending_pumps(game, inst)
+			# The allotment this body was declared on, spent down as the
+			# breaths are bought. -1 is "no cap of its own" — the leftover
+			# pass, and every rung below Sorcerer.
+			var cap := _activations_left(game, inst, index)
+			if honour_plan:
+				var allotted := _pump_plan_for(game, inst)
+				if allotted <= 0:
+					continue
+				cap = allotted if cap < 0 else mini(cap, allotted)
 			# Activations in reach: planned pump by pump against the REAL
 			# cost, colour included (as _pumps_are_lethal counts them) — a
 			# Frozen Shade with one Swamp and three Forests open has one
 			# {B} in reach, not four, and the count used to say four.
 			var reach: int = _pumps_in_reach(game, inst, ability, sources, null,
-				_activations_left(game, inst, index)) + pending
+				cap) + pending
 			if reach <= pending:
 				continue
 			var pending_bonus := bonus * pending
@@ -2682,6 +2750,8 @@ func _combat_self_pumps(game: MtgGame) -> String:
 			if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, inst)):
 				continue
 			if game.activate_ability(pid, inst, index, []) == "":
+				if _pump_plan.has(inst.id):
+					_pump_plan[inst.id] = maxi(int(_pump_plan[inst.id]) - 1, 0)
 				return "pumps %s" % inst.data.card_name
 	return ""
 
@@ -3580,13 +3650,17 @@ func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
 ## an over-count. Nothing here is excluded from it.
 func _attack_choice_once_pumped(game: MtgGame, candidates: Array[CardInstance],
 		defender: int) -> Array:
-	var bonuses := _reachable_pumps(game, candidates)
-	if bonuses.is_empty():
+	var shares := _pump_shares(game, candidates)
+	# THE SPLIT IS WRITTEN DOWN HERE (2026-09-09), before anything is
+	# hung on the board: what the declaration is about to be made on is
+	# what [method _combat_self_pumps] has to buy once the blocks are in.
+	_remember_pump_plan(game, shares)
+	if shares.is_empty():
 		return _attack_choice(game, candidates, defender)
 	var owned := game.undo_log == null
 	var mark := game.make_mark()
-	for id in bonuses:
-		var bonus: Vector2i = bonuses[id]
+	for id in shares:
+		var bonus: Vector2i = Vector2i(shares[id]["bonus"]) * int(shares[id]["count"])
 		game.continuous.add_until_eot_pump(int(id), bonus.x, bonus.y)
 	game.recalculate()
 	var chosen := _attack_choice(game, _attack_candidates(game, defender), defender)
@@ -3613,7 +3687,38 @@ func _attack_choice_once_pumped(game: MtgGame, candidates: Array[CardInstance],
 ## The order is the same too — the body with no power at all is the body
 ## the mana transforms, blocking as much as attacking (a 0/1 blocks
 ## anything and kills nothing).
+##
+## The totals are all the two probes ever wanted; the split behind them —
+## which body was allotted how many breaths — is [method _pump_shares],
+## and it is what [method _combat_self_pumps] has to spend and what
+## [method _absorbed_by] has to price a trampler against.
 func _reachable_pumps(game: MtgGame, candidates: Array[CardInstance]) -> Dictionary:
+	var out: Dictionary = {}
+	var shares := _pump_shares(game, candidates)
+	for id in shares:
+		var share: Dictionary = shares[id]
+		out[id] = Vector2i(share["bonus"]) * int(share["count"])
+	return out
+
+
+## THE SAME SPLIT, BREATH BY BREATH (2026-09-09) — `{instance id:
+## {index, ability, bonus, count}}`, where `bonus` is what ONE activation
+## grants and `count` is how many of them that body was allotted.
+##
+## [method _reachable_pumps] is the total this hands the two declaration
+## probes, and it was all anybody needed while the split was read once and
+## thrown away. Two readings want the pieces instead:
+##
+##  * [method _combat_self_pumps], which has to SPEND the allotment
+##    ([member _pump_plan]) rather than the whole pool — the split is a
+##    plan, and a plan the recovery ignores is a block declared on a lie;
+##  * [method _absorbed_by], which has to know how many of the breaths
+##    the recovery will actually buy before it prices a TRAMPLER's
+##    overflow against them.
+##
+## Everything the old routine did, it still does, in the same order and
+## against the same reserve.
+func _pump_shares(game: MtgGame, candidates: Array[CardInstance]) -> Dictionary:
 	var out: Dictionary = {}
 	# The bodies FIRST, and the mana only if there are any: most boards
 	# hold no firebreather at all, and this runs on every declaration a
@@ -3645,13 +3750,32 @@ func _reachable_pumps(game: MtgGame, candidates: Array[CardInstance]) -> Diction
 			_activations_left(game, inst, int(pump["index"])))
 		if reach <= 0:
 			continue
-		out[inst.id] = Vector2i(pump["bonus"]) * reach
+		out[inst.id] = {"index": int(pump["index"]), "ability": ability,
+			"bonus": Vector2i(pump["bonus"]), "count": reach}
 		var cost: ManaCost = ability.cost
 		for _i in reach - 1:
 			cost = _combined_cost(cost, ability.cost)
 		sources = _sources_after(sources, _plan_taps_from(sources, cost,
 			game.ability_surcharge(pid, inst) * reach))
 	return out
+
+
+## Write [param shares] down as the plan this combat's breaths are to be
+## bought against ([member _pump_plan]).
+func _remember_pump_plan(game: MtgGame, shares: Dictionary) -> void:
+	_pump_plan = {}
+	for id in shares:
+		_pump_plan[id] = int(shares[id]["count"])
+	_pump_plan_turn = game.turn_number
+
+
+## Activations of [param inst] still owed by the plan — 0 when the plan is
+## from another turn, when the body was priced at nothing, or when it has
+## already had everything it was allotted.
+func _pump_plan_for(game: MtgGame, inst: CardInstance) -> int:
+	if _pump_plan_turn != game.turn_number:
+		return 0
+	return int(_pump_plan.get(inst.id, 0))
 
 
 ## The self-pump [param inst] would breathe with, as
@@ -4445,26 +4569,28 @@ func _declare_blocks(game: MtgGame) -> String:
 ## spending two for one. So both readings are taken inside the probe, on
 ## one board, which is what [method _block_choice] exists to guarantee.
 ##
-## One over-count is left standing and named: the residue is counted with
+## THE TRAMPLER'S OVERFLOW WAS THE ONE OVER-COUNT THIS LEFT STANDING, and
+## it is closed (2026-09-09). The residue used to be counted with
 ## [member CardInstance.cur_toughness] as the probe made it, so a
-## TRAMPLER's overflow is measured against a toughness the pilot only
-## buys when the pump saves the body. It reads the swing as less
-## dangerous than it may be, by at most the pump, and only against
-## trample. The safe direction is the other one; this is the same
-## simplification the routine already documents for a blocker with no
-## toughness left, running the other way.
+## trampler's surplus was measured against a toughness the pilot only
+## buys when the pump saves the body — it read the swing as LESS
+## dangerous than it turned out to be, which is the direction that gets a
+## pilot killed. [method _absorbed_by] now asks the recovery's own
+## question of every blocker the trial plans, and the panic line and the
+## chump rung's price both go through it.
 func _block_choice_once_pumped(game: MtgGame, attackers: Array[CardInstance],
 		free: Array[CardInstance], used: Array[int]) -> Dictionary:
-	var bonuses := _reachable_pumps(game, free)
-	if bonuses.is_empty():
+	var shares := _pump_shares(game, free)
+	_remember_pump_plan(game, shares)
+	if shares.is_empty():
 		return _block_choice(game, attackers, free, used)
 	var owned := game.undo_log == null
 	var mark := game.make_mark()
-	for id in bonuses:
-		var bonus: Vector2i = bonuses[id]
+	for id in shares:
+		var bonus: Vector2i = Vector2i(shares[id]["bonus"]) * int(shares[id]["count"])
 		game.continuous.add_until_eot_pump(int(id), bonus.x, bonus.y)
 	game.recalculate()
-	var chosen := _block_choice(game, attackers, free, used)
+	var chosen := _block_choice(game, attackers, free, used, shares)
 	game.unmake_to(mark)
 	if owned:
 		game.end_search()
@@ -4479,23 +4605,26 @@ func _block_choice_once_pumped(game: MtgGame, attackers: Array[CardInstance],
 ## chump rung opens at all and whether the swing is lethal, which is the
 ## one case that buys a body at any price.
 func _block_choice(game: MtgGame, attackers: Array[CardInstance],
-		free: Array[CardInstance], used: Array[int]) -> Dictionary:
+		free: Array[CardInstance], used: Array[int],
+		shares: Dictionary = {}) -> Dictionary:
 	var me := game.players[pid]
-	var through := _damage_after_value_blocks(game, attackers, free)
+	var through := _damage_after_value_blocks(game, attackers, free, shares)
 	var desperate: bool = me.life - through <= profile.chump_threshold
 	var lethal_swing := through >= me.life
-	return _plan_blocks(game, attackers, free, desperate, used, lethal_swing)
+	return _plan_blocks(game, attackers, free, desperate, used, lethal_swing,
+		shares)
 
 
 ## The block plan the tier ladder makes for these attackers: blocker id ->
 ## attacker id, with the blockers it spent appended to [param used].
 func _plan_blocks(game: MtgGame, attackers: Array[CardInstance],
 		free: Array[CardInstance], desperate: bool,
-		used: Array[int], lethal_swing := false) -> Dictionary:
+		used: Array[int], lethal_swing := false,
+		shares: Dictionary = {}) -> Dictionary:
 	var block_map := {}
 	for attacker in attackers:
 		var choice := _best_block_for(game, attacker, free, used, desperate,
-			lethal_swing)
+			lethal_swing, shares)
 		for blocker_id in choice:
 			block_map[blocker_id] = attacker.id
 			used.append(blocker_id)
@@ -4520,9 +4649,10 @@ func _plan_blocks(game: MtgGame, attackers: Array[CardInstance],
 ## which reads the swing as more dangerous than it is — the safe way to
 ## be wrong about a body that is about to die anyway.
 func _damage_after_value_blocks(game: MtgGame, attackers: Array[CardInstance],
-		free: Array[CardInstance]) -> int:
+		free: Array[CardInstance], shares: Dictionary = {}) -> int:
 	var trial_used: Array[int] = []
-	var trial := _plan_blocks(game, attackers, free, false, trial_used)
+	var trial := _plan_blocks(game, attackers, free, false, trial_used, false,
+		shares)
 	var through := 0
 	for attacker in attackers:
 		var stopped := 0
@@ -4531,12 +4661,78 @@ func _damage_after_value_blocks(game: MtgGame, attackers: Array[CardInstance],
 				continue
 			var blocker := game.find_instance(int(blocker_id))
 			if blocker != null:
-				stopped += maxi(blocker.cur_toughness - blocker.damage, 0)
+				stopped += _absorbed_by(game, blocker, attacker, shares)
 		if stopped == 0:
 			through += attacker.cur_power
 		elif attacker.has_keyword(Mtg.Keyword.TRAMPLE):
 			through += maxi(attacker.cur_power - stopped, 0)
 	return through
+
+
+## THE TRAMPLER'S OVERFLOW, PRICED AGAINST THE TOUGHNESS THE PILOT WILL
+## ACTUALLY HAVE BOUGHT (2026-09-09, [member AiProfile.pumps_to_attack]).
+## Lethal damage [param blocker] takes off [param attacker]'s assignment
+## before the rest of it tramples through (CR 702.19b: the attacker must
+## assign lethal damage to each blocker, and lethal damage is toughness
+## less damage already marked).
+##
+## WHY IT IS NOT SIMPLY THE BLOCKER'S TOUGHNESS ANY MORE. The block
+## declaration is made inside [method _block_choice_once_pumped], on a
+## board where every one of our bodies is already wearing the WHOLE
+## bonus its share of the open mana could reach — that is the point of
+## the probe. [method _combat_self_pumps] then buys the breaths for real,
+## one at a time, and it buys a TOUGHNESS bonus only when the bonus saves
+## the body and a POWER bonus only when it wins the trade. So the two do
+## not have to agree, and against a trampler that disagreement is damage
+## to the face: measured on 2026-09-09, a Carrion Ants behind six Swamps
+## and a Scathe Zombies ganging a Force of Nature read the swing as ZERO
+## through (a 6/7 and a 2/2 stop eight) and took FIVE, because neither
+## body kills an 8/8 on its own, so the recovery bought nothing at all
+## and the swarm blocked at 0/1 with six Swamps still untapped. The panic
+## line ([method _damage_after_value_blocks]) and the chump rung's price
+## ([method _best_block_for]) were both reading it, and under-reading
+## lethal is the dangerous direction: the pilot declines to chump and
+## dies.
+##
+## THE READING, and it is the recovery's own ladder asked one step early:
+##
+##  * no share, or a share with no toughness in it — the body is what it
+##    looks like;
+##  * the probe's size SAVES it (its live toughness beats what is coming)
+##    — the recovery buys exactly enough to save it, and a body that
+##    lives absorbs the whole assignment anyway, so the probe's number is
+##    the honest one;
+##  * otherwise the body dies whatever it does, so the recovery buys only
+##    the breaths that KILL what it is in front of — the fewest that do,
+##    counted here the way [method _combat_self_pumps] counts them — and
+##    nothing at all when nothing it can reach kills.
+##
+## The one thing left standing is deliberate and is the safe direction:
+## a body in a GANG is asked whether it kills the attacker ALONE, because
+## that is the question the recovery asks it, so two bodies that finish a
+## trampler between them are each priced at no breath. That reads the
+## swing as more dangerous than it is, which is the same way this routine
+## is already wrong about a blocker with no toughness left to spend.
+func _absorbed_by(game: MtgGame, blocker: CardInstance,
+		attacker: CardInstance, shares: Dictionary) -> int:
+	var live := maxi(blocker.cur_toughness - blocker.damage, 0)
+	var share: Dictionary = shares.get(blocker.id, {})
+	if share.is_empty():
+		return live
+	var bonus: Vector2i = share["bonus"]
+	var count: int = share["count"]
+	if bonus.y <= 0 or count <= 0:
+		return live
+	if live > _damage_from(attacker, blocker):
+		return live
+	# The breaths are counted DOWN from the probe's size, because the
+	# probe's size is what the board is wearing right now: a body asked
+	# about at `bought` breaths is the one in front of us less the rest.
+	for bought in count + 1:
+		if _dies_to(game, attacker, blocker, Vector2i.ZERO,
+				bonus * (bought - count)):
+			return maxi(live - bonus.y * (count - bought), 0)
+	return maxi(live - bonus.y * count, 0)
 
 
 ## [param block_map] with every block REQUIREMENT written in and the
@@ -4636,7 +4832,7 @@ static func _blocks_a_lure(value: Variant, lured: Array[CardInstance]) -> bool:
 ## Blocker ids (0, 1, or 2 of them) to throw at one attacker.
 func _best_block_for(game: MtgGame, attacker: CardInstance,
 		free: Array[CardInstance], used: Array[int], desperate: bool,
-		lethal_swing := false) -> Array[int]:
+		lethal_swing := false, shares: Dictionary = {}) -> Array[int]:
 	var legal: Array[CardInstance] = []
 	for inst in free:
 		if used.has(inst.id):
@@ -4708,7 +4904,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 			var stopped := attacker.cur_power
 			if tramples:
 				stopped = mini(stopped,
-					maxi(cheapest.cur_toughness - cheapest.damage, 0))
+					_absorbed_by(game, cheapest, attacker, shares))
 			if _face_damage_value(game, stopped, pid) \
 					< Evaluator.permanent_value(cheapest):
 				return []

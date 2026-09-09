@@ -85,7 +85,7 @@ override any knob on any preset for a measurement
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
-| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game |
+| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, and a trampler's overflow is measured against the toughness that will actually be there |
 
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and `spares_own`
 are the five knobs that are on at every rung, and the reason is the
@@ -280,6 +280,47 @@ code as a third arm, so each half can be read on its own.
   numbers to the decimal (19.8/24.6, 28.7/34.7, 5.7/13.0, 18.0/25.7,
   5.8/12.8). That is what the gate on the card-local reading buys.
 
+THE THIRD PASS, later the same day: what the declaration PROMISES, the
+recovery now DELIVERS — the trampler's overflow and the one pool — and
+both were §5 items rather than new capabilities, so the knob's meaning
+grew a third time and its null did not move. Measured the same way, seed
+11, 1 000 games an arm, each pair run twice: once against the morning's
+tree and once against this one, so the `on` arms can be laid side by
+side.
+
+- It is a WASH in win rate on every pair, and by a wider margin than the
+  block half was — because the two faults are RARE, not because the
+  readings do nothing. Vampire Lord against Big Green (three War
+  Mammoths): null 19.8%, `on` 24.0% before and 23.9% after, 3 games of
+  1 000 different at all and one of them a win lost. Kzzy'n against Big
+  Green: null 14.3%, `on` 18.4% either way, 2 games different and neither
+  a flip. Against **Summoner**, which is where the tramplers are — three
+  Force of Nature, two Colossus of Sardia, four War Mammoth — null 39.9%,
+  `on` 53.3% either way, 2 games different and neither a flip. Against
+  War Mage's four Ball Lightning: null 22.9%, `on` 56.0% either way, and
+  not one game of the thousand different. The control pair Big Green vs
+  White Knights is byte-identical to its own null (525-475, 1 000 of
+  1 000) in every arm of all eight runs, and every NULL arm is identical
+  between the two trees game for game — 1 000 of 1 000 on all four pairs,
+  not merely the same rate — which is the proof that neither fix reaches
+  the pilot the Deck Lab measures the knob against.
+- THE CENSUS says the readings fire and the games rarely turn on them.
+  Over 200 logged games of Vampire Lord against Summoner the trample
+  reading returned a different number 19 times and the plan's cap bound a
+  breath 55 times; against Big Green, 14 and 68. So it is about one
+  trample reading every ten games and one capped breath every three — and
+  two or three of a thousand games end differently for it.
+- WHAT IT FIXES IS WHAT THE TABLE SEES, which is the block half's own
+  precedent. On the board the report was written from — a Force of Nature
+  and a Hill Giant into a Carrion Ants behind six Swamps, a Scathe
+  Zombies and one spare, at eight life — the shipped pilot read the swing
+  as three points through, kept its spare, took eight and DIED. It now
+  reads five, throws the spare in front of the Hill Giant and lives at
+  three. And on the pool: four Swamps split two and two between a Carrion
+  Ants and a Vampire Bats, both blocking, used to see the Ants take three
+  of them to save itself while the bats stayed a 0/1 and died for
+  nothing; both trades are made now and the fourth Swamp is spent.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -321,29 +362,53 @@ has the rule.
   fliers, the −0.3 there), and a second copy of a creature already on
   the table is let through as level with it although only one of the
   two dies. Open (`docs/ROADMAP.md`, the third pass).
-- `pumps_to_attack` read the ATTACK only until later the same day; the
-  block half and the two card-local firebreathers landed on 2026-09-09
-  and the knob's meaning grew to cover them. What that half left standing:
-  a TRAMPLER's overflow is measured against the toughness the probe put
-  on the blocker, and `_combat_self_pumps` buys a toughness bonus only
-  when it saves the body — so the panic line can read a trampling swing
-  as up to one pump less dangerous than it turns out to be. And the ONE
-  POOL is split among the blockers by `_reachable_pumps` while
-  `_combat_self_pumps` then buys against the whole remaining pool, one
-  activation at a time, so a two-body gang block can see the first body
-  spend what the second was priced with. Both are the attack half's
-  simplifications too, and both are open.
-- Rainbow Knights is the third card of the 2026-09-09 report and has NO
-  row in `EffectIntent.CARD_LOCAL_PUMPS`, by ruling rather than by
-  omission. Its `{W}{W}` is "+0/+0, +1/+0 or +2/+0 until end of turn
-  chosen at random", rolled when the ability RESOLVES, so what two white
-  mana guarantee is nothing: a declaration sized on the average walks a
-  2/1 into a blocker that eats it one time in three, and a one-ply board
-  reading cannot price a coin flip honestly — the rule that keeps
-  Camouflage out of `EffectIntent.WINDOW_SHAPES` and Orcish Catapult in
-  the AI's hand. Pricing a random bonus at all (its floor, its mean, or a
-  distribution the evaluator could carry) is open and is a bigger
-  question than one card.
+- ~~`pumps_to_attack` measured a TRAMPLER's overflow against the toughness
+  the probe put on the blocker, and split one mana pool among several
+  bodies that `_combat_self_pumps` then priced against as a whole.~~
+  **Closed 2026-09-09 — both FIXED** (§4, the third pass). The trample
+  reading was worse than "up to one pump": a gang buys NOTHING, because
+  `_combat_self_pumps` asks each blocker whether it kills the attacker
+  alone, so a Carrion Ants and a Scathe Zombies in front of a Force of
+  Nature read a five-point swing as nought and the pilot died of it at
+  eight life. `AiPlayer._absorbed_by` asks the recovery's own ladder
+  instead — the probe's toughness when the probe's size saves the body,
+  the breaths that win the trade when it does not, and nothing when
+  nothing it can reach kills — and the panic line and the chump rung's
+  price both go through it. The pool fix is in the RECOVERY and not in
+  the probe, because the probe already reserves per body and a second
+  reservation beside it is two plans that can disagree: the split is
+  written down where the declaration is made (`AiPlayer._pump_plan`) and
+  spent one activation at a time, with a second uncapped pass so that
+  mana no plan wanted is still spent. What is left open is smaller and
+  named at the site: a body in a GANG is priced at no breath because that
+  is the question the recovery asks it, which reads the swing as MORE
+  dangerous than it is — the safe direction — and
+  `_offensive_combat_response`, which breathes on an unblocked attacker
+  after `_combat_self_pumps` has had its turn, spends the leftovers
+  without consulting the plan.
+- ~~Whether a RANDOM bonus can be priced at all — its floor, its mean, or
+  a distribution the evaluator carries — with Rainbow Knights as the
+  card that asks it.~~ **Closed 2026-09-09 — RULED, not built: the floor,
+  and therefore no row.** The argument, so that it does not have to be
+  had again. Every reader of `EffectIntent.CARD_LOCAL_PUMPS` is a
+  DECLARATION — the attack cohort, the block ladder, the lethal probe —
+  and a declaration cannot be taken back once the roll happens, so the
+  only number that never turns a declaration into a blunder is the one
+  the activation GUARANTEES; the share of games any higher number
+  blunders in is exactly the probability mass below it, a third of them
+  at the mean of a uniform roll of three. Rainbow Knights' floor is +0,
+  and a row that grants no power is refused by `AiPlayer._self_pump_of`
+  anyway — so the honest row and no row are the same behaviour, and no
+  row is the one that does not pretend. A DISTRIBUTION is not one card's
+  worth of work and is not blocked on this card: `_dies_to`,
+  `_damage_from` and the crack-back search's power arrays are integers,
+  and carrying a distribution means every leaf of the search becomes an
+  expectation over the rolls. The ruling is pinned by
+  `tests/ai/test_ai_pump_plan_2026_09_09.gd`, roll and all. Where a
+  random bonus could be priced above its floor is AFTER every
+  declaration — an unblocked attacker breathing for face damage risks
+  nothing but the mana — and that is a different reader from this table;
+  it stays unbuilt because the mana it would spend is the held instant's.
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and

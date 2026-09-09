@@ -421,6 +421,39 @@ var trusts_abyss := false
 ## rule: its {W}{W} rolls +0, +1 or +2 at resolution, and what it
 ## guarantees for two white mana is nothing.
 ##
+## AND WHAT THE PROBE PROMISES, THE RECOVERY DELIVERS (2026-09-09, the
+## third pass, and both halves of it were named as open the day the
+## second one landed). A declaration probe hangs the WHOLE bonus a body's
+## share of the pool can reach; [method AiPlayer._combat_self_pumps] then
+## buys the breaths for real and buys FEWER — a toughness bonus only when
+## it saves the body, a power bonus only when it wins the trade. Where
+## the ladder asks a kill-or-survive question the two agree by
+## construction. Where it reads a MAGNITUDE they did not, and there were
+## exactly two such readings.
+##
+## The TRAMPLER's overflow was one: the panic line and the chump rung's
+## price both measured a trampler's surplus against the toughness the
+## PROBE put on the blocker, so a Carrion Ants and a Scathe Zombies
+## ganging a Force of Nature read the swing as nothing through and took
+## five — neither kills an 8/8 alone, so nothing was ever bought and the
+## swarm blocked at 0/1 with six Swamps up. Under-reading lethal is the
+## direction that kills a pilot, and at eight life against that swing
+## plus a Hill Giant it did. [method AiPlayer._absorbed_by] asks the
+## recovery's own question of every blocker the trial plans instead.
+##
+## The ONE POOL was the other: [method AiPlayer._pump_shares] divides it
+## among the bodies and the declaration is made on that division, but the
+## recovery priced every body against the whole remaining pool, so the
+## first body down the battlefield could spend what the second was priced
+## with — a Carrion Ants taking three of four Swamps to save itself while
+## the Vampire Bats beside it, allotted two, stayed a 0/1 and died for
+## nothing. The split is written down where the declaration is made
+## ([member AiPlayer._pump_plan]) and spent down one activation at a
+## time, with a second uncapped pass for the mana no plan wanted. The fix
+## is in the RECOVERY and not in the probe on purpose: the probe already
+## reserves per body, and a second reservation written beside it is two
+## plans that can disagree.
+##
 ## A CAPABILITY, like [member animates_to_attack] — not a second
 ## difficulty concept, and the same layer of play: mana spent before the
 ## declaration to make an attack (or a block) that does not otherwise
