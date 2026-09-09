@@ -346,7 +346,7 @@ thing to leave vague.
 |---|---|
 | `game/art/set_icon_arn.png` | Arabian Nights, a scimitar |
 | `game/art/set_icon_atq.png` | Antiquities, an anvil |
-| `game/art/set_icon_leg.png` | Legends, a fluted column |
+| `game/art/set_icon_leg.png` | Legends, a broken column |
 | `game/art/set_icon_drk.png` | The Dark, a crescent moon |
 | `game/art/set_icon_4ed.png` | Fourth Edition, a Roman `IV` |
 | `game/art/set_icon_past.png` | Astral, a comet trailing sparks |

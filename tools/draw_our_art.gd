@@ -10,7 +10,7 @@ extends SceneTree
 ## Manalink install carries are a THIRD PARTY'S RESTYLE of MicroProse's
 ## drawings — not ours to copy either. So the shapes below are DRAWN HERE,
 ## from scratch, by this file: an anvil, a scimitar, a comet, a crescent,
-## a Roman IV, a fluted column and a dagger, described as polygons and
+## a Roman IV, a broken column and a dagger, described as polygons and
 ## arcs in unit coordinates and rasterised by the little signed-distance
 ## renderer in this script. Nothing is traced, sampled or copied from any
 ## file: run this on a machine with no 1997 game and no Manalink install
@@ -73,21 +73,41 @@ const LIGHT := Vector2(-0.7071, -0.7071)
 ## How deep into the shape the bevel reaches, in final pixels.
 const BEVEL_DEPTH := 2.6
 
-## THE BLADE IS WARM, AND THAT IS A LEGIBILITY DECISION, not a
+## THE BLADE IS RED, AND THAT IS A LEGIBILITY DECISION, not a
 ## decoration. The dagger is the ONE mark on this table drawn over an
 ## arbitrary picture — a card's own art — instead of over a panel, and a
 ## steel-grey blade was tried first and lost: on `Grizzly Bears`, whose
-## art is a snowfield, an 18 px grey blade simply vanished. Warm carries
-## it, because it is also what the game already says about damage
-## everywhere else — the number beside this very mark is salmon
-## ([MiniCard]'s `_damage_count`, `1.0, 0.45, 0.35`) and the damage still
-## to come is its cold twin ([constant MiniCard.PENDING_COLOR]). So the
-## blade runs from a hot pale spine to a deep scarlet edge and the
-## furniture stays gold, which is what tells the two apart at a glance.
-const BLADE_LIT := Color(1.00, 0.94, 0.88)
-const BLADE_DARK := Color(0.72, 0.16, 0.12)
-const HILT_LIT := Color(1.00, 0.86, 0.42)
-const HILT_DARK := Color(0.42, 0.24, 0.04)
+## art is a snowfield, an 18 px grey blade simply vanished. The pass that
+## followed only WARMED it — a near-white spine falling to scarlet — and
+## the owner's ruling of 2026-09-09 took it the rest of the way: red and
+## salmon, the register of a wound, which is also what the game already
+## says about damage everywhere else. The number beside this very mark is
+## salmon ([MiniCard]'s `_damage_count`, `1.0, 0.45, 0.35`) and the damage
+## still to come is its cold twin ([constant MiniCard.PENDING_COLOR]).
+##
+## So the ramp is SHORT and lives entirely inside the red: a pale salmon
+## highlight down to a strong red, whose midpoint is `_damage_count`'s own
+## colour to within a hair. Nowhere on the blade is it either pale enough
+## to read as steel on a snowfield or dark enough to sink into a black
+## card — the two grounds that decide this mark — and the furniture stays
+## gold, which is what tells blade and hilt apart at a glance.
+##
+## The DARK end is the one that had to be pulled back up (2026-09-09).
+## The picture's base ramp runs top to bottom, and the blade now points
+## down-left, so the deepest colour of the ramp lands on the TIP — the
+## thinnest part of the mark, where the 2 px rim is already most of what
+## is drawn. A scarlet that looked right in the middle of the blade took
+## the last four pixels of the point to black on a black card and the
+## dagger simply got shorter.
+const BLADE_LIT := Color(1.00, 0.74, 0.63)
+const BLADE_DARK := Color(0.86, 0.20, 0.15)
+## The furniture, deepened on 2026-09-09 when the blade went red. Gold
+## and sandstone (`UiChrome.FACE`, 196/179/146) are within a percent of
+## each other in luminance, so the old bright gold was separated from the
+## Help page's own panel by hue alone — which a 14 px minification does
+## not keep. This gold is a full step darker at both ends of its ramp.
+const HILT_LIT := Color(0.96, 0.76, 0.26)
+const HILT_DARK := Color(0.34, 0.18, 0.02)
 
 const OUT_DIR := "res://game/art"
 
@@ -101,10 +121,21 @@ func _init() -> void:
 		_write(img, dir, "set_icon_%s.png" % code)
 	# The blade and the furniture are two GROUPS, each with its own metal
 	# and its own rim — which is what puts a dark seam between the guard
-	# and the blade instead of one gold-into-steel smear.
+	# and the blade instead of one gold-into-red smear.
+	#
+	# THE FURNITURE GOES ON LAST, i.e. IN FRONT (2026-09-09), which is
+	# both where a real crossguard sits and the only way the guard
+	# survives being drawn at eighteen pixels. Behind the blade it is two
+	# gold lobes with the blade's shoulder between them, and once the
+	# blade turned red and the hilt came up into the light half of the
+	# picture those lobes had neither value nor hue to separate them from
+	# it — at 14 px the mark read as a spike with a bead on the end. In
+	# front it is ONE unbroken bar crossing the blade, with its own dark
+	# rim down both sides of it, and a bar across a diagonal is the whole
+	# reason a dagger is not an arrow.
 	_write(_render(DAGGER_SIZE, [
-			[_dagger_hilt(), HILT_LIT, HILT_DARK],
-			[_dagger_blade(), BLADE_LIT, BLADE_DARK]], RIM_DAGGER),
+			[_dagger_blade(), BLADE_LIT, BLADE_DARK],
+			[_dagger_hilt(), HILT_LIT, HILT_DARK]], RIM_DAGGER),
 		dir, "damage_marker.png")
 	quit()
 
@@ -267,47 +298,135 @@ func _roman_four() -> Array:
 	return [{"op": "add", "poly": i_bar}, {"op": "add", "poly": v}]
 
 
-## LEGENDS — a fluted column: a wide flat abacus, an echinus flaring down
-## into a slender shaft with a little entasis, and a stepped base. Drawn
-## deliberately NARROWER in the waist and WIDER at the ends than the anvil
-## beside it, because at fourteen pixels the two are the same family of
-## silhouette and only the proportions tell them apart. The two flutes are
-## cut, not shaded, so they survive being scaled down; below about twelve
-## pixels they close up and the silhouette carries the glyph, which is the
-## right failure.
+## LEGENDS — a BROKEN COLUMN. Hard flat facets and not one curve: a wide
+## CAPITAL whose ends are taken off at 45°, a groove cut through it, a
+## narrower BAND under that, then the SHAFT with three arched flutes —
+## and the whole monument sheared away by a single DIAGONAL running from
+## the lower left up to the right, so the shaft ends in a slant and there
+## is no base at all.
+##
+## THE BREAK IS THE GLYPH, and it is there for legibility before it is
+## there for mood. Every other symbol on the row is left-right
+## symmetrical, and so was the column that shipped on 2026-09-09 — a
+## standing fluted column on a plinth, which at fourteen pixels is the
+## anvil beside it with the horn filed off. A silhouette that is
+## deliberately lopsided is the one thing the eye can still pick out of
+## that row once the flutes and both grooves have closed up, so the
+## shear is cut SHALLOW (about 30° off the horizontal) and long, taking
+## most of the shaft's right-hand side with it: at fourteen pixels the
+## missing corner is five pixels of the fourteen.
+##
+## Redrawn to the owner's brief of 2026-09-09 ("a broken monument, not a
+## standing column"). The levels, the chamfer angles and the shear are
+## chosen here by what survives minification; nothing is traced.
+
+## The break, corner to corner: down the shaft's left edge to [constant
+## COLUMN_CUT_L], then one straight line back up to [constant
+## COLUMN_CUT_R] on its right edge. Everything below and to the right of
+## that line is gone.
+const COLUMN_CUT_L := Vector2(0.195, 0.945)
+const COLUMN_CUT_R := Vector2(0.805, 0.585)
+
+
 func _column() -> Array:
-	var shaft := PackedVector2Array([
-		Vector2(0.365, 0.225), Vector2(0.635, 0.225), Vector2(0.655, 0.50),
-		Vector2(0.635, 0.775), Vector2(0.365, 0.775), Vector2(0.345, 0.50),
-	])
-	return [
-		# the abacus — the flat slab on top
+	var ops: Array = [
+		# THE CAPITAL — widest along its top edge, the ends taken in
+		# gently to a kink and then at a flat 45° (dx == dy) to the
+		# underside, which is the cut that gives it its splayed look.
 		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.05, 0.045), Vector2(0.95, 0.045),
-			Vector2(0.95, 0.135), Vector2(0.05, 0.135)])},
-		# the echinus, flaring down into the shaft
+			Vector2(0.025, 0.045), Vector2(0.975, 0.045),
+			Vector2(0.915, 0.150), Vector2(0.822, 0.243),
+			Vector2(0.178, 0.243), Vector2(0.085, 0.150)])},
+		# THE BAND — flaring the other way: narrow where it goes behind
+		# the capital, wide where it hands over to the shaft.
 		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.105, 0.135), Vector2(0.895, 0.135),
-			Vector2(0.635, 0.245), Vector2(0.365, 0.245)])},
-		{"op": "add", "poly": shaft},
-		# the base: a torus over a plinth
+			Vector2(0.335, 0.205), Vector2(0.665, 0.205),
+			Vector2(0.775, 0.395), Vector2(0.225, 0.395)])},
+		# THE SHAFT — square shoulders, straight sides, and then the
+		# break instead of a foot.
 		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.345, 0.755), Vector2(0.655, 0.755),
-			Vector2(0.895, 0.865), Vector2(0.105, 0.865)])},
-		{"op": "add", "poly": PackedVector2Array([
-			Vector2(0.045, 0.865), Vector2(0.955, 0.865),
-			Vector2(0.955, 0.955), Vector2(0.045, 0.955)])},
-		{"op": "sub", "capsule": [0.445, 0.285, 0.445, 0.72, 0.020]},
-		{"op": "sub", "capsule": [0.555, 0.285, 0.555, 0.72, 0.020]},
+			Vector2(0.238, 0.340), Vector2(0.762, 0.340),
+			Vector2(0.805, 0.440), COLUMN_CUT_R, COLUMN_CUT_L,
+			Vector2(0.195, 0.440)])},
+		# the groove through the capital, its ends splayed STEEPER than
+		# the 45° chamfer outside them so each end reads as a chevron
+		_groove(0.132, 0.196, 0.300, 0.700, 1.4),
+		# the groove between the band and the shaft
+		_groove(0.330, 0.386, 0.340, 0.660, 1.1),
 	]
+	# Three flutes and the two ribs between them, in the proportions a
+	# fluted shaft actually wears: the ribs a little wider than the
+	# channels, and a margin either side so the outer rib is not thinner
+	# than the rest.
+	for left in [0.270, 0.458, 0.646]:
+		ops.append(_flute(left, left + 0.085))
+	return ops
+
+
+## The height of the break at [param x] — used by the flutes, which stop
+## short of it rather than running off the end.
+func _column_cut(x: float) -> float:
+	var t: float = (x - COLUMN_CUT_L.x) / (COLUMN_CUT_R.x - COLUMN_CUT_L.x)
+	return lerpf(COLUMN_CUT_L.y, COLUMN_CUT_R.y, t)
+
+
+## A groove cut clean through: a horizontal slot from [param top] to
+## [param bottom], spanning [param left]..[param right] at the top and
+## splaying outward on the way down by [param splay] times its own
+## height. In a lit gold relief a slot is a DARK line, not a hole — the
+## rim ink meets in the middle of anything narrower than about three
+## pixels — which is the right reading anyway: these are incisions in a
+## stone, not gaps between separate pieces.
+func _groove(top: float, bottom: float, left: float, right: float,
+		splay: float) -> Dictionary:
+	var out: float = (bottom - top) * splay
+	return {"op": "sub", "poly": PackedVector2Array([
+		Vector2(left, top), Vector2(right, top),
+		Vector2(right + out, bottom), Vector2(left - out, bottom)])}
+
+
+## One flute: a channel with a 45° arch at its head, running down until
+## the break takes it.
+##
+## THE FOOT STOPS SHORT of the break by [constant COLUMN_LIP], and that
+## small number is doing real work. Run the channels all the way onto the
+## diagonal and the break becomes a dashed edge — three notches of
+## nothing where the flutes reach it — which at fourteen pixels is a
+## ragged bottom rather than a cut one. Stopping them early leaves an
+## unbroken dark LIP along the whole diagonal, and that lip is most of
+## what still says "sheared off" after the flutes themselves have gone.
+const COLUMN_LIP := 0.055
+
+func _flute(left: float, right: float) -> Dictionary:
+	var head := 0.485
+	var arch := 0.022
+	return {"op": "sub", "poly": PackedVector2Array([
+		Vector2(left + arch, head), Vector2(right - arch, head),
+		Vector2(right, head + arch),
+		Vector2(right, _column_cut(right) - COLUMN_LIP),
+		Vector2(left, _column_cut(left) - COLUMN_LIP),
+		Vector2(left, head + arch)])}
 
 
 ## THE DAMAGE DAGGER — the mark a wounded creature wears. The register is
 ## the one the owner chose: SHORT, FAT, BRIGHT and on a clear diagonal,
-## with furniture you can see. It points up and to the right, hilt at the
-## bottom left, because that is the corner of the small card it is drawn
-## in (`MiniCard._build_face`) and a blade pointing up out of the card's
-## own art reads as a wound rather than as a cursor.
+## with furniture you can see.
+##
+## IT POINTS DOWN AND TO THE LEFT (owner, 2026-09-09), hilt high on the
+## right — turned end for end from the version that shipped that morning.
+## The mark sits in the small card's bottom-right corner directly above
+## the P/T box (`MiniCard._build_face`), so a blade pointing down-left
+## drives INTO the card's own art and into the creature it is about; the
+## old up-right blade pointed out of the card at the table, which is a
+## cursor's job and not a wound's.
+##
+## The turn is a straight half-turn about the middle of the picture, and
+## that is what keeps the light honest. The bevel is lit from the top
+## left by the slope of the shape's own distance field ([method _metal]),
+## so every facet is relit for the direction it now faces: the edges that
+## caught the light before are the shadowed ones now, which is what a
+## real blade turned end for end does. Nothing about the lighting is
+## pinned to the blade's old direction, and nothing needed to be.
 ##
 ## Its points are given in the SAME square-unit space the rasteriser
 ## works in — x in 0..[constant DAGGER_ASPECT], y in 0..1, one unit is one
@@ -315,9 +434,9 @@ func _column() -> Array:
 ## perpendicular and the crossguard crosses the blade at a right angle on
 ## screen. [method _unq] puts them back into the 0..1 form the ops take.
 const DAGGER_ASPECT := 1.6
-const DAGGER_GUARD := Vector2(0.54, 0.685)
-const DAGGER_TIP := Vector2(1.545, 0.055)
-const DAGGER_POMMEL := Vector2(0.19, 0.875)
+const DAGGER_GUARD := Vector2(1.06, 0.315)
+const DAGGER_TIP := Vector2(0.055, 0.945)
+const DAGGER_POMMEL := Vector2(1.41, 0.125)
 
 
 ## A square-unit point as the fraction of the picture's width and height
