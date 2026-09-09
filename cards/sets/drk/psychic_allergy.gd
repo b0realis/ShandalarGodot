@@ -19,6 +19,15 @@ extends CardScript
 ##
 ## The rent wants TWO Islands, so one Island is no help at all: the
 ## enchantment dies with a single Island on the table.
+##
+## THE ONE "AS ... ENTERS" CLAUSE IN THE POOL STILL ON A TRIGGER, and
+## deliberately (checked 2026-09-09, when Lich, Jihad, Black Vise, The Rack
+## and Cursed Rack were all moved to CardData.as_it_enters because their
+## windows were observable). The colour has exactly two readers, both of
+## them UPKEEP_START triggers, and an upkeep cannot begin while a player
+## holds priority in the main phase this sorcery-speed enchantment is cast
+## in — so there is no state anybody can read, and nothing to respond to
+## that would read differently. Move it if that ever stops being true.
 
 
 const COLORS: Array[int] = [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B,

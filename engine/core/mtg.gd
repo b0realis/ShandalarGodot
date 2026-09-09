@@ -132,7 +132,12 @@ enum EventType {
 	                      ## mana, by cost, by effect (Icy), by attacking,
 	                      ## by regenerating. NOT fired for entering tapped
 	                      ## (that isn't "becoming tapped"). City of Brass,
-	                      ## Psychic Venom.
+	                      ## Psychic Venom. `controller` is the TAPPED
+	                      ## PERMANENT'S controller at every one of the five
+	                      ## dispatch sites, never the player who tapped it
+	                      ## — two of them sent the activator until
+	                      ## 2026-09-09; MtgGame.tap_for_mana carries the
+	                      ## note.
 	BECAME_UNTAPPED,      ## data: {instance, controller} — ANY untap: the
 	                      ## untap step, an Untap effect, a Candelabra.
 	                      ## Tawnos's Coffin releases its prisoner on it.

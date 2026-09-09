@@ -13,20 +13,37 @@ extends CardScript
 ## life_gain_becomes_draw), so they vanish the instant the Lich does — at
 ## which point the last clause kills you anyway.
 ##
-## The choice on resolution is the acting seat's own, asked through their
-## DecisionAgent: a human seat is held open on it (docs/duel-todo.md
-## §1.3) and every other seat answers for itself. The value the card
-## computes is only the HINT, and the candidates are pre-sorted for it.
+## "As this enchantment enters, you lose life equal to your life total" is
+## a REPLACEMENT effect (CR 614.1c): it is applied AS the enchantment
+## enters, uses no stack, and there is no moment at which the Lich is on
+## the battlefield and the life has not been paid. So it lives in
+## CardData.as_it_enters — the hook MtgGame._put_on_battlefield runs once
+## the permanent is on the battlefield (its own statics already published
+## by the recalculation above it, so the 0 life total does not end the
+## game) but before state-based actions and before any ENTERS_BATTLEFIELD
+## trigger sees it.
+##
+## IT USED TO BE A TRIGGER (fixed 2026-09-09, found while moving Phantasmal
+## Terrain onto the same hook). A trigger is a stack object, so BOTH
+## PLAYERS HELD PRIORITY over a Lich that was already on the battlefield
+## with its bargain live and its price unpaid — twenty life still standing
+## and "you don't lose the game for having 0 or less life" already true.
+## What that window bought, reproduced: seat at 2 life, Lich cast, a
+## Lightning Bolt at its controller IN RESPONSE. The damage trigger below
+## fed the Lich three permanents, and then "lose life equal to your life
+## total" resolved against a life total of -1 — a loss of -1 is a GAIN of
+## 1, which the card's own second static turns into a CARD DRAW. The Lich
+## finished at -1 life holding an extra card where the rules leave it at
+## -3 holding none. The price is paid as it enters now, so the earliest
+## Bolt is the one that lands afterwards, and the amount can only ever be
+## the life total the enchantment arrived on.
 
 
 func build() -> CardData:
 	return CardData.new("Lich", "{B}{B}{B}{B}", Mtg.CardType.ENCHANTMENT) \
+		.as_it_enters(_pay_your_life) \
 		.static_ability(StaticAbility.new(_the_bargain,
 			"You don't lose the game for having 0 or less life. If you would gain life, draw that many cards instead.")) \
-		.triggered(TriggeredAbility.new(
-			Mtg.EventType.ENTERS_BATTLEFIELD, _pay_your_life,
-			"As this enchantment enters, you lose life equal to your life total.",
-			_is_self)) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.DAMAGE_DEALT, _feed_the_lich,
 			"Whenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.",
@@ -36,10 +53,6 @@ func build() -> CardData:
 			"When this enchantment is put into a graveyard from the battlefield, you lose the game.",
 			_is_self_in_a_graveyard)) \
 		.oracle("As this enchantment enters, you lose life equal to your life total.\nYou don't lose the game for having 0 or less life.\nIf you would gain life, draw that many cards instead.\nWhenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.\nWhen this enchantment is put into a graveyard from the battlefield, you lose the game.")
-
-
-static func _is_self(_game: MtgGame, source: CardInstance, event: GameEvent) -> bool:
-	return event.data.get("instance") == source
 
 
 ## "Put into a graveyard from the battlefield" — NOT any departure: a
@@ -56,9 +69,12 @@ static func _the_bargain(game: MtgGame, source: CardInstance) -> void:
 	p.life_gain_becomes_draw = true
 
 
-static func _pay_your_life(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	var pid := source.controller_id
-	game.adjust_life(pid, -game.players[pid].life)
+## THE PRICE (CR 614.1c), paid as the enchantment arrives: the bargain
+## above is already published by then, so 0 life is survivable, and nothing
+## has held priority over a Lich that had not paid.
+static func _pay_your_life(game: MtgGame, _source: CardInstance,
+		controller: int) -> void:
+	game.adjust_life(controller, -game.players[controller].life)
 
 
 static func _damage_to_my_controller(_game: MtgGame, source: CardInstance,

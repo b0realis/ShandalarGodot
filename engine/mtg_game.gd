@@ -1520,9 +1520,28 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0) -> String:
 			{"instance": inst, "controller": pid, "color": produced_color,
 				"colors": produced_types})
 	# "Becomes tapped" triggers (City of Brass) — normal stacked triggers.
+	#
+	# `controller` IS THE PERMANENT'S CONTROLLER on this event, as on every
+	# other event that carries the key (see Mtg.EventType.ABILITY_ACTIVATED,
+	# which spells the convention out and carries the ACTING player in a
+	# second key, `player`, precisely because the two are not the same
+	# thing). "Becomes tapped" is a state change of the permanent, not an
+	# action of a player: every watcher in the pool asks whose permanent it
+	# was — Psychic Venom stings the land's controller, Lifetap wants "a
+	# Forest AN OPPONENT controls", Powerleech drinks off "an artifact an
+	# opponent controls". Two sites here used to send the ACTIVATING player
+	# instead (fixed 2026-09-09); no card read the key, so nothing was
+	# wrong, and the next one to read it would have been.
+	#
+	# The line above sends `pid` on purpose and is NOT the same convention:
+	# TAPPED_FOR_MANA is announced by an activation and its watchers are
+	# worded around the player who tapped ("Whenever a player taps a land
+	# for mana, Manabarbs deals 1 damage to THAT PLAYER"). At this site the
+	# two values are the same anyway — tap_for_mana refuses a permanent its
+	# activator does not control — so nothing here can tell them apart.
 	if ability.taps_source:
 		dispatch_event(Mtg.EventType.BECAME_TAPPED,
-			{"instance": inst, "controller": pid})
+			{"instance": inst, "controller": inst.controller_id})
 	# CR 605.1a: a mana ability is still an ACTIVATED ability, so "whenever
 	# a player activates an ability of ..." hears one (Artifact Possession,
 	# Powerleech and Haunting Wind all watch artifacts, and Ashnod's Altar
@@ -2279,8 +2298,15 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	if ability.tap_cost:
 		if undo_log != null: _rec(inst, &"tapped")
 		inst.tapped = true
+		# The PERMANENT'S controller, not the activator — the convention
+		# this event keeps at all five of its dispatch sites (the long note
+		# at the BECAME_TAPPED dispatch in tap_for_mana has the reasoning,
+		# and names the one neighbouring event that means the other thing).
+		# The two differ the moment a card hands a {T} ability to somebody
+		# else the way Clergy of the Holy Nimbus, Ifh-Bíff Efreet and
+		# Land's Edge hand out their untapped ones.
 		dispatch_event(Mtg.EventType.BECAME_TAPPED,
-			{"instance": inst, "controller": pid})
+			{"instance": inst, "controller": inst.controller_id})
 	if ability.life_cost > 0:
 		adjust_life(pid, -ability.life_cost)
 	if ability.random_discard_cost > 0:
