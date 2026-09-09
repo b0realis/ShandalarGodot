@@ -79,6 +79,7 @@ override any knob on any preset for a measurement
 | `feeds_worst` | on | on | on | on | asked which of its own to give up when the giving is no cost it chose — The Abyss's meal, Lord of the Pit's tribute, Mana Vortex's land, a Sylvan Library's discard — it gives the least valuable, not the best; on everywhere, the same reason |
 | `spares_own` | on | on | on | on | never fills a harmful spell's slots with its own permanents unless the evaluator prices giving them up below zero — no Detonate on its own Mana Vault, no Winter Blast padded with its own creatures (the owner's playtest, 2026-09-08); on everywhere, the same reason |
 | `prices_liabilities` | on | on | on | on | knows that a permanent of its OWN can be worth less than nothing: the reckoning (a permanent whose printed line says losing it loses the GAME is never given up — a Lich), the dead weight (tapped, not untapping, every ability needing the {T} it cannot pay — a Mana Vault with no {4}, a creature under a Paralyze) and the toll it still takes each turn, priced for the turns our mana needs to reach the price the card itself prints. It is what opens `spares_own`'s one door: with it the AI Detonates the Vault it cannot untap and keeps the one it can; on everywhere, the same reason |
+| `prices_fallout` | on | on | on | on | prices what its own spell does to its OWN side of the table on the way past — the other half of `spares_own`, which only guards the slots. Volcanic Eruption ("destroy X target Mountains, then that many damage to each creature and each player") is the pool's one card of the shape: on, the planner walks every affordable X, prices the blast on the sweeper's own scale (`_sweep_value`: what dies on each side, both life totals, never an X lethal to us), refuses one that would put it on its own `chump_threshold` or below unless the blast wins outright, and keeps the cheapest X worth casting. Off, the blast is free and the X is whatever the lands will pay: at five life against six Mountains it cast for X=6 and killed itself. On everywhere, the same reason; the panic line gives it a per-rung shape without a number of its own |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race — a Tome's tick, an Ancestral, a tutor's card, and since the third pass the extra draw step a Time Walk buys |
@@ -86,11 +87,11 @@ override any knob on any preset for a measurement
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
-| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, and a trampler's overflow is measured against the toughness that will actually be there |
+| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, a trampler's overflow is measured against the toughness that will actually be there, and since the fourth the question a blocker is asked is the GANG's — do these bodies together kill it — so the gang the ladder declares is the gang the pilot pays for, with an unblocked attacker's breath booking the held instant as well as its own second main phase |
 
-`minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`
-and `prices_liabilities`
-are the six knobs that are on at every rung, and the reason is the
+`minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
+`prices_liabilities` and `prices_fallout`
+are the seven knobs that are on at every rung, and the reason is the
 line between weak and broken: an Apprentice that taps City of Brass for
 its last life to cast a Grizzly Bears is not a worse player, it is a
 malfunction — and so is one that puts Eternal Warrior on a Wall of
@@ -110,7 +111,14 @@ permanents do you give up" with the Lich (2026-09-09: a four-mana
 enchantment prices at 3.2, below a Grizzly Bears, and *"when this
 enchantment is put into a graveyard from the battlefield, you lose the
 game"* ends the duel on the spot — three of two hundred Azaar Lichlord
-games, and the knob's other half is what those two hundred games moved).
+games, and the knob's other half is what those two hundred games moved),
+or casts a Volcanic Eruption for X=6 at five life and dies to its own
+sorcery while the opponent walks away at twelve (2026-09-09: the reader
+had no model for the card-local effect, so the blast on its own
+creatures and its own face cost the planner nothing — the census that
+named the card had it right for the wrong reason, since it is a
+SIDEBOARD card in all three decks that hold it and a free-play census
+never draws it).
 They are knobs only so the Deck Lab
 can run the null; with
 `mulligans` off the pilot falls back to `DecisionAgent`'s plain rule,
@@ -329,6 +337,53 @@ side.
   of them to save itself while the bats stayed a 0/1 and died for
   nothing; both trades are made now and the fourth Swamp is spent.
 
+THE FOURTH PASS, the same day again: the two things the third one left —
+a body in a GANG priced at no breath, and the leftovers spent off the
+plan — one FIXED and one RULED. Both were §5 items rather than new
+capabilities, so the knob's meaning grew a fourth time and its null did
+not move. Seed 11, 1 000 games an arm, five pairs, each run TWICE: once
+on the shipped tree and once on this one, so the `on` arms lie side by
+side and every game can be compared by its own fingerprint.
+
+- **The null is the null, proved game for game.** Every OFF arm — the
+  null pair, the candidate pair at `off`, and both of them on the control
+  pair — is byte-identical between the two trees, 1 000 of 1 000, on all
+  five pairs: Vampire Lord vs Big Green 19.8%, Kzzy'n vs Big Green 14.3%,
+  Vampire Lord vs Summoner 39.9%, vs Summoner (Spells of the Ancients)
+  47.9%, vs War Mage 22.6%, each of them the shipped tree's own number to
+  the decimal. **Control PASS in every arm of all ten runs** — Big Green
+  vs White Knights, 525-475, byte-identical to its null, 1 000 of 1 000.
+- **A small gain rather than a wash, and the flips say so even where the
+  win rate cannot.** On arm, against the shipped tree's own `on` arm:
+  Vampire Lord vs Big Green 23.9% → 25.4%, Kzzy'n vs Big Green 18.4% →
+  19.3%, vs Summoner 53.3% → 54.7%, vs Summoner (Ancients) 59.3% →
+  59.9%, vs War Mage 55.5% → 55.5%. Every one of those is inside the
+  ±4.4-point interval a 1 000-game delta carries, so on any single pair
+  it reads as a wash. The census underneath it does not: of the 5 000
+  `on`-arm games, **388 played differently and 54 ended differently — 49
+  of them won and 5 lost**. A 49-to-5 split of the games that turned is
+  not a coin, and the direction is the same on every pair.
+- **Where it fires and where it does not.** The gang question wants a
+  board with a firebreather, a second body and something neither of them
+  kills alone: 150 games of 1 000 differ against Big Green's War Mammoths
+  and Craw Wurms, 88 against Summoner's Force of Nature and Colossus, 96
+  against Big Green with Kzzy'n's dragons, 54 against the Ancients
+  Summoner — and **not one game of the thousand** against War Mage, where
+  the board that asks the question never comes up: its Ball Lightnings
+  are hasted one-shot swings that the swarm blocks alone or not at all.
+- **What it fixes is what the table sees**, the block half's precedent
+  again. On the third pass's own board — a Carrion Ants and a Scathe
+  Zombies in front of a Force of Nature with six Swamps open — the
+  shipped pilot declares the gang, buys NOTHING for it, loses both bodies
+  and takes five with every Swamp still untapped. It now buys the six
+  breaths the gang was declared on, kills the 8/8, keeps the swarm and
+  takes nothing. Put a Hill Giant beside it at eight life and the pilot
+  goes from three life and two dead bodies to five life, a dead Force of
+  Nature and its spare body still at home. And the counter: a Carrion
+  Ants unblocked behind four Swamps and two Islands with a Counterspell
+  in hand used to buy six breaths and tap out; it buys the four the
+  declaration priced and the counter can still be cast.
+
 THE LIABILITY (2026-09-09, `prices_liabilities`) is a WASH where the
 Detonate is and a small gain where the Lich is, and the two halves want
 reading apart. Seed 11, the sweep's own three pairs, control Big Green vs
@@ -391,6 +446,41 @@ White Knights.
   is on at every rung for the Lich's sake and not the Vault's: giving up
   the permanent you cannot lose is not a weaker way to play.
 
+THE FALLOUT (2026-09-09, `prices_fallout`) is a WASH ON THE SCOREBOARD
+and a malfunction removed, and the census that opened the item was right
+for the wrong reason.
+
+- WHY THE CENSUS SAW NOTHING. "Volcanic Eruption resolved no cast in
+  sixty games either way (0/0)" (`docs/ROADMAP.md`, the Detonate pass)
+  is not a planner fault: the card is in the SIDEBOARD of all three
+  decks that hold it — Conjurer, Mind Stealer and Thought Invoker, the
+  1997 files' `.vRed` sections — and a free-play census never
+  sideboards, so it could not be drawn. Put it in a hand and the pilot
+  cast it every single time.
+- WHAT IT DID THEN, probed on three boards. Nine Islands against six
+  Mountains at five life: X=6, life −1, game over, the opponent at 12.
+  A Mahamoti Djinn and two Serra Angels of its own against four
+  Mountains and a Goblin: X=6, both Angels burnt, to take four lands
+  and a 1/1. Two Mountains and nine Islands: X=6 paid for two, four
+  mana for nothing, because the X buys TARGETS.
+- MEASURED where the card can actually be reached: **Conjurer vs Troll
+  Shaman** (two tier-3 1997 originals, `--best-of 3 --sideboard on` —
+  the Eruption is boarded in against a red deck by every rung that
+  sideboards at all, and it is the FIRST card the heuristic reaches
+  for), 1 000 matches an arm, seed 4242, control Big Green vs White
+  Knights. Win rate **14.6% → 15.1% (+0.5 ±3.1)**, inside the interval;
+  the `off` arm replayed the null 1000 of 1000 and the control is
+  byte-identical to its own null in every arm. The knob FIRED in **179
+  of the 1 000 matches** and changed the winner in 12.
+- WHAT THE WASH IS HIDING is the thing worth having. Over the same
+  1 000 matches the pilot cast the Eruption 369 times with the knob off
+  and **killed itself with 15 of them**; with it on, 316 casts and
+  **none**. The sizing accounts for the rest: it now pays for the
+  Mountains that are there rather than for every point its Islands will
+  bear, and it steps down from an X its own board would not survive.
+  A card that ends the game for its caster once in every twenty-five
+  casts is a malfunction, which is why the knob is on at every rung.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -449,13 +539,46 @@ has the rule.
   reservation beside it is two plans that can disagree: the split is
   written down where the declaration is made (`AiPlayer._pump_plan`) and
   spent one activation at a time, with a second uncapped pass so that
-  mana no plan wanted is still spent. What is left open is smaller and
-  named at the site: a body in a GANG is priced at no breath because that
-  is the question the recovery asks it, which reads the swing as MORE
-  dangerous than it is — the safe direction — and
-  `_offensive_combat_response`, which breathes on an unblocked attacker
-  after `_combat_self_pumps` has had its turn, spends the leftovers
-  without consulting the plan.
+  mana no plan wanted is still spent. ~~What is left open is smaller and
+  named at the site: a body in a GANG is priced at no breath, and
+  `_offensive_combat_response` spends the leftovers without consulting
+  the plan.~~ **Both closed 2026-09-09 by the fourth pass** (§4) — one
+  FIXED, one RULED.
+  * The GANG's breath: FIXED, and it was not the safe direction after
+    all. The reading erred safe, but it was mirroring a recovery that was
+    itself wrong: the block ladder's third rung declares a gang — two
+    bodies whose combined damage kills — on the probe's sizes, and
+    `_combat_self_pumps` then asked each of them whether the breath let
+    IT kill the attacker alone. On the third pass's own board (a Carrion
+    Ants and a Scathe Zombies in front of a Force of Nature, six Swamps,
+    the gang priced at exactly the eight an 8/8 needs) the pilot declared
+    the gang and bought NOTHING: both bodies died at 0/1 and 2/2, five
+    trampled through, the trampler walked away and every Swamp was still
+    untapped. `AiPlayer._band_kills` is the ladder's own gang question
+    written down as a predicate, and the recovery, the trampler's residue
+    (`_absorbed_by`) and the declaration all ask it now. The mates are
+    priced at what the plan still owes them, so a gang reaches one
+    verdict and buys together; and because that pricing IS the plan, the
+    question is asked only in the pass that honours it, which is where
+    the null stays the null. What is left, and it is the one already
+    named on `_pump_plan`: mana spent between the declaration and the
+    recovery by something else leaves a body short of the reach its plan
+    promised, and the residue then over-reads by that much.
+  * The LEFTOVERS: RULED, not built, and one half of it fixed for a
+    different reason. `_offensive_combat_response` does spend off the
+    plan — measured, two unblocked firebreathers behind four Swamps split
+    two and two, and it poured all four into the first body it met — and
+    it costs nothing: by the time it runs the bodies it serves are
+    UNBLOCKED and every point they buy is face damage, which is fungible
+    between them, so any split of the same pool lands the same total.
+    Honouring it would be strictly worse in two ways (a dearer breath
+    handed mana a cheaper one could spend, an allotment made out to a
+    body that stayed home going unspent), so it stays off the plan. The
+    OTHER half of that note was real and is fixed: the routine booked
+    only `_main2_reserve`, so an unblocked firebreather spent a
+    Counterspell's mana — priced at four breaths by the declaration, it
+    bought six and tapped every land. It reads `_pump_reserve` now, the
+    same cost every other breath in the file is priced against.
 - ~~Whether a RANDOM bonus can be priced at all — its floor, its mean, or
   a distribution the evaluator carries — with Rainbow Knights as the
   card that asks it.~~ **Closed 2026-09-09 — RULED, not built: the floor,
@@ -518,8 +641,8 @@ has the rule.
     stays the wave-5 row it was named as.
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
-  (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and
-  `spares_own` did)
+  (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`,
+  `spares_own`, `prices_liabilities` and `prices_fallout` did)
   goes on everywhere;
   anything that is a layer of play stays a rung.
 - The 1997 adventure's difficulty (gold, deck minimum, life, the creature

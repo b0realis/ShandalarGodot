@@ -8,6 +8,15 @@ extends CardScript
 ## Mountains the first actually buried, so a Mountain that was regenerated
 ## or had already left doesn't add to the blast. Destruction is plain
 ## destroy (Mountains may be regenerated, and the count then drops).
+##
+## THE BLAST IS ONE EVENT (2026-09-09). "…to each creature and each
+## player" is a single damage event, so nothing may be swept off the board
+## or out of the game until every packet has landed (CR 704.3) — the same
+## bracket [DamageAllEffect] puts round an Earthquake. Without it the
+## loop below dealt to each player in turn, the state-based check fired
+## between the two, and an Eruption lethal to BOTH duelists ended as a win
+## for the opponent instead of the draw CR 104.4b calls for (probed at
+## three life a side: P0 -1 and lost, P1 -1 and not, winner 1).
 
 
 static func _is_mountain(inst: CardInstance) -> bool:
@@ -41,12 +50,15 @@ class EruptEffect extends EffectBase:
 				buried += 1
 		if buried <= 0:
 			return
+		# CR 704.3 / 104.4b — see the note at the top of the file.
+		game.begin_simultaneous()
 		for inst in game.all_battlefield():
 			if inst.is_creature():
 				game.deal_damage(source, TargetRef.card(inst), buried)
 		for p in game.players:
 			if not p.has_lost:
 				game.deal_damage(source, TargetRef.player(p.id), buried)
+		game.end_simultaneous()
 
 	func describe() -> String:
 		return "destroys X target Mountains, then deals that much damage to each creature and each player"

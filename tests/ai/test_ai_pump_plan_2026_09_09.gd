@@ -47,6 +47,12 @@ extends GameTest
 ## code: Rainbow Knights' `{W}{W}` still has no row, and the reason is
 ## written out below where the arithmetic can be seen.
 ##
+## AND TWO OF THESE TESTS WERE UPDATED THE SAME DAY by the fourth pass,
+## which closed what this one left open — a body in a GANG priced at no
+## breath. The boards are the same and the outcomes are better twice
+## over; each says so where it stands, and the whole of it is
+## `tests/ai/test_ai_pump_leftovers_2026_09_09.gd`.
+##
 ## Every behaviour is pinned with the knob ON and with it OFF. Neither fix
 ## can move the null: the trample reading is inert without the probe's
 ## shares, and the plan pass is skipped outright below Sorcerer.
@@ -179,20 +185,29 @@ func test_the_trample_the_pilot_read_as_stopped_used_to_kill_it() -> void:
 	# Swamps, a Scathe Zombies and one spare body. The ladder gangs the
 	# swarm and the Zombies onto the Force of Nature — and the probe's
 	# 6/7 and the 2/2 look like ten points of blocker, so the residue
-	# read three and the chump rung stayed priced. What actually landed
-	# was eight: NEITHER body kills an 8/8 on its own, so
-	# _combat_self_pumps bought nothing at all and the swarm stood there
-	# as a 0/1 with all six Swamps up.
+	# read three and the chump rung stayed priced. What landed before the
+	# third pass was eight, and the pilot died of it.
+	#
+	# UPDATED 2026-09-09 BY THE FOURTH PASS, and it is the same board
+	# reading better twice over. The third pass made the residue honest by
+	# mirroring a recovery that bought NOTHING for a gang — five through,
+	# six Swamps up, both blockers dead. The fourth makes the recovery buy
+	# what the gang was declared on ([method AiPlayer._band_kills]): the
+	# swarm takes its six breaths, the gang lands the eight an 8/8 needs,
+	# the trampler DIES with nothing past it, and the spare body is not
+	# spent at all — three from the Hill Giant is the whole swing.
 	var ai := _ai(_on())
 	var foe := _ai(AiProfile.wizard(), 1)
-	_swing(ai, "Swamp", 6,
+	var theirs := _swing(ai, "Swamp", 6,
 		["Carrion Ants", "Scathe Zombies", "Hurloon Minotaur"],
 		["Force of Nature", "Hill Giant"], 8)
-	assert_string_contains(ai.act(g), "declared 3 block(s)",
-		"the spare goes in front of the Hill Giant")
+	assert_string_contains(ai.act(g), "declared 2 block(s)",
+		"the gang goes in front of the trampler and the spare stays home")
 	_play_out_combat(ai, foe)
 	assert_false(g.game_over, "the pilot is alive")
-	assert_eq(g.players[0].life, 3, "five trampled through and the rest was stopped")
+	assert_eq(theirs[0].zone, Mtg.Zone.GRAVEYARD, "the Force of Nature died")
+	assert_eq(g.players[0].life, 5, "nothing trampled through; the Hill Giant's three did")
+	assert_eq(_untapped_lands(0), 0, "and every Swamp went into the gang")
 
 
 func test_off_the_same_swing_is_read_off_the_printed_board() -> void:
@@ -213,11 +228,19 @@ func test_off_the_same_swing_is_read_off_the_printed_board() -> void:
 
 func test_the_residue_is_what_the_recovery_will_actually_stop() -> void:
 	# The reading itself, taken where the declaration takes it: on the
-	# probe's board, with the shares in hand and without them. Nought is
-	# the old answer, five is the true one, and five is what lands.
+	# probe's board, with the shares in hand and without them.
+	#
+	# UPDATED 2026-09-09 BY THE FOURTH PASS. The third pass's answer here
+	# was five through, because it asked each blocker whether it kills the
+	# 8/8 ALONE and neither does. The band is asked now
+	# ([method AiPlayer._band_kills]), so the reading is nought again — but
+	# for the opposite reason, and it is a reason that is DELIVERED: the
+	# swarm buys the six breaths, the gang lands eight on an 8/8, and the
+	# body that lives absorbs the whole assignment. Both numbers are shown
+	# side by side below, the alone reading and the band's.
 	var ai := _ai(_on())
 	var foe := _ai(AiProfile.wizard(), 1)
-	_swing(ai, "Swamp", 6, ["Carrion Ants", "Scathe Zombies"],
+	var theirs := _swing(ai, "Swamp", 6, ["Carrion Ants", "Scathe Zombies"],
 		["Force of Nature"], 12)
 	var attackers := _attacking()
 	var free := _free()
@@ -227,19 +250,26 @@ func test_the_residue_is_what_the_recovery_will_actually_stop() -> void:
 		var bonus: Vector2i = Vector2i(shares[id]["bonus"]) * int(shares[id]["count"])
 		g.continuous.add_until_eot_pump(int(id), bonus.x, bonus.y)
 	g.recalculate()
+	var ants := _mine("Carrion Ants")
+	var zombies := _mine("Scathe Zombies")
+	var band: Array[CardInstance] = [ants, zombies]
 	assert_eq(ai._damage_after_value_blocks(g, attackers, free), 0,
-		"the old reading: a 6/7 and a 2/2 stop all eight")
-	assert_eq(ai._damage_after_value_blocks(g, attackers, free, shares), 5,
-		"the true one: neither kills it alone, so neither buys a breath")
-	assert_eq(ai._absorbed_by(g, _mine("Carrion Ants"), attackers[0], shares), 1,
-		"the swarm absorbs the toughness it is printed with")
-	assert_eq(ai._absorbed_by(g, _mine("Scathe Zombies"), attackers[0], shares), 2,
-		"and a body with no share is what it looks like")
+		"with no shares at all: a 6/7 and a 2/2 stop all eight")
+	assert_eq(ai._damage_after_value_blocks(g, attackers, free, shares), 0,
+		"and with them: the gang kills it, so the breaths are bought")
+	assert_eq(ai._absorbed_by(g, ants, attackers[0], shares), 1,
+		"ALONE the swarm buys nothing and absorbs what it is printed with")
+	assert_eq(ai._absorbed_by(g, ants, attackers[0], shares, band), 7,
+		"in the BAND it buys all six, and a body that lives stops everything")
+	assert_eq(ai._absorbed_by(g, zombies, attackers[0], shares, band), 2,
+		"and a body with no share is what it looks like, band or none")
 	g.unmake_to(mark)
 	g.end_search()
 	assert_string_contains(ai.act(g), "declared 2 block(s)", "the gang is still made")
 	_play_out_combat(ai, foe)
-	assert_eq(g.players[0].life, 7, "five, exactly as the reading now says")
+	assert_eq(theirs[0].zone, Mtg.Zone.GRAVEYARD, "the Force of Nature died")
+	assert_eq(g.players[0].life, 12, "and nothing came through")
+	assert_eq(_untapped_lands(0), 0, "six Swamps, six breaths")
 
 
 func test_the_breath_that_wins_the_trade_is_counted_because_it_is_bought() -> void:

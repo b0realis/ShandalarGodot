@@ -120,6 +120,53 @@ func test_volcanic_eruption_blasts_for_the_mountains_it_buried() -> void:
 	assert_eq(g.players[1].life, 18)
 
 
+func test_volcanic_eruption_is_one_event_and_kills_both_duelists_at_once() -> void:
+	# 2026-09-09. "…to each creature and each player" is a single damage
+	# event (CR 704.3), so nothing is checked until every packet has landed
+	# and two lethal blows at once are a DRAW (CR 104.4b) — the same rule
+	# tests/unit/test_simultaneous_loss.gd pins for an Earthquake. Until the
+	# blast was bracketed the loop dealt to each player in turn, the check
+	# fired between them, and this ended as a win for the opponent: P0 at
+	# -1 and lost, P1 at -1 and not, winner 1.
+	g.players[0].life = 3
+	g.players[1].life = 3
+	var mountains: Array[CardInstance] = []
+	var refs: Array = []
+	for _i in 4:
+		var m := put_battlefield(1, "Mountain")
+		mountains.append(m)
+		refs.append(TargetRef.card(m))
+	var erupt := give_hand(0, "Volcanic Eruption")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 3)
+	add_mana(0, Mtg.ManaColor.C, 4)
+	assert_ok(g.cast_spell(0, erupt, refs, 4))
+	resolve_stack()
+	assert_eq(g.players[0].life, -1, "the caster took the whole blast")
+	assert_eq(g.players[1].life, -1, "and so did the opponent")
+	assert_true(g.game_over)
+	assert_true(g.is_draw, "and it is a draw, not a win")
+	assert_eq(g.winner, -1, "nobody won")
+
+
+func test_volcanic_eruption_that_kills_only_the_caster_still_loses_them_it() -> void:
+	# The control: asymmetric lethal is an ordinary loss, not a draw.
+	g.players[0].life = 3
+	g.players[1].life = 9
+	var refs: Array = []
+	for _i in 4:
+		refs.append(TargetRef.card(put_battlefield(1, "Mountain")))
+	var erupt := give_hand(0, "Volcanic Eruption")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 3)
+	add_mana(0, Mtg.ManaColor.C, 4)
+	assert_ok(g.cast_spell(0, erupt, refs, 4))
+	resolve_stack()
+	assert_true(g.game_over)
+	assert_false(g.is_draw, "one survivor is not a draw")
+	assert_eq(g.winner, 1)
+
+
 func test_volcanic_eruption_only_targets_mountains() -> void:
 	var forest := put_battlefield(1, "Forest")
 	var erupt := give_hand(0, "Volcanic Eruption")

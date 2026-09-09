@@ -134,6 +134,15 @@ var target_spec: TargetSpec = null
 ## LEVELLERS] for why it is read by name.
 var levels: bool = false
 
+## A BLAST: the spell destroys the permanents it targets and then deals
+## damage to EACH creature and EACH player equal to how many it buried
+## (Volcanic Eruption). The targeting half points across the table; the
+## blast lands on both sides of it, so what the spell is worth is a board
+## calculation the fields above cannot sum — a flag, like [member levels],
+## and [method AiPlayer._blast_price] does the counting. See [constant
+## BLASTS] for why it is read by name.
+var blasts: bool = false
+
 ## THE WINDOW SHAPES — what a spell whose rider keeps it out of its
 ## caster's own main phase DOES in the moment the rider names, for the
 ## card-local effects of that kind (see [constant WINDOW_SHAPES]). NONE
@@ -290,6 +299,33 @@ const CARD_LOCAL_PUMPS := {
 		"fuse_count": "breaths", "fuse_turn": "breaths_turn"},
 }
 
+# THE BLASTS — the fifth table (2026-09-09), and the fourth one that is a
+# table of its own rather than a row in [constant CARD_LOCAL], for the
+# reason the second, third and fourth state: a row up there makes the
+# reader stop calling the effect `unknown`, and this effect IS unknown to
+# every reading that word gates (the harm reading, the target picker).
+# Only [member blasts] reads this column, so the null arm of the knob it
+# feeds is what shipped, to the byte.
+#
+# THE CARD THE CENSUS COULD NOT FIND (2026-09-09). Volcanic Eruption's
+# `EruptEffect` destroys X target Mountains and then deals that many
+# damage to each creature and each player — a targeted removal spell with
+# an untargeted sweeper welded to its back, which no field above can sum
+# and no shared effect class expresses. The reader called the whole thing
+# `unknown`, which makes it removal-shaped, so the planner priced the
+# Mountains it took and charged NOTHING for the blast: nine Islands
+# against six Mountains at five life, it cast for X=6 and killed ITSELF
+# (probed 2026-09-09 — the opponent walked away at 12); with a Mahamoti
+# Djinn and two Serra Angels of its own on the table it burned the Angels
+# down to destroy four lands and a 1/1; and with two Mountains in front
+# of it and nine Islands it still paid X=6 for the two.
+#
+# The card IS the class here — it is the pool's only spell of the shape —
+# and what the AI does with the flag is a count of both boards and both
+# life totals on the sweeper's own scale ([method AiPlayer._blast_price]),
+# never a rule about the name.
+const BLASTS := ["Volcanic Eruption"]
+
 
 ## The card-local breath [param card_name] pumps itself with, as a row of
 ## [constant CARD_LOCAL_PUMPS] — `{}` when the card has none.
@@ -310,6 +346,7 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 	var note: Dictionary = CARD_LOCAL.get(card_name, {})
 	intent.window = int(WINDOW_SHAPES.get(card_name, Shape.NONE))
 	intent.levels = LEVELLERS.has(card_name)
+	intent.blasts = BLASTS.has(card_name)
 	for e in effects:
 		if intent.target_spec == null and e.target_spec != null:
 			intent.target_spec = e.target_spec

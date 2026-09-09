@@ -1850,6 +1850,13 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		if swing < SWEEP_BAR:
 			return {}
 		return {"x": 0, "targets": [], "value": swing}
+	# THE FALLOUT (2026-09-09, AiProfile.prices_fallout): a spell that
+	# destroys what it targets and then blasts EVERY creature and BOTH
+	# players is sized and priced by [method _size_blast]. Off, it falls
+	# through to the plain targeted path below, which reads the victims it
+	# names and nothing else — the pilot that Erupted itself to death.
+	if intent.blasts and profile.prices_fallout and not data.is_modal():
+		return _size_blast(game, inst, max_x, mode)
 	if intent.damage_uses_x and intent.target_spec != null and not data.is_modal():
 		return _size_x_burn(game, inst, intent, max_x)
 	# A tap is worth nothing by itself: it has a POLICY, not a value.
@@ -1975,6 +1982,87 @@ func _size_x_burn(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		return {"x": max_x, "targets": [TargetRef.player(opponent)],
 			"value": intent.damage_at(max_x) * 0.75 + 2.0}
 	return {}
+
+
+# ================================================================ the blast --
+#
+# A SPELL THAT ANSWERS TO BOTH SIDES OF THE TABLE (2026-09-09,
+# [member AiProfile.prices_fallout]). Volcanic Eruption destroys X target
+# Mountains and then deals that many damage to each creature and each
+# player — the pool's one card whose targeted half points across the table
+# and whose untargeted half lands on ours as hard as on theirs
+# ([constant EffectIntent.BLASTS]).
+#
+# Two things had to be answered and the generic path answered neither.
+# WHAT IT IS WORTH: [method _cast_value] credits the victims a spell names
+# and knows nothing about what it does on the way past, so the blast was
+# free — the Serra Angels it burned to take four lands cost the planner
+# nothing, and neither did the last five points of its own life. WHAT X TO
+# PAY: the X here buys TARGETS, not damage (the Detonate reading, CR
+# 601.2b), so an X past the Mountains on the table is mana paid for
+# nothing, and the fall-through simply spent every point it could afford.
+#
+# The answer to both is one loop: try each affordable X, price the whole
+# resolution, and keep the best — a strict `>` from a floor of zero, so a
+# tie goes to the CHEAPEST X and a board where the spell is not worth
+# casting leaves it in hand.
+#
+# THE PANIC LINE, READ THE OTHER WAY ROUND. [method _sweep_value]'s life
+# guard is "never a sweep that is lethal to us", which is the right rule
+# for a sweeper whose size is printed on it and the wrong one for a spell
+# whose size we are choosing: it let the Eruption at five life step back
+# from X=6 and take X=4 instead, which is one life and an opponent at
+# fourteen. [member AiProfile.chump_threshold] is already the life total
+# at which this seat starts spending resources purely to survive, in both
+# of its readings — the chump block and the prevention window — so it is
+# the same question a third time, asked of our own spell: an X that would
+# put US on that line or below it is not paid, unless the blast wins the
+# game outright. It needs no number of its own, and it gives the rule a
+# per-rung shape for free: an Apprentice (3) walks closer to the edge
+# than a Wizard (6), which is what the lower rungs are.
+
+
+## Size and aim a blast, or `{}` to hold it. See the note above.
+func _size_blast(game: MtgGame, inst: CardInstance, max_x: int,
+		mode: int) -> Dictionary:
+	var me := game.players[pid]
+	var them := game.players[game.opponent_of(pid)]
+	var best_x := -1
+	var best_targets: Array = []
+	var best_value := 0.0
+	for x in range(1, max_x + 1):
+		var aim = _choose_targets(game, inst, x, mode)   # Array or null
+		if aim == null or aim.is_empty():
+			continue
+		# What the X actually BOUGHT: the picker fills as many slots as the
+		# board can (CR 601.2c), so the blast is the count it came back
+		# with, and so is the X worth paying for.
+		var bought: int = mini(x, aim.size())
+		if bought < them.life and me.life - bought <= profile.chump_threshold:
+			continue   # the panic line, read the other way round
+		var worth := _cast_value(game, inst, aim, bought) + _blast_price(game, bought)
+		if worth > best_value:
+			best_x = bought
+			best_targets = aim
+			best_value = worth
+	if best_x < 0:
+		return {}
+	return {"x": best_x, "targets": best_targets, "value": best_value}
+
+
+## What the blast half is worth once [param n] permanents are buried: the
+## sweeper reading, whole. [method _sweep_value] already prices "damage to
+## each creature and each player" from both boards and both life totals —
+## what dies on their side minus what dies on ours, their life at the
+## board scale and ours at the reaper's, a lethal blast at [constant
+## LETHAL_WORTH] and one that is lethal to US at minus the same, which is
+## the line the Eruption at five life walked over. The [DamageAllEffect]
+## built here is the sentence the shared vocabulary would have carried had
+## the card been able to use it; nothing is added to the game with it.
+func _blast_price(game: MtgGame, n: int) -> float:
+	if n <= 0:
+		return 0.0
+	return _sweep_value(game, DamageAllEffect.new(n).and_each_player(), n)
 
 
 # ============================================================ the tap policy --
@@ -2872,6 +2960,28 @@ func _find_bounce_for(game: MtgGame, victim: CardInstance) -> CardInstance:
 ## spent it on before — a second, uncapped pass that runs only when the
 ## first found nothing left to buy. With the knob off there is no plan
 ## and the second pass is the only one, which is the null exactly.
+##
+## AND THE QUESTION IT ASKS A BLOCKER IS THE GANG'S, NOT THE BODY'S OWN
+## (2026-09-09, the fourth pass, and the last thing the third one left
+## standing). "Does this breath win the trade?" used to mean "does this
+## body kill the attacker ALONE?" — but the block ladder's third rung
+## declares a GANG on the probe's sizes, where no single body has to. So
+## the pilot declared the gang and then bought nothing for it. Measured
+## on 2026-09-09, on the third pass's own board: a Carrion Ants and a
+## Scathe Zombies in front of a Force of Nature, six Swamps open, the
+## declaration priced the swarm at six breaths and the gang at exactly
+## the eight damage an 8/8 needs — and the recovery bought NOTHING, both
+## bodies died at 0/1 and 2/2, five trampled through and the Force of
+## Nature walked away with all six Swamps still untapped. Asked as the
+## gang's question ([method _band_kills], the ladder's own rung), the six
+## breaths are bought, the 8/8 dies and nothing comes through.
+##
+## The mates are priced at what the PLAN still owes them, which is the
+## size the block was declared on, so every body of the gang reaches the
+## same verdict and they buy together. The one way they can disagree is
+## the one [member _pump_plan] already documents: mana spent between the
+## declaration and the recovery by something else, which leaves a body
+## short of the reach its plan promised.
 func _combat_self_pumps(game: MtgGame) -> String:
 	if game.current_step() != Mtg.Step.DECLARE_BLOCKERS:
 		return ""
@@ -2949,6 +3059,24 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 						continue
 					if not _dies_to(game, other, inst, Vector2i.ZERO, pending_bonus) \
 							and _dies_to(game, other, inst, Vector2i.ZERO, reach_bonus):
+						worth = true
+						break
+					# THE GANG'S QUESTION (2026-09-09) — see the note above.
+					# Only in the plan's own pass: the gang is priced with
+					# every mate at the size the DECLARATION allotted it,
+					# and outside that pass there is no allotment to hold
+					# the pool for them.
+					if not honour_plan or not game.combat.blocks.has(inst.id):
+						continue
+					var band := _gang_on(game, other)
+					if band.size() < 2:
+						continue
+					var owed := _owed_bonuses(game, band, inst)
+					owed[inst.id] = pending_bonus
+					if _band_kills(game, other, band, owed):
+						continue   # the gang finishes it without this breath
+					owed[inst.id] = reach_bonus
+					if _band_kills(game, other, band, owed):
 						worth = true
 						break
 			if not worth:
@@ -3139,6 +3267,62 @@ func _dies_to(game: MtgGame, victim: CardInstance, hitter: CardInstance,
 	if hit <= 0 or hit < victim.cur_toughness + victim_bonus.y - victim.damage:
 		return false
 	return not _shieldable(game, victim)
+
+
+## THE SAME QUESTION ASKED OF A WHOLE BAND (2026-09-09,
+## [member AiProfile.pumps_to_attack]): would [param band] TOGETHER finish
+## [param victim], with [param extra] naming a what-if bonus for any of
+## the bodies in it (`{instance id: Vector2i}`)?
+##
+## It is the "gang up" rung of [method _best_block_for] written down as a
+## predicate, for the two readings that had been asking each body whether
+## it kills the attacker ALONE — the recovery ([method _self_pump_once])
+## and the trampler's residue ([method _absorbed_by]) — so that all three
+## ask one question. For a band of ONE it is [method _dies_to] exactly,
+## which is what both readings fall back to when there is no gang.
+func _band_kills(game: MtgGame, victim: CardInstance,
+		band: Array[CardInstance], extra: Dictionary = {}) -> bool:
+	if victim.cur_indestructible or _shieldable(game, victim):
+		return false
+	var total := 0
+	for body in band:
+		if body == null or body.zone != Mtg.Zone.BATTLEFIELD:
+			continue
+		var bonus: Vector2i = extra.get(body.id, Vector2i.ZERO)
+		total += _damage_from(body, victim, bonus)
+	return total > 0 and total >= victim.cur_toughness - victim.damage
+
+
+## Every body of ours blocking [param victim], as the band [method
+## _band_kills] asks about.
+func _gang_on(game: MtgGame, victim: CardInstance) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	for blocker_id in game.combat.blockers_of(victim.id):
+		var body := game.find_instance(blocker_id)
+		if body != null and body.zone == Mtg.Zone.BATTLEFIELD:
+			out.append(body)
+	return out
+
+
+## The breaths the plan still owes every body of [param band] except
+## [param inst], as `{instance id: Vector2i}` — the size the block was
+## DECLARED on, less whatever the recovery has bought so far. A body with
+## no plan, or one that has had everything it was allotted, contributes
+## the printed damage it already deals and no entry here.
+func _owed_bonuses(game: MtgGame, band: Array[CardInstance],
+		inst: CardInstance) -> Dictionary:
+	var out: Dictionary = {}
+	for body in band:
+		if body == inst:
+			continue
+		var owed := _pump_plan_for(game, body) + _pending_pumps(game, body)
+		if owed <= 0:
+			continue
+		var pump := _self_pump_of(game, body)
+		if pump.is_empty():
+			continue
+		out[body.id] = Vector2i(pump["bonus"]) * owed
+	return out
 
 
 ## Can [param inst]'s controller put a regeneration shield on it right
@@ -3452,6 +3636,27 @@ func _defensive_combat_response(game: MtgGame) -> String:
 
 
 ## We are ATTACKING; blocks are (being) declared.
+##
+## AND THE PUMP PLAN IS NOT CONSULTED HERE, BY RULING (2026-09-09, the
+## fourth pass at [member AiProfile.pumps_to_attack]). The note this
+## routine carried said it "spends the leftovers off-plan", and it does:
+## measured on that date, two unblocked firebreathers behind four Swamps,
+## the declaration's split two and two ([method _pump_shares]), and this
+## loop poured all four into the first body it met — a 4/5 Carrion Ants
+## beside a 0/1 Vampire Bats where the plan had priced a 2/3 and a 2/1.
+##
+## It costs NOTHING, and the reason is structural rather than lucky. The
+## plan is a DECLARATION's split: which body has to be big enough to be
+## worth sending. By the time this runs the blocks are in, the bodies it
+## serves are UNBLOCKED, and every point they buy is face damage — which
+## is fungible between them, so any split of the same pool lands the same
+## total (16 life either way, on that board). Two things then argue
+## against honouring it: a breath that is dearer per point of power would
+## be handed mana a cheaper one could spend better, and an allotment made
+## out to a body that stayed home, died, or was blocked would simply go
+## unspent. [method _combat_self_pumps] always has its say BEFORE this
+## routine does ([method _respond_action]'s order), so the mana reaching
+## here is mana the plan's own recovery has already declined.
 func _offensive_combat_response(game: MtgGame) -> String:
 	if game.current_step() != Mtg.Step.DECLARE_BLOCKERS:
 		return ""
@@ -3523,7 +3728,26 @@ func _offensive_combat_response(game: MtgGame) -> String:
 	if game.combat_damage_prevented:
 		return ""
 	var sources := _mana_sources(game)
-	var reserve := _main2_reserve(game, sources)
+	# ONE RESERVE, AND IT IS THE DECLARATION'S OWN (2026-09-09,
+	# [member AiProfile.pumps_to_attack]). This loop booked the second
+	# main phase and nothing else, so it would spend a Counterspell's
+	# {U}{U} on two points of face damage — the asymmetry the note of
+	# 36058fc named and the fourth pass closed. [method _pump_reserve] is
+	# the cost every OTHER breath in this file is already priced against
+	# (both declaration probes and [method _combat_self_pumps] reach it
+	# through [method _pumps_in_reach]), and it books the same second main
+	# phase plus the held instant or counter the reactive game is waiting
+	# on. Measured on 2026-09-09: a Carrion Ants unblocked behind four
+	# Swamps and two Islands with a Counterspell in hand — the
+	# declaration priced it at FOUR breaths and the recovery bought SIX,
+	# tapping every land, and the counter could not be paid for.
+	var kept: ManaCost = null
+	if profile.pumps_to_attack:
+		kept = _pump_reserve(game, sources)
+	else:
+		var main2 := _main2_reserve(game, sources)
+		if not main2.is_empty():
+			kept = main2["cost"]
 	for attacker in unblocked:
 		for index in attacker.cur_activated_abilities.size():
 			var ability: ActivatedAbility = attacker.cur_activated_abilities[index]
@@ -3567,9 +3791,9 @@ func _offensive_combat_response(game: MtgGame) -> String:
 							unblocked_total, per_pump)):
 				continue
 			var surcharge := game.ability_surcharge(pid, attacker)
-			if not reserve.is_empty() \
+			if kept != null \
 					and _plan_taps_from(sources,
-						_combined_cost(ability.cost, reserve["cost"]), surcharge).is_empty() \
+						_combined_cost(ability.cost, kept), surcharge).is_empty() \
 					and not _pumps_are_lethal(game, attacker, ability, sources,
 						unblocked_total, per_pump):
 				continue
@@ -4861,13 +5085,19 @@ func _damage_after_value_blocks(game: MtgGame, attackers: Array[CardInstance],
 		shares)
 	var through := 0
 	for attacker in attackers:
-		var stopped := 0
+		# The whole band first, because what each body of a gang absorbs
+		# depends on whether the gang KILLS (2026-09-09, [method
+		# _absorbed_by]) and not on what it could do alone.
+		var band: Array[CardInstance] = []
 		for blocker_id in trial:
 			if int(trial[blocker_id]) != attacker.id:
 				continue
 			var blocker := game.find_instance(int(blocker_id))
 			if blocker != null:
-				stopped += _absorbed_by(game, blocker, attacker, shares)
+				band.append(blocker)
+		var stopped := 0
+		for blocker in band:
+			stopped += _absorbed_by(game, blocker, attacker, shares, band)
 		if stopped == 0:
 			through += attacker.cur_power
 		elif attacker.has_keyword(Mtg.Keyword.TRAMPLE):
@@ -4913,14 +5143,27 @@ func _damage_after_value_blocks(game: MtgGame, attackers: Array[CardInstance],
 ##    counted here the way [method _combat_self_pumps] counts them — and
 ##    nothing at all when nothing it can reach kills.
 ##
-## The one thing left standing is deliberate and is the safe direction:
-## a body in a GANG is asked whether it kills the attacker ALONE, because
-## that is the question the recovery asks it, so two bodies that finish a
-## trampler between them are each priced at no breath. That reads the
-## swing as more dangerous than it is, which is the same way this routine
-## is already wrong about a blocker with no toughness left to spend.
+## AND THE KILL IS THE GANG'S (2026-09-09, the fourth pass). The one
+## thing this reading left standing was that a body in a GANG was asked
+## whether it kills the attacker ALONE — so two bodies that finish a
+## trampler between them were each priced at no breath. It errs safe as a
+## READING, but it was mirroring a recovery that was itself wrong: the
+## block ladder declares a gang on the probe's sizes and
+## [method _combat_self_pumps] then bought nothing for it. Both now ask
+## [method _band_kills] — do these bodies TOGETHER finish it — and the
+## breaths this routine counts are the breaths the recovery buys.
+##
+## [param band] is the bodies blocking [param attacker] alongside
+## [param blocker] in the block being priced, and it comes from the
+## caller because the block is still a PLAN here and the engine has not
+## been told of it: [method _damage_after_value_blocks] has the trial map,
+## and the chump rung of [method _best_block_for] is throwing one body, so
+## it passes none and the reading is the alone one it always was. Inside
+## the probe every mate is already wearing its whole share, so only the
+## body under test carries a delta.
 func _absorbed_by(game: MtgGame, blocker: CardInstance,
-		attacker: CardInstance, shares: Dictionary) -> int:
+		attacker: CardInstance, shares: Dictionary,
+		band: Array[CardInstance] = []) -> int:
 	var live := maxi(blocker.cur_toughness - blocker.damage, 0)
 	var share: Dictionary = shares.get(blocker.id, {})
 	if share.is_empty():
@@ -4931,12 +5174,16 @@ func _absorbed_by(game: MtgGame, blocker: CardInstance,
 		return live
 	if live > _damage_from(attacker, blocker):
 		return live
+	var gang: Array[CardInstance] = []
+	gang.assign(band)
+	if gang.is_empty():
+		gang.append(blocker)
 	# The breaths are counted DOWN from the probe's size, because the
 	# probe's size is what the board is wearing right now: a body asked
 	# about at `bought` breaths is the one in front of us less the rest.
 	for bought in count + 1:
-		if _dies_to(game, attacker, blocker, Vector2i.ZERO,
-				bonus * (bought - count)):
+		if _band_kills(game, attacker, gang,
+				{blocker.id: bonus * (bought - count)}):
 			return maxi(live - bonus.y * (count - bought), 0)
 	return maxi(live - bonus.y * count, 0)
 

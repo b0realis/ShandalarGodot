@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `prices_fallout`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -324,10 +324,14 @@ its control pair: `pumps_to_attack` grew on 2026-09-09 to cover the BLOCK
 declaration as well as the attack (and to read Dragon Whelp's and Nalathni
 Dragon's card-local breath), and again the same day to make the breaths
 the pilot BUYS match the ones the declaration was priced with — the
-trampler's overflow and the one pool split among several bodies. So its
+trampler's overflow and the one pool split among several bodies — and a
+fourth time, when the recovery learned to ask the GANG's question (do
+these bodies TOGETHER kill it) and an unblocked attacker's breath began
+booking the held instant as well as its own second main phase. So its
 control must hold no activated self-pump on EITHER side of the table —
 Big Green vs White Knights still replays its null game for game, 1,000 of
-1,000, in every arm of six runs. `prices_liabilities` (2026-09-09) fires
+1,000, in every arm of six runs, and of ten more on 2026-09-09 (five
+pairs on the candidate tree and the same five on its baseline). `prices_liabilities` (2026-09-09) fires
 on a permanent of the pilot's OWN that is worth less than nothing to it,
 so its control must hold no Lich, no Mana Vault, no permanent that stops
 untapping (a Paralyze, a Meekstone, an Arena of the Ancients) and no

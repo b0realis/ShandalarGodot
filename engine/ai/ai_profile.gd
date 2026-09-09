@@ -277,6 +277,49 @@ var spares_own := true
 ## A knob only so the Deck Lab can run the null.
 var prices_liabilities := true
 
+## THE FALLOUT: does this profile price what its own spell does to its own
+## side of the table on the way past? [member spares_own] keeps our
+## permanents out of a harmful spell's SLOTS; this is the other half — the
+## damage a spell deals to everything, ours included, once the slots are
+## filled and it resolves. The reader has no field that can sum it
+## ([constant EffectIntent.BLASTS] is where such a spell says so), and
+## [method AiPlayer._cast_value] priced only the victims it named.
+##
+## Volcanic Eruption is the pool's one card of the shape — "destroy X
+## target Mountains, then deal that many damage to each creature and each
+## player" — and the census that named it had it right for the wrong
+## reason: it resolved no cast in sixty games because it is a SIDEBOARD
+## card in all three decks that hold it (Conjurer, Mind Stealer, Thought
+## Invoker, `.vRed` sections), so a free-play census never draws it. Put
+## it in a hand and the pilot casts it every time, at the biggest X its
+## Islands will pay for and with no reading of the blast at all. Three
+## boards, probed 2026-09-09:
+##
+##  * NINE ISLANDS, SIX MOUNTAINS, US AT FIVE. Cast for X=6, life -1,
+##    game over, the opponent at 12 — a seat that kills itself with its
+##    own sorcery.
+##  * OUR BOARD THE BETTER ONE. A Mahamoti Djinn and two Serra Angels
+##    against four Mountains and a Goblin: the Angels burn, to take four
+##    lands and a 1/1.
+##  * TWO MOUNTAINS, NINE ISLANDS. X=6 paid for two — four mana for
+##    nothing, because the X buys TARGETS and there were only two.
+##
+## On, the planner walks every affordable X, prices the blast the way it
+## prices a sweeper ([method AiPlayer._sweep_value]: what dies on each
+## side on the board scale, both life totals at the reaper's rate, and
+## never an X that is lethal to us), refuses an X that would put us on
+## [member chump_threshold] or below it unless the blast wins the game
+## outright, and keeps the cheapest X worth casting at all ([method
+## AiPlayer._size_blast]). The panic line is what gives the rule a
+## per-rung shape without a number of its own.
+##
+## On for EVERY profile, like [member prices_liabilities] and [member
+## minds_pain]: an Apprentice that Erupts itself to death is not a weak
+## player, it is a broken one. A knob only so the Deck Lab can run the
+## null — off, the card is sized and priced exactly as it was before
+## 2026-09-09.
+var prices_fallout := true
+
 ## THE COUNT: does this profile size a card-advantage spell to the hands
 ## and libraries in front of it? On, an X discard is cast for the cards
 ## its target actually holds and waits while they hold none; an X draw is
@@ -508,6 +551,48 @@ var trusts_abyss := false
 ## is in the RECOVERY and not in the probe on purpose: the probe already
 ## reserves per body, and a second reservation written beside it is two
 ## plans that can disagree.
+##
+## AND THE TWO THINGS THAT PASS LEFT (2026-09-09, the fourth, and the
+## same seam once more): where the declaration asks a question the
+## recovery has to ask the SAME question, and where a breath is priced it
+## has to be priced against the SAME reserve.
+##
+## The GANG's breath was the first. The block ladder's third rung
+## declares a gang — two bodies whose combined damage kills — on the
+## probe's sizes, and [method AiPlayer._combat_self_pumps] then asked
+## each of them whether the breath let IT kill the attacker alone. In a
+## gang none of them does, so the pilot declared the gang and bought
+## nothing for it: on the third pass's own board — a Carrion Ants and a
+## Scathe Zombies in front of a Force of Nature, six Swamps open, the
+## gang priced at exactly the eight damage an 8/8 needs — both bodies
+## died at 0/1 and 2/2, five trampled through, the trampler walked away
+## and every Swamp was still untapped. [method AiPlayer._band_kills] is
+## the ladder's own gang question as a predicate, and the recovery, the
+## trampler's residue ([method AiPlayer._absorbed_by]) and the
+## declaration all ask it now. The mates are priced at what the plan
+## still owes them, so every body of a gang reaches the same verdict and
+## they buy together; and because that pricing IS the plan, the question
+## is asked only in the pass that honours it.
+##
+## The COUNTERSPELL's mana was the second, and it is older than this knob
+## (a note of 36058fc's). Every breath in the file is priced against
+## [method AiPlayer._pump_reserve] — the second main phase's best
+## sorcery-speed cast AND the held instant or counter the reactive game
+## is waiting on — except the one [method
+## AiPlayer._offensive_combat_response] buys for an unblocked attacker,
+## which booked the first of the two and spent the second. A Carrion Ants
+## unblocked behind four Swamps and two Islands with a Counterspell in
+## hand: the declaration priced it at four breaths and the recovery
+## bought six, tapping every land, and the counter could not be paid for.
+## One reserve now, and the lethal clause still overrides it — mana kept
+## for a turn that will not happen is kept for nobody.
+##
+## What that pass did NOT do, by ruling: [method
+## AiPlayer._offensive_combat_response] still does not consult the plan.
+## It spends off it, and it costs nothing — by the time it runs the
+## bodies it serves are UNBLOCKED and every point they buy is face
+## damage, which is fungible between them, so any split of the same pool
+## lands the same total. The reasoning is at the site.
 ##
 ## A CAPABILITY, like [member animates_to_attack] — not a second
 ## difficulty concept, and the same layer of play: mana spent before the
