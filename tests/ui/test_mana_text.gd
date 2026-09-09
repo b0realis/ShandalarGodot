@@ -200,7 +200,11 @@ func test_with_no_imported_sheet_every_symbol_stays_as_braces() -> void:
 ## count, and a 10 px line cannot end up with an 18 px symbol on it.
 func test_the_symbol_is_the_1997_share_of_the_line_it_stands_in() -> void:
 	for size in [18, 16, 14, 12, 11, 10]:
-		var line_h: float = _body.get_height(size)
+		# The CELL, not the line box: for a 1997 face they are one number,
+		# and for a face that bakes leading into its box they are not — see
+		# [method ManaText.symbol_metrics].
+		var line_h: float = minf(_body.get_height(size),
+			float(size) + ManaText.CELL_SLACK)
 		var m := ManaText.symbol_metrics(_body, size)
 		assert_almost_eq(float(m[0]), roundf(line_h * 0.75), 0.01,
 			"size %d: the symbol is three quarters of its line box" % size)

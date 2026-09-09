@@ -38,7 +38,8 @@ extends Control
 
 ## The frame art is 228x325, so the card renders at THAT aspect (0.702)
 ## — undistorted, and within 2% of a real 63x88mm card (0.716).
-const SIZE := Vector2(300, 428)
+const CARD_H := 428.0
+const SIZE := Vector2(300, CARD_H)
 
 ## THE ILLUSTRATOR CREDIT'S PREFIX, as every card of this era prints it in
 ## its bottom-left corner. `Duel.hlp`'s "Parts of the Card" topic numbers
@@ -164,16 +165,79 @@ const PT_OUTLINE_SIZE := 4
 ## | P/T | BigCardPT (CentSchbook BT) | 18 | 72 | 0.0625 | 26.8 px |
 ## | rules text | BigCardText (MPZurich Cn BT) | 14 | 56 | 0.0486 | 20.8 px |
 ##
-## The numbers are LINE-BOX heights, so [method _size_for_ratio] resolves
-## each one against the font actually in use rather than hard-coding a
-## point size that would be wrong the moment a skin changes the face.
+## The numbers are GDI CELL heights, which is not the same thing as a
+## letter and is the whole of the trap below — see [constant BODY_X_HEIGHT].
 const NAME_RATIO := 68.0 / 1152.0
 const TYPE_RATIO := 60.0 / 1152.0
 const PT_RATIO := 72.0 / 1152.0
+
+# --------------------------------------------------------------------------
+#  ...AND THE LETTER EACH CELL ACTUALLY HOLDS
+# --------------------------------------------------------------------------
+## **A CELL IS NOT A LETTER.** Every size on this card used to be picked by
+## shrinking a candidate until `Font.get_height()` — the face's LINE BOX,
+## ascent plus descent — stood inside the ported cell. That is faithful to
+## 1997 arithmetic, where `Duel.dat`'s numbers really are GDI cell heights,
+## and it worked for exactly one reason: the faces the original names have
+## a line box of ONE EM, so the cell the table asks for and the letter that
+## lands in it are the same number. `assets/original/font_body.ttf`
+## (MPlantin, the face the rules text is set in) measures a 1.000 em box at
+## 400 ppem, and so does exactly ONE of the twenty-two free serif faces
+## surveyed on 2026-09-09 (Newsreader). Every other modern OFL face bakes
+## 10-65% of leading INTO that box — Spectral 1.53 em, Charis SIL 1.64 — so
+## the same cell buys a much smaller letter, and the old fit handed the
+## substitute a size that was not small by opinion but by arithmetic: on
+## Rock Hydra, MPlantin sets at 10 px with a 4.5 px x-height where Charis
+## SIL sets at 7 px with 3.4. Whichever face this project ends up shipping
+## would have paid that tax.
+##
+## So the SIZE is picked by the letter and the LEADING is set separately
+## ([method _rules_leading]). x-height and not cap-height: it is what the
+## eye reads a body face by, the two spread about equally across the
+## surveyed field (x/em 0.410-0.555, cap/em 0.575-0.763), and a face can
+## put its cap a long way from its reading size.
+##
+## **THE REFERENCE IS THE CARD AS IT STANDS**, not a fresh port of the 1997
+## table: the letter each element wears today is the one that was looked at
+## and kept (2026-09-04, "the legible body face"), and the fix must not
+## move it by a pixel. Each ratio above is therefore resolved ONCE against
+## the face the project ships, and the x-height that lands there is the
+## constant every substitute is fitted to:
+##
+## | element | 1997 cell | face | its box | size today | x-height | / 428 |
+## |---|---|---|---|---|---|---|
+## | name | 68/1152 = 25.26 px | title | 1.08 em | 22 | 8.85 px | 0.02068 |
+## | type line | 60/1152 = 22.29 px | title | 1.08 em | 20 | 8.05 px | 0.01880 |
+## | P/T | 72/1152 = 26.75 px | body | 1.00 em | 26 | 11.71 px | 0.02735 |
+## | rules text | six lines in the box | body | 1.00 em | 18 | 8.10 px | 0.01894 |
+##
+## (Godot rounds ascent and descent apart, so even a 1.00-em face measures
+## one pixel over the em at every size — MPlantin is 19 px at 18 — which is
+## why the name lands on 22 and not on the 25 the raw cell would give. That
+## pixel is part of the card as it stands, and holding the card as it
+## stands is the point.)
+##
+## The two x-heights are what [method _x_height] reads off the shipped
+## faces' own outlines, by the SAME measurement it makes of a substitute,
+## so the pair cancels exactly and the shipped card cannot move. Their true
+## values, taken with FreeType at 400 ppem, are 0.450 and 0.405; the third
+## decimal here is Godot's grid fitting, and it belongs in the constant
+## because it is in the measurement.
+const BODY_X_HEIGHT := 0.4502
+const TITLE_X_HEIGHT := 0.4023
+const NAME_LETTER := 22.0 * TITLE_X_HEIGHT / CARD_H
+const TYPE_LETTER := 20.0 * TITLE_X_HEIGHT / CARD_H
+const PT_LETTER := 26.0 * BODY_X_HEIGHT / CARD_H
+const RULES_LETTER := 18.0 * BODY_X_HEIGHT / CARD_H
+## A twentieth of a pixel of slack on the letter fit — an eighth of the
+## smallest step a size can take, so it can never promote one. It is there
+## only so that a shipped face's measurement and the constant derived from
+## that same measurement cannot disagree in the last bit.
+const LETTER_SLACK := 0.05
 ## `[QoL]` The credit is the one element no source sizes: neither
 ## `Duel.dat` has a `sizeBigCardIllus`, and the DLL that drew it is the one
 ## Manalink replaced. The printed card sets it in a fine italic below the
-## rules text, so it is pinned to three quarters of the rules line — the
+## rules text, so it is pinned to three quarters of the rules LETTER — the
 ## smallest thing on the card, and still five points up from the 9 it used
 ## to be lettered at.
 const ILLUS_RATIO_OF_RULES := 0.75
@@ -185,6 +249,10 @@ const ILLUS_RATIO_OF_RULES := 0.75
 ## hair shorter in proportion (0.280 of the card against 0.292), so six
 ## lines is a slightly tighter line box than the raw 0.0486 ratio would
 ## give, and six lines is the thing worth keeping.
+##
+## Six lines is now held by the LEADING ([method _rules_leading]) rather
+## than by shrinking the letter until they fit, which is what made this
+## number the lever that starved every face but MPlantin.
 const RULES_LINES := 6
 
 ## Leading between those lines. The 1997 renderer sets its rules text at
@@ -194,6 +262,10 @@ const RULES_LINES := 6
 ## ordinary as Nova Pentacle lost its last line before this pass. One
 ## pixel, not none: MPlantin's descenders reach far enough that a bare
 ## cell touches the line under it.
+##
+## It is the NOMINAL leading now: [method _rules_leading] gives this much
+## whenever the face leaves room for it and takes air back when it does
+## not.
 const RULES_LINE_SPACING := 1
 
 ## `[QoL]` The original NEVER shrinks the rules text — `BigCardText` is a
@@ -201,8 +273,16 @@ const RULES_LINE_SPACING := 1
 ## (`ExtTextOut(..., ETO_CLIPPED, ...)`). We drop a step at a time instead,
 ## because losing the back half of Tawnos's Coffin is a worse trade than
 ## two points of type. Coarse steps, so the pool wears five sizes and not
-## fifteen; the floor is 11, which is still a point above the 10 the old
-## char-count ladder bottomed out at.
+## fifteen.
+##
+## THE STEPS ARE POINTS OF THE REFERENCE FACE, not of the face in use:
+## each is `step * BODY_X_HEIGHT` px off the letter ([method _step_size]),
+## so every face bottoms out on the SAME letter — 4.50 px of x-height,
+## which is what MPlantin sets at 10 pt. That is a floor at last. It used
+## to be `base - 8` with no clamp under it, and the comment here used to
+## claim a floor of 11 that no line of code held: MPlantin's own bottom
+## step has always been 10, and a face the old fit started at 12 bottomed
+## out at 4.
 const RULES_STEPS := [0, -2, -4, -6, -7, -8]
 
 ## Docked mode (the sidebar slot, like the original): position is fixed by
@@ -245,20 +325,79 @@ var _illus_size: int
 var _shown: CardInstance = null
 
 
-## The largest font size whose LINE BOX still stands inside [param ratio]
-## of the card's height — the ports in [constant NAME_RATIO] and its
-## neighbours, resolved against the face actually in use. Hard-coding a
-## point size instead would silently mis-size the card the moment a skin
-## shipped a different face: the engine fallback runs a third taller per
-## point than the skin's MPlantin (28 px at size 20 against 21), so the
-## same number would overflow every strip on this card.
-static func _size_for_ratio(f: Font, ratio: float) -> int:
-	return _size_for_height(f, ratio * SIZE.y)
+## The x-height of [param f] as a share of its em, read off the outline of
+## its own `x` at [constant X_HEIGHT_PPEM] — not off a rasterised bitmap,
+## which carries the glyph cache's padding, and not off OS/2's `sxHeight`,
+## which a face is free to leave at zero. Cached per face: it is a dozen
+## microseconds and it never changes.
+##
+## 0.0 when there is no `x` to read (a symbol font, a bitmap font), which
+## is the caller's signal to fall back to the 1997 cell.
+static var _x_height_cache: Dictionary = {}
+
+## High enough that grid fitting is under a tenth of a percent (MPlantin
+## reads 0.45020 against a true 0.450), low enough to cost nothing.
+const X_HEIGHT_PPEM := 1024
+
+static func _x_height(f: Font) -> float:
+	if f == null:
+		return 0.0
+	var key := f.get_instance_id()
+	if _x_height_cache.has(key):
+		return _x_height_cache[key]
+	var result := 0.0
+	var rids := f.get_rids()
+	if not rids.is_empty() and rids[0].is_valid():
+		var ts := TextServerManager.get_primary_interface()
+		var glyph: int = ts.font_get_glyph_index(rids[0], X_HEIGHT_PPEM,
+			"x".unicode_at(0), 0)
+		if glyph != 0:
+			var outline: Dictionary = ts.font_get_glyph_contours(
+				rids[0], X_HEIGHT_PPEM, glyph)
+			var points: PackedVector3Array = outline.get("points",
+				PackedVector3Array())
+			if not points.is_empty():
+				var top: float = points[0].y
+				var bottom: float = points[0].y
+				for point in points:
+					top = minf(top, point.y)
+					bottom = maxf(bottom, point.y)
+				result = absf(bottom - top) / float(X_HEIGHT_PPEM)
+	_x_height_cache[key] = result
+	return result
 
 
-## The largest size whose LINE BOX still fits [param target] pixels (half a
-## pixel of slack, so a target that lands a hair under a whole line box
-## still gets that line box), never below 8.
+## The largest size whose LETTER stands inside [param letter] pixels — the
+## same "largest that fits" rule the two line-box fits below use, applied
+## to the thing the eye actually reads. 0 when the face's letter cannot be
+## measured at all.
+static func _size_for_letter(f: Font, letter: float) -> int:
+	var x_em := _x_height(f)
+	if x_em <= 0.0:
+		return 0
+	var best := 8
+	for candidate in range(8, 41):
+		if x_em * candidate <= letter + LETTER_SLACK:
+			best = candidate
+	return best
+
+
+## The size at which [param f] sets [param letter] — the ports in
+## [constant NAME_LETTER] and its neighbours, as a share of the card's
+## height. [param cell] is the 1997 cell that letter was derived from, and
+## it is what a face with no readable outline falls back to.
+static func _size_for_ratio(f: Font, letter: float, cell: float) -> int:
+	var size := _size_for_letter(f, letter * SIZE.y)
+	return size if size > 0 else _size_for_height(f, cell * SIZE.y)
+
+
+## **THE OLD FIT, KEPT AS THE FALLBACK.** The largest size whose LINE BOX
+## fits [param target] pixels (half a pixel of slack, so a target that
+## lands a hair under a whole line box still gets that line box), never
+## below 8. It normalises the cell rather than the letter, which is right
+## for a 1.00-em face and a tax on every other one — see
+## [constant BODY_X_HEIGHT]. Reached only when [method _x_height] cannot
+## read the face at all.
 static func _size_for_height(f: Font, target: float) -> int:
 	var best := 8
 	for candidate in range(8, 41):
@@ -267,8 +406,9 @@ static func _size_for_height(f: Font, target: float) -> int:
 	return best
 
 
-## The largest size at which [param lines] wrapped lines — leading
-## included — still stand inside [param height] pixels.
+## The same fallback for the rules text: the largest size at which
+## [param lines] wrapped lines — leading included — still stand inside
+## [param height] pixels.
 static func _size_for_lines(f: Font, lines: int, height: float) -> int:
 	var best := 8
 	for candidate in range(8, 41):
@@ -276,6 +416,36 @@ static func _size_for_lines(f: Font, lines: int, height: float) -> int:
 				+ (lines - 1) * RULES_LINE_SPACING <= height:
 			best = candidate
 	return best
+
+
+## THE LEADING, WHICH IS THE OTHER HALF OF THE FIX. Once the size is
+## chosen by the letter, the space between the lines is the only free
+## variable left, and it has two jobs. It is the SMALLEST of three numbers:
+##
+##  1. [constant RULES_LINE_SPACING], the nominal pixel — nothing here ever
+##     opens a card's text up wider than it is set today;
+##  2. what leaves the 1997 ADVANCE: `draw_mana_text` moves one `tmHeight`
+##     a line and a 1997 `tmHeight` is one em, so the baselines want to sit
+##     `size + CELL_SLACK + RULES_LINE_SPACING` apart whatever the face's
+##     own box says. On a 1.00-em face that is the box, and this term is
+##     the nominal pixel exactly. On a face carrying half an em of
+##     manufactured air it is negative — the box taking that air back. The
+##     INK does not move; only the padding around it goes;
+##  3. what still leaves [constant RULES_LINES] lines standing in the box.
+##     Term 2 alone cannot promise that, because a paragraph's reported
+##     height carries its FIRST line's whole box, air and all, and on a
+##     1.53 em face that one line is ten pixels of nothing.
+##
+## Never the text's own line count: the leading is a property of the box
+## and the size, so a two-line card is set on the same baselines as a
+## six-line one, and `Expand` does not re-space what it did not re-size.
+static func _rules_leading(f: Font, size: int) -> int:
+	var line := f.get_height(size)
+	var advance := float(size) + ManaText.CELL_SLACK \
+		+ float(RULES_LINE_SPACING) - line
+	var box := (0.902 - (TEXT_TOP + 0.019)) * SIZE.y
+	var six := (box - RULES_LINES * line) / float(RULES_LINES - 1)
+	return mini(RULES_LINE_SPACING, floori(minf(advance, six)))
 
 
 ## How tall [param text] really stands once it has wrapped to [param width]
@@ -290,8 +460,9 @@ static func _size_for_lines(f: Font, lines: int, height: float) -> int:
 ## the widget will draw and reports its height: measurement and render can
 ## no longer disagree, and a `{T}` costs the box exactly what it will cost
 ## it on screen.
-static func _wrapped_height(f: Font, text: String, width: float, size: int) -> float:
-	return ManaText.measure(text, f, size, width, RULES_LINE_SPACING)
+static func _wrapped_height(f: Font, text: String, width: float, size: int,
+		spacing: int) -> float:
+	return ManaText.measure(text, f, size, width, spacing)
 
 
 ## The largest size from [param sizes] whose ONE line of [param text] fits
@@ -337,14 +508,21 @@ func _init() -> void:
 	_body_font = GameSkin.font("font_body")
 	if _body_font == null:
 		_body_font = ThemeDB.fallback_font
-	_name_size = _size_for_ratio(_title_font, NAME_RATIO)
-	_type_size = _size_for_ratio(_title_font, TYPE_RATIO)
-	_pt_size = _size_for_ratio(_body_font, PT_RATIO)
-	# Six lines in the box, as the original's own text rect is six lines.
-	_rules_size = _size_for_lines(_body_font, RULES_LINES,
-		(0.902 - (TEXT_TOP + 0.019)) * SIZE.y)
-	_illus_size = _size_for_height(_body_font,
-		_body_font.get_height(_rules_size) * ILLUS_RATIO_OF_RULES)
+	_name_size = _size_for_ratio(_title_font, NAME_LETTER, NAME_RATIO)
+	_type_size = _size_for_ratio(_title_font, TYPE_LETTER, TYPE_RATIO)
+	_pt_size = _size_for_ratio(_body_font, PT_LETTER, PT_RATIO)
+	# Six lines in the box, as the original's own text rect is six lines —
+	# held by the leading now, so the letter is the ported one on any face.
+	_rules_size = _size_for_letter(_body_font, RULES_LETTER * SIZE.y)
+	if _rules_size == 0:
+		_rules_size = _size_for_lines(_body_font, RULES_LINES,
+			(0.902 - (TEXT_TOP + 0.019)) * SIZE.y)
+	# Three quarters of the rules LETTER as it was actually set.
+	_illus_size = _size_for_letter(_body_font,
+		_x_height(_body_font) * _rules_size * ILLUS_RATIO_OF_RULES)
+	if _illus_size == 0:
+		_illus_size = _size_for_height(_body_font,
+			_body_font.get_height(_rules_size) * ILLUS_RATIO_OF_RULES)
 
 	_frame_bg = Panel.new()
 	_anchor(_frame_bg, 0, 0, 1, 1)
@@ -436,7 +614,8 @@ func _init() -> void:
 	_oracle = ManaText.new()
 	_anchor(_oracle, 0.118, TEXT_TOP + 0.019, 0.882, 0.902)
 	_oracle.add_theme_font_size_override("font_size", _rules_size)
-	_oracle.add_theme_constant_override("line_spacing", RULES_LINE_SPACING)
+	_oracle.add_theme_constant_override("line_spacing",
+		_rules_leading(_body_font, _rules_size))
 	# CLIPPED, as the original clips (`ETO_CLIPPED`): text that beats even
 	# the smallest step of the ladder stops at the box instead of running
 	# out over the bottom border and off the card.
@@ -590,7 +769,8 @@ func _lay_out_text_box(top: float) -> void:
 ## sentence.
 func _needed_text_top(text: String, size: int) -> float:
 	var width := (0.882 - 0.118) * SIZE.x
-	var needed := _wrapped_height(_body_font, text, width, size)
+	var needed := _wrapped_height(_body_font, text, width, size,
+		_rules_leading(_body_font, size))
 	# 0.019 of the card is the label's own inset below the box's top, and
 	# the extra pixel is slack: grown to exactly the measured height, the
 	# box and the text agree only to within a float, and [method
@@ -682,8 +862,12 @@ func show_card(inst: CardInstance) -> void:
 	var top := _needed_text_top(_oracle.text, _rules_size) if _text_expanded \
 		else TEXT_TOP
 	_lay_out_text_box(top)
-	_oracle.add_theme_font_size_override("font_size",
-		_fit_rules_size(_oracle.text, top))
+	# The size and ITS leading together: a step down the ladder changes the
+	# line box, and the space between the lines has to follow it.
+	var rules := _fit_rules_size(_oracle.text, top)
+	_oracle.add_theme_constant_override("line_spacing",
+		_rules_leading(_body_font, rules))
+	_oracle.add_theme_font_size_override("font_size", rules)
 	_pt_label.text = _power_toughness(inst)
 	# NO CREDIT AT ALL when we do not know the artist — never `Illus. ` with
 	# nothing after it. `CardData.artist` comes from the `cards/data/`
@@ -771,15 +955,26 @@ func show_card(inst: CardInstance) -> void:
 	visible = true
 
 
+## The size at which the body face sets the letter [param step] points of
+## the REFERENCE face below the full one — the ladder of
+## [constant RULES_STEPS] in the one currency every face shares. Falls back
+## to the face's own points when its letter cannot be measured.
+func _step_size(step: int) -> int:
+	var size := _size_for_letter(_body_font,
+		RULES_LETTER * SIZE.y + float(step) * BODY_X_HEIGHT)
+	return size if size > 0 else _rules_size + step
+
+
 ## The largest step of [constant RULES_STEPS] whose wrapped text still fits
 ## the box whose top is at [param top].
 func _fit_rules_size(text: String, top: float) -> int:
 	var width := (0.882 - 0.118) * SIZE.x
 	var height := (0.902 - top - 0.019) * SIZE.y
-	var chosen: int = _rules_size + int(RULES_STEPS[RULES_STEPS.size() - 1])
+	var chosen: int = _step_size(int(RULES_STEPS[RULES_STEPS.size() - 1]))
 	for step in RULES_STEPS:
-		var size: int = _rules_size + int(step)
-		if _wrapped_height(_body_font, text, width, size) <= height:
+		var size: int = _step_size(int(step))
+		if _wrapped_height(_body_font, text, width, size,
+				_rules_leading(_body_font, size)) <= height:
 			chosen = size
 			break
 	return chosen

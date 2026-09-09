@@ -9372,6 +9372,62 @@ and in the title row's fallback.
   (`filter_bar.gd` dresses them from `filter_icons` cells), so nothing
   there moved.
 
+## A CELL IS NOT A LETTER (2026-09-09) — the auto-fit, and the free face it would have starved
+
+The separate defect the body-face ruling named earlier the same day
+(*"the auto-fit's own part in that is a separate defect"*), found,
+quantified and fixed.
+
+- **What it was.** Every size on the enlarged card was picked by
+  shrinking a candidate until `Font.get_height()` — the face's LINE BOX —
+  stood inside the cell `Duelart/Duel.dat` ports. That is the right
+  arithmetic for 1997, whose `size` really is a GDI cell height, and it
+  worked for exactly one reason: the faces the original names have a line
+  box of ONE EM, so the cell and the letter that lands in it are the same
+  number. Of the twenty-two free serif faces surveyed for a replacement
+  body face, EXACTLY ONE shares that (Newsreader, 1.000 em); every other
+  modern OFL face bakes 10-65% of leading INTO the box — Spectral 1.53,
+  Charis SIL 1.64 — so the same cell buys a much smaller letter. Measured:
+  on Rock Hydra MPlantin sets at 10 px with a 4.5 px x-height and Charis
+  SIL at 7 with 3.4; Spectral, **whose x-height is MPlantin's to three
+  decimals**, was handed a base of 12 where MPlantin gets 18. Whichever
+  face this project shipped would have paid that tax, and it would have
+  looked like a bad face rather than a bad fit.
+- **The size is picked by the LETTER now**, and the leading is set
+  separately. x-height rather than cap-height: it is what the eye reads a
+  body face by, the two spread about equally across the field, and a face
+  can put its cap a long way from its reading size. The reference is THE
+  CARD AS IT STANDS rather than a fresh port of the 1997 table — each
+  ratio was resolved once against the shipped faces and the x-height that
+  landed there is the constant every substitute is fitted to. The leading
+  is then the smallest of three numbers: the nominal pixel, what leaves
+  the 1997 one-cell advance, and what still holds the box's six lines. On
+  a 1.00-em face the second is the nominal pixel at every size; on a
+  1.53-em face it is negative, which is the box taking back air, not ink.
+- **The test it was held to: MPlantin must not move.** It does not. The
+  five base sizes are 22/20/26/18/13 before and after; every rung of the
+  ladder is the 18/16/14/12/11/10 it always was with the leading still 1
+  at each — which makes the change a no-op for the whole 897-card pool
+  and not merely for the base size, because the fit then walks an
+  identical ladder; and the three cards shot through the live widget
+  under both sizers came out **byte-identical**. Spectral, fixed, gets
+  MPlantin's own size on every card.
+- **The ladder gained a floor** while it was open: `RULES_STEPS` is
+  points of the REFERENCE face now, so every face bottoms out on the same
+  letter — 4.50 px of x-height, MPlantin's 10 pt. It used to be `base − 8`
+  with no clamp, and the comment claimed a floor of 11 that no line of
+  code held: a face the old fit started at 12 bottomed out at 4.
+- **The mana symbols carried the same bug** and are fixed with it: three
+  quarters of the CELL rather than of the line box, which is one number
+  in 1997 and two on a face with leading in it.
+- **Not done, and named so it is not mistaken for done.** The SMALL card
+  letters at hard-coded point sizes (`MiniCard.PT_FONT_SIZE` and its
+  neighbours), so a substitute face with a small x-height reads small
+  there and no fit will notice; the name and type-line ladders still step
+  by the face's own points rather than by the reference letter; and NO
+  FACE IS WIRED — the choice of body face is the owner's and nothing is
+  in the repository.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

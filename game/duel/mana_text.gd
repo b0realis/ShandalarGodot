@@ -126,6 +126,10 @@ const WRAP_FLAGS := TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND \
 ## The symbol's side, as a share of the line box it stands in —
 ## `sym_hgt = metrics.tmHeight * 75 / 100` (`drawmanatext.c:296`).
 const SYMBOL_RATIO := 0.75
+## Godot reports a 1.00-em line box one pixel over the em, because it
+## rounds ascent and descent apart. That pixel is part of the reference —
+## see [method symbol_metrics].
+const CELL_SLACK := 1.0
 ## Its advance cell, the same share of the same line box —
 ## `sym_ext_wid = w * 85 / 100` (`:298`). The difference is the padding
 ## that keeps `{B}{B}{B}` from touching, split evenly either side.
@@ -180,7 +184,18 @@ static func symbol_metrics(font: Font, font_size: int) -> Array:
 	var key := "%d:%d" % [font.get_instance_id(), font_size]
 	if _metrics_cache.has(key):
 		return _metrics_cache[key]
-	var line_h: float = font.get_height(font_size)
+	# THE SYMBOL IS THREE QUARTERS OF THE CELL, NOT OF THE LINE BOX. In
+	# 1997 the two were one number: `tmHeight` for the faces the original
+	# ships is exactly one em. A modern OFL face bakes 10-65% of leading
+	# into its box (Spectral 1.53 em, Charis SIL 1.64), and three quarters
+	# of THAT is a symbol half again too big for the letter beside it — the
+	# same trap [constant CardPreview.BODY_X_HEIGHT] describes for the type
+	# size. So the symbol is measured against the smaller of the two, and
+	# the cell is the em plus the one pixel Godot's separate rounding of
+	# ascent and descent puts on a 1.00-em face (MPlantin measures 19 px at
+	# 18, and so does Newsreader).
+	var box: float = font.get_height(font_size)
+	var line_h: float = minf(box, float(font_size) + CELL_SLACK)
 	var side: float = maxf(1.0, roundf(line_h * SYMBOL_RATIO))
 	while side > 1.0:
 		var probe := TextParagraph.new()
@@ -188,7 +203,10 @@ static func symbol_metrics(font: Font, font_size: int) -> Array:
 		probe.set_width(-1)
 		probe.add_string("M", font, font_size)
 		probe.add_object(0, Vector2(side, side), INLINE_ALIGNMENT_CENTER, 1, 0.0)
-		if probe.get_line_size(0).y <= line_h:
+		# The guard is still the REAL box: what must not happen is the
+		# object making the shaper give the line more room than the face
+		# already asked for.
+		if probe.get_line_size(0).y <= box:
 			break
 		side -= 1.0
 	var advance: float = maxf(side,

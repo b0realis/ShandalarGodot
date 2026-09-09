@@ -5093,7 +5093,11 @@ shandalar/
 │       ├── mana_icons.gd    class ManaIcons — the mana-symbol glyphs the
 │       │                      mini cards and the preview draw
 │       ├── mana_text.gd     class ManaText — WRAPPED RULES TEXT WITH THE
-│       │                      SYMBOLS SET INLINE, wherever the oracle
+│       │                      SYMBOLS SET INLINE (symbol_metrics measures
+│       │                      against the CELL, not the line box, since
+│       │                      2026-09-09 — three quarters of a 1.53 em
+│       │                      box is a symbol half again too big for the
+│       │                      letter beside it), wherever the oracle
 │       │                      text writes {R}/{T}/{2}/{X}. The 1997 game
 │       │                      did this and its own card database proves
 │       │                      it: Master.csv (Tier 1, 1997-08-14) stores
@@ -5166,7 +5170,19 @@ shandalar/
 │       │                      LETTERING (2026-09-04): white + hard black
 │       │                      outline on the card BODY, 1997's 47,47,47
 │       │                      on the rules plate; every size a ported
-│       │                      ratio of the card's height; the box grows
+│       │                      ratio of the card's height, resolved as a
+│       │                      LETTER and not as a line box (2026-09-09):
+│       │                      the 1997 numbers are GDI cells, a cell is
+│       │                      one em only for the 1997 faces, and
+│       │                      normalising get_height() starves every
+│       │                      modern face that bakes leading into its box
+│       │                      (Spectral 1.53 em got a base of 12 where
+│       │                      MPlantin gets 18, on the same x-height).
+│       │                      _x_height reads the outline,
+│       │                      _size_for_letter fits it, _rules_leading
+│       │                      sets the space between the lines, and the
+│       │                      shipped faces do not move — byte-identical;
+│       │                      the box grows
 │       │                      only WHEN NECESSARY under Expand and takes
 │       │                      the frame's own plate with it. THE RULES
 │       │                      TEXT IS A ManaText (2026-09-04), so the

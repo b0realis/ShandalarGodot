@@ -105,21 +105,109 @@ func test_the_rules_text_keeps_1997s_dark_ink() -> void:
 # ---------------------------------------------------------------- the sizes --
 
 ## Each size is a share of the CARD'S HEIGHT ported off the original's own
-## font table, resolved against the face actually in use. The line box has
-## to land within a pixel under its target — a pixel over would overflow
-## the strip the element sits on.
+## font table — and what is resolved against the face in use is now the
+## LETTER, not the line box it stands in. The x-height has to land within
+## one step under its target and never over it.
 func test_the_sizes_are_the_1997_ratios_of_the_cards_height() -> void:
 	var rows := [
-		[_preview._title_font, _preview._name_size, CardPreview.NAME_RATIO, "name"],
-		[_preview._title_font, _preview._type_size, CardPreview.TYPE_RATIO, "type"],
-		[_preview._body_font, _preview._pt_size, CardPreview.PT_RATIO, "P/T"],
+		[_preview._title_font, _preview._name_size, CardPreview.NAME_LETTER, "name"],
+		[_preview._title_font, _preview._type_size, CardPreview.TYPE_LETTER, "type"],
+		[_preview._body_font, _preview._pt_size, CardPreview.PT_LETTER, "P/T"],
+		[_preview._body_font, _preview._rules_size, CardPreview.RULES_LETTER,
+			"rules text"],
 	]
 	for row in rows:
 		var font: Font = row[0]
+		var x_em: float = CardPreview._x_height(font)
+		if x_em <= 0.0:
+			continue      # a face with no `x` to read falls back to the cell
 		var target: float = float(row[2]) * CardPreview.SIZE.y
-		var got: float = font.get_height(int(row[1]))
-		assert_between(got, target - 2.0, target + 0.5,
-			"%s: line box %.0f px against a %.2f px target" % [row[3], got, target])
+		var got: float = x_em * int(row[1])
+		assert_between(got, target - x_em, target + CardPreview.LETTER_SLACK,
+			"%s: x-height %.2f px against a %.2f px target" % [row[3], got, target])
+
+
+## **AND THE FIX IS A NO-OP FOR THE FACES THE PROJECT SHIPS.** The letter
+## ratios were re-derived from the sizes the old line-box fit landed on
+## (see [constant CardPreview.BODY_X_HEIGHT]), so on MPlantin and the
+## original title face the two fits have to agree exactly — on a face whose
+## line box is one em they are the same statement. If this ever fails, the
+## re-derivation is wrong and the card the owner looks at has moved.
+func test_the_letter_fit_gives_the_shipped_faces_what_the_cell_fit_gave() -> void:
+	if GameSkin.font("font_body") == null or GameSkin.font("font_title") == null:
+		return   # no 1997 files on this machine — there is nothing to hold still
+	var box: float = (0.902 - (CardPreview.TEXT_TOP + 0.019)) * CardPreview.SIZE.y
+	var rows := [
+		[_preview._title_font, _preview._name_size,
+			CardPreview._size_for_height(_preview._title_font,
+				CardPreview.NAME_RATIO * CardPreview.SIZE.y), "name"],
+		[_preview._title_font, _preview._type_size,
+			CardPreview._size_for_height(_preview._title_font,
+				CardPreview.TYPE_RATIO * CardPreview.SIZE.y), "type"],
+		[_preview._body_font, _preview._pt_size,
+			CardPreview._size_for_height(_preview._body_font,
+				CardPreview.PT_RATIO * CardPreview.SIZE.y), "P/T"],
+		[_preview._body_font, _preview._rules_size,
+			CardPreview._size_for_lines(_preview._body_font,
+				CardPreview.RULES_LINES, box), "rules text"],
+	]
+	for row in rows:
+		assert_eq(int(row[1]), int(row[2]),
+			"%s: the letter fit gives %d where the 1997-cell fit gave %d"
+				% [row[3], int(row[1]), int(row[2])])
+	assert_eq(_preview._illus_size,
+		CardPreview._size_for_height(_preview._body_font,
+			_preview._body_font.get_height(_preview._rules_size)
+				* CardPreview.ILLUS_RATIO_OF_RULES),
+		"the credit too")
+
+
+## The leading is the nominal pixel on a face whose line box is one em —
+## which both shipped faces are — at every size the ladder can reach. It
+## goes negative only where a face has baked air into its box, and there is
+## none here to take back.
+func test_the_leading_is_the_nominal_pixel_on_the_shipped_face() -> void:
+	if GameSkin.font("font_body") == null or GameSkin.font("font_title") == null:
+		return   # no 1997 files on this machine — there is nothing to hold still
+	for step in CardPreview.RULES_STEPS:
+		var size: int = _preview._step_size(int(step))
+		assert_eq(CardPreview._rules_leading(_preview._body_font, size),
+			CardPreview.RULES_LINE_SPACING,
+			"step %d (size %d): the shipped face keeps its one pixel"
+				% [int(step), size])
+
+
+## **THE LADDER HAS A FLOOR AT LAST.** Its bottom step used to be
+## `base - 8` with no clamp under it, so the floor was a property of
+## MPlantin's base size — a face the old fit started at 12 bottomed out at
+## 4. The steps are now points of the REFERENCE face, so every face bottoms
+## out on the same letter, and on MPlantin that letter is still exactly the
+## 10 pt it has always been.
+func test_the_ladder_steps_by_the_letter_and_bottoms_out_on_one() -> void:
+	var x_em: float = CardPreview._x_height(_preview._body_font)
+	if x_em <= 0.0:
+		return
+	var last := 99
+	for step in CardPreview.RULES_STEPS:
+		var size: int = _preview._step_size(int(step))
+		assert_lt(size, last, "step %d goes down" % int(step))
+		last = size
+		var want: float = CardPreview.RULES_LETTER * CardPreview.SIZE.y \
+			+ float(int(step)) * CardPreview.BODY_X_HEIGHT
+		assert_between(x_em * size, want - x_em, want + CardPreview.LETTER_SLACK,
+			"step %d lands on its letter" % int(step))
+		# ...and on the shipped face every rung is the point step it always
+		# was, which is what makes the fix a no-op for the WHOLE POOL and
+		# not merely for the base size: [method CardPreview._fit_rules_size]
+		# then walks an identical ladder with an identical leading, so it
+		# cannot reach a different verdict on any card.
+		if GameSkin.font("font_body") != null:
+			assert_eq(size, _preview._rules_size + int(step),
+				"step %d is the same rung it always was" % int(step))
+	if GameSkin.font("font_body") != null:
+		assert_eq(last, _preview._rules_size
+			+ int(CardPreview.RULES_STEPS[CardPreview.RULES_STEPS.size() - 1]),
+			"and on the shipped face the bottom is the 10 pt it always was")
 
 
 ## The rules text is sized by the LINE COUNT, which is the invariant the
@@ -129,11 +217,12 @@ func test_the_rules_box_holds_the_originals_six_lines() -> void:
 	var font: Font = _preview._body_font
 	var size: int = _preview._rules_size
 	var box: float = (0.902 - (CardPreview.TEXT_TOP + 0.019)) * CardPreview.SIZE.y
+	var lead: int = CardPreview._rules_leading(font, size)
 	var six: float = CardPreview.RULES_LINES * font.get_height(size) \
-		+ (CardPreview.RULES_LINES - 1) * CardPreview.RULES_LINE_SPACING
+		+ (CardPreview.RULES_LINES - 1) * lead
 	assert_lte(six, box, "six lines stand inside the box")
 	var seven: float = (CardPreview.RULES_LINES + 1) * font.get_height(size) \
-		+ CardPreview.RULES_LINES * CardPreview.RULES_LINE_SPACING
+		+ CardPreview.RULES_LINES * lead
 	assert_gt(seven, box, "and a seventh would not — the size is the largest "
 		+ "that fits six, not merely one that fits")
 
