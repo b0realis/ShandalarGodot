@@ -594,18 +594,96 @@ var trusts_abyss := false
 ## damage, which is fungible between them, so any split of the same pool
 ## lands the same total. The reasoning is at the site.
 ##
+## AND THE BURN ON THE STACK (2026-09-09, the fourth reading and the
+## fourth time this knob's meaning has grown). [method
+## AiPlayer._save_from_the_stack] is the arm that answers a removal spell
+## aimed at one of ours, and against a BURN spell it knew exactly one
+## answer: a pump INSTANT in hand ([method
+## AiPlayer._find_pump_instant]). So a Frozen Shade with four Swamps
+## untapped — a 4/5 for the asking, three of those Swamps enough to put
+## it out of a Lightning Bolt's reach — died to the Bolt with the mana
+## still on the table, and so did every firebreather in the pool with a
+## toughness line. The machinery to price and buy the breath was already
+## there and had been since this knob's first pass; the save path simply
+## never asked it. [method AiPlayer._pump_out_of_reach] asks it, with the
+## same reserve ([method AiPlayer._pump_reserve]: the second main
+## phase's cast and the held instant), the same per-turn cap ([method
+## AiPlayer._activations_left]) and the same one-activation-per-call
+## shape [method AiPlayer._combat_self_pumps] uses. It is tried BEFORE
+## the pump instant, because the breath spends mana that untaps and the
+## instant spends a card that does not.
+##
 ## A CAPABILITY, like [member animates_to_attack] — not a second
-## difficulty concept, and the same layer of play: mana spent before the
-## declaration to make an attack (or a block) that does not otherwise
-## exist. Sorcerer and Wizard, for that reason; the Magician already
-## breathes fire on an attacker that got through, because that half
-## hangs off [member holds_instants]. Nothing here names a card in the
-## AI: the shape is [member EffectIntent.pump_self] read off the
-## ability's own effects, the two card-local breaths are a table in the
-## reader beside the window shapes and the levellers, the price is the
-## planner's, and an ability whose cost is a body or a counter stays
-## invisible ([method AiPlayer._ability_available]).
+## difficulty concept, and the same layer of play: mana spent to make a
+## body a size the pilot has to decide on now. Sorcerer and Wizard, for
+## that reason; the Magician already breathes fire on an attacker that
+## got through and already answers the stack with a Giant Growth, because
+## both of those hang off [member holds_instants], and the ceiling
+## between them is the ramp the owner ruled for on 2026-09-07. Nothing
+## here names a card in the AI: the shape is [member
+## EffectIntent.pump_self] read off the ability's own effects, the two
+## card-local breaths are a table in the reader beside the window shapes
+## and the levellers, the price is the planner's, and an ability whose
+## cost is a BODY stays invisible ([method
+## AiPlayer._ability_available]). An ability whose cost is a COUNTER is
+## [member spends_counters]'s ruling, not this one's — with that knob off
+## it stays invisible here as it always was.
 var pumps_to_attack := false
+
+## THE COUNTER THAT WAS NEVER SPENT: may this profile pay a cost of
+## "remove N <kind> counters from this permanent"? Until 2026-09-09
+## [method AiPlayer._ability_available] refused EVERY such ability
+## outright, alongside the exile and discard riders the mana planner
+## cannot model — so in the whole history of this AI no counter had ever
+## been removed as a cost. The report that surfaced it was Osai Vultures:
+## the bird accumulates carrion counters at every end step a creature
+## died and never spends the two that make it a 2/2, blocking at 1/1 and
+## dying for nothing. A Scavenging Ghoul never regenerates off a corpse
+## counter either, and a creature holding Life Matrix's grant never
+## regenerates at all.
+##
+## WHAT MAKES A COUNTER SPENDABLE, and it is not "all of them". A counter
+## is a resource with other uses, and unlike tapping a land, removing one
+## can cost the permanent its own substance: a Triskelion's +1/+1
+## counters ARE the 4/4, and a pilot that pings three times has priced
+## the damage and not the two points of body it gave up each time, which
+## is the same blindness [member pays_sacrifices] was gated for. So the
+## rule is NOTHING BUT THE COST MAY READ IT, and the two readers that can
+## are asked off the card's own text and the live board:
+##
+##  * the NAME. A counter whose kind parses as a P/T delta — "+1/+1",
+##    "-0/-2", "+1/+0" — is read by the characteristics pipeline itself
+##    ([method ContinuousEffects.parse_pt_counter], which is how "any P/T
+##    counter a card invents just works"), so removing one shrinks the
+##    creature. Refused, Triskelion included.
+##  * the LIVE FIELD. [member CardInstance.damage_eats_counters] names
+##    the counter kind a permanent sheds instead of taking damage — a
+##    Rock Hydra's heads are its life, point for point. Refused.
+##
+## Everything else this pool holds is FUEL: carrion, corpse and husk
+## counters that a trigger of the card's own puts back, a matrix counter
+## whose only use is the regeneration it was printed to buy, a dream
+## counter that Rasputin refills each upkeep. Nothing prices the counter
+## itself, and nothing has to: to every reader the pilot owns — the
+## evaluator, the combat maths, the damage replacement — fuel is worth
+## zero until it is spent, so the effect the existing readers already
+## price IS the whole of the trade. What the ruling deliberately does
+## NOT reach is a counter some OTHER ability of the same card reads —
+## a clock, a Time Vault's turn counter, an Armageddon Clock's doom
+## counter — because a card's own script cannot be read from outside it;
+## in this pool no such counter is a COST (the Clock removes a doom
+## counter as an EFFECT and the Oracle Time Vault has no counters at
+## all), so the rule reaches nothing it should not, and the day one
+## lands the card declares it.
+##
+## A CAPABILITY, and the same shape as [member pays_sacrifices]: a cost
+## the mana planner does not model, paid for an effect the scorer already
+## prices. Sorcerer and Wizard, for that reason — an Apprentice that
+## never regenerates its Scavenging Ghoul is playing a poorer game, not a
+## broken one, exactly as one that never cracks a Strip Mine is. Nothing
+## here names a card: the counter's kind is read through the pipeline's
+## own parser and the permanent's own live field.
+var spends_counters := false
 
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
@@ -614,7 +692,8 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_engines := false, p_sacrifices := false, p_timed := false,
 		p_counts := false, p_levels := false, p_paces := false,
 		p_duplicates := false, p_animates := false, p_times_sweeps := false,
-		p_trusts_abyss := false, p_pumps_to_attack := false) -> void:
+		p_trusts_abyss := false, p_pumps_to_attack := false,
+		p_spends_counters := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -634,6 +713,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	times_sweeps = p_times_sweeps
 	trusts_abyss = p_trusts_abyss
 	pumps_to_attack = p_pumps_to_attack
+	spends_counters = p_spends_counters
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -681,13 +761,13 @@ static func magician() -> AiProfile:
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
 	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
-		true, true, true, true, true)
+		true, true, true, true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
 	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
-		true, true, true, true, true)
+		true, true, true, true, true, true)
 
 
 func _to_string() -> String:

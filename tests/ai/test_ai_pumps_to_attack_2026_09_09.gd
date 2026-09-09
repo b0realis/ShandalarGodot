@@ -401,15 +401,26 @@ func test_the_opponents_firebreather_is_not_ours_to_pump() -> void:
 	assert_eq(theirs.cur_power, 0)
 
 
-func test_a_pump_priced_in_counters_stays_invisible() -> void:
-	# Osai Vultures pays two carrion counters for its +1/+1, and
-	# _ability_available refuses every counter cost — the planner has no
-	# model for one. Left exactly as it is.
+func test_a_pump_priced_in_counters_it_cannot_pay_stays_invisible() -> void:
+	# Osai Vultures pays two carrion counters for its +1/+1, and a bird
+	# that has eaten nothing has none to pay with — refused here on both
+	# arms of this knob and both arms of the other one.
+	#
+	# UNTIL 2026-09-09 the refusal was flat: _ability_available turned
+	# away EVERY counter cost, fed or not, because the planner had no
+	# model for one. What a FED bird may do is
+	# [member AiProfile.spends_counters]'s ruling now, and it has a file
+	# of its own (`test_ai_spends_counters_2026_09_09.gd`).
 	var ai := _ai(_on())
 	var vultures := put_battlefield(0, "Osai Vultures")
 	_lands(0, "Plains", 4)
 	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(int(vultures.counters.get("carrion", 0)), 0, "nothing has died")
 	assert_true(ai._self_pump_of(g, vultures).is_empty())
+	var starved := _off()
+	starved.spends_counters = false
+	assert_true(_ai(starved, 1)._self_pump_of(g, vultures).is_empty(),
+		"and with the counter ruling off as well")
 
 
 func test_a_pump_priced_in_a_body_stays_invisible() -> void:

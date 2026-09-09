@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `prices_fallout`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -332,6 +332,19 @@ control must hold no activated self-pump on EITHER side of the table —
 Big Green vs White Knights still replays its null game for game, 1,000 of
 1,000, in every arm of six runs, and of ten more on 2026-09-09 (five
 pairs on the candidate tree and the same five on its baseline). `prices_liabilities` (2026-09-09) fires
+trampler's overflow and the one pool split among several bodies. And a
+FOURTH time later the same day, to answer a BURN SPELL ON THE STACK with
+the victim's own breath. So its control must hold no activated self-pump
+on EITHER side of the table AND nothing that points damage at a creature
+— Big Green vs White Knights holds neither, still replays its null game
+for game (1,000 of 1,000, in every arm of ten runs), and the published
+null still comes out to the decimal: Vampire Lord vs Big Green at seed 11
+reads 19.8%.
+`spends_counters` (2026-09-09) fires wherever a permanent's ability costs
+"remove N counters from this permanent" and the counters are on it, so its
+control must hold no Osai Vultures, Scavenging Ghoul, Necropolis of Azar,
+Triskelion, Rasputin Dreamweaver or Life Matrix — Big Green vs White
+Knights holds none of the six, and no counter at all. `prices_liabilities` (2026-09-09) fires
 on a permanent of the pilot's OWN that is worth less than nothing to it,
 so its control must hold no Lich, no Mana Vault, no permanent that stops
 untapping (a Paralyze, a Meekstone, an Arena of the Ancients) and no

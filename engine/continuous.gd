@@ -566,7 +566,14 @@ func expire_end_of_combat() -> void:
 ## Parse a P/T counter name like "+1/+1", "-0/-2" or "+1/+0" into its
 ## power/toughness delta. Non-P/T counters (dream, storage, mire...)
 ## return ZERO and are ignored by the characteristics pipeline.
-static func _parse_pt_counter(kind: String) -> Vector2i:
+##
+## PUBLIC since 2026-09-09 because it is the one place that says whether a
+## counter is part of a creature's SIZE: [method
+## AiPlayer._counter_cost_spendable] asks it before it lets the pilot pay a
+## counter as a cost, so "a Triskelion's +1/+1 counter is its own body" and
+## "a carrion counter is fuel" are the same reading the pipeline makes,
+## made once.
+static func parse_pt_counter(kind: String) -> Vector2i:
 	var halves := kind.split("/")
 	if halves.size() != 2:
 		return Vector2i.ZERO
@@ -768,7 +775,7 @@ func recalculate(game: MtgGame) -> void:
 	# "+1/+0"), so any P/T counter a card invents just works.
 	for inst in battlefield:
 		for kind in inst.counters:
-			var delta := _parse_pt_counter(kind)
+			var delta := parse_pt_counter(kind)
 			if delta == Vector2i.ZERO:
 				continue
 			var n: int = inst.counters[kind]

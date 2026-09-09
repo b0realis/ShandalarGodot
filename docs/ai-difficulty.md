@@ -87,7 +87,8 @@ override any knob on any preset for a measurement
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
-| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, a trampler's overflow is measured against the toughness that will actually be there, and since the fourth the question a blocker is asked is the GANG's — do these bodies together kill it — so the gang the ladder declares is the gang the pilot pays for, with an unblocked attacker's breath booking the held instant as well as its own second main phase |
+| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, and a trampler's overflow is measured against the toughness that will actually be there; and since the fourth, the BURN SPELL ON THE STACK — a Frozen Shade with Swamps open grows out of a Lightning Bolt instead of dying with the mana up, and the breath is asked before the pump instant in hand because the mana untaps and the card does not |
+| `spends_counters` | off | off | on | on | pays a cost of "remove N <kind> counters from this permanent" — the AI had never removed one in its life, so an Osai Vultures sat on its carrion counters and a Scavenging Ghoul never regenerated. Spendable when NOTHING BUT THE COST READS THE COUNTER: refused when the kind's own NAME is a P/T delta (a Triskelion's +1/+1 counters are the 4/4) and refused when the permanent's live `damage_eats_counters` names it (a Rock Hydra's heads are its life). What is left is fuel — carrion, corpse, husk, matrix, dream — and fuel is worth zero to every reader until it is spent, so the effect is the whole trade |
 
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
 `prices_liabilities` and `prices_fallout`
@@ -146,7 +147,10 @@ only the biggest threats (`counter_threshold` 7.0), so most of your
 spells resolve. Sideboards two cards. Still no crack-back read, still no
 engines, sacrifices, timed spells or card-counting: it will cast a Mind
 Twist for X into an empty hand, and a Braingeyser sized past its own
-library, because those layers are the Sorcerer's. This is the rung the
+library, because those layers are the Sorcerer's. It answers a burn
+spell aimed at one of its creatures with a Giant Growth from hand, but
+never with the creature's own breath, and it never removes a counter to
+pay for anything: both of those are the Sorcerer's too. This is the rung the
 owner's ruling keeps as it is — the visible step between "reacts" and
 "plans".
 
@@ -163,11 +167,17 @@ second The Abyss in hand, animates a Factory
 only for an attack it will actually declare, sends a firebreather at the
 size its open mana can reach instead of at its printed 0/1 — and blocks
 with it at that size too, so a Carrion Ants behind six Swamps eats a
-Craw Wurm instead of watching it go past — and holds
+Craw Wurm instead of watching it go past — and grows that same Carrion Ants out of a Lightning Bolt
+aimed at it instead of watching it die with the Swamps untapped — and holds
 its Nevinyrral's Disk for the attack it answers — priced by the damage it keeps off the
 pilot, fired once the attackers are named and before they connect —
 and keeps its Counterspell in hand when the creature on the stack is
-one its Abyss will eat at their upkeep.
+one its Abyss will eat at their upkeep. It also spends a counter as a
+COST where a counter is fuel: two carrion counters off an Osai Vultures
+for the +1/+1 that wins a block, a corpse counter off a Scavenging Ghoul
+for the regeneration, a husk counter off a Necropolis of Azar for the
+Spawn — and never a Triskelion's +1/+1 counters, which are the body
+itself.
 
 **Wizard.** No mistakes at all. The same decision code, the same
 capabilities as the Sorcerer, with twice the search (3 000), the pickiest
@@ -480,6 +490,77 @@ for the wrong reason.
   bear, and it steps down from an X its own board would not survive.
   A card that ends the game for its caster once in every twenty-five
   casts is a malfunction, which is why the knob is on at every rung.
+THE FOURTH PASS ON `pumps_to_attack` (2026-09-09, the burn spell on the
+stack) is a WASH in win rate, and the reason it is measurable at all is
+that the earlier three readings were not: the knob's own numbers on a
+board with burn on it are large, and the fourth reading's share of them
+is small. Seed 11, 1 000 games an arm, each pair run TWICE — once against
+the tree before this landed and once against this one — so the `on` arms
+can be laid side by side. Control Big Green vs White Knights.
+
+| pair | null | `on`, before | `on`, after | the burn reading's own |
+| --- | --- | --- | --- | --- |
+| Vampire Lord vs Mountain Artillery | 18.3% | 25.7% | 26.5% | +0.8 |
+| Warlock vs Mountain Artillery | 4.7% | 8.5% | 9.5% | +1.0 |
+| Vampire Lord vs Black-Red Raiders | 27.6% | 36.2% | 36.3% | +0.1 |
+
+- THE NULL IS EXACTLY THE NULL, and it was proved twice over. Every
+  `off` arm above reads its own null to the decimal on BOTH trees, and
+  the published sweep replays as printed: Vampire Lord vs Big Green at
+  seed 11 comes out **19.8%** null — the first pass's own number above —
+  with 23.9% on the `on` arm, which is the third pass's `on` arm
+  unmoved. Big Green points no damage at a creature, so on that pair the
+  new reading is never offered a board at all. The control pair is
+  525-475 byte-identical to its own null in every arm of all ten runs at
+  1 000 games, and 1075-925 in all five at 2 000.
+- THE THREE DELTAS ARE +0.8, +1.0 and +0.1 against an interval of ±3.6,
+  ±2.2 and ±4.1, so not one of them is visible; what can be said is that
+  all three carry the same sign, which is what a rare reading in the
+  right direction looks like. At 2 000 games an arm the whole knob reads
+  +8.9 ±2.6 and +4.9 ±1.6 on the two Artillery pairs, both clear of zero,
+  and that is the first three readings' number, not this one's.
+- THE CENSUS SAYS THE READING FIRES AND THE GAMES RARELY TURN ON IT.
+  Over 150 logged games of Vampire Lord against Mountain Artillery the
+  pilot bought a breath off the stack **23 times** where it had bought
+  none, beside 333 ordinary combat breaths; Warlock's two Frozen Shades
+  buy 10 in the same 150. So it is about one save every six games with
+  four Bolts and two Fireballs across the table, and one every fifteen
+  with two Shades in sixty cards.
+- WHAT IT FIXES IS WHAT THE TABLE SEES, which is this knob's own
+  precedent twice over (the block half, the trampler). A Frozen Shade
+  with four Swamps untapped dying to a Lightning Bolt is not a close
+  decision the pilot got wrong; it is a play nobody at a table would
+  miss.
+
+`spends_counters` (2026-09-09) is a WASH on every pair it can fire on,
+and the census is where the change actually shows. Seed 11, control Big
+Green vs White Knights, byte-identical to its own null in every arm of
+all six runs (525-475 at 1 000, 1075-925 at 2 000).
+
+| pair | null | `on` | delta (1 000) | delta (2 000) |
+| --- | --- | --- | --- | --- |
+| Lord of Fate vs Big Green | 33.6% | 33.9% | +0.3 ±4.1 | +0.2 ±3.0 |
+| Witch vs Big Green | 16.8% | 17.2% | +0.4 ±3.3 | +0.0 ±2.3 |
+| Lord of Fate vs Mountain Artillery | 32.2% | 32.6% | +0.4 ±4.1 | +0.4 ±2.9 |
+
+- THE CENSUS, 150 logged games a pair, the same seeds. Witch (three
+  Scavenging Ghouls): the Ghoul regenerates off a corpse counter **53
+  times** where it had done so never, and the seat's regeneration
+  shields go from 326 to 364 — fewer than 53 more, because some of those
+  corpse counters replace a shield it was paying {B} for, which is the
+  right way round. Lord of Fate (three Osai Vultures, two Necropolis of
+  Azar): the birds spend their carrion **11 times** in 150 games where
+  they had spent none.
+- SO IT IS A DEAD CARD MADE LIVE RATHER THAN A DECISION RETUNED, and the
+  win rate says as much: the cards it wakes are a 1/1 flier's +1/+1 and a
+  2/2's regeneration, neither of which decides many games. It ships for
+  the reason `feeds_worst`, `times_sweeps` and the Detonate half of
+  `prices_liabilities` shipped: an Osai Vultures blocking at 1/1 with
+  four carrion counters on it is a malfunction at the table, whatever the
+  thousand games say. It is a rung and not a floor because paying a
+  non-mana cost is a LAYER — the same argument `pays_sacrifices` is
+  gated by — and the Apprentice that never regenerates its Ghoul is
+  playing the same poorer game as the one that never cracks a Strip Mine.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -487,9 +568,12 @@ Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 FIRES the knob, not by what the last knob used: a pace knob's control
 holds no draw spell, tutor or Time Walk (Big Green vs White Knights),
 a sweeper's no Hurricane, Earthquake or Wrath (Blue Skies vs Black-Red
-Raiders) — the third pass's Time Walk sweep FAILED its first control
-on exactly that (Blue Skies' Ancestral Recall), and a failed control
-makes the deltas beside it no measurement at all. `CONTRIBUTING.md`
+Raiders), `pumps_to_attack`'s no activated self-pump AND — since the
+fourth pass — no targeted burn on either side, `spends_counters`'s no
+permanent whose ability costs a counter — the third pass's Time Walk
+sweep FAILED its first control on exactly that (Blue Skies' Ancestral
+Recall), and a failed control makes the deltas beside it no measurement
+at all. `CONTRIBUTING.md`
 has the rule.
 
 ## 5. Where the ladder still ends short
@@ -639,6 +723,43 @@ has the rule.
     to relieve ourselves). An enemy Detonate's X is still an unpriced
     bonus — pricing it would move the shipped pilot on both arms, so it
     stays the wave-5 row it was named as.
+- `pumps_to_attack`'s burn reading answers DAMAGE and nothing else. A
+  spell that kills by shrinking — "target creature gets -2/-2" — has no
+  `EffectIntent.damage_at` for the arm to read, so a Frozen Shade with
+  Swamps open still dies to one although the toughness it can buy would
+  save it. It is the same arm `_find_pump_instant` has never answered
+  either, so the two readers agree; widening it means asking the intent
+  for the toughness a spell TAKES as well as the damage it deals, which
+  is a reader's question rather than this knob's.
+- `spends_counters` prices no counter at all, on purpose: fuel is worth
+  zero to every reader the pilot owns until it is spent. Three things
+  follow, and each is the honest cost of that.
+  * A counter with TWO uses is spent on whichever comes first. Rasputin
+    Dreamweaver's dream counters are a shield AND a colourless mana, and
+    the pilot buying the shield does not know it just spent a mana. The
+    cards in this pool put at most one useful second use on a counter and
+    the two are within a mana of each other, so nothing is measurably
+    wrong; a card that made the two uses far apart would need a price.
+  * A COUNTER SOME OTHER ABILITY OF THE SAME CARD READS is out of the
+    ruling's reach, because a card's own script cannot be read from
+    outside it. In this pool no such counter is a COST — Armageddon
+    Clock removes its doom counter as an EFFECT, and the Oracle Time
+    Vault has no counters — so the rule refuses nothing it should allow
+    and allows nothing it should refuse. The day a card makes a clock's
+    counter a cost, the card is where the reading has to be declared.
+  * NECROPOLIS OF AZAR STILL NEVER MAKES A SPAWN. The gate opens for it
+    (`{5}`, one husk counter, and the husk counters are fuel), but
+    `AiPlayer._ability_option` has no arm for an effect whose payload is
+    a TOKEN, so the general scorer prices the ability at nothing and
+    passes it by. That is a scorer's gap and not this knob's, and it is
+    why the Lord of Fate census shows the birds spending carrion and the
+    Necropolis spending nothing.
+- The counter cost is read on OUR side of the table only. A creature of
+  THEIRS with a corpse counter is judged regeneration-capable by
+  `AiPlayer._shieldable`, which counts their open mana and never asks
+  whether the ability's cost is a counter they have — an over-read that
+  predates this ruling and runs in the safe direction (it makes their
+  Ghoul look harder to kill than it is).
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`,

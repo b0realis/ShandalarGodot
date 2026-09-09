@@ -680,8 +680,13 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	# Cost riders the mana planner does not model.
 	if ability.exile_cost or ability.exile_filter.is_valid() \
 			or ability.graveyard_exile_filter.is_valid() \
-			or ability.random_discard_cost or ability.discard_cost > 0 \
-			or ability.counter_cost_kind != "":
+			or ability.random_discard_cost or ability.discard_cost > 0:
+		return false
+	# A COUNTER IS A PRICE TOO (2026-09-09, [member
+	# AiProfile.spends_counters]) — it used to sit on the line above and
+	# no counter had ever been removed as a cost in this AI's life.
+	if ability.counter_cost_kind != "" \
+			and not _counter_cost_spendable(inst, ability):
 		return false
 	if ability.discard_last_drawn_cost:
 		# "Discard the last card you drew this turn" (Jandor's Ring) names
@@ -697,7 +702,12 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	# scorer leaves them to their moment.
 	if not ability.tap_cost and ability.cost.mana_value() == 0 \
 			and ability.life_cost <= 0 and ability.max_per_turn <= 0 \
-			and not sacrifices:   # a body is a thing the turn runs out of
+			and not sacrifices \
+			and ability.counter_cost_kind == "":
+		# A body is a thing the turn runs out of, and since 2026-09-09 so
+		# is a counter: Osai Vultures' `+1/+1 for two carrion` is free of
+		# mana, free of the tap and capped by nothing but the birds it has
+		# eaten, and without this line the sink would offer it forever.
 		return false
 	if ability.life_cost > 0 and game.players[pid].life - ability.life_cost <= 3:
 		return false   # never pay life down to the last few points
@@ -723,6 +733,71 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	if ability.activation_condition.is_valid() \
 			and ability.activation_condition.call(game, inst) != "":
 		return false
+	return true
+
+
+## THE COUNTER THAT WAS NEVER SPENT (2026-09-09, [member
+## AiProfile.spends_counters]). May the pilot pay [param ability]'s
+## "remove N <kind> counters from this permanent" cost off [param inst]?
+##
+## Until this existed [method _ability_available] refused every counter
+## cost in the pool outright — they sat on the same line as the exile and
+## discard riders the mana planner cannot model — so no counter had ever
+## been removed as a cost in this AI's life. The report that surfaced it
+## was Osai Vultures: *"Remove two carrion counters from this creature: it
+## gets +1/+1 until end of turn"*, a bird that eats at every end step a
+## creature died and blocks at 1/1 with four counters on it.
+##
+## "ALLOW ALL COUNTER COSTS" IS THE WRONG RULE, and the reason is the same
+## one [member AiProfile.pays_sacrifices] is gated for: every reader
+## downstream prices the EFFECT and not the cost, and a counter is not
+## free the way tapping a land is. A Triskelion's three +1/+1 counters ARE
+## the 4/4 body; a pilot that shoots three times has bought three damage
+## and sold six points of creature without ever seeing the second half of
+## the trade.
+##
+## SO THE RULE IS: NOTHING BUT THE COST MAY READ THE COUNTER. A permanent's
+## counters can be read by exactly three things here, and two of them can
+## be asked from outside the card:
+##
+##  * THE NAME, read by the characteristics pipeline itself. A kind that
+##    parses as a P/T delta ([method ContinuousEffects.parse_pt_counter] —
+##    "+1/+1", "-0/-2", "+1/+0", "any P/T counter a card invents just
+##    works") is part of the creature's size, so removing it shrinks the
+##    body. Refused.
+##  * THE LIVE FIELD, read by the damage replacement. [member
+##    CardInstance.damage_eats_counters] names the kind a permanent sheds
+##    point for point instead of taking damage — a Rock Hydra's heads are
+##    its life (CR 615.1, a prevention effect that replaces the damage).
+##    Refused, whatever the kind is called.
+##  * THE CARD'S OWN SCRIPT, which cannot be read from outside it. That is
+##    where a CLOCK would live — a doom counter, a turn counter — and the
+##    ruling stops there and says so. Nothing in this pool makes a clock's
+##    counter a COST: Armageddon Clock removes its doom counter as an
+##    EFFECT, and the Oracle Time Vault this engine implements carries no
+##    counters at all.
+##
+## What is left is FUEL, and every counter cost the pool actually ships is
+## one: carrion, corpse and husk counters a trigger of the card's own puts
+## back, Life Matrix's matrix counter whose only printed use is the
+## regeneration it buys, Rasputin's dream counters refilled each upkeep.
+## Fuel needs no price of its own — to the evaluator, the combat maths and
+## the damage replacement it is worth zero until it is spent — so the
+## effect the existing readers already price is the whole of the trade.
+##
+## The count is checked here as well as in the engine so the refusal costs
+## no mana: [method MtgGame.activate_ability] would refuse an empty
+## permanent AFTER [method _plan_and_pay] had tapped the lands.
+func _counter_cost_spendable(inst: CardInstance, ability: ActivatedAbility) -> bool:
+	if not profile.spends_counters:
+		return false
+	var kind: String = ability.counter_cost_kind
+	if int(inst.counters.get(kind, 0)) < maxi(ability.counter_cost_count, 1):
+		return false
+	if ContinuousEffects.parse_pt_counter(kind) != Vector2i.ZERO:
+		return false   # the counter IS the body
+	if inst.damage_eats_counters == kind:
+		return false   # the counter IS the armour
 	return true
 
 
@@ -2898,15 +2973,28 @@ func _save_from_the_stack(game: MtgGame) -> String:
 			var shielded := _shield(game, victim)
 			if shielded != "":
 				return shielded
-		# Burn: a Giant Growth that lifts toughness past the damage saves
-		# a creature worth the card.
-		if intent.damage_at(top.x_value) > 0 and not intent.removes \
-				and Evaluator.permanent_value(victim) >= 3.0:
-			var pump := _find_pump_instant(game)
-			if pump != null:
-				var lift: int = pump.data.spell_effects[0].toughness
-				if victim.cur_toughness - victim.damage + lift > intent.damage_at(top.x_value):
-					return _cast_response(game, pump, [TargetRef.card(victim)])
+		# Burn: a breath of the creature's own, or a Giant Growth that
+		# lifts toughness past the damage.
+		if intent.damage_at(top.x_value) > 0 and not intent.removes:
+			# ITS OWN BREATH FIRST (2026-09-09) — the mana untaps and the
+			# card does not come back, so the Shade that can grow out of
+			# the Bolt is asked before the Giant Growth in hand is, and
+			# no worth bar stands in front of it: there is no card to
+			# lose, and a body whose own ability makes it bigger is one
+			# the evaluator's snapshot under-reads by construction.
+			var grown := _pump_out_of_reach(game, victim,
+				intent.damage_at(top.x_value))
+			if grown != "":
+				return grown
+			# ...and then the card, which is only worth a creature worth
+			# a card.
+			if Evaluator.permanent_value(victim) >= 3.0:
+				var pump := _find_pump_instant(game)
+				if pump != null:
+					var lift: int = pump.data.spell_effects[0].toughness
+					if victim.cur_toughness - victim.damage + lift \
+							> intent.damage_at(top.x_value):
+						return _cast_response(game, pump, [TargetRef.card(victim)])
 		# Unsummon our own Djinn out from under the Terror: the card is
 		# kept, the tempo is lost — worth it for a creature worth two.
 		if Evaluator.permanent_value(victim) >= 5.0:
@@ -2914,6 +3002,74 @@ func _save_from_the_stack(game: MtgGame) -> String:
 			if bounce != null:
 				return _cast_response(game, bounce, [TargetRef.card(victim)])
 	return ""
+
+
+## THE SHADE THAT DIED WITH FOUR SWAMPS UP (2026-09-09, [member
+## AiProfile.pumps_to_attack]'s fourth reading). One activation of
+## [param victim]'s own self-pump, when the burn spell on the stack would
+## deal [param damage] to it and the breaths in reach would carry it past
+## that; "" when there is no such breath, when the mana is spoken for, or
+## when everything in reach still is not enough.
+##
+## [method _save_from_the_stack] knew exactly one answer to a burn spell
+## aimed at one of ours — a pump INSTANT in hand ([method
+## _find_pump_instant]) — so a Frozen Shade with four Swamps untapped, a
+## 4/5 for the asking and three Swamps enough to walk out of a Lightning
+## Bolt, died to the Bolt with the mana still on the table. Every part of
+## the machinery this needs was built by the pump passes and none of it
+## had ever been asked here.
+##
+## THE THREE THINGS THOSE PASSES LEARNED, and all three are kept:
+##
+##  * the mana may be SPOKEN FOR. [method _pump_reserve] books the second
+##    main phase's best cast (on our own turn) and the held instant, so a
+##    Counterspell's {U}{U} is never spent on a point of toughness. A
+##    breath whose whole cost is counters takes none of it and is bounded
+##    by the counters alone ([method _pumps_in_reach]).
+##  * a per-turn CAP is counted, not the mana ([method
+##    _activations_left]): a body whose breath is once a turn is one
+##    point bigger, however many lands are open.
+##  * an ability whose cost is a BODY stays invisible, and one whose cost
+##    is a COUNTER is [member AiProfile.spends_counters]'s ruling — both
+##    through [method _ability_available], which [method _self_pump_of]
+##    asks.
+##
+## ONE ACTIVATION PER CALL, like [method _combat_self_pumps]: the pilot
+## acts once, our own object goes on top of the stack, [method
+## _respond_action] waits for it to resolve, and the burn spell is still
+## there to be answered again. The pumps ALREADY on the stack are counted
+## ([method _pending_pumps]) so a second is not bought for a job the first
+## has done.
+##
+## WHAT IT DELIBERATELY DOES NOT REACH: a spell that kills by shrinking
+## rather than by burning (a Dwarven Warriors' `-2/-2` shape has no
+## [member EffectIntent.damage_at]), which is the same arm [method
+## _find_pump_instant] has never answered either.
+func _pump_out_of_reach(game: MtgGame, victim: CardInstance,
+		damage: int) -> String:
+	if not profile.pumps_to_attack:
+		return ""
+	var pump := _self_pump_of(game, victim, true)
+	if pump.is_empty():
+		return ""
+	var index := int(pump["index"])
+	var ability: ActivatedAbility = pump["ability"]
+	var bonus: Vector2i = pump["bonus"]
+	var live := maxi(victim.cur_toughness - victim.damage, 0)
+	var pending := _pending_pumps(game, victim)
+	if live + bonus.y * pending > damage:
+		return ""   # what is already on the stack saves it
+	var sources := _mana_sources(game)
+	var reach := _pumps_in_reach(game, victim, ability, sources,
+		_pump_reserve(game, sources), _activations_left(game, victim, index)) \
+		+ pending
+	if live + bonus.y * reach <= damage:
+		return ""   # every breath it can reach still leaves it dead
+	if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, victim)):
+		return ""
+	if game.activate_ability(pid, victim, index, []) != "":
+		return ""
+	return "pumps %s out of the burn" % victim.data.card_name
 
 
 ## An affordable bounce instant in hand that can take [param victim].
@@ -3104,10 +3260,27 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 func _pumps_in_reach(game: MtgGame, inst: CardInstance, ability: ActivatedAbility,
 		sources: Array, kept: ManaCost = null, cap := -1) -> int:
 	var surcharge := game.ability_surcharge(pid, inst)
+	var limit := cap
+	# THE COUNTERS ARE PART OF THE COST TOO (2026-09-09, [member
+	# AiProfile.spends_counters]). A reach counted in mana alone would
+	# read an Osai Vultures with two carrion counters as +20/+20, because
+	# its breath asks for no mana at all — the counters on the permanent
+	# now are the bound, exactly as the per-turn cap is, and the smaller
+	# of the two wins. With the knob off no counter-cost ability ever
+	# reaches this function: [method _ability_available] refuses it.
+	if ability.counter_cost_kind != "":
+		var budget: int = int(inst.counters.get(ability.counter_cost_kind, 0)) \
+			/ maxi(ability.counter_cost_count, 1)
+		limit = budget if limit < 0 else mini(limit, budget)
+		if _cost_is_free(ability.cost) and surcharge == 0:
+			# Counters and nothing else: there is no plan to make, and no
+			# reserve to keep whole either — this breath cannot take a
+			# single point of mana away from the Counterspell.
+			return maxi(limit, 0)
 	var cost: ManaCost = ability.cost if kept == null \
 		else _combined_cost(ability.cost, kept)
 	var pumps := 0
-	while pumps < 20 and (cap < 0 or pumps < cap) \
+	while pumps < 20 and (limit < 0 or pumps < limit) \
 			and not _plan_taps_from(sources, cost, surcharge * (pumps + 1)).is_empty():
 		pumps += 1
 		cost = _combined_cost(cost, ability.cost)
@@ -4214,9 +4387,10 @@ func _pump_plan_for(game: MtgGame, inst: CardInstance) -> int:
 ## The gates are the ones the other pump paths already keep. No tap cost
 ## (a body that taps to pump cannot also attack), the ability available
 ## on its own terms ([method _ability_available], which is what keeps a
-## pump priced in BODIES — Atog, Fallen Angel — and one priced in
-## COUNTERS — Osai Vultures' carrion — invisible here as everywhere
-## else), a POWER bonus (a Granite Gargoyle's +0/+1 buys no attack), no
+## pump priced in BODIES — Atog, Fallen Angel — invisible here as
+## everywhere else, and one priced in COUNTERS invisible too until
+## [member AiProfile.spends_counters] rules on it), a POWER bonus (a
+## Granite Gargoyle's +0/+1 buys no attack), no
 ## toughness LOSS (Wall of Wonder's +4/-4 is a different card and a
 ## Defender besides), and nothing in the effect list the reader cannot
 ## price beside the pump — an Electric Eel's {R}{R} also shocks its
@@ -4232,7 +4406,15 @@ func _pump_plan_for(game: MtgGame, inst: CardInstance) -> int:
 ## beside it. That is the difference between Dragon Whelp — one effect,
 ## one row, read — and an Electric Eel, whose pump IS a [PumpEffect] and
 ## has an unpriced second effect next to it, and stays refused.
-func _self_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
+##
+## [param for_toughness] turns the power gate around (2026-09-09,
+## [member AiProfile.pumps_to_attack]'s fourth reading): the burn on the
+## stack is answered with TOUGHNESS, so [method _pump_out_of_reach] wants
+## the Granite Gargoyle's `{R}: +0/+1` this function exists to refuse, and
+## does not care whether the breath grants power at all. Every other gate
+## is the same one, and the default is the reading this had before.
+func _self_pump_of(game: MtgGame, inst: CardInstance,
+		for_toughness := false) -> Dictionary:
 	for index in inst.cur_activated_abilities.size():
 		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 		if ability.tap_cost or ability.cost == null:
@@ -4247,7 +4429,9 @@ func _self_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 			if breath.is_empty():
 				continue
 			bonus = Vector2i(int(breath["power"]), int(breath["toughness"]))
-		if bonus.x <= 0 or bonus.y < 0:
+		if bonus.x < 0 or bonus.y < 0:
+			continue
+		if (bonus.y <= 0) if for_toughness else (bonus.x <= 0):
 			continue
 		if not _ability_available(game, inst, index):
 			continue

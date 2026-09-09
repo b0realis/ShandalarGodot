@@ -355,8 +355,9 @@ func _ai_plays_its_turn(ai: AiPlayer) -> void:
 
 func test_the_ai_pays_the_pump_once_or_not_at_all() -> void:
 	# The AI wearing the Vultures with two counters and the aura. Whether
-	# its policy spends the counters is its own affair (today it does not
-	# — [method AiPlayer._ability_available] leaves counter costs alone);
+	# its policy spends the counters is its own affair ([member
+	# AiProfile.spends_counters] since 2026-09-09 — before that [method
+	# AiPlayer._ability_available] refused every counter cost outright);
 	# what this pins is the ARITHMETIC either way: 2 with the counters
 	# kept, 3 with both spent, and never a 3 with counters still on or a
 	# single counter left behind.
