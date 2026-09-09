@@ -126,3 +126,110 @@ func test_an_evicted_picture_still_hangs_on_its_card() -> void:
 	assert_true(is_instance_valid(rect.texture), "the card keeps its picture")
 	assert_eq(rect.texture.get_width(), 2)
 	_restore_art()
+
+
+# ------------------------------------------------------- the set symbols --
+# THE CUT that takes a set symbol off its own ground
+# ([method GameSkin.cut_set_icon]). Two skins draw these very differently
+# — 1997's DBArt is a 40x40 blue-grey stone TILE with a gold ring on it,
+# Manalink's restyle a 35x36 gold glyph on flat grey — and the loader has
+# to be right about both, on a machine that has imported either or
+# neither. So the shapes are BUILT here rather than loaded: these tests
+# say what the cut does, not what one developer's disc holds.
+
+
+## A 1997 DBArt medallion, to the measurements in `game/skin.gd`: stone
+## everywhere, a gold ring between 14.5 and 17.4 from the centre, a black
+## glyph inside it. The corners carry the stone's own blue-greys, which
+## is what tells the loader the achromatic key cannot take this ground.
+func _stone_tile() -> Image:
+	var img := Image.create(40, 40, false, Image.FORMAT_RGBA8)
+	img.fill(Color8(146, 171, 176))
+	var centre := Vector2(19.5, 19.5)
+	for y in 40:
+		for x in 40:
+			var dist := (Vector2(x, y) - centre).length()
+			if dist >= 14.5 and dist <= 17.4:
+				img.set_pixel(x, y, Color8(214, 168, 46))
+			elif dist < 8.0:
+				img.set_pixel(x, y, Color8(28, 24, 26))
+	img.set_pixel(0, 0, Color8(178, 237, 245))
+	img.set_pixel(39, 0, Color8(174, 180, 204))
+	img.set_pixel(0, 39, Color8(178, 237, 245))
+	img.set_pixel(39, 39, Color8(174, 180, 204))
+	return img
+
+
+## Manalink's restyle: a grey bevel with a gold glyph on it, and the glyph
+## reaches well past any circle inscribed in a 35x36 file — the Legends
+## pillar's capital is 19.47 from the centre, so a geometric cut here
+## would saw it off.
+func _grey_restyle() -> Image:
+	var img := Image.create(35, 36, false, Image.FORMAT_RGBA8)
+	for y in 36:
+		for x in 35:
+			var grey := 45 + y * 2
+			img.set_pixel(x, y, Color8(grey, grey, grey))
+	for x in range(2, 34):
+		img.set_pixel(x, 2, Color8(255, 214, 126))
+	for y in range(2, 34):
+		img.set_pixel(17, y, Color8(255, 214, 126))
+	return img
+
+
+func test_the_1997_tile_is_cut_down_to_its_medallion() -> void:
+	var img := _stone_tile()
+	GameSkin.cut_set_icon(img)
+	for corner in [Vector2i(0, 0), Vector2i(39, 0), Vector2i(0, 39),
+			Vector2i(39, 39)]:
+		assert_eq(img.get_pixelv(corner).a, 0.0,
+			"the tile's corner at %s is gone" % corner)
+	assert_eq(img.get_pixel(19, 19).a, 1.0, "the glyph's centre stays")
+	assert_eq(img.get_pixel(19, 4).a, 1.0,
+		"the gold ring stays (4.5 above centre of 40 is r 15.5)")
+	assert_eq(img.get_pixel(19, 0).a, 0.0,
+		"and the stone above the ring goes with the corners")
+
+
+func test_the_restyle_keeps_a_glyph_that_reaches_past_the_circle() -> void:
+	var img := _grey_restyle()
+	GameSkin.cut_set_icon(img)
+	for corner in [Vector2i(0, 0), Vector2i(34, 0), Vector2i(0, 35),
+			Vector2i(34, 35)]:
+		assert_eq(img.get_pixelv(corner).a, 0.0,
+			"the grey bevel's corner at %s is keyed away" % corner)
+	assert_eq(img.get_pixel(17, 17).a, 1.0, "the glyph's centre stays")
+	assert_eq(img.get_pixel(33, 2).a, 1.0,
+		"and so does the far end of it, 22px from the centre")
+
+
+func test_the_four_corners_choose_the_cut() -> void:
+	assert_false(GameSkin._backdrop_is_flat(_stone_tile()),
+		"stone in the corners: the key cannot take this ground")
+	assert_true(GameSkin._backdrop_is_flat(_grey_restyle()),
+		"pure grey in the corners: the key is the right cut")
+
+
+func test_every_imported_set_icon_loses_its_ground() -> void:
+	# Whichever skin this machine imported. Both cuts must end the same
+	# way: nothing of the backdrop in the corners, and a symbol left.
+	var found := 0
+	for code in ["atq", "arn", "past", "drk", "4ed", "leg"]:
+		var tex := GameSkin.set_icon(code)
+		if tex == null:
+			continue
+		found += 1
+		var img := tex.get_image()
+		var last := Vector2i(img.get_width() - 1, img.get_height() - 1)
+		for corner in [Vector2i.ZERO, Vector2i(last.x, 0),
+				Vector2i(0, last.y), last]:
+			assert_eq(img.get_pixelv(corner).a, 0.0,
+				"set_icon_%s keeps no corner at %s" % [code, corner])
+		var opaque := 0
+		for y in img.get_height():
+			for x in img.get_width():
+				if img.get_pixel(x, y).a > 0.5:
+					opaque += 1
+		assert_gt(opaque, 40, "set_icon_%s still has a symbol" % code)
+	if found == 0:
+		pass_test("no set symbols imported on this machine")

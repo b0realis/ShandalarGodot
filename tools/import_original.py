@@ -529,9 +529,17 @@ MANIFEST: dict[str, list[str]] = {
     # half (one colour, 546/546 px), i.e. a dead mask that decodes to a
     # fully transparent sprite. Only Manalink's 60x30 rescale has a
     # working mask. Whoever builds the poison counter takes that one.
-    # The ORIGINAL's own set symbols (DBArt, 35x36) — drawn on a card's
+    # The ORIGINAL's own set symbols (DBArt, 40x40) — drawn on a card's
     # type strip. Unlimited (2ed) and the promos have no symbol, exactly
     # as the printed cards don't.
+    #
+    # `[1997]`: the raw `.pic` leads each row since the day every skin key
+    # decoded (2026-09-09), so a genuine install gives the 1997 drawing —
+    # a blue-grey stone tile, a gold ring on it, a black glyph inside the
+    # ring — and only a Manalink source falls through to the 35x36
+    # greyscale restyle beside it. `GameSkin.cut_set_icon` takes the tile
+    # away by cutting to the ring's circle and the restyle's grey away by
+    # keying it, choosing between them on the file's own four corners.
     "set_icon_atq":          ["Antiquit.pic", "Antiquit.pic.png"],
     "set_icon_arn":          ["ArabNite.pic", "ArabNite.pic.png"],
     "set_icon_past":         ["Astral.pic", "Astral.pic.png"],

@@ -9261,6 +9261,117 @@ Ants :)"*.
   a Frozen Shade with Swamps open dies to a Bolt it could have grown out
   of. All three are written into `docs/ai-difficulty.md` §5.
 
+## THE FIREBREATHER'S OTHER HALF (2026-09-09) — the block, and the two the reader could not see
+
+`pumps_to_attack` shipped that morning reading the ATTACK only, and its
+own notes named what it left. Both are in now, under the same knob —
+**the knob's meaning grew**, and its name is the half it was born for,
+the way `animates_to_attack` is named for its attack and rules on the
+block in the same breath.
+
+- **The block was still declared at printed size.** A Carrion Ants
+  behind six Swamps let a Craw Wurm past for six at 20 life
+  (`declared 0 block(s)`), and at 8 life chump-blocked it at 0/1 for
+  `_combat_self_pumps` to rescue afterwards. `_block_choice_once_pumped`
+  is the attack probe mirrored — the same `_reachable_pumps`, the same
+  journal, the same unmaking — and THE PANIC LINE IS READ INSIDE IT,
+  because `_damage_after_value_blocks` runs the same ladder and reading
+  the panic at printed size while planning blocks at reach size is the
+  one combination that is wrong: it would chump AND value-block with the
+  same bodies. The swarm now eats the Wurm and walks away.
+- **Two rows in a fourth table.** Dragon Whelp and Nalathni Dragon
+  breathe through an `EffectBase` of their own — the breath carries a
+  FUSE the shared `PumpEffect` cannot express — so `pump_self` was false
+  and no pump path had ever touched them. `EffectIntent.CARD_LOCAL_PUMPS`
+  states the bonus one activation GUARANTEES plus the fuse and the card's
+  own memory keys; a table of its own rather than a `CARD_LOCAL` row for
+  the reason the window shapes and the levellers are one — a row there
+  stops the reader calling the effect `unknown`, and these must stay
+  unknown to every reading that word gates. GATED on the knob, unlike
+  every other reading in that file: ungated it would have moved this
+  knob's own null, and worse, sold the fourth breath with the cap unread,
+  since the cap is gated too. The fuse hands every reader three breaths;
+  the fourth is only for the attack that ends the game, and only while
+  the game is not already ending, so a Whelp that reaches exactly lethal
+  at three keeps itself.
+- **Rainbow Knights has NO row, by ruling.** Its `{W}{W}` rolls +0, +1
+  or +2 at resolution: what two white mana guarantee is nothing, and a
+  declaration sized on the average walks a 2/1 into a blocker one time in
+  three. The table's contract is "the bonus one activation GUARANTEES" —
+  the same rule that keeps Camouflage out of the window table.
+- **The numbers, with the two halves separated** by replaying the
+  morning's own tree as a third arm. Seed 11, 1,000 games an arm, 108,000
+  games in five runs with no error or stall; **control (Big Green vs
+  White Knights) PASS in every arm of all five — 525-475,
+  byte-identical to its null, 1,000 of 1,000** — and the morning's
+  published numbers reproduce to the decimal, which is what the gating
+  bought. **The block half is a WASH**: ten `on`-arm movements across two
+  decks, not one outside the ±3–4 a 1,000-game delta can see —
+  `_combat_self_pumps` was already recovering most of it a step later,
+  and what the planned block fixes is the block never declared at all,
+  which is the case the owner sees at the table and the win rate does
+  not. **The reader half is the gain**: Kzzy'n — The Dragon Lord, a deck
+  the morning's knob did nothing for (+0.7, +0.1, +1.1, +0.1, +1.5, none
+  clear), now reads +9.9 ±4.2, +5.4 ±4.1, +8.3 ±4.1, +4.9 ±3.9,
+  +7.8 ±4.2 against the five starters. `tests/ai` 541/541 across 34
+  scripts.
+- **Open, from the same look.** A trampler's overflow is priced against
+  a toughness the probe put on but `_combat_self_pumps` only buys when it
+  saves the body; one pool split among gang blockers is then spent whole
+  by the recovery; and pricing a RANDOM bonus at all (Rainbow Knights)
+  is a bigger question than one card. All three in
+  `docs/ai-difficulty.md` §5.
+
+## THE SET SYMBOLS ARE COINS AGAIN (2026-09-09) — the cut, not the key
+
+The day every skin key decoded out of a genuine install took the six
+`set_icon_*` with it, and the art that now arrives is not the art
+`GameSkin.set_icon` was written against. `Dbart/Antiquit.pic` and its
+five fellows are 40x40: a blue-grey STONE TILE with a gold ring on it and
+a black glyph inside the ring. Manalink's restyle — 35x36, a gold glyph
+on flat grey, no tile — is what the loader had ever seen, and its
+ACHROMATIC KEY was tuned to that grey. On 1997's stone the key sees
+almost nothing (`hi-lo` 0.118 for the tile, 0.263 for the dithered
+highlight along its top), so 13-14% of the file keys out and the square
+tile stands behind the symbol on the enlarged card, on Help's icon page,
+and in the title row's fallback.
+
+- **The fix is a CUT, not a better key, and the file says which cut.**
+  `GameSkin.cut_set_icon` reads the FOUR CORNERS — the one place both
+  skins put backdrop and nothing else. All four colourless (the restyle:
+  `hi-lo` exactly 0.0 on all six files) and the achromatic key is right
+  and stays. A corner that SURVIVES the key is a ground the key cannot
+  take, and the tile behind it carries a coin, so the cut is geometric:
+  an inscribed circle at 0.45 of the short side with the rim's last pixel
+  feathered — `MiniCard.badge_from_slot`'s cut of the ability sheet,
+  applied to the same class of bug.
+- **Measured, not chosen.** The gold ring lies 14.51 to 17.73 px from the
+  centre of a 40 px tile, so 0.45 keeps every gold pixel and no stone;
+  0.44 thins the ring (36 feathered, one gone), 0.46 brings forty stone
+  pixels back.
+- **Why not one rule for both.** A geometric cut alone is wrong for the
+  restyle — the Legends pillar reaches 19.47 px from the centre of a
+  35x36 file and any inscribed circle saws its capital off. A corner
+  flood-fill is wrong for both: the 1997 stone is dithered speckle, so a
+  fill loose enough to clear it walks up the restyle's anti-aliased
+  glyph edges and eats the glyph. Tried, measured, discarded; the corners
+  decide instead.
+- **Checked by looking**, on all six icons in each of the three places
+  they are drawn (the enlarged card, Help's *Icons — around the table*,
+  the title row with the `Cardsets` strip forced null so the fallback
+  runs): six round coins, gold rim closed all the way round, no corner
+  and no clipped glyph — the arn scimitar is the thinnest drawing in the
+  set and survives whole, the leg pillar the tallest and stays inside the
+  ring. The Manalink path is untouched in all three. Four tests in
+  `tests/ui/test_skin.gd` BUILD both shapes rather than needing a disc.
+- **Open, and the owner's call rather than a bug.** The 1997 glyph sits
+  inside its ring, so in the card's 14 px icon box it draws at about half
+  the height Manalink's ink-filling glyph did. One line at
+  `card_preview.gd:670` would trade the coin for a bigger glyph. The
+  Deck Builder's set filter buttons are NOT a `set_icon` site
+  (`filter_bar.gd` dresses them from `filter_icons` cells), so nothing
+  there moved.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

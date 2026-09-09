@@ -1373,6 +1373,27 @@ shandalar/
 │   │   │                      coin flip). pump_keywords is every keyword
 │   │   │                      the pumps grant, so Teleport (a 0/0 pump
 │   │   │                      granting unblockable) is read structurally
+│   │   │                      THE CARD-LOCAL BREATHS (CARD_LOCAL_PUMPS /
+│   │   │                      card_local_pump, 2026-09-09): a FOURTH
+│   │   │                      table, two rows, for the firebreathers
+│   │   │                      whose pump is a class inside their own
+│   │   │                      card file because it carries a FUSE the
+│   │   │                      shared PumpEffect cannot express — Dragon
+│   │   │                      Whelp and Nalathni Dragon, {R}: +1/+0 with
+│   │   │                      the fourth breath sacrificing the dragon.
+│   │   │                      Each row states the bonus ONE activation
+│   │   │                      GUARANTEES plus the fuse and the card's own
+│   │   │                      memory keys. A fourth table and not a
+│   │   │                      CARD_LOCAL row for the reason the second
+│   │   │                      and third exist: a row there stops the
+│   │   │                      reader calling the effect `unknown`, and
+│   │   │                      only the pump paths read this column —
+│   │   │                      through AiPlayer._card_local_breath, which
+│   │   │                      GATES it on AiProfile.pumps_to_attack so
+│   │   │                      the knob's null stays the pilot as it was.
+│   │   │                      Rainbow Knights has no row on purpose: its
+│   │   │                      {W}{W} rolls +0, +1 or +2 at resolution and
+│   │   │                      guarantees nothing (the Camouflage rule).
 │   │   │                      and needs no row. Detonate has one since
 │   │   │                      2026-09-08 (removes, ignores regeneration;
 │   │   │                      not damage_x — the X sizes the target):
@@ -3644,6 +3665,23 @@ shandalar/
 │    points put on each candidate shown on its own card, cleared by the
 │    rebuild after the submit, and lifted a row when real damage is
 │    already marked there so the two never overprint;
+│    tests/ai/test_ai_pumps_to_block_2026_09_09.gd — THE BLOCK STILL
+│    DECLARED AT PRINTED SIZE, and the firebreathers the reader could not
+│    see (AiProfile.pumps_to_attack, its second half): the Carrion Ants
+│    eating the Craw Wurm it used to let past for six and killing a
+│    Minotaur with a Swamp to spare, home on both counts with the knob
+│    off; the panic line read INSIDE the probe (6 outside, 0 inside, 6
+│    again after the unmaking); the block made with the chump rung shut by
+│    hand, so it is a value block and not a panic; no mana, one Swamp, a
+│    toughness-only pump, the attacking Shade, the Counterspell's mana,
+│    the second main phase booking nothing on their turn, one pool one
+│    swarm, the probe leaving rng, log, journal and every Swamp untouched,
+│    an outer search kept, nothing floating and nothing burned; Dragon
+│    Whelp breathing three at 12 life and keeping itself, stopping at
+│    exactly lethal at 5, lighting the fuse at 8 because that breath is
+│    the game, the count read out of card memory and resetting with the
+│    turn, Nalathni read by the same row, Rainbow Knights refused on both
+│    arms;
 │    tests/ai/test_ai_pumps_to_attack_2026_09_09.gd — THE FIREBREATHER
 │    THAT NEVER SWUNG (AiProfile.pumps_to_attack): the owner's Carrion
 │    Ants sent at 4/5 and breathing four times, sent into a Grizzly Bears
@@ -3653,7 +3691,8 @@ shandalar/
 │    an unpayable one reserving nothing, the second main phase's Specter
 │    kept whole; the Fire Drake counted at one and the Bats at two, the
 │    lethal probe reading the cap, the null still counting mana; Dragon
-│    Whelp's fuse never lit because it is never read; the Wall, the sick
+│    Whelp's fuse still unlit with the knob OFF (its ON arm moved to the
+│    block file when the reader row landed); the Wall, the sick
 │    body, the opponent's Shade, the counter cost, the body cost, the
 │    Eel's unpriced rider and the +0/+1 all refused; the probe leaving
 │    rng, log, journal and every Swamp untouched, nothing left floating;
@@ -4099,6 +4138,29 @@ shandalar/
 │   │                          strip) — added for the Help screen, which
 │   │                          must not reach into another screen's
 │   │                          private art code.
+│   │                          THE SET SYMBOLS ARE CUT, NOT KEYED
+│   │                          (2026-09-09): cut_set_icon(img) — public,
+│   │                          so a test pins the SHAPE without needing a
+│   │                          1997 install — picks its cut from the
+│   │                          file's FOUR CORNERS. All four colourless
+│   │                          (Manalink's 35x36 restyle, hi-lo 0.0) ->
+│   │                          the old achromatic key at BACKDROP_KEY
+│   │                          (0.09), unchanged; a corner that SURVIVES
+│   │                          it (1997's 40x40 Dbart stone tile, hi-lo
+│   │                          0.118 and 0.263) -> an inscribed circle at
+│   │                          MEDALLION_RADIUS (0.45 of the short side,
+│   │                          rim feathered), which is
+│   │                          MiniCard.badge_from_slot's cut of the
+│   │                          ability sheet. The key alone cleared 13-14%
+│   │                          of a 1997 file and left a square tile
+│   │                          behind the symbol on the enlarged card,
+│   │                          Help's icon page and the title row's
+│   │                          fallback. NOT dispatched on size: a circle
+│   │                          at 35x36 saws the Legends pillar's capital
+│   │                          off (ink at 19.47px), and a flood-fill
+│   │                          cannot cross the 1997 stone's dither
+│   │                          without eating the restyle's glyph. Pinned
+│   │                          at both sizes by tests/ui/test_skin.gd.
 │   │                          card_art (and card_scan through it)
 │   │                          GENERATES MIPMAPS since 2026-09-04: a
 │   │                          ~582x467 Scryfall crop drawn at ~110px is a

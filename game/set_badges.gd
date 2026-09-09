@@ -44,8 +44,8 @@ extends HBoxContainer
 
 ## Height every symbol is fitted to, in pixels. The two skins supply very
 ## differently shaped art — a `Cardsets` strip glyph is 12-15px tall, a
-## DBArt medallion 36 — so the badge fixes the height and lets the width
-## follow the aspect, which is what keeps the row's cap line straight.
+## DBArt medallion 36 or 40 — so the badge fixes the height and lets
+## the width follow the aspect, which keeps the row's cap line straight.
 const ICON_HEIGHT := 22
 
 ## Letter size for a lettered badge, and the gaps around the row.
@@ -294,13 +294,21 @@ static func badge_suffix(code: String) -> String:
 ## The original's symbol for a set, or null — for the three sets it drew
 ## none for, and for every set when no skin is imported.
 ##
-## TWO SOURCES, IN PROVENANCE ORDER. The 1997 `Cardsets` strip first: it is
-## the genuine article, reaching us through s30's conversion of the
-## original file. `set_icon_<code>` second: those are `Program/DBArt/*.pic`,
-## which `tools/import_original.py` records as Manalink 3's own flat
-## RESTYLE of the 1997 glyphs (a PNG wearing a `.pic` extension), and no
-## 1997 conversion of them exists — s30 converted the card art, not DBArt.
-## Same drawings, later hand; good enough to dress a menu, second in line.
+## TWO SOURCES, IN PROVENANCE ORDER. The 1997 `Cardsets` strip first: it
+## is the sheet the original stamps on a CARD, and it is the genuine
+## article. `set_icon_<code>` second: `Program/DBArt/*.pic`, the six
+## medallions the 1997 Deck Builder dressed its own toggles with.
+##
+## THE SECOND SOURCE IS 1997's TOO, SINCE 2026-09-09. `[1997]`: the note
+## that used to stand here said no 1997 conversion of DBArt existed — that
+## a `set_icon_*` was always Manalink 3's flat RESTYLE, a PNG wearing a
+## `.pic` extension. That was true only of what a Manalink install holds.
+## `tools/import_original.py` now decodes the genuine `.pic` itself, so a
+## player who imported from a real disc gets the 1997 drawing: a 40x40
+## stone tile, gold ring, black glyph, cut to its coin by [method
+## GameSkin.cut_set_icon]. A player who imported from Manalink still gets
+## the restyle. Either way this stays second in line — the strip is what
+## a card was printed with.
 static func symbol(code: String) -> Texture2D:
 	if not SYMBOL_SLOT.has(code):
 		return null
@@ -319,13 +327,14 @@ static func symbol(code: String) -> Texture2D:
 ## A glyph cropped to its own ink — the same trim [method symbol_from_sheet]
 ## does for the strip, applied to whatever the other source hands over.
 ##
-## IT IS WHAT MAKES A ROW OF BADGES A ROW. A DBArt medallion is a 35x36
-## TILE with the symbol floating in the middle of it, and the margin
-## differs per file (the scimitar is the thinnest drawing in the set and
-## the pillar nearly fills its tile). Fitting the tiles to a common height
-## therefore fits the PADDING, and the first render of this row came out
-## with a scimitar a third the size of the pillar beside it. Fitting the
-## INK instead gives every set the same optical weight.
+## IT IS WHAT MAKES A ROW OF BADGES A ROW. A DBArt medallion is a TILE
+## with the symbol floating in the middle of it — 35x36 in Manalink's
+## restyle, 40x40 in 1997's own — and the margin differs per file (the
+## scimitar is the thinnest drawing in the set and the pillar nearly fills
+## its tile). Fitting the tiles to a common height therefore fits the
+## PADDING, and the first render of this row came out with a scimitar a
+## third the size of the pillar beside it. Fitting the INK instead gives
+## every set the same optical weight.
 static func ink_tight(art: Texture2D) -> Texture2D:
 	if art == null:
 		return null

@@ -202,8 +202,10 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The Deck Builder's set filter icons, one per set code (atq, arn, "
      "past, drk, leg, 4ed). The original's own are 40x40 bevelled stone "
      "tiles carrying a gold-ringed medallion — the same art as cells of "
-     "the filter sheet — and the game keys their flat grey away before "
-     "drawing one on a card."),
+     "the filter sheet — and the game cuts each one down to that "
+     "medallion's circle before drawing it on a card. Manalink's "
+     "restyle is 35x36 with no tile and no ring, a gold glyph on flat "
+     "grey; the game keys that grey away instead. Either shape works."),
 
     ("The Deck Builder", "filter_icons",
      "The filter bar's medallions: 9 columns x 3 rows of 40 px cells, "

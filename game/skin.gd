@@ -277,10 +277,35 @@ static func set_label_suffix(set_code: String) -> String:
 	return ""
 
 
+## HOW COLOURLESS A PIXEL HAS TO BE to count as backdrop — the key
+## [method _key_flat_backdrop] applies, and the question [method
+## _backdrop_is_flat] asks of the four corners. Tuned to the restyle's
+## grey bevel and left exactly where it was.
+const BACKDROP_KEY := 0.09
+
+## THE MEDALLION'S RADIUS, as a fraction of the tile's short side.
+## MEASURED across all six 1997 files (2026-09-09): the gold ring's
+## pixels lie between 14.51 and 17.73 from the centre of a 40px tile —
+## 0.363 to 0.443 of the side — and everything past them is stone and
+## bevel. 0.45 is the value that keeps the whole ring and none of the
+## stone: at it, no gold pixel is lost and 13 of a ring's 181 take the
+## feather; at 0.44 the ring starts to thin (36 feathered, one gone),
+## and at 0.46 forty stone pixels come back with it.
+const MEDALLION_RADIUS := 0.45
+
 ## The ORIGINAL's set symbol for a set code (DBArt icons imported as
-## set_icon_*), with its flat backdrop keyed out so the symbol sits on a
+## set_icon_*), with its backdrop taken away so the symbol sits on a
 ## card's type strip without a box behind it. Null for sets the original
 ## gave no symbol (Unlimited, the promos) — as the printed cards have none.
+##
+## TWO SKINS HAND OVER TWO DIFFERENT DRAWINGS, and the file says which.
+## `[1997]`, 2026-09-09: now that the importer decodes every skin key out
+## of a genuine install, `Program/DBArt/Antiquit.pic` and its five fellows
+## arrive as what 1997 drew — a 40x40 blue-grey STONE TILE with a gold
+## ring on it and a black glyph inside the ring. Manalink's restyle, which
+## this loader was written against, is 35x36: a gold glyph on a flat grey
+## ground, no tile at all. [method cut_set_icon] does the right thing to
+## either.
 static var _set_icon_cache: Dictionary = {}
 
 static func set_icon(set_code: String) -> Texture2D:
@@ -291,22 +316,96 @@ static func set_icon(set_code: String) -> Texture2D:
 	if path != "":
 		var img := Image.load_from_file(path)
 		if img != null:
-			img.convert(Image.FORMAT_RGBA8)
-			# The backdrop is a GREY BEVEL (measured: light grey at the top
-			# corners, dark at the bottom), so a single flat-colour key
-			# left a black square behind. The symbols themselves are
-			# strongly coloured, so key every ACHROMATIC pixel instead.
-			for y in img.get_height():
-				for x in img.get_width():
-					var px := img.get_pixel(x, y)
-					var hi: float = maxf(px.r, maxf(px.g, px.b))
-					var lo: float = minf(px.r, minf(px.g, px.b))
-					if hi - lo < 0.09:
-						px.a = 0.0
-						img.set_pixel(x, y, px)
+			cut_set_icon(img)
 			result = ImageTexture.create_from_image(img)
 	_set_icon_cache[set_code] = result
 	return result
+
+
+## THE CUT, made in place on `img` — what takes a set symbol off whatever
+## ground its own skin drew it on. Public because the SHAPE of the cut is
+## the thing worth pinning, and a test that would have to import a 1997
+## install first pins nothing (`tests/ui/test_skin.gd`).
+##
+## THE FOUR CORNERS DECIDE, and they decide cleanly. Both skins fill the
+## corners of the file with backdrop and nothing else, so the only
+## question is what KIND of backdrop it is:
+##
+##   * Manalink's restyle, 35x36 — every corner is a pure grey, from
+##     (126,126,126) down to (45,45,45), hi-lo exactly 0.0 on all six
+##     files. The ground is a flat GREY BEVEL and the symbols are
+##     strongly coloured, so keying every ACHROMATIC pixel takes the
+##     ground and leaves the gold. That cut is unchanged. A geometric one
+##     would be WRONG here: the Legends pillar reaches 19.47px from the
+##     centre of a 35x36 file and any inscribed circle would saw its
+##     capital off.
+##   * 1997's own DBArt tile, 40x40 — the corners are the stone's own
+##     blue-greys, (178,237,245) and (174,180,204), hi-lo 0.263 and 0.118.
+##     The achromatic key cannot see them: it clears 13-14% of the file
+##     and leaves the SQUARE TILE standing behind the symbol. But that
+##     tile carries a COIN — a gold ring with the glyph inside it — so
+##     the cut is GEOMETRIC, the same inscribed-circle cut [method
+##     MiniCard.badge_from_slot] makes of the ability sheet: everything
+##     past [constant MEDALLION_RADIUS] goes, the last pixel of the rim
+##     feathered so the edge does not alias, and what is left is the
+##     medallion the 1997 Deck Builder drew on its own toggles.
+##
+## Which cut a file gets is therefore read OFF THE FILE, never off its
+## size: a corner that survives the key is a backdrop the key cannot take.
+static func cut_set_icon(img: Image) -> void:
+	img.convert(Image.FORMAT_RGBA8)
+	if _backdrop_is_flat(img):
+		_key_flat_backdrop(img)
+	else:
+		_cut_medallion(img)
+
+
+## Has this file the flat, colourless ground [method _key_flat_backdrop]
+## was written for? Asked of the four corners, which is the one place
+## every skin puts backdrop and nothing else.
+static func _backdrop_is_flat(img: Image) -> bool:
+	var last := Vector2i(img.get_width() - 1, img.get_height() - 1)
+	for corner in [Vector2i.ZERO, Vector2i(last.x, 0),
+			Vector2i(0, last.y), last]:
+		var px := img.get_pixelv(corner)
+		var hi: float = maxf(px.r, maxf(px.g, px.b))
+		var lo: float = minf(px.r, minf(px.g, px.b))
+		if hi - lo >= BACKDROP_KEY:
+			return false
+	return true
+
+
+## Take away every ACHROMATIC pixel — the restyle's grey bevel, which is
+## light at the top corners and dark at the bottom, so a single flat
+## colour key left a black square behind and this does not.
+static func _key_flat_backdrop(img: Image) -> void:
+	for y in img.get_height():
+		for x in img.get_width():
+			var px := img.get_pixel(x, y)
+			var hi: float = maxf(px.r, maxf(px.g, px.b))
+			var lo: float = minf(px.r, minf(px.g, px.b))
+			if hi - lo < BACKDROP_KEY:
+				px.a = 0.0
+				img.set_pixel(x, y, px)
+
+
+## Take the 1997 stone tile away and leave the coin drawn on it: an
+## inscribed circle at [constant MEDALLION_RADIUS], the outermost pixel
+## of the rim feathered. Multiplies the alpha rather than setting it, so
+## a file that came in with a mask keeps it.
+static func _cut_medallion(img: Image) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var centre := Vector2((w - 1) / 2.0, (h - 1) / 2.0)
+	var radius := mini(w, h) * MEDALLION_RADIUS
+	for y in h:
+		for x in w:
+			var dist := (Vector2(x, y) - centre).length()
+			if dist <= radius - 1.0:
+				continue
+			var px := img.get_pixel(x, y)
+			px.a *= maxf(0.0, radius - dist) if dist < radius else 0.0
+			img.set_pixel(x, y, px)
 
 
 ## One SUB-RECTANGLE of a skin sheet, as its own texture — cached.
