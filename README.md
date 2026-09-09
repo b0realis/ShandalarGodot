@@ -338,15 +338,17 @@ the 1997 game at runtime, where the player put it
 (`tools/import_original.py`, `docs/player-files.md`); with none of it
 present the game is complete and plays in a look of its own.
 
-**This: twelve files, of exactly three kinds,** listed here one by one
+**This: twelve files, of exactly two kinds,** listed here one by one
 because "some assets ship" is not a thing to leave vague. Each kind is
-ours to hand on for a different reason, and the reasons are not
-interchangeable: what this project MADE, what somebody else GAVE AWAY
-under a licence that permits redistribution, and one file whose licence
-comes with a caveat this section keeps rather than smooths.
+ours to hand on for a different reason, and the two reasons are not
+interchangeable: what this project MADE, and what somebody else GAVE
+AWAY under a licence that permits redistribution. There was a third kind
+until 2026-09-09 — one sound, under a stranger's licence, with a caveat
+attached — and it is gone because the sound was replaced with one of our
+own (`Provenance.md`, the row for `game/deck_builder/stone_grind.wav`).
 
-**One — nine pictures, every one of them ours,** under this project's own
-GPL-3.0.
+**One — nine pictures and one sound, every one of them ours,** under
+this project's own GPL-3.0.
 
 | file | what it is |
 |---|---|
@@ -359,13 +361,17 @@ GPL-3.0.
 | `game/art/damage_marker.png` | the dagger a wounded creature wears |
 | `game/icon.png` | the window and taskbar icon (`branding/logo.png` is its master) |
 | `game/boot_splash.png` | the picture shown while the game loads |
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue, a quarter of a second of stone |
 
 The seven in `game/art/` are drawn from scratch by
 `tools/draw_our_art.gd` — polygons and arcs in code, no source file of
 any kind — so the same command reproduces them byte for byte on a
-machine that has never seen the 1997 game. `game/art/README.md` records
-each one's SHA-256; `tests/ui/test_our_art.gd` holds the list to the
-folder, so a picture that arrived from anywhere else fails the suite.
+machine that has never seen the 1997 game. The sound is made the same
+way by `tools/make_our_sfx.py`: noise, a filter and an envelope, out of
+the standard library and a seeded generator, reading nothing.
+`game/art/README.md` records each one's SHA-256;
+`tests/ui/test_our_art.gd` holds the list to the folder, so a file that
+arrived from anywhere else fails the suite.
 
 **Two — one typeface, ours to pass on because its authors said so.**
 
@@ -388,26 +394,28 @@ MPlantin, because the loader looks in every skin directory before it
 looks at ours (`GameSkin.font`). Spectral is what a player who has
 imported nothing reads instead of Godot's default sans.
 
-**Three — one sound, under somebody else's licence, with a caveat.**
+**The sound, in detail, because it used to be somebody else's.**
 
 | file | what it is | source | licence | SHA-256 |
 |---|---|---|---|---|
-| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | supplied by the owner as `freesound_community077381_scrapingstone83768.mp3` (47 040 B, 2.352 s), trimmed to a quarter second | Pixabay Content License, as published | `9317c761442f82fcca0200f1380f4c51ecd3a7e98c9eb66966d59a4b4d2ac2d8` |
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — synthesised by `tools/make_our_sfx.py`, which reads no file | ours (GPL-3.0) | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
 
-This one is **not ours** and is not claimed to be. It is the only sound
-in the game that did not come out of the 1997 install, which is why it
-ships inside the pack rather than being read off the player's own copy
-(`game/deck_builder/deck_audio.gd`). It reached this project under the
-Pixabay Content License, which permits the use and requires no
-attribution, and that grant is sufficient on its own. What could NOT be
-established is which freesound.org entry it began as, or under which
-Creative Commons licence it was first published there — the `077381` in
-its title is not a freesound sound id. `Provenance.md` § *Our own assets*
-records both halves of that in full, including what this project would do
-if the original were ever identified as CC BY. The caveat is carried, not
-laundered.
+It is the only sound in the game that did not come out of the 1997
+install, which is why it ships inside the pack rather than being read
+off the player's own copy (`game/deck_builder/deck_audio.gd`). Until
+2026-09-09 it was a download the owner supplied, published on Pixabay by
+a bulk re-uploader of freesound.org material: the Pixabay grant was
+sufficient on its face, but the freesound entry it began as could never
+be identified, so if that entry was CC BY an attribution was owed to
+somebody nobody could name. Rather than ship on an obligation it could
+not discharge, this project made its own — noise, a filter and an
+envelope, from a seeded generator, reading nothing. One caveat travels
+with it and is not hidden: the filter was fitted to a 23-band spectral
+MEASUREMENT of the file it replaced. No sample data is in the output;
+the target curve was measured off the old recording. `Provenance.md`
+§ *Our own assets* sets all of that out in full.
 
-`game/art/README.md` is the one inventory behind all three tables: it
+`game/art/README.md` is the one inventory behind the tables above: it
 carries the source and the SHA-256 of every row above except
 `game/icon.png` and `game/boot_splash.png`, which are this project's own
 and predate it. `tests/ui/test_our_art.gd` holds that inventory to the

@@ -5693,10 +5693,25 @@ how it was unreadable in the first place.
 
 **6. THE STONE GRIND — [QoL], and the only sound this project ships.**
 Every other cue in the game comes out of the player's own copy of the 1997
-install. This one is the owner's sample, trimmed; it therefore lives inside
-the pack rather than in the skin, and its source and licence are recorded
-in `Provenance.md` under "Our own assets" — including what could NOT be
-established about the original freesound.org entry.
+install. This one was the owner's supplied sample, trimmed, until
+2026-09-09, and its licence was the one asset question this project could
+not close: a Pixabay download whose freesound.org original could never be
+identified, so an attribution that might be owed could not be paid, and an
+obligation that cannot be discharged is not one to ship on. It is now
+SYNTHESISED — `tools/make_our_sfx.py`, noise through a minimum-phase filter
+under a macro envelope, out of the standard library and a seeded generator
+that reads no file at all — and carries this project's own GPL-3.0 like the
+pictures do. It still lives inside the pack rather than in the skin.
+`Provenance.md` under "Our own assets" keeps the whole history — what was
+here, where it came from, why it could not stay — the reproduce-and-import
+pair, and the one caveat, stated rather than buried: the filter was fitted
+to a 23-band spectral MEASUREMENT of the recording it replaced, which is a
+measurement and not expression, and no sample data is in the output.
+FIVE candidates were built on one axis (grain density, 42/s to 380/s to
+none at all) and the owner auditioned all five. **They chose the one the
+measurements ranked fourth** — the numbers pick the shortlist, not the
+winner, and the workflow that produced them is archived outside the repo
+for the next sound and the next game.
 
 **7. THE GAME'S OWN DECKS ARE NOT OVERWRITABLE — [1997], and the strongest
 1997 answer in this whole pass.** *"Default decks of the game should not be

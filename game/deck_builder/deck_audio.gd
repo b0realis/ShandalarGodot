@@ -1,7 +1,7 @@
 class_name DeckAudio
 extends Node
 ## THE DECK BUILDER'S OWN SOUND — the 1997 deck surface's five slots, our
-## one new sample, and the two switches that silence them.
+## one synthesised cue, and the two switches that silence them.
 ##
 ## **THE ORIGINAL LOADED FIVE SOUNDS FOR THIS SCREEN AND NOTHING ELSE.**
 ## `init_sounds_and_music` (`shandalar-src/src/deck/deckdll.cpp:2040-2056`)
@@ -13,15 +13,20 @@ extends Node
 ## no file of its own in either `DuelSounds/` or `Sound/` and is therefore
 ## not played rather than guessed at.
 ##
-## **AND ONE SOUND THAT IS OURS**, from the owner's own sample
-## (2026-09-04): *"A quick stone grinding sound when pressing the stone
-## filter buttons, based on my sample."* [constant GRIND] is that sample,
-## trimmed to a quarter of a second (see the file's row in
-## `Provenance.md`). It is the only sound in this game that did not come
-## out of the 1997 install, which is why it ships INSIDE the pack — under
-## `game/`, like `game/boot_splash.png` — instead of being read off the
-## player's own copy of the original the way [GameSkin] reads everything
-## else.
+## **AND ONE SOUND THAT IS OURS**, asked for by the owner's playtest of
+## 2026-09-04: *"A quick stone grinding sound when pressing the stone
+## filter buttons."* [constant GRIND] is not a recording of anything —
+## it is SYNTHESISED by `tools/make_our_sfx.py`, a quarter of a second of
+## white noise through a minimum-phase filter under a macro envelope, out
+## of the standard library and a seeded generator with no file read at
+## any point. A supplied download stood here until 2026-09-09 and was
+## replaced because its licence could not be closed; `Provenance.md`, the
+## row for `game/deck_builder/stone_grind.wav`, carries that history and
+## the one caveat that goes with the new file. It is still the only sound
+## in this game that did not come out of the 1997 install, which is why it
+## ships INSIDE the pack — under `game/`, like `game/boot_splash.png` —
+## instead of being read off the player's own copy of the original the way
+## [GameSkin] reads everything else.
 ##
 ## ------------------------------------------------------------------------
 ## THE TWO SWITCHES, AND WHICH ONE WINS
@@ -57,7 +62,7 @@ extends Node
 ## answers null for a player who has not imported the original's sounds,
 ## and every path here treats null as silence rather than as an error.
 
-## OUR OWN SAMPLE, shipped inside the `.pck`. A normal resource path, so
+## OUR OWN SOUND, shipped inside the `.pck`. A normal resource path, so
 ## the import pipeline carries it into the export — `assets/` is excluded
 ## from the build and `AudioStreamWAV.load_from_file` cannot read a file
 ## the pack does not hold.
@@ -72,7 +77,7 @@ const MUSIC_SETTING := "deck_builder_music"
 
 ## The cue names. Three are [GameSkin] keys (the 1997 files); the fourth is
 ## ours and is looked up in [constant GRIND] instead.
-const CUE_FILTER := "deck_stone"   ## a filter medallion, on our own sample
+const CUE_FILTER := "deck_stone"   ## a filter medallion, on our own sound
 const CUE_ADD := "sfx_draw"        ## `Draw.wav`, slot 2 — a card into the deck
 const CUE_REMOVE := "sfx_discard"  ## `Discard.wav`, slot 3 — a card out of it
 const CUE_BUTTON := "sfx_button"   ## `Button.wav`, slot 4 — a command

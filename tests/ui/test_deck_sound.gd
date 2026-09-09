@@ -1,14 +1,18 @@
 extends GutTest
-## THE DECK BUILDER'S SOUND — its one looping bed, its new stone grind, and
+## THE DECK BUILDER'S SOUND — its one looping bed, its stone grind, and
 ## the two switches that silence either.
 ##
 ## The owner's playtest, 2026-09-04:
 ##
 ##   *"Deck builder: only the first song you now use should loop over."*
-##   *"A quick stone grinding sound when pressing the stone filter buttons,
-##    based on my sample."* … *"Shorten the sample to make the sound snap
-##    with the button press, but this stone grinding should be heard nicely
-##    still."*
+##   *"A quick stone grinding sound when pressing the stone filter
+##    buttons."* … *"Shorten the sample to make the sound snap with the
+##    button press, but this stone grinding should be heard nicely still."*
+##
+## The grind itself is OURS and is not a recording: since 2026-09-09 it is
+## synthesised by `tools/make_our_sfx.py` (`Provenance.md`, the row for
+## `game/deck_builder/stone_grind.wav`). What this file pins is the SHAPE
+## of the shipped bytes, which the generator has to keep hitting.
 ##   *"The menu should contain also deck builder SFX and music checkboxes,
 ##    as a user may be annoyed by SFX or music while deck building."*
 ##
@@ -20,7 +24,8 @@ extends GutTest
 ##     against the random pick this replaced.
 ##  2. **THE SHIPPED FILE ITSELF.** Its length and its shape are read out of
 ##     the bytes on disk, not out of a constant — the file is the artefact,
-##     and a re-trim that made it two seconds long would otherwise pass.
+##     and a regeneration that made it two seconds long would otherwise
+##     pass.
 ##  3. **WHICH SWITCH WINS.** Global off beats screen-on, and the default is
 ##     ON and is NOT IN THE FILE (`Settings.clear_value`; see
 ##     `tests/ui/test_duel_options.gd`'s `_unset` for why a test that reads
@@ -268,8 +273,9 @@ func _wav_header(path: String) -> Dictionary:
 
 func test_the_shipped_sample_is_a_short_punchy_grind() -> void:
 	# *"Shorten the sample to make the sound snap with the button press,
-	# but this stone grinding should be heard nicely still."* The source is
-	# 2.35 s of continuous scraping; a button cue that long is a drone.
+	# but this stone grinding should be heard nicely still."* A quarter of
+	# a second is what `tools/make_our_sfx.py` renders and what the screen
+	# is timed against; a button cue a second long is a drone.
 	var head := _wav_header(DeckAudio.GRIND)
 	assert_eq(head.get("riff", ""), "RIFF")
 	assert_eq(head.get("wave", ""), "WAVEfmt ")
@@ -283,8 +289,18 @@ func test_the_shipped_sample_is_a_short_punchy_grind() -> void:
 
 
 func test_the_sample_starts_and_ends_at_silence_so_it_cannot_click() -> void:
-	# A cut that lands on a non-zero sample clicks at both ends — which is
-	# exactly the defect the duel's old ten-second loop had.
+	# A cue that begins or ends on a loud sample clicks — which is exactly
+	# the defect the duel's old ten-second loop had. THE TWO ENDS ARE NOT
+	# THE SAME KIND OF QUIET, and the difference is worth stating rather
+	# than asserting past. The TAIL is exactly zero because
+	# `make_our_sfx.py` multiplies a fade over the last 30 ms after the
+	# filter, so the last frame is 0 and nothing rings on. The HEAD is not
+	# forced to zero at all: the noise enters a MINIMUM-PHASE filter whose
+	# impulse response starts at its first tap, so the first frames are
+	# whatever one or two taps make of it — measured at 192 of a 28 999
+	# peak on 2026-09-09, some -44 dBFS, and rising smoothly from there.
+	# That cannot click, so the head is held to a ceiling instead of to
+	# zero; a regeneration that started at full level would fail here.
 	var file := FileAccess.open(DeckAudio.GRIND, FileAccess.READ)
 	assert_not_null(file)
 	if file == null:
@@ -292,13 +308,14 @@ func test_the_sample_starts_and_ends_at_silence_so_it_cannot_click() -> void:
 	var bytes := file.get_buffer(int(file.get_length()))
 	file.close()
 	assert_gt(bytes.size(), 44, "there is audio in it")
-	assert_eq(bytes.decode_s16(44), 0, "the first frame is silence")
-	assert_eq(bytes.decode_s16(bytes.size() - 2), 0, "and so is the last")
+	assert_lt(absi(bytes.decode_s16(44)), 1000,
+		"the first frame is far below anything that could click")
+	assert_eq(bytes.decode_s16(bytes.size() - 2), 0, "and the last is zero")
 	# ...and it is not silent in the middle, which a fade bug could make it.
 	var peak := 0
 	for i in range(44, bytes.size() - 1, 2):
 		peak = maxi(peak, absi(bytes.decode_s16(i)))
-	assert_gt(peak, 16000, "there is a real grind between the two fades")
+	assert_gt(peak, 16000, "there is a real grind between the two ends")
 
 
 func test_the_sample_ships_inside_the_pack_as_a_normal_resource() -> void:
@@ -316,7 +333,7 @@ func test_the_sample_ships_inside_the_pack_as_a_normal_resource() -> void:
 	assert_not_null(stream, "it loads")
 	assert_true(stream is AudioStreamWAV)
 	assert_between(stream.get_length(), 0.15, 0.35,
-		"the loaded resource is the short one, not the source mp3")
+		"the loaded resource is the quarter-second cue, not something else")
 
 
 func test_pressing_a_stone_filter_button_grinds() -> void:

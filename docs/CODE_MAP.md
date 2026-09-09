@@ -4606,8 +4606,16 @@ shandalar/
 │   │   │                      sound folder and is therefore not played) —
 │   │   │                      so CUE_ADD/CUE_REMOVE/CUE_BUTTON are those
 │   │   │                      three, fired from `_add_one`, `_remove_one`
-│   │   │                      and `_run_command`. CUE_FILTER is OURS:
-│   │   │                      stone_grind.wav, played by FilterBar on the
+│   │   │                      and `_run_command`. CUE_FILTER is OURS —
+│   │   │                      stone_grind.wav, SYNTHESISED by
+│   │   │                      tools/make_our_sfx.py (--only smooth) out of
+│   │   │                      noise and arithmetic reading no file, and
+│   │   │                      GPL-3.0 like the pictures since 2026-09-09,
+│   │   │                      when the supplied download that stood here
+│   │   │                      was replaced because its licence could not
+│   │   │                      be closed (Provenance.md carries the history
+│   │   │                      and the measurement caveat) — played by
+│   │   │                      FilterBar on the
 │   │   │                      medallion PRESS (not on `changed`, which the
 │   │   │                      sort menu also emits). A four-voice pool
 │   │   │                      grown lazily, `recent` as the device-free

@@ -8,9 +8,10 @@ is a licence to redistribute it — its `OFL.txt` sits beside it. Nothing
 here came out of the 1997 game, out of a later reimplementation of it, or
 out of anybody else's restyle of either.
 
-A third kind of shipped file — one sound, under a third party's licence —
-lives outside this folder and is inventoried at the foot of this page all
-the same, because the inventory is what the test reads.
+One shipped file that is ours the FIRST way — the Deck Builder's stone
+grind, made by code the same as the pictures are — lives outside this
+folder and is inventoried at the foot of this page all the same, because
+the inventory is what the test reads.
 
 That distinction is the whole reason the folder exists. The 1997 art is
 the player's own copy and is never redistributed (`Provenance.md`,
@@ -165,7 +166,7 @@ that is not code has to be in it, wherever the bytes actually sit.
 
 | file | what it is | source | licence | SHA-256 |
 |---|---|---|---|---|
-| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | supplied by the owner as `freesound_community077381_scrapingstone83768.mp3` (47 040 B, 2.352 s) and trimmed to a quarter second | Pixabay Content License as published — with the caveat in `Provenance.md` | `9317c761442f82fcca0200f1380f4c51ecd3a7e98c9eb66966d59a4b4d2ac2d8` |
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — synthesised by `tools/make_our_sfx.py` (`--only smooth`), which reads no file of any kind | ours (GPL-3.0) — with the measurement caveat in `Provenance.md` | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
 
 A row whose name begins `game/` is a path from the project root rather
 than a file in this folder; that is the only difference the test makes
@@ -177,17 +178,23 @@ screen that plays it, and it is the ONE sound in this game that did not
 come out of the 1997 install — which is why it is in the pack at all
 while every other sound is read off the player's own copy.
 
-**AND IT IS NOT OURS THE WAY THE PICTURES ARE.** The pictures carry this
-project's GPL-3.0 because this project drew them; the face carries the
-OFL because its authors gave it away under one; this sound is a third
-thing — a file the owner supplied, published on Pixabay under the
-**Pixabay Content License**, which permits the use and asks for no
-attribution. What could *not* be established is which freesound.org
-entry it originally came from, or under which Creative Commons licence it
-was first published there: the `077381` in its title is not a freesound
-sound id. `Provenance.md` § *Our own assets* sets out both halves of that
-in full, including what this project would do if the original were ever
-identified as CC BY. **Do not restate it here as "ours".** The caveat is
-the point of writing it down.
+**AND SINCE 2026-09-09 IT IS OURS THE WAY THE PICTURES ARE.** The
+pictures carry this project's GPL-3.0 because this project drew them in
+code; the face carries the OFL because its authors gave it away under
+one; and this sound now carries the GPL-3.0 for the same reason as the
+pictures — `tools/make_our_sfx.py` synthesises it out of a seeded
+generator, a filter and an envelope, and reads no file at all
+(`tools/test_make_our_sfx.py` traps `open`, `wave.open` and `os.listdir`
+to prove it). It was NOT ours until then: a download the owner supplied,
+published on Pixabay by a bulk re-uploader of freesound.org material,
+whose underlying freesound entry could never be identified — so an
+attribution that might have been owed could not have been paid. That is
+why it was replaced rather than kept.
+
+**One caveat travels with the new file and is not to be smoothed away
+here.** The filter that shapes its noise was fitted to a 23-band
+spectral MEASUREMENT of the recording it replaced. No sample data is in
+the output; the target curve is. `Provenance.md` § *Our own assets* sets
+that out in full, along with what was there before and why it went.
 
 `b0realis`, 2026-09-09.

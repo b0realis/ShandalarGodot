@@ -41,9 +41,10 @@ extends GutTest
 ##
 ## AND THE INVENTORY IS NOT THE FOLDER. One shipped asset lives outside
 ## `game/art/` — `game/deck_builder/stone_grind.wav`, the Deck Builder's
-## filter cue, which sits beside the screen that plays it — and its row is
-## in `game/art/README.md` all the same, because a promise kept in two
-## documents is a promise that drifts. A row whose name begins `game/` is
+## filter cue, synthesised by `tools/make_our_sfx.py` and sitting beside
+## the screen that plays it — and its row is in `game/art/README.md` all
+## the same, because a promise kept in two documents is a promise that
+## drifts. A row whose name begins `game/` is
 ## read as a path from the project root ([method _path_of]); that is the
 ## only concession made to it.
 
@@ -53,8 +54,8 @@ const PRESETS := "res://export_presets.cfg.example"
 
 
 ## Every extension the README's tables may name. A row is a promise about
-## a file, and the three kinds of promise are a picture, a face and the
-## licence that face travels under.
+## a file, and the four kinds of promise are a picture, a sound, a face
+## and the licence that face travels under.
 const SHIPPED_EXTENSIONS := [".png", ".ttf", ".txt", ".wav"]
 
 ## A row may name a file that ships from somewhere ELSE in the tree — the
@@ -370,12 +371,14 @@ func test_the_licence_ships_wherever_the_face_ships() -> void:
 # ------------------------------------------------ 5. the one sound we ship --
 # `game/deck_builder/stone_grind.wav` — the only sound in the game that
 # did not come out of the 1997 install, which is why it is in the pack at
-# all (`DeckAudio`, `Provenance.md` § Our own assets). It is NOT ours the
-# way the pictures are: it reached this project under the Pixabay Content
-# License and the freesound.org entry behind it could not be identified.
-# The inventory has to name it anyway, and for the same reason as
-# everything else here — `README.md` § Legal promises what ships file by
-# file, and a file nobody named is the failure that promise is against.
+# all (`DeckAudio`, `Provenance.md` § Our own assets). Since 2026-09-09 it
+# is OURS the way the pictures are: `tools/make_our_sfx.py` synthesises it
+# out of noise and arithmetic and reads no file, exactly as
+# `tools/draw_our_art.gd` draws the glyphs. A supplied download stood here
+# before that and could not have its licence closed. Either way the
+# inventory has to name it, and for the same reason as everything else
+# here — `README.md` § Legal promises what ships file by file, and a file
+# nobody named is the failure that promise is against.
 
 const OUR_SOUND := "game/deck_builder/stone_grind.wav"
 
@@ -394,7 +397,7 @@ func test_the_sound_is_there_carries_its_hash_and_loads() -> void:
 	var path := _path_of(OUR_SOUND)
 	assert_true(FileAccess.file_exists(path), path)
 	assert_eq(FileAccess.get_file_as_bytes(path).size(), 11068,
-		"the trimmed quarter-second, as Provenance.md measured it")
+		"the quarter-second the generator writes, as Provenance.md says")
 	assert_true(ResourceLoader.exists(DeckAudio.GRIND),
 		"DeckAudio.GRIND still points at a file the pipeline imported")
 	assert_not_null(DeckAudio.stream_for(DeckAudio.CUE_FILTER),
