@@ -749,6 +749,31 @@ MANIFEST: dict[str, list[str]] = {
     # different size and decodes as neither a sprite nor a pair.
     # Cue card: "Damage: %d".
     "damage_marker":         ["Damage.pic", "Damage.pic.png"],
+    # THE COUNTER STONES, Cardcounters.pic — 24x750, ONE COLUMN of 25
+    # cells at a 30 px pitch (Magic.exe 0x4d3d20 divides the bitmap's
+    # height by 25): rows 0-23 the oval "stone" a permanent's counters
+    # wear on the duel table (the oval 22x28 at (1,1) in its cell; index
+    # 254 the backdrop around it, 255 the glyph's black ink inside), and
+    # ROW 24 the one MASK they all share (254 inside the oval, 255
+    # outside). So NOT the side-by-side image+mask pair of the other
+    # sprites: CounterMarks.tile() cuts a row and masks it with row 24.
+    # Which stone a card gets is the executable's own switch on the csv
+    # id (Magic.exe 0x4d4ca0, 27 cards -> 22 stones; the five "standard"
+    # counters other cards put down use fixed rows, 0x4d3cc0) — the table
+    # is transcribed in game/duel/counter_marks.gd. Raw 1997 file:
+    # MagicTG/Cardart/Cardcounters.pic, an X0 container of 1997-07-22 with
+    # the same indices under Duelpalall.tr. The s30 `card/` conversion is
+    # the one to take: it hangs tRNS on 255, so the mask row's outside
+    # loads transparent and the decode measures its own polarity off the
+    # corner (the ink is forced back to opaque black in code); the
+    # `screens/duel/` copy is the same indices under a palette with no
+    # tRNS and 254 white, and would need the polarity read the other way.
+    # `Program/CardArt/CardCounters.bmp` is MANALINK's own strip
+    # (Provenance.md: a .bmp in the install is never 1997) — not a
+    # candidate. Cue cards: "@CUECARD_COUNTERS_<Card>", UIStrings.txt:
+    # 745-840, one line per card ("Carrion counters: %d"). Added
+    # 2026-09-08 [1997].
+    "card_counters":         ["card/Cardcounters.pic.png", "Cardcounters.pic.png"],
     # Target.pic 122x61 -> a 61x61 RED CROSSHAIR. ONE FILE, TWO USES: the
     # duel screen's targeting CURSOR (DuelScreen._set_target_cursor takes
     # the image half raw) and the small card's "Is a target" STAMP
@@ -2258,6 +2283,90 @@ def import_pic_screens(index: dict[str, Path], dest: Path) -> None:
               % (key, width, height, source, dest / (key + ".png")))
 
 
+# ----------------------------------------------------- the counter stones --
+#
+# THE ONE MANIFEST ROW THIS DECODES RATHER THAN COPIES. [1997], 2026-09-09.
+#
+# `Cardart/Cardcounters.pic` (7 723 B, 1997-07-22) is a raw `X0` container
+# with NO palette block of its own, so the copy loop above can do nothing
+# with it: a player pointing this at their own 1997 disc, and at nothing
+# else, was told the stones were "missing (the clean fallback skin covers
+# these)" while the file sat in their install. The strip is worth the one
+# exception because it is not interchangeable with anything — nothing in
+# the clean skin draws a 1997 counter stone, only a lettered chip — and
+# because `decode_pic` already reads the format.
+#
+# WHAT COMES OUT IS THE s30 `card/` CONVERSION, PIXEL FOR PIXEL, and that
+# is measured, not hoped for (2026-09-09, against the owner's own install
+# and the s30 checkout beside it):
+#
+#   * the decoded 24x750 index buffer is byte-identical to the indices in
+#     `s30/assets/art/card/Cardcounters.pic.png`;
+#   * `Duelpalall.tr` — the duel palette the enemy faces already take,
+#     ROGUE_PALETTE_TR — agrees with that PNG's PLTE on all 109 indices
+#     the strip uses, with no exceptions;
+#   * index 255 is the one that conversion hangs its tRNS on, and it is
+#     both the glyph's ink inside a stone and the mask row's outside.
+#
+# So the strip is written RGBA with 255 clear and everything else opaque,
+# and `CounterMarks.tile()` reads the mask cell's corner, finds alpha 0
+# and takes the SAME branch for this file as for the conversion. The two
+# `.pic` palettes the portraits fall back on (`Pedstls.pic`, `Menu4.pic`)
+# differ from the `.tr` on exactly one index — 255, which is written
+# clear — so they are kept as fallbacks and change nothing that shows.
+#
+# `Program/CardArt/CardCounters.bmp` is still not a candidate: a `.bmp`
+# in a Manalink install is never a 1997 file (Provenance.md).
+COUNTER_KEY = "card_counters"
+## `Cardart/` first, so the strip cannot be answered by something that
+## merely shares the name — the rule the whole index was built for.
+COUNTER_NAMES: list[str] = ["Cardart/Cardcounters.pic", "Cardcounters.pic"]
+## The duel palette, in the order the enemy faces ask for it.
+COUNTER_PALETTE: list[str] = ROGUE_PALETTE_TR + ROGUE_PALETTE_PIC
+## 24x750: one column of 25 cells of 24x30 (see the MANIFEST row and
+## `game/duel/counter_marks.gd`). Anything else is not this file.
+COUNTER_SIZE = (24, 750)
+## The transparent index — the ink and the mask's outside. NOT index 0,
+## which is a real colour here, so `paint` is given an explicit alpha.
+COUNTER_CLEAR = 255
+
+
+def import_counter_stones(index: dict[str, Path], dest: Path) -> bool:
+    """Decode `Cardcounters.pic` into `<dest>/card_counters.png`.
+
+    True when the strip was written, so the caller can count it with the
+    copied keys. NEVER RAISES, like every other raw step: a player's copy
+    can hold a file this cannot read, and one of those must not end the
+    import.
+    """
+    source = _first_of(index, COUNTER_NAMES)
+    if source is None:
+        return False
+    palette, origin = _resolve_palette(index, COUNTER_PALETTE)
+    if palette is None:
+        print("\n%s: %s carries no palette and none is beside it (looked"
+              " for %s); skipped" % (COUNTER_KEY, source.name, origin))
+        return False
+    try:
+        width, height, indices, own = decode_pic(source.read_bytes())
+    except (ValueError, IndexError, OSError, struct.error) as err:
+        print("\n%s: %s is not a .pic this can read (%s); skipped"
+              % (COUNTER_KEY, source.name, err))
+        return False
+    if (width, height) != COUNTER_SIZE:
+        print("\n%s: %s is %dx%d, not %dx%d; skipped"
+              % (COUNTER_KEY, source.name, width, height,
+                 COUNTER_SIZE[0], COUNTER_SIZE[1]))
+        return False
+    alpha = bytes(0 if value == COUNTER_CLEAR else 255 for value in indices)
+    write_png(dest / (COUNTER_KEY + ".png"), width, height,
+              paint(indices, own or palette, alpha), alpha=True)
+    print("  %-24s <- %s (decoded, palette: %s)"
+          % (COUNTER_KEY, source, origin))
+    return True
+
+
+
 def build_index(sources: list[Path]) -> dict[str, Path]:
     """lowercase name -> path, keyed by the filename AND by every trailing
     piece of its directory path.
@@ -2362,6 +2471,15 @@ def default_dest() -> Path:
     return godot_user_dir() / "original_skin"
 
 
+## A candidate that is a REIMPLEMENTATION'S CONVERSION of a 1997 file
+## rather than a 1997 file: `Cardcounters.pic.png`, `16faces.spr.png`.
+## The 1997 game shipped `.pic`, `.spr`, `.bmp`, `.ttf`, `.wav`, `.csv`
+## and `.avi`; a `.png` in a manifest row is always somebody's export of
+## one of those. See THE CONVERSION DOOR in [main].
+def _is_conversion(name: str) -> bool:
+    return name.lower().endswith(".png")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", action="append", required=True,
@@ -2370,6 +2488,11 @@ def main() -> int:
                         help="skin output directory (default: %(default)s)")
     parser.add_argument("--no-videos", action="store_true",
                         help="skip the AVI transcoding step (see VIDEOS)")
+    parser.add_argument("--allow-conversions", action="store_true",
+                        help="ALSO take already-converted PNGs of the 1997 "
+                             "art (a reimplementation's tree). Off by "
+                             "default and not a player's door — see THE "
+                             "CONVERSION DOOR")
     args = parser.parse_args()
 
     index = build_index([Path(s).expanduser() for s in args.source])
@@ -2384,12 +2507,37 @@ def main() -> int:
     # key -> the file it actually came from, so the audio step can report
     # dates without hunting for the source a second time.
     chosen: dict[str, Path] = {}
+    refused_conversions: list[tuple[str, str]] = []
     for key, candidates in MANIFEST.items():
         source_path = None
         for name in candidates:
             source_path = index.get(name.lower())
-            if source_path:
-                break
+            if source_path is None:
+                continue
+            # THE CONVERSION DOOR IS SHUT UNLESS IT IS ASKED FOR (the
+            # owner, 2026-09-09: *"our original skin/art creation tool
+            # should only use original 1997 install and NOT s30 that is
+            # reimplementation project itself"*). A `*.pic.png` or
+            # `*.spr.png` is not a file the 1997 game shipped: it is a
+            # REIMPLEMENTATION'S conversion of it, redistributed by that
+            # project, and a skin built out of one is not the player's own
+            # copy of their own game — which is the one thing this
+            # importer exists to keep true (`GameSkin`'s class doc, and
+            # `Provenance.md`'s tiers: s30 is Tier 3).
+            #
+            # It stays reachable behind `--allow-conversions` for ONE
+            # reader: the maintainer filling this checkout's gitignored
+            # `assets/original/` while a raw decoder is written for the
+            # key, the way `import_counter_stones` was written for the
+            # counter strip (2026-09-09). `mtg_assets.py` — the player's
+            # front door — never passes it, and every key that only a
+            # conversion can serve is named in the summary so the list of
+            # decoders still to write is the tool's own output.
+            if _is_conversion(name) and not args.allow_conversions:
+                refused_conversions.append((key, source_path.name))
+                source_path = None
+                continue
+            break
         if source_path is None:
             missing.append(key)
             continue
@@ -2411,12 +2559,31 @@ def main() -> int:
         chosen[key] = source_path
         found += 1
 
+    # THE COUNTER STONES, before the summary rather than after it, so the
+    # count and the missing list tell the truth (2026-09-09). It is the
+    # one manifest row that has a raw 1997 file this can read, and a
+    # player whose only source is their own disc reaches it here — see
+    # the COUNTER STONES block.
+    if COUNTER_KEY in missing and import_counter_stones(index, dest):
+        missing.remove(COUNTER_KEY)
+        found += 1
+
     print(f"\nimported {found}/{len(MANIFEST)} skin assets -> {dest}")
     if skipped_raw:
         print("skipped — these are RAW 1997 files, not the converted PNGs")
         print("this step needs (s30's art tree carries those):")
         for key, name in skipped_raw:
             print(f"  - {key:22s} ({name})")
+    if refused_conversions:
+        only = [(k, n) for k, n in refused_conversions if k in missing]
+        if only:
+            print(f"{len(only)} of them are here ONLY as a reimplementation's")
+            print("converted PNG, which this tool does not import from; each")
+            print("one is a raw 1997 decoder still to write:")
+            for key, name in only[:8]:
+                print(f"  - {key:22s} ({name})")
+            if len(only) > 8:
+                print(f"  ... and {len(only) - 8} more")
     if missing:
         print("missing (the clean fallback skin covers these):")
         for key in missing:

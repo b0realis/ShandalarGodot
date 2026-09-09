@@ -174,6 +174,12 @@ FAMILIES: list[tuple[str, str, str]] = [
     ("Marks on a card", "damage_marker",
      "The dagger on a wounded creature, image+mask left/right; the damage "
      "count is printed beside it."),
+    ("Marks on a card", "card_counters",
+     "The counter stones: one column of 25 cells, 24 oval stones (a "
+     "scythe, five lightning bolts, a gear, five ankhs, yin-yangs in "
+     "five colours, grapes, a bird, tombstones, a drone, a whirl) and the "
+     "one mask they share in the 25th; a permanent wears one per kind of "
+     "counter with the count beside it."),
     ("Marks on a card", "target_cursor",
      "The mouse cursor while a target is being chosen: image+mask "
      "left/right, the hotspot at the arrow's tip."),

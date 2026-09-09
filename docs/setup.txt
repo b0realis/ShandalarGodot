@@ -296,7 +296,7 @@ game is almost certainly finding SOME of the art and not the rest. Run
 
     python3 mtg_assets.py --check /path/to/your/1997/install
 
-which reports on seven groups of files separately, and re-import.
+which reports on eight groups of files separately, and re-import.
 
 To go back to the drawn look entirely, rename `skin/` to `skin.off/`.
 Nothing breaks; the game is tested that way.

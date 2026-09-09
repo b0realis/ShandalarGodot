@@ -570,6 +570,209 @@ class TestPicScreens(unittest.TestCase):
                 (root / "character_select_background.png").exists())
 
 
+def tr_palette(palette: bytes) -> str:
+    """768 RGB bytes as a `.tr` text palette — the inverse of
+    `read_tr_palette`, which wants at least 200 named entries."""
+    return "".join("%3d - %3d %3d %3d - 0 0 0\n"
+                   % (i, palette[i * 3], palette[i * 3 + 1], palette[i * 3 + 2])
+                   for i in range(256))
+
+
+class TestCounterStones(unittest.TestCase):
+    """THE COUNTER STRIP, `Cardcounters.pic` — the odd one out of the
+    manifest, and the one row the importer decodes for itself.
+
+    Two things have to hold or `CounterMarks.tile()` cuts nonsense. The
+    strip is ONE COLUMN of 25 cells whose 25th is the mask every stone
+    shares, so it must arrive WHOLE and unscaled — never split down the
+    middle like the image+mask pairs beside it, never resized. And a
+    player whose only source is their own 1997 disc must still get it:
+    the raw `.pic` carries no palette of its own, so it is decoded here
+    against the duel palette (2026-09-09).
+    """
+
+    ## A stand-in strip: 25 cells of 24x30, cell N painted with index N,
+    ## the mask cell 254 inside and 255 outside — the shape of the real
+    ## file, none of its bytes.
+    WIDTH, HEIGHT = imp.COUNTER_SIZE
+
+    def strip_indices(self) -> bytes:
+        out = bytearray()
+        for row in range(25):
+            for y in range(30):
+                for x in range(self.WIDTH):
+                    edge = x == 0 or x == self.WIDTH - 1 or y == 0 or y == 29
+                    if row == 24:        # the shared mask cell
+                        out.append(255 if edge else 254)
+                    else:
+                        out.append(255 if (x + y) % 7 == 0 else row)
+        return bytes(out)
+
+    def _run(self, root: Path, dest: Path, conversions: bool = False) -> str:
+        """The importer's own main, so what is pinned is what a player
+        gets rather than a helper called the way a test finds handy.
+        [param conversions] opens the maintainer's door
+        (`--allow-conversions`), which a player never has: without it a
+        reimplementation's `*.pic.png` is not a source at all (the
+        owner's ruling, 2026-09-09)."""
+        argv = sys.argv
+        sys.argv = ["import_original.py", "--source", str(root),
+                    "--dest", str(dest), "--no-videos"]
+        if conversions:
+            sys.argv.append("--allow-conversions")
+        log = io.StringIO()
+        try:
+            with redirect_stdout(log):
+                self.assertEqual(imp.main(), 0)
+        finally:
+            sys.argv = argv
+        return log.getvalue()
+
+    # ------------------------------------------- the converted tree --
+
+    def test_the_card_conversion_is_copied_whole_and_the_duel_one_is_not(self):
+        """s30 ships the strip TWICE and only one of them is right: the
+        `card/` copy hangs tRNS on 255 and the `screens/duel/` copy does
+        not (see the MANIFEST row). The candidate order says which, and
+        the file lands byte for byte — a split or a rescale here is a
+        silently broken mask row."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "s30"
+            wanted = root / "assets/art/card/Cardcounters.pic.png"
+            other = root / "assets/art/screens/duel/Cardcounters.pic.png"
+            for path in (wanted, other):
+                path.parent.mkdir(parents=True, exist_ok=True)
+            pixels = bytes(bytearray(
+                b for i in range(self.WIDTH * self.HEIGHT) for b in (i % 251, 7, 9)))
+            imp.write_png(wanted, self.WIDTH, self.HEIGHT, pixels)
+            imp.write_png(other, self.WIDTH, self.HEIGHT, bytes(len(pixels)))
+            dest = Path(tmp) / "skin"
+            # The maintainer's door: a conversion tree is not a source
+            # without it, which the next test pins.
+            log = self._run(root, dest, conversions=True)
+            out = dest / "card_counters.png"
+            self.assertEqual(out.read_bytes(), wanted.read_bytes(),
+                             "copied whole, not split, scaled or repacked")
+            self.assertEqual(read_png(out.read_bytes())[:3],
+                             (self.WIDTH, self.HEIGHT, 3))
+            self.assertIn("card_counters", log)
+            self.assertNotIn("decoded", log, "a conversion needs no decode")
+
+    def test_the_manifest_row_asks_for_the_card_folder_first(self):
+        self.assertEqual(imp.MANIFEST["card_counters"][0],
+                         "card/Cardcounters.pic.png")
+
+    # ------------------------------------------------ the raw strip --
+
+    def _raw_tree(self, tmp: str, width: int = 0, height: int = 0) -> Path:
+        root = Path(tmp) / "MagicTG"
+        (root / "Cardart").mkdir(parents=True)
+        indices = self.strip_indices()
+        (root / "Cardart" / "Cardcounters.pic").write_bytes(
+            make_pic(width or self.WIDTH, height or self.HEIGHT, indices))
+        (root / "Duelpalall.tr").write_text(tr_palette(ramp_palette()))
+        return root
+
+    def test_a_raw_install_decodes_the_strip_against_the_duel_palette(self):
+        """The 1997 file has no palette block, so this is the whole
+        point: nothing but `Cardcounters.pic` and `Duelpalall.tr` in the
+        tree, and the strip comes out at its own size in RGBA."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._raw_tree(tmp)
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            width, height, channels, pixels = read_png(
+                (dest / "card_counters.png").read_bytes())
+            self.assertEqual((width, height, channels),
+                             (self.WIDTH, self.HEIGHT, 4))
+            self.assertIn("Cardcounters.pic (decoded, palette: Duelpalall.tr)",
+                          log)
+            self.assertNotIn("  - card_counters", log,
+                             "not missing: it was imported")
+
+    def test_index_255_is_the_only_transparent_one(self):
+        """255 is the glyph's ink INSIDE a stone and the mask cell's
+        outside, and it is what the s30 conversion hangs its tRNS on.
+        Index 0 is a real colour here, so `paint`'s no-mask rule would be
+        wrong — the alpha is handed to it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._raw_tree(tmp)
+            dest = Path(tmp) / "skin"
+            self._run(root, dest)
+            _, _, _, pixels = read_png((dest / "card_counters.png").read_bytes())
+            indices = self.strip_indices()
+            palette = ramp_palette()
+            clear = {i for i, v in enumerate(indices) if v == imp.COUNTER_CLEAR}
+            self.assertTrue(clear, "the fixture has ink to be transparent")
+            for i, value in enumerate(indices):
+                self.assertEqual(pixels[i * 4 + 3], 0 if i in clear else 255,
+                                 "alpha at pixel %d (index %d)" % (i, value))
+                self.assertEqual(pixels[i * 4:i * 4 + 3],
+                                 palette[value * 3:value * 3 + 3])
+            corner = 24 * 30 * self.WIDTH        # (0, 0) of the mask cell
+            self.assertEqual(pixels[corner * 4 + 3], 0,
+                             "the mask cell's corner is clear, which is what "
+                             "CounterMarks.tile reads the polarity off")
+
+    def test_a_conversion_beside_the_raw_file_wins_only_at_the_dev_door(self):
+        """With `--allow-conversions` the copy wins and nothing is
+        decoded; WITHOUT it — the player's way, and this project's rule —
+        the conversion is not a source at all and the raw 1997 `.pic`
+        beside it is decoded instead. The owner, 2026-09-09: *"our
+        original skin/art creation tool should only use original 1997
+        install and NOT s30 that is reimplementation project itself"*."""
+        for allowed in (True, False):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = self._raw_tree(tmp)
+                converted = root / "card" / "Cardcounters.pic.png"
+                converted.parent.mkdir(parents=True)
+                imp.write_png(converted, self.WIDTH, self.HEIGHT,
+                              bytes(self.WIDTH * self.HEIGHT * 3))
+                dest = Path(tmp) / "skin"
+                log = self._run(root, dest, conversions=allowed)
+                out = (dest / "card_counters.png").read_bytes()
+                if allowed:
+                    self.assertEqual(out, converted.read_bytes())
+                    self.assertNotIn("decoded", log)
+                else:
+                    self.assertNotEqual(out, converted.read_bytes(),
+                                        "the conversion is not a source")
+                    self.assertIn("decoded", log)
+
+    def test_a_strip_of_the_wrong_size_is_skipped_with_a_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._raw_tree(tmp, width=24, height=60)
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertIn("is 24x60, not 24x750; skipped", log)
+            self.assertFalse((dest / "card_counters.png").exists())
+            self.assertIn("  - card_counters", log, "and reported missing")
+
+    def test_no_palette_beside_it_is_reported_not_raised(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._raw_tree(tmp)
+            (root / "Duelpalall.tr").unlink()
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertIn("carries no palette", log)
+            self.assertFalse((dest / "card_counters.png").exists())
+
+    def test_a_file_that_is_not_a_pic_is_reported_not_raised(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._raw_tree(tmp)
+            (root / "Cardart" / "Cardcounters.pic").write_bytes(b"<html>404")
+            dest = Path(tmp) / "skin"
+            log = self._run(root, dest)
+            self.assertIn("is not a .pic this can read", log)
+            self.assertFalse((dest / "card_counters.png").exists())
+
+    def test_a_manalink_bmp_is_never_the_source(self):
+        """Provenance.md: a `.bmp` in an install is never a 1997 file.
+        `Program/CardArt/CardCounters.bmp` is Manalink's own strip."""
+        for name in imp.COUNTER_NAMES + imp.MANIFEST["card_counters"]:
+            self.assertFalse(name.lower().endswith(".bmp"), name)
+
+
 class TestSoundManifest(unittest.TestCase):
     """WHICH `Button.wav`, and WHEN was it written.
 

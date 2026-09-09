@@ -134,6 +134,19 @@ class TestTheManifestIsCatalogued(unittest.TestCase):
                         "cardart.zip", "Options > Skin", "TO DRAW YOUR OWN"):
             self.assertIn(heading, text)
 
+    def test_the_counter_strip_is_catalogued_with_its_mask_cell(self):
+        """A skin maker who draws their own stones has to be told that
+        the 25th cell is the MASK the other 24 wear — it is the one sheet
+        here that is not an image+mask PAIR, and nothing about the file
+        says so (2026-09-09)."""
+        self.assertIn("card_counters.png", cat.expected_files())
+        section, note = cat.note_for("card_counters")
+        self.assertEqual(section, "Marks on a card")
+        self.assertIn("25 cells", note)
+        self.assertIn("mask", note)
+        text = (ROOT / "docs" / "skin-catalogue.txt").read_text(encoding="utf-8")
+        self.assertIn("card_counters.png", text)
+
     def test_rendering_needs_no_art_on_the_machine(self):
         with tempfile.TemporaryDirectory() as tmp:
             text = cat.render(Path(tmp) / "no_skin", Path(tmp) / "no_art")

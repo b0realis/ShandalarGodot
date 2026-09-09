@@ -57,10 +57,29 @@ IMPORTER = HERE / "import_original.py"
 # What an install looks like from the outside. These are the names the
 # importer hunts for; finding SOME of them is enough, and the check
 # reports on each group rather than passing or failing as a whole.
+#
+# EVERY LANDMARK IS A RAW 1997 NAME, AND THAT IS THE POINT (the owner,
+# 2026-09-09: *"our original skin/art creation tool should only use
+# original 1997 install and NOT s30 that is reimplementation project
+# itself"*). This script is THE PLAYER'S front door: what it recognises
+# is what it will import from, and the only thing it may import from is
+# the player's own copy of the 1997 game. A reimplementation's converted
+# art is that project's redistribution of the original, not the player's
+# own install, and building a skin out of one would make this tool the
+# thing this project has always refused to be. A tree of `.pic.png`
+# conversions is therefore NOT an install here, is reported as nothing
+# recognisable, and is refused by --install — deliberately.
+#
+# THE COUNTER STONES ARE THEIR OWN GROUP because they are their own
+# import: `Cardcounters.pic` is the one manifest row the importer
+# decodes out of a raw install itself (import_original.py, THE COUNTER
+# STONES), which is what put the stones within a 1997 disc's reach at
+# all — before 2026-09-09 that key could only come from a conversion.
 LANDMARKS = {
     "the shell and dialog art": ["shellart", "winbk_options.pic",
                                  "winbk_shellscreen16.bmp"],
     "the card frames and mana symbols": ["cardart", "manasymbols.pic"],
+    "the counter stones": ["cardcounters.pic"],
     "the portraits": ["16faces.spr", "faces", "face.pic"],
     "the fonts": ["magim___.ttf", "magis___.ttf", "magicmedieval.ttf"],
     "the sounds": ["duelsounds", "sound"],
@@ -150,14 +169,21 @@ WHAT THIS NEEDS
   script at the folder that CONTAINS the game; it searches downwards, so
   the top of the install is the right place to aim.
 
-  Three kinds of folder work, and they can be combined (pass --install
+  Two kinds of folder work, and they can be combined (pass --install
   more than once; the first copy of each file wins):
 
-    * a genuine 1997 install    — the best source. Its raw .SPR and .PIC
-                                  files hold seventy portraits, five of
-                                  which exist in no conversion anywhere.
-    * a Manalink 3.0 install    — fonts and some art.
-    * an s30 checkout           — the community's .pic.png conversions.
+    * a genuine 1997 install    — the best source, and the whole point.
+                                  Its raw .SPR and .PIC files hold
+                                  seventy portraits, five of which exist
+                                  in no conversion anywhere.
+    * a Manalink 3.0 install    — the 1997 game with a later patch on
+                                  it: fonts and some art.
+
+  YOUR OWN GAME AND NOTHING ELSE. This imports from the copy of the 1997
+  game you own; it does not import from another project's converted art,
+  even where that art is the same pictures. The skin it builds is yours
+  because the game it came from is yours, and that is the only footing
+  this tool has ever stood on.
 
   It reads. It never writes to, moves, or modifies your install.
 
