@@ -2645,7 +2645,8 @@ func _combat_self_pumps(game: MtgGame) -> String:
 			# cost, colour included (as _pumps_are_lethal counts them) — a
 			# Frozen Shade with one Swamp and three Forests open has one
 			# {B} in reach, not four, and the count used to say four.
-			var reach: int = _pumps_in_reach(game, inst, ability, sources) + pending
+			var reach: int = _pumps_in_reach(game, inst, ability, sources, null,
+				_activations_left(inst, index)) + pending
 			if reach <= pending:
 				continue
 			var pending_bonus := Vector2i(intent.pump_power * pending, intent.pump_toughness * pending)
@@ -2679,12 +2680,21 @@ func _combat_self_pumps(game: MtgGame) -> String:
 ## [param sources] can pay for, planning the combined cost each time so
 ## every coloured pip is counted. Capped at 20 — a Shade with twenty
 ## Swamps needs no finer answer.
+##
+## [param kept] is a cost the pumps must leave payable ([method
+## _pump_reserve]: the second main phase's cast, the held instant), null
+## for "every point of it is the pump's"; [param cap] is the ability's
+## own remaining activations this turn ([method _activations_left]), -1
+## for uncapped. Both default to the reading this had before
+## [member AiProfile.pumps_to_attack] existed, which is the null.
 func _pumps_in_reach(game: MtgGame, inst: CardInstance, ability: ActivatedAbility,
-		sources: Array) -> int:
+		sources: Array, kept: ManaCost = null, cap := -1) -> int:
 	var surcharge := game.ability_surcharge(pid, inst)
-	var cost: ManaCost = ability.cost
+	var cost: ManaCost = ability.cost if kept == null \
+		else _combined_cost(ability.cost, kept)
 	var pumps := 0
-	while pumps < 20 and not _plan_taps_from(sources, cost, surcharge * (pumps + 1)).is_empty():
+	while pumps < 20 and (cap < 0 or pumps < cap) \
+			and not _plan_taps_from(sources, cost, surcharge * (pumps + 1)).is_empty():
 		pumps += 1
 		cost = _combined_cost(cost, ability.cost)
 	return pumps
@@ -3284,13 +3294,11 @@ func _pumps_are_lethal(game: MtgGame, attacker: CardInstance,
 	var them := game.players[game.opponent_of(pid)]
 	if ability.effects[0].power <= 0:
 		return false
-	var surcharge := game.ability_surcharge(pid, attacker)
-	var pumps := 0
-	var cost := ability.cost
-	# Bounded by the mana open (each probe adds one more activation).
-	while pumps < 20 and not _plan_taps_from(sources, cost, surcharge * (pumps + 1)).is_empty():
-		pumps += 1
-		cost = _combined_cost(cost, ability.cost)
+	# Bounded by the mana open, and — since 2026-09-09 — by the ability's
+	# own per-turn cap: a Fire Drake with five Mountains breathes once.
+	var index := attacker.cur_activated_abilities.find(ability)
+	var pumps := _pumps_in_reach(game, attacker, ability, sources, null,
+		_activations_left(attacker, index) if index >= 0 else -1)
 	return unblocked_total + pumps * int(ability.effects[0].power) >= them.life
 
 
@@ -3483,13 +3491,219 @@ func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
 	return attackers
 
 
+## THE FIREBREATHER THAT NEVER SWUNG (2026-09-09,
+## [member AiProfile.pumps_to_attack]). The owner's playtest: *"when
+## creatures can have greater power or defense by some action (like
+## paying mana), the ai opponent does not use this before attack for
+## example (even if opponent has free mana available). In other words:
+## Opponent does not pump Carrion Ants :)"*.
+##
+## Everything AFTER the declaration was already right — an unblocked
+## attacker breathes fire for the damage ([method
+## _offensive_combat_response]), a blocked one pumps to win or survive
+## its trade ([method _combat_self_pumps]) — and neither had ever been
+## given an attacker to work with, because the declaration reads
+## [member CardInstance.cur_power] and nothing else: [method
+## _choose_attack_cohort] drops a body with no power before it prices
+## anything, so a Carrion Ants with four Swamps untapped (a 4/5 for the
+## asking) was a 0/1 that could not be worth sending, and a Frozen Shade
+## or a Killer Bees stayed home for the whole duel.
+##
+## So the question is put to the declaration itself, under the journal,
+## exactly as [method _would_attack_once_animated] puts the Factory's:
+## every candidate is grown to the size its share of the open mana can
+## reach, the deterministic half of the declaration is asked, and the
+## pumps are unmade. No mana is tapped here — the pump is bought later,
+## one activation at a time, by the two routines above, and against the
+## real board each time. No random stream is consumed ([method
+## _attack_choice] has no mistake roll), and a search already in
+## progress keeps its journal.
+##
+## ONE DIFFERENCE FROM THE FACTORY, and it runs the other way. An
+## animated Factory is a land again at cleanup, so the crack-back model
+## had to stop counting it as a blocker on their turn; a pumped body is
+## a creature either way and our lands untap before they swing, so the
+## search reading it at its reach size on their turn is the truth, not
+## an over-count. Nothing here is excluded from it.
+func _attack_choice_once_pumped(game: MtgGame, candidates: Array[CardInstance],
+		defender: int) -> Array:
+	var bonuses := _reachable_pumps(game, candidates)
+	if bonuses.is_empty():
+		return _attack_choice(game, candidates, defender)
+	var owned := game.undo_log == null
+	var mark := game.make_mark()
+	for id in bonuses:
+		var bonus: Vector2i = bonuses[id]
+		game.continuous.add_until_eot_pump(int(id), bonus.x, bonus.y)
+	game.recalculate()
+	var chosen := _attack_choice(game, _attack_candidates(game, defender), defender)
+	game.unmake_to(mark)
+	if owned:
+		game.end_search()
+	return chosen
+
+
+## The bonus each of [param candidates] could pay its way to right now,
+## `{instance id: Vector2i}` — the empty dictionary when none of them can.
+##
+## ONE POOL, spent once. Two Frozen Shades in front of four Swamps are
+## not both a 4/5, so the mana a body is priced with comes off the table
+## before the next body is priced. The body that cannot swing AT ALL
+## without the mana is served first — that is the attack the knob exists
+## to create — and the rest in the order the evaluator values them.
+func _reachable_pumps(game: MtgGame, candidates: Array[CardInstance]) -> Dictionary:
+	var out: Dictionary = {}
+	# The bodies FIRST, and the mana only if there are any: most boards
+	# hold no firebreather at all, and this runs on every declaration a
+	# Sorcerer or a Wizard makes.
+	var breathers: Array = []
+	for inst in candidates:
+		var pump := _self_pump_of(game, inst)
+		if not pump.is_empty():
+			pump["inst"] = inst
+			breathers.append(pump)
+	if breathers.is_empty():
+		return out
+	var sources := _mana_sources(game)
+	if sources.is_empty():
+		return out
+	var kept := _pump_reserve(game, sources)
+	breathers.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
+		var a: CardInstance = x["inst"]
+		var b: CardInstance = y["inst"]
+		var a_mute := a.cur_power <= 0
+		var b_mute := b.cur_power <= 0
+		if a_mute != b_mute:
+			return a_mute
+		return Evaluator.permanent_value(a) > Evaluator.permanent_value(b))
+	for pump in breathers:
+		var inst: CardInstance = pump["inst"]
+		var ability: ActivatedAbility = pump["ability"]
+		var reach := _pumps_in_reach(game, inst, ability, sources, kept,
+			_activations_left(inst, int(pump["index"])))
+		if reach <= 0:
+			continue
+		out[inst.id] = Vector2i(pump["bonus"]) * reach
+		var cost: ManaCost = ability.cost
+		for _i in reach - 1:
+			cost = _combined_cost(cost, ability.cost)
+		sources = _sources_after(sources, _plan_taps_from(sources, cost,
+			game.ability_surcharge(pid, inst) * reach))
+	return out
+
+
+## The self-pump [param inst] would breathe with, as
+## `{index, ability, bonus}` — `{}` when it has none the pilot may use.
+##
+## The gates are the ones the other pump paths already keep. No tap cost
+## (a body that taps to pump cannot also attack), the ability available
+## on its own terms ([method _ability_available], which is what keeps a
+## pump priced in BODIES — Atog, Fallen Angel — and one priced in
+## COUNTERS — Osai Vultures' carrion — invisible here as everywhere
+## else), a POWER bonus (a Granite Gargoyle's +0/+1 buys no attack), no
+## toughness LOSS (Wall of Wonder's +4/-4 is a different card and a
+## Defender besides), and nothing in the effect list the reader cannot
+## price beside the pump — an Electric Eel's {R}{R} also shocks its
+## controller, and a shape [EffectIntent] reads as `unknown` is not
+## firebreathing. The FIRST such ability, not the best: a body with
+## several breaths (Vaevictis Asmadi's three colours) is counted at one
+## of them, which under-counts and never over-counts.
+func _self_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
+	for index in inst.cur_activated_abilities.size():
+		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+		if ability.tap_cost or ability.cost == null:
+			continue
+		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+		if not intent.pump_self or intent.unknown \
+				or intent.pump_power <= 0 or intent.pump_toughness < 0:
+			continue
+		if not _ability_available(game, inst, index):
+			continue
+		return {"index": index, "ability": ability,
+			"bonus": Vector2i(intent.pump_power, intent.pump_toughness)}
+	return {}
+
+
+## WHAT THE MANA IS OTHERWISE FOR, as one cost the pump must leave
+## payable — null when nothing is spoken for. Two bookings, and both are
+## the pilot's own: the second main phase's best sorcery-speed cast, the
+## reserve the firebreathing itself already keeps ([method
+## _main2_reserve]), and the held instant or counterspell the reactive
+## game is waiting on ([method _held_reserve], the reserve every
+## activation respects). A pump that spends the Counterspell's mana on
+## two points of damage is a bad trade, and this is where it is refused.
+##
+## A booking that cannot be paid for out of what is open books nothing:
+## [method _held_reserve] reserves a Counterspell's {U}{U} from the
+## moment the card is in hand, Islands or no Islands, and a reserve like
+## that would silently zero every pump in the deck.
+func _pump_reserve(game: MtgGame, sources: Array) -> ManaCost:
+	var kept: ManaCost = null
+	var main2 := _main2_reserve(game, sources)
+	if not main2.is_empty():
+		kept = main2["cost"]
+	var held := _held_reserve(game)
+	if not held.is_empty():
+		var cost: ManaCost = held["cost"]
+		if not _plan_taps_from(sources, cost, 0).is_empty():
+			kept = cost if kept == null else _combined_cost(kept, cost)
+	return kept
+
+
+## How many more times ability [param index] of [param inst] may be
+## activated this turn, or -1 for "as often as the mana lasts".
+##
+## THE FUSE (2026-09-09). A reach counted in mana alone promises what the
+## card will not deliver: a Fire Drake with five Mountains open is a 2/2
+## and not a 6/2, because its breath is `{R}: +1/+0` ONCE a turn, and a
+## Vampire Bats is a 2/1 at most. [method _ability_available] refuses the
+## activation itself once the cap is spent, so the mana was never lost —
+## but the reading that sent the attacker was wrong, and a body sent on a
+## size it cannot reach is exactly what this knob exists to stop. Gated
+## by [member AiProfile.pumps_to_attack] so the Deck Lab can run the
+## null: without it every reach in this file counts the mana only, as it
+## did before.
+func _activations_left(inst: CardInstance, index: int) -> int:
+	if not profile.pumps_to_attack:
+		return -1
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	if ability.max_per_turn <= 0:
+		return -1
+	return maxi(ability.max_per_turn - int(inst.ability_uses.get(index, 0)), 0)
+
+
+## [param sources] with everything [param plan] would tap taken out of
+## it — the planner's list minus the planner's own answer, so the next
+## body is priced against what is actually left. A plan entry is
+## `[instance, ability_index]` and a null instance is mana already
+## floating, which is keyed apart from every permanent.
+func _sources_after(sources: Array, plan: Array) -> Array:
+	if plan.is_empty():
+		return sources
+	var spent: Dictionary = {}
+	for pair in plan:
+		var owner_id := -1 if pair[0] == null else int(pair[0].id)
+		var key := "%d:%d" % [owner_id, int(pair[1])]
+		spent[key] = int(spent.get(key, 0)) + 1
+	var out: Array = []
+	for src in sources:
+		var owner_id := -1 if src[0] == null else int(src[0].id)
+		var key := "%d:%d" % [owner_id, int(src[1])]
+		if int(spent.get(key, 0)) > 0:
+			spent[key] = int(spent[key]) - 1
+			continue
+		out.append(src)
+	return out
+
+
 ## Attack declaration: per-attacker favorable-trade analysis (mage-go's
 ## combat heuristic, simplified), plus a lethal-push override and the
 ## aggression/mistake tilts from the profile.
 func _declare_attacks(game: MtgGame) -> String:
 	var defender := game.opponent_of(pid)
 	var candidates := _attack_candidates(game, defender)
-	var attackers := _attack_choice(game, candidates, defender)
+	var attackers := _attack_choice_once_pumped(game, candidates, defender) \
+		if profile.pumps_to_attack else _attack_choice(game, candidates, defender)
 	# Mistake injection: a fumbling AI leaves a good attacker home.
 	if attackers.size() > 0 and game.rng.randf() < profile.mistake_chance:
 		var drop_index := game.rng.randi_range(0, attackers.size() - 1)

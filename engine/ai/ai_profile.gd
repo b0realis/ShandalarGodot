@@ -358,6 +358,49 @@ var times_sweeps := false
 ## own scale, so a second feeder in the pool is answered the same way.
 var trusts_abyss := false
 
+## THE FIREBREATHER THAT NEVER SWUNG: does this profile judge a creature
+## of its own at the size the mana it has OPEN can make it, when the
+## attack is declared? The owner's playtest (2026-09-09): *"when
+## creatures can have greater power or defense by some action (like
+## paying mana), the ai opponent does not use this before attack for
+## example (even if opponent has free mana available). In other words:
+## Opponent does not pump Carrion Ants :)"*. The declaration read
+## [member CardInstance.cur_power] and nothing else ([method
+## AiPlayer._choose_attack_cohort] drops a body with no power at all
+## before it prices anything), so a Carrion Ants with four Swamps
+## untapped — a 4/5 for the asking — was a 0/1 that could never be worth
+## sending, and every firebreather in the pool that starts at zero
+## (Frozen Shade, Killer Bees, Carrion Ants) stayed home for the whole
+## duel. What happened AFTER the declaration was already right: an
+## unblocked attacker breathes fire for the damage ([method
+## AiPlayer._offensive_combat_response]) and a blocked one pumps to win
+## or survive its trade ([method AiPlayer._combat_self_pumps]) — the two
+## routines had simply never been given an attacker to work with.
+##
+## On, three readings. The declaration is made under the journal with
+## every candidate grown to the size its share of the open mana can
+## reach ([method AiPlayer._attack_choice_once_pumped]) — the same probe
+## shape [member animates_to_attack] uses, and for the same reason: the
+## price and the declaration must be read by one reader. The mana is
+## counted the way the firebreathing itself spends it, with the second
+## main phase's best cast and the held instant kept whole ([method
+## AiPlayer._pump_reserve]), so a Counterspell's mana is never a point of
+## trample damage. And an ability with a per-turn cap is counted at its
+## cap, not at the mana (a Fire Drake with five Mountains open is a 2/2,
+## not a 6/2) — the cap reading is this knob's everywhere it is asked,
+## the blocked pump included.
+##
+## A CAPABILITY, like [member animates_to_attack] — not a second
+## difficulty concept, and the same layer of play: mana spent before the
+## declaration to make an attack that does not otherwise exist. Sorcerer
+## and Wizard, for that reason; the Magician already breathes fire on an
+## attacker that got through, because that half hangs off
+## [member holds_instants]. Nothing here names a card: the shape is
+## [member EffectIntent.pump_self] read off the ability's own effects,
+## the price is the planner's, and an ability whose cost is a body or a
+## counter stays invisible ([method AiPlayer._ability_available]).
+var pumps_to_attack := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
@@ -365,7 +408,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_engines := false, p_sacrifices := false, p_timed := false,
 		p_counts := false, p_levels := false, p_paces := false,
 		p_duplicates := false, p_animates := false, p_times_sweeps := false,
-		p_trusts_abyss := false) -> void:
+		p_trusts_abyss := false, p_pumps_to_attack := false) -> void:
 	profile_name = p_name
 	mistake_chance = p_mistakes
 	aggression = p_aggression
@@ -384,6 +427,7 @@ func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 	animates_to_attack = p_animates
 	times_sweeps = p_times_sweeps
 	trusts_abyss = p_trusts_abyss
+	pumps_to_attack = p_pumps_to_attack
 
 
 ## Apply `knob=value` overrides — `pays_sacrifices=off`, `aggression=0.7`,
@@ -431,13 +475,13 @@ static func magician() -> AiProfile:
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
 	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
-		true, true, true, true)
+		true, true, true, true, true)
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
 	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
-		true, true, true, true)
+		true, true, true, true, true)
 
 
 func _to_string() -> String:

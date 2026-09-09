@@ -85,6 +85,7 @@ override any knob on any preset for a measurement
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
+| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when attackers are declared — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — with the second main phase's cast and the held instant kept whole, and counts a capped breath at its cap |
 
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and `spares_own`
 are the five knobs that are on at every rung, and the reason is the
@@ -143,8 +144,9 @@ better body, casts a Festival at your upkeep and a Siren's Call before
 your attackers, sizes its X spells, prices a Balance, paces its draws to
 the libraries (a Time Walk's extra draw step among them), keeps a
 second The Abyss in hand, animates a Factory
-only for an attack it will actually declare, and holds its Nevinyrral's
-Disk for the attack it answers — priced by the damage it keeps off the
+only for an attack it will actually declare, sends a firebreather at the
+size its open mana can reach instead of at its printed 0/1, and holds
+its Nevinyrral's Disk for the attack it answers — priced by the damage it keeps off the
 pilot, fired once the attackers are named and before they connect —
 and keeps its Counterspell in hand when the creature on the stack is
 one its Abyss will eat at their upkeep.
@@ -219,6 +221,23 @@ both seats got better: the tribute is the starters' gain, the Disk,
 the Factory, the Walk and the kept counter are The Deck's, and White
 Knights' +5.0 is where those land.
 
+`pumps_to_attack` is the one knob so far that is not a wash, and the
+reason is that it does not tune a decision the pilot was already making
+— it hands two working routines an attacker they had never been given.
+Vampire Lord (the 1997 original list: four Carrion Ants, four Vampire
+Bats) against the five starters, 1 000 games an arm at seed 11: 19.8 to
+24.6, 28.7 to 34.7, 5.7 to 13.0, 18.0 to 25.7, 5.8 to 12.8 — every
+matchup a gain, and every one of the five clear of zero on its own
+interval (+4.8 ±3.6, +6.0 ±4.1, +7.3 ±2.5, +7.7 ±3.6, +7.0 ±2.5), with
+the two the deck could barely win (Blue Skies, White Knights) more than
+doubled. Warlock's two Frozen Shades in sixty cards move it less and all
+the same way (+0.7, +4.0, +3.7, +4.9, +2.5, three of them clear),
+and Mountain Artillery — one Shivan Dragon and three Granite Gargoyles
+whose +0/+1 buys no attack and is refused — is the wash it should be
+(+0.6, 0.0, 0.0, +0.5). The control pair Big Green vs White Knights is
+byte-identical in every arm of all three runs: no starter but two owns a
+card the reader can see.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -260,6 +279,18 @@ has the rule.
   fliers, the −0.3 there), and a second copy of a creature already on
   the table is let through as level with it although only one of the
   two dies. Open (`docs/ROADMAP.md`, the third pass).
+- `pumps_to_attack` reads the ATTACK only. A blocker is still declared at
+  its printed size, so a Carrion Ants with four Swamps open chump-blocks
+  a Craw Wurm it could have eaten — the pump arrives afterwards
+  (`_combat_self_pumps`) and saves it, but the BLOCK it would have made
+  as a 4/5 was never planned. The mirror of the attack probe, on
+  `_plan_blocks`, is the obvious next half and is not built. Nor is the
+  reader's: Dragon Whelp, Nalathni Dragon and Rainbow Knights pump
+  themselves through a card-local effect rather than a `PumpEffect`, so
+  `EffectIntent.pump_self` is false for all three and no pump path in the
+  AI has ever seen them — the Whelp's fuse (a fourth breath dooms it at
+  the next end step) would have to be read with the row that opens them.
+  Both open (`docs/ROADMAP.md`, this pass).
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and
