@@ -9428,6 +9428,68 @@ quantified and fixed.
   FACE IS WIRED — the choice of body face is the owner's and nothing is
   in the repository.
 
+## THE SHIPPED BODY FACE (2026-09-09) — Spectral, and the floor under GameSkin.font
+
+The body-face ruling, wired. The owner chose Spectral from the comparison
+sheet; this is what it took to make that choice true on a machine with no
+1997 files.
+
+- **What was missing.** `GameSkin.our_art` has been the floor under the
+  PICTURES since 7edad48 — a skin directory first, ours next, the
+  code-drawn fallback last. `GameSkin.font` had no such floor: it fell
+  from the imported skin straight to Godot's default sans, so a player
+  who had imported nothing read every card, every dialog and the duel log
+  in a UI sans, and a Magic card set in a UI sans is not a Magic card.
+- **What ships.** `game/art/fonts/Spectral-Regular.ttf` (Spectral Regular
+  2.005) with `OFL.txt` beside it, fetched over HTTPS from the family's
+  own upstream and checked against the blob hashes that directory
+  publishes before either file entered the checkout. Both hashed in
+  `game/art/README.md`, both held to the folder by
+  `tests/ui/test_our_art.gd`. A SUBFOLDER rather than `game/art/` itself,
+  because the two are ours in two different ways: the pictures because
+  this project DREW them (GPL-3.0), the face because somebody else drew
+  it and gave it away (OFL 1.1) — which is what lets the licence sit next
+  to the file it actually covers.
+- **Why Spectral.** x-height 0.450 of the em against MPlantin's 0.450 —
+  the same to three decimals, and the x-height is what the eye reads a
+  body face by — with a text width within 1.2%. Closest of the
+  twenty-two free serifs surveyed, on both numbers at once, and read off
+  the shipped file's own OS/2 table (sxHeight 450, cap 660, em 1000).
+- **It only ever looked bad because the fit was wrong.** Spectral's line
+  box is 1.522 em where MPlantin's is 1.000, so the old line-box fit
+  handed it a base of 12 where MPlantin gets 18. With the letter doing
+  the sizing (the entry above), Spectral takes MPlantin's own numbers on
+  every card — checked by looking, all three comparison cards shot
+  through the live widget with no skin at all: base 18, Rock Hydra 10 px,
+  Mana Vault 12, Osai Vultures 14, P/T 26, credit 13.
+- **The order is the point: ours is a FLOOR, never an override.** The
+  player's imported skin, then a dev checkout's `assets/original`, then
+  ours, then nothing — asserted in BOTH states of the world by
+  `tests/ui/test_skin.gd`. The same three cards shot WITH
+  `assets/original` in place, before and after, came out byte-identical:
+  an imported MPlantin still wins and nothing on a skinned card moved.
+- **Regular only, and no italic**, because nothing asks for one: bold
+  everywhere is a `FontVariation` emboldening `font_body` in place.
+  `font_title` deliberately gets no floor — nothing free is near
+  MagicMedieval, and a serif standing in for a blackletter display face
+  would be a worse lie than the default a title already gets.
+- **The cost, measured and written down.** With `Expand` on, 808 of the
+  897-card pool read at the full ported size on Spectral against 810 on
+  MPlantin — Spectral's advances run a hair wider at the same x-height.
+  Two cards take one extra step down; none loses a line. The floor in
+  `tests/ui/test_card_preview.gd` is stated per face now, because a floor
+  is a measurement OF A FACE and there are two faces to measure.
+- **And it changed surfaces that were never in the comparison.** The duel
+  log's lines, every `OriginalDialog` label and the Deck Builder's body
+  text all take `font_body` and are Spectral now without a skin — looked
+  at, and better than the sans they replaced. What that also exposed:
+  `OriginalDialog.button` and `.gadget` set a font SIZE and no font, so
+  `Copy`/`Save`/`×` and `OK`/`Cancel` stay on Godot's default while the
+  labels beside them are serif. The split is NOT new — a skinned install
+  has had it since the dialogs were written — but a skinless one used to
+  be uniformly sans and is now mixed. Dressing the buttons is a look
+  ruling and belongs to the owner.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

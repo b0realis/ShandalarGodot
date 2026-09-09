@@ -32,6 +32,61 @@ func test_original_fonts_load() -> void:
 	assert_not_null(GameSkin.font("font_body"), "MPlantin")
 
 
+# ------------------------------------------------------- the order of faces --
+# THE FALLBACK CHAIN, 2026-09-09: the player's imported skin, then a
+# development checkout's `assets/original`, then the face this project
+# ships (`GameSkin.our_font`, `game/art/fonts/`), then Godot's own
+# default. Ours is a FLOOR and not a preference — an imported MPlantin
+# must still win outright, because it is what a player who went and found
+# their own copy of the 1997 game came for.
+#
+# Both states of the world are one test: the machine either has a
+# `font_body.ttf` in a skin directory or it does not, and the chain says
+# something different and checkable in each case. Nothing here is skipped
+# on either kind of machine.
+
+func test_an_imported_face_beats_ours_and_ours_beats_godots_default() -> void:
+	var ours := GameSkin.our_font("font_body")
+	assert_not_null(ours, "the floor is in the checkout on every machine")
+	var chosen := GameSkin.font("font_body")
+	assert_not_null(chosen,
+		"font_body can no longer come back empty — that is what the floor "
+		+ "is for")
+	if GameSkin._find("font_body.ttf") != "":
+		assert_ne(chosen, ours,
+			"a skin supplies font_body and it must be what renders")
+		assert_ne(chosen.get_font_name(), "Spectral",
+			"the imported face, not the shipped one")
+	else:
+		assert_eq(chosen, ours,
+			"nothing imported: the shipped face is what renders")
+		assert_eq(chosen.get_font_name(), "Spectral")
+
+
+func test_the_floor_answers_only_the_keys_it_has_a_face_for() -> void:
+	# A floor that guessed would be worse than none: the original's title
+	# face is a blackletter and this project ships no stand-in for it, so
+	# `font_title` still falls through to Godot's default without a skin.
+	assert_null(GameSkin.our_font("font_title"))
+	assert_null(GameSkin.our_font("no_such_font"))
+	if GameSkin._find("font_title.ttf") == "":
+		assert_null(GameSkin.font("font_title"),
+			"no skin and no floor for this key — the caller gets the "
+			+ "engine default, exactly as before")
+
+
+func test_a_skin_arriving_re_resolves_the_face_but_not_ours() -> void:
+	# `clear_caches` is what [SkinPack] calls the moment a zip is dropped
+	# on the window. The chosen face has to be looked up again (a skin may
+	# now supply one); what this project ships cannot have changed, and is
+	# deliberately kept in a cache of its own.
+	var before := GameSkin.our_font("font_body")
+	GameSkin.clear_caches()
+	assert_eq(GameSkin.our_font("font_body"), before,
+		"a skin arriving cannot change what this project ships")
+	assert_not_null(GameSkin.font("font_body"), "and the floor is still there")
+
+
 func test_cached_lookups_are_stable() -> void:
 	var first := GameSkin.texture("card_frame_white")
 	var second := GameSkin.texture("card_frame_white")

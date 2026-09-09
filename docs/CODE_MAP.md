@@ -1740,6 +1740,47 @@ shandalar/
 │   │                          card art folder (inner="cardart") under
 │   │                          skin/cardart/ as skin/cardart.zip, an empty
 │   │                          folder refused
+│   ├── draw_our_art.gd      THE PICTURES THIS PROJECT DRAWS FOR ITSELF
+│   │                          (SceneTree script) — game/art/'s six set
+│   │                          glyphs and the damage dagger. Every glyph is
+│   │                          add/sub polygons, ellipses and capsules in
+│   │                          unit coordinates, scanline-filled 8x
+│   │                          supersampled, turned into a signed distance
+│   │                          field by a two-pass chamfer transform, then
+│   │                          rendered with an anti-aliased edge, a dark
+│   │                          rim and a bevel lit from the top left —
+│   │                          which is what keeps a 14px glyph a shape.
+│   │                          The dagger's rim is heavier (2.0 against
+│   │                          1.15): it is the one mark drawn over a
+│   │                          card's ART rather than over a panel, and its
+│   │                          blade is red for the same reason (a grey one
+│   │                          vanished on Grizzly Bears' snowfield).
+│   │                          _column() is a BROKEN column since
+│   │                          2026-09-09 — the shear is what tells it from
+│   │                          the anvil at 14px. No input but itself: the
+│   │                          same bytes on a machine that has never seen
+│   │                          the 1997 game. Regenerated art is invisible
+│   │                          to a game run until --import has run.
+│   ├── make_our_sfx.py      OUR OWN FILTER-BUTTON CUE (2026-09-09) —
+│   │                          synthesises the Deck Builder's stone cue
+│   │                          from a hand-written xorshift64* PRNG and
+│   │                          arithmetic, reading NO file: a train of tiny
+│   │                          noise impacts through either seven
+│   │                          hand-placed resonators or a minimum-phase
+│   │                          FIR fitted to a 23-band measurement of the
+│   │                          cue it would replace, under a contact-force
+│   │                          profile with two accents and a fade. Five
+│   │                          candidates on one axis (grain density, 42 to
+│   │                          380/s to none). --measure prints fourteen
+│   │                          features against the stored target, because
+│   │                          nobody who wrote it could hear it.
+│   ├── test_make_our_sfx.py  unittest: it opens NOTHING (open/wave.open/
+│   │                          os.listdir trapped — the provenance test),
+│   │                          the same bytes twice, 22050/mono/16-bit/
+│   │                          5512 frames/11068 B, the band-energy to
+│   │                          density conversion, minimum phase
+│   │                          front-loading the impulse response, and
+│   │                          grain density ordering the roughness
 │   ├── skin_catalogue.py    THE SKIN'S CATALOGUE (2026-09-08) — writes
 │   │                          docs/skin-catalogue.txt (shipped as
 │   │                          skin/SKIN.txt): every MANIFEST / VIDEOS /
@@ -2278,6 +2319,15 @@ shandalar/
 │    must-attack creature and a must-be-blocked attacker are orange, a
 │    declared attacker is green, and the two targeting cue states are
 │    pushed down to the small card;
+│    tests/ui/test_our_art.gd — THE SHIPPED-ASSET INVENTORY: every row of
+│    game/art/README.md present, non-empty, carrying its written SHA-256,
+│    loading through the accessor that reaches it (our_art / our_font /
+│    DeckAudio.stream_for), and named by no exclude_filter and no
+│    .gitignore rule; nothing in the folder the README does not name. It
+│    also covers the FACE (Spectral, x-height 0.450, body-yes/title-no)
+│    and the promise made to somebody outside this project — OFL.txt is
+│    not a resource, so only a preset's include_filter carries it into the
+│    pack, and that is asserted;
 │    tests/ui/test_skin.gd — the skin loader in BOTH states of the world
 │    (imported and not), and since 2026-09-06 THE ART CACHE'S BOUND:
 │    never more than ART_CACHE_CAP pictures, the oldest the one that
@@ -4161,6 +4211,27 @@ shandalar/
 │   │                          cannot cross the 1997 stone's dither
 │   │                          without eating the restyle's glyph. Pinned
 │   │                          at both sizes by tests/ui/test_skin.gd.
+│   │                          AND A FLOOR THAT IS OURS (2026-09-09):
+│   │                          our_art(key) loads res://game/art/<key>.png
+│   │                          and our_font(key) a face from
+│   │                          game/art/fonts/, both checked LAST — after
+│   │                          every skin directory, before the code-drawn
+│   │                          fallback and before Godot's default sans.
+│   │                          set_icon falls through to ours (which needs
+│   │                          no cut: the ground is already transparent),
+│   │                          MiniCard.masked_sprite does the same for
+│   │                          damage_marker (real alpha, never the
+│   │                          image+mask split), and font() does it for
+│   │                          font_body -> Spectral-Regular.ttf.
+│   │                          font_title has no row on purpose: nothing
+│   │                          free stands in for MagicMedieval. Read
+│   │                          through load(), not Image.load_from_file —
+│   │                          inside a pack there is no filesystem path —
+│   │                          and NOT cleared by clear_caches: a skin
+│   │                          arriving cannot change what this project
+│   │                          ships. An imported face still wins outright;
+│   │                          the ORDER is pinned in both states of the
+│   │                          world by tests/ui/test_skin.gd.
 │   │                          card_art (and card_scan through it)
 │   │                          GENERATES MIPMAPS since 2026-09-04: a
 │   │                          ~582x467 Scryfall crop drawn at ~110px is a
@@ -4378,6 +4449,33 @@ shandalar/
 │   │                          screen's COMMANDS/SHORTCUTS by a test) and
 │   │                          three icon pages, the last teaching the
 │   │                          funnel and the Filters window's five pages
+│   ├── art/                 WHAT THIS PROJECT SHIPS AS ITS OWN LOOK, and
+│   │                          the only art inside the .pck: seven PNGs
+│   │                          drawn by tools/draw_our_art.gd (six set
+│   │                          glyphs 48x48 and damage_marker 64x40, real
+│   │                          alpha, no mask half) reached through
+│   │                          GameSkin.our_art, and fonts/ carrying
+│   │                          Spectral-Regular.ttf with its OFL.txt
+│   │                          beside it, reached through
+│   │                          GameSkin.our_font. A SUBFOLDER for the face
+│   │                          because the two are ours in different ways:
+│   │                          the pictures are GPL-3.0 because we drew
+│   │                          them, the face is OFL-1.1 because its
+│   │                          authors gave it away — so the licence sits
+│   │                          next to the file it covers. Here and not in
+│   │                          assets/ because assets/ is gitignored AND
+│   │                          excluded from every preset, while game/ is
+│   │                          what ships (icon.png is the precedent).
+│   │                          OFL.txt is not a resource, so only a
+│   │                          preset's include_filter carries it into the
+│   │                          pack — asserted, not assumed. README.md
+│   │                          here is the INVENTORY (source, licence and
+│   │                          SHA-256 per file, including the one shipped
+│   │                          asset that lives elsewhere,
+│   │                          deck_builder/stone_grind.wav);
+│   │                          Provenance.md is the register;
+│   │                          tests/ui/test_our_art.gd holds the folder
+│   │                          to that list and to the export filters.
 │   ├── deck_builder/        THE DECK BUILDER (@SHELLSCREEN_TOOLS: "Deck
 │   │   │                      Builder: Build or Modify decks."). The 1997
 │   │   │                      original was its own module (Deckdll.dll), so

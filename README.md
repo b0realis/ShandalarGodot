@@ -338,9 +338,15 @@ the 1997 game at runtime, where the player put it
 (`tools/import_original.py`, `docs/player-files.md`); with none of it
 present the game is complete and plays in a look of its own.
 
-**This: nine pictures, every one of them ours,** under this project's own
-GPL-3.0 and listed here file by file because "some art ships" is not a
-thing to leave vague.
+**This: twelve files, of exactly three kinds,** listed here one by one
+because "some assets ship" is not a thing to leave vague. Each kind is
+ours to hand on for a different reason, and the reasons are not
+interchangeable: what this project MADE, what somebody else GAVE AWAY
+under a licence that permits redistribution, and one file whose licence
+comes with a caveat this section keeps rather than smooths.
+
+**One — nine pictures, every one of them ours,** under this project's own
+GPL-3.0.
 
 | file | what it is |
 |---|---|
@@ -360,4 +366,52 @@ any kind — so the same command reproduces them byte for byte on a
 machine that has never seen the 1997 game. `game/art/README.md` records
 each one's SHA-256; `tests/ui/test_our_art.gd` holds the list to the
 folder, so a picture that arrived from anywhere else fails the suite.
+
+**Two — one typeface, ours to pass on because its authors said so.**
+
+| file | what it is |
+|---|---|
+| `game/art/fonts/Spectral-Regular.ttf` | Spectral Regular 2.005 (Production Type), the face the rules text, the duel log and the dialogs are set in when no skin is imported |
+| `game/art/fonts/OFL.txt` | the SIL Open Font Licence 1.1 it is given away under, which travels with it into every build |
+
+Fetched on 2026-09-09 from the family's own upstream, Google Fonts'
+`ofl/spectral` directory, and hashed into `game/art/README.md` before it
+entered the checkout. The OFL is a redistribution licence — that is what
+it is for — and the licence file ships beside the font wherever the font
+goes, which is what the OFL asks and what
+`tests/ui/test_our_art.gd` asserts.
+
+It is a FLOOR and not a replacement. `MPlantin`, the face the 1997 game
+actually sets its rules text in, is Monotype's and is not here and never
+will be; a player who imports their own copy of the original still gets
+MPlantin, because the loader looks in every skin directory before it
+looks at ours (`GameSkin.font`). Spectral is what a player who has
+imported nothing reads instead of Godot's default sans.
+
+**Three — one sound, under somebody else's licence, with a caveat.**
+
+| file | what it is | source | licence | SHA-256 |
+|---|---|---|---|---|
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | supplied by the owner as `freesound_community077381_scrapingstone83768.mp3` (47 040 B, 2.352 s), trimmed to a quarter second | Pixabay Content License, as published | `9317c761442f82fcca0200f1380f4c51ecd3a7e98c9eb66966d59a4b4d2ac2d8` |
+
+This one is **not ours** and is not claimed to be. It is the only sound
+in the game that did not come out of the 1997 install, which is why it
+ships inside the pack rather than being read off the player's own copy
+(`game/deck_builder/deck_audio.gd`). It reached this project under the
+Pixabay Content License, which permits the use and requires no
+attribution, and that grant is sufficient on its own. What could NOT be
+established is which freesound.org entry it began as, or under which
+Creative Commons licence it was first published there — the `077381` in
+its title is not a freesound sound id. `Provenance.md` § *Our own assets*
+records both halves of that in full, including what this project would do
+if the original were ever identified as CC BY. The caveat is carried, not
+laundered.
+
+`game/art/README.md` is the one inventory behind all three tables: it
+carries the source and the SHA-256 of every row above except
+`game/icon.png` and `game/boot_splash.png`, which are this project's own
+and predate it. `tests/ui/test_our_art.gd` holds that inventory to the
+files — a shipped asset that quietly stops shipping, or one that appears
+with nothing said about where it came from, fails the suite.
+
 Everything else the game needs it draws for itself, in code, at runtime.

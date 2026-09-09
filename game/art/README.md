@@ -1,8 +1,16 @@
-# `game/art/` — the pictures this project ships as its own
+# `game/art/` — the look this project ships as its own
 
-Everything in this folder was **drawn by this project** and travels
-inside the game's own pack. Nothing here came out of the 1997 game, out
-of a later reimplementation of it, or out of anybody else's file.
+Everything in this folder travels inside the game's own pack, and it is
+ours in one of exactly two ways. The **pictures** were *drawn by this
+project* and carry its GPL-3.0. The **body face**, in `fonts/`, was drawn
+by somebody else and *given away under the SIL Open Font Licence*, which
+is a licence to redistribute it — its `OFL.txt` sits beside it. Nothing
+here came out of the 1997 game, out of a later reimplementation of it, or
+out of anybody else's restyle of either.
+
+A third kind of shipped file — one sound, under a third party's licence —
+lives outside this folder and is inventoried at the foot of this page all
+the same, because the inventory is what the test reads.
 
 That distinction is the whole reason the folder exists. The 1997 art is
 the player's own copy and is never redistributed (`Provenance.md`,
@@ -12,7 +20,7 @@ and are not ours to copy either. So the game's default look does not
 borrow from either of them: it is drawn here, and a player who imports
 their own 1997 files still gets the 1997 files, because the loader
 checks every skin directory first and only then falls through to this
-folder (`GameSkin.our_art`, `GameSkin.set_icon`,
+folder (`GameSkin.our_art`, `GameSkin.our_font`, `GameSkin.set_icon`,
 `MiniCard.masked_sprite`).
 
 **Ours is the floor, never the ceiling.**
@@ -28,11 +36,20 @@ has to live somewhere the pack includes, and `game/` is that place —
 `all_resources`, so these files are in the pack without a preset change.
 
 They are read with `load()` (the import pipeline) rather than
-`Image.load_from_file`, because inside an exported pack there is no
-filesystem path to open — which is exactly the opposite of how the skin
-loader reads a skin, and why `GameSkin.our_art` is a separate accessor.
+`Image.load_from_file` or `FontFile.load_dynamic_font`, because inside an
+exported pack there is no filesystem path to open — which is exactly the
+opposite of how the skin loader reads a skin, and why `GameSkin.our_art`
+and `GameSkin.our_font` are separate accessors.
 
-## How to change one
+`OFL.txt` is the one file here that has to be in the pack as a FILE and
+not as an imported resource, because it is the licence the font travels
+under. `export_filter="all_resources"` alone would leave it out — Godot
+does not consider a `.txt` a resource — but every preset's
+`include_filter` already names `*.txt` (it is how `cards/data/dck_ids.txt`
+ships), so the licence goes wherever the face goes. `tests/ui/test_our_art.gd`
+asserts that rather than trusting it.
+
+## How to change a picture
 
 Do not paint over the PNG. Edit the shape in
 [`tools/draw_our_art.gd`](../../tools/draw_our_art.gd) — every glyph is a
@@ -40,11 +57,12 @@ handful of polygons, arcs and capsules in unit coordinates — and run
 
     ../tools/godot --headless --path . -s res://tools/draw_our_art.gd
 
-which rewrites every file here. The generator has no input but itself:
+which rewrites every PNG here — it never touches `fonts/`, whose one
+file is fetched, not drawn. The generator has no input but itself:
 run it on a machine with no 1997 game and no Manalink install and it
 produces exactly these bytes.
 
-## The files
+## The pictures
 
 | file | what it is | drawn by | licence | SHA-256 |
 |---|---|---|---|---|
@@ -80,12 +98,96 @@ bar across the diagonal rather than two lobes either side of it — which
 is the whole of what keeps a crossguard legible at the eighteen pixels
 the small card draws it at.
 
-`tests/ui/test_our_art.gd` holds this table to the folder: every file
-named here must exist, be non-empty, carry the hash written above, load
-as a texture, and sit somewhere the export cannot silently drop.
+## The face
+
+The rules text, the duel log and every dialog are set in `font_body`.
+With the 1997 files imported that is MPlantin, the commercial Monotype
+face the original names — **which this project may not redistribute**, so
+without an import there was nothing under it but Godot's own sans, and a
+Magic card set in a UI sans is not a Magic card. This is what stands
+under it now.
+
+| file | what it is | source | licence | SHA-256 |
+|---|---|---|---|---|
+| `fonts/Spectral-Regular.ttf` | Spectral Regular 2.005, the shipped body face | `github.com/google/fonts/blob/main/ofl/spectral/Spectral-Regular.ttf` (Production Type) | OFL-1.1 | `c89021dc20720c8d0dcf40b0b2f6e00c13665fa8041717f581396f51b8c78f5d` |
+| `fonts/OFL.txt` | the licence that file travels under | `github.com/google/fonts/blob/main/ofl/spectral/OFL.txt` | OFL-1.1 | `501d6ceca8e552630fe3aa9442b9a818565680a1a2f79f3fb8c13d6f309a9e98` |
+
+Both were fetched from the family's own upstream directory over HTTPS on
+2026-09-09 and checked against the blob hashes that directory publishes
+before either entered the checkout. The TTF is a real sfnt (`0x00010000`,
+18 tables), its name table reads `Spectral / Regular / Version 2.005`,
+and its own OS/2 gives x-height 450 and cap-height 660 on a 1000-unit em.
+
+WHY SPECTRAL, out of the twenty-two free serifs surveyed on 2026-09-09:
+it is the one that matches the face it stands in for. **x-height 0.450 of
+the em against MPlantin's 0.450** — the same to three decimals, and the
+x-height is what the eye reads a body face by — with a text width within
+1.2%. Nothing else in the field came as close on both.
+
+It first read as a BAD face and was not. The card's auto-fit used to pick
+a size by shrinking until the face's LINE BOX stood inside the cell the
+1997 font table ports, and Spectral bakes half an em of leading into that
+box (1.522 em, where MPlantin's is 1.000), so the same cell bought a much
+smaller letter: a base of 12 where MPlantin gets 18. That is a defect of
+the fit, not of the face, and it was fixed first — `docs/ROADMAP.md`, *"A
+cell is not a letter"*. With the fit measuring the LETTER, Spectral takes
+MPlantin's own sizes on every card: base 18, 10 px on Rock Hydra, P/T 26,
+credit 13, checked by looking at all three comparison cards with no skin
+present.
+
+Only the REGULAR weight ships, and there is no italic, because nothing in
+the game asks for one: bold is a `FontVariation` emboldening the face in
+place (`UiChrome.menu_button`, `DuelLog`, the Deck Builder), and no
+surface sets italics. A face that nothing loads is 260 kB of pack for
+nothing.
+
+There is no `font_title` of ours and that is deliberate. The original's
+display face is MagicMedieval; nothing free is near it, and a serif
+standing in for a blackletter would be a worse lie than the default face
+a title already gets without a skin.
+
+No table on this page may drift. `tests/ui/test_our_art.gd` holds every
+row to the file it names: it must exist, be non-empty, carry the hash
+written beside it, load through the accessor that reaches it, and sit
+somewhere the export cannot silently drop.
 
 *Where a name is a skin key* (`set_icon_<code>`, `damage_marker`), it is
 deliberately the SAME key `tools/skin_catalogue.py` publishes, so a skin
 that supplies its own simply replaces ours, one file at a time.
+
+## Shipped outside this folder
+
+One asset ships in the pack and does NOT live here, and the row for it is
+here anyway. `README.md` § Legal promises what ships file by file, and a
+promise kept in two documents is a promise that drifts: this file is the
+inventory `tests/ui/test_our_art.gd` reads, so anything the pack carries
+that is not code has to be in it, wherever the bytes actually sit.
+
+| file | what it is | source | licence | SHA-256 |
+|---|---|---|---|---|
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | supplied by the owner as `freesound_community077381_scrapingstone83768.mp3` (47 040 B, 2.352 s) and trimmed to a quarter second | Pixabay Content License as published — with the caveat in `Provenance.md` | `9317c761442f82fcca0200f1380f4c51ecd3a7e98c9eb66966d59a4b4d2ac2d8` |
+
+A row whose name begins `game/` is a path from the project root rather
+than a file in this folder; that is the only difference the test makes
+between it and the rows above.
+
+IT DOES NOT MOVE HERE, and the reason is not tidiness. `DeckAudio.GRIND`
+names it by path (`game/deck_builder/deck_audio.gd`), it sits beside the
+screen that plays it, and it is the ONE sound in this game that did not
+come out of the 1997 install — which is why it is in the pack at all
+while every other sound is read off the player's own copy.
+
+**AND IT IS NOT OURS THE WAY THE PICTURES ARE.** The pictures carry this
+project's GPL-3.0 because this project drew them; the face carries the
+OFL because its authors gave it away under one; this sound is a third
+thing — a file the owner supplied, published on Pixabay under the
+**Pixabay Content License**, which permits the use and asks for no
+attribution. What could *not* be established is which freesound.org
+entry it originally came from, or under which Creative Commons licence it
+was first published there: the `077381` in its title is not a freesound
+sound id. `Provenance.md` § *Our own assets* sets out both halves of that
+in full, including what this project would do if the original were ever
+identified as CC BY. **Do not restate it here as "ours".** The caveat is
+the point of writing it down.
 
 `b0realis`, 2026-09-09.

@@ -20,17 +20,21 @@ extends RefCounted
 ## original files, and dresses up automatically when they exist.
 ##
 ## BETWEEN THOSE TWO THERE IS NOW A FLOOR THAT IS OURS ([method our_art],
-## 2026-09-09): `game/art/`, a handful of pictures this project DREW —
-## the six set glyphs and the damage dagger — and ships in its own pack.
-## They are checked after every skin directory and before the code-drawn
+## [method our_font], 2026-09-09): `game/art/`, a handful of pictures this
+## project DREW — the six set glyphs and the damage dagger — plus the BODY
+## FACE it ships, all of it travelling inside the game's own pack. They
+## are checked after every skin directory and before the code-drawn
 ## fallback, so a player who has imported nothing still sees a symbol on
-## the card and a dagger on a wounded creature, and a player who HAS
-## imported keeps the 1997 art exactly as before. Ours is the floor,
-## never the ceiling.
+## the card, a dagger on a wounded creature and rules text in a serif
+## chosen for the job, and a player who HAS imported keeps the 1997 art
+## and the 1997 lettering exactly as before. Ours is the floor, never the
+## ceiling.
 ##
-## Loading goes through Image.load_from_file/FontFile, bypassing Godot's
-## import pipeline entirely — that is what lets gitignored and user://
-## files work identically in editor, headless, and exported builds.
+## Loading a SKIN goes through Image.load_from_file/FontFile, bypassing
+## Godot's import pipeline entirely — that is what lets gitignored and
+## user:// files work identically in editor, headless, and exported
+## builds. What this project ships is loaded the other way round, through
+## `load`, because it is inside the pack; the two accessors say so.
 
 ## Where a skin may live, in order, as built in. `user://` is the
 ## player's own and always wins; `res://` is a development checkout. The
@@ -139,7 +143,15 @@ static func texture(key: String) -> Texture2D:
 	return result
 
 
-## Font for a manifest key ("font_title", "font_body") or null.
+## Font for a manifest key ("font_title", "font_body"), or null when
+## neither a skin nor this project has one — the caller then gets Godot's
+## own default face.
+##
+## THE ORDER IS THE WHOLE POINT (2026-09-09): the player's imported skin,
+## then a development checkout's `assets/original`, then OURS ([method
+## our_font]), then nothing. An imported face still wins outright — the
+## 1997 lettering is what a player who went and found their CD came for —
+## and the face this project ships is only what stands under it.
 static func font(key: String) -> FontFile:
 	if _font_cache.has(key):
 		return _font_cache[key]
@@ -149,6 +161,8 @@ static func font(key: String) -> FontFile:
 		var f := FontFile.new()
 		if f.load_dynamic_font(path) == OK:
 			result = f
+	if result == null:
+		result = our_font(key)
 	_font_cache[key] = result
 	return result
 
@@ -184,6 +198,64 @@ static func our_art(key: String) -> Texture2D:
 		if loaded is Texture2D:
 			result = loaded
 	_our_art_cache[key] = result
+	return result
+
+
+## WHERE THE FACE THIS PROJECT SHIPS LIVES — `game/art/fonts/`, its
+## licence beside it. A subfolder and not `game/art/` itself, because the
+## two are ours in two different ways: the pictures are ours because this
+## project DREW them and they carry its GPL-3.0, the face is ours to ship
+## because somebody else drew it and gave it away under the SIL Open Font
+## Licence. Keeping them apart is what lets `OFL.txt` sit next to the file
+## it actually covers instead of looking as though it covered the glyphs
+## too. See `game/art/README.md`.
+const OUR_FONT_DIR := "res://game/art/fonts"
+
+## WHICH OF OURS ANSWERS A SKIN KEY.
+##
+## `font_body` — the rules text, the duel log, every dialog — is
+## **Spectral Regular 2.005** (Production Type, OFL 1.1), chosen from a
+## survey of twenty-two free serifs on 2026-09-09 because it is the one
+## that matches the face the original sets rules text in: x-height 0.450
+## of the em against MPlantin's 0.450, and a text width within 1.2%. That
+## comparison, and the sizing bug that had to be fixed before it could be
+## read (`docs/ROADMAP.md`, "A cell is not a letter"), are the whole of
+## why this row says Spectral and not something else.
+##
+## `font_title` has NO row and is meant not to. The original's display
+## face is a blackletter-ish MagicMedieval, nothing free is close to it,
+## and a serif standing in for it would be a worse lie than Godot's own
+## default — which is what a title still gets here without a skin.
+const OUR_FONTS := {"font_body": "Spectral-Regular.ttf"}
+
+## OUR OWN FACE for a skin key, or null when we ship none for it.
+##
+## READ THROUGH `load`, NOT `FontFile.load_dynamic_font`, for exactly the
+## reason [method our_art] reads through `load` and not
+## `Image.load_from_file`: a skin is read off the FILESYSTEM, which is
+## what lets a gitignored checkout folder and a `user://` folder behave
+## alike, but this file travels INSIDE the exported pack, where there is
+## no filesystem path to open and only the import pipeline can reach it.
+## `game/art/fonts/Spectral-Regular.ttf` imports as a [FontFile]; the
+## exported game loads that, on desktop and in a browser alike.
+##
+## Not cleared by [method clear_caches]: a skin arriving cannot change
+## what this project ships. [method font]'s own cache is cleared, so the
+## skin's face takes over there the moment it lands.
+static var _our_font_cache: Dictionary = {}
+
+static func our_font(key: String) -> FontFile:
+	if not OUR_FONTS.has(key):
+		return null
+	if _our_font_cache.has(key):
+		return _our_font_cache[key]
+	var result: FontFile = null
+	var path := "%s/%s" % [OUR_FONT_DIR, OUR_FONTS[key]]
+	if ResourceLoader.exists(path):
+		var loaded: Resource = load(path)
+		if loaded is FontFile:
+			result = loaded
+	_our_font_cache[key] = result
 	return result
 
 

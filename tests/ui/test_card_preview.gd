@@ -428,6 +428,21 @@ func test_the_symbols_did_not_cost_the_pool_a_single_step() -> void:
 ## and still not one card losing a line (which
 ## `test_expand_fits_every_card_in_the_pool` above measures on the real
 ## widget, frame by frame).
+##
+## **A FLOOR IS A MEASUREMENT OF A FACE**, and since 2026-09-09 there are
+## two faces to measure. The numbers above were counted on MPlantin, the
+## face the original names, and they stay exactly where they were. On a
+## machine with nothing imported the body face is now the Spectral this
+## project ships (`GameSkin.our_font`, `game/art/fonts/`), whose advances
+## run a hair wider than MPlantin's at the same x-height — the survey put
+## the difference at 1.2% of text width — and 808 of the pool read at the
+## full size instead of 810. Two cards, and they are two cards that gain a
+## step, not a clipped line. Writing 808 down here is what makes it a
+## measurement rather than a surprise: the count may go UP, and must not
+## go down, on EITHER face.
+const EXPAND_FLOOR_IMPORTED := 810
+const EXPAND_FLOOR_OURS := 808
+
 func test_expand_reads_at_least_as_many_cards_at_full_size_as_the_braces_did()\
 		-> void:
 	_preview.set_text_expanded(true)
@@ -437,7 +452,13 @@ func test_expand_reads_at_least_as_many_cards_at_full_size_as_the_braces_did()\
 		if _preview._oracle.get_theme_font_size("font_size") \
 				== _preview._rules_size:
 			full += 1
-	assert_gte(full, 810, "%d cards at full size with Expand on" % full)
+	var ours: bool = GameSkin.font("font_body") \
+		== GameSkin.our_font("font_body")
+	var floor_count: int = EXPAND_FLOOR_OURS if ours \
+		else EXPAND_FLOOR_IMPORTED
+	assert_gte(full, floor_count,
+		"%d cards at full size with Expand on, on %s" % [full,
+			"the face this project ships" if ours else "the imported face"])
 
 
 ## **AND IT STILL READS WITH NO 1997 FILES AT ALL.** Take the sheet away
