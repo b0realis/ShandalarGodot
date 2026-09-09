@@ -319,7 +319,12 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
-`--null` says otherwise. Every other switch keeps its meaning: `--games`
+`--null` says otherwise. Mind what a knob actually fires on when you pick
+its control pair: `pumps_to_attack` grew on 2026-09-09 to cover the BLOCK
+declaration as well as the attack (and to read Dragon Whelp's and Nalathni
+Dragon's card-local breath), so its control must hold no activated
+self-pump on EITHER side of the table — Big Green vs White Knights still
+replays its null game for game, 1,000 of 1,000. Every other switch keeps its meaning: `--games`
 is per arm and per pair, the seeds are the ones a plain `--deck-a`/
 `--deck-b` run deals (the null arm is `--profile-a wizard:KNOB=null
 --profile-b wizard:KNOB=null`, game for game), and `--gauntlet` sweeps

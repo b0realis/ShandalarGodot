@@ -85,7 +85,7 @@ override any knob on any preset for a measurement
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
-| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when attackers are declared — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — with the second main phase's cast and the held instant kept whole, and counts a capped breath at its cap |
+| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game |
 
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and `spares_own`
 are the five knobs that are on at every rung, and the reason is the
@@ -145,7 +145,9 @@ your attackers, sizes its X spells, prices a Balance, paces its draws to
 the libraries (a Time Walk's extra draw step among them), keeps a
 second The Abyss in hand, animates a Factory
 only for an attack it will actually declare, sends a firebreather at the
-size its open mana can reach instead of at its printed 0/1, and holds
+size its open mana can reach instead of at its printed 0/1 — and blocks
+with it at that size too, so a Carrion Ants behind six Swamps eats a
+Craw Wurm instead of watching it go past — and holds
 its Nevinyrral's Disk for the attack it answers — priced by the damage it keeps off the
 pilot, fired once the attackers are named and before they connect —
 and keeps its Counterspell in hand when the creature on the stack is
@@ -238,6 +240,46 @@ whose +0/+1 buys no attack and is refused — is the wash it should be
 byte-identical in every arm of all three runs: no starter but two owns a
 card the reader can see.
 
+THE SECOND HALF, later the same day: the BLOCK declaration and the two
+card-local firebreathers, both under the same knob. Measured the same
+way, seed 11, 1 000 games an arm, and this time against the morning's own
+code as a third arm, so each half can be read on its own.
+
+- The BLOCK half is a WASH in win rate, on both pairs, and it is worth
+  saying so plainly. Vampire Lord's `on` arm moves 24.6 → 24.0, 34.7 →
+  36.0, 13.0 → 11.7, 25.7 → 25.6, 12.8 → 12.6, and Kzzy'n's 33.3 → 33.7,
+  31.7 → 31.8, 31.1 → 30.9, 24.3 → 23.9, 34.1 → 33.9 — not one of the ten
+  outside the interval a 1 000-game delta can see (±3 to ±4). The reason
+  is visible in the code it replaces: `_combat_self_pumps` was already
+  buying the breaths AFTER the blockers were declared, so most of the
+  value the planned block wins was being recovered a step later by
+  accident. What it fixes is the case that recovery cannot reach — a
+  block never declared at all, the Carrion Ants behind six Swamps that
+  watched a Craw Wurm walk past for six — and that is the one the owner
+  sees at the table.
+- The READER half is the whole of the afternoon's gain. Kzzy'n — The
+  Dragon Lord (four Dragon Whelp, four Nalathni Dragon, four Shivan) was
+  a deck the morning's knob did NOTHING for: +0.7, +0.1, +1.1, +0.1,
+  +1.5 against its null, not one clear of zero, because its Shivans were
+  already 5/5 attackers and the eight bodies that were not read were the
+  eight the reader could not see. With the two rows in, against the same
+  null: 32.6 → 42.5, 31.6 → 37.0, 30.0 → 38.3, 24.2 → 29.1, 32.6 → 40.4
+  (+9.9 ±4.2, +5.4 ±4.1, +8.3 ±4.1, +4.9 ±3.9, +7.8 ±4.2), every one of
+  the five clear of zero, and against the morning's `on` arm +8.8, +5.2,
+  +7.4, +5.2, +6.5. Two rows in a table, three Mountains a turn the deck
+  was never spending — three and not more, because the fourth breath is
+  the fuse.
+- The Ancients Vampire Lord (two Carrion Ants and two Vampire Bats
+  rather than the originals' four and four) is the third pair, and reads
+  the whole knob at +3.6 ±3.6, +2.6 ±4.3, +6.5 ±2.5, +5.5 ±3.6, +4.0
+  ±2.6 — the same shape at half the copies.
+- The control pair Big Green vs White Knights is byte-identical to its
+  own null in every arm of all five runs (1 000 of 1 000 games each) —
+  including the two arms run against the morning's tree, which is how
+  the null was proved unmoved: it replays the published attack-half
+  numbers to the decimal (19.8/24.6, 28.7/34.7, 5.7/13.0, 18.0/25.7,
+  5.8/12.8). That is what the gate on the card-local reading buys.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -279,18 +321,29 @@ has the rule.
   fliers, the −0.3 there), and a second copy of a creature already on
   the table is let through as level with it although only one of the
   two dies. Open (`docs/ROADMAP.md`, the third pass).
-- `pumps_to_attack` reads the ATTACK only. A blocker is still declared at
-  its printed size, so a Carrion Ants with four Swamps open chump-blocks
-  a Craw Wurm it could have eaten — the pump arrives afterwards
-  (`_combat_self_pumps`) and saves it, but the BLOCK it would have made
-  as a 4/5 was never planned. The mirror of the attack probe, on
-  `_plan_blocks`, is the obvious next half and is not built. Nor is the
-  reader's: Dragon Whelp, Nalathni Dragon and Rainbow Knights pump
-  themselves through a card-local effect rather than a `PumpEffect`, so
-  `EffectIntent.pump_self` is false for all three and no pump path in the
-  AI has ever seen them — the Whelp's fuse (a fourth breath dooms it at
-  the next end step) would have to be read with the row that opens them.
-  Both open (`docs/ROADMAP.md`, this pass).
+- `pumps_to_attack` read the ATTACK only until later the same day; the
+  block half and the two card-local firebreathers landed on 2026-09-09
+  and the knob's meaning grew to cover them. What that half left standing:
+  a TRAMPLER's overflow is measured against the toughness the probe put
+  on the blocker, and `_combat_self_pumps` buys a toughness bonus only
+  when it saves the body — so the panic line can read a trampling swing
+  as up to one pump less dangerous than it turns out to be. And the ONE
+  POOL is split among the blockers by `_reachable_pumps` while
+  `_combat_self_pumps` then buys against the whole remaining pool, one
+  activation at a time, so a two-body gang block can see the first body
+  spend what the second was priced with. Both are the attack half's
+  simplifications too, and both are open.
+- Rainbow Knights is the third card of the 2026-09-09 report and has NO
+  row in `EffectIntent.CARD_LOCAL_PUMPS`, by ruling rather than by
+  omission. Its `{W}{W}` is "+0/+0, +1/+0 or +2/+0 until end of turn
+  chosen at random", rolled when the ability RESOLVES, so what two white
+  mana guarantee is nothing: a declaration sized on the average walks a
+  2/1 into a blocker that eats it one time in three, and a one-ply board
+  reading cannot price a coin flip honestly — the rule that keeps
+  Camouflage out of `EffectIntent.WINDOW_SHAPES` and Orcish Catapult in
+  the AI's hand. Pricing a random bonus at all (its floor, its mean, or a
+  distribution the evaluator could carry) is open and is a bigger
+  question than one card.
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and

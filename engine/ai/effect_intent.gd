@@ -219,6 +219,69 @@ const WINDOW_SHAPES := {
 # boards ([method AiPlayer._level_value]), never a rule about the name.
 const LEVELLERS := ["Balance"]
 
+# THE CARD-LOCAL BREATHS — the fourth table, and the third one that is a
+# table of its own rather than a row in [constant CARD_LOCAL], for the
+# reason the second and third state: a row up there makes the reader stop
+# calling the effect `unknown`, and these abilities ARE unknown to every
+# reading that word gates (the harm reading, the target picker, the
+# ability scorer). Only the pump paths read this column.
+#
+# THE THREE FIREBREATHERS THE READER COULD NOT SEE (2026-09-09). Dragon
+# Whelp and Nalathni Dragon pump themselves through a `class X extends
+# EffectBase` inside their own card file rather than through a
+# [PumpEffect] — they have to, because the breath carries a FUSE the
+# shared effect cannot express — so [member pump_self] was false for both
+# and no pump path in [AiPlayer] had ever seen them: not the attack
+# declaration, not the firebreathing on an unblocked attacker, not the
+# pump that wins a blocked trade. A Dragon Whelp with six Mountains open,
+# swinging into an empty board with its opponent at 5 life, dealt 2 and
+# left six lands untapped.
+#
+# Each row states the bonus ONE activation grants and the fuse the card
+# carries, exactly as the reader would have read it off a [PumpEffect]:
+#
+#   power, toughness — the bonus one activation grants, GUARANTEED. A
+#     bonus the card chooses at resolution has a guaranteed part of zero
+#     and therefore no row here (see Rainbow Knights below).
+#   fuse            — the activation number that dooms the body ("if this
+#     ability has been activated four or more times this turn, sacrifice
+#     this creature at the beginning of the next end step"), 0 for none.
+#   fuse_count, fuse_turn — the card's own memory keys for the count and
+#     the turn it belongs to, so the pilot can ask how many breaths of
+#     this turn are already spent. The count lives in
+#     [member CardInstance.memory] because [member CardInstance.ability_uses]
+#     is only kept for an ability with a [member ActivatedAbility.max_per_turn]
+#     and these two have none — the fuse is not a cap, it is a price.
+#
+# RAINBOW KNIGHTS IS DELIBERATELY ABSENT, and it is the third card the
+# 2026-09-09 pass was asked about. Its {W}{W} is "+0/+0, +1/+0 or +2/+0
+# until end of turn chosen at random" — the bonus is rolled when the
+# ability RESOLVES, so what the card guarantees for two white mana is
+# nothing at all. A declaration sized on the average sends a 2/1 into a
+# blocker that eats it one time in three, and a one-ply board reading
+# cannot price a coin flip honestly: the same rule that keeps Camouflage
+# out of [constant WINDOW_SHAPES] and Orcish Catapult in the AI's hand.
+# Its OTHER ability ({1}: first strike until end of turn) is a real
+# [PumpEffect] and is already read — and already refused by every pump
+# path, because it grants no power (docs/ai-difficulty.md, the knob table).
+const CARD_LOCAL_PUMPS := {
+	"Dragon Whelp": {"power": 1, "toughness": 0, "fuse": 4,
+		"fuse_count": "breaths", "fuse_turn": "breaths_turn"},
+	"Nalathni Dragon": {"power": 1, "toughness": 0, "fuse": 4,
+		"fuse_count": "breaths", "fuse_turn": "breaths_turn"},
+}
+
+
+## The card-local breath [param card_name] pumps itself with, as a row of
+## [constant CARD_LOCAL_PUMPS] — `{}` when the card has none.
+##
+## Read through this and not off the constant, so that the one caller
+## ([method AiPlayer._card_local_breath], which gates it on
+## [member AiProfile.pumps_to_attack]) is the only thing that has to know
+## the table exists.
+static func card_local_pump(card_name: String) -> Dictionary:
+	return CARD_LOCAL_PUMPS.get(card_name, {})
+
 
 ## Read [param effects] (a spell's spell_effects, one mode's effects, or an
 ## ability's effects) into an intent. [param card_name] keys the

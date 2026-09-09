@@ -2638,7 +2638,17 @@ func _combat_self_pumps(game: MtgGame) -> String:
 			if ability.tap_cost or ability.cost == null:
 				continue
 			var intent := EffectIntent.read(ability.effects, inst.data.card_name)
-			if not intent.pump_self or not _ability_available(game, inst, index):
+			var bonus := Vector2i(intent.pump_power, intent.pump_toughness)
+			if not intent.pump_self:
+				# The card-local breath the reader cannot see (2026-09-09,
+				# gated by [member AiProfile.pumps_to_attack]): Dragon
+				# Whelp and Nalathni Dragon pump through an EffectBase of
+				# their own, so this loop had never seen either of them.
+				var breath := _card_local_breath(inst, index, intent)
+				if breath.is_empty():
+					continue
+				bonus = Vector2i(int(breath["power"]), int(breath["toughness"]))
+			if not _ability_available(game, inst, index):
 				continue
 			var pending := _pending_pumps(game, inst)
 			# Activations in reach: planned pump by pump against the REAL
@@ -2646,19 +2656,19 @@ func _combat_self_pumps(game: MtgGame) -> String:
 			# Frozen Shade with one Swamp and three Forests open has one
 			# {B} in reach, not four, and the count used to say four.
 			var reach: int = _pumps_in_reach(game, inst, ability, sources, null,
-				_activations_left(inst, index)) + pending
+				_activations_left(game, inst, index)) + pending
 			if reach <= pending:
 				continue
-			var pending_bonus := Vector2i(intent.pump_power * pending, intent.pump_toughness * pending)
-			var reach_bonus := Vector2i(intent.pump_power * reach, intent.pump_toughness * reach)
+			var pending_bonus := bonus * pending
+			var reach_bonus := bonus * reach
 			var worth := false
-			if intent.pump_toughness > 0:
+			if bonus.y > 0:
 				var incoming := _incoming_combat_damage(game, inst, opposite)
 				var dies := incoming > 0 \
 					and inst.damage + incoming >= inst.cur_toughness + pending_bonus.y
 				var saved := inst.damage + incoming < inst.cur_toughness + reach_bonus.y
 				worth = dies and saved
-			if not worth and intent.pump_power > 0:
+			if not worth and bonus.x > 0:
 				for other_id in opposite:
 					var other := game.find_instance(other_id)
 					if other == null or other.zone != Mtg.Zone.BATTLEFIELD:
@@ -3243,20 +3253,49 @@ func _offensive_combat_response(game: MtgGame) -> String:
 			var ability: ActivatedAbility = attacker.cur_activated_abilities[index]
 			if ability.tap_cost or ability.effects.size() != 1:
 				continue
-			if not (ability.effects[0] is PumpEffect and ability.effects[0].self_mode):
-				continue
-			if ability.effects[0].power <= 0:
+			# What ONE activation adds to the power: the PumpEffect the
+			# reader can see, or — since 2026-09-09, under [member
+			# AiProfile.pumps_to_attack] — the card-local breath the table
+			# names for it. A Dragon Whelp with six Mountains and its
+			# opponent at 5 life used to swing for 2 and leave every
+			# Mountain untapped, because this loop tested `is PumpEffect`
+			# and its breath is a class inside its own card file.
+			var per_pump := 0
+			if ability.effects[0] is PumpEffect and ability.effects[0].self_mode:
+				per_pump = int(ability.effects[0].power)
+			else:
+				per_pump = int(_card_local_breath(attacker, index,
+					EffectIntent.read(ability.effects, attacker.data.card_name)
+					).get("power", 0))
+			if per_pump <= 0:
 				continue
 			# The same gate every other activation passes: a pump whose
 			# price is a BODY (Fallen Angel, Atog) is not firebreathing,
 			# and used to eat the board one Serra at a time.
 			if not _ability_available(game, attacker, index):
 				continue
+			# THE FUSE, and the one place it may be lit. Dragon Whelp's
+			# fourth breath sacrifices the dragon at the next end step
+			# (CR 701.17 — the delayed sacrifice regeneration cannot
+			# stop), so [method _activations_left] hands this loop three
+			# and no more. A dragon is worth spending on the attack that
+			# ENDS THE GAME and on nothing else — and only while the game
+			# is not already ending: the damage on the table is read
+			# FIRST (`unblocked_total` carries the breaths already
+			# bought), so a Whelp that has reached exactly lethal at
+			# three stops there and keeps itself. Buying past lethal is
+			# free for every other firebreather and costs a dragon here.
+			if _activations_left(game, attacker, index) == 0 \
+					and not (unblocked_total < them.life
+						and _pumps_are_lethal(game, attacker, ability, sources,
+							unblocked_total, per_pump)):
+				continue
 			var surcharge := game.ability_surcharge(pid, attacker)
 			if not reserve.is_empty() \
 					and _plan_taps_from(sources,
 						_combined_cost(ability.cost, reserve["cost"]), surcharge).is_empty() \
-					and not _pumps_are_lethal(game, attacker, ability, sources, unblocked_total):
+					and not _pumps_are_lethal(game, attacker, ability, sources,
+						unblocked_total, per_pump):
 				continue
 			if not _plan_and_pay(game, ability.cost, surcharge):
 				continue
@@ -3289,17 +3328,31 @@ func _main2_reserve(game: MtgGame, sources: Array) -> Dictionary:
 
 ## Would firebreathing [param attacker] with everything open finish them?
 ## The one case where the second main phase does not matter.
+##
+## [param per_pump] is what ONE activation adds to the power, 0 for "read
+## it off the effect" — the card-local breaths (2026-09-09) have no
+## [PumpEffect] to read it from, and asking `effects[0].power` of a
+## [WhelpBreathEffect] is a script error, not a zero.
 func _pumps_are_lethal(game: MtgGame, attacker: CardInstance,
-		ability: ActivatedAbility, sources: Array, unblocked_total: int) -> bool:
+		ability: ActivatedAbility, sources: Array, unblocked_total: int,
+		per_pump := 0) -> bool:
 	var them := game.players[game.opponent_of(pid)]
-	if ability.effects[0].power <= 0:
+	var power := per_pump
+	if power <= 0:
+		if not (ability.effects[0] is PumpEffect):
+			return false
+		power = int(ability.effects[0].power)
+	if power <= 0:
 		return false
 	# Bounded by the mana open, and — since 2026-09-09 — by the ability's
 	# own per-turn cap: a Fire Drake with five Mountains breathes once.
+	# The FUSE is not a bound here and nowhere else it is not: a dragon
+	# sacrificed at the next end step of a game that ended this turn cost
+	# nothing at all, which is the whole of "worth a dragon".
 	var index := attacker.cur_activated_abilities.find(ability)
 	var pumps := _pumps_in_reach(game, attacker, ability, sources, null,
-		_activations_left(attacker, index) if index >= 0 else -1)
-	return unblocked_total + pumps * int(ability.effects[0].power) >= them.life
+		_activations_left(game, attacker, index, true) if index >= 0 else -1)
+	return unblocked_total + pumps * power >= them.life
 
 
 ## Cast an instant-speed response from hand (plans mana, taps, casts).
@@ -3551,6 +3604,15 @@ func _attack_choice_once_pumped(game: MtgGame, candidates: Array[CardInstance],
 ## before the next body is priced. The body that cannot swing AT ALL
 ## without the mana is served first — that is the attack the knob exists
 ## to create — and the rest in the order the evaluator values them.
+##
+## ONE PRICING PATH FOR BOTH DECLARATIONS (2026-09-09). [param candidates]
+## is our attackers-to-be on our turn ([method _attack_choice_once_pumped])
+## and our untapped bodies on theirs ([method _block_choice_once_pumped]),
+## and the pricing does not care which: the question is the same question,
+## and asking it twice in two places is how the two halves drift apart.
+## The order is the same too — the body with no power at all is the body
+## the mana transforms, blocking as much as attacking (a 0/1 blocks
+## anything and kills nothing).
 func _reachable_pumps(game: MtgGame, candidates: Array[CardInstance]) -> Dictionary:
 	var out: Dictionary = {}
 	# The bodies FIRST, and the mana only if there are any: most boards
@@ -3580,7 +3642,7 @@ func _reachable_pumps(game: MtgGame, candidates: Array[CardInstance]) -> Diction
 		var inst: CardInstance = pump["inst"]
 		var ability: ActivatedAbility = pump["ability"]
 		var reach := _pumps_in_reach(game, inst, ability, sources, kept,
-			_activations_left(inst, int(pump["index"])))
+			_activations_left(game, inst, int(pump["index"])))
 		if reach <= 0:
 			continue
 		out[inst.id] = Vector2i(pump["bonus"]) * reach
@@ -3608,19 +3670,34 @@ func _reachable_pumps(game: MtgGame, candidates: Array[CardInstance]) -> Diction
 ## firebreathing. The FIRST such ability, not the best: a body with
 ## several breaths (Vaevictis Asmadi's three colours) is counted at one
 ## of them, which under-counts and never over-counts.
+##
+## THE ONE EXCEPTION TO `unknown` (2026-09-09) is an ability whose WHOLE
+## effect list is a card-local breath the reader has a row for ([method
+## _card_local_breath], [constant EffectIntent.CARD_LOCAL_PUMPS]): the
+## row says what the effect does, so nothing unpriced is left standing
+## beside it. That is the difference between Dragon Whelp — one effect,
+## one row, read — and an Electric Eel, whose pump IS a [PumpEffect] and
+## has an unpriced second effect next to it, and stays refused.
 func _self_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 	for index in inst.cur_activated_abilities.size():
 		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 		if ability.tap_cost or ability.cost == null:
 			continue
 		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
-		if not intent.pump_self or intent.unknown \
-				or intent.pump_power <= 0 or intent.pump_toughness < 0:
+		var bonus := Vector2i(intent.pump_power, intent.pump_toughness)
+		if not intent.pump_self or intent.unknown:
+			# ...or a breath the shared vocabulary cannot express and the
+			# table names instead (2026-09-09: Dragon Whelp, Nalathni
+			# Dragon). Same gates, same price, same cap.
+			var breath := _card_local_breath(inst, index, intent)
+			if breath.is_empty():
+				continue
+			bonus = Vector2i(int(breath["power"]), int(breath["toughness"]))
+		if bonus.x <= 0 or bonus.y < 0:
 			continue
 		if not _ability_available(game, inst, index):
 			continue
-		return {"index": index, "ability": ability,
-			"bonus": Vector2i(intent.pump_power, intent.pump_toughness)}
+		return {"index": index, "ability": ability, "bonus": bonus}
 	return {}
 
 
@@ -3637,9 +3714,18 @@ func _self_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 ## [method _held_reserve] reserves a Counterspell's {U}{U} from the
 ## moment the card is in hand, Islands or no Islands, and a reserve like
 ## that would silently zero every pump in the deck.
+##
+## AND ONE OF THE TWO IS OUR TURN'S ONLY (2026-09-09, the block half).
+## The second main phase is a phase of OUR turn: on theirs there is no
+## sorcery-speed cast this mana is being kept for, and our lands untap
+## before the phase that wants it. Booking it while blocking would keep
+## a Hypnotic Specter's four Swamps back from the block that saves the
+## body they were kept from — mana spent on nothing at all. The held
+## instant books on both turns, and on theirs it is the more real of the
+## two.
 func _pump_reserve(game: MtgGame, sources: Array) -> ManaCost:
 	var kept: ManaCost = null
-	var main2 := _main2_reserve(game, sources)
+	var main2 := _main2_reserve(game, sources) if pid == game.active_player else {}
 	if not main2.is_empty():
 		kept = main2["cost"]
 	var held := _held_reserve(game)
@@ -3653,7 +3739,7 @@ func _pump_reserve(game: MtgGame, sources: Array) -> ManaCost:
 ## How many more times ability [param index] of [param inst] may be
 ## activated this turn, or -1 for "as often as the mana lasts".
 ##
-## THE FUSE (2026-09-09). A reach counted in mana alone promises what the
+## THE CAP (2026-09-09). A reach counted in mana alone promises what the
 ## card will not deliver: a Fire Drake with five Mountains open is a 2/2
 ## and not a 6/2, because its breath is `{R}: +1/+0` ONCE a turn, and a
 ## Vampire Bats is a 2/1 at most. [method _ability_available] refuses the
@@ -3663,13 +3749,93 @@ func _pump_reserve(game: MtgGame, sources: Array) -> ManaCost:
 ## by [member AiProfile.pumps_to_attack] so the Deck Lab can run the
 ## null: without it every reach in this file counts the mana only, as it
 ## did before.
-func _activations_left(inst: CardInstance, index: int) -> int:
+##
+## THE FUSE (2026-09-09, the second half). Dragon Whelp and Nalathni
+## Dragon carry a cap of a different kind: *"if this ability has been
+## activated four or more times this turn, sacrifice this creature at the
+## beginning of the next end step"*. It is not a restriction — the engine
+## will happily sell the fourth breath — it is a PRICE, and the price is
+## the dragon. So three is what this hands every reader, and the fourth
+## is available only to a caller that passes [param may_light_fuse],
+## which is the lethal probe and nothing else: a dragon sacrificed at the
+## end step of a game that ended in this combat cost nothing.
+##
+## The count is the card's own ([member CardInstance.memory], keyed by
+## the row in [constant EffectIntent.CARD_LOCAL_PUMPS]) because
+## [member CardInstance.ability_uses] is only kept for an ability with a
+## [member ActivatedAbility.max_per_turn] and the fuse is not one. The
+## activations already on the stack count too — they have paid their mana
+## and not yet written their tally.
+func _activations_left(game: MtgGame, inst: CardInstance, index: int,
+		may_light_fuse := false) -> int:
 	if not profile.pumps_to_attack:
 		return -1
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
-	if ability.max_per_turn <= 0:
-		return -1
-	return maxi(ability.max_per_turn - int(inst.ability_uses.get(index, 0)), 0)
+	var left := -1
+	if ability.max_per_turn > 0:
+		left = maxi(ability.max_per_turn - int(inst.ability_uses.get(index, 0)), 0)
+	if may_light_fuse:
+		return left
+	var breath := _card_local_breath(inst, index,
+		EffectIntent.read(ability.effects, inst.data.card_name))
+	var fuse := int(breath.get("fuse", 0))
+	if fuse <= 0:
+		return left
+	var spent := _breaths_this_turn(game, inst, breath) + _pending_pumps(game, inst)
+	var safe := maxi(fuse - 1 - spent, 0)
+	return safe if left < 0 else mini(left, safe)
+
+
+## THE FIREBREATHERS THE READER CANNOT SEE (2026-09-09,
+## [member AiProfile.pumps_to_attack]). The breath ability [param index]
+## of [param inst] grants, as a row of
+## [constant EffectIntent.CARD_LOCAL_PUMPS] — `{}` when there is none.
+##
+## Dragon Whelp and Nalathni Dragon pump themselves through a `class X
+## extends EffectBase` written inside their own card file, because the
+## breath carries a fuse the shared [PumpEffect] cannot express. So
+## [member EffectIntent.pump_self] is false for both, and until this
+## existed NO pump path in this file had ever seen either of them: not
+## the attack declaration, not the block declaration, not the
+## firebreathing on an unblocked attacker, not the pump that wins a
+## blocked trade. A Whelp with six Mountains open swung for 2 into an
+## empty board with its opponent at 5 life and left every Mountain
+## untapped.
+##
+## GATED, and deliberately. A reading in the reader's own tables is
+## ungated — every profile gets it — and an ungated Whelp row would have
+## changed [method _combat_self_pumps] with the knob OFF, which is to say
+## it would have moved the null the Deck Lab measures this knob against.
+## Worse than untidy: the FUSE reading above is itself gated, so an
+## ungated row would have sold the fourth breath with no cap read at all
+## and doomed the dragon for a trade. One gate, one story.
+##
+## The row is the card's ONE breath: it is offered only for an ability
+## whose whole effect list is the single card-local effect the reader
+## called `unknown`, so a second ability of the same card (Rainbow
+## Knights' `{1}`: first strike, a real [PumpEffect]) can never pick it
+## up by name.
+func _card_local_breath(inst: CardInstance, index: int,
+		intent: EffectIntent) -> Dictionary:
+	if not profile.pumps_to_attack:
+		return {}
+	if intent.pump_self or not intent.unknown:
+		return {}
+	if inst.cur_activated_abilities[index].effects.size() != 1:
+		return {}
+	return EffectIntent.card_local_pump(inst.data.card_name)
+
+
+## How many breaths of THIS turn [param inst] has already taken, read out
+## of the card's own memory through [param breath]'s key names. The turn
+## number travels with the count because nothing clears card memory
+## between turns, and "four or more times THIS TURN" resets.
+func _breaths_this_turn(game: MtgGame, inst: CardInstance,
+		breath: Dictionary) -> int:
+	var turn_key := String(breath.get("fuse_turn", ""))
+	if turn_key != "" and int(inst.memory.get(turn_key, -1)) != game.turn_number:
+		return 0
+	return int(inst.memory.get(String(breath.get("fuse_count", "")), 0))
 
 
 ## [param sources] with everything [param plan] would tap taken out of
@@ -4212,14 +4378,8 @@ func _declare_blocks(game: MtgGame) -> String:
 	# Biggest threats first.
 	attackers.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 		return a.cur_power > b.cur_power)
-	# THE PANIC LINE, and it is asked of what actually LANDS: the ladder
-	# is run once with no desperation, and the residue decides both
-	# whether the chump rung opens at all and whether the swing is
-	# lethal, which is the one case that buys a body at any price.
-	var through := _damage_after_value_blocks(game, attackers, free)
-	var desperate: bool = me.life - through <= profile.chump_threshold
-	var lethal_swing := through >= me.life
-	block_map = _plan_blocks(game, attackers, free, desperate, used, lethal_swing)
+	block_map = _block_choice_once_pumped(game, attackers, free, used) \
+		if profile.pumps_to_attack else _block_choice(game, attackers, free, used)
 	# Mistake injection: drop one assignment.
 	if block_map.size() > 0 and game.rng.randf() < profile.mistake_chance:
 		block_map.erase(block_map.keys()[game.rng.randi_range(0, block_map.size() - 1)])
@@ -4248,6 +4408,83 @@ func _declare_blocks(game: MtgGame) -> String:
 		game.concede(pid)
 		return ""
 	return "declared %d block(s)" % block_map.size()
+
+
+## THE BLOCK IS DECLARED AT PRINTED SIZE TOO (2026-09-09,
+## [member AiProfile.pumps_to_attack], the second half of the knob).
+##
+## [method _attack_choice_once_pumped] fixed the ATTACK: a Carrion Ants
+## with four Swamps untapped is judged a 4/5 and sent. The BLOCK read
+## [member CardInstance.cur_power] and [member CardInstance.cur_toughness]
+## and nothing else, all the way down the ladder — so the same swarm,
+## with SIX Swamps open and a Craw Wurm coming at it, declared no block
+## at all and took six to the face, when a 6/7 eats a 6/4 and walks away.
+## Measured before this landed, at 20 life: `declared 0 block(s)`, life
+## 20 → 14, six Swamps still untapped. Lower the life to 8 and it was
+## worse in the other direction: the panic rung opened, the swarm went
+## under the Wurm as a 0/1 chump, and [method _combat_self_pumps] then
+## paid four Swamps to rescue a body that had been thrown away — the
+## block it would have MADE as a 4/5 was never planned.
+##
+## The probe is the attack's, mirrored, and deliberately the same code:
+## [method _reachable_pumps] over our untapped bodies, the bonuses hung
+## on under the journal, the deterministic half of the declaration asked,
+## the pumps unmade. Nothing is tapped here — [method _combat_self_pumps]
+## buys the breaths one at a time once the blocks are declared, against
+## the real board, and it buys them for exactly the reasons the ladder
+## planned the block for (the pump wins the trade, or the pump saves the
+## body).
+##
+## THE PANIC LINE MOVES WITH IT, and that is the point rather than a side
+## effect. [method _damage_after_value_blocks] runs the same ladder, so
+## inside the probe it reads the damage that lands once the blocks we can
+## AFFORD have been made: the Wurm above stops being six points through
+## and the chump rung never opens. Reading the panic at printed size
+## while planning the blocks at reach size is the one combination that
+## would be wrong — it would chump AND value-block with the same bodies,
+## spending two for one. So both readings are taken inside the probe, on
+## one board, which is what [method _block_choice] exists to guarantee.
+##
+## One over-count is left standing and named: the residue is counted with
+## [member CardInstance.cur_toughness] as the probe made it, so a
+## TRAMPLER's overflow is measured against a toughness the pilot only
+## buys when the pump saves the body. It reads the swing as less
+## dangerous than it may be, by at most the pump, and only against
+## trample. The safe direction is the other one; this is the same
+## simplification the routine already documents for a blocker with no
+## toughness left, running the other way.
+func _block_choice_once_pumped(game: MtgGame, attackers: Array[CardInstance],
+		free: Array[CardInstance], used: Array[int]) -> Dictionary:
+	var bonuses := _reachable_pumps(game, free)
+	if bonuses.is_empty():
+		return _block_choice(game, attackers, free, used)
+	var owned := game.undo_log == null
+	var mark := game.make_mark()
+	for id in bonuses:
+		var bonus: Vector2i = bonuses[id]
+		game.continuous.add_until_eot_pump(int(id), bonus.x, bonus.y)
+	game.recalculate()
+	var chosen := _block_choice(game, attackers, free, used)
+	game.unmake_to(mark)
+	if owned:
+		game.end_search()
+	return chosen
+
+
+## The deterministic half of the block declaration, read off the board as
+## it stands: the panic line, then the ladder.
+##
+## THE PANIC LINE, and it is asked of what actually LANDS: the ladder is
+## run once with no desperation, and the residue decides both whether the
+## chump rung opens at all and whether the swing is lethal, which is the
+## one case that buys a body at any price.
+func _block_choice(game: MtgGame, attackers: Array[CardInstance],
+		free: Array[CardInstance], used: Array[int]) -> Dictionary:
+	var me := game.players[pid]
+	var through := _damage_after_value_blocks(game, attackers, free)
+	var desperate: bool = me.life - through <= profile.chump_threshold
+	var lethal_swing := through >= me.life
+	return _plan_blocks(game, attackers, free, desperate, used, lethal_swing)
 
 
 ## The block plan the tier ladder makes for these attackers: blocker id ->

@@ -28,6 +28,12 @@ extends GameTest
 ## instant, the counterspell); and an ability with a per-turn cap counted
 ## at its cap and not at the mana ([method AiPlayer._activations_left] —
 ## the fuse). Each behaviour is pinned with the knob and without.
+##
+## THE KNOB GREW ON 2026-09-09, later the same day, and the second half
+## has a file of its own: `test_ai_pumps_to_block_2026_09_09.gd` pins the
+## BLOCK declaration read at reach size, the panic line taken inside the
+## same probe, and the two card-local firebreathers the reader could not
+## see. This file stays the ATTACK's and keeps every null it pinned.
 
 
 func _ai(profile: AiProfile, seat := 0) -> AiPlayer:
@@ -276,7 +282,7 @@ func test_a_capped_breath_is_counted_at_its_cap() -> void:
 	var bonuses := ai._reachable_pumps(g, mine)
 	assert_eq(bonuses.get(drake.id, Vector2i.ZERO), Vector2i(1, 0),
 		"once a turn, whatever the mana says")
-	assert_eq(ai._activations_left(drake, 0), 1)
+	assert_eq(ai._activations_left(g, drake, 0), 1)
 
 
 func test_off_the_cap_is_not_read_at_all() -> void:
@@ -284,7 +290,7 @@ func test_off_the_cap_is_not_read_at_all() -> void:
 	var drake := put_battlefield(0, "Fire Drake")
 	_lands(0, "Mountain", 5)
 	advance_to_step(Mtg.Step.MAIN1)
-	assert_eq(ai._activations_left(drake, 0), -1, "the null counts mana only")
+	assert_eq(ai._activations_left(g, drake, 0), -1, "the null counts mana only")
 	var ability: ActivatedAbility = drake.cur_activated_abilities[0]
 	assert_eq(ai._pumps_in_reach(g, drake, ability, ai._mana_sources(g)), 5,
 		"five Mountains, five breaths it may not have")
@@ -316,32 +322,40 @@ func test_the_lethal_probe_reads_the_cap_too() -> void:
 		null_ai._mana_sources(g), 1), "the null still counts the mana")
 
 
-func test_the_dragon_whelps_fuse_is_never_lit_because_it_is_never_read() -> void:
-	# Dragon Whelp's breath is a card-local effect (WhelpBreathEffect: the
-	# fourth activation dooms the body at the next end step), not a
-	# PumpEffect, and EffectIntent reads pump_self off PumpEffect alone.
-	# So no pump path in this file has ever seen it, this knob's included,
-	# and the fuse cannot be lit by the pilot. Pinned as it stands, on and
-	# off; the reader row that would change it is an open item, and it
-	# would have to carry the cap the fuse implies.
-	for profile in [_on(), _off()]:
-		before_each()
-		var ai := _ai(profile)
-		var foe := _ai(AiProfile.wizard(), 1)
-		var whelp := put_battlefield(0, "Dragon Whelp")
-		_lands(0, "Mountain", 6)
-		advance_to_step(Mtg.Step.MAIN1)
-		var ability: ActivatedAbility = whelp.cur_activated_abilities[0]
-		var intent := EffectIntent.read(ability.effects, whelp.data.card_name)
-		assert_false(intent.pump_self, "the reader does not see a pump")
-		assert_true(ai._self_pump_of(g, whelp).is_empty(), "so neither does the knob")
-		_reach_attackers(ai)
-		assert_string_contains(ai.act(g), "declared 1 attacker",
-			"it swings on its printed 2 power, as it always did")
-		_play_out_combat(ai, foe)
-		assert_eq(g.players[1].life, 18, "two damage, no breath")
-		assert_eq(int(whelp.memory.get("breaths", 0)), 0, "the fuse was never lit")
-		assert_eq(whelp.zone, Mtg.Zone.BATTLEFIELD)
+func test_off_the_dragon_whelps_fuse_is_never_lit_because_it_is_never_read() -> void:
+	# WHAT THIS TEST USED TO PIN, and what changed on 2026-09-09.
+	#
+	# It ran on BOTH arms and pinned the Whelp as unreadable on both:
+	# its breath is a card-local effect (WhelpBreathEffect — the fourth
+	# activation dooms the body at the next end step), not a PumpEffect,
+	# and EffectIntent reads pump_self off PumpEffect alone, so no pump
+	# path in the pilot had ever seen it and the fuse could not be lit.
+	# The open item it named ("the reader row that would change it") was
+	# then built: EffectIntent.CARD_LOCAL_PUMPS, gated on this same knob,
+	# carrying the cap the fuse implies.
+	#
+	# So the ON arm moved out, into
+	# tests/ai/test_ai_pumps_to_block_2026_09_09.gd, where the Whelp now
+	# breathes three times and stops. What is left here is the OFF arm,
+	# unchanged in every assertion — because the null must still be the
+	# pilot exactly as it was, and the reading is gated for that reason
+	# and no other.
+	var ai := _ai(_off())
+	var foe := _ai(AiProfile.wizard(), 1)
+	var whelp := put_battlefield(0, "Dragon Whelp")
+	_lands(0, "Mountain", 6)
+	advance_to_step(Mtg.Step.MAIN1)
+	var ability: ActivatedAbility = whelp.cur_activated_abilities[0]
+	var intent := EffectIntent.read(ability.effects, whelp.data.card_name)
+	assert_false(intent.pump_self, "the reader does not see a pump")
+	assert_true(ai._self_pump_of(g, whelp).is_empty(), "so neither does the null")
+	_reach_attackers(ai)
+	assert_string_contains(ai.act(g), "declared 1 attacker",
+		"it swings on its printed 2 power, as it always did")
+	_play_out_combat(ai, foe)
+	assert_eq(g.players[1].life, 18, "two damage, no breath")
+	assert_eq(int(whelp.memory.get("breaths", 0)), 0, "the fuse was never lit")
+	assert_eq(whelp.zone, Mtg.Zone.BATTLEFIELD)
 
 
 # --------------------------------------------------------- the traps --

@@ -390,15 +390,48 @@ var trusts_abyss := false
 ## not a 6/2) — the cap reading is this knob's everywhere it is asked,
 ## the blocked pump included.
 ##
+## AND THE BLOCK, SINCE 2026-09-09 — the knob's meaning GREW, and the
+## name is the half it was born for. The first pass read the attack
+## only, so the same Carrion Ants with six Swamps open declared no block
+## at all against a Craw Wurm and took six to the face: [method
+## AiPlayer._plan_blocks] and [method AiPlayer._best_block_for] read
+## [member CardInstance.cur_power] and [member CardInstance.cur_toughness]
+## straight down the ladder, and a 0/1 kills nothing and survives
+## nothing. [method AiPlayer._block_choice_once_pumped] is the attack
+## probe mirrored — the same [method AiPlayer._reachable_pumps], the same
+## journal, the same unmaking — and the PANIC LINE is read inside it, so
+## the residue that opens the chump rung is the damage that lands once
+## the blocks we can afford have been made. That is one capability, not
+## two: mana spent before a combat declaration to make a declaration
+## that does not otherwise exist. [member animates_to_attack] is named
+## for its attack half and rules on the block in the same breath.
+##
+## THE THREE THE READER COULD NOT SEE, also 2026-09-09 and also here.
+## Dragon Whelp and Nalathni Dragon breathe through a card-local
+## `EffectBase` rather than a [PumpEffect] — they must, because the
+## breath carries a fuse — so [member EffectIntent.pump_self] is false
+## for both and no pump path had ever touched them. They are read
+## through [constant EffectIntent.CARD_LOCAL_PUMPS], and the reading is
+## gated HERE rather than in the reader's own tables, which are ungated:
+## an ungated row would have moved this knob's null, and it would have
+## sold Dragon Whelp's fourth breath with no cap read at all. The fuse
+## itself ([method AiPlayer._activations_left]) hands every reader three
+## breaths and no more; the fourth is for the attack that ends the game
+## and nothing else. Rainbow Knights, the third of them, is refused by
+## rule: its {W}{W} rolls +0, +1 or +2 at resolution, and what it
+## guarantees for two white mana is nothing.
+##
 ## A CAPABILITY, like [member animates_to_attack] — not a second
 ## difficulty concept, and the same layer of play: mana spent before the
-## declaration to make an attack that does not otherwise exist. Sorcerer
-## and Wizard, for that reason; the Magician already breathes fire on an
-## attacker that got through, because that half hangs off
-## [member holds_instants]. Nothing here names a card: the shape is
-## [member EffectIntent.pump_self] read off the ability's own effects,
-## the price is the planner's, and an ability whose cost is a body or a
-## counter stays invisible ([method AiPlayer._ability_available]).
+## declaration to make an attack (or a block) that does not otherwise
+## exist. Sorcerer and Wizard, for that reason; the Magician already
+## breathes fire on an attacker that got through, because that half
+## hangs off [member holds_instants]. Nothing here names a card in the
+## AI: the shape is [member EffectIntent.pump_self] read off the
+## ability's own effects, the two card-local breaths are a table in the
+## reader beside the window shapes and the levellers, the price is the
+## planner's, and an ability whose cost is a body or a counter stays
+## invisible ([method AiPlayer._ability_available]).
 var pumps_to_attack := false
 
 
