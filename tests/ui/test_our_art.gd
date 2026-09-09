@@ -41,7 +41,7 @@ extends GutTest
 ##
 ## AND THE INVENTORY IS NOT THE FOLDER. One shipped asset lives outside
 ## `game/art/` — `game/deck_builder/stone_grind.wav`, the Deck Builder's
-## filter cue, synthesised by `tools/make_our_sfx.py` and sitting beside
+## filter cue, synthesised, not recorded, and sitting beside
 ## the screen that plays it — and its row is in `game/art/README.md` all
 ## the same, because a promise kept in two documents is a promise that
 ## drifts. A row whose name begins `game/` is
@@ -372,7 +372,7 @@ func test_the_licence_ships_wherever_the_face_ships() -> void:
 # `game/deck_builder/stone_grind.wav` — the only sound in the game that
 # did not come out of the 1997 install, which is why it is in the pack at
 # all (`DeckAudio`, `Provenance.md` § Our own assets). Since 2026-09-09 it
-# is OURS the way the pictures are: `tools/make_our_sfx.py` synthesises it
+# is OURS the way the pictures are: it is synthesised
 # out of noise and arithmetic and reads no file, exactly as
 # `tools/draw_our_art.gd` draws the glyphs. A supplied download stood here
 # before that and could not have its licence closed. Either way the

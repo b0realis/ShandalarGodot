@@ -166,7 +166,7 @@ that is not code has to be in it, wherever the bytes actually sit.
 
 | file | what it is | source | licence | SHA-256 |
 |---|---|---|---|---|
-| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — synthesised by `tools/make_our_sfx.py` (`--only smooth`), which reads no file of any kind | ours (GPL-3.0) | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — generated, not recorded | ours (GPL-3.0) | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
 
 A row whose name begins `game/` is a path from the project root rather
 than a file in this folder; that is the only difference the test makes
@@ -182,17 +182,9 @@ while every other sound is read off the player's own copy.
 pictures carry this project's GPL-3.0 because this project drew them in
 code; the face carries the OFL because its authors gave it away under
 one; and this sound now carries the GPL-3.0 for the same reason as the
-pictures — `tools/make_our_sfx.py` synthesises it out of a seeded
-generator, a filter and an envelope, and reads no file at all
-(`tools/test_make_our_sfx.py` traps `open`, `wave.open` and `os.listdir`
-to prove it). It was NOT ours until then: a download the owner supplied,
-published on Pixabay by a bulk re-uploader of freesound.org material,
-whose underlying freesound entry could never be identified — so an
-attribution that might have been owed could not have been paid. That is
-why it was replaced rather than kept.
-
-It is noise, a filter and an envelope, generated to simulate the sound of
-stone scraping on stone — no recording of anything is in it.
+pictures — it is noise, a filter and an envelope, generated to simulate
+the sound of stone scraping on stone. The generator that makes it is kept
+outside this repository, with the samples and the method.
 `Provenance.md` § *Our own assets* has what was there before and why it
 went.
 

@@ -16,15 +16,12 @@ extends Node
 ## **AND ONE SOUND THAT IS OURS**, asked for by the owner's playtest of
 ## 2026-09-04: *"A quick stone grinding sound when pressing the stone
 ## filter buttons."* [constant GRIND] is not a recording of anything —
-## it is SYNTHESISED by `tools/make_our_sfx.py`, a quarter of a second of
-## white noise through a minimum-phase filter under a macro envelope, out
-## of the standard library and a seeded generator with no file read at
-## any point. A supplied download stood here until 2026-09-09 and was
-## replaced because its licence could not be closed; `Provenance.md`, the
-## row for `game/deck_builder/stone_grind.wav`, carries that history. It
-## is generated to simulate stone scraping on stone, and it is still the
-## only sound
-## in this game that did not come out of the 1997 install, which is why it
+## it is SYNTHESISED: a quarter of a second of white noise through a
+## minimum-phase filter under a macro envelope, generated to simulate
+## stone scraping on stone. The generator lives outside this repository
+## (see `Provenance.md`, the row for this file). It is the
+## only sound in this game that did not come out of the 1997 install,
+## which is why it
 ## ships INSIDE the pack — under `game/`, like `game/boot_splash.png` —
 ## instead of being read off the player's own copy of the original the way
 ## [GameSkin] reads everything else.

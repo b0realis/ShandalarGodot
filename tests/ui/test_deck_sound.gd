@@ -10,7 +10,7 @@ extends GutTest
 ##    button press, but this stone grinding should be heard nicely still."*
 ##
 ## The grind itself is OURS and is not a recording: since 2026-09-09 it is
-## synthesised by `tools/make_our_sfx.py` (`Provenance.md`, the row for
+## synthesised rather than recorded (`Provenance.md`, the row for
 ## `game/deck_builder/stone_grind.wav`). What this file pins is the SHAPE
 ## of the shipped bytes, which the generator has to keep hitting.
 ##   *"The menu should contain also deck builder SFX and music checkboxes,
@@ -274,7 +274,7 @@ func _wav_header(path: String) -> Dictionary:
 func test_the_shipped_sample_is_a_short_punchy_grind() -> void:
 	# *"Shorten the sample to make the sound snap with the button press,
 	# but this stone grinding should be heard nicely still."* A quarter of
-	# a second is what `tools/make_our_sfx.py` renders and what the screen
+	# a second is what the generator renders and what the screen
 	# is timed against; a button cue a second long is a drone.
 	var head := _wav_header(DeckAudio.GRIND)
 	assert_eq(head.get("riff", ""), "RIFF")
@@ -293,7 +293,7 @@ func test_the_sample_starts_and_ends_at_silence_so_it_cannot_click() -> void:
 	# the defect the duel's old ten-second loop had. THE TWO ENDS ARE NOT
 	# THE SAME KIND OF QUIET, and the difference is worth stating rather
 	# than asserting past. The TAIL is exactly zero because
-	# `make_our_sfx.py` multiplies a fade over the last 30 ms after the
+	# the generator multiplies a fade over the last 30 ms after the
 	# filter, so the last frame is 0 and nothing rings on. The HEAD is not
 	# forced to zero at all: the noise enters a MINIMUM-PHASE filter whose
 	# impulse response starts at its first tap, so the first frames are

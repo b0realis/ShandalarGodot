@@ -366,8 +366,7 @@ The seven in `game/art/` are drawn from scratch by
 `tools/draw_our_art.gd` — polygons and arcs in code, no source file of
 any kind — so the same command reproduces them byte for byte on a
 machine that has never seen the 1997 game. The sound is made the same
-way by `tools/make_our_sfx.py`: noise, a filter and an envelope, out of
-the standard library and a seeded generator, reading nothing.
+way: noise, a filter and an envelope, generated rather than recorded.
 `game/art/README.md` records each one's SHA-256;
 `tests/ui/test_our_art.gd` holds the list to the folder, so a file that
 arrived from anywhere else fails the suite.
@@ -397,20 +396,13 @@ imported nothing reads instead of Godot's default sans.
 
 | file | what it is | source | licence | SHA-256 |
 |---|---|---|---|---|
-| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — synthesised by `tools/make_our_sfx.py`, which reads no file | ours (GPL-3.0) | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
+| `game/deck_builder/stone_grind.wav` | the Deck Builder's filter-button cue: 0.250 s, 22 050 Hz, mono, 16-bit PCM, 11 068 B | ours — generated, not recorded | ours (GPL-3.0) | `4e61a797760ae9ccfd550073c0ca6233b094c5f2128ad9bd21d256ee9644da6e` |
 
 It is the only sound in the game that did not come out of the 1997
 install, which is why it ships inside the pack rather than being read
-off the player's own copy (`game/deck_builder/deck_audio.gd`). Until
-2026-09-09 it was a download the owner supplied, published on Pixabay by
-a bulk re-uploader of freesound.org material: the Pixabay grant was
-sufficient on its face, but the freesound entry it began as could never
-be identified, so if that entry was CC BY an attribution was owed to
-somebody nobody could name. Rather than ship on an obligation it could
-not discharge, this project made its own: noise, a filter and an
-envelope, from a seeded generator that reads nothing, generated to
-simulate the sound of stone scraping on stone. `Provenance.md`
-§ *Our own assets* sets all of that out in full.
+off the player's own copy (`game/deck_builder/deck_audio.gd`). It is
+noise, a filter and an envelope, generated to simulate the sound of stone
+scraping on stone.
 
 `game/art/README.md` is the one inventory behind the tables above: it
 carries the source and the SHA-256 of every row above except

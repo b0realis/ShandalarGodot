@@ -1761,26 +1761,6 @@ shandalar/
 │   │                          same bytes on a machine that has never seen
 │   │                          the 1997 game. Regenerated art is invisible
 │   │                          to a game run until --import has run.
-│   ├── make_our_sfx.py      OUR OWN FILTER-BUTTON CUE (2026-09-09) —
-│   │                          synthesises the Deck Builder's stone cue
-│   │                          from a hand-written xorshift64* PRNG and
-│   │                          arithmetic, reading NO file: a train of tiny
-│   │                          noise impacts through either seven
-│   │                          hand-placed resonators or a minimum-phase
-│   │                          FIR fitted to a 23-band measurement of the
-│   │                          cue it would replace, under a contact-force
-│   │                          profile with two accents and a fade. Five
-│   │                          candidates on one axis (grain density, 42 to
-│   │                          380/s to none). --measure prints fourteen
-│   │                          features against the stored target, because
-│   │                          nobody who wrote it could hear it.
-│   ├── test_make_our_sfx.py  unittest: it opens NOTHING (open/wave.open/
-│   │                          os.listdir trapped — the provenance test),
-│   │                          the same bytes twice, 22050/mono/16-bit/
-│   │                          5512 frames/11068 B, the band-energy to
-│   │                          density conversion, minimum phase
-│   │                          front-loading the impulse response, and
-│   │                          grain density ordering the roughness
 │   ├── skin_catalogue.py    THE SKIN'S CATALOGUE (2026-09-08) — writes
 │   │                          docs/skin-catalogue.txt (shipped as
 │   │                          skin/SKIN.txt): every MANIFEST / VIDEOS /
@@ -4608,13 +4588,9 @@ shandalar/
 │   │   │                      three, fired from `_add_one`, `_remove_one`
 │   │   │                      and `_run_command`. CUE_FILTER is OURS —
 │   │   │                      stone_grind.wav, SYNTHESISED by
-│   │   │                      tools/make_our_sfx.py (--only smooth) out of
-│   │   │                      noise and arithmetic reading no file, and
-│   │   │                      GPL-3.0 like the pictures since 2026-09-09,
-│   │   │                      when the supplied download that stood here
-│   │   │                      was replaced because its licence could not
-│   │   │                      be closed (Provenance.md carries the
-│   │   │                      history) — played by
+│   │   │                      a generator kept OUTSIDE this repository
+│   │   │                      (noise, a filter and an envelope), and
+│   │   │                      GPL-3.0 like the pictures — played by
 │   │   │                      FilterBar on the
 │   │   │                      medallion PRESS (not on `changed`, which the
 │   │   │                      sort menu also emits). A four-voice pool

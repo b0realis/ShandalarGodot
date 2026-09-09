@@ -5693,15 +5693,12 @@ how it was unreadable in the first place.
 
 **6. THE STONE GRIND — [QoL], and the only sound this project ships.**
 Every other cue in the game comes out of the player's own copy of the 1997
-install. This one was the owner's supplied sample, trimmed, until
-2026-09-09, and its licence was the one asset question this project could
-not close: a Pixabay download whose freesound.org original could never be
-identified, so an attribution that might be owed could not be paid, and an
-obligation that cannot be discharged is not one to ship on. It is now
-SYNTHESISED — `tools/make_our_sfx.py`, noise through a minimum-phase filter
-under a macro envelope, out of the standard library and a seeded generator
-that reads no file at all — and carries this project's own GPL-3.0 like the
-pictures do. It still lives inside the pack rather than in the skin.
+install. This one is SYNTHESISED — noise through a minimum-phase filter
+under a macro envelope — and carries this project's own GPL-3.0 like the
+pictures do. It still lives inside the pack rather than in the skin, and
+the generator that renders it is kept outside the repository with the
+samples and the method, as a tool for the next sound rather than part of
+this game.
 `Provenance.md` under "Our own assets" keeps the whole history — what was
 here, where it came from, why it could not stay — and the
 reproduce-and-import pair. What ships is noise, a filter and an envelope,

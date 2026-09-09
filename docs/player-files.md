@@ -53,7 +53,7 @@ so give it the same treatment when it writes.
 | Card data | `res://cards/data/*.json` (one per set), `dck_ids.txt` (the 1997 `.dck` id table), `sets.json` (set names, dates, sizes, the blurb a title-screen badge shows) |
 | The card scripts | `res://cards/sets/<set>/*.gd` — one file per card, 897 of them |
 | The game itself | `res://game/`, `res://engine/` |
-| The one sound we ship | `res://game/deck_builder/stone_grind.wav` — the Deck Builder's filter-button grind, a quarter of a second of it. **Ours**, under this project's own GPL-3.0: it is not a recording of anything but noise put through a filter by `tools/make_our_sfx.py`. Every OTHER sound comes out of your own copy of the 1997 game (see *The skin*) |
+| The one sound we ship | `res://game/deck_builder/stone_grind.wav` — the Deck Builder's filter-button grind, a quarter of a second of it. **Ours**, under this project's own GPL-3.0: it is generated, not recorded. Every OTHER sound comes out of your own copy of the 1997 game (see *The skin*) |
 | The nine pictures we ship | `res://game/art/` — the six set symbols (`set_icon_arn/atq/leg/drk/4ed/past.png`) and the damage dagger (`damage_marker.png`), drawn from scratch by `tools/draw_our_art.gd`; plus `res://game/icon.png` (the window icon) and `res://game/boot_splash.png` (the loading picture). **Every one of them is ours**, under this project's own GPL-3.0 — no 1997 file and no reimplementation's redrawing of one is here. `game/art/README.md` lists each with its SHA-256 |
 
 **No art of the 1997 game is in the pack, and none of anybody else's
