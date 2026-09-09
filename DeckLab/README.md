@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -327,7 +327,13 @@ the pilot BUYS match the ones the declaration was priced with — the
 trampler's overflow and the one pool split among several bodies. So its
 control must hold no activated self-pump on EITHER side of the table —
 Big Green vs White Knights still replays its null game for game, 1,000 of
-1,000, in every arm of six runs. Every other switch keeps its meaning: `--games`
+1,000, in every arm of six runs. `prices_liabilities` (2026-09-09) fires
+on a permanent of the pilot's OWN that is worth less than nothing to it,
+so its control must hold no Lich, no Mana Vault, no permanent that stops
+untapping (a Paralyze, a Meekstone, an Arena of the Ancients) and no
+creature whose printed upkeep line names a mana price it might not
+reach — Big Green vs White Knights again, byte-identical to its own null
+in every arm of eight runs. Every other switch keeps its meaning: `--games`
 is per arm and per pair, the seeds are the ones a plain `--deck-a`/
 `--deck-b` run deals (the null arm is `--profile-a wizard:KNOB=null
 --profile-b wizard:KNOB=null`, game for game), and `--gauntlet` sweeps

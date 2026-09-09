@@ -78,6 +78,7 @@ override any knob on any preset for a measurement
 | `mulligans` | on | on | on | on | judges the opening hand under the Paris rule by its lands (`AiMulligan`: none, all, too few or too many for the hand's size, or lands that cast none of its spells; nothing below four cards goes back); on everywhere — keeping a no-land seven is a malfunction, not a weakness |
 | `feeds_worst` | on | on | on | on | asked which of its own to give up when the giving is no cost it chose — The Abyss's meal, Lord of the Pit's tribute, Mana Vortex's land, a Sylvan Library's discard — it gives the least valuable, not the best; on everywhere, the same reason |
 | `spares_own` | on | on | on | on | never fills a harmful spell's slots with its own permanents unless the evaluator prices giving them up below zero — no Detonate on its own Mana Vault, no Winter Blast padded with its own creatures (the owner's playtest, 2026-09-08); on everywhere, the same reason |
+| `prices_liabilities` | on | on | on | on | knows that a permanent of its OWN can be worth less than nothing: the reckoning (a permanent whose printed line says losing it loses the GAME is never given up — a Lich), the dead weight (tapped, not untapping, every ability needing the {T} it cannot pay — a Mana Vault with no {4}, a creature under a Paralyze) and the toll it still takes each turn, priced for the turns our mana needs to reach the price the card itself prints. It is what opens `spares_own`'s one door: with it the AI Detonates the Vault it cannot untap and keeps the one it can; on everywhere, the same reason |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race — a Tome's tick, an Ancestral, a tutor's card, and since the third pass the extra draw step a Time Walk buys |
@@ -87,8 +88,9 @@ override any knob on any preset for a measurement
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
 | `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, and a trampler's overflow is measured against the toughness that will actually be there |
 
-`minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and `spares_own`
-are the five knobs that are on at every rung, and the reason is the
+`minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`
+and `prices_liabilities`
+are the six knobs that are on at every rung, and the reason is the
 line between weak and broken: an Apprentice that taps City of Brass for
 its last life to cast a Grizzly Bears is not a worse player, it is a
 malfunction — and so is one that puts Eternal Warrior on a Wall of
@@ -103,7 +105,13 @@ card and the picker's fallback for an unclassified effect shopped its
 own side; the row closes the Detonate, and `spares_own` is the rule the
 fallback was the one exception to, keeping a Winter Blast from being
 filled out with the caster's own creatures — 112 of the 293 it named in
-sixty Ape Lord games, then none). They are knobs only so the Deck Lab
+sixty Ape Lord games, then none), or answers "which of your own
+permanents do you give up" with the Lich (2026-09-09: a four-mana
+enchantment prices at 3.2, below a Grizzly Bears, and *"when this
+enchantment is put into a graveyard from the battlefield, you lose the
+game"* ends the duel on the spot — three of two hundred Azaar Lichlord
+games, and the knob's other half is what those two hundred games moved).
+They are knobs only so the Deck Lab
 can run the null; with
 `mulligans` off the pilot falls back to `DecisionAgent`'s plain rule,
 which throws back only the two hands the 1997 game named — no land, all
@@ -321,6 +329,68 @@ side.
   of them to save itself while the bats stayed a 0/1 and died for
   nothing; both trades are made now and the fourth Swamp is spent.
 
+THE LIABILITY (2026-09-09, `prices_liabilities`) is a WASH where the
+Detonate is and a small gain where the Lich is, and the two halves want
+reading apart. Seed 11, the sweep's own three pairs, control Big Green vs
+White Knights.
+
+- THE NULL IS EXACTLY THE NULL, and it was proved by replay rather than
+  by argument: the `pays_sacrifices` sweep of the manual (Dracur, Spells
+  of the Ancients vs Big Green, 1 000 games an arm) was run on the tree
+  before this landed and on the tree after it with `prices_liabilities=off`
+  forced on both seats, and all **6 000 games are identical game for
+  game** — the same log fingerprint, the same winner, the same turn
+  count, 24.9% / 27.3% / 24.9% either way, with the published control
+  record 525-475 replayed to the game. Every sweep below also carries its
+  own control verdict, and Big Green vs White Knights is byte-identical
+  to its own null in every arm of all eight runs (525-475 at 1 000,
+  1075-925 at 2 000). That is the point of putting the reading in
+  `AiPlayer._own_value` and leaving `Evaluator.permanent_value` alone: the
+  board score, the combat maths, the blocks, the sweeps and the counter
+  threshold read the floored number they always did.
+- THE DETONATE HALF IS A WASH. War Mage (four Mana Vault, three Detonate)
+  against Crag Hydra: 45.3% → 45.5% at 1 000 games an arm (+0.2 ±4.4) and
+  45.8% → 45.6% at 2 000 (−0.2 ±3.1). Against Big Green, 11.7% → 11.5%
+  (−0.2 ±2.8). Ape Lord vs Elvish Magi — two Vaults and one Detonate in
+  sixty cards — is EXACTLY null, 32.0% both ways at 1 000 games. The
+  census says why, and it is the honest answer rather than "the reading
+  does nothing": over 150 logged War Mage games the pilot Detonated its
+  own dead Vault **13 times where it had done so 0 times**, its Vaults
+  burnt it 159 times instead of 187 — twenty-eight points of its own life
+  it no longer pays — and it spent 84 Detonates on the enemy where it had
+  spent 92. Thirteen own-side Detonates bought back twenty-eight life and
+  cost eight enemy artifacts, and at 1 000 games those two cancel.
+- THE LICH HALF IS A GAIN, or nearly one. Charles' Lich Deck (Baxter,
+  1995) against Mountain Artillery: 33.2% → 34.6% at 1 000 (+1.4 ±4.1)
+  and 33.9% → 35.2% at 2 000 (+1.4 ±2.9). Azaar - Lichlord (Spells of the
+  Ancients — two Lich, four Demonic Hordes, four Hypnotic Specter)
+  against the same burn: 55.7% → 58.8% at 1 000 (+3.1 ±4.3), 55.3% →
+  58.1% at 2 000 (+2.7 ±3.1) and 54.9% → **58.0% at 4 000 games an arm
+  (+3.2 ±2.2), which is clear of zero** — the same sign at all three
+  sizes and DECIDED at the last. Against Black-Red Raiders the same Lich
+  deck is a wash (23.2% → 23.5%, +0.4 ±2.6 at 2 000): the Raiders' clock
+  is creatures rather than burn, the Lich's damage trigger fires half as
+  often, and the ask this reading answers is rarely put.
+- WHAT THE LICH CENSUS SHOWS is not mainly the sacrifice that ends the
+  game — that is rare, three of two hundred Azaar games with the knob off
+  and one with it on. It is what the seat does with the four or five
+  earlier asks. Two hundred logged Azaar games, the same seeds: with the
+  knob OFF the seat loses 87 games at zero life, 3 to the Lich's own
+  reckoning and 1 with the Lich unfed; with it ON, 54 at zero life, 1 to
+  the reckoning and 31 unfed. The Lich prices at 3.2 — below a Grizzly
+  Bears, below a Strip Mine, and below its own controller's last two
+  Swamps once `land_value`'s scarcity term has lifted them — so the old
+  seat handed it over while it still had a board, lost the bargain that
+  says it cannot die of life loss, and then died of life loss. The new
+  seat keeps the enchantment and feeds the board, and loses only when the
+  board is gone. Ninety-one losses become eighty-six.
+- SO IT IS TWO READINGS WITH TWO VERDICTS, and they want saying
+  separately. The Detonate half is a WASH that fixes a visible
+  malfunction — the same shape `feeds_worst` and `times_sweeps` shipped
+  in. The Lich half is a GAIN, decided at four thousand games. The knob
+  is on at every rung for the Lich's sake and not the Vault's: giving up
+  the permanent you cannot lose is not a weaker way to play.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -409,6 +479,43 @@ has the rule.
   declaration — an unblocked attacker breathing for face damage risks
   nothing but the mana — and that is a different reader from this table;
   it stays unbuilt because the mana it would spend is the held instant's.
+- ~~`Evaluator.permanent_value` never returns below zero, so a permanent
+  worth LESS than nothing to its controller cannot be expressed and
+  `spares_own`'s one door never opens.~~ **Closed 2026-09-09 —
+  `prices_liabilities`** (§4). The reading lives in
+  `AiPlayer._own_value` and NOT in `Evaluator.permanent_value`, which has
+  seventy-six callers and every one of them is a board reading; the
+  question "what is giving this permanent up worth to us" has four
+  callers and they are the four that wanted it. WHAT IS LEFT OPEN, and
+  named at the sites:
+  * A TOLL WITH NO PRINTED PRICE TO STOP IT is not read at all — a
+    Serendib Efreet's point a turn, a Juzám Djinn's, an Erg Raiders' two,
+    a Yawgmoth Demon's. `permanent_value` is a SNAPSHOT and a stream with
+    no end cannot be subtracted from it without pricing every drawback
+    creature in the pool out of its own deck; pricing one properly means
+    an evaluator that knows how long the game has left, which is a
+    different piece of work.
+  * A ROLL is not read (Mana Crypt's coin flip), by the same ruling that
+    keeps Rainbow Knights out of `CARD_LOCAL_PUMPS`: what a card
+    guarantees is the only number a decision can be made on. Here the
+    sign is flipped, so the ruling is conservative rather than safe —
+    a Mana Crypt keeps its printed worth.
+  * A SYMMETRIC toll ("deals 1 damage to that player" — Copper Tablet,
+    Manabarbs, Storm World, Power Surge) is not read: our half of it is
+    not the whole of it, and a reading that saw only our half would call
+    a Copper Tablet a liability while it beats the opponent down beside
+    us. The two-sided race those cards are is a `counts_the_race`
+    question (wave 4).
+  * THE UNTAP PRICE PRINTED ON THE AURA rather than on the host is not
+    read, so a creature under a Paralyze reads as dead weight even on a
+    turn we could pay the {4} to free it. It understates what we could
+    get back, which leaves the worth at zero rather than below it, so it
+    cannot give the creature away.
+  * `EffectIntent.damage_to_target_controller` exists now and Detonate
+    has its row, but only the OWN-side half is priced (the sting we pay
+    to relieve ourselves). An enemy Detonate's X is still an unpriced
+    bonus — pricing it would move the shipped pilot on both arms, so it
+    stays the wave-5 row it was named as.
 - The Magician has no crack-back search and no capabilities — by ruling.
   Anything that turns out to be a malfunction rather than a weakness
   (the way `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst` and

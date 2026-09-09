@@ -1162,9 +1162,33 @@ func _victim_value(game: MtgGame, inst: CardInstance) -> float:
 ## buys. [param as_source] prices a permanent whose OWN ability is being
 ## paid for — a Strip Mine's strip is the thing being bought, not a
 ## reason to keep the Mine.
+##
+## THE LIABILITY (2026-09-09, [member AiProfile.prices_liabilities]) is
+## read here and only here, and the reason is a count: [method
+## Evaluator.permanent_value] has 76 callers and every one of them is a
+## BOARD reading — what an attacker is worth, what a block trades, what a
+## sweep takes, which creature a tutor wants, whether a spell clears the
+## counter threshold. A permanent allowed to price below zero there moves
+## all of them at once and the knob's null stops being the null. The
+## question this method asks is a different one — *what is giving this
+## permanent up worth to us* — and every caller asks exactly that: the
+## slots of a harmful spell and its single target ([method
+## _extra_targets], [method _pick_for_spec], both through [method
+## _worth_giving_up]), what that cast is worth ([method _cast_value]),
+## what an activation's sacrifice costs ([method _sacrifice_price]), and
+## the body a cost eats or a tribute takes ([method answer_card], [method
+## _tribute_value]). The floor of zero stays on the board score.
 func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
+	# THE RECKONING outranks every other reading, including the land maths
+	# below: a permanent whose departure loses the game has no price.
+	var priced := profile.prices_liabilities and inst.zone == Mtg.Zone.BATTLEFIELD
+	if priced and EffectIntent.loses_the_game_on_leaving(inst.data):
+		return LETHAL_WORTH
+	var toll := _liability_price(game, inst) if priced else 0.0
 	if not inst.is_land():
-		return Evaluator.permanent_value(inst)
+		if priced and _dead_weight(game, inst):
+			return 0.0 - toll   # nothing it does is ours until it untaps
+		return Evaluator.permanent_value(inst) - toll
 	var me := game.players[pid]
 	var in_hand := 0
 	var biggest := 0
@@ -1182,7 +1206,157 @@ func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
 		value -= 1.5   # the ability's bonus, which is what we are spending
 	if on_table - 1 + in_hand < biggest:
 		value += 2.0
-	return value
+	return value - toll
+
+
+## THE DEAD WEIGHT (2026-09-09, [member AiProfile.prices_liabilities]):
+## is nothing this permanent does available to us at all?
+##
+## [method Evaluator.permanent_value] prices an artifact or an enchantment
+## by what it cost — "it earned its slot" — which is the right guess for a
+## permanent that is working. A Mana Vault that is tapped, that does not
+## untap in our untap step, and whose one ability is "{T}: Add {C}{C}{C}"
+## is not working: it is a card face-down on the table, and it is worth 1.0
+## all the same. The three tests are all live fields, and a permanent that
+## has anything left to give fails one of them:
+##
+##  * it is TAPPED and [member CardInstance.cur_skips_untap] — the untap
+##    step will not give it back (Mana Vault's own static, a Paralyze, a
+##    Meekstone, an Arena of the Ancients);
+##  * every activated and mana ability it has needs the {T} it cannot pay
+##    — a Basalt Monolith's "{3}: untap this artifact" and a Colossus of
+##    Sardia's {9} both fail this and keep their worth, which is right:
+##    they can free themselves;
+##  * it has no STATIC ability except the untap lock itself, read off the
+##    printed line ([constant UNTAP_LOCK_WORDS]) — a static keeps working
+##    while its source is tapped, so a Lord under a Paralyze is still
+##    pumping the board and is no dead weight, while the Vault's one
+##    static IS the thing that killed it.
+##
+## What it deliberately does not reach: a permanent held down by something
+## on the OTHER side of the table asks the same question (a Paralyze the
+## opponent controls offers ITS controller nothing), and the untap price
+## printed on the AURA rather than on the host is not read here, so a
+## paralysed creature reads as dead weight even on a turn we could pay the
+## {4} to free it. Both understate what we could get back, which leaves the
+## worth at zero rather than below it — [member AiProfile.spares_own]'s
+## door needs BELOW zero, so neither can give a permanent away.
+const UNTAP_LOCK_WORDS := "doesn't untap"
+
+
+func _dead_weight(game: MtgGame, inst: CardInstance) -> bool:
+	if not inst.tapped or not inst.cur_skips_untap or inst.is_land():
+		return false
+	for ability in inst.cur_mana_abilities:
+		if not ability.taps_source:
+			return false
+	for ability in inst.cur_activated_abilities:
+		if not ability.tap_cost:
+			return false
+	for static_ability in inst.data.static_abilities:
+		if not static_ability.text.to_lower().contains(UNTAP_LOCK_WORDS):
+			return false
+	# ...and only while the price it prints to free itself is out of reach.
+	var escape := _own_toll(game, inst)["escape"] as String
+	return escape == "" or not _can_reach(game, inst, ManaCost.parse(escape))
+
+
+## THE TOLL (2026-09-09, [member AiProfile.prices_liabilities]): what this
+## permanent of ours takes from us at the next beat of our own turn, and
+## the mana price it prints to stop it — `{"damage": n, "escape": "{4}"}`.
+##
+## Every trigger the permanent actually has ([member
+## CardInstance.cur_triggered_abilities], so a silenced or granted one is
+## counted as the board has it) whose event is one of the beats that come
+## round whether we like them or not ([constant EffectIntent.TOLL_BEATS]),
+## and whose OWN condition says it would fire — the card's intervening
+## "if" asked with a probe event, CR 603.4, which is the whole reason an
+## UNTAPPED Mana Vault reads as no liability at all: its draw-step line
+## tests `source.tapped` and answers for itself.
+func _own_toll(game: MtgGame, inst: CardInstance) -> Dictionary:
+	var out := {"damage": 0, "escape": ""}
+	for trig in inst.cur_triggered_abilities:
+		if not EffectIntent.TOLL_BEATS.has(trig.event_type):
+			continue
+		if trig.condition.is_valid():
+			var probe := GameEvent.new(trig.event_type, {"player": pid})
+			if not trig.condition.call(game, inst, probe):
+				continue
+		var line := EffectIntent.toll_of_line(trig.text)
+		out["damage"] = int(out["damage"]) + int(line["damage"])
+		if String(out["escape"]) == "":
+			out["escape"] = line["escape"]
+	return out
+
+
+## What KEEPING [param inst] will cost us, on the evaluator's scale — the
+## other half of [method _own_value] and the half that can push it below
+## zero.
+##
+## THE PRICE IS THE TOLL TIMES THE TURNS IT STILL GETS, and neither number
+## is chosen. The toll is what the card's own line says it takes
+## ([method _own_toll]), charged at the reaper's rate for a point of our
+## own life ([method _life_price] — half a point at twenty, two under
+## seven), which is the same rate the sweep's relief is charged at
+## ([method _sweep_relief]). The turns are the ones our mana still needs to
+## reach the price the card itself prints to stop it, one source a turn,
+## which is the rate a game of this pool actually develops at: a War Mage
+## on one Mountain is three turns from the Vault's {4} and pays three
+## points for them; on four Mountains it is none, and the Vault is not a
+## liability at all because it will untap at the next upkeep.
+##
+## AND A TOLL WITH NO PRINTED PRICE IS NOT READ. A Serendib Efreet's point
+## a turn and a Juzám Djinn's have no end but the game's, and [method
+## Evaluator.permanent_value] is a SNAPSHOT — a 5/5 is worth ten whether
+## the game lasts three turns or thirty — so a stream with no end cannot
+## be subtracted from it without pricing every drawback creature in the
+## pool out of its own deck. What this reading can price honestly is a
+## toll we are paying only because we cannot yet afford to stop it, and
+## that is the case the owner reported.
+##
+## The whole price is capped at what our life is worth, because a toll can
+## never take more than the life it has to take.
+func _liability_price(game: MtgGame, inst: CardInstance) -> float:
+	var toll := _own_toll(game, inst)
+	var damage := int(toll["damage"])
+	var escape := String(toll["escape"])
+	if damage <= 0 or escape == "":
+		return 0.0
+	var cost := ManaCost.parse(escape)
+	if _can_reach(game, inst, cost):
+		return 0.0   # we stop it at the next beat
+	var life := game.players[pid].life
+	var turns := maxi(cost.mana_value() - _mana_reach(game, inst), 1)
+	return minf(float(damage * turns), float(life)) * _life_price(life)
+
+
+## Can a full untap pay [param cost]? [method MtgGame.can_afford_cost]
+## asks what is untapped NOW, which says "no" on a turn we have already
+## tapped out and would say it about a price we will comfortably pay at
+## the next upkeep. The liability reading wants the seat's REACH, so the
+## sources are counted as if they had all untapped — [param exclude] left
+## out, because a permanent cannot pay for its own release.
+func _can_reach(game: MtgGame, exclude: CardInstance, cost: ManaCost) -> bool:
+	return _mana_reach(game, exclude) >= cost.mana_value()
+
+
+## The mana a full untap would give us: every permanent's best mana
+## ability, [param exclude] left out. Generic reach only — the colours of
+## an escape price are not checked, which overstates what we can pay and
+## therefore understates the liability, the safe direction.
+func _mana_reach(game: MtgGame, exclude: CardInstance) -> int:
+	var reach := 0
+	for perm in game.players[pid].battlefield:
+		if perm == exclude:
+			continue
+		var best := 0
+		for ability in perm.cur_mana_abilities:
+			var made := 0
+			for pair in ability.produces:
+				made += int(pair[1])
+			best = maxi(best, made)
+		reach += best
+	return reach
 
 
 ## The body a "sacrifice a <desc>" rider would eat: the least valuable
@@ -1578,12 +1752,44 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 	var value := _card_value(inst.data)
 	if inst.data.cost.has_x:
 		value = maxf(value, float(x_value) * 1.5)
+	var intent: EffectIntent = null
 	for t in targets:
 		if t is TargetRef and not t.is_player:
 			var victim := game.find_instance(t.instance_id)
-			if victim != null and victim.controller_id != pid:
+			if victim == null:
+				continue
+			if victim.controller_id != pid:
 				value += Evaluator.permanent_value(victim) * 0.5
+				continue
+			# ONE OF OUR OWN (2026-09-09, AiProfile.prices_liabilities).
+			# Until this landed, [method _extra_targets]'s note was
+			# literally true: an own-side victim was charged NOTHING, the
+			# picker being the only gate. It is charged now — and CREDITED
+			# when it is a liability, on the same half-share an enemy
+			# victim is credited at, so a Detonate on our own dead Mana
+			# Vault is worth what the Vault was costing us and no more.
+			if not profile.prices_liabilities:
+				continue
+			value += maxf(-_own_value(game, victim), 0.0) * 0.5
+			# ...and the sting the card puts on its own target's
+			# controller is OURS to pay when the target is ours (Detonate's
+			# X, [member EffectIntent.damage_to_target_controller]),
+			# charged at the reaper's rate like every other self-damage.
+			if intent == null:
+				intent = _intent_of(inst)
+			var sting := intent.damage_to_target_controller
+			if sting != 0:
+				if sting < 0:
+					sting = x_value
+				value -= float(sting) * _life_price(game.players[pid].life)
 	return value
+
+
+## The reader's summary of what [param inst] does as a SPELL — the whole
+## card, not one mode. One line, so the readings that want it can share a
+## sentence about where it comes from.
+func _intent_of(inst: CardInstance) -> EffectIntent:
+	return EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
 
 
 ## The worth of a card in hand, with the pool's `*/*` CREATURES priced by
@@ -5216,8 +5422,14 @@ func _extra_targets(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# otherwise the slot stays empty, which the engine's refusal
 			# turns into "not now" ([method MtgGame.cast_refusal] asks for
 			# the count before a land is tapped).
+			# THE LIABILITY (2026-09-09, AiProfile.prices_liabilities) is
+			# what opens that door: _own_value may now answer below zero,
+			# and a slot may take a permanent of ours when it does — but
+			# only a slot that RELIEVES it. Tapping our own dead Mana
+			# Vault leaves it dead and tapped ([method _relieves]).
 			if harmful and found != null and owner_pid == pid \
-					and profile.spares_own and _own_value(game, found) >= 0.0:
+					and profile.spares_own \
+					and not _worth_giving_up(game, source, effect, found, x_value):
 				continue
 		if owner_pid == wanted_pid:
 			preferred.append(ref)
@@ -5345,6 +5557,32 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			break
 	if best != null:
 		return TargetRef.card(best)
+	# THE LIABILITY (2026-09-09, AiProfile.prices_liabilities), and the
+	# LAST thing this picker tries, because their board comes first: with
+	# nothing of theirs worth taking, is one of OURS worth giving up? A
+	# permanent the evaluator prices below zero that this spell would
+	# actually take off the table ([method _worth_giving_up]) — the tapped
+	# Mana Vault we cannot pay {4} for, and the Detonate in hand. Off (and
+	# before 2026-09-09) this block finds nothing, because nothing prices
+	# below zero, so the picker could never name one of ours for a KNOWN
+	# harmful effect and the owner's Detonate had to come through the
+	# unknown-effect fallback above.
+	if harmful and profile.prices_liabilities:
+		var relief := 0.0
+		for inst in game.players[pid].battlefield:
+			var ref := TargetRef.card(inst)
+			if not game.target_legal_at(spec, ref, source, x_value, earlier):
+				continue
+			if _already_chosen(ref, earlier):
+				continue
+			if not _worth_giving_up(game, source, effect, inst, x_value):
+				continue
+			var value := -_own_value(game, inst)
+			if value > relief:
+				best = inst
+				relief = value
+		if best != null:
+			return TargetRef.card(best)
 	# Harmful any-target with no creature worth hitting: go to the face if
 	# the spec allows players.
 	if harmful and spec.kind == TargetSpec.Kind.ANY \
@@ -5352,6 +5590,31 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 				x_value, earlier):
 		return TargetRef.player(opponent)
 	return null
+
+
+## THE ONE DOOR (2026-09-09, [member AiProfile.prices_liabilities] and
+## [member AiProfile.spares_own]): may this harmful effect of ours be
+## pointed at [param mine], a permanent of our OWN?
+##
+## Two things have to be true and neither is a card's name. The evaluator
+## has to price giving it up BELOW ZERO ([method _own_value] — the
+## liability reading, off before 2026-09-09 and off on the null arm, where
+## nothing ever prices below zero and this answers false for everything).
+## And the effect has to actually RELIEVE us of it: a destroy, an exile or
+## a bounce takes the permanent off the table, and damage does when it
+## kills; a TAP does not — our dead Mana Vault is already tapped, and
+## tapping it again is the padding this rule was written against.
+func _worth_giving_up(game: MtgGame, source: CardInstance, effect: EffectBase,
+		mine: CardInstance, x_value := 0) -> bool:
+	if mine == null or effect == null:
+		return false
+	if _own_value(game, mine) >= 0.0:
+		return false
+	var intent := EffectIntent.read([effect], source.data.card_name)
+	if intent.removes or intent.bounces:
+		return true
+	return intent.damage_at(x_value) > 0 and mine.is_creature() \
+		and intent.kills(mine, x_value)
 
 
 ## Is [param ref] already among the refs picked for the earlier slots?

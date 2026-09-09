@@ -9627,6 +9627,116 @@ were `docs/ai-difficulty.md` §5 items; both are closed.
   `_offensive_combat_response` breathes on an unblocked attacker after
   the recovery and spends the leftovers without consulting the plan.
 
+## THE LICH THAT HELD ITS PRICE ON THE STACK (2026-09-09)
+
+Found in the six cards the converted-Forest fix left standing: *"As this
+enchantment enters, you lose life equal to your life total"* was an
+`ENTERS_BATTLEFIELD` trigger, and a trigger is a stack object.
+
+- **What the window allowed, reproduced rather than guessed.** Most
+  answers to it come out where the rules leave them: a Disenchant, a
+  sacrifice or a Boomerang thrown into the window all end with the
+  controller losing anyway. **The arithmetic is what breaks.** At 2 life
+  with three lands, a Lightning Bolt taken IN THE WINDOW puts the
+  controller on −1; the Lich's damage trigger eats the three lands; then
+  "lose life equal to your life total" resolves against −1 — a loss of
+  −1 is a GAIN of 1, which the Lich's own second static turns into A CARD
+  DRAW. The window was worth two life and a card (−1 and a card, against
+  the −3 and none the rules give). It is `CardData.as_it_enters` now.
+- **Four of the five siblings were wrong too, and the pass that called
+  them harmless was reading its own guards.** **Jihad**: the
+  `memory.has("victim")` guard IS the bug — the anthem is a toughness
+  bonus and it is missing for the length of the window, so a Samite
+  Healer under an unchosen Jihad is a 1/1 and a Prodigal Sorcerer's
+  single point kills it. **Cursed Rack, Black Vise, The Rack**: "one
+  legal answer in a duel" holds only while nothing changes control, and
+  Aladdin is INSTANT-SPEED theft — activated in the window it takes the
+  artifact before the stamp, and the stamp is then made from the thief's
+  seat and names the artifact's own caster, so the Cursed Rack's caster
+  spends the rest of the game discarding to four. **Psychic Allergy is
+  genuinely harmless and stays a trigger**: both its readers are
+  `UPKEEP_START` triggers and an upkeep cannot begin while a player holds
+  priority in a main phase — the card now carries that ruling and a test
+  so it does not read as an oversight. Six cards used the hook before
+  today; eleven do now.
+- **`BECAME_TAPPED`'s `controller` key, the preventive half.** Two of the
+  five dispatch sites sent the ACTIVATING player and three the
+  permanent's controller; no card read the key, which is why it needed a
+  test before it rotted back. The meaning is the PERMANENT'S controller —
+  the file already says so where it is written down
+  (`ABILITY_ACTIVATED`: *"`controller` is the permanent's controller, as
+  on every other event here"*, with the acting player carried separately
+  as `player`). Whether the two can differ was checked per site: at the
+  MANA site never (`tap_for_mana` refuses a permanent you do not
+  control), at the ACTIVATED site YES — three flags drop the control
+  requirement and none of those five cards costs `{T}` yet. All five
+  sites now send `inst.controller_id`. `TAPPED_FOR_MANA` keeps the other
+  meaning on purpose (Manabarbs is *"that player"*, Gauntlet of Might is
+  *"that land's controller"*); the distinction is now one comment rather
+  than two unnamed conventions.
+- **Gate.** `tests/cards/test_lich_tap_key_2026_09_09.gd` 13/21 before,
+  21/21 after; the pool waves (74 scripts, 1243 tests), fidelity, audit,
+  aura, review, UI and engine neighbours green.
+
+## THE PERMANENT WORTH LESS THAN NOTHING (2026-09-09) — the liability reading, measured
+
+`Evaluator.permanent_value` never returned below zero, so a permanent
+worth LESS than nothing could not be said — and `spares_own` had exactly
+one door that opens on that sentence. Nothing ever opened it, and the
+test that shipped with the knob said so in as many words.
+`AiProfile.prices_liabilities` (on at every rung, a knob only for the
+null) is the reading that does.
+
+- **Where it is visible, and why not wider.** `permanent_value` has
+  SEVENTY-SIX callers and every one is a BOARD reading — what an attacker
+  is worth, what a block trades, what a sweep takes, which creature a
+  tutor wants, whether a spell clears the counter threshold. A number
+  allowed below zero there moves all of them at once. "What is giving
+  this permanent up worth to us" is a different question with its own
+  method, `AiPlayer._own_value`, and every caller of that method asks
+  exactly it. The floor of zero stays on the board score.
+- **Three readings, none of them a card's name.** THE RECKONING — a
+  printed "you lose the game" on leaving is never given up at any price.
+  THE DEAD WEIGHT — tapped, `cur_skips_untap`, every ability needing the
+  `{T}` it cannot pay: worth zero, not its mana value. THE TOLL — "deals
+  N damage to you" on a beat of the turn, gated by the trigger's own
+  condition asked with a probe event (CR 603.4, which is why an UNTAPPED
+  Mana Vault reads as no liability), priced at the reaper's rate for the
+  turns our mana still needs to reach the escape the card itself prints,
+  capped at what our life is worth. A toll with NO printed escape is not
+  read at all: `permanent_value` is a snapshot, and a stream with no end
+  cannot be subtracted from one without pricing every drawback creature
+  out of its own deck.
+- **Three of the four candidates the plan named did not survive
+  contact.** The tapped Vault is real. **Lich is the OPPOSITE of a
+  liability and was a live bug**: priced at 3.2 — below a Grizzly Bears —
+  a seat asked which of its own permanents to give up answered with the
+  Lich and lost the game on the spot. **Illusions of Grandeur is not in
+  this pool** (Ice Age). **Pestilence is not a liability** — its harm is
+  an activated ability nobody makes it use.
+- **Measured**, seed 11, control Big Green vs White Knights
+  byte-identical to its own null in every arm of eight runs. THE NULL IS
+  EXACTLY THE NULL BY REPLAY: the manual's `pays_sacrifices` sweep run
+  before and after with the knob forced off is 6,000 games identical
+  GAME FOR GAME. **The Detonate half is a wash** (War Mage vs Crag Hydra
+  +0.2 ±4.4 at 1,000, −0.2 ±3.1 at 2,000) and the census says why it
+  cancels rather than that it does nothing: over 150 games the pilot
+  Detonated its own dead Vault 13 times where it had done so 0, its
+  Vaults burnt it 159 times instead of 187, and it spent 84 Detonates on
+  the enemy where it had spent 92. **The Lich half is a GAIN, decided**:
+  Azaar - Lichlord vs Mountain Artillery **54.9% → 58.0% at 4,000 games
+  an arm, +3.2 ±2.2**. The census: 200 logged games, same seeds — knob
+  off, 87 losses at zero life, 3 to the reckoning; knob on, 54 at zero
+  life, 1 to the reckoning, 31 with the Lich simply unfed. The old seat
+  gave the Lich away while it still had a board, lost the bargain that
+  says it cannot die of life loss, and then died of life loss.
+- **Open, named at the sites**: a toll with no printed escape wants an
+  evaluator that knows how long the game has left; a random toll (Mana
+  Crypt) stays unread by the `CARD_LOCAL_PUMPS` ruling; a symmetric toll
+  is a `counts_the_race` question; an untap price printed on an AURA
+  rather than its host is not read; and the enemy-side half of
+  `EffectIntent.damage_to_target_controller` is still an unpriced bonus.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

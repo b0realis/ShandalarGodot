@@ -222,6 +222,61 @@ var feeds_worst := true
 ## is no play. A knob only so the Deck Lab can run the null.
 var spares_own := true
 
+## THE LIABILITY: does this profile know that a permanent of its own can
+## be worth LESS than nothing to it? [method Evaluator.permanent_value]
+## floors at zero — a Mana Vault is an artifact of mana value one, so it
+## is worth 1.0 whatever it is doing — and every question of the form
+## "what does giving this up cost us" reads that floor ([method
+## AiPlayer._own_value]). So [member spares_own]'s one door, a permanent
+## of ours a harmful spell may take BECAUSE giving it up is worth less
+## than nothing, could not open, and the tests that landed with it said
+## so in as many words. The owner's Detonate, 2026-09-08: the AI should
+## not blow up a working Mana Vault, and it should blow up one it cannot
+## untap.
+##
+## On, [method AiPlayer._own_value] answers with what the permanent is
+## still worth TO US minus what keeping it will cost us, and that number
+## may be negative. Three readings, all off the card's printed words and
+## the live board, none off a card's name:
+##
+##  * THE RECKONING. A permanent whose own printed line says that losing
+##    it loses the GAME ([method EffectIntent.loses_the_game_on_leaving])
+##    is never given up at any price. A Lich is the pool's one such card
+##    and the evaluator priced it at 3.2 — below a Grizzly Bears — so a
+##    seat asked to feed its own Lich answered with the Lich and lost the
+##    game on the spot. That is a malfunction, not a weakness, and it is
+##    why this knob is on at every rung.
+##  * THE DEAD WEIGHT. A permanent that is tapped, does not untap in our
+##    untap step, and whose every ability needs it untapped is doing
+##    nothing for us for as long as it stays that way, whatever its
+##    printed cost says ([method AiPlayer._dead_weight]) — a Mana Vault we
+##    cannot pay {4} for, a Grizzly Bears under a Paralyze. Its worth is
+##    zero, not its mana value.
+##  * THE TOLL. What such a permanent still TAKES from us each turn, read
+##    off its own trigger lines ([method EffectIntent.toll_of_line]:
+##    "deals 1 damage to you" at a beat of the turn that comes round
+##    whether we like it or not), charged at the reaper's rate ([method
+##    AiPlayer._life_price]) for the turns our mana still needs to reach
+##    the price the card itself names to stop it — and never more than
+##    our whole life is worth. A toll with no printed price to stop it is
+##    not read: a Serendib Efreet's point a turn is what the card costs,
+##    not a liability, and the evaluator's snapshot cannot price a stream
+##    that has no end.
+##
+## What the knob then lets the pilot do is stated where the decisions
+## are: the harmful spell's slot ([method AiPlayer._extra_targets]) and
+## its single target ([method AiPlayer._pick_for_spec]) may be a
+## liability of ours, but only when the effect actually TAKES IT OFF THE
+## TABLE — tapping our own dead Vault relieves nothing — and the cast is
+## priced with the relief and charged for the damage the card deals its
+## own target's controller ([method AiPlayer._cast_value]).
+##
+## On for EVERY profile, like [member spares_own] and [member
+## feeds_worst], and the Lich is the reason: a seat that sacrifices the
+## enchantment it cannot lose is not playing worse, it is not playing.
+## A knob only so the Deck Lab can run the null.
+var prices_liabilities := true
+
 ## THE COUNT: does this profile size a card-advantage spell to the hands
 ## and libraries in front of it? On, an X discard is cast for the cards
 ## its target actually holds and waits while they hold none; an X draw is

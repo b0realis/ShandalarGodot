@@ -1106,6 +1106,22 @@ shandalar/
 │   │   │                      the five starters, control byte-identical.
 │   │   │                      The block mirror and the card-local
 │   │   │                      breaths (Dragon Whelp) are open.
+│   │   │                      prices_liabilities (2026-09-09): THE
+│   │   │                      PERMANENT WORTH LESS THAN NOTHING —
+│   │   │                      Evaluator.permanent_value floors at zero
+│   │   │                      (76 callers, every one a BOARD reading), so
+│   │   │                      spares_own's one door never opened. Three
+│   │   │                      readings live in AiPlayer._own_value and
+│   │   │                      NOT in the evaluator: the RECKONING (a
+│   │   │                      printed "you lose the game" on leaving —
+│   │   │                      Lich, which the old 3.2 had the AI feeding
+│   │   │                      to its own trigger), the DEAD WEIGHT
+│   │   │                      (tapped, cur_skips_untap, every ability
+│   │   │                      needing the {T} it cannot pay) and the TOLL
+│   │   │                      (a printed "deals N damage to you" on a
+│   │   │                      beat of the turn, priced for the turns our
+│   │   │                      mana needs to reach the escape the card
+│   │   │                      itself prints). On for every profile.
 │   │   │                      spares_own (2026-09-08): THE WRONG SIDE OF
 │   │   │                      THE TABLE — a permanent of ours fills a
 │   │   │                      harmful spell's slot only when the
@@ -3737,6 +3753,16 @@ shandalar/
 │    Eel's unpriced rider and the +0/+1 all refused; the probe leaving
 │    rng, log, journal and every Swamp untouched, nothing left floating;
 │    the ladder from Sorcerer up; the knob read by the Lab;
+│    tests/ai/test_ai_liability_2026_09_09.gd — THE PERMANENT WORTH LESS
+│    THAN NOTHING (AiProfile.prices_liabilities): the reader's toll and
+│    escape, the coin flip and the count it refuses, the symmetric toll it
+│    will not call ours, the reckoning read as a shape; a working Mana
+│    Vault worth what it always was, a tapped one it cannot untap at -1.5,
+│    the price falling as the {4} comes into reach, a Basalt Monolith and
+│    a Serendib Efreet untouched; the AI Detonating its own dead Vault and
+│    the null leaving it where it is, their Sol Ring tried first, a tap
+│    relieving nothing; the Lich never fed to the Lich, and the null
+│    feeding it; the knob on at every rung and read by the Lab;
 │    tests/ai/test_ai_spares_own_2026_09_08.gd — THE WRONG SIDE OF THE
 │    TABLE (AiProfile.spares_own and the Detonate row): the reader's row;
 │    the AI's own untapped and tapped Mana Vault not Detonated, the
@@ -3746,6 +3772,20 @@ shandalar/
 │    ours and waiting in hand with no land tapped, cast at four of
 │    theirs, the null padding 1/3; Simulacrum still aimed at our own
 │    creature
+│    tests/cards/test_lich_tap_key_2026_09_09.gd — THE LICH'S PRICE AND
+│    THE TAP KEY: "as this enchantment enters, you lose life equal to your
+│    life total" is paid AS it enters (CR 614.1c), so the Bolt that used
+│    to land inside the window — turning a loss of -1 into a gain, and the
+│    gain into a card — can only land on a price already paid; the
+│    bargain, the gain-becomes-draw, the damage-feeds and the graveyard
+│    clause all stand. Beside it, one test per BECAME_TAPPED dispatch site
+│    that the event's `controller` is the TAPPED PERMANENT'S controller,
+│    with a synthetic Ledger that writes the key down and a synthetic {T}
+│    ability the whole table may activate (the one shape where the payer
+│    is not the controller); then the siblings — Jihad's anthem up before
+│    a Prodigal Sorcerer can ping the 1/1 it should have made a 3/2, the
+│    Racks' and the Vise's choice out of an Aladdin's reach, and Psychic
+│    Allergy keeping its trigger as a ruling;
 │    tests/cards/test_lifetap_terrain_2026_09_09.gd — THE CONVERTED FOREST
 │    (the owner's *"I dont get life when opponent taps this 'converted
 │    forest'"*): the type is named AS the Aura enters, with nothing of its

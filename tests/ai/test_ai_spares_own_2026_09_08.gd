@@ -107,11 +107,19 @@ func test_does_not_detonate_its_own_mana_vault() -> void:
 
 func test_does_not_detonate_its_own_tapped_mana_vault_either() -> void:
 	# A Vault it cannot untap is a liability in a human's eyes (one damage
-	# a turn), but the evaluator has no reading that prices a permanent
-	# below zero, so the rule holds and the card waits — the honest
-	# answer until the evaluator learns the liability, not a special case
-	# for a tapped Vault.
-	var ai := _ai(_on())
+	# a turn), but on the day this landed the evaluator had no reading that
+	# priced a permanent below zero, so the rule held and the card waited.
+	#
+	# THE EVALUATOR HAS LEARNED IT SINCE (2026-09-09, [member
+	# AiProfile.prices_liabilities], tests/ai/test_ai_liability_2026_09_09.gd):
+	# a tapped Vault whose {4} is out of reach prices BELOW zero and the
+	# door this knob was written to leave ajar finally opens. So this case
+	# is pinned on the NULL of that knob, which is what shipped on
+	# 2026-09-08 — the rule stated here is unchanged, only the reading it
+	# consults has grown.
+	var profile := _on()
+	profile.prices_liabilities = false
+	var ai := _ai(profile)
 	_mountains(0, 2)
 	var vault := put_battlefield(0, "Mana Vault")
 	vault.tapped = true

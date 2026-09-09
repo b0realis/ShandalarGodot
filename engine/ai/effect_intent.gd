@@ -105,6 +105,19 @@ var animates: AnimateSelfEffect = null
 ## read the way it is.
 var discards: int = 0
 
+## Damage the effect deals to the TARGET'S CONTROLLER — the sting on the
+## end of a punisher's removal ("Detonate deals X damage to that
+## artifact's controller"), which is a bonus when the target is theirs and
+## a price when the target is ours. -1 means the amount is the spell's X.
+##
+## Read from [constant CARD_LOCAL] only: every such clause in this pool
+## lives in a card-local effect class. It is consulted by ONE caller
+## today, [method AiPlayer._cast_value] charging a cast that points at one
+## of our own liabilities ([member AiProfile.prices_liabilities]); the
+## bonus half — an enemy Detonate's X, still unpriced — is the open row it
+## was named with (docs/AI-next-wave.md, wave 5).
+var damage_to_target_controller: int = 0
+
 ## Something the reader has no model for (a card-local effect outside the
 ## table). The AI treats an unknown TARGETED effect as removal-shaped —
 ## the common case in this pool — and an unknown untargeted one as a
@@ -169,7 +182,13 @@ const CARD_LOCAL := {
 	# has no field here — for an enemy target it is a bonus, and a slot of
 	# a harmful reading is no longer filled with a permanent of our own
 	# ([member AiProfile.spares_own]).
-	"Detonate": {"removes": true, "ignores_regeneration": true},
+	# `controller_damage: -1` is the X of "Detonate deals X damage to that
+	# artifact's controller" (2026-09-09): for an enemy target it stays an
+	# unpriced bonus, and for one of OUR OWN — which only a liability
+	# reading can name ([member AiProfile.prices_liabilities]) — it is the
+	# price of the relief, charged in [method AiPlayer._cast_value].
+	"Detonate": {"removes": true, "ignores_regeneration": true,
+		"controller_damage": -1},
 	# "You may tap OR untap target ..." — the mode is chosen on resolution,
 	# so the reader records both and the AI's tap policy decides which
 	# reading it is buying ([method AiPlayer._size_tap]). Without this row
@@ -378,6 +397,7 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.taps = true
 		if bool(note.get("untaps", false)):
 			intent.untaps = true
+		intent.damage_to_target_controller += int(note.get("controller_damage", 0))
 	return intent
 
 
@@ -663,4 +683,139 @@ static func aura_fits(data: CardData, host: CardInstance) -> bool:
 		if String(gift["landwalk"]) != "" and host.cur_landwalk.has(String(gift["landwalk"])):
 			continue
 		return true
+	return false
+
+
+# ------------------------------------------------------- the liability --
+#
+# THE TOLL AND THE RECKONING (2026-09-09, [member AiProfile.prices_liabilities]).
+# Everything above reads what a SPELL or an ABILITY does. These two read
+# what a PERMANENT ALREADY ON THE TABLE does to the seat that controls it
+# — the other half of the same question, and the half the evaluator had no
+# words for: [method Evaluator.permanent_value] floors at zero, so a
+# permanent worth LESS than nothing to its controller could not be said.
+#
+# Read off the printed text of the permanent's own triggered abilities, for
+# the same reason [method aura_gifts] reads an aura's oracle line: what a
+# card-local trigger DOES lives in a Callable this code cannot look inside,
+# so the card's own words are the only channel there is. The precedent is
+# [constant AiPlayer.TRIBUTE_WORDS], which reads the pool's prompts the
+# same way. Nothing here is keyed by a card's name.
+
+## The beats of a turn a toll can be charged at — the steps that come
+## round whether we like them or not. A trigger that fires on something
+## the seat CHOOSES (an attack, a land drop, a tap for mana) is not a toll
+## it is paying, it is a price it agreed to.
+const TOLL_BEATS: Array[int] = [
+	Mtg.EventType.UPKEEP_START, Mtg.EventType.DRAW_STEP, Mtg.EventType.END_STEP_START,
+]
+
+## The words that say the damage lands on the permanent's OWN controller.
+## "…deals 1 damage to THAT PLAYER" (Copper Tablet, Manabarbs, Karma, The
+## Rack) is deliberately absent: those tolls are symmetric or aimed, and a
+## reading that saw only our half of them would price a Copper Tablet as a
+## liability while it ticks the opponent down at exactly the same rate.
+const TOLL_WORDS: Array[String] = ["damage to you", "damage to its controller"]
+
+## Words that make the amount unknowable at the moment we would have to
+## act on it. A roll is not read at all — the 2026-09-09 ruling on
+## [constant CARD_LOCAL_PUMPS] (Rainbow Knights) applies with its sign
+## flipped: what a card GUARANTEES is the only number a decision can be
+## made on, and a Mana Crypt guarantees nothing. "damage to you equal to"
+## (Voodoo Doll's pin counters, Primordial Ooze's X) is a count this
+## reader would have to do itself, so it is left unread and the permanent
+## keeps its printed worth.
+const TOLL_UNKNOWABLE: Array[String] = ["flip a coin", "at random", "damage to you equal to"]
+
+static var _toll_cache: Dictionary = {}
+
+
+## What one printed trigger line takes from its own controller, per beat:
+## `{"damage": n, "escape": "<the mana price the line names>"}`.
+##
+## `damage` is the number in "deals N damage to you", 0 for a line that
+## names none, that rolls for it, or that would have to be counted.
+## `escape` is the mana the same line offers to avoid it — "unless you pay
+## {G}{G}{G}{G}", "you may pay {4}" — as printed, "" for none. A price
+## that is not mana (a card discarded, a land sacrificed, an Island) is
+## not an escape this reader can price and is left as "".
+##
+## Cached by the line itself: the pool's trigger texts are a fixed set.
+static func toll_of_line(text: String) -> Dictionary:
+	if _toll_cache.has(text):
+		return _toll_cache[text]
+	var lower := text.to_lower()
+	var out := {"damage": 0, "escape": _mana_price_in(lower)}
+	for word in TOLL_UNKNOWABLE:
+		if lower.contains(word):
+			_toll_cache[text] = out
+			return out
+	# "deals N damage to you", and the N has to be RIGHT THERE: Primordial
+	# Ooze's "it deals X damage to you" is a count this reader will not do,
+	# and a looser search read the 1 out of the "+1/+1 counter" three
+	# clauses earlier.
+	for word in TOLL_WORDS:
+		var regex := RegEx.new()
+		regex.compile("deals (\\d+) " + word)
+		var m := regex.search(lower)
+		if m != null:
+			out["damage"] = maxi(int(m.get_string(1)), 0)
+			break
+	_toll_cache[text] = out
+	return out
+
+
+## The mana price a printed line offers to avoid what it says — the run of
+## `{…}` symbols right after "pay". "" when the line names no such price,
+## or names one that is not mana.
+static func _mana_price_in(lower: String) -> String:
+	var at := lower.find("pay {")
+	if at < 0:
+		return ""
+	var out := ""
+	var i := at + 4
+	while i < lower.length() and lower[i] == "{":
+		var close := lower.find("}", i)
+		if close < 0:
+			break
+		out += lower.substr(i, close - i + 1).to_upper()
+		i = close + 1
+	# An {X} price is the card counting something of its own (Primordial
+	# Ooze's counters); this reader cannot say what it will be, so it says
+	# nothing.
+	return "" if out.contains("{X}") else out
+
+
+## Cached by card NAME (never by CardData: CONTRIBUTING.md's static-var
+## rule) — [method AiPlayer._own_value] asks the reckoning of every
+## candidate of every card ask, and the answer cannot change for a
+## printed card.
+static var _reckoning_cache: Dictionary = {}
+
+
+## THE RECKONING: does [param data] say that losing this permanent loses
+## the GAME? Lich's last line, and the one reading that has to outrank
+## every other — a permanent whose departure ends the game is not cheap
+## to give up, it is the most expensive thing on the table, and the
+## evaluator priced it at a four-drop enchantment's 3.2, below a Grizzly
+## Bears, until this landed. Read as a shape and not as a card: any
+## trigger that fires when the permanent LEAVES (or DIES) and whose
+## printed line says the controller loses the game.
+static func loses_the_game_on_leaving(data: CardData) -> bool:
+	if data == null:
+		return false
+	if _reckoning_cache.has(data.card_name):
+		return _reckoning_cache[data.card_name]
+	var found := _read_reckoning(data)
+	_reckoning_cache[data.card_name] = found
+	return found
+
+
+static func _read_reckoning(data: CardData) -> bool:
+	for trig in data.triggered_abilities:
+		if trig.event_type != Mtg.EventType.LEAVES_BATTLEFIELD \
+				and trig.event_type != Mtg.EventType.DIES:
+			continue
+		if trig.text.to_lower().contains("you lose the game"):
+			return true
 	return false
