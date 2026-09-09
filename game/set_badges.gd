@@ -11,16 +11,21 @@ extends HBoxContainer
 ## Edition) wear nothing at all, because Wizards did not put a symbol on a
 ## core set until Fifth.
 ##
-## THE LETTERS ARE WHAT SHIPS. Original art never enters this repository
-## (`Provenance.md`), so the symbols arrive only when a player has run
-## `tools/import_original.py` against their own copy. The lettered row is
-## therefore the real product and the symbols are the dressing: with no
-## skin at all this reads
+## WHAT SHIPS IS OUR OWN GLYPHS AND OUR OWN LETTERS. Original art never
+## enters this repository (`Provenance.md`), and since 2026-09-09 neither
+## does the project's default look depend on anybody else's restyle of
+## it: the five sets the original drew a card symbol for now wear a
+## symbol THIS PROJECT DREW — `game/art/set_icon_*.png`, written by
+## `tools/draw_our_art.gd` and reached through [method GameSkin.our_art]
+## — and the three the original never drew one for letter themselves.
+## With no skin imported at all the row reads
 ##
-##     2ⁿᵈ  ARN  ATQ  LEG  DRK  4ᵗʰ  Astral  PR
+##     2ⁿᵈ  scimitar  anvil  column  crescent  4ᵗʰ  comet  PR
 ##
 ## — eight badges, no gaps and no placeholders — and each one carries the
-## set's full 1997 name as its tooltip.
+## set's full 1997 name as its tooltip. A player who HAS imported their
+## own 1997 art still sees the 1997 art: ours is the floor and the skin
+## the ceiling, in that order, in [method symbol].
 ##
 ## THE SHORT FORMS ARE NOT A NEW NAMING SCHEME. They come from
 ## [method GameSkin.set_label], which the enlarged card
@@ -291,13 +296,18 @@ static func badge_suffix(code: String) -> String:
 
 # ----------------------------------------------------------- the symbols --
 
-## The original's symbol for a set, or null — for the three sets it drew
-## none for, and for every set when no skin is imported.
+## The symbol for a set, or null for the three the original drew none for
+## (Unlimited, Fourth Edition on a CARD, the promos — see the note under
+## [constant SYMBOL_SLOT]).
 ##
-## TWO SOURCES, IN PROVENANCE ORDER. The 1997 `Cardsets` strip first: it
+## THREE SOURCES, IN PROVENANCE ORDER. The 1997 `Cardsets` strip first: it
 ## is the sheet the original stamps on a CARD, and it is the genuine
 ## article. `set_icon_<code>` second: `Program/DBArt/*.pic`, the six
-## medallions the 1997 Deck Builder dressed its own toggles with.
+## medallions the 1997 Deck Builder dressed its own toggles with. OURS
+## last, and only when neither of those is on the machine — the glyphs
+## drawn by `tools/draw_our_art.gd`, which [method GameSkin.set_icon]
+## falls through to by itself, so nothing here had to change for the row
+## to stop being empty on an unskinned machine.
 ##
 ## THE SECOND SOURCE IS 1997's TOO, SINCE 2026-09-09. `[1997]`: the note
 ## that used to stand here said no 1997 conversion of DBArt existed — that

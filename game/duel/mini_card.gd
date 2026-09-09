@@ -2300,7 +2300,11 @@ static func sick_spiral_texture() -> Texture2D:
 	return masked_sprite("summon_sick")
 
 
-## The original's damage marker (Damage.pic), drawn on a wounded creature.
+## The damage marker drawn on a wounded creature — the original's
+## `Damage.pic` when the player has imported it, and OURS (`game/art/
+## damage_marker.png`, drawn by `tools/draw_our_art.gd`) when nobody has.
+## Until 2026-09-09 an unskinned board had no dagger at all and the
+## number stood alone.
 static func damage_marker_texture() -> Texture2D:
 	return masked_sprite("damage_marker")
 
@@ -2364,6 +2368,15 @@ static func masked_sprite(key: String, vertical := false) -> Texture2D:
 					px.a = (1.0 - m.r) if clear_is_bright else m.r
 				img.set_pixel(x, y, px)
 		result = ImageTexture.create_from_image(img)
+	else:
+		# NO SKIN SUPPLIES THIS SPRITE — so ours does, if we drew one.
+		# `GameSkin.our_art` hands back a picture that already carries its
+		# own alpha, which is why it goes straight through and never past
+		# the image+mask split above: there is no mask half to find. Today
+		# `damage_marker` is the only key with a drawn version
+		# (`game/art/`, `tools/draw_our_art.gd`, 2026-09-09) and every
+		# other key falls through as null exactly as before.
+		result = GameSkin.our_art(key)
 	_masked_cache[cache_key] = result
 	return result
 

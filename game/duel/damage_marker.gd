@@ -134,11 +134,11 @@ func _build_face() -> void:
 	_source_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_source_label)
 
-	# THE 1997 DAGGER (`Damage.pic`), the mark the original already draws on
-	# a wounded creature — the same art, on the object the damage IS. It
-	# only appears when the player has imported the original's set; without
-	# it the numeral stands alone, which is what the fallback skin does
-	# everywhere else.
+	# THE DAGGER, the mark already drawn on a wounded creature — the same
+	# art, on the object the damage IS. `Damage.pic` when the player has
+	# imported the original's set, and since 2026-09-09 OUR OWN drawing
+	# (`game/art/damage_marker.png`) when nobody has, so the marker wears
+	# a blade on every machine instead of leaving the numeral alone.
 	_dagger = TextureRect.new()
 	_dagger.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	_dagger.offset_left = 10

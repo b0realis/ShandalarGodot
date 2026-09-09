@@ -323,7 +323,41 @@ version 2 predates.
 ## Legal
 
 *Magic: The Gathering* is a trademark of Wizards of the Coast LLC. This is an
-unaffiliated, non-commercial fan project. No card images, artwork, fonts,
-sounds or other Wizards-owned or MicroProse-owned assets are distributed with
-this source. Card names and rules text are used under Wizards' Fan Content
-Policy, which requires that this stay non-commercial.
+unaffiliated, non-commercial fan project. Card names and rules text are used
+under Wizards' Fan Content Policy, which requires that this stay
+non-commercial.
+
+### What travels with this source, and what does not
+
+**Not this: no card image, no 1997 file, and no third party's restyle of
+a 1997 file.** No artwork, font, sound, tune or movie owned by Wizards of
+the Coast or by MicroProse is distributed here, and none ever will be —
+nor is anybody else's redrawing of one, which is a separate promise and a
+deliberate one. The game reads all of that off the player's own copy of
+the 1997 game at runtime, where the player put it
+(`tools/import_original.py`, `docs/player-files.md`); with none of it
+present the game is complete and plays in a look of its own.
+
+**This: nine pictures, every one of them ours,** under this project's own
+GPL-3.0 and listed here file by file because "some art ships" is not a
+thing to leave vague.
+
+| file | what it is |
+|---|---|
+| `game/art/set_icon_arn.png` | Arabian Nights, a scimitar |
+| `game/art/set_icon_atq.png` | Antiquities, an anvil |
+| `game/art/set_icon_leg.png` | Legends, a fluted column |
+| `game/art/set_icon_drk.png` | The Dark, a crescent moon |
+| `game/art/set_icon_4ed.png` | Fourth Edition, a Roman `IV` |
+| `game/art/set_icon_past.png` | Astral, a comet trailing sparks |
+| `game/art/damage_marker.png` | the dagger a wounded creature wears |
+| `game/icon.png` | the window and taskbar icon (`branding/logo.png` is its master) |
+| `game/boot_splash.png` | the picture shown while the game loads |
+
+The seven in `game/art/` are drawn from scratch by
+`tools/draw_our_art.gd` — polygons and arcs in code, no source file of
+any kind — so the same command reproduces them byte for byte on a
+machine that has never seen the 1997 game. `game/art/README.md` records
+each one's SHA-256; `tests/ui/test_our_art.gd` holds the list to the
+folder, so a picture that arrived from anywhere else fails the suite.
+Everything else the game needs it draws for itself, in code, at runtime.

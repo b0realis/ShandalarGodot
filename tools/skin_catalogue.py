@@ -54,6 +54,22 @@ ART_PREFIX = "skin/cardart/"
 WIDTH = 78
 
 
+# ------------------------------------------------------- the drawn floor --
+# THE SEVEN KEYS THE GAME ALREADY HAS A PICTURE FOR. Since 2026-09-09 this
+# project ships art of its own — `game/art/`, drawn from scratch by
+# `tools/draw_our_art.gd`, never anybody else's file — and `GameSkin`
+# checks it AFTER every skin directory. So a skin that leaves one of these
+# out is not missing anything: the game already has a picture and simply
+# keeps it. Every other absent file is drawn in code instead, which is a
+# different (and plainer) thing, and `--check` says which is which.
+
+SHIPPED_BY_THE_GAME = {
+    "set_icon_arn.png", "set_icon_atq.png", "set_icon_leg.png",
+    "set_icon_drk.png", "set_icon_4ed.png", "set_icon_past.png",
+    "damage_marker.png",
+}
+
+
 # ------------------------------------------------------------- the notes --
 # One note per key, or per family of keys (a prefix). A key without a note
 # is an error: the catalogue exists so that a skin maker is never left
@@ -173,7 +189,9 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The 'will untap' mark (image+mask)."),
     ("Marks on a card", "damage_marker",
      "The dagger on a wounded creature, image+mask left/right; the damage "
-     "count is printed beside it."),
+     "count is printed beside it. THE GAME SHIPS ONE OF ITS OWN (64x40, "
+     "real alpha, no mask half): leave this out and the drawn dagger "
+     "stands, supply it and yours is used instead."),
     ("Marks on a card", "card_counters",
      "The counter stones: one column of 25 cells, 24 oval stones (a "
      "scythe, five lightning bolts, a gear, five ankhs, yin-yangs in "
@@ -205,7 +223,10 @@ FAMILIES: list[tuple[str, str, str]] = [
      "the filter sheet — and the game cuts each one down to that "
      "medallion's circle before drawing it on a card. Manalink's "
      "restyle is 35x36 with no tile and no ring, a gold glyph on flat "
-     "grey; the game keys that grey away instead. Either shape works."),
+     "grey; the game keys that grey away instead. Either shape works. "
+     "THE GAME SHIPS SIX OF ITS OWN (48x48, gold glyph, transparent "
+     "ground, nothing to cut): leave these out and those stand, supply "
+     "them and yours are used instead."),
 
     ("The Deck Builder", "filter_icons",
      "The filter bar's medallions: 9 columns x 3 rows of 40 px cells, "
@@ -284,8 +305,12 @@ Shandalar dresses itself in a SKIN: the pictures, fonts, sounds, tunes,
 movies and portraits of the 1997 game, or any set drawn to the same
 shapes. Without one the game is complete and playable in its own plain
 drawing; with one, every panel, card and button wears the art. Every
-file is optional: a file that is missing falls back to the drawn
-equivalent, one file at a time.
+file is optional: a file that is missing falls back, one file at a
+time, to what the game already has. For seven of the names below —
+the six set symbols and the damage dagger — that is a PICTURE THE GAME
+SHIPS, drawn by the project itself; for every other name it is a shape
+drawn in code. Either way the skin's own file wins whenever it is
+there.
 
 TWO ZIPS. The skin and the card art travel apart, because they come
 from different places (a 1997 disc; a download) and are different
@@ -380,8 +405,9 @@ size with real alpha — the game reads both.
 
 TO DRAW YOUR OWN. Make a folder named skin/ and put in it, under the
 exact names below, whatever you have drawn — a few files or all of
-them; the game draws its own for each one missing. Zip the folder so
-that skin/ is the top of the zip (from the folder above it:
+them; for each one missing the game falls back to its own (see
+above). Zip the folder so that skin/ is the top of the zip (from the
+folder above it:
     zip -r my_skin.zip skin
 or, just as well, tar czf my_skin.tar.gz skin
 ) and check it:
@@ -714,9 +740,16 @@ def check(target: Path) -> int:
     print("  %d of %d named files present, %d portraits, %d card pictures"
           % (len(expected_files()) - len(missing), len(expected_files()),
              len(portraits), len(art)))
-    if missing:
+    stood_in = [f for f in missing if f in SHIPPED_BY_THE_GAME]
+    drawn = [f for f in missing if f not in SHIPPED_BY_THE_GAME]
+    if stood_in:
+        print("  not here, and the game's OWN picture stands in "
+              "(nothing is lost):")
+        for name in stood_in:
+            print("    " + name)
+    if drawn:
         print("  missing (the game draws its own for each):")
-        for name in missing:
+        for name in drawn:
             print("    " + name)
     unknown = [n for n in names if "/" not in n and n not in set(expected_files())]
     if unknown:

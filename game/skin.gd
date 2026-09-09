@@ -19,6 +19,15 @@ extends RefCounted
 ## back to the clean built-in skin — so the game is complete without any
 ## original files, and dresses up automatically when they exist.
 ##
+## BETWEEN THOSE TWO THERE IS NOW A FLOOR THAT IS OURS ([method our_art],
+## 2026-09-09): `game/art/`, a handful of pictures this project DREW —
+## the six set glyphs and the damage dagger — and ships in its own pack.
+## They are checked after every skin directory and before the code-drawn
+## fallback, so a player who has imported nothing still sees a symbol on
+## the card and a dagger on a wounded creature, and a player who HAS
+## imported keeps the 1997 art exactly as before. Ours is the floor,
+## never the ceiling.
+##
 ## Loading goes through Image.load_from_file/FontFile, bypassing Godot's
 ## import pipeline entirely — that is what lets gitignored and user://
 ## files work identically in editor, headless, and exported builds.
@@ -141,6 +150,40 @@ static func font(key: String) -> FontFile:
 		if f.load_dynamic_font(path) == OK:
 			result = f
 	_font_cache[key] = result
+	return result
+
+
+## WHERE THE PICTURES THIS PROJECT DREW LIVE — `game/art/`, written by
+## `tools/draw_our_art.gd`. Not `assets/`: that folder is gitignored AND
+## excluded from every export preset, because it holds the player's own
+## copy of the 1997 game. `game/` is the folder art ships in, and
+## `game/icon.png` and `game/boot_splash.png` are the precedent.
+const OUR_ART_DIR := "res://game/art"
+
+## OUR OWN ART for a skin key, or null when we drew none for it.
+##
+## READ THROUGH `load`, NOT `Image.load_from_file`, and that is the whole
+## reason this is a separate accessor rather than one more directory on
+## [method search_dirs]. Everything else here is read off the FILESYSTEM,
+## which is what lets a gitignored checkout folder and a `user://` folder
+## behave identically — but these files travel INSIDE the exported pack,
+## where there is no filesystem path to open and only the import pipeline
+## can reach them.
+##
+## Not cleared by [method clear_caches]: a skin arriving cannot change
+## what this project drew.
+static var _our_art_cache: Dictionary = {}
+
+static func our_art(key: String) -> Texture2D:
+	if _our_art_cache.has(key):
+		return _our_art_cache[key]
+	var result: Texture2D = null
+	var path := "%s/%s.png" % [OUR_ART_DIR, key]
+	if ResourceLoader.exists(path):
+		var loaded: Resource = load(path)
+		if loaded is Texture2D:
+			result = loaded
+	_our_art_cache[key] = result
 	return result
 
 
@@ -318,6 +361,12 @@ static func set_icon(set_code: String) -> Texture2D:
 		if img != null:
 			cut_set_icon(img)
 			result = ImageTexture.create_from_image(img)
+	else:
+		# NEITHER SKIN HAS ONE, so ours does: a gold glyph on nothing,
+		# drawn by `tools/draw_our_art.gd` at 48x48 with its ground
+		# already transparent — there is no tile and no bevel to cut off,
+		# which is why [method cut_set_icon] is not called on it.
+		result = our_art("set_icon_%s" % set_code)
 	_set_icon_cache[set_code] = result
 	return result
 

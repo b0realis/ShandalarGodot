@@ -13,8 +13,10 @@ where you look for it (and under `user://` instead when that directory
 cannot be written). Nothing else is written outside your home directory.
 
 `res://` is inside `Shandalar.pck`, the pack beside the executable. It is
-read-only and the game ships everything it needs there — except art, which
-is never shipped (see *The skin*).
+read-only and the game ships everything it needs there. Of ART it ships
+exactly nine pictures, all of them this project's own (below); the 1997
+material is never shipped and is read off your own copy at runtime (see
+*The skin*).
 
 *A note for anyone working in the source checkout:* a dev run of this
 project has the same project name, so its `user://` is the same directory
@@ -52,11 +54,22 @@ so give it the same treatment when it writes.
 | The card scripts | `res://cards/sets/<set>/*.gd` — one file per card, 897 of them |
 | The game itself | `res://game/`, `res://engine/` |
 | The one sound we ship | `res://game/deck_builder/stone_grind.wav` — the Deck Builder's filter-button grind, a quarter of a second of it. Every OTHER sound comes out of your own copy of the 1997 game (see *The skin*) |
+| The nine pictures we ship | `res://game/art/` — the six set symbols (`set_icon_arn/atq/leg/drk/4ed/past.png`) and the damage dagger (`damage_marker.png`), drawn from scratch by `tools/draw_our_art.gd`; plus `res://game/icon.png` (the window icon) and `res://game/boot_splash.png` (the loading picture). **Every one of them is ours**, under this project's own GPL-3.0 — no 1997 file and no reimplementation's redrawing of one is here. `game/art/README.md` lists each with its SHA-256 |
 
-**No art is in the pack.** `GameSkin` and `PortraitLibrary` read pictures
+**No art of the 1997 game is in the pack, and none of anybody else's
+redrawing of it either.** `GameSkin` and `PortraitLibrary` read pictures
 off the filesystem instead (`user://` first), which is what lets you add
 your own after the game is built — and what keeps the 1997 files yours
 rather than something this project redistributes.
+
+The nine pictures above are the exception that proves it, and they are
+the FLOOR rather than the ceiling: they are what a set symbol and a
+wounded creature's dagger look like when you have imported nothing, and
+the moment your skin supplies `set_icon_<code>.png` or `damage_marker.png`
+the loader takes yours instead, one file at a time, exactly as it does
+for every other key in the catalogue (`GameSkin.our_art` is checked LAST,
+after every skin directory). A skin that leaves those keys out is not
+missing anything: it simply keeps the drawn ones.
 
 ## The game's own decks stay the game's own
 

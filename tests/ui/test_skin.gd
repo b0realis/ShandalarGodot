@@ -233,3 +233,99 @@ func test_every_imported_set_icon_loses_its_ground() -> void:
 		assert_gt(opaque, 40, "set_icon_%s still has a symbol" % code)
 	if found == 0:
 		pass_test("no set symbols imported on this machine")
+
+
+# ------------------------------------------------- ours, and where it sits --
+# THE ORDER, 2026-09-09. `game/art/` holds pictures this project DREW —
+# the six set glyphs and the damage dagger — and the loader reaches them
+# through [method GameSkin.our_art]. They sit BETWEEN the two states this
+# file already tests: after every skin directory (an imported 1997 file
+# still wins) and before the code-drawn fallback (a machine with no skin
+# is no longer left with nothing). These tests pin that sandwich.
+
+## Every key `game/art/` answers, and the size each file is authored at.
+const OURS := {
+	"set_icon_atq": Vector2i(48, 48),
+	"set_icon_arn": Vector2i(48, 48),
+	"set_icon_past": Vector2i(48, 48),
+	"set_icon_drk": Vector2i(48, 48),
+	"set_icon_4ed": Vector2i(48, 48),
+	"set_icon_leg": Vector2i(48, 48),
+	"damage_marker": Vector2i(64, 40),
+}
+
+
+func test_our_own_art_answers_every_key_it_claims() -> void:
+	# Runs the same on every machine, skin or no skin: these files are in
+	# the pack, not on the player's disk.
+	for key in OURS:
+		var tex := GameSkin.our_art(String(key))
+		assert_not_null(tex, "game/art/%s.png" % key)
+		if tex != null:
+			assert_eq(Vector2i(tex.get_width(), tex.get_height()),
+				OURS[key], "%s is the size it was drawn at" % key)
+
+
+func test_our_own_art_says_nothing_about_a_key_we_never_drew() -> void:
+	assert_null(GameSkin.our_art("no_such_picture"))
+	assert_null(GameSkin.our_art("card_back"),
+		"the card back is the skin's business, not ours")
+
+
+func test_an_imported_skin_beats_ours() -> void:
+	# A skin directory of one file, pointed at through the `skin_folder`
+	# key exactly as a player would — the FIRST place [method
+	# GameSkin.search_dirs] looks. What comes back must be that file and
+	# not the 48x48 this project ships.
+	var dir := "user://test_skin_%d" % Time.get_ticks_usec()
+	var absolute := ProjectSettings.globalize_path(dir)
+	DirAccess.make_dir_recursive_absolute(absolute)
+	var stand_in := Image.create_empty(9, 9, false, Image.FORMAT_RGBA8)
+	stand_in.fill(Color(0, 0, 0, 0))
+	stand_in.set_pixel(4, 4, Color(1, 0, 1, 1))
+	stand_in.save_png(absolute.path_join("set_icon_atq.png"))
+	var was: Variant = Settings.get_value(GamePaths.KEY_SKIN_FOLDER, "")
+	Settings.set_value(GamePaths.KEY_SKIN_FOLDER, dir, false)
+	GameSkin.clear_caches()
+	var tex := GameSkin.set_icon("atq")
+	assert_not_null(tex, "the imported file")
+	if tex != null:
+		assert_eq(Vector2i(tex.get_width(), tex.get_height()),
+			Vector2i(9, 9), "the skin's own file, not ours")
+	Settings.set_value(GamePaths.KEY_SKIN_FOLDER, was, false)
+	GameSkin.clear_caches()
+	DirAccess.remove_absolute(absolute.path_join("set_icon_atq.png"))
+	DirAccess.remove_absolute(absolute)
+
+
+func test_ours_stands_when_no_skin_has_the_key() -> void:
+	# The other half, and it can only be READ on a machine with nothing
+	# imported — which is the state a player who has run no tools is in,
+	# and the state this suite must pass in either way.
+	if GameSkin._find("set_icon_atq.png") != "":
+		pass_test("a skin on this machine supplies set_icon_atq, "
+			+ "and by the order above it wins")
+		return
+	GameSkin.clear_caches()
+	var tex := GameSkin.set_icon("atq")
+	assert_not_null(tex, "ours stands in")
+	if tex != null:
+		assert_eq(Vector2i(tex.get_width(), tex.get_height()),
+			Vector2i(48, 48), "the file this project drew")
+
+
+func test_the_dagger_reaches_the_card_with_no_skin_at_all() -> void:
+	# [method MiniCard.masked_sprite] is the one accessor every dagger on
+	# the table goes through, and until 2026-09-09 it simply returned null
+	# with no skin, so a wounded creature wore a number and no mark.
+	if GameSkin.texture("damage_marker") != null:
+		pass_test("a skin on this machine supplies the dagger")
+		return
+	MiniCard._masked_cache.clear()
+	assert_not_null(MiniCard.damage_marker_texture(), "ours stands in")
+
+
+func test_a_key_with_no_drawing_anywhere_is_still_quietly_null() -> void:
+	# The contract at the top of this file is unchanged by any of the
+	# above: an asset nobody has is null, never an error.
+	assert_null(GameSkin.set_icon("no_such_set"))

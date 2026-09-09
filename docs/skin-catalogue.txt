@@ -5,8 +5,12 @@ Shandalar dresses itself in a SKIN: the pictures, fonts, sounds, tunes,
 movies and portraits of the 1997 game, or any set drawn to the same
 shapes. Without one the game is complete and playable in its own plain
 drawing; with one, every panel, card and button wears the art. Every
-file is optional: a file that is missing falls back to the drawn
-equivalent, one file at a time.
+file is optional: a file that is missing falls back, one file at a
+time, to what the game already has. For seven of the names below —
+the six set symbols and the damage dagger — that is a PICTURE THE GAME
+SHIPS, drawn by the project itself; for every other name it is a shape
+drawn in code. Either way the skin's own file wins whenever it is
+there.
 
 TWO ZIPS. The skin and the card art travel apart, because they come
 from different places (a 1997 disc; a download) and are different
@@ -101,8 +105,9 @@ size with real alpha — the game reads both.
 
 TO DRAW YOUR OWN. Make a folder named skin/ and put in it, under the
 exact names below, whatever you have drawn — a few files or all of
-them; the game draws its own for each one missing. Zip the folder so
-that skin/ is the top of the zip (from the folder above it:
+them; for each one missing the game falls back to its own (see
+above). Zip the folder so that skin/ is the top of the zip (from the
+folder above it:
     zip -r my_skin.zip skin
 or, just as well, tar czf my_skin.tar.gz skin
 ) and check it:
@@ -332,7 +337,9 @@ MARKS ON A CARD
     ability_icons.png                  22 x 396 px, palette
 
   The dagger on a wounded creature, image+mask left/right; the damage count is
-  printed beside it.
+  printed beside it. THE GAME SHIPS ONE OF ITS OWN (64x40, real alpha, no mask
+  half): leave this out and the drawn dagger stands, supply it and yours is
+  used instead.
     damage_marker.png                  84 x 26 px, RGBA
 
   The counter stones: one column of 25 cells, 24 oval stones (a scythe, five
@@ -353,7 +360,10 @@ SYMBOLS
   gold-ringed medallion — the same art as cells of the filter sheet — and the
   game cuts each one down to that medallion's circle before drawing it on a
   card. Manalink's restyle is 35x36 with no tile and no ring, a gold glyph on
-  flat grey; the game keys that grey away instead. Either shape works.
+  flat grey; the game keys that grey away instead. Either shape works. THE
+  GAME SHIPS SIX OF ITS OWN (48x48, gold glyph, transparent ground, nothing to
+  cut): leave these out and those stand, supply them and yours are used
+  instead.
     set_icon_atq.png                   35 x 36 px, RGBA
     set_icon_arn.png                   35 x 36 px, RGBA
     set_icon_past.png                  35 x 36 px, RGBA
