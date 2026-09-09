@@ -219,9 +219,12 @@ the original_skin.zip download:
     python3 mtg_assets.py --check   /path/to/game  looks, reports, writes nothing
     python3 mtg_assets.py --install /path/to/game  imports, writes a zip
 
-It reads your install and never writes to it. The zip it produces is a
-skin zip — a `skin/` folder inside — so choose it in Options > Skin, drop
-it onto the game's window, or put it where the download goes:
+It reads your install and never writes to it. A 1997 install is enough
+on its own: every picture, sheet, font, sound and portrait the game
+wears is decoded out of the disc's own .PIC, .SPR and .TTF files, so
+nothing else has to be found first. The zip it produces is a skin zip —
+a `skin/` folder inside — so choose it in Options > Skin, drop it onto
+the game's window, or put it where the download goes:
 
     cp shandalar-art.zip <this folder>/skin/original_skin.zip
 

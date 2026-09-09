@@ -35,21 +35,27 @@ gst-launch-1.0 is installed. The decoder is DETECTED, never assumed, and
 its absence is reported and skipped rather than fatal. See the VIDEOS
 block for the whole argument.
 
-Note on raw .PIC/.SPR decoding: most of this importer still consumes the
-PNG conversions the Manalink/s30 communities produced, but BOTH original
-formats are now decoded here with nothing but the standard library, and
-the portraits are the proof that it was worth doing.
+Note on raw .PIC/.SPR decoding: BOTH original formats are decoded here
+with nothing but the standard library, and since 2026-09-09 that is how
+almost the whole skin arrives — a genuine 1997 install alone now reaches
+EVERY key (the owner's goal: *"all art should be available in original
+install"*), where before it reached 68 of 163 and the rest waited on
+somebody else's `*.pic.png`.
 
   * `.SPR` (decode_spr) reads the raw `16faces.spr` and finds FIVE
-    player faces the community conversion drops.
+    player faces the community conversion drops, and `Statbutt.spr`.
   * `.PIC` (decode_pic, ported 2026-09-03) reads the LZW+RLE picture
     format. It is what the FIFTY-FIVE enemy faces of `Faces/*.pic`
-    needed, and it makes any full-screen `.pic` importable — see
-    PIC_SCREENS for the first one.
+    needed, and since 2026-09-09 it serves every texture row of the
+    MANIFEST as well — see THE RAW 1997 ART, DECODED IN PLACE.
 
 Both formats are from `mp_pic_tools` (Provenance.md Tier 2,
 https://github.com/benprew/mp_pic_tools); the code here is a rewrite for
 speed and for the standard library, verified byte for byte against it.
+Two things that reference does which this does NOT: its `parse_pic98`
+reads a SECOND picture format (a `\x00H8\x00` signature, four LZSS
+planes) which no file in a Shandalar install uses, and its `.spr` sheet
+tiler drops frames — see SPR_SHEETS.
 """
 
 import argparse
@@ -108,8 +114,8 @@ def shell_sound(name: str, bare: bool = True) -> list[str]:
 # skin key -> candidate source filenames (checked in order, case-insensitive)
 MANIFEST: dict[str, list[str]] = {
     # menus
-    "title_background":      ["Title.pic.png", "Title.png"],
-    "menu_background":       ["Menubak.pic.png"],
+    "title_background":      ["Title.pic", "Title.pic.png", "Title.png"],
+    "menu_background":       ["Menubak.pic", "Menubak.pic.png"],
     # ------------------------------------------- YOUR TERRITORY BACKGROUND --
     # `@DIALOG_DUELOPTIONS` (UIStrings.txt:598, latin-1 — grep needs -a)
     # ends with `Your &territory background` and NINE choices, which
@@ -180,21 +186,21 @@ MANIFEST: dict[str, list[str]] = {
     # fifteen carry a 1px BLACK edge from the conversion; `Terr_Redpict`
     # is the exception (it is also the only one with a full-colour
     # palette, 92 colours against 7-28 for the rest).
-    "duel_pattern_white":    ["Terr_Whitepatt.pic.png"],
-    "duel_pattern_blue":     ["Terr_Bluepatt.pic.png"],
-    "duel_pattern_black":    ["Terr_Blackpatt.pic.png"],
-    "duel_pattern_red":      ["Terr_Redpatt.pic.png"],
-    "duel_pattern_green":    ["Terr_Greenpatt.pic.png"],
-    "duel_picture_white":    ["Terr_Whitepict.pic.png"],
-    "duel_picture_blue":     ["Terr_Bluepict.pic.png"],
-    "duel_picture_black":    ["Terr_Blackpict.pic.png"],
-    "duel_picture_red":      ["Terr_Redpict.pic.png"],
-    "duel_picture_green":    ["Terr_Greenpict.pic.png"],
-    "duel_mana_white":       ["Terr_Whitemana.pic.png"],
-    "duel_mana_blue":        ["Terr_Bluemana.pic.png"],
-    "duel_mana_black":       ["Terr_Blackmana.pic.png"],
-    "duel_mana_red":         ["Terr_Redmana.pic.png"],
-    "duel_mana_green":       ["Terr_Greenmana.pic.png"],
+    "duel_pattern_white":    ["Terr_Whitepatt.pic", "Terr_Whitepatt.pic.png"],
+    "duel_pattern_blue":     ["Terr_Bluepatt.pic", "Terr_Bluepatt.pic.png"],
+    "duel_pattern_black":    ["Terr_Blackpatt.pic", "Terr_Blackpatt.pic.png"],
+    "duel_pattern_red":      ["Terr_Redpatt.pic", "Terr_Redpatt.pic.png"],
+    "duel_pattern_green":    ["Terr_Greenpatt.pic", "Terr_Greenpatt.pic.png"],
+    "duel_picture_white":    ["Terr_Whitepict.pic", "Terr_Whitepict.pic.png"],
+    "duel_picture_blue":     ["Terr_Bluepict.pic", "Terr_Bluepict.pic.png"],
+    "duel_picture_black":    ["Terr_Blackpict.pic", "Terr_Blackpict.pic.png"],
+    "duel_picture_red":      ["Terr_Redpict.pic", "Terr_Redpict.pic.png"],
+    "duel_picture_green":    ["Terr_Greenpict.pic", "Terr_Greenpict.pic.png"],
+    "duel_mana_white":       ["Terr_Whitemana.pic", "Terr_Whitemana.pic.png"],
+    "duel_mana_blue":        ["Terr_Bluemana.pic", "Terr_Bluemana.pic.png"],
+    "duel_mana_black":       ["Terr_Blackmana.pic", "Terr_Blackmana.pic.png"],
+    "duel_mana_red":         ["Terr_Redmana.pic", "Terr_Redmana.pic.png"],
+    "duel_mana_green":       ["Terr_Greenmana.pic", "Terr_Greenmana.pic.png"],
     # card frames (the in-duel card backgrounds) + the card back
     #
     # THERE IS NO BLANK / PAPER CARD IN THE ORIGINAL'S SET, and the search
@@ -217,19 +223,24 @@ MANIFEST: dict[str, list[str]] = {
     # in the era's idiom: the geometry is these frames' own measured
     # regions and the palette is `Cardbk_White`'s pale stone with the
     # colour taken out of it.
-    "card_back":             ["Cardback.pic.png"],
-    "card_frame_white":      ["Cardbk_White.pic.png"],
-    "card_frame_blue":       ["Cardbk_Blue.pic.png"],
-    "card_frame_black":      ["Cardbk_Black.pic.png"],
-    "card_frame_red":        ["Cardbk_Red.pic.png"],
-    "card_frame_green":      ["Cardbk_Green.pic.png"],
-    "card_frame_gold":       ["Cardbk_Gold.pic.png"],
-    "card_frame_artifact":   ["Cardbk_Artifact.pic.png"],
-    "card_frame_land_white": ["Cardbk_Whiteland.pic.png"],
-    "card_frame_land_blue":  ["Cardbk_Blueland.pic.png"],
-    "card_frame_land_black": ["Cardbk_Blackland.pic.png"],
-    "card_frame_land_red":   ["Cardbk_Redland.pic.png"],
-    "card_frame_land_green": ["Cardbk_Greenland.pic.png"],
+    "card_back":             ["Cardback.pic", "Cardback.pic.png"],
+    "card_frame_white":      ["Cardbk_White.pic", "Cardbk_White.pic.png"],
+    "card_frame_blue":       ["Cardbk_Blue.pic", "Cardbk_Blue.pic.png"],
+    "card_frame_black":      ["Cardbk_Black.pic", "Cardbk_Black.pic.png"],
+    "card_frame_red":        ["Cardbk_Red.pic", "Cardbk_Red.pic.png"],
+    "card_frame_green":      ["Cardbk_Green.pic", "Cardbk_Green.pic.png"],
+    "card_frame_gold":       ["Cardbk_Gold.pic", "Cardbk_Gold.pic.png"],
+    "card_frame_artifact":   ["Cardbk_Artifact.pic",
+                              "Cardbk_Artifact.pic.png"],
+    "card_frame_land_white": ["Cardbk_Whiteland.pic",
+                              "Cardbk_Whiteland.pic.png"],
+    "card_frame_land_blue":  ["Cardbk_Blueland.pic",
+                              "Cardbk_Blueland.pic.png"],
+    "card_frame_land_black": ["Cardbk_Blackland.pic",
+                              "Cardbk_Blackland.pic.png"],
+    "card_frame_land_red":   ["Cardbk_Redland.pic", "Cardbk_Redland.pic.png"],
+    "card_frame_land_green": ["Cardbk_Greenland.pic",
+                              "Cardbk_Greenland.pic.png"],
     # ------------------------------------- THE LIFE REGISTER, BOTH FACES --
     # `Duel.hlp`, topic **Duelist's Face**: *"When the Life Register flips
     # around to show a face, one of two things is the case. Either you have
@@ -274,11 +285,11 @@ MANIFEST: dict[str, list[str]] = {
     # `Life_Liched.pic` (the LICH REGISTER — `Duel.hlp` has a topic for it)
     # is surveyed and NOT imported: Lich is not in our card pool, so the
     # substitute register has nothing to substitute for. §6.5 tracks it.
-    "life_panel_white":      ["Life_Whitepatt.pic.png"],
-    "life_panel_blue":       ["Life_Bluepatt.pic.png"],
-    "life_panel_black":      ["Life_Blackpatt.pic.png"],
-    "life_panel_red":        ["Life_Redpatt.pic.png"],
-    "life_panel_green":      ["Life_Greenpatt.pic.png"],
+    "life_panel_white":      ["Life_Whitepatt.pic", "Life_Whitepatt.pic.png"],
+    "life_panel_blue":       ["Life_Bluepatt.pic", "Life_Bluepatt.pic.png"],
+    "life_panel_black":      ["Life_Blackpatt.pic", "Life_Blackpatt.pic.png"],
+    "life_panel_red":        ["Life_Redpatt.pic", "Life_Redpatt.pic.png"],
+    "life_panel_green":      ["Life_Greenpatt.pic", "Life_Greenpatt.pic.png"],
     # THE DUELIST'S FACE — the register's other side (manual p.119: *"You
     # can right-click on either life register and select Flip to Face if
     # you'd rather see your opponent's face."*).
@@ -311,21 +322,22 @@ MANIFEST: dict[str, list[str]] = {
     #    that set is the pre-duel VERSUS portrait pair, not the register's
     #    flip side. If the versus screen ever wants faces, that is the
     #    archive to go back to, and this is the note that says so.
-    "duelist_face_white":    ["Life_Whitepict.pic.png"],
-    "duelist_face_blue":     ["Life_Bluepict.pic.png"],
-    "duelist_face_black":    ["Life_Blackpict.pic.png"],
-    "duelist_face_red":      ["Life_Redpict.pic.png"],
-    "duelist_face_green":    ["Life_Greenpict.pic.png"],
+    "duelist_face_white":    ["Life_Whitepict.pic", "Life_Whitepict.pic.png"],
+    "duelist_face_blue":     ["Life_Bluepict.pic", "Life_Bluepict.pic.png"],
+    "duelist_face_black":    ["Life_Blackpict.pic", "Life_Blackpict.pic.png"],
+    "duelist_face_red":      ["Life_Redpict.pic", "Life_Redpict.pic.png"],
+    "duelist_face_green":    ["Life_Greenpict.pic", "Life_Greenpict.pic.png"],
     # Window chrome: the original's beveled sandstone dialog panel (a
     # 9-patch behind every dialog, the duel-opening coin toss included),
     # and the pre-duel Start Duel screen's own backdrop.
-    "panel_stone":           ["Winbk_Options.pic.png"],
-    "versus_background":     ["Winbk_Startduel.pic.png"],
+    "panel_stone":           ["Winbk_Options.pic", "Winbk_Options.pic.png"],
+    "versus_background":     ["Winbk_Startduel.pic",
+                              "Winbk_Startduel.pic.png"],
     # The PRE-DUEL SPLASH (500x400): brown marble with two sunken wells at
     # (50, 59) and (281, 59), each 162x192 — measured 2026-09-03, and the
     # numbers `DuelIntro` lays itself out with. s30's own art notes call
     # this file "Player vs opponent splash".
-    "versus_splash":         ["Winbk_Versus.pic.png"],
+    "versus_splash":         ["Winbk_Versus.pic", "Winbk_Versus.pic.png"],
     # ------------------------------------------------------- 1997 DIALOGS --
     # Every one of these is a DIALOG GROUND with the era's bevel baked
     # into its own edge pixels: a 2-4px highlight along top+left and the
@@ -344,16 +356,18 @@ MANIFEST: dict[str, list[str]] = {
     # ground the original puts under a question that must not compete
     # with the card art beside it (our X, library-search and game-over
     # dialogs).
-    "panel_dark_stone":      ["Winbk_Questmana.pic.png"],
+    "panel_dark_stone":      ["Winbk_Questmana.pic",
+                              "Winbk_Questmana.pic.png"],
     # Winbk_Changetext: the blue celtic-knot ground of the "change word /
     # to" dialog (@DIALOG_CHANGETEXT) — the original's ground for a
     # dialog that asks the player to pick from a LIST.
-    "panel_knot":            ["Winbk_Changetext.pic.png"],
+    "panel_knot":            ["Winbk_Changetext.pic",
+                              "Winbk_Changetext.pic.png"],
     # Winbk_Endduel: the end-of-duel window's dark blue-and-gold rings.
     # Its bevel is INSET (dark top/left, light bottom/right) — the only
     # sunken window in the set, which is why the duel's last word looks
     # carved rather than raised.
-    "panel_end_duel":        ["Winbk_Endduel.pic.png"],
+    "panel_end_duel":        ["Winbk_Endduel.pic", "Winbk_Endduel.pic.png"],
     # THE 1997 BUTTON, three states (131x36 each). The only generic
     # button art in DuelArt, and the source of the era's button
     # language: a DOUBLE rule — 2px highlight (207,209,209) on top+left
@@ -361,11 +375,14 @@ MANIFEST: dict[str, list[str]] = {
     # face, then the same pair again at 5-6px in, then the face. Normal
     # is raised twice; Depressed inverts BOTH rules; Disabled inverts
     # only the inner one.
-    "button_normal":         ["Winbk_Startduelbuttonnormal.pic.png"],
-    "button_pressed":        ["Winbk_Startduelbuttondepressed.pic.png"],
-    "button_disabled":       ["Winbk_Startduelbuttondisabled.pic.png"],
+    "button_normal":         ["Winbk_Startduelbuttonnormal.pic",
+                              "Winbk_Startduelbuttonnormal.pic.png"],
+    "button_pressed":        ["Winbk_Startduelbuttondepressed.pic",
+                              "Winbk_Startduelbuttondepressed.pic.png"],
+    "button_disabled":       ["Winbk_Startduelbuttondisabled.pic",
+                              "Winbk_Startduelbuttondisabled.pic.png"],
     # duel chrome: the original's vertical phase bar and graveyard piles
-    "phase_bar":             ["Winbk_Phase.pic.png"],
+    "phase_bar":             ["Winbk_Phase.pic", "Winbk_Phase.pic.png"],
     # ---------------------------------------------------------- THE COMBAT --
     # Winbk_Phasecombat 164x760 — THE COMBAT BAR (manual p.117, Duel.hlp
     # topic "Combat Bar"): the miniature Phase Bar that REPLACES the Phase
@@ -379,18 +396,20 @@ MANIFEST: dict[str, list[str]] = {
     # shield, sword-through-shield, and the Phase Bar's own mirrored
     # crescent. They line up one-for-one with the last seven
     # @CUECARD_PHASEBAR strings and with Duel.hlp's own list.
-    "combat_bar":            ["Winbk_Phasecombat.pic.png"],
+    "combat_bar":            ["Winbk_Phasecombat.pic",
+                              "Winbk_Phasecombat.pic.png"],
     # Winbk_Attack 888x316 — the COMBAT WINDOW's ground, a field of
     # SKULLS. Like Winbk_Telluser it carries NO bevel of its own (every
     # edge row is plain texture), so the window is RULED by
     # OriginalDialog's own frame routine.
-    "attack_panel":          ["Winbk_Attack.pic.png"],
+    "attack_panel":          ["Winbk_Attack.pic", "Winbk_Attack.pic.png"],
     # Winbk_Attackmin 39x70 — the MINIMISED Combat window: a dagger on
     # dark green inside a blue rule. 39 wide against a 41-wide Phase Bar
     # column and 70 tall against its ~100px centre band: this is the
     # "window icon in the center area of the Phase Bar" (manual p.126)
     # that restores the window, drawn at 1:1.
-    "attack_min":            ["Winbk_Attackmin.pic.png"],
+    "attack_min":            ["Winbk_Attackmin.pic",
+                              "Winbk_Attackmin.pic.png"],
     # The window's furniture, all IMAGE+MASK pairs (MiniCard.masked_sprite):
     #   Winbk_Attacksword  56x132 -> a 28x132 steel sword, hilt up: the
     #                               ATTACKERS' lane marker
@@ -398,17 +417,20 @@ MANIFEST: dict[str, list[str]] = {
     #                               BLOCKERS' lane marker
     #   Winbk_Attackbones 777x70  -> a 777x35 strip of bones, split TOP
     #                               image / BOTTOM mask: the window's floor
-    "attack_sword":          ["Winbk_Attacksword.pic.png"],
-    "attack_shield":         ["Winbk_Attackshield.pic.png"],
-    "attack_bones":          ["Winbk_Attackbones.pic.png"],
+    "attack_sword":          ["Winbk_Attacksword.pic",
+                              "Winbk_Attacksword.pic.png"],
+    "attack_shield":         ["Winbk_Attackshield.pic",
+                              "Winbk_Attackshield.pic.png"],
+    "attack_bones":          ["Winbk_Attackbones.pic",
+                              "Winbk_Attackbones.pic.png"],
     # The hand window's title bar, per seat color (s30: drawHandPanel).
-    "hand_panel_white":      ["Hand_White.pic.png"],
-    "hand_panel_blue":       ["Hand_Blue.pic.png"],
-    "hand_panel_black":      ["Hand_Black.pic.png"],
-    "hand_panel_red":        ["Hand_Red.pic.png"],
-    "hand_panel_green":      ["Hand_Green.pic.png"],
+    "hand_panel_white":      ["Hand_White.pic", "Hand_White.pic.png"],
+    "hand_panel_blue":       ["Hand_Blue.pic", "Hand_Blue.pic.png"],
+    "hand_panel_black":      ["Hand_Black.pic", "Hand_Black.pic.png"],
+    "hand_panel_red":        ["Hand_Red.pic", "Hand_Red.pic.png"],
+    "hand_panel_green":      ["Hand_Green.pic", "Hand_Green.pic.png"],
     # The sidebar mana-pool panel (s30: drawManaPool).
-    "mana_pool_panel":       ["Winbk_Manapool.pic.png"],
+    "mana_pool_panel":       ["Winbk_Manapool.pic", "Winbk_Manapool.pic.png"],
     # Statbutt sprite sheet: 16 x 48px cells. Opened cell by cell
     # (2026-08-31): 0-4 the five mana symbols, then THREE STATES EACH of
     # "WIZ STATS" (5-7), "JOURNAL" (8-10) and "DONE" (11-13), a dark bar
@@ -420,12 +442,13 @@ MANIFEST: dict[str, list[str]] = {
     # (button_normal/pressed/disabled) and keep this sheet for the
     # adventure layer. Its dark-on-light lettering IS our evidence for
     # how the original letters a button face.
-    "stat_buttons":          ["Statbutt.spr.png"],
+    "stat_buttons":          ["Statbutt.spr", "Statbutt.spr.png"],
     # The stack window, the message bar, and the enlarged-card window
     # (s30: spellChainBg / messageBg / the examine view).
-    "spell_chain_panel":     ["Winbk_Spellchain.pic.png"],
-    "message_panel":         ["Winbk_Telluser.pic.png"],
-    "big_card_panel":        ["Winbk_Bigcard.pic.png"],
+    "spell_chain_panel":     ["Winbk_Spellchain.pic",
+                              "Winbk_Spellchain.pic.png"],
+    "message_panel":         ["Winbk_Telluser.pic", "Winbk_Telluser.pic.png"],
+    "big_card_panel":        ["Winbk_Bigcard.pic", "Winbk_Bigcard.pic.png"],
     # SURVEYED AND DELIBERATELY NOT IMPORTED (2026-08-31) — opened with
     # PIL, one by one, so the next pass need not guess again:
     #   Winbk_Attackrats.pic      142x210  SIX 71x35 frames (image+mask) of
@@ -453,7 +476,8 @@ MANIFEST: dict[str, list[str]] = {
     #                                      but not popup chrome
     # Diagonal mana stripes marking what colours a card can produce,
     # drawn on its hand row (54x126: 6 cells of 54x21, W U B R G C).
-    "mana_stripes":          ["Manastripes.pic.png", "ManaStripes.pic.png"],
+    "mana_stripes":          ["Manastripes.pic", "Manastripes.pic.png",
+                              "ManaStripes.pic.png"],
     # ------------------------------------------- THE SMALL-CARD STATE ART --
     # `@CUECARD_SMALLCARD` (UIStrings.txt:732, latin-1 — grep needs -a)
     # names TEN states a card on the table can be in, and FIVE of them ship
@@ -480,18 +504,18 @@ MANIFEST: dict[str, list[str]] = {
     # The SUMMONING-SICKNESS spiral drawn over a creature's art. 194x97:
     # left half the image, right half its mask (black = opaque). A grey
     # spiral. Cue card: "Summoning sickness".
-    "summon_sick":           ["Summon.pic.png", "Summon.pic"],
+    "summon_sick":           ["Summon.pic", "Summon.pic.png"],
     # Dying 194x97 -> a 97x97 field of SILVER CRACKS spreading across the
     # card, the original's "this dies at the next check" mark. Cue card:
     # "Dying".
-    "state_dying":           ["Dying.pic.png", "Dying.pic"],
+    "state_dying":           ["Dying.pic", "Dying.pic.png"],
     # CantTarget 130x65 -> a 65x65 ORANGE CIRCLE-SLASH (a no-entry sign).
     # Cue card: "Can't target this".
-    "state_cant_target":     ["Canttarget.pic.png", "CantTarget.pic"],
+    "state_cant_target":     ["CantTarget.pic", "Canttarget.pic.png"],
     # WillUntap 110x59 -> a 55x59 BLUE CURVED ARROW (the untap symbol's
     # ancestor). Note the halves are NOT square. Cue card: "This card
     # will untap".
-    "state_will_untap":      ["Willuntap.pic.png", "WillUntap.pic"],
+    "state_will_untap":      ["WillUntap.pic", "Willuntap.pic.png"],
     # SURVEYED AND DELIBERATELY NOT IMPORTED — Poison.pic. Reason (1) below
     # was CORRECTED on 2026-09-01 and the pairing with "Damage to player"
     # with it: that cue is @CUECARD_SMALLCARD's, and @CUECARD_LIFE
@@ -508,11 +532,11 @@ MANIFEST: dict[str, list[str]] = {
     # The ORIGINAL's own set symbols (DBArt, 35x36) — drawn on a card's
     # type strip. Unlimited (2ed) and the promos have no symbol, exactly
     # as the printed cards don't.
-    "set_icon_atq":          ["Antiquit.pic.png", "Antiquit.pic"],
-    "set_icon_arn":          ["ArabNite.pic.png", "ArabNite.pic"],
-    "set_icon_past":         ["Astral.pic.png", "Astral.pic"],
-    "set_icon_drk":          ["Dark.pic.png", "Dark.pic"],
-    "set_icon_4ed":          ["Fourth.pic.png", "Fourth.pic"],
+    "set_icon_atq":          ["Antiquit.pic", "Antiquit.pic.png"],
+    "set_icon_arn":          ["ArabNite.pic", "ArabNite.pic.png"],
+    "set_icon_past":         ["Astral.pic", "Astral.pic.png"],
+    "set_icon_drk":          ["Dark.pic", "Dark.pic.png"],
+    "set_icon_4ed":          ["Fourth.pic", "Fourth.pic.png"],
     # THE 1997 EXPANSION-SYMBOL STRIP — the sheet the game stamps on CARDS,
     # as opposed to the `set_icon_*` medallions above, which are the Deck
     # Builder's filter buttons. 330x15 = five 66-wide slots, each an image
@@ -524,8 +548,8 @@ MANIFEST: dict[str, list[str]] = {
     # Only five sets have one, and that is the printed truth, not a gap:
     # Unlimited, Fourth Edition and the promos carried no expansion symbol,
     # which is why `SetBadges` letters those three instead.
-    "card_set_symbols":      ["Cardsets.pic.png"],
-    "set_icon_leg":          ["Legends.pic.png", "Legends.pic"],
+    "card_set_symbols":      ["Cardsets.pic", "Cardsets.pic.png"],
+    "set_icon_leg":          ["Legends.pic", "Legends.pic.png"],
     # --------------------------------------------------- THE DECK BUILDER --
     # The 1997 Deck Builder was its own module (Program/Deckdll.dll), so
     # there is no C source for it — but its ART survives, and the manual's
@@ -634,19 +658,19 @@ MANIFEST: dict[str, list[str]] = {
     # Dektit1 291x73 — the DECK HEADER's slab, veined blue-grey marble in a
     # 2px pale bevel. The manual: "At the top left corner of the screen is
     # the Deck Header box… the title of your deck is displayed."
-    "deck_title_slab":       ["Dektit1.pic.png"],
+    "deck_title_slab":       ["Dektit1.pic", "Dektit1.pic.png"],
     # Dekbar1 1006x198 — the INVENTORY's ground ("Along the bottom of the
     # screen, in the Inventory area, is every card you can put into a
     # deck"). A 14-colour 50/50 dither of dark teal (42,83,92) and slate
     # (82,106,111) with NO bevel and NO frame anywhere on its edges: a
     # field to lay a row of cards on, never a widget. s30 uses the same
     # file behind its 1024x180 collection carousel.
-    "deck_bar_ground":       ["Dekbar1.pic.png"],
+    "deck_bar_ground":       ["Dekbar1.pic", "Dekbar1.pic.png"],
     # The seamless 32x32 grounds the screen tiles: Dektile1 olive-brown
     # (s30 tiles it over the whole edit-deck screen) and Dektile4 navy
     # slate (its deck area). Both verified tileable by PIL.
-    "deck_tile_olive":       ["Dektile1.pic.png"],
-    "deck_tile_slate":       ["Dektile4.pic.png"],
+    "deck_tile_olive":       ["Dektile1.pic", "Dektile1.pic.png"],
+    "deck_tile_slate":       ["Dektile4.pic", "Dektile4.pic.png"],
     # SURVEYED, NOT IMPORTED (2026-08-31):
     #   Program/seedeck.pic       640x480  THE genuine 1997 full-screen deck
     #                                      screen, and the one thing here we
@@ -703,11 +727,11 @@ MANIFEST: dict[str, list[str]] = {
     #     .pic.png                         chain panel in its edit_deck folder;
     #                                      already imported as
     #                                      `spell_chain_panel` from DuelArt
-    "grave_panel_white":     ["Grave_White.pic.png"],
-    "grave_panel_blue":      ["Grave_Blue.pic.png"],
-    "grave_panel_black":     ["Grave_Black.pic.png"],
-    "grave_panel_red":       ["Grave_Red.pic.png"],
-    "grave_panel_green":     ["Grave_Green.pic.png"],
+    "grave_panel_white":     ["Grave_White.pic", "Grave_White.pic.png"],
+    "grave_panel_blue":      ["Grave_Blue.pic", "Grave_Blue.pic.png"],
+    "grave_panel_black":     ["Grave_Black.pic", "Grave_Black.pic.png"],
+    "grave_panel_red":       ["Grave_Red.pic", "Grave_Red.pic.png"],
+    "grave_panel_green":     ["Grave_Green.pic", "Grave_Green.pic.png"],
     # NO EXILE PLATE EXISTS — surveyed 2026-08-31, do not hunt again.
     #   The 1997 table drew no "removed from the game" pile: the zone was
     #   reached from the graveyard's own right-click menu, @MENU_GRAVEYARD
@@ -726,7 +750,7 @@ MANIFEST: dict[str, list[str]] = {
     # sheets (mana_symbols layout, decoded from the original sheet itself:
     # 19 cells of 18x18 — X, 0..10, W, R, U, B, G, tap — consumed by
     # game/duel/mana_icons.gd)
-    "mana_symbols":          ["Manasymbols.pic.png"],
+    "mana_symbols":          ["Manasymbols.pic", "Manasymbols.pic.png"],
     # Abilities.pic 22x396 — ONE COLUMN of 18 cells of 22x22, consumed by
     # MiniCard.badge_from_slot. Every cell is a DISC on an opaque black
     # square, so the cell is masked to its inscribed circle before use
@@ -743,7 +767,7 @@ MANIFEST: dict[str, list[str]] = {
     # colour. s30 maps Menace there (duel.go:1047-1121); the 1997 game had
     # no menace keyword and no icon for it, so that mapping would blit a
     # black square. Do not "complete" the map.
-    "ability_icons":         ["Abilities.pic.png"],
+    "ability_icons":         ["Abilities.pic", "Abilities.pic.png"],
     # Prefer the RAW .pic: it is a clean image+mask pair (84x26, white
     # background / black silhouette), while the converted copy is a
     # different size and decodes as neither a sprite nor a pair.
@@ -773,16 +797,58 @@ MANIFEST: dict[str, list[str]] = {
     # candidate. Cue cards: "@CUECARD_COUNTERS_<Card>", UIStrings.txt:
     # 745-840, one line per card ("Carrion counters: %d"). Added
     # 2026-09-08 [1997].
-    "card_counters":         ["card/Cardcounters.pic.png", "Cardcounters.pic.png"],
+    "card_counters":         ["Cardart/Cardcounters.pic", "Cardcounters.pic",
+                              "card/Cardcounters.pic.png",
+                              "Cardcounters.pic.png"],
     # Target.pic 122x61 -> a 61x61 RED CROSSHAIR. ONE FILE, TWO USES: the
     # duel screen's targeting CURSOR (DuelScreen._set_target_cursor takes
     # the image half raw) and the small card's "Is a target" STAMP
     # (MiniCard.STATE_OVERLAYS, via masked_sprite). Imported once under
     # this key — a second key would be a second copy of the same bytes.
-    "target_cursor":         ["Target.pic.png", "Target.pic"],
-    # fonts (from an original/Manalink install)
-    "font_title.ttf":        ["MagicMedieval.ttf", "GoudyMedieval-Pre8th.ttf"],
-    "font_body.ttf":         ["MPlantin-Regular.ttf", "Garamond.ttf"],
+    "target_cursor":         ["Target.pic", "Target.pic.png"],
+    # ------------------------------------------------- THE 1997 TYPEFACES --
+    # BOTH FONTS ARE ON THE 1997 DISC, under the 8.3 names the installer
+    # gave them, and until 2026-09-09 this importer asked only for the
+    # Manalink-era filenames — so a player whose one source was their own
+    # CD got no fonts at all. `Magic.exe`'s string table names EIGHT and
+    # they are all in the install: `Magim___.TTF` `Magis___.TTF`
+    # `Tt0085m_.TTF` `Tt0127m_.TTF` `Tt0298m_.TTF` `Tt0299m_.TTF`
+    # `Tt0300m_.TTF` `Tt0530m_.TTF`.
+    #
+    # WHICH IS WHICH, read out of each file's own `name` table:
+    #   Magim___  MagicMedieval    — and it is BYTE-IDENTICAL to the
+    #                                `MagicMedieval.ttf` a Manalink tree
+    #                                ships (md5 6d2dac9052), so the two
+    #                                candidates below are one font.
+    #   Magis___  MagicSymbols     — the 1997 mana-symbol face. No key
+    #                                reads it: our symbols come from
+    #                                `Manasymbols.pic`. Left for whoever
+    #                                wants type instead of a sheet.
+    #   Tt0085m_  CentSchbook BT   (Century Schoolbook Bold)
+    #   Tt0127m_  Benguiat Bk BT
+    #   Tt0298m_  MPZurich Cn BT   (roman condensed — MicroProse's own
+    #   Tt0299m_  MPZurich Cn BT    licensed Zurich, hence the MP)
+    #   Tt0300m_  MPZurich Cn BT    (bold condensed)
+    #   Tt0530m_  Benguiat BkCn BT
+    #
+    # AND WHICH THE GAME PUT WHERE, from the original's own font table —
+    # `Duelart/Duel.dat`, section `[fonts]`, the file `drawcardlib`'s
+    # `cfg_font()` reads (`shandalar-src/src/drawcardlib/config.c:392`,
+    # which registers TT0530/TT0127/TT0085/TT0298/TT0299/TT0300 by name):
+    #   `fontBigCardText`/`Text2`, `fontSmallCardTitle`, `fontTellUser`,
+    #   `fontShellPackLabel` = **MPZurich Cn BT** — the RULES TEXT, the
+    #       table card's name and the message strip: the body face.
+    #   `fontBigCardTitle`/`Subtitle`, `fontFace`, `fontChat` = Benguiat.
+    #   `fontBigCardPT`, `fontDamage`, `fontLife`, `fontShellText` =
+    #       CentSchbook BT — the NUMBERS.
+    # So `font_body` is `Tt0298m_.ttf` and nothing else, and MPlantin —
+    # the modern printed-card face a Manalink tree carries — is the
+    # FALLBACK it always should have been. TO PUT THE OLD LOOK BACK, swap
+    # the two names on that row; nothing else depends on the order.
+    "font_title.ttf":        ["Magim___.ttf", "MagicMedieval.ttf",
+                              "GoudyMedieval-Pre8th.ttf"],
+    "font_body.ttf":         ["Tt0298m_.ttf", "MPlantin-Regular.ttf",
+                              "Garamond.ttf"],
     # sounds (the original's Duelsounds/ and Sound/ folders). Keys are
     # what GameSkin.sound() serves; game/duel/duel_audio.gd maps game
     # events to them and game/music_player.gd plays the tunes.
@@ -1711,6 +1777,22 @@ def decode_spr(data: bytes) -> list[tuple[int, int, bytes]]:
                 pos += 1
             else:
                 count = control
+            # THE FRAME CAN END MID-ROW, and this guard is the reference's
+            # own — `spr2png.py` breaks on `tell() - start >=
+            # image_data_size` BEFORE it sanity-checks the run, and this
+            # decoder did not (found 2026-09-09 by walking all 344 `.spr`
+            # files in the owner's install through it). TEN of them are
+            # padded with `0xCD` after their last real row — MSVC's
+            # uninitialised-heap fill — so a run header of `0xCD 0xCD`
+            # was read as a 205-pixel run and the whole file was refused:
+            # `Worlds.spr`, `Begin.spr`, `Ttsprite.spr`, `Spr/Locatn02`,
+            # `Spr800/Land`, and five more under `Spr1024/`, all
+            # ADVENTURE art. With the guard all ten decode and the other
+            # 334 come out byte-identical, so nothing that worked moved.
+            # (Measured on `Worlds.spr` frame 16: the guard fires with
+            # `pos == end` after its 48 real rows of 53.)
+            if pos >= end:
+                break
             if transparent + count > width:
                 raise ValueError("frame %d: run %d+%d over width %d"
                                  % (len(frames), transparent, count, width))
@@ -2258,112 +2340,411 @@ PIC_SCREENS: dict[str, list[str]] = {
 def import_pic_screens(index: dict[str, Path], dest: Path) -> None:
     """Decode each raw `.pic` screen into `<dest>/<key>.png`.
 
-    Opaque RGB: these are backdrops, and none of them carries a mask.
-    Like every other optional step, it reports and returns.
+    Down the SAME path as every MANIFEST row that names a raw file
+    ([import_raw_texture]) — these keys are simply not in the MANIFEST,
+    because nothing asks for them yet. Like every other optional step, it
+    reports and returns rather than raising.
     """
     for key, candidates in PIC_SCREENS.items():
         source = _first_of(index, candidates)
         if source is None:
             continue
-        try:
-            width, height, indices, palette = decode_pic(source.read_bytes())
-        except (ValueError, IndexError, OSError, struct.error) as err:
-            print("\n%s: %s is not a .pic this can read (%s); skipped"
-                  % (key, source.name, err))
-            continue
-        if palette is None:
-            print("\n%s: %s carries no palette of its own; skipped"
-                  % (key, source.name))
-            continue
+        import_raw_texture(key, source, index, dest)
+
+
+# ==================================== THE RAW 1997 ART, DECODED IN PLACE ==
+#
+# ALL THE ART, OUT OF THE PLAYER'S OWN DISC. The owner, 2026-09-09:
+# *"all art should be available in original install! (If we added
+# something new ourselves, we can supply it no problem, like stone
+# grinding sound...)"* — and, the same day, *"check this repo for art
+# extraction tools for original shandalar and use it to reach all art!"*
+#
+# WHAT WAS ACTUALLY MISSING, and it was not a decoder. `decode_pic` and
+# `decode_spr` have read both 1997 formats since 2026-09-03. What the
+# MANIFEST held was ninety rows that named ONLY somebody else's
+# `*.pic.png` CONVERSION, so with the conversion door shut (the ruling of
+# 2026-09-09) a 1997 disc reached 68 of 163 keys while the files it needed
+# sat unread in `Duelart/`, `Cardart/` and `Dbart/`. Every one of those
+# rows now names the RAW 1997 file FIRST, and the copy loop in [main]
+# DECODES a candidate that is not already a PNG instead of skipping it.
+# One path, not ninety special cases: the row says which file, this
+# section says how to turn one into a PNG.
+#
+# ------------------------------------------------------- THE PALETTE --
+#
+# A `.pic` carries its own colours only when it is a full screen (an
+# `M0`/`M1` block: `Title.pic`, `Menubak.pic`, `Advfac64.pic`). Every
+# other one — all of `Duelart/`, `Cardart/` and `Dbart/` — is bare
+# indices and takes `Duelpalall.tr`, the duel palette the enemy faces
+# already use (ROGUE_PALETTE_TR).
+#
+# THAT CHOICE IS MEASURED, not assumed (2026-09-09, against the owner's
+# install with the s30 checkout beside it as the oracle). For all 84
+# texture keys that have both a raw 1997 file and an s30 conversion, the
+# DECODED INDEX BUFFER is byte-identical to the indices in the
+# conversion — 84 of 84, which is the decoder proving itself again — and
+# `Duelpalall.tr` agrees with the conversion's own PLTE on every index
+# those pictures use, with exactly two families of exception, both of
+# which are the CONVERTER'S DEFAULT COLOUR showing through rather than
+# art:
+#
+#   * INDEX 0 is not defined by `Duelpalall.tr` at all (the file names
+#     236 of 256 slots; 0 and 236-254 are absent). s30's tree renders it
+#     WHITE in one run of the converter (`Winbk_Phasecombat`,
+#     `Grave_*`, `Winbk_Attacksword`) and BLACK in another
+#     (`Winbk_Phase`, `Terr_Blackpict`, `Damage`) — and `Winbk_Phase`
+#     and `Winbk_Phasecombat` are the SAME icon strip laid out twice, so
+#     s30's own tree contradicts itself and neither reading can be the
+#     art. All five `.pic` files in the install that carry a palette of
+#     their own put (0,0,0) at index 0, so BLACK it is, which is also
+#     what `read_tr_palette` already leaves an unnamed slot.
+#   * INDEX 191 is `255 255 255` on the LAST line of `Duelpalall.tr`,
+#     and `Duelpal.tr` says the same. The half of s30's conversions that
+#     defaulted to black render it black, and `Damage.pic` is the proof
+#     that they are wrong: its mask half is `{0, 2, 190, 191}`, i.e. two
+#     dark tones and two light ones, and only with 191 WHITE does that
+#     mask read as a silhouette on a pale ground rather than as noise.
+#
+# So the palette here is the 1997 file's, and where it and a conversion
+# disagree the conversion is the one that lost a line.
+#
+# ---------------------------------------------------- THE TRANSPARENCY --
+#
+# `mp_pic_tools/pic2png.py` hangs PNG `tRNS` on index 255 unconditionally
+# (`image.info["transparency"] = 255`), and for the bare-index files that
+# is right: 255 is the border value of every mask half in the set
+# (measured: `Winbk_Attacksword` 320/320 border pixels, `Summon` 388/388,
+# `Winbk_Attackbones` 1587 of 1624), so it is the 1997 format's
+# transparent index and `MiniCard.masked_sprite` reads it back as one.
+#
+# IT IS NOT RIGHT FOR A FILE WITH ITS OWN PALETTE, and `Title.pic` is the
+# counter-example: 174 of its pixels are index 255, its own `M0` block
+# says that colour is white, and they are part of the picture. A backdrop
+# that carries its colours also owns index 255, so those come out OPAQUE
+# — which is what `import_pic_screens` has always done and what makes
+# `title_background` match s30's conversion pixel for pixel.
+#
+# THE RULE, then: own palette -> opaque RGB; no palette -> RGBA with
+# index 255 clear. Under it, 68 of the 84 keys come out RGBA-IDENTICAL to
+# the s30 conversion the game used to be handed, and the other 16 differ
+# only where s30's converter default was showing (the two indices above).
+
+## The palette a bare-index `.pic` takes: the duel palette, then the two
+## `.pic` files whose own `M0` block stands in for it if the `.tr` is
+## missing from a player's copy. They differ from the `.tr` only at
+## indices 191 (254,254,254 against 255,255,255) and 255 (which is
+## written clear anyway), so a fallback changes nothing that shows.
+PIC_PALETTE: list[str] = ROGUE_PALETTE_TR + ROGUE_PALETTE_PIC
+## `Statbutt.spr` and the other adventure sprites take `Todpal.tr` —
+## `spr2png.py`'s own default, and the one that puts a white sun, a blue
+## drop, a green tree, a red dragon and a black skull in the sheet's
+## first five cells (looked at, 2026-09-09). The duel palette renders the
+## same file in mud.
+SPR_PALETTE: list[str] = ["Todpal.tr"]
+## The 1997 picture format's transparent index — see THE TRANSPARENCY.
+PIC_CLEAR = 255
+
+
+PicRgba = tuple[int, int, bytes, bool]
+
+
+def _raw_pic_rgba(key: str, path: Path,
+                  palette: bytes | None) -> PicRgba | None:
+    """One raw `.pic` -> `(width, height, pixels, alpha)`, or None.
+
+    `alpha` says whether `pixels` is RGBA (bare-index file, 255 clear) or
+    RGB (the file brought its own palette). NEVER RAISES: a player's copy
+    can hold a file this cannot read and one of those must not end the
+    import — the same guard `_cut_masked_pic` has carried since a real CD
+    was first handed to this importer.
+    """
+    try:
+        width, height, indices, own = decode_pic(path.read_bytes())
+    except (ValueError, IndexError, OSError, struct.error) as err:
+        print("  %-24s SKIPPED %s (%s)" % (key, path.name, err))
+        return None
+    if own is not None:
         rgb = bytearray(len(indices) * 3)
         for i, value in enumerate(indices):
-            rgb[i * 3:i * 3 + 3] = palette[value * 3:value * 3 + 3]
-        write_png(dest / (key + ".png"), width, height, bytes(rgb))
-        print("\n%s: %dx%d <- %s -> %s"
-              % (key, width, height, source, dest / (key + ".png")))
-
-
-# ----------------------------------------------------- the counter stones --
-#
-# THE ONE MANIFEST ROW THIS DECODES RATHER THAN COPIES. [1997], 2026-09-09.
-#
-# `Cardart/Cardcounters.pic` (7 723 B, 1997-07-22) is a raw `X0` container
-# with NO palette block of its own, so the copy loop above can do nothing
-# with it: a player pointing this at their own 1997 disc, and at nothing
-# else, was told the stones were "missing (the clean fallback skin covers
-# these)" while the file sat in their install. The strip is worth the one
-# exception because it is not interchangeable with anything — nothing in
-# the clean skin draws a 1997 counter stone, only a lettered chip — and
-# because `decode_pic` already reads the format.
-#
-# WHAT COMES OUT IS THE s30 `card/` CONVERSION, PIXEL FOR PIXEL, and that
-# is measured, not hoped for (2026-09-09, against the owner's own install
-# and the s30 checkout beside it):
-#
-#   * the decoded 24x750 index buffer is byte-identical to the indices in
-#     `s30/assets/art/card/Cardcounters.pic.png`;
-#   * `Duelpalall.tr` — the duel palette the enemy faces already take,
-#     ROGUE_PALETTE_TR — agrees with that PNG's PLTE on all 109 indices
-#     the strip uses, with no exceptions;
-#   * index 255 is the one that conversion hangs its tRNS on, and it is
-#     both the glyph's ink inside a stone and the mask row's outside.
-#
-# So the strip is written RGBA with 255 clear and everything else opaque,
-# and `CounterMarks.tile()` reads the mask cell's corner, finds alpha 0
-# and takes the SAME branch for this file as for the conversion. The two
-# `.pic` palettes the portraits fall back on (`Pedstls.pic`, `Menu4.pic`)
-# differ from the `.tr` on exactly one index — 255, which is written
-# clear — so they are kept as fallbacks and change nothing that shows.
-#
-# `Program/CardArt/CardCounters.bmp` is still not a candidate: a `.bmp`
-# in a Manalink install is never a 1997 file (Provenance.md).
-COUNTER_KEY = "card_counters"
-## `Cardart/` first, so the strip cannot be answered by something that
-## merely shares the name — the rule the whole index was built for.
-COUNTER_NAMES: list[str] = ["Cardart/Cardcounters.pic", "Cardcounters.pic"]
-## The duel palette, in the order the enemy faces ask for it.
-COUNTER_PALETTE: list[str] = ROGUE_PALETTE_TR + ROGUE_PALETTE_PIC
-## 24x750: one column of 25 cells of 24x30 (see the MANIFEST row and
-## `game/duel/counter_marks.gd`). Anything else is not this file.
-COUNTER_SIZE = (24, 750)
-## The transparent index — the ink and the mask's outside. NOT index 0,
-## which is a real colour here, so `paint` is given an explicit alpha.
-COUNTER_CLEAR = 255
-
-
-def import_counter_stones(index: dict[str, Path], dest: Path) -> bool:
-    """Decode `Cardcounters.pic` into `<dest>/card_counters.png`.
-
-    True when the strip was written, so the caller can count it with the
-    copied keys. NEVER RAISES, like every other raw step: a player's copy
-    can hold a file this cannot read, and one of those must not end the
-    import.
-    """
-    source = _first_of(index, COUNTER_NAMES)
-    if source is None:
-        return False
-    palette, origin = _resolve_palette(index, COUNTER_PALETTE)
+            rgb[i * 3:i * 3 + 3] = own[value * 3:value * 3 + 3]
+        return width, height, bytes(rgb), False
     if palette is None:
-        print("\n%s: %s carries no palette and none is beside it (looked"
-              " for %s); skipped" % (COUNTER_KEY, source.name, origin))
-        return False
+        print("  %-24s SKIPPED %s (no palette in it and none beside it)"
+              % (key, path.name))
+        return None
+    alpha = bytes(0 if value == PIC_CLEAR else 255 for value in indices)
+    return width, height, paint(indices, palette, alpha), True
+
+
+# ------------------------------------------------------- THE .SPR SHEETS --
+#
+# `Statbutt.spr` is the one MANIFEST row whose 1997 file is a SPRITE, and
+# it needs the step `.pic` does not: sixteen frames laid out on one sheet.
+#
+# THE FRAMES ARE NOT ALL THE SAME SIZE — 5 of 48x48, 3 of 84x24, 3 of
+# 73x24, 3 of 49x24, one 25x161 and one 15x18 — and the sheet is a grid of
+# 48x48 cells, so a frame WIDER than its cell is CLIPPED to it. That is
+# not a licence taken here: laying the sixteen out at a 48 px pitch and
+# clipping reproduces s30's own `Statbutt.spr.png` byte for byte on all
+# 36 864 indices (2026-09-09), because their tiler pastes at the same
+# pitch and each frame's overflow is overwritten by the next one. Ours
+# clips instead of smearing, which is the same picture and a kinder file.
+#
+# Do NOT copy `spr2png.py`'s tiler itself: `modulo = min(1240 // width,
+# len(bitmaps))` DROPS THE TAIL of a sheet whose frames are wider than
+# 1240/count, which is why s30's `16faces.spr.png` carries nine of the
+# fourteen portraits (Provenance.md, the `mp_pic_tools` row).
+## key -> (candidate names, cells, cell width, cell height).
+SPR_SHEETS: dict[str, tuple[list[str], int, int, int]] = {
+    "stat_buttons": (["Statbutt.spr"], 16, 48, 48),
+}
+
+
+def _raw_spr_sheet(key: str, path: Path,
+                   palette: bytes | None) -> tuple[int, int, bytes] | None:
+    """One `.spr` -> a row of clipped cells as RGBA, or None."""
+    cells, cell_w, cell_h = SPR_SHEETS[key][1:]
+    if palette is None:
+        print("  %-24s SKIPPED %s (no palette beside it)" % (key, path.name))
+        return None
     try:
-        width, height, indices, own = decode_pic(source.read_bytes())
+        frames = decode_spr(path.read_bytes())
     except (ValueError, IndexError, OSError, struct.error) as err:
-        print("\n%s: %s is not a .pic this can read (%s); skipped"
-              % (COUNTER_KEY, source.name, err))
+        print("  %-24s SKIPPED %s (%s)" % (key, path.name, err))
+        return None
+    width = cell_w * cells
+    indices = bytearray(width * cell_h)
+    for slot, (frame_w, frame_h, pixels) in enumerate(frames[:cells]):
+        for y in range(min(frame_h, cell_h)):
+            row = pixels[y * frame_w:y * frame_w + min(frame_w, cell_w)]
+            start = y * width + slot * cell_w
+            indices[start:start + len(row)] = row
+    # Index 0 is the sprite format's transparency (decode_spr's own
+    # convention, and `paint` without a mask reads it that way).
+    return width, cell_h, paint(bytes(indices), palette)
+
+
+def import_raw_texture(key: str, source: Path, index: dict[str, Path],
+                       dest: Path) -> bool:
+    """Decode ONE raw 1997 art file into `<dest>/<key>.png`.
+
+    True when the file was written. This is the generic path every
+    MANIFEST row that names a `.pic` or a `.spr` goes down; nothing about
+    it is per-key except which palette family the file belongs to.
+    """
+    if key in SPR_SHEETS:
+        palette, origin = _resolve_palette(index, SPR_PALETTE)
+        sheet = _raw_spr_sheet(key, source, palette)
+        if sheet is None:
+            return False
+        width, height, pixels = sheet
+        write_png(dest / (key + ".png"), width, height, pixels, alpha=True)
+        print("  %-24s <- %s (decoded %dx%d, palette: %s)"
+              % (key, source, width, height, origin))
+        return True
+    palette, origin = _resolve_palette(index, PIC_PALETTE)
+    decoded = _raw_pic_rgba(key, source, palette)
+    if decoded is None:
         return False
-    if (width, height) != COUNTER_SIZE:
-        print("\n%s: %s is %dx%d, not %dx%d; skipped"
-              % (COUNTER_KEY, source.name, width, height,
-                 COUNTER_SIZE[0], COUNTER_SIZE[1]))
-        return False
-    alpha = bytes(0 if value == COUNTER_CLEAR else 255 for value in indices)
-    write_png(dest / (COUNTER_KEY + ".png"), width, height,
-              paint(indices, own or palette, alpha), alpha=True)
-    print("  %-24s <- %s (decoded, palette: %s)"
-          % (COUNTER_KEY, source, origin))
+    width, height, pixels, alpha = decoded
+    write_png(dest / (key + ".png"), width, height, pixels, alpha=alpha)
+    print("  %-24s <- %s (decoded %dx%d, palette: %s)"
+          % (key, source, width, height,
+             "its own" if not alpha else origin))
     return True
+
+
+# ------------------------------------------------ THE SHEETS 1997 NEVER --
+#                                                   SHIPPED AS ONE FILE --
+#
+# Two MANIFEST keys are a GRID of 1997 files rather than one of them, and
+# until 2026-09-09 the only way to either was s30's assembled PNG. Both
+# assemblies were re-derived here from the raw files and both come out
+# PIXEL FOR PIXEL the same picture as s30's sheet (RGB, `Duelpalall.tr`,
+# every cell scoring 1.000 against its own file):
+#
+#   `filter_icons` <- the TWENTY-SEVEN 40x40 medallions in `Dbart/`, nine
+#       to a row, in ASCII order of filename: Ability All-Butn Antiquit
+#       Arabnite Artifact Artist Astral Blue Castcost / Costcast Creature
+#       Dark Enchant Fourth Green Grey Instant Interrupt / Land Legends
+#       Power Rarity Red Restrict Sorcery Tough Yellow. That order IS
+#       s30's grid — matched cell by cell, not guessed — so
+#       `FilterBar.TYPE_CELL` keeps working unchanged, and it settles two
+#       cells the shape-matching passes had to argue about: (0,1) is
+#       `All-Butn.pic` (the ALL button, read there as "gold, a 5-dot
+#       palette") and (0,5) is `Artist.pic` (read as "a fan of cards").
+#       `Grey.pic` at (1,6) is the BLACK filter — 1997's own name for it.
+#       **`GOLD.pic` is a 28th medallion that this grid does not hold**:
+#       s30's sheet has 27 cells and dropped it, and adding it would move
+#       every cell after it, so it stays out until somebody moves the
+#       game's map with it.
+#   `deck_slot_plaques` <- `Bldr01b..05b` over `Bldr01c..05c`, five
+#       columns of 117 by two rows of 100. The `b` row is the warm
+#       brown-gold sandstone, the `c` row the cool blue slate.
+#
+# AND TWO KEYS ARE OURS, said plainly because the owner's rule is that
+# they may be (*"If we added something new ourselves, we can supply it no
+# problem"*). The 1997 install ships ONE state per filter medallion. The
+# lit and sunken sheets are a LUMINANCE SCALE of it, and the game already
+# describes the split it wants: `FilterBar` reads an ON filter from
+# `filter_icons` and an OFF one from `filter_icons_pressed` at "a clean
+# 2:1 luminance split", and lifts a hover by its own `HOVER_LIFT = 1.26`
+# when no hover sheet exists. So those are exactly the two factors used
+# here — 0.5 and 1.26 — and the imported hover sheet is the same picture
+# the game would have derived for itself. s30's own two sheets measure
+# 0.52-0.59 and 1.26-1.30 against theirs, so this is the same idea
+# arrived at twice, not a copy of their pixels.
+## key -> (file names in cell order, columns, cell width, cell height).
+PIC_SHEETS: dict[str, tuple[list[str], int, int, int]] = {
+    "filter_icons": ([
+        "Ability.pic", "All-Butn.pic", "Antiquit.pic", "Arabnite.pic",
+        "Artifact.pic", "Artist.pic", "Astral.pic", "Blue.pic",
+        "Castcost.pic",
+        "Costcast.pic", "Creature.pic", "Dark.pic", "Enchant.pic",
+        "Fourth.pic", "Green.pic", "Grey.pic", "Instant.pic",
+        "Interrupt.pic",
+        "Land.pic", "Legends.pic", "Power.pic", "Rarity.pic", "Red.pic",
+        "Restrict.pic", "Sorcery.pic", "Tough.pic", "Yellow.pic",
+    ], 9, 40, 40),
+    "deck_slot_plaques": ([
+        "Bldr01b.pic", "Bldr02b.pic", "Bldr03b.pic", "Bldr04b.pic",
+        "Bldr05b.pic",
+        "Bldr01c.pic", "Bldr02c.pic", "Bldr03c.pic", "Bldr04c.pic",
+        "Bldr05c.pic",
+    ], 5, 117, 100),
+}
+## key -> (the sheet it is derived from, the factor on every channel).
+## OURS, not 1997 — see the block above.
+DERIVED_SHEETS: dict[str, tuple[str, float]] = {
+    "filter_icons_pressed": ("filter_icons", 0.5),
+    "filter_icons_hover": ("filter_icons", 1.26),
+}
+
+
+def import_pic_sheets(index: dict[str, Path], dest: Path,
+                      wanted: list[str]) -> list[str]:
+    """Assemble each grid in [constant PIC_SHEETS]. Returns the keys written.
+
+    Opaque RGB: these are stone tiles with no transparency anywhere in
+    them (checked: no cell uses index 0 or 255). Like every other raw
+    step it reports and returns rather than raising.
+    """
+    written: list[str] = []
+    for key, (names, cols, cell_w, cell_h) in PIC_SHEETS.items():
+        if key not in wanted:
+            continue
+        found = [index.get(name.lower()) for name in names]
+        if any(path is None for path in found):
+            missing = [n for n, p in zip(names, found) if p is None]
+            print("  %-24s SKIPPED (%d of %d files, first missing %s)"
+                  % (key, len(names) - len(missing), len(names), missing[0]))
+            continue
+        palette, origin = _resolve_palette(index, PIC_PALETTE)
+        if palette is None:
+            print("  %-24s SKIPPED (no palette beside it)" % key)
+            continue
+        rows = math.ceil(len(names) / cols)
+        width, height = cols * cell_w, rows * cell_h
+        sheet = bytearray(width * height * 3)
+        broken = False
+        for slot, path in enumerate(found):
+            try:
+                cw, ch, indices, own = decode_pic(path.read_bytes())
+            except (ValueError, IndexError, OSError, struct.error) as err:
+                print("  %-24s SKIPPED %s (%s)" % (key, path.name, err))
+                broken = True
+                break
+            if (cw, ch) != (cell_w, cell_h):
+                print("  %-24s SKIPPED %s (%dx%d, not %dx%d)"
+                      % (key, path.name, cw, ch, cell_w, cell_h))
+                broken = True
+                break
+            table = own or palette
+            ox, oy = (slot % cols) * cell_w, (slot // cols) * cell_h
+            for y in range(ch):
+                start = ((oy + y) * width + ox) * 3
+                for x in range(cw):
+                    base = indices[y * cw + x] * 3
+                    sheet[start + x * 3:start + x * 3 + 3] = \
+                        table[base:base + 3]
+        if broken:
+            continue
+        write_png(dest / (key + ".png"), width, height, bytes(sheet))
+        print("  %-24s <- %d files in %s (%dx%d, palette: %s)"
+              % (key, len(names), found[0].parent, width, height, origin))
+        written.append(key)
+    return written
+
+
+def import_derived_sheets(dest: Path, wanted: list[str]) -> list[str]:
+    """Write each of [constant DERIVED_SHEETS]. Returns the keys written.
+
+    OURS, and the summary says so: the 1997 install has one state per
+    medallion and these are that state scaled. Needs the sheet it derives
+    from to be on disk already, so it runs after [import_pic_sheets].
+    """
+    written: list[str] = []
+    for key, (parent, factor) in DERIVED_SHEETS.items():
+        if key not in wanted:
+            continue
+        source = dest / (parent + ".png")
+        if not source.exists():
+            continue
+        try:
+            width, height, channels, pixels = read_png(source.read_bytes())
+        except (ValueError, OSError, zlib.error) as err:
+            print("  %-24s SKIPPED (%s could not be read back: %s)"
+                  % (key, source.name, err))
+            continue
+        out = bytearray(pixels)
+        for i in range(0, len(out), channels):
+            for c in range(min(3, channels)):
+                out[i + c] = min(255, round(out[i + c] * factor))
+        write_png(dest / (key + ".png"), width, height, bytes(out),
+                  alpha=channels == 4)
+        print("  %-24s <- %s x%.2f  [OURS, not 1997]"
+              % (key, parent, factor))
+        written.append(key)
+    return written
+
+
+def read_png(data: bytes) -> tuple[int, int, int, bytes]:
+    """`(width, height, channels, pixels)` of a PNG this file wrote.
+
+    The mirror of [write_png] and no more: 8-bit RGB or RGBA, filter 0 on
+    every row. It exists so [import_derived_sheets] can read a sheet back
+    without Pillow, and it refuses anything it did not write rather than
+    pretending to be a PNG decoder.
+    """
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG")
+    width = height = channels = 0
+    idat = bytearray()
+    offset = 8
+    while offset + 8 <= len(data):
+        length = struct.unpack_from(">I", data, offset)[0]
+        tag = data[offset + 4:offset + 8]
+        payload = data[offset + 8:offset + 8 + length]
+        if tag == b"IHDR":
+            width, height, depth, colour = struct.unpack(">IIBB", payload[:10])
+            if depth != 8 or colour not in (2, 6):
+                raise ValueError("not an 8-bit RGB/RGBA PNG")
+            channels = 3 if colour == 2 else 4
+        elif tag == b"IDAT":
+            idat += payload
+        elif tag == b"IEND":
+            break
+        offset += 12 + length
+    raw = zlib.decompress(bytes(idat))
+    stride = width * channels
+    pixels = bytearray()
+    for y in range(height):
+        start = y * (stride + 1)
+        if raw[start] != 0:
+            raise ValueError("filter %d is not one of ours" % raw[start])
+        pixels += raw[start + 1:start + 1 + stride]
+    return width, height, channels, bytes(pixels)
 
 
 
@@ -2500,10 +2881,15 @@ def main() -> int:
     dest.mkdir(parents=True, exist_ok=True)
 
     found, missing = 0, []
-    # Raw `.pic` files whose names matched a texture key — reported at the
-    # end so a player pointing this at their own CD is told WHY nothing
-    # arrived, rather than getting a skin of undecodable files.
+    # Raw 1997 files this could NOT decode, reported at the end so a
+    # player pointing this at their own CD is told WHY a key is absent
+    # rather than getting a skin of undecodable files. Before 2026-09-09
+    # every raw `.pic` landed here; now only a broken one does.
     skipped_raw: list[tuple[str, str]] = []
+    # Keys DECODED out of a raw 1997 file rather than copied — the
+    # difference the 2026-09-09 pass made, counted separately so the
+    # summary can say how much of the skin came off the disc itself.
+    decoded = 0
     # key -> the file it actually came from, so the audio step can report
     # dates without hunting for the source a second time.
     chosen: dict[str, Path] = {}
@@ -2527,12 +2913,14 @@ def main() -> int:
             #
             # It stays reachable behind `--allow-conversions` for ONE
             # reader: the maintainer filling this checkout's gitignored
-            # `assets/original/` while a raw decoder is written for the
-            # key, the way `import_counter_stones` was written for the
-            # counter strip (2026-09-09). `mtg_assets.py` — the player's
-            # front door — never passes it, and every key that only a
-            # conversion can serve is named in the summary so the list of
-            # decoders still to write is the tool's own output.
+            # `assets/original/` from a tree that has no raw file at all.
+            # Since 2026-09-09 that is a door onto almost nothing: every
+            # texture row names its RAW 1997 file FIRST and the loop below
+            # DECODES it, so the conversion is reached only when the raw
+            # one is absent from every source. `mtg_assets.py` — the
+            # player's front door — never passes it, and every key that
+            # only a conversion can serve is named in the summary, so the
+            # list of decoders still to write is the tool's own output.
             if _is_conversion(name) and not args.allow_conversions:
                 refused_conversions.append((key, source_path.name))
                 source_path = None
@@ -2543,35 +2931,54 @@ def main() -> int:
             continue
         # Texture keys become <key>.png; font/sound keys keep extensions.
         out_name = key if key.endswith((".ttf", ".wav")) else key + ".png"
-        # A TEXTURE KEY MUST BE HANDED A REAL PNG. This importer reads
-        # CONVERTED trees (s30's `*.pic.png`), and a raw 1997 install has
-        # files whose basenames match anyway — `Damage.pic`, `Dying.pic`,
-        # the set icons. Copying one to `<key>.png` writes a file the game
-        # cannot decode and the skin quietly breaks: on 2026-09-03 a run
-        # against a real CD produced twelve of them, and the suite found it
-        # as "Not a PNG file" rather than as anything about importing.
+        # A TEXTURE KEY MUST BE HANDED A REAL PNG, and a raw 1997 file is
+        # not one: copying `Damage.pic` to `damage_marker.png` writes a
+        # file the game cannot decode and the skin quietly breaks (a run
+        # against a real CD produced twelve of those on 2026-09-03, and
+        # the suite found it as "Not a PNG file" rather than as anything
+        # about importing). So a candidate that is not already a PNG goes
+        # to the DECODER instead — see THE RAW 1997 ART, DECODED IN PLACE.
+        # A Manalink install's `Program/DBArt/*.pic` and `CardArt/*.pic`
+        # ARE PNGs wearing a `.pic` name (Provenance.md), so they still
+        # take the copy branch, which is what keeps them working as the
+        # fallback the MANIFEST rows describe.
         if not out_name.endswith((".ttf", ".wav")) \
                 and source_path.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
-            skipped_raw.append((key, source_path.name))
+            if not import_raw_texture(key, source_path, index, dest):
+                skipped_raw.append((key, source_path.name))
+                missing.append(key)
+                continue
+            chosen[key] = source_path
+            found += 1
+            decoded += 1
             continue
         shutil.copyfile(source_path, dest / out_name)
         print(f"  {key:24s} <- {source_path}")
         chosen[key] = source_path
         found += 1
 
-    # THE COUNTER STONES, before the summary rather than after it, so the
-    # count and the missing list tell the truth (2026-09-09). It is the
-    # one manifest row that has a raw 1997 file this can read, and a
-    # player whose only source is their own disc reaches it here — see
-    # the COUNTER STONES block.
-    if COUNTER_KEY in missing and import_counter_stones(index, dest):
-        missing.remove(COUNTER_KEY)
+    # THE ASSEMBLED SHEETS, before the summary rather than after it, so
+    # the count and the missing list tell the truth. Two grids of 1997
+    # files and the two states that are OURS — see THE SHEETS 1997 NEVER
+    # SHIPPED AS ONE FILE.
+    for key in import_pic_sheets(index, dest, missing):
+        missing.remove(key)
+        found += 1
+        decoded += 1
+    ours = import_derived_sheets(dest, missing)
+    for key in ours:
+        missing.remove(key)
         found += 1
 
     print(f"\nimported {found}/{len(MANIFEST)} skin assets -> {dest}")
+    if decoded:
+        print(f"  {decoded} of them DECODED from raw 1997 files "
+              f"(.pic/.spr), not copied")
+    if ours:
+        print(f"  {len(ours)} are OURS, not 1997: {', '.join(sorted(ours))}")
     if skipped_raw:
-        print("skipped — these are RAW 1997 files, not the converted PNGs")
-        print("this step needs (s30's art tree carries those):")
+        print("skipped — these RAW 1997 files are here but would not")
+        print("decode; the reason is printed beside each above:")
         for key, name in skipped_raw:
             print(f"  - {key:22s} ({name})")
     if refused_conversions:

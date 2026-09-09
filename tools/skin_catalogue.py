@@ -200,7 +200,10 @@ FAMILIES: list[tuple[str, str, str]] = [
      "Antiquities, Astral."),
     ("Symbols", "set_icon_",
      "The Deck Builder's set filter icons, one per set code (atq, arn, "
-     "past, drk, leg, 4ed). Black is treated as transparent."),
+     "past, drk, leg, 4ed). The original's own are 40x40 bevelled stone "
+     "tiles carrying a gold-ringed medallion — the same art as cells of "
+     "the filter sheet — and the game keys their flat grey away before "
+     "drawing one on a card."),
 
     ("The Deck Builder", "filter_icons",
      "The filter bar's medallions: 9 columns x 3 rows of 40 px cells, "
@@ -210,8 +213,11 @@ FAMILIES: list[tuple[str, str, str]] = [
      "(0,8). Row 1: creature (1,1), The Dark (1,2), enchantment (1,3), "
      "Fourth Edition (1,4), green (1,5), black (1,6), instant (1,7). "
      "Row 2: land (2,0), Legends (2,1), power (2,2), rarity (2,3), red "
-     "(2,4), sorcery (2,6), toughness (2,7), white (2,8). The _hover and "
-     "_pressed sheets are the same grid in those states."),
+     "(2,4), sorcery (2,6), toughness (2,7), white (2,8). The sheet is "
+     "the twenty-seven 40x40 medallions of the original's Dbart folder, "
+     "nine to a row in filename order. The _hover and _pressed sheets "
+     "are OURS, not the original's: 1997 ships one state per medallion, "
+     "so those two are this one scaled to 1.26 and 0.5."),
     ("The Deck Builder", "deck_slot_plaques",
      "The empty deck slot watermarks: 5 columns of 117 px x 2 rows of "
      "100 px, in the order black, white, red, green, blue."),
@@ -228,8 +234,9 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The display face: titles, headings, the card's name "
      "(the original's MagicMedieval)."),
     ("Fonts", "font_body",
-     "The reading face: card text, menus, the log (the original's "
-     "MPlantin)."),
+     "The reading face: card text, menus, the log. The original's is "
+     "MPZurich Cn BT, which its own font table puts on the rules text "
+     "and the message strip; MPlantin is the later stand-in."),
 
     ("Sounds", "sfx_",
      "Sound effects. The names say when they play: sfx_tap, sfx_untap, "

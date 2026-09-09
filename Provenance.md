@@ -322,7 +322,26 @@ it the next pass re-runs the same search and the one after that guesses.
 |---|---|
 | **MicroProse Shandalar source** — a decompilation of the original 1997 game, by Ben Prew | https://github.com/benprew/microprose-shandalar-source/ |
 | **The write-up** describing that decompilation work | https://throwingbones.com/ben/blog/2026-08-shandalar-decomp/index.html |
-| **`mp_pic_tools`** — tools for the original's `.PIC` art format | https://github.com/benprew/mp_pic_tools | **Surveyed 2026-09-03** (the open job in this file's own list, now closed): `spr2png.py::parse_spr` reads `.SPR` (per-frame 16-byte header, then one RLE run per line, palette index 0 transparent), `pic2png.py` + `pic_headers.py` read `.PIC` v3 (`M0`/`M1` palette blocks, `X0`/`X1` LZW+RLE image), `shared.py::tr2pal` reads `.tr` palettes. `tools/import_original.py` implements BOTH halves directly (2026-09-03) rather than depending on it, and its output is verified byte for byte against this reference. **Its sheet tiler drops frames**: `modulo = min(1240 // width, len(bitmaps))` with integer division, so any 137-wide sheet of 10-17 frames loses its tail — which is why s30's `16faces.spr.png` has nine of the fourteen portraits. |
+| **`mp_pic_tools`** — tools for the original's `.PIC` art format | https://github.com/benprew/mp_pic_tools | **Surveyed 2026-09-03** (the open job in this file's own list, now closed): `spr2png.py::parse_spr` reads `.SPR` (per-frame 16-byte header, then one RLE run per line, palette index 0 transparent), `pic2png.py` + `pic_headers.py` read `.PIC` v3 (`M0`/`M1` palette blocks, `X0`/`X1` LZW+RLE image), `shared.py::tr2pal` reads `.tr` palettes. `tools/import_original.py` implements BOTH halves directly (2026-09-03) rather than depending on it, and its output is verified byte for byte against this reference. **Three more findings, 2026-09-09**, when every remaining key was decoded
+out of the owner's install with it as the oracle: (1) `spr2png.py` stops on
+the frame's declared length BEFORE sanity-checking a run, and **ten of a
+1997 install's 344 `.spr` files need that** — their last frame ends
+`FF CD CD`, a row terminator plus two bytes of uninitialised heap fill,
+which a run-first reader sees as a 205-pixel run and refuses (`Worlds.spr`,
+`Begin.spr`, `Ttsprite.spr`, `Spr/Locatn02.spr`, `Spr800/Land.spr` and five
+more under `Spr1024/`, all adventure art); `tools/import_original.py` took
+that guard. (2) Its `parse_pic98` is a whole second picture format
+(`\x00H8\x00`, four LZSS planes, RGB444) for the PC-98 titles — **no
+Shandalar file uses it**, all 421 `.pic` swept, so ours is complete and
+nobody need survey it again. (3) **`Duelpalall.tr` is the duel/card/DBArt
+palette and names 236 of 256 slots** (0 and 236-254 absent); s30's
+conversions were run with two different `--default-color` values, so their
+index 0 is white in some files and black in others, and index 191 — the
+palette's LAST line, `255 255 255` in both `.tr` files — is black in half of
+them. `Damage.pic` settles it: its mask half is `{0, 2, 190, 191}` and only
+with 191 white does it read as a silhouette rather than erase the dagger.
+Its `sprite_sheet.png` also hangs `tRNS` on index 0, punching a hole through
+the lit `Costcast` glyph. **Its sheet tiler drops frames**: `modulo = min(1240 // width, len(bitmaps))` with integer division, so any 137-wide sheet of 10-17 frames loses its tail — which is why s30's `16faces.spr.png` has nine of the fourteen portraits. |
 
 **Status: FIRST SURVEY DONE 2026-09-02** (the decompilation only —
 `mp_pic_tools` is still unread, see job 2). The survey was done to

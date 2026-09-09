@@ -29,8 +29,10 @@ import mtg_assets  # noqa: E402
 
 
 ## The counter strip's own size — one column of 25 cells of 24x30, the
-## 25th the mask they share (`import_original.py`, THE COUNTER STONES).
-COUNTER_WIDTH, COUNTER_HEIGHT = imp.COUNTER_SIZE
+## 25th the mask they share (`import_original.py`'s `card_counters` row).
+## A literal since 2026-09-09: the strip stopped being a step of its own
+## when every raw `.pic` gained one, so there is no constant to read.
+COUNTER_WIDTH, COUNTER_HEIGHT = 24, 750
 
 
 class TestWriteZip(unittest.TestCase):
@@ -181,15 +183,38 @@ class TestLandmarks(unittest.TestCase):
 
     def test_the_counter_group_names_the_raw_file_the_importer_decodes(self):
         """The group names the 1997 file and only it: the raw
-        `Cardcounters.pic` that `import_counter_stones` decodes. The
-        manifest row also lists conversions, but those are not a door this
-        tool opens (see LANDMARKS' note, 2026-09-09)."""
-        self.assertEqual(set(mtg_assets.LANDMARKS["the counter stones"]),
-                         {name.split("/")[-1].lower()
-                          for name in imp.COUNTER_NAMES})
+        `Cardcounters.pic` the importer decodes. The manifest row also
+        lists conversions, but those are not a door this tool opens (see
+        LANDMARKS' note, 2026-09-09)."""
+        raw = {name.split("/")[-1].lower()
+               for name in imp.MANIFEST["card_counters"]
+               if not name.lower().endswith(".png")}
+        self.assertEqual(set(mtg_assets.LANDMARKS["the counter stones"]), raw)
         for name in mtg_assets.LANDMARKS["the counter stones"]:
             self.assertFalse(name.endswith(".png"),
                              "a conversion is not an install's landmark")
+
+    def test_every_landmark_is_a_raw_1997_name(self):
+        """The rule the owner set on 2026-09-09, across every group:
+        what this tool recognises as an install is the 1997 game's own
+        files, never a reimplementation's export of them."""
+        for group, names in mtg_assets.LANDMARKS.items():
+            for name in names:
+                self.assertFalse(name.endswith((".png", ".pic.png",
+                                                ".spr.png")),
+                                 "%s: %s" % (group, name))
+
+    def test_the_deck_builder_group_names_files_the_importer_asks_for(self):
+        """`Dbart/` is imported whole since 2026-09-09 — the filter
+        medallions, the deck-slot plaques, the header slab, the two
+        tiles — so the check has to be able to see it."""
+        wanted = {name.lower()
+                  for row in imp.MANIFEST.values() for name in row}
+        wanted |= {name.lower()
+                   for names, _c, _w, _h in imp.PIC_SHEETS.values()
+                   for name in names}
+        for name in mtg_assets.LANDMARKS["the deck builder art"]:
+            self.assertTrue(name == "dbart" or name in wanted, name)
 
 
 

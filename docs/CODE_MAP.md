@@ -1766,6 +1766,28 @@ shandalar/
 │   │                          takes the same polarity branch either way;
 │   │                          it runs only when the copy loop found
 │   │                          nothing, and before the summary counts.
+│   │                          THE RAW 1997 ART, DECODED IN PLACE
+│   │                          (2026-09-09): every texture MANIFEST row
+│   │                          names its raw .pic/.spr FIRST and main's
+│   │                          copy loop hands a non-PNG candidate to
+│   │                          import_raw_texture — own M0 palette →
+│   │                          opaque RGB, bare indices → Duelpalall.tr
+│   │                          with index 255 clear, .spr sheets →
+│   │                          Todpal.tr. That one path replaced
+│   │                          import_counter_stones and took a 1997
+│   │                          install alone from 66/163 to 163/163.
+│   │                          PIC_SHEETS assembles filter_icons (27
+│   │                          Dbart/ medallions, 9 to a row, ASCII
+│   │                          filename order) and deck_slot_plaques
+│   │                          (Bldr01b..05b over ..c); SPR_SHEETS clips
+│   │                          Statbutt.spr into 16 48x48 cells;
+│   │                          DERIVED_SHEETS writes the two filter
+│   │                          states that are OURS (x0.5, x1.26 —
+│   │                          FilterBar's own numbers), named as ours in
+│   │                          the summary. decode_spr takes the
+│   │                          reference's early break, which is what
+│   │                          finally reads the ten adventure .spr files
+│   │                          whose last frame ends FF CD CD.
 │   │                          THE CONVERSION DOOR (2026-09-09): a
 │   │                          candidate ending .png is a reimplementation's
 │   │                          export of a 1997 file, not a 1997 file, and
@@ -1822,7 +1844,14 @@ shandalar/
 │   │                          downloads (it is not the bulk art fetcher).
 │   │                          Layout: docs/set-packages-plan.md
 │   │                          "Implemented: pack format v1"
-│   ├── test_import_original.py  unittest for the raw 1997 decoders, and
+│   ├── test_import_original.py  unittest for the raw 1997 decoders —
+│   │                          since 2026-09-09 also TestTheGenericRaw
+│   │                          Texture / TestPaletteFamilies / TestSpr
+│   │                          FramePadding / TestDamageMarkerPair /
+│   │                          TestSetIcons / TestSprSheet / TestAssembled
+│   │                          Sheets / TestEveryKeyIsReachableFromA1997
+│   │                          Install (the rule that no texture key may
+│   │                          lead with a conversion again) — and
 │   │                          since 2026-09-09 TestCounterStones: the
 │   │                          strip arrives WHOLE and unscaled (its 25th
 │   │                          cell is the mask all 24 stones share, so a

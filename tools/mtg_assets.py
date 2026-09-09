@@ -80,6 +80,11 @@ LANDMARKS = {
                                  "winbk_shellscreen16.bmp"],
     "the card frames and mana symbols": ["cardart", "manasymbols.pic"],
     "the counter stones": ["cardcounters.pic"],
+    # `Dbart/` — added 2026-09-09, when the importer learned to decode it.
+    # `Dektile1.pic` is the deck screen's own ground and `Bldr01c.pic` one
+    # of the ten plaques the empty-slot watermark sheet is built from; the
+    # twenty-seven 40x40 medallions of `filter_icons` live beside them.
+    "the deck builder art": ["dbart", "dektile1.pic", "bldr01c.pic"],
     "the portraits": ["16faces.spr", "faces", "face.pic"],
     "the fonts": ["magim___.ttf", "magis___.ttf", "magicmedieval.ttf"],
     "the sounds": ["duelsounds", "sound"],
@@ -172,12 +177,18 @@ WHAT THIS NEEDS
   Two kinds of folder work, and they can be combined (pass --install
   more than once; the first copy of each file wins):
 
-    * a genuine 1997 install    — the best source, and the whole point.
-                                  Its raw .SPR and .PIC files hold
-                                  seventy portraits, five of which exist
-                                  in no conversion anywhere.
+    * a genuine 1997 install    — the best source, the whole point, and
+                                  since 2026-09-09 a COMPLETE one on its
+                                  own: every picture, sheet, font, sound
+                                  and portrait the game wears is decoded
+                                  out of its raw .PIC, .SPR and .TTF
+                                  files. Its portraits alone hold five
+                                  faces that exist in no conversion
+                                  anywhere.
     * a Manalink 3.0 install    — the 1997 game with a later patch on
-                                  it: fonts and some art.
+                                  it. Nothing needs it any more; it is
+                                  kept as a fallback for a copy that is
+                                  missing a file.
 
   YOUR OWN GAME AND NOTHING ELSE. This imports from the copy of the 1997
   game you own; it does not import from another project's converted art,

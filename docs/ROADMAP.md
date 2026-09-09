@@ -9083,21 +9083,51 @@ I cannot see which point went where"*.
   front door never passes. The player-facing guide now names TWO kinds of
   folder, a 1997 install and a Manalink one, and says why: *"the skin it
   builds is yours because the game it came from is yours"*.
-- **THE DECODERS STILL TO WRITE — the owner's standing goal (2026-09-09):
-  *"all art should be available in original install"***, anything of our
-  own supplied by us and declared as ours. With the door shut, a 1997
-  disc plus a Manalink install reaches **68 of 163 keys**, and the
-  importer now PRINTS the other 84 by name with the 1997 file each one
-  waits on (`title_background` ← `Title.pic`, `menu_background` ←
-  `Menubak.pic`, the ten `duel_pattern_*` / `duel_picture_*` territory
-  plates, and so on) — the to-do list is the tool's own output rather
-  than a document that can drift. Each is the treatment `card_counters`
-  just had: read the raw `.pic` against its palette and write the PNG.
-  Two keys are known to be harder and are named in the same pass:
-  `damage_marker`, whose row is raw-first so the conversion is never
-  tried, and whose s30 conversion is 94x20 where the game wants the
-  84x26 image+mask pair; and the six `set_icon_*`, of which s30 carries
-  no conversion at all. Not started.
+- **ALL THE ART, OUT OF THE DISC (2026-09-09) — the owner's goal, met.**
+  *"All art should be available in original install!"* It was never a
+  missing decoder: `import_original.py` has implemented `mp_pic_tools`'
+  formats directly since 2026-09-03. It was ninety MANIFEST rows that
+  named only somebody else's `*.pic.png`, so with the conversion door
+  shut a 1997 install alone reached 66 of 163. Every texture row now
+  names its RAW 1997 file first and the copy loop DECODES anything that
+  is not already a PNG — `import_counter_stones` generalised into the one
+  path rather than ninety special cases, with the palette rule stated
+  once (own `M0` block → opaque RGB; bare indices → `Duelpalall.tr` with
+  index 255 clear; `.spr` sheets → `Todpal.tr`). The four keys with no
+  single 1997 file are assembled from `Dbart/` (`filter_icons` is its
+  twenty-seven medallions nine to a row in filename order — every cell
+  matched 1.000 against the reference, so `FilterBar.TYPE_CELL` is
+  untouched — and `deck_slot_plaques` its ten `Bldr` plaques), and the
+  two filter states nobody shipped in 1997 are OURS, derived at the
+  game's own 0.5 and 1.26 and printed as ours in the summary.
+  **66/163 → 163/163 from a 1997 install and nothing else**, the
+  catalogue 168 of 168, the tools' suite 130 → 158, the import 10.6 s.
+- **The oracle, and what it caught in the reference.** Every raw file
+  was decoded and compared with s30's conversion pixel for pixel: all 84
+  agree on the INDICES and 72 keys come out RGBA-identical. The 18 that
+  differ are all the other converter's DEFAULT showing at two palette
+  slots — index 0, which `Duelpalall.tr` never defines (s30 renders it
+  white in one run and black in another, and its own `Winbk_Phase` and
+  `Winbk_Phasecombat`, the same strip laid down twice, contradict each
+  other), and index 191, the palette's last line, which reads `255 255
+  255` in both `.tr` files. `Damage.pic` settles it: its mask half is
+  `{0, 2, 190, 191}` and only with 191 white does it read as a
+  silhouette on a pale ground. One more: s30's filter sheet hangs `tRNS`
+  on index 0 and punches a hole through the lit `Costcast` glyph.
+- **Read from `mp_pic_tools` and taken.** Its `.spr` reader stops on the
+  frame's declared length BEFORE sanity-checking a run; ours checked the
+  run first and therefore refused whole **ten of a 1997 install's 344
+  `.spr` files** — their last frame ends `FF CD CD`, a row terminator
+  plus two bytes of uninitialised heap fill, read as a 205-pixel run. All
+  ten decode now and the other 334 are byte-identical. Two negative
+  findings worth as much: its `parse_pic98` second format is used by NO
+  Shandalar file (all 421 swept), and its sheet tiler drops frames — not
+  copied.
+- **Found on the disc while looking.** Both fonts are there under their
+  8.3 names: `Magim___.ttf` is byte-identical to `MagicMedieval.ttf`, and
+  `Duelart/Duel.dat`'s own `[fonts]` table puts `MPZurich Cn BT`
+  (`Tt0298m_.ttf`) on the rules text.
+
 - **And they are in the game's own Help, with pictures (2026-09-09).**
   The owner asked to be shown what the individual stones mean: the
   reference gained two pages, *Icons — the counter stones* and its
