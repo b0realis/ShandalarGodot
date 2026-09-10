@@ -94,6 +94,7 @@ override any knob on any preset for a measurement
 | `holds_x_burn` | 0 | 0 | 3 | 5 | the smallest REACH — the largest X the mana can pay — at which the profile will point an X burn spell at a creature while the game is young; 0 never holds. A Fireball is two damage on turn three and eight on turn nine, and the deck holds it because it is the reach: `_size_x_burn` sized the X to the victim, which is right, and had no reading of whether the card was worth casting yet, so a Wizard on three Mountains spent one of Mountain Artillery's two Fireballs on a Grizzly Bears. The hold is bounded by the game's own age (only while the turn count is under twice the number, in player turns) and lifted by readings the pilot already makes rather than by a constant: a burn that wins is returned by the face arm before this is asked, and `AiPlayer._in_danger` — the panic line read a fourth time, against the damage their board would actually land through the blocks this seat would make — spends the card the moment the clock says to. The face arm still runs under the hold. It reads the REACH and not the shot on purpose: gating on the X actually paid refuses a Fireball for four at a Serra Angel for a game's first nine turns, which the suite has pinned as correct since the Fireball was first sized |
 | `reads_gaze` | off | off | on | on | reads the three printed lines that settle a combat without ever entering the damage arithmetic, all three at `AiPlayer._dies_to`'s own seam. THE GAZE: a Cockatrice or a Thicket Basilisk destroys whatever it blocks or is blocked by, at end of combat — so a Craw Wurm no longer swings into one for free (`_attack_risk` 0.0 before, 2.5 after) and our own Cockatrice stops watching a Craw Wurm walk past for six. THE RAMPAGE (CR 702.23): the engine gives a blocked attacker +N/+N for each blocker past the first and the gang rung ignored it, so two Grizzly Bears ganged a Craw Giant on `2+2 >= 4`, met an 8/6, died both and took four trample; the number is counted now wherever a gang is priced, the crack-back model included. THE EXECUTIONER: an untapped Royal Assassin is why a non-vigilant body stays home, because tapping to attack is what makes it a legal target — a Hypnotic Specter used to swing past a 1/1 it cannot be blocked by and be in the graveyard before the damage step. Nothing names a card: two printed lines read as shapes (`EffectIntent.is_gaze`, `EffectIntent.destroys_the_tapped`, each with the card's own condition or spec put to it) and one engine field (`CardInstance.cur_rampage`) |
 | `reads_manlands` | off | off | on | on | counts a permanent that can animate ITSELF as a body in the combat about to happen — theirs when we attack, ours when we block, and the two halves are one knob because either alone is a lie. Theirs: the attack was priced against their untapped CREATURES only, so a Mishra's Factory with `{1}` open was invisible to the cohort, to the pump rider and to the crack-back model, and a Llanowar Elves walked into a 2/2 that costs them a mana; the declaration is made now with their affordable animations hung on under the journal (`AiPlayer._attack_choice_reading_manlands`), the mirror of `animates_to_attack`'s own probe. Ours: `_animation_value` prices an animation by the ATTACK it enables and answers 0.0 at every moment but our own precombat main, so no rung had ever animated a Factory to BLOCK — three untapped lands watched a Grizzly Bears hit for two. It is bought at the moment `_defensive_combat_response` already owns, once their attackers are declared, and only when the block declaration itself would use the body AND the body comes back — `_animation_value`'s own refusal mirrored, because what animates here is almost always a LAND. Sorcerer and Wizard, with `animates_to_attack` and `plays_engines`. Nothing here names a card: the shape is `EffectIntent.animates`, and their mana is counted the way `AiPlayer._shieldable` already counts theirs — untapped permanents, public to both seats |
+| `reads_pumps` | off | off | on | on | reads the pump on a creature it does NOT control as part of that creature's SIZE, which is the mirror of `pumps_to_attack` and the half that had never been built: two days of passes taught the pilot to size its own attack, block and survival by the mana it holds, and it had never once feared the same mana on the other side of the table. A Shivan Dragon with three Mountains open was a 5/5 and a Frozen Shade behind four Swamps was a 0/1, so a Grizzly Bears was sent into one at `_attack_risk` 0.00 — *we kill it and live* — and was in the graveyard with the Shade still standing and their life still twenty. `AiPlayer._pump_reach` answers what their body can grow to: the cheapest self-targeting `PumpEffect` ability with no tap cost, times the activations their OPEN SOURCES pay for, under three caps — the card's own *activate only N times each turn* (a Fire Drake behind five Mountains is a 3/2, not a 7/2), ONE POOL shared among the bodies of theirs this combat can ask it of (three Carrion Ants behind six Swamps are three 2/3s, not three 6/7s), and the smallest count past which no kill-or-survive answer on the board could still change (a Shade behind ten Swamps facing one Grizzly Bears is +2/+2). ONLY THE KILL TEST reads it and never the face damage, so the cohort still prices its damage through. AND IT IS ASYMMETRIC, because the Lab put it that way rather than the design: their pump deciding whether THEIR body dies is read everywhere, at `_dies_to`'s own seam; their pump deciding whether OURS dies is read only where we are choosing to SEND a body into it — `_attack_risk` and `_cohort_value`, the two halves of the attack declaration — because a blocker of ours that dies to their breath has SPENT their mana, and mana spent killing a blocker is mana that did not reach our face, while an attacker of ours that dies to it has bought nothing at all. Nothing names a card: the shape is `EffectIntent.pump_self`, and their mana is counted the way `AiPlayer._shieldable` already counts it — untapped permanents, public to both seats |
 
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
 `prices_liabilities` and `prices_fallout`
@@ -1230,6 +1231,152 @@ leveller's number from 2026-09-07, not this reading's.)
   table. Cut 2's veto declined 8 of the 15 and 9 of the 37, which is what
   a rule with no price in it looks like.
 
+THE MANA ON THE OTHER SIDE OF THE TABLE (2026-09-10, `reads_pumps`) is a
+WASH on the win rate and the removal of a malfunction the owner named by
+name, and the interesting part of it is a CUT rather than the ship: the
+first form of the reading measured **−3.2 ±2.8 against Mountain
+Artillery**, which is outside the negative interval and is the "no harm"
+rule's own refusal. Seed 11, 2 000 games an arm unless the row says
+otherwise, control Big Green vs White Knights, byte-identical to its own
+null in every arm of every run below.
+
+| pair | null | `on` | delta | games that turned |
+| --- | --- | --- | --- | --- |
+| Big Green vs Vampire Lord (4 Carrion Ants, 4 Vampire Bats, 22 Swamps) | 76.6% | 77.2% | +0.6 ±2.6 | 58 of 2 000 — 35 won, 23 lost |
+| Big Green vs Great Hydra (4 Granite Gargoyle, 4 Wall of Fire, 4 Lightning Bolt, 4 Mana Flare) | 76.3% | 76.0% | −0.3 ±2.6 | 76 of 2 000 — 35 won, 41 lost |
+| Mountain Artillery vs Vampire Lord — the canary | 73.0% | 72.1% | −1.0 ±2.8 | 77 of 2 000 — 29 won, 48 lost |
+
+- **THE REPRODUCTION IS THE OWNER'S OWN SENTENCE AND IT REPRODUCED
+  EXACTLY.** *"The pilot pumps its own creatures and reads a Cockatrice, a
+  Factory and an Assassin — but it will still attack a 0/1 Frozen Shade
+  with four Swamps up."* On that board the shipped Wizard read
+  `_attack_risk 0.00` — "we kill it and live" — declared the swing, and
+  the Grizzly Bears was in the graveyard with the Shade still standing and
+  their life still twenty. `AiPlayer._shieldable` has counted their open
+  mana against their cheapest REGENERATION shield since the block audit,
+  so a Drudge Skeletons with {B} up is a wall to every kill this pilot
+  predicts; the other printed line their mana buys was read by nobody.
+- **THE READ IS THE MIRROR OF `pumps_to_attack` AND THAT IS THE WHOLE
+  CASE FOR IT.** Two days of passes taught the pilot to size its own
+  attack, block and survival by the mana it holds — five passes of them —
+  and not one of them ever asked the same question of the seat opposite.
+  A knob that does to you what it cannot see coming is the asymmetry this
+  closes.
+- **THE THREE CAPS ARE WHAT MAKE IT A READING AND NOT A FANTASY**, and
+  each is a real card. The printed *activate only N times each turn* (a
+  Fire Drake behind five Mountains is +1/+0 and a Vampire Bats behind six
+  Swamps +2/+0, not +5/+0 and +6/+0). ONE POOL, shared among the bodies of
+  theirs this combat can ask it of — three Carrion Ants behind six Swamps
+  are three 2/3s and not three 6/7s, which is `pumps_to_attack`'s own
+  fifth-pass sentence read from the other side of the table. And the
+  smallest activation count past which no kill-or-survive answer on the
+  board could still change: a Shade behind ten Swamps facing one Grizzly
+  Bears is +2/+2, because +3/+3 and +10/+10 answer every question there
+  identically and a reading that prints 10 invites a later caller to
+  believe it. Forge counts exactly ONE activation
+  (`predictPowerBonusOfBlocker`), which under-reads that Shade by three
+  points; counting all of them is the honest read of public mana.
+- **THE CUT THAT SAVED IT, AND THE NUMBER THAT FORCED THE CUT.** Fed
+  through `_dies_to` in BOTH directions the reading measured **−3.2 ±2.8
+  on Mountain Artillery vs Vampire Lord** with 44 of the 151 games that
+  turned won and 107 lost. Split by phase, the ATTACK half measured −0.2
+  and the BLOCK half **−2.4**: read on defence, their pump stopped the
+  block ladder's first rung from claiming a kill AND told it our blocker
+  would die, no later rung catches a printed 0/1 (rung 1.7 wants
+  `cur_power >= 2`), and three Carrion Ants behind six Swamps walked past
+  three Hill Giants for six damage a turn — the "wall" the Forge note's
+  own risk paragraph predicts, arriving on defence instead of offence.
+  So the POWER half — their pump killing a body of OURS — is asked only
+  where we are choosing to SEND a body into it (`_attack_risk` and
+  `_cohort_value`, the two halves of the attack declaration) and not where
+  we are choosing to put one in FRONT of it. The TOUGHNESS half — their
+  body surviving ours — is read everywhere, at `_dies_to`'s own seam.
+- **AND THE ASYMMETRY IS A FACT ABOUT THE GAME, NOT A TUNING.** A blocker
+  of ours that dies to their breath has SPENT their mana, and mana spent
+  killing a blocker is mana that did not reach our face — this engine
+  breathes fire at the PLAYER with an unblocked attacker, on both sides of
+  the table (`AiPlayer._offensive_combat_response`), which the
+  reproduction shows in one line: decline the block and the 0/1 Shade
+  hits for four. An attacker of ours that dies to it has bought nothing
+  at all. The Lab is what found it; the sentence is what keeps it.
+- **THE OTHER CUT WAS SMALLER AND IT STAYED.** Reading their pool whole
+  for every body of theirs took Mountain Artillery from −3.2 to −2.7 when
+  the pool was split among them, and the split is kept for the reading it
+  is rather than for that: with the phase asymmetry in as well the two
+  forms are −1.0 either way and the flips lean to the split (Big Green vs
+  Vampire Lord 35-23 with it, 36-30 without).
+- **NO HARM ACROSS THE WHOLE FIVE-DECK GAUNTLET**, 1 000 games an arm,
+  every one of the twenty starter matchups with each deck in turn on seat
+  A. **Fourteen of the twenty are byte-identical to their own null — 0
+  games different** — because the knob has nothing to read there. The six
+  that fire: Black-Red Raiders vs Mountain Artillery +0.7 (124 games
+  played differently, 17 ended, 12 won to 5), White Knights vs Mountain
+  Artillery +0.1 (203, 27, 14 to 13), White Knights vs Black-Red Raiders
+  +0.2 (4, 2, 2 to 0), Blue Skies vs Mountain Artillery +0.0 (62, 10, 5
+  to 5), Blue Skies vs Black-Red Raiders −0.1 (15, 1, 0 to 1) and Big
+  Green vs Mountain Artillery −0.4 (158, 16, 6 to 10). Nothing is near
+  the ±4.4 interval that size carries, and the deck the two earlier
+  rejected approximations broke — Mountain Artillery, at −2.3 then — is
+  the seat READING here in four of them and reads +0.0 in all four.
+- **MEASURED AT EVERY RUNG, and the numbers argue nothing.** Big Green vs
+  Vampire Lord, 1 000 games an arm, both seats at the same preset, control
+  PASS and byte-identical in every arm of all four runs:
+
+  | pilot | null | `on` | the knob's own delta |
+  | --- | --- | --- | --- |
+  | Apprentice | 77.1% | 77.2% | +0.1 ±3.7 |
+  | Magician | 83.3% | 82.7% | −0.6 ±3.3 |
+  | Sorcerer | 78.0% | 78.2% | +0.2 ±3.6 |
+  | Wizard | 75.5% | 75.6% | +0.1 ±3.8 |
+
+  Not monotone, not clear of zero anywhere, and the largest of the four is
+  a sixth of its own interval. So unlike `reads_gaze`, whose −1.2 at the
+  Apprentice argued its own rung, this one is placed by the ramp ruling
+  (§1, 2026-09-07) and by the company it keeps: it is the mirror of
+  `pumps_to_attack` and belongs to the layer `reads_gaze`,
+  `reads_manlands` and `animates_to_attack` belong to. SORCERER AND
+  WIZARD, said plainly as a ruling rather than dressed up as a
+  measurement.
+- **THE NULL IS EXACTLY THE NULL, proved by replay and not by argument.**
+  The `pays_sacrifices` sweep of the Deck Lab manual — Dracur (Spells of
+  the Ancients) vs Big Green, 1 000 games an arm, seed 11 — was run on
+  HEAD's own files and on this tree with
+  `reads_gaze=off,reads_manlands=off,reads_pumps=off` forced on both
+  seats, and all **6 000 games are identical game for game**, the two
+  `games.csv` files byte for byte. (Both read 22.6% null and 25.4% `on`
+  against the 24.9% / 27.2% §4 prints for that pair, which is a number
+  gone stale under the day's OTHER knobs and not a moved null — the same
+  thing recorded twice above.) Every sweep in this section carries its own
+  control verdict, and Big Green vs White Knights is byte-identical to its
+  own null in every arm of all of them (1075-925 at 2 000, 525-475 at
+  1 000).
+- **THE POOL FACT, AND IT IS THE REASON THE GAUNTLET IS ALL ZEROES.**
+  Seventeen cards in this pool carry an activated self-pump with no tap
+  cost (Arcades Sabboth, Atog, Carrion Ants, Dragon Engine, Fallen Angel,
+  Fire Drake, Frozen Shade, Granite Gargoyle, Killer Bees, Osai Vultures,
+  Pavel Maliki, Shivan Dragon, Vaevictis Asmadi, Vampire Bats, Wall of
+  Fire, Wall of Opposition, Wall of Water) and three of them — Atog,
+  Fallen Angel, Osai Vultures — pay in a BOARD rather than in mana and are
+  refused. Of the five shipped starters only Mountain Artillery (3 Granite
+  Gargoyle, 1 Shivan Dragon) and Black-Red Raiders (1 Shivan Dragon) hold
+  one at all, so the knob can fire in six of the twenty starter matchups
+  and nowhere else. It is the 1997 enemy decks that put the question:
+  Vampire Lord, Ape Lord, Great Hydra and Kzzy'n the Dragon Lord field
+  eight each. **And the plan's own Lab line is stale:**
+  `decks/community/necropotence_1996.deck`, which
+  `docs/forge/combat.md` P2 names as the likely pair, holds SIX proxies
+  and the Deck Lab refuses it with exit 2.
+- **SO THE READING OF IT IS A WASH THAT REMOVES A VISIBLE MALFUNCTION,
+  which is the reason `holds_x_burn` and the Detonate half shipped.** Two
+  of the three pairs are inside a ±2.6-point interval with opposite signs
+  and the canary is inside a ±2.8 one; across the three, 99 of the 211
+  games that ended differently were won and 112 lost, which at that count
+  is a coin. What is NOT a coin is the table: a Grizzly Bears sent into a
+  0/1 with four black sources open, dying for nothing while the pilot
+  reads the swing as free, is not a close decision made badly. It is the
+  one thing this pilot could do to a human that a human could not do back
+  to it.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -1254,20 +1401,24 @@ pass — no Paralyze and no Detonate,
 Thicket Basilisk), no printed rampage and no ability that destroys a
 TAPPED creature (Royal Assassin, Tetsuo Umezawa), and
 `reads_manlands`' no permanent that can animate ITSELF on EITHER side of
-the table (Mishra's Factory, Jade Statue) — the third pass's Time Walk
+the table (Mishra's Factory, Jade Statue), and `reads_pumps`' no
+activated self-pump on the side OPPOSITE the seat being swept — which in
+practice is the same list `pumps_to_attack` already keeps, seventeen
+cards, and Big Green vs White Knights holds none of them — the third
+pass's Time Walk
 sweep FAILED its first control on exactly that (Blue Skies' Ancestral
 Recall), and a failed control makes the deltas beside it no measurement
 at all. `CONTRIBUTING.md`
 has the rule.
 
 AND A KNOB THAT DEFAULTS ON AT SORCERER IS A KNOB THE NEXT SWEEP HAS TO
-PIN. `reads_gaze` and `reads_manlands` are on at Sorcerer and Wizard, so
-a measurement of some OTHER knob taken against a number published before
-2026-09-10 must force both off on both seats
-(`--profile-a wizard:reads_gaze=off,reads_manlands=off`, and the same for
-`--profile-b`) or it is measuring three changes at once. That is how this
-pass proved its own null, and it is the general rule every knob since
-`plays_engines` has quietly needed.
+PIN. `reads_gaze`, `reads_manlands` and `reads_pumps` are on at Sorcerer
+and Wizard, so a measurement of some OTHER knob taken against a number
+published before 2026-09-10 must force all three off on both seats
+(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off`,
+and the same for `--profile-b`) or it is measuring several changes at
+once. That is how both of those passes proved their own null, and it is
+the general rule every knob since `plays_engines` has quietly needed.
 TWO MORE SINCE 2026-09-10. `levels_boards` grew the LAND SWEEP, so its
 control must hold no Balance AND no all-lands sweeper — Big Green vs
 Mountain Artillery holds none of them in the main deck (Mountain
@@ -1300,6 +1451,26 @@ Regrowth is untouched by the knob.
   [method AiPlayer._cast_response] gives it, so a counter the engine
   refuses for a reason the mana plan cannot see still ends the search
   with a pass.
+- `reads_pumps` counts their open SOURCES and not their COLOURS, which is
+  the convention `_shieldable`, `_animatable_bodies` and
+  `_taps_into_execution` all keep — a permanent with any mana ability is
+  one mana — so a Frozen Shade behind three Forests and one Swamp is read
+  at +4/+4 where the truth is +1/+1. In this pool a deck plays the colour
+  of its own creatures, so the error is rare and it is always in the
+  direction of respecting the body; pricing it properly wants a planner
+  bound to a seat that is not ours, which is a larger thing than this
+  reading. It also does not see the two CARD-LOCAL firebreathers (Dragon
+  Whelp, Nalathni Dragon, `EffectIntent.CARD_LOCAL_PUMPS`), because that
+  table is gated behind `pumps_to_attack` and one reading with two gates
+  is two stories; a Whelp of theirs with Mountains open is still a 2/3 to
+  the attack declaration. And the thing the CUT above leaves open is a
+  rung and not a read: the block ladder has nothing between the safe block
+  (`cur_power >= 2`, which a printed 0/1 never satisfies) and the chump,
+  so there is no place for it to say *this body dies either way, and
+  blocking spends their mana instead of my life*. That is the comparison
+  `_face_damage_value` already prices for the chump rung, and giving it to
+  the middle of the ladder is `reinforces_blocks`' shape
+  (`docs/AI-next-wave.md`, combat P4) rather than this knob's.
 - `holds_x_burn` is the HOLD half of its row only. The CHAIN — two burn
   spells that kill together, the first sized for its share and the
   second's cost booked out of the reserve — is wave 3's

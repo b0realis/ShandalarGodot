@@ -3978,6 +3978,42 @@ func _dies_to(game: MtgGame, victim: CardInstance, hitter: CardInstance,
 	# are exactly the right ones and are simply shared.
 	if profile.reads_gaze and _gaze_kills(game, hitter, victim):
 		return not _shieldable(game, victim)
+	# THEIR PUMPS ARE PUBLIC (2026-09-10, [member AiProfile.reads_pumps]):
+	# a creature THEY control does not die at its printed toughness, it
+	# dies at the toughness their open mana can pay for — the way [method
+	# _shieldable] has read their regeneration since the block audit. It
+	# goes in HERE rather than at the two dozen call sites because the
+	# bonus is already the right channel, so every reader of this
+	# predicate — the attack risk, the block ladder, the gang, the
+	# crack-back matrices — asks one question and gets one answer.
+	# [method _pump_reach] answers zero for a body of OURS ([member
+	# AiProfile.pumps_to_attack] is that half) and for every creature with
+	# no activated ability at all, which is nearly the whole pool; the
+	# bonus the caller already passed is ADDED to, never replaced.
+	#
+	# WHAT IS NOT HERE IS THE OTHER DIRECTION, and it is the measurement
+	# of 2026-09-10 that put it where it is rather than an argument. Their
+	# pump also KILLS a body of ours, and read here that reading took a
+	# whole block declaration away: the ladder's first rung stopped
+	# claiming the kill, no later rung caught a printed 0/1, and three
+	# Carrion Ants behind six Swamps walked past three Hill Giants for six
+	# damage a turn. Mountain Artillery against Vampire Lord measured
+	# -2.4 +-2.8 on that half alone and -0.2 on the other. So the power
+	# half is asked where we are choosing to SEND a body into it — the two
+	# halves of the attack declaration, [method _attack_risk] and [method
+	# _cohort_value] — and not where we are choosing to put one in FRONT
+	# of it: a blocker of ours that dies to their breath has spent their
+	# mana, and mana spent killing a blocker is mana that did not reach
+	# our face (this engine firebreathes an unblocked attacker at the
+	# player, on both sides of the table — [method
+	# _offensive_combat_response]). An attacker of ours that dies to it
+	# has bought nothing at all.
+	#
+	# It sits AFTER the gaze on purpose: a Cockatrice kills what the
+	# numbers say it does not, and a pump that changes the numbers changes
+	# nothing about a gaze.
+	if profile.reads_pumps:
+		victim_bonus += _pump_reach(game, victim)
 	var hit := _damage_from(hitter, victim, hitter_bonus, victim_bonus)
 	if hit <= 0 or hit < victim.cur_toughness + victim_bonus.y - victim.damage:
 		return false
@@ -4094,6 +4130,211 @@ func _taps_into_execution(game: MtgGame, inst: CardInstance, defender: int) -> b
 	return false
 
 
+## WHAT THEIR BODY CAN GROW TO RIGHT NOW (2026-09-10, [member
+## AiProfile.reads_pumps]; `docs/forge/combat.md` P2), as a +power/
+## +toughness [Vector2i] — [constant Vector2i.ZERO] when it can grow no
+## further.
+##
+## [method _shieldable] already counts their open sources against their
+## cheapest regeneration shield, so a Drudge Skeletons with {B} up is a
+## wall to every kill this file predicts. This is the same sentence about
+## the other printed line their mana buys: the cheapest self-targeting
+## [PumpEffect] ability with NO tap cost (a body that taps to pump cannot
+## also block), times the activations their open sources pay for.
+##
+## THREE CAPS, and each one is a real card. The printed "activate only N
+## times each turn" ([member ActivatedAbility.max_per_turn], read against
+## the instance's own tally) is why a Fire Drake behind five Mountains is
+## a 3/2 and a Vampire Bats a 4/2 — the same fact [method
+## _activations_left] keeps for our own breath, read here off the ability
+## because the reading is of THEIR permanent and asks nobody to pay for
+## anything. Their OPEN SOURCES are the second, counted the way [method
+## _shieldable] counts them (untapped permanents with a mana ability,
+## public to both seats) and never from their hand, which is not. And the
+## third is [method _pump_cap]: the smallest activation count past which
+## no kill-or-survive answer on THIS board could still change.
+##
+## THE THIRD CAP IS WHY THIS IS A READING AND NOT A FANTASY. [forge]
+## `ComputerUtilCombat.predictPowerBonusOfBlocker` (`ComputerUtilCombat.java:955-991`,
+## the attacker twin at 1138-1322, commit `b09a3d3f`,
+## docs/forge/combat.md P2) adds ONE activation per pump ability, gated by
+## `ComputerUtilCost.canPayCost`, which under-reads a Frozen Shade behind
+## four Swamps by three points; counting every activation the mana pays
+## for is the honest read of public information. But the number that comes
+## out of that has to stay a COMBAT number: a Shade behind ten Swamps
+## facing one Grizzly Bears is read at +2/+2, because +3/+3 and +10/+10
+## answer every question on that board exactly the same way, and a reading
+## that prints 10 invites some later caller to believe it.
+##
+## OURS ANSWERS ZERO, deliberately. [member AiProfile.pumps_to_attack] is
+## the half of this that sizes our OWN body by our OWN open mana, and it
+## does it through the real planner with the second main phase and the
+## held instant booked out of the pool. Two readers for one side would be
+## two answers.
+##
+## The empty-ability bail on the second line is what keeps this off the
+## cost of the crack-back matrix, exactly as [method _gaze_kills]'s is:
+## [method _dies_to] is asked n x m times per declaration and nearly every
+## creature in the pool has no activated ability at all.
+func _pump_reach(game: MtgGame, inst: CardInstance) -> Vector2i:
+	# ONE GATE, ONE STORY. Every reader of this reaches it through here,
+	# so the null cannot be moved by a caller that forgot its own check —
+	# and [method _dies_to] keeps one anyway, because it asks this once
+	# per pair and the crack-back matrix asks it n x m times.
+	if not profile.reads_pumps:
+		return Vector2i.ZERO
+	if inst == null or inst.cur_activated_abilities.is_empty():
+		return Vector2i.ZERO
+	if inst.controller_id == pid:
+		return Vector2i.ZERO   # ours is [member AiProfile.pumps_to_attack]'s question
+	if not inst.is_creature() or inst.zone != Mtg.Zone.BATTLEFIELD:
+		return Vector2i.ZERO
+	var who := inst.controller_id
+	var best := _cheapest_pump_of(game, inst)
+	if best.is_empty():
+		return Vector2i.ZERO
+	var bonus: Vector2i = best["bonus"]
+	var index := int(best["index"])
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var open := 0
+	for p in game.players[who].battlefield:
+		if not p.tapped and not p.cur_mana_abilities.is_empty() \
+				and not (p.is_creature() and p.summoning_sick):
+			open += 1
+	# ONE POOL, SHARED (2026-09-10). Their mana is spent ONCE, and until
+	# this line every body of theirs was read as if the whole of it were
+	# waiting for that body alone: three Carrion Ants attacking behind six
+	# Swamps were three 6/7s to the block ladder, which declared no block
+	# at all and took six, where the truth is six mana between three
+	# bodies. It is [member AiProfile.pumps_to_attack]'s own fifth-pass
+	# sentence read from the other side of the table — the split of the
+	# one pool is spent as it was allotted — and the bodies it is split
+	# among are the ones THIS combat can ask it of ([method
+	# _pump_claimants]).
+	var times := open / (int(best["price"]) * _pump_claimants(game, inst))
+	if ability.max_per_turn > 0:
+		times = mini(times,
+			maxi(ability.max_per_turn - int(inst.ability_uses.get(index, 0)), 0))
+	times = mini(times, _pump_cap(game, inst, bonus))
+	return bonus * maxi(times, 0)
+
+
+## The cheapest self-pump of [param inst] that its controller could
+## actually activate right now, as `{index, bonus, price}` — `{}` when it
+## has none (2026-09-10, [member AiProfile.reads_pumps]).
+##
+## The gates are the ones the pilot's own pump paths keep, read for a seat
+## that is not ours and so without asking the engine to pay for anything:
+## no tap cost (a body that taps to pump cannot also block), the printed
+## timing riders ([method _animation_timing_open]), and a cost that is
+## MANA. An Atog eats an artifact and a Fallen Angel a creature; what
+## those cost is a board, not a Swamp, and nothing here prices a board —
+## the same answer [method _ability_available] gives them on our own side
+## of the table until a knob rules otherwise.
+func _cheapest_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
+	var who := inst.controller_id
+	var best: Dictionary = {}
+	for index in inst.cur_activated_abilities.size():
+		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+		if ability.tap_cost or ability.cost == null:
+			continue
+		if not _animation_timing_open(game, ability, who):
+			continue   # the printed timing riders, read for THEIR seat
+		if ability.only_owner_may_activate and inst.owner_id != who:
+			continue   # a stolen Personal Incarnation answers to its owner
+		if ability.cost.has_x or ability.sacrifice_cost \
+				or ability.sacrifice_filter.is_valid() or ability.exile_cost \
+				or ability.exile_filter.is_valid() or ability.discard_cost > 0 \
+				or ability.random_discard_cost > 0 or ability.life_cost > 0 \
+				or ability.counter_cost_kind != "":
+			continue
+		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+		if not intent.pump_self or intent.unknown:
+			continue
+		var bonus := Vector2i(intent.pump_power, intent.pump_toughness)
+		if bonus.x < 0 or bonus.y < 0 or (bonus.x <= 0 and bonus.y <= 0):
+			continue   # a Wall of Wonder's +4/-4 is a different card
+		var price := ability.cost.mana_value()
+		if price <= 0:
+			continue   # a free pump has no mana to read; this pool prints none
+		if best.is_empty() or price < int(best["price"]):
+			best = {"price": price, "bonus": bonus, "index": index}
+	return best
+
+
+## HOW MANY BODIES OF THEIRS ARE ASKING THE SAME POOL FOR THE SAME COMBAT
+## (2026-09-10, [member AiProfile.reads_pumps]) — never fewer than one,
+## and [param inst] is always one of them.
+##
+## The set is the combat's own. When THEY are attacking, it is their
+## attacking pumpers: those are the bodies a block can put the question
+## to, and the ones left at home want nothing. When we are the seat
+## declaring, it is their UNTAPPED pumpers: those are the bodies that
+## could block, and a tapped one is no blocker at all (CR 509.1a).
+##
+## THE DIRECTION OF THE ERROR IS CHOSEN. Splitting the pool evenly
+## under-reads the case where only one of their several bodies ends up in
+## the combat and takes the whole of it, and that under-read pushes the
+## pilot back toward the null it is measured against; reading the pool
+## whole for each of them over-read a whole block declaration away, which
+## is the wall this knob's own risk note is about (`docs/forge/combat.md`
+## P2). Measured both ways on 2026-09-10 and the split is what the Lab
+## kept.
+func _pump_claimants(game: MtgGame, inst: CardInstance) -> int:
+	var who := inst.controller_id
+	var they_attack := game.active_player == who and not game.combat.attackers.is_empty()
+	var claimants := 0
+	for other in game.players[who].battlefield:
+		if not other.is_creature() or other.cur_activated_abilities.is_empty():
+			continue
+		if other != inst:
+			if they_attack:
+				if not game.combat.attackers.has(other.id):
+					continue
+			elif other.tapped:
+				continue
+			if _cheapest_pump_of(game, other).is_empty():
+				continue
+		claimants += 1
+	return maxi(claimants, 1)
+
+
+## THE CAP ON [method _pump_reach]: the smallest number of activations
+## past which NO kill-or-survive answer on this board could still change
+## (2026-09-10, [member AiProfile.reads_pumps]).
+##
+## Two questions and no third. How much power would [param inst] need to
+## finish every body we have (the sum of their toughness — an attacker
+## divides its power among its blockers, so the sum is the ceiling), and
+## how much toughness would it need to live through every body we have
+## (the sum of their power, and one more). Whichever wants more
+## activations is the cap; a board with no creature of ours on it wants
+## none, and the reach is zero.
+##
+## It is a CEILING and not a target: the predicate it feeds is binary, so
+## the answers at the cap and above it are identical by construction —
+## which is exactly why the number may be capped without changing a
+## single decision, and why it must be, so that no reading downstream ever
+## inherits a +10/+10 that means +2/+2.
+func _pump_cap(game: MtgGame, inst: CardInstance, bonus: Vector2i) -> int:
+	var our_power := 0
+	var our_toughness := 0
+	for body in game.players[pid].battlefield:
+		if not body.is_creature():
+			continue
+		our_power += maxi(body.cur_power, 0)
+		our_toughness += maxi(body.cur_toughness - body.damage, 0)
+	var need := 0
+	if bonus.x > 0:
+		var short_power := maxi(our_toughness - maxi(inst.cur_power, 0), 0)
+		need = maxi(need, ceili(float(short_power) / float(bonus.x)))
+	if bonus.y > 0:
+		var alive := maxi(inst.cur_toughness - inst.damage, 0)
+		var short_toughness := maxi(our_power + 1 - alive, 0)
+		need = maxi(need, ceili(float(short_toughness) / float(bonus.y)))
+	return need
+
+
 ## THE SAME QUESTION ASKED OF A WHOLE BAND (2026-09-09,
 ## [member AiProfile.pumps_to_attack]): would [param band] TOGETHER finish
 ## [param victim], with [param extra] naming a what-if bonus for any of
@@ -4109,6 +4350,11 @@ func _band_kills(game: MtgGame, victim: CardInstance,
 		band: Array[CardInstance], extra: Dictionary = {}) -> bool:
 	if victim.cur_indestructible or _shieldable(game, victim):
 		return false
+	# THEIR PUMPS ARE PUBLIC (2026-09-10, [member AiProfile.reads_pumps]):
+	# a gang is a kill test, and this one does not go through
+	# [method _dies_to], so the reading is put to it here in the same
+	# words. Zero for a body of ours and for a creature with no ability.
+	var grows := _pump_reach(game, victim)
 	var total := 0
 	var bodies := 0
 	for body in band:
@@ -4116,7 +4362,7 @@ func _band_kills(game: MtgGame, victim: CardInstance,
 			continue
 		bodies += 1
 		var bonus: Vector2i = extra.get(body.id, Vector2i.ZERO)
-		total += _damage_from(body, victim, bonus)
+		total += _damage_from(body, victim, bonus, grows)
 	# RAMPAGE (CR 702.23, 2026-09-10, [member AiProfile.reads_gaze]): the
 	# body a gang meets is not the body it was declared against — a Craw
 	# Giant blocked by two is +2/+2 before any damage is assigned. Zero
@@ -4124,7 +4370,7 @@ func _band_kills(game: MtgGame, victim: CardInstance,
 	# there, which is what `tests/ai/test_ai_gang_blocks_2026_09_05.gd`
 	# pins.
 	return total > 0 and total >= victim.cur_toughness - victim.damage \
-		+ _rampage_bonus(victim, bodies)
+		+ _rampage_bonus(victim, bodies) + grows.y
 
 
 ## Every body of ours blocking [param victim], as the band [method
@@ -5930,7 +6176,16 @@ func _attack_risk(game: MtgGame, inst: CardInstance,
 		if CombatState.block_illegality(game, blocker, inst, defender) != "":
 			continue
 		worst_loss = maxf(worst_loss, 0.0)
-		var kills_me := _dies_to(game, inst, blocker, bonus, Vector2i.ZERO)
+		# THEIR PUMPS ARE PUBLIC (2026-09-10, [member
+		# AiProfile.reads_pumps]). This is where a body of ours is being
+		# SENT into theirs, so the breath their open mana pays for is
+		# asked of the blocker as well: a Grizzly Bears into a 0/1 Frozen
+		# Shade behind four Swamps read 0.00 here — "we kill it and live"
+		# — and was in the graveyard with their life still twenty.
+		# [method _dies_to] carries the other direction (their body
+		# surviving ours) for every reader.
+		var grows := _pump_reach(game, blocker)
+		var kills_me := _dies_to(game, inst, blocker, bonus, grows)
 		var survives_me := not _dies_to(game, blocker, inst, Vector2i.ZERO, bonus)
 		if kills_me and survives_me:
 			worst_loss = maxf(worst_loss, my_value)          # pure loss
@@ -6180,7 +6435,14 @@ func _cohort_value(game: MtgGame, group: Array[CardInstance],
 			if attacker.has_keyword(Mtg.Keyword.TRAMPLE):
 				soaked = mini(soaked, maxi(blocker.cur_toughness - blocker.damage, 0))
 			var gain := _face_damage_value(game, soaked, defender)
-			if _dies_to(game, attacker, blocker):
+			# THEIR PUMPS ARE PUBLIC (2026-09-10, [member
+			# AiProfile.reads_pumps]): the GROUP half of what [method
+			# _attack_risk] asks per creature, and it has to be paid here
+			# too or the cohort re-adds the body the per-creature filter
+			# refused — the same place [member AiProfile.reads_gaze]'s
+			# executioner had to be paid.
+			if _dies_to(game, attacker, blocker, Vector2i.ZERO,
+					_pump_reach(game, blocker)):
 				gain += Evaluator.permanent_value(attacker)
 			if _dies_to(game, blocker, attacker):
 				gain -= Evaluator.permanent_value(blocker)
@@ -6220,7 +6482,8 @@ func _cohort_value(game: MtgGame, group: Array[CardInstance],
 		if attacker.has_keyword(Mtg.Keyword.TRAMPLE):
 			through += maxi(
 				attacker.cur_power - maxi(blocker.cur_toughness - blocker.damage, 0), 0)
-		if _dies_to(game, attacker, blocker):
+		if _dies_to(game, attacker, blocker, Vector2i.ZERO,
+				_pump_reach(game, blocker)):
 			value -= Evaluator.permanent_value(attacker)
 		if _dies_to(game, blocker, attacker):
 			value += Evaluator.permanent_value(blocker)
@@ -6715,11 +6978,17 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 	# 3) Gang up: two blockers whose combined damage kills it, if their
 	#    combined worth isn't wildly above the prize.
 	if not _shieldable(game, attacker) and not attacker.cur_indestructible:
+		# THEIR PUMPS ARE PUBLIC (2026-09-10, [member
+		# AiProfile.reads_pumps]): the gang rung asks its own kill
+		# question rather than [method _dies_to]'s, so the body it prices
+		# is the one their open mana can put in front of it.
+		var grows := _pump_reach(game, attacker)
 		for i in legal.size():
 			for j in range(i + 1, legal.size()):
-				if _damage_from(legal[i], attacker) + _damage_from(legal[j], attacker) \
+				if _damage_from(legal[i], attacker, Vector2i.ZERO, grows) \
+						+ _damage_from(legal[j], attacker, Vector2i.ZERO, grows) \
 						>= attacker.cur_toughness - attacker.damage \
-							+ _rampage_bonus(attacker, 2):
+							+ _rampage_bonus(attacker, 2) + grows.y:
 					var price := Evaluator.permanent_value(legal[i]) \
 						+ Evaluator.permanent_value(legal[j])
 					if price <= attacker_value * 1.5 or desperate:

@@ -90,7 +90,7 @@ Factory attack instead of going off on an empty board — which is
 | Knob | Designed in | Rung | What it fixes |
 |---|---|---|---|
 | `reads_race` | combat P1 | Sorcerer+ | the tolerance moves with the two clocks, the block trade margin with it |
-| `reads_pumps` | combat P2 | Sorcerer+ | a bear into a Frozen Shade with Swamps up |
+| ~~`reads_pumps`~~ | combat P2 | Sorcerer+ | ~~a bear into a Frozen Shade with Swamps up~~ **SHIPPED 2026-09-10** — a wash that removes the malfunction (+0.6 / −0.3 / −1.0 on three pairs at 2,000 an arm), and the note's own risk arrived on DEFENCE: read in both directions it measured −3.2 against Mountain Artillery, so the power half is asked only where a body of ours is being SENT into theirs (`docs/ai-difficulty.md` §4) |
 | `reinforces_blocks` | combat P4 | Sorcerer+ | Wall of Stone plus Grizzly Bears kill the Craw Wurm |
 | `holds_tricks` | combat P5 / casting P13 | Wizard | the bait attacker sent on the strength of the Giant Growth, its mana booked |
 | `crack_back_margin` | combat P8 | Wizard | the crack-back search asked below lethal, at the chump line |
@@ -191,4 +191,13 @@ so that half of `reads_gaze` is pinned by tests and is honestly
 unmeasurable here; Demonic Tutor is restricted, so every deck plays
 exactly one and `tutors_for_the_turn`'s answer differs in about one game
 in eight; and the sideboard-only sweepers (Flashfires, Tsunami, Acid
-Rain) are never seen by a free-play sweep at all.
+Rain) are never seen by a free-play sweep at all. And `reads_pumps`
+(2026-09-10) added the sharpest one yet: of the five shipped starters
+only Mountain Artillery and Black-Red Raiders hold a creature with an
+activated self-pump, so **fourteen of the twenty starter matchups
+measure exactly 0 games different** and the whole gauntlet is a pool fact
+rather than a measurement. The decks that put the question are the 1997
+enemies — Vampire Lord, Ape Lord, Great Hydra, Kzzy'n the Dragon Lord,
+eight pumpers each — and `necropotence_1996`, which combat P2 names as
+the likely pair, is one of the four this section already says cannot be
+played.

@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -399,16 +399,42 @@ Mishra's Factory and Jade Statue — on EITHER side of the table, because
 the knob is one fact read twice: theirs is a blocker our attack has to
 price and ours is a blocker we buy once their attackers are declared.
 Its control must hold neither, and Big Green vs White Knights again
-does not. **Mind that both default ON at Sorcerer and Wizard**, so a
+does not.
+`reads_pumps` (2026-09-10) fires wherever a creature on the side
+OPPOSITE the seat being swept carries an activated self-pump with no tap
+cost — seventeen cards in this pool, the same shape `pumps_to_attack`
+reads on its own side (Frozen Shade, Carrion Ants, Killer Bees, Shivan
+Dragon, Granite Gargoyle, Vampire Bats, Fire Drake, the three Walls, and
+so on; Atog, Fallen Angel and Osai Vultures pay in a BOARD rather than
+in mana and are refused). Its control must hold none of them: Big Green
+vs White Knights holds none, and is 1075-925 byte-identical to its own
+null in every arm of six runs at 2,000 games and 525-475 in all eleven
+at 1,000. **Mind what the pool actually holds when you pick the live
+pair.** Of the five shipped starters only Mountain Artillery (3 Granite
+Gargoyle, 1 Shivan Dragon) and Black-Red Raiders (1 Shivan Dragon) hold
+one at all, so fourteen of the twenty starter matchups measure **exactly
+0 games different**; the decks that put the question are the 1997
+enemies — `decks/1997/originals/vampire_lord.deck` (4 Carrion Ants, 4
+Vampire Bats, 22 Swamps), `ape_lord.deck`, and
+`decks/1997/ancients/crag_hydra.deck` (Great Hydra: 4 Granite Gargoyle,
+4 Wall of Fire, and 4 Lightning Bolt and 4 Mana Flare beside them, which
+is the "pumps AND instants" pair the design note asks for). The
+community Necropotence list the note names CANNOT be played: six
+proxies, exit 2.
+**Mind also that all three default ON at Sorcerer and Wizard**, so a
 sweep of some OTHER knob taken against a published number must pin them
-off on both seats (`--profile-a wizard:reads_gaze=off,reads_manlands=off`
-and the same for `--profile-b`) or it is measuring three changes; that
-is how the null was proved for this pass — the `pays_sacrifices` sweep
+off on both seats
+(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off`
+and the same for `--profile-b`) or it is measuring several changes; that
+is how the null was proved for both passes — the `pays_sacrifices` sweep
 of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,
-1,000 games an arm, run on the tree before these two landed and on the
-tree after with both pinned off, is **identical game for game in all
+1,000 games an arm, run on the tree before the first two landed and on
+the tree after with both pinned off, is **identical game for game in all
 6,000 games**, 24.9% null either way and the control 525-475 replayed to
-the game.
+the game; and run again on 2026-09-10 on HEAD's own files and on the
+`reads_pumps` tree with all three pinned off, the two `games.csv` files
+are byte for byte the same 6,000 games (22.6% null on both, which is
+what the same pair reads under the day's other knobs).
 `tutors_for_the_turn` (2026-09-10) fires wherever a card ask offers cards
 out of the SEAT'S OWN LIBRARY, which in this pool is a Demonic Tutor, an
 Untamed Wilds, a Land Tax, a Transmute Artifact or an Aladdin's Lamp —

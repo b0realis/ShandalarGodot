@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5635 tests, 0 failing, 326 scripts** (148 220 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5658 tests, 0 failing, 327 scripts** (148 456 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10271,6 +10271,79 @@ in their places.
   spell, so an Ancestral and a Swords tie and the shuffle decides; and the
   land sweep reads the BOARD's clock and not what a drought does to the
   HAND, which wants `counts_the_race`'s horizon (wave 4).
+
+## THE MANA ON THE OTHER SIDE OF THE TABLE (2026-09-10) — Wave 3, combat P2
+
+- **The pilot sized everything of its own by the mana it held, and had
+  never once feared the same mana across the table.** `AiPlayer._shieldable`
+  has counted their open sources against their cheapest REGENERATION shield
+  since the block audit, so a Drudge Skeletons with `{B}` up is a wall to
+  every kill this AI predicts; nothing else on their side was read that way.
+  A Shivan Dragon with three Mountains was a 5/5 and a Frozen Shade behind
+  four Swamps a 0/1. Reproduced on the owner's own board: `_attack_risk
+  0.00` — "we kill it and live" — the Grizzly Bears declared, and the body
+  in the graveyard with the Shade still standing and their life still
+  twenty. `reads_pumps` (Sorcerer, Wizard) is the mirror of
+  `pumps_to_attack`, five passes after it.
+- **`AiPlayer._pump_reach`**: the cheapest self-targeting `PumpEffect`
+  ability with no tap cost, times the activations their open sources pay
+  for, under three caps that are each a real card — the printed *activate
+  only N times each turn* (a Fire Drake behind five Mountains is +1/+0),
+  ONE POOL shared among the bodies of theirs this combat can ask it of
+  (three Carrion Ants behind six Swamps are three 2/3s, not three 6/7s),
+  and the smallest count past which no kill-or-survive answer on the board
+  could change (a Shade behind ten Swamps facing one Grizzly Bears is
+  +2/+2). [forge] `ComputerUtilCombat.predictPowerBonusOfBlocker`
+  (`ComputerUtilCombat.java:955-991`, commit `b09a3d3f`) counts ONE
+  activation and under-reads that Shade by three points. Only the KILL
+  test reads it; the face damage is untouched and the cohort still prices
+  its damage through. Nothing names a card: `EffectIntent.pump_self`, and
+  their mana counted the way `_shieldable` counts it.
+- **THE CUT THAT SAVED IT, AND THE NUMBER THAT FORCED THE CUT.** Fed
+  through `_dies_to` in both directions it measured **−3.2 ±2.8 on
+  Mountain Artillery vs Vampire Lord**, 44 of the 151 games that turned
+  won and 107 lost — below the negative interval, on the canary the two
+  earlier rejected approximations broke. By phase: the ATTACK half −0.2,
+  the BLOCK half **−2.4**. Read on defence, their pump stopped the ladder's
+  first rung claiming a kill AND told it our blocker dies, no later rung
+  catches a printed 0/1, and three Carrion Ants behind six Swamps walked
+  past three Hill Giants for six a turn — the note's own "wall", arriving
+  on defence. So the POWER half is asked only where a body of ours is being
+  SENT into theirs (`_attack_risk`, `_cohort_value`) and the TOUGHNESS half
+  everywhere. It is a fact and not a tuning: a blocker of ours that dies to
+  their breath has SPENT their mana, and this engine breathes fire at the
+  PLAYER with an unblocked attacker on both sides of the table; an attacker
+  of ours that dies to it bought nothing. The smaller cut — reading their
+  pool whole for every body — cost 0.5 points on the same pair and the
+  split is kept for the reading it is.
+- **Measured**: Big Green vs Vampire Lord 76.6 -> 77.2 (+0.6 ±2.6, 35 won
+  to 23), vs Great Hydra 76.3 -> 76.0 (−0.3 ±2.6, 35 to 41), Mountain
+  Artillery vs Vampire Lord 73.0 -> 72.1 (−1.0 ±2.8, 29 to 48); across the
+  three, 99 of 211 games that ended differently won and 112 lost, a coin.
+  The whole five-deck gauntlet at 1 000 an arm: fourteen of twenty
+  byte-identical to their own null, the six that fire +0.7, +0.2, +0.1,
+  +0.0, −0.1, −0.4. Control PASS byte-identical in every arm of every run.
+  Measured at every rung and the numbers argue nothing (+0.1 / −0.6 / +0.2
+  / +0.1, none clear of zero), so the rung is the ramp ruling's and the
+  company it keeps. Null proved by replaying the manual's `pays_sacrifices`
+  sweep on HEAD's own files and on this tree with all three reads pinned
+  off: **6 000 games byte for byte**.
+- **Pool facts.** Seventeen cards carry an activated self-pump with no tap
+  cost; three of them (Atog, Fallen Angel, Osai Vultures) pay in a BOARD
+  and are refused. Of the five starters only Mountain Artillery and
+  Black-Red Raiders hold one, so the knob is invisible in fourteen of the
+  twenty starter matchups; the decks that put the question are the 1997
+  enemies. `decks/community/necropotence_1996.deck`, which combat P2 names
+  as the likely pair, holds SIX proxies and cannot be played.
+- **Open, named at the sites and in §5**: their COLOURS are not counted,
+  only their sources (the convention `_shieldable`, `_animatable_bodies`
+  and `_taps_into_execution` all keep); the two card-local firebreathers
+  (Dragon Whelp, Nalathni Dragon) are not read on their side, because that
+  table is gated behind `pumps_to_attack` and one reading with two gates is
+  two stories; and the block ladder still has no rung between the safe
+  block and the chump that can say *this body dies either way, and blocking
+  spends their mana instead of my life* — which is `reinforces_blocks`'
+  shape (combat P4), not this knob's.
 
 ## Standing quality gates
 

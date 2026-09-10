@@ -2284,7 +2284,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5635 tests / ~148 220 asserts, ~380 s
+├── tests/                   GUT suite — 5658 tests / ~148 456 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -3979,6 +3979,23 @@ shandalar/
 │    protection from black no risk at all, and Tetsuo Umezawa — which can
 │    take the body standing still — refused; the ladder from Sorcerer up;
 │    the knob read by the Lab;
+│    tests/ai/test_ai_reads_pumps_2026_09_10.gd — THEIR PUMPS ARE PUBLIC
+│    (AiProfile.reads_pumps): the Grizzly Bears that stops walking into a
+│    0/1 Frozen Shade behind four Swamps and the null that sends it and
+│    loses it; the group half of the declaration paying it too
+│    (_cohort_value -4.00 against the null's +1.00); one Swamp one
+│    activation, ten Swamps still +2/+2, an empty board of ours asking
+│    nothing; the printed per-turn cap on a Fire Drake and a Vampire Bats;
+│    one pool shared among one body and among three; tapped mana, a
+│    summoning-sick source, a TAP-COST pump (synthetic, no card named), a
+│    pump whose cost is a BOARD (Atog) and a pump on a creature of OURS
+│    all read as nothing; a creature with no activated ability untouched;
+│    a board where the pump changes nothing unchanged on both arms; the
+│    gang priced at the body it will meet and the null's gang at the
+│    printed 0/1; the crack-back matrix carrying the victim half and not
+│    the other; the gaze outranking the pump and the pump deciding it
+│    where the gaze is off; the ladder from Sorcerer up; the knob read by
+│    the Lab;
 │    tests/ai/test_ai_reads_manlands_2026_09_10.gd — THE LAND THAT IS A
 │    BLOCKER, AND THE ONE OF OURS THAT COULD BE (AiProfile.reads_manlands):
 │    the Llanowar Elves held home in front of a Factory with {1} up and

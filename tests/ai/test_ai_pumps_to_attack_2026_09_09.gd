@@ -137,7 +137,17 @@ func test_the_ants_are_sent_into_a_blocker_the_breaths_beat() -> void:
 	# buys exactly the two breaths that win the trade — not the four the
 	# mana would have paid for.
 	var ai := _ai(_on())
-	var foe := _ai(AiProfile.wizard(), 1)
+	# THE BLOCKER THAT CANNOT SEE THE BREATH (2026-09-10). The seat
+	# opposite is pinned with [member AiProfile.reads_pumps] OFF on
+	# purpose: a Wizard that reads their pumps declines this block — the
+	# Ants behind four Swamps is a 2/3 to it, and refusing to feed a
+	# Grizzly Bears to one is exactly what that knob is for
+	# (`test_ai_reads_pumps_2026_09_10.gd` pins the same board from the
+	# other side of the table). What this test is about is OUR half: the
+	# breaths the trade is won with once the block IS made.
+	var foe_profile := AiProfile.wizard()
+	foe_profile.reads_pumps = false
+	var foe := _ai(foe_profile, 1)
 	var ants := put_battlefield(0, "Carrion Ants")
 	_lands(0, "Swamp", 4)
 	var bears := put_battlefield(1, "Grizzly Bears")

@@ -906,6 +906,63 @@ var reads_gaze := false
 ## to both seats.
 var reads_manlands := false
 
+## THEIR PUMPS ARE PUBLIC (2026-09-10): does this profile read the
+## activated pump on a creature it does NOT control as part of that
+## creature's size, or take the printed numbers on trust?
+##
+## [method AiPlayer._shieldable] has counted their open mana against their
+## cheapest REGENERATION shield since the block audit, so a Drudge
+## Skeletons with {B} up is a wall to every kill this pilot predicts — and
+## nothing else on their side of the table was ever read that way. A
+## Shivan Dragon with three Mountains open was a 5/5 and a Frozen Shade
+## with four Swamps was a 0/1. Reproduced 2026-09-10 on the owner's own
+## board: our Grizzly Bears against their 0/1 Shade behind four untapped
+## Swamps reads `_attack_risk 0.00` — "we kill it and live" — the swing is
+## declared, and the Bears is in the graveyard with the Shade still
+## standing and their life still twenty.
+##
+## On, [method AiPlayer._pump_reach] answers what their body can grow to:
+## the cheapest self-targeting [PumpEffect] ability with no tap cost,
+## times the activations their OPEN SOURCES pay for — capped by the card's
+## own "activate only N times each turn", by the pool being ONE pool
+## shared among the bodies of theirs this combat can ask it of, and then
+## by the smallest count past which no kill-or-survive answer on the board
+## could still change. Forge counts ONE activation, which under-reads a
+## Shade badly; counting all of them is the honest read of public mana,
+## and the caps are what keep it from being a fantasy — a Shade behind ten
+## Swamps facing one Grizzly Bears is read at +2/+2, not +10/+10.
+##
+## ONLY THE KILL TEST READS IT, never the face damage: a pump that does
+## not change who dies is still their mana to spend, and the cohort still
+## prices its damage through. The reading enters at [method
+## AiPlayer._dies_to]'s own seam, through the bonus parameters that
+## predicate already carries, so the attack risk, the block ladder, the
+## gang and the crack-back matrices ask one question and get one answer.
+##
+## AND IT IS ASYMMETRIC, because the Lab said so rather than because the
+## design did. Their pump deciding whether THEIR body dies is read
+## everywhere. Their pump deciding whether OURS dies is read only where we
+## are choosing to SEND a body into it — the two halves of the attack
+## declaration — and not where we are choosing to put one in FRONT of it:
+## read there, it took a whole block declaration away (three Carrion Ants
+## behind six Swamps walking past three Hill Giants) and measured -2.4
+## +-2.8 on Mountain Artillery against Vampire Lord, against -0.2 for the
+## other half. The reason it is not merely a tuning: a blocker of ours
+## that dies to their breath has SPENT their mana, and mana spent killing
+## a blocker is mana that did not reach our face — this engine breathes
+## fire at the player with an unblocked attacker, on both sides of the
+## table. An attacker of ours that dies to it has bought nothing at all.
+##
+## Sorcerer and Wizard, with the other combat reads. It is the mirror of
+## [member pumps_to_attack], which sizes OUR body by OUR open mana and had
+## never once feared the same mana on the other side of the table — so a
+## profile with one and not the other does to the opponent what it cannot
+## see coming. Nothing here names a card: the shape is [member
+## EffectIntent.pump_self] read off the ability's own effects, and their
+## mana is counted the way [method AiPlayer._shieldable] already counts it
+## — untapped permanents, public to both seats.
+var reads_pumps := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
@@ -1003,6 +1060,7 @@ static func sorcerer() -> AiProfile:
 	profile.reads_gaze = true
 	profile.reads_manlands = true
 	profile.tutors_for_the_turn = true
+	profile.reads_pumps = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -1015,6 +1073,7 @@ static func wizard() -> AiProfile:
 	profile.reads_gaze = true
 	profile.reads_manlands = true
 	profile.tutors_for_the_turn = true
+	profile.reads_pumps = true
 	return profile
 
 
