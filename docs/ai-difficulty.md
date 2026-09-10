@@ -81,7 +81,8 @@ override any knob on any preset for a measurement
 | `prices_liabilities` | on | on | on | on | knows that a permanent of its OWN can be worth less than nothing: the reckoning (a permanent whose printed line says losing it loses the GAME is never given up — a Lich), the dead weight (tapped, not untapping, every ability needing the {T} it cannot pay — a Mana Vault with no {4}, a creature under a Paralyze whose {4} we cannot reach; since the fifth pass the escape printed on the AURA counts, so an Angel we could free for {4} is an Angel again) and the toll it still takes each turn, priced for the turns our mana needs to reach the price the card itself prints. It is what opens `spares_own`'s one door: with it the AI Detonates the Vault it cannot untap and keeps the one it can — and since the same pass it reads the sting a punisher deals its target's controller on BOTH sides of the table, so a Detonate on their Nevinyrral's Disk with the opponent at four is the kill it always was; on everywhere, the same reason |
 | `prices_fallout` | on | on | on | on | prices what its own spell does to its OWN side of the table on the way past — the other half of `spares_own`, which only guards the slots. Volcanic Eruption ("destroy X target Mountains, then that many damage to each creature and each player") is the pool's one card of the shape: on, the planner walks every affordable X, prices the blast on the sweeper's own scale (`_sweep_value`: what dies on each side, both life totals, never an X lethal to us), refuses one that would put it on its own `chump_threshold` or below unless the blast wins outright, and keeps the cheapest X worth casting. Off, the blast is free and the X is whatever the lands will pay: at five life against six Mountains it cast for X=6 and killed itself. On everywhere, the same reason; the panic line gives it a per-rung shape without a number of its own |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
-| `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
+| `levels_boards` | off | off | on | on | prices Balance by what each side would lose — and since 2026-09-10 THE LAND SWEEP, which is the same sentence with only the land clause: a sweeper whose every kill is a LAND (Armageddon, and the sideboards' Flashfires and Tsunami) levels both manabases, so it is priced by what each side would lose rather than by a head count. Each land it takes is worth what it is worth to its controller (`Evaluator.land_value` — scarcity, a dual, the only source of a colour, a land that does more than make mana) instead of `permanent_value`'s flat 1.0, so a Library of Alexandria and three duals are not four Plains; and whatever THEIR board gets through that ours does not is charged against the swing at the reaper's rate (`AiPlayer._drought_clock`, the damage each side puts through the other's blocks — the reading `times_sweeps`' relief already asks their next attack with — priced by `_life_price`). An all-lands sweep kills nothing on the table, so both boards go on hitting each other with no mana to answer with, and the pilot used to Armageddon on the land count alone with two Serra Angels facing it |
+| `tutors_for_the_turn` | off | off | on | on | fetches the card THIS TURN wants instead of the dearest card in the deck. A search of our own library is the one gain ask with an ORDER rather than a maximum (`AiPlayer._tutor_pick`, casting P9): a LAND when we are short of them, hold none and can cast nothing off the board's own mana — taken for the colour the hand is missing; then the best of what NEXT TURN's mana reaches; then the card worth most on THIS BOARD, which is a sweeper priced by what the sweep would swing and a leveller by what each side would lose. Off, the answer was `Evaluator.card_value` and nothing else, so in a hundred and fifty logged games The Deck's Demonic Tutor named exactly three cards out of the sixty in the deck and never a land |
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race — a Tome's tick, an Ancestral, a tutor's card, and since the third pass the extra draw step a Time Walk buys |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
@@ -200,7 +201,13 @@ your attackers, sizes its X spells — and since 2026-09-10 holds the X
 BURN while its whole reach is under three (the Wizard waits for five),
 so a Fireball is no longer spent on a Grizzly Bears on turn three and no
 longer waits once their board is a clock this seat's own blocks cannot
-absorb — prices a Balance, paces its draws to
+absorb — prices a Balance, and an Armageddon: it holds that one while
+your board is the one that would win the mana drought it makes, and
+casts it with a Library of Alexandria and three duals of its own only
+when the manabase it gives up is not the better one; fetches with its
+Demonic Tutor the land it is stuck without, the creature next turn can
+actually cast, or the Wrath your board is asking for rather than the
+dearest card in its deck, paces its draws to
 the libraries (a Time Walk's extra draw step among them), keeps a
 second The Abyss in hand, animates a Factory
 only for an attack it will actually declare, sends a firebreather at the
@@ -1096,6 +1103,132 @@ control Big Green vs Mountain Artillery:
   ships at 1.5 on every preset, no rung moves it, and the next person who
   wants Forge's 2.5 can have the same three arms in one command instead
   of an argument.
+THE TUTOR'S PICK (2026-09-10, `tutors_for_the_turn`) is a WASH on either
+pair's own interval and a GAIN once the games that turned are counted,
+and the census under it is where the change is really visible. Seed 11,
+control Big Green vs White Knights, byte-identical to its own null in
+every arm of all six runs (525-475 at 1 000, 2150-1850 at 4 000).
+
+| pair | null (4 000) | `on` (4 000) | delta (1 000) | delta (4 000) | games that turned (4 000) |
+| --- | --- | --- | --- | --- | --- |
+| The Deck vs White Knights | 28.1% | 29.4% | +0.7 ±4.0 | +1.3 ±2.0 | 482 played, 151 ended — **102 won, 49 lost** |
+| The Deck vs Black-Red Raiders | 41.8% | 42.4% | +0.6 ±4.3 | +0.6 ±2.2 | 518 played, 125 ended — **74 won, 51 lost** |
+| Alt-A-Kesh vs White Knights | 23.0% (1 000) | 23.0% | +0.0 ±3.7 | — | **4 played, 0 ended of 1 000** |
+
+(The 1 000-game runs have their own nulls — 29.1%, 41.3%, 23.0% — and the
+1 000-game delta column is read against those.)
+
+- **NEITHER DELTA IS CLEAR OF ZERO AND THE PAIR OF THEM IS.** Over the
+  two 4 000-game pairs 276 games ended differently and they split **176
+  to 100**; on the discordant pairs that is 4.6 standard errors from a
+  coin, which is decided, and it is the same +0.95 points the two win
+  rates average to. Said plainly: the search resolves in about a third of
+  the games and the ANSWER differs in about one in eight, which is not
+  enough to move a single pair's win rate past its own interval — and the
+  flips say which way it moves.
+- **THE NULL IS EXACTLY THE NULL, proved by replaying a published sweep
+  game for game.** The `pays_sacrifices` sweep of the Deck Lab manual
+  (Dracur — Spells of the Ancients vs Big Green, 1 000 games an arm, seed
+  11) was run on the shipped tree and on this one with
+  `tutors_for_the_turn=off` forced on both seats: 24.9% / 27.2% / 24.9%
+  either way, control 525-475, and **all 6 000 games identical by their
+  own log fingerprint** — the same winner, the same turn count, the same
+  hash. (The ROADMAP prints 27.3% for that arm; the shipped tree gives
+  27.2% here too, so the third decimal is the ledger's and not a moved
+  null.)
+- **THE CENSUS IS THE ARGUMENT.** Over 150 logged games of The Deck
+  against White Knights the pilot resolved 53 searches and the answer was
+  one of **exactly three cards** out of the sixty in the deck —
+  Jayemdae Tome ×25, The Abyss ×22, Nevinyrral's Disk ×6 — because those
+  are the three that price at 5.0 and nothing else in the deck does. With
+  the knob it names six: Jayemdae Tome ×17, The Abyss ×15, **Balance ×11**,
+  Disrupting Scepter ×4, Nevinyrral's Disk ×5 and **City of Brass ×2**. A
+  Balance had never been fetched once, and a LAND had never been fetched
+  in the pilot's life. Against Black-Red Raiders the same shape: six
+  cards and 77 fetches become eight and 78, with Balance ×14 and a Swords
+  to Plowshares where there had been none.
+- **AND WHERE THE POOL DOES NOT PUT THE QUESTION IT MEASURES NOTHING,
+  which is worth writing down rather than hiding.** Alt-A-Kesh — two
+  Untamed Wilds over seven Forests, seven Swamps and seven Islands, the
+  best deck in the pool for the colour prong — moves **4 games of 1 000**
+  and flips none. Thirteen of the sixteen Untamed Wilds decks are
+  mono-green, where "which basic" has one answer.
+- **TWO POOL FACTS ON THE PAIRS THE PLAN NAMED.** `sligh_geeba_1996`
+  cannot be played: 9 proxies (An-Zerrin Ruins, Dwarven Lieutenant,
+  Dwarven Ruins, Dwarven Trader, Incinerate, Orcish Cannoneers, Orcish
+  Librarian, Serrated Arrows, Zuran Orb) — Black-Red Raiders stands in
+  for it above. And `necropotence_1996` cannot be played either: 6
+  proxies (Hymn to Tourach, Icequake, Ihsan's Shade, Necropotence, Order
+  of the Ebon Hand, Zuran Orb) — and it holds no tutor of any kind, so
+  even loaded it could not have exercised the knob from seat A.
+
+THE LAND SWEEP (2026-09-10, `levels_boards`' second reading) is a WASH
+that removes a malfunction, and it took THREE CUTS to get there — the
+first two are written down because each was measured and each was wrong
+in a way the next one names. Seed 11, control Big Green vs Mountain
+Artillery, and every pair run twice: once on the tree before this landed
+and once on this one, so the `on` arms lie side by side game for game.
+
+| cut | what it compared | AoL vs Big Green | AoL vs White Knights | games that turned |
+| --- | --- | --- | --- | --- |
+| 1 | our creatures' VALUE against theirs, as a veto | −1.3 (1 000) | +0.6 (1 000) | 35 ended — 14 won, 21 lost |
+| 2 | our CLOCK against theirs, as a veto | −0.4 ±2.0 | +0.2 ±2.1 | 58 ended — 26 won, 32 lost |
+| 3 | the clock DEFICIT as a price — **shipped** | −0.1 ±2.0 | +0.0 ±2.1 | 26 ended — 11 won, 15 lost |
+
+(The deltas are this pass's own half: the `on` arm here against the `on`
+arm of the tree before it, at 4 000 games for cuts 2 and 3. The WHOLE
+knob on those pairs is +2.5 ±2.0 and +2.5 ±2.1, and that is the
+leveller's number from 2026-09-07, not this reading's.)
+
+- **CUT 1 WAS FORGE'S OWN COMPARISON AND IT LOST.** `evaluateCreatureList`
+  becomes `Evaluator.permanent_value` here, which is power plus
+  toughness — so an Ironroot Treefolk (8) outweighs two Savannah Lions
+  (3 and 3) and a white weenie deck reads as BEHIND against the wall it
+  is walking past. Against Big Green 15 of the 17 games that turned were
+  lost. The lesson is the currency and not the rule: what decides a game
+  with no mana in it is not what the boards are worth but what they get
+  through.
+- **CUT 2 FIXED THE CURRENCY AND KEPT THE VETO, and the veto was the
+  other half of the mistake.** `_drought_clock` is
+  `_damage_through_blocks` — the reading `times_sweeps`' relief already
+  asks their next attack with — and refusing whenever theirs got anything
+  through still cost 18 of the 21 games that turned against Big Green.
+  The reason is named in §5: against a green deck the case for an
+  Armageddon is the four fatties in THEIR HAND that will never be paid
+  for, and nothing in this engine can see a hand's future.
+- **CUT 3 CHARGES THE DEFICIT INSTEAD OF VETOING ON IT**, at
+  `_life_price`'s rate and for one turn of it, which is the same currency
+  and the same conservatism `_sweep_relief` prices a saved point of life
+  in. Two Grizzly Bears' worth of clock is one point off the swing; a
+  Serra Angel's is four, and four is what a three-land swing cannot
+  carry. Of 8 000 `on`-arm games **285 played differently and 26 ended
+  differently — 11 won and 15 lost**, which at that count is a coin, and
+  both win rates land inside a fifth of their own interval.
+- **THE NULL IS EXACTLY THE NULL, across two trees.** Every `off` arm,
+  every `null` arm and EVERY ARM OF THE CONTROL PAIR is byte-identical
+  between the shipped tree and this one, game for game — on both pairs at
+  4 000, 40 000 games of `off` and control compared one by one, not one
+  different, and the same at 1 000 for the two cuts above it. The control
+  is 549-451 at 1 000 and 2177-1823 at 4 000, byte-identical to its own
+  null in every arm of all fifteen runs — eight at 1 000, seven at 4 000.
+- **WHAT IT FIXES IS WHAT THE TABLE SEES**, which is this file's own
+  precedent several times over. Probed on two boards. Four Plains against
+  seven and two Serra Angels across the table with nothing on ours: the
+  shipped pilot prices the Armageddon at 6.00 and casts it, handing the
+  opponent a board that kills it in three swings with no mana on either
+  side; it now prices it at 2.00 and holds. And three Underground Seas, a
+  Tundra, a Library of Alexandria and a City of Brass of ours against
+  seven Plains: the shipped pilot sees five lands against seven, prices
+  it at 4.00 and blows up the better manabase in the game; it now sees
+  what each land is worth to the seat that has it, prices it at −9.00 and
+  holds. Neither is a close decision made badly.
+- **THE CENSUS SAYS IT DECLINES FEW AND THE RIGHT FEW.** Over 150 logged
+  games Armies of Light casts Armageddon 15 times against Big Green with
+  the reading off and 14 with it on, and 37 times against White Knights
+  and 31 — one in fifteen declined on the first pair and one in six on
+  the second, and the ones declined are the ones with a board across the
+  table. Cut 2's veto declined 8 of the 15 and 9 of the 37, which is what
+  a rule with no price in it looks like.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -1135,6 +1268,21 @@ a measurement of some OTHER knob taken against a number published before
 `--profile-b`) or it is measuring three changes at once. That is how this
 pass proved its own null, and it is the general rule every knob since
 `plays_engines` has quietly needed.
+TWO MORE SINCE 2026-09-10. `levels_boards` grew the LAND SWEEP, so its
+control must hold no Balance AND no all-lands sweeper — Big Green vs
+Mountain Artillery holds none of them in the main deck (Mountain
+Artillery's three Flashfires are in the SIDEBOARD, which a free-play
+sweep never swaps in), and it is 549-451 byte-identical to its own null
+in every arm of eight runs at 1 000 games and 2177-1823 in all seven at
+4 000. `tutors_for_the_turn` fires
+wherever a card ask offers cards out of OUR OWN LIBRARY, so its control
+must hold no Demonic Tutor, no Untamed Wilds, no Land Tax, no Transmute
+Artifact and no Aladdin's Lamp — Big Green vs White Knights holds none
+of the five, and is 525-475 byte-identical to its own null in every arm
+of four runs at 1 000 games and two at 4 000. A Regrowth is NOT one of
+the five: the graveyard's gain asks go through `_choose_targets`, which
+has had its own land rule since the second pass, and Big Green's one
+Regrowth is untouched by the knob.
 
 ## 5. Where the ladder still ends short
 
@@ -1171,6 +1319,22 @@ pass proved its own null, and it is the general rule every knob since
   it the other half of the same fact: a manland of THEIRS is a body the
   attack has to price. What is left open is smaller and is named on the
   knob's own rows below.
+- `levels_boards`' LAND SWEEP (2026-09-10) reads the BOARD's clock and
+  nothing else, and the thing it cannot see is the half of a mana drought
+  that hurts most: what it does to the HAND. Armies of Light Armageddons
+  a Big Green holding two Craw Wurms and a Force of Nature, and the
+  reason that is right has nothing to do with the creatures already on
+  the table — it is the four fatties that will never be cast. Pricing it
+  wants the same HORIZON `counts_the_race` is named for (wave 4): how
+  many turns each side needs to rebuild, which is a hand size, a curve
+  and a land count over turns, and nothing in the engine estimates turns.
+  So the reading errs toward NOT casting, and the measurement says that
+  costs a little against a fat green deck and gains a little against a
+  fast white one. Forge's other two clauses are ruled and not built for
+  the same reason each time: its Crucible of Worlds branch names a card
+  this pool does not have, and its second land test ("never when we would
+  lose more land value") is the swing itself once the lands are priced by
+  `Evaluator.land_value`, so it is already there rather than missing.
 - `times_sweeps` holds an activated sweeper only from the moment it is
   offered in the opponent's combat; a Disk that is worth firing at its
   own main phase still fires there, when waiting for their attack would
@@ -1456,6 +1620,39 @@ pass proved its own null, and it is the general rule every knob since
   that reports the toughness a spell TAKES), and it is blocked on a card
   this pool does not have. Pinned by
   `tests/ai/test_ai_shrink_and_dream_2026_09_10.gd`, census and all.
+- `tutors_for_the_turn` (2026-09-10) knows three things about a fetch and
+  four things are open, each the honest cost of reading only what the
+  engine already has a reading for.
+  * ITS THIRD STEP READS TWO SHAPES. "The card worth most on THIS board"
+    is `_sweep_value` for a sweeper and `_level_value` for a leveller,
+    which are the two readings `_size_and_aim` already opens with; every
+    other card keeps its printed worth. The casting note's own examples
+    name two more — *a Moat when their creatures are ground-bound*, *the
+    finisher when the board is ours* — and neither exists as a reading
+    anywhere in this engine. Inventing one for a fetch would be a
+    card-shaped rule in the one place the ladder forbids it (§1), so the
+    fetch says only what the caster can already say.
+  * THE EVALUATOR IS FLAT AT THE CHEAP END. `Evaluator.card_value` floors
+    every spell at 2.5, so among the candidates next turn's mana reaches
+    an Ancestral Recall, a Swords to Plowshares and a Dark Ritual all
+    price the same and the shuffle decides which comes back. That is not
+    this knob's flatness — `_try_cast_best` ranks the hand by the same
+    number — but the fetch is where a human notices it, because a tutor
+    is asked once a game and the answer is remembered.
+  * THE COLOUR PRONG NEARLY NEVER BITES IN THIS POOL, and the census says
+    so: of the sixteen decks that play Untamed Wilds, thirteen are
+    mono-green, so "which basic" has one answer whatever the hand wants.
+    Alt-A-Kesh (seven Forests, seven Swamps, seven Islands and four Gem
+    Bazaars) is the deck that could ask it and **4 games of 1 000 play
+    differently** — its manabase is even enough that the shortfall is
+    usually nought. The reading is right and the pool does not put the
+    question.
+  * IT IS ONE CARD IN SIXTY, and that is a fact about the format rather
+    than about the knob: Demonic Tutor is RESTRICTED, so every deck in
+    this repository that plays it plays exactly one. The search resolves
+    in about one game in three and the ANSWER differs in about one in
+    eight, which no win rate at a thousand games can see; the census and
+    the flips are what it is read by.
 - `spends_counters` prices no counter at all, on purpose: fuel is worth
   zero to every reader the pilot owns until it is spent. Three things
   follow, and each is the honest cost of that.

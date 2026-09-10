@@ -389,6 +389,22 @@ var counts_cards := false
 ## card-named thing is the READING ([constant EffectIntent.LEVELLERS]),
 ## because the pool's one leveller is a card-local effect, the way a
 ## window card's shape is named.
+##
+## AND SINCE 2026-09-10 THE LAND SWEEP, which is the same sentence with
+## only the land clause: a sweeper whose every kill is a LAND levels both
+## manabases to nothing, so it is priced by what each side would lose
+## rather than by a head count. Two things follow ([method
+## AiPlayer._land_sweep], [forge] `DestroyAllAi.java:146-163`). Each land
+## it takes is worth what it is worth to its controller ([method
+## Evaluator.land_value]: scarcity, a dual, the only source of a colour,
+## a land that does more than make mana) instead of [method
+## Evaluator.permanent_value]'s flat 1.0, so a Library of Alexandria and
+## three duals are not four Plains. And whatever THEIR board gets through
+## that ours does not is charged against the swing at the reaper's rate
+## ([method AiPlayer._drought_clock], [method AiPlayer._life_price]): an
+## all-lands sweep kills nothing on the table, so both boards go on
+## hitting each other with no mana to answer with, and the pilot used to
+## Armageddon on the land count alone with two Serra Angels facing it.
 var levels_boards := false
 
 ## THE PACE: does this profile pace its optional draws to the race of the
@@ -408,6 +424,26 @@ var levels_boards := false
 ## rule reads [member EffectIntent.draws], [member EffectIntent.searches]
 ## and the two library counts.
 var paces_draws := false
+
+## THE TUTOR'S PICK: does this profile fetch the card THIS TURN wants, or
+## the dearest card in the library? Off, a search asks one question —
+## [method Evaluator.card_value], the printed worth of a card as a thing
+## to have — so a Demonic Tutor on two lands with a hand of four-drops
+## fetches a fourth four-drop, and a Mahamoti Djinn is taken ahead of the
+## creature we could cast next turn because it is bigger. On, the pick
+## is made in the order the casting note ranks it (docs/forge/casting.md
+## P9, [method AiPlayer._tutor_pick]): a LAND when we are short of them
+## and hold none, taken for the colour the hand is missing; then the best
+## of what NEXT TURN'S mana can cast; then the card worth most on THIS
+## BOARD rather than on its own — a sweeper priced by what the sweep
+## would swing, a leveller by what each side would lose, everything else
+## by its printed worth. Sorcerer and Wizard: it is a layer of play (the
+## turn ahead read into a card choice), not a number, and an Apprentice
+## that fetches the biggest card it owns is playing a poorer game rather
+## than a broken one. Nothing here names a card — the seam is a card ask
+## whose candidates all sit in the LIBRARY, which is the shape every
+## tutor in this pool has ([method AiPlayer._tutor_ask]).
+var tutors_for_the_turn := false
 
 ## THE SECOND LEGEND: does this profile keep in hand a permanent whose
 ## arrival would be a card thrown away? A legend whose name is already
@@ -954,6 +990,11 @@ static func magician() -> AiProfile:
 	return profile
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
+##
+## A KNOB ADDED AFTER 2026-09-10 IS SET BY NAME HERE, never appended to
+## [method _init]'s positional tail: a twenty-argument call two branches
+## both add an argument to is a silently scrambled preset rather than a
+## visible conflict, and the tail is long enough already.
 static func sorcerer() -> AiProfile:
 	var profile := AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
 		true, true, true, true, true, true)
@@ -961,6 +1002,7 @@ static func sorcerer() -> AiProfile:
 	profile.holds_x_burn = 3
 	profile.reads_gaze = true
 	profile.reads_manlands = true
+	profile.tutors_for_the_turn = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -972,6 +1014,7 @@ static func wizard() -> AiProfile:
 	profile.holds_x_burn = 5
 	profile.reads_gaze = true
 	profile.reads_manlands = true
+	profile.tutors_for_the_turn = true
 	return profile
 
 

@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **4469 tests, 0 failing, 259 scripts** (129 349 asserts, ~290 s, the 2026-09-06 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5635 tests, 0 failing, 326 scripts** (148 220 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10201,6 +10201,76 @@ and three decks the plan names for these rows do not load at all —
 `the_deck_weissman_1996` (Zuran Orb). The row 3 measurement used
 `the_deck_playable`, `the_deck_weissman_1996_02` and `mountain_artillery`
 in their places.
+
+## THE TUTOR THAT KNEW THREE CARDS (2026-09-10) — Wave 1 rows 6 and 8
+
+- **A fifty-nine-card library with three answers in it.** `answer_card`
+  priced every gain ask by `Evaluator.card_value` alone, so The Deck's
+  Demonic Tutor fetched a Jayemdae Tome, The Abyss or a Nevinyrral's Disk
+  and nothing else — the three cards in the list that print 5.0 — in 53 of
+  53 logged searches, and a LAND had never been fetched in this AI's life
+  (every land prices 1.5, below every spell in the pool).
+  `tutors_for_the_turn` (Sorcerer, Wizard) puts the casting note's order
+  on it (P9, [forge] `ChangeZoneAi.java:1641-1645`, `:630-656`, commit
+  `b09a3d3f`): a land when we are short of them, hold none and can cast
+  nothing off the board's own mana; then the best of what NEXT TURN's mana
+  reaches; then the card worth most on THIS board, which is `_sweep_value`
+  for a sweeper and `_level_value` for a leveller. The seam names no card:
+  it is a card ask whose candidates all sit in the LIBRARY, the shape
+  every tutor in this pool has.
+- **Forge's third clause had to change tense.** "Nothing castable in hand"
+  is asked of the mana our BOARD makes and not of what is untapped,
+  because a search resolves with the lands that paid for it tapped and the
+  clause would otherwise be true of every board in the game.
+- **Measured**: The Deck vs White Knights 28.1 -> 29.4 (+1.3 ±2.0 at
+  4 000), vs Black-Red Raiders 41.8 -> 42.4 (+0.6 ±2.2). Neither clears
+  zero alone; across the two pairs **276 games ended differently and split
+  176 to 100**, 4.6 standard errors from a coin. Census: the null names
+  three cards, the knob six — Balance ×11 where it had never been fetched,
+  City of Brass ×2 where no land ever had. Control PASS in every arm of six
+  runs. The null was proved by replaying the manual's own `pays_sacrifices`
+  sweep with the knob forced off: **6 000 games byte-identical between the
+  two trees**.
+- **AND ROW 8'S FIRST HALF DID NOT REPRODUCE.** "A Wrath at a board that
+  kills us next turn even when we are ahead on value" was built on
+  2026-09-08 as `times_sweeps`' RELIEF, at the same rung. Reproduced on the
+  row's own board — a Colossus of Sardia (18) against five Savannah Lions
+  (15) at six life, raw swing −8.00: the shipped Wizard prices the Wrath at
+  1008.00 and casts it. Not built twice; pinned instead.
+- **What DID reproduce was Armageddon**, and `levels_boards` grew a second
+  reading rather than a second knob: an all-lands sweep is the leveller's
+  sentence with only the land clause. `_land_sweep` reads the shape off the
+  board; each land is priced by `Evaluator.land_value` instead of the flat
+  1.0, and the clock their board gets through that ours does not is charged
+  at `_life_price`. **THREE CUTS**, and the first two are written down
+  because each measured worse: Forge's own `evaluateCreatureList` becomes
+  power-plus-toughness here, so an Ironroot Treefolk outweighs two Savannah
+  Lions and the Armageddon deck reads as behind against the wall it is
+  walking past (15 of 17 games that turned, lost); a clock VETO still cost
+  18 of 21 against Big Green, because the case for that Armageddon is the
+  fatties in THEIR HAND and no reading here sees a hand's future. Charging
+  the deficit instead of vetoing on it is a clean wash: −0.1 ±2.0 and
+  +0.0 ±2.1 at 4 000 games an arm, 26 of 8 000 games ending differently.
+- **It ships as a wash because of what the table sees.** Four Plains
+  against seven with two Serra Angels across the table and nothing on ours:
+  6.00 and cast, now 2.00 and held. Three Underground Seas, a Tundra, a
+  Library of Alexandria and a City of Brass against seven Plains: 4.00 and
+  cast, now −9.00 and held. Neither is a close decision made badly.
+- **Pool facts, and two of them cost the plan its pairs.**
+  `sligh_geeba_1996` cannot be played (9 proxies) and neither can
+  `necropotence_1996` (6 proxies) — and the latter holds no tutor at all,
+  so the pair row 6 named could not have measured the knob from seat A.
+  Demonic Tutor is RESTRICTED, so every deck here plays exactly one: the
+  search resolves in one game in three and the answer differs in one in
+  eight. Thirteen of the sixteen Untamed Wilds decks are mono-green, so the
+  colour prong has one answer wherever it fires — Alt-A-Kesh, the best deck
+  in the pool for it, moves 4 games of 1 000.
+- **Open, named at the sites and in §5**: the tutor's third step reads only
+  the two board shapes this engine already has (P9's Moat and its finisher
+  have no reading to borrow); `card_value` is flat at 2.5 for every cheap
+  spell, so an Ancestral and a Swords tie and the shuffle decides; and the
+  land sweep reads the BOARD's clock and not what a drought does to the
+  HAND, which wants `counts_the_race`'s horizon (wave 4).
 
 ## Standing quality gates
 

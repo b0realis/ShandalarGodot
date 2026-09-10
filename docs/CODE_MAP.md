@@ -1265,6 +1265,36 @@ shandalar/
 │   │                      the third table, one row, because the pool's
 │   │                      one leveller is a card-local effect. The Deck
 │   │                      24.5% -> 32.0% against the starters.
+│   │                      AND SINCE 2026-09-10 THE LAND SWEEP, the same
+│   │                      sentence with only the land clause: a sweeper
+│   │                      whose every kill is a LAND (AiPlayer._land_sweep
+│   │                      — Armageddon, and the sideboards' Flashfires,
+│   │                      Tsunami, Acid Rain) levels both manabases, so it
+│   │                      is priced by what each side would lose rather
+│   │                      than by a head count. Each land at
+│   │                      Evaluator.land_value instead of permanent_value's
+│   │                      flat 1.0, and the clock their board gets through
+│   │                      that ours does not (AiPlayer._drought_clock,
+│   │                      _damage_through_blocks) charged against the swing
+│   │                      at _life_price's rate. Three cuts; the two that
+│   │                      measured worse are in docs/ai-difficulty.md §4.
+│   │                      tutors_for_the_turn (2026-09-10) is THE TUTOR'S
+│   │                      PICK: does a search of our own library fetch the
+│   │                      card THIS TURN wants or the dearest card in the
+│   │                      deck? The seam is a card ask whose candidates all
+│   │                      sit in the LIBRARY (AiPlayer._tutor_ask) — Demonic
+│   │                      Tutor, Untamed Wilds, Land Tax, Transmute
+│   │                      Artifact, Aladdin's Lamp — and the order is
+│   │                      casting P9's (AiPlayer._tutor_pick): a land when
+│   │                      short, holding none and able to cast nothing
+│   │                      (_mana_permanents, _castable_within, _tutor_land
+│   │                      by colour shortfall then land_value); then what
+│   │                      next turn's mana reaches; then _tutor_worth,
+│   │                      which is _sweep_value for a sweeper and
+│   │                      _level_value for a leveller. Off, the answer is
+│   │                      Evaluator.card_value and the tutor names three
+│   │                      cards out of sixty and never a land. Sorcerer
+│   │                      and Wizard.
 │   │                      paces_draws (2026-09-07) is THE PACE: whether
 │   │                      an optional draw — a Tome tick, the Library at
 │   │                      seven, an Ancestral, a Braingeyser's X, a
@@ -2254,7 +2284,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5116 tests / ~137 240 asserts, ~380 s
+├── tests/                   GUT suite — 5635 tests / ~148 220 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -3710,6 +3740,33 @@ shandalar/
 │    eight lands to five; held when our Serra and Giant would go for
 │    their four cards; the ladder from Sorcerer up; the knob read by the
 │    Lab;
+│    tests/ai/test_ai_tutor_pick_2026_09_10.gd — THE TUTOR'S PICK
+│    (AiProfile.tutors_for_the_turn): the seam refused for a hand, a
+│    board and an opponent's library; a Library of Alexandria fetched on
+│    two lands where the null takes a Jayemdae Tome; the Swamp taken for
+│    a {B}{B} hand behind three Forests; no land when one is in hand or
+│    the hand can already be cast; the castable clause read off the board
+│    and not off what is untapped; a Hypnotic Specter over a Mahamoti
+│    Djinn on three sources and the Djinn once eight are down; a Wrath of
+│    God over a Tome against four creatures and the Tome again across an
+│    empty board; a Balance read by _level_value and by its printed worth
+│    when levels_boards is off; the cost, the tribute and the ordered ask
+│    untouched; the ladder from Sorcerer up; the knob read by the Lab;
+│    tests/ai/test_ai_land_sweep_2026_09_10.gd — THE LAND SWEEP
+│    (AiProfile.levels_boards' second reading) and THE NEXT-ATTACK TEST,
+│    which was already built: a Wrath cast from ahead at a board that
+│    kills us next turn, priced at LETHAL_WORTH by times_sweeps' relief
+│    and declined without it, and the two knobs proved to turn on
+│    together; the land sweep read off the board and refused for a Wrath,
+│    an Earthquake and a Tsunami with no Island out; Armageddon declined
+│    against two Serra Angels and cast when the Angels are ours; the
+│    clock as what gets THROUGH and not what it weighs (two Savannah
+│    Lions against an Ironroot Treefolk); the deficit as a price and not
+│    a veto; our own clock paying it down; a Defender and a summoning-sick
+│    Angel; the lock across an empty board still cast; three duals and a
+│    Library worth more than seven Plains; a Wrath priced at exactly the
+│    44.0 it always was; the ladder from Sorcerer up; the knob read by
+│    the Lab;
 │    tests/ai/test_ai_paces_draws_2026_09_07.gd — THE PACE
 │    (AiProfile.paces_draws): the slack table with their draw step next
 │    (level counts keep) and with ours (a lead of one keeps), a race

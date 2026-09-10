@@ -1680,6 +1680,10 @@ func _has_attackers(game: MtgGame) -> bool:
 ## this left it out as "the activation's price" and the measurement
 ## showed the Disk going off at twenty life to kill a lone 3/3
 ## (2026-09-08, THE DECK, THIRD PASS).
+##
+## Under [member AiProfile.levels_boards] a sweep whose every kill is a
+## LAND is read as the leveller it is — [method _land_sweep] for the two
+## readings and why they belong to that knob.
 func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 	var me := game.players[pid]
 	var them := game.players[game.opponent_of(pid)]
@@ -1691,12 +1695,29 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 			return 0.0
 	elif not (effect is DestroyAllEffect):
 		return 0.0
+	var levels_lands := profile.levels_boards and _land_sweep(game, effect, n)
 	for inst in game.all_battlefield():
 		if not _sweep_kills(effect, inst, n):
 			continue
-		var worth := Evaluator.permanent_value(inst)
+		var worth := Evaluator.land_value(game, inst) if levels_lands \
+			else Evaluator.permanent_value(inst)
 		swing += -worth if inst.controller_id == pid else worth
 	swing *= Evaluator.W_BOARD
+	# THE DROUGHT IS WON BY WHOEVER STILL HAS A CLOCK (2026-09-10,
+	# AiProfile.levels_boards). An all-lands sweep kills nothing on the
+	# table, so both boards go on hitting each other with no mana to
+	# answer with, and whatever theirs gets through ours does not is a
+	# toll the sweep hands them — charged at the reaper's rate ([method
+	# _life_price]), the same currency the relief credits damage in, and
+	# for one turn of it, because how many turns a drought lasts is the
+	# horizon this engine does not have (docs/ai-difficulty.md §5). So a
+	# Serra Angel across the table is four points of price against the
+	# land swing and two Grizzly Bears are one, which is the difference
+	# between a blunder and a close call.
+	if levels_lands:
+		var toll := _drought_clock(game, them.id) - _drought_clock(game, me.id)
+		if toll > 0:
+			swing -= float(toll) * _life_price(me.life)
 	if effect is DamageAllEffect and effect.hit_players:
 		if n >= me.life:
 			return -LETHAL_WORTH   # never
@@ -1730,6 +1751,80 @@ func _sweep_kills(effect: EffectBase, inst: CardInstance, n: int) -> bool:
 			return false
 		return inst.damage + n >= inst.cur_toughness
 	return false
+
+
+## THE LAND SWEEP (2026-09-10, AiProfile.levels_boards): is [param effect]
+## a sweeper that takes LANDS AND NOTHING ELSE off this board?
+##
+## Read off the board rather than off a name: every permanent the sweep
+## would kill is a land, and it would kill at least one. Armageddon is the
+## card that asks it in this pool's shipped decks (four in Armies of
+## Light, in High Priest, in Sainted One); the one-sided land sweepers —
+## Flashfires, Tsunami, Acid Rain — answer it the same way and are
+## sideboard cards in every list that holds them. A Wrath, an Earthquake
+## or a Nevinyrral's Disk fails at the first non-land it kills, and a Disk
+## on a board of nothing but lands kills nothing at all, so neither reads
+## as one.
+##
+## WHY IT BELONGS TO THE LEVELLER and not to a knob of its own: [member
+## AiProfile.levels_boards] is "price a spell that levels both sides by
+## what each side would lose", and an all-lands sweep is that sentence
+## with only the land clause — the same reading [method _level_value]
+## already makes about a Balance's lands, made in the sweeper's own
+## function because that is where an all-lands sweeper is priced. Two
+## knobs for one idea would be the second difficulty concept
+## docs/ai-difficulty.md §1 forbids.
+##
+## [forge] The shape of the rule is `DestroyAllAi.java:146-163` (commit
+## `b09a3d3f`, docs/forge/casting.md §3.3): an all-lands branch, a
+## creature comparison and a land-value comparison. Neither of its numbers
+## is taken — the creature comparison is a CLOCK here (see [method
+## _drought_clock], which is why), and its land test is the swing itself
+## once the lands are priced by [method Evaluator.land_value]. Its third
+## clause, a Crucible of Worlds, names a card this pool does not have.
+func _land_sweep(game: MtgGame, effect: EffectBase, n: int) -> bool:
+	var any := false
+	for inst in game.all_battlefield():
+		if not _sweep_kills(effect, inst, n):
+			continue
+		if not inst.is_land():
+			return false
+		any = true
+	return any
+
+
+## THE CLOCK a land sweep would leave [param of_pid] holding: the damage
+## their board puts through the other's best blocks, [method
+## _damage_through_blocks] — the same reading [method _sweep_relief] asks
+## their next attack with, so the two agree about what a board does.
+##
+## WHY A CLOCK AND NOT A SUM. The first cut of this test compared the two
+## sides on [method Evaluator.permanent_value] (Forge's own
+## `evaluateCreatureList` comparison) and MEASURED WORSE where it mattered
+## most: that scale is power plus toughness, so an Ironroot Treefolk
+## outweighs two Savannah Lions and a white weenie deck reads as behind
+## against the wall that cannot catch it. Armies of Light vs Big Green
+## lost 15 of the 17 games that turned on it. What decides a game with no
+## mana in it is not what the boards are WORTH but what they get THROUGH.
+##
+## Two things are deliberately not asked. A creature that has not shed its
+## summoning sickness still counts: the drought lasts turns, not one step.
+## And "can't attack unless defending player controls a <type>" is not
+## read, because a sweep that takes every land takes that land too.
+func _drought_clock(game: MtgGame, of_pid: int) -> int:
+	var against := game.opponent_of(of_pid)
+	var attackers: Array[CardInstance] = []
+	for inst in game.players[of_pid].battlefield:
+		if not inst.is_creature() or inst.cur_power <= 0:
+			continue
+		if inst.has_keyword(Mtg.Keyword.DEFENDER) or inst.cur_cant_attack:
+			continue
+		attackers.append(inst)
+	var blockers: Array[CardInstance] = []
+	for inst in game.players[against].battlefield:
+		if inst.is_creature():
+			blockers.append(inst)
+	return _damage_through_blocks(game, attackers, blockers, against)
 
 
 ## THE RELIEF (2026-09-08, AiProfile.times_sweeps): what the sweep keeps
@@ -7742,6 +7837,10 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 ## or a Sacrifice spell), or a TRIBUTE ([method _tribute_ask]: The Abyss,
 ## a Lord of the Pit, a Mana Vortex — the same loss without the cost
 ## flag; [member AiProfile.feeds_worst]), when the LEAST valuable goes.
+##
+## And unless it is a LIBRARY SEARCH read for the turn it is made in
+## ([member AiProfile.tutors_for_the_turn], [method _tutor_pick]), which
+## is the one gain ask that has an order rather than a maximum.
 func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 		prompt: String) -> CardInstance:
 	var asked := current_choice()
@@ -7751,6 +7850,9 @@ func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 	var paying := asked != null and asked.is_cost
 	var tribute := not paying and profile.feeds_worst \
 		and _tribute_ask(p_pid, candidates, prompt)
+	if not paying and not tribute and p_pid == pid \
+			and profile.tutors_for_the_turn and _tutor_ask(p_pid, candidates):
+		return _tutor_pick(game, candidates)
 	var best: CardInstance = null
 	for inst in candidates:
 		if best == null:
@@ -7809,3 +7911,165 @@ func _tribute_value(game: MtgGame, inst: CardInstance) -> float:
 	if inst.zone == Mtg.Zone.BATTLEFIELD:
 		return _own_value(game, inst)
 	return Evaluator.card_value(inst.data)
+
+
+# ---------------------------------------------------------- the tutor's pick --
+
+## THE TUTOR (2026-09-10, AiProfile.tutors_for_the_turn): is this card ask
+## a search of OUR OWN LIBRARY — the one gain ask whose answer is an
+## ORDER rather than a maximum?
+##
+## Structural, like [method _tribute_ask] and for the same reason: no card
+## is named and no prompt is read. Every candidate sits in the library,
+## which is true of a Demonic Tutor's whole deck, an Untamed Wilds' basic
+## lands, a Land Tax's three, a Transmute Artifact's artifacts and an
+## Aladdin's Lamp's top X — and of nothing else the pilot is asked. The
+## graveyard's own gain asks (Regrowth, Recall) are not here: they go
+## through [method _choose_targets], which has had its own land rule since
+## the second pass. An ask ordered by the card ([member
+## PlayerChoice.ordered] — Natural Selection's restack) never reaches this,
+## having been answered above.
+func _tutor_ask(p_pid: int, candidates: Array[CardInstance]) -> bool:
+	if candidates.is_empty():
+		return false
+	for inst in candidates:
+		if inst.zone != Mtg.Zone.LIBRARY or inst.controller_id != p_pid:
+			return false
+	return true
+
+
+## What the tutor takes, in the order the casting note ranks it
+## (docs/forge/casting.md P9; [forge] `ChangeZoneAi.java:1641-1645` and
+## `:630-656`, commit `b09a3d3f`, read for the ORDER and not for its
+## numbers — its key-card list is a deck resource file this project does
+## not have and would not read, and step 3 stands in its place).
+##
+## 1. A LAND WHEN SHORT. [method _land_light] already says what short is —
+##    fewer than a working four, or fewer than the hand's biggest spell
+##    wants — and the fetch is only the answer when the land drop is not
+##    already covered from hand and nothing we hold is castable at all.
+##    Forge's three clauses exactly; the third is asked of the mana our
+##    BOARD makes ([method _mana_permanents]) and not of what is untapped,
+##    because at the moment a search resolves the lands that paid for it
+##    are tapped and "nothing castable" would be true of every board.
+##    Which land is [method _tutor_land]'s.
+## 2. WHAT NEXT TURN CAN CAST — the board's sources plus the one land the
+##    turn allows. The candidates that fit, if any: a Hypnotic Specter on
+##    three lands rather than the Mahamoti Djinn four turns away. No turn
+##    number gates it: late in a game the filter admits everything and the
+##    step costs nothing, which is Forge's `turn <= 3` without the number.
+## 3. THE CARD WORTH MOST ON THIS BOARD, [method _tutor_worth], which is
+##    the whole difference between fetching for the game and fetching for
+##    the turn.
+func _tutor_pick(game: MtgGame, candidates: Array[CardInstance]) -> CardInstance:
+	var sources := _mana_permanents(game)
+	if _land_light(game) and not _holding_a_land(game) \
+			and not _castable_within(game, sources):
+		var land := _tutor_land(game, candidates)
+		if land != null:
+			return land
+	var shortlist: Array[CardInstance] = []
+	for inst in candidates:
+		if inst.data.cost.mana_value() <= sources + 1:
+			shortlist.append(inst)
+	if shortlist.is_empty():
+		shortlist = candidates
+	var best: CardInstance = null
+	var best_worth := 0.0
+	for inst in shortlist:
+		var worth := _tutor_worth(game, inst)
+		if best == null or worth > best_worth:
+			best = inst
+			best_worth = worth
+	return best
+
+
+## How many permanents of ours make mana — tapped ones counted, because
+## they untap (CR 502.1) and this is a question about turns rather than
+## about the pool. Forge's `manaSources`; next turn's reach is this plus
+## the one land the turn allows.
+func _mana_permanents(game: MtgGame) -> int:
+	var sources := 0
+	for inst in game.players[pid].battlefield:
+		if not inst.cur_mana_abilities.is_empty():
+			sources += 1
+	return sources
+
+
+## Is a land already in hand? The drop the fetch would buy is covered.
+func _holding_a_land(game: MtgGame) -> bool:
+	for inst in game.players[pid].hand:
+		if inst.is_land():
+			return true
+	return false
+
+
+## Does the hand hold a spell [param reach] mana can pay for? Read off the
+## printed mana value alone — the colours are what [method _tutor_land]
+## fixes, and a hand of coloured cards with no land to cast them is
+## exactly the board the land fetch exists for.
+func _castable_within(game: MtgGame, reach: int) -> bool:
+	for inst in game.players[pid].hand:
+		if not inst.is_land() and inst.data.cost.mana_value() <= reach:
+			return true
+	return false
+
+
+## Which land the fetch takes: the one that makes the colour the hand is
+## missing most ([method _colour_shortfall], the same reading [method
+## _try_play_land] chooses the drop by), and among equals the one worth
+## most to us ([method Evaluator.land_value]: scarcity, a dual, the only
+## source of a colour, a land that does more than make mana). Null when
+## the search offers no land at all.
+func _tutor_land(game: MtgGame, candidates: Array[CardInstance]) -> CardInstance:
+	var shortfall := _colour_shortfall(game)
+	var best: CardInstance = null
+	var best_fixes := 0.0
+	var best_worth := 0.0
+	for inst in candidates:
+		if not inst.is_land():
+			continue
+		var fixes := 0.0
+		for ability in inst.data.mana_abilities:
+			for pair in ability.produces:
+				fixes = maxf(fixes, float(shortfall.get(int(pair[0]), 0)))
+		var worth := Evaluator.land_value(game, inst)
+		if best == null or fixes > best_fixes \
+				or (fixes == best_fixes and worth > best_worth):
+			best = inst
+			best_fixes = fixes
+			best_worth = worth
+	return best
+
+
+## What a fetched card is worth ON THIS BOARD rather than on its own.
+##
+## Two shapes have a board reading in this file already and both are used
+## here, which is why the third step of P9 costs nothing new: a SWEEPER is
+## worth what the sweep would swing ([method _sweep_value] — a Wrath is
+## the best card in the deck against four creatures and the worst against
+## none), and a LEVELLER what each side would lose ([method _level_value],
+## under the knob that owns it). Everything else keeps its printed worth
+## ([method _card_value], which prices the pool's `*/*` creatures by what
+## they cost). It is the same pair of readings [method _size_and_aim]
+## opens with, so the tutor and the caster cannot disagree about which
+## card the board wants.
+##
+## The leveller's reading is exact at this moment and not by luck: the
+## search is resolving, so the tutor itself has left the hand and the
+## fetched card has not arrived — which is the hand size [method
+## _level_value] would see with the leveller in hand and its own copy
+## discounted.
+##
+## WHAT IS NOT READ, and it is P9's own third line: "a Moat when their
+## creatures are ground-bound" and "the finisher when the board is ours"
+## have no reading in this engine to borrow, and inventing one for a
+## fetch would be a card-shaped rule in the one place the ladder forbids
+## it. Named in docs/ai-difficulty.md §5.
+func _tutor_worth(game: MtgGame, inst: CardInstance) -> float:
+	var intent := _intent_of(inst)
+	if intent.sweeper != null and not inst.data.is_modal():
+		return _sweep_value(game, intent.sweeper, 0)
+	if intent.levels and profile.levels_boards and not inst.data.is_modal():
+		return _level_value(game, inst)
+	return _card_value(inst.data)

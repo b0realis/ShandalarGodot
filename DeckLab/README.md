@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `reads_gaze`, `reads_manlands`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -408,7 +408,27 @@ of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,
 1,000 games an arm, run on the tree before these two landed and on the
 tree after with both pinned off, is **identical game for game in all
 6,000 games**, 24.9% null either way and the control 525-475 replayed to
-the game. Every other switch keeps its meaning: `--games`
+the game.
+`tutors_for_the_turn` (2026-09-10) fires wherever a card ask offers cards
+out of the SEAT'S OWN LIBRARY, which in this pool is a Demonic Tutor, an
+Untamed Wilds, a Land Tax, a Transmute Artifact or an Aladdin's Lamp —
+so its control must hold none of the five, and Big Green vs White Knights
+does not (Big Green's Regrowth is a GRAVEYARD ask and goes through a
+different reader). It is 525-475 byte-identical to its own null in every
+arm of four runs at 1,000 games and two at 4,000. Mind the pool when you
+pick the live pair: every deck in this repository that plays Demonic
+Tutor plays exactly ONE (it is restricted), so the search resolves in
+about one game in three and the ANSWER differs in about one in eight —
+not enough for any single pair to move a win rate past its own interval.
+The census in `docs/ai-difficulty.md` §4 is what the reading is read by.
+`levels_boards` (2026-09-07) GREW on 2026-09-10 to cover the LAND SWEEP —
+a sweeper whose every kill is a land — so its control must hold no
+Balance AND no Armageddon, Flashfires, Tsunami or Acid Rain. Big Green vs
+Mountain Artillery holds none of them in the MAIN deck, which is what a
+free-play sweep plays: Mountain Artillery's three Flashfires are
+sideboard cards and `--sideboard` is off unless you ask for it. It is
+549-451 byte-identical to its own null in every arm of eight runs at
+1,000 games and 2177-1823 in all seven at 4,000. Every other switch keeps its meaning: `--games`
 is per arm and per pair, the seeds are the ones a plain `--deck-a`/
 `--deck-b` run deals (the null arm is `--profile-a wizard:KNOB=null
 --profile-b wizard:KNOB=null`, game for game), and `--gauntlet` sweeps
