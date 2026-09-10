@@ -8,6 +8,12 @@ extends CardScript
 ## marked as a MANA trigger (CR 605.1b — it resolves off-stack, so the
 ## extra red is in the pool while the payment that tapped the Mountain is
 ## still being made). Symmetric, but only a red deck ever plays it.
+##
+## "ITS CONTROLLER" IS THE MOUNTAIN'S, so this reads the event's
+## `controller` key and always has (2026-09-10: the event now carries the
+## tapping player beside it as `player`, which is what Manabarbs and Mana
+## Flare's "that player" read — the two seats are one at today's only
+## dispatch site, and this card wants the land's either way).
 
 
 func build() -> CardData:

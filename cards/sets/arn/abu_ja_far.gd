@@ -36,7 +36,14 @@ static func _curse(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 	for id in game.combat.blockers_of(source.id):
 		if not doomed.has(int(id)):
 			doomed.append(int(id))
+	# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): "destroy all
+	# creatures blocking or blocked by it" is one triggered ability
+	# resolving, however many creatures it names. Nothing may return
+	# between the two calls — a deferral left open freezes state-based
+	# actions for the rest of the game.
+	game.begin_simultaneous()
 	for id in doomed:
 		var victim := game.find_instance(id)
 		if victim != null and victim.zone == Mtg.Zone.BATTLEFIELD:
 			game.destroy(victim, false)
+	game.end_simultaneous()

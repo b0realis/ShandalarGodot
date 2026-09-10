@@ -1,0 +1,8 @@
+# cards/todo/<set>/ is EMPTY ON PURPOSE and must stay in the tree.
+#
+# The pool is complete but for a handful of cards, and tests/cards/
+# test_pool_wave73.gd asserts that these eight directories EXIST and are
+# empty — the shape that says "nothing is owed for this set". Git does not
+# carry an empty directory, so without this file a fresh clone or a git
+# worktree has no cards/todo at all and that test fails on a checkout that
+# is otherwise perfect. It cost two agents an hour on 2026-09-09.

@@ -43,7 +43,7 @@ extends CardScript
 ## the expansion, so there is no 1997 prompt for either question.
 
 ## The three counters the card prints, in oracle order. Parsed by
-## ContinuousEffects._parse_pt_counter like any other P/T counter kind.
+## ContinuousEffects.parse_pt_counter like any other P/T counter kind.
 const COUNTER_KINDS: Array[String] = ["+2/+0", "+1/+1", "+0/+2"]
 
 ## Index into COUNTER_KINDS used as the hint. +1/+1 keeps the Monster's

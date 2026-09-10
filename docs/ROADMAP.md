@@ -9737,6 +9737,97 @@ null) is the reading that does.
   rather than its host is not read; and the enemy-side half of
   `EffectIntent.damage_to_target_controller` is still an unpriced bonus.
 
+## ONE RESOLUTION, TWO PLAYERS (2026-09-10) — the bracket for the rule, and the key for the day after
+
+- **Volcanic Eruption's DESTROY loop is bracketed, and the test says in
+  its own header that it is a RULE test.** The blast was bracketed on
+  2026-09-09; the destroys were a plain loop, and CR 704.3 wants the whole
+  resolution treated as one. The survey came first: **nothing in this pool
+  can see the difference**, and structurally — `MtgGame.destroy` and
+  `_move_to_graveyard` never check state-based actions, a land's death
+  triggers go on the STACK (only a mana trigger resolves off-stack, and
+  the pool's three all watch `TAPPED_FOR_MANA`), the two death
+  replacements that would route a permanent through a checking helper are
+  set by nothing that can name a land, and no LAND carries an immediate
+  leave hook. Dingus Egg, the one card that watches a land reach a
+  graveyard, is an ordinary stacked trigger. So the bracket is there
+  because the rule says so, and the early return is folded inside it — a
+  deferral left open freezes every state-based action for the rest of the
+  game. The measurement is a trigger CONDITION used as a microscope:
+  conditions are consulted inside `dispatch_event`, mid-mutation, so one
+  that writes the board down and answers "no" reads an instant no
+  ordinary card can reach.
+- **`TAPPED_FOR_MANA` carries both meanings of "that player" now.** The
+  `BECAME_TAPPED` pass unified `controller` across five sites and left
+  this event alone on purpose, because its four watchers are worded two
+  ways: Manabarbs is *"deals 1 damage to that player"* and Mana Flare
+  *"that player adds"*; Gauntlet of Might and Wild Growth are *"its
+  controller"*. It now carries both, as `ABILITY_ACTIVATED` already does —
+  `controller` the land's, `player` the acting seat — and each card reads
+  the meaning its own oracle names. **Nothing changed for any card in
+  play**: `tap_for_mana` refuses a permanent its activator does not
+  control, so the two are one seat at the only dispatch site, which is
+  exactly why the divergence needed pinning before it rotted.
+- **Gate.** `test_erupt_bracket_2026_09_10.gd` 5/5 (a rule test, and it
+  says so); `test_tapped_for_mana_player_key_2026_09_10.gd` 5/9 before,
+  9/9 after; thirty-seven neighbouring scripts green.
+
+## THE BODY THE SCORER COULD NOT SEE (2026-09-10) — the token arm, and the sideboard's Eruption ruled
+
+- **Five cards, not one.** `spends_counters` opened the husk counter on
+  2026-09-09 and Necropolis of Azar still never made a Spawn, because
+  `AiPlayer._ability_option` had no arm for an effect whose whole payload
+  is a permanent that did not exist a moment ago. The census understated
+  itself: FIVE permanents make a creature token through an activated
+  ability — The Hive, Boris Devilboon, Master of the Hunt, Serpent
+  Generator, Necropolis of Azar — and **not one had ever produced a token
+  in this AI's life**. Four Hives sit in Nether Fiend and four in Arch
+  Angel; The Hive's own file calls it "an inevitable win condition". At
+  Lab scale the proof was already there and unread: on all three pairs
+  holding one of these cards, `plays_engines` on and off gave identical
+  rates TO THE DECIMAL.
+- **The reading is the sixth card-local table**,
+  `EffectIntent.TOKEN_MAKERS`, stating the body ONE activation
+  GUARANTEES. The Spawn rolls its P/T on resolution, so the row is the
+  FLOOR of that roll — Rainbow Knights' ruling with the sign reversed, so
+  the floor is conservative rather than safe: the pilot may buy a 3/3 for
+  the price of a 1/1, never the reverse. Two coin flips are refused and
+  pinned: Bottle of Suleiman, and Pandora's Box, whose flip can hand the
+  OPPONENT the copy.
+- **The price is the body, not a constant** — `_token_value` is
+  `permanent_value`'s creature branch read off the row, so a Wasp beats a
+  Spawn beats a Minor Demon. **No bar of its own**, unlike the animation:
+  an animation expires and a token does not, so the main phase's bar is
+  the right one for it to fail, and what it falls into is the mana sink at
+  their end step, where the mana would be lost and the body still arrives
+  in time to attack.
+- **An extension of `plays_engines`, not a new knob**, and the knob's own
+  docstring is the argument: a Tome "turns mana it has nothing else to do
+  with into cards"; a Hive turns it into a body.
+- **Measured**: Lord of Fate vs Big Green 33.8 → 34.4, Crag Hydra vs Big
+  Green 21.0 → 21.9, Lord of Fate (Ancients) 34.6 → 35.2 (+0.6 to +0.9;
+  ±2.1 at 4,000 games). Every OFF arm byte-identical between the two
+  trees — 15,000 games, not one different; control PASS in every arm. Of
+  3,000 on-arm games, **192 played differently and 23 ended differently —
+  22 won, 1 lost**. Census: 25 Spawn where it made 0, 27 Wasps where it
+  made 0.
+- **And the sideboard's Eruption is RULED CORRECT, not built.** Three
+  reasons, each measured: `prices_fallout` answers the complaint one step
+  later and where it costs something (probed — the knob-off pilot casts
+  X=2 and burns FOUR OF ITS OWN creatures for two Mountains, and at five
+  life against six Mountains casts X=6 and dies; with the knob on it
+  declines both); the 1997 designer boarded exactly this card against red
+  in all three decks (`.vRed` in the original `.dck` files); and the swap
+  measures as a wash with OPPOSITE SIGNS on two pairs at 4,000 matches.
+  A card that is sometimes castable is still worth boarding, and it
+  replaces the worst card in the deck by the heuristic's own reckoning.
+- **Open, named at the sites**: the token arm never fires in the pilot's
+  own main phase, so the body cannot block the turn it is bought; a
+  token's own triggered and static abilities are unpriced (understates);
+  and `AiSideboard` still reads a symmetric sweeper's `creature` key as a
+  pure bonus — a question about Earthquake, Hurricane and Wrath that
+  wants the heuristic to know the deck it is boarding FOR.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

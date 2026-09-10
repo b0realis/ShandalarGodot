@@ -3753,6 +3753,17 @@ shandalar/
 │    Eel's unpriced rider and the +0/+1 all refused; the probe leaving
 │    rng, log, journal and every Swamp untouched, nothing left floating;
 │    the ladder from Sorcerer up; the knob read by the Lab;
+│    tests/ai/test_ai_token_ability_2026_09_10.gd — THE BODY THE SCORER
+│    COULD NOT SEE (the token arm of AiProfile.plays_engines): all five
+│    token makers dead with the knob off and alive with it on — The Hive,
+│    Boris Devilboon, Master of the Hunt, Serpent Generator, Necropolis of
+│    Azar, whose husk counter is still spends_counters' own gate; the price
+│    read off the BODY, so a 1/1 flier beats a 1/1 swampwalker and five
+│    mana for a Wasp beats five mana for a Spawn; the MOMENT — priced in
+│    the main phase, stating no bar of its own, bought at the sink; both
+│    coin flips (Bottle of Suleiman, Pandora's Box) refused on both arms;
+│    and a pool scan that fails on a sixth token-making activated ability
+│    with no TOKEN_MAKERS row;
 │    tests/ai/test_ai_liability_2026_09_09.gd — THE PERMANENT WORTH LESS
 │    THAN NOTHING (AiProfile.prices_liabilities): the reader's toll and
 │    escape, the coin flip and the count it refuses, the symmetric toll it
@@ -3772,6 +3783,27 @@ shandalar/
 │    ours and waiting in hand with no land tapped, cast at four of
 │    theirs, the null padding 1/3; Simulacrum still aimed at our own
 │    creature
+│    tests/cards/test_erupt_bracket_2026_09_10.gd — VOLCANIC ERUPTION IS
+│    ONE RESOLUTION, DESTROYS INCLUDED: a RULE test, and it says so in its
+│    own header — nothing in the pool can observe the destroy loop's
+│    interleaving (destroy never checks state-based actions, a land's death
+│    triggers go on the stack, no land has a death replacement or an
+│    immediate leave hook, Dingus Egg is stacked), so the bracket is there
+│    for CR 704.3 and the tests pin the property. A synthetic Aura is the
+│    orphan-in-waiting and a synthetic trigger CONDITION is the microscope
+│    — conditions run inside dispatch_event, mid-mutation — showing the
+│    Vine still on the battlefield when the second Mountain's departure is
+│    announced; plus the bracket closing on the buries-nothing path, Dingus
+│    Egg cracking once per Mountain, and the mutual-kill draw re-pinned;
+│    tests/cards/test_tapped_for_mana_player_key_2026_09_10.gd —
+│    TAPPED_FOR_MANA CARRIES BOTH MEANINGS OF "THAT PLAYER": `controller`
+│    is the land's and `player` the hand that tapped it, as
+│    ABILITY_ACTIVATED already splits them. A synthetic Ledger writes both
+│    keys at the live site (where they are one seat, because tap_for_mana
+│    refuses a permanent you do not control — pinned), and four hand-built
+│    events with the seats pulled apart offer themselves to each watcher:
+│    Manabarbs and Mana Flare follow the tapper, Gauntlet of Might and Wild
+│    Growth the land's controller;
 │    tests/cards/test_lich_tap_key_2026_09_09.gd — THE LICH'S PRICE AND
 │    THE TAP KEY: "as this enchantment enters, you lose life equal to your
 │    life total" is paid AS it enters (CR 614.1c), so the Bolt that used

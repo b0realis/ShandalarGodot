@@ -7,6 +7,12 @@ extends CardScript
 ## Mana Flare's off-stack mana trigger, the damage rightly waits its turn
 ## on the stack. Symmetric pain: every land anyone taps costs a point.
 ## Manabarbs + Mana Flare on the same table is the era's little joke.
+##
+## "THAT PLAYER" IS THE HAND THAT TAPPED, so this reads the event's
+## `player` key, not `controller` (2026-09-10 — the event carries both;
+## Gauntlet of Might and Wild Growth say "its controller" and read the
+## other one). The two are the same seat at today's only dispatch site,
+## which is why nothing changed here.
 
 
 func build() -> CardData:
@@ -18,4 +24,4 @@ func build() -> CardData:
 
 
 static func _barb(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
-	game.deal_damage(source, TargetRef.player(event.data["controller"]), 1)
+	game.deal_damage(source, TargetRef.player(event.data["player"]), 1)

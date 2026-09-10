@@ -928,6 +928,34 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		# argument the animation makes, so the same bar.
 		if ability.turn_restriction > 0:
 			own_bar = ABILITY_BAR_SINK
+	elif not intent.makes_token.is_empty() and profile.plays_engines:
+		# THE BODY THE SCORER COULD NOT SEE (2026-09-10). Five permanents
+		# in this pool turn mana into a creature TOKEN through an activated
+		# ability — The Hive, Boris Devilboon, Master of the Hunt, Serpent
+		# Generator, Necropolis of Azar — and not one of them had ever made
+		# a token. The cost was never the gate ([method
+		# _ability_available] says yes to all five, the Necropolis's husk
+		# counter included since [member AiProfile.spends_counters]); the
+		# gate was this function, which had no arm for an effect whose
+		# whole payload is a permanent that did not exist a moment ago, so
+		# every one of them fell through to the `else` below.
+		#
+		# It is the same knob as the animation and the repeatable discard,
+		# and the knob's own words say why: a Hive turns "mana it has
+		# nothing else to do with" into a body every turn, which is what a
+		# Tome does with cards. A pilot that cannot read a permanent as a
+		# thing that pays over time simply owns an artifact.
+		value = _token_value(intent.makes_token)
+		if moment == Moment.SINK:
+			value += 1.0   # mana that would otherwise be lost
+		# AND NO BAR OF ITS OWN, unlike the animation. An animation lasts
+		# until end of turn, so the moment it is not bought is the moment
+		# it is lost; a TOKEN is permanent, so the ability that makes one
+		# has every later moment to be used at and the main phase's bar —
+		# "is this worth the mana a SPELL might want" — is the right one
+		# for it to fail. What it fails into is the mana sink at their end
+		# step, where the mana is about to be wasted anyway and the body
+		# arrives in time to attack on our next turn.
 	else:
 		return {}   # pumps, regeneration, mana, untaps, unknowns: not here
 	var sacrifice := _sacrifice_price(game, inst, ability)
@@ -946,6 +974,34 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 	if keep_source_untapped:
 		out["keep_source_untapped"] = true
 	return out
+
+
+## WHAT A TOKEN IS WORTH ON THE BOARD (2026-09-10, [member
+## AiProfile.plays_engines]) — [param row] is a row of [constant
+## EffectIntent.TOKEN_MAKERS], the body one activation GUARANTEES.
+##
+## Priced as [method Evaluator.permanent_value] prices the creature it is
+## about to become, and deliberately NOT as a constant: the whole point of
+## reading the body is that a 1/1 flier off a Hive and a 1/1 off a Boris
+## Devilboon cost the same five-ish mana and are not the same purchase,
+## and the Spawn of Azar's swampwalk is worth the same half point on the
+## table as any other landwalker's. A token is a creature that cost no
+## card, so nothing is subtracted for the card it did not spend; the mana
+## is charged by [method _ability_option]'s own price term, like every
+## other arm's.
+##
+## The row is a body, not a permanent, so the three terms
+## [method Evaluator.permanent_value] reads off a live instance and this
+## cannot — protection, regeneration shields, and any size a static
+## ability would add — are simply absent. All three understate, which is
+## the direction a purchase should err in.
+func _token_value(row: Dictionary) -> float:
+	var value := float(int(row.get("power", 0)) + int(row.get("toughness", 0)))
+	for keyword in row.get("keywords", []):
+		value += float(Evaluator.KEYWORD_VALUE.get(keyword, 0.0))
+	if bool(row.get("landwalk", false)):
+		value += 0.5
+	return maxf(value, 0.5)   # permanent_value's own floor
 
 
 ## CAN THE ANIMATION BE PAID FOR WITHOUT TAPPING THE THING IT ANIMATES?

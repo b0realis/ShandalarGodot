@@ -7,6 +7,14 @@ extends CardScript
 ## payload is a MANA TRIGGER (off-stack, CR 605.1b) conditioned on the
 ## tapped land being its host. Pairs with mana_flare.gd as the two mana
 ## triggers of the pool; the host check is the interesting part here.
+##
+## "ITS CONTROLLER" IS THE ENCHANTED LAND'S, not this Aura's and not the
+## hand that tapped it, so this reads the event's `controller` key
+## (2026-09-10: the tapping player rides along as `player`, which is what
+## Manabarbs and Mana Flare's "that player" read). The Aura may well be
+## the other seat's — Wild Growth on an opponent's land still feeds the
+## opponent — and at today's only dispatch site the tapper and the land's
+## controller are one seat anyway.
 
 
 func build() -> CardData:

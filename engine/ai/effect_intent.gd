@@ -143,6 +143,19 @@ var levels: bool = false
 ## BLASTS] for why it is read by name.
 var blasts: bool = false
 
+## A TOKEN the effect puts onto the battlefield under our own control —
+## the row of [constant TOKEN_MAKERS] that says what ONE activation
+## GUARANTEES, `{}` for everything else. Kept as the body rather than as a
+## number for the reason [member sweeper] and [member animates] are kept
+## whole: what a new creature is worth is a board reading, and [method
+## AiPlayer._token_value] does it on the evaluator's own scale.
+##
+## Read by ONE caller, [method AiPlayer._ability_option]'s token arm
+## (gated by [member AiProfile.plays_engines]) — the effects it names are
+## card-local, so [member unknown] stays set and every reading that word
+## gates keeps the behaviour it had.
+var makes_token: Dictionary = {}
+
 ## THE WINDOW SHAPES — what a spell whose rider keeps it out of its
 ## caster's own main phase DOES in the moment the rider names, for the
 ## card-local effects of that kind (see [constant WINDOW_SHAPES]). NONE
@@ -326,6 +339,82 @@ const CARD_LOCAL_PUMPS := {
 # never a rule about the name.
 const BLASTS := ["Volcanic Eruption"]
 
+# THE TOKEN MAKERS — the sixth table (2026-09-10), and the fifth one that
+# is a table of its own rather than a row in [constant CARD_LOCAL], for
+# the reason the second, third, fourth and fifth state: a row up there
+# makes the reader stop calling the effect `unknown`, and these effects
+# ARE unknown to every reading that word gates (the harm reading, the
+# target picker). Only [member makes_token] reads this column, so the
+# null arm of the knob it feeds is what shipped, to the byte.
+#
+# THE BODY THE SCORER COULD NOT SEE (2026-09-10). Five permanents in this
+# pool turn mana into a CREATURE TOKEN through an activated ability, and
+# every one of them makes it in a `class X extends EffectBase` inside its
+# own card file — there is no shared token effect to test `is` against.
+# So [method AiPlayer._ability_option] fell through to its final
+# `return {}` for all five, and in the whole history of this AI not one
+# Wasp, Minor Demon, Wolf, Snake or Spawn of Azar had ever been made:
+# The Hive sat on ten open mana, and Necropolis of Azar kept every husk
+# counter the day [member AiProfile.spends_counters] opened the cost
+# (docs/ai-difficulty.md, §5).
+#
+# Each row states the body ONE activation GUARANTEES, exactly as the
+# reader would have read it off the token's own [CardData]:
+#
+#   power, toughness — the printed size.
+#   keywords        — the printed keywords, priced by
+#     [constant Evaluator.KEYWORD_VALUE] like any other creature's.
+#   landwalk        — true when the token has one, worth the same 0.5
+#     [method Evaluator.permanent_value] gives a landwalker.
+#
+# A GUARANTEE and not an average, which is what keeps Necropolis of Azar
+# honest: its Spawn is "a random power and toughness, each no less than 1
+# and no greater than 3", rolled when the ability RESOLVES, so the row is
+# the floor of that roll. It is the ruling [constant CARD_LOCAL_PUMPS]
+# makes for Rainbow Knights, applied to a body instead of a bonus — with
+# the sign the other way round, so the floor is conservative rather than
+# safe: the pilot may buy a 3/3 for the price of a 1/1, never the reverse.
+#
+# TWO CARDS ARE DELIBERATELY ABSENT, both for the coin flip. BOTTLE OF
+# SULEIMAN's {1} and a sacrifice buy a 5/5 flier if it wins and five
+# damage to its own controller if it loses; PANDORA'S BOX's {3} rolls one
+# creature card out of BOTH libraries and then flips for EACH player, so a
+# winning activation can hand the opponent the copy and a losing one buys
+# nothing. What one activation guarantees is nothing at all in both cases,
+# and a one-ply board reading cannot price a coin flip honestly. That is
+# the same rule that keeps Rainbow Knights out of the breath table,
+# Camouflage out of [constant WINDOW_SHAPES] and Mana Crypt's flip unread
+# by the liability reading.
+#
+# The abilities here have no X and no sizing question: a row is a body,
+# not a count. A card that made the COUNT its X would need a sizing arm
+# of its own, and this pool has none.
+const TOKEN_MAKERS := {
+	# "{5}, {T}: Create a 1/1 colorless Insect artifact creature token
+	# with flying named Wasp." The 1994 mana sink, and the reason the
+	# whole class was worth an arm: four of them sit in Nether Fiend.
+	"The Hive": {"power": 1, "toughness": 1,
+		"keywords": [Mtg.Keyword.FLYING]},
+	# "{2}{B}{R}, {T}: Create a 1/1 black and red Demon creature token
+	# named Minor Demon." One demon a turn, forever.
+	"Boris Devilboon": {"power": 1, "toughness": 1},
+	# "{2}{G}{G}: Create a 1/1 green Wolf creature token named Wolves of
+	# the Hunt." The banding the token grants ITSELF is a static ability
+	# and not a keyword, so the row does not claim it — the same
+	# understatement [method Evaluator.permanent_value] already makes
+	# about every triggered and static ability on a real creature.
+	"Master of the Hunt": {"power": 1, "toughness": 1},
+	# "{4}, {T}: Create a 1/1 colorless Snake artifact creature token"
+	# with the poison trigger, which the row does not claim either, for
+	# the reason above.
+	"Serpent Generator": {"power": 1, "toughness": 1},
+	# "{5}, Remove a husk counter: Put a Spawn of Azar token into play…
+	# a black creature with a random power and toughness, each no less
+	# than 1 and no greater than 3, that has swampwalk." The floor of the
+	# roll, and the swampwalk it always has.
+	"Necropolis of Azar": {"power": 1, "toughness": 1, "landwalk": true},
+}
+
 
 ## The card-local breath [param card_name] pumps itself with, as a row of
 ## [constant CARD_LOCAL_PUMPS] — `{}` when the card has none.
@@ -418,6 +507,11 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			if stripped != 0:
 				intent.discards = -1 if stripped < 0 or intent.discards < 0 \
 					else intent.discards + stripped
+	# THE TOKEN (2026-09-10): asked only of an effect list the reader could
+	# not classify, so a card that grew a second, readable ability cannot
+	# be handed the first one's body by name alone.
+	if intent.unknown and TOKEN_MAKERS.has(card_name):
+		intent.makes_token = TOKEN_MAKERS[card_name]
 	# The table overrides what the reader could not see.
 	if not note.is_empty():
 		intent.damage += int(note.get("damage", 0))

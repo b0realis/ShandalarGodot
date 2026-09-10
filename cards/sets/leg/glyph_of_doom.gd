@@ -28,10 +28,16 @@ static func _doom(game: MtgGame, wall_id: int) -> void:
 	var wall := game.find_instance(wall_id)
 	if wall == null:
 		return
+	# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): the delayed action
+	# buries everything the Wall stopped in one go. Nothing may return
+	# between the two calls — a deferral left open freezes state-based
+	# actions for the rest of the game.
+	game.begin_simultaneous()
 	for attacker_id in wall.blocked_ids_this_turn:
 		var victim := game.find_instance(attacker_id)
 		if victim != null and victim.zone == Mtg.Zone.BATTLEFIELD:
 			game.destroy(victim)
+	game.end_simultaneous()
 
 
 class GlyphOfDoomEffect extends EffectBase:

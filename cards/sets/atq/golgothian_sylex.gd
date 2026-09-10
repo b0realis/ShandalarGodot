@@ -26,9 +26,15 @@ class SylexEffect extends EffectBase:
 			if not inst.is_token and CardRegistry.originally_printed_in(
 					inst.data.card_name, "atq"):
 				doomed.append(inst)
+		# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10) — the whole
+		# sweep is one activated ability resolving. Nothing may return
+		# between the two calls: a deferral left open freezes state-based
+		# actions for the rest of the game.
+		game.begin_simultaneous()
 		for inst in doomed:
 			if inst.zone == Mtg.Zone.BATTLEFIELD:
 				game.sacrifice_permanent(inst)
+		game.end_simultaneous()
 
 	func describe() -> String:
 		return "sacrifices every nontoken Antiquities permanent"

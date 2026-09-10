@@ -24,8 +24,17 @@ class RecallEffect extends EffectBase:
 		for inst in game.all_battlefield():
 			if inst.owner_id == target.player_id and inst.is_type(Mtg.CardType.ARTIFACT):
 				victims.append(inst)
+		# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10). This one is a
+		# MASS BOUNCE and needs no death replacement to be visible:
+		# MtgGame.return_to_hand ends with check_state_based_actions(), so
+		# unbracketed the loop swept between every pair of artifacts and an
+		# Aura orphaned by the first one was gone before the second left.
+		# Nothing may return between the two calls: a deferral left open
+		# freezes state-based actions for the rest of the game.
+		game.begin_simultaneous()
 		for inst in victims:
 			game.return_to_hand(inst)
+		game.end_simultaneous()
 
 	func describe() -> String:
 		return "returns all artifacts target player owns to their hand"

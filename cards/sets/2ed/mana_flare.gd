@@ -10,6 +10,12 @@ extends CardScript
 ## castle's standing Mana Flare terrifies (dos486: it supercharges every
 ## X-spell in the room, yours and theirs).
 ##
+## "THAT PLAYER" IS THE HAND THAT TAPPED, so the bonus goes to the event's
+## `player` key, not `controller` (2026-09-10 — the event carries both, and
+## the "its controller" half of the pool reads the other one). Identical
+## seats at today's only dispatch site; the distinction is there for the
+## day something taps a land another player controls.
+##
 ## "Any type that land produced": the event carries every type the tap
 ## made (`colors`). A dual land in this pool taps for ONE of its colours
 ## per activation, so the bonus is that colour and there is nothing to
@@ -34,7 +40,7 @@ func build() -> CardData:
 
 
 static func _bonus_mana(game: MtgGame, _source: CardInstance, event: GameEvent) -> void:
-	var pid: int = event.data["controller"]
+	var pid: int = event.data["player"]
 	var color: int = int(event.data["color"])
 	var types: Array = event.data.get("colors", [color])
 	if types.size() > 1:

@@ -53,6 +53,11 @@ class GlyphOfReincarnationEffect extends EffectBase:
 		if wall == null:
 			return
 		var history: Dictionary = wall.blocked_ids_this_turn.duplicate()
+		# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): the destroys
+		# and the bodies that replace them are all one spell resolving.
+		# Nothing may return between the two calls — a deferral left open
+		# freezes state-based actions for the rest of the game.
+		game.begin_simultaneous()
 		for attacker_id in history:
 			var victim := game.find_instance(attacker_id)
 			if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD:
@@ -61,6 +66,7 @@ class GlyphOfReincarnationEffect extends EffectBase:
 			if victim.zone != Mtg.Zone.GRAVEYARD:
 				continue
 			_raise_one(game, int(history[attacker_id]), _controller)
+		game.end_simultaneous()
 
 	## One replacement body out of [param pid]'s graveyard. WHICH card is
 	## the SPELL's controller's choice (CR 609.3 — an effect's instructions

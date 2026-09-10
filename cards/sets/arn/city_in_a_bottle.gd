@@ -53,9 +53,18 @@ static func _sweep_arabia(game: MtgGame, source: CardInstance, _event: GameEvent
 			continue
 		if CardRegistry.originally_printed_in(inst.data.card_name, "arn"):
 			doomed.append(inst)
+	# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10). The Bottle's sweep
+	# is one triggered ability resolving, so nothing may be swept between
+	# two of its sacrifices — and a victim the Whippoorwill has marked
+	# (exile_instead_of_dying) would otherwise route through
+	# MtgGame.exile_permanent, which ends with a state-based check. Nothing
+	# may return between the two calls: a deferral left open freezes
+	# state-based actions for the rest of the game.
+	game.begin_simultaneous()
 	for inst in doomed:
 		if inst.zone == Mtg.Zone.BATTLEFIELD:
 			game.sacrifice_permanent(inst)
+	game.end_simultaneous()
 
 
 static func _sacrifice_the_newcomer(game: MtgGame, _source: CardInstance,

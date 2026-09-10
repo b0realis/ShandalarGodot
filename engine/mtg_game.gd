@@ -1515,10 +1515,23 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0) -> String:
 	if ability.side_effect.is_valid():
 		ability.side_effect.call(self, inst, pid)
 	# Mana triggers (Mana Flare, Wild Growth) fire off-stack right now.
+	#
+	# TWO PLAYERS, TWO KEYS (2026-09-10). This event's four watchers are
+	# worded two different ways: Manabarbs deals its damage "to THAT
+	# PLAYER" and Mana Flare has "THAT PLAYER adds", both meaning the hand
+	# that tapped the land, while Gauntlet of Might and Wild Growth say
+	# "ITS CONTROLLER", meaning the land's. So it carries both, the way
+	# Mtg.EventType.ABILITY_ACTIVATED does: `controller` is the
+	# PERMANENT'S controller, as on every other event in the catalogue,
+	# and `player` is the ACTING one. Here the two are the same seat —
+	# the refusal at the top of this method turns away a permanent its
+	# activator does not control — so this changed nothing for any card in
+	# the pool; it means the day something taps another player's land for
+	# mana, the event does not have to lie to half its readers.
 	if inst.is_land() and ability.taps_source:
 		dispatch_event(Mtg.EventType.TAPPED_FOR_MANA,
-			{"instance": inst, "controller": pid, "color": produced_color,
-				"colors": produced_types})
+			{"instance": inst, "controller": inst.controller_id, "player": pid,
+				"color": produced_color, "colors": produced_types})
 	# "Becomes tapped" triggers (City of Brass) — normal stacked triggers.
 	#
 	# `controller` IS THE PERMANENT'S CONTROLLER on this event, as on every
@@ -1533,12 +1546,9 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0) -> String:
 	# instead (fixed 2026-09-09); no card read the key, so nothing was
 	# wrong, and the next one to read it would have been.
 	#
-	# The line above sends `pid` on purpose and is NOT the same convention:
-	# TAPPED_FOR_MANA is announced by an activation and its watchers are
-	# worded around the player who tapped ("Whenever a player taps a land
-	# for mana, Manabarbs deals 1 damage to THAT PLAYER"). At this site the
-	# two values are the same anyway — tap_for_mana refuses a permanent its
-	# activator does not control — so nothing here can tell them apart.
+	# TAPPED_FOR_MANA, dispatched above, keeps the SAME convention on its
+	# `controller` key and carries the acting player beside it as `player`
+	# — see the note there for why it needs both.
 	if ability.taps_source:
 		dispatch_event(Mtg.EventType.BECAME_TAPPED,
 			{"instance": inst, "controller": inst.controller_id})

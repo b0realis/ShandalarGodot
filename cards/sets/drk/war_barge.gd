@@ -35,10 +35,17 @@ static func _sink(game: MtgGame, _source: CardInstance, event: GameEvent) -> voi
 	var parting: Dictionary = event.data.get("memory", {})
 	if int(parting.get("passenger_turn", -1)) != game.turn_number:
 		return   # "leaves the battlefield THIS TURN" — an older ferry expired
+	# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): every passenger of
+	# this turn goes down with the Barge in ONE delayed trigger, so nothing
+	# is swept between two of them. Nothing may return between the two
+	# calls — a deferral left open freezes state-based actions for the rest
+	# of the game.
+	game.begin_simultaneous()
 	for passenger_id in Array(parting.get("passengers", [])):
 		var passenger := game.find_instance(int(passenger_id))
 		if passenger != null and passenger.zone == Mtg.Zone.BATTLEFIELD:
 			game.destroy(passenger, false)
+	game.end_simultaneous()
 
 
 class BoardTheBargeEffect extends EffectBase:

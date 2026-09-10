@@ -80,6 +80,17 @@ static func _raise_the_sands(game: MtgGame, _source: CardInstance, _event: GameE
 
 static func _scatter_the_sands(game: MtgGame, _source: CardInstance,
 		_event: GameEvent) -> void:
+	# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): "exile all Sand
+	# Warriors" is one leave-trigger resolving, and MtgGame.exile_permanent
+	# ends with a state-based check, so unbracketed the board settled
+	# between every pair of tokens. The list is taken first because the
+	# loop mutates the battlefield. Nothing may return between the two
+	# calls: a deferral left open freezes state-based actions for good.
+	var sands: Array[CardInstance] = []
 	for inst in game.all_battlefield():
 		if inst.has_subtype("sand"):
-			game.exile_permanent(inst)
+			sands.append(inst)
+	game.begin_simultaneous()
+	for inst in sands:
+		game.exile_permanent(inst)
+	game.end_simultaneous()

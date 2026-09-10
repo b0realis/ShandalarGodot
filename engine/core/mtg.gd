@@ -126,8 +126,25 @@ enum EventType {
 	END_STEP_START,       ## data: {player}
 	DECLARED_ATTACKERS,   ## data: {attackers: Array[CardInstance]}
 	LAND_PLAYED,          ## data: {instance, controller}
-	TAPPED_FOR_MANA,      ## data: {instance, controller, color} — mana
-	                      ## triggers only (resolved off-stack, CR 605.1b)
+	TAPPED_FOR_MANA,      ## data: {instance, controller, player, color,
+	                      ## colors} — a LAND was tapped for mana, and the
+	                      ## event carries BOTH seats because its four
+	                      ## watchers are worded two ways. `controller` is
+	                      ## the LAND'S controller, as on every other event
+	                      ## here ("its controller adds an additional {R}"
+	                      ## — Gauntlet of Might, Wild Growth); `player` is
+	                      ## the hand that TAPPED it, the same meaning
+	                      ## ABILITY_ACTIVATED gives the key ("Manabarbs
+	                      ## deals 1 damage to that player", "that player
+	                      ## adds" — Mana Flare). MtgGame.tap_for_mana
+	                      ## refuses a permanent its activator does not
+	                      ## control, so the two are one seat today and the
+	                      ## split is there for the day they are not.
+	                      ## `color` is the type the activation made and
+	                      ## `colors` every type it made (Mana Flare's "any
+	                      ## type that land produced"). Mana triggers
+	                      ## resolve off-stack (CR 605.1b); ordinary ones
+	                      ## (Manabarbs) use the stack like any other.
 	BECAME_TAPPED,        ## data: {instance, controller} — ANY tap: for
 	                      ## mana, by cost, by effect (Icy), by attacking,
 	                      ## by regenerating. NOT fired for entering tapped

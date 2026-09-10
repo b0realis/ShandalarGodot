@@ -23,12 +23,20 @@ class HellfireEffect extends EffectBase:
 		for inst in game.all_battlefield():
 			if inst.is_creature() and (inst.cur_colors & Mtg.ManaColor.B) == 0:
 				victims.append(inst)
+		# ONE RESOLUTION, ONE BRACKET (CR 704.3, 2026-09-10): the destroys
+		# AND the burn are one resolution, so nothing is swept between two
+		# victims or between the last victim and the damage. Nothing may
+		# return between the two calls — a deferral left open freezes
+		# state-based actions for the rest of the game, and this spell can
+		# end it (the burn is often lethal to its own caster).
+		game.begin_simultaneous()
 		var died := 0
 		for inst in victims:
 			game.destroy(inst)
 			if inst.zone != Mtg.Zone.BATTLEFIELD:
 				died += 1   # a regenerated creature never "died this way"
 		game.deal_damage(source, TargetRef.player(controller), died + 3)
+		game.end_simultaneous()
 
 	func describe() -> String:
 		return "destroys all nonblack creatures, then burns you for the count plus 3"

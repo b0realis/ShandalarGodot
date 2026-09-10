@@ -10,7 +10,7 @@ extends CardScript
 ## its printed 2 only two activations can RESOLVE with effect in a turn, and
 ## the "-0/-1" it hands out is a real COUNTER that never wears off. The
 ## counter's NAME is parsed by the continuous pipeline
-## (ContinuousEffects._parse_pt_counter), which is why no static is needed
+## (ContinuousEffects.parse_pt_counter), which is why no static is needed
 ## to make it stick.
 ##
 ## "If this creature's power is 1 or more" is an IF clause inside the

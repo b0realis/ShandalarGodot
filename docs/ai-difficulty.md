@@ -70,7 +70,7 @@ override any knob on any preset for a measurement
 | `counter_threshold` | (5.0) | 7.0 | 5.5 | 5.0 | smallest threat worth a Counterspell; the Magician's 7.0 lets a tier more through |
 | `sideboard_swaps` | 0 | 2 | 3 | 4 | cards it may move between duels of a match |
 | `combat_search_nodes` | 0 | 0 | 1 500 | 3 000 | the crack-back search's budget; 0 never looks past its own combat |
-| `plays_engines` | off | off | on | on | a permanent that pays over time — a Mishra's Factory, a Disrupting Scepter, a Jayemdae Tome |
+| `plays_engines` | off | off | on | on | a permanent that pays over time — a Mishra's Factory, a Disrupting Scepter, a Jayemdae Tome, and since 2026-09-10 a TOKEN MAKER, which is the same sentence with a body in place of the card: The Hive, Boris Devilboon, Master of the Hunt, Serpent Generator and Necropolis of Azar turn mana the turn has nothing else to do with into a creature that stays. The scorer had no arm for a payload that is a permanent which did not exist a moment ago, so all five fell through it and not one token had ever been made in this AI's life. Priced as the BODY (`AiPlayer._token_value`, the evaluator's own creature arithmetic read off the row a card-local effect cannot state for itself) and never as a constant, so a Wasp beats a Minor Demon; bought at the mana sink, because a token is permanent and the ability that makes one has every later moment to be used at. What one activation GUARANTEES is the whole of the reading — the Spawn of Azar's random 1..3 is read at its floor — so the two coin flips in the pool (Bottle of Suleiman, Pandora's Box) have no row and stay unbought |
 | `pays_sacrifices` | off | off | on | on | an ability whose cost is one of its own permanents — Strip Mine, a Digging Team |
 | `casts_timed_spells` | off | off | on | on | a spell whose only moment is outside its own main phase — a Festival, a Siren's Call |
 | `minds_pain` | on | on | on | on | a City of Brass is not a Plains; on everywhere (see below) |
@@ -138,7 +138,8 @@ counters, never Fogs, never casts a trick in your combat, and lets the
 automatic damage-prevention order apply. Panics late (life 3). Never
 sideboards between duels, never looks past its own combat, and treats
 every permanent as what it is worth today: a Factory is a land, a Tome is
-an artifact, a Strip Mine is never cracked. What you see is the shape of
+an artifact, a Hive is an artifact too — ten mana and it never makes a
+Wasp — and a Strip Mine is never cracked. What you see is the shape of
 the 1997 game's easiest table — a wizard with good cards and no patience.
 
 **Magician.** Fumbles a fifth. The reactive game switches on: it holds
@@ -159,7 +160,10 @@ panics at 5, counters a tier smaller (5.5), sideboards three. Reads your
 crack-back before committing an attacker — 1 500 leaf evaluations, half
 the Wizard's, so its search truncates on the wide boards the Wizard still
 resolves. Every capability is on: it activates engines and knows what
-they are worth over time, pays a Strip Mine or a Digging Team for a
+they are worth over time — including the five that pay in BODIES, so a
+Hive buys a Wasp, a Boris Devilboon a Minor Demon and a Necropolis of
+Azar its Spawn, each at the opponent's end step where the mana would be
+lost anyway — pays a Strip Mine or a Digging Team for a
 better body, casts a Festival at your upkeep and a Siren's Call before
 your attackers, sizes its X spells, prices a Balance, paces its draws to
 the libraries (a Time Walk's extra draw step among them), keeps a
@@ -490,6 +494,36 @@ for the wrong reason.
   bear, and it steps down from an X its own board would not survive.
   A card that ends the game for its caster once in every twenty-five
   casts is a malfunction, which is why the knob is on at every rung.
+- AND THE OTHER HALF OF THAT REPORT — that `AiSideboard` reaches for the
+  Eruption against any red deck on a `land:mountain` tally, with no
+  reading of what the blast would do to the BOARDER'S OWN creatures — was
+  RULED on 2026-09-10 and not built. Reproduced first: against Troll
+  Shaman the Eruption scores 5.65 (Thought Invoker, Conjurer) and 5.40
+  (Mind Stealer), made of the six Mountains seen (3.00), the five
+  creatures seen (1.25) and a damped generic 1.40 — so the land tally is
+  the plurality but not the whole of it, and the card is the FIRST one
+  boarded in two of the three decks and the third of four swaps in
+  Conjurer. Three things decided it. The 1997 designer boarded exactly
+  this card against red in all three of those decks (`.vRed` in the
+  original `.dck` files), so the heuristic is agreeing with Coyote Tex,
+  not overruling him. `prices_fallout` now answers the complaint one step
+  later and at the moment it costs something: probed on Conjurer's own
+  board of five creatures, the pilot with the knob off casts X=2 to take
+  two Mountains and burns four of its OWN creatures for nothing, and at
+  five life against six Mountains it casts X=6 and dies — with the knob
+  on it declines both, and casts only the X that takes three of theirs
+  and six lands with five of ours. And the swap MEASURES as a wash:
+  `--best-of 3 --sideboard on` against Troll Shaman at seed 4242, the
+  same decks with and without the Eruption in the board, 4 000 matches an
+  arm — Thought Invoker 47.9% with and 49.2% without (−1.3 ±2.2), Conjurer
+  16.8% with and 15.1% without (+1.7 ±1.6), the two signs opposite and the
+  1 000-match run reading +1.9 and +0.3 the other way. A card that is
+  sometimes castable is still worth boarding, and it is replacing the
+  worst card in the deck by the heuristic's own reckoning (a Power Leak, a
+  Sindbad, a Pirate Ship). What is left open is a different reading and is
+  named in §5: the sideboard scores a symmetric sweeper's `creature` key
+  as a BONUS, which is a general question about Earthquake, Hurricane and
+  Wrath of God rather than about this card.
 THE FOURTH PASS ON `pumps_to_attack` (2026-09-09, the burn spell on the
 stack) is a WASH in win rate, and the reason it is measurable at all is
 that the earlier three readings were not: the knob's own numbers on a
@@ -562,6 +596,57 @@ all six runs (525-475 at 1 000, 1075-925 at 2 000).
   gated by — and the Apprentice that never regenerates its Ghoul is
   playing the same poorer game as the one that never cracks a Strip Mine.
 
+THE BODY THE SCORER COULD NOT SEE (2026-09-10, the TOKEN ARM of
+`plays_engines`) is a WASH in win rate with the same sign on every pair,
+and five dead cards made live. It is an extension of a knob rather than a
+new one, so the knob's meaning grew and its null did not move. Seed 11,
+control Big Green vs White Knights, each pair run TWICE — once on the
+tree before this landed and once on this one — so the `on` arms lie side
+by side and every game can be compared by its own fingerprint.
+
+| pair | null | `on`, before | `on`, after | delta (1 000) | delta (4 000) |
+| --- | --- | --- | --- | --- | --- |
+| Lord of Fate vs Big Green (2 Necropolis) | 33.8% | 33.8% | 34.4% | +0.6 ±4.1 | +0.6 ±2.1 |
+| Crag Hydra vs Big Green (3 The Hive) | 21.0% | 21.0% | 21.9% | +0.9 ±3.6 | +0.8 ±1.8 |
+| Lord of Fate — Ancients vs Big Green (2 Necropolis) | 34.6% | 34.6% | 35.2% | +0.6 ±4.2 | +0.7 ±2.1 |
+
+(The 4 000-game column is its own run with its own null — 35.4%, 21.5%,
+33.1% — not a longer version of the 1 000-game one; what it buys is the
+interval, and all three deltas keep their sign and their size inside it.)
+
+- THE `ON` ARM BEFORE THIS LANDED WAS THE NULL TO THE DECIMAL, on all
+  three pairs, and that is the report reproduced at the Lab's own scale:
+  none of these three decks owns a Factory or a Scepter, so
+  `plays_engines` had nothing left to fire on and the knob did literally
+  nothing for them — 33.8/33.8, 21.0/21.0, 34.6/34.6 at 1 000 games an
+  arm. The census says the same thing card by card: over 150 logged games
+  Lord of Fate makes **25 Spawn of Azar where it had made 0**, Crag Hydra
+  **27 Wasps where it had made 0**, and Nether Fiend (four Hives in a much
+  faster deck) **7 where it had made 0**.
+- THE NULL IS EXACTLY THE NULL, proved game for game rather than by
+  argument. Every `off` arm — the null pair, the candidate pair at `off`,
+  and both control arms — is byte-identical BETWEEN THE TWO TREES on all
+  three pairs: 5 000 games a pair, 15 000 in all, **not one game
+  different**. The control pair is byte-identical to its own null in
+  every arm of all six 1 000-game runs (525-475) and all three
+  4 000-game ones (2150-1850), and the `plays_engines=on` control arm is
+  identical too,
+  which is the stronger statement: Big Green vs White Knights owns no
+  Factory, no Scepter and no token maker, so the whole knob is silent
+  there.
+- THE FLIPS SAY MORE THAN THE RATES. Of the 3 000 `on`-arm games,
+  **192 played differently and 23 ended differently — 22 won and 1
+  lost** (Lord of Fate 7-1, Crag Hydra 9-0, the Ancients 6-0). A 22-to-1
+  split of the games that turned is not a coin, and the direction is the
+  same on every pair.
+- WHAT IT FIXES IS WHAT THE TABLE SEES, which is this file's own
+  precedent five times over. A Hive on the battlefield with ten untapped
+  Islands behind it and no card in hand that wants them, turn after turn,
+  is not a close decision the pilot got wrong; it is a permanent nobody
+  at a table would leave alone. The same goes for a Necropolis with three
+  husk counters on it — the counter cost had been opened the day before
+  and the Spawn still could not be bought.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -570,7 +655,10 @@ holds no draw spell, tutor or Time Walk (Big Green vs White Knights),
 a sweeper's no Hurricane, Earthquake or Wrath (Blue Skies vs Black-Red
 Raiders), `pumps_to_attack`'s no activated self-pump AND — since the
 fourth pass — no targeted burn on either side, `spends_counters`'s no
-permanent whose ability costs a counter — the third pass's Time Walk
+permanent whose ability costs a counter, `plays_engines`' no Factory, no
+Scepter and — since the token arm — no permanent whose activated ability
+makes a token (Big Green vs White Knights holds none of the three) — the
+third pass's Time Walk
 sweep FAILED its first control on exactly that (Blue Skies' Ancestral
 Recall), and a failed control makes the deltas beside it no measurement
 at all. `CONTRIBUTING.md`
@@ -747,13 +835,70 @@ has the rule.
     Vault has no counters — so the rule refuses nothing it should allow
     and allows nothing it should refuse. The day a card makes a clock's
     counter a cost, the card is where the reading has to be declared.
-  * NECROPOLIS OF AZAR STILL NEVER MAKES A SPAWN. The gate opens for it
+  * ~~NECROPOLIS OF AZAR STILL NEVER MAKES A SPAWN. The gate opens for it
     (`{5}`, one husk counter, and the husk counters are fuel), but
     `AiPlayer._ability_option` has no arm for an effect whose payload is
     a TOKEN, so the general scorer prices the ability at nothing and
-    passes it by. That is a scorer's gap and not this knob's, and it is
-    why the Lord of Fate census shows the birds spending carrion and the
-    Necropolis spending nothing.
+    passes it by.~~ **Closed 2026-09-10 — FIXED, under
+    `plays_engines`** (§4, the token arm). It was a scorer's gap and not
+    this knob's, and the gap was wider than the one card: FIVE permanents
+    in this pool make a creature token through an activated ability and
+    not one of them had ever made one — The Hive on ten open mana, Boris
+    Devilboon, Master of the Hunt, Serpent Generator and the Necropolis.
+    The reading is `EffectIntent.TOKEN_MAKERS`, the sixth card-local
+    table, and it states the body ONE activation GUARANTEES; the price is
+    that body on `Evaluator.permanent_value`'s own scale
+    (`AiPlayer._token_value`), never a constant. What is left open is
+    named on the arm itself, below.
+- `plays_engines`' TOKEN ARM (2026-09-10) buys a body and knows four
+  things about it: its power, its toughness, its printed keywords and
+  whether it walks. Four things are open, and each is the honest cost of
+  a reading that states only what an activation GUARANTEES.
+  * IT NEVER FIRES IN THE PILOT'S OWN MAIN PHASE. The value it reaches
+    (a 1/1 flier for `{5}` prices at 1.5, a 1/1 at 0.5) is below
+    `ABILITY_BAR_MAIN`, so every token in the pool is bought at the mana
+    sink — the opponent's end step, where the mana would be lost anyway.
+    That is deliberate and it is the arm's own note: a token is
+    PERMANENT, so unlike an animation it is not lost by waiting, and the
+    main bar asks "is this worth the mana a SPELL might want". What
+    waiting costs is one turn of the body's availability as a BLOCKER,
+    because the sink runs after their combat. Whether the arm should
+    state its own bar the way the animation does is a measurement
+    nobody has made.
+  * THE TOKEN'S OWN ABILITIES ARE NOT PRICED. Serpent Generator's Snake
+    carries a poison trigger and Master of the Hunt's Wolf grants itself
+    banding; the row claims neither, so both are bought as vanilla 1/1s.
+    It understates, which is the direction a purchase should err in, and
+    it is the same understatement `Evaluator.permanent_value` already
+    makes about every triggered and static ability on a real creature.
+  * THE ROLL IS READ AT ITS FLOOR. Necropolis of Azar's Spawn is 1/1 to
+    3/3 rolled on resolution, and the row says 1/1 — the Rainbow Knights
+    ruling with the sign the other way, so the pilot may buy a 3/3 for
+    the price of a 1/1 and never the reverse. A DISTRIBUTION is the same
+    piece of work it was there and is not blocked on this card.
+  * A COIN FLIP HAS NO ROW AT ALL, so Bottle of Suleiman ({1} and a
+    sacrifice for a 5/5 flier or five damage to our own face) and
+    Pandora's Box ({3} for one creature out of both libraries and a flip
+    for EACH player, which can hand the opponent the copy) are still
+    never activated. That is the Camouflage rule and not an oversight;
+    what would lift it is an evaluator that carries a distribution.
+- `AiSideboard` scores a card by what it ANSWERS and never by what it
+  costs the seat that boards it, so a SYMMETRIC sweeper's `creature` key
+  is read as a bonus in proportion to the opponent's creatures with our
+  own side of the board unread. Volcanic Eruption is the card that raised
+  it and Volcanic Eruption is closed (§4, the fallout): the planner
+  prices the blast now, the swap measures as a wash, and the 1997
+  designer boarded the same card. The general question is not closed —
+  Earthquake, Hurricane and Wrath of God are in the shipped sideboards
+  and the same reading applies to all of them — and it is a bigger piece
+  of work than a card: the heuristic would have to know the deck it is
+  boarding FOR, which is the one thing it currently reads only for
+  colour (`deck_colors`). Two smaller over-reads sit beside it and are
+  worth naming while somebody is in the file: "put into a graveyard this
+  way" gives the Eruption the `graveyard` key, so a deck that recurs its
+  dead makes the blast look like graveyard hate; and `SIGNAL_CAP` counts
+  the Mountains seen, not the Mountains that will be on the table when
+  the spell is cast.
 - The counter cost is read on OUR side of the table only. A creature of
   THEIRS with a corpse counter is judged regeneration-capable by
   `AiPlayer._shieldable`, which counts their open mana and never asks
