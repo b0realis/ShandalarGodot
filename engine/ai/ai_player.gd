@@ -706,11 +706,164 @@ func _cast_veto(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		return false
 	if intent.unknown or not intent.makes_token.is_empty():
 		return false   # a payoff the projection cannot price: no opinion
+	# THE FINISHER (2026-09-10, this knob's own sentence with a TRIGGER in
+	# place of an activated ability, and — behind [member
+	# AiProfile.holds_the_closer], which every preset ships at its null —
+	# with a RACE in place of a ping): a body the table's own appetite
+	# eats at the next upkeep is answered before it has blocked once, and
+	# a closer committed into a board that out-runs it is the card this
+	# deck wins with, spent. Both are lifted by [method _in_danger]
+	# exactly as the ping is.
+	if _fed_on_arrival(game, inst) or _holds_the_closer(game, inst):
+		return not _in_danger(game)
 	if not _answered_on_arrival(game, inst.data):
 		return false
 	if _in_danger(game):
 		return false
 	return _cast_projection(game, inst, intent, targets, x_value) < 0.0
+
+
+## THE APPETITE ALREADY ON THE TABLE (2026-09-10, [member
+## AiProfile.checks_before_casting]). Would the creature this cast puts on
+## the battlefield be the NEXT MEAL of a feeder already in play — a
+## permanent whose upkeep trigger declares an appetite the body satisfies,
+## with nothing cheaper of ours to be fed in its place?
+##
+## THE MALFUNCTION IT CLOSES, reproduced on HEAD before a line was
+## written. The Deck's own list plays three copies of the pool's one
+## feeder, and the feeder eats at EVERY player's upkeep — its controller's
+## included. Fifty games of `decks/variants/the_deck_serra.deck` against
+## White Knights: 56 Serra Angels cast, 33 of them destroyed at OUR OWN
+## upkeep with OUR OWN enchantment on the table, and the two Angels
+## attacked 29 times in fifty games between them. Five mana for a body
+## that is summoning-sick (CR 302.6) until the very upkeep that eats it
+## can only ever BLOCK once, which is why [method _in_danger] — where a
+## block once is exactly what is wanted — is the escape and the whole of
+## it.
+##
+## IT IS THE VETO'S OWN SENTENCE, not a second idea: "the answer the table
+## is already showing" ([method _answered_on_arrival]) reads an ACTIVATED
+## ability on THEIR battlefield, and a printed appetite is the same answer
+## written as a trigger. It is read on BOTH sides of the table, because
+## the feeder in this pool is symmetric — theirs eats our body at our
+## upkeep just as ours does.
+##
+## The reading is [method _is_next_meal]'s, unchanged and asked of our own
+## side: the card is still in hand, so the spec's zone check cannot be put
+## to it; its own filter and printed protection can, and a creature of
+## ours already on the table worth no more than the newcomer shelters it.
+func _fed_on_arrival(game: MtgGame, inst: CardInstance) -> bool:
+	if not inst.data.is_creature():
+		return false
+	return _is_next_meal(game, inst, pid)
+
+
+## THE CLOSER HELD UNTIL THE BOARD IS LOCKED (2026-09-10, [member
+## AiProfile.holds_the_closer]; docs/ROADMAP.md, "THE DECK, THIRD PASS"
+## §6). The finisher of a control deck is not a blocker and not
+## development: it is the card the game ends with, and committing it into
+## a board that still out-runs it spends the win condition to buy one
+## combat.
+##
+## BUILT WHOLE, MEASURED AND REFUSED: every preset ships the field at its
+## null, so what follows is dead on the shipped pilot and alive from one
+## Deck Lab command. −0.4 ±2.9 on the very pair it was written for with 6
+## games flipped to a win against 14 away, and about fifty games of four
+## thousand taken off Blue Skies — the one starter that holds a
+## counterspell beside its creatures — across the starter matrix. A flier
+## deck's Mahamoti Djinn is its clock, not its finisher, and this reading
+## cannot tell the two apart from the hand alone
+## (`docs/ai-difficulty.md` §4).
+##
+## THE FOUR READINGS, all of them the pilot's own and none of them a card
+## name. A COUNTER IN HAND ([method _holding_counter]) — a hand with no
+## answer in it has nothing to wait for, and that one line is what keeps
+## this off every aggro deck in the pool: an attacker held back by a hand
+## that cannot follow it up is not a finisher waiting for its moment, it
+## is a blocker sulking. [method _is_the_closer]: this body is the fastest
+## clock we have and our table has no other. [method _out_raced]: the
+## crack-back search's own gate — their attackers' power against our life
+## over the turns this body needs. [method _board_is_locked]: their attack
+## grounded by a static of ours or eaten by a feeder. Held while they can
+## race it and the board is not locked — which is the article's sentence
+## exactly, since "a Moat or an Abyss on the table with a counter in hand"
+## is this conjunction turning over — and cast whatever any of it says
+## when [method _in_danger] wants the block.
+func _holds_the_closer(game: MtgGame, inst: CardInstance) -> bool:
+	if not profile.holds_the_closer:
+		return false
+	if not inst.data.is_creature():
+		return false
+	if not _holding_counter(game):
+		return false
+	if not _is_the_closer(game, inst):
+		return false
+	if _board_is_locked(game):
+		return false
+	return _out_raced(game, inst)
+
+
+## Is [param inst] the body this deck's game ends with? Two counted facts
+## and no card name: nothing we control is worth as much (so casting it
+## commits the best body we have), and our own table cannot already close
+## faster than it can (the attackers we control put through less power
+## than this one body would). A deck whose board is already the clock has
+## no finisher to hold — it has an attack.
+func _is_the_closer(game: MtgGame, inst: CardInstance) -> bool:
+	if inst.cur_power <= 0:
+		return false
+	var worth := Evaluator.permanent_value(inst, profile)
+	var ours := 0
+	for other in game.players[pid].battlefield:
+		if not other.is_creature():
+			continue
+		if Evaluator.permanent_value(other, profile) >= worth:
+			return false
+		if not other.has_keyword(Mtg.Keyword.DEFENDER) and not other.cur_cant_attack:
+			ours += maxi(other.cur_power, 0)
+	return ours < inst.cur_power
+
+
+## Can their board still out-run [param inst]? The turns the closer needs
+## is their life over its power; their reach is the power of every
+## creature of theirs that could attack us next turn
+## ([method _could_attack_next_turn], the crack-back model's own
+## `d_can_attack`, which is what makes a Moat answer this without knowing
+## the card). They out-race the closer when that reach, taken for those
+## turns, reaches our life.
+func _out_raced(game: MtgGame, inst: CardInstance) -> bool:
+	var them := game.opponent_of(pid)
+	var reach := 0
+	for other in game.players[them].battlefield:
+		if other.is_creature() and _could_attack_next_turn(game, other):
+			reach += maxi(other.cur_power, 0)
+	if reach <= 0:
+		return false
+	var turns := int(ceil(float(game.players[them].life) / float(inst.cur_power)))
+	return reach * turns >= game.players[pid].life
+
+
+## Is their board LOCKED — the half of the article's moment that is on the
+## table rather than in the hand? An attack that cannot come: every
+## creature of theirs either cannot attack us at all (a static of ours:
+## Moat, read through [method _could_attack_next_turn]) or is the meal a
+## feeder on the table takes at their own upkeep ([method _upkeep_meals],
+## the Abyss read as a shape). The counter in hand is the other half and
+## its caller's ([method _holds_the_closer]).
+func _board_is_locked(game: MtgGame) -> bool:
+	var them := game.opponent_of(pid)
+	var alive: Array[CardInstance] = []
+	for inst in game.all_battlefield():
+		alive.append(inst)
+	var eaten := _upkeep_meals(game, them, alive)
+	for other in game.players[them].battlefield:
+		if not other.is_creature():
+			continue
+		if not _could_attack_next_turn(game, other):
+			continue
+		if not eaten.has(other):
+			return false
+	return true
 
 
 ## The position this cast would leave us in, as a delta on

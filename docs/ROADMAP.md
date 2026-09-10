@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5874 tests, 0 failing, 340 scripts** (152 133 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5900 tests, 0 failing, 341 scripts** (153 088 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11002,6 +11002,78 @@ arm, seed, on-the-play, won, turns, stalled, drawn and a fingerprint, and
 nothing about which card was cast when, so "the median turn at which the
 loop first runs" cannot be read from it. A per-card census is a change to
 `DeckLab/simulate.gd` and was not made.
+
+## THE ANGEL (2026-09-10) — the deck built, half the finisher shipped, the other half and the mulligan floor refused
+
+The third pass left the Angel open with a census that priced it, and the census
+reproduces: `the_deck_playable` against the five starters, 150 games a matchup
+with the mulligan on, seed 4242 — wins at 52.1 / 52.6 / 48.8 / 52.8 / 52.2 on the
+mean against the pass's 52.5 / 56.0 / 48.9 / 48.1 / 57.9, 162 of 358 by an empty
+library, losses at 18.1 to 24.2, **191 of 392 by turn 16 (48.7% against 48.8%)
+and 161 of those 191 keeps of one to three lands (84.3% against 83.3%)**.
+
+**THE DECK IS BUILT AND THE ANGEL DOES NOT CLOSE.**
+`decks/variants/the_deck_serra.deck` is the item's own list — two Serra Angels
+for two Mishra's Factories, and the shipped list holds THREE Factories rather
+than the four the item names, so one stays. It measures 47.1% against the base
+list's 47.7% with the win arriving THREE TURNS LATER (54.4 against 51.6) and 251
+of 353 wins by library-out. The reason is on our own side of the table: The Deck
+plays three copies of the pool's one feeder, and a feeder eats at EVERY player's
+upkeep. Fifty games against White Knights cast 56 Angels and lost **33 of them at
+our own upkeep to our own enchantment**, for 29 attacks in fifty games.
+`AiPlayer._is_next_meal` has answered that question since the third pass — of
+THEIR board only, under `trusts_abyss` — and nothing in the cast path had ever
+asked it of ours.
+
+**THE APPETITE ALREADY IN PLAY SHIPS, INSIDE `checks_before_casting`.** A printed
+upkeep appetite is the one-ply veto's own "answer the table is already showing"
+written as a trigger, so it is that knob's sentence and not a knob:
+`AiPlayer._fed_on_arrival`, read on both sides because the feeder is symmetric,
+lifted by `_in_danger` because a body that is summoning-sick until the upkeep
+that eats it (CR 302.6) can still block once, and blocking once is what danger
+wants. Measured at 2 000 games an arm, seed 11, `--mulligan on`: **34.2% null /
+35.0% on (+0.8 ±2.9)**, 453 of 2 000 games ending differently and 40 changing
+hands, **28 to a win against 12 away** where a fair toss sits at 20 ± 3.2. In the
+game rather than on the scoreboard: 56 Angels cast and 33 eaten becomes 38 and 21
+for the same 28 attacks. The five-deck starter matrix is byte-identical to the
+tree before the row — 0 games of 10 000 — because no deck in `decks/` holds a
+feeder.
+
+**THE RACE IS BUILT WHOLE AND REFUSED**, shipping at its null as
+`AiProfile.holds_the_closer` on `develops_late`'s precedent: a counter in hand (a
+hand with no answer in it has nothing to wait for — the line that keeps the
+reading off every aggro deck in the pool), `_is_the_closer`, `_out_raced` off the
+crack-back model's own `_could_attack_next_turn`, released by `_board_is_locked`'s
+Moat-or-feeder reading and by `_in_danger`. **−0.4 ±2.9 on the very pair it was
+written for, 6 games flipped to a win against 14 away** — and the starter matrix
+says where the cost lands: with it on, six of ten matchups do not move a game and
+the four that do are the four involving Blue Skies, the one starter holding a
+counterspell beside its creatures, which gives up about fifty games of four
+thousand. A capability is as good or better one rung up; this one is not.
+
+**WHETHER A CONTROL DECK'S KEEP SHOULD WANT THREE: NO.** Measured before anything
+was built, at the size wave 1's row asked for —
+`the_deck_weissman_1994_95_winter` vs `white_knights`, 4 000 games an arm, seed
+11, `--mulligan on`, the floor put on seat A alone through a scratch field:
+**43.4% at the shipped floor against 42.4% at a floor of three (−1.0 ±2.2)**,
+1 497 of 4 000 games ending differently and **565 changing hands, 263 to a win
+against 302 away** (a fair toss sits at 282 ± 12); control two all-land lists,
+2000-2000 byte-identical in every arm. The hand census is the argument: a floor
+of three nearly TRIPLES the mulligan rate (sevens thrown back 16.6 -> 46.0% on
+the Winter list, 8.3 -> 27.8% on the playable one, 16.6 -> 47.3% on Big Green)
+and drops the mean kept hand from 6.78 to 6.08 cards, while The Deck's sevens
+kept on exactly two mana win 44.6% of 130 games against the 45.5% of the sixes
+that would replace them. **`AiMulligan` is untouched — no floor, no field, no
+knob** — and the short losses stay what the census called them.
+
+**AND THE ITEM'S OWN CLAIM IS HALF TRUE.** "An Angel shortens the win by ten to
+twenty turns and changes nothing about the loss" is right about the shortening
+and wrong about the price: the same variant with the three feeders out for two
+Moats and a Factory (a scratch list, not shipped) wins at **turn 35.0, 16.6 turns
+sooner**, with only 31 of 266 wins by library-out — and at **35.5% against
+47.7%**. The Angel closes when the Abyss leaves, and the Abyss is worth about
+twelve points of win rate. That is a DECK question and not an AI one, and it is
+why Weissman's lists carry Moats where they carry Angels.
 
 ## Standing quality gates
 

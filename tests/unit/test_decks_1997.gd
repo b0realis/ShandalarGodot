@@ -53,8 +53,10 @@ const PORTED_TOTAL := 312
 ## deck of ours must not be able to move one of them. The Deck's playable
 ## variant went into `extended_community` once and these tests caught it
 ## (2026-09-06) — this constant is how the guard keeps working while the
-## variants still ship.
-const VARIANT_TOTAL := 1
+## variants still ship. TWO since 2026-09-10: `the_deck_serra.deck`, the
+## same list with two Serra Angels in for two Mishra's Factories (the
+## Angel row, docs/ai-difficulty.md §4).
+const VARIANT_TOTAL := 2
 ## Every `.deck` under `decks/`, ported and ours together.
 const SHIPPED_TOTAL := PORTED_TOTAL + VARIANT_TOTAL
 ## The enemy-deck groups: one deck per enemy, each with a `# tier:` line.

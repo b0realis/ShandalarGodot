@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `holds_the_closer`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -677,6 +677,30 @@ turns, stalled, drawn and a fingerprint, and nothing about which card was
 cast when — so "the median turn at which the loop first runs", which both
 `docs/AI-next-wave.md` and casting P5 ask for, cannot be read from a
 sweep as the Lab stands.
+**ITS FOOTPRINT GREW ON 2026-09-10**, when the knob took THE FINISHER
+(`docs/ai-difficulty.md` §1, the Angel): it now also fires where a
+permanent on EITHER side declares an upkeep appetite the creature about
+to be cast would satisfy (The Abyss is the pool's one such card), and
+and, behind the FIELD `holds_the_closer`, where a CREATURE is cast from
+a hand holding a COUNTERSPELL while the opponent's board could still
+out-run it. So a control for either must hold no feeder and no
+counterspell — Big Green vs White Knights holds neither, and is
+1099-901 byte-identical to its own null in both arms of four runs at
+2,000 games, on the tree with the finisher and on the tree without it.
+The live pair for both is `decks/variants/the_deck_serra.deck` vs White
+Knights: The Deck's own list plays three copies of the feeder and two of
+the closer.
+**`holds_the_closer` (2026-09-10) IS NOT A DIFFICULTY KNOB**: every
+preset ships it OFF — the Lab refused the rung (`docs/ai-difficulty.md`
+§4: −0.4 ±2.9 on that pair, 6 games flipped to a win against 14 away,
+and about fifty games of four thousand taken off Blue Skies across the
+starter matrix) — so `--null off` is both the seat's own value and the
+shipped pilot, and an `off` arm that does not replay the null game for
+game is a bug in the measurement rather than a finding. Mind the pool
+when you pick a live pair for it: what shows the knob is a deck that
+holds a COUNTERSPELL beside a creature worth more than anything on its
+own table, which in `decks/` is Blue Skies and The Deck's own lists and
+nothing else.
 `levels_boards` (2026-09-07) GREW on 2026-09-10 to cover the LAND SWEEP —
 a sweeper whose every kill is a land — so its control must hold no
 Balance AND no Armageddon, Flashfires, Tsunami or Acid Rain. Big Green vs

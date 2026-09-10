@@ -1531,6 +1531,33 @@ var minds_the_vise := false
 var runs_loops := false
 
 
+## THE CLOSER HELD UNTIL THE BOARD IS LOCKED — the finisher rule of
+## docs/ROADMAP.md's "THE DECK, THIRD PASS" §6, built whole and shipping
+## at its null on every preset (2026-09-10).
+##
+## NOT A DIFFICULTY KNOB and no rung moves it, exactly as
+## [member develops_late] and [member crack_back_margin] are not: the
+## field is here so the Deck Lab can put the question in ONE command
+## (`--sweep holds_the_closer=on,off --null off`) instead of a patch to
+## this file. What it gates is [method AiPlayer._holds_the_closer] — a
+## creature kept in hand while a counter is held, our own table is the
+## slower clock and their attackers still out-run the body, released when
+## a static of ours grounds their attack or a feeder eats it.
+##
+## THE LAB SAID NO, and the number that refused it is not the pair the
+## rule was written for: on The Deck's own Serra variant it is a wash
+## inside its interval, and on the one STARTER that holds a counterspell
+## beside its creatures it is a loss — Blue Skies gives up about a point
+## and a quarter across its four matchups, because a flier deck's
+## Mahamoti Djinn is its clock and not its finisher. A capability is as
+## good or better one rung up; this one is not. The OTHER half of the
+## same rule — the appetite already on the table
+## ([method AiPlayer._fed_on_arrival]) — measured as a wash that removes a
+## malfunction and ships inside [member checks_before_casting], where it
+## belongs.
+var holds_the_closer := false
+
+
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,

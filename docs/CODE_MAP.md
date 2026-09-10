@@ -1496,6 +1496,25 @@ shandalar/
 │                      whose guards run first and are untouched. A wash
 │                      on four win rates and it says so, with 142 games
 │                      flipped to a win against 46 away.
+│   │                      THE FINISHER (2026-09-10, under
+│   │                      AiProfile.checks_before_casting):
+│   │                      AiPlayer._fed_on_arrival refuses a creature cast
+│   │                      that a feeder already in play would eat at the
+│   │                      next upkeep — _is_next_meal asked of OUR OWN
+│   │                      side, because the pool's one feeder eats at
+│   │                      every player's upkeep and The Deck runs three.
+│   │                      AiPlayer._holds_the_closer (behind the FIELD
+│   │                      AiProfile.holds_the_closer, which every preset
+│   │                      ships at its null) keeps the finisher in hand
+│   │                      while a counter is held, nothing of ours is
+│   │                      worth as much and our own board is the slower
+│   │                      clock (_is_the_closer), and their attackers
+│   │                      still out-run it (_out_raced, the crack-back
+│   │                      model's own _could_attack_next_turn) — released
+│   │                      the moment their attack is grounded by a static
+│   │                      of ours or eaten by a feeder (_board_is_locked),
+│   │                      the Moat and the Abyss read as shapes and never
+│   │                      as names. _in_danger lifts both.
 │   │                      trusts_abyss (2026-09-08) is THE ABYSS AS AN
 │   │                      ANSWER: the counter decision (_try_counter)
 │   │                      keeps the counterspell when the creature spell
@@ -2420,7 +2439,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5874 tests / ~152 133 asserts, ~380 s
+├── tests/                   GUT suite — 5900 tests / ~153 088 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4171,6 +4190,22 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_holds_the_closer_2026_09_10.gd — THE FINISHER
+│    (AiProfile.checks_before_casting's appetite half, and
+│    AiProfile.holds_the_closer's refused race half): the Serra Angel held
+│    instead of cast under our OWN Abyss and the null casting it, played
+│    out to the graveyard at our own upkeep; a Savannah Lions of ours
+│    sheltering it so the cast goes on both arms; an artifact creature no
+│    meal; a noncreature spell held by neither half; the closer held while
+│    their board out-runs it and committed with the field at its null; a
+│    hand with NO counterspell never holding anything; the panic line
+│    lifting both halves at four life; a Moat of ours as the lock and four
+│    fliers walking over it; a feeder that eats their one attacker as the
+│    other lock, two attackers as no lock; a bigger body of ours and a
+│    faster board of ours both meaning this one is not the closer; the
+│    race arithmetic at twenty life and at twenty-one; a Wall of theirs no
+│    racer; every preset shipping the race half off; the Wizard alone
+│    holding the appetite half; both reachable from the Lab;
 │    tests/ai/test_ai_minds_the_vise_2026_09_10.gd — THE HAND UNDER A
 │    SQUEEZE (AiProfile.minds_the_vise): the pool's three hand tolls and
 │    the Vise and Rack pointing opposite ways; Nicol Bolas's hand line

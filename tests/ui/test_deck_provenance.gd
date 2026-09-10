@@ -36,10 +36,10 @@ var screen: DeckBuilderScreen
 ## the other one.
 const VICTIM := "res://decks/1997/originals/cleric.deck"
 ## How many files `res://decks` holds. `tests/unit/test_decks_1997.gd`
-## owns the breakdown (5 starters + 312 ported); this is the number the
-## fingerprint below covers, pinned so a deck added later is covered too
-## rather than silently skipped.
-const SHIPPED_FILES := 318
+## owns the breakdown (5 starters + 312 ported + 2 of our own); this is
+## the number the fingerprint below covers, pinned so a deck added later
+## is covered too rather than silently skipped.
+const SHIPPED_FILES := 319
 
 var _written: Array[String] = []
 

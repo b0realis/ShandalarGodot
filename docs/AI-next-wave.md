@@ -145,21 +145,76 @@ Library of Alexandria or a Strip Mine worth more untapped than a Forest;
 `engine/mana_planner.gd` takes equal sources in battlefield order — an
 engine change measured at every rung, not a knob.
 
-## THE ANGEL — its own item, when a deck wants it
+## ~~THE ANGEL~~ — **DONE 2026-09-10: the deck built, one half of the finisher shipped, the other half and the mulligan floor REFUSED**
 
-The census (ROADMAP, THE DECK, THIRD PASS §6): The Deck's wins come at
+~~The census (ROADMAP, THE DECK, THIRD PASS §6): The Deck's wins come at
 turn 48–58 on the mean, its losses at 16–22, and 35 of the 42 short
-losses were keeps of one to three lands. An Angel shortens the win by
-ten to twenty turns and changes nothing about the loss. When wanted: a
-`the_deck_serra.deck` variant (two Angels for two of the four Factories,
-the Winter list's shape) and a finisher rule on the cast — the closer is
-held while their board can still race it (the crack-back search's
-reading of their untapped attackers against our life over the turns the
-Angel needs) and cast when the board is locked (a Moat or an Abyss on
-the table with a counter in hand). Control pair `big_green` vs
-`white_knights`. The short losses are a mulligan question with a deck in
-it — whether a control deck's keep should want three — and go with wave
-1's row 2, measured, not assumed.
+losses were keeps of one to three lands.~~ **REPRODUCED on today's tree**
+(`the_deck_playable` against the five starters, 150 games a matchup with
+the mulligan on, seed 4242): wins at 52.1 / 52.6 / 48.8 / 52.8 / 52.2 on
+the mean, 162 of 358 by an empty library, losses at 18.1–24.2, **191 of
+392 by turn 16 (48.7%, where the pass read 48.8%) and 161 of those 191
+keeps of one to three lands (84.3%, where the pass read 83.3%)**.
+
+~~An Angel shortens the win by ten to twenty turns and changes nothing
+about the loss.~~ **HALF TRUE, and the half that is false is the
+expensive one.** `decks/variants/the_deck_serra.deck` is built exactly as
+described — two Serra Angels for two Mishra's Factories, and the list
+holds THREE Factories rather than the four the item names, so one stays —
+and on the same census it wins at turn 54.4, **three turns LATER** than
+the list it replaces, with 251 of its 353 wins by library-out. The reason
+is on our own side of the table: The Deck plays three copies of the
+pool's one feeder and a feeder eats at EVERY player's upkeep, so fifty
+games against White Knights cast 56 Angels and lost **33 of them at our
+own upkeep to our own enchantment**. Take the feeders out for Moats (a
+scratch list, not shipped) and the win does arrive **16.6 turns sooner**
+— inside the item's own band — for **twelve points of win rate**. The
+Angel closes when the Abyss leaves; the Abyss is worth more than the
+speed, which is why Weissman's own lists carry Moats where they carry
+Angels.
+
+~~a finisher rule on the cast — the closer is held while their board can
+still race it … and cast when the board is locked~~ **BUILT WHOLE AND
+SPLIT BY THE NUMBERS, both halves inside `checks_before_casting`'s own
+sentence rather than as a knob of their own.** THE APPETITE ALREADY IN
+PLAY (`AiPlayer._fed_on_arrival`) SHIPS: a printed upkeep trigger that
+declares what it eats is the veto's "answer the table is already showing"
+written as a trigger, read on both sides because the feeder is symmetric
+— +0.8 ±2.9 at 2 000 games an arm on the Serra variant vs White Knights,
+**28 games flipped to a win against 12 flipped away**, 56 Angels cast and
+33 eaten becoming 38 and 21 for the same 28 attacks, and the starter
+matrix byte-identical to the tree before it (0 of 10 000: no deck in
+`decks/` holds a feeder). THE RACE IS REFUSED and ships at its null as
+the field `AiProfile.holds_the_closer` (`develops_late`'s precedent): the
+whole rule is built — a counter in hand, `_is_the_closer`, `_out_raced`
+off the crack-back model's own `_could_attack_next_turn`, released by
+`_board_is_locked`'s Moat-or-feeder reading and by `_in_danger` — and it
+measures **−0.4 ±2.9 on the very pair it was written for, 6 flips for
+against 14 away**, and takes about fifty games of four thousand off Blue
+Skies, the one starter holding a counterspell beside its creatures. A
+flier deck's Mahamoti Djinn is its clock and not its finisher, and the
+reading cannot tell them apart from the hand alone. Control `big_green`
+vs `white_knights` (no feeder, no counterspell) 1099-901 byte-identical
+in every arm of four runs.
+
+~~The short losses are a mulligan question with a deck in it — whether a
+control deck's keep should want three — and go with wave 1's row 2,
+measured, not assumed.~~ **MEASURED AND REFUSED; `AiMulligan` is
+untouched.** At the size wave 1's row asked for —
+`the_deck_weissman_1994_95_winter` vs `white_knights`, **4 000 games an
+arm**, seed 11, `--mulligan on`, the floor put on seat A alone through a
+scratch field the Lab could sweep — **43.4% at the shipped floor against
+42.4% at a floor of three (−1.0 ±2.2)**, 1 497 of 4 000 games ending
+differently and **565 changing hands, 263 to a win against 302 away**
+(a fair toss sits at 282 ± 12); control two all-land decks, 2000-2000
+byte-identical in every arm. The hand census says why: a floor of three
+nearly TRIPLES the mulligan rate (sevens thrown back 16.6 → 46.0% on the
+Winter list, 8.3 → 27.8% on the playable one, 16.6 → 47.3% on Big Green)
+and drops the mean kept hand from 6.78 to 6.08 cards, while The Deck's
+sevens kept on exactly two mana win 44.6% of 130 games against the 45.5%
+of the sixes that would replace them. A point of win rate for seven
+tenths of a card is the wrong way round. The scratch field was removed;
+nothing in `engine/ai/ai_mulligan.gd` changed.
 
 ## The engine pass (all S; `docs/forge/rules.md` §4)
 
