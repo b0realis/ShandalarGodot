@@ -48,6 +48,21 @@ var aggression := 0.5
 ## number to tune.
 var chump_threshold := 5
 
+## THE HAND'S WEIGHT in [method Evaluator.position_score] — and the one
+## evaluator number a profile carries rather than reading the file's
+## constant ([constant Evaluator.W_HAND], which is this default; the two
+## are pinned to each other by
+## `tests/ai/test_ai_w_hand_2026_09_10.gd`, since the evaluator reads the
+## profile and so the profile may not name the evaluator).
+##
+## NOT A DIFFICULTY KNOB, and the only field here that is not. Every
+## preset ships the same value and no rung moves it. It is here because
+## `apply_overrides` is how the Deck Lab puts a NUMBER on a seat, and the
+## Forge study's casting note P11 asks for the hand:life ratio — 1.5
+## here, 2.5 in Forge — to be settled by a sweep rather than by argument:
+## `--sweep w_hand=1.5,2.0,2.5`.
+var w_hand := 1.5
+
 ## Gates the whole reactive game: counterspells, Fog, combat tricks, holding
 ## mana open — and, since §6.8, the 1997 DAMAGE-PREVENTION and REGENERATION
 ## windows, which are a priority round whose only legal actions are fast
@@ -705,6 +720,156 @@ var pumps_to_attack := false
 ## own parser and the permanent's own live field.
 var spends_counters := false
 
+## WHICH COUNTER, AND WHAT THE UNLESS-COST'S X IS: does this profile pick
+## the counterspell it answers a spell with, or fire whichever one sits
+## first in its hand?
+##
+## Until 2026-09-10 [method AiPlayer._try_counter] walked the hand in
+## order and cast the first card that could legally answer the spell on
+## the stack, so a Mana Drain and a Power Sink in the same hand were
+## spent by the shuffle: whichever the deck had dealt first went on
+## whatever came first, and the Sink — the card that stops a spell for
+## two mana while the caster is tapped out — was as likely to be left
+## holding the bag for a Serra Angel. The same routine paid Power Sink's
+## X "as deep as the mana goes", which against a tapped-out opponent
+## meant eight Islands spent to make a one-mana price unpayable.
+##
+## With the knob on the counters that can answer THIS spell are ranked
+## before one is cast — can we pay for it, does it actually stop the
+## spell (a printed "unless its controller pays" price the caster can
+## simply pay is no counter at all), what it costs us now with its X
+## included, then the narrow card before the wide one and the card the
+## evaluator would rather not keep — and an unless-cost's X is the
+## smallest one the caster cannot pay, which is their open mana plus one.
+## The two halves are the same reading from opposite ends, which is why
+## they are one knob: what a soft counter costs and whether it works are
+## both "how much mana can they still reach".
+##
+## A CAPABILITY, and it belongs to the rung [member holds_instants]
+## belongs to: MAGICIAN and up. An Apprentice never casts a counterspell
+## at all, so the knob is as inert there as [member counter_threshold] is
+## — and the ranking is not a second difficulty dial, it is the layer
+## being played competently or by the shuffle. Nothing here names a card:
+## the unless-cost is the card's own oracle line and the narrowness is
+## whether its own [TargetSpec] carries a filter.
+var ranks_counters := false
+
+## THE X BURN HELD FOR A BIGGER ONE: the smallest X this profile will pay
+## to point an X burn spell at a CREATURE while the game is still young,
+## or 0 for a profile that fires it at whatever it can size to.
+##
+## A NUMBER and not a switch, because what is being held is a size. An X
+## burn is the only card in a hand whose worth grows with the turn — a
+## Fireball is two damage on turn three and eight on turn nine, and the
+## deck holds it because it is the reach — and
+## [method AiPlayer._size_x_burn] sizes X to the victim, which is right,
+## and then fired a two-point Disintegrate at a Grizzly Bears on turn
+## three: one of the deck's two finishers spent on a bear, on a board a
+## Lightning Bolt answers for one mana.
+##
+## The hold is bounded by the game's own age (the burn waits only while
+## the turn count is under twice this number) and lifted by the pilot's
+## own readings rather than by any constant: a burn that wins the game is
+## taken before this is asked at all, and a pilot whose life the board in
+## front of it is about to take ([method AiPlayer._in_danger], the panic
+## line read against their clock) spends the card it was holding for turn
+## nine. The face arm still runs under the hold, so a burn worth throwing
+## at a player within reach of it is still thrown.
+##
+## A CAPABILITY, and the same shape as [member times_sweeps]: knowing
+## that a card is worth more later than now is a whole layer of play, and
+## the bottom two rungs not having it is the same honest weakness as the
+## Apprentice never holding an instant. SORCERER 3, WIZARD 5 — the
+## ladder is monotone in it, the larger number being the more patient
+## pilot; the numbers are Forge's own Reckless and Default thresholds
+## (docs/forge/casting.md P7), and its coin flip over them is not ported.
+var holds_x_burn := 0
+## THE THREE READS THE COMBAT MATHS NEVER MADE (2026-09-10): does this
+## profile see the printed lines that decide a combat without ever
+## appearing in the damage arithmetic?
+##
+## Every kill this AI predicts goes through [method AiPlayer._dies_to],
+## and until this landed that predicate was power against toughness and
+## nothing else. Three shapes in this pool settle a combat some other
+## way, and the pilot walked into all three:
+##
+##  * THE GAZE. A Cockatrice or a Thicket Basilisk destroys whatever it
+##    blocks or is blocked by, at end of combat, whatever the numbers
+##    said. Reproduced 2026-09-10: a Craw Wurm swings into a Cockatrice
+##    at `_attack_risk` 0.0 — "we kill it and live" — and the seat
+##    declares the attack; on the other side of the table the same
+##    reading keeps our OWN Cockatrice at home, because rung 1 of the
+##    block ladder cannot see that the 2/4 kills the 6/4 it steps in
+##    front of. The reading is [method EffectIntent.is_gaze], a BLOCKED
+##    trigger whose printed line destroys that creature at end of
+##    combat, with the trigger's own condition put to a probe event so
+##    the "non-Wall" rider answers for itself (CR 603.4).
+##  * RAMPAGE (CR 702.23). The engine applies +N/+N for each blocker past
+##    the first ([method MtgGame.declare_blockers]) and the block ladder's
+##    gang rung ignored it: two Grizzly Bears in front of a Craw Giant
+##    read 2+2 against a toughness of 4 and gang up, and the 8/6 that
+##    actually stands there kills them both and tramples four through.
+##    Counted now wherever a gang is priced — the ladder's rung 3, the
+##    band predicate the recovery shares, and the crack-back model's own
+##    resolution.
+##  * THE EXECUTIONER. An untapped Royal Assassin with {1}{B}{B} open is
+##    the reason a non-vigilant attacker of ours does not come home:
+##    tapping to attack is what makes it a legal target. Reproduced the
+##    same day: a Hypnotic Specter swings past a 1/1 Assassin it cannot
+##    be blocked by, `_attack_risk` -1.0 ("nothing over there may block
+##    it"), and is in the graveyard before the damage step with their
+##    life still twenty. Read as a shape ([method
+##    EffectIntent.destroys_the_tapped] plus the spec's own refusal of
+##    the body standing still), the way Forge's
+##    `canBeKilledByRoyalAssassin` reads it.
+##
+## READS, not strength — which is why the rung is a question the numbers
+## answer rather than a ruling. Sorcerer and Wizard, with the other
+## combat capabilities, and measured at every rung so the ramp ruling
+## (docs/ai-difficulty.md §1) can be applied to what it costs the bottom
+## of the ladder. Nothing here names a card: two printed lines and one
+## engine field ([member CardInstance.cur_rampage]).
+var reads_gaze := false
+
+## THE LAND THAT IS A BLOCKER, AND THE ONE OF OURS THAT COULD BE
+## (2026-09-10): does this profile count a permanent that can animate
+## itself as a body in the combat about to happen — theirs when we
+## attack, ours when we block?
+##
+## TWO HALVES OF ONE READ, and they ship together because either one
+## alone is a lie. [method AiPlayer._attack_choice] lists their untapped
+## CREATURES as the blockers an attack is priced against, so a Mishra's
+## Factory with {1} open is invisible to the cohort and to the crack-back
+## model, and a Grizzly Bears walks into a 2/2 that eats it for a mana
+## (reproduced 2026-09-10). And no rung animated a Factory to BLOCK at
+## all: [method AiPlayer._animation_value] prices an animation by the
+## attack it enables and returns 0.0 at every moment but our own first
+## main phase, so on their turn the same three lands sat untapped while
+## a Grizzly Bears hit us for two (reproduced the same day, `declared 0
+## block(s)`, three untapped lands). Ship only the first and the pilot
+## grows timid about a body the AI across the table never actually makes;
+## ship only the second and it makes a body the reading opposite still
+## cannot see. Together they are one fact about the same permanent.
+##
+## On, the attack declaration is made with their affordable animations
+## HUNG ON under the journal — the same probe shape [member
+## animates_to_attack] uses, and for the same reason: one reader for the
+## price and the declaration — and the block is bought at the moment
+## [method AiPlayer._defensive_combat_response] already owns, once their
+## attackers are declared, when the declaration itself says the body
+## would be used and would come back ([method
+## AiPlayer._would_block_once_animated]). Off, a manland is a land.
+##
+## Sorcerer and Wizard, with [member animates_to_attack] and [member
+## plays_engines] — the same layer of play, mana spent to make a body
+## that was not there. The Factory is rare in the 1997 lists and common
+## in the tournament ones. Nothing here names a card: the shape is
+## [member EffectIntent.animates] read off the ability's own effects,
+## and the price is their open mana counted the way [method
+## AiPlayer._shieldable] already counts it — untapped permanents, public
+## to both seats.
+var reads_manlands := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
@@ -766,6 +931,14 @@ func apply_overrides(spec: String) -> String:
 	return ""
 
 
+# THE PRESETS. A knob added since 2026-09-10 is set on the built profile
+# by NAME rather than threaded through [method _init]'s positional tail:
+# the tail is twenty arguments of bare `true`, and two knobs landing in it
+# from two branches at once is a silently scrambled preset rather than a
+# merge conflict anyone can see. Named assignment reads the same and
+# cannot be misread.
+
+
 ## Lowest difficulty: fumbles a third of its actions, swings recklessly, and
 ## never holds up instants — sorcery-speed Magic, which is the honest way to
 ## be weak without cheating the rules.
@@ -776,18 +949,30 @@ static func apprentice() -> AiProfile:
 ## threshold means it only answers the biggest threats and lets the rest
 ## resolve.
 static func magician() -> AiProfile:
-	return AiProfile.new("Magician", 0.20, 0.60, 4, true, 7.0, 2, 0, false)
+	var profile := AiProfile.new("Magician", 0.20, 0.60, 4, true, 7.0, 2, 0, false)
+	profile.ranks_counters = true
+	return profile
 
 ## Third difficulty: rarely fumbles, plays a balanced game.
 static func sorcerer() -> AiProfile:
-	return AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
+	var profile := AiProfile.new("Sorcerer", 0.08, 0.50, 5, true, 5.5, 3, 1500, true, true, true, true, true, true,
 		true, true, true, true, true, true)
+	profile.ranks_counters = true
+	profile.holds_x_burn = 3
+	profile.reads_gaze = true
+	profile.reads_manlands = true
+	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
 ## every other profile, just without ever degrading its own choice.
 static func wizard() -> AiProfile:
-	return AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
+	var profile := AiProfile.new("Wizard", 0.0, 0.50, 6, true, 5.0, 4, 3000, true, true, true, true, true, true,
 		true, true, true, true, true, true)
+	profile.ranks_counters = true
+	profile.holds_x_burn = 5
+	profile.reads_gaze = true
+	profile.reads_manlands = true
+	return profile
 
 
 func _to_string() -> String:

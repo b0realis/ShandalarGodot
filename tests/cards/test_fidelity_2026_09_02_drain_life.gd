@@ -62,7 +62,14 @@ func test_drain_life_x_zero_needs_no_black_beyond_the_pip() -> void:
 func test_ai_sizes_drain_life_by_its_black_mana() -> void:
 	# Three Swamps and three Forests: {B}{1} plus X — the Forests can pay
 	# the {1} but not X, so the biggest legal X is 2: enough for the Bears.
-	var ai := AiPlayer.new(0, AiProfile.wizard())
+	# holds_x_burn OFF (2026-09-10): this test is about the BLACK MANA that
+	# sizes X, and a reach of two at a bear is exactly what the Wizard's
+	# hold now declines. What it holds and what lifts the hold is pinned in
+	# tests/ai/test_ai_holds_x_burn_2026_09_10.gd; here the knob is out of
+	# the way so the colour restriction is the only thing under test.
+	var profile := AiProfile.wizard()
+	profile.holds_x_burn = 0
+	var ai := AiPlayer.new(0, profile)
 	g.set_agent(0, ai)
 	give_hand(0, "Drain Life")
 	put_battlefield(1, "Grizzly Bears")

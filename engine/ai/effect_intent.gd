@@ -982,3 +982,64 @@ static func _read_reckoning(data: CardData) -> bool:
 		if trig.text.to_lower().contains("you lose the game"):
 			return true
 	return false
+
+
+## THE GAZE (2026-09-10, [member AiProfile.reads_gaze]), cached by the
+## trigger's own printed line the way [member _toll_cache] caches a toll's:
+## the pool's trigger texts are a fixed set.
+static var _gaze_cache: Dictionary = {}
+
+
+## Does [param trig] DESTROY the creature its permanent blocks — or is
+## blocked by — whatever the combat maths say? Cockatrice and Thicket
+## Basilisk are the pool's two, and neither is named here: the reading is
+## a [constant Mtg.EventType.BLOCKED] trigger whose printed line destroys
+## "that creature" at end of combat.
+##
+## THE TIMING IS READ AND NOT ASSUMED, which is the half a shape test is
+## easy to get wrong. A gaze that resolves AT END OF COMBAT lets the
+## victim strike first — the Basilisk still takes the six a Craw Wurm
+## deals it — while one that destroyed the creature on the spot would
+## take the damage off the exchange as well. This pool prints only the
+## first, so only the first is read: a line that destroys what it blocks
+## at some other moment keeps the pilot exactly where it was, which
+## understates the danger rather than inventing a rule for a card that is
+## not here. [method AiPlayer._damage_from] is therefore untouched.
+static func is_gaze(trig: TriggeredAbility) -> bool:
+	if trig == null or trig.event_type != Mtg.EventType.BLOCKED:
+		return false
+	if _gaze_cache.has(trig.text):
+		return _gaze_cache[trig.text]
+	var lower := trig.text.to_lower()
+	var found := lower.contains("destroy that creature") \
+		and lower.contains("end of combat")
+	_gaze_cache[trig.text] = found
+	return found
+
+
+## THE EXECUTIONER'S SHAPE (2026-09-10, [member AiProfile.reads_gaze]):
+## does [param ability] destroy a creature that has to be TAPPED for it to
+## be aimed at all? Forge's `canBeKilledByRoyalAssassin`
+## (`ComputerUtilCard.java:911-938`) is the same test with the same
+## absence of a card name.
+##
+## Read as one [DestroyEffect] behind a creature spec whose printed line
+## names the tapped state — the card's own English, the reading
+## [method loses_the_game_on_leaving] and [method toll_of_line] already
+## make. The dynamic half is the caller's ([method
+## AiPlayer._taps_into_execution]): a spec that is legal against the body
+## STANDING STILL is a threat the attack did not create, and the tap is
+## then not what buys them the kill. That is what tells the pool's two
+## cards apart — Royal Assassin's spec carries the filter that refuses an
+## untapped creature, and Tetsuo Umezawa's ("target tapped or blocking
+## creature") carries none at all, so it may already aim at the body and
+## is no reason to keep it home.
+static func destroys_the_tapped(ability: ActivatedAbility) -> bool:
+	if ability == null or ability.effects.size() != 1:
+		return false
+	if not (ability.effects[0] is DestroyEffect):
+		return false
+	var spec: TargetSpec = ability.effects[0].target_spec
+	if spec == null or spec.kind != TargetSpec.Kind.CREATURE:
+		return false
+	return (ability.text + " " + spec.description).to_lower().contains("tapped")

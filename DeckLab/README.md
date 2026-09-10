@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `aggression=0.3,0.7`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `reads_gaze`, `reads_manlands`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -368,7 +368,47 @@ price printed on an ATTACHMENT (Paralyze's {4}, the pool's one such aura
 deals its target's controller is priced on the ENEMY side as well as our
 own, so the control must also hold no Detonate. Neither deck does; Big
 Green vs White Knights is 525-475 byte-identical to its own null in every
-arm of five more runs at 1,000 games and one at 2,000. Every other switch keeps its meaning: `--games`
+arm of five more runs at 1,000 games and one at 2,000.
+`ranks_counters` (2026-09-10) fires only where a COUNTERSPELL is cast, so
+its control must hold none on either side of the table — Big Green vs
+Mountain Artillery holds none in either main deck (Mountain Artillery's
+Red Elemental Blasts are sideboard cards, so keep `--sideboard` off or
+pick another pair). Mind also that the knob does nothing in a deck whose
+counters are all the same card: with two Counterspells and nothing else,
+there is no order to get wrong. `holds_x_burn` (2026-09-10) is a NUMBER
+and fires only where a spell whose X IS its damage is pointed at a
+creature (`EffectIntent.damage_uses_x` — Fireball, Disintegrate, Drain
+Life), so its control must hold none of them: Blue Skies vs White Knights
+holds no X burn at all (Psionic Blast's four is printed and Braingeyser's
+X is cards, not damage). Its null is 0 and NOT the seat's own preset
+value, so a sweep of it wants `--null 0` written out — a wizard seat's
+own value is 5, and a sweep that lets the default stand is measuring 3
+and 0 against 5 rather than against the shipped tree before the knob
+existed.
+`reads_gaze` (2026-09-10) fires on three printed shapes and its control
+must hold none of them: a trigger that destroys what it blocks
+(Cockatrice, Thicket Basilisk), a printed rampage (all seven are Legends
+cards — Craw Giant, Frost Giant, Wolverine Pack, Marhault Elsdragon,
+Aerathi Berserker, Hunding Gjornersen, Chromium — and NO deck in
+`decks/` holds one, which is why the rampage half is pinned by
+`tests/ai/` and not measured here), and an activated ability that
+destroys a TAPPED creature (Royal Assassin, Tetsuo Umezawa). Big Green
+vs White Knights holds none of the three. `reads_manlands` (the same
+day) fires wherever a permanent can animate ITSELF — the pool's two are
+Mishra's Factory and Jade Statue — on EITHER side of the table, because
+the knob is one fact read twice: theirs is a blocker our attack has to
+price and ours is a blocker we buy once their attackers are declared.
+Its control must hold neither, and Big Green vs White Knights again
+does not. **Mind that both default ON at Sorcerer and Wizard**, so a
+sweep of some OTHER knob taken against a published number must pin them
+off on both seats (`--profile-a wizard:reads_gaze=off,reads_manlands=off`
+and the same for `--profile-b`) or it is measuring three changes; that
+is how the null was proved for this pass — the `pays_sacrifices` sweep
+of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,
+1,000 games an arm, run on the tree before these two landed and on the
+tree after with both pinned off, is **identical game for game in all
+6,000 games**, 24.9% null either way and the control 525-475 replayed to
+the game. Every other switch keeps its meaning: `--games`
 is per arm and per pair, the seeds are the ones a plain `--deck-a`/
 `--deck-b` run deals (the null arm is `--profile-a wizard:KNOB=null
 --profile-b wizard:KNOB=null`, game for game), and `--gauntlet` sweeps
@@ -411,6 +451,17 @@ one. The delta's interval is the two Wilson half-widths in quadrature, so
 at 1,000 games per arm a delta under 4.4 points is invisible, and the
 reading block at the foot of the report says how many games a `+-3` or
 `+-1` delta would need.
+
+`w_hand` (2026-09-10) is the first number here that is not a difficulty
+knob at all: `Evaluator.W_HAND`, the weight `position_score` puts on a
+card-in-hand lead, exposed on `AiProfile` precisely so the Lab can put
+it on a seat. It cannot have a proper control pair — every game is
+scored — but it very nearly does: raising it from 1.5 to 2.5 changes 12
+games of 2 000 on Big Green vs Mountain Artillery, so the run reports a
+control FAIL at 2.0 and 2.5 and a PASS at 1.5, and the PASS at the
+shipped value is the determinism check that matters. Read the FAIL lines'
+counts, not just the verdict, when the swept number is one every game
+touches.
 
 A sweep writes `report.txt`, `sweep.json` (everything, including the
 control verdict and each arm's profiles), `sweep.csv` (one row per arm
@@ -455,8 +506,8 @@ which is the case worth re-measuring if the default ever flips.
 
 **Since 2026-09-08 the rule is the Paris mulligan** (the owner's ruling,
 `docs/duel-todo.md` §1.5): any hand may go back, one card fewer each
-time, and the pilot judges by `AiMulligan` — no land, all land, a land
-count outside the keep range for the hand's size, or lands that cast
+time, and the pilot judges by `AiMulligan` — no mana, all land, a mana
+count outside the keep range for the hand's size, or mana that casts
 none of the spells. That is a wider filter than the 1997 one, so the
 table above is the old rule's; the default stays **off** for the same
 reason as before (the baseline), and the judgement itself is measured in
@@ -464,6 +515,22 @@ reason as before (the baseline), and the judgement itself is measured in
 mulligans=on --mulligan on`, with two all-land decks as the control —
 both rules throw an all-land hand back down to the same floor, so the
 control replays the null byte for byte.
+
+**And since 2026-09-10 the band's floor counts MANA, not lands** — the
+lands plus every card in hand that costs `{0}` and prints a mana ability
+(five Moxen, Black Lotus, Mana Crypt in this pool). It matters to the
+Lab's numbers only for a deck that owns one of those seven: the five
+shipped decks own none and throw back exactly the share of their sevens
+they always did (16.6 / 11.6 / 9.8 / 13.7 / 14.3%, 4 000 hands each,
+unchanged to the tenth), while The Deck's lists roughly halve theirs
+(20.2 → 8.3%, 22.6 → 9.8%, 36.2 → 16.6%), nineteen 1997 enemy decks do
+the same (Dracur 33.6 → 22.2%, Prismat 30.5 → 17.9%) — 69 of the 217
+loadable decks hold one of the seven cards — and `twist_of_fire_merritt_1993`
+— forty cards, no land at all, twenty-one Black Lotuses — stops
+mulliganing to the four-card floor in every game of every run
+(100 → 3.1%). **So a recorded baseline that involved `--mulligan on` and
+a Power deck is not comparable across that date**; one with `--mulligan
+off`, or with none of those seven cards in either list, is.
 
 Deck paths are tried as given, then under `decks/`. **A deck argument is a
 PATH, not a deck's name** — `--deck-a decks/big_green.deck`, never

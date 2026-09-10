@@ -1875,7 +1875,16 @@ func _is_next_meal(game: MtgGame, card: CardInstance, who: int) -> bool:
 			for inst in game.players[who].battlefield:
 				if not spec.is_legal(game, TargetRef.card(inst), feeder):
 					continue
-				if Evaluator.permanent_value(inst) < worth:
+				# THE TWIN (2026-09-10): a creature already on the table
+				# that is worth NO MORE than the newcomer shelters it just
+				# as surely as a cheaper one does — the feeder takes one
+				# body a turn, so a second Sengir Vampire beside the first
+				# leaves a Sengir Vampire standing whichever of the two is
+				# eaten. The test was `<`, so the pilot read the newcomer
+				# as the next meal, kept its Counterspell, and the pair
+				# traded one copy for nothing (reproduced 2026-09-10:
+				# `_is_next_meal(second Sengir) = true`).
+				if Evaluator.permanent_value(inst) <= worth:
 					sheltered = true
 					break
 			if not sheltered:
@@ -1883,12 +1892,75 @@ func _is_next_meal(game: MtgGame, card: CardInstance, who: int) -> bool:
 	return false
 
 
+## THE SHELTER CAST (2026-09-10, [member AiProfile.trusts_abyss]): what
+## letting [param card] resolve onto [param who]'s battlefield would SAVE
+## from the feeder's next meal, on the Evaluator's scale — 0.0 when it
+## saves nothing.
+##
+## [method _is_next_meal] reads the table as it stands, and the table does
+## not stand still. The counter is kept because The Abyss will eat their
+## Serra Angel at their upkeep; they then cast a Mesa Pegasus, which is
+## cheaper, and the Abyss eats THAT instead — one Counterspell saved, one
+## Serra Angel on the table, which is the trade the knob was built to
+## avoid (reproduced 2026-09-10: the meal goes from `Serra Angel(10.0)`
+## to `Mesa Pegasus(3.8)` the moment the one-drop lands, and the Pegasus's
+## own printed worth of 3.8 is below [member AiProfile.counter_threshold],
+## so [method _try_counter] returned before it ever asked about the
+## Abyss).
+##
+## THE READING IS THE "AFTER" BOARD, ASKED ONCE MORE. The meal a feeder
+## takes today is the cheapest legal creature of theirs ([method
+## _upkeep_meals]'s own rule, and the choice is theirs — [member
+## AiProfile.feeds_worst] is what they answer with). A newcomer worth less
+## than that displaces it, and what the displacement buys them is exactly
+## the difference: the dear body lives, the cheap one dies in its place.
+## That number is what the spell is worth countering for, and it is
+## nothing whatever to do with what the spell is worth on the board — a
+## Mesa Pegasus that saves a Serra Angel is a Serra Angel.
+##
+## ONE FEEDER AT A TIME, taking the largest displacement. Two feeders
+## would each take a meal and the second one's is a board this reader
+## would have to simulate; the pool has one card of the shape and the
+## honest single-feeder number is the one that can be read off the table.
+func _shelter_swing(game: MtgGame, card: CardInstance, who: int) -> float:
+	var worth := Evaluator.permanent_value(card)
+	var best := 0.0
+	for feeder in game.all_battlefield():
+		for ability in feeder.cur_triggered_abilities:
+			var spec: TargetSpec = ability.kills_each_upkeep
+			if spec == null:
+				continue
+			# The card is on the stack, so the spec's zone check cannot be
+			# asked; its own filter and printed protection are — the same
+			# reading [method _is_next_meal] makes of a spell.
+			if spec.filter.is_valid() and not spec.filter.call(card):
+				continue
+			if (card.cur_protection & feeder.cur_colors) != 0:
+				continue
+			var meal: CardInstance = null
+			for inst in game.players[who].battlefield:
+				if not spec.is_legal(game, TargetRef.card(inst), feeder):
+					continue
+				if meal == null or Evaluator.permanent_value(inst) \
+						< Evaluator.permanent_value(meal):
+					meal = inst
+			if meal == null:
+				continue
+			var saved := Evaluator.permanent_value(meal)
+			if worth < saved:
+				best = maxf(best, saved - worth)
+	return best
+
+
 ## What a leveller (Balance: [member EffectIntent.levels]) would move,
 ## on the Evaluator's scale — theirs counting for us, ours against. Each
 ## pass measures the fewest across the two seats and every card over it
 ## goes: a land at what one more is worth to the player left with the
 ## fewest ([method Evaluator.land_value]'s curve, W_LANDS), a card in
-## hand at W_HAND, a creature at its permanent value times W_BOARD. The
+## hand at the pilot's own [member AiProfile.w_hand] (the sweep of
+## 2026-09-10 moves this reading with [method Evaluator.position_score]'s,
+## so that one number is being measured and not two), a creature at its
+## permanent value times W_BOARD. The
 ## choices being each player's own, the CHEAPEST creatures are the ones
 ## assumed to go (the order the card's own default takes,
 ## BalanceEffect._cheapest_first), and the leveller itself is on the
@@ -1914,8 +1986,8 @@ func _level_value(game: MtgGame, source: CardInstance) -> float:
 	var my_hand := me.hand.size() - (1 if source.zone == Mtg.Zone.HAND else 0)
 	var their_hand := them.hand.size()
 	fewest = mini(my_hand, their_hand)
-	swing += float(their_hand - fewest) * Evaluator.W_HAND
-	swing -= float(my_hand - fewest) * Evaluator.W_HAND
+	swing += float(their_hand - fewest) * profile.w_hand
+	swing -= float(my_hand - fewest) * profile.w_hand
 	# Creatures: each side gives up its cheapest, however big the rest.
 	var mine: Array[float] = []
 	var theirs: Array[float] = []
@@ -2237,12 +2309,110 @@ func _size_x_burn(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		var worth := Evaluator.permanent_value(victim)
 		if worth >= 3.0:
 			var need: int = victim.cur_toughness - victim.damage - intent.damage
-			return {"x": clampi(need, 1, max_x), "targets": [TargetRef.card(victim)],
-				"value": worth + 1.0}
+			# THE HOLD (2026-09-10, [member AiProfile.holds_x_burn]): a
+			# burn whose whole reach is small, pointed at a creature while
+			# the game is young, is the finisher thrown away. See [method
+			# _holds_x_burn]. The face arm below still gets its say, so a
+			# burn worth throwing at a player within range of it is still
+			# thrown.
+			if not _holds_x_burn(game, max_x):
+				return {"x": clampi(need, 1, max_x),
+					"targets": [TargetRef.card(victim)], "value": worth + 1.0}
 	if face_ok and max_x >= 4 and them.life <= intent.damage_at(max_x) * 2:
 		return {"x": max_x, "targets": [TargetRef.player(opponent)],
 			"value": intent.damage_at(max_x) * 0.75 + 2.0}
 	return {}
+
+
+## THE X BURN HELD FOR A BIGGER ONE (2026-09-10, [member
+## AiProfile.holds_x_burn]).
+##
+## An X burn spell is the only card in a hand whose worth GROWS with the
+## turn: a Fireball is two damage on turn three and eight on turn nine,
+## and the deck holds it because it is the reach. [method _size_x_burn]
+## sizes the X to the victim, which is right, and then fired a two-point
+## Disintegrate at a Grizzly Bears on turn three — one of the deck's two
+## finishers spent on a bear, on a board a Lightning Bolt answers for one
+## mana.
+##
+## The knob is a NUMBER and not a switch because what is held is a SIZE:
+## the burn waits while the LARGEST X the mana can reach is under the
+## number AND the game is younger than twice that in turns, so the hold
+## expires on its own and a Fireball is never held for a game that has
+## stopped being young. [member MtgGame.turn_number] counts a PLAYER's
+## turn, so twice the threshold is the Wizard's ninth and the Sorcerer's
+## fifth.
+##
+## THE REACH AND NOT THE SHOT, and the difference was measured rather
+## than argued. [param max_x] is what the mana can pay; the X this
+## routine would actually spend on the victim is smaller. Gating on the
+## SHOT was built first and refuses a Fireball for four at a Serra Angel
+## — a play `tests/ai/test_ai_capabilities.gd` has pinned as correct
+## since the Fireball was first sized, and one no human would decline —
+## because four is under the Wizard's five for the whole of a game's
+## first nine turns. Gating on the REACH says the honest thing instead:
+## while the card can only be small it is not yet the answer to anything,
+## and once it is big the sizing that was already right takes over. It is
+## also what Forge does, `dmg` there being its own maximum X.
+##
+## Two things end it early, and each is a reading this pilot already
+## makes rather than a constant:
+##
+##  * LETHAL is not asked here at all. [method _size_x_burn] returns the
+##    FACE before it ever looks for a creature, so reaching this line
+##    means the burn does not win the game on the spot.
+##  * THEIR CLOCK ([method _in_danger]): a pilot the board in front of it
+##    is about to kill spends the card it was keeping for turn nine.
+##
+## [forge] `DamageDealAi.canPlayAI`
+## (forge-ai/src/main/java/forge/ai/ability/DamageDealAi.java:97-160),
+## commit b09a3d3f: `dmg < HOLD_X_DAMAGE_SPELLS_THRESHOLD && turn / 2 <
+## threshold && !inDanger && !isLethal` refuses the play, with the
+## threshold 5 in the Default profile and 3 in Reckless — which is where
+## the two rungs come from (docs/forge/casting.md, P7). The ROLL that
+## gates it there (`HOLD_X_DAMAGE_SPELLS_FOR_MORE_DAMAGE_CHANCE`, 100 and
+## 85) is not ported: nothing in this AI is decided by a coin
+## (docs/forge/README.md, "what is not to be copied").
+func _holds_x_burn(game: MtgGame, max_x: int) -> bool:
+	if profile.holds_x_burn <= 0:
+		return false
+	if max_x >= profile.holds_x_burn:
+		return false
+	if game.turn_number >= profile.holds_x_burn * 2:
+		return false
+	return not _in_danger(game)
+
+
+## THEIR CLOCK: would the attack the board in front of us can declare put
+## this seat on the panic line?
+##
+## [member AiProfile.chump_threshold] read a fourth time — the chump
+## block, the prevention window and the blast's own X are the other three
+## — and asked of the damage that would ACTUALLY land, through the block
+## plan this seat would make ([method _damage_after_value_blocks]), not
+## of the total power standing on the table.
+##
+## Every creature of theirs counts, tapped ones included: they untap
+## before they swing, which is the reading [method _search_hold_back]
+## already makes. Ours are offered as blockers and the block predicate
+## refuses the tapped ones itself, so a swing reads as slightly more
+## dangerous than it is — the safe direction for a question whose wrong
+## answer is a card held while the game ends.
+func _in_danger(game: MtgGame) -> bool:
+	var me := game.players[pid]
+	var theirs: Array[CardInstance] = []
+	for inst in game.players[game.opponent_of(pid)].battlefield:
+		if inst.is_creature() and inst.cur_power > 0 \
+				and not inst.has_keyword(Mtg.Keyword.DEFENDER):
+			theirs.append(inst)
+	if theirs.is_empty():
+		return me.life <= profile.chump_threshold
+	var mine: Array[CardInstance] = []
+	for inst in me.battlefield:
+		if inst.is_creature():
+			mine.append(inst)
+	return me.life - _damage_after_value_blocks(game, theirs, mine) \
+		<= profile.chump_threshold
 
 
 # ================================================================ the blast --
@@ -3705,10 +3875,128 @@ func _dies_to(game: MtgGame, victim: CardInstance, hitter: CardInstance,
 		victim_bonus := Vector2i.ZERO, hitter_bonus := Vector2i.ZERO) -> bool:
 	if victim.cur_indestructible:
 		return false
+	# THE GAZE (2026-09-10, [member AiProfile.reads_gaze]): a Cockatrice
+	# destroys what it blocks or is blocked by WHATEVER the numbers say,
+	# so the reading comes before the arithmetic and not after it. It is
+	# still a DESTRUCTION, which is why the two clauses this predicate
+	# already ends on — indestructible above, a shield in reach below —
+	# are exactly the right ones and are simply shared.
+	if profile.reads_gaze and _gaze_kills(game, hitter, victim):
+		return not _shieldable(game, victim)
 	var hit := _damage_from(hitter, victim, hitter_bonus, victim_bonus)
 	if hit <= 0 or hit < victim.cur_toughness + victim_bonus.y - victim.damage:
 		return false
 	return not _shieldable(game, victim)
+
+
+## Would [param gazer]'s own printed line destroy [param victim] for
+## meeting it in combat (2026-09-10, [member AiProfile.reads_gaze])?
+##
+## [method _dies_to] is asked about a PAIR and is deliberately blind to
+## which of the two is attacking — the crack-back matrix asks both ways
+## about the same two bodies — and the gaze does not care either: its
+## trigger fires on "blocks or becomes blocked". So the pair is put to
+## the trigger's own condition in both roles ([constant
+## Mtg.EventType.BLOCKED] carries `{attacker, blocker}`, which is what
+## Cockatrice's "non-Wall" rider reads), and either answer is taken. A
+## card that gazed in one direction only would be over-read by that, and
+## this pool prints none; the alternative — demanding both — would
+## under-read the two it does print the moment they attack.
+##
+## The empty-trigger bail on the first line is what keeps this off the
+## cost of the matrix: nearly every creature in the pool has no triggered
+## ability at all, and [method _dies_to] is asked n x m times per
+## declaration.
+func _gaze_kills(game: MtgGame, gazer: CardInstance, victim: CardInstance) -> bool:
+	if gazer == null or victim == null or gazer == victim:
+		return false
+	if gazer.cur_triggered_abilities.is_empty():
+		return false
+	if not victim.is_creature() or victim.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	if not gazer.is_creature() or gazer.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	for trig in gazer.cur_triggered_abilities:
+		if not EffectIntent.is_gaze(trig):
+			continue
+		if not trig.condition.is_valid():
+			return true
+		var as_blocker := GameEvent.new(Mtg.EventType.BLOCKED,
+			{"attacker": victim, "blocker": gazer})
+		if trig.condition.call(game, gazer, as_blocker):
+			return true
+		var as_attacker := GameEvent.new(Mtg.EventType.BLOCKED,
+			{"attacker": gazer, "blocker": victim})
+		if trig.condition.call(game, gazer, as_attacker):
+			return true
+	return false
+
+
+## RAMPAGE (CR 702.23, 2026-09-10, [member AiProfile.reads_gaze]): the
+## +N/+N [param attacker] takes for each of [param blockers] past the
+## first. The engine applies it as the blockers are declared
+## ([method MtgGame.declare_blockers]); every reading of ours that prices
+## a GANG has to apply it a moment earlier, or the gang is declared on an
+## attacker that is two sizes smaller than the one it meets.
+##
+## Zero for a gang of one, which is what makes this safe to put in every
+## band predicate: a single block is the number it always was.
+func _rampage_bonus(attacker: CardInstance, blockers: int) -> int:
+	if not profile.reads_gaze or attacker == null or blockers <= 1:
+		return 0
+	return maxi(attacker.cur_rampage, 0) * (blockers - 1)
+
+
+## Would attacking TAP [param inst] into an execution (2026-09-10,
+## [member AiProfile.reads_gaze])? An untapped Royal Assassin with its
+## mana open is why a non-vigilant body stays home, and the shape is
+## Forge's `canBeKilledByRoyalAssassin` — an opposing Destroy ability,
+## payable now, that can be aimed at the creature only once it is tapped.
+##
+## Three things have to hold and each rules a real case out. The body
+## must TAP to attack (vigilance keeps a Serra Angel out of this
+## entirely). The ability's line must name the tapped state and destroy a
+## creature ([method EffectIntent.destroys_the_tapped]). And the spec
+## must REFUSE the body as it stands: an ability that can already take it
+## standing still is a threat the attack did not create — Tetsuo
+## Umezawa's "target tapped or blocking creature" carries no filter at
+## all in this engine, so it may aim at our body either way and is no
+## reason to hold it back.
+##
+## Their mana is counted the way [method _shieldable] already counts it —
+## untapped permanents with a mana ability, which is public to both seats
+## — and their protection is read off the body the way [method
+## _is_next_meal] reads a feeder's.
+func _taps_into_execution(game: MtgGame, inst: CardInstance, defender: int) -> bool:
+	if inst.tapped or inst.has_keyword(Mtg.Keyword.VIGILANCE):
+		return false
+	if not inst.is_creature() or inst.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	var open := 0
+	for p in game.players[defender].battlefield:
+		if not p.tapped and not p.cur_mana_abilities.is_empty() \
+				and not (p.is_creature() and p.summoning_sick):
+			open += 1
+	var ref := TargetRef.card(inst)
+	for source in game.players[defender].battlefield:
+		if (inst.cur_protection & source.cur_colors) != 0:
+			continue
+		for index in source.cur_activated_abilities.size():
+			var ability: ActivatedAbility = source.cur_activated_abilities[index]
+			if not EffectIntent.destroys_the_tapped(ability):
+				continue
+			if ability.tap_cost and (source.tapped
+					or (source.is_creature() and source.summoning_sick)):
+				continue
+			if ability.cost.mana_value() > open:
+				continue
+			var spec: TargetSpec = ability.effects[0].target_spec
+			if spec.is_legal(game, ref, source):
+				continue   # it can take the body standing still
+			if not spec.filter.is_valid() or spec.filter.call(inst):
+				continue   # something other than the tap is refusing
+			return true
+	return false
 
 
 ## THE SAME QUESTION ASKED OF A WHOLE BAND (2026-09-09,
@@ -3727,12 +4015,21 @@ func _band_kills(game: MtgGame, victim: CardInstance,
 	if victim.cur_indestructible or _shieldable(game, victim):
 		return false
 	var total := 0
+	var bodies := 0
 	for body in band:
 		if body == null or body.zone != Mtg.Zone.BATTLEFIELD:
 			continue
+		bodies += 1
 		var bonus: Vector2i = extra.get(body.id, Vector2i.ZERO)
 		total += _damage_from(body, victim, bonus)
-	return total > 0 and total >= victim.cur_toughness - victim.damage
+	# RAMPAGE (CR 702.23, 2026-09-10, [member AiProfile.reads_gaze]): the
+	# body a gang meets is not the body it was declared against — a Craw
+	# Giant blocked by two is +2/+2 before any damage is assigned. Zero
+	# for a gang of one, so this predicate still IS [method _dies_to]
+	# there, which is what `tests/ai/test_ai_gang_blocks_2026_09_05.gd`
+	# pins.
+	return total > 0 and total >= victim.cur_toughness - victim.damage \
+		+ _rampage_bonus(victim, bodies)
 
 
 ## Every body of ours blocking [param victim], as the band [method
@@ -3890,6 +4187,192 @@ static func _is_counterspell(data: CardData) -> bool:
 	return false
 
 
+## THE PRICE A SOFT COUNTER LETS ITS VICTIM WALK THROUGH FOR: the `{N}`
+## of *"Counter target spell unless its controller pays {N}"*, read off
+## the card's own oracle line exactly as [method _is_counterspell] reads
+## the first one, and for the same reason — the effect class cannot say
+## it (CR 701.5a: the spell is countered only if the price goes unpaid).
+##
+## [constant UNLESS_NONE] for a HARD counter, one that prints no such
+## line; [constant UNLESS_X] when the price is the {X} we ourselves name,
+## which is the one price this seat controls. A line this reader cannot
+## parse is read as no price at all, which prices the card as the hard
+## counter it is not — the mild direction, and the pool holds exactly two
+## of the shape (Power Sink's {X}, Force Spike's {1}) and both parse.
+const UNLESS_NONE := -1
+const UNLESS_X := -2
+
+
+static func _unless_price(data: CardData) -> int:
+	var at := data.oracle_text.find("unless its controller pays {")
+	if at < 0:
+		return UNLESS_NONE
+	var opened := data.oracle_text.find("{", at)
+	var closed := data.oracle_text.find("}", opened)
+	if closed < 0:
+		return UNLESS_NONE
+	var body := data.oracle_text.substr(opened + 1, closed - opened - 1)
+	if body == "X":
+		return UNLESS_X
+	return int(body) if body.is_valid_int() else UNLESS_NONE
+
+
+## The mana [param who] can still reach: what is floating in their pool
+## plus every untapped permanent of theirs the planner would tap — the
+## same list this seat builds for itself ([method _mana_sources]), asked
+## of the other seat. All of it is public: an untapped permanent and the
+## ability printed on it are on the table, and nothing here reads a hand,
+## a library or a decision.
+##
+## It is the PLANNER's list and therefore slightly short: a source whose
+## ability carries a rider the planner does not model (a life cost, a
+## sacrifice, a counter to remove) is left out of it, so a seat holding
+## one can pay a little more than this says. Short is the direction that
+## costs a counter rather than a game — the price we name is one they
+## might just cover — and the alternative is a second mana model beside
+## the one this whole file already shares.
+func _their_open_mana(game: MtgGame, who: int) -> int:
+	var total := 0
+	for source in ManaPlanner.sources(game, who):
+		total += int(source[3])
+	return total
+
+
+## The spec [method _try_counter] would fire [param inst] at this spell
+## with, or null when the card is no answer to it. The three shapes that
+## loop knows, in its own order: the shared [CounterEffect], a card-local
+## counterspell ([method _is_counterspell]) and a modal card one of whose
+## modes is a counter.
+func _counter_spec(game: MtgGame, inst: CardInstance,
+		top_ref: TargetRef) -> TargetSpec:
+	for effect in inst.data.spell_effects:
+		if effect is CounterEffect \
+				and effect.target_spec.is_legal(game, top_ref, inst):
+			return effect.target_spec
+	if _is_counterspell(inst.data):
+		for effect in inst.data.spell_effects:
+			if effect.target_spec != null \
+					and effect.target_spec.kind == TargetSpec.Kind.SPELL:
+				return effect.target_spec
+	for mode in inst.data.modes:
+		var m_effects: Array = mode["effects"]
+		if m_effects.size() == 1 and m_effects[0] is CounterEffect \
+				and m_effects[0].target_spec.is_legal(game, top_ref, inst):
+			return m_effects[0].target_spec
+	return null
+
+
+## THE COUNTERS IN HAND, THE BEST ANSWER TO THIS SPELL FIRST (2026-09-10,
+## [member AiProfile.ranks_counters]).
+##
+## [method _try_counter] walked the hand in the order the cards sit in it
+## and cast the first one that could legally answer, so WHICH counter
+## answered a Serra Angel was the shuffle's business. A Mana Drain and a
+## Power Sink in the same hand meant the Drain went on whatever came
+## first — and against a tapped-out caster the Sink is the card that
+## stops that spell for two mana, while the Drain is the one that stops
+## anything.
+##
+## Five keys, and every one is read off the board and the cards' own
+## lines:
+##
+##  1. CAN WE PAY FOR IT. A counter the mana on the table does not cover
+##     is not an answer, and it sorts last so the loop reaches one that
+##     is. This is a fix as much as an ordering: the loop RETURNS what
+##     [method _cast_response] gives it, so a legal counter it could not
+##     afford used to end the search with a pass.
+##  2. DOES IT STOP THE SPELL. A soft counter is a counter only while the
+##     price it prints is out of the caster's reach: a Force Spike into
+##     an untapped land, or a Power Sink whose unpayable X we cannot
+##     afford, is a card thrown away. This is the "hard before
+##     unless-cost" half of the rule, and it is also why a Sink is not
+##     cast at all when they can pay it and something else in hand
+##     answers — that card is simply ahead of it.
+##  3. WHAT IT COSTS US NOW, the X included: cheap before dear.
+##  4. THE NARROW CARD BEFORE THE WIDE ONE — a spec carrying a filter of
+##     its own (Remove Soul's creature spells, an Elemental Blast's
+##     colour) is spent before the one that answers anything.
+##  5. THE CARD WE WOULD RATHER KEEP, kept. A Power Sink for one and a
+##     Mana Drain both cost two mana against a tapped-out caster; the
+##     Sink is the lesser card, so the Sink is what a Grizzly Bears gets
+##     and the Drain is still in hand when the Serra Angel comes.
+##
+## The hand's own index is the last key, so the order is total and a
+## seeded duel replays it ([method Array.sort_custom] is not stable).
+## With the knob off the hand is returned untouched, which is the null.
+##
+## [forge] the shape is `ComputerUtil.counterSpellRestriction`
+## (forge-ai/src/main/java/forge/ai/ComputerUtil.java:160-214), chosen by
+## `AiController.chooseCounterSpell` (:691-717), commit b09a3d3f: its
+## unless-cost arm scores a counter the caster cannot pay through far
+## above one they can, and its `validTgts` arm puts the narrow card
+## first. The scores themselves are not ported — there they are a sum of
+## magic numbers, here they are a sort.
+func _counter_order(game: MtgGame, top: StackItem, top_ref: TargetRef) -> Array:
+	var hand: Array = game.players[pid].hand
+	if not profile.ranks_counters:
+		return hand
+	var open_mana := _their_open_mana(game, top.controller)
+	var sources := _mana_sources(game)
+	var rows: Array = []
+	for i in hand.size():
+		rows.append(_counter_key(game, hand[i], top_ref, open_mana, sources, i))
+	rows.sort_custom(func(a: Array, b: Array) -> bool:
+		for k in 6:
+			if a[k] != b[k]:
+				return a[k] < b[k]
+		return false)
+	var out: Array = []
+	for row in rows:
+		out.append(row[6])
+	return out
+
+
+## One row of [method _counter_order]'s sort: the five readings, the
+## hand's index and the card. A card that answers nothing here sorts
+## behind every card that does — the loop skips it either way, so its
+## place among its own kind does not matter.
+func _counter_key(game: MtgGame, inst: CardInstance, top_ref: TargetRef,
+		open_mana: int, sources: Array, index: int) -> Array:
+	var no_answer := [1, 1, 99, 1, 99.0, index, inst]
+	var spec := _counter_spec(game, inst, top_ref)
+	if spec == null:
+		return no_answer
+	var data := inst.data
+	var surcharge := game.spell_surcharge(pid, data)
+	var keys: Array = game.mana_usage_keys(data)
+	var unless := _unless_price(data)
+	var unpayable := 0   # 1 = the mana on the table does not cover it
+	var walks := 0       # 1 = the caster can simply pay past it
+	var x := 0
+	if data.cost.has_x:
+		var max_x := _max_affordable_x(game, data.cost, surcharge, sources,
+			data.x_color, keys)
+		if spec.source_filter.is_valid():
+			# Spell Blast: the X is the mana value on the stack, and the
+			# spec is the only thing that knows which.
+			x = _x_that_makes_legal(game, inst, spec, top_ref, max_x)
+			if x < 0:
+				return no_answer
+		elif unless == UNLESS_X:
+			x = open_mana + 1
+			if x > max_x:
+				x = max_x
+				walks = 1
+		else:
+			x = max_x
+		if max_x <= 0:
+			unpayable = 1
+	elif _plan_taps_from(sources, data.cost, surcharge, keys).is_empty() \
+			and not (_cost_is_free(data.cost) and surcharge == 0):
+		unpayable = 1
+	if unless >= 0 and open_mana >= unless:
+		walks = 1
+	return [unpayable, walks, data.cost.mana_value() + surcharge + maxi(x, 0),
+		0 if spec.filter.is_valid() else 1, Evaluator.card_value(data),
+		index, inst]
+
+
 ## Counter the top opposing spell when the threat clears the profile bar.
 func _try_counter(game: MtgGame) -> String:
 	if game.stack.is_empty():
@@ -3905,17 +4388,31 @@ func _try_counter(game: MtgGame) -> String:
 			var target := game.find_instance(t.instance_id)
 			if target != null and target.controller_id == pid:
 				threat = maxf(threat, Evaluator.card_value(target.data))
+	# THE SHELTER CAST (2026-09-10, AiProfile.trusts_abyss): a creature
+	# spell is sometimes worth far more than it prints, because what it
+	# does on that board is take the feeder's next meal away from a body
+	# twice its size (_shelter_swing). It is read BEFORE the bar, because
+	# the whole point of it is a one-drop the bar would never look at.
+	var shelter := 0.0
+	if profile.trusts_abyss and top.card.is_creature():
+		shelter = _shelter_swing(game, top.card, top.controller)
+		threat = maxf(threat, shelter)
 	if threat < profile.counter_threshold:
 		return ""
 	# THE ABYSS AS AN ANSWER (2026-09-08, AiProfile.trusts_abyss): a
 	# creature that will be the next meal of a feeder on the table dies
 	# at their upkeep having blocked once at most; the counter is saved
-	# for what the feeder cannot eat.
-	if profile.trusts_abyss and top.card.is_creature() \
+	# for what the feeder cannot eat. A body that is the next meal ONLY
+	# because it shelters a dearer one is not that body: the feeder eats
+	# it and the threat we were trusting the feeder to answer walks away,
+	# so the trust is withheld exactly where the swing says it should be.
+	if profile.trusts_abyss and top.card.is_creature() and shelter <= 0.0 \
 			and _is_next_meal(game, top.card, top.controller):
 		return ""
 	var top_ref := TargetRef.card(top.card)
-	for inst in game.players[pid].hand:
+	# THE ORDER (2026-09-10, [member AiProfile.ranks_counters]): the hand's
+	# own, until this landed — and still, with the knob off.
+	for inst in _counter_order(game, top, top_ref):
 		# Plain counterspells — but only when the spell CAN be countered by
 		# this card (Remove Soul only stops creature spells).
 		for effect in inst.data.spell_effects:
@@ -3950,8 +4447,22 @@ func _try_counter(game: MtgGame) -> String:
 						if x < 0:
 							continue
 					else:
-						# Power Sink's X is paid as deep as the mana goes.
+						# THE UNLESS-COST'S X (2026-09-10, [member
+						# AiProfile.ranks_counters]): the smallest X the
+						# caster cannot pay, which is the mana they can
+						# still reach plus one — not "as deep as the mana
+						# goes", which spent eight Islands making a
+						# one-mana price unpayable. Whenever that X is out
+						# of our own reach the old maximum stands, and so
+						# does the card's own resolution: a price they CAN
+						# pay is a counter that does not counter, which is
+						# why the ranking above has already put anything
+						# else in hand that answers ahead of it.
 						x = max_x
+						if profile.ranks_counters:
+							var beyond := _their_open_mana(game, top.controller) + 1
+							if beyond <= max_x:
+								x = beyond
 						if x <= 0:
 							continue
 				if not game.target_legal_at(effect.target_spec, top_ref, inst, x):
@@ -4074,7 +4585,140 @@ func _defensive_combat_response(game: MtgGame) -> String:
 				if dies_now and saved_by_pump \
 						and Evaluator.permanent_value(blocker) >= 3.0:
 					return _cast_response(game, pump, [TargetRef.card(blocker)])
+	# THE FACTORY ANIMATED TO BLOCK (2026-09-10, AiProfile.reads_manlands)
+	# — last, because every responder above holds a CARD this mana might
+	# be wanted for, and an animation's whole worth is spent in this
+	# combat. Below the rung it returns before it reads the board.
+	return _combat_animation(game)
+
+
+## THE FACTORY ANIMATED TO BLOCK (2026-09-10, [member
+## AiProfile.reads_manlands], the other half of the read; the third
+## pass's own open row, `docs/ai-difficulty.md` §5: *"no rung animates a
+## Factory to BLOCK on the opponent's turn"*).
+##
+## [method _animation_value] prices an animation by the ATTACK it enables
+## and returns 0.0 at every moment but our own precombat main — the body,
+## the mana and the whole reading are simply absent on their turn. So
+## three untapped lands watched a Grizzly Bears hit us for two
+## (reproduced 2026-09-10: `declared 0 block(s)`, life 20 → 18, three
+## lands still untapped).
+##
+## THE MOMENT IS THE ONE THIS ROUTINE ALREADY OWNS — their declare-
+## attackers, after the attack is declared and before we are asked for
+## blocks. It is the only window there is: an animation bought at their
+## upkeep is a body that has to survive their whole main phase, and one
+## bought after the blockers are declared is a body that did not block.
+##
+## THE PROBE IS [method _would_attack_once_animated] MIRRORED, which is
+## the same reason that one exists: the price and the declaration must be
+## read by ONE reader, or the two disagree and the pilot pays a mana a
+## turn for nothing. The body is animated under the journal, the block
+## declaration's deterministic half is asked over the attackers actually
+## on the table, and both are unmade.
+##
+## AND IT COMES LAST IN THIS ROUTINE, after every responder above has
+## declined. The argument is the mana sink's ([method _try_activate]):
+## the Fog, the sweep, the removal and the trick are all cards or
+## answers this mana might be wanted for, and an animation is the one
+## purchase whose whole value is spent inside this combat. Nothing above
+## it changes behaviour.
+func _combat_animation(game: MtgGame) -> String:
+	if not profile.reads_manlands or game.active_player == pid:
+		return ""
+	if game.current_step() != Mtg.Step.DECLARE_ATTACKERS or game.awaiting_blockers:
+		return ""
+	var attackers: Array[CardInstance] = []
+	for attacker_id in game.combat.attackers:
+		var attacker := game.find_instance(attacker_id)
+		if attacker != null and attacker.zone == Mtg.Zone.BATTLEFIELD:
+			attackers.append(attacker)
+	if attackers.is_empty():
+		return ""
+	# The order the block ladder itself reads them in.
+	attackers.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+		return a.cur_power > b.cur_power)
+	for inst in game.players[pid].battlefield:
+		if inst.is_creature() or inst.tapped:
+			continue
+		for index in inst.cur_activated_abilities.size():
+			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+			if not _ability_available(game, inst, index):
+				continue
+			if not _animation_timing_open(game, ability, pid):
+				continue
+			var anim := EffectIntent.read(ability.effects,
+				inst.data.card_name).animates
+			if anim == null or (anim.add_types & Mtg.CardType.CREATURE) == 0 \
+					or anim.set_power <= 0:
+				continue
+			if not _animation_payable(game, inst, ability):
+				continue
+			if not _would_block_once_animated(game, inst, anim, attackers):
+				continue
+			if not _pay_without_source(game, inst, ability):
+				continue
+			if game.activate_ability(pid, inst, index, []) != "":
+				game.log_line("(AI animation of %s refused)" % inst.data.card_name)
+				_refused["%d:%d" % [inst.id, index]] = true
+				return ""
+			return "animates %s to block" % inst.data.card_name
 	return ""
+
+
+## Would the block declaration put [param inst] in front of something,
+## once [param anim] has made it a creature — and would it come back?
+##
+## The first half is [method _would_attack_once_animated]'s question with
+## the roles swapped, and it is asked of the same declaration code the
+## step after this one will run ([method _block_choice], or the pumped
+## probe when the knob for that is on), so the animation is never bought
+## for a block the ladder was not going to make.
+##
+## THE SECOND HALF IS [method _animation_value]'S OWN REFUSAL, mirrored.
+## What animates here is almost always a LAND, and a land traded for
+## nothing is a mana source a control deck needed — so the body steps out
+## only when it LIVES through the block, or takes the attacker with it. A
+## chump block by a Mishra's Factory is a mana source spent on two points
+## of life, and the block ladder's panic rung cannot know it is spending
+## a land.
+##
+## AND THE PROBE LEAVES NO PLAN BEHIND. [method _block_choice_once_pumped]
+## writes the breath allotment down ([member _pump_plan]) for [method
+## _combat_planned_pumps] to spend, and that member is NOT journaled —
+## a probe that left its own allotment there would have the pilot paying
+## for a block on a board that never existed. It is saved and put back
+## around the call, the way the journal puts the board back.
+func _would_block_once_animated(game: MtgGame, inst: CardInstance,
+		anim: AnimateSelfEffect, attackers: Array[CardInstance]) -> bool:
+	var saved_plan := _pump_plan.duplicate()
+	var saved_turn := _pump_plan_turn
+	var owned := game.undo_log == null
+	var mark := game.make_mark()
+	game.continuous.add_until_eot_animation(inst.id, anim.add_types,
+		anim.set_power, anim.set_toughness, anim.add_subtypes, anim.combat_duration)
+	game.recalculate()
+	var would := false
+	if inst.is_creature() and not inst.tapped:
+		var free: Array[CardInstance] = []
+		for body in game.players[pid].battlefield:
+			if body.is_creature() and not body.tapped:
+				free.append(body)
+		var used: Array[int] = []
+		var plan := _block_choice_once_pumped(game, attackers, free, used) \
+			if profile.pumps_to_attack else _block_choice(game, attackers, free, used)
+		var against: Variant = plan.get(inst.id)
+		if against != null:
+			var first: int = int(against[0]) if against is Array else int(against)
+			var attacker := game.find_instance(first)
+			would = attacker != null \
+				and (not _dies_to(game, inst, attacker) or _dies_to(game, attacker, inst))
+	game.unmake_to(mark)
+	if owned:
+		game.end_search()
+	_pump_plan = saved_plan
+	_pump_plan_turn = saved_turn
+	return would
 
 
 ## We are ATTACKING; blocks are (being) declared.
@@ -4869,14 +5513,171 @@ func _sources_after(sources: Array, plan: Array) -> Array:
 	return out
 
 
+## THE DECLARATION, WITH THEIR MANLANDS ON THE TABLE (2026-09-10,
+## [member AiProfile.reads_manlands]). One line, so that [method
+## _declare_attacks] keeps reading as the ladder it is, and so that the
+## two halves of the declaration — the pumped one and the plain one —
+## stay one call for every reader that follows.
+func _attack_declaration(game: MtgGame, candidates: Array[CardInstance],
+		defender: int) -> Array:
+	if profile.reads_manlands:
+		return _attack_choice_reading_manlands(game, candidates, defender)
+	return _attack_choice_once_pumped(game, candidates, defender) \
+		if profile.pumps_to_attack else _attack_choice(game, candidates, defender)
+
+
+## THE MANLAND IS A BLOCKER (2026-09-10, [member
+## AiProfile.reads_manlands]; `docs/forge/combat.md` P7). [method
+## _attack_choice] prices the attack against their untapped CREATURES, so
+## a Mishra's Factory with {1} open is invisible to the cohort, to the
+## pump rider and to the crack-back model alike — and the Grizzly Bears
+## that walks into it trades a card for a mana (reproduced 2026-09-10:
+## `blockers the attack reading sees: 0`, `_attack_risk -1.0`, the Bears
+## sent).
+##
+## The question is put to the declaration itself with their affordable
+## animations HUNG ON, under the journal, exactly as [method
+## _would_attack_once_animated] puts our own Factory's and [method
+## _attack_choice_once_pumped] puts our own breath's: the bodies are
+## animated the way their abilities would animate them, the deterministic
+## half of the declaration is asked, and the animations are unmade. No
+## mana is tapped, no random stream is consumed ([method _attack_choice]
+## has no mistake roll), and a search already in progress keeps its
+## journal.
+##
+## WHY IT IS THE WHOLE DECLARATION AND NOT ONE LIST. The blockers a
+## cohort is priced against, the bodies the pump rider looks past and the
+## `theirs` side of [method _build_combat_model] are three readings of the
+## same battlefield taken in three places; hanging the animation on the
+## BOARD is what makes all three agree, and it is the only way the
+## crack-back model — which builds itself out of `is_creature()` — can
+## see the body at all.
+##
+## AND IT IS AN OVER-COUNT ON THEIR NEXT TURN, in the safe direction and
+## on purpose. An animation lasts until end of turn, so the Factory the
+## model treats as a creature that could swing at us next turn is one
+## they would have to pay for again. That is the same judgement [method
+## _build_combat_model] already records about its own defensive reads —
+## over-including a body that might block or swing is the safe way to be
+## wrong — and it is the mirror of [member animates_to_attack]'s ruling
+## about OUR animated body, which is excluded because holding it home
+## buys nothing.
+func _attack_choice_reading_manlands(game: MtgGame,
+		candidates: Array[CardInstance], defender: int) -> Array:
+	var manlands := _animatable_bodies(game, defender)
+	if manlands.is_empty():
+		return _attack_choice_once_pumped(game, candidates, defender) \
+			if profile.pumps_to_attack else _attack_choice(game, candidates, defender)
+	var owned := game.undo_log == null
+	var mark := game.make_mark()
+	for row in manlands:
+		var anim: AnimateSelfEffect = row["anim"]
+		game.continuous.add_until_eot_animation(int(row["id"]), anim.add_types,
+			anim.set_power, anim.set_toughness, anim.add_subtypes,
+			anim.combat_duration)
+	game.recalculate()
+	var fresh := _attack_candidates(game, defender)
+	var chosen := _attack_choice_once_pumped(game, fresh, defender) \
+		if profile.pumps_to_attack else _attack_choice(game, fresh, defender)
+	game.unmake_to(mark)
+	if owned:
+		game.end_search()
+	# AND THE DECLARATION IS FILTERED BACK TO THE REAL BOARD. Attack
+	# legality can read the DEFENDER's permanents ("can't attack unless
+	# the defending player controls a ..." — CombatState.attack_illegality),
+	# so a body animated inside the probe could make an attack legal that
+	# the engine refuses the moment the probe is unmade. The declaration
+	# ladder would survive it — a refusal falls back to the conscripts —
+	# but a fallback is a worse attack than the one we meant, and the
+	# candidates the caller handed us are the ones the board really has.
+	var legal: Array = []
+	for id in chosen:
+		for inst in candidates:
+			if inst.id == id:
+				legal.append(id)
+				break
+	return legal
+
+
+## Every permanent of [param who]'s that could make ITSELF a creature
+## right now, as `[{id, anim}]` — the bodies [method
+## _attack_choice_reading_manlands] hangs on the board and nothing else.
+##
+## THE COST IS PAID FROM THEIR OTHER SOURCES, which is [method
+## _animation_payable]'s rule read from the other side of the table: a
+## Factory that taps for its own {1} is a tapped body and no blocker at
+## all (CR 509.1a). Their mana is counted the way [method _shieldable]
+## counts it — untapped permanents that make mana, which is public
+## information both seats can see — and never from their hand, which is
+## not.
+##
+## The timing riders that could refuse the activation are honoured
+## because they are printed on the ability and cost nothing to read: an
+## "activate only during your turn" ability is not one they may use in
+## OUR combat, and a combat-only one (Jade Statue) is one they may. What
+## is deliberately not modelled is [member ActivatedAbility.max_per_turn]
+## and an [member ActivatedAbility.activation_condition], both of which
+## would need a per-instance count or the card's own predicate; both
+## over-include, which on a read of what may BLOCK us is the safe way to
+## be wrong.
+func _animatable_bodies(game: MtgGame, who: int) -> Array:
+	var out: Array = []
+	var open := 0
+	for p in game.players[who].battlefield:
+		if not p.tapped and not p.cur_mana_abilities.is_empty() \
+				and not (p.is_creature() and p.summoning_sick):
+			open += 1
+	for inst in game.players[who].battlefield:
+		if inst.is_creature() or inst.tapped:
+			continue
+		for index in inst.cur_activated_abilities.size():
+			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+			if not _animation_timing_open(game, ability, who):
+				continue
+			var anim := EffectIntent.read(ability.effects,
+				inst.data.card_name).animates
+			if anim == null or (anim.add_types & Mtg.CardType.CREATURE) == 0 \
+					or anim.set_power <= 0:
+				continue
+			var mine := 1 if not inst.cur_mana_abilities.is_empty() else 0
+			if ability.cost.mana_value() > open - mine:
+				continue
+			out.append({"id": inst.id, "anim": anim})
+			break
+	return out
+
+
+## The printed timing riders on [param ability], asked of the step we are
+## actually in for the seat [param who]. A thin mirror of the three
+## clauses [method MtgGame.activate_ability] enforces — it exists so the
+## reading of THEIR permanent can be made without asking the engine to
+## pay for anything.
+func _animation_timing_open(game: MtgGame, ability: ActivatedAbility,
+		who: int) -> bool:
+	if ability.only_opponents_may_activate or ability.cost.has_x:
+		return false
+	if ability.only_during_combat and not Mtg.is_combat_step(game.current_step()):
+		return false
+	if ability.only_during_step >= 0 and game.current_step() != ability.only_during_step:
+		return false
+	if ability.only_before_step >= 0 \
+			and Mtg.STEP_ORDER.find(game.current_step()) \
+				>= Mtg.STEP_ORDER.find(ability.only_before_step):
+		return false
+	if ability.turn_restriction > 0 and game.active_player != who:
+		return false
+	if ability.turn_restriction < 0 and game.active_player == who:
+		return false
+	return true
+
+
 ## Attack declaration: per-attacker favorable-trade analysis (mage-go's
 ## combat heuristic, simplified), plus a lethal-push override and the
 ## aggression/mistake tilts from the profile.
 func _declare_attacks(game: MtgGame) -> String:
 	var defender := game.opponent_of(pid)
 	var candidates := _attack_candidates(game, defender)
-	var attackers := _attack_choice_once_pumped(game, candidates, defender) \
-		if profile.pumps_to_attack else _attack_choice(game, candidates, defender)
+	var attackers := _attack_declaration(game, candidates, defender)
 	# Mistake injection: a fumbling AI leaves a good attacker home.
 	if attackers.size() > 0 and game.rng.randf() < profile.mistake_chance:
 		var drop_index := game.rng.randi_range(0, attackers.size() - 1)
@@ -5020,6 +5821,16 @@ func _attack_risk(game: MtgGame, inst: CardInstance,
 		blockers: Array[CardInstance], defender: int, bonus := Vector2i.ZERO) -> float:
 	var my_value := Evaluator.permanent_value(inst)
 	var worst_loss := -1.0   # < 0 = unblockable by anything they have
+	# TAPPING INTO AN EXECUTION (2026-09-10, [member
+	# AiProfile.reads_gaze]). The whole of this function below is about
+	# BLOCKERS, and an assassin is not one: the body is lost for having
+	# tapped, before a blocker is declared and whether or not anything
+	# over there could have blocked it. So it is priced first, at the
+	# body's own worth, and it deliberately overwrites the "nothing may
+	# block this" answer — a Hypnotic Specter no 1/1 can stop is exactly
+	# the body the {T} was waiting for.
+	if profile.reads_gaze and _taps_into_execution(game, inst, defender):
+		worst_loss = my_value
 	for blocker in blockers:
 		if CombatState.block_illegality(game, blocker, inst, defender) != "":
 			continue
@@ -5123,6 +5934,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	search.a_soak.resize(n)
 	search.a_first.resize(n)
 	search.a_immune.resize(n)
+	search.a_rampage.resize(n)
 	for i in n:
 		var inst := mine[i]
 		search.a_pow[i] = maxi(inst.cur_power, 0)
@@ -5144,6 +5956,10 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.a_first[i] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
 		search.a_immune[i] = 1 if (inst.cur_indestructible
 			or _shieldable(game, inst)) else 0
+		# RAMPAGE (CR 702.23, 2026-09-10, [member AiProfile.reads_gaze]):
+		# zero unless the knob is on, so the model the null arm searches
+		# is byte-identical to the one it always searched.
+		search.a_rampage[i] = inst.cur_rampage if profile.reads_gaze else 0
 	search.d_pow.resize(m)
 	search.d_val.resize(m)
 	search.d_free.resize(m)
@@ -5152,6 +5968,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	search.d_soak.resize(m)
 	search.d_first.resize(m)
 	search.d_immune.resize(m)
+	search.d_rampage.resize(m)
 	for j in m:
 		var inst := theirs[j]
 		search.d_pow[j] = maxi(inst.cur_power, 0)
@@ -5163,6 +5980,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_first[j] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
 		search.d_immune[j] = 1 if (inst.cur_indestructible
 			or _shieldable(game, inst)) else 0
+		search.d_rampage[j] = inst.cur_rampage if profile.reads_gaze else 0
 	var cells := n * m
 	search.block_ours.resize(cells)
 	search.block_theirs.resize(cells)
@@ -5208,7 +6026,7 @@ func _could_attack_next_turn(game: MtgGame, inst: CardInstance) -> bool:
 ## Adaptive posture (mage-go's idea): press an advantage.
 func _combat_tolerance(game: MtgGame) -> float:
 	var posture := 0.0
-	if Evaluator.position_score(game, pid) > 5.0:
+	if Evaluator.position_score(game, pid, profile) > 5.0:
 		posture = 1.0
 	return (profile.aggression - 0.5) * 6.0 + posture
 
@@ -5288,6 +6106,18 @@ func _cohort_value(game: MtgGame, group: Array[CardInstance],
 	var value := 0.0
 	var through := 0
 	for attacker in group:
+		# TAPPING INTO AN EXECUTION (2026-09-10, [member
+		# AiProfile.reads_gaze]). [method _attack_risk] is the per-creature
+		# half of the decision and this is the GROUP half, so the loss has
+		# to be paid here too or a flier no blocker can stop is sent for
+		# its face damage and dies at the declaration — reproduced that
+		# day, a Hypnotic Specter in the graveyard with their life still
+		# twenty. The {T} answers before the damage step, so the body
+		# lands nothing and trades with nobody: it is subtracted and the
+		# loop moves on.
+		if profile.reads_gaze and _taps_into_execution(game, attacker, defender):
+			value -= Evaluator.permanent_value(attacker)
+			continue
 		if not blocked.has(attacker.id):
 			through += attacker.cur_power
 			continue
@@ -5554,7 +6384,12 @@ func _damage_after_value_blocks(game: MtgGame, attackers: Array[CardInstance],
 		if stopped == 0:
 			through += attacker.cur_power
 		elif attacker.has_keyword(Mtg.Keyword.TRAMPLE):
-			through += maxi(attacker.cur_power - stopped, 0)
+			# RAMPAGE feeds the trampler too (2026-09-10): the surplus is
+			# measured against the size the gang MAKES it, which is the
+			# same direction the trampler's overflow was fixed in — under-
+			# reading lethal is what gets a pilot killed.
+			through += maxi(attacker.cur_power
+				+ _rampage_bonus(attacker, band.size()) - stopped, 0)
 	return through
 
 
@@ -5788,7 +6623,8 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 		for i in legal.size():
 			for j in range(i + 1, legal.size()):
 				if _damage_from(legal[i], attacker) + _damage_from(legal[j], attacker) \
-						>= attacker.cur_toughness - attacker.damage:
+						>= attacker.cur_toughness - attacker.damage \
+							+ _rampage_bonus(attacker, 2):
 					var price := Evaluator.permanent_value(legal[i]) \
 						+ Evaluator.permanent_value(legal[j])
 					if price <= attacker_value * 1.5 or desperate:

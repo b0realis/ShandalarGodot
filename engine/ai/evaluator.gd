@@ -33,6 +33,17 @@ const W_LIFE := 1.0
 const W_BOARD := 2.0
 
 ## Weight of a hand-size lead — cards in hand are unrealised board.
+##
+## THE ONE WEIGHT A PILOT MAY CARRY ITS OWN VALUE OF (2026-09-10, the
+## Forge study's casting note P11). Forge prices a card in hand at 5
+## against 2 per point of life — a hand:life ratio of 2.5 where ours is
+## 1.5 — and which of the two is right is a MEASUREMENT, not an argument.
+## The Deck Lab measures a number by putting it on a seat, so
+## [method position_score] takes an optional [AiProfile] and reads
+## [member AiProfile.w_hand] from it: `--sweep w_hand=1.5,2.0,2.5`. This
+## constant is that field's own default, which is why a caller that hands
+## over no profile — and every shipped preset, which carries 1.5 — scores
+## exactly as it did. It is NOT a difficulty knob and no rung moves it.
 const W_HAND := 1.5
 
 ## Weight of a land-count lead: mana is what turns the hand into board.
@@ -118,7 +129,11 @@ static func card_value(data: CardData) -> float:
 ## Overall position from [param pid]'s perspective; positive = ahead.
 ## The Adaptive posture (mage-go's idea) reads this: ahead → press the
 ## attack, behind → hold back and trade.
-static func position_score(game: MtgGame, pid: int) -> float:
+##
+## [param profile], when one is given, supplies the single weight a pilot
+## may carry its own value of ([member AiProfile.w_hand], and see
+## [constant W_HAND]); without one every weight is this file's constant.
+static func position_score(game: MtgGame, pid: int, profile: AiProfile = null) -> float:
 	var me := game.players[pid]
 	var them := game.players[game.opponent_of(pid)]
 	var score := (me.life - them.life) * W_LIFE
@@ -131,7 +146,8 @@ static func position_score(game: MtgGame, pid: int) -> float:
 		if not inst.is_land():
 			their_board += permanent_value(inst)
 	score += (my_board - their_board) * W_BOARD
-	score += (me.hand.size() - them.hand.size()) * W_HAND
+	var hand_weight: float = W_HAND if profile == null else profile.w_hand
+	score += (me.hand.size() - them.hand.size()) * hand_weight
 	var my_lands := me.battlefield.filter(func(i: CardInstance) -> bool: return i.is_land()).size()
 	var their_lands := them.battlefield.filter(func(i: CardInstance) -> bool: return i.is_land()).size()
 	score += (my_lands - their_lands) * W_LANDS

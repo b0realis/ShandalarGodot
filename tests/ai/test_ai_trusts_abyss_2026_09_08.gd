@@ -114,7 +114,14 @@ func test_the_meal_is_the_least_valuable_legal_creature() -> void:
 	assert_true(ai._is_next_meal(g, bears, 0), "an empty board: the Bears are the meal")
 	assert_true(ai._is_next_meal(g, serra, 0), "an empty board: so would the Angel be")
 	put_battlefield(0, "Grizzly Bears")
-	assert_true(ai._is_next_meal(g, bears, 0), "level with the Bears on the table: fed either way")
+	# THE TWIN, closed 2026-09-10 (docs/ai-difficulty.md §5, the third
+	# pass's open row). This assertion used to read `assert_true` and
+	# `"level with the Bears on the table: fed either way"`, and that was
+	# the malfunction: the feeder takes ONE body a turn, so a second
+	# Grizzly Bears beside the first leaves a Grizzly Bears standing
+	# whichever of the two is eaten, and the counter kept bought nothing.
+	assert_false(ai._is_next_meal(g, bears, 0),
+		"a twin already on the table shelters it: only one of the two dies")
 	assert_false(ai._is_next_meal(g, serra, 0), "the Bears on the table are fed first")
 
 

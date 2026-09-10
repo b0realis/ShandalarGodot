@@ -194,6 +194,14 @@ var d_soak: PackedInt32Array = PackedInt32Array()
 ## Our creature has first strike (CR 510.4).
 var a_first: PackedByteArray = PackedByteArray()
 var d_first: PackedByteArray = PackedByteArray()
+## RAMPAGE N (CR 702.23, 2026-09-10, [member AiProfile.reads_gaze]): the
+## +N/+N this creature takes for each blocker past the first, applied by
+## the engine as the blockers are declared. Zero at every rung the knob is
+## off at, and zero for every creature in this pool that does not print it
+## — which is why a gang of one is the number it always was and the null
+## arm of every published sweep replays.
+var a_rampage: PackedInt32Array = PackedInt32Array()
+var d_rampage: PackedInt32Array = PackedInt32Array()
 ## Damage cannot finish this creature: indestructible, or a regeneration
 ## shield its controller can still pay for.
 var a_immune: PackedByteArray = PackedByteArray()
@@ -268,6 +276,16 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 	var atk_trample := a_trample[attacker] if ours_attacks else d_trample[attacker]
 	if blockers.is_empty():
 		return [false, 0, atk_pow]
+	# RAMPAGE, before anything is assigned (CR 702.23): the body the gang
+	# meets is bigger than the body it chose to gang, in power and in
+	# toughness both. Applied here rather than in the pair matrices because
+	# it is a property of the BLOCK, not of either creature — `we_kill` and
+	# `they_kill` are still exactly [method AiPlayer._dies_to] for a gang
+	# of one, which is what pins this model to the engine's own predicate.
+	var ramp := (a_rampage[attacker] if ours_attacks else d_rampage[attacker]) \
+		* (blockers.size() - 1)
+	atk_pow += ramp
+	atk_soak += ramp
 	# --- 1. does the attacker even live to strike? A blocker with first
 	# strike that it does not share kills it before it assigns anything
 	# (CR 510.4), which is exactly what `_damage_from`'s own first clause

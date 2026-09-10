@@ -755,11 +755,16 @@ the window's own centred examine popup. The last `Start the duel` click survives
 after their own last press; a keep costs no click.
 
 **The AI's judgement** is `engine/ai/ai_mulligan.gd` (`AiProfile.mulligans`,
-on for every profile; the Deck Lab's null is the plain rule): no land and
-all land go back, so does a hand whose land count falls outside
-`KEEP_LANDS` for its size (7: 2-5, 6: 2-4, 5: 1-4), and a seven or six
-whose lands cast none of its spells; nothing below four cards is thrown
-back (`FLOOR`). Measured 2026-09-08, `docs/ROADMAP.md`. Manalink 3's
+on for every profile; the Deck Lab's null is the plain rule): no mana and
+all land go back, so does a hand whose count falls outside `KEEP_LANDS`
+for its size (7: 2-5, 6: 2-4, 5: 1-4), and a seven or six whose mana
+casts none of its spells; nothing below four cards is thrown back
+(`FLOOR`). Since 2026-09-10 the band's FLOOR counts MANA and not lands —
+`AiMulligan.mana_sources`, the lands plus every card costing `{0}` that
+prints a mana ability, so an Island beside two Moxen is four mana on turn
+one and no longer "1 land in 7" — while the ceiling still counts lands,
+because "nothing but land" asks what the hand can CAST and a Mox is a
+spell. Measured 2026-09-08 and 2026-09-10, `docs/ROADMAP.md`. Manalink 3's
 `%s mulligans to %d` strings are still not ported — the count rides the
 1997 line instead.
 

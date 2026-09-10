@@ -1122,6 +1122,72 @@ shandalar/
 │   │   │                      beat of the turn, priced for the turns our
 │   │   │                      mana needs to reach the escape the card
 │   │   │                      itself prints). On for every profile.
+│   │   │                      ranks_counters (2026-09-10): WHICH COUNTER,
+│   │   │                      AND THE UNLESS-COST'S X — _try_counter walked
+│   │   │                      the hand in order and cast the first card that
+│   │   │                      could legally answer, so a Mana Drain and a
+│   │   │                      Power Sink in one hand were spent by the
+│   │   │                      shuffle, and the Sink's X was "as deep as the
+│   │   │                      mana goes". AiPlayer._counter_order sorts the
+│   │   │                      answers first — can we pay for it (a legal
+│   │   │                      counter the mana did not cover used to end the
+│   │   │                      search with a pass), does it STOP the spell
+│   │   │                      (AiPlayer._unless_price off the card's own
+│   │   │                      oracle line against AiPlayer._their_open_mana),
+│   │   │                      what it costs us now with its X, narrow before
+│   │   │                      wide, then the card we would rather keep — and
+│   │   │                      the X is their open mana plus one. Magician and
+│   │   │                      up, the rung holds_instants is on.
+│   │   │                      holds_x_burn (2026-09-10): THE FINISHER SPENT
+│   │   │                      ON A BEAR — a NUMBER, the smallest reach (the
+│   │   │                      largest X the mana can pay) at which the pilot
+│   │   │                      will point an X burn at a creature while the
+│   │   │                      game is young; 0 never holds. Sorcerer 3,
+│   │   │                      Wizard 5 (Forge's Reckless and Default,
+│   │   │                      docs/forge/casting.md P7). Held in
+│   │   │                      AiPlayer._size_x_burn's creature branch and
+│   │   │                      lifted by AiPlayer._in_danger — the panic line
+│   │   │                      read a fourth time, against the damage their
+│   │   │                      board would land through the blocks this seat
+│   │   │                      would make (_damage_after_value_blocks). The
+│   │   │                      face arm still runs under the hold, and lethal
+│   │   │                      is returned before the hold is asked.
+│   │   │                      reads_gaze (2026-09-10): THE THREE READS
+│   │   │                      THE COMBAT MATHS NEVER MADE — the printed
+│   │   │                      lines that settle a combat without ever
+│   │   │                      entering the damage arithmetic. The GAZE
+│   │   │                      (a BLOCKED trigger that destroys what it
+│   │   │                      blocks at end of combat — Cockatrice,
+│   │   │                      Thicket Basilisk) read at _dies_to itself;
+│   │   │                      RAMPAGE (CR 702.23) counted wherever a
+│   │   │                      GANG is priced — _band_kills, the ladder's
+│   │   │                      rung 3, the panic line's trample residue
+│   │   │                      and CombatSearch.resolve_block; and the
+│   │   │                      EXECUTIONER (an opposing ability that
+│   │   │                      destroys a TAPPED creature — Royal
+│   │   │                      Assassin) charged as risk against a
+│   │   │                      non-vigilant attacker in _attack_risk and
+│   │   │                      in _cohort_value. Sorcerer and Wizard.
+│   │   │                      reads_manlands (2026-09-10): THE LAND THAT
+│   │   │                      IS A BLOCKER — a permanent that can
+│   │   │                      animate ITSELF counted as a body in the
+│   │   │                      combat about to happen, THEIRS when we
+│   │   │                      attack (the declaration made with their
+│   │   │                      affordable animations hung on under the
+│   │   │                      journal) and OURS when we block (bought at
+│   │   │                      their declare-attackers, only when the
+│   │   │                      block declaration would use it and the
+│   │   │                      body comes back). Two halves of one fact,
+│   │   │                      one knob, because either alone is a lie.
+│   │   │                      Sorcerer and Wizard.
+│   │   │                      w_hand (2026-09-10): the ONE field here
+│   │   │                      that is not a difficulty knob — the weight
+│   │   │                      Evaluator.position_score puts on a
+│   │   │                      card-in-hand lead, on the profile only so
+│   │   │                      the Deck Lab can sweep it
+│   │   │                      (--sweep w_hand=1.5,2.0,2.5). Every preset
+│   │   │                      ships Evaluator.W_HAND's own 1.5 and no
+│   │   │                      rung moves it.
 │   │   │                      spares_own (2026-09-08): THE WRONG SIDE OF
 │   │   │                      THE TABLE — a permanent of ours fills a
 │   │   │                      harmful spell's slot only when the
@@ -1326,7 +1392,14 @@ shandalar/
 │   │   │                      piles, format still legal
 │   │   ├── evaluator.gd     class Evaluator — permanent/card values,
 │   │   │                      keyword worth, weighted position score
-│   │   │                      (mage-go's eval package, GDScript scale)
+│   │   │                      (mage-go's eval package, GDScript scale).
+│   │   │                      position_score takes an optional AiProfile
+│   │   │                      since 2026-09-10 and reads w_hand from it —
+│   │   │                      the one weight a pilot may carry its own
+│   │   │                      value of, for the sweep casting note P11
+│   │   │                      asked for; with no profile every weight is
+│   │   │                      this file's constant.
+│   │   │                      tests/ai/test_ai_w_hand_2026_09_10.gd
 │   │   ├── effect_intent.gd class EffectIntent — WHAT AN EFFECT LIST DOES,
 │   │   │                      read once into numbers the AI reasons with
 │   │   │                      (damage / X damage / self-damage / removes /
@@ -1416,6 +1489,17 @@ shandalar/
 │   │   │                      without it the destroy read as unknown and
 │   │   │                      the picker's own-side fallback found the
 │   │   │                      AI's own Mana Vault (the owner's playtest).
+│   │   │                      is_gaze / destroys_the_tapped
+│   │   │                      (2026-09-10, AiProfile.reads_gaze): two
+│   │   │                      PRINTED-LINE readers beside
+│   │   │                      loses_the_game_on_leaving and
+│   │   │                      toll_of_line — a BLOCKED trigger whose
+│   │   │                      line destroys that creature at end of
+│   │   │                      combat, and an activated ability whose one
+│   │   │                      DestroyEffect names the tapped state.
+│   │   │                      Cached by the line, never by a card name;
+│   │   │                      the timing is READ and a gaze with any
+│   │   │                      other timing is deliberately unread.
 │   │   ├── combat_search.gd
 │   │   │                    class CombatSearch — THE CRACK-BACK SEARCH
 │   │   │                      (M4 phase 3's first landing, 2026-09-05):
@@ -1453,19 +1537,42 @@ shandalar/
 │   │   │                      second rules model.
 │   │   │                      tests/ai/test_ai_crack_back_2026_09_05.gd,
 │   │   │                      tests/ai/test_ai_gang_blocks_2026_09_05.gd
+│   │   │                      a_rampage / d_rampage (2026-09-10,
+│   │   │                      AiProfile.reads_gaze): the +N/+N a blocked
+│   │   │                      attacker takes for each blocker past the
+│   │   │                      first, applied inside resolve_block rather
+│   │   │                      than in the pair matrices — it is a
+│   │   │                      property of the BLOCK, so we_kill and
+│   │   │                      they_kill stay exactly AiPlayer._dies_to
+│   │   │                      for a gang of one. Zero at every rung the
+│   │   │                      knob is off at.
 │   │   ├── ai_mulligan.gd   class AiMulligan — THE OPENING HAND
 │   │   │                      (2026-09-08, docs/duel-todo.md §1.5): the
 │   │   │                      pilot's keep-or-redraw under the Paris
-│   │   │                      rule, by the lands. No land and all land
-│   │   │                      go back; a hand whose land count falls
+│   │   │                      rule, by the MANA in the hand. No mana and
+│   │   │                      all land go back; a hand whose count falls
 │   │   │                      outside KEEP_LANDS for its size (7: 2-5,
 │   │   │                      6: 2-4, 5: 1-4) goes back; a seven or six
-│   │   │                      whose lands cast none of its spells (the
+│   │   │                      whose mana casts none of its spells (the
 │   │   │                      mana abilities' colours against every
 │   │   │                      spell's coloured pips) goes back; nothing
 │   │   │                      below FLOOR (4) is thrown back. reason()
-│   │   │                      words the judgement for the log.
-│   │   │                      tests/ai/test_ai_mulligan_2026_09_08.gd
+│   │   │                      words the judgement for the log. Since
+│   │   │                      2026-09-10 the band's FLOOR reads
+│   │   │                      mana_sources() — the lands PLUS every card
+│   │   │                      costing {0} that prints a mana ability
+│   │   │                      (is_free_source: five Moxen, Black Lotus,
+│   │   │                      Mana Crypt, none of them named) — while the
+│   │   │                      CEILING still reads land_count(), because
+│   │   │                      "nothing but land" asks what the hand can
+│   │   │                      CAST and a Mox is a spell. One-directional:
+│   │   │                      it can only turn a mulligan into a keep, so
+│   │   │                      a deck holding none of the seven cannot
+│   │   │                      tell the difference. Forge's own deck-ratio
+│   │   │                      escape fires on 1 of the 217 loadable decks
+│   │   │                      and is deliberately absent.
+│   │   │                      tests/ai/test_ai_mulligan_2026_09_08.gd,
+│   │   │                      tests/ai/test_ai_mulligan_mana_2026_09_10.gd
 │   │   └── ai_player.gd     class AiPlayer extends DecisionAgent — one
 │   │                          act() per call through the PUBLIC API:
 │   │                          colour-aware land drops, mana tap planning
@@ -3783,6 +3890,81 @@ shandalar/
 │    ours and waiting in hand with no land tapped, cast at four of
 │    theirs, the null padding 1/3; Simulacrum still aimed at our own
 │    creature
+│    tests/ai/test_ai_counter_order_2026_09_10.gd — WHICH COUNTER, AND
+│    WHAT AN UNLESS-COST'S X IS (AiProfile.ranks_counters): the Mana Drain
+│    and the Power Sink answering the same Serra Angel whichever way the
+│    hand was dealt, and the hand's own order back with the knob off; the
+│    counter the mana does not cover no longer ending the search with a
+│    pass; a Sink priced at their open mana plus one and the old maximum
+│    back when that X is out of reach; no Sink at all when they can pay it
+│    and a hard counter is in hand; Remove Soul before Counterspell at a
+│    creature spell; the ladder from Magician up; the knob read by the Lab;
+│    tests/ai/test_ai_holds_x_burn_2026_09_10.gd — THE FINISHER SPENT ON A
+│    BEAR (AiProfile.holds_x_burn): the Fireball for two at a Grizzly Bears
+│    on turn three declined, and cast with the knob at 0; the hold expiring
+│    with the turn count; lethal at the face still taken under the hold;
+│    _in_danger lifting it when their board's damage actually lands, and
+│    three Walls of Stone no clock; the REACH and not the shot, so a
+│    Fireball for four at a Serra Angel still fires; the number per rung
+│    and the knob read by the Lab;
+│    tests/ai/test_ai_reads_gaze_2026_09_10.gd — THE THREE READS THE
+│    COMBAT MATHS NEVER MADE (AiProfile.reads_gaze): the Craw Wurm that
+│    stops walking into a Cockatrice and our own Cockatrice that steps in
+│    front of one, both home with the knob off; the trigger's non-Wall
+│    rider answering for itself through a probe event; the gaze as a
+│    DESTRUCTION, so a Drudge Skeletons with {B} open still survives it; a
+│    creature with no trigger at all untouched; two Grizzly Bears refusing
+│    the Craw Giant they used to gang and die under, the gang of ONE still
+│    equal to _dies_to on both arms, the crack-back model carrying the
+│    printed 2 and carrying 0 at the null; the Hypnotic Specter that stops
+│    tapping into a Royal Assassin, vigilance outside the reading, a
+│    tapped and a summoning-sick assassin no reason to stay home,
+│    protection from black no risk at all, and Tetsuo Umezawa — which can
+│    take the body standing still — refused; the ladder from Sorcerer up;
+│    the knob read by the Lab;
+│    tests/ai/test_ai_reads_manlands_2026_09_10.gd — THE LAND THAT IS A
+│    BLOCKER, AND THE ONE OF OURS THAT COULD BE (AiProfile.reads_manlands):
+│    the Llanowar Elves held home in front of a Factory with {1} up and
+│    sent with the knob off; a Factory that can only tap for its own
+│    animation, and a tapped one, still lands on both arms; Jade Statue
+│    read as the same shape and its combat-only rider honoured off the
+│    ability; our own Factory answering a Grizzly Bears and the two points
+│    it used to take, declining the Craw Wurm it would die under, declining
+│    when it can only pay for itself, and the window shut once the
+│    blockers are declared; the probe leaving no pump plan behind; the
+│    ladder from Sorcerer up; the knob read by the Lab;
+│    tests/ai/test_ai_abyss_shelter_2026_09_10.gd — THE SHELTER CAST AND
+│    THE TWIN (AiProfile.trusts_abyss, extended): the second Sengir
+│    Vampire countered where the feeder eats only one of the two, the lone
+│    copy still let through; the Mesa Pegasus countered because it takes
+│    the feeder's meal away from a Serra Angel, and left alone with the
+│    knob off because 3.8 is under the bar; the swing as the displacement
+│    it buys them, zero on an empty board and zero when a cheaper body of
+│    theirs is already the meal, zero for a White Knight and a Clay Statue
+│    the filter refuses, zero with no feeder on either arm; and the saved
+│    counter still spent on the Disenchant;
+│    tests/ai/test_ai_mulligan_mana_2026_09_10.gd — THE OPENING HAND
+│    COUNTS MANA, NOT LANDS: what a free source is, named by shape (five
+│    Moxen, Lotus, Crypt yes; Sol Ring's {1} no; a land no; an
+│    Ornithopter no); one land and a Mox kept, one land and a Lotus kept,
+│    two free sources and no land kept, the six and the five on the same
+│    census; the hands that must STILL go back (a one-lander of
+│    four-drops, of Bolts, beside a Sol Ring, a lone Mox, an empty seven);
+│    the CEILING still counting lands (five lands and two Moxen is not
+│    "all land"; six lands still is); the colour check reading a Mox Ruby
+│    for the Bolt and a Lotus for {B}{B}; the null — a hand with no free
+│    source judged exactly as on 2026-09-08; every rung keeping it, and
+│    the plain rule with the knob off untouched (a Mox is not a land to
+│    MtgGame.hand_is_a_mulligan_hand);
+│    tests/ai/test_ai_w_hand_2026_09_10.gd — THE HAND'S WEIGHT, EXPOSED
+│    FOR A SWEEP: every preset ships Evaluator.W_HAND (the pin that keeps
+│    the constant and the field from drifting, since the evaluator reads
+│    the profile and so the profile may not name the evaluator); a default
+│    profile scoring exactly as no profile; position_score pricing a
+│    three-card lead at the profile's weight from both seats;
+│    AiPlayer._level_value spending the same weight, so a sweep measures
+│    one number and not two; and the Lab able to put it on a seat
+│    (typeof == TYPE_FLOAT, apply_overrides round-trip)
 │    tests/cards/test_erupt_bracket_2026_09_10.gd — VOLCANIC ERUPTION IS
 │    ONE RESOLUTION, DESTROYS INCLUDED: a RULE test, and it says so in its
 │    own header — nothing in the pool can observe the destroy loop's

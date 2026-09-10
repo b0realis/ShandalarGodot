@@ -9927,6 +9927,281 @@ more than the change would have been.
   truth for Unlimited and Fourth Edition and a MISSING PIECE for anything
   else. Written at the site as well as here.
 
+## THE COUNTER'S OWN ORDER AND THE X BURN'S PATIENCE (2026-09-10)
+
+Wave 1 rows 1 and 7 of `docs/AI-next-wave.md`, both reproduced with a
+headless probe before a line was written. Two knobs, `ranks_counters` and
+`holds_x_burn`; every number below is seed 11 and every control is
+byte-identical to its own null.
+
+**ROW 1 — WHICH COUNTER, AND WHAT AN UNLESS-COST'S X IS.**
+`AiPlayer._try_counter` walked `players[pid].hand` in order and cast the
+first card that could legally answer. On one board — a Wizard on eight
+Islands, a Serra Angel on the stack — a hand of `[Mana Drain, Power Sink]`
+answered with the Drain and a hand of `[Power Sink, Mana Drain]` answered
+with the Sink. Which counter a threat cost was the shuffle's decision.
+Power Sink's X was "as deep as the mana goes": against a caster with
+nothing untapped the pilot paid X=7 out of eight Islands to make a price
+of ONE unpayable, and had nothing left for the rest of the turn. And a
+third fault the plan had not named: the loop RETURNS what `_cast_response`
+gives it, so a counter that was legal but that the mana did not cover
+ended the search with a PASS — one Island, a Counterspell and a Force
+Spike in hand, and the Serra Angel resolved.
+
+`ranks_counters` (Magician and up, the rung `holds_instants` is on) sorts
+the counters that can answer THIS spell before one is cast. Five keys,
+none of them a card's name: can we pay for it; does it actually STOP the
+spell (a printed "unless its controller pays" price the caster can simply
+pay is no counter — the hard card goes ahead of it, which is also why a
+Sink is not cast at all when they can pay it and something else answers);
+what it costs us now with its X; the narrow card before the wide one;
+then the card the evaluator would rather keep. The hand's own index is
+the last key, because `sort_custom` is not stable and a seeded duel has to
+replay. The unless-cost is read off the card's own oracle line
+(`_unless_price`, the reading `_is_counterspell` already makes of the
+first one) and priced against the planner's own source list asked of the
+other seat (`_their_open_mana` — all of it public, and short by any source
+carrying a rider the planner does not model, which is the direction that
+costs a counter rather than a game). `[forge]`
+`ComputerUtil.counterSpellRestriction` :160-214, chosen by
+`AiController.chooseCounterSpell` :691-717, commit `b09a3d3f`; its scores
+are a sum of magic numbers and are not ported, only their shape.
+
+**WHAT THE MEASUREMENT FOUND FIRST IS A POOL FACT**, and it is worth
+writing down before the numbers: THREE of the four pairs the plan named
+cannot see this knob at all. `sligh_geeba_1996` cannot be played (nine
+proxies). Blue Skies' main deck is two Counterspells and nothing else, so
+there is no order to get wrong — 0 of 1 000 games differ, and 0 of 1 000
+again with `--best-of 3 --sideboard on`, the four Power Sinks staying in
+the board. The Deck's counters are four Counterspells, a Mana Drain that
+ties them on every key, and one Red Elemental Blast that counters BLUE
+spells — 0 of 1 000 against Black-Red Raiders and 0 of 1 000 against White
+Knights. A knob whose deck holds one counter, or four of the same
+counter, is a knob that does nothing, and that is most of this pool.
+
+The deck that CAN see it is Kevin Bane's Coral Reef (4 Counterspell, 3
+Power Sink, 2 Spell Blast). Against White Knights, 4 000 games an arm:
+35.3% -> 36.4%, +1.1 ±2.1. Against Big Green at 1 000: 35.9% -> 37.4%,
++1.5 ±4.2. 140 of 1 000 games differ from the null, 14 flipped to a win
+against 4 flipped away. NOT DECIDED — positive on both pairs and both
+sizes, and the whole interval on the larger run is [−1.0, +3.2]. Control
+Big Green vs Mountain Artillery byte-identical to its own null in every
+arm of six runs.
+
+**ROW 7 — THE X BURN HELD FOR A BIGGER ONE.** A Wizard on three Mountains
+with a Fireball in hand and a Grizzly Bears across the table cast it for
+X=2 at the bear. One of Mountain Artillery's two finishers, spent on a
+board a Lightning Bolt answers for one mana, at the moment the card is
+worth the least it will ever be worth. `_size_x_burn` sizes X to the
+victim, which is right, and had no reading at all of whether the card was
+worth casting yet.
+
+`holds_x_burn` (0 / 0 / 3 / 5) holds the burn off a creature while the
+LARGEST X the mana can reach is under the number and the game is younger
+than twice that in turns, so the hold expires on its own. Lethal is not
+asked: the face arm returns before the routine looks for a creature.
+Their CLOCK is `_in_danger`: `chump_threshold` read a fourth time — after
+the chump block, the prevention window and the blast's X — against the
+damage that would actually land through the blocks this seat would make
+(`_damage_after_value_blocks`), their whole board as attackers and ours as
+blockers, so a swing three Walls of Stone eat is no clock. And the face
+arm still runs under the hold.
+
+**THE REACH AND NOT THE SHOT**, and it was measured rather than argued.
+`docs/forge/casting.md` P7 writes the gate as `x < threshold`, and that
+was built first: it refuses a Fireball for FOUR at a Serra Angel for the
+whole of a game's first nine turns, and it turned
+`tests/ai/test_ai_capabilities.gd`'s
+`test_fireball_pays_exactly_the_toughness` red — a play this suite has
+pinned as correct since the Fireball was first sized, and one no human
+would decline. Forge's own `dmg` there is `setMaxXValue`, its maximum X,
+because Forge always pays the maximum; read that way the sentence is about
+the card's reach and not about one shot, which is the honest reading and
+the one that ships. Its roll
+(`HOLD_X_DAMAGE_SPELLS_FOR_MORE_DAMAGE_CHANCE`) is not ported: nothing in
+this AI is decided by a coin.
+
+Mountain Artillery vs White Knights, 4 000 games an arm: 53.4% null, 52.9%
+at 3 (−0.5 ±2.2), 53.8% at 5 (+0.3 ±2.2). Against Big Green at 1 000:
+48.0 / 48.0 / 47.6. A WASH, decided at half the usual interval — and a
+ship all the same, because the knob plainly fires and what it removes is a
+malfunction: 119 and 296 of 1 000 games differ from the null at 3 and 5
+against White Knights (5 games flipped to a win against 15 away, and 24
+against 27), 39 and 189 against Big Green. The null is proved by REPLAY:
+the `0` arm is byte-identical to the null in 1 000 of 1 000 games on both
+pairs. Control Blue Skies vs White Knights byte-identical in every arm of
+both runs (2838-1162 at 4 000, 701-299 at 1 000).
+
+Two more things the pass leaves behind.
+`tests/cards/test_fidelity_2026_09_02_drain_life.gd`'s AI test now runs
+with `holds_x_burn=0` and says why: a reach of two at a bear is exactly
+what the hold declines, and that test is about the black mana that sizes
+X. And a knob added since this pass is set on the built profile BY NAME
+rather than threaded through `AiProfile._init`'s positional tail — the
+tail is twenty arguments of bare `true`, and two knobs landing in it from
+two branches at once is a silently scrambled preset rather than a merge
+conflict anyone can see.
+
+## THE THREE READS AND THE LAND THAT BLOCKS (2026-09-10) — Wave 1 rows 4 and 5, measured
+
+- **Row 4, `reads_gaze` — three printed lines that settle a combat without ever
+  entering the damage arithmetic, and the pilot walked into all three.**
+  Reproduced before a line was written. THE GAZE: a Craw Wurm swings into a
+  Cockatrice at `_attack_risk` **0.0** — "we kill it and live" — and from the
+  other seat our own Cockatrice declares **0 blocks** and takes six. RAMPAGE
+  (CR 702.23): two Grizzly Bears gang a Craw Giant on `2+2 >= 4`, meet the 8/6
+  that is actually there, and the log reads **`Bears GRAVEYARD/GRAVEYARD, Craw
+  Giant BATTLEFIELD, our life 16`** — the crack-back model said the same thing
+  in its own words, `resolve_block([0,1]) = [true, 3, 2]` against a truth of
+  `[false, 3, 4]`. THE EXECUTIONER: `_attack_risk(Hypnotic Specter) = -1.0` and
+  the 1/1 Royal Assassin beside three untapped Swamps takes it during the
+  declaration — **`Hypnotic Specter GRAVEYARD, their life 20`**.
+- **All three are shapes, not cards.** `EffectIntent.is_gaze` is a BLOCKED
+  trigger whose printed line destroys that creature at end of combat, with the
+  trigger's OWN condition put to a probe event so the non-Wall rider answers for
+  itself (CR 603.4); `EffectIntent.destroys_the_tapped` is one DestroyEffect
+  behind a creature spec whose line names the tapped state, and the dynamic half
+  — the spec must REFUSE the body standing still — is what tells Royal Assassin
+  from Tetsuo Umezawa. Rampage is `CardInstance.cur_rampage`, counted wherever a
+  GANG is priced and nowhere else.
+- **Row 5, `reads_manlands` — one fact about a permanent, read from both sides
+  of the table, shipped as ONE knob because either half alone is a lie.**
+  Theirs: `blockers the attack reading sees: 0` with a Factory and an Island up.
+  Ours: `declared 0 block(s)`, life 20 -> 18, three untapped lands — no rung had
+  ever animated a Factory to block.
+- **THE NULL IS EXACTLY THE NULL, proved by replay.** The `pays_sacrifices`
+  sweep of the Deck Lab manual, run on the tree before this landed and on the
+  tree after with both knobs forced off: all **6 000 games identical game for
+  game**, 24.9% null either way, control 525-475 replayed to the game.
+- **Measured**, seed 11, control Big Green vs White Knights byte-identical to
+  its own null in every arm of every run. `reads_gaze`: Forest Dragon 77.8% ->
+  79.3% (+1.5 ±2.5; 213 of 2 000 games turned, 121 won 92 lost); A Royal Pain
+  65.8% -> 68.3% at 2 000 and **66.6% -> 69.1%, +2.4 ±2.0 CLEAR OF ZERO at
+  4 000** (152 turned, 125 won 27 lost). Measured at EVERY RUNG as the note
+  asked — −1.2 / +2.1 / +2.7 / +2.6 — monotone and NEGATIVE at the Apprentice,
+  so the numbers and the ramp ruling agree. `reads_manlands`: The Deck vs Big
+  Green 42.0% -> 44.5% (+2.5 ±3.1; 62 turned, **56 won 6 lost**); vs Mountain
+  Artillery 39.4% -> 40.4%; and Big Green vs The Deck — the ATTACK half ALONE —
+  **−0.1 ±3.1 with 0 of the 3 games that turned won**, which is the design's own
+  prediction measured: a pilot made timid about a blocker that does not arrive.
+- **The third pass's two open `trusts_abyss` rows are closed with them**, as an
+  EXTENSION of that knob: the knob promises *the counter is kept because the
+  feeder answers this creature*, and both rows are boards where it does not.
+  THE TWIN — `_is_next_meal`'s shelter test asked for a body worth strictly
+  LESS, and a feeder eats one a turn, so a second Sengir Vampire beside the
+  first leaves a Sengir Vampire standing. THE SHELTER CAST — the "after" board
+  read once more (`_shelter_swing`): a Mesa Pegasus that saves a Serra Angel is
+  a Serra Angel, read BEFORE `counter_threshold` because the whole point of it
+  is a one-drop the bar would never look at. Measured on the pair the third pass
+  flagged with its −0.3, The Deck vs Blue Skies at 1 000 games an arm on BOTH
+  trees: the knob's own delta goes from **−1.9 ±4.4 to +0.9 ±4.4**, every off,
+  null and control arm byte-identical across the two trees (5 000 games, not one
+  different), and of the 36 `on`-arm games that ended differently **32 won and
+  4 lost**.
+- **Open, named at the sites**: a gaze with a timing other than end of combat is
+  deliberately unread (`_damage_from` untouched); rampage is not counted on an
+  attacker of OURS that their gang is about to grow; the lethal push does not
+  subtract an assassinated attacker; the animated body is never pumped, so the
+  two-Factory 3/3 block is not planned; and `_animation_value`'s own attack
+  probe still does not read a manland of theirs — the same gap
+  `animates_to_attack` already carries between its probe and a pumped
+  declaration.
+- **And two pool facts worth writing down.** No deck in `decks/` holds any of
+  the seven rampage cards (all Legends), so that half of `reads_gaze` cannot be
+  measured in the Lab at all and is pinned by `tests/ai/` alone. And
+  `decks/community/sligh_geeba_1996.deck` — the plan's own second pair for
+  `reads_manlands`, named for its four Factories — holds NINE proxies and the
+  Lab refuses it with exit 2.
+
+## THE OPENING HAND COUNTS MANA (2026-09-10) — Wave 1 rows 2 and 3
+
+Two rows of `docs/AI-next-wave.md`'s first wave, both about the seven
+cards a seat starts with. One is a correction with no knob; the other is
+a measurement that changed nothing and says so with its numbers.
+
+**ROW 2, THE MULLIGAN.** The plan asked for Forge's low-land-DECK escape
+— keep a one-lander when the library holds fewer than one land in seven.
+That escape fires on ONE of the 217 decks this pool can load, and the
+deck named to measure it on (`wc1994_lestree`) is at 3.05 cards per land
+and does not even load (Chaos Orb). A cut that measures nothing is
+written down and not kept, so it is not.
+
+What was actually wrong is one line above it. `AiMulligan` read
+`land_count` at BOTH ends of the keep band, and the era's mana is not all
+land: five Moxen, a Black Lotus and a Mana Crypt counted for nothing, so
+a seven of one Island and two Moxen — four mana on turn one — went back
+as "1 land in 7", and an Island beside a Mox Ruby could not cast the
+Bolt the Mox pays for. The band's FLOOR now reads
+`AiMulligan.mana_sources` (the lands plus every card costing `{0}` that
+prints a mana ability — named by shape, no card named anywhere) and its
+CEILING still reads the lands, because "nothing but land" asks what the
+hand can CAST and a Mox is a spell. The colour check reads the free
+sources too. It is ONE-DIRECTIONAL: it can only turn a mulligan into a
+keep. No knob — `AiProfile.mulligans` already owns the judgement at every
+rung, and a hand that functions is not a difficulty setting (CR 103.4).
+
+IT IS NOT A CURIOSITY OF THE COMMUNITY LISTS. 69 of the 217 loadable
+decks hold one of the seven cards and NINETEEN OF THOSE ARE 1997 ENEMY
+DECKS — Dracur, Prismat, Kiska-Ra, Arzakon, Azaar-Lichlord, Mind Stealer
+and thirteen more. Sevens thrown back, 4 000 hands a deck: The Deck's
+lists 20.2 -> 8.3%, 22.6 -> 9.8%, 36.2 -> 16.6%; Dracur 33.6 -> 22.2%,
+Prismat 30.5 -> 17.9%, Kiska-Ra 29.6 -> 21.1%;
+`twist_of_fire_merritt_1993`, forty cards with no land in them at all,
+100 -> 3.1% — it had begun every duel of its life on four cards. The five
+shipped starters hold none of the seven and are unchanged to the tenth of
+a point.
+
+MEASURED AS A WASH AND SHIPPED AS ONE. `--mulligan on --sweep
+mulligans=on,off`, seed 11, 2 000 games an arm, four pairs, each played
+on both trees: 28.2 -> 28.8, 22.1 -> 22.9, 44.2 -> 42.8, 51.5 -> 53.5. Of
+the 8 000 games, 1 299 ended differently — 669 won, 630 lost, +39 games,
+a coin. Three pairs lean up and one leans down, and the one that leans
+down is the Deck list with the fewest lands, which is the ANGEL
+section's open question (whether a control deck's keep should want three)
+asked from the other side and NOT answered here. THE NULL IS EXACTLY THE
+NULL: every `off` arm, every `null` arm and every arm of the control pair
+(Big Green vs White Knights, no Mox on either side) is byte-identical
+across the two trees — 24 000 games compared one by one, not one
+different. Within a single run the `mulligans` sweep's own control FAILS
+by construction and the run exits 4: that knob changes the opening hand
+of every deck, so no pair exists that it cannot fire on.
+
+**ROW 3, THE HAND'S WEIGHT.** Casting note P11 observed that Forge prices
+a card in hand at 2.5 times a point of life where `Evaluator.W_HAND`
+prices it at 1.5, and asked for the difference to be settled by
+measurement. `Evaluator.position_score` now takes an optional `AiProfile`
+and reads `AiProfile.w_hand` from it — the "thread an AiProfile through
+rather than editing constants" its own header has asked for since it was
+written — so `--sweep w_hand=1.5,2.0,2.5` is a command. It is NOT a
+difficulty knob: every preset ships 1.5, no rung moves it, nothing in the
+game sets it.
+
+THE ANSWER IS NO CHANGE. 2 000 games an arm, seed 11, control Big Green
+vs Mountain Artillery: the Deck mirror 51.8 / 51.8 / 51.6 / 51.6, The
+Deck vs Mountain Artillery 39.2 / 39.2 / 39.4 / 39.1, Big Green vs White
+Knights 53.8 / 53.8 / 53.8 / 53.8. No delta reaches a third of its
+interval and the flips are a coin at both candidates (40-42 at 2.0, 70-76
+at 2.5). The 1.5 arm is byte-identical to the null on every pair and on
+the control, 0 of 2 000 four times over — the determinism check P11 asked
+for, and the proof that the plumbing is inert at the shipped value.
+
+WHY IT MOVES SO LITTLE IS THE FINDING. `W_HAND` has exactly two readers:
+`_combat_tolerance`'s "> 5.0" posture flag and `_level_value`'s Balance
+price. Raising the weight a full point changes SIX GAMES OF TWO THOUSAND
+on Big Green vs Mountain Artillery and twelve at 2.5 — which is why P11
+said the number can have no true control pair and why it very nearly has
+one. The hand weight is not a lever on this evaluator. It ships at 1.5,
+and the next person who wants Forge's 2.5 gets three arms in one command
+instead of an argument.
+
+THE POOL FACTS THIS PASS ESTABLISHED, worth keeping: of the 217 decks
+that load, ONE is under one land in seven; 69 hold a free mana source;
+and three decks the plan names for these rows do not load at all —
+`wc1994_lestree` (Chaos Orb), `sligh_geeba_1996` (Dwarven Ruins),
+`the_deck_weissman_1996` (Zuran Orb). The row 3 measurement used
+`the_deck_playable`, `the_deck_weissman_1996_02` and `mountain_artillery`
+in their places.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
