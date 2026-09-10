@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5755 tests, 0 failing, 334 scripts** (150 029 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5781 tests, 0 failing, 335 scripts** (150 871 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10603,6 +10603,84 @@ clean; tools 158 OK; boot smoke clean.
   Forge's `notNeededAsBlockers` describes — measures **exactly 0 games
   different in 3 000**. What the question needs is a reading of the RACE
   and not a lower bar, which is `reads_race`'s row (combat P1).
+
+## THE HAND HELD UNTIL AFTER THE ATTACK (2026-09-10) — Wave 2, casting P1: built, measured, REFUSED
+
+- **The pilot has never had a second main phase.** `AiPlayer.act` reaches
+  `_main_phase_action` in EITHER main step and the first one it reaches is
+  Main 1, so every land, creature, artifact, enchantment, draw spell,
+  discard, tutor and Regrowth this AI has ever played went down BEFORE its
+  own combat — and with it the mana. Reproduced at HEAD: a Wizard on four
+  Forests with an Ironroot Treefolk in hand and a Grizzly Bears on the
+  table played the land, cast the Treefolk, and stood at their
+  declare-blockers with all of it shown and nothing open; the same board
+  with the cast held reaches Main 2 with `cast_refusal` still answering ""
+  and five lands up. `develops_late`.
+- **Built whole, as Forge's own list read off the reader.** `_main1_worthy`
+  is `ComputerUtil.castPermanentInMain1` (`ComputerUtil.java:1141-1297`,
+  `b09a3d3f`) in five sentences and no card name: a win at `LETHAL_WORTH`;
+  floating mana CR 500.4 would empty; a haste creature; a NON-CREATURE
+  mana source (a Llanowar Elves is summoning sick and buys this turn
+  nothing); and what changes this combat (`_changes_this_combat` — a
+  permanent of theirs answered, an aura or a pump on a body of ours, a
+  land that animates itself), all of them gated on an attack actually
+  coming. The MANA SINK waits with the rest, and that gate is load-bearing
+  rather than tidy: with the hand held `_try_cast_best` answers "" in Main
+  1 and a Jayemdae Tome would spend on a card the mana the hold exists to
+  keep. The LAND DROP is `isSafeToHoldLandDropForMain2` with its own four
+  guards.
+- **THE ROW'S HAZARD IS REAL AND IT IS THE PILOT'S OWN ATTACK.** A cast
+  held for Main 2 is mana that looks open in between; every other reader
+  of open mana was already booked (`_pump_reserve` books `_main2_reserve`
+  out of every breath), and the one that was not is the attack
+  declaration. Big Green's Llanowar Elves is tapped for mana in Main 1 at
+  HEAD and therefore never attacks; with the hold on it stands untapped
+  and is SENT. Mana sources sent to attack 1.49 -> 3.00 a game, a whole
+  cast fewer each game (7.89 -> 6.84), creatures at turn six 1.60 -> 1.39,
+  and the first sweep read −4.7 ±4.4. `_main2_mana_held` is Forge's
+  `reserveManaSourcesForMain2` (`AiController.java:722-757`) put where
+  this pilot spends mana that Forge does not, with the LANDS ASKED FIRST
+  so a body is held only when it is actually needed. It closes the pair to
+  −0.5 and levels the development again (turns ending with a castable card
+  in hand 42.1% against 41.8%).
+- **AND THE ANSWER IS STILL NO.** Nine pairs at 1 000 games an arm, seed
+  11, control PASS byte-identical in every one: −0.5, −0.2, +0.8, −2.0,
+  −0.8, −2.9, −1.1, −3.1, −1.8. Not one delta clear of its interval,
+  EIGHT OF NINE NEGATIVE — and the PAIRED count is the instrument that is
+  clear, because a timing change touches nearly every game: 8 825 of 9 000
+  ended differently and 748 CHANGED HANDS, 316 to a win and 432 away,
+  where a fair toss over 748 sits at 374 ± 14. The ladder's first rule
+  settles it: a capability is monotone, and a knob that costs the Sorcerer
+  and the Wizard a point is not one. **Every preset ships `false`**, the
+  whole mechanism stays in the tree behind the field the way
+  `crack_back_margin`'s 0 does, and the question is one command:
+  `--sweep develops_late=on,off --null off`.
+- **No half of it explains the drift**, and each was measured on its own.
+  The LAND DROP alone ends 860 of 1 000 games differently and flips one
+  each way — a wash, because `hasRelevantAbsOTB` plays the land whenever a
+  permanent of ours has an ability the mana could pay for, which in this
+  pool is every firebreather, every Factory and every Icy. The MANA SINK
+  alone moves nothing on a deck without one. And pinning `pumps_to_attack`
+  off on both seats leaves the loss exactly where it was (Mountain
+  Artillery vs Big Green −2.5 against −3.1, White Knights vs Big Green
+  −2.9 against −2.9). What is left is the timing itself, and the honest
+  sentence is about this Lab rather than about Magic: neither seat reads a
+  hand, a hand size or an open land as a bluff, so the information the
+  hold buys is worth nothing here while the board it prices one phase
+  later is worth something. The row is refused UNTIL there is an opponent
+  that punishes an open board — `holds_tricks` and a hand read.
+- **P1'S CONTROL PAIR EXISTS AND THE NOTE SAID IT DID NOT.** A timing knob
+  fires on any deck with a nonland card in hand, a mana sink or a held
+  land drop, so the pair it cannot fire on must have no spells AND no land
+  drop worth holding: forty Mishra's Factories against forty Mishra's
+  Factories. No nonland card ever reaches the hand, and `hasRelevantAbsOTB`
+  sees the Factory's own animation and plays the land in Main 1 every
+  time. 500-500, byte-identical to its own null in every arm of all
+  eighteen sweeps, on both trees. Forty Forests against forty Mountains —
+  the block knobs' own control — is NOT one here, because the land-drop
+  half fires on it.
+- Gate: 5781/5781 across 335 scripts, 150 871 asserts, exit 0; both soaks
+  clean; tools 158 OK; boot smoke clean.
 
 ## Standing quality gates
 

@@ -184,6 +184,245 @@ func _main_phase_action(game: MtgGame) -> String:
 	return _try_activate(game)
 
 
+# ------------------------------------------------- develop after combat --
+#
+# DEVELOP AFTER COMBAT (2026-09-10, [member AiProfile.develops_late];
+# `docs/forge/casting.md` P1). The four functions below are the whole of
+# the row: when the hold is on, what Main 1 may still do, whether one
+# cast or activation changes the combat that is about to happen, and
+# whether the LAND stays in hand.
+
+
+## Is this the main phase whose development waits? True only in OUR OWN
+## first main step, under the knob — everything here is a question about
+## the combat that has not happened yet, and after it there is none.
+func _develops_late(game: MtgGame) -> bool:
+	return profile.develops_late and game.active_player == pid \
+		and game.current_step() == Mtg.Step.MAIN1
+
+
+## FORGE'S MAIN-1 LIST, read off the reader instead of off a card's
+## `SVar:PlayMain1`. Would this cast lose something by waiting for the
+## second main phase?
+##
+## [forge] `ComputerUtil.castPermanentInMain1`
+## (`forge-ai/src/main/java/forge/ai/ComputerUtil.java:1141-1297`, commit
+## `b09a3d3f`) and its parallel `castSpellInMain1` (`:1299-1361`). Five
+## sentences, and the reasoning for each is in
+## [member AiProfile.develops_late].
+func _main1_worthy(game: MtgGame, inst: CardInstance, intent: EffectIntent,
+		targets: Array, value: float) -> bool:
+	# A WIN IS NEVER POSTPONED. Main 2 would end the game just as well and
+	# a pilot that holds a won game is one bad interaction away from
+	# losing it; `_lethal_life_mana` is asked before this function is
+	# reached for the same reason.
+	if value >= LETHAL_WORTH:
+		return true
+	# FLOATING MANA IS LOST AT THE STEP BOUNDARY (CR 500.4), and
+	# [method ManaPlanner.sources] offers the pool before it offers a
+	# land, so the cast that spends it is made now (`:1191-1205`).
+	if game.players[pid].mana_pool.total() > 0:
+		return true
+	# A HASTE CREATURE ATTACKS THIS TURN (`:1217-1220`).
+	if inst.data.is_creature() and inst.data.keywords.has(Mtg.Keyword.HASTE):
+		return true
+	# A MANA SOURCE HELD IS MANA HELD (`:1181`, where Forge's own line is
+	# the zero cost the Moxen are scripted with). A mana CREATURE is
+	# summoning sick and makes nothing this turn, so it waits.
+	if not inst.data.is_creature() and not inst.data.mana_abilities.is_empty():
+		return true
+	return _changes_this_combat(game, targets)
+
+
+## Does what this spell or ability POINTS AT change the combat that is
+## about to happen? Forge's Main-1 interrupts, in one sentence for both
+## paths: a permanent of THEIRS answered is a blocker that will not be
+## there (`ComputerUtil.java:1246-1259` — "removing a blocker lets more
+## attackers through in own Main 1"), and a permanent of OURS aimed at is
+## the aura or the pump that makes the attack bigger
+## (`castSpellInMain1`'s pump clause).
+##
+## Both want an attack to be coming — Forge's `PlayMain1:TRUE` is
+## literally "when the AI has creatures" — and [method _has_attackers]
+## is the same question the animation probe asks.
+func _changes_this_combat(game: MtgGame, targets: Array) -> bool:
+	if targets.is_empty():
+		return false
+	if not _has_attackers(game):
+		return false
+	for t in targets:
+		if not (t is TargetRef) or t.is_player:
+			continue
+		var victim := game.find_instance(t.instance_id)
+		if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD:
+			continue
+		return true
+	return false
+
+
+## The activation half of the same question. An ability that ANIMATES its
+## own source is a body that attacks this turn and nothing else
+## ([method _animation_value] already answers 0.0 outside our own first
+## main step); everything else is judged by what it points at.
+func _activation_changes_combat(game: MtgGame, inst: CardInstance,
+		index: int, option: Dictionary) -> bool:
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+	if intent.animates != null:
+		return true
+	return _changes_this_combat(game, option.get("targets", []))
+
+
+## THE LAND DROP HELD FOR MAIN 2 (`AiController.isSafeToHoldLandDropForMain2`,
+## `AiController.java:1404-1516`). A land that changes nothing castable
+## this turn is worth more in hand than on the table, because it is the
+## one card the opponent can be certain of.
+##
+## Forge's own four guards, and the fourth is the one that matters here.
+## THIS PILOT SIZES ITS OWN COMBAT BY THE MANA IT IS HOLDING — a Carrion
+## Ants behind four Swamps is a 4/5 to [method _pump_reach], a Factory is
+## a blocker to [member AiProfile.reads_manlands] — so a land kept in hand
+## is a body that reads one point smaller at the declaration. Forge's
+## `hasRelevantAbsOTB` (`:1504-1512`) is exactly that guard and it is
+## kept: with an ability on our own table the mana could pay for, the land
+## is played.
+func _land_drop_waits(game: MtgGame, land: CardInstance) -> bool:
+	if not _develops_late(game):
+		return false
+	# `:1415-1418` — on turn 1 or 2 the bluff fools nobody.
+	if game.turn_number <= 2:
+		return false
+	var me := game.players[pid]
+	# `HOLD_LAND_DROP_ONLY_IF_HAVE_OTHER_PERMS` (`:1423`): an empty board
+	# has nothing to be coy about.
+	if me.battlefield.is_empty():
+		return false
+	if _has_ability_wanting_mana(game):
+		return false
+	if _land_unlocks_a_cast(game, _mana_sources(game), land):
+		return false
+	return true
+
+
+## An ability on OUR OWN battlefield the extra mana could pay for —
+## Forge's `hasRelevantAbsOTB`. A firebreather, a Factory's animation, an
+## Icy Manipulator, a Tome: every one of them is a reason for the land to
+## be on the table where the combat maths can see it.
+func _has_ability_wanting_mana(game: MtgGame) -> bool:
+	for inst in game.players[pid].battlefield:
+		for index in inst.cur_activated_abilities.size():
+			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+			if ability.cost == null or ability.cost.mana_value() <= 0:
+				continue
+			if not _ability_available(game, inst, index):
+				continue
+			return true
+	return false
+
+
+## Does the drop change what the hand can cast this turn? Forge's
+## `canCastWithLandDrop` / `cantCastAnythingNow` arithmetic (`:1443-1444`),
+## asked of the mana planner itself rather than of a cheapest-CMC number:
+## for every colour the land could make, is there a card in hand that goes
+## from unplannable to plannable?
+##
+## An X spell says yes on sight: its X is what the land is FOR, and a
+## plan at X = 0 would answer "castable already" for a Fireball on one
+## Mountain.
+func _land_unlocks_a_cast(game: MtgGame, sources: Array,
+		land: CardInstance) -> bool:
+	var colours: Dictionary = {}
+	for ability in land.data.mana_abilities:
+		# The same riders [method ManaPlanner.sources] refuses to model.
+		if ability.cost != null or ability.life_cost > 0 \
+				or ability.counter_cost_kind != "" \
+				or ability.sacrifice_filter.is_valid():
+			continue
+		for pair in ability.produces:
+			colours[int(pair[0])] = maxi(int(colours.get(int(pair[0]), 0)),
+				int(pair[1]))
+	if colours.is_empty():
+		return false   # a Maze of Ith makes no mana: no cast is waiting on it
+	for inst in game.players[pid].hand:
+		if inst.is_land():
+			continue
+		if _cast_gate(game, inst) != "":
+			continue   # "Cast this spell only ..." — not this turn, whatever we play
+		if inst.data.cost.has_x:
+			return true
+		var surcharge := game.spell_surcharge(pid, inst.data)
+		var keys: Array = game.mana_usage_keys(inst.data)
+		if _cost_is_free(inst.data.cost) and surcharge == 0:
+			continue
+		if not _plan_taps_from(sources, inst.data.cost, surcharge, keys).is_empty():
+			continue   # castable already: the drop changes nothing for it
+		for colour in colours:
+			var with_land: Array = sources.duplicate()
+			# One entry per unit, shaped the way the planner's own
+			# floating-mana rows are ([method ManaPlanner.sources]).
+			for _unit in int(colours[colour]):
+				with_land.append([null, 0, int(colour), 1, false, "", 0])
+			if not _plan_taps_from(with_land, inst.data.cost, surcharge,
+					keys).is_empty():
+				return true
+	return false
+
+
+## THE MANA THE SECOND MAIN PHASE IS WAITING ON (2026-09-10, [member
+## AiProfile.develops_late]), as `{instance id: true}` — the bodies of
+## ours that must not be sent to attack, because attacking taps them and
+## the cast after combat needs what they make.
+##
+## THIS IS THE ROW'S OWN HAZARD, AND THE LAB FOUND IT BEFORE THE ARGUMENT
+## DID. A cast held for Main 2 is mana that looks open in between, and the
+## attack declaration is what spends it: Big Green's Llanowar Elves is
+## tapped for mana in Main 1 at HEAD and therefore never attacks, while
+## with the hold on it stands untapped at the declaration and is sent.
+## Measured over 200 games of Big Green against White Knights, mana
+## sources sent to attack per game went 1.49 -> 3.00 and the pilot cast a
+## whole spell FEWER each game (7.89 -> 6.84), with its creature count at
+## turn six down from 1.60 to 1.39. That is the whole of the −4.7 the
+## first sweep measured.
+##
+## [forge] `AiController.reserveManaSourcesForMain2` /
+## `HELD_MANA_SOURCES_FOR_MAIN2` (`AiController.java:722-757`, commit
+## `b09a3d3f`, `docs/forge/casting.md` §2.2) marks the sources
+## `predictSpellToCastInMain2` will want so nothing else spends them; ours
+## is the same mark, put where this pilot spends mana that Forge does not
+## — its own attack.
+##
+## THE LANDS ARE ASKED FIRST, so a body is held only when it is actually
+## needed: if the cast plans out of the non-creature sources alone, every
+## creature attacks as it always did. A body under an attack REQUIREMENT
+## (Juggernaut) is never held — the engine refuses that declaration.
+## Same shape as [method _attackers_excluded], which is the mirror of this
+## sentence for a Factory animated to attack.
+func _main2_mana_held(game: MtgGame) -> Dictionary:
+	var out: Dictionary = {}
+	if not profile.develops_late or game.active_player != pid \
+			or game.current_step() > Mtg.Step.DECLARE_ATTACKERS:
+		return out
+	var sources := _mana_sources(game)
+	var main2 := _main2_reserve(game, sources)
+	if main2.is_empty():
+		return out
+	var cost: ManaCost = main2["cost"]
+	var surcharge := int(main2.get("surcharge", 0))
+	var keys: Array = main2.get("keys", [])
+	var landbound: Array = []
+	for row in sources:
+		var src: CardInstance = row[0]
+		if src == null or not src.is_creature():
+			landbound.append(row)
+	if not _plan_taps_from(landbound, cost, surcharge, keys).is_empty():
+		return out   # the lands pay for it: no body is spoken for
+	for step in _plan_taps_from(sources, cost, surcharge, keys):
+		var src: CardInstance = step[0]
+		if src != null and src.is_creature():
+			out[src.id] = true
+	return out
+
+
 ## Play the land whose colour the hand is shortest of — mage-go's
 ## `chooseBestLand` (`heuristic.go`, "land that produces the most needed
 ## colour"). Ties keep hand order, so a seeded duel replays the same.
@@ -209,6 +448,8 @@ func _try_play_land(game: MtgGame) -> bool:
 			best = inst
 			best_score = score
 	if best == null:
+		return false
+	if _land_drop_waits(game, best):
 		return false
 	return game.play_land(pid, best) == ""
 
@@ -315,6 +556,14 @@ func _try_cast_best(game: MtgGame) -> String:
 		var x: int = sized["x"]
 		var targets: Array = sized["targets"]
 		var value: float = sized["value"]
+		# DEVELOP AFTER COMBAT (2026-09-10, AiProfile.develops_late). In
+		# our FIRST main phase only what Forge's `castPermanentInMain1`
+		# would cast is cast; everything else has a whole second main
+		# phase to be cast in, and the opponent declares its blocks
+		# without it.
+		if _develops_late(game) \
+				and not _main1_worthy(game, inst, intent, targets, value):
+			continue
 		if not reserve.is_empty() and value < float(reserve["value"]) * 1.5 \
 				and _plan_taps_from(sources, _combined_cost(inst.data.cost_for(x), reserve["cost"]),
 					_generic_x(inst.data, x) + surcharge).is_empty():
@@ -759,6 +1008,15 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 					and not game.players[pid].mana_pool.can_pay(ability.cost, surcharge):
 				continue
 			var option := _ability_option(game, inst, index, moment)
+			# DEVELOP AFTER COMBAT (2026-09-10,
+			# AiProfile.develops_late): the mana sink is a Main 2 action
+			# like every other one. Without this the knob defeats itself
+			# — with the hand held, `_try_cast_best` returns "" in Main 1
+			# and a Jayemdae Tome would spend on a card the mana the
+			# whole point was to keep open.
+			if not option.is_empty() and _develops_late(game) \
+					and not _activation_changes_combat(game, inst, index, option):
+				continue
 			if not option.is_empty() and profile.minds_pain:
 				# THE LIFE THE TAPS COST. A Rod ping at their end step is
 				# "mana about to be wasted" only from a Mountain; from a
@@ -5834,12 +6092,18 @@ func _main2_reserve(game: MtgGame, sources: Array) -> Dictionary:
 		if _cast_gate(game, inst) != "":
 			continue   # what cannot be cast needs no mana kept for it
 		var surcharge := game.spell_surcharge(pid, inst.data)
-		if _plan_taps_from(sources, inst.data.cost, surcharge,
-				game.mana_usage_keys(inst.data)).is_empty():
+		var keys: Array = game.mana_usage_keys(inst.data)
+		if _plan_taps_from(sources, inst.data.cost, surcharge, keys).is_empty():
 			continue
 		var value := Evaluator.card_value(inst.data)
 		if value >= 3.0 and value > float(out.get("value", 0.0)):
-			out = {"cost": inst.data.cost, "value": value}
+			# `surcharge` and `keys` are the same two the plan above was
+			# made with, carried so a second caller ([method
+			# _main2_mana_held]) can re-plan the identical cost without
+			# guessing at them. Every older reader takes `cost` and
+			# `value` and is unaffected.
+			out = {"cost": inst.data.cost, "value": value,
+				"surcharge": surcharge, "keys": keys}
 	return out
 
 
@@ -5985,10 +6249,16 @@ static func _has_effect(data: CardData, effect_class: String) -> bool:
 ## Factory as surely as theirs), whose attack cost is payable.
 func _attack_candidates(game: MtgGame, defender: int) -> Array[CardInstance]:
 	var candidates: Array[CardInstance] = []
+	# THE MANA THE SECOND MAIN PHASE IS WAITING ON (2026-09-10,
+	# AiProfile.develops_late): a Llanowar Elves that attacks is a Llanowar
+	# Elves that cannot be tapped after combat.
+	var held := _main2_mana_held(game)
 	for inst in game.players[pid].battlefield:
 		if inst.is_creature() \
 				and CombatState.attack_illegality(game, inst, defender) == "" \
 				and _attack_costs_payable(game, inst):
+			if held.has(inst.id) and not _must_attack(inst):
+				continue
 			candidates.append(inst)
 	return candidates
 

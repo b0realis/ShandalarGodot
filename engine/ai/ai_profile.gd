@@ -1207,6 +1207,121 @@ var reinforces_blocks := false
 ## (`docs/AI-next-wave.md`, combat P1) rather than this gate's.
 var crack_back_margin := 0
 
+## DEVELOP AFTER COMBAT (2026-09-10): does this profile keep its hand shut
+## until the attack is over?
+##
+## **EVERY PRESET SHIPS `false`, which is the pilot unchanged.** The row is
+## built, tested and measurable from one Deck Lab command, and the numbers
+## refused the rung — see THE LAB SAID NO below and
+## `docs/ai-difficulty.md` §4.
+##
+## THE REPRODUCTION IS REAL AND IT IS NOT A NUMBER.
+## [method AiPlayer.act] reaches [method AiPlayer._main_phase_action] in
+## EITHER main step and the first one it reaches is Main 1, so every land,
+## creature, artifact, enchantment, draw spell, discard, tutor and Regrowth
+## this pilot has ever played went down BEFORE its own combat — and with
+## it the mana. At HEAD, a Wizard on four Forests with an Ironroot Treefolk
+## in hand and a Grizzly Bears already on the table:
+##
+## [codeblock]
+## MAIN1 act -> 'played a land'          (untapped lands 5)
+## MAIN1 act -> 'cast Ironroot Treefolk' (untapped lands 0)
+## ...their declare-blockers, with all of it shown and no mana up
+## MAIN2: nothing in hand, nothing open
+## [/codeblock]
+##
+## On, the same board reaches Main 2 with the Treefolk still legal
+## ([method MtgGame.cast_refusal] answers "" there) and five lands open
+## through the combat.
+##
+## [forge] `PermanentAi.java:38` (commit `b09a3d3f`) is the default —
+## `!ph.is(PhaseType.MAIN1) || ... || ComputerUtil.castPermanentInMain1(ai, sa)`
+## — and `ComputerUtil.castPermanentInMain1` (`ComputerUtil.java:1141-1297`)
+## is the list of exceptions. Ours is that list read off [EffectIntent] and
+## the board rather than off a card's `SVar:PlayMain1`
+## (`docs/forge/casting.md` §1.7, P1), and it is five sentences
+## ([method AiPlayer._main1_worthy]):
+##
+## 1. A WIN IS NEVER POSTPONED — a cast [method AiPlayer._cast_value]
+##    prices at [constant AiPlayer.LETHAL_WORTH] is made now. Main 2 would
+##    do as well and a pilot that holds a game it has already won is one
+##    bad interaction away from losing it.
+## 2. FLOATING MANA IS LOST AT THE STEP BOUNDARY (CR 500.4), so anything
+##    in the pool spends now (`:1191-1205`).
+## 3. A HASTE CREATURE ATTACKS THIS TURN (`:1217-1220`).
+## 4. A MANA SOURCE HELD IS MANA HELD: a non-creature permanent with a
+##    printed mana ability — a Mox, a Sol Ring, a Basalt Monolith — goes
+##    down before combat. Forge's own line is the zero cost (`:1181`, the
+##    Moxen carry `PlayMain1:TRUE`); a mana CREATURE is summoning sick and
+##    buys this turn nothing, so it waits with the rest.
+## 5. WHAT CHANGES THIS COMBAT ([method AiPlayer._changes_this_combat]):
+##    a spell or activation aimed at a permanent THEY control, which is
+##    Forge's own first interrupt — removing a blocker lets more attackers
+##    through in one's own Main 1 (`:1246-1259`) — and one aimed at a
+##    permanent of OURS, the aura or the pump that makes the attack bigger
+##    (`castSpellInMain1`'s pump clause, `:1299-1361`); plus a permanent
+##    that animates ITSELF into an attacker. All of them ask for an attack
+##    to be coming first, Forge's `PlayMain1:TRUE` being literally "when
+##    the AI has creatures".
+##
+## Everything else waits for Main 2, the MANA SINK with it — without that
+## last gate the knob defeats itself, because with the hand held
+## [method AiPlayer._try_cast_best] answers "" in Main 1 and a Jayemdae
+## Tome spends on a card the mana the hold exists to keep open.
+##
+## THE LAND DROP is held by the same rule
+## (`AiController.isSafeToHoldLandDropForMain2`, `:1404-1516`) with Forge's
+## own four guards: not on turn 1 or 2 (`:1415-1418`, too obvious), not
+## with an empty board (`HOLD_LAND_DROP_ONLY_IF_HAVE_OTHER_PERMS`,
+## `:1423`), not when a card in hand becomes castable with it
+## (`canCastWithLandDrop`, `:1443`), and NOT WHEN A PERMANENT WE CONTROL
+## HAS AN ABILITY THE MANA COULD PAY FOR (`hasRelevantAbsOTB`,
+## `:1504-1512`) — that last because this pilot sizes its attack and its
+## block by the mana it is holding ([member pumps_to_attack],
+## [member reads_manlands]), so a land kept in hand is a Carrion Ants that
+## reads one point smaller at the declaration.
+##
+## THE HAZARD THE ROW CARRIES, AND THE LAB FOUND IT BEFORE THE ARGUMENT
+## DID: a cast held for Main 2 is mana that looks open in between, and what
+## spends it is THIS PILOT'S OWN ATTACK. Big Green's Llanowar Elves is
+## tapped for mana in Main 1 at HEAD and therefore never attacks; with the
+## hold on it stands untapped at the declaration and is sent, and the mana
+## it makes is gone. Mana sources sent to attack went 1.49 to 3.00 a game,
+## the pilot cast a whole spell FEWER each game (7.89 to 6.84) and its
+## creature count at turn six fell from 1.60 to 1.39 — and the first sweep
+## read −4.7 ±4.4. [method AiPlayer._main2_mana_held] is the answer and it
+## is Forge's own (`reserveManaSourcesForMain2` /
+## `HELD_MANA_SOURCES_FOR_MAIN2`, `AiController.java:722-757`): the bodies
+## the second main phase's cast needs are not sent to attack, the lands
+## asked first so a body is held only when it is actually needed. With it
+## the same pair reads −0.5 ±4.4 and the development is level again (turns
+## ending with a castable card still in hand 42.1% against 41.8%).
+##
+## THE LAB SAID NO, AND THAT IS THE RESULT. Nine pairs at 1 000 games an
+## arm, seed 11, control PASS byte-identical in every one of them: −0.5,
+## −0.2, +0.8, −2.0, −0.8, −2.9, −1.1, −3.1, −1.8. Not one delta is clear
+## of its interval and EIGHT OF NINE ARE NEGATIVE, a drift of about a point
+## and a quarter against the knob — and the PAIRED count is the instrument
+## that is clear, because a timing change touches nearly every game: 8,825
+## of the 9,000 ended differently and 748 CHANGED HANDS, 316 to a win and
+## 432 away, where a fair toss over 748 sits at 374 ± 14. No half of it
+## accounts for that: the land drop alone moves 860 games of 1 000 and
+## flips one each way, the mana sink alone nothing, and pinning
+## [member pumps_to_attack] off on both seats leaves the loss exactly
+## where it was. What is left is the timing
+## itself — in a Lab where neither seat reads a hand, a hand size or an
+## open land as a bluff, the information the hold buys is worth nothing,
+## and the pilot pays for it in a board it prices one phase later.
+##
+## So the knob stays at the null on every preset, the way
+## [member crack_back_margin] stayed at 0: the question is one Deck Lab
+## command (`--sweep develops_late=on,off --null off`, control
+## `DeckLab/README.md`) instead of a patch to this file. What the row
+## needs before it can be reopened is an opponent that PUNISHES an open
+## board — `holds_tricks` and a hand read (`docs/AI-next-wave.md`) — since
+## hiding a card from a seat that never guesses is a cost with no buyer.
+var develops_late := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,

@@ -100,6 +100,7 @@ override any knob on any preset for a measurement
 | `checks_before_casting` | off | off | off | on | looks at the POSITION a cast would leave it in before it commits — the last layer of the ramp, and the one a player notices. `AiPlayer._try_cast_best` prices a cast by what the card is worth and what its victim is worth (`_cast_value`) and never by the board afterwards, so a Savannah Lions was cast in front of an untapped Prodigal Sorcerer and pinged off the table before it had blocked once: the card gone, the board where it was, and the pilot reading the cast as a gain. Forge's `OnePlaySafetyChecker` copies the game and replays the play; ours copies nothing, because `Evaluator.position_score` is a sum of four counted quantities and the position after a cast is therefore ARITHMETIC (`AiPlayer._cast_projection` — the card leaves the hand, the victim leaves their board, the life totals move, our permanent arrives). THE ANSWER IS THE ONE THE TABLE IS ALREADY SHOWING and no other: an activated ability on THEIR battlefield they can pay for right now that would take the body straight off again (`AiPlayer._answered_on_arrival`), their open sources counted the way `AiPlayer._shieldable` counts them, the effect read as a shape (`EffectIntent`) and never as a name; their hand is not looked at at all. It ABSTAINS unless that answer is on the table, which is the note's own "a pessimistic projection that never casts into open red mana" answered, and `AiPlayer._in_danger` lifts it, because a desperate play is allowed to be desperate — Forge's own escape |
 | `reinforces_blocks` | off | off | on | on | comes back to a block it has already declared and finishes the attacker off. `AiPlayer._best_block_for` is a LADDER and returns on the first rung that answers, so the free absorb — *a wall soaks the hit at zero cost, which is what walls are FOR* — sits above the value trade and above the gang: a Wall of Stone on the table blocked alone every time and the rungs below it were never reached, however many bodies were standing at home. Two walls of swords watched a Serra Angel walk away for free (each lives through it, and together they deal it exactly four); a Wall of Stone soaked a Craw Wurm while the Water Elemental beside it, which kills the Wurm, stayed home. `AiPlayer._reinforce_blocks` runs ONCE over the finished plan, and only where the band survives the attacker and does not kill it — never a chump, never a trade, never a body that `_shieldable`, indestructible or a printed gaze says cannot die. Safe bodies first and free of charge, then, only if those fall short, ONE body that dies to close the kill exactly. THE PRICE IS WHAT THE PAIR PUTS AT RISK — rung 3's own `price <= attacker_value * 1.5` read off the bodies that actually die, with Forge's stricter bound on top (the body that dies is worth strictly less than the attacker it kills) — so a survivor is free, a rampage that turns the pair into two corpses is charged for both, and nothing is written into the plan unless the band it builds actually kills. Sorcerer and Wizard, with the other combat reads |
 | `crack_back_margin` | 0 | 0 | 0 | 0 | how far under our own life total the counter-swing has to reach before `AiPlayer._search_hold_back` is worth running: the gate was `reach >= life`, and it is `reach >= life - crack_back_margin`. The old gate is exact and asks exactly one question — *does this attack LOSE THE GAME to the counter-swing?* — and never the other one, whether it costs us twelve life for four points of damage. **Every preset ships 0, which is that gate unchanged**: the number is here so the Deck Lab can put the question in one command, the way `w_hand` is, and the Lab's answer of 2026-09-10 was NO (§4). Not a difficulty knob, and no rung moves it |
+| `develops_late` | off | off | off | off | keeps the hand shut until the attack is over — the whole of `docs/forge/casting.md` P1, and **every preset ships it off, which is the pilot unchanged**. `AiPlayer.act` reaches the main-phase planner in EITHER main step and the first one it reaches is Main 1, so every land, creature, artifact, enchantment, draw spell, discard and tutor this pilot has ever played went down BEFORE its own combat and with it the mana: a Wizard on four Forests with an Ironroot Treefolk in hand plays the land, casts the Treefolk, and stands at their declare-blockers with everything shown and nothing open. On, Main 1 casts only what Forge's `castPermanentInMain1` would — a win, floating mana that would be lost, a haste creature, a non-creature mana source, and what changes THIS combat (a permanent of theirs answered, an aura or a pump on a body of ours, a land that animates itself) — the mana sink waits with the rest, and the land drop is held under Forge's own four guards, the fourth of which is this pilot's own hazard: it sizes its attack and its block by the mana it holds, so a land in hand is a Carrion Ants that reads one point smaller. **THE LAB REFUSED THE RUNG** (§4): nine pairs, eight of them negative, a drift of about a point and a quarter and not one delta clear of its interval — so the field is here for the Deck Lab to ask with, the way `crack_back_margin` is, and no rung moves it |
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
 `prices_liabilities` and `prices_fallout`
 are the seven knobs that are on at every rung, and the reason is the
@@ -1892,6 +1893,105 @@ the five: the graveyard's gain asks go through `_choose_targets`, which
 has had its own land rule since the second pass, and Big Green's one
 Regrowth is untouched by the knob.
 
+DEVELOP AFTER COMBAT, BUILT AND REFUSED (`develops_late`, 2026-09-10).
+`docs/forge/casting.md` P1 is the note's own top-ranked "feels like a
+competent human" row, and its reproduction is not in doubt: the pilot
+reaches its main-phase planner in EITHER main step, the first one it
+reaches is Main 1, and so every land, creature, artifact, enchantment,
+draw spell, discard and tutor it has ever played went down before its own
+combat. A Wizard on four Forests with an Ironroot Treefolk in hand and a
+Grizzly Bears on the table played the land, cast the Treefolk, and stood
+at their declare-blockers with all of it shown and no mana up. With the
+knob on the same board reaches Main 2 with the cast still legal and five
+lands open.
+
+THE FIRST SWEEP READ −4.7 ±4.4 AND THE CENSUS SAID WHY, which is the
+hazard the row carries and the one worth recording whatever happens to
+the knob: a cast held for Main 2 is mana that looks open in between, and
+what spends it is THIS PILOT'S OWN ATTACK. Big Green's Llanowar Elves is
+tapped for mana in Main 1 at HEAD and therefore never attacks; with the
+hold on it stands untapped at the declaration and is sent. Over 200 games
+against White Knights, mana sources sent to attack went 1.49 → 3.00 a
+game, the pilot cast a whole spell FEWER each game (7.89 → 6.84) and its
+creature count at turn six fell 1.60 → 1.39. `AiPlayer._main2_mana_held`
+is the answer and it is Forge's own (`reserveManaSourcesForMain2` /
+`HELD_MANA_SOURCES_FOR_MAIN2`): the bodies the second main phase's cast
+needs are not sent to attack, with the lands asked first so a body is
+held only when it is actually needed. With it the same pair reads −0.5
+±4.4 and the development is level again — turns ending with a castable
+card still in hand 42.1% against 41.8%, sources left open 1.97 against
+1.82.
+
+AND WITH THAT FIXED THE ANSWER IS STILL NO. Nine pairs at 1 000 games an
+arm, seed 11, the control PASS byte-identical in every one of them:
+
+| pair | null | on | delta |
+| --- | --- | --- | --- |
+| Big Green vs White Knights | 53.3% | 52.8% | −0.5 ±4.4 |
+| The Deck (1996-02) vs Mountain Artillery | 32.2% | 32.0% | −0.2 ±4.1 |
+| The Deck (1996-02) vs White Knights | 21.1% | 21.9% | +0.8 ±3.6 |
+| Vampire Lord vs Big Green | 26.7% | 24.7% | −2.0 ±3.8 |
+| Kzzy'n — The Dragon Lord vs Big Green | 19.2% | 18.4% | −0.8 ±3.4 |
+| White Knights vs Big Green | 47.5% | 44.6% | −2.9 ±4.4 |
+| Blue Skies vs Big Green | 60.7% | 59.6% | −1.1 ±4.3 |
+| Mountain Artillery vs Big Green | 49.9% | 46.8% | −3.1 ±4.4 |
+| Black-Red Raiders vs Big Green | 52.1% | 50.3% | −1.8 ±4.4 |
+
+Not one delta is clear of its interval and EIGHT OF NINE ARE NEGATIVE, a
+drift of about a point and a quarter against the knob.
+
+THE FLIPS ARE THE INSTRUMENT THAT IS CLEAR, and they are why this is a
+refusal rather than a shrug. A timing change touches nearly every game —
+8,825 of the 9,000 ended differently under the knob — and of those, 748
+CHANGED HANDS: **316 to a win and 432 away**. A fair toss over 748 sits at
+374 ± 14, so 316 is four standard deviations out. Eight of the nine pairs
+lean the same way, and the paired count says plainly what nine separate
+intervals could not afford to: the knob costs games.
+
+That is the same shape `crack_back_margin` was refused for the same day,
+and the ladder's own first rule settles it: a capability is monotone, as good or better one
+rung up, and a knob that costs the Sorcerer and the Wizard a point is not
+that.
+
+NO HALF OF IT ACCOUNTS FOR THE DRIFT, and each was measured on its own
+from the Deck Lab. The LAND DROP alone ends 860 of 1 000 games differently
+and flips exactly one each way — a wash, and the guards are why: Forge's
+`hasRelevantAbsOTB` plays the land whenever a permanent of ours has an
+ability the mana could pay for, which in this pool is every firebreather,
+every Factory and every Icy. The MANA SINK alone moves nothing on a deck
+without one and is load-bearing on a deck with one, because without that
+gate the knob defeats itself — with the hand held, `_try_cast_best`
+answers "" in Main 1 and a Jayemdae Tome spends on a card the mana the
+hold exists to keep open. And pinning `pumps_to_attack` off on both seats
+leaves the loss exactly where it was (Mountain Artillery vs Big Green
+−2.5 against −3.1, White Knights vs Big Green −2.9 against −2.9), so it
+is not the pilot's own open-mana reading either.
+
+WHAT IS LEFT IS THE TIMING ITSELF, and the honest sentence is about this
+pool and this Lab rather than about Magic: neither seat reads a hand, a
+hand size or an open land as a bluff, so the information the hold buys is
+worth nothing here, while the board it prices one phase later is worth
+something. The row is therefore not refused for good — it is refused
+until there is an opponent that punishes an open board, which is
+`holds_tricks` and a hand read (`docs/AI-next-wave.md`). Every preset
+ships `false`, the whole mechanism is in the tree behind the field, and
+the question is one command:
+`--sweep develops_late=on,off --null off`.
+
+THE CONTROL FOR A TIMING KNOB IS THE FORTY-FACTORY PAIR, and P1 was wrong
+to say there is no honest one. A timing knob fires on any deck with a
+nonland card in hand, a mana sink or a held land drop — so the pair it
+cannot fire on must have no spells at all AND no land drop worth holding.
+Forty Mishra's Factories against forty Mishra's Factories is that pair:
+no nonland card ever reaches the hand, and `hasRelevantAbsOTB` sees the
+Factory's own animation and plays the land in Main 1 every time. It is
+500-500 and byte-identical to its own null in every arm of all eighteen
+sweeps of 2026-09-10, on both trees — the ones taken before
+`AiPlayer._main2_mana_held` existed and the ones taken after. Forty Forests against forty Mountains is NOT a control
+for this knob — the land-drop half fires on it (harmlessly, as it
+happens, which is a pool fact and not a licence).
+
+
 ## 5. Where the ladder still ends short
 
 - `counter_threshold` is an absolute evaluator number, so a Wizard on a
@@ -1987,6 +2087,22 @@ Regrowth is untouched by the knob.
   one kill the reinforcement buys, and the reading has no horizon to say
   so (`counts_the_race`'s row, `docs/AI-next-wave.md` wave 4). The
   measurement is what says it comes out ahead anyway.
+- `develops_late` ships at the null on every rung (§4), so three things
+  it exposed are open rather than fixed. THE MAIN-2 RESERVE BOOKS ONE
+  CARD: `AiPlayer._main2_reserve` answers with the single most valuable
+  sorcery-speed cast the open mana could make and a bar of 3.0, so a
+  second cheap cast — a Llanowar Elves at 1.5 — is not booked and the
+  body that makes its mana is still sent to attack. THE COMBAT TRICKS ARE
+  NOT BOOKED AT ALL: only the firebreathing path reaches that reserve
+  (through `AiPlayer._pump_reserve`), and `_defensive_combat_response`,
+  `_offensive_combat_response`, the shield and the window caster all spend
+  against `_held_reserve` alone — measured at 1.00 responses a game
+  against 1.03, so it is not what refused the row, but it is the seam
+  P1's own risk clause names. AND A LORD IS NOT READ: Crusade's
+  `PlayMain1:TRUE` is a card script in Forge and a STATIC ability here, so
+  `EffectIntent` sees no target and no pump, and a lord held to Main 2
+  pumps nothing this turn. None of the three is worth building while the
+  knob is off.
 - `holds_x_burn` is the HOLD half of its row only. The CHAIN — two burn
   spells that kill together, the first sized for its share and the
   second's cost booked out of the reserve — is wave 3's

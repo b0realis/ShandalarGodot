@@ -1180,6 +1180,35 @@ shandalar/
 │   │   │                      body comes back). Two halves of one fact,
 │   │   │                      one knob, because either alone is a lie.
 │   │   │                      Sorcerer and Wizard.
+│   │   │                      reads_pumps (2026-09-10): THEIR PUMPS ARE
+│   │   │                      PUBLIC — a creature they control is read
+│   │   │                      at the size their OPEN MANA can pay for,
+│   │   │                      the mirror of pumps_to_attack.
+│   │   │                      AiPlayer._pump_reach: the cheapest
+│   │   │                      self-targeting PumpEffect with no tap
+│   │   │                      cost, times the affordable activations,
+│   │   │                      under three caps — the printed
+│   │   │                      max_per_turn, ONE POOL shared among the
+│   │   │                      bodies this combat can ask it of
+│   │   │                      (_pump_claimants), and the count past
+│   │   │                      which no kill answer on the board could
+│   │   │                      change (_pump_cap). Only the KILL test
+│   │   │                      reads it, never the face damage. ASYMMETRIC
+│   │   │                      by measurement: their body SURVIVING ours
+│   │   │                      is read at _dies_to itself, their body
+│   │   │                      KILLING ours only in _attack_risk and
+│   │   │                      _cohort_value, where a body of ours is
+│   │   │                      being sent into it. Sorcerer and Wizard.
+│   │   │                      develops_late (2026-09-10): DEVELOP AFTER
+│   │   │                      COMBAT — Main 1 casts only Forge's
+│   │   │                      castPermanentInMain1 list (a win, floating
+│   │   │                      mana, haste, a non-creature mana source,
+│   │   │                      what changes this combat), the mana sink
+│   │   │                      and the land drop wait with everything
+│   │   │                      else. EVERY PRESET SHIPS IT OFF: built,
+│   │   │                      tested and measurable from one Lab
+│   │   │                      command, and the numbers refused the rung
+│   │   │                      (docs/ai-difficulty.md §4).
 │   │   │                      w_hand (2026-09-10): the ONE field here
 │   │   │                      that is not a difficulty knob — the weight
 │   │   │                      Evaluator.position_score puts on a
@@ -2284,7 +2313,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5755 tests / ~150 029 asserts, ~380 s
+├── tests/                   GUT suite — 5781 tests / ~150 871 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4035,6 +4064,19 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_develops_late_2026_09_10.gd — DEVELOP AFTER COMBAT
+│    (AiProfile.develops_late): the creature cast before combat at HEAD and
+│    held with the knob on, and the same cast made in Main 2; MAIN2 pinned
+│    as a step the turn cannot skip; Forge's Main-1 list on both arms — a
+│    Ball Lightning, a Mox, a mana creature that waits because it is sick,
+│    a Paralyze on a blocker with an attack coming and the same Paralyze
+│    held with none, a Holy Strength on an attacker, a lethal Fireball
+│    never postponed, floating mana spent before the step ends; the Tome
+│    that waits and the Factory animation that does not; the land drop held
+│    and then made in Main 2, and played anyway on turn one, on an empty
+│    board, when a card in hand needs it, when an X spell is in hand, and
+│    when a Carrion Ants wants the mana; every preset shipping the null;
+│    the knob read by the Lab;
 │    tests/ai/test_ai_reinforces_blocks_2026_09_10.gd — SAFE BLOCK, THEN
 │    FINISH IT (AiProfile.reinforces_blocks): two Wall of Swords that now
 │    finish a Serra Angel and the null that declares one of them and

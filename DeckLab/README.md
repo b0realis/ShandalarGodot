@@ -500,6 +500,28 @@ the game; and run again on 2026-09-10 on HEAD's own files and on the
 `reads_pumps` tree with all three pinned off, the two `games.csv` files
 are byte for byte the same 6,000 games (22.6% null on both, which is
 what the same pair reads under the day's other knobs).
+`develops_late` (2026-09-10) is a TIMING knob, so it fires on any deck
+with a nonland card in hand, a mana sink, or a land drop worth holding —
+which is every deck in this repository. **Its control is the forty-FACTORY
+pair, not the forty-land one**: write two lists of `40 Mishra's Factory`
+beside the run and pass them as `--control-deck-a` / `--control-deck-b`.
+No nonland card ever reaches either hand, and Forge's `hasRelevantAbsOTB`
+guard sees the Factory's own animation and plays the land in Main 1 every
+time, so the knob has nothing to hold; the pair is 500-500 and
+byte-identical to its own null in every arm of all eighteen sweeps of
+2026-09-10, on both trees. Forty Forests against forty Mountains is NOT a
+control for it — the land-drop half fires on that pair (860 of 1,000 end
+differently on the land half alone), which is exactly the trap the block
+knobs' own control note warns about one paragraph up, with the decks the
+other way round. **Every preset ships this knob OFF** (the Lab refused the
+rung — `docs/ai-difficulty.md` §4), so `--null off` is both the seat's own
+value and the shipped pilot, and an `off` arm that does not replay the
+null game for game is a bug in the measurement rather than a finding.
+Mind the pool when you pick the live pair: what shows the knob is a deck
+whose creatures make mana (Big Green's four Llanowar Elves) or whose
+permanents want mana in combat (Mountain Artillery's Rod of Ruin, Icy
+Manipulator and Granite Gargoyles), because those are the two readings the
+hold collides with.
 `tutors_for_the_turn` (2026-09-10) fires wherever a card ask offers cards
 out of the SEAT'S OWN LIBRARY, which in this pool is a Demonic Tutor, an
 Untamed Wilds, a Land Tax, a Transmute Artifact or an Aladdin's Lamp —
