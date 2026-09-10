@@ -332,6 +332,11 @@ func _try_cast_best(game: MtgGame) -> String:
 		# step boundary (docs/ROADMAP.md, the dead-card sweep's class 4).
 		if game.cast_refusal(pid, inst, targets, x, mode) != "":
 			continue
+		# THE ONE-PLY VETO (2026-09-10, AiProfile.checks_before_casting):
+		# the engine has cleared the cast; this asks whether the POSITION
+		# it leaves us in is worse than the one we are in.
+		if _cast_veto(game, inst, intent, targets, x):
+			continue
 		if value > best_value:
 			best = inst
 			best_value = value
@@ -390,6 +395,150 @@ func _wait_out(game: MtgGame, inst: CardInstance) -> bool:
 	game.log_line("(AI holds %s: the stack filled up while it was paying)"
 		% inst.data.card_name)
 	return true
+
+
+## THE ONE-PLY VETO (2026-09-10, [member AiProfile.checks_before_casting];
+## `docs/forge/casting.md` P8). Would this cast leave us WORSE OFF than
+## simply passing — once the spell has resolved and the one answer the
+## table is already showing has been taken?
+##
+## [forge] `forge-ai/src/main/java/forge/ai/simulation/OnePlaySafetyChecker.java:23-31`
+## (commit `b09a3d3f`) runs the heuristic picker, COPIES the game, replays
+## that one play and refuses it when the score drops. We cannot copy the
+## game and do not have to (`docs/forge/casting.md` §6.4):
+## [method Evaluator.position_score] is a sum of four counted quantities,
+## so the position after a cast is ARITHMETIC — the card leaves the hand,
+## the victim leaves their board, the life totals move, our permanent
+## arrives. That is [method _cast_projection], and it costs one pass over
+## the targets.
+##
+## THE ANSWER IS THE ONE THE TABLE IS ALREADY SHOWING, AND NO OTHER. The
+## note asks for "the opponent's obvious answer"; the only answer a seat
+## may READ is the one it can see, so it is an activated ability on THEIR
+## battlefield that they can pay for right now and that would take the
+## body straight off again ([method _answered_on_arrival]) — a Prodigal
+## Sorcerer's ping, a Rod of Ruin, an Orcish Artillery. Their hand is not
+## looked at. The note's other clause — a guessed Lightning Bolt behind
+## open red mana, gated on [AiMatchMemory] having seen that colour deal
+## damage — is NOT built, and the reason is structural rather than a
+## preference: `AiMatchMemory` belongs to the sideboard, no `AiPlayer`
+## carries one, and free play has none at all, so the clause would be
+## inert in the very runs that measure it (docs/ai-difficulty.md §5).
+##
+## AND THE SWING THEIR CREATURES MAKE NEXT TURN IS NOT COUNTED, because
+## the body is not on the table to block it: with no instance to hand,
+## [method _damage_after_value_blocks] answers the same number on both
+## sides of the comparison and the term cancels.
+##
+## IT ABSTAINS UNLESS THE ANSWER IS THERE. A cast nothing on the table
+## answers is never vetoed whatever the projection says — a veto with no
+## answer in it is exactly the "pessimistic projection that never casts
+## into open red mana" the note's own risk paragraph names. And a
+## DESPERATE PLAY IS ALLOWED TO BE DESPERATE: [method _in_danger] — the
+## panic line read against the damage their board would actually land —
+## lifts it, which is Forge's own escape ("desperate plays are ok if next
+## combat was already likely to kill AI").
+func _cast_veto(game: MtgGame, inst: CardInstance, intent: EffectIntent,
+		targets: Array, x_value: int) -> bool:
+	if not profile.checks_before_casting:
+		return false
+	if intent.unknown or not intent.makes_token.is_empty():
+		return false   # a payoff the projection cannot price: no opinion
+	if not _answered_on_arrival(game, inst.data):
+		return false
+	if _in_danger(game):
+		return false
+	return _cast_projection(game, inst, intent, targets, x_value) < 0.0
+
+
+## The position this cast would leave us in, as a delta on
+## [method Evaluator.position_score]'s own terms — with the arriving
+## permanent already struck out, because this is only ever asked once
+## [method _answered_on_arrival] has said the table takes it back. Every
+## term is one of the four quantities that score counts, and nothing that
+## is not one of them is guessed at.
+func _cast_projection(game: MtgGame, inst: CardInstance, intent: EffectIntent,
+		targets: Array, x_value: int) -> float:
+	var delta := -profile.w_hand   # the card leaves our hand
+	var drawn := intent.draws + (x_value if intent.draws_use_x else 0)
+	delta += float(drawn) * profile.w_hand
+	delta += float(intent.life_gain - intent.self_damage) * Evaluator.W_LIFE
+	for t in targets:
+		if not (t is TargetRef):
+			continue
+		var ref: TargetRef = t
+		if ref.is_player:
+			var dmg := intent.damage_at(x_value)
+			if dmg > 0:
+				delta += float(dmg) * Evaluator.W_LIFE \
+					* (1.0 if ref.player_id != pid else -1.0)
+			continue
+		var victim := game.find_instance(ref.instance_id)
+		if victim == null or not intent.kills(victim, x_value):
+			continue
+		var worth := Evaluator.permanent_value(victim, profile) * Evaluator.W_BOARD
+		delta += worth if victim.controller_id != pid else -worth
+	return delta
+
+
+## THE ANSWER THE TABLE IS ALREADY SHOWING (2026-09-10, [member
+## AiProfile.checks_before_casting]): would the creature this cast puts on
+## the battlefield be taken off it again by an activated ability the
+## opponent can pay for RIGHT NOW?
+##
+## The same reading [method _taps_into_execution] makes for the Royal
+## Assassin and [method _shieldable] for their regeneration shield, asked
+## of a body that does not exist yet: their open sources counted the way
+## both of those count them (untapped permanents with a mana ability,
+## public to both seats), the ability's own tap cost paid by an untapped,
+## un-sick source, and the effect read as a SHAPE ([EffectIntent]) rather
+## than as a card name.
+##
+## THREE THINGS IT REFUSES TO GUESS AT, each in the safe direction —
+## fewer vetoes, never more. A cost that is not mana (a sacrifice, a life
+## payment, an exile, a discard) is a board or a card and nothing here
+## prices either, which is the answer [method _cheapest_pump_of] gives the
+## same question. A target spec with a FILTER on it is one this reading
+## cannot put an unbuilt body to — a Royal Assassin's *target TAPPED
+## creature* is no answer to a creature that has not arrived — so it is
+## passed over. And only a CREATURE is asked about: nothing in this pool
+## answers an artifact or an enchantment at will.
+func _answered_on_arrival(game: MtgGame, data: CardData) -> bool:
+	if not data.is_creature():
+		return false
+	var them := game.opponent_of(pid)
+	var open := 0
+	for p in game.players[them].battlefield:
+		if not p.tapped and not p.cur_mana_abilities.is_empty() \
+				and not (p.is_creature() and p.summoning_sick):
+			open += 1
+	for source in game.players[them].battlefield:
+		if (data.protection_from & source.cur_colors) != 0:
+			continue
+		for index in source.cur_activated_abilities.size():
+			var ability: ActivatedAbility = source.cur_activated_abilities[index]
+			if ability.effects.is_empty() or ability.only_opponents_may_activate:
+				continue
+			if ability.sacrifice_cost or ability.exile_cost \
+					or ability.life_cost > 0 or ability.random_discard_cost > 0:
+				continue
+			if ability.tap_cost and (source.tapped
+					or (source.is_creature() and source.summoning_sick)):
+				continue
+			if ability.cost != null and ability.cost.mana_value() > open:
+				continue
+			var intent := EffectIntent.read(ability.effects, source.data.card_name)
+			var spec := intent.target_spec
+			if spec == null or spec.filter.is_valid() or spec.game_filter.is_valid():
+				continue
+			if spec.kind != TargetSpec.Kind.CREATURE \
+					and spec.kind != TargetSpec.Kind.ANY:
+				continue
+			if intent.removes:
+				return true
+			if intent.damage > 0 and intent.damage >= data.toughness:
+				return true
+	return false
 
 
 ## The engine's own pre-cast gates the planner can read WITHOUT paying:
@@ -452,7 +601,7 @@ func _sacrifice_fodder_ok(game: MtgGame, inst: CardInstance) -> bool:
 	for perm in game.players[pid].battlefield:
 		if not bool(want["filter"].call(perm)):
 			continue
-		var worth := Evaluator.permanent_value(perm)
+		var worth := Evaluator.permanent_value(perm, profile)
 		if cheapest < 0.0 or worth < cheapest:
 			cheapest = worth
 	return cheapest >= 0.0 and cheapest <= Evaluator.card_value(inst.data)
@@ -487,7 +636,7 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 		elif intent.answers_creatures():
 			var victim := _best_victim(game, inst, intent, 0)
 			if victim != null:
-				var worth := Evaluator.permanent_value(victim)
+				var worth := Evaluator.permanent_value(victim, profile)
 				if worth >= 3.0 and not (intent.bounces and not intent.removes
 						and intent.damage == 0 and worth < 6.0):
 					value = worth + 1.0
@@ -850,7 +999,7 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		# Kill the best creature it can; failing that, the face.
 		var victim := _best_victim(game, inst, intent, 0)
 		if victim != null:
-			value = Evaluator.permanent_value(victim) + 1.0
+			value = Evaluator.permanent_value(victim, profile) + 1.0
 			targets = [TargetRef.card(victim)]
 		elif _spec_allows_player(intent.target_spec, game, inst, opponent):
 			targets = [TargetRef.player(opponent)]
@@ -880,9 +1029,9 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 			# At their upkeep the tap holds through both turns; on our own
 			# turn it only clears a blocker, and only if we mean to attack.
 			if moment == Moment.UPKEEP:
-				value = Evaluator.permanent_value(mark) * 0.6 + 1.0
+				value = Evaluator.permanent_value(mark, profile) * 0.6 + 1.0
 			elif game.current_step() == Mtg.Step.MAIN1 and _has_attackers(game):
-				value = Evaluator.permanent_value(mark) * 0.4 + 1.0
+				value = Evaluator.permanent_value(mark, profile) * 0.4 + 1.0
 			else:
 				return {}
 		else:
@@ -1294,10 +1443,10 @@ func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
 ## the ability is the reason to take it.
 func _victim_value(game: MtgGame, inst: CardInstance) -> float:
 	if inst.is_creature():
-		return Evaluator.permanent_value(inst)
+		return Evaluator.permanent_value(inst, profile)
 	if inst.is_land():
 		return Evaluator.land_value(game, inst)
-	var value := Evaluator.permanent_value(inst)
+	var value := Evaluator.permanent_value(inst, profile)
 	if not inst.cur_activated_abilities.is_empty():
 		value += 1.0
 	return value
@@ -1337,7 +1486,7 @@ func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
 	if not inst.is_land():
 		if priced and _dead_weight(game, inst):
 			return 0.0 - toll   # nothing it does is ours until it untaps
-		return Evaluator.permanent_value(inst) - toll
+		return Evaluator.permanent_value(inst, profile) - toll
 	var me := game.players[pid]
 	var in_hand := 0
 	var biggest := 0
@@ -1653,7 +1802,7 @@ func _best_tap_victim(game: MtgGame, source: CardInstance, spec: TargetSpec) -> 
 			continue
 		var value := 0.0
 		if inst.is_creature():
-			value = Evaluator.permanent_value(inst)
+			value = Evaluator.permanent_value(inst, profile)
 		elif not inst.cur_mana_abilities.is_empty():
 			value = 0.5
 		if value > best_value:
@@ -1712,7 +1861,7 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 		if not _sweep_kills(effect, inst, n):
 			continue
 		var worth := Evaluator.land_value(game, inst) if levels_lands \
-			else Evaluator.permanent_value(inst)
+			else Evaluator.permanent_value(inst, profile)
 		swing += -worth if inst.controller_id == pid else worth
 	swing *= Evaluator.W_BOARD
 	# THE DROUGHT IS WON BY WHOEVER STILL HAS A CLOCK (2026-09-10,
@@ -1949,8 +2098,8 @@ func _upkeep_meals(game: MtgGame, who: int,
 					continue
 				if not spec.is_legal(game, TargetRef.card(inst), feeder):
 					continue
-				if meal == null or Evaluator.permanent_value(inst) \
-						< Evaluator.permanent_value(meal):
+				if meal == null or Evaluator.permanent_value(inst, profile) \
+						< Evaluator.permanent_value(meal, profile):
 					meal = inst
 			if meal != null:
 				eaten.append(meal)
@@ -1968,7 +2117,7 @@ func _upkeep_meals(game: MtgGame, who: int,
 ## The meal is the least valuable legal creature, the same reading
 ## [method _upkeep_meals] makes of a board.
 func _is_next_meal(game: MtgGame, card: CardInstance, who: int) -> bool:
-	var worth := Evaluator.permanent_value(card)
+	var worth := Evaluator.permanent_value(card, profile)
 	for feeder in game.all_battlefield():
 		for ability in feeder.cur_triggered_abilities:
 			var spec: TargetSpec = ability.kills_each_upkeep
@@ -1991,7 +2140,7 @@ func _is_next_meal(game: MtgGame, card: CardInstance, who: int) -> bool:
 				# as the next meal, kept its Counterspell, and the pair
 				# traded one copy for nothing (reproduced 2026-09-10:
 				# `_is_next_meal(second Sengir) = true`).
-				if Evaluator.permanent_value(inst) <= worth:
+				if Evaluator.permanent_value(inst, profile) <= worth:
 					sheltered = true
 					break
 			if not sheltered:
@@ -2030,7 +2179,7 @@ func _is_next_meal(game: MtgGame, card: CardInstance, who: int) -> bool:
 ## would have to simulate; the pool has one card of the shape and the
 ## honest single-feeder number is the one that can be read off the table.
 func _shelter_swing(game: MtgGame, card: CardInstance, who: int) -> float:
-	var worth := Evaluator.permanent_value(card)
+	var worth := Evaluator.permanent_value(card, profile)
 	var best := 0.0
 	for feeder in game.all_battlefield():
 		for ability in feeder.cur_triggered_abilities:
@@ -2048,12 +2197,12 @@ func _shelter_swing(game: MtgGame, card: CardInstance, who: int) -> float:
 			for inst in game.players[who].battlefield:
 				if not spec.is_legal(game, TargetRef.card(inst), feeder):
 					continue
-				if meal == null or Evaluator.permanent_value(inst) \
-						< Evaluator.permanent_value(meal):
+				if meal == null or Evaluator.permanent_value(inst, profile) \
+						< Evaluator.permanent_value(meal, profile):
 					meal = inst
 			if meal == null:
 				continue
-			var saved := Evaluator.permanent_value(meal)
+			var saved := Evaluator.permanent_value(meal, profile)
 			if worth < saved:
 				best = maxf(best, saved - worth)
 	return best
@@ -2100,10 +2249,10 @@ func _level_value(game: MtgGame, source: CardInstance) -> float:
 	var theirs: Array[float] = []
 	for inst in me.battlefield:
 		if inst.is_creature():
-			mine.append(Evaluator.permanent_value(inst))
+			mine.append(Evaluator.permanent_value(inst, profile))
 	for inst in them.battlefield:
 		if inst.is_creature():
-			theirs.append(Evaluator.permanent_value(inst))
+			theirs.append(Evaluator.permanent_value(inst, profile))
 	mine.sort()
 	theirs.sort()
 	fewest = mini(mine.size(), theirs.size())
@@ -2118,7 +2267,7 @@ func _board_value(game: MtgGame, of_pid: int) -> float:
 	var total := 0.0
 	for inst in game.players[of_pid].battlefield:
 		if not inst.is_land():
-			total += Evaluator.permanent_value(inst)
+			total += Evaluator.permanent_value(inst, profile)
 	return total
 
 
@@ -2177,7 +2326,7 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 			if victim == null:
 				continue
 			if victim.controller_id != pid:
-				value += Evaluator.permanent_value(victim) * 0.5
+				value += Evaluator.permanent_value(victim, profile) * 0.5
 				# ONE OF THEIRS, and the sting it carries (2026-09-10).
 				if not profile.prices_liabilities:
 					continue
@@ -2413,7 +2562,7 @@ func _size_x_burn(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 			"targets": [TargetRef.player(opponent)], "value": LETHAL_WORTH}
 	var victim := _best_victim(game, inst, intent, max_x)
 	if victim != null:
-		var worth := Evaluator.permanent_value(victim)
+		var worth := Evaluator.permanent_value(victim, profile)
 		if worth >= 3.0:
 			var need: int = victim.cur_toughness - victim.damage - intent.damage
 			# THE HOLD (2026-09-10, [member AiProfile.holds_x_burn]): a
@@ -2693,7 +2842,7 @@ func _size_tap(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 			continue
 		var mark := game.find_instance(t.instance_id)
 		if mark != null:
-			worth += Evaluator.permanent_value(mark)
+			worth += Evaluator.permanent_value(mark, profile)
 	if worth < TAP_CARD_BAR:
 		return {}
 	# The same 0.4 share `_ability_option` puts on a tap taken on our own
@@ -2736,7 +2885,7 @@ func _fire_tap_instant(game: MtgGame) -> String:
 		var mark := _best_tap_victim(game, inst, intent.target_spec)
 		if mark == null or not _tap_denies_something(game, mark):
 			continue
-		var worth := Evaluator.permanent_value(mark)
+		var worth := Evaluator.permanent_value(mark, profile)
 		if worth < best_worth:
 			continue
 		best = inst
@@ -3003,7 +3152,7 @@ func _fire_held_instant(game: MtgGame) -> String:
 		elif intent.answers_creatures():
 			var victim := _best_victim(game, inst, intent, 0)
 			if victim != null:
-				var worth := Evaluator.permanent_value(victim)
+				var worth := Evaluator.permanent_value(victim, profile)
 				var bar := 3.0
 				if intent.bounces and not intent.removes and intent.damage == 0 \
 						and victim.attachments.is_empty():
@@ -3327,16 +3476,16 @@ func _worth_forcing_attacks(game: MtgGame) -> Dictionary:
 		if not inst.is_creature() or inst.has_subtype("wall") or inst.summoning_sick:
 			continue
 		if CombatState.attack_illegality(game, inst, pid) != "":
-			gain += Evaluator.permanent_value(inst)   # dies at the end step
+			gain += Evaluator.permanent_value(inst, profile)   # dies at the end step
 		else:
 			forced.append(inst)
 	forced.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
-		return Evaluator.permanent_value(a) > Evaluator.permanent_value(b))
+		return Evaluator.permanent_value(a, profile) > Evaluator.permanent_value(b, profile))
 	var free := _untapped_creatures(game, pid)
 	var used: Dictionary = {}
 	var through := 0
 	for attacker in forced:
-		var worth := Evaluator.permanent_value(attacker)
+		var worth := Evaluator.permanent_value(attacker, profile)
 		var best_gain := 0.0
 		var best_blocker: CardInstance = null
 		for blocker in free:
@@ -3347,7 +3496,7 @@ func _worth_forcing_attacks(game: MtgGame) -> Dictionary:
 				continue
 			var trade := worth
 			if _dies_to(game, blocker, attacker):
-				trade -= Evaluator.permanent_value(blocker)
+				trade -= Evaluator.permanent_value(blocker, profile)
 			if trade > best_gain:
 				best_gain = trade
 				best_blocker = blocker
@@ -3399,7 +3548,7 @@ func _worth_stealing_an_attacker(game: MtgGame) -> Dictionary:
 	var best: CardInstance = null
 	var best_value := 0.0
 	for attacker in attackers:
-		var value := Evaluator.permanent_value(attacker) * 0.5
+		var value := Evaluator.permanent_value(attacker, profile) * 0.5
 		if through >= me.life:
 			var rest: Array[CardInstance] = attackers.duplicate()
 			rest.erase(attacker)
@@ -3447,7 +3596,7 @@ func _worth_conscripting_a_blocker(game: MtgGame) -> Dictionary:
 		var stopped := through_now - _damage_through_blocks(game, rest, others, pid)
 		var value := _face_damage_value(game, stopped, pid)
 		reach.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
-			return Evaluator.permanent_value(a) > Evaluator.permanent_value(b))
+			return Evaluator.permanent_value(a, profile) > Evaluator.permanent_value(b, profile))
 		var power_left := conscript.cur_power
 		for attacker in reach:
 			var needed := attacker.cur_toughness - attacker.damage
@@ -3455,10 +3604,10 @@ func _worth_conscripting_a_blocker(game: MtgGame) -> Dictionary:
 					or _shieldable(game, attacker):
 				continue
 			power_left -= needed
-			value += Evaluator.permanent_value(attacker)
+			value += Evaluator.permanent_value(attacker, profile)
 		if taken >= conscript.cur_toughness - conscript.damage \
 				and not conscript.cur_indestructible and not _shieldable(game, conscript):
-			value -= Evaluator.permanent_value(conscript)
+			value -= Evaluator.permanent_value(conscript, profile)
 		if value > best_value:
 			best = conscript
 			best_value = value
@@ -3506,13 +3655,13 @@ func _worth_pulling_a_blocker(game: MtgGame) -> Dictionary:
 		var value := _face_damage_value(game, attacker.cur_power, opponent) \
 			- _face_damage_value(game, landing.cur_power, opponent)
 		if _dies_to(game, attacker, blocker):
-			value += Evaluator.permanent_value(attacker)
+			value += Evaluator.permanent_value(attacker, profile)
 		if _dies_to(game, blocker, attacker):
-			value -= Evaluator.permanent_value(blocker)
+			value -= Evaluator.permanent_value(blocker, profile)
 		if _dies_to(game, landing, blocker):
-			value -= Evaluator.permanent_value(landing)
+			value -= Evaluator.permanent_value(landing, profile)
 		if _dies_to(game, blocker, landing):
-			value += Evaluator.permanent_value(blocker)
+			value += Evaluator.permanent_value(blocker, profile)
 		if landing_total + attacker.cur_power - landing.cur_power >= them.life \
 				and landing_total < them.life:
 			value += LETHAL_WORTH
@@ -3616,7 +3765,7 @@ func _save_from_the_stack(game: MtgGame) -> String:
 				return grown
 			# ...and then the card, which is only worth a creature worth
 			# a card.
-			if Evaluator.permanent_value(victim) >= 3.0:
+			if Evaluator.permanent_value(victim, profile) >= 3.0:
 				var pump := _find_pump_instant(game)
 				if pump != null:
 					var lift: int = pump.data.spell_effects[0].toughness
@@ -3625,7 +3774,7 @@ func _save_from_the_stack(game: MtgGame) -> String:
 						return _cast_response(game, pump, [TargetRef.card(victim)])
 		# Unsummon our own Djinn out from under the Terror: the card is
 		# kept, the tempo is lost — worth it for a creature worth two.
-		if Evaluator.permanent_value(victim) >= 5.0:
+		if Evaluator.permanent_value(victim, profile) >= 5.0:
 			var bounce := _find_bounce_for(game, victim)
 			if bounce != null:
 				return _cast_response(game, bounce, [TargetRef.card(victim)])
@@ -5306,7 +5455,7 @@ func _defensive_combat_response(game: MtgGame) -> String:
 		var attacker := game.find_instance(attacker_id)
 		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD:
 			continue
-		var gain := Evaluator.permanent_value(attacker)
+		var gain := Evaluator.permanent_value(attacker, profile)
 		if blocks_known:
 			if game.combat.was_blocked(game.combat.band_of(attacker_id)):
 				for blocker_id in game.combat.blockers_of(attacker_id):
@@ -5314,7 +5463,7 @@ func _defensive_combat_response(game: MtgGame) -> String:
 					if blocker != null and blocker.controller_id == pid \
 							and _dies_to(game, blocker, attacker) \
 							and not _dies_to(game, attacker, blocker):
-						gain += Evaluator.permanent_value(blocker)
+						gain += Evaluator.permanent_value(blocker, profile)
 			elif unblocked_total >= me.life:
 				gain += LETHAL_WORTH
 			else:
@@ -5365,7 +5514,7 @@ func _defensive_combat_response(game: MtgGame) -> String:
 				var dies_now := _dies_to(game, blocker, attacker)
 				var saved_by_pump := not _dies_to(game, blocker, attacker, bonus)
 				if dies_now and saved_by_pump \
-						and Evaluator.permanent_value(blocker) >= 3.0:
+						and Evaluator.permanent_value(blocker, profile) >= 3.0:
 					return _cast_response(game, pump, [TargetRef.card(blocker)])
 	# THE FACTORY ANIMATED TO BLOCK (2026-09-10, AiProfile.reads_manlands)
 	# — last, because every responder above holds a CARD this mana might
@@ -5583,7 +5732,7 @@ func _offensive_combat_response(game: MtgGame) -> String:
 		if pump != null and not _dies_to(game, attacker, blocker, bonus) \
 				and _dies_to(game, blocker, attacker, Vector2i.ZERO, bonus):
 			return _cast_response(game, pump, [TargetRef.card(attacker)])
-		if Evaluator.permanent_value(blocker) + Evaluator.permanent_value(attacker) >= 5.0:
+		if Evaluator.permanent_value(blocker, profile) + Evaluator.permanent_value(attacker, profile) >= 5.0:
 			var killer := _find_instant_removal_for(game, blocker)
 			if killer != null:
 				return _cast_response(game, killer, [TargetRef.card(blocker)])
@@ -5885,7 +6034,7 @@ func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
 					continue
 				if _attack_is_reasonable(game, inst, blockers, defender, bonus) \
 						and (extra == null
-							or Evaluator.permanent_value(inst) > Evaluator.permanent_value(extra)):
+							or Evaluator.permanent_value(inst, profile) > Evaluator.permanent_value(extra, profile)):
 					extra = inst
 			if extra != null:
 				attackers.append(extra.id)
@@ -6040,7 +6189,7 @@ func _pump_shares(game: MtgGame, candidates: Array[CardInstance]) -> Dictionary:
 		var b_mute := b.cur_power <= 0
 		if a_mute != b_mute:
 			return a_mute
-		return Evaluator.permanent_value(a) > Evaluator.permanent_value(b))
+		return Evaluator.permanent_value(a, profile) > Evaluator.permanent_value(b, profile))
 	for pump in breathers:
 		var inst: CardInstance = pump["inst"]
 		var ability: ActivatedAbility = pump["ability"]
@@ -6484,7 +6633,7 @@ func _declare_attacks(game: MtgGame) -> String:
 			if inst.has_keyword(Mtg.Keyword.BANDING):
 				banders.append(id)
 			elif best_rider == null \
-					or Evaluator.permanent_value(inst) > Evaluator.permanent_value(best_rider):
+					or Evaluator.permanent_value(inst, profile) > Evaluator.permanent_value(best_rider, profile):
 				best_rider = inst
 		if banders.size() >= 2:
 			var band: Array = banders.duplicate()
@@ -6556,7 +6705,7 @@ func _trim_attackers_to_cap(game: MtgGame, ids: Array) -> Array:
 		else:
 			optional.append(inst)
 	optional.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
-		return Evaluator.permanent_value(a) > Evaluator.permanent_value(b))
+		return Evaluator.permanent_value(a, profile) > Evaluator.permanent_value(b, profile))
 	for inst in optional:
 		if keep.size() >= cap:
 			break
@@ -6601,7 +6750,7 @@ func _damage_through_blocks(game: MtgGame, candidates: Array[CardInstance],
 ## at all — the one answer the cohort maths must tell apart from "0".
 func _attack_risk(game: MtgGame, inst: CardInstance,
 		blockers: Array[CardInstance], defender: int, bonus := Vector2i.ZERO) -> float:
-	var my_value := Evaluator.permanent_value(inst)
+	var my_value := Evaluator.permanent_value(inst, profile)
 	var worst_loss := -1.0   # < 0 = unblockable by anything they have
 	# TAPPING INTO AN EXECUTION (2026-09-10, [member
 	# AiProfile.reads_gaze]). The whole of this function below is about
@@ -6631,7 +6780,7 @@ func _attack_risk(game: MtgGame, inst: CardInstance,
 		if kills_me and survives_me:
 			worst_loss = maxf(worst_loss, my_value)          # pure loss
 		elif kills_me:
-			var trade := my_value - Evaluator.permanent_value(blocker)
+			var trade := my_value - Evaluator.permanent_value(blocker, profile)
 			worst_loss = maxf(worst_loss, maxf(trade, 0.0))  # trade-down risk
 	return worst_loss
 
@@ -6729,7 +6878,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	for i in n:
 		var inst := mine[i]
 		search.a_pow[i] = maxi(inst.cur_power, 0)
-		search.a_val[i] = Evaluator.permanent_value(inst)
+		search.a_val[i] = Evaluator.permanent_value(inst, profile)
 		search.a_id[i] = inst.id
 		search.a_can_attack[i] = 1 if candidates.has(inst) else 0
 		search.a_forced[i] = 1 if (candidates.has(inst) and _must_attack(inst)) else 0
@@ -6763,7 +6912,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	for j in m:
 		var inst := theirs[j]
 		search.d_pow[j] = maxi(inst.cur_power, 0)
-		search.d_val[j] = Evaluator.permanent_value(inst)
+		search.d_val[j] = Evaluator.permanent_value(inst, profile)
 		search.d_free[j] = 0 if inst.tapped else 1
 		search.d_can_attack[j] = 1 if _could_attack_next_turn(game, inst) else 0
 		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
@@ -6884,9 +7033,9 @@ func _cohort_value(game: MtgGame, group: Array[CardInstance],
 			# executioner had to be paid.
 			if _dies_to(game, attacker, blocker, Vector2i.ZERO,
 					_pump_reach(game, blocker)):
-				gain += Evaluator.permanent_value(attacker)
+				gain += Evaluator.permanent_value(attacker, profile)
 			if _dies_to(game, blocker, attacker):
-				gain -= Evaluator.permanent_value(blocker)
+				gain -= Evaluator.permanent_value(blocker, profile)
 			if gain <= 0.0:
 				continue   # they would rather take the hit
 			pairs.append({"gain": gain, "blocker": blocker, "attacker": attacker})
@@ -6914,7 +7063,7 @@ func _cohort_value(game: MtgGame, group: Array[CardInstance],
 		# lands nothing and trades with nobody: it is subtracted and the
 		# loop moves on.
 		if profile.reads_gaze and _taps_into_execution(game, attacker, defender):
-			value -= Evaluator.permanent_value(attacker)
+			value -= Evaluator.permanent_value(attacker, profile)
 			continue
 		if not blocked.has(attacker.id):
 			through += attacker.cur_power
@@ -6925,9 +7074,9 @@ func _cohort_value(game: MtgGame, group: Array[CardInstance],
 				attacker.cur_power - maxi(blocker.cur_toughness - blocker.damage, 0), 0)
 		if _dies_to(game, attacker, blocker, Vector2i.ZERO,
 				_pump_reach(game, blocker)):
-			value -= Evaluator.permanent_value(attacker)
+			value -= Evaluator.permanent_value(attacker, profile)
 		if _dies_to(game, blocker, attacker):
-			value += Evaluator.permanent_value(blocker)
+			value += Evaluator.permanent_value(blocker, profile)
 	return value + _face_damage_value(game, through, defender)
 
 
@@ -7381,7 +7530,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 			legal.append(inst)
 	if legal.is_empty():
 		return []
-	var attacker_value := Evaluator.permanent_value(attacker)
+	var attacker_value := Evaluator.permanent_value(attacker, profile)
 	var tramples := attacker.has_keyword(Mtg.Keyword.TRAMPLE)
 	# 1) Kill it and live — always take it. First strike and shields are
 	#    in _dies_to: a 2/2 first striker kills the 2/2 that blocks it and
@@ -7414,7 +7563,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 	# 2) Value trade: we both die, their creature was worth at least ours.
 	for blocker in legal:
 		if _dies_to(game, attacker, blocker) \
-				and Evaluator.permanent_value(blocker) <= attacker_value + 0.5:
+				and Evaluator.permanent_value(blocker, profile) <= attacker_value + 0.5:
 			return [blocker.id]
 	# 3) Gang up: two blockers whose combined damage kills it, if their
 	#    combined worth isn't wildly above the prize.
@@ -7430,8 +7579,8 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 						+ _damage_from(legal[j], attacker, Vector2i.ZERO, grows) \
 						>= attacker.cur_toughness - attacker.damage \
 							+ _rampage_bonus(attacker, 2) + grows.y:
-					var price := Evaluator.permanent_value(legal[i]) \
-						+ Evaluator.permanent_value(legal[j])
+					var price := Evaluator.permanent_value(legal[i], profile) \
+						+ Evaluator.permanent_value(legal[j], profile)
 					if price <= attacker_value * 1.5 or desperate:
 						return [legal[i].id, legal[j].id]
 	# 4) Chump: only when the race says so — throw the cheapest body, and
@@ -7445,7 +7594,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 	if desperate:
 		var cheapest: CardInstance = legal[0]
 		for blocker in legal:
-			if Evaluator.permanent_value(blocker) < Evaluator.permanent_value(cheapest):
+			if Evaluator.permanent_value(blocker, profile) < Evaluator.permanent_value(cheapest, profile):
 				cheapest = blocker
 		if not lethal_swing:
 			var stopped := attacker.cur_power
@@ -7453,7 +7602,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 				stopped = mini(stopped,
 					_absorbed_by(game, cheapest, attacker, shares))
 			if _face_damage_value(game, stopped, pid) \
-					< Evaluator.permanent_value(cheapest):
+					< Evaluator.permanent_value(cheapest, profile):
 				return []
 		return [cheapest.id]
 	return []
@@ -7890,7 +8039,7 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# Rain on the only Swamp, not the fourth Mountain); ours by
 			# the flat board scale.
 			var value := _victim_value(game, inst) if harmful \
-				else Evaluator.permanent_value(inst)
+				else Evaluator.permanent_value(inst, profile)
 			if value > best_value:
 				best = inst
 				best_value = value
@@ -8131,7 +8280,7 @@ func _packet_worth(game: MtgGame, packet: DamagePacket) -> float:
 		return 0.0
 	if inst.damage + uncovered < inst.cur_toughness:
 		return 0.0                # it survives: nothing to save
-	return Evaluator.permanent_value(inst)
+	return Evaluator.permanent_value(inst, profile)
 
 
 ## What a packet that KILLS US is worth. Bigger than anything
@@ -8348,8 +8497,8 @@ func _regeneration_action(game: MtgGame) -> String:
 		doomed.append(inst)
 	# Instance id breaks ties, for the reason `_prevention_action` gives.
 	doomed.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
-		var va := Evaluator.permanent_value(a)
-		var vb := Evaluator.permanent_value(b)
+		var va := Evaluator.permanent_value(a, profile)
+		var vb := Evaluator.permanent_value(b, profile)
 		return a.id < b.id if is_equal_approx(va, vb) else va > vb)
 	for victim in doomed:
 		var did := _regenerate(game, victim)
@@ -8383,7 +8532,7 @@ func _regenerate(game: MtgGame, victim: CardInstance) -> String:
 		if not _effects_regenerate(game, inst.data.spell_effects, victim, inst):
 			continue
 		# A card for a creature: only if the creature is worth more.
-		if Evaluator.card_value(inst.data) > Evaluator.permanent_value(victim):
+		if Evaluator.card_value(inst.data) > Evaluator.permanent_value(victim, profile):
 			continue
 		var spell_price: float = inst.data.cost.mana_value()
 		if not best.is_empty() and float(best["price"]) <= spell_price:
@@ -8471,7 +8620,7 @@ func order_blockers(game: MtgGame, attacker: CardInstance,
 		if blocker == null:
 			return blocker_ids
 		var lethal := maxi(blocker.cur_toughness - blocker.damage, 0)
-		var worth := Evaluator.permanent_value(blocker)
+		var worth := Evaluator.permanent_value(blocker, profile)
 		if lethal <= 0 or blocker.cur_indestructible or _shieldable(game, blocker):
 			worth = 0.0
 		entries.append({"id": int(id), "lethal": lethal, "worth": worth})

@@ -97,6 +97,7 @@ override any knob on any preset for a measurement
 | `reads_pumps` | off | off | on | on | reads the pump on a creature it does NOT control as part of that creature's SIZE, which is the mirror of `pumps_to_attack` and the half that had never been built: two days of passes taught the pilot to size its own attack, block and survival by the mana it holds, and it had never once feared the same mana on the other side of the table. A Shivan Dragon with three Mountains open was a 5/5 and a Frozen Shade behind four Swamps was a 0/1, so a Grizzly Bears was sent into one at `_attack_risk` 0.00 — *we kill it and live* — and was in the graveyard with the Shade still standing and their life still twenty. `AiPlayer._pump_reach` answers what their body can grow to: the cheapest self-targeting `PumpEffect` ability with no tap cost, times the activations their OPEN SOURCES pay for, under three caps — the card's own *activate only N times each turn* (a Fire Drake behind five Mountains is a 3/2, not a 7/2), ONE POOL shared among the bodies of theirs this combat can ask it of (three Carrion Ants behind six Swamps are three 2/3s, not three 6/7s), and the smallest count past which no kill-or-survive answer on the board could still change (a Shade behind ten Swamps facing one Grizzly Bears is +2/+2). ONLY THE KILL TEST reads it and never the face damage, so the cohort still prices its damage through. AND IT IS ASYMMETRIC, because the Lab put it that way rather than the design: their pump deciding whether THEIR body dies is read everywhere, at `_dies_to`'s own seam; their pump deciding whether OURS dies is read only where we are choosing to SEND a body into it — `_attack_risk` and `_cohort_value`, the two halves of the attack declaration — because a blocker of ours that dies to their breath has SPENT their mana, and mana spent killing a blocker is mana that did not reach our face, while an attacker of ours that dies to it has bought nothing at all. Nothing names a card: the shape is `EffectIntent.pump_self`, and their mana is counted the way `AiPlayer._shieldable` already counts it — untapped permanents, public to both seats |
 | `counters_by_shape` | off | off | on | on | counters by what the spell DOES and by what its own hand can answer, instead of comparing one printed number with `counter_threshold`. The bar is the wrong instrument at both ends of it, and the probe of 2026-09-10 says so in four numbers: Wrath of God prices at 5.00, Fireball at 2.50, Time Walk at 3.00 and Wheel of Fortune at 4.00 — so a Sorcerer (bar 5.5) watched a Wrath of God take four Serra Angels off its own table, and EVERY rung let a Fireball for eight resolve at eight life with the Counterspell in hand. `AiPlayer._counter_shape` answers ALWAYS, NEVER or *ask the bar* before the bar is asked. ALWAYS: a sweeper that takes more off our board than off theirs by a 2/2's worth; damage at our FACE that is lethal or crosses the panic line, the X read off the stack (and a player-hitting sweeper counted here as well as on the board, because an Earthquake for eight against a two-creature control deck is not a board sweep at all); a draw at OUR library that decks us; an extra turn; a wheel (`EffectIntent.wheels`) while our hand is the fuller. NEVER — Weissman's rule, *the counter is for what nothing else in the hand can touch* — when a card in hand answers the spell later and CHEAPER, with the mana for it PLANNED and not merely hoped for, and with the answer SPARE: every creature already on their side has a claim on the removal in our hand, so one Swords to Plowshares against a Savannah Lions on the table is a reason to counter the White Knight and Swords the Lions, not to let both resolve. That last clause is the Lab's and not the design's — without it the rule measured −1.7 with 3 games flipped to a win against 20 flipped away, and with it −0.1 with 2 against 3. It COMPOSES with `ranks_counters` rather than replacing it: this decides WHETHER a spell deserves a counter, that one decides WHICH counter answers it |
 | `reads_lethal_x` | off | off | on | on | knows that LIFE can be spent as mana when the mana is lethal. Channel opens a mana source paid for in life (`MtgPlayer.life_for_mana`) and no seat had ever paid a point: the card is a card-local effect, so `EffectIntent.adds_mana` was false, the Dark Ritual gate never asked about it, and it was cast as a plain three-point spell — probed at HEAD, a Wizard holding Channel and Fireball with two Forests and a Mountain cast Channel into an empty board against an opponent at twenty and finished the turn with the Channel in the graveyard, the Fireball in hand and its own life at twenty. On, a life-for-mana spell is cast ONLY in a step where the life it opens makes an X spell in hand LETHAL, and once it is open the life is paid and the spell fired in ONE action (`AiPlayer._lethal_life_mana`), so no rung can pay life for mana it then fails to spend. Two printed shapes reach a player's life with an X and the pool holds one of each behind a Channel — the aimed burn (Fireball, Disintegrate) and the sweeper that hits PLAYERS (Hurricane, Earthquake), whose X lands on us too and must leave us alive. The life is capped at `life − 1 − their attack`, read through the same block plan `_in_danger` uses, so a Fireball is not paid for with the life a Serra Angel is about to take. Forge never gets here at all: Channel is `AI:RemoveDeck:All` there and `willPayCosts` keeps a margin of four |
+| `checks_before_casting` | off | off | off | on | looks at the POSITION a cast would leave it in before it commits — the last layer of the ramp, and the one a player notices. `AiPlayer._try_cast_best` prices a cast by what the card is worth and what its victim is worth (`_cast_value`) and never by the board afterwards, so a Savannah Lions was cast in front of an untapped Prodigal Sorcerer and pinged off the table before it had blocked once: the card gone, the board where it was, and the pilot reading the cast as a gain. Forge's `OnePlaySafetyChecker` copies the game and replays the play; ours copies nothing, because `Evaluator.position_score` is a sum of four counted quantities and the position after a cast is therefore ARITHMETIC (`AiPlayer._cast_projection` — the card leaves the hand, the victim leaves their board, the life totals move, our permanent arrives). THE ANSWER IS THE ONE THE TABLE IS ALREADY SHOWING and no other: an activated ability on THEIR battlefield they can pay for right now that would take the body straight off again (`AiPlayer._answered_on_arrival`), their open sources counted the way `AiPlayer._shieldable` counts them, the effect read as a shape (`EffectIntent`) and never as a name; their hand is not looked at at all. It ABSTAINS unless that answer is on the table, which is the note's own "a pessimistic projection that never casts into open red mana" answered, and `AiPlayer._in_danger` lifts it, because a desperate play is allowed to be desperate — Forge's own escape |
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
 `prices_liabilities` and `prices_fallout`
 are the seven knobs that are on at every rung, and the reason is the
@@ -141,13 +142,22 @@ land — down to the same floor of four.
 The Apprentice's `counter_threshold` is in brackets because it never
 reads it — with `holds_instants` off there is no counterspell to price.
 
-`AiProfile` carries one field that is NOT in the table and not a
-difficulty knob at all: `w_hand` (2026-09-10), the weight
-`Evaluator.position_score` puts on a card-in-hand lead. Every preset
-ships the same 1.5 — `Evaluator.W_HAND`'s own value — and no rung moves
-it. It lives on the profile because `apply_overrides` is how the Deck Lab
-puts a NUMBER on a seat, and casting note P11 wanted the hand:life ratio
-settled by a sweep (§4, "THE HAND'S WEIGHT": it was, and nothing moved).
+`AiProfile` carries THREE fields that are NOT in the table and not
+difficulty knobs at all — `w_hand`, `defender_scale` and `ability_bonus`
+(all 2026-09-10). Each is an EVALUATOR NUMBER a seat carries for the
+length of a measurement: the weight `Evaluator.position_score` puts on a
+card-in-hand lead, and the two `Evaluator.permanent_value` terms combat
+note P6 proposed changing — a defensive body's discount per point of
+toughness and what an activated or a mana ability adds. Every preset
+ships the evaluator's own constant (1.5, 0.0, 0.0) and no rung moves any
+of them. They live on the profile because `apply_overrides` is how the
+Deck Lab puts a NUMBER on a seat, and because a CONSTANT cannot otherwise
+be measured at all: with the number on the profile, "the new evaluator on
+one seat against the old on the other, same seeds" is one command instead
+of two builds in two worktrees. All three questions were put and all
+three answered the same way — §4, "THE HAND'S WEIGHT" and "THE PRICE OF A
+BODY THAT CANNOT ATTACK": the incumbent constants stay, and the evidence
+is written down.
 
 ## 3. Rung by rung, in the player's terms
 
@@ -235,13 +245,22 @@ blocker its attack has to price, and its own is a blocker it animates
 once your attackers are declared, when the block it would make is one
 that brings the land back.
 
-**Wizard.** No mistakes at all. The same decision code, the same
-capabilities as the Sorcerer, with twice the search (3 000), the pickiest
-panic line (6), the widest counter net (5.0), the more patient X burn
-(`holds_x_burn` 5 against the Sorcerer's 3) and four sideboard swaps.
-Every difference between a Wizard and a Sorcerer is a number, not a
-layer — which is what "no mistakes" means here: it never degrades its own
-choice.
+**Wizard.** No mistakes at all. The Sorcerer's capabilities with twice
+the search (3 000), the pickiest panic line (6), the widest counter net
+(5.0), the more patient X burn (`holds_x_burn` 5 against the Sorcerer's
+3) and four sideboard swaps — and, since 2026-09-10, ONE LAYER OF ITS
+OWN: it looks at the position a cast would leave it in before it makes
+the cast (`checks_before_casting`). It does not put a Savannah Lions in
+front of your untapped Prodigal Sorcerer, or a Llanowar Elves in front of
+your Rod of Ruin with `{3}` up, because it projects the board after the
+spell resolves and after the answer YOUR TABLE IS ALREADY SHOWING — and
+refuses the cast when that position is worse than the one it is in. It
+reads your hand for none of this; the answer has to be a permanent you
+control and mana you have untapped. When the next attack would kill it
+anyway the veto lifts, because a desperate play is allowed to be
+desperate. Every OTHER difference between a Wizard and a Sorcerer is a
+number, not a layer — which is what "no mistakes" means here: it never
+degrades its own choice.
 
 ## 4. What the ladder measures as
 
@@ -1477,6 +1496,175 @@ thousand — 43.3 → 43.1, 41.6 → 41.7, 59.1 → 58.5, 70.4 → 70.5 — wher
 standard deviation at that size is sixteen. No matchup moves against
 either knob by more than the run's noise. `reads_lethal_x` cannot fire in
 the matrix at all: no starter holds a life-for-mana spell.
+THE ANSWER STANDING ON THE TABLE (2026-09-10, `checks_before_casting`)
+is a WASH on the win rate that removes a malfunction a human would name
+on sight, and it ships on `holds_x_burn`'s and `reads_pumps`' precedent —
+with a null this time, which is the difference between this row and the
+one below it. Seed 11, 1 000 games an arm, control Big Green vs White
+Knights (no repeatable creature-answer on either side), byte-identical to
+its own null in every arm of every run.
+
+| pair | null | `on` | delta | games that turned |
+| --- | --- | --- | --- | --- |
+| White Knights vs Conjurer (4 Prodigal Sorcerer, 4 Rod of Ruin) | 92.8% | 93.0% | +0.2 ±2.3 | 169 — 3 won, 1 lost |
+| Big Green vs Conjurer | 91.9% | 92.0% | +0.1 ±2.4 | 203 — 7 won, 6 lost |
+| White Knights vs Mountain Artillery (2 Rod of Ruin, 2 Orcish Artillery) | 48.0% | 47.8% | −0.2 ±4.4 | 123 — 6 won, 8 lost |
+| The Deck (playable) vs Mountain Artillery | 40.2% | 40.2% | +0.0 ±4.3 | **0 of 1 000** |
+| Big Green vs Black-Red Raiders | 46.8% | 46.8% | +0.0 ±4.4 | **0 of 1 000** |
+
+- **THE REPRODUCTION IS THE THIRD BOARD TRIED AND IT IS NOT ARGUABLE.** A
+  Savannah Lions, one Plains, and an untapped Prodigal Sorcerer across
+  the table: the shipped Wizard casts it, and it is pinged off the
+  battlefield before it blocks once. The card is gone, the board is where
+  it was, and `_cast_value` read the cast as a gain. A Llanowar Elves
+  into a Rod of Ruin with `{3}` up is the same board one card over. The
+  first board tried — a Grizzly Bears at four life against two Serra
+  Angels — is the pilot playing CORRECTLY, which is exactly why
+  `AiPlayer._in_danger` has to lift the veto, and does.
+- **495 of the 5 000 games end differently and the flips are 16 to 15**,
+  which at that count is a coin held very still. No pair is outside its
+  own interval in either direction.
+- **TWO OF THE FIVE PAIRS MEASURE 0 GAMES DIFFERENT, and both are pool
+  facts.** Black-Red Raiders answers creatures with TERROR and LIGHTNING
+  BOLT — cards in a hand, which this reading never looks at — and holds
+  no repeatable ability at all; and The Deck's own creatures are Mishra's
+  Factories, which are lands until they animate and so are never the
+  subject of a "would this body survive its arrival" question. The pairs
+  that can see the knob are the ones whose BOARD shows the answer, and in
+  this pool that is Conjurer (four Prodigal Sorcerer, four Rod of Ruin)
+  and Mountain Artillery.
+- **THE NULL IS EXACTLY THE NULL.** The `off` arm replays the null game
+  for game in all five runs (0 of 5 000), and the manual's own
+  `pays_sacrifices` sweep — Dracur vs Big Green, seed 11 — run on this
+  tree with `checks_before_casting=off` pinned on both seats is **byte
+  for byte HEAD's own 6 000 games**.
+- **P8's OWN NO-HARM TEST IS THE GAME LENGTH — "a veto that lengthens
+  games by more than a turn is refusing too much" — and it goes the other
+  way.** Mean turns from `games.csv`: 17.54 → 17.51 on White Knights vs
+  Conjurer, 19.58 → 19.51 on Big Green vs Conjurer, 20.36 → 20.34 on
+  White Knights vs Mountain Artillery. It costs about 14% of the Lab's
+  throughput on a board that fires it (85 games/s against 99), which is
+  `_in_danger`'s block plan being asked once per answered candidate.
+- **WHAT IT IS NOT.** It is not a hand read: the answer has to be a
+  permanent they control and mana they have untapped. It is not a game
+  copy: the projection is arithmetic on the four quantities
+  `position_score` counts. And it is not the whole of casting note P8 —
+  the guessed Bolt behind open red mana is gated on a match memory no
+  `AiPlayer` carries (§5).
+
+THE PRICE OF A BODY THAT CANNOT ATTACK (2026-09-10, the Forge study's
+combat note P6 — two constants, NO KNOB) is a **NO CHANGE with the
+evidence attached**, and it is the second time in one day that the
+answer to "is this number right" turned out to be "the incumbent stays"
+(the first was `w_hand`, above). P6 asks for two terms of
+`Evaluator.permanent_value` to move for every rung and every consumer at
+once: a defensive body's discount to scale with its toughness, and half a
+point per activated or mana ability. Both were built, both were measured,
+neither clearly helps — so neither ships, and what ships instead is the
+ABILITY TO ASK.
+
+- **IT REPRODUCED TWICE, AND NEITHER BOARD IS ARGUABLE.** With a Wall of
+  Stone (7.00) and a Hypnotic Specter (5.50) across the table, a Swords
+  to Plowshares takes **the Wall**, and a Control Magic — cast and
+  resolved through the real path — **steals the Wall**. A 0/8 that can
+  never attack is priced above a 2/2 flier that eats a card a turn, and
+  every consumer that has to PICK inherits it. Forge's own table puts the
+  same wall at 155 against a vanilla 2/2's 160 — just BELOW the bear
+  (`docs/forge/combat.md` §2.1).
+- **THE NOTE'S OWN EXAMPLE CANNOT BE PLAYED, AND ITS ARITHMETIC IS ONE
+  SUBTRACTION OUT.** P6 names a Terror, and Terror can legally target
+  NEITHER of the two cards the note contrasts the Wall with: the Hypnotic
+  Specter is black and the White Knight has protection from black. Swords
+  to Plowshares is the pool's one "destroy target creature" with no
+  colour rider, and it is what the reproduction had to use. And
+  `-(toughness * 0.4 + 1.0)` on a Wall of Stone's eight stat points is
+  **3.8**, not the 2.8 the note prints — 2.8 is that discount taken off
+  the ALREADY discounted 7.0. 3.8 is the number measured, and it is the
+  better one: it is where Forge puts the card.
+- **`counter_threshold` IS NOT AN INHERITOR, WHATEVER THE NOTE SAYS.**
+  `AiPlayer._try_counter` prices the spell on the stack with
+  `Evaluator.card_value` — `permanent_value`'s PRINTED twin — so a Wall
+  of Stone clears a Wizard's 5.0 bar and a Magician's 7.0 exactly on the
+  nose however this change goes. That malfunction is `card_value`'s and
+  is written down in §5 rather than fixed here: widening a no-knob
+  constant change while measuring it is how a measurement stops meaning
+  anything.
+- **HOW A CONSTANT WAS MEASURED AT ALL.** A constant has no null, so the
+  two numbers are carried by the profile for the length of a run —
+  `AiProfile.defender_scale`, `AiProfile.ability_bonus`, fields and not
+  knobs, shipping at the evaluator's own constants (0.0 and 0.0), no rung
+  moving them — and `Evaluator.permanent_value` takes the optional
+  `AiProfile` that `position_score` has taken since `w_hand`, with the
+  pilot handing its own profile to all sixty-nine of its calls. That
+  turns P6's own Lab prescription — *a third run pairing each preset
+  against the OLD evaluator, the null build kept in a worktree* — into
+  one command on one seed set: `--sweep defender_scale=0,0.4`.
+- **THE DEFENDER DISCOUNT, on the nine pairs that can see it at all** —
+  every wall deck the pool can play, four of them as MIRRORS because a
+  mirror is the most sensitive instrument a symmetric change has. Seed
+  11, 1 000 games an arm, control Big Green vs White Knights:
+
+| pair | null | 0.4 | delta | games that turned |
+| --- | --- | --- | --- | --- |
+| Priestess mirror (4 Wall of Swords, 4 Wall of Spears, 2 Elder Land Wurm) | 49.9% | 50.0% | +0.1 ±4.4 | 304 — 5 won, 4 lost |
+| Alt-A-Kesh mirror (2 Wall of Ice, 2 Wall of Bone, 2 Wall of Air) | 48.4% | 48.2% | −0.2 ±4.4 | 292 — 28 won, 30 lost |
+| Fungus Master mirror (2 Wall of Brambles, 2 Wall of Wood, 2 Carnivorous Plant) | 50.1% | 49.3% | −0.8 ±4.4 | 320 — 6 won, 14 lost |
+| Elementalist mirror (Wall of Air, Water, Fire, Stone) | 50.4% | 51.0% | +0.6 ±4.4 | 83 — 8 won, 2 lost |
+| Priestess vs Black-Red Raiders | 8.3% | 8.5% | +0.2 ±2.4 | 53 — 2 won, 0 lost |
+| Black-Red Raiders vs Priestess (the Terror seat) | 89.5% | 89.7% | +0.2 ±2.7 | 75 — 4 won, 2 lost |
+| Fungus Master vs Big Green | 10.5% | 11.1% | +0.6 ±2.7 | 127 — 7 won, 1 lost |
+| Alt-A-Kesh vs Mountain Artillery | 25.5% | 25.5% | +0.0 ±3.8 | 46 — 3 won, 3 lost |
+| Priestess vs Mountain Artillery | 3.1% | 3.3% | +0.2 ±1.6 | 40 — 2 won, 0 lost |
+
+- **1 340 of those 9 000 games end differently and the flips are a
+  coin**: 65 won to 56 lost, 0.8 standard errors off even. Not one pair
+  is below its own negative interval, which is the no-harm rule kept —
+  and not one is above its own positive one either, which is the rule
+  that decides this.
+- **AND THE FIVE-STARTER GAUNTLET CANNOT SEE IT AT ALL.** Twenty-five
+  cards in this pool carry DEFENDER and **not one of them is in any of
+  the five shipped decks**, main deck or sideboard, so all twenty ordered
+  starter matchups measure **exactly 0 games different — 0 of 20 000**.
+  That is a POOL FACT and not a null result: the decks that put the
+  question are the 1997 enemies, and Priestess alone fields ten
+  defenders.
+- **THE ABILITY BONUS, on the WHOLE five-starter gauntlet — all twenty
+  ordered matchups, 20 000 games.** It fires on 144 of the pool's 387
+  creatures, so unlike the discount it is visible in the shipped decks:
+  1 757 of 20 000 games end differently, **91 flipped to a win and 104
+  to a loss** (0.47, 0.9 standard errors off a coin, if anything the
+  wrong way). No single matchup's delta reaches a third of its own
+  ±4.4-point interval; the largest are Blue Skies vs Mountain Artillery
+  −1.2 and Big Green vs Mountain Artillery −0.7.
+- **EVERY `0` ARM IS BYTE-IDENTICAL TO THE NULL** — 0 of 1 000 games in
+  every one of the twenty-nine runs above — which is the determinism
+  check and the proof that the plumbing is inert at the shipped value.
+  Every control arm likewise: Big Green vs White Knights 525-475 for the
+  discount, and for the bonus a control of its own, since Big Green's
+  Llanowar Elves can see it — **White Knights vs Blue Skies**, the one
+  starter pair where neither deck holds a creature with an activated or a
+  mana ability, 273-727 byte-identical in all twelve of its arms.
+- **MEASURED AT EVERY PRESET, as the note asks**, on the pair the
+  published ladder itself is measured on — the Big Green mirror, the
+  pilot's rung against a Wizard. Today's tree reads **15.9 / 37.1 / 44.4
+  / 51.3** (the published 15.8 / 37.6 / 45.1 / 51.7 is the 2026-09-06
+  sweep, before six knobs), and the discount moves it by **+0.0 at every
+  one of the four rungs — 0 games different, four times over**, because
+  Big Green holds no defender. The ladder stays monotone because nothing
+  touched it.
+- **AND THE BASELINE IS THE OTHER HALF OF THE ANSWER.** A constant change
+  invalidates the BASELINE, not the knobs, so the manual's own
+  `pays_sacrifices` sweep (Dracur vs Big Green, seed 11, 1 000 games an
+  arm) was replayed with the candidate constants on BOTH seats. The
+  defender discount leaves it **byte for byte where it was — 0 of 6 000
+  games different**, 22.6 / 25.4 / 22.6 with the control 525-475, because
+  neither deck holds a defender. That is a real point in its favour and
+  it is not enough on its own. The ability bonus does NOT: **829 of the
+  same 6 000 games end differently**, the published sweep reads 22.7 /
+  25.3 / 22.7 instead of 22.6 / 25.4 / 22.6 and the control pair itself
+  moves from 525-475 to 523-477 — four Llanowar Elves are enough. A
+  constant that moves the number every other knob was measured against,
+  in exchange for a coin, is the clearest DO NOT SHIP in this file.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -1520,11 +1708,12 @@ has the rule.
 
 AND A KNOB THAT DEFAULTS ON AT SORCERER IS A KNOB THE NEXT SWEEP HAS TO
 PIN. `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`
-and `reads_lethal_x` are on at Sorcerer
-and Wizard, so a measurement of some OTHER knob taken against a number
-published before 2026-09-10 must force all five off on both seats
-(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
-`counters_by_shape=off,reads_lethal_x=off`,
+and `reads_lethal_x` are on at Sorcerer and Wizard — and
+`checks_before_casting` is on at the WIZARD — so a measurement of some
+OTHER knob taken against a number published before 2026-09-10 must force
+all six off on both seats (`--profile-a wizard:reads_gaze=off,`
+`reads_manlands=off,reads_pumps=off,counters_by_shape=off,`
+`reads_lethal_x=off,checks_before_casting=off`,
 and the same for `--profile-b`) or it is measuring several changes at
 once. The last two matter more than the first three for anything with a
 counterspell in it: `counters_by_shape` moves The Deck against Mountain
@@ -1551,6 +1740,21 @@ Regrowth is untouched by the knob.
 - `counter_threshold` is an absolute evaluator number, so a Wizard on a
   deck with pain lands spends life on counters a Sorcerer keeps; that is
   the open knob question above, to be instrumented before it is touched.
+- `Evaluator.card_value` is `permanent_value`'s PRINTED twin and carries
+  none of the profile numbers the battlefield price carries, so the two
+  can disagree about the same card and today they would: a Wall of Stone
+  is 7.0 to a discard pick, to a tutor's fallback, to the sideboard's
+  weighting and — the one that shows at the table — to
+  `AiPlayer._try_counter`'s bar, which prices the spell on the stack with
+  `card_value` and nothing else. A MAGICIAN SPENDS A COUNTERSPELL ON A
+  WALL OF STONE (7.0 against its own 7.0 threshold) AND LETS A HYPNOTIC
+  SPECTER (5.5) RESOLVE. Combat note P6 names `counter_threshold` among
+  the consumers that inherit `permanent_value`'s ranking and it is not
+  one of them; the malfunction is real and it is `card_value`'s. Not
+  fixed on 2026-09-10 because P6's own edit was under measurement that
+  day and widening a no-knob constant change while measuring it is how a
+  measurement stops meaning anything (§4, "THE PRICE OF A BODY THAT
+  CANNOT ATTACK").
 - `ranks_counters` orders the counters in hand by what they COST and
   whether they work, and never by what the spell on the stack would do:
   a Counterspell and a Mana Drain price the same, so which of the two
@@ -1582,6 +1786,19 @@ Regrowth is untouched by the knob.
   `_face_damage_value` already prices for the chump rung, and giving it to
   the middle of the ladder is `reinforces_blocks`' shape
   (`docs/AI-next-wave.md`, combat P4) rather than this knob's.
+- `checks_before_casting` reads only the answer the table is ALREADY
+  SHOWING. Casting note P8 asks for a second clause — a guessed
+  Lightning Bolt behind open red mana, gated on `AiMatchMemory.copies_seen`
+  having shown that colour deals damage — and it is not built, for a
+  structural reason rather than a preference: `AiMatchMemory` belongs to
+  the SIDEBOARD, no `AiPlayer` carries one, and free play (which is every
+  game the Deck Lab measures) has none at all, so the clause would have
+  been inert in the very runs that measure it. Giving the pilot a match
+  memory is its own piece of work and it is not this one. Two smaller
+  things are open at the site: the projection cannot count the SWING their
+  creatures make next turn, because the body it is asking about is not on
+  the table to block it, and it does not know that tapping out costs us
+  the Fog we were holding — `position_score` counts lands and not mana.
 - `holds_x_burn` is the HOLD half of its row only. The CHAIN — two burn
   spells that kill together, the first sized for its share and the
   second's cost booked out of the reserve — is wave 3's

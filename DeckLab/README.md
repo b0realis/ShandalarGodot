@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -455,11 +455,12 @@ list holds no Channel, only the archetype's name in a comment. Channel is
 restricted, so a deck plays exactly one, and the knob's answer differs in
 about one game in five (409 of 2,000 against White Knights, 420 of 2,000
 against Big Green).
-**Mind also that all five default ON at Sorcerer and Wizard**, so a
-sweep of some OTHER knob taken against a published number must pin them
-off on both seats
+**Mind also that five of them default ON at Sorcerer and Wizard** — and
+that `checks_before_casting` defaults ON at the Wizard — so a sweep of
+some OTHER knob taken against a published number must pin all six off on
+both seats
 (`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
-`counters_by_shape=off,reads_lethal_x=off`
+`counters_by_shape=off,reads_lethal_x=off,checks_before_casting=off`
 and the same for `--profile-b`) or it is measuring several changes; that
 is how the null was proved for both passes — the `pays_sacrifices` sweep
 of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,
@@ -482,6 +483,35 @@ Tutor plays exactly ONE (it is restricted), so the search resolves in
 about one game in three and the ANSWER differs in about one in eight —
 not enough for any single pair to move a win rate past its own interval.
 The census in `docs/ai-difficulty.md` §4 is what the reading is read by.
+**THREE OF THE NAMES ABOVE ARE NOT KNOBS AT ALL** — `w_hand`,
+`defender_scale` and `ability_bonus` (all 2026-09-10). They are
+EVALUATOR CONSTANTS a profile carries for the length of a run, every
+preset ships the evaluator's own value (1.5, 0.0, 0.0) and no rung moves
+any of them; they exist so that a constant can be MEASURED, which
+otherwise takes two builds in two worktrees and can only ever compare
+two absolute win rates. Put the candidate on seat A and the incumbent on
+seat B and the question becomes one command on one seed set. Their
+controls are their own, because they fire on different cards.
+`defender_scale` fires only on a creature with DEFENDER — twenty-five
+cards in this pool — and **not one of the five starters holds one**, so
+the whole twenty-matchup starter gauntlet measures exactly 0 games
+different and Big Green vs White Knights is a control for it several
+times over; the decks that put the question are the 1997 enemies
+(`decks/1997/originals/priestess.deck` fields ten defenders, `alt_a_kesh`
+six, `fungus_master` six, `elementalist` four, `conjurer` four). A
+MIRROR is the sharpest instrument it has — a symmetric change on one
+seat against the same deck on the other — and the Priestess mirror ends
+304 of 1,000 games differently. `ability_bonus` fires on any creature
+with an activated or a mana ability, 144 of the pool's 387, so three of
+the five starters see it and its control has to be **White Knights vs
+Blue Skies** — the one starter pair where neither deck holds one
+(273-727 byte-identical to its own null in every arm of twelve runs).
+`checks_before_casting` (the same day) fires wherever the OPPONENT's
+battlefield shows an activated ability they can pay for that would kill
+the creature about to be cast, so its control must hold no repeatable
+creature-answer on either side — Big Green vs White Knights holds none,
+where Conjurer (4 Prodigal Sorcerer, 4 Rod of Ruin) and Mountain
+Artillery (2 Rod of Ruin, 2 Orcish Artillery) are the live pairs.
 `levels_boards` (2026-09-07) GREW on 2026-09-10 to cover the LAND SWEEP —
 a sweeper whose every kill is a land — so its control must hold no
 Balance AND no Armageddon, Flashfires, Tsunami or Acid Rain. Big Green vs

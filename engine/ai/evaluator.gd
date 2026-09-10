@@ -49,13 +49,43 @@ const W_HAND := 1.5
 ## Weight of a land-count lead: mana is what turns the hand into board.
 const W_LANDS := 1.0
 
+## THE DEFENDER'S DISCOUNT, per point of toughness, on top of
+## [constant KEYWORD_VALUE]'s flat −1.0 (2026-09-10, the Forge study's
+## combat note P6). 0.0 is the incumbent — a Wall of Stone at 7.0, above
+## a Hypnotic Specter and a White Knight — and the candidate is 0.4.
+## Carried by [member AiProfile.defender_scale] so the Deck Lab can put
+## the two on opposite seats: `--sweep defender_scale=0,0.4`.
+const DEFENDER_SCALE := 0.0
+
+## THE ABILITY BONUS: what one activated ability, or a mana ability, adds
+## to a creature's worth (2026-09-10, combat note P6). 0.0 is the
+## incumbent — a Prodigal Sorcerer and a Llanowar Elves both price at a
+## vanilla 1/1 — and the candidate is 0.5. Carried by
+## [member AiProfile.ability_bonus]: `--sweep ability_bonus=0,0.5`.
+const ABILITY_BONUS := 0.0
+
 
 ## Battlefield worth of one permanent (live characteristics).
-static func permanent_value(inst: CardInstance) -> float:
+##
+## [param profile], when one is given, supplies the two numbers a pilot
+## may carry its own values of ([member AiProfile.defender_scale] and
+## [member AiProfile.ability_bonus], and see the constants above);
+## without one every weight is this file's constant.
+static func permanent_value(inst: CardInstance, profile: AiProfile = null) -> float:
 	if inst.is_creature():
 		var v := float(inst.cur_power + inst.cur_toughness)
 		for k in inst.cur_keywords:
 			v += KEYWORD_VALUE.get(k, 0.0)
+		var defender_scale: float = DEFENDER_SCALE if profile == null \
+			else profile.defender_scale
+		if defender_scale != 0.0 and Mtg.Keyword.DEFENDER in inst.cur_keywords:
+			v -= float(inst.cur_toughness) * defender_scale
+		var ability_bonus: float = ABILITY_BONUS if profile == null \
+			else profile.ability_bonus
+		if ability_bonus != 0.0:
+			v += ability_bonus * float(inst.cur_activated_abilities.size())
+			if not inst.cur_mana_abilities.is_empty():
+				v += ability_bonus
 		if inst.cur_protection != 0:
 			v += 1.0
 		if not inst.cur_landwalk.is_empty():
@@ -130,9 +160,12 @@ static func card_value(data: CardData) -> float:
 ## The Adaptive posture (mage-go's idea) reads this: ahead → press the
 ## attack, behind → hold back and trade.
 ##
-## [param profile], when one is given, supplies the single weight a pilot
-## may carry its own value of ([member AiProfile.w_hand], and see
-## [constant W_HAND]); without one every weight is this file's constant.
+## [param profile], when one is given, supplies the weights a pilot may
+## carry its own values of ([member AiProfile.w_hand], and — through
+## [method permanent_value] — [member AiProfile.defender_scale] and
+## [member AiProfile.ability_bonus]); without one every weight is this
+## file's constant. None of the three is a difficulty knob: they are here
+## so a CONSTANT can be measured on a seat instead of argued about.
 static func position_score(game: MtgGame, pid: int, profile: AiProfile = null) -> float:
 	var me := game.players[pid]
 	var them := game.players[game.opponent_of(pid)]
@@ -141,10 +174,10 @@ static func position_score(game: MtgGame, pid: int, profile: AiProfile = null) -
 	var their_board := 0.0
 	for inst in me.battlefield:
 		if not inst.is_land():
-			my_board += permanent_value(inst)
+			my_board += permanent_value(inst, profile)
 	for inst in them.battlefield:
 		if not inst.is_land():
-			their_board += permanent_value(inst)
+			their_board += permanent_value(inst, profile)
 	score += (my_board - their_board) * W_BOARD
 	var hand_weight: float = W_HAND if profile == null else profile.w_hand
 	score += (me.hand.size() - them.hand.size()) * hand_weight

@@ -2284,7 +2284,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5703 tests / ~149 546 asserts, ~380 s
+├── tests/                   GUT suite — 5727 tests / ~149 747 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -3979,6 +3979,31 @@ shandalar/
 │    protection from black no risk at all, and Tetsuo Umezawa — which can
 │    take the body standing still — refused; the ladder from Sorcerer up;
 │    the knob read by the Lab;
+│    tests/ai/test_ai_cast_veto_2026_09_10.gd — THE ONE-PLY VETO
+│    (AiProfile.checks_before_casting): the Savannah Lions held instead of
+│    cast in front of an untapped Prodigal Sorcerer and the null casting
+│    it and losing it; a Grizzly Bears the same ping cannot kill cast on
+│    both arms; a tapped pinger, a summoning-sick one and a Rod of Ruin
+│    with no mana behind it read as no answer, the Rod behind three
+│    Mountains read as one; an ability whose cost is a BOARD not priced,
+│    and the same ability with a {T} cost priced (synthetic, no card
+│    named); the veto lifted at four life against two Serra Angels, which
+│    is Forge's own escape; an artifact never asked about; a removal spell
+│    priced by what it takes off their board and never vetoed; the Wizard
+│    alone; the knob read by the Lab;
+│    tests/ai/test_ai_eval_constants_2026_09_10.gd — THE DEFENDER'S
+│    DISCOUNT AND THE ABILITY BONUS, EXPOSED FOR A SWEEP (combat P6, no
+│    knob, NOT SHIPPED): the four presets shipping Evaluator.DEFENDER_SCALE
+│    and Evaluator.ABILITY_BONUS and the default profile pricing byte for
+│    byte as no profile; the incumbent Wall of Stone at 7.0 above a
+│    Hypnotic Specter's 5.5, kept as the null; the candidate discount
+│    scaling with toughness (3.8 / 3.2 / 0.8) and monotone in it; the wall
+│    just under a Grizzly Bears where Forge puts it; a non-defender
+│    untouched; the tapper and the mana dork lifted off a vanilla 1/1 and a
+│    Birds of Paradise paid once for five colours; the bonus read LIVE; the
+│    removal pick changing hands (Swords to Plowshares, because TERROR can
+│    target neither card the note names); position_score carrying the
+│    profile through; both numbers read by the Lab;
 │    tests/ai/test_ai_wheels_2026_09_10.gd — THE WHEEL FIELD
 │    (EffectIntent.wheels): Wheel of Fortune and Timetwister at seven,
 │    Winds of Change as a REDRAW because it gives back what it took; Mind

@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5703 tests, 0 failing, 330 scripts** (149 546 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5727 tests, 0 failing, 332 scripts** (149 747 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10428,6 +10428,89 @@ what the OPPONENT casts.
 
 Gate: 5703/5703 across 330 scripts, 149 546 asserts, exit 0; both soaks
 clean; tools 158 OK; boot smoke clean.
+
+## THE ANSWER STANDING ON THE TABLE (2026-09-10) — Wave 5, casting P8
+
+- **The pilot priced a cast by what the card is worth and what its victim
+  is worth, and never by the position it would leave it in.** Reproduced
+  on the third board tried, and it is not arguable: a **Savannah Lions
+  cast in front of an untapped Prodigal Sorcerer**, pinged off the table
+  before it blocked once — the card gone, the board where it was, and the
+  cast read as a gain. (A Llanowar Elves into a Rod of Ruin with `{3}` up
+  is the same shape one board over. The third, a Grizzly Bears at four
+  life against two Serra Angels, is CORRECT, which is why the veto has to
+  lift.) `checks_before_casting`, Wizard only.
+- **`AiPlayer._cast_veto` / `_cast_projection` / `_answered_on_arrival`.**
+  [forge] `OnePlaySafetyChecker.java:23-31` (commit `b09a3d3f`) runs the
+  heuristic picker, copies the game, replays the one play and refuses it
+  when the score drops. We copy nothing: `Evaluator.position_score` is a
+  sum of four counted quantities, so the position after a cast is
+  ARITHMETIC — the card leaves the hand, the victim leaves their board,
+  the life totals move, our permanent arrives. `docs/forge/casting.md`
+  §6.4 ruled the copy out for this engine and named this as what fits.
+- **The answer is the one the table is ALREADY SHOWING, and no other**: an
+  activated ability on THEIR battlefield they can pay for right now that
+  would take the body straight off again — their open sources counted the
+  way `_shieldable` and `_taps_into_execution` count them, the effect read
+  as an `EffectIntent` shape and never as a card name, their hand not
+  looked at. Three things it refuses to guess at, each in the safe
+  direction: a cost that is not mana (a board, and nothing here prices a
+  board), a target spec with a FILTER on it (a Royal Assassin's *target
+  tapped creature* is no answer to a body that has not arrived), and
+  anything but a creature.
+- **THE NOTE'S OTHER CLAUSE IS NOT BUILT, and the reason is structural.**
+  P8 asks for a guessed Lightning Bolt behind open red mana, gated on
+  `AiMatchMemory.copies_seen` having shown that colour deals damage.
+  `AiMatchMemory` belongs to the SIDEBOARD: no `AiPlayer` carries one and
+  free play has none at all, so the clause would have been inert in the
+  very runs that measure it. Written down in `docs/ai-difficulty.md` §5
+  rather than half-built.
+- **It abstains unless the answer is there**, which is the note's own risk
+  paragraph ("a pessimistic projection that never casts into open red
+  mana") answered, and `_in_danger` lifts it — Forge's own escape.
+
+## THE PRICE OF A BODY THAT CANNOT ATTACK (2026-09-10) — Wave 5, combat P6
+
+- **MEASURED, AND THE INCUMBENT CONSTANTS STAY.** Combat note P6 is the
+  plan's one row with no knob to hide behind: it asks for two numbers in
+  `Evaluator.permanent_value` to change for every rung and every consumer
+  at once. Both were built, both were measured on every instrument this
+  repository has, and neither clearly helps — so neither ships, and what
+  ships instead is the ABILITY TO ASK, exactly as `w_hand` shipped on the
+  same day.
+- **IT REPRODUCED TWICE, AND NEITHER BOARD IS ARGUABLE.** A Swords to
+  Plowshares with a Wall of Stone (7.00) and a Hypnotic Specter (5.50)
+  across the table takes THE WALL; a Control Magic on the same board
+  steals THE WALL, played out through the real cast path. A 0/8 that can
+  never attack is priced above a 2/2 flier that eats a card a turn, and
+  every consumer that has to PICK inherits the ranking. Forge's own table
+  puts the same wall at 155 against a vanilla 2/2's 160 — just BELOW the
+  bear (`docs/forge/combat.md` §2.1).
+- **THE NOTE'S OWN EXAMPLE CANNOT BE PLAYED, AND ITS ARITHMETIC IS ONE
+  SUBTRACTION OUT.** P6 names a Terror, and Terror can legally target
+  NEITHER of the two cards the note contrasts the Wall with — the
+  Hypnotic Specter is black, the White Knight has protection from black.
+  And `-(toughness * 0.4 + 1.0)` on a Wall of Stone's eight stat points
+  is **3.8**, not the 2.8 the note prints; 2.8 is that discount taken off
+  the already-discounted 7.0. 3.8 is the number measured, and it is the
+  better one, because it is where Forge puts the card.
+- **`counter_threshold` IS NOT AN INHERITOR, WHATEVER THE NOTE SAYS.**
+  `AiPlayer._try_counter` prices the spell on the stack with
+  `Evaluator.card_value` — `permanent_value`'s PRINTED twin — so a Wall
+  of Stone clears a Wizard's 5.0 bar and a Magician's 7.0 exactly on the
+  nose whatever this change does. A Magician spending a Counterspell on a
+  Wall of Stone while a Hypnotic Specter walks past is a live
+  malfunction; it belongs to `card_value` and is written down in §5
+  rather than fixed here, because widening a no-knob constant change
+  while measuring it is how a measurement stops meaning anything.
+- **THE MEASUREMENT.** Both numbers are carried by the profile for the
+  run — `AiProfile.defender_scale`, `AiProfile.ability_bonus`, fields and
+  not knobs, shipping at the evaluator's own constants, no rung moving
+  them — so the Deck Lab puts one on a seat and the other's null on the
+  other: `--sweep defender_scale=0,0.4`, `--sweep ability_bonus=0,0.5`.
+  `Evaluator.permanent_value` takes the optional `AiProfile` that
+  `position_score` has taken since `w_hand`, and the pilot hands its own
+  profile to all sixty-nine of its calls.
 
 ## Standing quality gates
 

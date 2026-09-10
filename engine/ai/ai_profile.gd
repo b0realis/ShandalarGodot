@@ -63,6 +63,23 @@ var chump_threshold := 5
 ## `--sweep w_hand=1.5,2.0,2.5`.
 var w_hand := 1.5
 
+## THE DEFENDER'S DISCOUNT and THE ABILITY BONUS in
+## [method Evaluator.permanent_value] — two more evaluator numbers a
+## profile carries rather than reading the file's constant
+## ([constant Evaluator.DEFENDER_SCALE], [constant Evaluator.ABILITY_BONUS],
+## which are these defaults).
+##
+## NOT DIFFICULTY KNOBS, exactly as [member w_hand] is not: every preset
+## ships the same values and no rung moves them. They are here because
+## `apply_overrides` is how the Deck Lab puts a NUMBER on a seat, and the
+## Forge study's combat note P6 asks for a defensive body's price to be
+## settled by a measurement rather than by an argument:
+## `--sweep defender_scale=0,0.4`, `--sweep ability_bonus=0,0.5`.
+var defender_scale := 0.0
+
+## See [member defender_scale].
+var ability_bonus := 0.0
+
 ## Gates the whole reactive game: counterspells, Fog, combat tricks, holding
 ## mana open — and, since §6.8, the 1997 DAMAGE-PREVENTION and REGENERATION
 ## windows, which are a priority round whose only legal actions are fast
@@ -1067,6 +1084,30 @@ var counters_by_shape := false
 var reads_lethal_x := false
 
 
+## THE ONE-PLY VETO (2026-09-10; the Forge study's casting note P8, and
+## Forge's own `OnePlaySafetyChecker`): does this profile look at the
+## POSITION a cast would leave it in — after the spell resolves and after
+## the one answer the table is already showing has been taken — before it
+## commits to the cast?
+##
+## A CAPABILITY, like [member holds_instants] and [member plays_engines].
+## [method AiPlayer._try_cast_best] prices a cast by what the card is
+## worth and what its victim is worth ([method AiPlayer._cast_value]) and
+## never by the position afterwards, so a Savannah Lions was cast into an
+## untapped Prodigal Sorcerer and pinged off the table before it had
+## blocked once — the card gone, the board unchanged, and the pilot
+## reading the cast as a gain. Reading one ply out is a whole layer of
+## play and the top of the ramp is where it belongs: it is the layer a
+## player NOTICES, the seat that stops walking into the answer standing
+## on the table.
+##
+## It is the cheapest form of simulation a headless GDScript engine can
+## afford — no game copy, one arithmetic projection of
+## [method Evaluator.position_score]'s own terms per candidate
+## (`docs/forge/casting.md` §6.4).
+var checks_before_casting := false
+
+
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
@@ -1181,6 +1222,7 @@ static func wizard() -> AiProfile:
 	profile.reads_pumps = true
 	profile.reads_lethal_x = true
 	profile.counters_by_shape = true
+	profile.checks_before_casting = true
 	return profile
 
 
