@@ -533,29 +533,27 @@ MANIFEST: dict[str, list[str]] = {
     # type strip. Unlimited (2ed) and the promos have no symbol, exactly
     # as the printed cards don't.
     #
-    # WHICH SYMBOL, DECIDED BY LOOKING (the owner, 2026-09-09: *"the
-    # edition on the cards i like our current golden image of edition or
-    # only writing as we had in 19 release"*). Both installs carry these
-    # six and they are different drawings. The 1997 file is 40x40: a
-    # blue-grey STONE TILE with a gold ring and a black glyph inside the
-    # ring, so on a card's 14px icon box the glyph is only the ring's
-    # inner half and reads small. Manalink's `Program/DBArt/` restyle is
-    # 35x36 and is the GOLD GLYPH ALONE, which fills the box — what
-    # v0.19.0 shipped and what the owner kept. MANALINK'S LEADS,
-    # therefore, and the 1997 medallion is the fallback for a disc-only
-    # install: `GameSkin.cut_set_icon` reads the file's own four corners
-    # and cuts the stone tile to its ring, or keys the restyle's flat
-    # grey, so both arrive clean and neither needs a name here.
-    "set_icon_atq":          ["program/dbart/antiquit.pic", "Antiquit.pic",
-                              "Antiquit.pic.png"],
-    "set_icon_arn":          ["program/dbart/arabnite.pic", "ArabNite.pic",
-                              "ArabNite.pic.png"],
-    "set_icon_past":         ["program/dbart/astral.pic", "Astral.pic",
-                              "Astral.pic.png"],
-    "set_icon_drk":          ["program/dbart/dark.pic", "Dark.pic",
-                              "Dark.pic.png"],
-    "set_icon_4ed":          ["program/dbart/fourth.pic", "Fourth.pic",
-                              "Fourth.pic.png"],
+    # THE RAW 1997 FILE LEADS AGAIN (the owner, 2026-09-10), and the
+    # reason is INDEPENDENCE rather than looks. For one day these six rows
+    # preferred Manalink's `Program/DBArt/` restyle, because its gold
+    # glyph read better than the 1997 medallion in the enlarged card's
+    # 14x17px symbol box. That argument is gone: the game now draws its
+    # OWN six glyphs for every player and reads neither import
+    # (`GameSkin.set_icon`), so preferring a reimplementation's art here
+    # bought nothing and left the chain reaching for somebody else's
+    # drawing. A player who imports their own disc gets their own disc's
+    # medallions in their skin folder; Manalink's stays the fallback for
+    # a Manalink-only tree. Neither is what a card wears.
+    "set_icon_atq":          ["Antiquit.pic", "Antiquit.pic.png",
+                              "program/dbart/antiquit.pic"],
+    "set_icon_arn":          ["ArabNite.pic", "ArabNite.pic.png",
+                              "program/dbart/arabnite.pic"],
+    "set_icon_past":         ["Astral.pic", "Astral.pic.png",
+                              "program/dbart/astral.pic"],
+    "set_icon_drk":          ["Dark.pic", "Dark.pic.png",
+                              "program/dbart/dark.pic"],
+    "set_icon_4ed":          ["Fourth.pic", "Fourth.pic.png",
+                              "program/dbart/fourth.pic"],
     # THE 1997 EXPANSION-SYMBOL STRIP — the sheet the game stamps on CARDS,
     # as opposed to the `set_icon_*` medallions above, which are the Deck
     # Builder's filter buttons. 330x15 = five 66-wide slots, each an image
@@ -568,8 +566,8 @@ MANIFEST: dict[str, list[str]] = {
     # Unlimited, Fourth Edition and the promos carried no expansion symbol,
     # which is why `SetBadges` letters those three instead.
     "card_set_symbols":      ["Cardsets.pic", "Cardsets.pic.png"],
-    "set_icon_leg":          ["program/dbart/legends.pic", "Legends.pic",
-                              "Legends.pic.png"],
+    "set_icon_leg":          ["Legends.pic", "Legends.pic.png",
+                              "program/dbart/legends.pic"],
     # --------------------------------------------------- THE DECK BUILDER --
     # The 1997 Deck Builder was its own module (Program/Deckdll.dll), so
     # there is no C source for it — but its ART survives, and the manual's

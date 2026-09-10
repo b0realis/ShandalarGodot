@@ -327,30 +327,67 @@ func test_our_own_art_says_nothing_about_a_key_we_never_drew() -> void:
 		"the card back is the skin's business, not ours")
 
 
-func test_an_imported_skin_beats_ours() -> void:
-	# A skin directory of one file, pointed at through the `skin_folder`
-	# key exactly as a player would — the FIRST place [method
-	# GameSkin.search_dirs] looks. What comes back must be that file and
-	# not the 48x48 this project ships.
+## A skin directory of one file, pointed at through the `skin_folder` key
+## exactly as a player would — the FIRST place [method
+## GameSkin.search_dirs] looks — and a stand-in of an unmistakable size so
+## the answer says which source it came from. [param key] is the skin key
+## to plant, [param call] fetches it back.
+func _planted(key: String, call: Callable) -> Vector2i:
 	var dir := "user://test_skin_%d" % Time.get_ticks_usec()
 	var absolute := ProjectSettings.globalize_path(dir)
 	DirAccess.make_dir_recursive_absolute(absolute)
 	var stand_in := Image.create_empty(9, 9, false, Image.FORMAT_RGBA8)
 	stand_in.fill(Color(0, 0, 0, 0))
 	stand_in.set_pixel(4, 4, Color(1, 0, 1, 1))
-	stand_in.save_png(absolute.path_join("set_icon_atq.png"))
+	stand_in.save_png(absolute.path_join("%s.png" % key))
 	var was: Variant = Settings.get_value(GamePaths.KEY_SKIN_FOLDER, "")
 	Settings.set_value(GamePaths.KEY_SKIN_FOLDER, dir, false)
 	GameSkin.clear_caches()
-	var tex := GameSkin.set_icon("atq")
-	assert_not_null(tex, "the imported file")
-	if tex != null:
-		assert_eq(Vector2i(tex.get_width(), tex.get_height()),
-			Vector2i(9, 9), "the skin's own file, not ours")
+	# AND THE DERIVED CACHES, which `clear_caches` deliberately does not
+	# reach (a skin arriving mid-game restarts the duel screen instead).
+	# Without this the test passes alone and fails in the suite, because a
+	# neighbour has already cut the real sprite and the planted file is
+	# never read — which is exactly how it first failed, 2026-09-10.
+	MiniCard._masked_cache.clear()
+	var tex: Texture2D = call.call()
+	var size := Vector2i(tex.get_width(), tex.get_height()) if tex != null \
+		else Vector2i.ZERO
 	Settings.set_value(GamePaths.KEY_SKIN_FOLDER, was, false)
 	GameSkin.clear_caches()
-	DirAccess.remove_absolute(absolute.path_join("set_icon_atq.png"))
+	MiniCard._masked_cache.clear()
+	DirAccess.remove_absolute(absolute.path_join("%s.png" % key))
 	DirAccess.remove_absolute(absolute)
+	return size
+
+
+func test_an_imported_skin_beats_ours() -> void:
+	# The rule for every picture this project ships: ours is a FLOOR, and
+	# a file the player imported stands on top of it. The dagger arrives
+	# through [method MiniCard.masked_sprite], which SPLITS a 1997 sprite
+	# into its image and mask halves — so a planted 9x9 comes back 4x9,
+	# and that halving is itself the proof the imported file is what was
+	# read (ours is 64x40 and carries real alpha, so it is never split).
+	assert_eq(_planted("damage_marker",
+		func() -> Texture2D: return MiniCard.damage_marker_texture()),
+		Vector2i(4, 9), "the skin's own file, halved by the mask split")
+
+
+## THE SET SYMBOL IS THE ONE EXCEPTION, and it is deliberate (the owner,
+## 2026-09-10: *"Lets always use our own designed glyphs and thats it for
+## all players. Simplest."*). The enlarged card's symbol box is 14x17
+## PIXELS and the three possible sources read very differently there —
+## Manalink's restyle fills it, ours fills 77% of its tile, and 1997's own
+## is a black glyph inside a gold ring on a stone disc, which at that size
+## is a dark smudge whatever you crop off it. So every player gets the
+## same six glyphs rather than one player getting a legible anvil and
+## another a smudge. What it costs is stated at the site: a player who
+## imported their own disc does not see their disc's medallions HERE —
+## though they do still see the printed expansion symbols on the title
+## row, which come off a different sheet ([method SetBadges.symbol]).
+func test_the_set_symbol_is_ours_even_when_a_skin_has_one() -> void:
+	assert_eq(_planted("set_icon_atq",
+		func() -> Texture2D: return GameSkin.set_icon("atq")),
+		Vector2i(48, 48), "ours, at the size draw_our_art.gd writes")
 
 
 func test_ours_stands_when_no_skin_has_the_key() -> void:

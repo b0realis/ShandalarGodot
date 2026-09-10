@@ -377,6 +377,27 @@ static func bar_style(content_margin := 6.0) -> StyleBox:
 ## its own DONE. Godot wants five states and the original ships three —
 ## hover reuses `normal` brightened (the era had no hover at all; a mouse
 ## cue is a modern affordance we owe the player), focus follows hover.
+##
+## THE LETTERING IS A UI SANS, ON PURPOSE (2026-09-10), and it is the one
+## thing on a dialog that does NOT take `font_body`. Every label, line and
+## text field below reaches for the skin's body face; a BUTTON does not,
+## and 1997 drew the same line where it had to draw one: the duel screen's
+## font table (`Duelart/Duel.dat`) names a face for the card text, the
+## card titles, the P/T, the damage, the life, the message strip, the chat
+## and the cue cards — and NO face for a duel button, because the era's
+## duel buttons were art with the lettering baked in. Where the original
+## did letter a button it chose a sans against a serif for the prose
+## beside it: `fontShellButtons = "Verdana"` against `fontShellText =
+## "CentSchbook BT"`. Serif for reading, sans for chrome.
+##
+## The practical half is the same conclusion. These buttons are 20 to 28
+## pixels tall and their words are 13 or 14, sitting on TEXTURED STONE; a
+## serif at that size spends its detail on serifs the art then swallows,
+## and the owner's 2026-09-07 playtest already called an earlier pale
+## treatment *"unreadable buttons"*. So the face is left to the theme's UI
+## sans deliberately rather than by omission — checked by looking on
+## 2026-09-10, beside MPlantin labels, and kept. If a project-wide theme
+## font is ever set, this is the place that has to opt out of it.
 static func button(label: String, min_size := Vector2(96, 26)) -> Button:
 	var btn := Button.new()
 	btn.text = label

@@ -426,19 +426,47 @@ static var _set_icon_cache: Dictionary = {}
 static func set_icon(set_code: String) -> Texture2D:
 	if _set_icon_cache.has(set_code):
 		return _set_icon_cache[set_code]
-	var result: Texture2D = null
-	var path := _find("set_icon_%s.png" % set_code)
-	if path != "":
-		var img := Image.load_from_file(path)
-		if img != null:
-			cut_set_icon(img)
-			result = ImageTexture.create_from_image(img)
-	else:
-		# NEITHER SKIN HAS ONE, so ours does: a gold glyph on nothing,
-		# drawn by `tools/draw_our_art.gd` at 48x48 with its ground
-		# already transparent — there is no tile and no bevel to cut off,
-		# which is why [method cut_set_icon] is not called on it.
-		result = our_art("set_icon_%s" % set_code)
+	# THE SET SYMBOL IS ALWAYS OURS, whatever the player imported (the
+	# owner, 2026-09-10: *"Lets always use our own designed glyphs and
+	# thats it for all players. Simplest."*). It is the ONE key that does
+	# not take a skin.
+	#
+	# THE REASON IS INDEPENDENCE, and the owner said so in as many words:
+	# *"This is basically just to be independent of the manalink install
+	# that had its own set…"*. Manalink 3 restyled these six medallions,
+	# and until today the game preferred that restyle — so the symbol on a
+	# card came from a REIMPLEMENTATION rather than from the 1997 game or
+	# from us. Drawing our own ends that: the six glyphs are this
+	# project's, they are the same for everybody, and no part of the chain
+	# reaches for somebody else's drawing. (`tools/import_original.py`'s
+	# rows lead with the disc's own file again for the same reason, though
+	# the game reads neither.)
+	#
+	# WHAT THE MEASUREMENT ADDED, corroboration rather than argument: the enlarged
+	# card's symbol slot is 14x17 PIXELS, and the three sources read very
+	# differently at that size. Manalink's restyle is a gold glyph that
+	# fills it; ours is a gold glyph with a drawn bevel, filling 77% of
+	# its tile; 1997's own is a BLACK glyph inside a gold ring on a
+	# blue-grey stone disc, and at 14px that is a dark smudge on a pale
+	# coin — cropping the ring away (measured, 2026-09-10) barely helps,
+	# because the trouble is the CONTRAST and not the size. So rather than
+	# show one player a legible anvil and another a smudge, every player
+	# gets the same six glyphs this project drew for the purpose.
+	#
+	# WHAT THIS COSTS, said plainly: a player who imported their own 1997
+	# disc does NOT see their disc's set symbols here. It is the only
+	# place in the game where that is true, and it is a deliberate
+	# exception rather than a gap — `set_icon_*` is still imported (a skin
+	# is a complete thing, and `docs/skin-catalogue.txt` still lists it),
+	# it is simply not what the card wears.
+	#
+	# THE DAY A NEW SET ARRIVES — Ice Age, Homelands, anything past the
+	# 897 — ITS GLYPH MUST BE DRAWN, in `tools/draw_our_art.gd`, beside
+	# the six that are there. There is no import to fall back on any more:
+	# an undrawn set letters itself through `SetBadges`, which is the
+	# printed truth for Unlimited and Fourth Edition and a MISSING PIECE
+	# for anything else.
+	var result := our_art("set_icon_%s" % set_code)
 	_set_icon_cache[set_code] = result
 	return result
 

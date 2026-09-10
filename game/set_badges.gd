@@ -311,14 +311,21 @@ static func badge_suffix(code: String) -> String:
 ##
 ## THE SECOND SOURCE IS 1997's TOO, SINCE 2026-09-09. `[1997]`: the note
 ## that used to stand here said no 1997 conversion of DBArt existed — that
-## a `set_icon_*` was always Manalink 3's flat RESTYLE, a PNG wearing a
-## `.pic` extension. That was true only of what a Manalink install holds.
-## `tools/import_original.py` now decodes the genuine `.pic` itself, so a
-## player who imported from a real disc gets the 1997 drawing: a 40x40
-## stone tile, gold ring, black glyph, cut to its coin by [method
-## GameSkin.cut_set_icon]. A player who imported from Manalink still gets
-## the restyle. Either way this stays second in line — the strip is what
-## a card was printed with.
+## a `set_icon_*` was always Manalink 3's flat RESTYLE. Since 2026-09-10
+## it is neither: [method GameSkin.set_icon] hands back the glyph THIS
+## PROJECT DREW, the same one for every player, because the enlarged
+## card's symbol box is 14x17 pixels and the 1997 medallion — a black
+## glyph inside a gold ring on a blue-grey stone disc — reads as a smudge
+## at that size whatever you crop off it.
+##
+## THE STRIP STAYS FIRST HERE, and the distinction is the point (the
+## owner, 2026-09-10). `Cardsets.pic` is not a UI icon: it is the
+## expansion symbol PRINTED ON THE CARD, for the five sets that had one.
+## A medallion is the era's interface furniture and ours replaces it
+## everywhere; the printed symbol is the card itself, and a player who
+## imported their own disc keeps seeing theirs on this row. Ours is
+## second in line, for the sets with no printed symbol and for a player
+## who imported nothing.
 static func symbol(code: String) -> Texture2D:
 	if not SYMBOL_SLOT.has(code):
 		return null

@@ -9871,6 +9871,62 @@ more than the change would have been.
   overflows from twenty-nine to two. Neither is started, and neither
   should be started without re-deriving the sizes in the same pass.
 
+## THE SET SYMBOL IS OURS, EVERYWHERE (2026-09-10) — items 2 and 3 of the owner's list
+
+- **Item 2, the dialog's lettering: kept and made deliberate.** Every
+  label, line and field on an `OriginalDialog` takes the skin's body face
+  and a BUTTON does not — it wears the theme's UI sans. Looked at before
+  deciding, and 1997 drew the same line where it had to: `Duel.dat` names
+  a face for the card text, the titles, the P/T, the damage, the life, the
+  message strip, the chat and the cue cards, and **none for a duel
+  button**, because the era's duel buttons were art with the lettering
+  baked in — and where the shell did letter one it chose sans against
+  serif (`fontShellButtons = "Verdana"` against `fontShellText =
+  "CentSchbook BT"`). The practical half agrees: these buttons are 20-28
+  px tall with 13-14 px words on TEXTURED STONE, and a serif spends its
+  detail on serifs the art swallows — the owner's 2026-09-07 playtest
+  already called a paler treatment *"unreadable buttons"*. The split is
+  now stated at the site and pinned by a test, so the day somebody sets a
+  project-wide theme font or dresses a button with `font_body` for
+  tidiness, an assertion fails and the reasoning is there to read.
+- **Item 3, and the measurement moved the answer.** The complaint was
+  that the 1997 set glyph draws at about half height in the enlarged
+  card's symbol box. The box is **14 x 17 px**, and rendered at true size
+  the four candidates are: Manalink's restyle, a gold glyph filling it;
+  ours, a gold glyph filling 77% of its tile; the 1997 medallion, a BLACK
+  glyph inside a gold ring on a blue-grey stone disc; and the medallion
+  cropped to its ink, which is **barely different** — because the trouble
+  is CONTRAST, not size. The proposed fix did not fix it.
+- **The reason is INDEPENDENCE, and the measurement is corroboration.**
+  The owner, on being asked why: *"This is basically just to be
+  independent of the manalink install that had its own set…"*. Manalink 3
+  restyled these six medallions and the game preferred that restyle, so
+  the symbol on a card came from a REIMPLEMENTATION rather than from the
+  1997 game or from us — the one place in the look where that was still
+  true after the art pass of 2026-09-09. **So the rule is one source for
+  every player** (*"Lets always use our own designed glyphs and thats it
+  for all players. Simplest."*): `GameSkin.set_icon` hands back the glyph
+  this project drew, whatever the player imported. And the import's own
+  six rows lead with the DISC's file again — for one day they preferred
+  Manalink's restyle, on an argument (it reads better on the card) that
+  this change retired. It is the ONE key that does not
+  take a skin, and the cost is stated where it is paid: a player who
+  imported their own disc does not see their disc's medallions there.
+  `set_icon_*` is still imported, because a skin is a complete thing and
+  the catalogue still lists it — it is simply not what the card wears.
+- **The printed strip stays first on the title row**, and the distinction
+  is the point: `Cardsets.pic` is not a UI icon but the expansion symbol
+  PRINTED ON THE CARD, for the five sets that had one. A medallion is the
+  era's interface furniture and ours replaces it; the printed symbol is
+  the card itself. The Deck Builder's set filter buttons are a third
+  source again (`filter_icons` cells) and were never in this question.
+- **THE DAY A NEW SET ARRIVES — Ice Age, Homelands, anything past the
+  897 — ITS GLYPH MUST BE DRAWN** in `tools/draw_our_art.gd` beside the
+  six that are there. There is no import to fall back on any more: an
+  undrawn set letters itself through `SetBadges`, which is the printed
+  truth for Unlimited and Fourth Edition and a MISSING PIECE for anything
+  else. Written at the site as well as here.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

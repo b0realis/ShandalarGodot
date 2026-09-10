@@ -260,3 +260,36 @@ func test_dismiss_reports_once_and_frees() -> void:
 	dialog.dismiss()
 	assert_signal_emit_count(dialog, "closed", 1)
 	assert_true(dialog.is_queued_for_deletion())
+
+
+## THE LETTERING SPLIT IS A DECISION, NOT AN OMISSION (2026-09-10).
+## Every label, line and field on a dialog reaches for the skin's body
+## face; a BUTTON deliberately does not, and wears the theme's UI sans.
+## 1997 drew the same line where it had to draw one — `Duel.dat` names no
+## face for a duel button at all (the era's were art with the lettering
+## baked in), and the shell's own pair is `fontShellButtons = "Verdana"`
+## against `fontShellText = "CentSchbook BT"`: sans for chrome, serif for
+## prose. The practical half agrees — a 13px serif on textured stone
+## spends its detail on serifs the art swallows.
+##
+## This test exists so the split cannot become an accident again: the day
+## somebody sets a project-wide theme font, or dresses a button with
+## `font_body` for tidiness, one of these two assertions fails and the
+## reasoning above is there to read.
+func test_a_dialogs_prose_takes_the_skin_face_and_its_buttons_do_not() -> void:
+	var lab := OriginalDialog.label("Save this duel log to a file?", 15)
+	add_child_autofree(lab)
+	var button := OriginalDialog.button("OK", Vector2(90, 28))
+	add_child_autofree(button)
+	var gadget := OriginalDialog.gadget("Copy")
+	add_child_autofree(gadget)
+	var body := GameSkin.font("font_body")
+	if body != null:
+		assert_eq(lab.get_theme_font("font"), body,
+			"a dialog's prose is the skin's body face")
+	assert_false(button.has_theme_font_override("font"),
+		"a button letters itself in the theme's UI sans, on purpose")
+	assert_false(gadget.has_theme_font_override("font"),
+		"and so does a window's gadget")
+	assert_true(button.has_theme_font_size_override("font_size"),
+		"the SIZE is still ours to set, and is")

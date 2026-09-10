@@ -1041,21 +1041,23 @@ class TestSetIcons(RawStepCase):
              "set_icon_past": "Astral.pic", "set_icon_drk": "Dark.pic",
              "set_icon_4ed": "Fourth.pic", "set_icon_leg": "Legends.pic"}
 
-    def test_manalinks_gold_glyph_leads_and_the_1997_medallion_follows(self):
-        """THE OWNER'S RULING, 2026-09-09: *"the edition on the cards i
-        like our current golden image of edition or only writing as we had
-        in 19 release"*. The 1997 file is the 40x40 stone medallion, whose
-        glyph is only the gold ring's inner half and therefore draws small
-        in a card's 14px icon box; Manalink's 35x36 restyle is the gold
-        glyph alone and fills it, which is what v0.19.0 shipped. So the
-        restyle leads, PATH-QUALIFIED (a 1997 install has `Dbart/` files
-        of the same bare names), and the disc's own medallion is the
-        fallback — `GameSkin.cut_set_icon` reads the corners and serves
-        either one clean."""
+    def test_the_raw_1997_medallion_leads_and_manalinks_restyle_follows(self):
+        """THE OWNER'S RULING, 2026-09-10, and it reverses the one made the
+        day before. For one day these rows led with Manalink's restyle,
+        because its gold glyph read better than the 1997 medallion in the
+        enlarged card's 14x17px symbol box. The game now draws its OWN six
+        glyphs for every player and reads neither import
+        (`GameSkin.set_icon`), so that argument is gone and what is left is
+        INDEPENDENCE: nothing in the chain should prefer a
+        reimplementation's drawing. The disc's own file leads; Manalink's
+        stays in the row as the fallback for a Manalink-only tree; neither
+        is what a card wears."""
         for key, raw in self.NAMES.items():
             row = imp.MANIFEST[key]
-            self.assertTrue(row[0].startswith("program/dbart/"), row[0])
-            self.assertIn(raw, row, "the disc's own medallion is the fallback")
+            self.assertEqual(row[0], raw, key)
+            self.assertTrue(
+                any(name.startswith("program/dbart/") for name in row),
+                "Manalink's copy is still reachable: %s" % row)
 
     def test_a_raw_dbart_icon_decodes_at_its_own_size(self):
         with tempfile.TemporaryDirectory() as tmp:
