@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5781 tests, 0 failing, 335 scripts** (150 871 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5806 tests, 0 failing, 336 scripts** (151 421 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10681,6 +10681,109 @@ clean; tools 158 OK; boot smoke clean.
   half fires on it.
 - Gate: 5781/5781 across 335 scripts, 150 871 asserts, exit 0; both soaks
   clean; tools 158 OK; boot smoke clean.
+
+## WAVE 3'S LAST TWO: THE BURN THAT CHAINS AND THE DISK THAT WAITS (2026-09-10)
+
+Both rows shipped as EXTENSIONS of the knobs they belong to, for the same
+reason twice: a second knob would have let a seat do the thing the first
+knob was at that moment refusing.
+
+**THE TWO BURN SPELLS THAT KILL TOGETHER** (`holds_x_burn`'s chain half,
+`docs/forge/casting.md` P7). `_best_victim` asks `EffectIntent.kills` of
+ONE card at a time, so a Fireball and a Lightning Bolt in one hand on four
+Mountains looked at a Serra Angel and both answered honestly — three is
+not four, and three is not four — and the pilot PASSED with three of its
+four mana enough to kill a 4/4 flier. `AiPlayer._burn_chain` finds the
+creature the two kill together, sizes the X to its SHARE, refuses the pair
+unless ONE plan pays for both, and books the partner in `_held_reserve`
+(Forge's `reserveManaSourcesForNextSpell` at the same seam). The partner's
+damage must be PRINTED: two X spells are refused on arithmetic, because
+each pays a coloured pip of overhead and one of them reaches further alone
+than two do. The second half is released by `AiPlayer._finishes_damaged` —
+a held burn that kills a creature ONLY because of the damage already
+marked on it cannot wait for their end step, since marked damage is wiped
+in this turn's cleanup (CR 514.2). Asked UNDER the hold and never beside
+it: at a reach the hold refuses, a chain would spend the finisher AND the
+card next to it, and `_in_danger` lifts both together — which is Forge's
+own arrangement.
+
+A WASH ON THE SCOREBOARD whose flips lean one way everywhere. Three pairs,
+seed 11, 2 000 games an arm: Mountain Artillery vs Big Green 49.2 -> 49.5
+/ 50.2, Black-Red Raiders vs Big Green 52.3 -> 53.4 / 53.0, Mountain
+Artillery vs White Knights 54.4 -> 54.5 / 55.5. Not one delta is clear of
+its ±3.1 interval and that is said plainly; what is not a coin is that all
+six arms are positive where three of six were negative without the chain,
+and that 2 715 of 12 000 games end differently with 291 flipped to a win
+against 203 away — where the hold alone, on the same seeds, flipped 120 to
+144.
+
+AND THE KNOB'S CONTROL PAIR CHANGED, which is a fact about its footprint
+and not a moved null. Blue Skies holds three Psionic Blasts — a printed
+four, an instant — so the release fires on a deck with no X burn in it at
+all, and the pair the HOLD was measured against now moves 7 of 2 000
+games. A control for `holds_x_burn` must hold no targeted burn of ANY
+kind; Big Green vs White Knights holds none and replays its null 2 000 of
+2 000. Written into `DeckLab/README.md`.
+
+A LATENT BUG THE RELEASE UNCOVERED: `_held_reserve`'s dictionary now
+carries the INSTANCE it is holding mana for. Until a held instant could be
+ranked at all, no card could reserve against itself; the released Bolt
+did, and `_try_cast_best`'s 1.5× rule refused it at seven Mountains
+because `{R}` plus `{R}` is two mana it did not have.
+
+**THE SWEEP THAT WAITS FOR THE COMBAT IT ANSWERS** (`times_sweeps`'
+deferral, the third pass's open row). The knob had made their combat an
+EXTRA moment and never a preferred one: our own main phase went on
+offering the same activation at its own bar with a relief read off an
+attack that had not happened. A Disk and two Jayemdae Tomes of ours
+against three Grizzly Bears went off in our own first main phase, both
+Tomes in the graveyard, on a turn where waiting cost nothing.
+`AiPlayer._defers_sweep` waits while a creature of theirs COULD attack us
+— and the first cut learned its second half from a probe rather than from
+the design, since deferred out of the main phase the Disk simply went off
+at their UPKEEP, one step before their draw. Their upkeep is one phase
+EARLIER than their combat; their END step is not deferred, which is also
+why no deferred sweeper can be stranded. Bounded by the same reading: a
+board that cannot attack has no combat to wait for, so the Disk under our
+own Moat still fires at home rather than waiting on a moment the Moat has
+refused; a sweep that WINS is never deferred; a printed timing rider ends
+the wait.
+
+AND THE RELIEF'S "AFTER" BOARD NOW APPLIES THE STATICS THE SWEEP TAKES
+(`AiPlayer._ground_the_sweep_opens`). It read its survivors' attack
+legality off the board as it STOOD, so a Moat of ours went on holding the
+ground in a reading of the board the same sweep had just destroyed the
+Moat on: at two life, with a Moat and a Disk against a Serra Angel and a
+regenerating 2/2, the relief answered 1008.00 — four points priced as
+lethal plus `LETHAL_WORTH` for a sweep that "is the out" — while the 2/2
+walks in for two the moment the Moat is gone. It reads 4.00 now. Asked
+without replaying the game: `cur_cant_attack` is set by a static and by
+nothing else, so a sweep that takes EVERY permanent carrying a static can
+leave nothing that grounds anything; where a static source survives the
+old reading stands, which is the conservative direction.
+
+THE NOTE'S OWN EXAMPLE IS THE ONE CARD THAT CANNOT SHOW ITS OWN CLAUSE,
+and it is recorded rather than forced: a Nevinyrral's Disk kills every
+creature a Moat was holding, so the after-board is empty and the clause
+changes nothing. The boards where it bites are the ones where a creature
+SURVIVES the sweep, which under a Disk means a regeneration shield — its
+printed line carries no clause against regeneration, and this engine
+models that. The test pins exactly that board.
+
+THE CLEAREST GAIN OF THE WAVE ON THE DECK THAT OWNS THE CARD. Witch (4
+Nevinyrral's Disk) vs Big Green: 9.5% null, 9.8% before, 14.4% after —
+**+4.9 ±2.0, CLEAR OF ZERO**, with 111 games flipped to a win against 12
+away where the same knob without the deferral flipped 17 against 10 on the
+same seeds. The Deck (playable) vs Black-Red Raiders 50.6 -> 51.6 (+1.0).
+Control Blue Skies vs Black-Red Raiders — no sweeper on either side —
+byte-identical to its own null in every arm; the Witch pair's `off` arm
+byte-identical across both trees, 2 000 of 2 000.
+
+NO-HARM for both rows together, the five starters at 1 000 games a matchup
+with every knob at its shipped value: −14, −1, −5, 0, 0, −2, +3, −7, 0,
++7 — nineteen games of ten thousand, not one matchup as much as one sigma
+(16), and the three that do not move at all are the three with neither a
+burn spell nor a sweeper in reach.
 
 ## Standing quality gates
 

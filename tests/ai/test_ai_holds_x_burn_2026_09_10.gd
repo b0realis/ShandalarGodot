@@ -302,3 +302,279 @@ func test_the_knob_is_reachable_from_the_deck_lab() -> void:
 	assert_eq(profile.holds_x_burn, 0)
 	assert_eq(profile.apply_overrides("holds_x_burn=3"), "")
 	assert_eq(profile.holds_x_burn, 3)
+
+
+# ================================================================= the chain --
+#
+# THE SECOND HALF OF THE SAME ROW (2026-09-10, wave 3;
+# `docs/forge/casting.md` P7, `AiPlayer._burn_chain`). The hold answers
+# *when is an X burn worth pointing at a creature at all*; the chain
+# answers *which creature*, once the answer is one card short. They are
+# one knob because they are one sentence with one number in it, and
+# because two knobs would let a seat chain a burn it is at the same
+# moment holding — the second difficulty concept `docs/ai-difficulty.md`
+# §1 forbids, in its plainest form.
+#
+# WHAT WAS WRONG, reproduced before a line was written: a Fireball and a
+# Lightning Bolt in one hand on four Mountains, a Serra Angel across the
+# table, and the pilot PASSED. `_best_victim` asks `EffectIntent.kills`
+# of one card at a time and both cards answered honestly — three is not
+# four, and three is not four — while three mana of the four on the
+# table kill a 4/4 flier outright.
+
+
+func _chain_hand() -> void:
+	give_hand(0, "Fireball")
+	give_hand(0, "Lightning Bolt")
+
+
+## Act until the pilot passes (or [param steps] actions have been taken),
+## resolving each thing it puts on the stack. What a whole main phase
+## does, which is what a two-card plan has to be judged by.
+func _play_out(ai: AiPlayer, steps := 4) -> Array:
+	var did: Array = []
+	for _i in steps:
+		var action := ai.act(g)
+		if action == "" or action == "pass":
+			break
+		did.append(action)
+		resolve_stack()
+	return did
+
+
+func test_the_serra_angel_neither_card_could_kill() -> void:
+	# THE NULL: two burn spells, four mana, and a 4/4 that lives.
+	var ai := _ai(0)
+	_chain_hand()
+	_mountains(4)
+	var serra := put_battlefield(1, "Serra Angel")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(ai.act(g), "pass", "neither card kills it, so neither is cast")
+	assert_eq(serra.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(g.players[0].hand.size(), 2)
+
+	# THE CHAIN at the Sorcerer's three: the Fireball pays its share and
+	# the Bolt finishes the job, in the same main phase.
+	before_each()
+	var sorcerer := _ai(3)
+	_chain_hand()
+	_mountains(4)
+	var angel := put_battlefield(1, "Serra Angel")
+	advance_to_step(Mtg.Step.MAIN1)
+	var did := _play_out(sorcerer)
+	assert_eq(did.size(), 2, "two casts, one after the other: %s" % str(did))
+	assert_string_contains(did[0], "cast Fireball")
+	assert_string_contains(did[1], "cast Lightning Bolt")
+	assert_eq(angel.zone, Mtg.Zone.GRAVEYARD, "and the 4/4 is dead")
+	assert_eq(g.players[0].hand.size(), 0)
+	assert_eq(g.players[0].life, 20, "nothing was paid for it but the cards")
+
+
+func test_the_hold_wins_where_the_two_disagree() -> void:
+	# The Wizard's five refuses a reach of three, and the chain is asked
+	# UNDER that refusal: two burn spells on one creature is the finisher
+	# spent cheaply twice over.
+	var wizard := _ai(5)
+	_chain_hand()
+	_mountains(4)
+	var serra := put_battlefield(1, "Serra Angel")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(wizard.act(g), "pass", "a reach of three is under five, chain or no chain")
+	assert_eq(serra.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_the_chain_arrives_with_the_reach_at_both_rungs() -> void:
+	# Eight Mountains is a reach of seven, over both numbers, and seven
+	# does not kill a Force of Nature. Five plus the Bolt's three does.
+	for number in [3, 5]:
+		before_each()
+		var ai := _ai(number)
+		_chain_hand()
+		_mountains(8)
+		var force := put_battlefield(1, "Force of Nature")
+		advance_to_step(Mtg.Step.MAIN1)
+		var did := _play_out(ai)
+		assert_eq(did.size(), 2, "holds_x_burn=%d chains: %s" % [number, str(did)])
+		assert_eq(force.zone, Mtg.Zone.GRAVEYARD,
+			"holds_x_burn=%d kills the 8/8" % number)
+
+	# And the null leaves the 8/8 standing with both cards in hand.
+	before_each()
+	var null_arm := _ai(0)
+	_chain_hand()
+	_mountains(8)
+	var untouched := put_battlefield(1, "Force of Nature")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(null_arm.act(g), "pass")
+	assert_eq(untouched.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_the_share_is_the_smallest_x_that_closes_the_gap() -> void:
+	# A Shivan Dragon is 5/5; the Bolt brings three, so the Fireball's
+	# share is two and not the four the mana would pay for.
+	var ai := _ai(3)
+	_chain_hand()
+	_mountains(5)
+	put_battlefield(1, "Shivan Dragon")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_string_contains(ai.act(g), "cast Fireball")
+	assert_eq(_top_x(), 2, "two, not the reach's four")
+	assert_eq(_aim(), "Shivan Dragon")
+
+
+func test_one_x_spell_reaches_further_alone_than_two_do() -> void:
+	# Two Fireballs never chain, and the reason is arithmetic rather than
+	# taste: each X spell pays a coloured pip of overhead, so the pair
+	# always deals one less than the single card would.
+	var ai := _ai(3)
+	give_hand(0, "Fireball")
+	give_hand(0, "Fireball")
+	_mountains(5)
+	var force := put_battlefield(1, "Force of Nature")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(ai.act(g), "pass", "four plus nothing is not eight")
+	assert_eq(force.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_the_pair_is_refused_unless_one_plan_pays_for_both() -> void:
+	# A Force of Nature wants X=5 (six mana) and the Bolt's one: seven.
+	var poor := _ai(3)
+	_chain_hand()
+	_mountains(6)
+	var force := put_battlefield(1, "Force of Nature")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(poor.act(g), "pass", "six mana does not pay for a seven-mana plan")
+	assert_eq(force.zone, Mtg.Zone.BATTLEFIELD)
+
+	before_each()
+	var rich := _ai(3)
+	_chain_hand()
+	_mountains(7)
+	var doomed := put_battlefield(1, "Force of Nature")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_eq(_play_out(rich).size(), 2, "the seventh Mountain pays for both")
+	assert_eq(doomed.zone, Mtg.Zone.GRAVEYARD)
+
+
+func test_a_card_that_does_it_alone_is_not_chained() -> void:
+	# Six Mountains kill a Serra Angel with the Fireball alone: the
+	# single-card arm answers first and the Bolt stays in hand.
+	var ai := _ai(3)
+	_chain_hand()
+	_mountains(6)
+	var serra := put_battlefield(1, "Serra Angel")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_string_contains(ai.act(g), "cast Fireball")
+	assert_eq(_top_x(), 4)
+	resolve_stack()
+	assert_eq(serra.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.players[0].hand.size(), 1, "the Bolt was not spent")
+
+
+func test_the_partner_is_released_by_the_damage_it_borrows() -> void:
+	# The second half's own rule, on a board with no chain in it at all:
+	# a held Bolt waits for their end step while the Angel is whole, and
+	# does not wait once three of its four points are already marked,
+	# because marked damage is gone in this turn's cleanup (CR 514.2).
+	var ai := _ai(5)
+	var bolt := give_hand(0, "Lightning Bolt")
+	_mountains(1)
+	var serra := put_battlefield(1, "Serra Angel")
+	advance_to_step(Mtg.Step.MAIN1)
+	var intent := EffectIntent.read(bolt.data.spell_effects, bolt.data.card_name)
+	assert_false(ai._finishes_damaged(g, bolt, intent), "nothing is marked yet")
+	assert_eq(ai.act(g), "pass", "and the Bolt keeps its moment")
+	assert_eq(bolt.zone, Mtg.Zone.HAND)
+
+	before_each()
+	var marked := _ai(5)
+	var shot := give_hand(0, "Lightning Bolt")
+	_mountains(1)
+	var angel := put_battlefield(1, "Serra Angel")
+	angel.damage = 2
+	advance_to_step(Mtg.Step.MAIN1)
+	var shot_intent := EffectIntent.read(shot.data.spell_effects, shot.data.card_name)
+	assert_true(marked._finishes_damaged(g, shot, shot_intent),
+		"three answers the last two")
+	assert_string_contains(marked.act(g), "cast Lightning Bolt")
+	resolve_stack()
+	assert_eq(angel.zone, Mtg.Zone.GRAVEYARD)
+
+
+func test_the_null_holds_the_partner_whatever_is_marked() -> void:
+	var ai := _ai(0)
+	var bolt := give_hand(0, "Lightning Bolt")
+	_mountains(1)
+	var serra := put_battlefield(1, "Serra Angel")
+	serra.damage = 2
+	advance_to_step(Mtg.Step.MAIN1)
+	var intent := EffectIntent.read(bolt.data.spell_effects, bolt.data.card_name)
+	assert_false(ai._finishes_damaged(g, bolt, intent))
+	assert_eq(ai.act(g), "pass", "the null's Bolt still waits for their end step")
+	assert_eq(serra.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_a_shot_that_would_kill_it_whole_is_in_no_hurry() -> void:
+	# A Hypnotic Specter is 2/2: the Bolt kills it marked or whole, so
+	# nothing is borrowed and the moment is still theirs to wait for.
+	var ai := _ai(5)
+	var bolt := give_hand(0, "Lightning Bolt")
+	_mountains(1)
+	var specter := put_battlefield(1, "Hypnotic Specter")
+	var intent := EffectIntent.read(bolt.data.spell_effects, bolt.data.card_name)
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_false(ai._finishes_damaged(g, bolt, intent), "three answers a 2/2 whole")
+	specter.damage = 1
+	assert_false(ai._finishes_damaged(g, bolt, intent), "and still does")
+
+	# A Craw Wurm is 6/4: three is not four, and three on top of one is.
+	before_each()
+	var second := _ai(5)
+	var shot := give_hand(0, "Lightning Bolt")
+	_mountains(1)
+	var wurm := put_battlefield(1, "Craw Wurm")
+	var shot_intent := EffectIntent.read(shot.data.spell_effects, shot.data.card_name)
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_false(second._finishes_damaged(g, shot, shot_intent),
+		"three of four is not a kill")
+	wurm.damage = 1
+	assert_true(second._finishes_damaged(g, shot, shot_intent), "one of four is")
+
+
+func test_the_reserve_books_the_partners_mana() -> void:
+	# Forge reserves the second spell's sources before it casts the
+	# first; ours is the held reserve saying the Bolt has a job tonight.
+	var ai := _ai(3)
+	_chain_hand()
+	_mountains(4)
+	put_battlefield(1, "Serra Angel")
+	advance_to_step(Mtg.Step.MAIN1)
+	var reserve := ai._held_reserve(g)
+	assert_false(reserve.is_empty(), "the chain's partner books its own mana")
+	assert_eq(float(reserve["value"]) > 5.0, true,
+		"and it is worth what the Serra Angel is worth")
+
+	before_each()
+	var null_arm := _ai(0)
+	_chain_hand()
+	_mountains(4)
+	put_battlefield(1, "Serra Angel")
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_true(null_arm._held_reserve(g).is_empty(),
+		"and with the knob off the Bolt has no job at all")
+
+
+func test_the_chain_reads_the_victims_marked_damage() -> void:
+	# Two of the Angel's four points are already gone, so the Bolt alone
+	# finishes it and there is no chain to make — the cheaper answer.
+	var ai := _ai(3)
+	_chain_hand()
+	_mountains(4)
+	var serra := put_battlefield(1, "Serra Angel")
+	serra.damage = 1
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_string_contains(ai.act(g), "cast Lightning Bolt",
+		"three answers the three that are left")
+	resolve_stack()
+	assert_eq(serra.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.players[0].hand.size(), 1, "and the Fireball is still the finisher")

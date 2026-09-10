@@ -94,14 +94,31 @@ Factory attack instead of going off on an empty board — which is
 | ~~`reinforces_blocks`~~ | combat P4 | Sorcerer+ | ~~Wall of Stone plus Grizzly Bears kill the Craw Wurm~~ **SHIPPED 2026-09-10** — a GAIN, and the note's own headline board is the one thing in it that does not add up: a Wall of Stone is 0/8, so that pair deals TWO to a toughness of four. What DOES reproduce is the ladder returning too early — rung 1.5's free absorb sits above the trade and the gang, so a wall blocks alone every time and two Walls of Swords watched a Serra Angel walk away for nothing. `AiPlayer._reinforce_blocks` is one pass over the finished plan: safe bodies free, then ONE that dies to close the kill exactly, priced on what the pair actually RISKS. Priestess (8 walls) vs Big Green 6.6% → 10.9% (**+4.4 ±1.7**), vs Blue Skies 1.5% → 3.4% (**+2.0 ±1.0**), both clear of zero; 110 won to 42 lost across the twenty-matchup starter matrix (`docs/ai-difficulty.md` §4) |
 | `holds_tricks` | combat P5 / casting P13 | Wizard | the bait attacker sent on the strength of the Giant Growth, its mana booked |
 | ~~`crack_back_margin`~~ | combat P8 | Wizard | ~~the crack-back search asked below lethal, at the chump line~~ **BUILT, MEASURED AND REFUSED 2026-09-10 — the knob exists and every preset ships its null (0 = today's gate).** The row reproduces (our Air Elemental against two Craw Wurms at 14 life: the null swings for four and takes twelve back to sit at 2; at 6 it holds the body and blocks) and the gate is one line, `reach >= life - crack_back_margin`. The Lab said no: twenty arms at 0/6/10, seed 11, control PASS byte-identical everywhere, **not one delta clear of its interval** and the flips a coin (212 won to 228 lost at 6). Where it moves a deck systematically it moves the CREATURE deck the wrong way — Big Green vs Blue Skies −2.4 then −4.3, a green deck that stops attacking into a deck it cannot block. THE COST BUDGET WAS MET WITH ROOM (0.92–1.06× the null's seconds per game against P8's two), so the cost is not what refused it. Kept as a field on `w_hand`'s precedent so the question is one Lab command; what it actually needs is `reads_race` |
-| `holds_x_burn`, the chain half | casting P7 | Sorcerer+ | two burn spells that kill together: the first sized for its share, the second's cost booked |
+| ~~`holds_x_burn`, the chain half~~ | casting P7 | Sorcerer+ | ~~two burn spells that kill together: the first sized for its share, the second's cost booked~~ **SHIPPED 2026-09-10 as an EXTENSION of `holds_x_burn`, not a knob of its own** — the two halves would contradict each other at a reach the hold refuses, and Forge arranges it the same way (its chain chance is forced to 100 exactly where its hold stops refusing). REPRODUCED: a Fireball and a Lightning Bolt on four Mountains, a Serra Angel across the table, and the pilot PASSES — `_best_victim` asks `EffectIntent.kills` of ONE card at a time and both answer honestly. `AiPlayer._burn_chain` sizes the X to its SHARE, refuses the pair unless one plan pays for both, and books the partner in `_held_reserve`; `AiPlayer._finishes_damaged` releases the second half, because a shot that borrows MARKED damage cannot wait for their end step (CR 514.2). A second X spell is refused on arithmetic — each pays a coloured pip of overhead, so one reaches further alone than two do. **A WASH ON THE SCOREBOARD** and a malfunction removed; the pool facts are below |
 
-And the third pass's **Disk deferral**: `times_sweeps` holds an activated
-sweeper only from the moment it is offered in their combat, so a Disk
-worth firing in our main phase still fires there; the deferral is the
-relief read one phase earlier, and the "after" board must apply the
+And the third pass's ~~**Disk deferral**: `times_sweeps` holds an
+activated sweeper only from the moment it is offered in their combat, so
+a Disk worth firing in our main phase still fires there; the deferral is
+the relief read one phase earlier, and the "after" board must apply the
 statics the sweep removes (a Moat the Disk takes no longer holds the
-ground).
+ground).~~ **SHIPPED 2026-09-10, both halves, as an EXTENSION of
+`times_sweeps`** — the knob that offers the later moment is the knob that
+may defer to it. REPRODUCED: a Disk and two Jayemdae Tomes of ours
+against three Grizzly Bears went off in our own first main phase, both
+Tomes in the graveyard, on a turn where waiting cost nothing.
+`AiPlayer._defers_sweep` waits while a creature of theirs could attack —
+in our main phase AND at their upkeep, which is also one phase earlier
+than their combat, a correction a probe made rather than the design — and
+fires at home when no combat is coming, so the Disk under our own Moat
+still goes off rather than waiting on a moment the Moat has refused.
+`AiPlayer._ground_the_sweep_opens` is the statics half: at two life with
+a Moat and a Disk against a Serra Angel and a REGENERATING 2/2 the relief
+read **1008.00** and now reads 4.00. **THE NOTE'S OWN EXAMPLE CANNOT SHOW
+IT and that is recorded rather than forced**: a Nevinyrral's Disk kills
+every creature a Moat was holding, so the after-board is empty and the
+clause changes nothing — the boards where it bites are the ones where a
+creature SURVIVES the sweep, which under a Disk means a regeneration
+shield (the Disk's printed line carries no clause against regeneration).
 
 ## Wave 4 — the old loops (S–M; `docs/arzakon.strategy` §4)
 

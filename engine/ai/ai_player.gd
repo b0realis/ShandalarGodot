@@ -536,9 +536,13 @@ func _try_cast_best(game: MtgGame) -> String:
 			if max_x <= 0:
 				continue
 		# A held instant waits for its moment (their combat, their end
-		# step) — unless it wins the game right now.
+		# step) — unless it wins the game right now, or unless it is the
+		# second half of a chain and the damage it borrows is wiped in
+		# this turn's cleanup (2026-09-10, AiProfile.holds_x_burn; CR
+		# 514.2, [method _finishes_damaged]).
 		if _is_held_instant(inst, intent) \
-				and not _lethal_burn(game, intent, max_x):
+				and not _lethal_burn(game, intent, max_x) \
+				and not _finishes_damaged(game, inst, intent):
 			continue
 		# Dark Ritual is worth exactly what it lets us cast this turn.
 		if intent.adds_mana and not _mana_spell_enables(game, inst, sources):
@@ -564,7 +568,16 @@ func _try_cast_best(game: MtgGame) -> String:
 		if _develops_late(game) \
 				and not _main1_worthy(game, inst, intent, targets, value):
 			continue
-		if not reserve.is_empty() and value < float(reserve["value"]) * 1.5 \
+		# THE RESERVE IS NEVER KEPT FROM THE CARD IT IS KEPT FOR
+		# (2026-09-10): `for` names the instance [method _held_reserve]
+		# is holding the mana for, and until the chain's second half
+		# ([method _finishes_damaged]) no held instant ever reached this
+		# line, so the card could not reserve against itself. Now it can:
+		# a Lightning Bolt released to finish a creature the Fireball
+		# damaged is exactly the card the reserve is about, and 1 R plus
+		# 1 R is two mana it does not have.
+		if not reserve.is_empty() and int(reserve.get("for", -1)) != inst.id \
+				and value < float(reserve["value"]) * 1.5 \
 				and _plan_taps_from(sources, _combined_cost(inst.data.cost_for(x), reserve["cost"]),
 					_generic_x(inst.data, x) + surcharge).is_empty():
 			continue
@@ -857,13 +870,23 @@ func _sacrifice_fodder_ok(game: MtgGame, inst: CardInstance) -> bool:
 
 
 ## The held instant with a job right now — removal for a creature of
-## theirs worth a card, a draw into a thin hand — as `{cost, value}`, or
-## `{}` when nothing in hand is waiting for anything.
+## theirs worth a card, a draw into a thin hand — as
+## `{cost, value, for}`, or `{}` when nothing in hand is waiting for
+## anything. `for` is the instance id the mana is being kept for, so a
+## caller ranking that very card can tell the reserve is its own.
 func _held_reserve(game: MtgGame) -> Dictionary:
 	if not profile.holds_instants:
 		return {}
 	var me := game.players[pid]
 	var out: Dictionary = {}
+	# THE CHAIN'S SECOND HALF BOOKS ITS OWN MANA (2026-09-10, [member
+	# AiProfile.holds_x_burn]): a burn that kills nothing on its own still
+	# has a job tonight when an X burn in the same hand is about to leave
+	# a creature one shot short of dead — Forge's
+	# `reserveManaSourcesForNextSpell` at the same seam. Without it the
+	# turn's next cast may tap the partner's mana away and the X spell is
+	# spent for a point of damage.
+	var chain := _best_burn_chain(game)
 	for inst in me.hand:
 		if not inst.is_type(Mtg.CardType.INSTANT):
 			continue
@@ -889,12 +912,14 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 				if worth >= 3.0 and not (intent.bounces and not intent.removes
 						and intent.damage == 0 and worth < 6.0):
 					value = worth + 1.0
+		if value <= 0.0 and not chain.is_empty() and chain["partner"] == inst:
+			value = float(chain["worth"])
 		# The recoil (a spell that hurts us too) is part of the price, the
 		# way _ability_option charges it: dear when life is short.
 		if intent.self_damage > 0:
 			value -= intent.self_damage * (0.5 if me.life > 12 else (1.0 if me.life > 6 else 2.0))
 		if value > float(out.get("value", 0.0)):
-			out = {"cost": inst.data.cost, "value": value}
+			out = {"cost": inst.data.cost, "value": value, "for": inst.id}
 	# A COUNTERSPELL RESERVES TOO, though it is not a "held instant".
 	#
 	# [method _is_held_instant] excludes anything that counters, and it is
@@ -921,7 +946,8 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 				continue
 			if profile.counter_threshold > float(out.get("value", 0.0)):
-				out = {"cost": inst.data.cost, "value": profile.counter_threshold}
+				out = {"cost": inst.data.cost, "value": profile.counter_threshold,
+					"for": inst.id}
 	return out
 
 
@@ -1316,6 +1342,11 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 	elif intent.life_gain > 0 and intent.target_spec == null:
 		value = 1.0 + (2.0 if me.life <= 10 else 0.0)
 	elif intent.sweeper != null:
+		# THE DEFERRAL (2026-09-10, [member AiProfile.times_sweeps]): their
+		# combat is the better moment for the same activation, so a sweeper
+		# offered in OUR main phase waits for it. See [method _defers_sweep].
+		if _defers_sweep(game, inst, ability, intent.sweeper, moment):
+			return {}
 		value = _sweep_value(game, intent.sweeper, 0)
 	elif intent.animates != null and profile.plays_engines:
 		# THE CLOCK A PERMANENT CAN BECOME (2026-09-06, the control sweep).
@@ -2308,12 +2339,19 @@ func _sweep_relief(game: MtgGame, effect: EffectBase, n: int) -> float:
 				remains.append(inst)
 		var eaten := _upkeep_meals(game, them.id, board)
 		var eaten_after := _upkeep_meals(game, them.id, remains)
+		# THE STATICS THE SWEEP REMOVES (2026-09-10, AiProfile.times_sweeps):
+		# the ground a Moat holds is ground the sweep that takes the Moat
+		# hands back. See [method _ground_the_sweep_opens].
+		var freed := _ground_the_sweep_opens(game, effect, n)
 		for inst in them.battlefield:
-			if inst.cur_power <= 0 or not _could_attack_next_turn(game, inst):
+			if inst.cur_power <= 0:
 				continue
-			if not eaten.has(inst):
+			var attacks_now := _could_attack_next_turn(game, inst)
+			if attacks_now and not eaten.has(inst):
 				attackers.append(inst)
-			if remains.has(inst) and not eaten_after.has(inst):
+			if not remains.has(inst) or eaten_after.has(inst):
+				continue
+			if attacks_now or freed.has(inst):
 				survivors.append(inst)
 		for inst in me.battlefield:
 			if inst.is_creature() and not inst.tapped:
@@ -2331,6 +2369,147 @@ func _sweep_relief(game: MtgGame, effect: EffectBase, n: int) -> float:
 	if before >= me.life and after < me.life:
 		value += LETHAL_WORTH   # the sweep is the out
 	return value
+
+
+## THE GROUND THE SWEEP OPENS (2026-09-10, [member
+## AiProfile.times_sweeps]): the creatures of theirs that survive
+## [param effect] and could attack us once the STATICS the sweep itself
+## takes off the table are gone.
+##
+## WHAT WAS WRONG. [method _sweep_relief] builds its "after" board out of
+## the sweep's survivors and then asks [method _could_attack_next_turn]
+## of them — a question answered off [member CardInstance.cur_cant_attack],
+## which is the board as it stands, Moat and all. So a Moat of ours went
+## on holding the ground in a reading of the very board the sweep had
+## just destroyed the Moat on. Probed at HEAD: at two life, with a Moat
+## and a Nevinyrral's Disk of ours against a Serra Angel and a
+## regenerating 2/2 of theirs, [method _sweep_relief] answered
+## 1008.00 — the four the Angel deals priced as lethal, plus
+## [constant LETHAL_WORTH] for a sweep that "is the out" — while the 2/2
+## the Disk does not kill (the Disk lets a creature regenerate: its
+## printed line carries no clause against it) walks in for two the moment
+## the Moat is gone, and the seat dies anyway.
+##
+## HOW IT IS ASKED WITHOUT REPLAYING THE GAME. Nothing can say which
+## permanent grounds which creature without running the statics again,
+## and this is called inside a per-X loop. What CAN be said exactly is
+## the case that matters: [member CardInstance.cur_cant_attack] is set by
+## a static and by nothing else, so a creature carrying it is grounded by
+## some permanent on the table — and if the sweep takes EVERY permanent
+## that carries a static ([method MtgGame.battlefield_with_statics]),
+## there is nothing left that could be grounding it. A permanent's own
+## static is not what grounds it (Moat is symmetric, the Evil Eye and the
+## Akron Legionnaire ground everything BUT themselves), so the creature
+## being asked about is not counted against itself.
+##
+## Where a static source survives, the old reading stands: that is the
+## conservative direction — the sweep looks no better than it did — and
+## the one thing this must never do is talk a seat into a sweep. The two
+## readings it does NOT make are named rather than hidden: a floating
+## static whose source has already left the battlefield, and the other
+## faces of the same question — an anthem the sweep takes, a keyword an
+## aura granted — which want a real recalculation of the layers and are
+## left open in docs/ai-difficulty.md §5.
+func _ground_the_sweep_opens(game: MtgGame, effect: EffectBase,
+		n: int) -> Array[CardInstance]:
+	var freed: Array[CardInstance] = []
+	var standing: Array[CardInstance] = []
+	for src in game.battlefield_with_statics():
+		if not _sweep_kills(effect, src, n):
+			standing.append(src)
+	if standing.size() > 1:
+		return freed   # something that could be grounding them is still there
+	for inst in game.players[game.opponent_of(pid)].battlefield:
+		if not inst.is_creature() or inst.cur_power <= 0 or not inst.cur_cant_attack:
+			continue
+		if inst.has_keyword(Mtg.Keyword.DEFENDER) or _sweep_kills(effect, inst, n):
+			continue
+		if standing.size() == 1 and standing[0] != inst:
+			continue
+		var needs := inst.data.attack_needs_defender_land
+		if needs != "" and not CombatState._controls_land_of_type(game, pid, needs):
+			continue
+		freed.append(inst)
+	return freed
+
+
+## THE SWEEP THAT WAITS FOR THE COMBAT IT ANSWERS (2026-09-10, [member
+## AiProfile.times_sweeps]).
+##
+## WHAT WAS WRONG. The knob's own sentence is that a sweeper this seat can
+## ACTIVATE is offered in the opponent's combat, with the attackers
+## declared and the damage still to come — the Disk as a Fog. But that
+## offering was only ever an ADDITION: our own main phase went on offering
+## the same activation at its own bar, and [method _sweep_value] carries
+## the relief of an attack that has not happened, so a Disk worth firing
+## in our main phase still fired there. Probed at HEAD: a Disk and two
+## Jayemdae Tomes of ours against three Grizzly Bears, nothing else on the
+## table — `activated Nevinyrral's Disk` in our own first main phase, both
+## Tomes in the graveyard, on a turn where waiting costs nothing at all.
+## Everything the Disk would kill now it kills in their combat too, plus
+## whatever their own main phase puts on the table in between, and there
+## it is priced against a declared attack instead of a guessed one.
+##
+## THE RELIEF READ ONE PHASE EARLIER is what decides it, and it is also
+## what bounds it: the sweeper waits only while a creature of theirs COULD
+## attack us next turn ([method _could_attack_next_turn], the reading
+## [method _sweep_relief] models their swing with). A board that cannot
+## attack is a board whose combat never comes — there is no
+## [method _defensive_combat_response] without attackers — so a sweeper
+## deferred against one would be waiting on a moment that is never
+## offered. Under our own Moat, with three Craw Wurms across the table,
+## that is the right answer for the opposite reason: the ground is
+## already held, the wait would be a wait for a combat the Moat itself
+## has refused, so the Disk goes off in the main phase or not at all.
+##
+## IT IS THE SAME REFUSAL AT THEIR UPKEEP, and the first cut of this
+## learned it from a probe rather than from the design: deferred out of
+## our own main phase, the Disk simply went off at [constant
+## Moment.UPKEEP] instead — one step earlier than their draw, before they
+## had cast a card, with the attack still unguessed. Their upkeep is one
+## phase EARLIER than their combat, not later, so the same wait applies
+## there. Their END step is not deferred, because by then their combat
+## has been and gone and every point of open mana is about to be lost —
+## which is what [constant Moment.SINK] is for, and which is also why no
+## deferred sweeper can be stranded: a combat that never came still ends
+## in a mana sink that will fire it.
+##
+## Two more things end the wait, and neither is a constant of its own: a
+## sweep that WINS ([constant LETHAL_WORTH] — an Earthquake that reaches
+## their last life) is never deferred, and neither is an ability whose
+## printed timing rider means their combat is not a moment it may be
+## activated at. What is NOT read is their hand: a Disenchant on the
+## deferred Disk is the price of the wait, and this seat does not look at
+## hands (docs/forge/README.md, "what is not to be copied").
+##
+## [forge] Forge has no equivalent and the difference is structural:
+## `DestroyAllAi`/`DamageAllAi` are asked at every priority its
+## `chooseSpellAbilityToPlay` runs at (docs/forge/casting.md §1.1, §3.3),
+## so its sweeper is offered in the opponent's combat by the shape of the
+## loop rather than by a decision. Ours is asked at named moments
+## ([enum Moment]), which is what makes the moment a thing that has to be
+## chosen — and chosen here.
+func _defers_sweep(game: MtgGame, inst: CardInstance, ability: ActivatedAbility,
+		effect: EffectBase, moment: int) -> bool:
+	if not profile.times_sweeps or game.combat_damage_prevented:
+		return false
+	if moment != Moment.MAIN and moment != Moment.UPKEEP:
+		return false
+	if moment == Moment.MAIN and game.active_player != pid:
+		return false
+	# A rider that names a turn or a step may not admit their combat.
+	if ability.turn_restriction != 0 or ability.only_during_step >= 0 \
+			or ability.only_before_step >= 0:
+		return false
+	if inst.data.is_modal():
+		return false
+	if _sweep_value(game, effect, 0) >= LETHAL_WORTH:
+		return false
+	for other in game.players[game.opponent_of(pid)].battlefield:
+		if other.cur_power > 0 and _could_attack_next_turn(game, other):
+			return true
+	return false
+
 
 
 ## THE APPETITE (2026-09-08, AiProfile.times_sweeps): the creatures
@@ -2832,6 +3011,16 @@ func _size_x_burn(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 			if not _holds_x_burn(game, max_x):
 				return {"x": clampi(need, 1, max_x),
 					"targets": [TargetRef.card(victim)], "value": worth + 1.0}
+	# THE CHAIN (2026-09-10, [member AiProfile.holds_x_burn]): nothing on
+	# their board dies to this spell alone, and something does die to this
+	# spell AND one more burn in hand. Asked UNDER the hold, which is the
+	# same refusal for the same reason: see [method _burn_chain].
+	if not _holds_x_burn(game, max_x):
+		var chain := _burn_chain(game, inst, intent, max_x)
+		if not chain.is_empty():
+			return {"x": int(chain["x"]),
+				"targets": [TargetRef.card(chain["victim"])],
+				"value": float(chain["worth"])}
 	if face_ok and max_x >= 4 and them.life <= intent.damage_at(max_x) * 2:
 		return {"x": max_x, "targets": [TargetRef.player(opponent)],
 			"value": intent.damage_at(max_x) * 0.75 + 2.0}
@@ -2895,6 +3084,208 @@ func _holds_x_burn(game: MtgGame, max_x: int) -> bool:
 	if game.turn_number >= profile.holds_x_burn * 2:
 		return false
 	return not _in_danger(game)
+
+
+## THE TWO BURN SPELLS THAT KILL TOGETHER (2026-09-10, [member
+## AiProfile.holds_x_burn], the CHAIN half of its row) — the creature
+## neither card answers alone, the SHARE the X spell pays for it, and the
+## partner whose cost the rest of the turn has to keep. `{}` when this
+## hand and this board make no such pair.
+##
+## WHAT WAS WRONG. [method _size_x_burn] asks [method _best_victim], which
+## asks [method EffectIntent.kills] — *does THIS card finish it* — so a
+## Fireball on four Mountains and a Lightning Bolt in the same hand looked
+## at a Serra Angel and both said no: three is not four and three is not
+## four. The pilot passed with two burn spells in hand and four mana up
+## while a 4/4 flier it can kill for three mana stood across the table
+## (probed at HEAD, `docs/AI-next-wave.md` wave 3).
+##
+## WHAT IS ASKED, and every clause of it is arithmetic off the table:
+##
+##  * THE PARTNER is any other card in hand whose damage is PRINTED — a
+##    fixed shot, [member EffectIntent.damage] with no X of its own. A
+##    second X spell is refused on arithmetic and not on taste: each X
+##    spell pays a coloured pip of overhead, so one X spell for the whole
+##    of the mana always reaches FURTHER than two sharing it, and a chain
+##    of two is a strictly worse Fireball.
+##  * THE VICTIM is a creature of theirs that neither card kills on its
+##    own and the two kill together, worth the same 3.0 the single-card
+##    arm demands, legal for BOTH specs (the partner's read now, the X
+##    spell's read at the X it will actually be cast for — CR 115.4).
+##  * THE SHARE is the smallest X that closes the gap, so the mana left
+##    over is the mana the partner needs; and the pair is refused unless
+##    ONE plan pays for both ([method _combined_cost], the same
+##    arithmetic the held reserve's 1.5x rule uses).
+##
+## THE ORDER IS THE X SPELL FIRST, and it is not a preference. The partner
+## is a Lightning Bolt, which is to say a held instant: cast the Bolt
+## first and the reach the hold reads shrinks with the mana it spent, so
+## the Fireball that was to finish the job is held instead and the Bolt is
+## thrown away. Sized first, the X spell is priced against the reach it
+## has NOW, and the partner is released by [method _finishes_damaged] on
+## the very next action because the damage is already on the creature.
+##
+## IT IS ASKED UNDER THE HOLD ([method _holds_x_burn]) and that is the
+## composition the row wanted: a reach the hold refuses to point at a
+## creature is a reach it refuses to point at a creature TWICE OVER, since
+## a chain spends the finisher AND the card beside it. [method
+## _in_danger] lifts both together, which is Forge's own arrangement —
+## its chain chance is forced to 100 exactly where its hold stops
+## refusing.
+##
+## [forge] `DamageDealAi.getDamagingSAToChain`
+## (forge-ai/src/main/java/forge/ai/ability/DamageDealAi.java:1027-1110),
+## commit b09a3d3f: a second numeric-damage spell with a pure mana cost
+## and the same target class, `canPayManaCost` for the combined cost, and
+## `reserveManaSourcesForNextSpell` for the second (`:272`) — which is
+## [method _held_reserve] here. Its `CHANCE_TO_CHAIN_TWO_DAMAGE_SPELLS`
+## roll (90/75/25/100) is not ported: nothing in this AI is decided by a
+## coin (docs/forge/README.md, "what is not to be copied").
+func _burn_chain(game: MtgGame, inst: CardInstance, intent: EffectIntent,
+		max_x: int, from_sources: Array = []) -> Dictionary:
+	if profile.holds_x_burn <= 0 or intent.target_spec == null:
+		return {}
+	if not intent.damage_uses_x or intent.sweeper != null:
+		return {}
+	var me := game.players[pid]
+	var them := game.players[game.opponent_of(pid)]
+	# THE CHEAP GATE FIRST: a board with nothing on it that this spell
+	# cannot already finish has no chain to make, and neither the hand nor
+	# the mana is walked at all. This runs on every X burn the ranking
+	# looks at, so what is above the gate has to stay arithmetic.
+	var reachable := false
+	for victim in them.battlefield:
+		if not victim.is_creature():
+			continue
+		var gap: int = victim.cur_toughness - victim.damage - intent.damage_at(max_x)
+		if gap > 0 and _victim_value(game, victim) >= 3.0:
+			reachable = true
+			break
+	if not reachable:
+		return {}
+	var sources: Array = from_sources if not from_sources.is_empty() \
+		else _mana_sources(game)
+	var surcharge := game.spell_surcharge(pid, inst.data)
+	var best: Dictionary = {}
+	var best_worth := 0.0
+	for partner in me.hand:
+		if partner == inst or partner.is_land() or partner.data.is_modal():
+			continue
+		if partner.data.cost.has_x:
+			continue   # one X spell reaches further alone than two do
+		if _refused.has(str(partner.id)) or _cast_gate(game, partner) != "":
+			continue
+		var shot := EffectIntent.read(partner.data.spell_effects, partner.data.card_name)
+		if shot.damage <= 0 or shot.damage_uses_x or shot.sweeper != null:
+			continue
+		if shot.target_spec == null or shot.self_damage >= me.life:
+			continue
+		for victim in them.battlefield:
+			if not victim.is_creature():
+				continue
+			var need: int = victim.cur_toughness - victim.damage
+			if need <= 0 or shot.damage >= need or intent.damage_at(max_x) >= need:
+				continue   # one of the two does it alone: no chain to make
+			if intent.damage_at(max_x) + shot.damage < need:
+				continue
+			var worth := _victim_value(game, victim)
+			if worth < 3.0 or worth <= best_worth:
+				continue
+			var ref := TargetRef.card(victim)
+			if not shot.target_spec.is_legal(game, ref, partner):
+				continue
+			var share := clampi(need - shot.damage - intent.damage, 1, max_x)
+			if not game.target_legal_at(intent.target_spec, ref, inst, share):
+				continue
+			if _plan_taps_from(sources,
+					_combined_cost(inst.data.cost_for(share), partner.data.cost),
+					_generic_x(inst.data, share) + surcharge
+					+ game.spell_surcharge(pid, partner.data)).is_empty():
+				continue
+			best = {"victim": victim, "x": share, "partner": partner,
+				"worth": worth + 1.0}
+			best_worth = worth
+	return best
+
+
+## The chain this hand and this board would make with ANY X burn in hand,
+## for the callers that ask about the PARTNER rather than about the X
+## spell ([method _held_reserve], which has to keep the partner's mana).
+## `{}` when there is none.
+func _best_burn_chain(game: MtgGame) -> Dictionary:
+	if profile.holds_x_burn <= 0:
+		return {}
+	# THE TWO CHEAPEST QUESTIONS FIRST, both off printed data: is there a
+	# creature to point a chain at, and is there an X card to point?
+	# [method _held_reserve] runs on every ranking and most hands hold
+	# neither, so nothing below is reached in the ordinary game.
+	var candidates: Array[CardInstance] = []
+	for inst in game.players[pid].hand:
+		if not inst.is_land() and inst.data.cost.has_x and not inst.data.is_modal():
+			candidates.append(inst)
+	if candidates.is_empty():
+		return {}
+	var any_creature := false
+	for perm in game.players[game.opponent_of(pid)].battlefield:
+		if perm.is_creature():
+			any_creature = true
+			break
+	if not any_creature:
+		return {}
+	var sources := _mana_sources(game)
+	for inst in candidates:
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+			continue
+		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
+		if not intent.damage_uses_x or intent.target_spec == null:
+			continue
+		var surcharge := game.spell_surcharge(pid, inst.data)
+		var max_x := _max_affordable_x(game, inst.data.cost, surcharge, sources,
+			inst.data.x_color, game.mana_usage_keys(inst.data))
+		if max_x <= 0 or _holds_x_burn(game, max_x):
+			continue
+		var chain := _burn_chain(game, inst, intent, max_x, sources)
+		if not chain.is_empty():
+			return chain
+	return {}
+
+
+## THE CHAIN'S SECOND HALF (2026-09-10, [member AiProfile.holds_x_burn]):
+## is [param inst] a burn spell that kills a creature of theirs ONLY
+## because of the damage already marked on it?
+##
+## Such a card cannot wait. [method _is_held_instant] keeps removal back
+## for the opponent's end step, which is right for a Bolt that kills the
+## same creature whenever it is cast — and wrong for one whose kill is
+## borrowed from marked damage, because marked damage is wiped in the
+## cleanup step of the turn it was dealt (CR 514.2). Held to their end
+## step the shot is a shot at a whole creature again, and the Fireball
+## that put the first points on it was spent for nothing.
+##
+## It is asked in our own main phase and nowhere else — [method
+## _try_cast_best] is a main-phase caller — so the damage it reads is
+## damage this turn of OURS put there: the chain's own first half, or a
+## body that came back from a block. Nothing here remembers a card being
+## cast; the marked damage on the table IS the memory, and it is public
+## to both seats.
+func _finishes_damaged(game: MtgGame, inst: CardInstance,
+		intent: EffectIntent) -> bool:
+	if profile.holds_x_burn <= 0 or intent.damage <= 0 or intent.damage_uses_x:
+		return false
+	if intent.target_spec == null or intent.sweeper != null:
+		return false
+	for victim in game.players[game.opponent_of(pid)].battlefield:
+		if not victim.is_creature() or victim.damage <= 0:
+			continue
+		if intent.damage >= victim.cur_toughness:
+			continue   # it would kill this creature undamaged too: no hurry
+		if not intent.kills(victim, 0):
+			continue
+		if _victim_value(game, victim) < 3.0:
+			continue
+		if intent.target_spec.is_legal(game, TargetRef.card(victim), inst):
+			return true
+	return false
 
 
 ## THEIR CLOCK: would the attack the board in front of us can declare put

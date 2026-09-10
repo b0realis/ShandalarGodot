@@ -1152,6 +1152,21 @@ shandalar/
 │   │   │                      would make (_damage_after_value_blocks). The
 │   │   │                      face arm still runs under the hold, and lethal
 │   │   │                      is returned before the hold is asked.
+│   │   │                      And since 2026-09-10 the same number
+│   │   │                      carries THE CHAIN (AiPlayer._burn_chain):
+│   │   │                      the creature two burn spells kill together
+│   │   │                      and neither kills alone, the X sized to its
+│   │   │                      SHARE, the pair refused unless one plan pays
+│   │   │                      for both and the partner's mana booked in
+│   │   │                      _held_reserve, whose dictionary now names
+│   │   │                      the instance it is keeping mana for. The
+│   │   │                      partner's damage must be PRINTED — two X
+│   │   │                      spells are refused on arithmetic. Released
+│   │   │                      by AiPlayer._finishes_damaged: a held burn
+│   │   │                      that kills only because of damage already
+│   │   │                      MARKED cannot wait for their end step
+│   │   │                      (CR 514.2). Asked under the hold, never
+│   │   │                      beside it.
 │   │   │                      reads_gaze (2026-09-10): THE THREE READS
 │   │   │                      THE COMBAT MATHS NEVER MADE — the printed
 │   │   │                      lines that settle a combat without ever
@@ -1405,6 +1420,24 @@ shandalar/
 │   │                      A wash in the right direction against the
 │   │                      starters, the Disk fired in their combat five
 │   │                      times in 150 census games where it never had.
+│   │                      And since 2026-09-10 it DEFERS to that moment
+│   │                      instead of merely adding it
+│   │                      (AiPlayer._defers_sweep): a sweeper we can
+│   │                      activate waits while a creature of theirs could
+│   │                      attack — in our main phase and at their UPKEEP
+│   │                      alike, both earlier than their combat — and
+│   │                      fires at home when no combat is coming, so the
+│   │                      Disk under our own Moat is not made to wait on
+│   │                      a moment the Moat has refused. A sweep that
+│   │                      WINS and a printed timing rider end the wait;
+│   │                      their END step is not deferred, so no deferred
+│   │                      sweeper is stranded. The relief's "after" board
+│   │                      now applies the STATICS the sweep removes
+│   │                      (AiPlayer._ground_the_sweep_opens): a Moat the
+│   │                      Disk takes stops grounding the creatures the
+│   │                      Disk did not kill, because cur_cant_attack is
+│   │                      set by a static and by nothing else, and
+│   │                      conservative wherever a static source survives.
 │   │                      trusts_abyss (2026-09-08) is THE ABYSS AS AN
 │   │                      ANSWER: the counter decision (_try_counter)
 │   │                      keeps the counterspell when the creature spell
@@ -2313,7 +2346,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5781 tests / ~150 871 asserts, ~380 s
+├── tests/                   GUT suite — 5806 tests / ~151 421 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4064,6 +4097,19 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_disk_deferral_2026_09_10.gd — THE DISK DEFERRAL
+│    (AiProfile.times_sweeps): the Disk that no longer fires at home and
+│    the null that still does; the deferred Disk going off once their
+│    attackers are declared, their upkeep deferred with it; a sweep that
+│    wins never deferred; a board that cannot attack — our own Moat, their
+│    Craw Wurms — no reason to wait, on both arms; walls no combat to wait
+│    for; the deferral asked directly at each moment the scorer has, and
+│    off with the knob; THE STATICS THE SWEEP TAKES WITH IT — a Moat and a
+│    Disk of ours at two life against a Serra Angel and a regenerating
+│    2/2, the relief 1008.00 before and 4.00 after; a second static still
+│    standing keeping the old reading; a creature never counted against
+│    its own static; a Wrath that takes no enchantment freeing nobody; a
+│    defender not freed by the Moat going away; the rungs the knob had;
 │    tests/ai/test_ai_develops_late_2026_09_10.gd — DEVELOP AFTER COMBAT
 │    (AiProfile.develops_late): the creature cast before combat at HEAD and
 │    held with the knob on, and the same cast made in Main 2; MAIN2 pinned

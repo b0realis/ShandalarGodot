@@ -86,12 +86,12 @@ override any knob on any preset for a measurement
 | `paces_draws` | off | off | on | on | refuses an optional draw that would hand the opponent the library race — a Tome's tick, an Ancestral, a tutor's card, and since the third pass the extra draw step a Time Walk buys |
 | `holds_duplicates` | off | off | on | on | keeps a second legend or world in hand instead of burying the first |
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
-| `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
+| `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog). **And since 2026-09-10 it DEFERS to that moment instead of merely adding it** (`AiPlayer._defers_sweep`): the combat offering was an addition, so our own main phase went on offering the same activation at its own bar with a relief read off an attack that had not happened, and a Disk worth firing at home still fired at home — a Disk and two Jayemdae Tomes of ours against three Grizzly Bears went off in our own first main phase, both Tomes in the graveyard, on a turn where waiting cost nothing at all. The deferral is that relief read ONE PHASE EARLIER: while a creature of theirs could attack us, their combat is the better moment for the same activation — the attack declared instead of guessed, and whatever their own main phase adds to the table swept with it — so the sweeper waits, in our main phase and at their UPKEEP alike, both of which come before their combat. It is bounded by the same reading: a board that cannot attack has no combat to wait for, so the Disk still goes off at home under our own Moat rather than waiting on a moment the Moat itself has refused; a sweep that WINS is never deferred; a printed timing rider that would refuse their combat ends the wait; and a combat that never comes still ends in the mana sink at their end step, so no deferred sweeper is stranded. **And the relief's "after" board now applies the STATICS the sweep removes** (`AiPlayer._ground_the_sweep_opens`): it read the survivors' attack legality off the board as it STOOD, so a Moat of ours went on holding the ground in a reading of the board the same sweep had just destroyed the Moat on — at two life, with a Moat and a Disk against a Serra Angel and a regenerating 2/2, the relief came back 1008.00, the Angel's four priced as lethal plus a lethal-worth for a sweep that "is the out", while the 2/2 the Disk does not kill walks in for two the moment the Moat is gone. Asked without replaying the game: `cur_cant_attack` is set by a static and by nothing else, so a sweep that takes EVERY permanent carrying a static (`MtgGame.battlefield_with_statics`) can leave nothing that grounds anything — and where a static source survives, the old reading stands, which is the conservative direction |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
 | `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, and a trampler's overflow is measured against the toughness that will actually be there; and since the fourth, the BURN SPELL ON THE STACK — a Frozen Shade with Swamps open grows out of a Lightning Bolt instead of dying with the mana up, and the breath is asked before the pump instant in hand because the mana untaps and the card does not; and since the fifth, the breaths a block was DECLARED on are bought before the pilot's own pre-emptive regeneration shield can spend them — the one thing that was measurably breaking its own plan |
 | `spends_counters` | off | off | on | on | pays a cost of "remove N <kind> counters from this permanent" — the AI had never removed one in its life, so an Osai Vultures sat on its carrion counters and a Scavenging Ghoul never regenerated. Spendable when NOTHING BUT THE COST READS THE COUNTER: refused when the kind's own NAME is a P/T delta (a Triskelion's +1/+1 counters are the 4/4) and refused when the permanent's live `damage_eats_counters` names it (a Rock Hydra's heads are its life). What is left is fuel — carrion, corpse, husk, matrix, dream — and fuel is worth zero to every reader until it is spent, so the effect is the whole trade |
 | `ranks_counters` | off | on | on | on | picks WHICH counterspell answers a spell instead of firing whichever sat first in its hand, and pays an unless-cost's X to the caster rather than to the mana on the table. Until 2026-09-10 `_try_counter` walked the hand in order, so a Mana Drain and a Power Sink in one hand were spent by the shuffle, and Power Sink's X was "as deep as the mana goes" — eight Islands to make a price of one unpayable. The ranking is five readings, none of them a card's name: can we pay for it (a counter the mana does not cover used to end the search with a pass), does it actually STOP the spell (a printed "unless its controller pays" price the caster can simply pay is no counter — the hard card goes ahead of it, which is also why a Sink is not cast at all when they can pay it and something else answers), what it costs us now with its X included, the narrow card before the wide one, and then the card the evaluator would rather keep — so a Power Sink for one takes the small threat on a tapped-out turn and the Mana Drain is still in hand for the Serra Angel. Magician and up, the rung `holds_instants` is on: an Apprentice never casts a counterspell at all, so it is as inert there as `counter_threshold` |
-| `holds_x_burn` | 0 | 0 | 3 | 5 | the smallest REACH — the largest X the mana can pay — at which the profile will point an X burn spell at a creature while the game is young; 0 never holds. A Fireball is two damage on turn three and eight on turn nine, and the deck holds it because it is the reach: `_size_x_burn` sized the X to the victim, which is right, and had no reading of whether the card was worth casting yet, so a Wizard on three Mountains spent one of Mountain Artillery's two Fireballs on a Grizzly Bears. The hold is bounded by the game's own age (only while the turn count is under twice the number, in player turns) and lifted by readings the pilot already makes rather than by a constant: a burn that wins is returned by the face arm before this is asked, and `AiPlayer._in_danger` — the panic line read a fourth time, against the damage their board would actually land through the blocks this seat would make — spends the card the moment the clock says to. The face arm still runs under the hold. It reads the REACH and not the shot on purpose: gating on the X actually paid refuses a Fireball for four at a Serra Angel for a game's first nine turns, which the suite has pinned as correct since the Fireball was first sized |
+| `holds_x_burn` | 0 | 0 | 3 | 5 | the smallest REACH — the largest X the mana can pay — at which the profile will point an X burn spell at a creature while the game is young; 0 never holds. A Fireball is two damage on turn three and eight on turn nine, and the deck holds it because it is the reach: `_size_x_burn` sized the X to the victim, which is right, and had no reading of whether the card was worth casting yet, so a Wizard on three Mountains spent one of Mountain Artillery's two Fireballs on a Grizzly Bears. The hold is bounded by the game's own age (only while the turn count is under twice the number, in player turns) and lifted by readings the pilot already makes rather than by a constant: a burn that wins is returned by the face arm before this is asked, and `AiPlayer._in_danger` — the panic line read a fourth time, against the damage their board would actually land through the blocks this seat would make — spends the card the moment the clock says to. The face arm still runs under the hold. It reads the REACH and not the shot on purpose: gating on the X actually paid refuses a Fireball for four at a Serra Angel for a game's first nine turns, which the suite has pinned as correct since the Fireball was first sized. **And since 2026-09-10 the same number carries THE CHAIN** (`docs/forge/casting.md` P7's second half), which is the same sentence read forwards instead of backwards: the hold answers *is this X burn worth pointing at a creature at all*, and the chain answers *which creature*, once the answer is one card short. `_best_victim` asks `EffectIntent.kills` of ONE card at a time, so a Fireball and a Lightning Bolt in one hand on four Mountains looked at a Serra Angel and both answered honestly — three is not four, and three is not four — and the pilot PASSED with three of its four mana enough to kill a 4/4 flier. `AiPlayer._burn_chain` finds the creature the two kill together, sizes the X to its SHARE (the Fireball for one, not for the reach's three), refuses the pair unless ONE plan pays for both, and books the partner's cost in `_held_reserve` — Forge's `reserveManaSourcesForNextSpell` at the same seam. The partner is a card whose damage is PRINTED: a second X spell is refused on arithmetic, because each X spell pays a coloured pip of overhead and one of them reaches further alone than two do. The second half is released by `AiPlayer._finishes_damaged` — a held burn that kills a creature ONLY because of the damage already marked on it cannot wait for their end step, since marked damage is wiped in this turn's cleanup (CR 514.2) — and that reading also spends a Bolt on the blocker that came back from combat with three points on it. ONE KNOB AND NOT TWO because the two halves would contradict each other: at a reach the hold refuses, a separate chain knob would point the same card at the same creature for the same turn. The hold is asked FIRST and wins, `_in_danger` lifts both together, and Forge arranges it the same way — its chain chance is forced to 100 exactly where its hold stops refusing |
 | `reads_gaze` | off | off | on | on | reads the three printed lines that settle a combat without ever entering the damage arithmetic, all three at `AiPlayer._dies_to`'s own seam. THE GAZE: a Cockatrice or a Thicket Basilisk destroys whatever it blocks or is blocked by, at end of combat — so a Craw Wurm no longer swings into one for free (`_attack_risk` 0.0 before, 2.5 after) and our own Cockatrice stops watching a Craw Wurm walk past for six. THE RAMPAGE (CR 702.23): the engine gives a blocked attacker +N/+N for each blocker past the first and the gang rung ignored it, so two Grizzly Bears ganged a Craw Giant on `2+2 >= 4`, met an 8/6, died both and took four trample; the number is counted now wherever a gang is priced, the crack-back model included. THE EXECUTIONER: an untapped Royal Assassin is why a non-vigilant body stays home, because tapping to attack is what makes it a legal target — a Hypnotic Specter used to swing past a 1/1 it cannot be blocked by and be in the graveyard before the damage step. Nothing names a card: two printed lines read as shapes (`EffectIntent.is_gaze`, `EffectIntent.destroys_the_tapped`, each with the card's own condition or spec put to it) and one engine field (`CardInstance.cur_rampage`) |
 | `reads_manlands` | off | off | on | on | counts a permanent that can animate ITSELF as a body in the combat about to happen — theirs when we attack, ours when we block, and the two halves are one knob because either alone is a lie. Theirs: the attack was priced against their untapped CREATURES only, so a Mishra's Factory with `{1}` open was invisible to the cohort, to the pump rider and to the crack-back model, and a Llanowar Elves walked into a 2/2 that costs them a mana; the declaration is made now with their affordable animations hung on under the journal (`AiPlayer._attack_choice_reading_manlands`), the mirror of `animates_to_attack`'s own probe. Ours: `_animation_value` prices an animation by the ATTACK it enables and answers 0.0 at every moment but our own precombat main, so no rung had ever animated a Factory to BLOCK — three untapped lands watched a Grizzly Bears hit for two. It is bought at the moment `_defensive_combat_response` already owns, once their attackers are declared, and only when the block declaration itself would use the body AND the body comes back — `_animation_value`'s own refusal mirrored, because what animates here is almost always a LAND. Sorcerer and Wizard, with `animates_to_attack` and `plays_engines`. Nothing here names a card: the shape is `EffectIntent.animates`, and their mana is counted the way `AiPlayer._shieldable` already counts theirs — untapped permanents, public to both seats |
 | `reads_pumps` | off | off | on | on | reads the pump on a creature it does NOT control as part of that creature's SIZE, which is the mirror of `pumps_to_attack` and the half that had never been built: two days of passes taught the pilot to size its own attack, block and survival by the mana it holds, and it had never once feared the same mana on the other side of the table. A Shivan Dragon with three Mountains open was a 5/5 and a Frozen Shade behind four Swamps was a 0/1, so a Grizzly Bears was sent into one at `_attack_risk` 0.00 — *we kill it and live* — and was in the graveyard with the Shade still standing and their life still twenty. `AiPlayer._pump_reach` answers what their body can grow to: the cheapest self-targeting `PumpEffect` ability with no tap cost, times the activations their OPEN SOURCES pay for, under three caps — the card's own *activate only N times each turn* (a Fire Drake behind five Mountains is a 3/2, not a 7/2), ONE POOL shared among the bodies of theirs this combat can ask it of (three Carrion Ants behind six Swamps are three 2/3s, not three 6/7s), and the smallest count past which no kill-or-survive answer on the board could still change (a Shade behind ten Swamps facing one Grizzly Bears is +2/+2). ONLY THE KILL TEST reads it and never the face damage, so the cohort still prices its damage through. AND IT IS ASYMMETRIC, because the Lab put it that way rather than the design: their pump deciding whether THEIR body dies is read everywhere, at `_dies_to`'s own seam; their pump deciding whether OURS dies is read only where we are choosing to SEND a body into it — `_attack_risk` and `_cohort_value`, the two halves of the attack declaration — because a blocker of ours that dies to their breath has SPENT their mana, and mana spent killing a blocker is mana that did not reach our face, while an attacker of ours that dies to it has bought nothing at all. Nothing names a card: the shape is `EffectIntent.pump_self`, and their mana is counted the way `AiPlayer._shieldable` already counts it — untapped permanents, public to both seats |
@@ -1990,6 +1990,154 @@ sweeps of 2026-09-10, on both trees — the ones taken before
 `AiPlayer._main2_mana_held` existed and the ones taken after. Forty Forests against forty Mountains is NOT a control
 for this knob — the land-drop half fires on it (harmlessly, as it
 happens, which is a pool fact and not a licence).
+THE TWO BURN SPELLS THAT KILL TOGETHER (2026-09-10, the CHAIN half of
+`holds_x_burn`, `docs/forge/casting.md` P7) is a WASH ON THE WIN RATE
+whose flips lean one way on every pair and at both rungs, and a
+malfunction removed. It ships as an EXTENSION of the knob it belongs to
+rather than as a knob of its own.
+
+- **THE REPRODUCTION IS ONE BOARD AND IT IS NOT ARGUABLE.** A Fireball
+  and a Lightning Bolt in hand, four Mountains, a Serra Angel across the
+  table, and the shipped Wizard PASSES. `_best_victim` asks
+  `EffectIntent.kills` of ONE card at a time and both cards answer
+  honestly — three is not four, and three is not four — while three of
+  the four mana on the table kill a 4/4 flier outright. On, the Fireball
+  is cast for X=1 and the Bolt finishes it in the same main phase.
+- **ONE KNOB AND NOT TWO, and the argument is that two would contradict
+  each other.** At a reach the hold refuses, a separate chain knob would
+  point the same card at the same creature on the same turn — and the
+  hold's whole sentence is that a small X burn is the finisher thrown
+  away, which is twice as true of a chain, because a chain spends the
+  card beside it as well. So the chain is asked UNDER the hold, both are
+  lifted together by `_in_danger`, and Forge arranges it the same way:
+  its `CHANCE_TO_CHAIN_TWO_DAMAGE_SPELLS` is forced to 100 exactly where
+  its hold stops refusing.
+- **THE NUMBERS.** Seed 11, 2 000 games an arm, `--null 0`, control Big
+  Green vs White Knights byte-identical to its own null (1083-917) in
+  every arm of every run. The HEAD column is the same command on the
+  same seeds with the CHAIN absent — the hold half alone, which shipped
+  earlier the same day — so the two columns differ by the chain and by
+  nothing else.
+
+| pair | null | HEAD 3 / 5 | with the chain 3 / 5 | games that turned at 5 |
+| --- | --- | --- | --- | --- |
+| Mountain Artillery vs Big Green | 49.2% | 49.1 / 49.3 | 49.5 / **50.2** | 606 — 56 won, 37 lost |
+| Black-Red Raiders vs Big Green | 52.3% | 52.3 / 51.9 | **53.4** / 53.0 | 453 — 46 won, 32 lost |
+| Mountain Artillery vs White Knights | 54.4% | 53.4 / 54.3 | 54.5 / **55.5** | 654 — 81 won, 57 lost |
+
+- **NOT ONE DELTA IS CLEAR OF ITS INTERVAL** (±3.1 at this size) and that
+  is said plainly. What is not a coin is the SIGN and the flips: all six
+  arms are positive with the chain and three of the six were negative
+  without it (−0.1, −0.3 and −0.9), and across the three pairs and both rungs **2 715 of
+  12 000 games end differently, 291 flipped to a win against 203 flipped
+  away** — where the hold alone, on the same twelve thousand seeds,
+  flipped **120 to a win against 144 away** across 1 522. The
+  footprint quadruples at the Sorcerer's 3 (83 and 33 games without the
+  chain against 357 and 323 with it), which is the chain firing where
+  the hold had already let the reach through.
+- **THE HOLD IS WHAT THE CHAIN ANSWERS TO, AND THE NUMBERS SHOW IT.** At
+  the Wizard's 5 the chain fires only past a reach of five or past turn
+  ten; at the Sorcerer's 3 it opens from four lands on. That is why the
+  Sorcerer's arm moves LESS here than the Wizard's on two of the three
+  pairs: the hold is refusing the small chains, which is what it is for.
+- **AND THE KNOB'S CONTROL PAIR CHANGED**, which is a fact about the
+  knob's new footprint rather than a failure of the null. The chain's
+  second half releases a held burn spell that kills a creature ONLY
+  because of the damage already marked on it, and Blue Skies holds three
+  Psionic Blasts — a printed four, an instant — so the pair the HOLD was
+  measured against now moves seven of two thousand games at 3 and at 5.
+  A control for this knob must hold no targeted burn of ANY kind on
+  either side, X or printed; Big Green vs White Knights holds none
+  (`DeckLab/README.md`).
+
+
+THE SWEEP THAT WAITS FOR THE COMBAT IT ANSWERS (2026-09-10, the DISK
+DEFERRAL and the after-board STATICS, both extensions of `times_sweeps`)
+is **the clearest GAIN of the wave on the deck that owns the card**, and
+it is one of the few rows where the knob's own delta moves from nothing
+to something without a line of the null changing.
+
+- **THE REPRODUCTION, from a headless probe.** A Nevinyrral's Disk and
+  two Jayemdae Tomes of ours, three Grizzly Bears of theirs, nothing else
+  on the table: `activated Nevinyrral's Disk` in our own first main
+  phase, both Tomes in the graveyard, on a turn where waiting costs
+  nothing at all. `times_sweeps` had made their combat an EXTRA moment
+  and never a preferred one, and `_sweep_value` carries a relief read off
+  an attack that has not happened, so the guessed attack paid for the
+  early activation.
+- **AND THE FIRST CUT LEARNED ITS SECOND HALF FROM A PROBE.** Deferred
+  out of our main phase, the Disk simply went off at their UPKEEP
+  instead — one step before their draw, before they had cast a card,
+  with the attack still unguessed. Their upkeep is one phase EARLIER
+  than their combat, not later, so the same wait applies there; their
+  END step is not deferred, and that is also why no deferred sweeper can
+  be stranded, since a combat that never comes still ends in a mana sink
+  that fires it.
+- **THE STATICS HALF, and the note's own example is the one card that
+  cannot show it.** `_sweep_relief` read its survivors' attack legality
+  off the board as it STOOD, so a Moat of ours went on holding the
+  ground in a reading of the board the same sweep had just destroyed the
+  Moat on: at two life, with a Moat and a Disk against a Serra Angel and
+  a regenerating 2/2, the relief answered **1008.00** — four points
+  priced as lethal plus `LETHAL_WORTH` for a sweep that "is the out" —
+  while the 2/2 walks in for two the moment the Moat is gone. It reads
+  **4.00** now. What the row's own wording asks for — *a Moat the Disk
+  takes no longer holds the ground* — needs a creature the DISK DID NOT
+  KILL, and a Disk kills every creature a Moat was holding: the only
+  survivors it leaves are regenerating ones (its printed line carries no
+  clause against regeneration, which this engine models), which is the
+  board the test pins. Said plainly: the clause is right, and the card
+  the note names is the one card that can only show it with a shield up.
+- **THE NUMBERS.** Seed 11, 2 000 games an arm, control Blue Skies vs
+  Black-Red Raiders — no sweeper on either side — byte-identical to its
+  own null in every arm of every run. The HEAD column is the same
+  command on the same seeds without the deferral and without the statics
+  reading.
+
+| pair | null | HEAD `on` | with the deferral | games that turned |
+| --- | --- | --- | --- | --- |
+| Witch (4 Nevinyrral's Disk) vs Big Green | 9.5% | 9.8% (+0.4 ±1.8) | **14.4% (+4.9 ±2.0)** | 768 — **111 won, 12 lost** |
+| The Deck (playable, 2 Disks) vs Black-Red Raiders | 50.6% | 51.1% (+0.5) | 51.6% (+1.0 ±3.1) | 163 — 23 won, 4 lost |
+
+- **+4.9 ±2.0 IS CLEAR OF ZERO** and the flips are not close: 111 games
+  flipped to a win against 12 flipped away, where the same knob without
+  the deferral flipped 17 against 10 on the same seeds. The Witch is the
+  deck the row is about — four Disks, a board of Clay Statues and
+  Skeletons that does not mind losing the table — and holding the Disk
+  for the attack is exactly what a player does with it.
+- **THE NULL DID NOT MOVE.** The Witch pair's `off` arm is byte-identical
+  across the two trees, 2 000 of 2 000, and The Deck pair's is 1 999 of
+  2 000. Both control arms PASS inside each tree; between the trees the
+  control moves 209 of 2 000 in BOTH arms alike, and that is the CHAIN
+  above firing on Blue Skies' Psionic Blasts and Black-Red Raiders'
+  Bolts, not this row.
+
+
+THE NO-HARM MATRIX FOR BOTH ROWS TOGETHER, the five starters at 1 000
+games a matchup, seed 11, every knob at its shipped value on both seats —
+the tree with the chain and the deferral against the same command on the
+tree without them:
+
+| matchup | before | after | games of 1 000 |
+| --- | --- | --- | --- |
+| Big Green vs Black-Red Raiders | 474 | 460 | −14 |
+| Big Green vs Blue Skies | 420 | 419 | −1 |
+| Big Green vs Mountain Artillery | 505 | 500 | −5 |
+| Big Green vs White Knights | 544 | 544 | 0 |
+| Black-Red Raiders vs Blue Skies | 417 | 417 | 0 |
+| Black-Red Raiders vs Mountain Artillery | 437 | 435 | −2 |
+| Black-Red Raiders vs White Knights | 413 | 416 | +3 |
+| Blue Skies vs Mountain Artillery | 580 | 573 | −7 |
+| Blue Skies vs White Knights | 705 | 705 | 0 |
+| Mountain Artillery vs White Knights | 524 | 531 | +7 |
+
+One standard deviation at that size is sixteen games, so not one matchup
+moves by as much as a sigma and the ten together move nineteen games of
+ten thousand. The three that do not move at all are the three with
+neither a burn spell nor a sweeper in reach of the two rows, and the
+largest mover is the pair with three Lightning Bolts and a Fireball on
+one side of it — which is the chain, arriving where the sweeps said it
+would.
 
 
 ## 5. Where the ladder still ends short
@@ -2104,10 +2252,25 @@ happens, which is a pool fact and not a licence).
   pumps nothing this turn. None of the three is worth building while the
   knob is off.
 - `holds_x_burn` is the HOLD half of its row only. The CHAIN — two burn
+- ~~`holds_x_burn` is the HOLD half of its row only. The CHAIN — two burn
   spells that kill together, the first sized for its share and the
-  second's cost booked out of the reserve — is wave 3's
-  (`docs/AI-next-wave.md`, `docs/forge/casting.md` P7). And
-  `AiPlayer._in_danger` reads the board's clock and nothing else: burn in
+  second's cost booked out of the reserve — is wave 3's.~~ **Closed
+  2026-09-10 — BUILT, as an EXTENSION of the knob rather than a knob of
+  its own** (§2, §4). What is left open under it is named rather than
+  hidden. The chain's FIRST half must be the X spell: a pair of PRINTED
+  shots (two Lightning Bolts on a Craw Wurm) is a chain this pool can
+  make and this reading cannot, because both cards are held instants and
+  nothing in the main phase would release the first of them — the
+  release (`AiPlayer._finishes_damaged`) is a reading of damage ALREADY
+  marked, and the first shot of a two-Bolt chain has nothing to borrow
+  from. Two X spells are refused on arithmetic and that one is correct
+  and closed: each X spell pays a coloured pip of overhead, so one of
+  them reaches further alone than two do. And the chain prices the
+  victim and never the CARDS: spending a Fireball and a Bolt on one
+  Serra Angel is two cards for one, which the reading says nothing about
+  — the hold above it is what keeps that from being cheap, and past turn
+  ten nothing does.
+- `AiPlayer._in_danger` reads the board's clock and nothing else: burn in
   their hand, an upkeep price we cannot pay, a Vise ticking — none of
   those lift the hold, and the first of them is a hand read this AI does
   not do at all.
@@ -2138,13 +2301,44 @@ happens, which is a pool fact and not a licence).
   this pool does not have, and its second land test ("never when we would
   lose more land value") is the swing itself once the lands are priced by
   `Evaluator.land_value`, so it is already there rather than missing.
-- `times_sweeps` holds an activated sweeper only from the moment it is
+- ~~`times_sweeps` holds an activated sweeper only from the moment it is
   offered in the opponent's combat; a Disk that is worth firing at its
   own main phase still fires there, when waiting for their attack would
   cost nothing but a Disenchant's window. The relief's "after" board is
   the sweep's survivors under the statics as they stand — a Moat the
   Disk takes with the board still holds the ground creatures the Disk
-  did not kill. Both open (`docs/ROADMAP.md`, the third pass).
+  did not kill.~~ **Closed 2026-09-10 — both BUILT, as an EXTENSION of
+  the knob** (§2, §4). Three things under them are left open and are
+  worth naming.
+  THE DEFERRAL DOES NOT BOOK ITS OWN MANA. It declines the activation
+  and nothing keeps the cost open, so an ability scored after it in the
+  same `_try_activate` pass can spend the mana the deferred sweeper will
+  want in their combat. `AiPlayer._held_reserve` is a reserve for CARDS
+  and the ability scorer only reads it; a reserve for a deferred
+  ACTIVATION is a second mechanism and was not built for a row about
+  timing.
+  THE STATICS READING IS ONE FACE OF THE QUESTION. What
+  `AiPlayer._ground_the_sweep_opens` answers is attack LEGALITY — a Moat,
+  an Arboria, an Island Sanctuary, an Evil Eye. The other faces of "the
+  after board must apply what the sweep removes" are an ANTHEM the sweep
+  takes (a Crusade, a Bad Moon: the survivors are read at the size the
+  anthem still gives them) and a keyword an aura granted. Those want a
+  real recalculation of the CR 613 layers on a board that does not
+  exist, inside a per-X loop, and the cheap exact answer that works for
+  `cur_cant_attack` — it is set by a static and by nothing else, so a
+  sweep that takes every static on the table cannot leave one grounding
+  anything — has no equivalent for a number. Where a static source
+  survives the sweep the reading stays conservative on purpose, and a
+  FLOATING static (one whose source has already left the battlefield) is
+  not counted at all.
+  AND THE DISK UNDER OUR OWN MOAT IS NOT A MALFUNCTION THE ROW FIXES.
+  With a Moat of ours and three Craw Wurms across the table the Disk
+  fires in our main phase on both arms and always did: the board swing
+  is 47.20 and the relief is correctly 0, because the ground is held.
+  What is wrong there is not the timing but the HORIZON — the Moat
+  answers every ground creature still in their deck and nothing in this
+  engine prices a permanent's future (`counts_the_race`'s row,
+  `docs/AI-next-wave.md` wave 4).
 - Time Walk is cast for its printed worth — a generic three, the same
   as a Hill Giant — once the pace allows it; the turn's own value (the
   untap, the attack, the land drop) is not priced, so a Walk goes off

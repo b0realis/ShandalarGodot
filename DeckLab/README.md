@@ -378,13 +378,38 @@ counters are all the same card: with two Counterspells and nothing else,
 there is no order to get wrong. `holds_x_burn` (2026-09-10) is a NUMBER
 and fires only where a spell whose X IS its damage is pointed at a
 creature (`EffectIntent.damage_uses_x` — Fireball, Disintegrate, Drain
-Life), so its control must hold none of them: Blue Skies vs White Knights
-holds no X burn at all (Psionic Blast's four is printed and Braingeyser's
-X is cards, not damage). Its null is 0 and NOT the seat's own preset
+Life), so its control must hold none of them — Blue Skies vs White
+Knights holds no X burn at all (Psionic Blast's four is printed and
+Braingeyser's X is cards, not damage), which is what the HOLD half was
+measured against and is no longer enough (below). Its null is 0 and NOT the seat's own preset
 value, so a sweep of it wants `--null 0` written out — a wizard seat's
 own value is 5, and a sweep that lets the default stand is measuring 3
 and 0 against 5 rather than against the shipped tree before the knob
 existed.
+**AND ITS CONTROL PAIR CHANGED ON 2026-09-10**, when the knob grew its
+CHAIN half. Blue Skies vs White Knights was byte-identical to its own
+null while the knob was only the hold; it is not any more, and the
+reason is one card. The chain's second half releases a held burn
+spell that kills a creature ONLY because of the damage already marked on
+it (`AiPlayer._finishes_damaged`, marked damage being wiped in the
+cleanup step), and **Blue Skies holds three Psionic Blasts** — four
+damage, printed, an instant. So the knob now fires on a deck with no X
+burn in it at all: seven of two thousand control games differ at both 3
+and 5, the first at game 751. A control for `holds_x_burn` must hold no
+targeted burn of ANY kind on either side, X or printed — **Big Green vs
+White Knights** holds none (Big Green's Hurricane is a sweeper, which
+the chain refuses on both sides of the reading, and Giant Growth is a
+pump), and it replays its own null game for game.
+`times_sweeps` (2026-09-10) grew the same way and its control has to be
+picked with the same care: it prices EVERY sweeper — a spell as well as
+an activated ability — so a control must hold no `DestroyAll` and no
+`DamageAll` on either side. White Knights' one Wrath of God and Big
+Green's one Hurricane both disqualify the usual pair; **Blue Skies vs
+Black-Red Raiders** holds neither, and is byte-identical to its own null
+(1158-842 at 2,000 games). The live pair for its DEFERRAL half is a deck
+with an ACTIVATED sweeper in it — `decks/1997/ancients/witch.deck` runs
+four Nevinyrral's Disks, `decks/variants/the_deck_playable.deck` two —
+against a board that actually attacks.
 `reads_gaze` (2026-09-10) fires on three printed shapes and its control
 must hold none of them: a trigger that destroys what it blocks
 (Cockatrice, Thicket Basilisk), a printed rampage (all seven are Legends
