@@ -101,6 +101,7 @@ override any knob on any preset for a measurement
 | `reinforces_blocks` | off | off | on | on | comes back to a block it has already declared and finishes the attacker off. `AiPlayer._best_block_for` is a LADDER and returns on the first rung that answers, so the free absorb — *a wall soaks the hit at zero cost, which is what walls are FOR* — sits above the value trade and above the gang: a Wall of Stone on the table blocked alone every time and the rungs below it were never reached, however many bodies were standing at home. Two walls of swords watched a Serra Angel walk away for free (each lives through it, and together they deal it exactly four); a Wall of Stone soaked a Craw Wurm while the Water Elemental beside it, which kills the Wurm, stayed home. `AiPlayer._reinforce_blocks` runs ONCE over the finished plan, and only where the band survives the attacker and does not kill it — never a chump, never a trade, never a body that `_shieldable`, indestructible or a printed gaze says cannot die. Safe bodies first and free of charge, then, only if those fall short, ONE body that dies to close the kill exactly. THE PRICE IS WHAT THE PAIR PUTS AT RISK — rung 3's own `price <= attacker_value * 1.5` read off the bodies that actually die, with Forge's stricter bound on top (the body that dies is worth strictly less than the attacker it kills) — so a survivor is free, a rampage that turns the pair into two corpses is charged for both, and nothing is written into the plan unless the band it builds actually kills. Sorcerer and Wizard, with the other combat reads |
 | `minds_the_vise` | off | off | on | on | reads the two printed shapes on THEIR side of the table that decide what our own HAND should be doing, and neither of them had ever reached a decision. THE SQUEEZE: a permanent whose upkeep trigger deals damage counted off the cards in a hand (`EffectIntent.hand_toll_of_line`, read from the trigger's own line the way the wheel and the aimed discard are). Reproduced — a Wizard holding seven with a Black Vise across the table went on drawing (the Jayemdae Tome's tick is offered at a hand of five, where `_draw_need` returns exactly 0.00), cast by printed worth alone, and its one Disenchant took the Jayemdae Tome (4.20) over the Vise (1.00) while the Vise squeezed for three a turn. THE PRISON: a permanent of theirs whose static holds our creatures at home (`cur_cant_attack`, set by a static and by nothing else — the reading `_ground_the_sweep_opens` already makes), priced by `Evaluator.permanent_value` at a flat 3.20 with two Craw Wurms standing behind it. Three readings, each of them 0 with no such permanent on the table: THE ROOM (`_vise_room`, the cards the hand can still take before the toll charges for them — no Ancestral, no Tome tick and no wheel drawn into a hand a Vise is already counting), THE RELIEF (`_vise_relief`, a cast worth the point it takes off our next upkeep at `_life_price`'s rate) and THE PRICE (`_prison_relief`, what taking the card off the table is worth — the squeeze's next beat ours minus theirs, and the prison's held attack read through `_damage_through_blocks`). **THE RELIEF IS SIGNED, AND THAT IS THE HALF `docs/forge/casting.md` P4 HAS BACKWARDS**: its *"The Rack shares (a)-(c) with the threshold at three"* is one subtraction out — a Rack's X is three MINUS the hand, so emptying a hand under one is the worst play at the table, and a pilot that answered it like a Vise would take the full three every upkeep instead of nothing. The room is one-directional for the same reason (it may refuse a draw and can never demand one), and a WHEEL is charged for the seven cards it refills us to rather than credited for the one it spent, which is `docs/arzakon.strategy` §4's *"never Wheel or Twister into one"* as arithmetic. **WHAT IS NOT BUILT**: P4's *"priced at the damage it will deal over `PACE_HORIZON` turns"* is a stream times a horizon, and there is no horizon in this engine — the same ruling the `EffectIntent.TOLL_BEATS` census made on 2026-09-10 for `prices_liabilities`. Every reading here prices ONE BEAT, a number the table is showing; the horizon stays `counts_the_race`'s (§5) |
 | `runs_loops` | off | off | off | on | prices the three cards of `docs/arzakon.strategy` §3C's infinite-turn loop by what they DO on this board instead of by the printed card, which is the one thing `Evaluator.card_value` cannot see. Reproduced, all three at the same seam: a Wheel of Fortune came out at **4.00 with our hand at seven and theirs at nothing** — a gift of six cards — and at **4.00 with ours at one and theirs at seven**, a gain of six, the same number both ways round; **Time Walk came out at 3.00 with three Serra Angels on the table**, an extra turn worth twelve damage priced at a Counterspell (the flat 3.0 `docs/arzakon.strategy` §5 names); and a **Regrowth with Time Walk and a Serra Angel in our own graveyard took the Angel**, 10.00 against 3.00, which is why the loop could never start. On: an extra turn is a draw step (`w_hand`) plus a land drop when a land is held plus the attack the board makes again, read through their blocks and priced by `_face_damage_value` (`AiPlayer._extra_turn_value` — 20.70 for that Time Walk); a FIXED-COUNT wheel is worth the cards it MOVES, `their hand − ours` once the wheel itself has left our hand (CR 608.2m), refused when that is negative and priced at `w_hand` a card (`_wheel_swing`); and a card in our own graveyard is offered to a "return a card" spell at what casting it on THIS board would be worth (`_graveyard_worth`). **THE LOOP IS THOSE THREE AND NOT A FOURTH RULE**: a turn taken with a returner in hand is credited the card it does not spend, which is what puts the Walk ahead of the Regrowth beside it in the same main step — so the Walk is in the graveyard when the Regrowth is cast, and the Regrowth takes it back. Nothing is named: the shapes are "extra turn", "each player discards and draws" (`EffectIntent.wheels`, built the same morning) and "return a card from your graveyard", and a Raise Dead is not a returner because its spec admits creatures alone. `paces_draws`' and `counts_cards`' guards run FIRST and are untouched. Wizard only — the far end of the ramp, and `docs/arzakon.strategy` §4's own item 6 |
+| `counts_the_race` | off | off | on | on | reads the race to the empty library in TURNS instead of in cards — the same number only while each side loses one a turn. `paces_draws` counts CARDS and is exactly right under that assumption, because a draw step takes one from each library in turn; a MILL breaks the equality and everything built on it is then wrong by the ratio. Reproduced four times over, and the first is not a mispricing but a decision the pilot had never made: **A MILLSTONE IS NEVER ACTIVATED** — `{2}, {T}: target player mills two cards` falls out of `AiPlayer._ability_option`'s last `else` ("pumps, regeneration, mana, untaps, unknowns") because nothing there has an arm for a payload that is a card off a LIBRARY, and with the opponent's library at **two**, where the activation is the game (CR 704.5b), the option is still `{}` and the Millstone stays untapped. **OUR OWN MILLSTONE MAKES NO DIFFERENCE TO THE PACE** — our library at 12 against their 30 is a race we hold by two turns (theirs is ten turns at three cards a turn, ours is twelve) and `_library_slack` answered `1 << 20`, *"the race is lost already"*, because 12 − 30 is negative. **THEIR MILLSTONE IS PRICED AT 2.60 WHILE IT KILLS US** — with our library at six the one Disenchant took a Jayemdae Tome (4.20) and left the mill running, which is `minds_the_vise`'s malfunction in the other currency. **AND A TIMETWISTER IS CAST INTO A LIBRARY WE HAVE EMPTIED** — ours at 40, theirs at 3 with twenty cards in their graveyard, priced 11.50 and cast, their library back at 21, which is `docs/arzakon.strategy` §4 item 4 word for word. On, all four come out of ONE reading and no card is named: the rate a library loses cards at (`AiPlayer._mill_rate` — the draw step plus every repeatable mill aimed at that seat, a `{T}` ability counted ONCE because the tap is what makes a rate, and an unbounded one refused the way `TOLL_UNKNOWABLE` refuses a count) turns a library into a number of TURNS (`_deck_clock`); the pace counts those turns; a mill is bought at `LETHAL_WORTH` when it decks them and at what a card is worth otherwise, at the mana sink and never in the main phase, which is where a Millstone belongs; taking a mill of THEIRS off the table is worth the cards it hands back (`_mill_relief`, `w_hand` a card rising with the share of the library it takes — `_face_damage_value`'s own sentence about a life total, said about a library); and a wheel that shuffles the GRAVEYARDS back (`EffectIntent.wheel_recycles`, one more fact off the line the wheel count is already read from) is refused when it would lengthen the loser's clock in a race we hold. **THE HORIZON IS THE DECKING CLOCK AND NOTHING ELSE, AND THAT IS THIS ROW'S REAL ANSWER** (§5): a library is the one quantity in this game that never grows back, so a rate taken off it is a fact, while every other rate the engine can see is revisable inside a turn — which is why `RACE_HORIZON` refuses to read a combat clock more than four turns out. The bound here is `PACE_HORIZON`, the libraries' own, and there is no new number anywhere in the row. **AND THE POOL CANNOT MEASURE THE MILL AT ALL**: five decks hold a maindeck Millstone and **not one of them loads**, the three `docs/forge/casting.md` P3 names for its own measurement among them |
 | `crack_back_margin` | 0 | 0 | 0 | 0 | how far under our own life total the counter-swing has to reach before `AiPlayer._search_hold_back` is worth running: the gate was `reach >= life`, and it is `reach >= life - crack_back_margin`. The old gate is exact and asks exactly one question — *does this attack LOSE THE GAME to the counter-swing?* — and never the other one, whether it costs us twelve life for four points of damage. **Every preset ships 0, which is that gate unchanged**: the number is here so the Deck Lab can put the question in one command, the way `w_hand` is, and the Lab's answer of 2026-09-10 was NO (§4). Not a difficulty knob, and no rung moves it |
 | `develops_late` | off | off | off | off | keeps the hand shut until the attack is over — the whole of `docs/forge/casting.md` P1, and **every preset ships it off, which is the pilot unchanged**. `AiPlayer.act` reaches the main-phase planner in EITHER main step and the first one it reaches is Main 1, so every land, creature, artifact, enchantment, draw spell, discard and tutor this pilot has ever played went down BEFORE its own combat and with it the mana: a Wizard on four Forests with an Ironroot Treefolk in hand plays the land, casts the Treefolk, and stands at their declare-blockers with everything shown and nothing open. On, Main 1 casts only what Forge's `castPermanentInMain1` would — a win, floating mana that would be lost, a haste creature, a non-creature mana source, and what changes THIS combat (a permanent of theirs answered, an aura or a pump on a body of ours, a land that animates itself) — the mana sink waits with the rest, and the land drop is held under Forge's own four guards, the fourth of which is this pilot's own hazard: it sizes its attack and its block by the mana it holds, so a land in hand is a Carrion Ants that reads one point smaller. **THE LAB REFUSED THE RUNG** (§4): nine pairs, eight of them negative, a drift of about a point and a quarter and not one delta clear of its interval — so the field is here for the Deck Lab to ask with, the way `crack_back_margin` is, and no rung moves it |
 | `reads_race` | off | off | on | on | reads the two CLOCKS of the race — how many turns we need to take them from their life total to nothing, how many they need to do it to us — and lets the difference move what a VOLUNTARY BLOCK TRADE is allowed to cost. Rung 2 of `AiPlayer._best_block_for` takes a trade nothing forces on it whenever the body it spends is worth no more than `attacker_value + 0.5`, and that is the same margin at twenty life as at four: our Serra Angel trades itself for their Craw Wurm while we are one turn from winning at 20 against their 4, and our Craw Wurm lets an Erhnam Djinn through at 8 life because the Wurm is worth ONE POINT more. On, `AiPlayer._trade_margin` reads P1's own three states — demand a gain (−0.5) when their clock is more than a turn longer than ours, allow a small loss (+1.5) when ours is more than a turn longer than theirs, +0.5 otherwise — with a dead band of a turn between them and `AiPlayer.RACE_HORIZON` (four turns, `PACE_HORIZON`'s sentence said about the red zone) under all of it, because on a 20-20 board two Grizzly Bears against one Hill Giant is five turns against seven and that is a board, not a race. Both clocks are public numbers: the two life totals and the printed power each side could swing with once everything untaps, which is the durable reading the crack-back model has always made of theirs. **P1'S HEADLINE HALF — the ATTACK bar moved by the same difference, plus one for a clock they cannot block — WAS BUILT, MEASURED AND REFUSED** (§4): over the eight starter matchups it moved most it ended 42 games in a win against **170 in a loss**, White Knights vs Black-Red Raiders −3.1, and it is the third brake-or-licence hung on `AiPlayer._combat_tolerance` to be refused this month. The block half alone reads 16 won to 17 lost on those same eight, every delta between −0.2 and +0.2, and that wash is what ships |
@@ -2603,6 +2604,106 @@ point of win rate for seven tenths of a card is the wrong way round.
 short losses stay what the census called them: hands that had the mana
 and lost anyway.
 
+### THE DECKING COUNT (2026-09-10, `counts_the_race`)
+
+Wave 4's last row and the plan's (`docs/AI-next-wave.md`,
+`docs/forge/casting.md` P3, `docs/arzakon.strategy` §4 item 4).
+`paces_draws` has read the two libraries as a race since 2026-09-07 and it
+counts CARDS, which is exactly right while each side loses one a turn — a
+draw step takes one from each library in turn, so a lead in cards IS a
+lead in turns. A MILL breaks that equality, and every reading built on it
+is then wrong by the ratio. Four probes at HEAD, and the first is not a
+mispricing at all:
+
+- **A MILLSTONE IS NEVER ACTIVATED.** `{2}, {T}: target player mills two
+  cards` reaches `AiPlayer._ability_option` and falls out of its last
+  `else` — *"pumps, regeneration, mana, untaps, unknowns: not here"* —
+  because nothing there has an arm for a payload that is a card off a
+  LIBRARY. With three Islands untapped and the opponent's library at
+  **two**, where the activation is the game (CR 704.5b), the option is
+  still `{}` and `_try_activate` returns `''`. **Not one card had ever
+  been milled in this AI's life.**
+- **OUR OWN MILLSTONE MAKES NO DIFFERENCE TO THE PACE.** Our library at
+  12 against their 30, a Millstone of ours on the table: their clock is
+  **ten** turns and ours is **twelve**, a race we hold by two — and
+  `_library_slack` answered **`1 << 20`**, "the race is lost already,
+  draw for value", because 12 − 30 is negative.
+- **THEIR MILLSTONE IS PRICED AT 2.60 WHILE IT KILLS US.** Our library at
+  six, their Millstone and their Jayemdae Tome across the table, one
+  Disenchant in hand: `_victim_value` read **2.60** against the Tome's
+  **4.20** and `_best_victim` took the Tome. It is `minds_the_vise`'s
+  malfunction one row over, in the other currency.
+- **A TIMETWISTER IS CAST INTO A LIBRARY WE HAVE EMPTIED.** Ours at 40,
+  theirs at **3** with twenty cards in their graveyard: `_size_and_aim`
+  priced it **11.50** and cast it, and their library came back at 21.
+  That is `docs/arzakon.strategy` §4 item 4 word for word.
+
+On, the four are one reading and nothing is named. `AiPlayer._mill_rate`
+is the cards a turn a library loses to repeatable mills — a `{T}` ability
+counted ONCE, because the tap is what makes a rate, and an unbounded one
+refused the way `EffectIntent.TOLL_UNKNOWABLE` refuses a count it cannot
+do. `_deck_clock` is the library over that rate plus its draw step, in
+turns. `_library_slack` counts those turns instead of cards, and with no
+mill on either battlefield it is the integer expression it has been since
+2026-09-07. `_ability_option` buys a mill at `LETHAL_WORTH` when it decks
+them and at what a card is worth otherwise — `w_hand` a card, rising with
+the share of the library it takes, which is `_face_damage_value`'s own
+sentence about a life total said about a library — at the mana sink and
+never in the main phase, which is where a Millstone belongs.
+`_mill_relief` prices taking one of THEIRS off the table by the cards it
+hands us back, and by the game when one more activation would empty us.
+And `_hands_back_the_race` refuses a wheel that shuffles the GRAVEYARDS
+back (`EffectIntent.wheel_recycles`, one more fact off the line the wheel
+count is already read from) when it would lengthen the loser's clock in a
+race we hold — one-directional, silent on a race we are LOSING, where a
+Timetwister is the card that saves us.
+
+**THE HORIZON IS THE DECKING CLOCK AND NOTHING ELSE.** Four rows of the
+same day asked this one for a game clock; §5 has the ruling and its
+reasons in full. In one line: a library is the only quantity in this game
+that never grows back, so turns counted off it are a fact and turns
+counted off anything else are a guess — and the bound is `PACE_HORIZON`,
+the libraries' own, with no new constant anywhere in the row.
+
+**THE POOL, AND WHY THE HEADLINE CANNOT BE MEASURED.** Millstone is the
+only card in this pool with a `MillEffect` at all, five decks play one in
+the maindeck, and **not one of the five loads** — `ptcs_regnier`,
+`ptcs_loconto` and `wc1995_redi`, the three `docs/forge/casting.md` P3
+names for its own measurement, among them. So the whole mill half is
+pinned by `tests/ai/test_ai_counts_the_race_2026_09_10.gd` and by nothing
+else, exactly as The Rack's slope is. What the Lab CAN put the question
+to is the wheel half, and only in the games P3 itself prescribes: life out
+of the picture, two long control decks, the decking race the thing that
+ends it.
+
+**THE NUMBERS.** Seed 11, 2 000 games an arm, `--lives 400,400`, control
+Big Green vs White Knights — no mill and no wheel on either side —
+**1058-942, byte-identical to its own null in every arm of both sweeps,
+2 000 of 2 000 games**, and the `off` arm replays the null game for game
+in all four pairs.
+
+| pair (seat A) | null | `on` | games that turned |
+| --- | --- | --- | --- |
+| The Deck (Weissman, Feb 1996) vs The Deck (playable) | 60.0% | 61.4% (+1.4 ±3.0) | 282 — 31 won, 3 lost |
+| The Deck (Weissman, Fall 1994) vs The Deck (playable) | 79.5% | 80.3% (+0.8 ±2.5) | 328 — 21 won, 4 lost |
+| The Deck (Weissman, Fall 1994) vs The Deck (Weissman, Summer 1996) | 86.0% | 86.6% (+0.6 ±2.1) | 382 — 34 won, 21 lost |
+| The Deck (Weissman, Fall 1994) vs Kiska Ra (Spells of the Ancients) | 94.9% | 95.0% (+0.1 ±1.4) | 92 — 2 won, 0 lost |
+
+**NOT ONE DELTA IS CLEAR OF ITS INTERVAL, AND THAT IS SAID PLAINLY** —
+the last pair is at 94.9% and has almost nowhere to move. What is not a
+coin is the paired count, the instrument `runs_loops` and
+`holds_x_burn`'s chain half shipped on: **all four arms are positive**,
+1 084 of 8 000 games end differently, and **88 flipped to a win against 28
+flipped away**, where a fair toss over 116 sits at 58 ± 5.4. It is a WASH
+ON THE WIN RATE that removes a visible malfunction — a Millstone that had
+never been activated once, and a Timetwister handing back a win three
+turns away — and it ships as that.
+
+**NO HARM.** Big Green against the whole starter field, 1 000 games a
+pair: **0 of 4 000 games different**, and 0 of the control's 1 000 beside
+them. No shipped starter holds a mill or a wheel, so the starter meta
+cannot move and does not.
+
 ## 5. Where the ladder still ends short
 
 - `counter_threshold` is an absolute evaluator number, so a Wizard on a
@@ -3326,9 +3427,12 @@ and lost anyway.
   is a number the table is showing — so a Vise squeezing for three reads
   4.45 against a Jayemdae Tome's 4.20 and a Vise squeezing for nothing
   reads its printed 1.00, which is the right answer to both boards but
-  is NOT the note's. The stream stays `counts_the_race`'s
-  (`docs/AI-next-wave.md`, wave 4), which is where the two liability rows
-  were already sent.
+  is NOT the note's. **AND `counts_the_race` LANDED THE SAME DAY AND
+  ANSWERED NO** (the bullet below), which closes this rather than
+  deferring it: the only clock this engine can count forward honestly is
+  the DECKING one, so a toll's stream stays one beat and that is the
+  reading, not a stand-in for a later one. The two liability rows that
+  were sent here close the same way.
 - **P4's LAST CLAUSE — the Wall or the Bear not cast under a Moat — IS
   THE DEFENDER DISCOUNT UNDER ANOTHER NAME, and that constant was
   measured and refused on the same day** (§4, "THE PRICE OF A BODY THAT
@@ -3357,6 +3461,81 @@ and lost anyway.
   each way; `runs_loops` was read on those and the reading is in §4. A
   per-card census would be a change to `DeckLab/simulate.gd`, which is
   not this pass's.
+- **THE HORIZON: WHAT `counts_the_race` BROUGHT, AND WHAT IT REFUSED TO
+  INVENT** (2026-09-10). Four rows of that day ended by naming this one as
+  the thing they lacked — the land sweep's rebuild, the wall that blocks
+  every turn forever, the Disk fired under our own Moat, the Vise's
+  stream — and all four asked the same question: *how many turns has this
+  game left*. The answer the row shipped is narrow and is a RULING rather
+  than an omission.
+  **ONE CLOCK IN THIS ENGINE COUNTS FORWARD HONESTLY, AND IT IS THE
+  DECKING ONE.** A library is monotone: it only ever shrinks, its draw
+  step is a rule and not a choice, and a mill on the table mills again
+  next turn unless somebody takes it off. So `library ÷ (1 + the mill
+  aimed at it)` is a number of turns that is a FACT about the table
+  (`AiPlayer._deck_clock`), and it needs no constant that is not already
+  here — the bound is `PACE_HORIZON`, the libraries' own twenty draw
+  steps, which is the sentence that horizon was written to say.
+  **EVERY OTHER RATE THE ENGINE CAN SEE IS REVISABLE INSIDE A TURN, and
+  that is why the general horizon is refused.** A combat clock moves the
+  moment a creature is cast, blocks or dies — which is exactly why
+  `reads_race` will not read one more than `RACE_HORIZON` (four) turns
+  out, and the same objection applies with more force at ten or twenty. A
+  toll stops the turn its permanent leaves the battlefield. A mana
+  drought's "turns to rebuild" is a hand, a curve and a land count, and
+  half of it (theirs) is hidden. And what a Moat still answers — the Disk
+  deferral's own example — is a question about the CARDS LEFT IN A
+  LIBRARY, which is a hidden zone this AI is forbidden to read
+  (`docs/forge/README.md`, "no hand reads"). A number of turns multiplied
+  by any of those is a guess wearing a fact's clothes, and this repository
+  has twice ruled that an invented constant is worse than the silence
+  (`EffectIntent.TOLL_BEATS`, `TOLL_UNKNOWABLE`). So the three rows that
+  wanted a game clock keep the readings they shipped with — one beat, one
+  turn, one board — and this row does not hand them a longer one it
+  cannot defend. What it does hand them is the shape of the argument: ask
+  first whether the quantity being counted forward can grow back.
+- **THE MILL CANNOT BE MEASURED IN THIS POOL, AT ALL** (2026-09-10, and
+  it is the third such finding in two days). Five decks in `decks/` hold
+  a maindeck Millstone — `tournament/ptcs_regnier`, `ptcs_loconto`,
+  `wc1995_redi`, `ptny1996_sclafani` and
+  `extended_community/os_tinker_the_deck_menendian_2014` — and **not one
+  of them loads**: every one is proxy-blocked (exit 2). Three of the five
+  are the decks `docs/forge/casting.md` P3 names for its own measurement.
+  Two more decks name the card and neither counts: `wc1995_hernandez`
+  says "Millstone control" in a comment and plays none, and
+  `ptdallas1996_baca` has two in its SIDEBOARD, which the Lab never swaps
+  in without `--best-of`. Millstone is also the ONLY card in the pool
+  with a `MillEffect` at all. So the whole mill half of this row — the
+  activation, the rate, the pace correction and the relief — is pinned by
+  `tests/ai/test_ai_counts_the_race_2026_09_10.gd` and by nothing else,
+  exactly as The Rack's slope is, and what the Lab can measure is the
+  wheel half.
+- **AN ACTIVATED ABILITY CANNOT BE COUNTERED IN THIS ENGINE, so half of
+  P3's clause (b) is not buildable rather than not built.** The note asks
+  `_try_counter` to treat "a draw at us that decks us OR a Millstone
+  activation" as ALWAYS. The draw half was already there before this row
+  — `counters_by_shape`'s third shape, since 2026-09-10 — and the
+  activation half has nowhere to live: `TargetSpec.Kind` has `SPELL` and
+  no `ABILITY`, `_try_counter` returns immediately unless the top of the
+  stack is `Mtg.StackKind.SPELL`, and no card in this pool counters an
+  ability. It would be an engine row and a card row, not an AI knob's.
+- **THE MILL RATE IS THE ONE THE PERMANENT PRINTS, NOT THE ONE ITS MANA
+  ALLOWS.** `AiPlayer._mill_rate` counts a `{T}` mill once a turn and
+  never asks whether its controller can pay the `{2}` on the turn in
+  question: the clock is a question about many turns and the mana is a
+  question about one. It therefore slightly overstates BOTH clocks — for
+  our own library that is the safe direction, and for theirs it is the
+  plan the pilot is actually executing. A mill with no tap in its cost
+  has a rate the reading cannot bound and is refused outright, which is
+  `TOLL_UNKNOWABLE`'s ruling again; no such card is in the pool.
+- **THE WHEEL GUARD HAS NO MIRROR IN `_try_counter`.** A Timetwister of
+  OURS that would hand back a race we hold is refused
+  (`AiPlayer._hands_back_the_race`); a Timetwister of THEIRS that would
+  hand back a race THEY hold is not counted as an ALWAYS by
+  `_counter_shape`, which reads the two HANDS for a wheel and not the two
+  libraries. It is the same reading from the other side of the table and
+  it is left open on purpose: `counters_by_shape`'s wheel clause is a
+  hand reading with its own null, and widening it is that knob's row.
 - What the engine should eventually know about the old loops a player
   brings to the highest table — Channel-Fireball, the infinite turn, the
   Vise behind a Moat, decking — is `docs/arzakon.strategy`, section 4.
@@ -3364,4 +3543,6 @@ and lost anyway.
   Vise, never wheel into one) and item 6 (recognise the three-card loop),
   as `minds_the_vise` and `runs_loops`. Items 1 and 4 — counter by what a
   spell does, and count the library against a mill — are
-  `counters_by_shape` (shipped) and `counts_the_race` (wave 4, held).
+  `counters_by_shape` and `counts_the_race`, both shipped on 2026-09-10.
+  **All four of section 4's AI items are now the pilot's**, and what each
+  of them could not reach is written above rather than left to be found.

@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `holds_the_closer`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `holds_the_closer`, `counts_the_race`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -543,11 +543,47 @@ four apiece — `decks/1997/originals/beast_master.deck`, `druid.deck`,
 `fungus_master.deck`. It also needs a BLOCKER on the other side to have
 anything to bait, so a pair whose seat B empties its board is a pair the
 knob sleeps through.
-**Mind also that five of them default ON at Sorcerer and Wizard and a
-sixth at the Wizard**, so a sweep of some OTHER knob taken against a
-published number must pin them off on both seats
+`counts_the_race` (2026-09-10) fires on two shapes and its control must
+hold neither on EITHER side of the table: a repeatable MILL on a
+battlefield (an activated ability with a `MillEffect` and a `{T}` in its
+cost — **Millstone and nothing else in this pool**), and a WHEEL with a
+fixed count in the swept seat's hand (Timetwister and Wheel of Fortune;
+Winds of Change is `EffectIntent.WHEEL_REDRAW` and every reader of the
+field already stands down on it). **Big Green vs White Knights holds none
+of the three** and is byte-identical to its own null in every arm of
+every run of that day — 1058-942 at 2 000 games under `--lives 400,400`,
+550-450 at 1 000 at the default life. With no mill on either battlefield
+`AiPlayer._mill_rate` is 0 and `_library_slack` is the integer expression
+`paces_draws` has answered since 2026-09-07, so a pair with no wheel in
+it cannot move at all.
+**MIND WHAT THE POOL HOLDS, AND MIND IT TWICE.** Five decks in `decks/`
+play a maindeck Millstone — `tournament/ptcs_regnier`, `ptcs_loconto`,
+`wc1995_redi`, `ptny1996_sclafani`,
+`extended_community/os_tinker_the_deck_menendian_2014` — and **NOT ONE OF
+THEM LOADS**; all five are proxy-blocked (exit 2), and three of them are
+the decks `docs/forge/casting.md` P3 names for its own measurement.
+(`wc1995_hernandez` says "Millstone control" in a COMMENT and plays none;
+`ptdallas1996_baca` keeps two in its `SB:` sideboard, which the Lab never
+swaps in without `--best-of`.) So the mill half of this knob cannot be
+measured here at all and is pinned by `tests/ai/` alone, exactly as The
+Rack's slope is for `minds_the_vise`.
+**AND THE WHEEL HALF NEEDS A GAME THAT REACHES THE LIBRARIES.** The guard
+says nothing unless one of the two decking clocks is inside
+`AiPlayer.PACE_HORIZON` (twenty turns), which a duel at twenty life
+almost never is — the starter matrix measures **exactly 0 games
+different**, on all five pairs, because no shipped starter holds a mill
+or a wheel in the first place. The pairs that put the question are two
+long control decks with life out of the picture, which is P3's own
+prescription: `--lives 400,400`, a Timetwister deck in seat A, e.g.
+`decks/community/the_deck_weissman_1996_02.deck` against
+`decks/variants/the_deck_playable.deck` (median 67 turns). Twenty-one
+loadable decks hold a Timetwister and thirteen a Wheel of Fortune.
+**Mind also that six of them default ON at Sorcerer and Wizard and a
+seventh at the Wizard** (`counts_the_race` joined them on 2026-09-10), so
+a sweep of some OTHER knob taken against a published number must pin them
+off on both seats
 (`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
-`reinforces_blocks=off,reads_race=off,holds_tricks=off`
+`reinforces_blocks=off,reads_race=off,holds_tricks=off,counts_the_race=off`
 and the same for `--profile-b`) or it is measuring several changes; that
 is how the null was proved for both passes — the `pays_sacrifices` sweep
 of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,

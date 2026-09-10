@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5900 tests, 0 failing, 341 scripts** (153 088 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5922 tests, 0 failing, 342 scripts** (153 496 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11074,6 +11074,123 @@ sooner**, with only 31 of 266 wins by library-out — and at **35.5% against
 47.7%**. The Angel closes when the Abyss leaves, and the Abyss is worth about
 twelve points of win rate. That is a DECK question and not an AI one, and it is
 why Weissman's lists carry Moats where they carry Angels.
+
+## THE DECKING COUNT, AND THE HORIZON REFUSED (2026-09-10)
+
+`docs/AI-next-wave.md`'s Wave 4 row one and **the last row of the plan**,
+designed in `docs/forge/casting.md` P3 out of `docs/arzakon.strategy` §4
+item 4. It ships as a knob of its own, `counts_the_race`, at Sorcerer and
+Wizard.
+
+WHY NOT AN EXTENSION OF `paces_draws`, which is the honest question. That
+knob has read the two libraries as a race since 2026-09-07 and it counts
+CARDS — which is exactly right while each side loses one a turn, because a
+draw step takes one from each library in turn, so a lead in cards IS a
+lead in turns. A MILL breaks the equality and every term built on it is
+then wrong by the ratio. But `paces_draws` has only ever REFUSED a draw;
+"activate the Millstone", "Disenchant the Millstone" and "do not Twister"
+are three decisions in three other functions, and folding them into a knob
+that has never bought anything would misname it. The second reason is the
+measurement: folded in, the 2026-09-07 pace and the 2026-09-10 correction
+could only ever be swept together, and the new reading could never be
+taken against the shipped tree.
+
+REPRODUCED FOUR TIMES AT HEAD, and the first is not a mispricing but a
+decision the pilot had never made. **A MILLSTONE IS NEVER ACTIVATED**:
+"{2}, {T}: target player mills two cards" reaches
+`AiPlayer._ability_option` and falls out of its last `else` — "pumps,
+regeneration, mana, untaps, unknowns: not here" — because nothing there
+has an arm for a payload that is a card off a LIBRARY. Three Islands
+untapped and their library at TWO, where the activation is the game
+(CR 704.5b): the option is still `{}` and `_try_activate` returns "". Not
+one card had ever been milled in this AI's life. OUR OWN MILLSTONE MADE NO
+DIFFERENCE TO THE PACE: our library at 12 against their 30 is a race we
+hold by two turns — theirs is ten turns at three cards a turn, ours is
+twelve — and `_library_slack` answered 1 << 20, "the race is lost already,
+draw for value", because 12 minus 30 is negative. THEIR MILLSTONE PRICED
+AT 2.60 WHILE IT KILLED US: our library at six, the one Disenchant went at
+a Jayemdae Tome (4.20). AND A TIMETWISTER CAST INTO A LIBRARY WE HAD
+EMPTIED: ours 40, theirs 3 with twenty cards in their graveyard, priced
+11.50 and cast, their library back at 21 — `docs/arzakon.strategy` §4 item
+4 word for word.
+
+ONE READING, NO CARD NAMED. `_mill_rate` is the cards a turn a library
+loses to repeatable mills; a `{T}` ability is counted ONCE because the tap
+is what makes a rate, and an unbounded one is refused the way
+`EffectIntent.TOLL_UNKNOWABLE` refuses a count the reader cannot do.
+`_deck_clock` is the library over that rate plus its own draw step, in
+turns. `_library_slack` counts those turns instead of cards and reduces
+**algebraically** to its 2026-09-07 self when both rates are one.
+`_ability_option` buys a mill at `LETHAL_WORTH` when it decks them and at
+what a card is worth otherwise — `w_hand` a card, rising with the share of
+the library it takes — at the mana sink and never in the main phase, which
+is where a Millstone belongs. `_mill_relief` prices taking one of THEIRS
+off the table by the cards it hands back, and by the game when one more
+activation would empty us. `_hands_back_the_race` refuses a wheel that
+shuffles the GRAVEYARDS back (`EffectIntent.wheel_recycles`, one more fact
+off the line the wheel count is already read from) when it would lengthen
+the loser's clock in a race we hold — one-directional, and silent on a
+race we are LOSING, where a Timetwister is the card that saves us.
+
+**AND THE HORIZON FOUR ROWS SENT HERE IS REFUSED, WITH ITS REASONS.** The
+land sweep's rebuild, the wall that blocks every turn forever, the Disk
+fired under our own Moat and the Vise's stream all asked this row for "the
+turns a game has left". ONE CLOCK IN THIS ENGINE COUNTS FORWARD HONESTLY
+AND IT IS THE DECKING ONE: a library is monotone — it only ever shrinks,
+its draw step is a rule and not a choice, and a mill on the table mills
+again next turn unless somebody takes it off. Every other rate the engine
+can see is revisable inside a turn. A combat clock moves the moment a
+creature is cast, blocks or dies, which is exactly why `reads_race` will
+not read one past `RACE_HORIZON` (four turns) and the objection is
+stronger at twenty, not weaker. A toll stops the turn its permanent
+leaves. A mana drought's rebuild is a hand, a curve and a land count, and
+half of it is hidden in their hand. And what a Moat still answers is a
+question about the CARDS LEFT IN A LIBRARY, a hidden zone this AI is
+forbidden to read. A number of turns times any of those is a guess wearing
+a fact's clothes, and this repository has twice ruled that an invented
+constant is worse than the silence. So the three other rows keep the
+readings they shipped with, this row invents nothing — its bound is
+`PACE_HORIZON`, the libraries' own — and what it hands the ledger instead
+is the shape of the argument: **ask first whether the quantity being
+counted forward can grow back.**
+
+THE POOL CANNOT MEASURE THE HEADLINE, and that is the third such finding
+in two days. Millstone is the only card in this pool with a `MillEffect`
+at all; five decks play one in the maindeck and NOT ONE OF THEM LOADS —
+`ptcs_regnier`, `ptcs_loconto`, `wc1995_redi`, `ptny1996_sclafani` and
+`os_tinker_the_deck_menendian_2014`, all five proxy-blocked, and the first
+three are the decks P3 names for its own measurement. So the mill half is
+pinned by `tests/ai/test_ai_counts_the_race_2026_09_10.gd` and by nothing
+else, exactly as The Rack's slope is. AND HALF OF P3's CLAUSE (b) IS NOT
+BUILDABLE rather than not built: the draw-that-decks-us was already
+`counters_by_shape`'s third shape, and a Millstone ACTIVATION cannot be
+countered by anything in this engine — `TargetSpec.Kind` has SPELL and no
+ABILITY, and `_try_counter` returns unless the top of the stack is a
+spell.
+
+THE NUMBERS. Seed 11, 2 000 games an arm, `--lives 400,400` (P3's own
+prescription: life out of the picture, the libraries the thing that ends
+it), control Big Green vs White Knights — no mill and no wheel on either
+side, 1058-942 byte-identical to its own null in every arm of both sweeps.
+The Deck (Weissman, Feb 1996) vs The Deck (playable) 60.0% -> 61.4%
+(+1.4 ±3.0); Weissman Fall 1994 vs The Deck (playable) 79.5% -> 80.3%
+(+0.8 ±2.5); Weissman Fall 1994 vs Weissman Summer 1996 86.0% -> 86.6%
+(+0.6 ±2.1); Weissman Fall 1994 vs Kiska Ra 94.9% -> 95.0% (+0.1 ±1.4). A
+WASH ON EVERY WIN RATE AND IT SAYS SO — not one delta clear of its
+interval, and the last pair has nowhere to move. What is not a coin is the
+paired count: all four arms positive, 1 084 of 8 000 games end differently
+and 88 flipped to a win against 28 away, where a fair toss over 116 sits
+at 58 ± 5.4. It ships on `runs_loops`' and `holds_x_burn`'s precedent, and
+because it removes a malfunction the Lab cannot reach.
+
+THE NULL, PROVED AGAINST HEAD'S OWN FILES. The manual's `pays_sacrifices`
+pair — Dracur vs Big Green, seed 11, 1 000 games — run on HEAD's engine
+and on this tree is 24.9% both ways with `matchups.csv` byte-identical,
+with the knob pinned off AND at the shipped default. No harm: Big Green
+against the whole starter field, 0 of 4 000 games different — no shipped
+starter holds a mill or a wheel.
+
+**Wave 4 is closed, and with it `docs/AI-next-wave.md`'s plan.**
 
 ## Standing quality gates
 

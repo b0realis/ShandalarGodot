@@ -53,6 +53,23 @@ var draws_use_x: bool = false
 ## needs to know; the value of the search is priced by card_value.
 var searches: bool = false
 
+## THE MILL (2026-09-10, [member AiProfile.counts_the_race]) — cards this
+## effect takes off the TOP OF A LIBRARY and puts in a graveyard
+## ([MillEffect]), 0 for everything else.
+##
+## A card milled is not a card drawn and not a card discarded: nobody sees
+## it and nobody loses the game for it. What it takes is a TURN off the
+## clock of the library it comes from, because the loss is the draw from
+## the empty one (CR 704.5b) — which is why the field's only readers are
+## the race's ([method AiPlayer._mill_rate], [method AiPlayer._deck_clock])
+## and why it is a COUNT rather than a flag: two cards a turn and ten
+## cards a turn are not the same clock.
+##
+## Read from the effect class and never from a name. In this pool exactly
+## one card carries it, and that is a POOL FACT and not a design: Millstone
+## ({2}, {T}: target player mills two cards).
+var mills: int = 0
+
 ## Extra turns the caster takes (Time Walk: one). Each is a draw step off
 ## our own library before theirs comes round again, which is what THE
 ## PACE ([member AiProfile.paces_draws]) reads it for (2026-09-08); the
@@ -95,6 +112,23 @@ var wheels: int = 0
 
 ## [member wheels] when each player draws back exactly what it discarded.
 const WHEEL_REDRAW := -1
+
+## THE WHEEL THAT PUTS THE GRAVEYARDS BACK (2026-09-10, [member
+## AiProfile.counts_the_race]) — true when the wheel's own line says the
+## cards it takes are SHUFFLED INTO A LIBRARY rather than discarded.
+##
+## The distinction is the whole of `docs/arzakon.strategy` §4 item 4,
+## *"don't put the opponent's graveyard back with a Timetwister when it is
+## their loop"*: a Wheel of Fortune takes seven off each library and
+## leaves the decking race exactly where it found it, and a Timetwister
+## hands each player their hand AND their graveyard back, which can undo a
+## race one seat has spent the whole game winning. Same line, same reader,
+## one more fact off it ([method _wheel_recycles]).
+##
+## Winds of Change shuffles a HAND back and no graveyard, so it is false
+## here — and it is [constant WHEEL_REDRAW] anyway, which every reader of
+## [member wheels] already stands down on.
+var wheel_recycles: bool = false
 
 ## Targeted or self pump. [member pump_self] for the firebreathing shape;
 ## [member pump_uses_x] when the power bonus is the spell's X (Howl from
@@ -567,9 +601,12 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			intent.searches = true   # priced by card_value; a card off the library
 		elif e is ExtraTurnEffect:
 			intent.extra_turns += 1   # priced by card_value; a draw step off the library
+		elif e is MillEffect:
+			# THE MILL (2026-09-10): a count, not a flag — see [member mills].
+			intent.mills += e.count
 		elif e is MassPumpEffect \
 				or e is ReturnFromGraveyardEffect or e is PreventDamageEffect \
-				or e is PreventDamageShieldEffect or e is MillEffect:
+				or e is PreventDamageShieldEffect:
 			pass   # priced elsewhere (card_value); nothing here to sum
 		elif note.is_empty():
 			intent.unknown = true
@@ -586,6 +623,11 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			# and for the same reason. `unknown` stays set here too.
 			if intent.wheels == 0:
 				intent.wheels = _wheel_draw(e)
+				# ...and, off the same line, whether the cards it takes go
+				# back into the LIBRARIES (2026-09-10): see
+				# [member wheel_recycles].
+				if intent.wheels != 0:
+					intent.wheel_recycles = _wheel_recycles(e)
 	# THE TOKEN (2026-09-10): asked only of an effect list the reader could
 	# not classify, so a card that grew a second, readable ability cannot
 	# be handed the first one's body by name alone.
@@ -685,6 +727,16 @@ static func _wheel_draw(e: EffectBase) -> int:
 		if WHEEL_COUNTS.has(stripped):
 			return int(WHEEL_COUNTS[stripped])
 	return WHEEL_REDRAW
+
+
+## Does the wheel's own line say the cards go back into a LIBRARY along
+## with a GRAVEYARD? (2026-09-10 — see [member wheel_recycles].) Both words
+## are required: a hand shuffled back and nothing else is a reroll, which
+## leaves both libraries exactly the size they were.
+static func _wheel_recycles(e: EffectBase) -> bool:
+	var line := e.describe().to_lower()
+	return line.contains("shuffle") and line.contains("graveyard") \
+		and line.contains("librar")
 
 
 # The counts a wheel's own line can print, as words. Godot has no
@@ -1001,8 +1053,11 @@ const TOLL_BEATS: Array[int] = [
 ## AiPlayer._face_damage_value] scales one hit by the share of a life
 ## total it takes, [method Evaluator.position_score] is a snapshot, and
 ## [constant AiPlayer.PACE_HORIZON] is the LIBRARY's clock under a knob of
-## its own). So the question is `counts_the_race`'s (docs/AI-next-wave.md,
-## wave 4) and stays there; a symmetric toll keeps its printed worth.
+## its own). [member AiProfile.counts_the_race] shipped on 2026-09-10 and
+## brought exactly that one clock and no other, for the reason its own
+## docs give — a library never grows back and a life total under a toll
+## can — so the second half is still unanswerable and a symmetric toll
+## keeps its printed worth. The item is CLOSED rather than deferred.
 const TOLL_WORDS: Array[String] = ["damage to you", "damage to its controller"]
 
 ## Words that make the amount unknowable at the moment we would have to
@@ -1085,8 +1140,10 @@ static func toll_of_line(text: String) -> Dictionary:
 ## snapshot with no horizon in it. This reader does no such thing: the
 ## count it needs is a hand size, a number in front of the seat at the
 ## moment it acts, and every caller prices exactly ONE BEAT and never a
-## stream. The horizon question the ruling left open is still open and
-## still `counts_the_race`'s (docs/AI-next-wave.md, wave 4).
+## stream. The horizon question the ruling left open was answered by
+## [member AiProfile.counts_the_race] on 2026-09-10, and the answer is
+## that the DECKING clock is the only one this engine can count forward:
+## a hand toll's stream is not one of them, so ONE BEAT stays the reading.
 ##
 ## Read from the trigger's own printed line, which is the reading [method
 ## toll_of_line], [method _aimed_discard] and [method _wheel_draw] already

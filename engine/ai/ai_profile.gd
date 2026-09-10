@@ -1479,8 +1479,13 @@ var holds_tricks := false
 ## horizon in this engine (`docs/ai-difficulty.md` §5, and the census at
 ## [constant EffectIntent.TOLL_BEATS] that closed the same question for
 ## [member prices_liabilities] on 2026-09-10). Every reading here prices
-## ONE BEAT, which is a number the table is showing. The horizon stays
-## `counts_the_race`'s (docs/AI-next-wave.md, wave 4).
+## ONE BEAT, which is a number the table is showing.
+##
+## AND [member counts_the_race] LANDED THE SAME DAY AND ANSWERED NO, which
+## closes this rather than deferring it: the only clock this engine can
+## count forward honestly is the DECKING one, because a library is the one
+## resource that never grows back. A toll's stream is not that, so it
+## stays one beat and this is the reading, not a stand-in for a later one.
 var minds_the_vise := false
 
 
@@ -1556,6 +1561,79 @@ var runs_loops := false
 ## malfunction and ships inside [member checks_before_casting], where it
 ## belongs.
 var holds_the_closer := false
+## THE DECKING COUNT (2026-09-10, `docs/forge/casting.md` P3,
+## `docs/arzakon.strategy` §4 item 4) — the race to the empty library read
+## in TURNS instead of in CARDS, and the one clock in this engine that a
+## board cannot revise.
+##
+## [member paces_draws] already reads the two libraries as a race
+## ([method AiPlayer._library_slack]) and it counts CARDS, which is exactly
+## right while each side loses one a turn: a draw step takes one card from
+## each library in turn, so a lead in cards IS a lead in turns. A MILL
+## breaks that equality — the rates stop being the same number — and every
+## reading built on it is then wrong by the ratio.
+##
+## FOUR THINGS REPRODUCED AT HEAD, and the first is not a mispricing but a
+## whole decision the pilot has never made:
+##
+##  * A MILLSTONE IS NEVER ACTIVATED. `{2}, {T}: target player mills two
+##    cards` reaches [method AiPlayer._ability_option] and falls out of its
+##    last `else` — pumps, regeneration, mana, untaps, unknowns — because
+##    nothing there has an arm for an effect whose payload is a card off a
+##    library. With the opponent's library at TWO, where the mill is the
+##    game (they lose at their next draw, CR 704.5b), the option is still
+##    `{}` and the Millstone stays untapped. Not one card has ever been
+##    milled in this AI's life.
+##  * OUR OWN MILLSTONE MAKES NO DIFFERENCE TO THE PACE. With our library
+##    at 12 against their 30 and a Millstone of ours on the table, the race
+##    is ours by two turns (theirs is 10 turns at three cards a turn, ours
+##    is 12) — and [method AiPlayer._library_slack] answers `1 << 20`, "the
+##    race is lost already, draw for value", because 12 − 30 is negative.
+##  * THEIR MILLSTONE IS PRICED AT 2.60 WHILE IT KILLS US. With our library
+##    at 6 the one Disenchant in hand took a Jayemdae Tome (4.20) and left
+##    the Millstone milling. The same malfunction [member minds_the_vise]
+##    found one row over, in the other currency.
+##  * A TIMETWISTER IS CAST INTO A LIBRARY WE HAVE EMPTIED. Ours at 40,
+##    theirs at 3 with twenty cards in their graveyard: 11.50, cast, and
+##    their library comes back at 21. That is `docs/arzakon.strategy` §4
+##    item 4 word for word.
+##
+## On, all four are answered from ONE reading and no card is named. The
+## rate a library loses cards at ([method AiPlayer._mill_rate]: the draw
+## step, plus every repeatable mill on the table aimed at that seat) turns
+## the library into a number of TURNS ([method AiPlayer._deck_clock]); the
+## pace counts those turns instead of cards; a mill is bought at
+## [constant AiPlayer.LETHAL_WORTH] when it decks them and at what a card
+## is worth otherwise; taking a mill of theirs off the table is worth the
+## cards it hands us back ([method AiPlayer._mill_relief]); and a wheel
+## that shuffles the GRAVEYARDS back ([member EffectIntent.wheel_recycles])
+## is refused when it would hand back a race we hold.
+##
+## THE HORIZON, WHICH IS THE REAL QUESTION OF THIS ROW AND IS ANSWERED
+## NARROWLY ON PURPOSE. Four rows of 2026-09-10 asked this knob for "how
+## many turns has this game left" — the land sweep's rebuild, the wall that
+## blocks forever, the Disk under our own Moat, the Vise's stream — and the
+## answer is that only ONE clock in this engine can be counted forward
+## honestly, and it is this one. A library is MONOTONE: it only ever
+## shrinks, the draw step is a rule rather than a choice, and a mill on the
+## table mills again next turn unless somebody removes it. Every other rate
+## the engine can see is revisable within a turn — a combat clock changes
+## when a creature is cast or dies (which is why [constant
+## AiPlayer.RACE_HORIZON] saturates at four turns), a toll stops when its
+## permanent leaves, and what a Moat still answers is a question about the
+## cards left in a library, which this AI is not allowed to look at. So
+## there is no general turn horizon here and this knob does not invent one.
+## What it brings is the decking clock and nothing else, bounded by
+## [constant AiPlayer.PACE_HORIZON] — the horizon the libraries already
+## had, and the sentence it was written to say: a game that has not ended
+## in twenty turns of draw steps is being decided by the libraries.
+##
+## Sorcerer and Wizard, beside [member counts_cards] and [member
+## paces_draws], whose guards it corrects rather than replaces: with no
+## mill on either battlefield [method AiPlayer._mill_rate] is 0, the pace's
+## arithmetic is the integer expression it has always been, and every
+## reading below is the number it was before this knob existed.
+var counts_the_race := false
 
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
@@ -1660,6 +1738,7 @@ static func sorcerer() -> AiProfile:
 	profile.reinforces_blocks = true
 	profile.reads_race = true
 	profile.minds_the_vise = true
+	profile.counts_the_race = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -1681,6 +1760,7 @@ static func wizard() -> AiProfile:
 	profile.holds_tricks = true
 	profile.minds_the_vise = true
 	profile.runs_loops = true
+	profile.counts_the_race = true
 	return profile
 
 

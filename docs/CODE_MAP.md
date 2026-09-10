@@ -2439,7 +2439,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5900 tests / ~153 088 asserts, ~380 s
+├── tests/                   GUT suite — 5922 tests / ~153 496 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4190,6 +4190,24 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_counts_the_race_2026_09_10.gd — THE DECKING COUNT
+│    (AiProfile.counts_the_race): Millstone as the pool's only MillEffect
+│    and the mill read as a COUNT; Timetwister recycling and Wheel of
+│    Fortune not, off the same line; the clock as the library over the
+│    rate and a mill never aimed at its own controller; the pace counting
+│    turns (slack 1 where the card count said the race was lost) and the
+│    same five library pairs answering exactly what paces_draws has
+│    answered since 2026-09-07, on both arms; the Millstone bought at the
+│    mana SINK and refused by the main phase's bar; the mill that decks
+│    them worth LETHAL_WORTH and taken through act(); a library beyond
+│    PACE_HORIZON not a race; an empty library nothing left to mill; the
+│    Disenchant taking the Millstone (6.60) over the Jayemdae Tome (4.20)
+│    and the null taking the Tome; a mill one activation from decking us
+│    worth the game; our own Millstone never a reason to destroy it; the
+│    Timetwister refused where it would hand back a race we hold and the
+│    Wheel of Fortune not, because it only deals cards out; the Twister
+│    never refused when we are LOSING the race; the rung and the Lab's
+│    override;
 │    tests/ai/test_ai_holds_the_closer_2026_09_10.gd — THE FINISHER
 │    (AiProfile.checks_before_casting's appetite half, and
 │    AiProfile.holds_the_closer's refused race half): the Serra Angel held

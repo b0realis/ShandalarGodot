@@ -1577,6 +1577,39 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		# for it to fail. What it fails into is the mana sink at their end
 		# step, where the mana is about to be wasted anyway and the body
 		# arrives in time to attack on our next turn.
+	elif intent.mills > 0 and profile.counts_the_race \
+			and intent.target_spec != null:
+		# THE CARD OFF A LIBRARY (2026-09-10, [member
+		# AiProfile.counts_the_race]). A mill fell out of the `else` below
+		# for the same reason the token did: the scorer had no arm for an
+		# effect whose payload is neither a board nor a hand. So the pool's
+		# one Millstone had never milled a card — not on an open board with
+		# three Islands untapped, and not with the opponent's library at
+		# TWO, where the activation is the game.
+		if them.library.is_empty():
+			return {}   # nothing left to take; their draw step has this
+		if not _spec_allows_player(intent.target_spec, game, inst, opponent):
+			return {}
+		targets = [TargetRef.player(opponent)]
+		if intent.mills >= them.library.size():
+			value = LETHAL_WORTH   # they draw from nothing (CR 704.5b)
+		else:
+			if _deck_clock(game, opponent) > PACE_HORIZON:
+				return {}   # PACE_HORIZON: the libraries decide nothing yet
+			# A card off a library is a CARD, on the price this seat puts
+			# on one everywhere else — and the last cards are the game, so
+			# it rises with the share of what is left that it takes. That
+			# is [method _face_damage_value]'s own shape ([constant
+			# CLOCK_WEIGHT]) said about a library instead of a life total.
+			value = float(intent.mills) * profile.w_hand * (1.0 + CLOCK_WEIGHT \
+				* float(intent.mills) / float(them.library.size()))
+			if moment == Moment.SINK:
+				value += 1.0   # mana that would otherwise be lost
+		# AND NO BAR OF ITS OWN, for the token's reason rather than the
+		# animation's: the library will still be there next turn, so the
+		# ability that empties it has every later moment to be used at and
+		# the main phase's bar is the right one for it to fail. What it
+		# fails into is the mana sink, which is where a Millstone belongs.
 	else:
 		return {}   # pumps, regeneration, mana, untaps, unknowns: not here
 	var sacrifice := _sacrifice_price(game, inst, ability)
@@ -1805,6 +1838,80 @@ func _hand_room(game: MtgGame, moment: int, source: CardInstance = null) -> int:
 const PACE_HORIZON := 20
 
 
+## THE RATE A LIBRARY EMPTIES AT (2026-09-10, [member
+## AiProfile.counts_the_race]): how many cards a turn come off
+## [param victim]'s library from repeatable MILLS on the table, on top of
+## the one its draw step takes. 0 with no such permanent in the game, which
+## is the null and is also every board this pool can currently put up.
+##
+## A TAP IS WHAT MAKES A RATE. Only an activated ability whose cost taps
+## its own source is counted, and it is counted ONCE: the {T} is what says
+## "once between untap steps", and an ability that could be paid for twice
+## in a turn has a rate this reading cannot bound — the same ruling
+## [constant EffectIntent.TOLL_UNKNOWABLE] makes about a count the reader
+## will not do. Whether the controller has the mana on a given turn is
+## deliberately not asked: the clock is a question about many turns and the
+## mana is a question about one, so what is read is the rate the PERMANENT
+## prints.
+##
+## AIMED BY CONTROL AND NOT BY A TARGET LIST. A mill points at a player and
+## nobody mills themselves, so the seat a mill is aimed at is the seat its
+## controller is not — the same way [method _hand_toll_of] asks the toll's
+## own condition rather than guessing.
+func _mill_rate(game: MtgGame, victim: int) -> int:
+	if not profile.counts_the_race:
+		return 0
+	var rate := 0
+	for inst in game.all_battlefield():
+		rate += _mill_rate_of(game, inst, victim)
+	return rate
+
+
+## The same question of ONE permanent — what [param inst] alone takes off
+## [param victim]'s library every turn.
+func _mill_rate_of(game: MtgGame, inst: CardInstance, victim: int) -> int:
+	if inst.controller_id == victim:
+		return 0
+	var rate := 0
+	for ability in inst.cur_activated_abilities:
+		if not ability.tap_cost:
+			continue
+		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+		if intent.mills <= 0 or intent.target_spec == null \
+				or intent.target_spec.kind != TargetSpec.Kind.PLAYER:
+			continue
+		if not _spec_allows_player(intent.target_spec, game, inst, victim):
+			continue
+		rate += intent.mills
+	return rate
+
+
+## TURNS UNTIL [param seat] HAS TO DRAW FROM AN EMPTY LIBRARY (2026-09-10,
+## [member AiProfile.counts_the_race]) — the cards it has left over the
+## rate they come off at, the draw step included.
+##
+## THIS IS THE ONE CLOCK IN THIS ENGINE THAT COUNTS FORWARD HONESTLY, and
+## saying why is the whole of what this knob brings. A library is MONOTONE:
+## it only ever shrinks, its draw step is a rule rather than a choice, and
+## a mill on the table mills again next turn unless somebody takes it off.
+## Every other rate a seat can see here is revisable inside a turn — a
+## combat clock moves the moment a creature is cast or dies, which is why
+## [constant RACE_HORIZON] refuses to read one more than four turns out —
+## so a number of turns taken off THIS one is a fact and a number of turns
+## taken off any other is a guess.
+func _deck_clock(game: MtgGame, seat: int) -> int:
+	return _clock_of(game.players[seat].library.size(), _mill_rate(game, seat))
+
+
+## [method _deck_clock] for a library of [param cards] emptying at one card
+## a turn plus [param mill] — the arithmetic on its own, so the wheel can
+## ask it about a library that does not exist yet.
+func _clock_of(cards: int, mill: int) -> int:
+	var rate := 1 + maxi(mill, 0)
+	@warning_ignore("integer_division")
+	return (maxi(cards, 0) + rate - 1) / rate
+
+
 ## THE PACE (2026-09-07, [member AiProfile.paces_draws]): how many cards
 ## this seat can take off its library and still win the race to deck.
 ## The loss is the draw from the empty library (CR 704.5b), and each
@@ -1825,20 +1932,33 @@ const PACE_HORIZON := 20
 ## before the other's comes round — ours counted against the lead,
 ## theirs for it. The pilot that never counted this cast a Time Walk
 ## into a race it led by nothing.
+##
+## THE MILL (2026-09-10, [member AiProfile.counts_the_race]): every count
+## below is a count of TURNS wearing a card's clothes, and the two are the
+## same number only while each library loses exactly one a turn. A mill
+## breaks that, and then their library has to be read as the turns it
+## buys them ([method _deck_clock]) and every card of ours as the fraction
+## of a turn it really is. Our library at 12 against their 30 with a
+## Millstone of ours on the table is a race we hold by two turns, and the
+## card count called it lost. With no mill on either battlefield
+## [method _mill_rate] is 0, `ours_rate` is 1, and this is the integer
+## expression it has been since 2026-09-07.
 func _library_slack(game: MtgGame) -> int:
 	if not profile.paces_draws:
 		return 1 << 20
+	var them := game.opponent_of(pid)
 	var mine := game.players[pid].library.size()
-	var theirs := game.players[game.opponent_of(pid)].library.size()
+	var ours_rate := 1 + _mill_rate(game, pid)
+	var their_turns := _deck_clock(game, them)
 	var step := game.current_step()
 	var ours_next := (game.active_player == pid and step < Mtg.Step.DRAW) \
 		or (game.active_player != pid and step >= Mtg.Step.DRAW)
-	var lead := mine - theirs - (1 if ours_next else 0)
+	var lead := mine - their_turns * ours_rate - (ours_rate if ours_next else 0)
 	for taker in game.extra_turns:
-		lead += -1 if taker == pid else 1
+		lead += -ours_rate if taker == pid else ours_rate
 	if lead < 0:
 		return 1 << 20   # the race is lost already: not ours to protect
-	return maxi(lead, mine - PACE_HORIZON - 1)
+	return maxi(lead, mine - ours_rate * (PACE_HORIZON + 1))
 
 
 ## THE DRAW THAT WINS (2026-09-07, [member AiProfile.counts_cards]): a
@@ -1909,6 +2029,11 @@ func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
 ## permanent: the three hand tolls are two artifacts and an enchantment,
 ## and a creature whose static grounds anything (Akron Legionnaire, the
 ## Evil Eye) grounds its OWN controller's board and never ours.
+##
+## THE MILL (2026-09-10, [member AiProfile.counts_the_race]) is a third
+## such term on the same branch and for the same reasons — the pool's one
+## mill is an artifact, the reading is what taking it AWAY is worth, and
+## with no mill on the table it is 0.0. See [method _mill_relief].
 func _victim_value(game: MtgGame, inst: CardInstance) -> float:
 	if inst.is_creature():
 		return Evaluator.permanent_value(inst, profile)
@@ -1917,7 +2042,7 @@ func _victim_value(game: MtgGame, inst: CardInstance) -> float:
 	var value := Evaluator.permanent_value(inst, profile)
 	if not inst.cur_activated_abilities.is_empty():
 		value += 1.0
-	return value + _prison_relief(game, inst)
+	return value + _prison_relief(game, inst) + _mill_relief(game, inst)
 
 
 ## THE SQUEEZE, READ OFF THEIR TABLE (2026-09-10, [member
@@ -2090,6 +2215,45 @@ func _prison_attack(game: MtgGame, inst: CardInstance) -> float:
 			blockers.append(theirs)
 	return _face_damage_value(game,
 		_damage_through_blocks(game, freed, blockers, them), them)
+
+
+## WHAT TAKING THEIR MILL OFF THE TABLE IS WORTH (2026-09-10, [member
+## AiProfile.counts_the_race]) — the term [method _victim_value] adds for a
+## permanent of THEIRS that is emptying our library, and 0 for every other
+## permanent and on every board with no mill on it.
+##
+## It sits beside [method _prison_relief] and is not folded into it for the
+## same reason that one is not folded into [method Evaluator.permanent_value]:
+## this asks what taking a permanent AWAY is worth and the board score asks
+## what it IS. Before it, one Disenchant against a Millstone and a Jayemdae
+## Tome went to the TOME — 4.20 against 1.00 — with our library at six and
+## the Millstone taking two a turn off it.
+##
+## THE PRICE IS THE CARDS IT HANDS BACK, on the scale this seat puts on a
+## card everywhere else ([member AiProfile.w_hand]), rising with the share
+## of what is left that it takes: that is exactly the sentence
+## [method _face_damage_value] makes about a life total ([constant
+## CLOCK_WEIGHT] — "the LAST points of life are the game"), said about a
+## library. When one more activation would empty it the card IS the game
+## and it is worth [constant LETHAL_WORTH], the same number
+## [method _decking_draw] puts on the same fact from the other side.
+## Beyond [constant PACE_HORIZON] turns the libraries are not deciding the
+## game and the term is 0.
+func _mill_relief(game: MtgGame, inst: CardInstance) -> float:
+	if not profile.counts_the_race or inst.controller_id == pid:
+		return 0.0
+	var rate := _mill_rate_of(game, inst, pid)
+	if rate <= 0:
+		return 0.0
+	var mine := game.players[pid].library.size()
+	if mine <= 0:
+		return 0.0
+	if rate >= mine:
+		return LETHAL_WORTH   # one more activation and we draw from nothing
+	if _deck_clock(game, pid) > PACE_HORIZON:
+		return 0.0
+	return float(rate) * profile.w_hand \
+		* (1.0 + CLOCK_WEIGHT * float(rate) / float(mine))
 
 
 ## What giving up [param inst] of OUR OWN costs — the other side of the
@@ -2336,8 +2500,15 @@ func _own_toll(game: MtgGame, inst: CardInstance) -> Dictionary:
 ## 8.5 minus the whole of our life: −1.5 at twenty, and every drawback
 ## creature in the pool out of its own deck. An invented constant would be
 ## worse than the silence, so the silence stands and the item closes:
-## a toll with no printed escape is worth its printed worth, and the
-## horizon is `counts_the_race`'s to bring (docs/AI-next-wave.md, wave 4).
+## a toll with no printed escape is worth its printed worth.
+##
+## AND [member AiProfile.counts_the_race] LANDED ON 2026-09-10 AND
+## ANSWERED NO. The horizon it brought is the DECKING clock and nothing
+## else ([method _deck_clock]), because a library is the one quantity in
+## this game that never grows back — a rate taken off it is a fact, and a
+## rate taken off a life total under a toll is a guess about how long the
+## toll's own permanent stays on the table. So the silence here is the
+## answer and not a placeholder for one.
 ##
 ## The whole price is capped at what our life is worth, because a toll can
 ## never take more than the life it has to take.
@@ -3322,6 +3493,69 @@ func _returner_in_hand(game: MtgGame, except_inst: CardInstance) -> bool:
 	return false
 
 
+## WOULD THIS WHEEL HAND BACK A DECKING RACE WE HOLD? (2026-09-10, [member
+## AiProfile.counts_the_race]; `docs/arzakon.strategy` §4 item 4, *"don't
+## put the opponent's graveyard back with a Timetwister when it is their
+## loop"*.)
+##
+## A wheel that DISCARDS takes the same seven off each library and leaves
+## the race where it found it; a wheel that SHUFFLES THE GRAVEYARDS BACK
+## ([member EffectIntent.wheel_recycles]) hands each player their hand and
+## their graveyard again, which can undo a race one seat has spent the
+## whole game winning. Reproduced at HEAD: our library at 40, theirs at 3
+## with twenty cards in their graveyard, and the Timetwister priced at
+## 11.50 and cast — their library came back at 21.
+##
+## ONE-DIRECTIONAL, like [method _vise_room]: it can refuse a wheel and can
+## never ask for one. It says nothing at all unless we hold the race NOW
+## (a race we are LOSING has nothing to hand back — a Timetwister is then
+## the card that saves us, and the hand reading that already prices it is
+## left alone) and unless the nearer of the two clocks is inside
+## [constant PACE_HORIZON], which is where the libraries stop deciding
+## anything.
+##
+## WHAT IT ASKS IS WHETHER THE LOSER'S CLOCK GETS LONGER, and not whether
+## the winner changes. Their library at three against our forty is a game
+## we win in three turns; a Timetwister that gives it back at twenty-one
+## leaves us still "winning" and has thrown the win away, so a test on who
+## is ahead after would pass the very board the row was written about. A
+## wheel that only DEALS cards out shortens both libraries and can never
+## fail this, whatever the hands hold.
+func _hands_back_the_race(game: MtgGame, inst: CardInstance,
+		intent: EffectIntent) -> bool:
+	if not profile.counts_the_race or intent.wheels <= 0:
+		return false
+	var them := game.opponent_of(pid)
+	var ours_now := _deck_clock(game, pid)
+	var theirs_now := _deck_clock(game, them)
+	if mini(ours_now, theirs_now) > PACE_HORIZON:
+		return false   # PACE_HORIZON: the libraries are not deciding this
+	if theirs_now >= ours_now:
+		return false   # not a race we hold
+	var theirs_after := _clock_of(_library_after_wheel(game, them, inst, intent),
+		_mill_rate(game, them))
+	return theirs_after > theirs_now
+
+
+## The library [param seat] would be left with once [param inst]'s wheel
+## resolved: the cards it deals out come off, and the cards it shuffles
+## back go on. OUR OWN HAND IS ONE SMALLER THAN IT LOOKS — the wheel is on
+## the stack while it resolves and is not among the cards it puts back (CR
+## 608.2m), which is the same subtraction [method _wheel_swing] makes and
+## the reason `docs/arzakon.strategy` §3C's loop has to Regrow the
+## Timetwister at all.
+func _library_after_wheel(game: MtgGame, seat: int, inst: CardInstance,
+		intent: EffectIntent) -> int:
+	var player := game.players[seat]
+	var after := player.library.size() - intent.wheels
+	if intent.wheel_recycles:
+		var held := player.hand.size()
+		if seat == pid and inst.zone == Mtg.Zone.HAND:
+			held -= 1
+		after += maxi(held, 0) + player.graveyard.size()
+	return maxi(after, 0)
+
+
 ## A sweeper is cast when the swing clears this (a 2/2's worth of board).
 const SWEEP_BAR := 3.0
 
@@ -3380,6 +3614,13 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	# the race counts it the way it counts a Tome.
 	if intent.extra_turns > 0 and not data.is_modal() \
 			and _library_slack(game) < intent.extra_turns:
+		return {}
+	# THE WHEEL THAT HANDS A RACE BACK (2026-09-10, AiProfile.counts_the_race;
+	# docs/arzakon.strategy §4 item 4). Above the runs_loops arm and above
+	# the printed path, so it guards both rungs: this is a refusal about
+	# the LIBRARIES and not a re-pricing of the hands.
+	if intent.wheels > 0 and not data.is_modal() \
+			and _hands_back_the_race(game, inst, intent):
 		return {}
 	# THE OLD LOOPS (2026-09-10, AiProfile.runs_loops; casting P5). Two
 	# cards whose worth is a fact about the BOARD and the two HANDS, and
