@@ -1321,6 +1321,111 @@ var crack_back_margin := 0
 ## board — `holds_tricks` and a hand read (`docs/AI-next-wave.md`) — since
 ## hiding a card from a seat that never guesses is a cost with no buyer.
 var develops_late := false
+## WHO IS THE BEATDOWN (2026-09-10): does this profile read the two clocks
+## of the race — how many turns we need to kill them, how many they need
+## to kill us — and let the difference move what a voluntary BLOCK TRADE
+## is allowed to cost?
+##
+## Rung 2 of [method AiPlayer._best_block_for] takes a trade nothing
+## forces on it whenever the body it spends is worth no more than
+## `attacker_value + 0.5`, and that margin is the same number at twenty
+## life as at four. Reproduced 2026-09-10, one board and its mirror:
+##
+## [codeblock]
+## their Craw Wurm 6/4 | our Serra Angel 4/4, us at 20 and them at 4
+##     our_clock 1, their_clock 4 -- we win next turn
+##     block: [Serra Angel] -- the body that wins the game, given away
+##
+## their Erhnam Djinn 4/5 | our Craw Wurm 6/4, us at 8 and them at 20
+##     our_clock 4, their_clock 2 -- two turns from dying
+##     block: [] -- the Wurm is worth ONE POINT more, so it lets it through
+## [/codeblock]
+##
+## On, [method AiPlayer._trade_margin] moves that margin in the three
+## states `docs/forge/combat.md` P1 writes: DEMAND A GAIN (−0.5) when
+## their clock is more than a turn longer than ours, ALLOW A SMALL LOSS
+## (+1.5) when ours is more than a turn longer than theirs, and 0.5 —
+## the incumbent — inside a turn of each other or when neither clock is
+## inside [constant AiPlayer.RACE_HORIZON]. Both clocks are read off
+## public numbers alone: the two life totals and the printed power each
+## side could swing with once everything untaps ([method
+## AiPlayer._race_reach], the durable half [method
+## AiPlayer._could_attack_next_turn] already asks of theirs), so a side
+## with no creature has a clock of never and moves nothing.
+## [forge] after `AiBlockController.java:1050` (`diff = life * 2 - 5` — a
+## voluntary trade must gain more the healthier you are) and
+## `AiAttackController.java:1117-1136` (`ratioDiff`) at `b09a3d3f` — read
+## as a RACE rather than as a life total, because twenty life in front of
+## a board that kills in two is not health.
+##
+## THE OTHER HALF OF P1 IS BUILT, MEASURED AND REFUSED, and that is the
+## larger part of this row's result. P1's headline is the ATTACK bar:
+## [method AiPlayer._combat_tolerance] moved by
+## `clamp(their_clock - our_clock, -2, +2)` stat points plus one for a
+## clock they cannot block (Forge's `turnsUntilDeathByUnblockable`). It
+## was built exactly so — with a floor at zero, because a risk of 0.00 is
+## a FREE exchange and a negative appetite refuses attacks that cost
+## nothing, and with the horizon above — and the Deck Lab said no. Over
+## the eight starter matchups it moves most, 1 000 games an arm, seed 11:
+## **42 games ended in a win against 170 in a loss**, White Knights
+## against Black-Red Raiders −3.1 and Blue Skies against Mountain
+## Artillery −1.9. Dropping the evasive clause changed nothing (58 to
+## 165); the clamp itself is what moves the deck it should have left
+## alone, which is the risk P1 names in its own Risk paragraph and the
+## third time this month one number has been asked to carry a brake.
+## Under the SAME eight matchups the block half alone reads 16 won to 17
+## lost with every delta between −0.2 and +0.2 — a wash, and the wash is
+## what ships. `docs/ai-difficulty.md` §4 has all four arms.
+##
+## Sorcerer and Wizard, with the other combat reads. Nothing here names a
+## card, and nothing is read that the seat may not see.
+var reads_race := false
+
+## THE TRICK'S MANA, BOOKED (2026-09-10): does this profile keep the mana
+## for a pump instant in hand open through its own combat, so that the
+## body it sent on the strength of the trick can actually be saved?
+##
+## [method AiPlayer._attack_choice] already sends ONE extra body when a
+## pump in hand makes the attack sound ([method
+## _attack_is_reasonable]'s `bonus`), and [method
+## AiPlayer._offensive_combat_response] already spends the pump to win a
+## block. What sits between them is the first main phase, which knows
+## nothing about either: [method AiPlayer._held_reserve] books removal, a
+## draw and a counterspell and skips a pump outright (`or intent.pumps`),
+## so the {G} of a Giant Growth is spent on a Grizzly Bears and the trick
+## is a dead card for the turn. Measured on HEAD before a line was
+## written, 200 games of Big Green against White Knights: the pilot
+## reached declare-blockers holding a pump instant 2,051 times and in
+## **531 of them (25.9%) could no longer pay for it**.
+##
+## On, the pump's cost joins the reserve every sorcery-speed cast is
+## already priced against — but only where the trick has a JOB: only on
+## our own turn, only before the blocks are in, and only when there is a
+## body of ours that the pump makes a sound attacker and that is not one
+## without it ([method AiPlayer._trick_bait], which is the rider's own
+## question asked one phase earlier). An empty board on the other side
+## books nothing, because with nothing to block us every attack is
+## already sound. Its worth is the bait's own worth, so [method
+## AiPlayer._try_cast_best]'s 1.5x rule lets a clearly better cast go
+## ahead of it, exactly as it does for a held Counterspell.
+## [forge] after `ComputerUtilCard.java:1593-1607` (the held mana sources
+## for declare-blockers) at `b09a3d3f`, `docs/forge/combat.md` P5 and
+## `docs/forge/casting.md` P13 — without Forge's 65% roll, which is a
+## personality and not a capability (`docs/forge/combat.md` §10).
+##
+## P5's OTHER HALF DID NOT REPRODUCE and is not built: "remember the
+## body's id for the turn so the offensive response prefers it" answers a
+## question the pilot is almost never asked. Over those same 200 games the
+## response found TWO OR MORE of its own attackers that the pump could
+## save in exactly ONE declare-blockers step, because the rider sends one
+## bait and the cohort's own bodies are the ones it already priced as
+## sound. Re-measured on the tree that books the mana it is 2 in 200.
+##
+## Wizard only: a trick held through a combat is the last rung of the
+## reactive ramp, and it composes with [member holds_instants] rather than
+## widening it — the reservation is a subset of what that knob may already
+## keep open.
+var holds_tricks := false
 
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
@@ -1423,6 +1528,7 @@ static func sorcerer() -> AiProfile:
 	profile.reads_lethal_x = true
 	profile.counters_by_shape = true
 	profile.reinforces_blocks = true
+	profile.reads_race = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -1440,6 +1546,8 @@ static func wizard() -> AiProfile:
 	profile.counters_by_shape = true
 	profile.checks_before_casting = true
 	profile.reinforces_blocks = true
+	profile.reads_race = true
+	profile.holds_tricks = true
 	return profile
 
 

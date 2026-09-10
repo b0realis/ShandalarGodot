@@ -101,6 +101,8 @@ override any knob on any preset for a measurement
 | `reinforces_blocks` | off | off | on | on | comes back to a block it has already declared and finishes the attacker off. `AiPlayer._best_block_for` is a LADDER and returns on the first rung that answers, so the free absorb — *a wall soaks the hit at zero cost, which is what walls are FOR* — sits above the value trade and above the gang: a Wall of Stone on the table blocked alone every time and the rungs below it were never reached, however many bodies were standing at home. Two walls of swords watched a Serra Angel walk away for free (each lives through it, and together they deal it exactly four); a Wall of Stone soaked a Craw Wurm while the Water Elemental beside it, which kills the Wurm, stayed home. `AiPlayer._reinforce_blocks` runs ONCE over the finished plan, and only where the band survives the attacker and does not kill it — never a chump, never a trade, never a body that `_shieldable`, indestructible or a printed gaze says cannot die. Safe bodies first and free of charge, then, only if those fall short, ONE body that dies to close the kill exactly. THE PRICE IS WHAT THE PAIR PUTS AT RISK — rung 3's own `price <= attacker_value * 1.5` read off the bodies that actually die, with Forge's stricter bound on top (the body that dies is worth strictly less than the attacker it kills) — so a survivor is free, a rampage that turns the pair into two corpses is charged for both, and nothing is written into the plan unless the band it builds actually kills. Sorcerer and Wizard, with the other combat reads |
 | `crack_back_margin` | 0 | 0 | 0 | 0 | how far under our own life total the counter-swing has to reach before `AiPlayer._search_hold_back` is worth running: the gate was `reach >= life`, and it is `reach >= life - crack_back_margin`. The old gate is exact and asks exactly one question — *does this attack LOSE THE GAME to the counter-swing?* — and never the other one, whether it costs us twelve life for four points of damage. **Every preset ships 0, which is that gate unchanged**: the number is here so the Deck Lab can put the question in one command, the way `w_hand` is, and the Lab's answer of 2026-09-10 was NO (§4). Not a difficulty knob, and no rung moves it |
 | `develops_late` | off | off | off | off | keeps the hand shut until the attack is over — the whole of `docs/forge/casting.md` P1, and **every preset ships it off, which is the pilot unchanged**. `AiPlayer.act` reaches the main-phase planner in EITHER main step and the first one it reaches is Main 1, so every land, creature, artifact, enchantment, draw spell, discard and tutor this pilot has ever played went down BEFORE its own combat and with it the mana: a Wizard on four Forests with an Ironroot Treefolk in hand plays the land, casts the Treefolk, and stands at their declare-blockers with everything shown and nothing open. On, Main 1 casts only what Forge's `castPermanentInMain1` would — a win, floating mana that would be lost, a haste creature, a non-creature mana source, and what changes THIS combat (a permanent of theirs answered, an aura or a pump on a body of ours, a land that animates itself) — the mana sink waits with the rest, and the land drop is held under Forge's own four guards, the fourth of which is this pilot's own hazard: it sizes its attack and its block by the mana it holds, so a land in hand is a Carrion Ants that reads one point smaller. **THE LAB REFUSED THE RUNG** (§4): nine pairs, eight of them negative, a drift of about a point and a quarter and not one delta clear of its interval — so the field is here for the Deck Lab to ask with, the way `crack_back_margin` is, and no rung moves it |
+| `reads_race` | off | off | on | on | reads the two CLOCKS of the race — how many turns we need to take them from their life total to nothing, how many they need to do it to us — and lets the difference move what a VOLUNTARY BLOCK TRADE is allowed to cost. Rung 2 of `AiPlayer._best_block_for` takes a trade nothing forces on it whenever the body it spends is worth no more than `attacker_value + 0.5`, and that is the same margin at twenty life as at four: our Serra Angel trades itself for their Craw Wurm while we are one turn from winning at 20 against their 4, and our Craw Wurm lets an Erhnam Djinn through at 8 life because the Wurm is worth ONE POINT more. On, `AiPlayer._trade_margin` reads P1's own three states — demand a gain (−0.5) when their clock is more than a turn longer than ours, allow a small loss (+1.5) when ours is more than a turn longer than theirs, +0.5 otherwise — with a dead band of a turn between them and `AiPlayer.RACE_HORIZON` (four turns, `PACE_HORIZON`'s sentence said about the red zone) under all of it, because on a 20-20 board two Grizzly Bears against one Hill Giant is five turns against seven and that is a board, not a race. Both clocks are public numbers: the two life totals and the printed power each side could swing with once everything untaps, which is the durable reading the crack-back model has always made of theirs. **P1'S HEADLINE HALF — the ATTACK bar moved by the same difference, plus one for a clock they cannot block — WAS BUILT, MEASURED AND REFUSED** (§4): over the eight starter matchups it moved most it ended 42 games in a win against **170 in a loss**, White Knights vs Black-Red Raiders −3.1, and it is the third brake-or-licence hung on `AiPlayer._combat_tolerance` to be refused this month. The block half alone reads 16 won to 17 lost on those same eight, every delta between −0.2 and +0.2, and that wash is what ships |
+| `holds_tricks` | off | off | off | on | keeps the mana for a pump instant open through its own combat, so the body it sent on the strength of the trick can still be saved. The pilot already picks the one extra attacker a Giant Growth makes sound (`AiPlayer._attack_choice`'s rider) and already spends the pump to win that body's block (`_offensive_combat_response`); what sat between them was the first main phase, which knew about neither — `AiPlayer._held_reserve` books removal, a draw and a counterspell and skips a pump outright, so the {G} paid for a Grizzly Bears and the trick was a dead card. Measured over 200 whole games of Big Green against White Knights before a line was written: the pilot reached declare-blockers holding a pump 2,051 times and **could no longer pay for it in 531 of them (25.9%)**. On, `AiPlayer._trick_reserve` puts the pump's cost into that same reserve — but only on our own turn, only before the blocks are in, and only where there IS a bait: a body of ours the pump makes a sound attacker and that is not one without it, which is the rider's own pair of readings asked one phase earlier. An empty board on the other side books nothing, because with nothing to block us every attack is sound already. Its worth is the bait's own worth, so the 1.5x rule that lets a clearly better cast go ahead of a held Counterspell lets one go ahead of this. Wizard only: a trick held through a combat is the last rung of the reactive ramp, and it composes with `holds_instants` rather than widening it. P5's OTHER half — remember the body's id so the response prefers it — DID NOT REPRODUCE and is not built: over those same 200 games the response found two or more of its own attackers that the pump could save in exactly ONE declare-blockers step |
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
 `prices_liabilities` and `prices_fallout`
 are the seven knobs that are on at every rung, and the reason is the
@@ -246,7 +248,16 @@ Specter into your Royal Assassin — and it counts a MANLAND as a body on
 both sides of the table: your Mishra's Factory with `{1}` open is a
 blocker its attack has to price, and its own is a blocker it animates
 once your attackers are declared, when the block it would make is one
-that brings the land back.
+that brings the land back. And it comes back to a block it has already
+declared to finish the attacker off — two Wall of Swords together kill
+the Serra Angel one of them used to watch walk away — and it reads the
+two CLOCKS of the race before it takes a trade nothing forces on it: at
+twenty life with the game one turn from over it keeps the Serra Angel
+rather than exchanging it for your Craw Wurm, and at eight life with two
+turns left it gives up a Craw Wurm worth a point MORE than your Erhnam
+Djinn, because a point of value is worth a turn of the clock that is
+killing it. Only while a clock is inside four turns: on a 20-20 board
+with nothing happening it trades the way it always did.
 
 **Wizard.** No mistakes at all. The Sorcerer's capabilities with twice
 the search (3 000), the pickiest panic line (6), the widest counter net
@@ -263,7 +274,13 @@ control and mana you have untapped. When the next attack would kill it
 anyway the veto lifts, because a desperate play is allowed to be
 desperate. Every OTHER difference between a Wizard and a Sorcerer is a
 number, not a layer — which is what "no mistakes" means here: it never
-degrades its own choice.
+degrades its own choice. The one exception since 2026-09-10 is a second
+layer and a small one: it books the mana for the combat trick in its
+hand. The pilot has always sent one extra attacker on the strength of a
+Giant Growth and always spent the Growth to win that body's block; the
+Wizard is the rung that stops the first main phase spending the {G} on a
+two-drop first — but only on its own turn, only before your blocks are
+in, and only when there is a body the trick is actually FOR.
 
 ## 4. What the ladder measures as
 
@@ -1798,6 +1815,177 @@ byte-identical in every arm of every run.
   the RACE rather than a lower bar — the swing the reproduction refuses is
   a 4/4 flier they cannot block trading four damage for twelve, which is
   `reads_race`'s row (`docs/AI-next-wave.md`, combat P1).
+  **AND THAT ROW, BUILT THE SAME DAY, DOES NOT ANSWER IT EITHER** (the
+  entry below). P1's race read is a threshold on `AiPlayer._attack_risk`,
+  and `_attack_is_reasonable` returns on `risk < 0` — *nothing over there
+  may legally block it* — before any threshold is read: the Air Elemental
+  is declared on both arms of `reads_race`, at a clock of five against
+  their two. The board is pinned that way in
+  `tests/ai/test_ai_reads_race_2026_09_10.gd` so the hand-off is not
+  believed twice. What that swing actually costs is a TAPPED blocker, and
+  nothing on the attack side prices a body for being unavailable on their
+  turn except the crack-back search itself — which is where a fourth
+  attempt, if anyone makes one, has to live.
+
+WHO IS THE BEATDOWN (2026-09-10, `reads_race`) is a WASH THAT REMOVES A
+MALFUNCTION on the block ladder, and a REFUSAL on the attack bar — which
+is the larger half of `docs/forge/combat.md` P1 and the third time this
+month one number has been asked to carry a brake and has not earned it.
+Seed 11, `--profile-a wizard:holds_tricks=off --profile-b
+wizard:holds_tricks=off` so the day's other combat row is pinned out of
+the reading, control the ALL-LAND PAIR (forty Forests against forty
+Mountains — the only pair where both clocks are NEVER), byte-identical to
+its own null in every arm of every run below.
+
+| pair (seat A holds the knob) | null | `on` | delta | games that turned |
+| --- | --- | --- | --- | --- |
+| Big Green vs White Knights, 2 000 an arm | 54.1% | 54.8% | +0.6 ±3.1 | 183 of 2 000 — 32 ended, 22 won to 10 |
+| Mountain Artillery vs White Knights, 2 000 an arm | 54.3% | 54.5% | +0.2 ±3.1 | 232 of 2 000 — 35 ended, 20 won to 15 |
+| Big Green vs Blue Skies, 2 000 an arm | 40.8% | 40.8% | +0.1 ±3.0 | 31 of 2 000 — 7 ended, 4 won to 3 |
+| The Deck (playable) vs Mountain Artillery, 2 000 an arm | 51.3% | 51.3% | +0.0 ±3.1 | **1 of 2 000** |
+
+- **THE REPRODUCTION IS A MARGIN THAT DOES NOT MOVE.** Rung 2 of
+  [method AiPlayer._best_block_for] takes a trade nothing forces on it
+  whenever the body it spends is worth no more than `attacker_value +
+  0.5`, and that is the same number at twenty life as at four:
+
+  ```
+  their Craw Wurm 6/4 | our Serra Angel 4/4, us at 20 and them at 4
+      our_clock 1, their_clock 4 -- we win next turn
+      block: [Serra Angel] -- the body that wins the game, given away
+
+  their Erhnam Djinn 4/5 | our Craw Wurm 6/4, us at 8 and them at 20
+      our_clock 4, their_clock 2 -- two turns from dying
+      block: [] -- the Wurm is worth ONE POINT more, so it lets it through
+  ```
+
+  `AiPlayer._trade_margin` reads P1's own three states — demand a gain
+  (−0.5), allow a small loss (+1.5), or leave it alone — off two clocks
+  built from public numbers only: the two life totals and the printed
+  power each side could swing with once everything untaps
+  (`AiPlayer._race_reach`, the durable half `_could_attack_next_turn`
+  has always asked of their board, asked of ours as well).
+- **THE HORIZON IS THE TREE'S AND NOT THE NOTE'S, and the suite is what
+  put it there.** `clamp(their_clock - our_clock, ...)` saturates almost
+  at once: on a 20-20 board two Grizzly Bears against one Hill Giant is
+  five turns against seven, the maximum reading, for a difference nobody
+  will still be in by then. Read that way it refused a Rasputin
+  Dreamweaver the 3/3 it was worth trading with — a declaration this
+  suite has pinned as right since the 2026-09-04 cohort audit. So nothing
+  is read at all unless the FASTER clock is inside `AiPlayer.
+  RACE_HORIZON`, four turns: `PACE_HORIZON`'s sentence about the
+  libraries — *a game that has not ended by then is not being decided by
+  them* — said about the red zone.
+- **P1'S HEADLINE HALF WAS BUILT, MEASURED AND REFUSED.** The attack bar
+  moved by the same clock difference plus one for a clock they cannot
+  block (Forge's `turnsUntilDeathByUnblockable`) was built exactly as the
+  note asks — with a floor at zero, because a risk of 0.00 is a FREE
+  exchange and a negative appetite refuses attacks that cost nothing, and
+  with the horizon above — and four arms over the eight starter matchups
+  it moves most, 1 000 games an arm, say no:
+
+  | arm on the eight matchups | worst delta | games that turned | ended, won to lost |
+  | --- | --- | --- | --- |
+  | both halves | −3.0 | 2 410 | 245 — **59 won to 186** |
+  | the attack bar alone | −3.1 | 2 185 | 212 — **42 won to 170** |
+  | the attack bar without the evasive clock | −2.3 | 2 266 | 223 — **58 won to 165** |
+  | the block margin alone (what ships) | −0.2 | 301 | 33 — 16 won to 17 |
+
+  Dropping the evasive clock changes nothing, so it is the CLAMP itself,
+  and what it moves is the deck it should have left alone: White Knights
+  against Black-Red Raiders −3.1, Blue Skies against Mountain Artillery
+  −1.9. Both are decks of small evasive bodies that were already ahead in
+  those matchups, and a race read hands them a licence to swing. P1's own
+  Risk paragraph names this exactly — *a tolerance that moves is the
+  first thing the two rejected approximations were, and both were
+  rejected because they moved the wrong deck* — and the asymmetry it
+  offers as the protection is not one. `AiPlayer._combat_tolerance` is
+  therefore the arithmetic it always was, and
+  `tests/ai/test_ai_reads_race_2026_09_10.gd` pins that on both arms.
+- **NO HARM ACROSS THE WHOLE TWENTY-MATCHUP STARTER MATRIX**, 1 000 games
+  an arm, each deck in turn on seat A. Every delta is between −0.6 and
+  +0.8, well inside the ±4.4 that size carries, and across the twenty
+  **111 games ended differently — 63 won, 48 lost**.
+- **AND THE POOL BARELY PUTS THE QUESTION, which is a pool fact and not a
+  null.** Nothing moves unless a clock is inside four turns, so a pair
+  that spends its games on a 20-20 board never reaches the reading: **The
+  Deck (playable) against Mountain Artillery — the archetypal
+  control-versus-beatdown race, and P1's own named tournament pair —
+  measures 1 GAME DIFFERENT IN 2 000**, because a control deck's own
+  reach is usually zero and a clock of never is not a race. (P1 names
+  `sligh_geeba_1996` for that pair; it cannot be played — nine proxies —
+  and Mountain Artillery is the substitute.) The matchups that move are
+  the ones with a creature deck on seat A.
+- **THE NULL IS EXACTLY THE NULL.** Every sweep carries an `off` arm
+  beside its `on` one, byte-identical to the null in **2 000 of 2 000
+  games on all four pairs, 8 000 for 8 000**, and the creatureless
+  control replays 1000-1000 in every arm of every run.
+
+THE TRICK'S MANA, BOOKED (2026-09-10, `holds_tricks`) is a GAIN, and the
+whole of it lives in one deck of the five, which is the pool fact under
+it. Seed 11, `--profile-a wizard:reads_race=off --profile-b
+wizard:reads_race=off` so the day's other combat row is pinned out of
+the reading, control White Knights vs Blue Skies (neither list holds a
+pump instant), byte-identical to its own null at 560-1440 in every arm
+of every run below.
+
+| pair (seat A holds the knob) | null | `on` | delta | games that turned |
+| --- | --- | --- | --- | --- |
+| Big Green vs White Knights, 2 000 an arm | 54.1% | 55.4% | +1.3 ±3.1 | 216 of 2 000 — 35 ended, **30 won to 5** |
+| Beast Master (4 Giant Growth) vs White Knights, 2 000 an arm | 20.5% | 21.9% | +1.4 ±2.5 | 321 of 2 000 — 46 ended, **37 won to 9** |
+| Big Green vs Mountain Artillery, 2 000 an arm | 54.7% | 55.5% | +0.7 ±3.1 | 107 of 2 000 — 25 ended, **20 won to 5** |
+| Big Green vs Black-Red Raiders, 2 000 an arm | 48.6% | 49.0% | +0.4 ±3.1 | 109 of 2 000 — 26 ended, 17 won to 9 |
+
+- **NO SINGLE DELTA IS CLEAR OF ITS INTERVAL AND THE FLIPS ARE NOT A
+  COIN**, and the second sentence is the finding. Across the four pairs
+  the knob ends 132 games differently: **104 won against 28 lost**. The
+  arms are the same seeds game for game, so the paired count is the
+  sharper instrument than two unpaired Wilson intervals — a coin would
+  give 66-66, and 104-28 is nearly seven standard deviations off it. The
+  pooled delta over 8 000 games an arm is +0.95 points.
+- **THE MALFUNCTION IS MEASURED, not argued.** 200 whole games of Big
+  Green against White Knights on the tree before this existed: the pilot
+  reached declare-blockers holding a pump instant **2 051 times** and in
+  **531 of them (25.9%) could no longer pay for it** — the first main
+  phase had spent the mana on a two-drop. `AiPlayer._held_reserve` books
+  removal, a draw and a counterspell and skips a pump outright
+  (`or intent.pumps`), so a Giant Growth reserved nothing, and the two
+  routines that DO know about it — the declaration's pump rider and
+  `_offensive_combat_response`'s *win the block* — were being handed an
+  empty pool. On the tree that books it the rate is 23.5%, and the
+  booking itself fires in **18% of the main-phase passes** where a pump
+  is in hand: it is a narrow reservation, not a blanket hold.
+- **THE BOOKING IS THE RIDER'S OWN QUESTION ASKED ONE PHASE EARLIER.**
+  `AiPlayer._trick_reserve` books only on our own turn, only before the
+  blocks are in, and only where there is a BAIT — a body of ours the pump
+  makes a sound attacker and that is not one without it, which is exactly
+  the pair of readings `_attack_choice`'s rider makes. An empty board on
+  the other side books nothing at all, because with nothing to block us
+  every attack is sound already; and its worth is the bait's own worth,
+  so the 1.5x rule that lets a clearly better cast go ahead of a held
+  Counterspell lets one go ahead of this (a Force of Nature is cast, a
+  Grizzly Bears waits a turn).
+- **P5'S OTHER HALF DID NOT REPRODUCE AND IS NOT BUILT.** The note asks
+  for the bait's id to be remembered *"so the offensive response prefers
+  it"*. Over those same 200 games the response found two or more of its
+  own attackers that the pump could save in **exactly one** declare-
+  blockers step — 2 in 200 on the tree that books the mana — because the
+  rider sends ONE bait and the cohort's own bodies are the ones it has
+  already priced as sound. A tie-break for a tie that happens once in two
+  hundred games is not a capability; the row is recorded here so nobody
+  spends an afternoon on it.
+- **AND THE POOL HOLDS EXACTLY TWO CARDS OF THE SHAPE.** A pump INSTANT
+  with a toughness bonus and no self-mode is Giant Growth and
+  Righteousness, and of the five shipped starters only Big Green holds
+  one (three Giant Growth). So **16 of the 20 starter matchups are
+  byte-identical to their own null**, every delta in the four that are
+  not is between +0.2 and +1.7, and across the matrix **56 games are won
+  against 18 lost**. The 1997 enemies with four apiece — Beast Master,
+  Druid, Guardian of the Tusk, Alt-a-Kesh, Fungus Master — are where the
+  question is really put, and Beast Master is the pair above.
+- **THE NULL IS EXACTLY THE NULL.** Every sweep carries an `off` arm
+  beside its `on` one and it is byte-identical to the null in **2 000 of
+  2 000 games on all four pairs, 8 000 for 8 000**.
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -1852,13 +2040,17 @@ once. The last two matter more than the first three for anything with a
 counterspell in it: `counters_by_shape` moves The Deck against Mountain
 Artillery by eleven points. That is how both of those passes proved their own null, and it is
 the general rule every knob since `plays_engines` has quietly needed.
-PIN. `reads_gaze`, `reads_manlands`, `reads_pumps` and
-`reinforces_blocks` are on at Sorcerer and Wizard, so a measurement of
-some OTHER knob taken against a number published before 2026-09-10 must
-force all four off on both seats (`--profile-a
-wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,reinforces_blocks=off`,
+PIN. `reads_gaze`, `reads_manlands`, `reads_pumps`,
+`reinforces_blocks` and `reads_race` are on at Sorcerer and Wizard — and
+`holds_tricks` is on at the WIZARD — so a measurement of some OTHER knob
+taken against a number published before 2026-09-10 must force all six off
+on both seats (`--profile-a
+wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,reinforces_blocks=off,`
+`reads_race=off,holds_tricks=off`,
 and the same for `--profile-b`) or it is measuring several changes at
-once. That is how each of those passes proved its own null, and it is
+once. The two combat rows of 2026-09-10 pinned each other exactly that
+way: the `reads_race` sweeps below are taken with `holds_tricks=off` on
+both seats and the `holds_tricks` sweeps with `reads_race=off`. That is how each of those passes proved its own null, and it is
 the general rule every knob since `plays_engines` has quietly needed. It
 holds inside the SUITE as well and not only in the Lab:
 `tests/ai/test_ai_pump_plan_broken_2026_09_10.gd`'s null arm pins
@@ -1875,7 +2067,10 @@ byte-identical to its own null in every arm of every run of 2026-09-10
 (2 000 games an arm on the Big Green and Priestess sweeps, 1 000 on the
 matrix), and it is the same control `crack_back_margin` needs, for the
 same reason — the crack-back search reads THEIR creatures and there are
-none. Two forty-land lists are not shipped decks and do not need to be;
+none. `reads_race` takes it too, and for the same reason: the knob reads the
+REACH of both boards and moves a rung of the block ladder, so a pair with
+a creature in it exercises it in every game, and a creatureless pair is
+the only one where both clocks are NEVER and no margin ever moves. Two forty-land lists are not shipped decks and do not need to be;
 write them beside the run.
 TWO MORE SINCE 2026-09-10. `levels_boards` grew the LAND SWEEP, so its
 control must hold no Balance AND no all-lands sweeper — Big Green vs

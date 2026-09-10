@@ -2346,7 +2346,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5806 tests / ~151 421 asserts, ~380 s
+├── tests/                   GUT suite — 5829 tests / ~151 703 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4097,6 +4097,30 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_reads_race_2026_09_10.gd — WHO IS THE BEATDOWN
+│    (AiProfile.reads_race): the Serra Angel that stops trading itself for
+│    a Craw Wurm one turn from winning and the null that gives it away;
+│    the Craw Wurm that pays a point more to stop an Erhnam Djinn at eight
+│    life and the null that lets it through; the two clocks read off the
+│    life totals and the printed reach, a Wall counted as no reach, a
+│    tapped body counted at full because it untaps first, and two boards
+│    that cannot kill each other reading never against never; the dead
+│    band of a turn; the HORIZON the suite put there, four turns, with the
+│    20-20 Hill Giant board that saturated without it and one point of
+│    life either side of the line; and, on BOTH arms, the attack bar P1
+│    asked for and the Lab refused, plus the Air Elemental board
+│    crack_back_margin was handed here and this row does not answer;
+│    tests/ai/test_ai_holds_tricks_2026_09_10.gd — THE TRICK'S MANA,
+│    BOOKED (AiProfile.holds_tricks): the {G} kept open through main 1 and
+│    the null that spends it on a Grizzly Bears and leaves the Giant
+│    Growth unpayable; the booking priced at the bait's own worth and
+│    carried into _held_reserve; an empty board over there booking
+│    nothing, a body sound without the trick that is no bait, their turn
+│    and the phase after the blocks booking nothing; the 1.5x rule still
+│    sending a Force of Nature ahead of it; and the response spending the
+│    pump to win the block on both arms, which is what stands in place of
+│    P5's remembered attacker — a tie-break for a tie that happened once
+│    in two hundred games;
 │    tests/ai/test_ai_disk_deferral_2026_09_10.gd — THE DISK DEFERRAL
 │    (AiProfile.times_sweeps): the Disk that no longer fires at home and
 │    the null that still does; the deferred Disk going off once their

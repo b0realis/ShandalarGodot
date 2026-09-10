@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5806 tests, 0 failing, 336 scripts** (151 421 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5829 tests, 0 failing, 338 scripts** (151 703 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10784,6 +10784,83 @@ with every knob at its shipped value: −14, −1, −5, 0, 0, −2, +3, −7, 0
 +7 — nineteen games of ten thousand, not one matchup as much as one sigma
 (16), and the three that do not move at all are the three with neither a
 burn spell nor a sweeper in reach.
+
+## THE RACE READ, HALF OF IT — AND THE TRICK'S MANA (2026-09-10) — Wave 3, combat P1 and P5
+
+- **THE BLOCK HALF SHIPS** (`reads_race`, Sorcerer and Wizard). Rung 2 of
+  `_best_block_for` took a voluntary trade at `attacker_value + 0.5` at
+  twenty life as at four, so a Serra Angel traded itself for a Craw Wurm
+  while one turn from winning at 20 against 4, and a Craw Wurm let an
+  Erhnam Djinn through at 8 life because the Wurm was worth ONE POINT
+  more. `AiPlayer._trade_margin` reads P1's own three states (−0.5 / +0.5
+  / +1.5) off two clocks of public numbers — the life totals and the
+  printed power each side could swing with once everything untaps — with
+  a dead band of a turn and `RACE_HORIZON` (four turns, `PACE_HORIZON`'s
+  sentence said about the red zone) under all of it. **The horizon is the
+  tree's and the suite put it there**: the clamp saturates on a 20-20
+  board, where two Grizzly Bears against one Hill Giant is five turns
+  against seven, and the first cut refused a Rasputin Dreamweaver a trade
+  this suite has pinned since the 2026-09-04 audit. MEASURED as a wash
+  that removes a malfunction — the twenty-matchup matrix runs −0.6 to
+  +0.8 with 63 games won to 48 lost; four pairs at 2 000 an arm read
+  +0.6 / +0.2 / +0.1 / +0.0; the creatureless control byte-identical in
+  every arm.
+- **AND P1'S HEADLINE HALF IS THE THIRD BRAKE ON `_combat_tolerance` TO BE
+  REFUSED THIS MONTH.** The attack bar moved by the same clock difference,
+  plus one for a clock they cannot block, was built exactly as designed —
+  with a floor at zero, because a risk of 0.00 is a FREE exchange and a
+  negative appetite refuses attacks that cost nothing — and over the eight
+  starter matchups it moves most it ended **42 games in a win against 170
+  in a loss** (White Knights vs Black-Red Raiders −3.1, Blue Skies vs
+  Mountain Artillery −1.9). Dropping the evasive clock changed nothing (58
+  to 165), so it is the clamp itself, and what it moves is the deck P1's
+  own Risk paragraph says it must not: decks of small evasive bodies that
+  were already ahead, handed a licence to swing. The block half alone
+  reads 16 won to 17 lost on those same eight. `_combat_tolerance` is
+  byte-identical to what it was.
+- **AND IT DOES NOT ANSWER `crack_back_margin`'S QUESTION.** That row was
+  refused the same day and handed here. It cannot be answered here:
+  `_attack_is_reasonable` returns on `risk < 0` — *nothing over there may
+  legally block it* — before any bar is read, so the Air Elemental into
+  two Craw Wurms at 14 life is declared on both arms at a clock of five
+  against two. What that swing costs is a TAPPED BLOCKER, and only the
+  crack-back search prices a body for being unavailable on their turn. A
+  fourth attempt, if anyone makes one, lives there — and a test pins the
+  board so the hand-off is not believed twice.
+- **THE TRICK'S MANA, BOOKED** (`holds_tricks`, Wizard). The pilot has
+  always sent one extra attacker on the strength of a Giant Growth and
+  always spent the Growth to win that body's block; between them sat the
+  first main phase, which knew about neither — `_held_reserve` books
+  removal, a draw and a counterspell and skips a pump outright. Measured
+  over 200 whole games of Big Green against White Knights before a line
+  was written: the pilot reached declare-blockers holding a pump **2 051
+  times and could no longer pay for it in 531 of them (25.9%)**.
+  `AiPlayer._trick_reserve` puts the pump's cost into that same reserve,
+  on our own turn only, before the blocks only, and only where there is a
+  BAIT — the rider's own pair of readings asked one phase earlier — so an
+  empty board over there books nothing at all, because with nothing to
+  block us every attack is already sound. A GAIN: Big Green vs White
+  Knights 54.1% -> 55.4%, Beast Master (4 Giant Growth) vs White Knights
+  20.5% -> 21.9%, vs Mountain Artillery +0.7, vs Black-Red Raiders +0.4 —
+  no single delta clear of its interval and **104 flips won to 28 lost**
+  across the four pairs, which a coin does not do (66-66), on arms that
+  are the same seeds game for game.
+- **TWO OF THE NOTES' OWN CLAIMS DID NOT REPRODUCE and are not built.**
+  P13 says *"`_declare_attacks` does not know the trick exists"*; the pump
+  rider has been in `_attack_choice` for some time, and what was missing
+  was the mana. P5's second half — remember the body's id so the response
+  prefers it — answers a question the response was asked in **ONE
+  declare-blockers step in 200 games**.
+- **Pool facts.** The Giant Growth shape is **exactly two cards** in this
+  pool (Giant Growth, Righteousness); of the five starters only Big Green
+  holds one, so **16 of the 20 starter matchups measure exactly 0 games
+  different** for `holds_tricks`. The Deck (playable) vs Mountain
+  Artillery measures **1 game different in 2 000** for `reads_race` — P1
+  names that pair as the archetypal control-versus-beatdown race, and a
+  control deck's own reach is usually zero, so a clock of never is not a
+  race. And `--jobs 16` is no faster than `--jobs 8` on this box under
+  contention: one sweep read 2.5 games/s beside other agents and 66
+  games/s alone.
 
 ## Standing quality gates
 

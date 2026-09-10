@@ -948,6 +948,18 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			if profile.counter_threshold > float(out.get("value", 0.0)):
 				out = {"cost": inst.data.cost, "value": profile.counter_threshold,
 					"for": inst.id}
+	# AND SO DOES THE COMBAT TRICK (2026-09-10, [member
+	# AiProfile.holds_tricks]). The loop above refuses a pump on purpose —
+	# [method _fire_held_instant] would never cast one at their end step —
+	# but "would I cast this unprompted?" and "must the mana still be
+	# there when the moment comes?" are the two different questions the
+	# counterspell clause above was written for, and a Giant Growth held
+	# for a bait attacker of ours answers the second one too. [method
+	# _trick_reserve] is that reading, and it books nothing at all unless
+	# the bait exists.
+	var trick := _trick_reserve(game)
+	if not trick.is_empty() and float(trick["value"]) > float(out.get("value", 0.0)):
+		out = {"cost": trick["cost"], "value": trick["value"]}
 	return out
 
 
@@ -6626,6 +6638,69 @@ func _find_pump_instant(game: MtgGame) -> CardInstance:
 	return null
 
 
+## THE TRICK'S OWN BOOKING (2026-09-10, [member AiProfile.holds_tricks];
+## `docs/forge/combat.md` P5, `docs/forge/casting.md` P13) — `{cost,
+## value, bait}` for a pump instant in hand that has a body to send, `{}`
+## otherwise. [method _held_reserve] merges it with the removal, the draw
+## and the counterspell it already books.
+##
+## THE HOLE IT FILLS. [method _attack_choice] already sends one extra body
+## on the strength of a pump in hand, and [method
+## _offensive_combat_response] already spends the pump to win that body's
+## block. What neither of them can do is stop the FIRST MAIN PHASE from
+## spending the mana: [method _held_reserve] skips a pump outright (`or
+## intent.pumps`), so the {G} of a Giant Growth pays for a Grizzly Bears
+## and the trick is a dead card for the turn. Measured over 200 games of
+## Big Green against White Knights on the tree before this existed: the
+## pilot reached declare-blockers holding a pump 2,051 times and could no
+## longer pay for it in 531 of them.
+##
+## THE BOOKING IS THE RIDER'S OWN QUESTION, ASKED ONE PHASE EARLIER, and
+## it is deliberately narrow. Only on our own turn and only before the
+## blocks are in, because a bait attacker is a thing our combat does.
+## Only when there is a body of ours that the pump makes a sound attacker
+## AND that is not one without it — the exact pair of readings the rider
+## makes ([method _attack_is_reasonable] with and without the bonus) — so
+## an empty board on the other side books nothing at all, every attack
+## being sound already when nothing may block it. Its worth is the bait's
+## own worth, which puts it in the same currency as the rest of the
+## reserve and lets [method _try_cast_best]'s 1.5x rule send a clearly
+## better cast ahead of it.
+func _trick_reserve(game: MtgGame) -> Dictionary:
+	if not profile.holds_tricks:
+		return {}
+	if pid != game.active_player or game.current_step() > Mtg.Step.DECLARE_BLOCKERS:
+		return {}   # a trick held on their turn is not a bait attacker
+	var defender := game.opponent_of(pid)
+	var blockers: Array[CardInstance] = []
+	for inst in game.players[defender].battlefield:
+		if inst.is_creature() and not inst.tapped:
+			blockers.append(inst)
+	if blockers.is_empty():
+		return {}   # nothing may block us: no attack of ours needs a trick
+	var pump := _find_pump_instant(game)
+	if pump == null:
+		return {}
+	var bonus := Vector2i(pump.data.spell_effects[0].power,
+		pump.data.spell_effects[0].toughness)
+	var bait: CardInstance = null
+	var best := 0.0
+	for inst in _attack_candidates(game, defender):
+		if inst.cur_power <= 0:
+			continue
+		if _attack_is_reasonable(game, inst, blockers, defender):
+			continue   # sound without the trick — the trick is not for it
+		if not _attack_is_reasonable(game, inst, blockers, defender, bonus):
+			continue
+		var worth := Evaluator.permanent_value(inst, profile)
+		if bait == null or worth > best:
+			bait = inst
+			best = worth
+	if bait == null:
+		return {}
+	return {"cost": pump.data.cost, "value": best, "bait": bait}
+
+
 static func _has_effect(data: CardData, effect_class: String) -> bool:
 	for effect in data.spell_effects:
 		if effect.get_script().get_global_name() == effect_class:
@@ -7619,28 +7694,145 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 
 
 ## The durable half of [method CombatState.attack_illegality]: could
-## [param inst] attack us on THEIR next turn, once it has untapped and
-## shed its summoning sickness and this turn's bans have expired?
-func _could_attack_next_turn(game: MtgGame, inst: CardInstance) -> bool:
+## [param inst] attack [param defender] on its controller's next turn,
+## once it has untapped and shed its summoning sickness and this turn's
+## bans have expired? [param defender] is our own seat unless a caller
+## says otherwise — the reading the crack-back model has always made of
+## THEIR board — and [method _race_reach] passes the other seat to ask the
+## same question of OURS (2026-09-10, [member AiProfile.reads_race]).
+func _could_attack_next_turn(game: MtgGame, inst: CardInstance,
+		defender := -1) -> bool:
 	if not inst.is_creature():
 		return false
 	if inst.has_keyword(Mtg.Keyword.DEFENDER) or inst.cur_cant_attack:
 		return false
 	var needs := inst.data.attack_needs_defender_land
-	if needs != "" and not CombatState._controls_land_of_type(game, pid, needs):
+	if needs != "" and not CombatState._controls_land_of_type(
+			game, pid if defender < 0 else defender, needs):
 		return false
 	return true
+
+
+## A clock of NEVER: what [method _race_clocks] answers for a side whose
+## reach is zero. Large enough that the difference of two of them is still
+## the honest 0 — neither side is killing anybody, so there is no race to
+## read — and small enough to stay an int.
+const RACE_NEVER := 99
+
+
+## THE RACE'S OWN HORIZON (2026-09-10, [member AiProfile.reads_race]): the
+## faster of the two clocks has to be this near before either of them is
+## read at all. [constant PACE_HORIZON] is the same sentence about the
+## LIBRARIES — a game that has not ended by then is not being decided by
+## them — and this is it about the red zone.
+##
+## THE SUITE IS WHAT PUT IT HERE, and it is the difference between a race
+## and a board. A first cut read the clocks whenever there were creatures
+## on both sides, and on a 20-20 table two Grizzly Bears against one Hill
+## Giant is five turns against seven — a saturating difference nobody will
+## still be in by then. It refused a Rasputin Dreamweaver the 3/3 it was
+## worth trading with, and (in the attack-side half these numbers went on
+## to refuse) sent a bear into the Giant and walked a 1/2 Carrion Ants
+## into a Grizzly Bears: three declarations this suite has pinned as right
+## since the 2026-09-04 cohort audit, *"the fix is a CALCULATION, not a
+## licence to swing"*. Four of somebody's turns is about a fifth of this
+## pool's median duel (19 turns over the starter matrix); past that both
+## boards will have been rebuilt before either clock runs out, and who is
+## the beatdown is not yet a question the table is asking.
+const RACE_HORIZON := 4
+
+
+## THE REACH OF ONE SIDE (2026-09-10, [member AiProfile.reads_race]): the
+## printed power [param seat] could put in the red zone against [param
+## defender] once everything untaps, in damage per turn.
+##
+## It is the DURABLE reading on both sides of the table on purpose. A
+## clock is a question about the turns ahead, so a body that is tapped
+## right now still counts (it untaps before it swings) and a body that is
+## summoning-sick this instant still counts (it is not next turn); what
+## does NOT count is a Wall, a creature that cannot attack at all, and one
+## whose printed rider the defender's lands do not satisfy. That is
+## exactly [method _could_attack_next_turn], which the crack-back model
+## has always asked of their board — asked here of ours as well. Its one
+## consumer is [method _trade_margin].
+func _race_reach(game: MtgGame, seat: int, defender: int) -> int:
+	var reach := 0
+	for inst in game.players[seat].battlefield:
+		if _could_attack_next_turn(game, inst, defender):
+			reach += maxi(inst.cur_power, 0)
+	return reach
+
+
+## THE TWO CLOCKS as `[our_clock, their_clock]`: the turns we need to take
+## [param defender] from their life total to nothing, and the turns they
+## need to do it to us. [constant RACE_NEVER] for a side with no reach.
+func _race_clocks(game: MtgGame, defender: int) -> Vector2i:
+	var ours := _race_reach(game, pid, defender)
+	var theirs := _race_reach(game, defender, pid)
+	var our_clock := RACE_NEVER if ours <= 0 else \
+		ceili(float(maxi(game.players[defender].life, 0)) / float(ours))
+	var their_clock := RACE_NEVER if theirs <= 0 else \
+		ceili(float(maxi(game.players[pid].life, 0)) / float(theirs))
+	return Vector2i(our_clock, their_clock)
 
 
 ## The profile's appetite for a bad exchange, in stat points. Aggression
 ## converts acceptable-loss into a threshold: 0.5 accepts even trades;
 ## higher accepts worse. Being ahead on board buys one more point — the
 ## Adaptive posture (mage-go's idea): press an advantage.
+##
+## AND THE RACE DOES NOT MOVE IT, WHICH IS A MEASUREMENT AND NOT AN
+## OVERSIGHT (2026-09-10, [member AiProfile.reads_race]).
+## `docs/forge/combat.md` P1 asks for exactly that — the bar a single body
+## must clear moved by `clamp(their_clock - our_clock, -2, +2)` stat
+## points, plus one for a clock they cannot block — and it was built here,
+## with a floor at zero and a horizon on the clocks, and the Deck Lab
+## refused it: over the eight starter matchups it moves most it turned
+## 2,185 games and ended 42 of them in a win against 170 in a loss, with
+## White Knights against Black-Red Raiders at -3.1 and Blue Skies against
+## Mountain Artillery at -1.9. It is the third brake-or-licence on this
+## one number to be measured and refused this month, and the second to
+## move the deck it should have left alone. The clocks stayed for the
+## BLOCK ladder, where the same reading measures a wash
+## ([method _trade_margin]); `docs/ai-difficulty.md` §4 has the four arms.
 func _combat_tolerance(game: MtgGame) -> float:
 	var posture := 0.0
 	if Evaluator.position_score(game, pid, profile) > 5.0:
 		posture = 1.0
 	return (profile.aggression - 0.5) * 6.0 + posture
+
+
+## HOW MUCH A VOLUNTARY BLOCK TRADE MAY COST, on top of the attacker's own
+## worth: rung 2 of [method _best_block_for] takes the trade when the body
+## it spends is worth no more than `attacker_value + this`.
+##
+## 0.5 is the incumbent and the null, and it is the same number at twenty
+## life as at four. Under [member AiProfile.reads_race] the race moves it,
+## in the three states `docs/forge/combat.md` P1 writes rather than as a
+## sliding scale: DEMAND A GAIN when their clock is more than a turn
+## longer than ours — we are winning and the board we have is what wins
+## it — and ALLOW A SMALL LOSS when ours is more than a turn longer than
+## theirs, because a point of value is worth a turn of their clock when
+## the clock is what is killing us. Inside a turn of each other nothing
+## moves: two boards a turn apart at twenty life are not in a race, and a
+## reading that saturated there refused a Rasputin Dreamweaver the 3/3 it
+## was worth trading with.
+##
+## Forge says the same thing with `diff = life * 2 - 5`
+## (`AiBlockController.java:1050`) — a voluntary trade must gain more the
+## healthier you are — read as a race rather than as a life total, because
+## twenty life in front of a board that kills in two is not health.
+func _trade_margin(game: MtgGame) -> float:
+	if not profile.reads_race:
+		return 0.5
+	var clocks := _race_clocks(game, game.opponent_of(pid))
+	if mini(clocks.x, clocks.y) > RACE_HORIZON:
+		return 0.5   # [constant RACE_HORIZON]: not a race yet
+	if clocks.y > clocks.x + 1:
+		return -0.5   # winning the race: the trade has to GAIN
+	if clocks.x > clocks.y + 1:
+		return 1.5    # losing it: a point of value buys a turn
+	return 0.5
 
 
 ## Would attacking with [param inst] be sensible against these blockers,
@@ -8430,9 +8622,10 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 			if not tramples and not _dies_to(game, blocker, attacker):
 				return [blocker.id]
 	# 2) Value trade: we both die, their creature was worth at least ours.
+	var trade_margin := _trade_margin(game)
 	for blocker in legal:
 		if _dies_to(game, attacker, blocker) \
-				and Evaluator.permanent_value(blocker, profile) <= attacker_value + 0.5:
+				and Evaluator.permanent_value(blocker, profile) <= attacker_value + trade_margin:
 			return [blocker.id]
 	# 3) Gang up: two blockers whose combined damage kills it, if their
 	#    combined worth isn't wildly above the prize.

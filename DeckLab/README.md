@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -485,7 +485,8 @@ that `checks_before_casting` defaults ON at the Wizard — so a sweep of
 some OTHER knob taken against a published number must pin all six off on
 both seats
 (`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
-`counters_by_shape=off,reads_lethal_x=off,checks_before_casting=off`
+`counters_by_shape=off,reads_lethal_x=off,checks_before_casting=off,`
+`reads_race=off,holds_tricks=off`
 `reinforces_blocks` (2026-09-10) fires wherever a block is DECLARED at
 all, which is every game with a creature in it — so unlike the three
 above it has no card list, and **the only control it cannot fire on is a
@@ -511,10 +512,42 @@ same reason: the crack-back search reads THEIR creatures and there are
 none. Every preset ships 0, so the `0` arm replays the null game for
 game; the sweep of 2026-09-10 is written up in `docs/ai-difficulty.md`
 §4 and its answer was no.
-**Mind also that all four default ON at Sorcerer and Wizard**, so a
-sweep of some OTHER knob taken against a published number must pin them
-off on both seats
-(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,reinforces_blocks=off`
+`reads_race` (2026-09-10) reads the REACH of both boards and moves rung 2
+of the block ladder, so like `reinforces_blocks` it has no card list and
+**takes the same creatureless control** — forty Forests against forty
+Mountains, where both clocks are NEVER and no margin ever moves. It is
+byte-identical to its own null in every arm of every run of that day
+(2 000 games an arm on four pairs, 1 000 on five gauntlets). **Mind what
+the knob can even see when you pick the live pair**: nothing moves unless
+the FASTER of the two clocks is inside four turns
+(`AiPlayer.RACE_HORIZON`), so a pair that spends its games on a 20-20
+board barely exercises it at all — The Deck (playable) against Mountain
+Artillery, which `docs/forge/combat.md` P1 names as the archetypal
+control-versus-beatdown race, measures **1 game different in 2 000**,
+because a control deck's own reach is usually zero and a clock of never
+is not a race. The pairs that move are the ones with a creature deck in
+seat A. And mind that the knob's ATTACK half was refused: a sweep of
+`reads_race` measures the block trade margin and nothing else.
+`holds_tricks` (2026-09-10) fires only where a PUMP INSTANT of the Giant
+Growth shape is in the seat's hand — a single non-self `PumpEffect` with
+a toughness bonus — and **this pool holds exactly TWO of them, Giant
+Growth and Righteousness**. So its control is any pair holding neither,
+and White Knights vs Blue Skies is the one used (byte-identical to its
+own null, 560-1440, in every arm of four sweeps at 2 000 games and five
+gauntlets at 1 000). **Of the five shipped starters only Big Green holds
+one** (3 Giant Growth), so **16 of the 20 starter matchups measure
+exactly 0 games different** and the whole reading lives in Big Green's
+four. The decks that put the question hardest are the 1997 enemies with
+four apiece — `decks/1997/originals/beast_master.deck`, `druid.deck`,
+`guardian_of_the_tusk.deck`, `decks/1997/ancients/alt_a_kesh.deck` and
+`fungus_master.deck`. It also needs a BLOCKER on the other side to have
+anything to bait, so a pair whose seat B empties its board is a pair the
+knob sleeps through.
+**Mind also that five of them default ON at Sorcerer and Wizard and a
+sixth at the Wizard**, so a sweep of some OTHER knob taken against a
+published number must pin them off on both seats
+(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
+`reinforces_blocks=off,reads_race=off,holds_tricks=off`
 and the same for `--profile-b`) or it is measuring several changes; that
 is how the null was proved for both passes — the `pays_sacrifices` sweep
 of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,
