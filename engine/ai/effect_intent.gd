@@ -111,11 +111,14 @@ var discards: int = 0
 ## a price when the target is ours. -1 means the amount is the spell's X.
 ##
 ## Read from [constant CARD_LOCAL] only: every such clause in this pool
-## lives in a card-local effect class. It is consulted by ONE caller
-## today, [method AiPlayer._cast_value] charging a cast that points at one
-## of our own liabilities ([member AiProfile.prices_liabilities]); the
-## bonus half — an enemy Detonate's X, still unpriced — is the open row it
-## was named with (docs/AI-next-wave.md, wave 5).
+## lives in a card-local effect class. It is consulted by ONE caller,
+## [method AiPlayer._cast_value], and since 2026-09-10 that caller reads
+## BOTH halves of it under [member AiProfile.prices_liabilities] — the
+## price when the target is ours, charged at the reaper's rate, and the
+## bonus when the target is theirs, charged on the AI's own clock
+## ([method AiPlayer._face_damage_value]) or worth the game outright when
+## it is lethal. Until then only the own-side half was priced, which made
+## an enemy Detonate's X a gain the planner got for free.
 var damage_to_target_controller: int = 0
 
 ## Something the reader has no model for (a card-local effect outside the
@@ -205,10 +208,11 @@ const CARD_LOCAL := {
 	# a harmful reading is no longer filled with a permanent of our own
 	# ([member AiProfile.spares_own]).
 	# `controller_damage: -1` is the X of "Detonate deals X damage to that
-	# artifact's controller" (2026-09-09): for an enemy target it stays an
-	# unpriced bonus, and for one of OUR OWN — which only a liability
-	# reading can name ([member AiProfile.prices_liabilities]) — it is the
-	# price of the relief, charged in [method AiPlayer._cast_value].
+	# artifact's controller" (2026-09-09), and since 2026-09-10 both sides
+	# of it are charged in [method AiPlayer._cast_value] under [member
+	# AiProfile.prices_liabilities]: for one of OUR OWN — which only a
+	# liability reading can name — it is the price of the relief, and for
+	# one of THEIRS it is burn, lethal-worth when it is lethal.
 	"Detonate": {"removes": true, "ignores_regeneration": true,
 		"controller_damage": -1},
 	# "You may tap OR untap target ..." — the mode is chosen on resolution,
@@ -846,6 +850,34 @@ const TOLL_BEATS: Array[int] = [
 ## Rack) is deliberately absent: those tolls are symmetric or aimed, and a
 ## reading that saw only our half of them would price a Copper Tablet as a
 ## liability while it ticks the opponent down at exactly the same rate.
+##
+## RULED AND NOT BUILT, 2026-09-10, and the census is why. The six cards
+## the pool puts on this shape were read one by one, and FIVE of them are
+## refused for a reason that has nothing to do with symmetry:
+##
+##  * MANABARBS fires on `Mtg.EventType.TAPPED_FOR_MANA`, which is not a
+##    [constant TOLL_BEATS] event at all — tapping a land is a price the
+##    seat AGREED to, not a beat that comes round whether it likes it or
+##    not, and that rule predates this question.
+##  * KARMA ("damage equal to the number of Swamps they control"), THE
+##    RACK and STORM WORLD ("X damage … where X is 3 minus the number of
+##    cards in their hand") and POWER SURGE ("X … the number of untapped
+##    lands") print a COUNT this reader would have to do itself, which is
+##    exactly what [constant TOLL_UNKNOWABLE]'s ruling already refuses. A
+##    search for "deals <a number> damage to that player" finds one in
+##    none of the four.
+##
+## What is left is ONE CARD, Copper Tablet, and pricing it needs to know
+## whose race the shared clock is winning — which of the two seats it
+## kills first, and whether the game ends from something else before it
+## kills either. The AI has the first half (two life totals and a rate
+## each) and nothing whatever of the second: no reader in this engine
+## estimates the turns a game has left ([method
+## AiPlayer._face_damage_value] scales one hit by the share of a life
+## total it takes, [method Evaluator.position_score] is a snapshot, and
+## [constant AiPlayer.PACE_HORIZON] is the LIBRARY's clock under a knob of
+## its own). So the question is `counts_the_race`'s (docs/AI-next-wave.md,
+## wave 4) and stays there; a symmetric toll keeps its printed worth.
 const TOLL_WORDS: Array[String] = ["damage to you", "damage to its controller"]
 
 ## Words that make the amount unknowable at the moment we would have to

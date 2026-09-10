@@ -78,7 +78,7 @@ override any knob on any preset for a measurement
 | `mulligans` | on | on | on | on | judges the opening hand under the Paris rule by its lands (`AiMulligan`: none, all, too few or too many for the hand's size, or lands that cast none of its spells; nothing below four cards goes back); on everywhere — keeping a no-land seven is a malfunction, not a weakness |
 | `feeds_worst` | on | on | on | on | asked which of its own to give up when the giving is no cost it chose — The Abyss's meal, Lord of the Pit's tribute, Mana Vortex's land, a Sylvan Library's discard — it gives the least valuable, not the best; on everywhere, the same reason |
 | `spares_own` | on | on | on | on | never fills a harmful spell's slots with its own permanents unless the evaluator prices giving them up below zero — no Detonate on its own Mana Vault, no Winter Blast padded with its own creatures (the owner's playtest, 2026-09-08); on everywhere, the same reason |
-| `prices_liabilities` | on | on | on | on | knows that a permanent of its OWN can be worth less than nothing: the reckoning (a permanent whose printed line says losing it loses the GAME is never given up — a Lich), the dead weight (tapped, not untapping, every ability needing the {T} it cannot pay — a Mana Vault with no {4}, a creature under a Paralyze) and the toll it still takes each turn, priced for the turns our mana needs to reach the price the card itself prints. It is what opens `spares_own`'s one door: with it the AI Detonates the Vault it cannot untap and keeps the one it can; on everywhere, the same reason |
+| `prices_liabilities` | on | on | on | on | knows that a permanent of its OWN can be worth less than nothing: the reckoning (a permanent whose printed line says losing it loses the GAME is never given up — a Lich), the dead weight (tapped, not untapping, every ability needing the {T} it cannot pay — a Mana Vault with no {4}, a creature under a Paralyze whose {4} we cannot reach; since the fifth pass the escape printed on the AURA counts, so an Angel we could free for {4} is an Angel again) and the toll it still takes each turn, priced for the turns our mana needs to reach the price the card itself prints. It is what opens `spares_own`'s one door: with it the AI Detonates the Vault it cannot untap and keeps the one it can — and since the same pass it reads the sting a punisher deals its target's controller on BOTH sides of the table, so a Detonate on their Nevinyrral's Disk with the opponent at four is the kill it always was; on everywhere, the same reason |
 | `prices_fallout` | on | on | on | on | prices what its own spell does to its OWN side of the table on the way past — the other half of `spares_own`, which only guards the slots. Volcanic Eruption ("destroy X target Mountains, then that many damage to each creature and each player") is the pool's one card of the shape: on, the planner walks every affordable X, prices the blast on the sweeper's own scale (`_sweep_value`: what dies on each side, both life totals, never an X lethal to us), refuses one that would put it on its own `chump_threshold` or below unless the blast wins outright, and keeps the cheapest X worth casting. Off, the blast is free and the X is whatever the lands will pay: at five life against six Mountains it cast for X=6 and killed itself. On everywhere, the same reason; the panic line gives it a per-rung shape without a number of its own |
 | `counts_cards` | off | off | on | on | sizes X draws and discards to the hands and libraries in front of it; aims a draw at an empty library |
 | `levels_boards` | off | off | on | on | prices Balance by what each side would lose |
@@ -87,7 +87,7 @@ override any knob on any preset for a measurement
 | `animates_to_attack` | off | off | on | on | buys a Factory's animation only when the attack it would declare sends the body; until then the body is no mana source, and on their turn a creature-until-end-of-turn is no blocker |
 | `times_sweeps` | off | off | on | on | prices a board wipe by the damage it keeps off its life as well as the permanents it trades — lethal-worth when the sweep is the out, a creature its Abyss will eat never counted — and fires one it can activate in the opponent's combat, after the attackers are declared and before the damage (the Disk as a Fog) |
 | `trusts_abyss` | off | off | on | on | keeps its counterspell when the creature spell on the stack is the next meal of a feeder on its table — The Abyss will destroy it at their upkeep — and spends it on what the feeder cannot eat |
-| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, and a trampler's overflow is measured against the toughness that will actually be there; and since the fourth, the BURN SPELL ON THE STACK — a Frozen Shade with Swamps open grows out of a Lightning Bolt instead of dying with the mana up, and the breath is asked before the pump instant in hand because the mana untaps and the card does not |
+| `pumps_to_attack` | off | off | on | on | judges its own creature at the size its OPEN MANA can reach when a combat declaration is made — a Carrion Ants behind four Swamps is a 4/5, not a 0/1 — attacking AND blocking (the name is the half it was born for), with the second main phase's cast kept whole on its own turn and the held instant on both, a capped breath counted at its cap, and the two card-local firebreathers (Dragon Whelp, Nalathni Dragon) read at last — three breaths and never the fourth unless that attack ends the game; and since the third pass the breaths the pilot BUYS are the ones the declaration was priced with — the split of the one pool is spent as it was allotted, and a trampler's overflow is measured against the toughness that will actually be there; and since the fourth, the BURN SPELL ON THE STACK — a Frozen Shade with Swamps open grows out of a Lightning Bolt instead of dying with the mana up, and the breath is asked before the pump instant in hand because the mana untaps and the card does not; and since the fifth, the breaths a block was DECLARED on are bought before the pilot's own pre-emptive regeneration shield can spend them — the one thing that was measurably breaking its own plan |
 | `spends_counters` | off | off | on | on | pays a cost of "remove N <kind> counters from this permanent" — the AI had never removed one in its life, so an Osai Vultures sat on its carrion counters and a Scavenging Ghoul never regenerated. Spendable when NOTHING BUT THE COST READS THE COUNTER: refused when the kind's own NAME is a P/T delta (a Triskelion's +1/+1 counters are the 4/4) and refused when the permanent's live `damage_eats_counters` names it (a Rock Hydra's heads are its life). What is left is fuel — carrion, corpse, husk, matrix, dream — and fuel is worth zero to every reader until it is spent, so the effect is the whole trade |
 
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
@@ -566,6 +566,51 @@ can be laid side by side. Control Big Green vs White Knights.
   decision the pilot got wrong; it is a play nobody at a table would
   miss.
 
+THE FIFTH PASS ON `pumps_to_attack` (2026-09-10, the plan the pilot broke
+itself) is a WASH in win rate, and it is the smallest of the five: it can
+only show on a board where the pilot holds a firebreather AND a
+regenerator that want the same mana in the same combat. Seed 11, control
+Big Green vs White Knights, each pair run TWICE — once against the tree
+before this landed and once against this one — so the `on` arms can be
+laid side by side game for game.
+
+| pair | null | `on`, before | `on`, after | games that moved |
+| --- | --- | --- | --- | --- |
+| Vampire Lord vs Big Green, 1 000 | 19.7% | 23.3% | 23.3% | 46 of 1 000 |
+| Vampire Lord vs Big Green, 4 000 | 20.3% | 23.4% (+3.0 ±1.8) | 23.4% (+3.1 ±1.8) | 226 of 4 000 |
+| Troll Shaman vs Big Green, 1 000 | 16.8% | 16.6% | 16.6% | 0 of 1 000 |
+
+- THE PAIR IS THE ONE THAT CAN ANSWER IT. Vampire Lord holds two
+  firebreathers (Carrion Ants, Vampire Bats) and a regenerator
+  (Will-o'-the-Wisp) on one colour of land, so the declaration's breaths
+  and the pre-emptive shield reach for the same Swamps; Big Green attacks
+  every turn it can, which is what puts the question. Troll Shaman is the
+  control of a different kind — four Uthden Trolls and a shield's worth of
+  red mana, but only ONE firebreather, a 5/5 flier that is nearly never
+  the body a plan is written for — and it moves nothing at all, which is
+  what "this only fires when both halves are on the table" looks like.
+- THE NULL IS EXACTLY THE NULL, twice over: the `off` and null arms of
+  every run are byte-identical between the two trees, 4 000 of 4 000,
+  and the control pair is 2150-1850 (525-475 at 1 000) byte-identical to
+  its own null in every arm of all six runs.
+- 226 OF 4 000 GAMES PLAYED DIFFERENTLY AND 8 ENDED DIFFERENTLY — six won,
+  two lost, 938 wins against 934. The knob's own delta reads +3.1 ±1.8
+  after and +3.0 ±1.8 before, so this pass's share of it is +0.1 against
+  an interval twenty times that: a wash, and it should be.
+- WHAT IT FIXES IS WHAT THE TABLE SEES, the same precedent the block half,
+  the trampler and the burn save shipped on. A pilot that declares a gang
+  on six breaths, spends one of the six Swamps shielding a Drudge
+  Skeletons, then buys NOTHING and watches both blockers die and five
+  trample through with five Swamps untapped is not making a close decision
+  badly; it is breaking its own plan in front of the player.
+- ONE READING WAS TAKEN AND NOT PUBLISHED HERE BEFORE: on this tree the
+  1 000-game reading of Vampire Lord vs Big Green at seed 11 is 19.7%
+  null / 23.3% `on`, where the fourth pass's paragraph above prints 19.8%
+  / 23.9%. The difference is one game and six, it is the same on BOTH
+  trees of this pass's A/B, and the control replays 525-475 exactly as
+  printed — so it is a stale number from a pre-merge worktree, not a
+  moved null. The 4 000-game reading in the table is the one to quote.
+
 `spends_counters` (2026-09-09) is a WASH on every pair it can fire on,
 and the census is where the change actually shows. Seed 11, control Big
 Green vs White Knights, byte-identical to its own null in every arm of
@@ -647,6 +692,69 @@ interval, and all three deltas keep their sign and their size inside it.)
   husk counters on it — the counter cost had been opened the day before
   and the Spawn still could not be bought.
 
+THE TOLLS (2026-09-10, `prices_liabilities`) is the FIFTH pass on the
+liability knob and it closes the four questions §5 was left with — TWO
+RULED and TWO FIXED — so the knob's meaning grew twice and its null did
+not move at all. Seed 11, control Big Green vs White Knights, and every
+pair run TWICE: once on the tree the liability pass shipped and once on
+this one, so the `on` arms lie side by side and every game can be
+compared by its own fingerprint.
+
+- **THE NULL IS EXACTLY THE NULL, and this time across two trees.**
+  Every `off` arm, every `null` arm and EVERY ARM OF THE CONTROL PAIR is
+  byte-identical between the shipped tree and this one, game for game, in
+  all SEVEN matched runs — five deck pairs, at 1 000, 2 000 and 4 000
+  games an arm, 65 000 games of `off` and control compared one by one. The
+  shipped tree's own sweep also replays the PUBLISHED numbers to the
+  decimal: War Mage vs Crag Hydra 45.3% null / 45.5% `on` at 1 000 and
+  45.8% / 45.6% at 2 000, War Mage vs Big Green 11.7% / 11.5% — which is
+  the liability pass's own table above, read back. The control is
+  525-475 at 1 000, 1075-925 at 2 000 and 2150-1850 at 4 000,
+  byte-identical to its own null in every arm of all FIFTEEN runs.
+- **THE DETONATE'S OTHER HALF IS A SMALL GAIN, and the flips say so
+  where the win rate cannot quite.** War Mage (three Detonate) against
+  Crag Hydra (four Onulet, three The Hive, two Soul Net): the `on` arm
+  goes 45.5% → **47.1%** at 1 000 games an arm and 45.6% → **46.8%** at
+  2 000, so the whole knob on that pair moves from −0.2 ±3.1 to +1.0
+  ±3.1. Both deltas are inside the interval a 2 000-game arm can see; the
+  census under them is not. Of the 2 000 `on`-arm games **207 played
+  differently and 33 ended differently — 28 of them won and 5 lost**. A
+  28-to-5 split is not a coin.
+- **AND AGAINST A DECK WITH NO ARTIFACT ON IT, NOT ONE GAME OF A
+  THOUSAND MOVES.** War Mage vs Big Green — the same three Detonates,
+  nothing across the table to point them at — is 11.5% on both trees and
+  **0 of 1 000 games differ**. That is the reading's own negative
+  control: it fires on their artifacts and on nothing else.
+- **THE AURA'S {4} IS A WASH, and the honest reading of it leans very
+  slightly the wrong way.** The pair that puts the question is a seat
+  asked for one of its own every turn against a deck holding Paralyze:
+  Azaar - Lichlord (two Lich, three Sengir Vampire, three Juzám Djinn)
+  vs Centaur Shaman (Spells of the Ancients) (four Paralyze, four Copper
+  Tablet) at 4 000 games an arm — null 61.6%, `on` 66.6% before and
+  **66.5%** after — and against A Royal Pain (four Paralyze) at 2 000 —
+  null 58.0%, 62.4% before and **62.2%** after. Over the two pairs 374 of
+  6 000 `on`-arm games play differently and 43 end differently: **17 won,
+  26 lost**, which at that count is a coin (−9 games of six thousand,
+  against a ±2.1-point interval). Alt-A-Kesh (two Lord of the Pit) vs the
+  same Royal Pain is a third pair where the whole KNOB does nothing —
+  32.0% in every arm, 0 of 2 000 games different either way.
+- **SO IT SHIPS FOR THE REASON `feeds_worst`, `times_sweeps` AND THE
+  DETONATE HALF SHIPPED,** and the numbers are said plainly rather than
+  dressed up: a Serra Angel under a Paralyze with four mana open, handed
+  to the first "give up one of yours" ask while a Grizzly Bears stands
+  beside it, is a malfunction at the table whatever six thousand games
+  say. The reading is also the one the knob already makes for a Mana
+  Vault whose {4} is in reach — full worth, the untap not charged — so
+  refusing it for an aura and granting it for an artifact would be two
+  rules for one sentence.
+- **THE TWO RULINGS COST NOTHING BECAUSE THEY BUILT NOTHING.** A toll
+  with no printed escape and a symmetric toll are both left exactly as
+  the liability pass left them; §5 carries the arguments. The short of
+  it: the first wants a HORIZON and this engine has none, and the second
+  turns out to be one card — Copper Tablet — once Manabarbs is refused
+  for firing on a land being tapped and Karma, The Rack, Storm World and
+  Power Surge for printing a count the reader will not do.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -659,6 +767,14 @@ permanent whose ability costs a counter, `plays_engines`' no Factory, no
 Scepter and — since the token arm — no permanent whose activated ability
 makes a token (Big Green vs White Knights holds none of the three) — the
 third pass's Time Walk
+
+fourth pass — no targeted burn on either side AND — since the fifth — no
+regenerator beside a firebreather, `spends_counters`'s no
+permanent whose ability costs a counter — the third pass's Time Walk
+
+permanent whose ability costs a counter, `prices_liabilities`'s no Lich,
+no Mana Vault, no permanent that stops untapping and — since the fifth
+pass — no Paralyze and no Detonate — the third pass's Time Walk
 sweep FAILED its first control on exactly that (Blue Skies' Ancestral
 Recall), and a failed control makes the deltas beside it no measurement
 at all. `CONTRIBUTING.md`
@@ -732,10 +848,37 @@ has the rule.
     priced at what the plan still owes them, so a gang reaches one
     verdict and buys together; and because that pricing IS the plan, the
     question is asked only in the pass that honours it, which is where
-    the null stays the null. What is left, and it is the one already
+    the null stays the null. ~~What is left, and it is the one already
     named on `_pump_plan`: mana spent between the declaration and the
     recovery by something else leaves a body short of the reach its plan
-    promised, and the residue then over-reads by that much.
+    promised, and the residue then over-reads by that much.~~
+    **Closed 2026-09-10 by the fifth pass — FIXED, and the spender was
+    the pilot itself.** Walking `_respond_action` in order, the routine
+    that spends the plan's mana is the line directly above the recovery:
+    `_combat_regeneration` buys a pre-emptive shield out of the same open
+    pool, and the two were double-booked at the declaration as well
+    (the ladder's `_dies_to` asks `_shieldable` -> `_can_shield`, which
+    plans the shield against the WHOLE pool that `_pump_shares` is
+    dividing). Reproduced on the fourth pass's own board plus one Drudge
+    Skeletons: six Swamps, the swarm declared on six breaths, the shield
+    took one, the gang question then said no — correctly, of five —
+    and the recovery bought NOTHING; both blockers died, FIVE trampled
+    through and five Swamps were left untapped. `_combat_planned_pumps`
+    delivers the breaths the declaration was priced with before the
+    pilot's own next discretionary purchase, and it is gated by the knob
+    the plan is gated by, so below Sorcerer it returns before it reads
+    the board. The counterspell and the answer to removal on the stack
+    still come first and always could — `_pump_reserve` books
+    `_held_reserve` out of every share, so the plan never owned that
+    mana. WHAT IS LEFT is now only THEIRS: an opponent's effect that taps
+    one of our lands between the two moments still leaves a body short,
+    and `_owed_bonuses` is deliberately NOT re-read against the mana on
+    the table — over-crediting a mate errs on the harmless side, because
+    every breath it buys is toughness as well as power, so against the
+    trampler this reading exists for the gang still absorbs the
+    assignment it paid for, and on the opponent's turn that mana has
+    nothing else to buy. Ruled, and pinned by
+    `tests/ai/test_ai_pump_plan_broken_2026_09_10.gd`.
   * The LEFTOVERS: RULED, not built, and one half of it fixed for a
     different reason. `_offensive_combat_response` does spend off the
     plan — measured, two unblocked firebreathers behind four Swamps split
@@ -781,15 +924,29 @@ has the rule.
   `AiPlayer._own_value` and NOT in `Evaluator.permanent_value`, which has
   seventy-six callers and every one of them is a board reading; the
   question "what is giving this permanent up worth to us" has four
-  callers and they are the four that wanted it. WHAT IS LEFT OPEN, and
-  named at the sites:
-  * A TOLL WITH NO PRINTED PRICE TO STOP IT is not read at all — a
-    Serendib Efreet's point a turn, a Juzám Djinn's, an Erg Raiders' two,
-    a Yawgmoth Demon's. `permanent_value` is a SNAPSHOT and a stream with
-    no end cannot be subtracted from it without pricing every drawback
-    creature in the pool out of its own deck; pricing one properly means
-    an evaluator that knows how long the game has left, which is a
-    different piece of work.
+  callers and they are the four that wanted it. WHAT WAS LEFT OPEN was
+  five rows, and the fifth pass (2026-09-10, §4) closed the four that
+  were open questions — two RULED and two FIXED; the fifth, a roll, was
+  already a ruling and stays one:
+  * ~~A TOLL WITH NO PRINTED PRICE TO STOP IT is not read at all — a
+    Serendib Efreet's point a turn, an Erg Raiders' two, a Yawgmoth
+    Demon's.~~ **Closed 2026-09-10 — RULED, not built, and the reason is
+    that the horizon does not exist.** The honest price of an endless
+    stream is the stream times a number of TURNS, and nothing in this
+    engine estimates the turns a game has left: `_face_damage_value`
+    scales one hit by the share of a life total it takes,
+    `Evaluator.position_score` is a snapshot of life, board, hand and
+    lands, `CombatSearch` looks exactly one turn ahead, the liability
+    reading's own `turns` are the turns our MANA needs to reach a printed
+    price, and `PACE_HORIZON` is twenty DRAW STEPS of a library race
+    under `paces_draws` — a decking clock, not a game clock. The one
+    horizon derivable from what is here is the toll's own, our life over
+    its rate, and taking it prices a Serendib Efreet at 8.5 minus our
+    whole life: −1.5 at twenty, and every drawback creature in the pool
+    out of its own deck. An invented constant would be worse than the
+    silence. The reader SEES the stream (`_own_toll` returns one damage
+    for the Efreet); it is the price that refuses, and the horizon is
+    `counts_the_race`'s to bring (wave 4).
   * A ROLL is not read (Mana Crypt's coin flip), by the same ruling that
     keeps Rainbow Knights out of `CARD_LOCAL_PUMPS`: what a card
     guarantees is the only number a decision can be made on. Here the
@@ -811,23 +968,127 @@ has the rule.
     to relieve ourselves). An enemy Detonate's X is still an unpriced
     bonus — pricing it would move the shipped pilot on both arms, so it
     stays the wave-5 row it was named as.
+- ~~`pumps_to_attack`'s burn reading answers DAMAGE and nothing else. A
+
+    a Mana Crypt keeps its printed worth. Still open, still ruled.
+  * ~~A SYMMETRIC toll ("deals 1 damage to that player" — Copper Tablet,
+    Manabarbs, Storm World, Power Surge) is not read.~~ **Closed
+    2026-09-10 — RULED, and the census is the argument rather than the
+    symmetry.** Of the six cards the pool puts on the shape, FIVE are
+    refused by rules that predate the question: Manabarbs fires on a LAND
+    BEING TAPPED FOR MANA, which `TOLL_BEATS` excludes on purpose (a
+    price the seat agreed to is not a toll), and Karma ("damage equal to
+    the number of Swamps they control"), The Rack, Storm World and Power
+    Surge print a COUNT the reader will not do, which is
+    `TOLL_UNKNOWABLE`'s own ruling — a regex for "deals N damage to that
+    player" finds a bare number in none of the four. What is left is ONE
+    CARD, Copper Tablet, and pricing a shared clock needs to know whose
+    race it is winning: which seat it kills first (answerable, two life
+    totals and a rate each) AND whether the game ends from something else
+    before it kills either (not answerable — the same missing horizon as
+    the row above). So it is a `counts_the_race` question after all, and
+    it stays wave 4's.
+  * ~~THE UNTAP PRICE PRINTED ON THE AURA rather than on the host is not
+    read … it cannot give the creature away.~~ **Closed 2026-09-10 —
+    FIXED, and the stated reason for leaving it was wrong.** The
+    understatement is harmless to `spares_own`'s door, which needs a
+    price BELOW zero — and to no other caller: `answer_card` gives up the
+    LEAST valuable of ours when the giving is no cost we chose
+    (`feeds_worst`), and zero is the least there is. A Serra Angel under
+    a Paralyze with four Mountains open was fed to a Lord of the Pit's
+    upkeep ahead of a Grizzly Bears, on a turn the {4} the aura itself
+    prints would have given the Angel back. `AiPlayer._untap_prices`
+    reads the host's own line AND the lines of everything in
+    `CardInstance.attachments` — the same beat (`TOLL_BEATS`), the same
+    line reader (`EffectIntent.toll_of_line`), the trigger's own
+    condition put to it with a probe event (CR 603.4), and the line
+    required to say "untap" or it is some other bargain. Who controls the
+    aura is not asked, because the printed line does not ask it: an enemy
+    Paralyze offers the {4} to the creature's controller, which is the
+    copy of the card this pool plays. WHAT REMAINS, and it is smaller: a
+    price printed on a permanent with NO structural link to the host —
+    Magnetic Mountain's "{4} for each tapped blue creature" — cannot be
+    tied to THIS creature without reading the card's own filter, so a
+    blue creature under one still reads as dead weight. It understates,
+    in the direction that cannot give a permanent away.
+  * ~~`EffectIntent.damage_to_target_controller` … only the OWN-side half
+    is priced … An enemy Detonate's X is still an unpriced bonus.~~
+    **Closed 2026-09-10 — FIXED, under the knob that owns the field.**
+    A half-read field is what made the pilot blind to a lethal Detonate:
+    their Nevinyrral's Disk, the opponent at four, five Mountains and the
+    card in hand read as an ordinary 7.6 and not as a win. Both halves go
+    through one line now (`AiPlayer._controller_sting`): ours is charged
+    at the reaper's rate as before, theirs is credited on the AI's own
+    clock (`_face_damage_value`, the currency every point of combat
+    damage to a face is already read in) and is worth `LETHAL_WORTH` when
+    it is lethal. It is gated on `prices_liabilities` and not shipped
+    knobless, which is what keeps the null the null — the objection that
+    deferred it ("pricing it moves the shipped pilot on both arms") was
+    an objection to a reader change, and this is a knob's.
 - `pumps_to_attack`'s burn reading answers DAMAGE and nothing else. A
   spell that kills by shrinking — "target creature gets -2/-2" — has no
   `EffectIntent.damage_at` for the arm to read, so a Frozen Shade with
   Swamps open still dies to one although the toughness it can buy would
-  save it. It is the same arm `_find_pump_instant` has never answered
-  either, so the two readers agree; widening it means asking the intent
-  for the toughness a spell TAKES as well as the damage it deals, which
-  is a reader's question rather than this knob's.
+  save it.~~ **Closed 2026-09-10 — RULED, not built: the shape is not in
+  this pool, and the census is the argument.** Walking every printed
+  effect in the registry, a negative TOUGHNESS term exists on exactly two
+  cards and both are `self_buff()`s on their own card (Urza's Avenger's
+  `{0}: -1/-1`, Wall of Wonder's `+4/-4`). Every shrink that can be aimed
+  at a creature of ours takes POWER only — Ghosts of the Damned and Hell
+  Swarm at -1/-0, Pradesh Gypsies, Staff of Zegon and Marsh Gas at -2/-0,
+  Bone Flute at -1/-0 — and no amount of it kills anything. Two more
+  things take toughness off one of ours and neither is the shape either.
+  HOLY LIGHT ("nonwhite creatures get -1/-1") is the pool's only
+  until-end-of-turn toughness shrink and it would kill a Frozen Shade
+  behind four Swamps — reproduced, four Swamps untapped — but it TARGETS
+  NOTHING: `_save_from_the_stack` walks `top.targets` and there are none,
+  so the arm is never reached, `EffectIntent` reads the card-local effect
+  as `unknown` besides, and the card is in no shipped deck. Everything
+  else is PERMANENT — the Immolation and Weakness auras, which ARE in the
+  1997 decks, and the Spirit Shackle, Takklemaggot and Unstable Mutation
+  counters — and a breath lasts until end of turn (CR 514.2), so it
+  postpones the state-based action by one cleanup and does not save:
+  reproduced, four breaths make the Shade a 6/3 that lives the turn and
+  is in the graveyard at the cleanup with every Swamp spent. So the arm
+  answers nothing because there is nothing here to answer, and
+  `_find_pump_instant` is silent for the same reason — the two readers
+  stay in step. Widening either is still a READER's question (an intent
+  that reports the toughness a spell TAKES), and it is blocked on a card
+  this pool does not have. Pinned by
+  `tests/ai/test_ai_shrink_and_dream_2026_09_10.gd`, census and all.
 - `spends_counters` prices no counter at all, on purpose: fuel is worth
   zero to every reader the pilot owns until it is spent. Three things
   follow, and each is the honest cost of that.
-  * A counter with TWO uses is spent on whichever comes first. Rasputin
+  * ~~A counter with TWO uses is spent on whichever comes first. Rasputin
     Dreamweaver's dream counters are a shield AND a colourless mana, and
-    the pilot buying the shield does not know it just spent a mana. The
-    cards in this pool put at most one useful second use on a counter and
-    the two are within a mana of each other, so nothing is measurably
-    wrong; a card that made the two uses far apart would need a price.
+    the pilot buying the shield does not know it just spent a mana.~~
+    **Closed 2026-09-10 — RULED, and the measurement says something
+    simpler than the note did: the pilot makes NEITHER use, so there is
+    no preference to decide.** THE MANA is refused by the mana planner
+    itself — a mana ability with a rider the plan's arithmetic cannot
+    model (mana, life, a sacrifice, counters) is not a source, and
+    Rasputin's "Remove a dream counter: Add {C}" is that comment's own
+    example in `engine/mana_planner.gd`. THE SHIELD is admitted by
+    `_ability_available` and then priced at nothing by `_ability_option`,
+    because `DreamShieldEffect` is card-local and the reader calls it
+    `unknown` — the same scorer gap the Necropolis row below names — and
+    it is not reachable in the 1997 damage-prevention window either:
+    `_effects_answer` wants `is_damage_prevention` and one of two known
+    effect classes, and the card declares neither. Measured: a 4/1 with
+    seven dream counters blocks a Hill Giant and dies holding all seven,
+    on both arms of the knob. Both fences are outside `spends_counters` —
+    one is the mana planner's, one the general scorer's and the card's
+    own script — so the knob has nothing to prefer between and no price
+    to carry. WHAT WOULD HAVE TO BE READ the day both uses are reachable:
+    not the two prices, which exist already (`_packet_worth` prices a
+    point of prevention at the creature when the point is the one that
+    kills it, and a mana is worth the cast it completes), but the ORDER —
+    the counter is spent one at a time and the two uses come up in
+    different windows, so the pilot would have to know at the earlier one
+    how many counters the later one will want, which is the damage that
+    is COMING rather than the damage that has landed. That is the same
+    forward reading `counts_the_race` is named for (wave 4). Pinned by
+    `tests/ai/test_ai_shrink_and_dream_2026_09_10.gd`.
   * A COUNTER SOME OTHER ABILITY OF THE SAME CARD READS is out of the
     ruling's reach, because a card's own script cannot be read from
     outside it. In this pool no such counter is a COST — Armageddon

@@ -9828,6 +9828,49 @@ null) is the reading that does.
   pure bonus — a question about Earthquake, Hurricane and Wrath that
   wants the heuristic to know the deck it is boarding FOR.
 
+## THE SMALL CARD KEEPS GODOT'S FONT (2026-09-10) — ruled, with the finding written down
+
+Item 1 of the owner's list was *"MiniCard letters at hard-coded point
+sizes, so a substitute face reads small there and no sizer notices"*.
+Investigated with the owner before anything was written, and the item was
+**closed as ruled: change nothing**. What the investigation found is worth
+more than the change would have been.
+
+- **The skin's faces never reach the small card at all.** Probed with the
+  full 1997 skin mounted: `GameSkin.font("font_body")` is MPlantin and
+  `font_title` is MagicMedieval, and the label's own face is **Open Sans
+  SemiBold — Godot's built-in fallback**. `MiniCard` sets no font override
+  anywhere, so every card on the table, in every pile, in the deck builder
+  and on the help screen renders its name, P/T, status line, damage count
+  and ID tag in the engine's default font, with both skin faces loaded and
+  unused. That is also why nothing moved when Spectral shipped: there was
+  never a face there to substitute.
+- **1997 named TWO faces for it and neither is ours.**
+  `Duelart/Duel.dat`: `fontSmallCardTitle = "MPZurich Cn BT"` at size 38,
+  BOLD, and `fontSmallCardPT = "CentSchbook BT"` at size 80 — Century
+  Schoolbook, a third face different from both the name and the rules
+  text.
+- **The condensed face is not decoration; it is why `bar_title` exists.**
+  Measured over all 897 names in the 122 px title bar at size 11: Open
+  Sans overflows **29** names (widest 168 px), Spectral 15, MPlantin 14,
+  MagicMedieval 4, and MPZurich Cn **2** (widest 128). The
+  ellipsis-and-initials rule that turns *Circle of Protection: Red* into
+  *CoP: Red* — written after the 2026-09-06 playtest — is largely
+  compensating for a wide face the original never intended to be there.
+- **Why it is ruled rather than fixed.** The two halves are one job: the
+  sizes (name 11, P/T 25, status 9, damage 12, ID tag 10) were tuned by
+  eye to Open Sans, so changing the face without re-deriving them moves
+  the problem rather than solving it — and the current look is what the
+  owner has been playtesting all along. **The owner's call, 2026-09-10:
+  leave it.** The table stays on Godot's font.
+- **What would reopen it**, in ascending order of work: give the small
+  card ONE face (the skin's body face, our shipped Spectral as the floor)
+  and normalise the sizes to the LETTER the way `CardPreview` does since
+  "A cell is not a letter"; or follow `Duel.dat` properly with the
+  condensed name face and Century Schoolbook's P/T, which would cut name
+  overflows from twenty-nine to two. Neither is started, and neither
+  should be started without re-deriving the sizes in the same pass.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

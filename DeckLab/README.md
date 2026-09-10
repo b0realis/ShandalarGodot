@@ -331,15 +331,26 @@ booking the held instant as well as its own second main phase. So its
 control must hold no activated self-pump on EITHER side of the table —
 Big Green vs White Knights still replays its null game for game, 1,000 of
 1,000, in every arm of six runs, and of ten more on 2026-09-09 (five
-pairs on the candidate tree and the same five on its baseline). `prices_liabilities` (2026-09-09) fires
-trampler's overflow and the one pool split among several bodies. And a
+pairs on the candidate tree and the same five on its baseline). And a
 FOURTH time later the same day, to answer a BURN SPELL ON THE STACK with
 the victim's own breath. So its control must hold no activated self-pump
 on EITHER side of the table AND nothing that points damage at a creature
 — Big Green vs White Knights holds neither, still replays its null game
-for game (1,000 of 1,000, in every arm of ten runs), and the published
-null still comes out to the decimal: Vampire Lord vs Big Green at seed 11
-reads 19.8%.
+for game (1,000 of 1,000, in every arm of ten runs). And a FIFTH time on
+2026-09-10, when the breaths a block was DECLARED on began to be bought
+before the pilot's own pre-emptive regeneration shield could spend them —
+so its control must ALSO hold no regenerator beside a firebreather, which
+Big Green vs White Knights again does not: 2150-1850 byte-identical to
+its own null in every arm of six more runs (525-475 at 1,000). The live
+pair for that reading is Vampire Lord vs Big Green at seed 11 — two
+firebreathers and a Will-o'-the-Wisp reaching for the same Swamps — and
+on the merged tree it reads **20.3% null / 23.4% `on`** at 4,000 games
+per arm, **19.7% / 23.3%** at 1,000. (The 19.8% / 23.9% the fourth pass
+printed for the same pair is one game and six away from that; it is the
+same on both trees of the fifth pass's A/B and the control replays
+525-475 exactly, so it is a stale pre-merge number rather than a moved
+null. The reading is invariant in `--jobs`, checked at 4 and at all
+cores.)
 `spends_counters` (2026-09-09) fires wherever a permanent's ability costs
 "remove N counters from this permanent" and the counters are on it, so its
 control must hold no Osai Vultures, Scavenging Ghoul, Necropolis of Azar,
@@ -350,7 +361,14 @@ so its control must hold no Lich, no Mana Vault, no permanent that stops
 untapping (a Paralyze, a Meekstone, an Arena of the Ancients) and no
 creature whose printed upkeep line names a mana price it might not
 reach — Big Green vs White Knights again, byte-identical to its own null
-in every arm of eight runs. Every other switch keeps its meaning: `--games`
+in every arm of eight runs. It GREW twice on 2026-09-10 and the control
+pair holds against both: the dead-weight reading now follows the untap
+price printed on an ATTACHMENT (Paralyze's {4}, the pool's one such aura
+— Holy Strength grants and takes nothing back), and the sting a punisher
+deals its target's controller is priced on the ENEMY side as well as our
+own, so the control must also hold no Detonate. Neither deck does; Big
+Green vs White Knights is 525-475 byte-identical to its own null in every
+arm of five more runs at 1,000 games and one at 2,000. Every other switch keeps its meaning: `--games`
 is per arm and per pair, the seeds are the ones a plain `--deck-a`/
 `--deck-b` run deals (the null arm is `--profile-a wizard:KNOB=null
 --profile-b wizard:KNOB=null`, game for game), and `--gauntlet` sweeps

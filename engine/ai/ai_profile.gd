@@ -251,7 +251,13 @@ var spares_own := true
 ##    nothing for us for as long as it stays that way, whatever its
 ##    printed cost says ([method AiPlayer._dead_weight]) — a Mana Vault we
 ##    cannot pay {4} for, a Grizzly Bears under a Paralyze. Its worth is
-##    zero, not its mana value.
+##    zero, not its mana value — but only while EVERY price printed to
+##    free it is out of reach, and since 2026-09-10 that includes the
+##    price printed on what is ATTACHED to it ([method
+##    AiPlayer._untap_prices]). Paralyze locks the creature and offers the
+##    {4} on the AURA; a Serra Angel under one with four mana open used to
+##    read as dead weight and go to the first "give up one of yours" ask
+##    ahead of a Grizzly Bears.
 ##  * THE TOLL. What such a permanent still TAKES from us each turn, read
 ##    off its own trigger lines ([method EffectIntent.toll_of_line]:
 ##    "deals 1 damage to you" at a beat of the turn that comes round
@@ -261,7 +267,12 @@ var spares_own := true
 ##    our whole life is worth. A toll with no printed price to stop it is
 ##    not read: a Serendib Efreet's point a turn is what the card costs,
 ##    not a liability, and the evaluator's snapshot cannot price a stream
-##    that has no end.
+##    that has no end. RULED for good on 2026-09-10 — the honest price is
+##    the stream times a HORIZON, no reader in this engine estimates the
+##    turns a game has left, and an invented constant would be worse than
+##    the silence ([method AiPlayer._liability_price]). A SYMMETRIC toll
+##    ("deals 1 damage to that player") is ruled the same day and for a
+##    reason of its own ([constant EffectIntent.TOLL_WORDS]).
 ##
 ## What the knob then lets the pilot do is stated where the decisions
 ## are: the harmful spell's slot ([method AiPlayer._extra_targets]) and
@@ -270,6 +281,15 @@ var spares_own := true
 ## TABLE — tapping our own dead Vault relieves nothing — and the cast is
 ## priced with the relief and charged for the damage the card deals its
 ## own target's controller ([method AiPlayer._cast_value]).
+##
+## AND THE SAME STING THE OTHER WAY ROUND (2026-09-10). [member
+## EffectIntent.damage_to_target_controller] was born under this knob and
+## only its own-side half was charged, so a Detonate that cost us X to our
+## own face gained the same X against theirs for nothing. Both halves are
+## priced now, under this knob and no other, because the field is this
+## knob's and a half-read field is what made the pilot blind to a lethal
+## Detonate: their life goes on the AI's own clock ([method
+## AiPlayer._face_damage_value]) and a lethal sting is worth the game.
 ##
 ## On for EVERY profile, like [member spares_own] and [member
 ## feeds_worst], and the Lich is the reason: a seat that sacrifices the

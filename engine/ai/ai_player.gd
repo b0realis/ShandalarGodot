@@ -87,6 +87,12 @@ var _refused_stamp: String = ""
 ## breath BACK — [method _pumps_in_reach] still prices every activation
 ## against the mana actually on the table — so being wrong here costs a
 ## pump and never an illegal one.
+##
+## AND IT IS DELIVERED BEFORE ANYTHING ELSE OF OURS SPENDS THE POOL
+## (2026-09-10): [method _combat_planned_pumps] runs ahead of the
+## pre-emptive regeneration shield, which is the one spender that was
+## measurably breaking it. See that method for the reproduction and for
+## what an opponent can still take away.
 var _pump_plan: Dictionary = {}
 var _pump_plan_turn := -1
 
@@ -1366,12 +1372,9 @@ func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
 ##
 ## What it deliberately does not reach: a permanent held down by something
 ## on the OTHER side of the table asks the same question (a Paralyze the
-## opponent controls offers ITS controller nothing), and the untap price
-## printed on the AURA rather than on the host is not read here, so a
-## paralysed creature reads as dead weight even on a turn we could pay the
-## {4} to free it. Both understate what we could get back, which leaves the
-## worth at zero rather than below it — [member AiProfile.spares_own]'s
-## door needs BELOW zero, so neither can give a permanent away.
+## opponent controls offers ITS controller nothing). The untap price
+## printed on the AURA rather than on the host WAS the second such gap
+## and is one no longer ([method _untap_prices], 2026-09-10).
 const UNTAP_LOCK_WORDS := "doesn't untap"
 
 
@@ -1387,9 +1390,79 @@ func _dead_weight(game: MtgGame, inst: CardInstance) -> bool:
 	for static_ability in inst.data.static_abilities:
 		if not static_ability.text.to_lower().contains(UNTAP_LOCK_WORDS):
 			return false
-	# ...and only while the price it prints to free itself is out of reach.
-	var escape := _own_toll(game, inst)["escape"] as String
-	return escape == "" or not _can_reach(game, inst, ManaCost.parse(escape))
+	# ...and only while EVERY price printed to free it is out of reach: its
+	# own line and, since 2026-09-10, the lines of what is attached to it.
+	for escape in _untap_prices(game, inst):
+		if _can_reach(game, inst, ManaCost.parse(escape)):
+			return false
+	return true
+
+
+## THE UNTAP PRICE, WHEREVER IT IS PRINTED (2026-09-10, [member
+## AiProfile.prices_liabilities]): every mana price on the table that
+## would hand [param inst] back to us at the next beat of our own turn.
+##
+## The permanent's own line is the first of them ([method _own_toll]: a
+## Mana Vault's {4}, a Brass Man's {1}, an Island Fish Jasconius's
+## {U}{U}{U}). The rest are printed on what is ATTACHED to it, which is
+## where this pool actually puts them — Paralyze locks the creature's
+## untap step and offers "that player may pay {4}" on the AURA, and the
+## host's own [member CardInstance.cur_triggered_abilities] never sees it.
+##
+## WHY IT WAS NOT HARMLESS. The liability pass called this understatement
+## safe because [member AiProfile.spares_own]'s door needs a price BELOW
+## zero and dead weight is only worth zero, so no harmful spell of ours
+## could be pointed at the creature. That is true of THAT door and of no
+## other caller: [method answer_card] gives up the LEAST valuable of ours
+## when the giving is no cost we chose ([member AiProfile.feeds_worst]),
+## and zero is the least there is. A Serra Angel under a Paralyze with
+## four mana open was therefore fed to a Lord of the Pit's upkeep ahead of
+## a Grizzly Bears, on a turn the {4} would have given the Angel back.
+##
+## STRUCTURAL, NOT CARD-NAMED. The link is [member
+## CardInstance.attachments], the beat is [constant
+## EffectIntent.TOLL_BEATS], the price is what [method
+## EffectIntent.toll_of_line] already reads off a permanent's own line,
+## and the line has to say UNTAP or it is some other bargain
+## ([constant UNTAP_ESCAPE_WORD]). WHO CONTROLS the attachment is not
+## asked, because the printed line does not ask it — "that player may pay
+## {4}" is addressed to the creature's controller, and an enemy Paralyze
+## is the copy of the card this pool actually plays. The trigger's own
+## condition is put to it with a probe event (CR 603.4), exactly as
+## [method _own_toll] does, so an offer that is not ours to take answers
+## for itself.
+##
+## WHAT IT STILL DOES NOT REACH: a price printed on a permanent with NO
+## structural link to the host — Magnetic Mountain's "{4} for each tapped
+## blue creature" is offered to us by an enchantment that is attached to
+## nothing, and tying it to THIS creature means reading the card's own
+## filter. That one still understates, and still cannot give a permanent
+## away through `spares_own`'s door.
+const UNTAP_ESCAPE_WORD := "untap"
+
+
+func _untap_prices(game: MtgGame, inst: CardInstance) -> Array[String]:
+	var out: Array[String] = []
+	var own := String(_own_toll(game, inst)["escape"])
+	if own != "":
+		out.append(own)
+	for attached_id in inst.attachments:
+		var attached := game.find_instance(attached_id)
+		if attached == null or attached.zone != Mtg.Zone.BATTLEFIELD:
+			continue
+		for trig in attached.cur_triggered_abilities:
+			if not EffectIntent.TOLL_BEATS.has(trig.event_type):
+				continue
+			if not trig.text.to_lower().contains(UNTAP_ESCAPE_WORD):
+				continue
+			if trig.condition.is_valid():
+				var probe := GameEvent.new(trig.event_type, {"player": pid})
+				if not trig.condition.call(game, attached, probe):
+					continue
+			var price := String(EffectIntent.toll_of_line(trig.text)["escape"])
+			if price != "":
+				out.append(price)
+	return out
 
 
 ## THE TOLL (2026-09-09, [member AiProfile.prices_liabilities]): what this
@@ -1437,13 +1510,33 @@ func _own_toll(game: MtgGame, inst: CardInstance) -> Dictionary:
 ## liability at all because it will untap at the next upkeep.
 ##
 ## AND A TOLL WITH NO PRINTED PRICE IS NOT READ. A Serendib Efreet's point
-## a turn and a Juzám Djinn's have no end but the game's, and [method
+## a turn and an Erg Raiders' two have no end but the game's, and [method
 ## Evaluator.permanent_value] is a SNAPSHOT — a 5/5 is worth ten whether
 ## the game lasts three turns or thirty — so a stream with no end cannot
 ## be subtracted from it without pricing every drawback creature in the
 ## pool out of its own deck. What this reading can price honestly is a
 ## toll we are paying only because we cannot yet afford to stop it, and
 ## that is the case the owner reported.
+##
+## RULED AND NOT BUILT, 2026-09-10. The honest price of an endless stream
+## is the stream times a HORIZON — how long the game has left, or how long
+## we expect to keep the permanent — and this engine has no such number
+## and never has. Everything that looks like one was read and is not:
+## [method _face_damage_value] scales a single hit by the share of a life
+## total it takes and counts no turns; [method Evaluator.position_score]
+## is a snapshot of life, board, hand and lands; [constant PACE_HORIZON]
+## is twenty DRAW STEPS of a library race under [member
+## AiProfile.paces_draws], a decking clock and not a game clock; the
+## `turns` above are the turns our MANA needs to reach a printed price,
+## which is a development rate, not an ending; and [CombatSearch] looks
+## exactly one turn ahead. The only horizon that could be derived from
+## what is here is the toll's own — our life divided by its rate, which is
+## the cap on the line below — and taking it prices a Serendib Efreet at
+## 8.5 minus the whole of our life: −1.5 at twenty, and every drawback
+## creature in the pool out of its own deck. An invented constant would be
+## worse than the silence, so the silence stands and the item closes:
+## a toll with no printed escape is worth its printed worth, and the
+## horizon is `counts_the_race`'s to bring (docs/AI-next-wave.md, wave 4).
 ##
 ## The whole price is capped at what our life is worth, because a toll can
 ## never take more than the life it has to take.
@@ -1879,6 +1972,21 @@ func _blue_after_plan(game: MtgGame, plan: Array) -> int:
 ## Worth of resolving this cast right now: base card value; X spells scale
 ## with the X actually paid; removal pointed at an enemy adds a share of
 ## the victim's worth (a Terror on a Serra outranks a fresh Gray Ogre).
+##
+## THE STING ON THE END OF A PUNISHER'S REMOVAL ([member
+## EffectIntent.damage_to_target_controller]) is priced on BOTH sides of
+## the table since 2026-09-10, under the same knob that read the first
+## half of it ([member AiProfile.prices_liabilities]). The field was born
+## with that knob and only its own-side half was charged — the price we
+## pay to relieve ourselves of a liability — so the sentence the reader
+## could say was half a sentence: a Detonate that costs us X to our own
+## face gained the same X against theirs for nothing. Two things follow
+## from finishing it, and the second is the one a table sees: their life
+## is priced on the AI's own clock ([method _face_damage_value], the
+## currency every point of combat damage to a face is already read in),
+## and a sting that is LETHAL is worth [constant LETHAL_WORTH] like every
+## other lethal line in this file — a Detonate on their Nevinyrral's Disk
+## with the opponent at four is a kill the pilot could not see.
 func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int) -> float:
 	var value := _card_value(inst.data)
 	if inst.data.cost.has_x:
@@ -1891,6 +1999,17 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 				continue
 			if victim.controller_id != pid:
 				value += Evaluator.permanent_value(victim) * 0.5
+				# ONE OF THEIRS, and the sting it carries (2026-09-10).
+				if not profile.prices_liabilities:
+					continue
+				if intent == null:
+					intent = _intent_of(inst)
+				var theirs := _controller_sting(intent, x_value)
+				if theirs <= 0:
+					continue
+				if theirs >= game.players[victim.controller_id].life:
+					return LETHAL_WORTH
+				value += _face_damage_value(game, theirs, victim.controller_id)
 				continue
 			# ONE OF OUR OWN (2026-09-09, AiProfile.prices_liabilities).
 			# Until this landed, [method _extra_targets]'s note was
@@ -1908,12 +2027,23 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 			# charged at the reaper's rate like every other self-damage.
 			if intent == null:
 				intent = _intent_of(inst)
-			var sting := intent.damage_to_target_controller
-			if sting != 0:
-				if sting < 0:
-					sting = x_value
+			var sting := _controller_sting(intent, x_value)
+			if sting > 0:
 				value -= float(sting) * _life_price(game.players[pid].life)
 	return value
+
+
+## How much [param intent]'s "damage to that permanent's controller"
+## actually deals at X = [param x_value]. The field carries -1 for "the
+## amount is the spell's X" ([member
+## EffectIntent.damage_to_target_controller]); everything else is the
+## printed number. One line, so the two sides of the table cannot read the
+## same field differently.
+static func _controller_sting(intent: EffectIntent, x_value: int) -> int:
+	var sting := intent.damage_to_target_controller
+	if sting < 0:
+		return maxi(x_value, 0)
+	return sting
 
 
 ## The reader's summary of what [param inst] does as a SPELL — the whole
@@ -2487,6 +2617,13 @@ func _respond_action(game: MtgGame) -> String:
 		return saved
 	var response := ""
 	if not game.combat.attackers.is_empty():
+		# THE BLOCK THAT WAS DECLARED IS PAID FOR BEFORE ANYTHING ELSE OF
+		# OURS SPENDS THE MANA (2026-09-10) — see [method
+		# _combat_planned_pumps]. Below Sorcerer there is no plan and this
+		# returns "" without looking at the board, so the null is the null.
+		var owed := _combat_planned_pumps(game)
+		if owed != "":
+			return owed
 		var shield := _combat_regeneration(game)
 		if shield != "":
 			return shield
@@ -3144,6 +3281,78 @@ func _find_bounce_for(game: MtgGame, victim: CardInstance) -> CardInstance:
 	return null
 
 
+## THE PLAN IS DELIVERED BEFORE THE PILOT'S OWN NEXT PURCHASE (2026-09-10,
+## [member AiProfile.pumps_to_attack]'s fifth reading, and the last thing
+## the fourth pass left standing on [member _pump_plan]).
+##
+## WHAT WAS OPEN. The gang pass made the declaration and the recovery agree
+## by construction — the mates are priced at what the plan still owes them
+## ([method _owed_bonuses]), and the trampler's residue ([method
+## _absorbed_by]) reads the same number — with one exposure named at the
+## site and in `docs/ai-difficulty.md` §5: *mana spent between the
+## declaration and the recovery by something else leaves a body short of
+## the reach its plan promised, and the residue then over-reads by that
+## much.* That is the dangerous direction: the panic line
+## ([method _damage_after_value_blocks]) reads less through than will land,
+## the chump rung stays shut, and the pilot declines to chump and dies.
+##
+## SOMETHING CAN. It is not an opponent's trick or a Time Walk-ish extra
+## beat — it is the routine on the next line of [method _respond_action]
+## itself, which ran [method _combat_regeneration] BEFORE [method
+## _combat_self_pumps], and a pre-emptive regeneration shield is paid for
+## out of the same open mana the declaration had already allotted to the
+## breaths. Worse, the two were double-booked at the declaration itself:
+## the block ladder asks [method _dies_to], which asks [method _shieldable]
+## → [method _can_shield], which plans the shield's cost against the WHOLE
+## open pool — the same pool [method _pump_shares] was dividing among the
+## bodies.
+##
+## Reproduced 2026-09-10 on the gang pass's own board plus one Drudge
+## Skeletons: six Swamps, a Carrion Ants and a Scathe Zombies in front of a
+## Force of Nature (8/8 trample) and the Skeletons in front of a Hill
+## Giant, us at 12. The plan allotted the swarm six breaths and the ladder
+## declared the gang on the eight damage an 8/8 needs; the shield then took
+## a Swamp for the 1/1, the swarm could reach only five, [method
+## _band_kills] said no — correctly, of the mana that was left — and the
+## recovery bought NOTHING. Both blockers died at 0/1 and 2/2, five
+## trampled through, the trampler walked away and five Swamps were still
+## untapped. Without the Skeletons on the board the same pilot buys all six
+## and kills the 8/8 for nothing through.
+##
+## THE FIX IS THE ORDER, and it is the smallest one that closes it: the
+## breaths the declaration was priced with are bought BEFORE the pilot's
+## own next discretionary purchase. A block is a commitment already made —
+## the bodies are standing where they are because of the plan — and the
+## shield is a fresh option; when the pool cannot pay for both, the
+## commitment wins and the declaration stops being a blunder in retrospect.
+## The counterspell and the answer to removal on the stack still come
+## first, and they always could: [method _pump_reserve] books
+## [method _held_reserve] out of every share, so the plan never owned that
+## mana to begin with.
+##
+## WHAT IS STILL NOT GUARANTEED, and it is now only THEIRS: an opponent's
+## effect that taps one of our lands between the two moments (an Icy
+## Manipulator, a Winter Orb turn) still leaves the body short. The residue
+## over-reads by that much, and the recovery's mates keep the plan's
+## number — [method _owed_bonuses] is deliberately not re-read, because
+## over-crediting a mate errs on the harmless side: the breaths it buys are
+## toughness as well as power, so against a trampler — the case this
+## reading exists for — they still absorb the assignment they were bought
+## for, and on the opponent's turn that mana has nothing else to buy. Ruled
+## 2026-09-10, `docs/ai-difficulty.md` §5.
+##
+## Gated by [member AiProfile.pumps_to_attack], which is what the plan
+## itself is gated by: below Sorcerer [method _remember_pump_plan] is never
+## called, so this returns "" before it reads the board and the null is
+## reproduced exactly.
+func _combat_planned_pumps(game: MtgGame) -> String:
+	if not profile.pumps_to_attack:
+		return ""
+	if game.current_step() != Mtg.Step.DECLARE_BLOCKERS:
+		return ""
+	return _self_pump_once(game, true)
+
+
 ## Self-pumps once blocks are known (Granite Gargoyle's {R}: +0/+1,
 ## firebreathing on a BLOCKED Shivan): one activation per call, for a
 ## creature of ours the declared combat would kill and the pumps in reach
@@ -3190,10 +3399,14 @@ func _find_bounce_for(game: MtgGame, victim: CardInstance) -> CardInstance:
 ##
 ## The mates are priced at what the PLAN still owes them, which is the
 ## size the block was declared on, so every body of the gang reaches the
-## same verdict and they buy together. The one way they can disagree is
-## the one [member _pump_plan] already documents: mana spent between the
-## declaration and the recovery by something else, which leaves a body
-## short of the reach its plan promised.
+## same verdict and they buy together. The one way they could disagree was
+## the one [member _pump_plan] documented — mana spent between the
+## declaration and the recovery by something else — and the spender turned
+## out to be the pilot's own pre-emptive shield running one line above this
+## one in [method _respond_action]. Closed 2026-09-10 by
+## [method _combat_planned_pumps], which delivers the plan first; what an
+## OPPONENT can still take away is ruled at that method and in
+## `docs/ai-difficulty.md` §5.
 func _combat_self_pumps(game: MtgGame) -> String:
 	if game.current_step() != Mtg.Step.DECLARE_BLOCKERS:
 		return ""
