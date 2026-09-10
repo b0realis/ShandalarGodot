@@ -32,9 +32,7 @@ static func _toll(game: MtgGame, source: CardInstance, _event: GameEvent) -> voi
 		return
 	var pid := source.controller_id
 	var cost := ManaCost.parse("{U}")
-	if game.can_afford_cost(pid, cost) \
-			and game.agents[pid].choose_yes_no(game, pid,
-				"Pay {U} to keep %s?" % source.data.card_name, true) \
-			and game.try_pay(pid, cost):
+	if EffectBase.unless_paid(game, pid, cost,
+			"Pay {U} to keep %s?" % source.data.card_name):
 		return
 	game.sacrifice_permanent(source)

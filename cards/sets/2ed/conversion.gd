@@ -9,12 +9,18 @@ extends CardScript
 ## producing white — plus the "pay or sacrifice" upkeep rent. Against
 ## mono-red it is a hard lock; against anything else it is a four-mana
 ## do-nothing that keeps charging you {W}{W}.
+##
+## The static is marked `reading_land_types()`: it READS a land type to
+## decide what it applies to, which makes it dependent (CR 613.8) on every
+## layer-4 static that WRITES one. It is therefore applied after Blood
+## Moon, Evil Presence, Phantasmal Terrain and Cyclopean Tomb whatever the
+## timestamps say, and a Mishra's Factory under a Blood Moon is a Plains.
 
 
 func build() -> CardData:
 	return CardData.new("Conversion", "{2}{W}{W}", Mtg.CardType.ENCHANTMENT) \
 		.static_ability(StaticAbility.new(_apply, "All Mountains are Plains.") \
-			.changing_land_types()) \
+			.changing_land_types().reading_land_types()) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _rent,
 			"At the beginning of your upkeep, sacrifice Conversion unless you pay {W}{W}.",
@@ -38,9 +44,6 @@ static func _rent(game: MtgGame, source: CardInstance, _event: GameEvent) -> voi
 		return
 	var pid := source.controller_id
 	var cost := ManaCost.parse("{W}{W}")
-	if game.can_afford_cost(pid, cost) \
-			and game.agents[pid].choose_yes_no(game, pid,
-				"Pay {W}{W} to keep Conversion?", true) \
-			and game.try_pay(pid, cost):
+	if EffectBase.unless_paid(game, pid, cost, "Pay {W}{W} to keep Conversion?"):
 		return
 	game.sacrifice_permanent(source)

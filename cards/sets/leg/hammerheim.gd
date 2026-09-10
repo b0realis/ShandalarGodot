@@ -5,9 +5,10 @@ extends CardScript
 ##         turn.
 ##
 ## Implementation: a red mana ability plus LoseAbilityEffect.and_landwalk()
-## — the continuous pipeline clears cur_landwalk for the rest of the turn,
-## after every granting pass, so a Goblin King's mountainwalk grant is
-## stripped just as well as printed swampwalk.
+## — the continuous pipeline clears cur_landwalk for the rest of the turn.
+## A printed swampwalk and a grant made EARLIER this turn both go; a grant
+## made after it stands, because layer 6 applies in timestamp order
+## (CR 613.7).
 
 
 func build() -> CardData:

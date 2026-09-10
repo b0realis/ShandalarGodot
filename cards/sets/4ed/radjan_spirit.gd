@@ -2,10 +2,12 @@ extends CardScript
 ## Radjan Spirit — {3}{G} — Creature — Spirit — 3/2 — (4ed, uncommon)
 ## Oracle: {T}: Target creature loses flying until end of turn.
 ##
-## Implementation: LoseAbilityEffect stripping FLYING for the turn — the
-## continuous pipeline applies losses after every granting pass, so a
-## Flight aura is neutralized too. Green's repeatable answer to a Serra
-## Angel: ground it, then block it.
+## Implementation: LoseAbilityEffect stripping FLYING for the turn. Since
+## 2026-09-10 the continuous pipeline applies layer-6 grants and losses in
+## TIMESTAMP order (CR 613.7), so this grounds a Flight aura and every
+## earlier Jump — and a Jump cast AFTER it puts the wings back. Green's
+## repeatable answer to a Serra Angel: ground it, then block it, and hold
+## the block until their blue mana is spent.
 
 
 func build() -> CardData:

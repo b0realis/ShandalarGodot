@@ -245,6 +245,13 @@ shandalar/
 │   │
 │   ├── effects/             One-shot effects (what spells DO on resolution)
 │   │   ├── effect_base.gd   class EffectBase — contract: resolve(game,
+│   │   │                      unless_paid(game, payer, cost, prompt, hint)
+│   │   │                      — STATIC: "[do something] unless [a player
+│   │   │                      pays]" (CR 118.12) in one place, the afford ->
+│   │   │                      ask -> pay chain 42 cards wrote by hand.
+│   │   │                      Static because most of the pool's "unless"
+│   │   │                      clauses are upkeep TRIGGERS with no EffectBase
+│   │   │                      in reach, and the payer differs by card.
 │   │   │                      source, controller, target, x_value) and
 │   │   │                      resolve_multi(...targets: Array...) for
 │   │   │                      variable-count effects; one_or_more(),
@@ -424,6 +431,11 @@ shandalar/
 │   │                          exclusion set. Carries the decompilation
 │   │                          evidence that 1997 auto-tapped at all
 │   ├── mtg_game.gd          class MtgGame — THE ORCHESTRATOR. Public API:
+│   │                        _freeze_stack / _unfreeze_stack /
+│   │                        _waiting_triggers — triggers raised while a cost
+│   │                        is being paid WAIT and go on the stack ABOVE the
+│   │                        object, in one APNAP flush (CR 603.3, 603.3b);
+│   │                        triggered mana abilities never wait (605.1b).
 │   │                          setup/start, play_land, tap_for_mana,
 │   │                          cast_spell, activate_ability, pass_priority,
 │   │                          declare_attackers/blockers (declare_attackers
@@ -836,6 +848,16 @@ shandalar/
 │   │                          queue entry behind a delayed trigger
 │   │                          (read via MtgGame.current_delayed)
 │   ├── continuous.gd        class ContinuousEffects — recalculation pipeline
+│   │                        Layer 6's FLOATING half applies in TIMESTAMP
+│   │                        order since 2026-09-10 (CR 613.7, _timestamp /
+│   │                        _stamp / _layer_six), so a Jump cast after a
+│   │                        Radjan Spirit puts the wings back; layer 4 runs
+│   │                        in TWO WAVES, the writers of a land type then
+│   │                        the one reader (StaticAbility.reads_land_types,
+│   │                        Conversion), which is CR 613.8's dependency in
+│   │                        the one shape this pool needs. What is still by
+│   │                        construction: a layer-6 grant printed as a
+│   │                        STATIC applies ahead of every floating entry.
 │   │                          in CR 613 layer order: reset → animations
 │   │                          (layer 4) → type-changing statics (layer 4,
 │   │                          run twice when two share the board, a
@@ -2439,7 +2461,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5922 tests / ~153 496 asserts, ~380 s
+├── tests/                   GUT suite — 5953 tests / ~154 093 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent

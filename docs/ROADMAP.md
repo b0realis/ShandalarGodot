@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5922 tests, 0 failing, 342 scripts** (153 496 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5953 tests, 0 failing, 346 scripts** (154 093 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11191,6 +11191,120 @@ against the whole starter field, 0 of 4 000 games different — no shipped
 starter holds a mill or a wheel.
 
 **Wave 4 is closed, and with it `docs/AI-next-wave.md`'s plan.**
+
+## THE ENGINE PASS (2026-09-10)
+
+Four items off `docs/AI-next-wave.md`, and they are the first work in a
+while with **no null to fall back on**: a knob ships off and proves nothing
+moved, a rules change moves every seat, every deck and every test at once.
+So each one is a CR number at the site, a reproduction quoted before it was
+built, and a pool survey deciding whether it was worth building at all.
+
+**THE WAITING-TRIGGER QUEUE** (CR 603.3). A trigger that fired while a cost
+was being paid went on the stack BELOW the object it paid for, because
+`_push_trigger` put it there the moment it fired — and between announcing a
+spell (CR 601.2a) and the spell being on the stack (601.2i) nobody receives
+priority, which is exactly when a trigger is supposed to wait.
+`MtgGame._freeze_stack` / `_unfreeze_stack` / `_waiting_triggers` park every
+trigger the payment raises and flush them in one APNAP pass (CR 603.3b) once
+the object is on the stack and its own cast or activation event has been
+dispatched — Forge's `freezeStack` / `waitingTriggers` / `addAndUnfreeze`
+shape in two fields. Triggered MANA abilities never wait (CR 605.1b); they
+never reach `_push_trigger`. **The pool sees this everywhere**: 176 cards
+have `{T}` in an activation cost against 13 `BECAME_TAPPED` watchers, 27 pay
+a sacrifice cost against 18 `DIES` watchers, and two spells eat a creature
+to be cast. A player at 1 life sacrificing a Forest to Dark Heart of the
+Wood with a Dingus Egg on the table was at 2 and alive, because the 3 life
+arrived first; they are now at −1 and the duel is over.
+
+**THE AFFECTED PLAYER'S CHOICE AMONG DRAW REPLACEMENTS** (CR 616.1) — **and
+the ledger row's own claim was wrong, which is the finding here.** Row 2672
+read *"No pair in the 1997 pool can be on the table at once and disagree, so
+this is invisible today."* They can, completely. Chains of Mephistopheles
+exempts only the FIRST draw of your own draw step; Island Sanctuary offers
+to skip ANY draw in it; and a **Howling Mine**'s extra card is both. The
+fixed order ran the Chains first, so you discarded a card — and the
+Sanctuary then ate the replacement draw the Chains had given you. You lost
+the card twice. All three cards are in the pool and castable in one deck.
+`CardData.draw_replacement_applies` is the PURE half every static now
+carries, because a replacement that answered "do you apply?" by RUNNING
+would have asked its own question before the choice was put. **The default
+hint is the old order**, so a heuristic seat is byte-identical and the
+change is, for that seat, a provable null; the question is filed as a real
+`PlayerChoice` inside the Mine's own trigger resolution, so a human seat can
+be held on it.
+
+**AND THE DAMAGE HALF IS A RULING, NOT A BUILD.** `docs/forge/rules.md` §4.2
+reframes row 2660 as CR 616.1 among two shields on ONE packet — a different
+question from the prevention POOL this project has already declined twice —
+and nothing in this pool can observe it: no card writes the colour-keyed
+`prevention_shields` list at all (every Circle names one source and lands in
+the predicate list bound to that id), and the only pair that can co-apply is
+a one-shot Circle bound to source X plus an ALL-TURN class shield that also
+matches X, which covers every later packet from X too. Both facts are pinned
+by tests rather than asserted in prose. What IS observable is ordering a
+prevention against a REPLACEMENT (Nova Pentacle, Forcefield, Eye for an Eye,
+Dark Sphere, Shimian Night Stalker) — and that needs a decision point in
+front of every gate in `_land_damage_impl`, on the combat-damage path, which
+is Forge's generic `ReplacementHandler` that §4.2 itself says not to port.
+**Not S. Left alone, written at the site.**
+
+**LAYER 6 IN TIMESTAMP ORDER** (CR 613.7). An until-end-of-turn LOSS beat a
+later grant, because `_losses` ran after every granting pass: Radjan Spirit
+then Jump left a Serra Angel grounded, when the Jump is the later effect and
+should put the wings back. `ContinuousEffects._timestamp` stamps every
+layer-6 floating entry and `_layer_six()` merges the four contending lists —
+a pump's granted keywords, bare keyword grants, landwalk grants, the losses
+— into one sorted pass. The pump's P/T half stays in layer 7c where it was.
+
+**AND THE BOUNDED LAYER-4 DEPENDENCY** (CR 613.8). Layer 4 already ran
+retypers before animators; the dependency it did NOT resolve is a retyper
+that READS a land type another retyper WRITES. A Mishra's Factory under both
+Blood Moon and Conversion was a Mountain when the Conversion had entered
+first and a Plains when it had not. Two waves — writers, then readers — and
+no graph and no cycle detection, because CR 613.8b has nothing to break
+here. A test pins that **Conversion is the pool's only layer-4 land-type
+reader**, so a second one forces the claim to be re-checked.
+
+**`EffectBase.unless_paid`** (CR 118.12) — not a ledger row but a
+duplication: 45 sites across 42 cards each writing the same afford → ask →
+pay chain. **The plan's shape for it was wrong and the pass says so at the
+site**: §4.5 imagined a fluent rider beside `optional_target`, and it cannot
+be one, because most of this pool's "unless" clauses sit on UPKEEP TRIGGERS
+whose callback is a plain static with no `EffectBase` in reach — and a rider
+would have to name the payer, which is the source's controller on the taxes,
+the TARGET's controller on Power Sink, and the caster on Nether Void. One
+static helper, two doors. Nine sites converted so the helper is not dead
+code; the other 36 move whenever someone is in them.
+
+**DID THE PLAN'S "ALL S" SIZING HOLD?** For three of four, yes. The CR 613
+row was **two changes wearing one row**: the two built are S, and the two
+the same rows also name — a prevention ordered against a replacement, and a
+layer-6 flag on `StaticAbility` so a static grant carries its own timestamp
+— are each their own change. What is still by construction is written at the
+site: a layer-6 grant printed as a STATIC (Flight, Fear, Concordant
+Crossroads) applies in the statics pass, ahead of every floating entry, so a
+floating loss still beats a static grant whatever their real timestamps.
+
+**THREE PRE-EXISTING TESTS MOVED, each inspected rather than updated.** Two
+are the `BECAME_TAPPED` ledger orders in `test_lich_tap_key_2026_09_09.gd`,
+whose own comment had named the simplification as its reason — the new order
+is the chronological one as well as the stack's. The third is **Sorrow's
+Path, and it is a real rules consequence rather than bookkeeping**: the card
+taps itself as its own cost, so its "deals 2 damage to you and each creature
+you control" now resolves BEFORE the swap, and the test's 2/2 attacker dies
+on the way. That card is working correctly for the first time.
+
+**Three AI readings change through the game state and none was touched** (no
+edit in `engine/ai/`): a response that reads `game.stack.back()` can now see
+a cost trigger rather than the object, which delays a response by one
+resolution and never loses it; the AI's own Sorrow's Path activation is
+priced without the trigger, a pre-existing mispricing now consequential; and
+a creature grounded by a Radjan Spirit can regain flying to a later Jump,
+which is the AI reading a more correct board.
+
+Suite 5922 -> **5953 across 346 scripts**, both soaks green modern and
+fifth, pool still 897.
 
 ## Standing quality gates
 

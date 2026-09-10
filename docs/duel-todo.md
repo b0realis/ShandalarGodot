@@ -1862,10 +1862,22 @@ Checked and deliberately not filed:
   library order is not reproducible. `MtgGame.rng` + our Fisher-Yates is
   the stronger design, and the seeded-duel work (twenty-fifth pass) has
   no counterpart there.
-- **CR 613.8 dependency analysis** — absent in mage-go too. We are at
-  parity, not behind.
+- **CR 613.8 dependency analysis** — absent in mage-go too. We were at
+  parity; since 2026-09-10 we are AHEAD of it in the one shape this pool
+  needs. Layer 4 runs its retypers in two waves — writers, then the one
+  that reads a land type (Conversion) — so a Mishra's Factory under a
+  Blood Moon and a Conversion is a Plains whichever entered first
+  (`StaticAbility.reads_land_types`, `tests/unit/test_layer_order_2026_09_10.gd`).
+  No graph, no cycle detection: the pool has one reader and no cycle.
 - **CR 616.1 replacement-ordering choice** (the affected player picks) —
-  absent in mage-go; scope §5.6 knowing this is not included.
+  absent in mage-go; ours has it for DRAWS since 2026-09-10
+  (`MtgGame._replace_draw` builds the candidate list from each static's
+  pure `draw_replacement_applies` and asks the drawing seat when more than
+  one applies). For DAMAGE it is a documented ruling rather than a
+  shortcut: nothing in the pool can tell two applicable shields apart, and
+  the case that IS observable — a prevention against a replacement — needs
+  a decision point in front of every gate in `_land_damage_impl`. Scope
+  §5.6 knowing that half is not included.
 - **Mana burn** — absent in mage-go. Our `mechanics.md §14` note stands
   as a deliberate era choice.
 - **Split second, snow, Phyrexian, hybrid, scry/surveil, ward,

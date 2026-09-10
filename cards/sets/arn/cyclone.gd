@@ -45,10 +45,8 @@ static func _blow(game: MtgGame, source: CardInstance, _event: GameEvent) -> voi
 	# The HINT for a seat that answers with the default: pay while it is
 	# affordable and the storm would not blow its own controller away.
 	var hint: bool = game.players[pid].life > winds
-	if game.can_afford_cost(pid, cost) \
-			and game.agents[pid].choose_yes_no(game, pid,
-				"Pay %d green to keep Cyclone?" % winds, hint) \
-			and game.try_pay(pid, cost):
+	if EffectBase.unless_paid(game, pid, cost,
+			"Pay %d green to keep Cyclone?" % winds, hint):
 		DamageAllEffect.new(winds).and_each_player().resolve(
 			game, source, pid, null)
 		return

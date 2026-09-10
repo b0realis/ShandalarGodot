@@ -216,15 +216,37 @@ of the sixes that would replace them. A point of win rate for seven
 tenths of a card is the wrong way round. The scratch field was removed;
 nothing in `engine/ai/ai_mulligan.gd` changed.
 
-## The engine pass (all S; `docs/forge/rules.md` §4)
+## ~~The engine pass~~ **DONE 2026-09-10** (`docs/forge/rules.md` §4)
 
-Not Wizard work, but each closes a ledger row: the waiting-trigger queue
-with one APNAP flush (row 2679); the affected player's choice among
-replacements (rows 2672, 2660); timestamp order within a layer with the
-bounded type-dependency step (rows 2666, 2680, 2682);
-`EffectBase.unless_paid(cost, payer)`. Only if wanted: a `decider` on
-`StackItem` for Word of Command (M); Shahrazad as a second `MtgGame` (S
-in the engine, L in the screen).
+Not Wizard work, but each closes a ledger row: ~~the waiting-trigger queue
+with one APNAP flush (row 2679)~~ — `MtgGame._freeze_stack` /
+`_unfreeze_stack` / `_waiting_triggers`, CR 603.3b, and Dark Heart of the
+Wood into a Dingus Egg at 1 life is the outcome flip; ~~the affected
+player's choice among replacements (rows 2672, 2660)~~ — CR 616.1, BUILT
+for draws (the row's "no pair in the pool can disagree" was WRONG: Chains
+of Mephistopheles and Island Sanctuary both catch a Howling Mine's extra
+card) and RULED for damage (nothing in the pool can tell two applicable
+shields apart, and the case that is observable needs a decision point in
+front of every gate in `_land_damage_impl`, which is not S); ~~timestamp
+order within a layer with the bounded type-dependency step (rows 2666,
+2680, 2682)~~ — CR 613.7 for layer 6's floating half (Radjan Spirit then
+Jump) and CR 613.8 in two waves for layer 4 (Blood Moon then Conversion),
+with layer-6 grants printed as STATICS still by construction and the row
+narrowed rather than closed; ~~`EffectBase.unless_paid(cost, payer)`~~ —
+CR 118.12, a static helper rather than the fluent rider the plan imagined,
+because most of the pool's "unless" clauses are upkeep TRIGGERS with no
+EffectBase in reach.
+
+The "all S" sizing HELD for three of the four and was half right on the
+third: layer 6 in timestamp order and the bounded layer-4 dependency are
+both S, but the two pieces the same rows also name — a prevention ordered
+against a replacement, and a layer-6 flag on `StaticAbility` so a static
+grant can carry its own timestamp — are each their own change and are
+written up where they live.
+
+Only if wanted, and still not built: a `decider` on `StackItem` for Word
+of Command (M); Shahrazad as a second `MtgGame` (S in the engine, L in the
+screen).
 
 ## What is not in this plan
 

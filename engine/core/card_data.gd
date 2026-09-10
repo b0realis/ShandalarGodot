@@ -579,9 +579,22 @@ func triggers_when_discarded(cb: Callable) -> CardData:
 ## Island Sanctuary, Chains of Mephistopheles.
 var draw_replacement: Callable = Callable()
 
-## Fluent: attach a draw replacement (see [member draw_replacement]).
-func replaces_draws(cb: Callable) -> CardData:
+## THE PURE HALF of the same replacement — "would you apply to this draw?",
+## asked of every candidate BEFORE any of them runs, because CR 616.1 gives
+## the affected player the choice when more than one applies. Same signature
+## as [member draw_replacement] but with no side effects and no question
+## put to any seat: [code]func(game: MtgGame, source: CardInstance,
+## pid: int, ctx: Dictionary) -> bool[/code]. Required beside every
+## `draw_replacement` — MtgGame._replace_draw cannot build the candidate
+## list without it, and a replacement that answered by RUNNING would have
+## already asked its own question by the time the choice was put.
+var draw_replacement_applies: Callable = Callable()
+
+## Fluent: attach a draw replacement (see [member draw_replacement]) and
+## the pure predicate that says whether it applies (CR 616.1).
+func replaces_draws(cb: Callable, applies: Callable) -> CardData:
 	draw_replacement = cb
+	draw_replacement_applies = applies
 	return self
 
 

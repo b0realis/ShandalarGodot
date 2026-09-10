@@ -30,11 +30,19 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Chains of Mephistopheles", "{1}{B}",
 			Mtg.CardType.ENCHANTMENT) \
-		.replaces_draws(_chain) \
+		.replaces_draws(_chain, _catches) \
 		.oracle("If a player would draw a card except the first one they draw in "
 			+ "each of their draw steps, that player discards a card instead. If the "
 			+ "player discards a card this way, they draw a card. If the player "
 			+ "doesn't discard a card this way, they mill a card.")
+
+
+## The pure half (CR 616.1): whose draws the Chains catch, asked before any
+## replacement runs. "Except the first one they draw in each of their draw
+## steps" is the whole condition — every other draw, of every player.
+static func _catches(_game: MtgGame, _source: CardInstance, _pid: int,
+		ctx: Dictionary) -> bool:
+	return not (bool(ctx["in_draw_step"]) and int(ctx["draw_number"]) == 1)
 
 
 static func _chain(game: MtgGame, _source: CardInstance, pid: int,

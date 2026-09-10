@@ -40,7 +40,6 @@ static func _pay_the_rent(game: MtgGame, source: CardInstance, _event: GameEvent
 		return
 	var rent := ManaCost.parse("{U}")
 	var pid := source.controller_id
-	if game.can_afford_cost(pid, rent) and game.agents[pid].choose_yes_no(
-			game, pid, "Pay {U} to keep Stasis?", true) and game.try_pay(pid, rent):
+	if EffectBase.unless_paid(game, pid, rent, "Pay {U} to keep Stasis?"):
 		return
 	game.sacrifice_permanent(source)

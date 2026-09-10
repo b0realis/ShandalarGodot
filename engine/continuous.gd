@@ -38,10 +38,20 @@ extends RefCounted
 ## Recomputing from scratch after every change is exactly how XMage/mage-go
 ## stay correct, and at duel scale (tens of permanents) the cost is
 ## irrelevant — see docs/audit-2026-09.md for the measurements that decided
-## which parts of it to make cheaper. What is still simplified: no
-## dependency analysis (CR 613.8) beyond running the layer-4 pass twice, and
-## an ability LOSS beats a later grant regardless of timestamps
-## (docs/ROADMAP.md).
+## which parts of it to make cheaper.
+##
+## TIMESTAMPS AND DEPENDENCY, since 2026-09-10. Layer 6's floating half —
+## a pump's keywords, a keyword grant, a landwalk grant, an ability loss —
+## applies in TIMESTAMP order (CR 613.7, [member _timestamp],
+## [method _layer_six]), so a Jump cast after a Radjan Spirit puts the
+## wings back. Layer 4 resolves its one real dependency (CR 613.8) in two
+## waves rather than by analysis: a retyper that READS a land type
+## (Conversion, the pool's only one) is applied after every retyper that
+## WRITES one, so a Mishra's Factory under a Blood Moon and a Conversion is
+## a Plains whichever entered first. What is still by construction: a
+## layer-6 grant printed as a STATIC (Flight, Fear, Concordant Crossroads)
+## applies in the statics pass, which is ahead of every floating entry —
+## docs/ROADMAP.md carries the row and what closing it would take.
 
 ## How long a floating effect lasts (CR 611.2b — a one-shot effect that
 ## creates a continuous effect states its own duration).
@@ -76,8 +86,21 @@ extends RefCounted
 enum Duration { END_OF_TURN, END_OF_COMBAT, UNTIL_UPKEEP_OF, INDEFINITE,
 	UNTIL_END_OF_UPKEEP_OF }
 
+## THE LAYER-6 CLOCK (CR 613.7). Every effect that GRANTS or REMOVES an
+## ability is stamped with the moment it was created, and
+## [method recalculate] applies them in that order rather than "every grant,
+## then every loss". Radjan Spirit grounding a Serra Angel and a Jump cast
+## afterwards is the pool's own pair: under CR 613 the later effect wins,
+## and it is the Jump.
+##
+## A plain counter is enough because nothing here compares a floating
+## effect's timestamp with a PERMANENT's (CR 613.7c) — a static's layer-6
+## grant still applies from its own sub-pass, which is earlier than every
+## floating effect. See the note in [method recalculate].
+var _timestamp := 0
+
 ## Active until-end-of-turn pumps:
-## {instance_id, power, toughness, keywords: Array[int]}
+## {instance_id, power, toughness, keywords: Array[int], ts: int}
 var _floating: Array[Dictionary] = []
 
 ## Active ANIMATIONS (Mishra's Factory): the object gains types/subtypes
@@ -97,8 +120,9 @@ var _animations: Array[Dictionary] = []
 var _base_pt: Array[Dictionary] = []
 
 ## Active until-end-of-turn LANDWALK grants (Scarwood Hag, Wormwood
-## Treefolk, War Barge), as {instance_id, types: Array, until_combat}.
-## Applied with the other keyword grants, before ability losses.
+## Treefolk, War Barge), as {instance_id, types: Array, until_combat, ts}.
+## Applied with the other keyword grants, in timestamp order against the
+## ability losses (CR 613.7).
 var _landwalk_grants: Array[Dictionary] = []
 
 ## Active until-end-of-turn RAMPAGE grants (Rapid Fire), as
@@ -115,9 +139,10 @@ var _rampage_grants: Array[Dictionary] = []
 ## landwalk_types: Array[String], until_combat: bool} — `landwalk` is
 ## Hammerheim's "all landwalk abilities", `landwalk_types` Urborg's
 ## "swampwalk" / Scarwood Hag's "forestwalk", one type each and no other.
-## Applied after the granting passes, so a keyword
-## granted earlier this turn is removed too — a timestamp simplification
-## in the spirit of the rest of this pipeline (CR 613 layer 6 proper).
+## Applied in TIMESTAMP order against the grants (CR 613.7,
+## [member _timestamp]): a loss removes a keyword granted before it and is
+## undone by a grant made after it — Radjan Spirit then Jump leaves the
+## Angel flying, Jump then Radjan Spirit grounds it.
 var _losses: Array[Dictionary] = []
 
 ## Active until-end-of-turn DAMAGE IMMUNITIES ("if a spell or ability that
@@ -174,9 +199,8 @@ var _floating_statics: Array[Dictionary] = []
 
 ## Active until-end-of-turn / until-end-of-combat KEYWORD GRANTS ("gains
 ## banding until end of combat" — Battering Ram), as {instance_id,
-## keywords: Array[int], until_combat: bool}. Applied in CR 613 layer 6
-## BEFORE the losses, so a later "loses flying" still beats an earlier
-## grant, exactly as the landwalk grants do.
+## keywords: Array[int], until_combat: bool, ts: int}. Applied in CR 613
+## layer 6 in TIMESTAMP order against the losses — see [member _losses].
 var _keyword_grants: Array[Dictionary] = []
 
 ## Active until-end-of-turn COMBAT-damage preventions (Lady Evangela,
@@ -217,6 +241,14 @@ func _rec(list_name: StringName) -> void:
 		journal.record(self, list_name, get(list_name))
 
 
+## The next layer-6 timestamp (CR 613.7). Monotonic for the life of the
+## game, so two entries can never tie and the sort needs no tie-break.
+func _stamp() -> int:
+	_rec(&"_timestamp")
+	_timestamp += 1
+	return _timestamp
+
+
 ## Note EVERY floating list — for the passes that may touch any of them
 ## ([method forget_instance], the expiries).
 func record_all() -> void:
@@ -234,6 +266,7 @@ func add_until_eot_pump(instance_id: int, power: int, toughness: int,
 		"power": power, "toughness": toughness,
 		"keywords": keywords.duplicate(),
 		"until_combat": until_end_of_combat,
+		"ts": _stamp(),
 	})
 
 
@@ -291,6 +324,7 @@ func add_until_eot_landwalk(instance_id: int, types: Array,
 		"instance_id": instance_id, "types": types.duplicate(),
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid,
+		"ts": _stamp(),
 	})
 
 
@@ -337,6 +371,7 @@ func add_until_eot_keywords(instance_id: int, keywords: Array,
 	_keyword_grants.append({
 		"instance_id": instance_id, "keywords": list,
 		"until_combat": until_end_of_combat,
+		"ts": _stamp(),
 	})
 
 
@@ -395,6 +430,7 @@ func add_until_eot_loss(instance_id: int, keywords: Array[int] = [],
 		"landwalk": lose_landwalk,
 		"landwalk_types": types,
 		"until_combat": until_end_of_combat,
+		"ts": _stamp(),
 	})
 
 
@@ -591,7 +627,7 @@ static func parse_pt_counter(kind: String) -> Vector2i:
 ## The order is CR 613's layer order as this pipeline resolves it: ability
 ## removal (layer 6) before the two layer-4 retypers, then the layer-7a/7b
 ## setters, then everything else.
-enum _StaticPass { SILENCE, LAND_TYPES, TYPES, BASE_PT, REST }
+enum _StaticPass { SILENCE, LAND_TYPES, LAND_TYPE_READERS, TYPES, BASE_PT, REST }
 
 
 ## Run the FLOATING statics ([member _floating_statics]) that belong to
@@ -615,7 +651,9 @@ func _floating_statics_pass(game: MtgGame, which: int) -> void:
 			_StaticPass.SILENCE:
 				runs = ability.silences_abilities
 			_StaticPass.LAND_TYPES:
-				runs = ability.changes_land_types
+				runs = ability.changes_land_types and not ability.reads_land_types
+			_StaticPass.LAND_TYPE_READERS:
+				runs = ability.changes_land_types and ability.reads_land_types
 			_StaticPass.TYPES:
 				runs = ability.changes_types and not ability.changes_land_types \
 					and not ability.silences_abilities
@@ -627,6 +665,70 @@ func _floating_statics_pass(game: MtgGame, which: int) -> void:
 					and not ability.silences_abilities
 		if runs:
 			ability.apply.call(game, entry["source"])
+
+
+## CR 613 LAYER 6, the floating half, in timestamp order (CR 613.7).
+##
+## Four lists contribute and they contend: a pump's granted keywords
+## ([member _floating]), a bare keyword grant ([member _keyword_grants]), a
+## landwalk grant ([member _landwalk_grants]) and the ability losses
+## ([member _losses]). Each entry carries the `ts` [method _stamp] gave it,
+## every stamp is unique, and applying them in that order is the whole
+## rule: "loses flying" strips a Jump cast before it and is undone by a
+## Jump cast after it.
+##
+## The other layer-6 registries — protection, granted activated abilities,
+## rampage, block restrictions, damage immunities — are applied in their
+## own passes because nothing in the pool REMOVES any of them, so their
+## order against a loss is unobservable.
+func _layer_six(game: MtgGame) -> void:
+	var entries: Array[Dictionary] = []
+	for fx in _floating:
+		if not fx["keywords"].is_empty():
+			entries.append({"ts": int(fx.get("ts", 0)), "grant": fx})
+	for grant in _keyword_grants:
+		entries.append({"ts": int(grant.get("ts", 0)), "grant": grant})
+	for grant in _landwalk_grants:
+		entries.append({"ts": int(grant.get("ts", 0)), "walk": grant})
+	for loss in _losses:
+		entries.append({"ts": int(loss.get("ts", 0)), "loss": loss})
+	if entries.size() > 1:
+		entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a["ts"]) < int(b["ts"]))
+	for entry in entries:
+		if entry.has("grant"):
+			var grant: Dictionary = entry["grant"]
+			var gains := game.find_instance(int(grant["instance_id"]))
+			if gains == null or gains.zone != Mtg.Zone.BATTLEFIELD \
+					or gains.phased_out:
+				continue
+			for k in grant["keywords"]:
+				if not gains.cur_keywords.has(k):
+					gains.cur_keywords.append(k)
+		elif entry.has("walk"):
+			var walk: Dictionary = entry["walk"]
+			var walker := game.find_instance(int(walk["instance_id"]))
+			if walker == null or walker.zone != Mtg.Zone.BATTLEFIELD \
+					or walker.phased_out:
+				continue
+			for t in walk["types"]:
+				if not walker.cur_landwalk.has(t):
+					walker.cur_landwalk.append(t)
+		else:
+			var loss: Dictionary = entry["loss"]
+			var victim := game.find_instance(int(loss["instance_id"]))
+			if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD \
+					or victim.phased_out:
+				continue
+			for k in loss["keywords"]:
+				victim.cur_keywords.erase(k)
+			if loss["keywords"].has(Mtg.Keyword.BANDING):
+				# CR 702.22b: losing banding loses every "bands with other".
+				victim.cur_bands_with.clear()
+			if loss["landwalk"]:
+				victim.cur_landwalk.clear()
+			for t in loss.get("landwalk_types", []):
+				victim.cur_landwalk.erase(t)   # "loses swampwalk": that one
 
 
 ## Rebuild cur_* characteristics of every battlefield permanent.
@@ -712,13 +814,26 @@ func recalculate(game: MtgGame) -> void:
 	# everything that animates or counts those types has to see the
 	# result. That dependency (CR 613.8) is resolved by construction —
 	# retype, then read — rather than by analysis.
-	for inst in type_sources:
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
-			continue
-		for ability in inst.data.static_abilities:
-			if ability.changes_land_types:
-				ability.apply.call(game, inst)
-	_floating_statics_pass(game, _StaticPass.LAND_TYPES)
+	#
+	# TWO WAVES, and the second is the bounded dependency step (CR 613.8).
+	# A retyper that READS a land type is dependent on every retyper that
+	# WRITES one, so it goes second whatever the timestamps say: Conversion
+	# ("All Mountains are Plains") under Blood Moon ("Nonbasic lands are
+	# Mountains") turns a Mishra's Factory into a Plains, and did not until
+	# 2026-09-10 if the Conversion had entered first. Conversion is the
+	# pool's only reader ([member StaticAbility.reads_land_types]), so two
+	# waves are the whole analysis — no graph, and CR 613.8b's cycle rule
+	# has nothing to break.
+	for wave in [false, true]:
+		for inst in type_sources:
+			if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+				continue
+			for ability in inst.data.static_abilities:
+				if ability.changes_land_types \
+						and ability.reads_land_types == wave:
+					ability.apply.call(game, inst)
+		_floating_statics_pass(game, _StaticPass.LAND_TYPE_READERS if wave
+			else _StaticPass.LAND_TYPES)
 	# 2a-2 — LAYER 4, the rest: animations that ADD a type ("all Swamps
 	# are 1/1 creatures"), reading the board the retypers just settled.
 	for inst in type_sources:
@@ -792,25 +907,15 @@ func recalculate(game: MtgGame) -> void:
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.REST)
 
-	# Pass 3: floating until-EOT effects, in creation order.
+	# Pass 3: floating until-EOT effects, in creation order. The P/T half
+	# only (CR 613 layer 7c) — a pump's KEYWORDS are layer 6 and go into the
+	# timestamped pass below with the grants and the losses.
 	for fx in _floating:
 		var inst := game.find_instance(fx.instance_id)
 		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD or inst.phased_out:
 			continue  # target left the battlefield; effect does nothing
 		inst.cur_power += fx.power
 		inst.cur_toughness += fx.toughness
-		for k in fx.keywords:
-			if not inst.cur_keywords.has(k):
-				inst.cur_keywords.append(k)
-
-	# Pass 3a2: floating LANDWALK grants (Scarwood Hag, Wormwood Treefolk).
-	for grant in _landwalk_grants:
-		var walker := game.find_instance(grant.instance_id)
-		if walker == null or walker.zone != Mtg.Zone.BATTLEFIELD or walker.phased_out:
-			continue
-		for t in grant.types:
-			if not walker.cur_landwalk.has(t):
-				walker.cur_landwalk.append(t)
 
 	# Pass 3a2b: floating RAMPAGE grants (Rapid Fire). The biggest wins —
 	# see [member _rampage_grants] — and a printed rampage is never
@@ -831,15 +936,20 @@ func recalculate(game: MtgGame) -> void:
 			"desc": restriction.desc, "filter": restriction.filter,
 		})
 
-	# Pass 3a2: floating KEYWORD GRANTS (CR 613 layer 6) — before the
-	# losses below, so "loses flying" still wins.
-	for grant in _keyword_grants:
-		var gains := game.find_instance(grant.instance_id)
-		if gains == null or gains.zone != Mtg.Zone.BATTLEFIELD or gains.phased_out:
-			continue
-		for k in grant.keywords:
-			if not gains.cur_keywords.has(k):
-				gains.cur_keywords.append(k)
+	# Pass 3a2: FLOATING LAYER 6 (CR 613.6) IN TIMESTAMP ORDER (CR 613.7).
+	# Every effect that grants or removes an ability — a pump's keywords, a
+	# bare keyword grant, a landwalk grant, and the losses — is applied in
+	# the order it was created, so a later grant undoes an earlier loss and
+	# a later loss undoes an earlier grant. Radjan Spirit into Jump leaves
+	# the Angel flying; Jump into Radjan Spirit grounds it.
+	#
+	# WHAT IS STILL BY CONSTRUCTION: a layer-6 grant printed as a STATIC
+	# (Flight's flying, Fear, Concordant Crossroads' haste) applies in
+	# pass 2c above, which is earlier than every floating entry here — so a
+	# floating loss always beats a static grant, whatever their real
+	# timestamps. Closing that needs a layer-6 flag on StaticAbility, the
+	# way layers 4 and 7b already have one; docs/ROADMAP.md carries the row.
+	_layer_six(game)
 
 	# Pass 3a2b: GRANTED ACTIVATED ABILITIES (CR 613 layer 6), mostly
 	# durationless (Life Matrix). Appended to the live list the same way a
@@ -870,22 +980,6 @@ func recalculate(game: MtgGame) -> void:
 		guarded.cur_damage_immunity.append({
 			"desc": immunity.desc, "filter": immunity.filter,
 		})
-
-	# Pass 3b: ABILITY LOSSES (CR 613 layer 6) — applied after every
-	# granting pass so "loses flying" beats a Flight cast earlier this turn.
-	for loss in _losses:
-		var victim := game.find_instance(loss.instance_id)
-		if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD or victim.phased_out:
-			continue
-		for k in loss.keywords:
-			victim.cur_keywords.erase(k)
-		if loss.keywords.has(Mtg.Keyword.BANDING):
-			# CR 702.22b: losing banding loses every "bands with other" too.
-			victim.cur_bands_with.clear()
-		if loss.landwalk:
-			victim.cur_landwalk.clear()
-		for t in loss.get("landwalk_types", []):
-			victim.cur_landwalk.erase(t)   # "loses swampwalk": that one only
 
 	# Pass 3c: floating COMBAT-damage preventions (Lady Evangela, Horn of
 	# Deafening) — the same instance flags Gaseous Form's static sets.

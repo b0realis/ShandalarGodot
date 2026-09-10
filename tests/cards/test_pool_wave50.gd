@@ -151,9 +151,17 @@ func test_camouflage_expires_with_the_turn() -> void:
 
 # ----------------------------------------------------------- Sorrow's Path --
 
+## THE DRAWBACK IS PAID FIRST, and it is why both attackers here are 3/3.
+## The {T} in the cost wakes the Path's own became-tapped trigger, which
+## waits for the ability to be on the stack and then goes ABOVE it
+## (CR 603.3b, MtgGame._waiting_triggers, 2026-09-10): two damage lands on
+## you and on every creature you control BEFORE the swap resolves. Until
+## the waiting queue closed that ledger row the swap went first, and this
+## test could attack with a Grizzly Bears — which the Path now kills on
+## the way, leaving the second Wall with nothing to swap onto.
 func test_sorrows_path_swaps_two_blockers() -> void:
 	var a := put_battlefield(0, "Hill Giant")            # 3/3
-	var b := put_battlefield(0, "Grizzly Bears")         # 2/2
+	var b := put_battlefield(0, "Bog Wraith")            # 3/3
 	var x := put_battlefield(1, "Wall of Stone")         # 0/8
 	var y := put_battlefield(1, "Wall of Air")           # 0/5 flying
 	var path := put_battlefield(0, "Sorrow's Path")
@@ -165,6 +173,7 @@ func test_sorrows_path_swaps_two_blockers() -> void:
 	assert_ok(g.activate_ability(0, path, 0,
 		[TargetRef.card(x), TargetRef.card(y)]))
 	resolve_stack()
+	assert_eq(g.players[0].life, 18, "the Path's own tap hurt you first")
 	assert_eq(g.combat.blocks[x.id], b.id, "the Walls traded places")
 	assert_eq(g.combat.blocks[y.id], a.id)
 

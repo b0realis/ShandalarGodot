@@ -32,10 +32,8 @@ class PowerSinkEffect extends EffectBase:
 		var item := game.find_stack_item(spell)
 		var victim := spell.owner_id if item == null else item.controller
 		var toll := ManaCost.parse("{%d}" % x_value)
-		if x_value <= 0 or (game.can_afford_cost(victim, toll)
-				and game.agents[victim].choose_yes_no(game, victim,
-					"Pay {%d} to save %s?" % [x_value, spell.data.card_name], true)
-				and game.try_pay(victim, toll)):
+		if x_value <= 0 or EffectBase.unless_paid(game, victim, toll,
+				"Pay {%d} to save %s?" % [x_value, spell.data.card_name]):
 			return
 		game.counter_spell(spell)
 		for inst in game.players[victim].battlefield.duplicate():

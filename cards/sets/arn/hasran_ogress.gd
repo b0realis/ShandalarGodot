@@ -29,9 +29,7 @@ static func _self_attacks(_game: MtgGame, source: CardInstance, event: GameEvent
 static func _tax(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
 	var pid := source.controller_id
 	var cost := ManaCost.parse("{2}")
-	if game.can_afford_cost(pid, cost) \
-			and game.agents[pid].choose_yes_no(game, pid,
-				"Pay {2} to appease %s?" % source.data.card_name, true) \
-			and game.try_pay(pid, cost):
+	if EffectBase.unless_paid(game, pid, cost,
+			"Pay {2} to appease %s?" % source.data.card_name):
 		return
 	game.deal_damage(source, TargetRef.player(pid), 3)

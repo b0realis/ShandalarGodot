@@ -776,6 +776,34 @@ var _next_packet_id := 1
 ## the same reason packet ids never are: "the ability you aimed at has
 ## resolved" has to stay detectable.
 var _next_stack_id := 1
+
+# --------------------------------------------------- the waiting-trigger queue --
+#
+# CR 603.3: a triggered ability does nothing when it triggers — it is put
+# on the stack THE NEXT TIME A PLAYER WOULD RECEIVE PRIORITY. While a
+# spell is being cast or an ability activated, nobody receives priority
+# between the announcement (CR 601.2a) and the object being on the stack
+# (601.2i), so every trigger raised by PAYING THE COST — the {T} that
+# wakes Blight, the creature a sacrifice cost eats, the land Dingus Egg
+# mourns, the life Book of Rass charges — waits and goes on the stack
+# ABOVE the thing that was being paid for, not below it. Until 2026-09-10
+# ours went on as it fired, which put it under the spell.
+#
+# So the two fields below are a FREEZE: `_freeze_stack` before the first
+# cost is paid, `_unfreeze_stack` once the object is on the stack and its
+# own cast/activation event has been dispatched, and every trigger
+# collected in between is flushed in one APNAP pass (CR 603.3b). It is
+# Forge's `MagicStack.freezeStack` / `waitingTriggers` / `addAndUnfreeze`
+# shape [forge] (`forge-game/src/main/java/forge/game/zone/MagicStack.java`
+# 120-167, `TriggerHandler.java` 243-285, commit as pinned in
+# docs/forge/rules.md §4.1) in the two fields this engine needs.
+#
+# TRIGGERED MANA ABILITIES NEVER WAIT (CR 605.1b): their mana has to be
+# spendable mid-payment, so [method dispatch_event] resolves them on the
+# spot and they never reach [method _push_trigger].
+var _stack_frozen := false
+var _waiting_triggers: Array[StackItem] = []
+
 var _instances: Dictionary = {}        # id -> CardInstance
 var _battlefield_order: Array[int] = [] # instance ids in entry (timestamp) order
 ## Cached [method all_battlefield] result + its staleness flag and the
@@ -1999,6 +2027,11 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	# the targets that are its to roll (CR 601.2c, before the cost of
 	# 601.2h) — once, since a held cast reaches here only on its replay.
 	_fill_random_targets(plan, inst)
+	# THE STACK FREEZES HERE (CR 603.3, 601.2h). Nothing below refuses, so
+	# the cost is about to be paid and nobody receives priority again until
+	# the spell is on the stack — every trigger the payment raises waits and
+	# goes on ABOVE it (see [member _waiting_triggers]).
+	_freeze_stack()
 	if wildcard:
 		players[pid].any_color_spells -= 1
 		log_line("%s spends mana as though it were any type (North Star)"
@@ -2069,6 +2102,10 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	dispatch_event(Mtg.EventType.SPELL_CAST, {"instance": inst, "controller": pid},
 		self_listener)
 	log_line(item.description, inst, "cast", pid)
+	# The spell is on the stack and its own cast event has been dispatched:
+	# everything that triggered since the announcement goes on now, in one
+	# APNAP pass, on top of it (CR 603.3b).
+	_unfreeze_stack()
 	# Caster keeps priority after casting (CR 117.3c).
 	_resume_priority(pid)
 	return ""
@@ -2286,6 +2323,11 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	# the targets that are its to roll (CR 601.2c — so the Polka Band's
 	# own untapped body is a candidate, its {T} not yet paid) — once.
 	_fill_random_targets(plan, inst)
+	# THE STACK FREEZES HERE, as in cast_spell: the {T}, the sacrificed
+	# body, the land Dingus Egg mourns and the life Book of Rass charges
+	# all raise their triggers below, and every one of them waits for the
+	# ability to be on the stack first (CR 603.3).
+	_freeze_stack()
 	# Pay costs (not undoable, CR 601.2h).
 	players[pid].mana_pool.pay(pay_cost, surcharge, [], ability_subs)
 	if ability.counter_cost_kind != "":
@@ -2414,6 +2456,8 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		# never uses the stack (CR 605.3a) and so carries -1.
 		"stack_id": item.id,
 	})
+	# Everything the cost raised goes on top of the ability now (CR 603.3b).
+	_unfreeze_stack()
 	# The activator keeps priority afterward (CR 117.3c).
 	_resume_priority(pid)
 	return ""
@@ -3069,6 +3113,25 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 				log_line("%s's damage is redirected to %s" % [
 					source.data.card_name, shield.data.card_name])
 				return _redirect_damage(packet, TargetRef.card(shield))
+		# CR 616.1 AND THE SHIELDS — RULED, NOT BUILT (2026-09-10). The rule
+		# gives the affected player the order when two prevention effects
+		# would apply to one event, and this chain fixes it instead. Nothing
+		# in the 897-card pool can tell the difference, for two reasons the
+		# survey found and `tests/unit/test_replacement_choice_2026_09_10.gd`
+		# pins: no card writes the COLOUR list below at all (every Circle
+		# names one source and lands in the predicate list beneath it), and
+		# the only pair that can co-apply is a Circle bound to source X plus
+		# an ALL-TURN class shield (Scarecrow's fliers, Al-abara's Carpet's
+		# ground attackers) that also matches X — which covers every later
+		# packet from X as well, so the Circle that survives has nothing
+		# left to stop. What IS observable is ordering a prevention against
+		# a REPLACEMENT (Nova Pentacle's redirect, Forcefield, Eye for an
+		# Eye, Dark Sphere, Shimian Night Stalker): taking the Circle first
+		# would prevent the damage AND keep the redirect. That needs a
+		# decision point in front of every gate in this method, on the
+		# combat-damage path — Forge's generic ReplacementHandler, which
+		# docs/forge/rules.md §4.2 says not to port. Left as it is.
+		#
 		# Circle of Protection shields: one-shot, color-matched (the shield
 		# eats the WHOLE damage event, like the original CoP wording).
 		for i in p.prevention_shields.size():
@@ -3889,10 +3952,22 @@ func draw_cards(pid: int, count: int) -> void:
 # replacement is running, its own "then draw a card" cannot be caught by it
 # again, which is exactly Chains of Mephistopheles' printed behaviour.
 #
-# SIMPLIFIED (docs/ROADMAP.md): with two replacements applicable at once
-# CR 616.1 gives the AFFECTED PLAYER the order; here the one-shots go first
-# and the statics follow in battlefield timestamp order. The 1997 pool has
-# no pair that can be on the table at the same time and disagree.
+# CR 616.1 — WHEN MORE THAN ONE APPLIES, THE AFFECTED PLAYER CHOOSES which
+# one to apply first, and the rule is then applied again to what is left.
+# The drawing player is the affected player for every draw, so the question
+# goes to them. Building the candidate list needs a PURE "would you apply?"
+# from each static ([member CardData.draw_replacement_applies]), because a
+# replacement that answered by running would have asked its own question
+# first. A one-shot is a candidate as soon as its seat matches.
+#
+# The pool CAN see this, which is what closed the ledger row on 2026-09-10:
+# with a Howling Mine out, the extra card in your own draw step is caught by
+# BOTH Chains of Mephistopheles (which exempts only the first draw of your
+# draw step) and Island Sanctuary (which offers to skip any draw in it).
+# Ours ran Chains first on battlefield timestamp: you discarded a card AND
+# — because Chains' own "they draw a card" is a new event that Island
+# Sanctuary then caught — got nothing back. Choosing the Sanctuary keeps
+# the card in hand.
 
 ## One-shot draw replacements waiting to catch a draw. Each entry is
 ## {"player": int, "callback": Callable(game, pid, ctx)}.
@@ -3907,8 +3982,10 @@ var _draw_replacements_running: Array[int] = []
 ## [code]func(game: MtgGame, pid: int, ctx: Dictionary)[/code] and is
 ## responsible for whatever happens instead (including drawing, if the card
 ## says so). Consumed by the first draw it catches; dropped at cleanup.
-func replace_next_draw(pid: int, callback: Callable) -> void:
-	_one_shot_draws.append({"player": pid, "callback": callback})
+## [param desc] is what the entry is called when CR 616.1 puts the choice
+## between two applicable replacements to the drawing seat.
+func replace_next_draw(pid: int, callback: Callable, desc := "") -> void:
+	_one_shot_draws.append({"player": pid, "callback": callback, "desc": desc})
 
 
 ## Would-be draw number [param pid] is on within the current step, plus the
@@ -3925,25 +4002,54 @@ func _replace_draw(pid: int) -> bool:
 		"in_draw_step": current_step() == Mtg.Step.DRAW and active_player == pid,
 		"draw_number": p.draws_this_step,
 	}
-	for i in _one_shot_draws.size():
-		var entry: Dictionary = _one_shot_draws[i]
-		if int(entry["player"]) != pid:
-			continue
-		_one_shot_draws.remove_at(i)
-		entry["callback"].call(self, pid, ctx)
-		return true
+	# THE CANDIDATES (CR 616.1). One-shots first in the list and statics in
+	# battlefield timestamp order after them — which is the order the engine
+	# used to apply them in, and so is the order a single candidate still
+	# takes with nobody asked anything.
+	var candidates: Array[Dictionary] = []
+	for entry in _one_shot_draws:
+		if int(entry["player"]) == pid:
+			candidates.append({"one_shot": entry})
 	all_battlefield()   # refreshes the index below if it is stale
-	# The index is built in battlefield timestamp order, which is the
-	# tie-break between two statics.
 	for inst in _battlefield_draw_replacements:
 		if _draw_replacements_running.has(inst.id):
 			continue   # CR 614.5 — once per event
+		if not bool(inst.data.draw_replacement_applies.call(self, inst, pid, ctx)):
+			continue
+		candidates.append({"static": inst})
+	# CR 616.1 again for each survivor: a candidate that declines its own
+	# "you may" (Island Sanctuary) has still been applied and cannot apply
+	# twice (CR 614.5), so the rule is re-applied to the rest.
+	while not candidates.is_empty():
+		var pick := 0
+		if candidates.size() > 1:
+			var labels: Array[String] = []
+			for c in candidates:
+				labels.append(_draw_replacement_label(c))
+			pick = maxi(0, agents[pid].choose_option(self, pid, labels,
+				"Which replacement applies to your draw first?", 0, false, true))
+		var chosen: Dictionary = candidates[pick]
+		candidates.remove_at(pick)
+		if chosen.has("one_shot"):
+			var entry: Dictionary = chosen["one_shot"]
+			_one_shot_draws.erase(entry)
+			entry["callback"].call(self, pid, ctx)
+			return true
+		var inst: CardInstance = chosen["static"]
 		_draw_replacements_running.append(inst.id)
 		var replaced: bool = inst.data.draw_replacement.call(self, inst, pid, ctx)
 		_draw_replacements_running.erase(inst.id)
 		if replaced:
 			return true
 	return false
+
+
+## The name a waiting draw replacement goes by in the CR 616.1 question.
+func _draw_replacement_label(candidate: Dictionary) -> String:
+	if candidate.has("static"):
+		var inst: CardInstance = candidate["static"]
+		return inst.data.card_name
+	return String(candidate["one_shot"].get("desc", "the pending replacement"))
 
 
 ## Is [param pid]'s draw STEP itself replaced away? ("If you would begin
@@ -7871,12 +7977,53 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 			_dispatch_delayed(pid, event)
 
 
+## Stop putting triggers on the stack: everything raised from here until
+## [method _unfreeze_stack] is parked in [member _waiting_triggers]
+## instead. Called by [method cast_spell] and [method activate_ability] the
+## moment before the first cost is paid — from there to the stack append
+## nothing can refuse, so the freeze is always closed by the unfreeze in
+## the same call (CR 601.2h, 602.2b).
+func _freeze_stack() -> void:
+	if undo_log != null:
+		_rec(self, &"_stack_frozen")
+		_rec(self, &"_waiting_triggers")
+	_stack_frozen = true
+
+
+## The object is on the stack and its own cast/activation event has been
+## dispatched: put every trigger that fired while the cost was being paid
+## on top of it, in APNAP order (CR 603.3b — the active player's first,
+## then the non-active player's; the order among one player's own is that
+## player's choice, and the order they fired in is the one this engine
+## offers, as [method dispatch_event] already does for one event).
+func _unfreeze_stack() -> void:
+	if undo_log != null:
+		_rec(self, &"_stack_frozen")
+		_rec(self, &"_waiting_triggers")
+	_stack_frozen = false
+	if _waiting_triggers.is_empty():
+		return
+	var waiting := _waiting_triggers
+	_waiting_triggers = []
+	for seat in [active_player, opponent_of(active_player)]:
+		for item in waiting:
+			if item.controller == seat:
+				_push_trigger(item)
+
+
 ## Put one triggered ability on the stack — unless it TARGETS and has no
 ## legal target, in which case it is removed instead (CR 603.3d). A
 ## targeted trigger's controller names the target here, as it goes on the
 ## stack, and a modal trigger's controller announces the mode first (CR
 ## 603.3c) — see [method _arm_trigger_targets].
 func _push_trigger(item: StackItem) -> void:
+	if _stack_frozen:
+		# A cost is being paid: nobody receives priority until the object
+		# being paid for is on the stack, so this waits (CR 603.3) — and
+		# waits UNARMED, because a targeted trigger names its target as it
+		# goes on the stack, not as it fires (CR 603.3d).
+		_waiting_triggers.append(item)
+		return
 	if not _arm_trigger_targets(item):
 		log_line("Trigger: %s — no legal target, removed (CR 603.3d)"
 			% item.description)

@@ -28,12 +28,22 @@ extends CardScript
 
 func build() -> CardData:
 	return CardData.new("Island Sanctuary", "{1}{W}", Mtg.CardType.ENCHANTMENT) \
-		.replaces_draws(_offer) \
+		.replaces_draws(_offer, _catches) \
 		.static_ability(StaticAbility.new(
 			_shield, "Until your next turn, you can't be attacked except by creatures with flying and/or islandwalk.")) \
 		.oracle("If you would draw a card during your draw step, instead you may "
 			+ "skip that draw. If you do, until your next turn, you can't be attacked "
 			+ "except by creatures with flying and/or islandwalk.")
+
+
+## The pure half (CR 616.1): the Sanctuary offers itself for its own
+## controller's draws, and only in their own draw step — ANY draw in it,
+## which is how it can meet Chains of Mephistopheles over a Howling Mine's
+## extra card. Asked before any replacement runs, so it puts no question to
+## anybody.
+static func _catches(_game: MtgGame, source: CardInstance, pid: int,
+		ctx: Dictionary) -> bool:
+	return pid == source.controller_id and bool(ctx["in_draw_step"])
 
 
 ## The replacement. Returns true when the draw was skipped.

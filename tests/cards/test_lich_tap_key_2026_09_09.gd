@@ -235,10 +235,12 @@ func test_nobody_can_tap_a_land_they_do_not_control_for_mana() -> void:
 func test_a_tap_cost_names_the_permanents_controller() -> void:
 	# MtgGame.activate_ability, the {T} in the cost — an Icy Manipulator
 	# tapping itself to pay for its own ability. Both ends are written
-	# down, and in the stack's order rather than the clock's: the cost's
-	# tap fires first but its ledger trigger goes UNDER the ability it paid
-	# for, so the creature the Icy tapped is recorded first and the Icy
-	# itself second.
+	# down, and since 2026-09-10 in the CLOCK's order as well as the
+	# stack's: a trigger raised while a cost is being paid waits for the
+	# ability to be on the stack and then goes ABOVE it (CR 603.3b,
+	# MtgGame._waiting_triggers), so the Icy's own tap is recorded first
+	# and the creature it went on to tap second. It read the other way
+	# round until the waiting queue closed that ledger row.
 	var ledger := _ledger(0)
 	var icy := put_battlefield(1, "Icy Manipulator")
 	var target := put_battlefield(0, "Grizzly Bears")
@@ -248,8 +250,8 @@ func test_a_tap_cost_names_the_permanents_controller() -> void:
 	assert_ok(g.activate_ability(1, icy, 0, [TargetRef.card(target)]))
 	resolve_stack()
 	assert_true(icy.tapped and target.tapped, "both ends of the Icy fired")
-	assert_eq(_seen(ledger), [0, 1],
-		"our creature, then their Icy — each named by its own controller")
+	assert_eq(_seen(ledger), [1, 0],
+		"their Icy, then our creature — each named by its own controller")
 
 
 func test_an_ability_the_table_may_activate_names_its_controller() -> void:
@@ -322,7 +324,9 @@ func test_a_regeneration_tap_names_the_regenerated_permanents_controller() -> vo
 func test_a_tap_by_effect_names_the_tapped_permanents_controller() -> void:
 	# MtgGame.tap_permanent — an Icy Manipulator reaching across the table.
 	# The activator is seat 0 and the land is seat 1's, so this site can
-	# tell the two meanings apart on its own.
+	# tell the two meanings apart on its own. The Icy's own {T} is recorded
+	# first: its trigger waited for the ability and went on above it
+	# (CR 603.3b), and the land is not tapped until that ability resolves.
 	var ledger := _ledger(0)
 	var icy := put_battlefield(0, "Icy Manipulator")
 	var theirs := put_battlefield(1, "Forest")
@@ -331,8 +335,8 @@ func test_a_tap_by_effect_names_the_tapped_permanents_controller() -> void:
 	assert_ok(g.activate_ability(0, icy, 0, [TargetRef.card(theirs)]))
 	resolve_stack()
 	assert_true(theirs.tapped, "the Icy tapped it")
-	assert_eq(_seen(ledger), [1, 0],
-		"THEIR land, then our Icy paying its own {T} — never the activator")
+	assert_eq(_seen(ledger), [0, 1],
+		"our Icy paying its own {T}, then THEIR land — never the activator")
 
 
 # ================= THREE: THE SIBLINGS THAT SHARED THE SHAPE ==

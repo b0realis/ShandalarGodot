@@ -38,9 +38,7 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 static func _hunger(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
 	var pid := int(event.data["player"])
 	var cost := ManaCost.parse("{G}{G}{G}{G}")
-	if game.can_afford_cost(pid, cost) \
-			and game.agents[pid].choose_yes_no(game, pid,
-				"Pay {G}{G}{G}{G} to appease %s?" % source.data.card_name, true) \
-			and game.try_pay(pid, cost):
+	if EffectBase.unless_paid(game, pid, cost,
+			"Pay {G}{G}{G}{G} to appease %s?" % source.data.card_name):
 		return
 	game.deal_damage(source, TargetRef.player(pid), 8)

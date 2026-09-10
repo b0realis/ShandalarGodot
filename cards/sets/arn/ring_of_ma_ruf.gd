@@ -35,7 +35,8 @@ func build() -> CardData:
 class WishEffect extends EffectBase:
 	func resolve(game: MtgGame, _source: CardInstance, controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		game.replace_next_draw(controller, WishEffect._instead_of_the_draw)
+		game.replace_next_draw(controller, WishEffect._instead_of_the_draw,
+			"Ring of Ma'rûf")
 		game.log_line("Ring of Ma'rûf waits for %s's next draw this turn"
 			% game.players[controller].player_name)
 

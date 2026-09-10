@@ -186,7 +186,7 @@ targeting effect and validates the whole choice at once.
 | Life for mana | A player-level mana source rather than a permanent's ability. | 605.3a | `MtgPlayer.life_for_mana`, `MtgGame.pay_life_for_mana` | Channel (`2ed/channel.gd`) |
 | Paid prevention on the seat | "Until end of turn, you may pay {1} any time you could cast an instant. If you do, prevent the next 1 damage that would be dealt to that permanent or player this turn" — a permission on the seat, spent at priority without the stack, one point into the target's prevention pool per {1}; gone at cleanup or when the permanent leaves (CR 400.7). | 117.1a, 615, 400.7 | `MtgPlayer.paid_prevention`, `MtgGame.grant_paid_prevention` / `pay_for_prevention` / `paid_prevention_for`, `PreventDamageEffect.with_paid_rider` | Guardian Angel (`2ed/guardian_angel.gd`) |
 | Recoloured land mana | "If you tap a land you control for mana, it produces {U} instead of any other type" — the colour changes, the amount does not. | 106.1b | `MtgPlayer.land_mana_becomes`, applied in `MtgGame.tap_for_mana` | Deep Water (`drk/deep_water.gd`) |
-| Until-EOT keyword and protection grants | "Gains banding until end of combat", "gains protection from white until end of turn" — CR 613 layer 6, applied before the losses so a loss still wins. | 613 layer 6 | `ContinuousEffects.add_until_eot_keywords` / `add_until_eot_protection` | Battering Ram, Goblin Wizard (`drk/goblin_wizard.gd`) |
+| Until-EOT keyword and protection grants | "Gains banding until end of combat", "gains protection from white until end of turn" — CR 613 layer 6, applied in timestamp order against the losses (CR 613.7), so the later effect wins whichever kind it is. | 613 layer 6 | `ContinuousEffects.add_until_eot_keywords` / `add_until_eot_protection` | Battering Ram, Goblin Wizard (`drk/goblin_wizard.gd`) |
 | Player-target predicates | "Target player who attacked this turn" — a targeting restriction on a PLAYER. | 115.4 | `TargetSpec.with_player_filter`, `MtgPlayer.attacked_this_turn` | Fire and Brimstone (`drk/fire_and_brimstone.gd`) |
 | "Acted on their last turn" | Whether a seat cast a spell or put a nontoken permanent onto the battlefield during a turn of THEIRS. | — | `MtgPlayer.acted_this_turn` / `acted_last_turn` | Arboria (`leg/arboria.gd`) |
 | No duplicate targets | "Two target creatures" means two different ones — enforced across the whole spell. | 601.2c | `TargetPlan._validate` | — |
@@ -339,7 +339,7 @@ be built inside. What it does today, in order:
 | 0 | Reset the per-recalculation game/player fields the statics rebuild (`nullified_landwalk`, `max_attackers`/`max_blockers`, `untap_caps`, `unlimited_land_plays`, `mana_substitutions`, `max_hand_size`, `min_life_from_damage`, both damage-redirect slots, `cant_lose_to_life`, `life_gain_becomes_draw`). | — | top of `recalculate` |
 | 1 | Reset each permanent to printed values, re-applying instance-level permanent modifiers (`added_types`, `removed_keywords`, `added_protection`, `color_override`) and TEXT CHANGES, then the face-down override. | 613 layer 1 + layer 3 | `CardInstance.reset_characteristics`, `_apply_text_changes` |
 | 2 | Until-EOT ANIMATIONS: add types/subtypes and SET base P/T. | layers 4 + 7b | `_animations` |
-| 3 | Type-changing STATICS, in timestamp order, run TWICE when more than one is on the board (a crude stand-in for dependency analysis). | layer 4 | `battlefield_with_type_statics()`, `StaticAbility.changing_types` |
+| 3 | Type-changing STATICS, in timestamp order, run in TWO WAVES — the writers of a land type, then the one reader (Conversion) — which is CR 613.8's dependency in the one shape this pool needs (`StaticAbility.reads_land_types`). | layer 4 | `battlefield_with_type_statics()`, `StaticAbility.changing_types` |
 | 4 | Base-P/T-SETTING statics (characteristic-defining abilities). | layers 7a/7b | `StaticAbility.setting_base_pt` |
 | 5 | Floating "has base power/toughness N until end of turn" sets — later timestamp than any setter above. | layer 7b | `_base_pt` |
 | 6 | Until-EOT COLOUR changes, in creation order (last cast wins). | layer 5 | `_color_changes` |
@@ -372,7 +372,7 @@ Registration and expiry:
 | Live colours | `cur_colors` is what every rules check reads; indefinite changes ride on `color_override` (and survive a spell resolving into a permanent), until-EOT ones float. | `MtgGame.set_color`, `ChangeColorEffect`, `CardInstance.has_color` / `is_colorless` | Thoughtlace (`2ed/thoughtlace.gd`) |
 
 **Simplification here:** this is a simplified CR 613 — there is no general
-timestamp ordering across layers, no dependency analysis beyond the two-round
+timestamp ordering across layers; layer 6's floating half is timestamp-ordered (CR 613.7) and layer 4 resolves its one dependency in two waves (CR 613.8), beyond which no analysis past the two-round
 type pass (CR 613.8), and no "indefinite" duration for base-P/T sets. All of
 it is contained in `recalculate` — ROADMAP; the card-visible consequences are
 in simplified-cards (*Brine Hag*, *Wall of Tombstones*).

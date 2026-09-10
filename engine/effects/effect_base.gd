@@ -181,6 +181,54 @@ func resolve_multi(game: MtgGame, source: CardInstance, controller: int,
 		resolve(game, source, controller, t, x_value)
 
 
+# --------------------------------------------- "unless a player pays" (CR 118.12) --
+#
+# *"Some spells, activated abilities, and triggered abilities read, '[Do
+# something] unless [a player does something else].' This means the player
+# has the option to take the specified action... If they don't, the first
+# action is taken"* — CR 118.12. Forty-two cards in this pool print one
+# (45 sites), and until 2026-09-10 every single one of them wrote the same
+# three-clause chain by hand: can the payer afford it, will they, did the
+# payment go through. [method unless_paid] is that chain, once.
+#
+# WHY IT IS STATIC, and it matters: most of the pool's "unless" clauses are
+# not on an effect at all but on an UPKEEP TRIGGER (Force of Nature, Junún
+# Efreet, Cyclone, Stasis, Demonic Hordes, Sunken City, Primordial Ooze,
+# Cosmic Horror, The Tabernacle at Pendrell Vale…), whose callback is a
+# plain static function with no EffectBase in reach. A static helper serves
+# both doors from one body; `EffectBase.unless_paid(game, …)` from a
+# trigger reads a little oddly and is the price of having ONE of these.
+# (The plan that asked for it — docs/forge/rules.md §4.5 — imagined a
+# fluent rider beside `optional_target`; the pool's own shape is why this
+# is a call instead. A rider would have to name the payer, and the payer is
+# the source's controller on the upkeep taxes, the TARGET'S controller on
+# Power Sink, and the caster on Nether Void.)
+#
+# The three clauses, in the order they must run:
+#  * [method MtgGame.can_afford_cost] first, so a seat that cannot pay is
+#    never asked a question with no answer (and no PlayerChoice is filed
+#    for one);
+#  * the payer's own [DecisionAgent], so a human seat is held open on it
+#    (docs/duel-todo.md §1.3) and the AI answers for itself. `hint` is the
+#    default answer, never a decision the engine takes;
+#  * [method MtgGame.try_pay] last, and its FALSE is a real answer: a plan
+#    that goes stale mid-payment leaves the cost unpaid, and the "[do
+#    something]" half must then happen.
+
+## "…unless [param payer] pays [param cost]". Returns TRUE when the payer
+## paid — the caller's "unless" branch, in which the printed action does
+## NOT happen — and FALSE when they could not, would not, or the payment
+## failed. [param prompt] is the question in the card's own words;
+## [param hint] is what the heuristic would answer.
+static func unless_paid(game: MtgGame, payer: int, cost: ManaCost,
+		prompt: String, hint := true) -> bool:
+	if not game.can_afford_cost(payer, cost):
+		return false
+	if not game.agents[payer].choose_yes_no(game, payer, prompt, hint):
+		return false
+	return game.try_pay(payer, cost)
+
+
 ## One-line description for logs and UI ("deals 3 damage to any target").
 func describe() -> String:
 	return "does something"

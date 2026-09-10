@@ -89,6 +89,28 @@ func changing_land_types() -> StaticAbility:
 	return self
 
 
+## Does this layer-4 static READ a land type to decide what it applies to?
+## "All Mountains are Plains" (Conversion) does; "Nonbasic lands are
+## Mountains" (Blood Moon), "enchanted land is a Swamp" (Evil Presence,
+## Phantasmal Terrain, Cyclopean Tomb) do not — they read a supertype or an
+## attachment and WRITE a land type.
+##
+## THE DEPENDENCY (CR 613.8). Applying Blood Moon changes what Conversion
+## applies to, so Conversion is dependent on Blood Moon and is applied
+## after it WHATEVER the two timestamps say: a Mishra's Factory under both
+## is a Plains, not a Mountain. [method ContinuousEffects.recalculate]
+## runs the retypers in two waves for exactly this — writers, then readers.
+## No graph and no cycle detection: Conversion is the only card in the pool
+## that reads a land type in layer 4, and nothing writes the type it reads
+## while reading the type something else writes.
+var reads_land_types: bool = false
+
+## Fluent: mark this layer-4 static as reading a land type (CR 613.8).
+func reading_land_types() -> StaticAbility:
+	reads_land_types = true
+	return self
+
+
 ## Does this static REMOVE abilities (CR 613 layer 6 — Titania's Song's
 ## "each noncreature artifact loses all abilities")? Layer 6 precedes every
 ## P/T layer, and an ability that has been removed contributes nothing in

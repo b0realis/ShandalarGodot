@@ -8,9 +8,9 @@ extends CardScript
 ## Implementation: two abilities sharing one untap — a floating landwalk
 ## GRANT (four green mana) and a free landwalk LOSS of forestwalk alone
 ## (LoseAbilityEffect.and_landwalk_of(["forest"]) — a creature with a
-## second landwalk type keeps it). The continuous pipeline applies losses
-## after grants, so pointing both at the same creature in one turn leaves
-## it without forestwalk.
+## second landwalk type keeps it). The continuous pipeline applies layer-6
+## grants and losses in TIMESTAMP order (CR 613.7), so pointing both at
+## the same creature leaves it with whichever was activated LAST.
 
 
 func build() -> CardData:

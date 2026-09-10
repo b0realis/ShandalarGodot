@@ -45,9 +45,8 @@ static func _the_tithe(game: MtgGame, source: CardInstance, event: GameEvent) ->
 	# in the same set documents the same rule.
 	var pid := int(event.data["player"])
 	var rent := ManaCost.parse("{B}{B}{B}")
-	if game.can_afford_cost(pid, rent) and game.agents[pid].choose_yes_no(
-			game, pid, "Pay {B}{B}{B} to keep the Hordes free?", true) \
-			and game.try_pay(pid, rent):
+	if EffectBase.unless_paid(game, pid, rent,
+			"Pay {B}{B}{B} to keep the Hordes free?"):
 		return
 	if source.zone == Mtg.Zone.BATTLEFIELD:
 		game.tap_permanent(source)

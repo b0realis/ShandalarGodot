@@ -46,7 +46,8 @@ class LampEffect extends EffectBase:
 			_target: TargetRef, x_value: int = 0) -> void:
 		if x_value <= 0:
 			return
-		game.replace_next_draw(controller, LampEffect._rummage.bind(x_value))
+		game.replace_next_draw(controller, LampEffect._rummage.bind(x_value),
+			"Aladdin's Lamp")
 
 	## The replacement itself: look at X, keep one, bury the rest, draw.
 	static func _rummage(game: MtgGame, pid: int, _ctx: Dictionary,
