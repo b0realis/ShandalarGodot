@@ -1438,6 +1438,64 @@ shandalar/
 │   │                      Disk did not kill, because cur_cant_attack is
 │   │                      set by a static and by nothing else, and
 │   │                      conservative wherever a static source survives.
+│                      minds_the_vise (2026-09-10) is THE HAND UNDER A
+│                      SQUEEZE AND THE BOARD UNDER A PRISON: the two
+│                      printed shapes on THEIR side that decide what our
+│                      own hand should be doing, and neither had ever
+│                      reached a decision. The squeeze is a permanent
+│                      whose upkeep trigger counts a hand
+│                      (EffectIntent.hand_toll_of_line, read off the
+│                      trigger's own line the way the wheel and the aimed
+│                      discard are, as a SLOPE and a threshold — Black
+│                      Vise +1/4, The Rack -1/3, Storm World -1/4, the
+│                      whole of the shape in this pool). The prison is a
+│                      permanent whose static grounds our creatures
+│                      (cur_cant_attack, the reading
+│                      _ground_the_sweep_opens already makes, with its
+│                      one-static bound borrowed). Three readings, each
+│                      0.0 with no such permanent on the table:
+│                      _vise_room (the cards the hand can take before the
+│                      toll charges — one-directional, it may refuse a
+│                      draw and never demand one), _vise_relief (a cast
+│                      worth the point it takes off our next upkeep at
+│                      _life_price's rate, SIGNED so a Rack charges what
+│                      a Vise credits, and read through the hand the card
+│                      leaves us with so a WHEEL is charged for the
+│                      refill) and _prison_relief (the beat OURS MINUS
+│                      THEIRS so a symmetric toll is worth only the
+│                      difference, plus _prison_attack, the held attack
+│                      through _damage_through_blocks). Sorcerer and
+│                      Wizard. One BEAT and never a stream: the horizon
+│                      P4 asks for is the same one the TOLL_BEATS census
+│                      refused that morning, and it stays
+│                      counts_the_race's. The Deck vs four Black Vises
+│                      45.9% -> 52.7%, +6.8 +-4.4, 92 games won to 24
+│                      lost; control byte-identical in every arm.
+│                      runs_loops (2026-09-10) is THE THREE-CARD TURN:
+│                      the pieces of arzakon.strategy §3C's loop priced
+│                      by what they do on this board instead of by
+│                      Evaluator.card_value, which reads a printed card
+│                      and a loop piece prints nothing. An extra turn is
+│                      a draw step, a land drop when a land is held and
+│                      the attack the board makes again
+│                      (AiPlayer._extra_turn_value: Time Walk 3.00 ->
+│                      20.70 behind three Serra Angels); a fixed-count
+│                      wheel is worth the cards it MOVES, their hand
+│                      minus ours once the wheel has left our own hand
+│                      (CR 608.2m, _wheel_swing), refused when negative —
+│                      the same Wheel of Fortune priced 4.00 for a gift
+│                      of six cards and 4.00 for a gain of six; and a
+│                      card in our own graveyard is offered to a "return
+│                      a card" spell at what casting it on THIS board
+│                      would be worth (_graveyard_worth), so the Regrowth
+│                      stops taking the Serra Angel over the Time Walk.
+│                      The loop's ORDER is a value and not a fourth rule:
+│                      _returner_in_hand credits the turn the card it
+│                      does not spend, which casts the Walk first.
+│                      Wizard only, with counts_cards and paces_draws,
+│                      whose guards run first and are untouched. A wash
+│                      on four win rates and it says so, with 142 games
+│                      flipped to a win against 46 away.
 │   │                      trusts_abyss (2026-09-08) is THE ABYSS AS AN
 │   │                      ANSWER: the counter decision (_try_counter)
 │   │                      keeps the counterspell when the creature spell
@@ -1493,6 +1551,22 @@ shandalar/
 │   │   │                      this file's constant.
 │   │   │                      tests/ai/test_ai_w_hand_2026_09_10.gd
 │   │   ├── effect_intent.gd class EffectIntent — WHAT AN EFFECT LIST DOES,
+│                      hand_toll_of_line / hand_toll_damage (2026-09-10,
+│                      AiProfile.minds_the_vise) read a trigger's printed
+│                      line for damage counted off a HAND, as the two
+│                      numbers a decision needs — {"slope": ±1,
+│                      "threshold": n}, the beat being
+│                      max(slope * (hand - threshold), 0). Black Vise
+│                      squeezes a full hand and The Rack stretches an
+│                      empty one, which is why it is a slope and not a
+│                      flag; Storm World is the Rack's slope at the
+│                      Vise's threshold and beats at each player's
+│                      upkeep. Exactly three cards in the pool, pinned by
+│                      a census test. The COUNT is done here and
+│                      TOLL_UNKNOWABLE's ruling still stands, because
+│                      that ruling refused a stream subtracted from a
+│                      snapshot and this reader prices one beat off a
+│                      hand size in front of it.
 │   │   │                      read once into numbers the AI reasons with
 │   │   │                      (damage / X damage / self-damage / removes /
 │   │   │                      bounces / taps / draws / searches / extra
@@ -2346,7 +2420,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5829 tests / ~151 703 asserts, ~380 s
+├── tests/                   GUT suite — 5874 tests / ~152 133 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4097,6 +4171,37 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_minds_the_vise_2026_09_10.gd — THE HAND UNDER A
+│    SQUEEZE (AiProfile.minds_the_vise): the pool's three hand tolls and
+│    the Vise and Rack pointing opposite ways; Nicol Bolas's hand line
+│    refused; the room stopping at the Vise's threshold and free below it,
+│    against the null that reads the hand size alone; the Jayemdae Tome's
+│    tick refused under a Vise and offered on the null at the hand of five
+│    where _draw_need returns 0.00; a board with no toll leaving every
+│    number where it was; a cast worth the point it saves and the printed
+│    card on the null; THE RACK AS THE OTHER SLOPE, charging what the Vise
+│    credits, and never shortening the room; a wheel charged for the
+│    refill; the Disenchant taking the Black Vise (4.45) over the Jayemdae
+│    Tome (4.20) and the null taking the Tome; a Vise that is not charging
+│    left alone; a symmetric Storm World worth only the difference between
+│    the two beats; a STOLEN Vise still squeezing the player it chose; the
+│    Disenchant taking the Moat over the Tome and the null's flat 3.20; a
+│    Moat holding nothing back, a second static standing, and our own Moat
+│    never priced as their prison;
+│    tests/ai/test_ai_runs_loops_2026_09_10.gd — THE THREE-CARD TURN
+│    (AiProfile.runs_loops): Time Walk at 20.70 behind three Serra Angels
+│    and at the null's flat 3.00; an extra turn with no board buying a
+│    draw and nothing else; the land drop counted only when a land is
+│    held; the pace's own refusal still running first; a wheel that gives
+│    six cards away refused and cast on the null; a wheel that takes seven
+│    priced at 14.50 and 4.00 on the null; Winds of Change as a reroll
+│    keeping its printed worth; a wheel a library of five cannot pay for
+│    refused (CR 704.5b); the Regrowth taking the Time Walk off a board
+│    that attacks, the Serra Angel on the null, and the Serra Angel again
+│    on an empty board; the Walk cast before the Regrowth beside it and
+│    the two tied at 3.00 on the null; Raise Dead refused as a returner
+│    because its spec admits creatures alone; a Timetwister in the
+│    graveyard offered at what it would move;
 │    tests/ai/test_ai_reads_race_2026_09_10.gd — WHO IS THE BEATDOWN
 │    (AiProfile.reads_race): the Serra Angel that stops trading itself for
 │    a Craw Wurm one turn from winning and the null that gives it away;

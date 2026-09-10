@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -621,6 +621,62 @@ the creature about to be cast, so its control must hold no repeatable
 creature-answer on either side — Big Green vs White Knights holds none,
 where Conjurer (4 Prodigal Sorcerer, 4 Rod of Ruin) and Mountain
 Artillery (2 Rod of Ruin, 2 Orcish Artillery) are the live pairs.
+`minds_the_vise` (2026-09-10) fires on two printed shapes on the side of
+the table OPPOSITE the seat being swept: a permanent whose upkeep trigger
+counts a hand (**the pool holds exactly three — Black Vise, The Rack and
+Storm World**, and a census test says so) and a permanent whose static
+sets `cur_cant_attack` on a creature of ours (six cards in the pool —
+Moat, Island Sanctuary, Arboria, Demonic Torment, Akron Legionnaire and
+the Evil Eye of Orms-by-Gore, the last two of which ground their OWN
+controller's board and can never be the prison this reads; of the four
+that can, only Moat and Island Sanctuary are in a deck at all). Its
+control must hold none of them on either side, and **Big Green vs White Knights** holds none — no
+Vise, no Rack, no Storm World, no Moat, and no static that grounds
+anything (White Knights' Crusade IS a static, which is why the prison
+half is asked of ONE named permanent and answers 0 with nothing
+grounded). It is 533-467, byte-identical to its own null in every arm of
+five runs. And the whole starter meta is a control several times over:
+Big Green against the other four at 1 000 games a matchup is 0 of 4 000
+games different, which is the no-harm matrix and the control in one. **AND MIND THE POOL BEFORE YOU PICK THE LIVE PAIR,
+because every deck `docs/forge/casting.md` P4 names for its own
+measurement is unplayable**: `the_deck_weissman_1995_05` (Chaos Orb),
+`sligh_geeba_1996` (9 proxies), `necro_montesanti_1996` (Juzám Djinn,
+Necropotence) and `ptcs_justice` (8). Thirty-one decks in `decks/` hold a
+Black Vise and **eleven of them load**; the two that field a PLAYSET are
+`decks/community/sargent_2009_astral_visionary.deck` and
+`decks/1997/coyote_tex/swamp_thing.deck`, and those are the pairs the
+squeeze was measured on. **The Rack has two decks in the whole pool and
+NEITHER loads** (`wc1995_blumke`, 9 proxies; `winds_of_chains_justice`,
+3), so the Rack half — the slope the note has backwards — is pinned by
+`tests/ai/` and cannot be measured here at all. Seven decks hold a Moat
+and **three load**, all of them The Deck
+(`the_deck_weissman_1994_95_winter`, `_1996_02`, `_1996_summer`), so the
+prison half wants a ground creature deck in seat A against one of those.
+`runs_loops` (the same day) fires on three shapes: a fixed-count wheel
+(`EffectIntent.wheels` — Wheel of Fortune and Timetwister; Winds of
+Change is a reroll and is not read), an extra-turn spell (Time Walk; Time
+Vault is an activated ability and goes nowhere near this seam), and a
+spell that returns a card from our own graveyard — **so its control must
+hold no Regrowth, and Big Green's one Regrowth disqualifies the usual
+pair.** **White Knights vs Mountain Artillery** holds none of the three
+and is the control every sweep of it used, byte-identical to its own null
+(469-531) in every arm of five runs. Mind the pool twice over here:
+`looping_dolan_1996` and `churning_dolan_1996`, the two decks
+`docs/forge/casting.md` P5 names for its own measurement, **both hold a
+Zuran Orb and cannot be played**. Twenty-nine decks in `decks/` hold Time
+Walk, Regrowth and Timetwister together and **nine of them load** —
+`the_deck_weissman_1996_02`, `_1994_95_winter`, `_1994_fall`,
+`_1996_summer`, `noobcon2016_berlin`, both `arzakon.deck`s and both
+`kiska_ra.deck`s — and every one of them holds exactly ONE of each,
+because all three are restricted. So the three-card loop itself is rare
+by construction and the win rate is not the instrument for it on its own;
+what the knob moves game to game is the three readings underneath it, and
+the PAIRED count is what reads them. And note what `games.csv` does NOT
+carry: it has pair, decks, value, arm, game, seed, on-the-play, won,
+turns, stalled, drawn and a fingerprint, and nothing about which card was
+cast when — so "the median turn at which the loop first runs", which both
+`docs/AI-next-wave.md` and casting P5 ask for, cannot be read from a
+sweep as the Lab stands.
 `levels_boards` (2026-09-07) GREW on 2026-09-10 to cover the LAND SWEEP —
 a sweeper whose every kill is a land — so its control must hold no
 Balance AND no Armageddon, Flashfires, Tsunami or Acid Rain. Big Green vs

@@ -1428,6 +1428,109 @@ var reads_race := false
 var holds_tricks := false
 
 
+## THE HAND UNDER A SQUEEZE AND THE BOARD UNDER A PRISON (2026-09-10,
+## `docs/forge/casting.md` P4, `docs/arzakon.strategy` §4 items 2 and 3).
+##
+## Two printed shapes on THEIR side of the table that this pilot has never
+## read, and both of them decide what our own hand should be doing:
+##
+##  * THE SQUEEZE — a permanent whose upkeep trigger deals damage counted
+##    off the cards in a hand ([method EffectIntent.hand_toll_of_line]).
+##    Reproduced at HEAD: a Wizard holding seven cards with a Black Vise
+##    across the table went on drawing (the Tome's tick is offered at a
+##    hand of five, where `_draw_need` returns exactly 0.00) and cast by
+##    printed worth alone, so nothing about the three damage a turn
+##    reached a single decision.
+##  * THE PRISON — a permanent of theirs whose static holds our creatures
+##    at home (`CardInstance.cur_cant_attack`, set by a static and by
+##    nothing else — the reading [method AiPlayer._ground_the_sweep_opens]
+##    already makes). A Moat is priced by [method Evaluator.permanent_value]
+##    at 3.20, a four-mana enchantment's flat cost-times-0.8, whatever it
+##    is holding back.
+##
+## Three readings, and the null is the pilot unchanged because each one is
+## zero with no such permanent on the table:
+##
+##  1. THE ROOM ([method AiPlayer._vise_room]): the cards our hand can
+##    still take before the squeeze charges for them — under a Black Vise,
+##    the room up to four and no further, so no Ancestral, no Tome tick
+##    and no wheel is drawn into a hand the card is already counting.
+##  2. THE RELIEF ([method AiPlayer._vise_relief]): a cast is worth the
+##    point of damage it takes off our next upkeep, charged at the
+##    reaper's own rate ([method AiPlayer._life_price], half a point at
+##    twenty and two under seven). SIGNED, which is the half
+##    `docs/forge/casting.md` P4 has backwards — under a Rack, whose X is
+##    three MINUS the hand, emptying the hand is what costs — and read
+##    through the hand the card actually leaves us with, so a WHEEL that
+##    refills us to seven is charged for the refill instead of credited
+##    for the cast.
+##  3. THE PRICE ([method AiPlayer._prison_relief]): what taking the
+##    permanent off the table is worth, on the same scale the pilot
+##    prices damage at everywhere else — the squeeze's next beat, ours
+##    minus theirs so a symmetric toll is worth only the difference, and
+##    the prison's held attack read as the damage the freed bodies would
+##    put through their blocks. Before it, one Disenchant against a Black
+##    Vise and a Jayemdae Tome went to the TOME (4.20 against 1.00) and
+##    left the Vise squeezing.
+##
+## WHAT IS NOT BUILT, and the reason is a ruling this repository already
+## made. P4 asks for the Vise priced "at the damage it will deal over
+## `PACE_HORIZON` turns" — a STREAM times a horizon, and there is no
+## horizon in this engine (`docs/ai-difficulty.md` §5, and the census at
+## [constant EffectIntent.TOLL_BEATS] that closed the same question for
+## [member prices_liabilities] on 2026-09-10). Every reading here prices
+## ONE BEAT, which is a number the table is showing. The horizon stays
+## `counts_the_race`'s (docs/AI-next-wave.md, wave 4).
+var minds_the_vise := false
+
+
+## THE OLD LOOPS (2026-09-10, `docs/forge/casting.md` P5,
+## `docs/arzakon.strategy` §3C and §4 item 6) — Time Walk priced as a
+## turn, Regrowth aimed at it, and the wheel priced by the two hands
+## instead of by its printed worth.
+##
+## THREE THINGS REPRODUCED AT HEAD, all three at the same seam — a card
+## whose worth is a fact about the BOARD was priced by
+## [method Evaluator.card_value], which reads the printed card and nothing
+## else:
+##
+##  * A WHEEL OF FORTUNE PRICES AT 4.00 EITHER WAY ROUND. With our hand at
+##    seven and theirs at nothing it is a gift of six cards; with ours at
+##    one and theirs at seven it is a gain of six. The pilot read 4.00 for
+##    both.
+##  * TIME WALK PRICES AT 3.00 WITH THREE SERRA ANGELS ON THE TABLE — an
+##    extra turn worth twelve damage, a draw and a land drop, priced at a
+##    Counterspell. This is the flat 3.0 `docs/arzakon.strategy` §5
+##    complains of, measured.
+##  * A REGROWTH WITH TIME WALK AND A SERRA ANGEL IN THE GRAVEYARD TAKES
+##    THE ANGEL, every time, because 10.00 beats 3.00 and the pick is
+##    [method Evaluator.card_value] alone.
+##
+## On, all three are priced from what the seat can see and none of them by
+## a name: an extra turn is a draw step plus a land drop plus the attack
+## the board would make again ([method AiPlayer._extra_turn_value]); a
+## fixed-count wheel is worth the cards it MOVES, `their hand − ours` once
+## the wheel itself has left our hand (CR 608.2m), and is refused when
+## that is negative ([method AiPlayer._wheel_swing]); and a card in our
+## own graveyard is offered to a "return a card" spell at what casting it
+## on THIS board would be worth ([method AiPlayer._graveyard_worth]).
+##
+## THE LOOP IS THE THREE READINGS AND NOT A FOURTH RULE. With a returner
+## in hand the extra turn is credited the card it does not spend, which is
+## what puts Time Walk ahead of the Regrowth in the same main step — so
+## the Walk is in the graveyard when the Regrowth is cast, and the
+## Regrowth takes it back. `docs/arzakon.strategy` §3C's loop is that
+## sequence with a Timetwister to find the pieces again, and every step of
+## it is a shape ("extra turn", "return a card", "each player discards and
+## draws"), never a card name.
+##
+## Wizard only, with [member counts_cards] and [member paces_draws], whose
+## guards run FIRST and are untouched: a wheel that our library cannot pay
+## for and an extra turn the library race cannot spare are still refused
+## before any of this is asked.
+var runs_loops := false
+
+
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
 		p_sideboard_swaps := 0, p_search_nodes := 0,
@@ -1529,6 +1632,7 @@ static func sorcerer() -> AiProfile:
 	profile.counters_by_shape = true
 	profile.reinforces_blocks = true
 	profile.reads_race = true
+	profile.minds_the_vise = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -1548,6 +1652,8 @@ static func wizard() -> AiProfile:
 	profile.reinforces_blocks = true
 	profile.reads_race = true
 	profile.holds_tricks = true
+	profile.minds_the_vise = true
+	profile.runs_loops = true
 	return profile
 
 

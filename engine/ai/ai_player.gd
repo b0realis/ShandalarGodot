@@ -1639,7 +1639,10 @@ func _hand_room(game: MtgGame, moment: int, source: CardInstance = null) -> int:
 		room = me.max_hand_size + allowance - me.hand.size()
 		if source != null and source.zone == Mtg.Zone.HAND:
 			room += 1   # the spell itself leaves the hand before its cards arrive
-	return mini(room, _library_slack(game))
+	# ...and by THE SQUEEZE (2026-09-10, [member AiProfile.minds_the_vise]):
+	# a card the hand could hold and the race could spare is still not
+	# drawn when the Black Vise across the table is counting it.
+	return mini(mini(room, _library_slack(game)), _vise_room(game))
 
 
 ## THE PACE (2026-09-07, [member AiProfile.paces_draws]): the end of a
@@ -1742,6 +1745,17 @@ func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
 ## permanent by its cost, plus a point when it has an activated ability —
 ## an Icy Manipulator or a Jayemdae Tome is on the table to be USED, and
 ## the ability is the reason to take it.
+## THE SQUEEZE AND THE PRISON (2026-09-10, [member
+## AiProfile.minds_the_vise]) are added on top and never folded in, for
+## the reason [method _own_value]'s liability is not folded into
+## [method Evaluator.permanent_value]: this asks what taking a permanent
+## AWAY is worth, and the board score asks what it IS. Off, and with
+## neither shape on the table, the term is 0.0 and this is the method it
+## has always been. It is added on the LAST branch and not on the first
+## two because every card of either shape in this pool is a noncreature
+## permanent: the three hand tolls are two artifacts and an enchantment,
+## and a creature whose static grounds anything (Akron Legionnaire, the
+## Evil Eye) grounds its OWN controller's board and never ours.
 func _victim_value(game: MtgGame, inst: CardInstance) -> float:
 	if inst.is_creature():
 		return Evaluator.permanent_value(inst, profile)
@@ -1750,7 +1764,179 @@ func _victim_value(game: MtgGame, inst: CardInstance) -> float:
 	var value := Evaluator.permanent_value(inst, profile)
 	if not inst.cur_activated_abilities.is_empty():
 		value += 1.0
-	return value
+	return value + _prison_relief(game, inst)
+
+
+## THE SQUEEZE, READ OFF THEIR TABLE (2026-09-10, [member
+## AiProfile.minds_the_vise]): what every hand-size toll aimed at
+## [param of_pid] would deal at a hand of [param hand_size], at its next
+## beat and never over a stream of them (see [method
+## EffectIntent.hand_toll_of_line]).
+##
+## THE TOLL IS ASKED THE WAY [method _own_toll] ASKS ITS OWN, and that is
+## what makes a STOLEN Black Vise come out right: the trigger's printed
+## condition is put a probe event naming the player, and the Vise's
+## condition reads the opponent it chose AS IT ENTERED (CR 614.1c,
+## `cards/sets/2ed/black_vise.gd`) rather than whoever controls it now.
+## Storm World, whose line names each player's upkeep and carries no
+## condition at all, answers true for either seat — which is the truth
+## about the card.
+func _hand_toll_beat(game: MtgGame, of_pid: int, hand_size: int) -> int:
+	var total := 0
+	for inst in game.all_battlefield():
+		total += _hand_toll_of(game, inst, of_pid, hand_size)
+	return total
+
+
+## The same question of ONE permanent — what [param inst] alone charges
+## [param of_pid] for a hand of [param hand_size].
+func _hand_toll_of(game: MtgGame, inst: CardInstance, of_pid: int,
+		hand_size: int) -> int:
+	var total := 0
+	for trig in inst.cur_triggered_abilities:
+		if not EffectIntent.TOLL_BEATS.has(trig.event_type):
+			continue
+		var toll := EffectIntent.hand_toll_of_line(trig.text)
+		if toll.is_empty():
+			continue
+		if trig.condition.is_valid():
+			var probe := GameEvent.new(trig.event_type, {"player": of_pid})
+			if not trig.condition.call(game, inst, probe):
+				continue
+		total += EffectIntent.hand_toll_damage(toll, hand_size)
+	return total
+
+
+## Is any hand-size toll on the table at all? The cheap gate in front of
+## every reading below, so a board with no such card pays for none of
+## this and answers exactly what it answered before the knob existed.
+func _table_has_hand_toll(game: MtgGame) -> bool:
+	if not profile.minds_the_vise:
+		return false
+	for inst in game.all_battlefield():
+		for trig in inst.cur_triggered_abilities:
+			if EffectIntent.TOLL_BEATS.has(trig.event_type) \
+					and not EffectIntent.hand_toll_of_line(trig.text).is_empty():
+				return true
+	return false
+
+
+## THE ROOM A SQUEEZE LEAVES (2026-09-10, [member AiProfile.minds_the_vise]):
+## how many more cards this hand can take before the toll starts charging
+## for them — under a Black Vise, the room up to four and no further.
+##
+## Counted by asking the toll itself rather than by reading its threshold
+## out, so the answer is right for a card of either slope and for two of
+## them at once: the first card whose arrival raises the next beat ends
+## the room. A Rack, whose damage FALLS as the hand fills, never shortens
+## it, which is the one-directional shape [member AiProfile.mulligans]'
+## own escape has — this may refuse a draw and can never demand one.
+func _vise_room(game: MtgGame) -> int:
+	if not _table_has_hand_toll(game):
+		return 1 << 20
+	var me := game.players[pid]
+	var base := _hand_toll_beat(game, pid, me.hand.size())
+	for room in range(me.max_hand_size + 2):
+		if _hand_toll_beat(game, pid, me.hand.size() + room + 1) > base:
+			return room
+	return 1 << 20   # nothing on the table charges for a fuller hand
+
+
+## THE RELIEF A CAST BUYS (2026-09-10, [member AiProfile.minds_the_vise]):
+## the damage our next upkeep no longer takes because this card left the
+## hand, at the reaper's own rate for a point of our life ([method
+## _life_price] — the rate [method _liability_price] charges its own toll
+## at). 0.0 with no such card on the table.
+##
+## THE HAND THE CARD ACTUALLY LEAVES US WITH is what is read, and it is
+## not always one card fewer: a WHEEL refills both seats to a printed
+## count ([member EffectIntent.wheels]), so under a Vise it is charged for
+## the seven cards it deals us and never credited for the one it spent —
+## `docs/arzakon.strategy` §4's *"never Wheel or Twister into one"*, as
+## arithmetic instead of as a rule.
+##
+## AND IT IS SIGNED. Under a Rack the same subtraction comes out negative
+## and the cast is charged, which is the half `docs/forge/casting.md` P4
+## has backwards (see [method EffectIntent.hand_toll_of_line]).
+func _vise_relief(game: MtgGame, inst: CardInstance) -> float:
+	if inst.zone != Mtg.Zone.HAND or not _table_has_hand_toll(game):
+		return 0.0
+	var me := game.players[pid]
+	var after := me.hand.size() - 1
+	var wheels := _intent_of(inst).wheels
+	if wheels > 0:
+		after = wheels
+	var saved := _hand_toll_beat(game, pid, me.hand.size()) \
+		- _hand_toll_beat(game, pid, after)
+	return float(saved) * _life_price(me.life)
+
+
+## WHAT TAKING THEIR PRISON OFF THE TABLE IS WORTH (2026-09-10, [member
+## AiProfile.minds_the_vise]) — the term [method _victim_value] adds for a
+## permanent of THEIRS that is charging our hand or holding our board.
+##
+## THE SQUEEZE is its next beat against us MINUS its next beat against
+## them, so a SYMMETRIC toll is worth only the difference — Storm World
+## stretches both seats and destroying it relieves both. That subtraction
+## is the whole of what [constant EffectIntent.TOLL_BEATS]' census said it
+## did not have, and it has it here because both halves are one beat: no
+## horizon is needed to compare two numbers taken at the same moment.
+## Priced by [method _face_damage_value], the scale every other reading of
+## damage at a face uses.
+##
+## THE PRISON is the attack the permanent is holding at home: our own
+## creatures carrying [member CardInstance.cur_cant_attack], and the
+## damage they would put through their blocks if the card were gone. The
+## bound is [method _ground_the_sweep_opens]' own and is borrowed
+## deliberately — `cur_cant_attack` is set by a static and by nothing
+## else, so with exactly ONE static source on the table (this one) taking
+## it can be said to free them, and with more than one the reading stands
+## down rather than guess which static was doing the work. Under a Moat
+## that is the common case: a Moat is usually the only static in the game.
+##
+## Never below zero: this method is a REASON TO TAKE a permanent, and a
+## card that is quietly helping us is not a reason to leave a better
+## target alone — [method _victim_value]'s other callers price that.
+func _prison_relief(game: MtgGame, inst: CardInstance) -> float:
+	if not profile.minds_the_vise or inst.controller_id == pid:
+		return 0.0
+	var them := game.opponent_of(pid)
+	var relief := 0.0
+	if _table_has_hand_toll(game):
+		var ours := _hand_toll_of(game, inst, pid, game.players[pid].hand.size())
+		var theirs := _hand_toll_of(game, inst, them, game.players[them].hand.size())
+		relief += _face_damage_value(game, ours, pid) \
+			- _face_damage_value(game, theirs, them)
+	relief += _prison_attack(game, inst)
+	return maxf(relief, 0.0)
+
+
+## The attack [param inst]'s static is holding at home, priced by what it
+## would put through their blocks ([method _damage_through_blocks], the
+## same one-blocker-per-attacker model the cohort maths uses).
+func _prison_attack(game: MtgGame, inst: CardInstance) -> float:
+	var statics := game.battlefield_with_statics()
+	if statics.size() != 1 or statics[0] != inst:
+		return 0.0
+	var freed: Array[CardInstance] = []
+	for mine in game.players[pid].battlefield:
+		if not mine.is_creature() or mine.cur_power <= 0 or not mine.cur_cant_attack:
+			continue
+		if mine.has_keyword(Mtg.Keyword.DEFENDER):
+			continue   # a Wall stays home whatever happens to their card
+		var needs := mine.data.attack_needs_defender_land
+		if needs != "" and not CombatState._controls_land_of_type(game, game.opponent_of(pid), needs):
+			continue
+		freed.append(mine)
+	if freed.is_empty():
+		return 0.0
+	var them := game.opponent_of(pid)
+	var blockers: Array[CardInstance] = []
+	for theirs in game.players[them].battlefield:
+		if theirs.is_creature():
+			blockers.append(theirs)
+	return _face_damage_value(game,
+		_damage_through_blocks(game, freed, blockers, them), them)
 
 
 ## What giving up [param inst] of OUR OWN costs — the other side of the
@@ -2768,6 +2954,12 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 	var value := _card_value(inst.data)
 	if inst.data.cost.has_x:
 		value = maxf(value, float(x_value) * 1.5)
+	# THE SQUEEZE (2026-09-10, [member AiProfile.minds_the_vise]): a card
+	# played is a point the Black Vise across the table no longer deals at
+	# our upkeep — and, under a Rack, a point it starts dealing. 0.0 with
+	# no such permanent on the table, which is every board this pilot
+	# played before the knob existed.
+	value += _vise_relief(game, inst)
 	var intent: EffectIntent = null
 	for t in targets:
 		if t is TargetRef and not t.is_player:
@@ -2853,6 +3045,130 @@ func _card_value(data: CardData) -> float:
 	return value
 
 
+## THE EXTRA TURN, PRICED AS A TURN (2026-09-10, [member
+## AiProfile.runs_loops]; `docs/forge/casting.md` P5,
+## `docs/arzakon.strategy` §5).
+##
+## [method Evaluator.card_value] reads a printed card, and an extra turn
+## prints nothing: Time Walk came out at a flat 3.00 with three Serra
+## Angels on our table and an empty board across it. What a turn actually
+## buys is three things the seat can count, and all three are counted:
+##
+##  * A DRAW STEP, worth what a card in hand is worth to the position
+##    ([member AiProfile.w_hand], the same weight [method
+##    Evaluator.position_score] gives a hand lead).
+##  * A LAND DROP, worth [constant Evaluator.W_LANDS] — and only when a
+##    land is actually in hand to play, because a drop with nothing to
+##    drop is worth nothing.
+##  * THE ATTACK THE BOARD MAKES AGAIN, read through the blocks they would
+##    actually make ([method _damage_through_blocks]) and priced by
+##    [method _face_damage_value], the scale every other reading of damage
+##    at a face uses.
+##
+## It is deliberately NOT read as lethal. An extra turn that swings for
+## more than their life is only lethal if this turn's attack has already
+## happened or is about to, and this method is asked in a main phase where
+## neither is decided; [method _lethal_burn] and the cohort maths own that
+## question and answer it with the attack itself.
+func _extra_turn_value(game: MtgGame, turns: int) -> float:
+	if turns <= 0:
+		return 0.0
+	var them := game.opponent_of(pid)
+	var value := (profile.w_hand + (Evaluator.W_LANDS if _holding_a_land(game) else 0.0)) \
+		* float(turns)
+	var mine: Array[CardInstance] = []
+	for inst in game.players[pid].battlefield:
+		if inst.is_creature() and inst.cur_power > 0 and not inst.cur_cant_attack:
+			mine.append(inst)
+	if mine.is_empty():
+		return value
+	var blockers: Array[CardInstance] = []
+	for inst in game.players[them].battlefield:
+		if inst.is_creature():
+			blockers.append(inst)
+	return value + _face_damage_value(game,
+		_damage_through_blocks(game, mine, blockers, them) * turns, them)
+
+
+## THE WHEEL'S SWING (2026-09-10, [member AiProfile.runs_loops]): the
+## cards a fixed-count wheel MOVES — `their hand − ours` — or 0 for a
+## reroll and for a line this is not.
+##
+## THE COUNT CANCELS, which is why [member EffectIntent.wheels] carries a
+## number and not a flag: each seat ends on N, so the swing is
+## `(N − theirs) − (N − ours)` and N drops out — but only while N is
+## FIXED. Winds of Change gives each player back exactly what it took
+## ([constant EffectIntent.WHEEL_REDRAW]) and moves nothing whatever the
+## hands hold, so it keeps its printed worth and is not read here at all.
+##
+## OUR HAND IS ONE SMALLER THAN IT LOOKS. The wheel is on the stack while
+## it resolves and is not among the cards it deals back (CR 608.2m — the
+## reason `docs/arzakon.strategy` §3C's loop has to Regrow the Timetwister
+## at all), so the card being cast has already left the hand it is
+## counting.
+func _wheel_swing(game: MtgGame, inst: CardInstance, intent: EffectIntent) -> int:
+	if intent.wheels <= 0:
+		return 0
+	var ours := game.players[pid].hand.size()
+	if inst.zone == Mtg.Zone.HAND:
+		ours -= 1
+	return game.players[game.opponent_of(pid)].hand.size() - ours
+
+
+## WHAT A CARD IN OUR OWN GRAVEYARD IS WORTH TO A "RETURN A CARD" SPELL
+## (2026-09-10, [member AiProfile.runs_loops]).
+##
+## The pick was [method Evaluator.card_value] and nothing else, so a
+## Regrowth with Time Walk and a Serra Angel in the graveyard took the
+## Angel every time — 10.00 against 3.00 — and `docs/arzakon.strategy`
+## §3C's loop could not start. On, a card whose worth is a fact about the
+## BOARD is offered at what casting it on THIS board would be worth, and
+## everything else keeps the printed number it always had.
+##
+## Two shapes have such a worth and both are the loop's own: an EXTRA TURN
+## ([method _extra_turn_value]) and a WHEEL, worth the cards it would move
+## at the hands in front of us. Neither is a card's name.
+func _graveyard_worth(game: MtgGame, dead: CardInstance) -> float:
+	var base := Evaluator.card_value(dead.data)
+	if not profile.runs_loops or dead.data.spell_effects.is_empty():
+		return base
+	var intent := _intent_of(dead)
+	if intent.extra_turns > 0:
+		return maxf(base, _extra_turn_value(game, intent.extra_turns))
+	if intent.wheels > 0:
+		return maxf(base, base + float(_wheel_swing(game, dead, intent)) * profile.w_hand)
+	return base
+
+
+## IS THERE A CARD IN HAND THAT COULD TAKE THIS ONE BACK? (2026-09-10,
+## [member AiProfile.runs_loops]) — the whole of the three-card loop's
+## ORDER, and the reason it is a value and not a fourth rule.
+##
+## A spell that returns a card from OUR graveyard to our hand means the
+## card we are about to cast is not spent, so it is worth the card again
+## ([member AiProfile.w_hand]) — which is what puts Time Walk ahead of the
+## Regrowth beside it in the same main step. The Walk resolves, goes to
+## the graveyard, and the Regrowth cast after it finds it there
+## ([method _graveyard_worth]).
+##
+## Read as a shape and never as a name: a [ReturnFromGraveyardEffect]
+## whose spec admits any card of ours rather than creatures alone, which
+## is the difference between Regrowth and Raise Dead — and Raise Dead
+## cannot take a Time Walk back.
+func _returner_in_hand(game: MtgGame, except_inst: CardInstance) -> bool:
+	for other in game.players[pid].hand:
+		if other == except_inst:
+			continue
+		for e in other.data.spell_effects:
+			if not (e is ReturnFromGraveyardEffect):
+				continue
+			if e.to_battlefield_mode or e.target_spec == null:
+				continue
+			if e.target_spec.kind == TargetSpec.Kind.CARD_IN_YOUR_GRAVEYARD:
+				return true
+	return false
+
+
 ## A sweeper is cast when the swing clears this (a 2/2's worth of board).
 const SWEEP_BAR := 3.0
 
@@ -2912,6 +3228,36 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	if intent.extra_turns > 0 and not data.is_modal() \
 			and _library_slack(game) < intent.extra_turns:
 		return {}
+	# THE OLD LOOPS (2026-09-10, AiProfile.runs_loops; casting P5). Two
+	# cards whose worth is a fact about the BOARD and the two HANDS, and
+	# which Evaluator.card_value — a reading of the printed card — has no
+	# way to see. Both arms sit UNDER the pace guards above, which are
+	# paces_draws' and stay in front of them.
+	if profile.runs_loops and not data.is_modal():
+		if intent.extra_turns > 0:
+			var worth := maxf(_cast_value(game, inst, [], max_x),
+				_extra_turn_value(game, intent.extra_turns))
+			# ...and a turn taken with a Regrowth in hand is a card that
+			# comes BACK rather than a card spent, which is added to
+			# whatever the turn is worth rather than compared with it —
+			# the premium is about the CARD and the maximum above is about
+			# the TURN. It is also the whole of the loop's order: it is
+			# what puts the Walk ahead of the Regrowth beside it in the
+			# same main step, on a board where the turn alone would not.
+			if _returner_in_hand(game, inst):
+				worth += profile.w_hand
+			return {"x": max_x, "targets": [], "value": worth}
+		if intent.wheels > 0:
+			# A wheel our own library cannot pay for is the draw from an
+			# empty library (CR 704.5b) and loses the game on the spot.
+			if game.players[pid].library.size() <= intent.wheels:
+				return {}
+			var swing := _wheel_swing(game, inst, intent)
+			if swing < 0:
+				return {}   # a gift of cards, refused (casting P5)
+			return {"x": max_x, "targets": [],
+				"value": _cast_value(game, inst, [], max_x)
+					+ float(swing) * profile.w_hand}
 	# THE COUNT (2026-09-07, AiProfile.counts_cards): an X that draws or
 	# discards is sized to the cards it acts on, not to the mana at hand.
 	if profile.counts_cards and not data.is_modal():
@@ -9022,15 +9368,18 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 		if spec.kind == TargetSpec.Kind.CREATURE_IN_ANY_GRAVEYARD:
 			graveyards.append(game.players[opponent].graveyard)
 		var best_dead: CardInstance = null
+		# THE OLD LOOPS (2026-09-10, AiProfile.runs_loops): the pick is
+		# [method _graveyard_worth], which is Evaluator.card_value with the
+		# knob off and on every card the knob has nothing to say about.
 		for pile in graveyards:
 			for dead in pile:
 				if game.target_legal_at(spec, TargetRef.card(dead), source, x_value, earlier) \
 						and (best_dead == null
-							or Evaluator.card_value(dead.data) > Evaluator.card_value(best_dead.data)):
+							or _graveyard_worth(game, dead) > _graveyard_worth(game, best_dead)):
 					best_dead = dead
 		# A Regrowth for a Forest is a Regrowth wasted: wait for a card that
 		# is worth the card (a land only when we are short of them).
-		if best_dead != null and Evaluator.card_value(best_dead.data) < 2.5 \
+		if best_dead != null and _graveyard_worth(game, best_dead) < 2.5 \
 				and not (best_dead.is_land() and _land_light(game)):
 			return null
 		return null if best_dead == null else TargetRef.card(best_dead)

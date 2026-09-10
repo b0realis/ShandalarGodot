@@ -99,6 +99,8 @@ override any knob on any preset for a measurement
 | `reads_lethal_x` | off | off | on | on | knows that LIFE can be spent as mana when the mana is lethal. Channel opens a mana source paid for in life (`MtgPlayer.life_for_mana`) and no seat had ever paid a point: the card is a card-local effect, so `EffectIntent.adds_mana` was false, the Dark Ritual gate never asked about it, and it was cast as a plain three-point spell — probed at HEAD, a Wizard holding Channel and Fireball with two Forests and a Mountain cast Channel into an empty board against an opponent at twenty and finished the turn with the Channel in the graveyard, the Fireball in hand and its own life at twenty. On, a life-for-mana spell is cast ONLY in a step where the life it opens makes an X spell in hand LETHAL, and once it is open the life is paid and the spell fired in ONE action (`AiPlayer._lethal_life_mana`), so no rung can pay life for mana it then fails to spend. Two printed shapes reach a player's life with an X and the pool holds one of each behind a Channel — the aimed burn (Fireball, Disintegrate) and the sweeper that hits PLAYERS (Hurricane, Earthquake), whose X lands on us too and must leave us alive. The life is capped at `life − 1 − their attack`, read through the same block plan `_in_danger` uses, so a Fireball is not paid for with the life a Serra Angel is about to take. Forge never gets here at all: Channel is `AI:RemoveDeck:All` there and `willPayCosts` keeps a margin of four |
 | `checks_before_casting` | off | off | off | on | looks at the POSITION a cast would leave it in before it commits — the last layer of the ramp, and the one a player notices. `AiPlayer._try_cast_best` prices a cast by what the card is worth and what its victim is worth (`_cast_value`) and never by the board afterwards, so a Savannah Lions was cast in front of an untapped Prodigal Sorcerer and pinged off the table before it had blocked once: the card gone, the board where it was, and the pilot reading the cast as a gain. Forge's `OnePlaySafetyChecker` copies the game and replays the play; ours copies nothing, because `Evaluator.position_score` is a sum of four counted quantities and the position after a cast is therefore ARITHMETIC (`AiPlayer._cast_projection` — the card leaves the hand, the victim leaves their board, the life totals move, our permanent arrives). THE ANSWER IS THE ONE THE TABLE IS ALREADY SHOWING and no other: an activated ability on THEIR battlefield they can pay for right now that would take the body straight off again (`AiPlayer._answered_on_arrival`), their open sources counted the way `AiPlayer._shieldable` counts them, the effect read as a shape (`EffectIntent`) and never as a name; their hand is not looked at at all. It ABSTAINS unless that answer is on the table, which is the note's own "a pessimistic projection that never casts into open red mana" answered, and `AiPlayer._in_danger` lifts it, because a desperate play is allowed to be desperate — Forge's own escape |
 | `reinforces_blocks` | off | off | on | on | comes back to a block it has already declared and finishes the attacker off. `AiPlayer._best_block_for` is a LADDER and returns on the first rung that answers, so the free absorb — *a wall soaks the hit at zero cost, which is what walls are FOR* — sits above the value trade and above the gang: a Wall of Stone on the table blocked alone every time and the rungs below it were never reached, however many bodies were standing at home. Two walls of swords watched a Serra Angel walk away for free (each lives through it, and together they deal it exactly four); a Wall of Stone soaked a Craw Wurm while the Water Elemental beside it, which kills the Wurm, stayed home. `AiPlayer._reinforce_blocks` runs ONCE over the finished plan, and only where the band survives the attacker and does not kill it — never a chump, never a trade, never a body that `_shieldable`, indestructible or a printed gaze says cannot die. Safe bodies first and free of charge, then, only if those fall short, ONE body that dies to close the kill exactly. THE PRICE IS WHAT THE PAIR PUTS AT RISK — rung 3's own `price <= attacker_value * 1.5` read off the bodies that actually die, with Forge's stricter bound on top (the body that dies is worth strictly less than the attacker it kills) — so a survivor is free, a rampage that turns the pair into two corpses is charged for both, and nothing is written into the plan unless the band it builds actually kills. Sorcerer and Wizard, with the other combat reads |
+| `minds_the_vise` | off | off | on | on | reads the two printed shapes on THEIR side of the table that decide what our own HAND should be doing, and neither of them had ever reached a decision. THE SQUEEZE: a permanent whose upkeep trigger deals damage counted off the cards in a hand (`EffectIntent.hand_toll_of_line`, read from the trigger's own line the way the wheel and the aimed discard are). Reproduced — a Wizard holding seven with a Black Vise across the table went on drawing (the Jayemdae Tome's tick is offered at a hand of five, where `_draw_need` returns exactly 0.00), cast by printed worth alone, and its one Disenchant took the Jayemdae Tome (4.20) over the Vise (1.00) while the Vise squeezed for three a turn. THE PRISON: a permanent of theirs whose static holds our creatures at home (`cur_cant_attack`, set by a static and by nothing else — the reading `_ground_the_sweep_opens` already makes), priced by `Evaluator.permanent_value` at a flat 3.20 with two Craw Wurms standing behind it. Three readings, each of them 0 with no such permanent on the table: THE ROOM (`_vise_room`, the cards the hand can still take before the toll charges for them — no Ancestral, no Tome tick and no wheel drawn into a hand a Vise is already counting), THE RELIEF (`_vise_relief`, a cast worth the point it takes off our next upkeep at `_life_price`'s rate) and THE PRICE (`_prison_relief`, what taking the card off the table is worth — the squeeze's next beat ours minus theirs, and the prison's held attack read through `_damage_through_blocks`). **THE RELIEF IS SIGNED, AND THAT IS THE HALF `docs/forge/casting.md` P4 HAS BACKWARDS**: its *"The Rack shares (a)-(c) with the threshold at three"* is one subtraction out — a Rack's X is three MINUS the hand, so emptying a hand under one is the worst play at the table, and a pilot that answered it like a Vise would take the full three every upkeep instead of nothing. The room is one-directional for the same reason (it may refuse a draw and can never demand one), and a WHEEL is charged for the seven cards it refills us to rather than credited for the one it spent, which is `docs/arzakon.strategy` §4's *"never Wheel or Twister into one"* as arithmetic. **WHAT IS NOT BUILT**: P4's *"priced at the damage it will deal over `PACE_HORIZON` turns"* is a stream times a horizon, and there is no horizon in this engine — the same ruling the `EffectIntent.TOLL_BEATS` census made on 2026-09-10 for `prices_liabilities`. Every reading here prices ONE BEAT, a number the table is showing; the horizon stays `counts_the_race`'s (§5) |
+| `runs_loops` | off | off | off | on | prices the three cards of `docs/arzakon.strategy` §3C's infinite-turn loop by what they DO on this board instead of by the printed card, which is the one thing `Evaluator.card_value` cannot see. Reproduced, all three at the same seam: a Wheel of Fortune came out at **4.00 with our hand at seven and theirs at nothing** — a gift of six cards — and at **4.00 with ours at one and theirs at seven**, a gain of six, the same number both ways round; **Time Walk came out at 3.00 with three Serra Angels on the table**, an extra turn worth twelve damage priced at a Counterspell (the flat 3.0 `docs/arzakon.strategy` §5 names); and a **Regrowth with Time Walk and a Serra Angel in our own graveyard took the Angel**, 10.00 against 3.00, which is why the loop could never start. On: an extra turn is a draw step (`w_hand`) plus a land drop when a land is held plus the attack the board makes again, read through their blocks and priced by `_face_damage_value` (`AiPlayer._extra_turn_value` — 20.70 for that Time Walk); a FIXED-COUNT wheel is worth the cards it MOVES, `their hand − ours` once the wheel itself has left our hand (CR 608.2m), refused when that is negative and priced at `w_hand` a card (`_wheel_swing`); and a card in our own graveyard is offered to a "return a card" spell at what casting it on THIS board would be worth (`_graveyard_worth`). **THE LOOP IS THOSE THREE AND NOT A FOURTH RULE**: a turn taken with a returner in hand is credited the card it does not spend, which is what puts the Walk ahead of the Regrowth beside it in the same main step — so the Walk is in the graveyard when the Regrowth is cast, and the Regrowth takes it back. Nothing is named: the shapes are "extra turn", "each player discards and draws" (`EffectIntent.wheels`, built the same morning) and "return a card from your graveyard", and a Raise Dead is not a returner because its spec admits creatures alone. `paces_draws`' and `counts_cards`' guards run FIRST and are untouched. Wizard only — the far end of the ramp, and `docs/arzakon.strategy` §4's own item 6 |
 | `crack_back_margin` | 0 | 0 | 0 | 0 | how far under our own life total the counter-swing has to reach before `AiPlayer._search_hold_back` is worth running: the gate was `reach >= life`, and it is `reach >= life - crack_back_margin`. The old gate is exact and asks exactly one question — *does this attack LOSE THE GAME to the counter-swing?* — and never the other one, whether it costs us twelve life for four points of damage. **Every preset ships 0, which is that gate unchanged**: the number is here so the Deck Lab can put the question in one command, the way `w_hand` is, and the Lab's answer of 2026-09-10 was NO (§4). Not a difficulty knob, and no rung moves it |
 | `develops_late` | off | off | off | off | keeps the hand shut until the attack is over — the whole of `docs/forge/casting.md` P1, and **every preset ships it off, which is the pilot unchanged**. `AiPlayer.act` reaches the main-phase planner in EITHER main step and the first one it reaches is Main 1, so every land, creature, artifact, enchantment, draw spell, discard and tutor this pilot has ever played went down BEFORE its own combat and with it the mana: a Wizard on four Forests with an Ironroot Treefolk in hand plays the land, casts the Treefolk, and stands at their declare-blockers with everything shown and nothing open. On, Main 1 casts only what Forge's `castPermanentInMain1` would — a win, floating mana that would be lost, a haste creature, a non-creature mana source, and what changes THIS combat (a permanent of theirs answered, an aura or a pump on a body of ours, a land that animates itself) — the mana sink waits with the rest, and the land drop is held under Forge's own four guards, the fourth of which is this pilot's own hazard: it sizes its attack and its block by the mana it holds, so a land in hand is a Carrion Ants that reads one point smaller. **THE LAB REFUSED THE RUNG** (§4): nine pairs, eight of them negative, a drift of about a point and a quarter and not one delta clear of its interval — so the field is here for the Deck Lab to ask with, the way `crack_back_margin` is, and no rung moves it |
 | `reads_race` | off | off | on | on | reads the two CLOCKS of the race — how many turns we need to take them from their life total to nothing, how many they need to do it to us — and lets the difference move what a VOLUNTARY BLOCK TRADE is allowed to cost. Rung 2 of `AiPlayer._best_block_for` takes a trade nothing forces on it whenever the body it spends is worth no more than `attacker_value + 0.5`, and that is the same margin at twenty life as at four: our Serra Angel trades itself for their Craw Wurm while we are one turn from winning at 20 against their 4, and our Craw Wurm lets an Erhnam Djinn through at 8 life because the Wurm is worth ONE POINT more. On, `AiPlayer._trade_margin` reads P1's own three states — demand a gain (−0.5) when their clock is more than a turn longer than ours, allow a small loss (+1.5) when ours is more than a turn longer than theirs, +0.5 otherwise — with a dead band of a turn between them and `AiPlayer.RACE_HORIZON` (four turns, `PACE_HORIZON`'s sentence said about the red zone) under all of it, because on a 20-20 board two Grizzly Bears against one Hill Giant is five turns against seven and that is a board, not a race. Both clocks are public numbers: the two life totals and the printed power each side could swing with once everything untaps, which is the durable reading the crack-back model has always made of theirs. **P1'S HEADLINE HALF — the ATTACK bar moved by the same difference, plus one for a clock they cannot block — WAS BUILT, MEASURED AND REFUSED** (§4): over the eight starter matchups it moved most it ended 42 games in a win against **170 in a loss**, White Knights vs Black-Red Raiders −3.1, and it is the third brake-or-licence hung on `AiPlayer._combat_tolerance` to be refused this month. The block half alone reads 16 won to 17 lost on those same eight, every delta between −0.2 and +0.2, and that wash is what ships |
@@ -2335,6 +2337,163 @@ one side of it — which is the chain, arriving where the sweeps said it
 would.
 
 
+### THE HAND UNDER A SQUEEZE AND THE BOARD UNDER A PRISON (2026-09-10, `minds_the_vise`)
+
+Wave 4's second row (`docs/AI-next-wave.md`, `docs/forge/casting.md` P4,
+`docs/arzakon.strategy` §3D and §4 items 2 and 3). Three probes at HEAD,
+a Wizard in seat 0:
+
+- **THE DRAW.** Seven cards in hand and a Black Vise across the table —
+  three damage at our own upkeep, every upkeep — and `_hand_room` came
+  back 2, so two more cards were welcome. At a hand of FIVE, where
+  `_draw_need` returns exactly **0.00**, the Jayemdae Tome's tick was
+  offered at 2.50 and taken. Half of P4's clause (a) is therefore
+  **already built and always was**: `_draw_need` already returns 0.00 at a
+  hand of five and six, −3.00 at seven and eight and −4.00 at nine. The
+  half that was missing is the ROOM.
+- **THE CAST.** A Grizzly Bears out of a hand of six under a Vise priced
+  at **4.00** — the printed card, the Vise unread. It reads 4.50 now, and
+  a Wheel of Fortune out of a hand of one under the same Vise falls from
+  4.00 to **2.50**, because the hand it leaves us with is seven.
+- **THE ANSWER.** Their Black Vise and their Jayemdae Tome, one
+  Disenchant in hand: `_victim_value` **1.00 against 4.20**, and
+  `_best_victim` took the Tome. Their Moat with two Craw Wurms of ours
+  standing behind it: **3.20**, and the Disenchant took the Tome again.
+
+**THE NOTE'S RACK CLAUSE IS ONE SUBTRACTION OUT, and checking it is the
+reason the reading has a sign in it.** P4 ends
+*"The Rack shares (a)-(c) with the threshold at three"*. The Rack's X is
+**3 minus** the hand: at seven cards the Vise deals 3 and the Rack deals
+0; at nothing the Vise deals 0 and the Rack deals 3. A pilot that
+answered a Rack the way it answers a Vise would empty its hand into the
+card and take the maximum every upkeep. So the reading is the SLOPE and
+not a threshold, the relief is signed (a Grizzly Bears out of the last
+card of a hand costs 3.50 under a Rack where it is worth 4.50 under a
+Vise) and the room is one-directional — it can refuse a draw and can
+never demand one.
+
+**THE POOL, BEFORE THE NUMBERS.** `EffectIntent.hand_toll_of_line` finds
+**exactly three cards in the whole pool** — Black Vise, The Rack and
+Storm World — and a census test pins that. **Every deck P4 names for its
+own measurement is unplayable**: `the_deck_weissman_1995_05` (Chaos Orb),
+`sligh_geeba_1996` (9 proxies), `necro_montesanti_1996` (2) and
+`ptcs_justice` (8). Thirty-one decks hold a Black Vise and eleven load;
+the two with a playset are `sargent_2009_astral_visionary` and the 1997
+`swamp_thing`. **The Rack has two decks and neither loads**, and Storm
+World is in no deck at all, so the slope is pinned by `tests/ai/` alone
+(§5). Seven decks hold a Moat and three load, all of them The Deck.
+
+**THE NUMBERS.** Seed 11, 1 000 games an arm, control Big Green vs White
+Knights — no hand toll and no grounding static on either side —
+**533-467, byte-identical to its own null in every arm of every run**.
+
+| pair (seat A is the seat facing the card) | null | `on` | games that turned |
+| --- | --- | --- | --- |
+| The Deck (Feb 1996) vs Astral Visionary (4 Black Vise) | 45.9% | **52.7% (+6.8 ±4.4)** | 603 — **92 won, 24 lost** |
+| Blue Skies vs Swamp Thing (4 Black Vise) | 63.8% | 64.9% (+1.1 ±4.2) | 237 — 30 won, 19 lost |
+| White Knights vs Astral Visionary (4 Black Vise) | 95.1% | 95.1% (+0.0 ±1.9) | 90 — 3 won, 3 lost |
+| White Knights vs The Deck (2 Moat) | 76.4% | 77.8% (+1.4 ±3.7) | 46 — **15 won, 1 lost** |
+| Black-Red Raiders vs The Deck (2 Moat) | 62.9% | 62.9% (+0.0) | **0 — a pool fact** |
+
+**+6.8 ±4.4 IS CLEAR OF ZERO**, and it is the pair the row is about: a
+control deck that wants to hold cards, against four Black Vises. The
+flips are not close either — 92 to a win against 24 away, where a fair
+toss over 116 sits at 58 ± 5.4.
+
+**AND THE PAIR HAS TO BE ONE THE VISE CAN DECIDE.** White Knights against
+the same four Vises is 95.1% on both arms and 3 flips each way: a
+seventeen-Plains weenie deck empties its hand by turn four whatever it
+knows, and it wins that matchup nineteen times in twenty. What the knob
+needs on seat A is a deck that WOULD have sat on a full hand — which is
+what The Deck is, and why its row is the one that moves.
+
+**THE LAST ROW IS A POOL FACT AND NOT A NULL.** The prison half is read
+inside `_victim_value`, which nothing consults unless a card in hand can
+point at an artifact or an enchantment — and **Black-Red Raiders holds no
+such card at all** (Terror is a creature answer, Bolt and Fireball are
+damage). Nothing to answer the Moat with, nothing to price. Put the same
+Moat in front of White Knights' two Disenchants and the reading fires:
+46 games of a thousand end differently and fifteen of them are won
+against one lost.
+
+**NO HARM.** No shipped starter holds a Black Vise, a Rack, a Storm World
+or any grounding static, so the knob cannot fire on the starter meta at
+all — Big Green against the whole field at 1 000 games a matchup is
+**0 of 4 000 games different**, four win rates unmoved to the tenth of a
+point, and the control byte-identical beside them.
+
+**AND THE NULL IS PROVED AGAINST HEAD ITSELF, not merely against an
+`off` arm.** The manual's own `pays_sacrifices` sweep — Dracur (Spells of
+the Ancients) vs Big Green, seed 11, 1 000 games an arm, control Big
+Green vs White Knights — was run three ways: on HEAD's own
+`engine/ai/{ai_player,ai_profile,effect_intent}.gd`, on this tree with
+both knobs pinned off, and on this tree with the presets exactly as they
+now ship. **All three `games.csv` files are byte for byte the same 6 000
+games** — 22.9% null, control 533-467 in every arm. The third of those is
+a fact about the pair as well as about the knobs: neither fires on it,
+because Dracur holds no Vise and Big Green's graveyard never offers its
+Regrowth an extra turn or a wheel.
+
+### THE OLD LOOPS (2026-09-10, `runs_loops`)
+
+Wave 4's third row (`docs/AI-next-wave.md`, `docs/forge/casting.md` P5,
+`docs/arzakon.strategy` §3C and §4 item 6). Three probes at HEAD, all
+three at the same seam — `Evaluator.card_value` reads the printed card
+and a loop piece prints nothing:
+
+- **A WHEEL OF FORTUNE PRICED AT 4.00 EITHER WAY ROUND.** Our hand seven
+  and theirs nothing (a gift of six cards): 4.00. Ours one and theirs
+  seven (a gain of six): **4.00, the same number.**
+- **TIME WALK PRICED AT 3.00 WITH THREE SERRA ANGELS ON THE TABLE** — an
+  extra turn worth twelve damage, a draw and a land drop, priced at a
+  Counterspell. It reads **20.70** now.
+- **A REGROWTH TAKING THE SERRA ANGEL OVER THE TIME WALK**, 10.00 against
+  3.00, every time — which is why §3C's loop could never start.
+
+The order falls out of the pricing rather than out of a fourth rule: a
+turn taken with a returner in hand is credited the card it does not spend
+(`w_hand`), which puts the Walk at 4.50 against the Regrowth's 3.00 on an
+empty board, so the Walk is in the graveyard when the Regrowth is cast.
+
+**THE POOL, AND THE NOTE'S OWN DECKS.** `looping_dolan_1996` and
+`churning_dolan_1996`, the two lists P5 names for its measurement, **both
+hold a Zuran Orb and cannot be played**. Twenty-nine decks in `decks/`
+hold Time Walk, Regrowth and Timetwister together and **nine load** —
+and every one of them holds exactly ONE of each, because all three are
+restricted. The three-card loop is therefore rare by construction, and
+the win rate is the wrong instrument for it on its own; what moves game
+to game is the three readings underneath.
+
+**THE NUMBERS.** Seed 11, 1 000 games an arm, control White Knights vs
+Mountain Artillery — no wheel, no extra turn, no graveyard return on
+either side — **469-531, byte-identical to its own null in every arm of
+every run.** (Big Green vs White Knights is NOT a control here: Big
+Green's one Regrowth is exactly the ask this knob re-prices.)
+
+| pair | null | `on` | games that turned |
+| --- | --- | --- | --- |
+| The Deck (Feb 1996) vs Black-Red Raiders | 33.0% | 35.2% (+2.2 ±4.1) | 218 — 41 won, 19 lost |
+| The Deck (Feb 1996) vs White Knights | 19.4% | 22.5% (+3.1 ±3.6) | 243 — 44 won, 13 lost |
+| Berlin, n00bcon 2016 (The Deck) vs Black-Red Raiders | 26.9% | 29.6% (+2.7 ±3.9) | 206 — 37 won, 10 lost |
+| Kiska Ra (Spells of the Ancients) vs Big Green | 24.2% | 25.8% (+1.6 ±3.8) | 167 — 20 won, 4 lost |
+
+**NOT ONE DELTA IS CLEAR OF ITS INTERVAL, AND THAT IS SAID PLAINLY.**
+What is not a coin is the paired count, which is the instrument
+`holds_x_burn`'s chain half shipped on: **all four arms are positive**,
+834 of 4 000 games end differently, and **142 flipped to a win against 46
+flipped away**, where a fair toss over 188 sits at 94 ± 6.9. Four pairs,
+four positives, four one-sided flip counts, on two different Deck lists
+and a 1997 enemy. It ships at the Wizard on that, and on
+`holds_x_burn`'s and `reads_pumps`' precedent.
+
+**NO HARM.** Of the five shipped starters only Big Green holds a card the
+knob can read at all — its one Regrowth — so Big Green against the whole
+field is the only starter question there is, and the answer is **0 of
+4 000 games different**: its graveyard never holds an extra turn or a
+wheel, so `_graveyard_worth` answers `Evaluator.card_value` on every card
+the Regrowth is ever offered. Both of this pass's knobs together move the
+starter meta by nothing at all, over 8 000 games.
+
 ## 5. Where the ladder still ends short
 
 - `counter_threshold` is an absolute evaluator number, so a Wizard on a
@@ -3045,6 +3204,55 @@ would.
 - The 1997 adventure's difficulty (gold, deck minimum, life, the creature
   bonus, Arzakon's 100/200/300/400) is not a duel-profile matter and is
   not modelled here; it belongs with the adventure.
+- **THE TOLL'S STREAM IS STILL THE HORIZON'S, AND `minds_the_vise` DID
+  NOT BRING ONE** (2026-09-10). `docs/forge/casting.md` P4 asks for the
+  Black Vise "priced at the damage it will deal over `PACE_HORIZON`
+  turns", and that is a rate times a number of turns this engine does not
+  have — the same refusal the `EffectIntent.TOLL_BEATS` census made the
+  same day for `prices_liabilities`, and for the same reason
+  (`_face_damage_value` scales one hit by the share of a life total,
+  `Evaluator.position_score` is a snapshot, `PACE_HORIZON` is a library
+  clock under a knob of its own, and `CombatSearch` sees one turn). What
+  shipped prices ONE BEAT — the damage the card is about to deal, which
+  is a number the table is showing — so a Vise squeezing for three reads
+  4.45 against a Jayemdae Tome's 4.20 and a Vise squeezing for nothing
+  reads its printed 1.00, which is the right answer to both boards but
+  is NOT the note's. The stream stays `counts_the_race`'s
+  (`docs/AI-next-wave.md`, wave 4), which is where the two liability rows
+  were already sent.
+- **P4's LAST CLAUSE — the Wall or the Bear not cast under a Moat — IS
+  THE DEFENDER DISCOUNT UNDER ANOTHER NAME, and that constant was
+  measured and refused on the same day** (§4, "THE PRICE OF A BODY THAT
+  CANNOT ATTACK"). A creature that arrives grounded is worth its blocking
+  half alone, which is exactly what `defender_scale` prices, and the
+  answer over all nine wall pairs the pool can play was 1 340 of 9 000
+  games different with 65 flipped to a win and 56 away — a coin. Pricing
+  the same discount off `cur_cant_attack` instead of off the DEFENDER
+  keyword would widen a refused constant rather than test a new reading,
+  so it was left. The half of the clause that DID ship is the other
+  direction: the Moat itself is priced by the attack it holds, so the
+  Disenchant goes at it.
+- **THE RACK CANNOT BE MEASURED IN THIS POOL** (2026-09-10). Two decks in
+  `decks/` play it and neither loads (`wc1995_blumke`, 9 proxies;
+  `winds_of_chains_justice`, 3), so the slope reading — the half
+  `docs/forge/casting.md` P4 has backwards — is pinned by
+  `tests/ai/test_ai_minds_the_vise_2026_09_10.gd` and by nothing else.
+  Storm World, the pool's third hand toll, is in no deck at all.
+- **THE LOOP'S OWN MEASURE IS NOT IN THE LAB.** Both `docs/AI-next-wave.md`
+  and `docs/forge/casting.md` P5 ask for "the median turn at which the
+  loop first runs, from `games.csv`" — and `games.csv` carries
+  pair, decks, value, arm, game, seed, on-the-play, won, turns, stalled,
+  drawn and a fingerprint, and nothing whatever about which card was cast
+  when. The instruments the Lab actually has for a knob this rare are the
+  win rate, the PAIRED count of games that end differently, and the flips
+  each way; `runs_loops` was read on those and the reading is in §4. A
+  per-card census would be a change to `DeckLab/simulate.gd`, which is
+  not this pass's.
 - What the engine should eventually know about the old loops a player
   brings to the highest table — Channel-Fireball, the infinite turn, the
   Vise behind a Moat, decking — is `docs/arzakon.strategy`, section 4.
+  Two of its four are now the pilot's: item 2 (empty the hand under a
+  Vise, never wheel into one) and item 6 (recognise the three-card loop),
+  as `minds_the_vise` and `runs_loops`. Items 1 and 4 — counter by what a
+  spell does, and count the library against a mill — are
+  `counters_by_shape` (shipped) and `counts_the_race` (wave 4, held).

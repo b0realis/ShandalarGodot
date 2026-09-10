@@ -1053,6 +1053,83 @@ static func toll_of_line(text: String) -> Dictionary:
 	return out
 
 
+## THE HAND TOLL (2026-09-10, [member AiProfile.minds_the_vise];
+## `docs/forge/casting.md` P4, `docs/arzakon.strategy` §4 item 2) — a
+## printed trigger line whose damage is a COUNT OF THE CARDS IN A HAND,
+## read as the two numbers a decision needs: `{"slope": ±1, "threshold": n}`,
+## or `{}` when the line is not one of these.
+##
+## The damage one beat deals is `max(slope * (hand − threshold), 0)`, so
+## the pair says the whole card: Black Vise ("X is the number of cards in
+## their hand minus 4") is `{slope: +1, threshold: 4}` and squeezes a FULL
+## hand; The Rack ("X is 3 minus the number of cards in their hand") is
+## `{slope: −1, threshold: 3}` and stretches an EMPTY one. Storm World's
+## "X is 4 minus the number of cards in their hand" is the Rack's slope at
+## the Vise's threshold, and it beats at EACH player's upkeep. Those three
+## are the whole of it in this pool.
+##
+## WHY THE SLOPE AND NOT A FLAG, and this is the one reading
+## `docs/forge/casting.md` P4 has backwards. Its last sentence — *"The
+## Rack shares (a)-(c) with the threshold at three"* — is one subtraction
+## out: three minus the hand GROWS as the hand empties, so a pilot that
+## answered a Rack the way it answers a Vise would empty its hand into the
+## card and take the full three every upkeep instead of nothing. One knob
+## cannot hold both cards unless it reads which way the line points, so it
+## reads it.
+##
+## WHY THE COUNT IS DONE HERE WHILE [constant TOLL_UNKNOWABLE]'S RULING
+## STANDS. That ruling (2026-09-10) refused The Rack and Storm World for
+## [method AiPlayer._liability_price] because they "print a COUNT this
+## reader would have to do itself" — and it was right, because that
+## reading subtracts a STREAM from [method Evaluator.position_score], a
+## snapshot with no horizon in it. This reader does no such thing: the
+## count it needs is a hand size, a number in front of the seat at the
+## moment it acts, and every caller prices exactly ONE BEAT and never a
+## stream. The horizon question the ruling left open is still open and
+## still `counts_the_race`'s (docs/AI-next-wave.md, wave 4).
+##
+## Read from the trigger's own printed line, which is the reading [method
+## toll_of_line], [method _aimed_discard] and [method _wheel_draw] already
+## make of the same kind of text, and cached by that line the same way —
+## the pool's trigger texts are a fixed set.
+static func hand_toll_of_line(text: String) -> Dictionary:
+	if _hand_toll_cache.has(text):
+		return _hand_toll_cache[text]
+	var out: Dictionary = {}
+	var lower := text.to_lower()
+	# The damage has to land on a PLAYER and the line has to say which hand
+	# it is counting. The only other card in this pool whose trigger names
+	# a hand at all — Nicol Bolas's "that player discards their hand" —
+	# says neither.
+	if lower.contains("damage to that player") and lower.contains("cards in their hand"):
+		var squeeze := RegEx.new()
+		squeeze.compile("number of cards in their hand minus ([0-9]+)")
+		var m := squeeze.search(lower)
+		if m != null:
+			out = {"slope": 1, "threshold": int(m.get_string(1))}
+		else:
+			var stretch := RegEx.new()
+			stretch.compile("([0-9]+) minus the number of cards in their hand")
+			m = stretch.search(lower)
+			if m != null:
+				out = {"slope": -1, "threshold": int(m.get_string(1))}
+	_hand_toll_cache[text] = out
+	return out
+
+
+## What one hand toll takes at a hand of [param hand_size] — the BEAT, and
+## never a stream (see [method hand_toll_of_line]). 0 for a line that is
+## not one of these, and never below 0: a Vise under four cards and a Rack
+## over three both deal nothing at all.
+static func hand_toll_damage(toll: Dictionary, hand_size: int) -> int:
+	if toll.is_empty():
+		return 0
+	return maxi(int(toll["slope"]) * (hand_size - int(toll["threshold"])), 0)
+
+
+static var _hand_toll_cache: Dictionary = {}
+
+
 ## The mana price a printed line offers to avoid what it says — the run of
 ## `{…}` symbols right after "pay". "" when the line names no such price,
 ## or names one that is not mana.
