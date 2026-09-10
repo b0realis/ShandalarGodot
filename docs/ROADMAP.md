@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5658 tests, 0 failing, 327 scripts** (148 456 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5703 tests, 0 failing, 330 scripts** (149 546 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10344,6 +10344,90 @@ in their places.
   block and the chump that can say *this body dies either way, and blocking
   spends their mana instead of my life* — which is `reinforces_blocks`'
   shape (combat P4), not this knob's.
+
+## WAVE 2, THE COUNTER'S MIND (2026-09-10)
+
+Three rows of `docs/AI-next-wave.md`'s wave 2, in the order the plan sets:
+the field, the knob that reads it, and the life sold for a kill.
+
+**THE WHEEL FIELD** (`EffectIntent.wheels`). Wheel of Fortune, Timetwister
+and Winds of Change were `unknown` to the reader and priced at their
+printed 4.00, 4.00 and 2.50, so seven cards taken off our side and seven
+handed to the other were invisible to everything. The field is the COUNT
+each player ends up holding, `WHEEL_REDRAW` when the count is each
+player's own hand — a fixed refill and a reroll are different spells, and
+a reader that answered seven for both would be wrong about Winds of
+Change. Read off the effect's own `describe()` line, the `_aimed_discard`
+precedent, with `unknown` still set so every older reading keeps its
+behaviour. Mind Bomb never refills and Eureka never draws; neither is a
+wheel. The pool holds exactly three and a census test says so. No knob: a
+field that says what a card does is not a difficulty.
+
+**COUNTER BY WHAT THE SPELL DOES** (`counters_by_shape`, Sorcerer and
+Wizard). `_try_counter` compared `Evaluator.card_value` with
+`counter_threshold` and nothing else, and a printed worth is the wrong
+instrument at both ends of it: Wrath of God prices at 5.00, Fireball at
+2.50, Time Walk at 3.00, Wheel of Fortune at 4.00. Reproduced on one board
+apiece — a Sorcerer watching a Wrath take four Serra Angels off its own
+table, every rung letting a Fireball for eight resolve at eight life with
+the Counterspell in hand, and the same pilot spending that Counterspell on
+a Serra Angel with a Swords to Plowshares in hand and a Plains untapped.
+`AiPlayer._counter_shape` answers ALWAYS, NEVER or "ask the bar" before
+the bar is asked. MEASURED, seed 11, 1 000 games an arm: The Deck
+(playable) vs Mountain Artillery **40.2% -> 51.6% (+11.4 ±4.3)** with 122
+games flipped to a win against 8 flipped away, vs Black-Red Raiders
+**42.7% -> 49.9% (+7.2 ±4.4)**, vs White Knights −0.1 ±4.0. At every rung
+on the first pair: Apprentice inert, Magician +0.3, Sorcerer **+12.0**,
+Wizard +11.4 — so P2's own conditional is answered by the number and the
+whole knob sits at Sorcerer.
+
+THE HALF THE LAB REWROTE. Weissman's rule as P2 states it measured −1.7
+with 3 games won against 20 lost on P2's own pair, and the ALWAYS half
+measures exactly zero there, so all of it was the NEVER half: The Deck
+holds four Swords and four Counterspells and the rule let EVERY White
+Knights creature through on the strength of ONE Swords. The answer must be
+SPARE — every body already on their side has a claim on the removal in our
+hand — and the same pair then reads −0.1 with 2 against 3. A fact about
+this pool's decks, not a tuning.
+
+P2's SIXTH ALWAYS CLAUSE WAS NOT BUILT. `_try_counter` has priced a
+Control Magic by the Serra Angel it names since long before this knob; a
+second copy would fire only where the bar itself refuses.
+
+**X EQUALS MY LIFE** (`reads_lethal_x`, Sorcerer and Wizard).
+`MtgGame.pay_life_for_mana` had never been called by any seat in this AI's
+life: Channel is a card-local effect, `adds_mana` was false, and the card
+was cast as a plain three-point spell into an empty board on turn three
+with the Fireball still in hand. On, a life-for-mana spell is cast only
+where the life it opens makes an X spell lethal, and the life is paid and
+the spell fired in ONE action so no rung can pay for mana it fails to
+spend — over both printed shapes that reach a player's life with an X, the
+aimed burn and the sweeper that hits players (Channel-Hurricane is the
+1997 Summoner's own kill). A WASH THAT REMOVES A MALFUNCTION: −0.1 ±1.8
+and +0.2 ±1.9 at 2 000 games an arm, 829 of 4 000 games ending
+differently, 3 flipped to a win against 1 away.
+
+P6's CIRCLE-OF-PROTECTION HALF DID NOT REPRODUCE. With the 1997 prevention
+fork on the shipped pilot already answers a lethal Fireball with the
+Circle and lives; with the fork off there is no window for any seat. A
+ruleset, not an AI gap, and pinned on both arms.
+
+THE NULL, twice over: HEAD's own five-starter matrix is byte-identical to
+this tree's with both knobs pinned off (10 000 games, md5 to md5), and the
+manual's published `pays_sacrifices` sweep replays its 22.6% null here
+with all five Sorcerer-default reads pinned off. No-harm matrix: six of
+ten matchups byte-identical, and the four Blue Skies plays move by 1, 1, 6
+and 2 games in a thousand.
+
+POOL FACTS. `fork_recursion_chalice_1995` — the second deck casting P6
+names for its own measurement — cannot be played (Chaos Orb), joining the
+four this plan already lists; of the ten decks naming Channel only three
+load. And the reverse trap: Coral Reef, with nine counterspells, measures
+0 of 1 000 games different against White Knights, because the knob reads
+what the OPPONENT casts.
+
+Gate: 5703/5703 across 330 scripts, 149 546 asserts, exit 0; both soaks
+clean; tools 158 OK; boot smoke clean.
 
 ## Standing quality gates
 

@@ -963,6 +963,109 @@ var reads_manlands := false
 ## — untapped permanents, public to both seats.
 var reads_pumps := false
 
+## COUNTER BY WHAT THE SPELL DOES (2026-09-10, `docs/forge/casting.md`
+## P2): does this profile read the SHAPE of the spell on the stack and the
+## answers in its own hand, or price the card with one number and compare
+## it with [member counter_threshold]?
+##
+## [method AiPlayer._try_counter] asked [method Evaluator.card_value]
+## against the bar and nothing else, and a printed worth is the wrong
+## instrument for the two spells at either end of it. Probed at HEAD, a
+## Wizard on eight Islands with a Counterspell in hand:
+##
+##   Wrath of God 5.00 · Fireball 2.50 · Time Walk 3.00 · Wheel 4.00
+##
+## — so a Sorcerer (bar 5.5) watched a Wrath of God take four Serra Angels
+## off its own table, and every rung let a Fireball for eight resolve at
+## eight life, a Time Walk resolve, and a Wheel of Fortune hand the other
+## seat seven cards while taking seven away. At the other end it spent the
+## Counterspell on a Serra Angel with a Swords to Plowshares in hand and a
+## Plains untapped.
+##
+## On, [method AiPlayer._counter_shape] answers ALWAYS, NEVER or "ask the
+## bar" before the bar is asked, and every clause is a shape:
+##
+##  * ALWAYS a SWEEPER that takes more off our board than off theirs by a
+##    2/2's worth ([constant AiPlayer.SWEEP_BAR], the same bar our own
+##    sweeps clear); ALWAYS damage aimed at us that is lethal or crosses
+##    the panic line, the X on the stack read as it was paid; ALWAYS a
+##    draw at OUR library that decks us; ALWAYS an extra turn; ALWAYS a
+##    wheel ([member EffectIntent.wheels]) while our hand is the fuller.
+##  * NEVER when a card in hand ANSWERS the spell later and cheaper — the
+##    Terror we hold for their creature, the Disenchant for their
+##    enchantment — and the mana to cast it is on the table at their next
+##    end step, which is [method AiPlayer._answered_later] and the half
+##    that needed the plan and not merely the card. Lifted when the
+##    counter is the last card in hand, and never reached at all when an
+##    ALWAYS clause has already fired.
+##  * Between the two, today's threshold, unchanged.
+##
+## That is Weissman's rule — *the counter is kept for what nothing else in
+## the hand can answer* — and `docs/ROADMAP.md` calls it "a capability of a
+## different kind". It COMPOSES with [member ranks_counters] rather than
+## replacing it: this knob decides WHETHER a spell deserves a counter, and
+## that one decides WHICH counter answers it.
+##
+## P2's SIXTH CLAUSE — a control-stealing aura on our best creature — was
+## measured against the tree and NOT BUILT: [method AiPlayer._try_counter]
+## has raised the threat to the worth of any card of OURS the top spell
+## targets since long before this knob, so a Control Magic on a Serra Angel
+## is already priced at the Angel's 10.00 and countered at every rung. A
+## second copy would fire only on a steal the bar itself refuses. The board
+## is pinned on both arms in
+## `tests/ai/test_ai_counters_by_shape_2026_09_10.gd`.
+##
+## Nothing here names a card. The sweep is [member EffectIntent.sweeper]
+## with the engine's own kill rule put to both boards, the burn is
+## [method EffectIntent.damage_at] at the stack's own X, and the answer in
+## hand is [method EffectIntent.answers_creatures] with the planner asked
+## whether the mana will be there.
+##
+## [forge] the instinct is `ComputerUtil.shouldCounterSpell` and the
+## ApiType categories of `AiController.canPlayAndPayFor`
+## (forge-ai/src/main/java/forge/ai/ComputerUtil.java, commit b09a3d3f):
+## a type reading beats a cost reading. Its CMC buckets are not copied
+## (`docs/forge/casting.md` §10) and neither are its magic numbers.
+var counters_by_shape := false
+
+## "X EQUALS MY LIFE" (2026-09-10, `docs/forge/casting.md` P6): does this
+## profile know that life can be spent as mana when the mana is lethal?
+##
+## Channel opens a mana source paid for in life
+## ([member MtgPlayer.life_for_mana]), and no seat had ever paid a point:
+## the card is a card-local effect, so [member EffectIntent.adds_mana] was
+## false, the Dark Ritual gate never asked about it, and it was cast as a
+## plain three-point spell. Probed at HEAD — a Wizard holding Channel and
+## Fireball with two Forests and a Mountain, the opponent at twenty — the
+## pilot cast Channel into an empty board on the spot, paid no life, and
+## finished the turn with the Fireball still in hand and the Channel in
+## the graveyard.
+##
+## On, a life-for-mana spell is cast ONLY in a step where the life it
+## opens makes an X burn in hand lethal ([method
+## AiPlayer._life_mana_enables]), and once it is open the life is paid and
+## the burn fired in ONE action ([method AiPlayer._lethal_life_mana]), so
+## no rung can pay life for mana it then fails to spend. The life is capped
+## at what leaves us alive after their board's next unblocked swing —
+## `life − 1 − their attack` — because a Fireball that wins is a Fireball
+## cast from at least one life.
+##
+## Sorcerer and Wizard. Forge never gets here at all: Channel is
+## `AI:RemoveDeck:All` there and `willPayCosts` keeps a margin of four
+## (`docs/forge/casting.md` §8), so this is ours.
+##
+## THE DEFENDER'S HALF OF P6 IS NOT HERE, and both reasons are on the
+## record. The counter against a lethal X spell is one of
+## [member counters_by_shape]'s ALWAYS clauses, exactly as P6 asks ("counts
+## it as ALWAYS (P2)") — one line, one knob. And the Circle of Protection
+## in the prevention window DID NOT REPRODUCE: with the 1997 fork on
+## (`RulesOptions.damage_prevention_window`, `--rules fifth`) the shipped
+## pilot already answers a Fireball for six at six life with the Circle and
+## lives, because [method AiPlayer._packet_worth] prices a packet that
+## kills us at [constant AiPlayer.LETHAL_WORTH]; with the fork off there is
+## no window for any seat to act in. Nothing was built for it.
+var reads_lethal_x := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
@@ -1061,6 +1164,8 @@ static func sorcerer() -> AiProfile:
 	profile.reads_manlands = true
 	profile.tutors_for_the_turn = true
 	profile.reads_pumps = true
+	profile.reads_lethal_x = true
+	profile.counters_by_shape = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -1074,6 +1179,8 @@ static func wizard() -> AiProfile:
 	profile.reads_manlands = true
 	profile.tutors_for_the_turn = true
 	profile.reads_pumps = true
+	profile.reads_lethal_x = true
+	profile.counters_by_shape = true
 	return profile
 
 

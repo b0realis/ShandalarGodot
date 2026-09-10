@@ -76,9 +76,9 @@ and 4).
 | Knob | Designed in | Rung | What it fixes |
 |---|---|---|---|
 | `develops_late` | casting P1 | Sorcerer+ | everything cast in main 1; the land drop played before it is needed; instants at their end step |
-| `EffectIntent.wheels` — the field first | casting P5 | — | a prerequisite of the next two rows, beside `extra_turns`, which the third pass built for Time Walk's draw step (`engine/ai/effect_intent.gd`) |
-| `counters_by_shape` | casting P2 | Wizard (the ALWAYS half at Sorcerer if it measures) | counter by what the spell does; Weissman's rule — the counter is kept when a card in hand answers the spell later |
-| `reads_lethal_x` | casting P6 | Sorcerer+ | Channel-Fireball as the pilot; "X equals my life" as the defender |
+| ~~`EffectIntent.wheels` — the field first~~ **DONE 2026-09-10** | casting P5 | — | ~~a prerequisite of the next two rows~~ — built as a READER and no knob, because a field that says what a card does is not a difficulty. `EffectIntent.wheels` is the number of cards each player is left holding (Wheel of Fortune, Timetwister: seven) or `WHEEL_REDRAW` when the count is each player's own hand size (Winds of Change) — the COUNT and not a flag, because a fixed refill hands whoever has the emptier hand a pile and a reroll nets nobody anything. Read off the effect's own `describe()` line, the `_aimed_discard` precedent, with `unknown` deliberately still set so every older reading is unchanged; Mind Bomb (discards, never refills) and Eureka (empties a hand onto the table, draws nothing) are refused by shape and pinned as such. **The pool holds exactly three**, and a census test says so. Its first consumer is `counters_by_shape`'s wheel clause |
+| ~~`counters_by_shape`~~ **DONE 2026-09-10, Sorcerer+ BY MEASUREMENT** | casting P2 | ~~Wizard (the ALWAYS half at Sorcerer if it measures)~~ Sorcerer, Wizard | ~~counter by what the spell does; Weissman's rule~~ REPRODUCED in four numbers — Wrath of God prices at 5.00, Fireball at 2.50, Time Walk at 3.00, Wheel of Fortune at 4.00 — so a Sorcerer watched a Wrath take four Serra Angels off its own table and every rung let a Fireball for eight resolve at eight life. Built as `AiPlayer._counter_shape`: ALWAYS / NEVER / ask-the-bar, five ALWAYS clauses and no card name. **MEASURED: The Deck (playable) vs Mountain Artillery 40.2% → 51.6% (+11.4 ±4.3), 122 games flipped to a win against 8 flipped away; vs Black-Red Raiders 42.7% → 49.9% (+7.2 ±4.4)**; vs White Knights −0.1 ±4.0. At every rung on the first pair: Apprentice inert, Magician +0.3, **Sorcerer +12.0 ±4.3**, Wizard +11.4 — so the note's conditional is answered by the number and the whole knob goes at Sorcerer. THE LAB REWROTE ONE HALF: P2's NEVER rule as written measured −1.7 with 3 games won against 20 lost, because The Deck let every White Knights creature through on the strength of ONE Swords; the answer must be SPARE (`answers > their creatures in play`) and it then reads −0.1 with 2 against 3. P2's SIXTH clause — the steal — DID NOT REPRODUCE and was not built: `_try_counter` has priced a Control Magic by the Serra Angel it names since long before this knob. Control byte-identical in every arm of six runs |
+| ~~`reads_lethal_x`~~ **DONE 2026-09-10, the pilot's half; the defender's half is one line of the row above and one that did not reproduce** | casting P6 | Sorcerer+ | ~~Channel-Fireball as the pilot~~ REPRODUCED: `MtgGame.pay_life_for_mana` had never been called by any seat in this AI's life, so a Wizard holding Channel and Fireball cast Channel into an empty board on turn three and finished with the card in the graveyard and its life at twenty. Built as ONE action — the life is paid and the spell fired together, so no rung can pay for mana it fails to spend — over TWO printed shapes, the aimed burn and the sweeper that hits players (Channel-Hurricane is the 1997 Summoner's own kill). MEASURED as a WASH THAT REMOVES A MALFUNCTION: Summoner vs White Knights −0.1 ±1.8 and vs Big Green +0.2 ±1.9 at 2 000 games an arm, with **829 of 4 000 games ending differently and 3 flipped to a win against 1 away**. ~~"X equals my life" as the defender~~: the counter half is one of `counters_by_shape`'s ALWAYS clauses exactly as P6 asks, and the **Circle of Protection half DID NOT REPRODUCE** — with the 1997 prevention fork on, the shipped pilot already answers a lethal Fireball with the Circle and lives; with the fork off there is no window for any seat, which is a ruleset and not an AI gap |
 
 With it, the third pass's **Time Walk's worth beyond the draw** — the
 untap, the attack and the land drop priced, so a Walk waits for a
@@ -180,6 +180,15 @@ the list makes the Deck Lab exit 2: `sligh_geeba_1996` (9 proxies),
 `the_deck_weissman_1996` (Zuran Orb). The substitutes Wave 1 used are
 `black_red_raiders` for the aggro seat, `mountain_artillery` for the burn
 seat and `the_deck_weissman_1996_02` for the Deck mirror.
+**Wave 2 added a fifth and a whole family: `fork_recursion_chalice_1995`
+— the OTHER deck casting P6 names for its own measurement — cannot be
+played either (Chaos Orb), and of the ten decks in `decks/` that name
+Channel only THREE load at all** (`1997/originals/summoner.deck`,
+`1997/duels/summoner.deck`, `community/sargent_2009_summoner.deck`); the
+rest are proxy-blocked (`wc1994_symens` and `wc1994_defoucaud` on Chaos
+Orb, `wc1995_stern` on twelve, `wc1995_justice` on ten) or, in
+`explosion_wright_1994`'s case, name the archetype in a comment and hold
+no Channel in the list.
 
 **And check the pair can SEE the knob, which is a different question.**
 A knob whose decks never present the choice measures 0 games different,
@@ -201,3 +210,12 @@ enemies — Vampire Lord, Ape Lord, Great Hydra, Kzzy'n the Dragon Lord,
 eight pumpers each — and `necropotence_1996`, which combat P2 names as
 the likely pair, is one of the four this section already says cannot be
 played.
+And `counters_by_shape` (2026-09-10) added the reverse trap — a pair with
+NINE counterspells in it that still measures nothing. **Coral Reef (4
+Counterspell, 3 Power Sink, 2 Spell Blast) against White Knights is 0 of
+1 000 games different**, because the knob reads what the OPPONENT casts
+and White Knights holds none of the shapes: its one Wrath of God already
+clears a Wizard's 5.0 bar, and there is no X burn, no extra turn and no
+wheel in the list. A counter deck is only half a pair for this knob; the
+other half has to hold the spells a printed worth gets wrong, which among
+the starters is Mountain Artillery's Fireball and Earthquake.

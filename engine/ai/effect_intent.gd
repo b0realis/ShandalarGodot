@@ -59,6 +59,43 @@ var searches: bool = false
 ## turn's worth beyond the draw is priced by card_value.
 var extra_turns: int = 0
 
+## THE WHEEL (2026-09-10) — a spell that empties EACH player's hand and
+## refills it: the number of cards each player is left holding (Wheel of
+## Fortune and Timetwister: seven), or [constant WHEEL_REDRAW] when the
+## count is each player's own hand size (Winds of Change, a reroll that
+## preserves it).
+##
+## 0 for everything else, and the two deliberate exclusions say what the
+## field is: MIND BOMB ("each player discards up to three cards or takes
+## the difference in damage") refills nobody, and EUREKA ("each player
+## empties their hand of permanents onto the battlefield") is not a draw.
+## An "each player discards" is not a wheel until it deals the cards back.
+##
+## WHY THE COUNT AND NOT A FLAG. The net cards a wheel moves is
+## `(N − our hand) − (N − their hand)`, so N cancels and the swing is
+## `their hand − our hand` — but only while N is a FIXED number. A reroll
+## that gives each player back exactly what it took nets nothing whatever
+## the hands hold, and a reader that answered 7 for one would be wrong
+## about the other. The count itself is what the hand-size readings that
+## come later want (`docs/forge/casting.md` P4: the refill into a Black
+## Vise is seven cards of damage, whatever the hands hold now).
+##
+## Read from the effect's own [method EffectBase.describe] line for the
+## reason [method _aimed_discard] is: there is no shared wheel effect in
+## this vocabulary — all three are a `class X extends EffectBase` inside
+## their own card file — so the reader has nothing to test `is` against,
+## and the card's own line is the signal every effect already provides.
+## [member unknown] deliberately STAYS set, exactly as it does for the
+## aimed discard: every reading that word gates keeps the behaviour it
+## had, and only the wheel's own readers consult this.
+##
+## Its first reader is [member AiProfile.counters_by_shape], which counters
+## a wheel that hands the other seat a hand and takes ours away.
+var wheels: int = 0
+
+## [member wheels] when each player draws back exactly what it discarded.
+const WHEEL_REDRAW := -1
+
 ## Targeted or self pump. [member pump_self] for the firebreathing shape;
 ## [member pump_uses_x] when the power bonus is the spell's X (Howl from
 ## Beyond) — [member pump_power] then holds only the printed part.
@@ -82,6 +119,16 @@ var life_gain: int = 0
 
 ## Mana produced by a SPELL (Dark Ritual) — worth nothing on its own.
 var adds_mana: bool = false
+
+## MANA BOUGHT WITH LIFE (2026-09-10): the spell opens a mana source that
+## is paid for in life rather than in taps — [member MtgPlayer.life_for_mana],
+## which is Channel and nothing else in this pool. Worth nothing on its
+## own, exactly as [member adds_mana] is worth nothing on its own, and
+## worth the GAME in the one step where the life it buys makes an X burn
+## lethal ([member AiProfile.reads_lethal_x]).
+##
+## See [constant LIFE_FOR_MANA] for why it is read by name.
+var mana_for_life: bool = false
 
 ## Counters a spell.
 var counters: bool = false
@@ -343,6 +390,29 @@ const CARD_LOCAL_PUMPS := {
 # never a rule about the name.
 const BLASTS := ["Volcanic Eruption"]
 
+# THE LIFE-FOR-MANA SPELL — the seventh table (2026-09-10), one row, and
+# the sixth that is a table of its own rather than a row in
+# [constant CARD_LOCAL], for the reason every one before it states: a row
+# up there makes the reader stop calling the effect `unknown`, and this
+# effect IS unknown to every reading that word gates.
+#
+# THE CARD THE PILOT THREW AWAY (2026-09-10). Channel grants the PLAYER a
+# mana source rather than a permanent an ability, so it is a `class X
+# extends EffectBase` inside its own card file and there is no
+# [AddManaEffect] to test `is` against: [member adds_mana] was false, the
+# Dark Ritual gate never asked about it, and the card was cast as a plain
+# three-point spell the first turn two Forests were on the table. Probed
+# at HEAD: a Wizard with Channel and Fireball in hand and three lands out
+# cast Channel into an empty board against an opponent at twenty, and paid
+# not one point of life for mana in the whole turn — the graveyard, and
+# the Fireball still in hand.
+#
+# The card IS the class here — it is the pool's only spell of the shape,
+# and [member MtgPlayer.life_for_mana] is the flag it sets — and what the
+# AI does with it is an arithmetic on two life totals and an X
+# ([method AiPlayer._lethal_life_mana]), never a rule about the name.
+const LIFE_FOR_MANA := ["Channel"]
+
 # THE TOKEN MAKERS — the sixth table (2026-09-10), and the fifth one that
 # is a table of its own rather than a row in [constant CARD_LOCAL], for
 # the reason the second, third, fourth and fifth state: a row up there
@@ -440,6 +510,7 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 	intent.window = int(WINDOW_SHAPES.get(card_name, Shape.NONE))
 	intent.levels = LEVELLERS.has(card_name)
 	intent.blasts = BLASTS.has(card_name)
+	intent.mana_for_life = LIFE_FOR_MANA.has(card_name)
 	for e in effects:
 		if intent.target_spec == null and e.target_spec != null:
 			intent.target_spec = e.target_spec
@@ -511,6 +582,10 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 			if stripped != 0:
 				intent.discards = -1 if stripped < 0 or intent.discards < 0 \
 					else intent.discards + stripped
+			# ...and so does A WHEEL (2026-09-10), read off the same line
+			# and for the same reason. `unknown` stays set here too.
+			if intent.wheels == 0:
+				intent.wheels = _wheel_draw(e)
 	# THE TOKEN (2026-09-10): asked only of an effect list the reader could
 	# not classify, so a card that grew a second, readable ability cannot
 	# be handed the first one's body by name alone.
@@ -569,6 +644,56 @@ static func _aimed_discard(e: EffectBase) -> int:
 	if not line.contains("discard"):
 		return 0
 	return -1 if line.contains(" x ") else 1
+
+
+## THE WHEEL, read from the effect's own one-line description — the same
+## reading [method _aimed_discard] makes, of the same line, for the same
+## reason (see [member wheels]).
+##
+## THE THREE CLAUSES ARE ALL LOAD-BEARING, and each one refuses a card in
+## this pool that the loose version would have taken:
+##
+##  * IT TARGETS NOBODY. A wheel is symmetric by definition, so an effect
+##    that names a target player is an aimed discard and not this — the
+##    guard is also the cheap one, so a description is only asked for when
+##    the effect could possibly be a wheel.
+##  * EACH PLAYER. The prefix that separates Wheel of Fortune from
+##    Contract from Below ("discards your hand") and from Recall.
+##  * THE HAND LEAVES AND CARDS COME BACK. "Discards their hand" or
+##    "shuffles hand ... into their library", AND a draw. Mind Bomb
+##    discards and never refills; Eureka empties a hand onto the
+##    battlefield and draws nothing. Neither is a wheel.
+##
+## Returns the number of cards each player ends up with,
+## [constant WHEEL_REDRAW] when the line names no count (a reroll gives
+## back what it took), or 0 when this is not a wheel at all.
+static func _wheel_draw(e: EffectBase) -> int:
+	if e.target_spec != null:
+		return 0
+	var line := e.describe().to_lower()
+	if not line.begins_with("each player") or not line.contains("hand"):
+		return 0
+	if not (line.contains("discard") or line.contains("shuffle")):
+		return 0
+	var at := line.find("draw")
+	if at < 0:
+		return 0
+	for word in line.substr(at).split(" ", false):
+		var stripped := word.strip_edges()
+		if stripped.is_valid_int():
+			return maxi(int(stripped), 1)
+		if WHEEL_COUNTS.has(stripped):
+			return int(WHEEL_COUNTS[stripped])
+	return WHEEL_REDRAW
+
+
+# The counts a wheel's own line can print, as words. Godot has no
+# spelled-number parser and the pool's wheels print "seven"; a digit is
+# read directly, so a card that says "draws 7 cards" needs no row.
+const WHEEL_COUNTS := {
+	"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+	"six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
 
 
 ## Does this intent hurt what it targets? Mirrors the classification

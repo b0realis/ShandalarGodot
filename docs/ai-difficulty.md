@@ -95,7 +95,8 @@ override any knob on any preset for a measurement
 | `reads_gaze` | off | off | on | on | reads the three printed lines that settle a combat without ever entering the damage arithmetic, all three at `AiPlayer._dies_to`'s own seam. THE GAZE: a Cockatrice or a Thicket Basilisk destroys whatever it blocks or is blocked by, at end of combat — so a Craw Wurm no longer swings into one for free (`_attack_risk` 0.0 before, 2.5 after) and our own Cockatrice stops watching a Craw Wurm walk past for six. THE RAMPAGE (CR 702.23): the engine gives a blocked attacker +N/+N for each blocker past the first and the gang rung ignored it, so two Grizzly Bears ganged a Craw Giant on `2+2 >= 4`, met an 8/6, died both and took four trample; the number is counted now wherever a gang is priced, the crack-back model included. THE EXECUTIONER: an untapped Royal Assassin is why a non-vigilant body stays home, because tapping to attack is what makes it a legal target — a Hypnotic Specter used to swing past a 1/1 it cannot be blocked by and be in the graveyard before the damage step. Nothing names a card: two printed lines read as shapes (`EffectIntent.is_gaze`, `EffectIntent.destroys_the_tapped`, each with the card's own condition or spec put to it) and one engine field (`CardInstance.cur_rampage`) |
 | `reads_manlands` | off | off | on | on | counts a permanent that can animate ITSELF as a body in the combat about to happen — theirs when we attack, ours when we block, and the two halves are one knob because either alone is a lie. Theirs: the attack was priced against their untapped CREATURES only, so a Mishra's Factory with `{1}` open was invisible to the cohort, to the pump rider and to the crack-back model, and a Llanowar Elves walked into a 2/2 that costs them a mana; the declaration is made now with their affordable animations hung on under the journal (`AiPlayer._attack_choice_reading_manlands`), the mirror of `animates_to_attack`'s own probe. Ours: `_animation_value` prices an animation by the ATTACK it enables and answers 0.0 at every moment but our own precombat main, so no rung had ever animated a Factory to BLOCK — three untapped lands watched a Grizzly Bears hit for two. It is bought at the moment `_defensive_combat_response` already owns, once their attackers are declared, and only when the block declaration itself would use the body AND the body comes back — `_animation_value`'s own refusal mirrored, because what animates here is almost always a LAND. Sorcerer and Wizard, with `animates_to_attack` and `plays_engines`. Nothing here names a card: the shape is `EffectIntent.animates`, and their mana is counted the way `AiPlayer._shieldable` already counts theirs — untapped permanents, public to both seats |
 | `reads_pumps` | off | off | on | on | reads the pump on a creature it does NOT control as part of that creature's SIZE, which is the mirror of `pumps_to_attack` and the half that had never been built: two days of passes taught the pilot to size its own attack, block and survival by the mana it holds, and it had never once feared the same mana on the other side of the table. A Shivan Dragon with three Mountains open was a 5/5 and a Frozen Shade behind four Swamps was a 0/1, so a Grizzly Bears was sent into one at `_attack_risk` 0.00 — *we kill it and live* — and was in the graveyard with the Shade still standing and their life still twenty. `AiPlayer._pump_reach` answers what their body can grow to: the cheapest self-targeting `PumpEffect` ability with no tap cost, times the activations their OPEN SOURCES pay for, under three caps — the card's own *activate only N times each turn* (a Fire Drake behind five Mountains is a 3/2, not a 7/2), ONE POOL shared among the bodies of theirs this combat can ask it of (three Carrion Ants behind six Swamps are three 2/3s, not three 6/7s), and the smallest count past which no kill-or-survive answer on the board could still change (a Shade behind ten Swamps facing one Grizzly Bears is +2/+2). ONLY THE KILL TEST reads it and never the face damage, so the cohort still prices its damage through. AND IT IS ASYMMETRIC, because the Lab put it that way rather than the design: their pump deciding whether THEIR body dies is read everywhere, at `_dies_to`'s own seam; their pump deciding whether OURS dies is read only where we are choosing to SEND a body into it — `_attack_risk` and `_cohort_value`, the two halves of the attack declaration — because a blocker of ours that dies to their breath has SPENT their mana, and mana spent killing a blocker is mana that did not reach our face, while an attacker of ours that dies to it has bought nothing at all. Nothing names a card: the shape is `EffectIntent.pump_self`, and their mana is counted the way `AiPlayer._shieldable` already counts it — untapped permanents, public to both seats |
-
+| `counters_by_shape` | off | off | on | on | counters by what the spell DOES and by what its own hand can answer, instead of comparing one printed number with `counter_threshold`. The bar is the wrong instrument at both ends of it, and the probe of 2026-09-10 says so in four numbers: Wrath of God prices at 5.00, Fireball at 2.50, Time Walk at 3.00 and Wheel of Fortune at 4.00 — so a Sorcerer (bar 5.5) watched a Wrath of God take four Serra Angels off its own table, and EVERY rung let a Fireball for eight resolve at eight life with the Counterspell in hand. `AiPlayer._counter_shape` answers ALWAYS, NEVER or *ask the bar* before the bar is asked. ALWAYS: a sweeper that takes more off our board than off theirs by a 2/2's worth; damage at our FACE that is lethal or crosses the panic line, the X read off the stack (and a player-hitting sweeper counted here as well as on the board, because an Earthquake for eight against a two-creature control deck is not a board sweep at all); a draw at OUR library that decks us; an extra turn; a wheel (`EffectIntent.wheels`) while our hand is the fuller. NEVER — Weissman's rule, *the counter is for what nothing else in the hand can touch* — when a card in hand answers the spell later and CHEAPER, with the mana for it PLANNED and not merely hoped for, and with the answer SPARE: every creature already on their side has a claim on the removal in our hand, so one Swords to Plowshares against a Savannah Lions on the table is a reason to counter the White Knight and Swords the Lions, not to let both resolve. That last clause is the Lab's and not the design's — without it the rule measured −1.7 with 3 games flipped to a win against 20 flipped away, and with it −0.1 with 2 against 3. It COMPOSES with `ranks_counters` rather than replacing it: this decides WHETHER a spell deserves a counter, that one decides WHICH counter answers it |
+| `reads_lethal_x` | off | off | on | on | knows that LIFE can be spent as mana when the mana is lethal. Channel opens a mana source paid for in life (`MtgPlayer.life_for_mana`) and no seat had ever paid a point: the card is a card-local effect, so `EffectIntent.adds_mana` was false, the Dark Ritual gate never asked about it, and it was cast as a plain three-point spell — probed at HEAD, a Wizard holding Channel and Fireball with two Forests and a Mountain cast Channel into an empty board against an opponent at twenty and finished the turn with the Channel in the graveyard, the Fireball in hand and its own life at twenty. On, a life-for-mana spell is cast ONLY in a step where the life it opens makes an X spell in hand LETHAL, and once it is open the life is paid and the spell fired in ONE action (`AiPlayer._lethal_life_mana`), so no rung can pay life for mana it then fails to spend. Two printed shapes reach a player's life with an X and the pool holds one of each behind a Channel — the aimed burn (Fireball, Disintegrate) and the sweeper that hits PLAYERS (Hurricane, Earthquake), whose X lands on us too and must leave us alive. The life is capped at `life − 1 − their attack`, read through the same block plan `_in_danger` uses, so a Fireball is not paid for with the life a Serra Angel is about to take. Forge never gets here at all: Channel is `AI:RemoveDeck:All` there and `willPayCosts` keeps a margin of four |
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
 `prices_liabilities` and `prices_fallout`
 are the seven knobs that are on at every rung, and the reason is the
@@ -1377,6 +1378,106 @@ null in every arm of every run below.
   one thing this pilot could do to a human that a human could not do back
   to it.
 
+THE COUNTER'S MIND (2026-09-10, `counters_by_shape`) is wave 2's second
+row (`docs/forge/casting.md` P2) and the biggest single number this
+project has measured for one knob. Reproduced before a line was written,
+a Wizard on eight Islands with one Counterspell in hand: a Wrath of God
+into four Serra Angels of ours went uncountered at the Sorcerer's 5.5 bar
+(the card prices at 5.00), a Fireball for eight at eight life went
+uncountered at EVERY rung (2.50), so did a Time Walk (3.00) and a Wheel
+of Fortune into a hand of seven against a hand of none (4.00) — and the
+same pilot spent the Counterspell on a Serra Angel with a Swords to
+Plowshares in hand and a Plains untapped.
+
+Seed 11, 1 000 games an arm, the shipped Wizard on seat B:
+**The Deck (playable) vs Mountain Artillery 40.2% → 51.6% (+11.4 ±4.3)**,
+with 381 of 1 000 games ending differently and **122 flipped to a win
+against 8 flipped away**; **vs Black-Red Raiders 42.7% → 49.9% (+7.2
+±4.4)**; vs White Knights 30.5% → 30.4% (−0.1 ±4.0, 113 differ, 2 won and
+3 lost). Both clear-of-zero numbers are the burn clause: The Deck holds
+five counters and dies to a Fireball or an Earthquake it was pricing at
+2.50. Control `big_green` vs `white_knights` 525-475 byte-identical to
+its own null in every arm of six runs, and the `off` arm replays the null
+in 1 000 of 1 000 games on all four pairs.
+
+THE HALF THE LAB REWROTE. Fed as P2 wrote it, the NEVER clause measured
+−1.7 against White Knights with **3 games flipped to a win against 20
+flipped away** — the pair P2 names for it. Split by clause: the ALWAYS
+half measures EXACTLY ZERO on that pair (White Knights' one Wrath of God
+already clears the Wizard's 5.0 bar, and the deck holds no X burn, no
+extra turn and no wheel), so all of it was the NEVER half. The cause is
+arithmetic and not judgement: The Deck holds four Swords to Plowshares
+and four Counterspells, and the rule as written let EVERY White Knights
+creature through on the strength of ONE Swords, so the counters were
+hoarded against a weenie deck that has nothing better coming. The clause
+that fixes it counts the claims already on the table — the answer must be
+SPARE, `answers > their creatures in play` — and the same pair then reads
+−0.1 ±4.0 with 2 flipped to a win against 3 away. That is a fact about
+this pool's decks and not a tuning: a removal spell in hand is spoken for
+the moment a body of theirs is standing.
+
+MEASURED AT EVERY RUNG on the pair that moves most, The Deck vs Mountain
+Artillery: Apprentice inert (`holds_instants` off — it never casts a
+counterspell at all), Magician +0.3 ±0.6 (the matchup itself is 0.2% at
+that rung, a floor), Sorcerer 37.0% → 49.0% (**+12.0 ±4.3**), Wizard
++11.4. Monotone, clear of zero at both top rungs and at neither lower
+one, so P2's own conditional — *"Wizard; Sorcerer for the ALWAYS half
+only if the sweep says so"* — is answered by the number rather than by
+the ramp ruling: the whole knob goes at Sorcerer, and the halves were not
+split into two knobs because the NEVER half, once narrowed, is a coin
+rather than a cost.
+
+P2'S SIXTH ALWAYS CLAUSE WAS NOT BUILT. A control-stealing aura on our
+best creature is already answered: `_try_counter` has raised the threat
+to the worth of any card of OURS the top spell targets since long before
+this knob — a line written for the counter-war — so a Control Magic on a
+Serra Angel is priced at the Angel's 10.00 and countered at every rung. A
+second copy would fire only where the bar itself refuses. The board is
+pinned on both arms in `tests/ai/test_ai_counters_by_shape_2026_09_10.gd`.
+
+CHANNEL-FIREBALL (2026-09-10, `reads_lethal_x`) is wave 2's third row
+(`docs/forge/casting.md` P6) and a WASH THAT REMOVES A VISIBLE
+MALFUNCTION, on `holds_x_burn`'s and `tutors_for_the_turn`'s precedent.
+`MtgGame.pay_life_for_mana` had never been called by any seat in this
+AI's life, and the probe shows what that looked like: a Wizard with
+Channel and Fireball in hand and three lands out cast Channel into an
+empty board against an opponent at twenty, and finished the turn with the
+Channel in the graveyard, the Fireball in hand and its own life
+untouched. On, the same board holds the Channel; at six life across the
+table it casts Channel, pays six and Fireballs for six in one action.
+
+Seed 11, 2 000 games an arm: Summoner (1997, the pool's one playable
+Channel deck) vs White Knights 8.8% → 8.7% (−0.1 ±1.8) and vs Big Green
+10.8% → 10.9% (+0.2 ±1.9). Across the two, **829 of 4 000 games end
+differently and 3 are flipped to a win against 1 flipped away** — a coin
+on the totals, with the thrown-away card no longer thrown away. Control
+byte-identical in every arm, and the `off` arm replays the null in 4 000
+of 4 000.
+
+P6'S CIRCLE-OF-PROTECTION HALF DID NOT REPRODUCE and was not built. With
+the 1997 damage-prevention fork on (`RulesOptions.damage_prevention_window`,
+`duel_soak.sh --rules fifth`) the shipped pilot already answers a Fireball
+for six at six life with the Circle and lives at six, because
+`AiPlayer._packet_worth` prices a packet that kills us at `LETHAL_WORTH`;
+with the fork off — the built-in default, and what the Deck Lab plays —
+there is no window for any seat to act in, which is a ruleset and not an
+AI gap. P6's other defender clause, the counter against a lethal X spell,
+is one of `counters_by_shape`'s ALWAYS clauses exactly as P6 asks
+("counts it as ALWAYS (P2)"), so it is one line under one knob. Both
+boards are pinned on both arms in
+`tests/ai/test_ai_reads_lethal_x_2026_09_10.gd`.
+
+THE NO-HARM MATRIX for both knobs together, the five starters at 1 000
+games a matchup, seed 11, `wizard:counters_by_shape=on,reads_lethal_x=on`
+against the same pair pinned off: six of the ten matchups are BYTE-
+IDENTICAL and the four that move are the four Blue Skies plays, because
+Blue Skies is the only starter with a counterspell in its main deck (two
+Counterspells and nothing else). They move by 1, 1, 6 and 2 games in a
+thousand — 43.3 → 43.1, 41.6 → 41.7, 59.1 → 58.5, 70.4 → 70.5 — where one
+standard deviation at that size is sixteen. No matchup moves against
+either knob by more than the run's noise. `reads_lethal_x` cannot fire in
+the matrix at all: no starter holds a life-for-mana spell.
+
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
 `docs/ROADMAP.md` keeps the runs. The control pair is chosen by what
@@ -1401,10 +1502,16 @@ pass — no Paralyze and no Detonate,
 Thicket Basilisk), no printed rampage and no ability that destroys a
 TAPPED creature (Royal Assassin, Tetsuo Umezawa), and
 `reads_manlands`' no permanent that can animate ITSELF on EITHER side of
-the table (Mishra's Factory, Jade Statue), and `reads_pumps`' no
+the table (Mishra's Factory, Jade Statue), `reads_pumps`' no
 activated self-pump on the side OPPOSITE the seat being swept — which in
 practice is the same list `pumps_to_attack` already keeps, seventeen
-cards, and Big Green vs White Knights holds none of them — the third
+cards, and Big Green vs White Knights holds none of them —
+`counters_by_shape`'s no COUNTERSPELL on either side (the reading is
+inside `_try_counter`, which no seat without one ever reaches) and
+`reads_lethal_x`'s no life-for-mana spell, which in this pool is Channel
+and nothing else; Big Green vs White Knights holds neither, and is
+525-475 byte-identical to its own null in every arm of eight more runs at
+1 000 games and 1075-925 in both at 2 000 — the third
 pass's Time Walk
 sweep FAILED its first control on exactly that (Blue Skies' Ancestral
 Recall), and a failed control makes the deltas beside it no measurement
@@ -1412,12 +1519,16 @@ at all. `CONTRIBUTING.md`
 has the rule.
 
 AND A KNOB THAT DEFAULTS ON AT SORCERER IS A KNOB THE NEXT SWEEP HAS TO
-PIN. `reads_gaze`, `reads_manlands` and `reads_pumps` are on at Sorcerer
+PIN. `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`
+and `reads_lethal_x` are on at Sorcerer
 and Wizard, so a measurement of some OTHER knob taken against a number
-published before 2026-09-10 must force all three off on both seats
-(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off`,
+published before 2026-09-10 must force all five off on both seats
+(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
+`counters_by_shape=off,reads_lethal_x=off`,
 and the same for `--profile-b`) or it is measuring several changes at
-once. That is how both of those passes proved their own null, and it is
+once. The last two matter more than the first three for anything with a
+counterspell in it: `counters_by_shape` moves The Deck against Mountain
+Artillery by eleven points. That is how both of those passes proved their own null, and it is
 the general rule every knob since `plays_engines` has quietly needed.
 TWO MORE SINCE 2026-09-10. `levels_boards` grew the LAND SWEEP, so its
 control must hold no Balance AND no all-lands sweeper — Big Green vs

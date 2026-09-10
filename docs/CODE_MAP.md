@@ -2284,7 +2284,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5658 tests / ~148 456 asserts, ~380 s
+├── tests/                   GUT suite — 5703 tests / ~149 546 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -3979,6 +3979,37 @@ shandalar/
 │    protection from black no risk at all, and Tetsuo Umezawa — which can
 │    take the body standing still — refused; the ladder from Sorcerer up;
 │    the knob read by the Lab;
+│    tests/ai/test_ai_wheels_2026_09_10.gd — THE WHEEL FIELD
+│    (EffectIntent.wheels): Wheel of Fortune and Timetwister at seven,
+│    Winds of Change as a REDRAW because it gives back what it took; Mind
+│    Bomb (discards, never refills) and Eureka (empties a hand onto the
+│    table, draws nothing) refused; an aimed discard keeping its own
+│    reading; a census over the whole registry that the pool holds
+│    exactly three; unknown still set so every older reading is unchanged;
+│    tests/ai/test_ai_counters_by_shape_2026_09_10.gd — COUNTER BY WHAT
+│    THE SPELL DOES (AiProfile.counters_by_shape): the Wrath of God a
+│    Sorcerer's 5.5 bar let take four Serra Angels; the sweeper that costs
+│    THEM more left alone; the lethal Fireball at eight life and the one
+│    that crosses the panic line, and the four damage at twenty that does
+│    not; burn at their own face not our business; Time Walk; the wheel
+│    into a full hand, the gift into an empty one and the reroll that nets
+│    nobody anything; the Braingeyser that decks us and the one our
+│    library survives; the STEAL that needed no clause because the
+│    target's own worth was already the threat; Weissman's rule, the
+│    answer with no mana for it, the answer a protection blanks, the
+│    answer dearer than the counter, the last card in hand, the sorcery
+│    nothing can answer later, and NEVER never beating ALWAYS; the ranking
+│    still picking which counter; the counter-war reading untouched;
+│    tests/ai/test_ai_reads_lethal_x_2026_09_10.gd — X EQUALS MY LIFE
+│    (AiProfile.reads_lethal_x): the life paid and the Fireball that ends
+│    the game against the null that throws the Channel away; the Channel
+│    kept when nothing is lethal, when the board already pays for it and
+│    when no X burn is behind it; the budget capped by their next swing
+│    and a kill beyond it refused; a sweep over five life totals proving
+│    the pilot never pays life it cannot spend; Channel-Hurricane read as
+│    the same shape and a Hurricane that would kill us too refused; the
+│    reader naming Channel and nothing else; and the Circle of Protection
+│    board that DID NOT REPRODUCE, on both arms;
 │    tests/ai/test_ai_reads_pumps_2026_09_10.gd — THEIR PUMPS ARE PUBLIC
 │    (AiProfile.reads_pumps): the Grizzly Bears that stops walking into a
 │    0/1 Frozen Shade behind four Swamps and the null that sends it and

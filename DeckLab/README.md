@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -421,10 +421,45 @@ Vampire Bats, 22 Swamps), `ape_lord.deck`, and
 is the "pumps AND instants" pair the design note asks for). The
 community Necropotence list the note names CANNOT be played: six
 proxies, exit 2.
-**Mind also that all three default ON at Sorcerer and Wizard**, so a
+`counters_by_shape` (2026-09-10) is read inside `_try_counter`, which no
+seat without a counterspell in hand ever reaches, so its control must
+hold none on either side of the table — Big Green vs White Knights holds
+none, and is 525-475 byte-identical to its own null in every arm of six
+runs at 1,000 games. **Mind what the pool holds when you pick the live
+pair, twice over.** The knob needs a counter deck in seat A AND an
+opponent that casts one of the shapes it reads, and the shapes are the
+ones a printed worth gets wrong: a sweeper, an X burn or a player-hitting
+Earthquake, a deck-out draw, an extra turn, a wheel. **Coral Reef vs
+White Knights measures exactly 0 games different** — White Knights' one
+Wrath of God already clears a Wizard's 5.0 bar, the deck holds no X burn
+and no extra turn, and Coral Reef's only creature answer is a Boomerang
+that costs the same as its Counterspell — which is a pool fact and not a
+null result. The pairs that put the question are The Deck (playable) vs
+**Mountain Artillery** (2 Fireball, 1 Earthquake, 4 Lightning Bolt:
+40.2% → 51.6%) and vs **Black-Red Raiders** (42.7% → 49.9%). Of the five
+shipped starters only Blue Skies holds a counterspell at all, and only
+two of them, so the starter matrix moves by at most six games in a
+thousand.
+`reads_lethal_x` (the same day) fires only where a LIFE-FOR-MANA spell is
+in the deck, which in this pool is **Channel and nothing else**, so its
+control must hold none — Big Green vs White Knights again, 1075-925
+byte-identical to its own null in both arms at 2,000 games. Ten decks
+name Channel and **only three of them can be played**: the 1997
+`summoner.deck` (originals and duels) and `sargent_2009_summoner.deck`.
+The other seven are proxy-blocked — `wc1994_lestree` and
+`fork_recursion_chalice_1995`, which `docs/forge/casting.md` P6 names for
+its own measurement, are BOTH of them (Chaos Orb), as are
+`wc1994_symens`, `wc1994_defoucaud` (Chaos Orb), `wc1995_stern` (12
+proxies) and `wc1995_justice` (10); `explosion_wright_1994` loads but its
+list holds no Channel, only the archetype's name in a comment. Channel is
+restricted, so a deck plays exactly one, and the knob's answer differs in
+about one game in five (409 of 2,000 against White Knights, 420 of 2,000
+against Big Green).
+**Mind also that all five default ON at Sorcerer and Wizard**, so a
 sweep of some OTHER knob taken against a published number must pin them
 off on both seats
-(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off`
+(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
+`counters_by_shape=off,reads_lethal_x=off`
 and the same for `--profile-b`) or it is measuring several changes; that
 is how the null was proved for both passes — the `pays_sacrifices` sweep
 of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,

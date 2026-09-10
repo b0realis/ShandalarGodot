@@ -172,6 +172,12 @@ func _main_phase_action(game: MtgGame) -> String:
 	if profile.mistake_chance > 0.0 \
 			and game.rng.randf() < profile.mistake_chance:
 		return ""
+	# THE LIFE ALREADY SOLD (2026-09-10, AiProfile.reads_lethal_x): a
+	# life-for-mana grant is open and the burn in hand ends the game with
+	# it. Asked before the ranking, because no ranking prices a win.
+	var channelled := _lethal_life_mana(game)
+	if channelled != "":
+		return channelled
 	var cast := _try_cast_best(game)
 	if cast != "":
 		return cast
@@ -295,6 +301,12 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue
 		# Dark Ritual is worth exactly what it lets us cast this turn.
 		if intent.adds_mana and not _mana_spell_enables(game, inst, sources):
+			continue
+		# ...and CHANNEL is worth exactly the game it ends (2026-09-10,
+		# AiProfile.reads_lethal_x). Off, it is the plain 3.00 spell the
+		# pilot has always cast into an empty board.
+		if intent.mana_for_life and profile.reads_lethal_x \
+				and not _life_mana_enables(game, inst, sources):
 			continue
 		var mode := _pick_mode(game, inst.data)
 		var sized := _size_and_aim(game, inst, intent, max_x, mode)   # {} = wait
@@ -2791,6 +2803,164 @@ func _mana_spell_enables(game: MtgGame, ritual: CardInstance, sources: Array) ->
 	return false
 
 
+## CHANNEL-FIREBALL (2026-09-10, [member AiProfile.reads_lethal_x];
+## `docs/forge/casting.md` P6). The gate [method _mana_spell_enables] is
+## for Dark Ritual, applied to the spell that sells mana for LIFE: cast it
+## only in a step where the life it opens makes an X burn in hand LETHAL.
+##
+## The bar is deliberately higher than the Ritual's. Dark Ritual is worth
+## casting whenever it turns an unaffordable card into an affordable one,
+## because the mana costs nothing but the card; this costs LIFE, and life
+## spent on a Fireball that does not finish them is life they finish us
+## with. Probed at HEAD the pilot cast Channel into an empty board on turn
+## three for a card's worth of 3.00 and never paid a point — the card was
+## simply thrown away — so with the knob off nothing here runs and that is
+## still what happens.
+##
+## [param sources] is the seat's own list; the life is capped by
+## [method _life_for_mana_budget].
+func _life_mana_enables(game: MtgGame, spell: CardInstance,
+		sources: Array) -> bool:
+	return not _lethal_x_off_life(game, spell, sources).is_empty()
+
+
+## THE X BURN THE LIFE WOULD FINISH THEM WITH, as
+## `{inst, x, life}` — or `{}`.
+##
+## [param spending] is the spell that OPENS the life-for-mana source when
+## it is still in hand (Channel on the stack has not resolved, so its own
+## cost is charged and it is not itself a candidate), and null once the
+## source is open and the only question left is how much life to pay.
+##
+## Their life is the X to find, and the reach is what the board pays plus
+## the life we may spend. Two printed shapes reach a player's life with an
+## X and the pool holds one of each behind a Channel: the AIMED burn
+## (Fireball, Disintegrate — [method _lethal_burn]'s own test) and the
+## SWEEPER THAT HITS PLAYERS (Hurricane, Earthquake), whose X lands on us
+## as well and must therefore leave us alive. The only new arithmetic is
+## the budget.
+func _lethal_x_off_life(game: MtgGame, spending: CardInstance,
+		sources: Array) -> Dictionary:
+	var budget := _life_for_mana_budget(game)
+	if budget <= 0:
+		return {}
+	var opening := 0
+	if spending != null:
+		# Channel's own cost is paid out of the same board, so the mana it
+		# takes is not there for the burn.
+		var plan := _plan_taps_from(sources, spending.data.cost,
+			game.spell_surcharge(pid, spending.data),
+			game.mana_usage_keys(spending.data))
+		if plan.is_empty() and not _cost_is_free(spending.data.cost):
+			return {}
+		opening = spending.data.cost.mana_value() \
+			+ game.spell_surcharge(pid, spending.data)
+	var me := game.players[pid]
+	var opponent := game.opponent_of(pid)
+	var their_life := game.players[opponent].life
+	for inst in me.hand:
+		if inst == spending or inst.is_land() or inst.data.is_modal():
+			continue
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+			continue   # locked, banned, "cast only ...", or refused this step
+		if not inst.data.cost.has_x or inst.data.x_color != 0:
+			continue   # "spend only black mana on X": life buys none of it
+		var intent := _intent_of(inst)
+		# TWO SHAPES REACH A PLAYER'S LIFE WITH AN X, and the pool holds one
+		# of each behind a Channel: the AIMED burn (Fireball, Disintegrate)
+		# and the SWEEPER THAT HITS PLAYERS (Hurricane, Earthquake), whose
+		# damage lands on us as well and therefore has to be survived.
+		var aimed := intent.damage_uses_x and intent.target_spec != null \
+			and (intent.target_spec.kind == TargetSpec.Kind.ANY
+				or intent.target_spec.kind == TargetSpec.Kind.PLAYER) \
+			and intent.target_spec.is_legal(game, TargetRef.player(opponent), inst)
+		var swept: bool = intent.sweeper is DamageAllEffect \
+			and intent.sweeper.hit_players and intent.sweeper.use_x
+		if not (aimed or swept):
+			continue
+		if aimed and intent.self_damage >= me.life - budget:
+			continue   # a Psionic Blast that kills us on the way is no win
+		var surcharge := game.spell_surcharge(pid, inst.data)
+		var keys: Array = game.mana_usage_keys(inst.data)
+		# The board's own reach, with Channel's cost already spent out of
+		# it, and then the life on top: one life is one colourless mana.
+		var reach := _max_affordable_x(game, inst.data.cost,
+			surcharge + opening, sources, inst.data.x_color, keys)
+		var need: int = their_life - (intent.damage if aimed else 0)
+		if need <= reach:
+			return {}   # the board already pays for it; no life is owed
+		var life := (need - reach) * maxi(inst.data.cost.x_count, 1)
+		if life > budget:
+			continue
+		if swept and me.life - life - need < 1:
+			continue   # a Hurricane that kills us with them is not a win
+		return {"inst": inst, "x": need, "life": life,
+			"targets": [TargetRef.player(opponent)] if aimed else []}
+	return {}
+
+
+## THE LIFE THIS SEAT MAY SELL FOR MANA: everything down to one point,
+## less what their board would land on us if we spend the turn on this and
+## the spell does not end the game — `life − 1 − their attack`, the cap
+## P6 names. [method _damage_after_value_blocks] is the same reading
+## [method _in_danger] makes of their clock, so a Fireball is not paid for
+## with the life a Serra Angel is about to take.
+func _life_for_mana_budget(game: MtgGame) -> int:
+	var me := game.players[pid]
+	var theirs: Array[CardInstance] = []
+	for inst in game.players[game.opponent_of(pid)].battlefield:
+		if inst.is_creature() and inst.cur_power > 0 \
+				and not inst.has_keyword(Mtg.Keyword.DEFENDER):
+			theirs.append(inst)
+	var mine: Array[CardInstance] = []
+	for inst in me.battlefield:
+		if inst.is_creature():
+			mine.append(inst)
+	var swing := 0
+	if not theirs.is_empty():
+		swing = _damage_after_value_blocks(game, theirs, mine)
+	return maxi(me.life - 1 - swing, 0)
+
+
+## THE LIFE PAID AND THE BURN FIRED, IN ONE ACTION (2026-09-10,
+## [member AiProfile.reads_lethal_x]).
+##
+## [method MtgGame.pay_life_for_mana] had never been called by any seat in
+## this AI's life. It is not a mana ability the planner can model — it is
+## an action on the game, taken by the player, with no permanent to tap —
+## so the pilot pays it here, itself, and casts in the same call: a seat
+## that paid the life and then failed to cast would have burned its own
+## life for nothing, and there is no rung at which that is a weakness
+## rather than a malfunction.
+##
+## Everything is checked before a point is paid: the burn is in hand, its
+## X reaches their life with the life added, the target is legal, and the
+## cast itself is refused-checked the way every other cast in this file is.
+func _lethal_life_mana(game: MtgGame) -> String:
+	if not profile.reads_lethal_x or not game.players[pid].life_for_mana:
+		return ""
+	var found := _lethal_x_off_life(game, null, _mana_sources(game))
+	if found.is_empty():
+		return ""
+	var inst: CardInstance = found["inst"]
+	var x := int(found["x"])
+	var life := int(found["life"])
+	var targets: Array = found["targets"]
+	if game.cast_refusal(pid, inst, targets, x, 0) != "":
+		_refused[str(inst.id)] = true
+		return ""
+	if game.pay_life_for_mana(pid, life) != "":
+		return ""
+	if not _plan_and_pay(game, inst.data.cost_for(x),
+			_generic_x(inst.data, x) + game.spell_surcharge(pid, inst.data),
+			game.mana_usage_keys(inst.data)):
+		return ""
+	if game.cast_spell(pid, inst, targets, x) != "":
+		_refused[str(inst.id)] = true
+		return ""
+	return "paid %d life and cast %s for %d" % [life, inst.data.card_name, x]
+
+
 ## The opponent's end step: cast the held instant with the best use, or
 ## "" to keep holding. Removal at their best creature worth a card, a
 ## bounce only at something big or dressed in auras, a draw into a thin
@@ -4714,6 +4884,267 @@ func _counter_key(game: MtgGame, inst: CardInstance, top_ref: TargetRef,
 		index, inst]
 
 
+## THE SHAPE OF THE SPELL, not its price (2026-09-10,
+## [member AiProfile.counters_by_shape]; wave 2, `docs/forge/casting.md`
+## P2). [constant SHAPE_ALWAYS], [constant SHAPE_NEVER] or
+## [constant SHAPE_BAR] — "ask [member AiProfile.counter_threshold], as
+## this seat always did".
+##
+## WHY A PRINTED WORTH IS THE WRONG INSTRUMENT. [method
+## Evaluator.card_value] reads a card's cost and its printed numbers, and
+## the spells that decide a game have neither: probed at HEAD, Wrath of
+## God prices at 5.00, Fireball at 2.50, Time Walk at 3.00 and Wheel of
+## Fortune at 4.00, so a Sorcerer (bar 5.5) watched a Wrath take four
+## Serra Angels off its own table and every rung let a Fireball for eight
+## resolve at eight life. Meanwhile a Serra Angel at 10.00 ate the
+## Counterspell with a Swords to Plowshares in hand and a Plains untapped.
+##
+## THE FIVE ALWAYS CLAUSES, each a shape and none a name:
+##
+##  1. A SWEEPER that takes more off our board than off theirs by a 2/2's
+##     worth ([constant SWEEP_BAR] — the bar our own sweeps have to clear
+##     to be worth casting, read from the other side of the table).
+##  2. DAMAGE AT OUR FACE that is lethal, or that puts us on the panic
+##     line — the same reading [method _packet_worth] makes of a waiting
+##     packet one step later, so the counter and the Circle answer the
+##     same Fireball with the same number. The X is the one on the STACK,
+##     which is public. A sweeper that hits PLAYERS is read here as well
+##     as at clause 1: against a control deck with two creatures on the
+##     table, an Earthquake for eight is not a board sweep at all.
+##  3. A DRAW AT OUR LIBRARY that empties it: they win at our next draw
+##     step (CR 704.5b) and nothing we draw on the way changes it — the
+##     mirror of [method _decking_draw], which reads it in our favour.
+##  4. AN EXTRA TURN ([member EffectIntent.extra_turns]). An untap, a
+##     draw, a land drop and a whole attack, and no bar prices it.
+##  5. A WHEEL ([member EffectIntent.wheels]) while OUR hand is the
+##     fuller. The swing is `their hand − our hand` (P5's arithmetic: the
+##     refill count cancels), measured against the hand the counter leaves
+##     us. A REROLL that gives each player back what it took nets nobody
+##     anything and is not a clause.
+##
+## THE STEAL IS NOT A CLAUSE, and P2's list names it. It DID NOT REPRODUCE:
+## [method _try_counter] has raised the threat to the worth of any card of
+## OURS the top spell targets since long before this knob — the line
+## written for a counter-war — and a Control Magic names our Serra Angel,
+## so the Angel's 10.00 is already the number the bar is asked. A second
+## copy of that reading would fire only where the first refuses, which is a
+## steal on a creature the bar itself would not spend a counter for.
+## `tests/ai/test_ai_counters_by_shape_2026_09_10.gd` pins the board on
+## both arms so nobody builds it twice.
+##
+## THE COUNTER-WAR is not a clause either, and for the same reason: that
+## reading predates this knob and stands unchanged.
+##
+## NEVER is asked last and only when no ALWAYS clause fired, so a lethal
+## Fireball is never let through because we hold an answer to it.
+const SHAPE_NEVER := -1
+const SHAPE_BAR := 0
+const SHAPE_ALWAYS := 1
+
+
+func _counter_shape(game: MtgGame, top: StackItem) -> int:
+	var me := game.players[pid]
+	var them := game.players[top.controller]
+	var intent := _intent_of(top.card)
+	# 1. THE SWEEPER.
+	if intent.sweeper != null and _their_sweep_loss(game, intent.sweeper,
+			top.x_value) >= SWEEP_BAR:
+		return SHAPE_ALWAYS
+	# 2. THE BURN AT OUR FACE.
+	var at_us := _damage_at_us(game, top, intent)
+	if at_us > 0:
+		if at_us >= me.life:
+			return SHAPE_ALWAYS
+		if float(me.life - at_us) \
+				<= profile.chump_threshold * (1.5 - profile.aggression):
+			return SHAPE_ALWAYS
+	# 3. THE DRAW THAT DECKS US.
+	if _draw_at_us(game, top, intent) >= me.library.size() \
+			and me.library.size() > 0:
+		return SHAPE_ALWAYS
+	# 4. THE EXTRA TURN.
+	if intent.extra_turns > 0:
+		return SHAPE_ALWAYS
+	# 5. THE WHEEL. `me.hand.size() - 1` is the hand the counter leaves us,
+	# which is the hand the refill would have to fill.
+	if intent.wheels > 0 and me.hand.size() - 1 > them.hand.size():
+		return SHAPE_ALWAYS
+	if _answered_later(game, top, intent):
+		return SHAPE_NEVER
+	return SHAPE_BAR
+
+
+## What THEIR sweeper would take off our board net of theirs, on the
+## evaluator's own board scale — [method _sweep_value] read from the other
+## side of the table, and deliberately not that function: its relief, its
+## land reading and its life terms are all about a sweep WE cast, and the
+## question here is only whose board it clears.
+func _their_sweep_loss(game: MtgGame, effect: EffectBase, x_value: int) -> float:
+	var n := 0
+	if effect is DamageAllEffect:
+		n = x_value if effect.use_x else effect.amount
+		if n <= 0:
+			return 0.0
+	elif not (effect is DestroyAllEffect):
+		return 0.0
+	var loss := 0.0
+	for inst in game.all_battlefield():
+		if not _sweep_kills(effect, inst, n):
+			continue
+		var worth := Evaluator.permanent_value(inst)
+		loss += worth if inst.controller_id == pid else -worth
+	return loss * Evaluator.W_BOARD
+
+
+## The damage [param top] would deal to THIS SEAT'S FACE at the X it was
+## cast for, or 0.
+##
+## A DIVIDED spell (Fireball at several targets) splits its damage, and
+## the split is the caster's; the honest floor is what is left after every
+## other target has taken the one point it must — CR 601.2d, "each target
+## must be assigned at least one".
+func _damage_at_us(game: MtgGame, top: StackItem, intent: EffectIntent) -> int:
+	# A SWEEPER THAT HITS PLAYERS (Earthquake, Hurricane) lands the same
+	# points on our face with no target list to read them off. The board
+	# half of it is clause 1's; this is the face half, and against a
+	# control deck with two creatures the face half is the whole spell.
+	if intent.sweeper is DamageAllEffect and intent.sweeper.hit_players:
+		var n: int = top.x_value if intent.sweeper.use_x else intent.sweeper.amount
+		return maxi(n, 0)
+	var total := intent.damage_at(top.x_value)
+	if total <= 0:
+		return 0
+	var at_us := false
+	var others := 0
+	for t in top.targets:
+		if t == null:
+			continue
+		if t.is_player and t.player_id == pid:
+			at_us = true
+		else:
+			others += 1
+	if not at_us:
+		return 0
+	if intent.damage_divided and others > 0:
+		return maxi(total - others, 0)
+	return total
+
+
+## The cards [param top] would draw off OUR library at the X it was cast
+## for, or 0 — the mirror of [method _decking_draw], which asks the same
+## question in our favour.
+func _draw_at_us(game: MtgGame, top: StackItem, intent: EffectIntent) -> int:
+	if not (intent.draws > 0 or intent.draws_use_x):
+		return 0
+	for t in top.targets:
+		if t != null and t.is_player and t.player_id == pid:
+			return intent.draws + (top.x_value if intent.draws_use_x else 0)
+	return 0
+
+
+## WEISSMAN'S RULE (2026-09-10): is there a card in hand that answers
+## [param top] AFTER it resolves, for less than the counter costs?
+##
+## *"A capability of a different kind"* (`docs/ROADMAP.md`): the counter is
+## the answer to what nothing else in the hand can touch, so a creature we
+## hold a Terror for is let through and the Counterspell is still there
+## when the Wrath comes. It cannot apply to a sorcery or an instant —
+## there is nothing left to answer — nor while our own hand is down to the
+## counter itself, which is the moment the discipline becomes a loss.
+##
+## THE RISK THE NOTE NAMED, and it is the whole of the second half: *"the
+## rule must check [method _plan_taps] for the answer at the opponent's
+## next end step, not just its presence"*. A Hypnotic Specter let through
+## because a Terror sits in hand is a card in hand and a Specter on the
+## table when the black mana is not there, so the answer is planned
+## against this seat's own sources ([method _plan_taps_from]) and refused
+## when the plan comes back empty. The list is the one standing NOW rather
+## than a modelled untap, and it is the same list either way: this seat is
+## looking at a spell on THEIR turn with a counter in hand, which is a
+## turn its lands have been untapped for since its own untap step.
+##
+## The answer's legality is read as far as a spell on the STACK can be
+## read: the spec's kind and its own filter put to the card, and the
+## printed protection put to the answer's colours the way [method
+## TargetSpec.refusal_reason] puts it. A creature that will be legal only
+## once something else has happened is not counted.
+func _answered_later(game: MtgGame, top: StackItem, intent: EffectIntent) -> bool:
+	var me := game.players[pid]
+	if me.hand.size() <= 1:
+		return false          # the counter is all we have: cast it
+	var host := top.card
+	if not (host.is_creature() or host.is_type(Mtg.CardType.ENCHANTMENT)
+			or host.is_type(Mtg.CardType.ARTIFACT)):
+		return false
+	if intent.counters:
+		return false          # a counter-war is settled by the prize, not by this
+	var sources := _mana_sources(game)
+	var counter_price := 99
+	for inst in me.hand:
+		if _is_counterspell(inst.data):
+			counter_price = mini(counter_price, inst.data.cost.mana_value())
+	var answers := 0
+	for inst in me.hand:
+		if inst.is_land() or _is_counterspell(inst.data):
+			continue
+		if _refused.has(str(inst.id)):
+			continue
+		var answer := _intent_of(inst)
+		if not _answers_the_host(game, inst, answer, host):
+			continue
+		if inst.data.cost.mana_value() >= counter_price:
+			continue          # not cheaper: the counter is the better card here
+		if _plan_taps_from(sources, inst.data.cost,
+				game.spell_surcharge(pid, inst.data),
+				game.mana_usage_keys(inst.data)).is_empty():
+			continue          # the Terror in hand with no Swamp is no answer
+		answers += 1
+	# THE ANSWER MUST BE SPARE, and this clause is what the Lab put here
+	# (see the method's own note). Every permanent already on their side
+	# has a claim on the removal in our hand, so one Swords to Plowshares
+	# against a Savannah Lions on the table is not a reason to let a White
+	# Knight resolve — it is a reason to counter one and Swords the other.
+	var claims := 0
+	for inst in game.players[top.controller].battlefield:
+		if inst.is_creature() and not inst.has_keyword(Mtg.Keyword.DEFENDER):
+			claims += 1
+	return answers > claims
+
+
+## Would [param answer] in hand deal with [param host] once it is on the
+## battlefield? The reading a spell on the STACK allows: the shape, the
+## spec's kind, the spec's own filter and the printed protection.
+func _answers_the_host(game: MtgGame, inst: CardInstance,
+		answer: EffectIntent, host: CardInstance) -> bool:
+	if inst.data.is_modal() or answer.target_spec == null:
+		return false
+	if answer.damage_uses_x or answer.sweeper != null:
+		return false          # sized on a board we cannot see yet
+	var spec := answer.target_spec
+	if host.is_creature():
+		if not answer.answers_creatures():
+			return false
+		if spec.kind != TargetSpec.Kind.CREATURE \
+				and spec.kind != TargetSpec.Kind.ANY \
+				and spec.kind != TargetSpec.Kind.PERMANENT:
+			return false
+		if answer.damage > 0 and not answer.removes \
+				and answer.damage < host.cur_toughness:
+			return false      # a Bolt is no answer to a Serra Angel
+	else:
+		if not answer.removes:
+			return false
+		if spec.kind != TargetSpec.Kind.PERMANENT:
+			return false
+	if spec.filter.is_valid() and not spec.filter.call(host):
+		return false
+	if spec.game_filter.is_valid() and not spec.game_filter.call(game, host):
+		return false
+	if (host.cur_protection & inst.cur_colors) != 0:
+		return false
+	return true
+
+
 ## Counter the top opposing spell when the threat clears the profile bar.
 func _try_counter(game: MtgGame) -> String:
 	if game.stack.is_empty():
@@ -4738,7 +5169,16 @@ func _try_counter(game: MtgGame) -> String:
 	if profile.trusts_abyss and top.card.is_creature():
 		shelter = _shelter_swing(game, top.card, top.controller)
 		threat = maxf(threat, shelter)
-	if threat < profile.counter_threshold:
+	# THE SHAPE BEFORE THE BAR (2026-09-10, AiProfile.counters_by_shape):
+	# what the spell DOES and what our own hand can answer, asked before
+	# the one number. ALWAYS skips the bar, NEVER skips the counter, and
+	# between them the bar is exactly what it was — which is the null.
+	var shape := SHAPE_BAR
+	if profile.counters_by_shape:
+		shape = _counter_shape(game, top)
+	if shape == SHAPE_NEVER:
+		return ""
+	if shape != SHAPE_ALWAYS and threat < profile.counter_threshold:
 		return ""
 	# THE ABYSS AS AN ANSWER (2026-09-08, AiProfile.trusts_abyss): a
 	# creature that will be the next meal of a feeder on the table dies
@@ -4748,6 +5188,7 @@ func _try_counter(game: MtgGame) -> String:
 	# it and the threat we were trusting the feeder to answer walks away,
 	# so the trust is withheld exactly where the swing says it should be.
 	if profile.trusts_abyss and top.card.is_creature() and shelter <= 0.0 \
+			and shape != SHAPE_ALWAYS \
 			and _is_next_meal(game, top.card, top.controller):
 		return ""
 	var top_ref := TargetRef.card(top.card)
