@@ -5140,7 +5140,7 @@ func _their_sweep_loss(game: MtgGame, effect: EffectBase, x_value: int) -> float
 	for inst in game.all_battlefield():
 		if not _sweep_kills(effect, inst, n):
 			continue
-		var worth := Evaluator.permanent_value(inst)
+		var worth := Evaluator.permanent_value(inst, profile)
 		loss += worth if inst.controller_id == pid else -worth
 	return loss * Evaluator.W_BOARD
 
@@ -6802,6 +6802,17 @@ func _attack_risk(game: MtgGame, inst: CardInstance,
 ## here for this search to find and the cohort's answer stands untouched.
 ## That is what keeps the cost off the combats this is not for — measured
 ## at [i]docs/ROADMAP.md[/i]'s cost table.
+##
+## AND IT IS ALSO THE ONLY QUESTION IT EVER ASKED (2026-09-10, [member
+## AiProfile.crack_back_margin]). An exact gate on LOSING THE GAME never
+## asks whether the swing costs us eight life for one point of damage,
+## which is a bad attack at twenty life as much as at nine. The search has
+## priced life since it was built ([method CombatSearch._fdv]), so the
+## knob is the gate and nothing else: it lowers the bar by its own number
+## of life points and lets the same search answer the same way. Zero is
+## the gate exactly as it stood, which is the null; the Wizard carries
+## [member AiProfile.chump_threshold]'s 6, so the two sides of the table
+## agree about what "close to dead" means.
 func _search_hold_back(game: MtgGame, candidates: Array[CardInstance],
 		chosen: Array, defender: int) -> Array:
 	if profile.combat_search_nodes <= 0:
@@ -6812,7 +6823,7 @@ func _search_hold_back(game: MtgGame, candidates: Array[CardInstance],
 	for inst in game.players[defender].battlefield:
 		if inst.is_creature() and not inst.has_keyword(Mtg.Keyword.DEFENDER):
 			reach += maxi(inst.cur_power, 0)
-	if reach < game.players[pid].life:
+	if reach < game.players[pid].life - profile.crack_back_margin:
 		return chosen
 	var mine: Array[CardInstance] = []
 	for inst in game.players[pid].battlefield:
@@ -7278,6 +7289,14 @@ func _block_choice(game: MtgGame, attackers: Array[CardInstance],
 
 ## The block plan the tier ladder makes for these attackers: blocker id ->
 ## attacker id, with the blockers it spent appended to [param used].
+##
+## SAFE BLOCK, THEN FINISH IT (2026-09-10, [member
+## AiProfile.reinforces_blocks]): the ladder is walked once per attacker
+## and returns on the first rung that answers, so the finished plan is
+## revisited ONCE — [method _reinforce_blocks] — before it is handed back.
+## It can only ever ADD a body to an attacker the plan already blocked,
+## never move one and never take one away, so every caller of this with
+## the knob off gets the declaration it always got.
 func _plan_blocks(game: MtgGame, attackers: Array[CardInstance],
 		free: Array[CardInstance], desperate: bool,
 		used: Array[int], lethal_swing := false,
@@ -7289,7 +7308,196 @@ func _plan_blocks(game: MtgGame, attackers: Array[CardInstance],
 		for blocker_id in choice:
 			block_map[blocker_id] = attacker.id
 			used.append(blocker_id)
+	_reinforce_blocks(game, attackers, block_map, free, used)
 	return block_map
+
+
+## THE SECOND PASS OVER A FINISHED BLOCK PLAN (2026-09-10, [member
+## AiProfile.reinforces_blocks]; `docs/forge/combat.md` P4): an attacker
+## met by a band that SURVIVES it and does not KILL it gets more bodies
+## until it dies, or gets none at all.
+##
+## [method _best_block_for] is a ladder that returns on its first
+## answering rung, and the free absorb (rung 1.5 — a wall soaks the hit at
+## zero cost) sits ABOVE the value trade and the gang. So a Wall of Stone
+## on the table blocks alone every time and the rungs below it are never
+## reached, however many bodies are standing at home. Reproduced
+## 2026-09-10 on two boards:
+##
+## [codeblock]
+## their Serra Angel 4/4    ours: Wall of Swords 3/5, Wall of Swords 3/5
+##     _plan_blocks -> ["Wall of Swords"] ; band kills it: false
+##       + Wall of Swords -> kills it: true ; that body dies: false
+##
+## their Craw Wurm 6/4      ours: Wall of Stone 0/8, Water Elemental 5/4
+##     _plan_blocks -> ["Wall of Stone"] ; band kills it: false
+##       + Water Elemental -> kills it: true ; that body dies: true
+## [/codeblock]
+##
+## The first of those is FREE — two walls that both live through a Serra
+## Angel and together deal it exactly four.
+##
+## THE ORDER IS FORGE'S: safe bodies first, then one that dies to finish
+## the job.
+## [forge] after fai/AiBlockController.java:795-858
+## (reinforceBlockersToKill) at b09a3d3f — with one thing tightened. Forge
+## adds its safe blockers whether or not the attacker ends up dead;
+## nothing is written into the plan here unless the band it builds
+## actually kills, because a body added for nothing is a body exposed to a
+## combat trick for nothing (P4's own named risk: a Giant Growth on the
+## Wurm).
+##
+## THE PRICE IS WHAT THE PAIR PUTS AT RISK, and it is rung 3's rule
+## (`price <= attacker_value * 1.5`) read off the bodies that actually
+## DIE. The survivor the ladder already committed is not spent, so it is
+## not charged — but it is re-asked at the size the gang MAKES the
+## attacker, so a rampage that turns the pair into two corpses is charged
+## for both (CR 702.23, [method _rampage_bonus]). Forge's own bound is
+## kept on top of it: the body that dies must be worth strictly less than
+## the attacker it kills. That is the same currency the crack-back
+## search's own gang defence spends ([member CombatSearch.gang_defence],
+## which values a gang as the attacker gained less the bodies lost), so
+## the declaration this makes and the declaration that search predicts of
+## us do not disagree.
+##
+## NEVER AGAINST A BODY THAT CANNOT DIE: indestructible, a regeneration
+## shield their open mana reaches ([method _shieldable]), or a band that
+## already finishes it by a printed line rather than by the arithmetic
+## ([member AiProfile.reads_gaze]) — all three are asked before a single
+## candidate is looked at.
+func _reinforce_blocks(game: MtgGame, attackers: Array[CardInstance],
+		block_map: Dictionary, free: Array[CardInstance],
+		used: Array[int]) -> void:
+	if not profile.reinforces_blocks:
+		return
+	for attacker in attackers:
+		var band := _planned_band(game, block_map, attacker)
+		if band.is_empty():
+			continue
+		if attacker.cur_indestructible or _shieldable(game, attacker):
+			continue
+		var spent := false
+		var finished := _band_kills(game, attacker, band)
+		for body in band:
+			# The chump and the trade are not what this is for: a band that
+			# has already paid a body is not the "safe block" Forge records.
+			if _dies_to(game, body, attacker, Vector2i.ZERO,
+					_rampage_vector(attacker, band.size())):
+				spent = true
+			# THE GAZE finishes it without the arithmetic ever agreeing
+			# (2026-09-10, [member AiProfile.reads_gaze]): our own Cockatrice
+			# is a band that kills, and [method _band_kills] cannot see it.
+			if _dies_to(game, attacker, body):
+				finished = true
+		if spent or finished:
+			continue
+		var legal := _reinforcements_for(game, attacker, free, used)
+		if legal.is_empty():
+			continue
+		for body in _reinforcement_band(game, attacker, band, legal):
+			block_map[body.id] = attacker.id
+			used.append(body.id)
+
+
+## The bodies [param block_map] puts in front of [param attacker], in
+## battlefield order.
+func _planned_band(game: MtgGame, block_map: Dictionary,
+		attacker: CardInstance) -> Array[CardInstance]:
+	var band: Array[CardInstance] = []
+	for blocker_id in block_map:
+		if int(block_map[blocker_id]) != attacker.id:
+			continue
+		var body := game.find_instance(int(blocker_id))
+		if body != null and body.zone == Mtg.Zone.BATTLEFIELD:
+			band.append(body)
+	return band
+
+
+## RAMPAGE as a [Vector2i] the damage predicates already read (CR 702.23):
+## what [param attacker] is wearing once [param blockers] bodies are on
+## it. Zero at every rung [member AiProfile.reads_gaze] is off at, and for
+## every creature in this pool that does not print the keyword.
+func _rampage_vector(attacker: CardInstance, blockers: int) -> Vector2i:
+	var bonus := _rampage_bonus(attacker, blockers)
+	return Vector2i(bonus, bonus)
+
+
+## The still-free bodies that may legally be added to [param attacker]'s
+## block, cheapest first (ties by instance id, so the choice is
+## deterministic).
+func _reinforcements_for(game: MtgGame, attacker: CardInstance,
+		free: Array[CardInstance], used: Array[int]) -> Array[CardInstance]:
+	var legal: Array[CardInstance] = []
+	for inst in free:
+		if used.has(inst.id):
+			continue
+		if CombatState.block_illegality(game, inst, attacker, pid) != "":
+			continue
+		legal.append(inst)
+	legal.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+		var av := Evaluator.permanent_value(a, profile)
+		var bv := Evaluator.permanent_value(b, profile)
+		if absf(av - bv) > 1e-6:
+			return av < bv
+		return a.id < b.id)
+	return legal
+
+
+## The bodies to ADD to [param band] so that it finishes [param attacker],
+## or an empty array when no set of them is worth it.
+##
+## Safe bodies first and free of charge — they live through the attacker
+## at the size the gang makes it, so nothing is spent — and then, only if
+## the safe ones fall short, ONE body that dies to close the kill exactly.
+## That last one is what the price rule is for.
+func _reinforcement_band(game: MtgGame, attacker: CardInstance,
+		band: Array[CardInstance],
+		legal: Array[CardInstance]) -> Array[CardInstance]:
+	var trial: Array[CardInstance] = band.duplicate()
+	var added: Array[CardInstance] = []
+	var spare: Array[CardInstance] = []
+	for body in legal:
+		var grown := _rampage_vector(attacker, trial.size() + 1)
+		if _dies_to(game, body, attacker, Vector2i.ZERO, grown) \
+				or _damage_from(body, attacker) <= 0:
+			spare.append(body)
+			continue
+		trial.append(body)
+		added.append(body)
+		if _band_kills(game, attacker, trial):
+			return added
+	# THE ONE THAT DIES TO FINISH IT. Forge's own clause: the body has to
+	# CLOSE the kill (the band without it does not, the band with it does)
+	# and be worth strictly less than the prize. The safe bodies gathered
+	# above ride along only because this one finishes what they started.
+	var attacker_value := Evaluator.permanent_value(attacker, profile)
+	for body in spare:
+		if Evaluator.permanent_value(body, profile) >= attacker_value:
+			continue
+		var closed: Array[CardInstance] = trial.duplicate()
+		closed.append(body)
+		if not _band_kills(game, attacker, closed):
+			continue
+		if _reinforcement_price(game, attacker, closed) > attacker_value * 1.5:
+			continue
+		added.append(body)
+		return added
+	return []
+
+
+## What a block by [param band] on [param attacker] would COST us: the
+## worth of every body of the band the attacker kills, asked at the size
+## the gang makes it (CR 702.23). The rung 3 price rule is read against
+## this, so a survivor is free and a rampage that kills the survivor too
+## is charged for both bodies.
+func _reinforcement_price(game: MtgGame, attacker: CardInstance,
+		band: Array[CardInstance]) -> float:
+	var grown := _rampage_vector(attacker, band.size())
+	var price := 0.0
+	for body in band:
+		if _dies_to(game, body, attacker, Vector2i.ZERO, grown):
+			price += Evaluator.permanent_value(body, profile)
+	return price
 
 
 ## THE PANIC LINE, asked of the damage that would ACTUALLY land: what

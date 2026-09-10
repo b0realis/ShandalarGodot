@@ -72,6 +72,14 @@ func _on() -> AiProfile:
 func _off() -> AiProfile:
 	var profile := AiProfile.wizard()
 	profile.pumps_to_attack = false
+	# AND THE OTHER KNOB THAT TOUCHES THIS DECLARATION IS PINNED WITH IT
+	# (2026-09-10, [member AiProfile.reinforces_blocks]). The null this arm
+	# states is the pilot BEFORE the pump plan, and on this board the block
+	# reinforcement — a second body onto the Hill Giant the regenerator
+	# holds but does not kill — would add a third block to it: two changes
+	# read as one, which is what `docs/ai-difficulty.md` §5 forbids of any
+	# knob that defaults on at Sorcerer.
+	profile.reinforces_blocks = false
 	return profile
 
 

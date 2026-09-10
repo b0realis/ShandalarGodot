@@ -315,7 +315,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -461,6 +461,35 @@ some OTHER knob taken against a published number must pin all six off on
 both seats
 (`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,`
 `counters_by_shape=off,reads_lethal_x=off,checks_before_casting=off`
+`reinforces_blocks` (2026-09-10) fires wherever a block is DECLARED at
+all, which is every game with a creature in it — so unlike the three
+above it has no card list, and **the only control it cannot fire on is a
+creatureless pair**. Write two forty-land lists beside the run (forty
+Forests against forty Mountains: they deck out at 68 turns and play
+1000-1000) and pass them as `--control-deck-a` / `--control-deck-b`; that
+pair is byte-identical to its own null in every arm of every run of
+2026-09-10. Big Green vs White Knights is NOT a control for it. **Mind
+what the pool holds when you pick the live pair**: what the knob needs is
+a body that survives an attacker without killing it and a spare body
+beside it, so the starters that show it are the ones with a wall or a
+fat-bottomed creature. No shipped starter holds a WALL at all — four of
+the twenty starter matchups measure exactly 0 games different and the
+liveliest six all have Big Green (Ironroot Treefolk, Giant Spider) in
+them — and the deck that puts the question is a 1997 enemy:
+`decks/1997/originals/priestess.deck`, four Wall of Swords and four Wall
+of Spears, which measures **+4.4 ±1.7 against Big Green**.
+`crack_back_margin` (2026-09-10) is a NUMBER whose null is the seat's own
+value, so **a sweep of it wants the null written out** —
+`--sweep crack_back_margin=0,6,10 --null 0` — the lesson `holds_x_burn`
+learned the same day. It takes the same creatureless control, for the
+same reason: the crack-back search reads THEIR creatures and there are
+none. Every preset ships 0, so the `0` arm replays the null game for
+game; the sweep of 2026-09-10 is written up in `docs/ai-difficulty.md`
+§4 and its answer was no.
+**Mind also that all four default ON at Sorcerer and Wizard**, so a
+sweep of some OTHER knob taken against a published number must pin them
+off on both seats
+(`--profile-a wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,reinforces_blocks=off`
 and the same for `--profile-b`) or it is measuring several changes; that
 is how the null was proved for both passes — the `pays_sacrifices` sweep
 of the manual, Dracur (Spells of the Ancients) vs Big Green at seed 11,

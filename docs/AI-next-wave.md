@@ -91,9 +91,9 @@ Factory attack instead of going off on an empty board — which is
 |---|---|---|---|
 | `reads_race` | combat P1 | Sorcerer+ | the tolerance moves with the two clocks, the block trade margin with it |
 | ~~`reads_pumps`~~ | combat P2 | Sorcerer+ | ~~a bear into a Frozen Shade with Swamps up~~ **SHIPPED 2026-09-10** — a wash that removes the malfunction (+0.6 / −0.3 / −1.0 on three pairs at 2,000 an arm), and the note's own risk arrived on DEFENCE: read in both directions it measured −3.2 against Mountain Artillery, so the power half is asked only where a body of ours is being SENT into theirs (`docs/ai-difficulty.md` §4) |
-| `reinforces_blocks` | combat P4 | Sorcerer+ | Wall of Stone plus Grizzly Bears kill the Craw Wurm |
+| ~~`reinforces_blocks`~~ | combat P4 | Sorcerer+ | ~~Wall of Stone plus Grizzly Bears kill the Craw Wurm~~ **SHIPPED 2026-09-10** — a GAIN, and the note's own headline board is the one thing in it that does not add up: a Wall of Stone is 0/8, so that pair deals TWO to a toughness of four. What DOES reproduce is the ladder returning too early — rung 1.5's free absorb sits above the trade and the gang, so a wall blocks alone every time and two Walls of Swords watched a Serra Angel walk away for nothing. `AiPlayer._reinforce_blocks` is one pass over the finished plan: safe bodies free, then ONE that dies to close the kill exactly, priced on what the pair actually RISKS. Priestess (8 walls) vs Big Green 6.6% → 10.9% (**+4.4 ±1.7**), vs Blue Skies 1.5% → 3.4% (**+2.0 ±1.0**), both clear of zero; 110 won to 42 lost across the twenty-matchup starter matrix (`docs/ai-difficulty.md` §4) |
 | `holds_tricks` | combat P5 / casting P13 | Wizard | the bait attacker sent on the strength of the Giant Growth, its mana booked |
-| `crack_back_margin` | combat P8 | Wizard | the crack-back search asked below lethal, at the chump line |
+| ~~`crack_back_margin`~~ | combat P8 | Wizard | ~~the crack-back search asked below lethal, at the chump line~~ **BUILT, MEASURED AND REFUSED 2026-09-10 — the knob exists and every preset ships its null (0 = today's gate).** The row reproduces (our Air Elemental against two Craw Wurms at 14 life: the null swings for four and takes twelve back to sit at 2; at 6 it holds the body and blocks) and the gate is one line, `reach >= life - crack_back_margin`. The Lab said no: twenty arms at 0/6/10, seed 11, control PASS byte-identical everywhere, **not one delta clear of its interval** and the flips a coin (212 won to 228 lost at 6). Where it moves a deck systematically it moves the CREATURE deck the wrong way — Big Green vs Blue Skies −2.4 then −4.3, a green deck that stops attacking into a deck it cannot block. THE COST BUDGET WAS MET WITH ROOM (0.92–1.06× the null's seconds per game against P8's two), so the cost is not what refused it. Kept as a field on `w_hand`'s precedent so the question is one Lab command; what it actually needs is `reads_race` |
 | `holds_x_burn`, the chain half | casting P7 | Sorcerer+ | two burn spells that kill together: the first sized for its share, the second's cost booked |
 
 And the third pass's **Disk deferral**: `times_sweeps` holds an activated
@@ -218,4 +218,16 @@ and White Knights holds none of the shapes: its one Wrath of God already
 clears a Wizard's 5.0 bar, and there is no X burn, no extra turn and no
 wheel in the list. A counter deck is only half a pair for this knob; the
 other half has to hold the spells a printed worth gets wrong, which among
-the starters is Mountain Artillery's Fireball and Earthquake.
+the starters is Mountain Artillery's Fireball and Earthquake. played. And 2026-09-10's two block rows added two more of the same kind.
+`reinforces_blocks` needs a body that survives an attacker without
+killing it: **no shipped starter holds a wall at all**, four of the
+twenty starter matchups measure exactly 0 games different, and the deck
+that puts the question is a 1997 enemy (`priestess.deck`, four Wall of
+Swords and four Wall of Spears). `crack_back_margin` needs a seat that
+declares sub-lethal attacks worth reconsidering, and **The Deck — this
+pool's non-aggro deck, which is the very shape Forge's
+`notNeededAsBlockers` describes — measures exactly 0 games different in
+3 000** against Big Green, White Knights and Mountain Artillery. Both
+rows also needed a control neither the starters nor the 1997 lists can
+give: a creatureless pair, written beside the run as two forty-land
+lists (`DeckLab/README.md`).

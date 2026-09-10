@@ -1106,6 +1106,106 @@ var reads_lethal_x := false
 ## [method Evaluator.position_score]'s own terms per candidate
 ## (`docs/forge/casting.md` §6.4).
 var checks_before_casting := false
+## SAFE BLOCK, THEN FINISH IT (2026-09-10): once the block ladder has put
+## a body in front of an attacker and the attacker LIVED, does this
+## profile come back with a second body that finishes it?
+##
+## [method AiPlayer._best_block_for] is a ladder and it RETURNS on the
+## first rung that answers. The free absorb (rung 1.5, "a wall soaks the
+## hit at zero cost — what walls are FOR") therefore pre-empts the value
+## trade below it and the gang below that: with a Wall of Stone on the
+## table the wall blocks alone, every time, and the trade or the gang that
+## would have KILLED the attacker is never reached. Reproduced 2026-09-10
+## on two boards, both of them a survivor and a body left standing at
+## home:
+##
+## [codeblock]
+## their Serra Angel 4/4    ours: Wall of Swords 3/5, Wall of Swords 3/5
+##     _plan_blocks -> ["Wall of Swords"] ; band kills it: false
+##       + Wall of Swords -> kills it: true ; that body dies: false
+##
+## their Craw Wurm 6/4      ours: Wall of Stone 0/8, Water Elemental 5/4
+##     _plan_blocks -> ["Wall of Stone"] ; band kills it: false
+##       + Water Elemental -> kills it: true ; that body dies: true
+## [/codeblock]
+##
+## The first of those costs NOTHING — two walls that both live through a
+## Serra Angel and together deal it exactly four — and the pilot declined
+## it for a year.
+##
+## On, [method AiPlayer._reinforce_blocks] runs once over the finished
+## plan: for every attacker met by a band that survives it and does not
+## kill it, the SAFE bodies first (bodies that live through the attacker
+## at the size the gang makes it) and then, only if the safe ones do not
+## finish the job, ONE body that dies to close the kill exactly — and that
+## one is priced. [forge] `AiBlockController.reinforceBlockersToKill`
+## (`AiBlockController.java:795-858`, commit `b09a3d3f`,
+## docs/forge/combat.md P4) is the shape, with one thing tightened: Forge
+## adds its safe bodies whether or not the attacker ends up dead, and this
+## commits nothing unless the band it builds actually kills — a body added
+## for nothing is a body exposed to a combat trick for nothing.
+##
+## THE PRICE IS WHAT THE BLOCK PUTS AT RISK, which is the rung 3 rule
+## ([method AiPlayer._best_block_for], `price <= attacker_value * 1.5`)
+## asked of the pair the reinforcement makes: the bodies of that pair that
+## DIE, against the attacker's worth. The survivor already on the
+## attacker is not spent and is not charged — but it is re-asked at the
+## size the gang makes the attacker, so a rampage that turns the pair into
+## two corpses is charged for both ([member reads_gaze] owns that number).
+## Forge's own bound is kept on top of it: the body that dies must be
+## worth strictly less than the attacker it kills.
+##
+## Sorcerer and Wizard, with the other combat reads. Nothing here names a
+## card: the shape is a band that survives without killing, and every
+## predicate in it — [method AiPlayer._band_kills], [method
+## AiPlayer._dies_to], [method AiPlayer._shieldable] — is one the ladder
+## above it already asks.
+var reinforces_blocks := false
+
+## THE CRACK-BACK ASKED BELOW LETHAL (2026-09-10): how far under our own
+## life total the counter-swing has to reach before [method
+## AiPlayer._search_hold_back] is worth running.
+##
+## The search's gate is `reach >= life` and it is exact — if every
+## creature they control connecting still leaves us alive, no attack we
+## could declare LOSES THE GAME to the counter-swing. That is a true
+## sentence and it is not the only question worth asking: an attack that
+## costs us eight life for one point of damage is a bad attack at twenty
+## life too, and nothing above the gate ever prices it. The search itself
+## has priced life since it was built ([method CombatSearch._fdv], one
+## point per point scaled by the share of the remaining total it takes),
+## so the change is the GATE and nothing else: run when
+## `reach >= life - crack_back_margin`.
+##
+## 0 is today's gate exactly, and **0 is what every preset ships**.
+## Apprentice and Magician have no search at all
+## ([member combat_search_nodes] is 0 there), so the number is inert below
+## the Sorcerer whatever it says.
+##
+## THE NUMBERS REFUSED THE RUNG, AND THAT IS THE RESULT (2026-09-10,
+## `docs/ai-difficulty.md` §4). `docs/forge/combat.md` P8 asked for the
+## Wizard at [member chump_threshold]'s 6 and said plainly that this is
+## the THIRD attempt at a question two earlier brakes failed. Swept at
+## 0/6/10 over twenty arms, seed 11, control PASS byte-identical in every
+## one of them: not a single delta is clear of its interval, the flips are
+## a coin (212 won to 228 lost at 6, 330 to 360 at 10), and where the knob
+## moves a deck systematically it moves the CREATURE deck the wrong way —
+## Big Green against Blue Skies −2.4 then −4.3, a green deck that stops
+## attacking into a deck it cannot block anyway. So the gate stays where
+## it was and the field stays, the way [member w_hand] stayed: the
+## question is now one Deck Lab command instead of a patch to this file.
+## THE COST WAS NEVER THE PROBLEM — the wider gate measured 0.96x and
+## 0.92x the null's seconds per game on one pair and 0.94x and 1.06x on
+## another, against P8's budget of two — because opening the gate does not
+## make one declaration dearer ([constant CombatSearch.MIN_SLICE] and
+## [member combat_search_nodes] are untouched), it runs the same search on
+## SMALLER boards, which are the cheap ones.
+##
+## What the question needs is a reading of the RACE and not a lower bar:
+## the swing the reproduction refuses is a 4/4 flier they cannot block
+## trading four damage for twelve, which is `reads_race`'s row
+## (`docs/AI-next-wave.md`, combat P1) rather than this gate's.
+var crack_back_margin := 0
 
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
@@ -1207,6 +1307,7 @@ static func sorcerer() -> AiProfile:
 	profile.reads_pumps = true
 	profile.reads_lethal_x = true
 	profile.counters_by_shape = true
+	profile.reinforces_blocks = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -1223,6 +1324,7 @@ static func wizard() -> AiProfile:
 	profile.reads_lethal_x = true
 	profile.counters_by_shape = true
 	profile.checks_before_casting = true
+	profile.reinforces_blocks = true
 	return profile
 
 

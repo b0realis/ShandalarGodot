@@ -2284,7 +2284,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5727 tests / ~149 747 asserts, ~380 s
+├── tests/                   GUT suite — 5755 tests / ~150 029 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4035,6 +4035,31 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_reinforces_blocks_2026_09_10.gd — SAFE BLOCK, THEN
+│    FINISH IT (AiProfile.reinforces_blocks): two Wall of Swords that now
+│    finish a Serra Angel and the null that declares one of them and
+│    watches it walk away; the Water Elemental added to a Wall of Stone to
+│    kill a Craw Wurm, and the same board on the null; the note's own
+│    headline pair (Wall of Stone plus Grizzly Bears, two damage against a
+│    toughness of four) refused on both arms; a body worth exactly the
+│    prize left home; a regenerator with a Swamp up and an indestructible
+│    attacker never reinforced; a band that has already paid a body left
+│    alone; the gap read at the size their open mana makes the attacker
+│    and the survival test still reading the printed one (reads_pumps'
+│    asymmetry, one rung further down); a gap six Swamps put out of reach
+│    buying nothing; rampage charged for both bodies before the second is
+│    bought; the trick on the attacker taking the pair, which is the risk
+│    the price rule bounds; the whole path through a real combat; the
+│    ladder from Sorcerer up; the knob read by the Lab;
+│    tests/ai/test_ai_crack_back_margin_2026_09_10.gd — A SUB-LETHAL
+│    CRACK-BACK GATE (AiProfile.crack_back_margin): the Air Elemental held
+│    home against two Craw Wurms at 14 life and the null that sends it and
+│    ends the turn at 2; a board above the margin identical on both arms;
+│    the exact gate still exact at lethal reach; the search still saying
+│    ATTACK where the swing pays; a creatureless board untouched at every
+│    value; the number inert below the Sorcerer (combat_search_nodes 0);
+│    the knob read as an INT by the Lab; and every preset shipping 0,
+│    because the Lab refused the rung the note asked for;
 │    tests/ai/test_ai_reads_pumps_2026_09_10.gd — THEIR PUMPS ARE PUBLIC
 │    (AiProfile.reads_pumps): the Grizzly Bears that stops walking into a
 │    0/1 Frozen Shade behind four Swamps and the null that sends it and

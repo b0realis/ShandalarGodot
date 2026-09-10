@@ -98,6 +98,8 @@ override any knob on any preset for a measurement
 | `counters_by_shape` | off | off | on | on | counters by what the spell DOES and by what its own hand can answer, instead of comparing one printed number with `counter_threshold`. The bar is the wrong instrument at both ends of it, and the probe of 2026-09-10 says so in four numbers: Wrath of God prices at 5.00, Fireball at 2.50, Time Walk at 3.00 and Wheel of Fortune at 4.00 — so a Sorcerer (bar 5.5) watched a Wrath of God take four Serra Angels off its own table, and EVERY rung let a Fireball for eight resolve at eight life with the Counterspell in hand. `AiPlayer._counter_shape` answers ALWAYS, NEVER or *ask the bar* before the bar is asked. ALWAYS: a sweeper that takes more off our board than off theirs by a 2/2's worth; damage at our FACE that is lethal or crosses the panic line, the X read off the stack (and a player-hitting sweeper counted here as well as on the board, because an Earthquake for eight against a two-creature control deck is not a board sweep at all); a draw at OUR library that decks us; an extra turn; a wheel (`EffectIntent.wheels`) while our hand is the fuller. NEVER — Weissman's rule, *the counter is for what nothing else in the hand can touch* — when a card in hand answers the spell later and CHEAPER, with the mana for it PLANNED and not merely hoped for, and with the answer SPARE: every creature already on their side has a claim on the removal in our hand, so one Swords to Plowshares against a Savannah Lions on the table is a reason to counter the White Knight and Swords the Lions, not to let both resolve. That last clause is the Lab's and not the design's — without it the rule measured −1.7 with 3 games flipped to a win against 20 flipped away, and with it −0.1 with 2 against 3. It COMPOSES with `ranks_counters` rather than replacing it: this decides WHETHER a spell deserves a counter, that one decides WHICH counter answers it |
 | `reads_lethal_x` | off | off | on | on | knows that LIFE can be spent as mana when the mana is lethal. Channel opens a mana source paid for in life (`MtgPlayer.life_for_mana`) and no seat had ever paid a point: the card is a card-local effect, so `EffectIntent.adds_mana` was false, the Dark Ritual gate never asked about it, and it was cast as a plain three-point spell — probed at HEAD, a Wizard holding Channel and Fireball with two Forests and a Mountain cast Channel into an empty board against an opponent at twenty and finished the turn with the Channel in the graveyard, the Fireball in hand and its own life at twenty. On, a life-for-mana spell is cast ONLY in a step where the life it opens makes an X spell in hand LETHAL, and once it is open the life is paid and the spell fired in ONE action (`AiPlayer._lethal_life_mana`), so no rung can pay life for mana it then fails to spend. Two printed shapes reach a player's life with an X and the pool holds one of each behind a Channel — the aimed burn (Fireball, Disintegrate) and the sweeper that hits PLAYERS (Hurricane, Earthquake), whose X lands on us too and must leave us alive. The life is capped at `life − 1 − their attack`, read through the same block plan `_in_danger` uses, so a Fireball is not paid for with the life a Serra Angel is about to take. Forge never gets here at all: Channel is `AI:RemoveDeck:All` there and `willPayCosts` keeps a margin of four |
 | `checks_before_casting` | off | off | off | on | looks at the POSITION a cast would leave it in before it commits — the last layer of the ramp, and the one a player notices. `AiPlayer._try_cast_best` prices a cast by what the card is worth and what its victim is worth (`_cast_value`) and never by the board afterwards, so a Savannah Lions was cast in front of an untapped Prodigal Sorcerer and pinged off the table before it had blocked once: the card gone, the board where it was, and the pilot reading the cast as a gain. Forge's `OnePlaySafetyChecker` copies the game and replays the play; ours copies nothing, because `Evaluator.position_score` is a sum of four counted quantities and the position after a cast is therefore ARITHMETIC (`AiPlayer._cast_projection` — the card leaves the hand, the victim leaves their board, the life totals move, our permanent arrives). THE ANSWER IS THE ONE THE TABLE IS ALREADY SHOWING and no other: an activated ability on THEIR battlefield they can pay for right now that would take the body straight off again (`AiPlayer._answered_on_arrival`), their open sources counted the way `AiPlayer._shieldable` counts them, the effect read as a shape (`EffectIntent`) and never as a name; their hand is not looked at at all. It ABSTAINS unless that answer is on the table, which is the note's own "a pessimistic projection that never casts into open red mana" answered, and `AiPlayer._in_danger` lifts it, because a desperate play is allowed to be desperate — Forge's own escape |
+| `reinforces_blocks` | off | off | on | on | comes back to a block it has already declared and finishes the attacker off. `AiPlayer._best_block_for` is a LADDER and returns on the first rung that answers, so the free absorb — *a wall soaks the hit at zero cost, which is what walls are FOR* — sits above the value trade and above the gang: a Wall of Stone on the table blocked alone every time and the rungs below it were never reached, however many bodies were standing at home. Two walls of swords watched a Serra Angel walk away for free (each lives through it, and together they deal it exactly four); a Wall of Stone soaked a Craw Wurm while the Water Elemental beside it, which kills the Wurm, stayed home. `AiPlayer._reinforce_blocks` runs ONCE over the finished plan, and only where the band survives the attacker and does not kill it — never a chump, never a trade, never a body that `_shieldable`, indestructible or a printed gaze says cannot die. Safe bodies first and free of charge, then, only if those fall short, ONE body that dies to close the kill exactly. THE PRICE IS WHAT THE PAIR PUTS AT RISK — rung 3's own `price <= attacker_value * 1.5` read off the bodies that actually die, with Forge's stricter bound on top (the body that dies is worth strictly less than the attacker it kills) — so a survivor is free, a rampage that turns the pair into two corpses is charged for both, and nothing is written into the plan unless the band it builds actually kills. Sorcerer and Wizard, with the other combat reads |
+| `crack_back_margin` | 0 | 0 | 0 | 0 | how far under our own life total the counter-swing has to reach before `AiPlayer._search_hold_back` is worth running: the gate was `reach >= life`, and it is `reach >= life - crack_back_margin`. The old gate is exact and asks exactly one question — *does this attack LOSE THE GAME to the counter-swing?* — and never the other one, whether it costs us twelve life for four points of damage. **Every preset ships 0, which is that gate unchanged**: the number is here so the Deck Lab can put the question in one command, the way `w_hand` is, and the Lab's answer of 2026-09-10 was NO (§4). Not a difficulty knob, and no rung moves it |
 `minds_pain`, `fits_auras`, `mulligans`, `feeds_worst`, `spares_own`,
 `prices_liabilities` and `prices_fallout`
 are the seven knobs that are on at every rung, and the reason is the
@@ -1665,6 +1667,136 @@ ABILITY TO ASK.
   moves from 525-475 to 523-477 — four Llanowar Elves are enough. A
   constant that moves the number every other knob was measured against,
   in exchange for a coin, is the clearest DO NOT SHIP in this file.
+THE WALL THAT BLOCKED ALONE (2026-09-10, `reinforces_blocks`) is a GAIN,
+and the deck that says so loudest is the one with eight walls in it. Seed
+11, control the ALL-LAND PAIR (forty Forests against forty Mountains —
+the only pair a block knob cannot fire on; it decks out at 68 turns and
+plays 1000-1000), byte-identical to its own null in every arm of every
+run below.
+
+| pair | null | `on` | delta | games that turned |
+| --- | --- | --- | --- | --- |
+| Priestess (4 Wall of Swords, 4 Wall of Spears) vs Big Green, 2 000 an arm | 6.6% | 10.9% | **+4.4 ±1.7, clear of zero** | 450 of 2 000 — 108 ended, **98 won to 10** |
+| Priestess vs Blue Skies | 1.5% | 3.4% | **+2.0 ±1.0, clear of zero** | 185 of 2 000 — 43 ended, **41 won to 2** |
+| Priestess vs Black-Red Raiders | 11.6% | 12.2% | +0.6 ±2.0 | 237 of 2 000 — 26 ended, 19 won to 7 |
+| Big Green vs White Knights, 2 000 an arm | 53.8% | 54.4% | +0.7 ±3.1 | 120 of 2 000 — 21 ended, 17 won to 4 |
+| White Knights vs Big Green, 2 000 an arm | 47.8% | 48.9% | +1.1 ±3.1 | 285 of 2 000 — 36 ended, 29 won to 7 |
+
+- **THE REPRODUCTION IS A LADDER THAT RETURNS TOO EARLY.**
+  [method AiPlayer._best_block_for] answers on its first answering rung,
+  and rung 1.5 — the free absorb, *a wall soaks the hit at zero cost,
+  which is what walls are FOR* — sits above the value trade at rung 2 and
+  the gang at rung 3. So a survivor is chosen and the rest of the ladder
+  is never walked:
+
+  ```
+  their Serra Angel 4/4    ours: Wall of Swords 3/5, Wall of Swords 3/5
+      _plan_blocks -> ["Wall of Swords"] ; band kills it: false
+        + Wall of Swords -> kills it: true ; that body dies: false
+
+  their Craw Wurm 6/4      ours: Wall of Stone 0/8, Water Elemental 5/4
+      _plan_blocks -> ["Wall of Stone"] ; band kills it: false
+        + Water Elemental -> kills it: true ; that body dies: true
+  ```
+
+  The first of those costs NOTHING — both walls live through the Angel and
+  together they deal it exactly four — and the pilot declined it every
+  time.
+- **THE NOTE'S OWN HEADLINE BOARD DOES NOT ADD UP, and it is written down
+  rather than forced.** `docs/forge/combat.md` P4 is titled by "the Wall
+  of Stone plus Grizzly Bears kill on a Craw Wurm"; a Wall of Stone is
+  0/8 and a Grizzly Bears is 2/2, so that pair deals TWO to a toughness of
+  four. The probe above is what the row is really about, and
+  `tests/ai/test_ai_reinforces_blocks_2026_09_10.gd` pins the arithmetic
+  that refuses the headline on both arms.
+- **THE PRICE IS WHAT THE PAIR PUTS AT RISK, and that is a decision the
+  note left open.** P4 says *the rung 3 price rule applied to the pair*;
+  rung 3 charges both bodies of a gang because in a gang both are at
+  risk, and here the survivor the ladder already committed is not. So the
+  price is `Evaluator.permanent_value` summed over the bodies of the pair
+  the attacker actually KILLS, against the same `attacker_value * 1.5`,
+  with Forge's own bound kept on top of it — the body that dies is worth
+  strictly less than the attacker it kills
+  ([forge] `AiBlockController.java:795-858` at `b09a3d3f`). Charging the
+  wall as well would have made the knob nearly inert (a Wall of Stone
+  scores 7.00 against a Craw Wurm's 10.00), and it would have bound the
+  reading to an evaluator constant the Wave 5 row is about to change.
+  Priced this way the rampage is still charged for both bodies, because a
+  Craw Giant blocked by two is an 8/6 and the wall dies with the
+  reinforcement (CR 702.23).
+- **ONE THING IS TIGHTER THAN FORGE.** Forge adds its safe blockers
+  whether or not the attacker ends up dead. Nothing is written into the
+  plan here unless the band it builds actually kills — a body added for
+  nothing is a body exposed to a combat trick for nothing, which is P4's
+  own named risk (a Giant Growth on the Wurm takes the Elemental AND the
+  wall the ladder had made safe; the test plays that out).
+- **NO HARM ACROSS THE WHOLE TWENTY-MATCHUP STARTER MATRIX**, 1 000 games
+  an arm, each deck in turn on seat A. Every delta is between −0.6 and
+  +1.4, nothing anywhere near the ±4.4 interval that size carries, and
+  across the twenty **152 games ended differently — 110 won, 42 lost**.
+  Four of the twenty are byte-identical to their own null, and the six
+  liveliest all have Big Green in them, which is the pool fact under it:
+  a survivor that does not kill is what the knob needs, and in the
+  starters that is Big Green's Ironroot Treefolk and Giant Spider. No
+  shipped starter holds a WALL at all — for those you go to the 1997
+  enemies, and Priestess (eight of them) is the pair above.
+- **THE NULL IS EXACTLY THE NULL.** Every sweep above carries an `off`
+  arm beside the `on` one, and it is byte-identical to the null in
+  **2 000 of 2 000 games on both Big Green pairs and in all four pairs of
+  the Priestess run, 8 000 for 8 000** — the knob only ever ADDS a body to
+  an attacker the plan already blocked, never moves one and never takes
+  one away.
+
+A SUB-LETHAL CRACK-BACK GATE, MEASURED AND REFUSED (2026-09-10,
+`crack_back_margin`). `docs/forge/combat.md` P8 asked for the Wizard at
+`chump_threshold`'s 6 and said plainly that this is the THIRD attempt at
+a question two earlier brakes failed, with *the search prices, it does
+not threshold* as the argument and the Lab as the proof. The gate was
+built exactly as designed — one line, `reach >= life -
+crack_back_margin` — and the Lab said no. **Every preset ships 0, which
+is the old gate unchanged.** Seed 11, control the all-land pair, PASS
+byte-identical in every arm of every run.
+
+| pair (seat A holds the knob) | null | 6 | 10 | games that turned at 6 |
+| --- | --- | --- | --- | --- |
+| Big Green vs Mountain Artillery, 2 000 an arm | 54.8% | −0.6 ±3.1 | −1.6 ±3.1 | 406 of 2 000 — 68 ended, 28 won to 40 |
+| Mountain Artillery vs Big Green, 2 000 an arm | 48.9% | +0.3 ±3.1 | +2.1 ±3.1 | 674 of 2 000 — 102 ended, 54 won to 48 |
+| Big Green vs the other four starters, 1 000 an arm | — | −0.7 / −2.4 / +1.1 / −1.0 | −2.7 / −4.3 / +1.9 / −1.0 | 1 063 of 4 000 — 194 ended, 82 won to 112 |
+| White Knights vs the other four starters, 1 000 an arm | — | +1.6 / −0.5 / +1.0 / −0.1 | +0.8 / −0.6 / +1.9 / +0.0 | 654 of 4 000 — 76 ended, 48 won to 28 |
+| The Deck (playable) vs Big Green / White Knights / Mountain Artillery | — | **+0.0** | **+0.0** | **0 of 3 000 — the knob cannot fire there at all** |
+
+- **NOT ONE DELTA IN TWENTY ARMS IS CLEAR OF ITS INTERVAL**, and the flips
+  are a coin: 212 won to 228 lost at 6, 330 to 360 at 10.
+- **WHERE IT MOVES A DECK SYSTEMATICALLY IT MOVES THE CREATURE DECK THE
+  WRONG WAY.** Big Green against Blue Skies is −2.4 then −4.3, monotone —
+  a green deck that stops attacking into a deck it cannot block anyway.
+  That is the pessimism the 2026-09-04 attack audit spent a pass removing
+  and the two earlier brakes were rejected for; the search prices it
+  rather than thresholding it, and it prices it the same way.
+- **THE COST WAS NEVER THE PROBLEM, and P8's budget is met with room.**
+  The note's rule is that the per-declaration time in the Lab's timing
+  column must not exceed twice today's. On Big Green vs Mountain
+  Artillery, 1 000 games at `--jobs 1`, best of two runs: 13.6 s at the
+  null, **13.1 s at 6 and 12.5 s at 10** (0.96× and 0.92×), and per TURN
+  0.72 / 0.66 / 0.62 ms because the arms play longer games. On Big Green
+  vs White Knights: 13.7 / 12.9 / 14.5 s (0.94× and 1.06×). The reason is
+  worth keeping: opening the gate does not make ONE declaration dearer —
+  `combat_search_nodes` and `CombatSearch.MIN_SLICE` are untouched — it
+  runs the same search on more declarations, and the ones it newly runs on
+  are the SMALLER boards, which are the cheap ones.
+- **THE DECK WHOSE SHAPE FORGE'S SOURCE DESCRIBES CANNOT SEE IT.**
+  `notNeededAsBlockers` is about a non-aggro deck declining a sub-lethal
+  swing; The Deck is this pool's non-aggro deck and it measures **exactly
+  0 games different in 3 000**, because it barely declares an attack the
+  search could hold back in the first place. A pool fact, not a null.
+- **SO THE KNOB SHIPS AT ITS NULL AND THE FIELD STAYS**, on `w_hand`'s own
+  precedent of the same day: the question is now one Deck Lab command
+  (`--sweep crack_back_margin=0,6,10 --null 0`) instead of a patch to
+  `engine/ai/ai_profile.gd`, and the numbers are here so nobody spends a
+  fourth attempt on it. What the question actually needs is a reading of
+  the RACE rather than a lower bar — the swing the reproduction refuses is
+  a 4/4 flier they cannot block trading four damage for twelve, which is
+  `reads_race`'s row (`docs/AI-next-wave.md`, combat P1).
 
 Every change to a profile is measured before it ships — `DeckLab/deck_lab.sh
 --sweep KNOB=on,off` against a control pair, the same seed — and
@@ -1719,6 +1851,31 @@ once. The last two matter more than the first three for anything with a
 counterspell in it: `counters_by_shape` moves The Deck against Mountain
 Artillery by eleven points. That is how both of those passes proved their own null, and it is
 the general rule every knob since `plays_engines` has quietly needed.
+PIN. `reads_gaze`, `reads_manlands`, `reads_pumps` and
+`reinforces_blocks` are on at Sorcerer and Wizard, so a measurement of
+some OTHER knob taken against a number published before 2026-09-10 must
+force all four off on both seats (`--profile-a
+wizard:reads_gaze=off,reads_manlands=off,reads_pumps=off,reinforces_blocks=off`,
+and the same for `--profile-b`) or it is measuring several changes at
+once. That is how each of those passes proved its own null, and it is
+the general rule every knob since `plays_engines` has quietly needed. It
+holds inside the SUITE as well and not only in the Lab:
+`tests/ai/test_ai_pump_plan_broken_2026_09_10.gd`'s null arm pins
+`reinforces_blocks` off beside `pumps_to_attack`, because on that board
+the block reinforcement would put a third body on the Hill Giant the
+regenerator holds but does not kill — two changes read as one.
+
+AND THE CONTROL FOR A KNOB THAT LIVES IN COMBAT IS THE ALL-LAND PAIR.
+`reinforces_blocks` fires wherever a block is declared, and a block is
+declared in every game with a creature in it, so the only pair it cannot
+fire on is a pair with no creature at all: forty Forests against forty
+Mountains, which decks out at 68 turns and plays 1000-1000. It is
+byte-identical to its own null in every arm of every run of 2026-09-10
+(2 000 games an arm on the Big Green and Priestess sweeps, 1 000 on the
+matrix), and it is the same control `crack_back_margin` needs, for the
+same reason — the crack-back search reads THEIR creatures and there are
+none. Two forty-land lists are not shipped decks and do not need to be;
+write them beside the run.
 TWO MORE SINCE 2026-09-10. `levels_boards` grew the LAND SWEEP, so its
 control must hold no Balance AND no all-lands sweeper — Big Green vs
 Mountain Artillery holds none of them in the main deck (Mountain
@@ -1799,6 +1956,37 @@ Regrowth is untouched by the knob.
   creatures make next turn, because the body it is asking about is not on
   the table to block it, and it does not know that tapping out costs us
   the Fog we were holding — `position_score` counts lands and not mana.
+  (`docs/forge/combat.md` P4) rather than this knob's. **STILL OPEN after
+  `reinforces_blocks` landed (2026-09-10):** that knob is a SECOND PASS
+  over a block already declared and never a first one, so it can add a
+  body to a wall that blocked — it cannot put a body in front of an
+  attacker the ladder declined altogether. The missing rung is still
+  missing.
+- `reinforces_blocks` inherits `reads_pumps`' asymmetry and it shows on
+  its own safe pass. The gap the reinforcement has to CLOSE is read at the
+  size their open mana makes the attacker (`_band_kills` asks
+  `_pump_reach`), so a Frozen Shade behind three Swamps is a 3/4 and the
+  Grizzly Bears alone is no answer to it. Whether the body we ADD survives
+  is read at the PRINTED attacker, because their pump killing a body of
+  ours is deliberately not read on defence — so a Bears added against that
+  Shade counts as a free, safe reinforcement and may in truth die to the
+  breath. That is the same sentence the 2026-09-10 cut is built on (a
+  blocker of ours that dies to their breath has SPENT their mana), read
+  one rung further down; it is pinned in
+  `tests/ai/test_ai_reinforces_blocks_2026_09_10.gd` rather than left to
+  be rediscovered. The consequence worth naming: a body the safe pass
+  reads as free is charged nothing by the price rule, so the `* 1.5` bound
+  never sees it.
+- `reinforces_blocks` prices the bodies that DIE and not the whole pair,
+  which means it does not charge for the block's second-order cost — a
+  body put on an attacker is a body that cannot block the NEXT attacker,
+  and the pass runs after every attacker has been answered, so the ladder
+  has already had first pick. Forge has the same ordering. What it also
+  does not price is the wall's own permanence: a Wall of Stone that stops
+  a Craw Wurm every turn for the rest of the game is worth more than the
+  one kill the reinforcement buys, and the reading has no horizon to say
+  so (`counts_the_race`'s row, `docs/AI-next-wave.md` wave 4). The
+  measurement is what says it comes out ahead anyway.
 - `holds_x_burn` is the HOLD half of its row only. The CHAIN — two burn
   spells that kill together, the first sized for its share and the
   second's cost booked out of the reserve — is wave 3's

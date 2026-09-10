@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5727 tests, 0 failing, 332 scripts** (149 747 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5755 tests, 0 failing, 334 scripts** (150 029 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -10511,6 +10511,98 @@ clean; tools 158 OK; boot smoke clean.
   `Evaluator.permanent_value` takes the optional `AiProfile` that
   `position_score` has taken since `w_hand`, and the pilot hands its own
   profile to all sixty-nine of its calls.
+
+## THE WALL THAT BLOCKED ALONE (2026-09-10) — Wave 3, combat P4 and P8
+
+- **A ladder that returns on its first answering rung never reaches the
+  rungs below it.** `AiPlayer._best_block_for` answers at rung 1.5 — the
+  free absorb, *a wall soaks the hit at zero cost, which is what walls are
+  FOR* — and that rung sits ABOVE the value trade at rung 2 and the gang at
+  rung 3. So a survivor blocks alone every time, however many bodies stand
+  at home. Reproduced: two Wall of Swords in front of a Serra Angel
+  declared ONE of them and watched the Angel walk away, when both live
+  through it and together deal it exactly four; a Wall of Stone soaked a
+  Craw Wurm while the Water Elemental beside it, which kills the Wurm,
+  stayed home. `reinforces_blocks` (Sorcerer, Wizard).
+- **`AiPlayer._reinforce_blocks` is ONE pass over the finished plan**, and
+  it can only ever ADD a body to an attacker the plan already blocked —
+  never move one, never take one away, so the null is structural and not
+  argued. It runs only where the band SURVIVES the attacker and does not
+  KILL it (never a chump, never a trade, and never against a body that is
+  indestructible, that `_shieldable` says regenerates, or that a printed
+  gaze already finishes). Safe bodies first and free of charge, then — only
+  if those fall short — ONE body that dies to close the kill exactly.
+  [forge] after `AiBlockController.java:795-858`
+  (`reinforceBlockersToKill`) at `b09a3d3f`, with one thing tightened:
+  Forge adds its safe blockers whether or not the attacker ends up dead,
+  and nothing is written into the plan here unless the band it builds
+  actually kills — a body added for nothing is a body exposed to a combat
+  trick for nothing.
+- **THE PRICE IS WHAT THE PAIR PUTS AT RISK, and the note left the choice
+  open.** P4 says *the rung 3 price rule applied to the pair*; rung 3
+  charges both bodies of a gang because in a gang both are at risk, and the
+  survivor the ladder already committed is not. So the price is
+  `Evaluator.permanent_value` over the bodies of the pair the attacker
+  actually KILLS, against the same `attacker_value * 1.5`, with Forge's own
+  bound on top (the body that dies is worth strictly less than the attacker
+  it kills). Charging the survivor as well would make the knob nearly inert
+  — a Wall of Stone scores 7.00 against a Craw Wurm's 10.00 — and would
+  bind the reading to an evaluator constant wave 5 was about to measure.
+  Rampage is still charged for both bodies, because a Craw Giant blocked by
+  two is an 8/6 and the wall dies with the reinforcement (CR 702.23). It is
+  the same currency `CombatSearch.gang_defence` spends, which is what P4
+  means by *the two must agree*.
+- **THE NOTE'S OWN HEADLINE BOARD DOES NOT ADD UP** and is recorded rather
+  than forced: a Wall of Stone is 0/8 and a Grizzly Bears is 2/2, so that
+  pair deals TWO to a toughness of four. The knob refuses it on both arms
+  and `tests/ai/test_ai_reinforces_blocks_2026_09_10.gd` pins the
+  arithmetic.
+- **Measured — a GAIN, and the deck that says so loudest is the one with
+  eight walls in it.** Seed 11, control the ALL-LAND PAIR (forty Forests
+  against forty Mountains, the only pair a block knob cannot fire on),
+  byte-identical to its own null in every arm of every run. Priestess
+  (4 Wall of Swords, 4 Wall of Spears) vs Big Green 6.6% -> 10.9%
+  (**+4.4 ±1.7, clear of zero**, 98 games won to 10), vs Blue Skies
+  1.5% -> 3.4% (**+2.0 ±1.0**, 41 to 2), vs Black-Red Raiders +0.6 ±2.0;
+  Big Green vs White Knights 53.8 -> 54.4 (+0.7 ±3.1, 17 to 4) and White
+  Knights vs Big Green 47.8 -> 48.9 (+1.1 ±3.1, 29 to 7), 2 000 games an
+  arm. No harm over the whole twenty-matchup starter matrix at 1 000 an
+  arm: every delta between −0.6 and +1.4, and **110 games won to 42 lost**.
+  The `off` arm replays the null game for game in all 12 000 games it was
+  run over.
+- **Pool facts.** NO shipped starter holds a wall at all; what the knob
+  needs is a body that survives an attacker without killing it, which in
+  the starters is Big Green's Ironroot Treefolk and Giant Spider. Four of
+  the twenty starter matchups measure exactly 0 games different, and the
+  six liveliest all have Big Green in them. The deck that puts the question
+  is a 1997 enemy: `decks/1997/originals/priestess.deck`.
+- **A SUB-LETHAL CRACK-BACK GATE, BUILT, MEASURED AND REFUSED**
+  (`crack_back_margin`, combat P8). `_search_hold_back` ran only when
+  `reach >= life`, so the search was asked exactly one question — *does
+  this attack LOSE THE GAME?* — and never whether it costs twelve life for
+  four damage. Reproduced: our Air Elemental against two Craw Wurms at 14
+  life, the null swinging for four and taking twelve back to sit at 2. The
+  gate is one line, `reach >= life - crack_back_margin`, and the Lab said
+  no: twenty arms at 0/6/10, seed 11, control PASS byte-identical in every
+  one, **not a single delta clear of its interval** and the flips a coin
+  (212 won to 228 lost at 6, 330 to 360 at 10). Where it moves a deck
+  systematically it moves the CREATURE deck the wrong way — Big Green
+  against Blue Skies −2.4 then −4.3, monotone, a green deck that stops
+  attacking into a deck it cannot block anyway, which is the pessimism the
+  2026-09-04 attack audit spent a pass removing. **THE COST BUDGET WAS MET
+  WITH ROOM** and is not what refused it: 1 000 games at `--jobs 1`, best
+  of two, Big Green vs Mountain Artillery 13.6 s at the null against 13.1 s
+  at 6 and 12.5 s at 10 (0.96× and 0.92×), Big Green vs White Knights
+  13.7 / 12.9 / 14.5 (0.94× and 1.06×), against P8's budget of two —
+  because opening the gate does not make ONE declaration dearer
+  (`combat_search_nodes` and `CombatSearch.MIN_SLICE` are untouched), it
+  runs the same search on SMALLER boards, which are the cheap ones. So
+  **every preset ships 0, which is the old gate unchanged**, and the field
+  stays on `w_hand`'s precedent so the question is one Lab command. A POOL
+  FACT under it: The Deck — this pool's non-aggro deck, the very shape
+  Forge's `notNeededAsBlockers` describes — measures **exactly 0 games
+  different in 3 000**. What the question needs is a reading of the RACE
+  and not a lower bar, which is `reads_race`'s row (combat P1).
 
 ## Standing quality gates
 
