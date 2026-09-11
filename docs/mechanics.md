@@ -114,7 +114,7 @@ order" (simplified-cards, *untap locks*).
 | X spells | X is chosen at cast, stamped on the card before targets are validated (so "target with mana value X" filters see it), then multiplied by `x_count` and paid as generic. | 107.3, 115.4, 601.2b | `MtgGame.cast_spell(x_value)`, `CardInstance.memory["x_value"]`, `StackItem.x_value` | Fireball, Frankenstein's Monster (`drk/frankenstein_s_monster.gd`) |
 | X in abilities | Generic by default; `with_colored_x` makes it a coloured payment. | 107.3 | `ActivatedAbility.x_color` / `with_colored_x` / `cost_for`, `ManaCost.plus_colored` | Goblin Polka Band (`past/goblin_polka_band.gd`) |
 | Coloured X on spells | "Spend only black mana on X": `CardData.with_colored_x` makes `cast_spell` pay `cost_for(x)` (X copies of that colour) with no generic X share; the AI sizes X against the coloured cost. | 107.3, 601.2f | `CardData.x_color` / `with_colored_x` / `cost_for`, `MtgGame.cast_spell`, `AiPlayer._max_affordable_x` | Drain Life (`2ed/drain_life.gd`) |
-| Mid-trigger payments | "Unless you pay {N}" resolved inside a trigger: floating mana first, then auto-tapped LANDS. | 601.2h | `MtgGame.try_pay`, `can_afford_cost`, `_payment_plan` | Stasis (`2ed/stasis.gd`) |
+| Mid-trigger payments | "Unless you pay {N}" resolved inside a trigger: floating mana first, then EVERY untapped mana source the payer controls — a Sol Ring, a Mox, a Llanowar Elves, not only the lands (**since 2026-09-11**; the plan is [ManaPlanner]'s, the one the AI seat and the human auto-cast already share). | 601.2h, **605.3a** | `MtgGame.try_pay`, `can_afford_cost`, `_payment_plan`, `_mana_ability_asks` | Stasis (`2ed/stasis.gd`), The Tabernacle at Pendrell Vale (`leg/the_tabernacle_at_pendrell_vale.gd`) |
 
 **A COST THAT IS REFUSED ASKS NOTHING** (CR 601.2h — "if the total cost
 can't be paid, the casting is illegal and the game returns to the moment
@@ -128,9 +128,15 @@ in `choice_log`, an entry in `unanswered_choices` and a
 the engine then turned down. Pinned by
 `tests/unit/test_cost_choice_contract.gd`.
 
-**Simplifications here:** `try_pay` auto-taps lands only (never Sol Ring) and
-picks them greedily — ROADMAP. Power Artifact's floor is "generic can't go
-below zero" rather than "not less than one mana" — simplified-cards.
+**Simplifications here:** `try_pay` no longer stops at lands (2026-09-11 —
+CR 605.3a, a mana ability may be activated whenever a rule asks for a
+payment), but the payer still does not CHOOSE which sources go: the
+planner's order decides, and the two shapes that would ask a question to
+activate — a colour CHOICE (Fellwar Stone) and a mana battery with charge
+counters on it — are left out of the plan rather than half-paid, which
+under-reports six cards in the safe direction — ROADMAP. Power Artifact's
+floor is "generic can't go below zero" rather than "not less than one
+mana" — simplified-cards.
 
 ---
 

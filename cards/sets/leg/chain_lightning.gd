@@ -7,7 +7,8 @@ extends CardScript
 ##
 ## Implementation: both halves. The victim (the targeted player, or the
 ## targeted permanent's controller) is offered the {R}{R} through the
-## triggered-payment path — floating mana first, then auto-tapped lands —
+## triggered-payment path — floating mana first, then auto-tapped mana
+## sources (every source, not only lands, since 2026-09-11) —
 ## and paying puts a real copy of Chain Lightning on the stack under THEIR
 ## control, aimed back at the player who fired it. That is the chain.
 ##

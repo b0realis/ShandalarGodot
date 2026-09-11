@@ -116,17 +116,22 @@ func test_scarwood_bandits_can_be_bought_off() -> void:
 
 
 func test_scarwood_bandits_take_it_when_nobody_pays() -> void:
+	# THE PRIZE IS A ROD AND NOT A SOL RING SINCE 2026-09-11:
+	# `MtgGame.try_pay` auto-taps every mana source now and not lands only
+	# (CR 605.3a), so a Sol Ring buys its own freedom and nobody is being
+	# asked to pay at all. An artifact with no mana ability is what "nobody
+	# pays" means on a board with no lands.
 	var bandits := put_battlefield(0, "Scarwood Bandits")
-	var ring := put_battlefield(1, "Sol Ring")
+	var rod := put_battlefield(1, "Rod of Ruin")
 	advance_to_step(Mtg.Step.MAIN1)
 	add_mana(0, Mtg.ManaColor.G)
 	add_mana(0, Mtg.ManaColor.C, 2)
-	assert_ok(g.activate_ability(0, bandits, 0, [TargetRef.card(ring)]))
+	assert_ok(g.activate_ability(0, bandits, 0, [TargetRef.card(rod)]))
 	resolve_stack()
-	assert_eq(ring.controller_id, 0)
+	assert_eq(rod.controller_id, 0)
 	g.destroy(bandits, false)
 	g.check_state_based_actions()
-	assert_eq(ring.controller_id, 1)
+	assert_eq(rod.controller_id, 1)
 
 
 func test_steal_artifact_takes_it_while_attached() -> void:

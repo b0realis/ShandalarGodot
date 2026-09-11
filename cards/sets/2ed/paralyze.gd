@@ -11,7 +11,8 @@ extends CardScript
 ## - Untap lock: static setting the host's cur_skips_untap (Meekstone infra).
 ## - The {4} escape: an upkeep trigger asking the host controller's
 ##   DecisionAgent (choose_yes_no, hinted by affordability), paid through
-##   MtgGame.try_pay — floating mana first, then auto-tapped lands (that
+##   MtgGame.try_pay — floating mana first, then auto-tapped mana sources
+##   (every source, not only lands, since 2026-09-11 — CR 605.3a; that
 ##   helper's engine-wide limits are documented in docs/ROADMAP.md).
 ## THE dos486-guide tech card — the AI famously always pays the {4}; ours
 ## pays when it can afford it, which is already smarter than 1997.

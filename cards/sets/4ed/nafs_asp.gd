@@ -19,7 +19,8 @@ extends CardScript
 ## reference implementations' window (mage-go's `TryPayMana` at the draw
 ## step, XMage's DoUnlessCostPaid) and the one a heuristic seat uses —
 ## through the engine's triggered-payment path (floating mana first,
-## then auto-tapped lands); otherwise they lose the life. The 1997
+## then auto-tapped mana sources — every source, not only lands, since
+## 2026-09-11); otherwise they lose the life. The 1997
 ## game's line for the loss is `@NAFS_ASP` (`Program/prompts.txt:611`):
 ## "Naf's Asp takes 1 life!".
 

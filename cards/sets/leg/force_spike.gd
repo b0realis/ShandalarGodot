@@ -5,7 +5,8 @@ extends CardScript
 ## Implementation: a card-local effect. On resolution the spell's
 ## CONTROLLER (from its stack item, not its owner) is offered {1} through
 ## MtgGame.try_pay — which spends floating mana first and then auto-taps
-## lands, so "tapped out" really means countered. Declining or being
+## every mana source, not only lands (since 2026-09-11), so "tapped out"
+## really means tapped out. Declining or being
 ## unable to pay counters the spell (CR 701.5a).
 
 

@@ -1833,7 +1833,7 @@ already tracks an item, that is said so we do not double-count it.
 |---|---|---|---|---|---|
 | 5.1 | **Game-state deep clone** with copy-on-write battlefield | `pkg/mage/clone.go:20-198`; COW at `game.go:518-559` | none in `engine/`; ROADMAP names it under M4 phase 3 | Prerequisite for search AI, "would this kill me", undo, and §5.3 | L |
 | 5.2 | **Cost payment as a validate-on-clone transaction** | `pkg/mage/payment_transaction.go:15-175`; `spell_payment.go:150-197` `lockPaymentCosts` | PARTIAL — riders are checked before paying, but per-site; the 2026-09 audit found `tap_for_mana` half-paying | Makes "half-paid then refused" impossible as a class | M |
-| 5.3 | **Exact mana solver / auto-tapper** (A\* with an admissible heuristic) | `pkg/mage/mana_solver.go:105-496`; pool-side `mana.go:180-264` | PARTIAL — ours is greedy one-pass; ROADMAP tracks only the "lands only" half. **RE-SITED 2026-09-11** (the line numbers this cell used to carry are two engine passes out of date): there are now TWO greedy planners, not one — `ManaPlanner` (`engine/mana_planner.gd`), which every source type reaches and which the AI and the human auto-cast share, and `MtgGame._payment_plan`, the older one behind `try_pay`/`can_afford_cost`, which scans `inst.is_land()` and nothing else | A greedy planner REFUSES casts that are payable, and it drives the duel's castable highlight through `can_afford`. **AND THE "LANDS ONLY" HALF IS THE SMALL ONE, surveyed 2026-09-11: 45 card files reach `try_pay`/`can_afford_cost` — every lucky charm, Paralyze, Mana Vault, Nether Void, Energy Flux, The Tabernacle at Pendrell Vale — and this pool is full of artifact mana (Sol Ring, the five Moxen, Black Lotus, Mana Crypt, Basalt Monolith, Celestial Prism), so a board whose untapped mana is artifacts CANNOT pay an upkeep it plainly could.** The two planners already emit the SAME shape, `[[instance, ability_index], …]`, which is what `try_pay` executes step by step, and `ManaPlanner.sources` already counts floating mana as a zero-cost source the way `_payment_plan` seeds its sim — so the lift is pointing `_payment_plan` at `ManaPlanner.plan` and keeping one ordering rule, not writing a solver | M (the solver) / **S (the "lands only" half)** |
+| 5.3 | **Exact mana solver / auto-tapper** (A\* with an admissible heuristic) | `pkg/mage/mana_solver.go:105-496`; pool-side `mana.go:180-264` | PARTIAL — ours is greedy one-pass. **THE "LANDS ONLY" HALF IS DONE 2026-09-11**: there is ONE greedy planner again, not two. `MtgGame._payment_plan` no longer walks the battlefield itself — it builds `ManaPlanner.sources` / `plan_from` like everything else, so `try_pay`/`can_afford_cost` reach every mana source the AI seat and the human auto-cast already reached (CR 605.3a), honour RESTRICTED mana (CR 106.6) and keep the planner's order. It keeps ONE rule of its own, [method MtgGame._mana_ability_asks]: a source whose activation would ASK (Fellwar Stone's colour, a battery's charge count) is left out, because a payment nested in a resolution has no way to hold the duel open for the answer. Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd`. What is left of this row is the SOLVER: still greedy, still one pass | A greedy planner REFUSES casts that are payable, and it drives the duel's castable highlight through `can_afford`. **AND THE "LANDS ONLY" HALF IS THE SMALL ONE, surveyed 2026-09-11: 45 card files reach `try_pay`/`can_afford_cost` — every lucky charm, Paralyze, Mana Vault, Nether Void, Energy Flux, The Tabernacle at Pendrell Vale — and this pool is full of artifact mana (Sol Ring, the five Moxen, Black Lotus, Mana Crypt, Basalt Monolith, Celestial Prism), so a board whose untapped mana is artifacts CANNOT pay an upkeep it plainly could.** The two planners already emit the SAME shape, `[[instance, ability_index], …]`, which is what `try_pay` executes step by step, and `ManaPlanner.sources` already counts floating mana as a zero-cost source the way `_payment_plan` seeds its sim — so the lift is pointing `_payment_plan` at `ManaPlanner.plan` and keeping one ordering rule, not writing a solver. **BUILT 2026-09-11 and the drop-in was real, with three caveats the audit had not seen** — see the item below the table | M (the solver); the "lands only" half was **S and is DONE 2026-09-11** |
 | 5.4 | **Trigger batching** — accumulate since last priority, then stack APNAP | `pkg/mage/game.go:2006-2105`, `:2232-2248` `PutTriggersOnStack` | PARTIAL — `dispatch_event` stacks each trigger immediately | Decides which of two simultaneous triggers resolves first | M |
 | 5.5 | **Real delayed triggers** (stack objects with event matchers) | `pkg/mage/game.go:325-338`, `:2001-2005`, `:2108-2165` | ALREADY TRACKED (ROADMAP, audit-2026-09) | Nobody can respond to Berserk's destruction or Rukh Egg's bird | M |
 | 5.6 | **Generic replacement-effect pipeline** | `pkg/mage/action.go:11-41`; `effect_manager.go:768-811` | ALREADY TRACKED (`mechanics.md §14`) | Blocks ten stubbed damage cards (Forcefield, Eye for an Eye, Rock Hydra…) | L |
@@ -1855,6 +1855,139 @@ already tracks an item, that is said so we do not double-count it.
 | 5.22 | **Alternative costs / casting from a non-hand zone** | `pkg/mage/alternate_cost.go:26-109`; `effect_cast_alt.go:122-299` | MISSING for cast-from-zone; PARTIAL for lands | Low era pressure; the clean home for `cards/todo/drk/gaea_s_touch.gd` | S |
 | 5.23 | **Attack costs** ("can't attack unless you pay", CR 508.1e) | `pkg/mage/combat_restrictions.go:67-206` | MISSING | No Propaganda in the pool; the right home for Hasran Ogress-style taxes we do as triggers | S |
 | 5.24 | **`DecisionAgent` breadth**: choose a number, name a card, choose a permanent, distribute damage at resolution, order blockers | `pkg/mage/player.go:82-146` (15 questions vs our 4) | PARTIAL — **order blockers and distribute COMBAT damage landed 2026-08-31** (`order_blockers` / `assign_combat_damage`, §1.4), as did `choose_mulligan` (§1.5) and the two "hold the turn open" switches (§1.1, §1.4). Our four primitives are now seven, all funnelled through `PlayerChoice` and, since the §1.3 pre-flight landed, all actually PUT TO THE PLAYER. Still missing as TYPES: choose a number, name a card, choose a permanent, distribute damage at RESOLUTION — each needs a new `PlayerChoice.Kind` and a row in `DuelScreen.choice_options`, which is now the one place a new kind has to be worded | Directly blocks the Balance / Eureka / Juxtapose / Nebuchadnezzar stub cluster — several need a HOOK, not just a UI | M |
+
+### 5.3a THE "LANDS ONLY" HALF, BUILT (2026-09-11) — and the three things the audit had not seen
+
+**THE REPRODUCTION, quoted off a `--headless --script` probe before a line
+was changed.** Every board is one untapped source and a cost of `{1}`:
+
+```
+=== can_afford_cost / try_pay with ONLY artifact mana untapped ===
+  board ["Sol Ring"]:               can_afford_cost({1}) = false  try_pay({1}) = false
+  board ["Mox Emerald", "Mox Ruby"]: can_afford_cost({1}) = false  try_pay({1}) = false
+  board ["Basalt Monolith"]:        can_afford_cost({1}) = false  try_pay({1}) = false
+  board ["Mana Crypt"]:             can_afford_cost({1}) = false  try_pay({1}) = false
+  board ["Black Lotus"]:            can_afford_cost({1}) = false  try_pay({1}) = false
+     ...and ManaPlanner.plan({1}) on the SAME board: ["Sol Ring"], ["Mox Emerald"], …
+
+=== The Tabernacle at Pendrell Vale, a Sol Ring untapped ===
+  my upkeep passed: Bears zone=3 (graveyard), Sol Ring tapped=false
+  >> the Bears are DEAD
+=== the same board with a Forest instead of the Sol Ring ===
+  Bears zone=2, Forest tapped=true    >> the Bears are alive
+```
+
+The prison land of the era killing a creature with two mana standing
+beside it, and a Forest in the Ring's place saving it. **CR 605.3a**: a
+player may activate a mana ability whenever a rule or effect asks them to
+pay a mana cost. Nothing in that rule says "land".
+
+**WHAT CHANGED.** `MtgGame._payment_plan` no longer walks the battlefield
+itself. It builds `ManaPlanner.sources` and calls `ManaPlanner.plan_from`
+— the planner the AI seat and the human's double-click auto-cast have
+shared since 2026-09-03 — so a triggered payment taps exactly what a cast
+of the same cost would. `try_pay` skips the plan's floating-mana steps (a
+null instance) instead of trying to tap them. Five helpers that existed
+only to serve the old scan are gone (`_is_free_mana_ability`,
+`_has_free_mana_ability`, `_first_free_mana_ability`, `_ability_producing`,
+`_fewer_mana_options`).
+
+**AND THE DROP-IN WAS REAL, with three things the audit's "identical
+shape" had not looked at:**
+
+1. **`[]` means two different things in the two vocabularies.** The old
+   `_payment_plan` returned `[]` for "floating mana already covers it" and
+   `null` for "uncoverable"; `ManaPlanner.plan_from` returns `[]` for "no
+   plan" *and* for a free cost, and puts floating mana in the plan as
+   `[null, unit]` rows. `ManaPlanner.cost_is_free` is asked first and `[]`
+   after it is the refusal — which is the same order every other executor
+   in the file already uses.
+2. **A mana ability can ASK, and a payment nested in a resolution has
+   nowhere to put the question.** Two shapes do it: a colour CHOICE
+   (Fellwar Stone) and a mana battery with charge counters on it
+   (CR 601.2b). Proven at the site rather than argued:
+
+   ```
+   tap_for_mana(Fellwar Stone) -> ''
+   awaiting_choice = Fellwar Stone: What kind of mana?
+   stone tapped = false ; pool = []
+   ```
+
+   The refusal string is empty — it looks like success — and no mana was
+   made. The COST hold (`MtgGame._pending_action`) re-issues the *mana
+   ability alone*, so the trigger that was paying would be lost. So
+   `_payment_plan` keeps one rule of its own, `_mana_ability_asks`, and
+   leaves those six cards out; the cost is under-reported rather than
+   half-paid, which is the direction `could_afford` already takes. A
+   battery with no counters on it asks nothing and is planned normally.
+3. **Restricted mana comes free with the planner and is a fix.** The old
+   scan put Mishra's Workshop in the plan and then discovered the sim
+   could not spend it; `ManaPlanner.source_usable` refuses it up front
+   (CR 106.6 — artifact spells only, and an upkeep tax is not a spell).
+   Both answer "no"; only one of them means it.
+
+**WHAT A PLAYER NOTICES.** The human seat pays through this path for every
+"unless you pay" on the table, and the *query* behind the offer —
+`can_afford_cost` — is also what puts the OPTIONAL border on a permanent
+whose ability the player could activate (`DuelScreen._can_act_on`, read by
+`_highlight_for`), what `_could_respond` holds the four instant windows on
+and what `_has_affordable_fast_effect` reads for the Done order. So: the
+Yes/No box now appears when a Sol Ring, a Mox or a Llanowar Elves can
+cover the price, where before it silently did not; answering Yes taps them;
+and an ability whose cost only artifact mana can reach now lights up. The
+sources are still the planner's choice and not the player's, and
+`DuelScreen`'s `Don't auto tap this card` marks are NOT consulted (they
+live in the screen, and `try_pay` is engine-side) — which was already true
+of the lands it tapped before today.
+
+**THE NO-HARM, MEASURED ON BOTH TREES.** The manual's `pays_sacrifices`
+sweep (Dracur (Spells of the Ancients) vs Big Green, control Big Green vs
+White Knights, seed 11, 1,000 games an arm) is **byte-identical, 0 of
+6,000 games**, the two reports differing only in their timing line; the
+five-starter matrix (`--matrix decks/ --games 200 --seed 4242`, 2,000
+games) is identical too, `matchups.csv` byte for byte. Neither is a
+surprise: **no main deck among the five starters holds one of the 45 cards
+that reach `try_pay`** (Blue Skies keeps its two Energy Flux in a
+sideboard the Lab never swaps in, and Mountain Artillery's lone Sol Ring
+has nothing to pay).
+
+**AND IT DOES MOVE A WIN RATE, WHICH IS SAID OUT LOUD RATHER THAN BURIED.**
+On the pair that can see it — Elementalist (Spells of the Ancients): four
+Mana Vault, a Sol Ring, two Moxen — **1,152 of 3,000 games end
+differently** against Centaur Shaman and the deck's win rate falls 40.9% →
+39.1%. Isolated against Big Green, where the only affected card left on
+the table is Elementalist's own Mana Vault, **834 of 3,000 differ, 39
+games flipped to a win against 90 away** (a fair toss on 129 discordant
+pairs is 64.5 ± 5.7 — this is not a coin) and 44.4% → 42.7%.
+
+**The cause is not the rule; it is an ANSWER with no judgement in it.**
+`cards/sets/2ed/mana_vault.gd` offers its upkeep escape with
+`choose_yes_no(..., true)`, and **no agent overrides
+`DecisionAgent.answer_yes_no`** — every seat returns the hint, so every
+seat always says yes. Paying {4} at upkeep to untap a source that makes
+{C}{C}{C} is about a mana down and a damage saved, and the mana is spent
+before the turn starts. Until today the engine's own defect protected the
+pilot from that answer by being unable to reach the Moxen. Pricing a "you
+may pay" offer is the AI's question and not this row's — filed for the AI
+pass, not fixed here, and named so nobody reads the 1.7 points as the
+rules change being wrong.
+
+Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd` (17 tests; 10 of
+them fail on HEAD's engine). Three PRE-EXISTING tests moved, each
+inspected on its own and each because its board had been built on the
+defect: `test_energy_flux_taxes_every_artifact` and
+`test_each_artifact_carries_its_own_tax_trigger` (a Sol Ring pays its own
+{2} tax now, and pays the Rod of Ruin's before it) and
+`test_scarwood_bandits_take_it_when_nobody_pays` (a Sol Ring buys its own
+freedom, so "nobody pays" needed an artifact that makes no mana).
+
+**LEFT OPEN, and named rather than done:** the payer still does not CHOOSE
+the sources (the `SIMPLIFIED` marker that stays); the six asking sources
+above are under-reported; a single source that makes two or more of ONE
+colour cannot pay two pips of it, because `ManaPlanner.plan_from` takes a
+fresh source per pip — a Black Lotus cannot pay `{W}{W}`, which is the
+shared planner's limit and not this row's, and which no board could reach
+before today; and the SOLVER half of §5.3 is untouched.
 
 ### Where mage-go is NOT ahead of us — do not chase these
 

@@ -5785,28 +5785,43 @@ func _spell_target_specs(data: CardData, mode := 0) -> Array[TargetSpec]:
 # "You may pay {N}" / "unless you pay" costs resolved MID-TRIGGER (the
 # lucky charms, Phantasmal Forces, Mana Vault, Paralyze) — mage-go's
 # TryPayMana. Floating mana is used first; what's missing is produced by
-# auto-tapping the player's untapped lands (through tap_for_mana, so mana
-# triggers and became-tapped triggers all fire). SIMPLIFIED (engine-wide,
-# docs/ROADMAP.md): only LANDS are auto-tapped — artifact mana must be
-# floated beforehand — and the engine's greedy pick (basics before
-# multi-option lands) decides which lands tap.
+# auto-tapping the payer's untapped mana sources through tap_for_mana, so
+# mana triggers and became-tapped triggers all fire.
+#
+# EVERY SOURCE, NOT ONLY LANDS (2026-09-11). CR 605.3a: a player may
+# activate a mana ability whenever a rule or effect asks them to pay a mana
+# cost, which is exactly what "unless you pay {N}" is doing — so the plan
+# is built by the ONE planner the AI seat and the human's own double-click
+# auto-cast already share ([ManaPlanner]). Until today it scanned
+# `inst.is_land()` and nothing else, and a board whose untapped mana was a
+# Sol Ring, a Mox or a Mana Crypt could not pay an upkeep it plainly could:
+# The Tabernacle at Pendrell Vale killed a Grizzly Bears with the Ring
+# standing untapped beside it.
+#
+# SIMPLIFIED (engine-wide, docs/ROADMAP.md): the payer does not CHOOSE the
+# sources — the planner's own order decides (sacrifices last, painless
+# before painful, the least flexible source first, and among equals the one
+# holding nothing back) — and the two shapes that would ASK a question to
+# activate are left out of the plan (see [method _mana_ability_asks]).
 
 ## Can [param pid] cover [param cost] right now? (Pure check — the hint
-## for choose_yes_no offers.)
+## for choose_yes_no offers, and the duel screen's activatable highlight.)
 func can_afford_cost(pid: int, cost: ManaCost) -> bool:
 	return _payment_plan(pid, cost) != null
 
 
 ## Attempt to actually pay [param cost]. Returns true and pays, tapping
-## lands as needed. Returns false when no plan covers the cost (nothing is
-## touched) — or, should a plan go stale mid-execution, it stops tapping at
-## the first refusal and reports failure with the mana already produced
+## sources as needed. Returns false when no plan covers the cost (nothing
+## is touched) — or, should a plan go stale mid-execution, it stops tapping
+## at the first refusal and reports failure with the mana already produced
 ## still floating (it empties at the end of the step, CR 500.4).
 func try_pay(pid: int, cost: ManaCost) -> bool:
 	var plan: Variant = _payment_plan(pid, cost)
 	if plan == null:
 		return false
 	for step in plan:
+		if step[0] == null:
+			continue   # mana already floating — there is nothing to tap
 		if tap_for_mana(pid, step[0], step[1]) != "":
 			break   # the plan went stale — stop before tapping more
 	if not players[pid].mana_pool.can_pay(cost):
@@ -5818,98 +5833,67 @@ func try_pay(pid: int, cost: ManaCost) -> bool:
 	return true
 
 
-## Build the tap plan covering [param cost]: Array of [land, ability_index]
-## pairs, [] if floating mana already suffices, or null if uncoverable.
+## Build the tap plan covering [param cost]: Array of
+## `[source, ability_index]` pairs as [method ManaPlanner.plan] builds
+## them — a null source is mana already floating, which [method try_pay]
+## skips — `[]` when the cost is free, or null when nothing covers it.
+##
+## THE PLAN IS THE SHARED PLANNER'S (2026-09-11). This used to walk the
+## battlefield itself and take `inst.is_land()` only; [ManaPlanner] reads
+## every untapped source the payer controls, seeds floating mana as the
+## same zero-cost source this method's own simulation used to, honours
+## RESTRICTED mana (Mishra's Workshop pays for artifact spells and not for
+## an upkeep, CR 106.6) and refuses the riders neither planner models. One
+## planner means a triggered payment cannot tap a different set of sources
+## than a cast of the same cost would.
+##
+## LIVE mana abilities throughout, never the printed list: under Blood
+## Moon / Conversion / Evil Presence a land taps for something else
+## entirely, and tap_for_mana indexes `cur_mana_abilities`.
 func _payment_plan(pid: int, cost: ManaCost) -> Variant:
-	var p := players[pid]
-	var sim := ManaPool.new()
-	for c in [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B,
-			Mtg.ManaColor.R, Mtg.ManaColor.G, Mtg.ManaColor.C]:
-		var have := p.mana_pool.amount_of(c)
-		if have > 0:
-			sim.add(c, have)
-	# LIVE mana abilities, never the printed list: under Blood Moon /
-	# Conversion / Evil Presence a land taps for something else entirely,
-	# and tap_for_mana indexes cur_mana_abilities — a plan built from
-	# data.mana_abilities would tap for the wrong colour (or index out of
-	# range) and pay nothing.
-	var lands: Array[CardInstance] = []
-	for inst in p.battlefield:
-		if inst.is_land() and not inst.tapped \
-				and _has_free_mana_ability(inst) \
-				and not (inst.is_creature() and inst.summoning_sick):
-			lands.append(inst)
-	lands.sort_custom(_fewer_mana_options)   # basics before duals/City
-	var plan: Array = []
-	# Colored requirements first — each taken from a land producing it.
-	for color in cost.colored:
-		while sim.amount_of(color) < cost.colored[color]:
-			var found := false
-			for li in lands.size():
-				var idx := _ability_producing(lands[li], color)
-				if idx != -1:
-					plan.append([lands[li], idx])
-					# produce_into_for honours dynamic amounts (the Urza
-					# lands give two once the Tron is assembled).
-					lands[li].cur_mana_abilities[idx].produce_into_for(sim, self, lands[li])
-					lands.remove_at(li)
-					found = true
-					break
-			if not found:
-				return null
-	# Generic remainder from whatever is left.
-	while not sim.can_pay(cost):
-		if lands.is_empty():
-			return null
-		var land: CardInstance = lands.pop_front()
-		var idx := _first_free_mana_ability(land)
-		plan.append([land, idx])
-		land.cur_mana_abilities[idx].produce_into_for(sim, self, land)
-	return plan
-
-
-## Can [param ability] be activated by the auto-tapper for nothing but the
-## {T}? Mana abilities with their own mana/life/sacrifice riders (Standing
-## Stones, Black Lotus) are off limits: try_pay would silently pay those
-## extra costs, and the plan's arithmetic does not model them.
-static func _is_free_mana_ability(ability: ManaAbility) -> bool:
-	return ability.taps_source and ability.cost == null and ability.life_cost == 0 \
-		and ability.counter_cost_kind == "" \
-		and not ability.sacrifice_source and not ability.sacrifice_filter.is_valid()
-
-
-static func _has_free_mana_ability(inst: CardInstance) -> bool:
-	return _first_free_mana_ability(inst) != -1
-
-
-static func _first_free_mana_ability(inst: CardInstance) -> int:
-	for i in inst.cur_mana_abilities.size():
-		if _is_free_mana_ability(inst.cur_mana_abilities[i]):
-			return i
-	return -1
-
-
-static func _fewer_mana_options(a: CardInstance, b: CardInstance) -> bool:
-	return a.cur_mana_abilities.size() < b.cur_mana_abilities.size()
-
-
-func _ability_producing(inst: CardInstance, color: int) -> int:
-	for i in inst.cur_mana_abilities.size():
-		var ability: ManaAbility = inst.cur_mana_abilities[i]
-		if not _is_free_mana_ability(ability):
+	# A free cost plans as [] in the planner's vocabulary and so does "no
+	# plan" ([method ManaPlanner.cost_is_free] is why every executor asks
+	# this first); this method's callers tell the two apart by null, so the
+	# free one is answered before the plan is built.
+	if ManaPlanner.cost_is_free(cost):
+		return []
+	var src: Array = []
+	for s in ManaPlanner.sources(self, pid):
+		if s[0] != null and _mana_ability_asks(s[0], int(s[1])):
 			continue
-		# A dynamic-colour source (Gem Bazaar) makes the colour it is
-		# SHOWING, not the seed colour it was built with — otherwise a blue
-		# Bazaar could not pay a {U} upkeep and Stasis was sacrificed with
-		# the mana sitting right there.
-		if ability.dynamic_color.is_valid():
-			if int(ability.dynamic_color.call(self, inst)) == color:
-				return i
-			continue
-		for pair in ability.produces:
-			if pair[0] == color:
-				return i
-	return -1
+		src.append(s)
+	var plan := ManaPlanner.plan_from(src, cost, 0)
+	return plan if not plan.is_empty() else null
+
+
+## Would activating [param inst]'s mana ability [param index] put a
+## QUESTION to its controller? [method _payment_plan] leaves those sources
+## out, and this is the one rule it keeps of its own.
+##
+## A triggered payment runs inside a resolution, and the COST hold that
+## catches such a question ([member _pending_action]) re-issues the mana
+## ability ALONE — the resolution it was nested in would be lost, the
+## trigger would already have destroyed the creature the mana was for, and
+## a seat that wants to be asked would be left holding a question about a
+## payment that no longer exists. Two shapes ask, both in
+## [method tap_for_mana]: a colour CHOICE (Fellwar Stone's census of what
+## an opponent's lands could make) and a mana battery with charge counters
+## on it, whose "how many" is announced with the activation (CR 601.2b).
+##
+## Six cards in the pool, and the cost is that the plan UNDER-reports them
+## — the safe direction, the one [method could_afford] already takes: a
+## board with nothing else keeps the answer 1997 gives for a source the
+## auto-tapper will not touch, which is to tap it by hand before the
+## trigger. A battery with no counters on it asks nothing and is planned
+## like any other source.
+static func _mana_ability_asks(inst: CardInstance, index: int) -> bool:
+	if index < 0 or index >= inst.cur_mana_abilities.size():
+		return true
+	var ability: ManaAbility = inst.cur_mana_abilities[index]
+	if ability.color_options.is_valid():
+		return true
+	return ability.any_number_counter_kind != "" \
+		and int(inst.counters.get(ability.any_number_counter_kind, 0)) > 0
 
 
 # ------------------------------------------------------------ cost modifiers --
@@ -7295,7 +7279,8 @@ func schedule_delayed_trigger(trig: TriggeredAbility, controller: int,
 ## triggers, any time they have priority. The card sets `settle_cost`
 ## and `settle_by` on the entry [method schedule_delayed_trigger]
 ## returned. The payment goes through [method try_pay] (floating mana
-## first, then auto-tapped lands).
+## first, then auto-tapped mana sources — every source, not only lands,
+## since 2026-09-11).
 func settle_delayed_trigger(pid: int, entry_id: int) -> String:
 	var refusal := _act_precheck(pid)
 	if refusal != "":

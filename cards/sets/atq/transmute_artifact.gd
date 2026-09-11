@@ -13,7 +13,8 @@ extends CardScript
 ## be cast with no artifact at all and a countered Transmute Artifact eats
 ## nothing. The search then runs through the engine's normal
 ## library-search path, the difference is paid through the
-## triggered-payment route — floating mana first, then auto-tapped lands —
+## triggered-payment route — floating mana first, then auto-tapped mana
+## sources (every source, not only lands, since 2026-09-11) —
 ## and a refusal really does bury the card.
 ##
 ## The choice on resolution is the acting seat's own, asked through their

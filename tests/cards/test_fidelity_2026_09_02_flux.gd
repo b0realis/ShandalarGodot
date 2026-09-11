@@ -35,8 +35,16 @@ func test_each_artifact_carries_its_own_tax_trigger() -> void:
 	assert_true(carriers.has(ring))
 	assert_true(carriers.has(rod))
 	resolve_stack()
-	assert_eq(ring.zone, Mtg.Zone.GRAVEYARD)
-	assert_eq(rod.zone, Mtg.Zone.GRAVEYARD)
+	# MOVED 2026-09-11, AND IT IS THE ENGINE THAT MOVED. `MtgGame.try_pay`
+	# auto-taps every mana source now and not lands only (CR 605.3a: a
+	# player may activate a mana ability whenever a rule or effect asks
+	# them to pay a mana cost). The Rod's tax went on the stack second and
+	# so resolves first, and the Sol Ring taps for the {2} that saves it;
+	# the Ring's own tax resolves next with nothing untapped left, so the
+	# Ring is the one that goes. Both of them died here until today with
+	# two mana standing on the table.
+	assert_eq(rod.zone, Mtg.Zone.BATTLEFIELD, "the Ring paid the Rod's tax")
+	assert_eq(ring.zone, Mtg.Zone.GRAVEYARD, "...and then could not pay its own")
 	assert_eq(ours.zone, Mtg.Zone.BATTLEFIELD, "not OUR upkeep")
 
 

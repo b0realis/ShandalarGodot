@@ -130,11 +130,16 @@ func test_fortified_area_arms_your_walls() -> void:
 
 
 func test_energy_flux_taxes_every_artifact() -> void:
-	var ring := put_battlefield(1, "Sol Ring")
+	# A ROD AND NOT A SOL RING SINCE 2026-09-11: `MtgGame.try_pay` auto-taps
+	# every mana source now and not lands only (CR 605.3a), so a Sol Ring
+	# taps for its own {2} and lives — which is the printed rule, and which
+	# `tests/cards/test_fidelity_2026_09_02_flux.gd` pins. The tax an
+	# artifact CANNOT pay is what this test is about.
+	var rod := put_battlefield(1, "Rod of Ruin")
 	put_battlefield(0, "Energy Flux")
 	advance_to_next_turn()   # player 1's upkeep, no mana available
 	resolve_stack()
-	assert_eq(ring.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(rod.zone, Mtg.Zone.GRAVEYARD)
 
 
 func test_energy_flux_spares_a_paid_artifact() -> void:

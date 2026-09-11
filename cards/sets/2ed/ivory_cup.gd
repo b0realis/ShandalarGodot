@@ -6,7 +6,8 @@ extends CardScript
 ## Implementation: the LUCKY CHARM pattern (five-card cycle + Soul Net) —
 ## a SPELL_CAST trigger filtered by color; resolving offers the payment
 ## through the controller's DecisionAgent and MtgGame.try_pay (floating
-## mana first, then auto-tapped lands). Triggers on EVERY player's white
+## mana first, then auto-tapped mana sources — every source, not only
+## lands, since 2026-09-11). Triggers on EVERY player's white
 ## spells, including the controller's own.
 
 

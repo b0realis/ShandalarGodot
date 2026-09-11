@@ -7,7 +7,8 @@ extends CardScript
 ## Implementation: the hungriest upkeep cost in the pool — an
 ## "unless you pay" trigger whose failure mode is 8 GREEN damage to its
 ## own controller (source = the Force itself, so CoP: Green eats it —
-## the era's famous trick). try_pay auto-taps four Forests. The trigger is
+## the era's famous trick). try_pay auto-taps four green sources — every
+## source, not only lands, since 2026-09-11. The trigger is
 ## independent of the Force once it is on the stack (CR 603.6): removing
 ## the Force in response does not cancel the tax.
 

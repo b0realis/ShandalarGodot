@@ -9,7 +9,8 @@ extends CardScript
 ## Implementation: the counter goes on FIRST, so the very first upkeep
 ## already costs {G} and already deals 1 — the storm never arrives free.
 ## The rent uses the engine's mid-trigger payment (floating mana, then
-## auto-tapped lands) and the sweep is DamageAllEffect's "each creature and
+## auto-tapped mana sources — every source, not only lands, since
+## 2026-09-11) and the sweep is DamageAllEffect's "each creature and
 ## each player", which includes the Cyclone's own controller: this is a
 ## symmetrical clock, and letting it run is a real decision.
 ##

@@ -8,7 +8,8 @@ extends CardScript
 ## every permanent in play, both sides — so the untap step still clears
 ## summoning sickness and resets land drops, it just untaps nothing. The
 ## rent is the engine's usual "unless you pay" trigger: floating mana
-## first, then auto-tapped lands.
+## first, then auto-tapped mana sources (every source, not only lands,
+## since 2026-09-11).
 ##
 ## The rent is a real QUESTION, asked of the paying seat through its own
 ## DecisionAgent: the human seat is held open on it (docs/duel-todo.md
