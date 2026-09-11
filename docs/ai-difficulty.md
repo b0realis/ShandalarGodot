@@ -2891,6 +2891,212 @@ pair: **0 of 4 000 games different**, and 0 of the control's 1 000 beside
 them. No shipped starter holds a Mana Vault, and Blue Skies' two Energy
 Flux are sideboard cards the Lab never swaps in without `--best-of`, so
 the starter meta cannot move and does not.
+### v0.19.0 AGAINST THIS TREE — THE WHOLE PASS MEASURED AT ONCE (2026-09-11)
+
+Fifty-eight commits separate the last release a player actually held
+(`a6e8e04`, v0.19.0) from this tree, and they changed TWO different
+things: two dozen AI capabilities, and a pass of engine rules work — the
+waiting-trigger queue (CR 603.3), CR 616.1 on both damage branches, layer
+6 in timestamp order (CR 613.7), the layer-4 dependency (CR 613.8), the
+mulligan counting mana rather than lands, `try_pay` reaching every mana
+source (CR 605.3a), the planner's tie-break, the sweeper brackets and
+five "as it enters" clauses. A single A/B between the trees conflates the
+two into one misleading number, so what follows is THREE measurements and
+not one — the product, the pilot isolated, and the ladder — because "the
+AI got better by N points" is a different claim from "the game changed by
+N points" and only one of them is the question.
+
+**THE INSTRUMENT DID NOT MOVE, WHICH SETTLES WHICH LAB RUNS WHICH TREE.**
+`DeckLab/simulate.gd`, `deck_lab.sh`, `lab_console.gd`, `sim_stats.gd`
+and `svg_charts.gd` are BYTE-IDENTICAL across the fifty-eight commits
+(md5); only `elo_ledger.gd` differs, and every run below is `--no-elo`.
+So the old tree is measured by its own Lab and its own Lab is this one.
+The old tree was laid down with `git archive a6e8e04 | tar -x`, its
+`assets/` symlinked and the eight `cards/todo/` set folders created — the
+`.gitkeep`s that hold them are new in this tree.
+
+**AND NEITHER DID THE POOL.** No card file was added or removed (897 in
+both trees, `cards/todo/` empty in both), the five shipped starters are
+byte-identical, and the one deck file that is new —
+`decks/variants/the_deck_serra.deck` — is a variant in a subfolder that
+never enters the starter field. **Nothing had to be excluded for the
+gauntlet.** Seed 11 throughout, `--no-elo` throughout, the mulligan off
+except in the one row that names it.
+
+**WHAT "PINNED" MEANS, EXACTLY.** Thirty fields on `AiProfile` are new
+since v0.19.0. **Twenty-four are on in at least one shipped preset** and
+those are what the pinned arm turns back to the released value:
+`feeds_worst`, `spares_own`, `prices_liabilities`, `prices_fallout`
+(every rung); `ranks_counters` (Magician up); `animates_to_attack`,
+`times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`,
+`holds_x_burn`, `reads_gaze`, `reads_manlands`, `tutors_for_the_turn`,
+`reads_pumps`, `reads_lethal_x`, `counters_by_shape`, `reinforces_blocks`,
+`reads_race`, `minds_the_vise`, `counts_the_race` (Sorcerer and Wizard);
+`checks_before_casting`, `holds_tricks`, `runs_loops` (Wizard). **Three
+were built, measured and REFUSED**, and ship at the null on every rung —
+`develops_late`, `crack_back_margin`, `holds_the_closer` — so pinning them
+changes nothing. **Three are measured CONSTANTS** shipped at the
+incumbent value, already the released number: `w_hand` 1.5,
+`defender_scale` 0.0, `ability_bonus` 0.0. **What the pinned arm CANNOT
+reach** is work that landed inside a knob v0.19.0 already had — the token
+makers under `plays_engines`, Time Walk under `paces_draws` — because
+switching those off would remove a v0.19.0 capability rather than restore
+one. They sit in the residue with the rules changes, and the residue is
+what bounds them.
+
+**1. THE PRODUCT — the five-starter matrix, both seats on one tree.**
+2 000 games a pair, 20 000 games a run, at every rung on both trees.
+
+```
+DeckLab/deck_lab.sh --matrix decks --games 2000 --seed 11 --no-elo \
+    --no-svg --quiet --profile-a wizard --profile-b wizard --procs 6 --jobs 4
+```
+
+| rung | matchups clear of their own interval | deck standings clear |
+| --- | --- | --- |
+| Apprentice | 0 of 10 — **`matchups.csv` is byte-identical** | 0 of 5 |
+| Magician | 0 of 10 (6 wins moved of 20 000) | 0 of 5 |
+| Sorcerer | 0 of 10 (216 wins moved of 20 000) | 0 of 5 |
+| Wizard | 0 of 10 (220 wins moved of 20 000) | 1 of 5 — Mountain Artillery 46.8% → 48.6% (+1.8 ±1.5) |
+
+**NOT ONE OF THE FORTY MATCHUPS IS DECIDED AND ONE DECK STANDING OF
+TWENTY IS**, and that is the player-facing number said plainly. The
+reason is structural rather than disappointing: a matrix puts the SAME
+pilot on both seats, so a capability that helps every deck equally
+cancels exactly, and only one that helps one archetype more than the rest
+can show at all. Mountain Artillery — one Shivan Dragon, three Granite
+Gargoyles, two Fireball and an Earthquake — is the one starter that owns
+the cards the new readings are about, and it is the one standing that
+moves.
+
+**2. THE PILOT ISOLATED — and nothing shipped ungated.** The same matrix
+on this tree with the twenty-four knobs pinned to their v0.19.0 value on
+BOTH seats. What is left is the rules pass and whatever widened an older
+knob.
+
+| rung | v0.19.0 → pinned HEAD | the twenty-four knobs, symmetric |
+| --- | --- | --- |
+| Apprentice | **0 wins moved of 20 000** | 0 |
+| Magician | 6 of 20 000 | 0 |
+| Sorcerer | 6 of 20 000 | 216 |
+| Wizard | **1 of 20 000** | 221 |
+| Wizard, `--mulligan on` | 2 of 20 000 | 258 |
+| Apprentice, `--mulligan on` | 0 of 20 000 | 0 |
+
+**The residue is 0.03% of the games at its worst and one game in twenty
+thousand at the rung the work was built for**: pin the twenty-four knobs
+and this tree plays v0.19.0's games back. The same reading on the seven
+1997-enemy pairings below is +0.5 ±0.4 over 70 000 games — real, small,
+and in the AI's favour. The mulligan rows exist because the Lab's
+`--mulligan` defaults OFF, so every other run here is blind to the
+mulligan change; turned on, it moves two games in twenty thousand.
+
+**3. THE PILOT, HEAD TO HEAD — what "the AI got better" actually means.**
+The same deck on both seats, so the deck cancels: seat A the shipped
+rung, seat B the same rung pinned to v0.19.0. The NULL arm is both seats
+pinned and carries the seat bias, which reads 50.0% over 20 000 games.
+
+```
+DeckLab/deck_lab.sh --deck-a decks/big_green.deck --deck-b decks/big_green.deck \
+    --games 4000 --seed 11 --no-elo --no-svg --quiet --profile-a wizard \
+    --profile-b "wizard:feeds_worst=off,spares_own=off,...,counts_the_race=off"
+```
+
+| rung | null | shipped | delta |
+| --- | --- | --- | --- |
+| Apprentice | 50.5% | 50.5% | **+0.0 ±1.4 — 0 games of 10 000 different** |
+| Magician | 50.8% | 50.8% | **+0.0 ±1.4 — 0 games of 10 000 different** |
+| Sorcerer | 49.9% | 52.7% | **+2.8 ±1.0** (+550 of 20 000) |
+| Wizard | 50.0% | 52.7% | **+2.7 ±1.0** (+535 of 20 000) |
+
+Per starter at Wizard: Big Green **+3.9 ±2.2** and Mountain Artillery
+**+7.7 ±2.2**, both decided; Blue Skies +1.6, White Knights +0.3,
+Black-Red Raiders −0.1, all three washes. The Sorcerer's five are the
+same shape (+3.8 and +7.6 decided; +1.5, +0.8, +0.1 washes), which is
+what a ladder whose new capabilities all land at Sorcerer should look
+like. **The two lower rungs are EXACTLY zero — not a wash, zero** —
+because the only post-release knobs they carry are `ranks_counters` (the
+whole starter field holds one kind of counterspell, so there is no order
+to get wrong) and the four that are on at every rung, and no starter
+presents the question any of the five asks.
+
+**4. THE LADDER.** Each rung in the pilot's seat against a Wizard on the
+same deck, 2 000 games, both trees.
+
+| pilot | Big Green, v0.19.0 | Big Green, HEAD | Mountain Artillery, v0.19.0 | Mountain Artillery, HEAD |
+| --- | --- | --- | --- | --- |
+| Apprentice | 17.2% | 15.7% | 12.1% | 10.9% |
+| Magician | 37.7% | 35.9% | 36.5% | **30.4%** |
+| Sorcerer | 45.1% | 45.5% | 45.9% | 46.0% |
+| Wizard | 50.7% | 50.7% | 51.9% | 52.6% |
+
+**Monotone on both trees, on both decks, at every step** — the ladder's
+own promise holds. It also SEPARATED: the Apprentice-to-Wizard span grew
+from 33.5 to 35.0 points on Big Green and from 39.8 to 41.7 on Mountain
+Artillery, and the Magician-to-Sorcerer step on Mountain Artillery
+doubled, 9.4 points to 15.6. That is the shape the design asks for — the
+new capabilities are Sorcerer-and-up, so the lower rungs stand still
+while the seat across the table improves. The Big Green column also
+replays this section's published table (15.8 / 37.6 / 45.1 / 51.7, 1 000
+games) to within its interval at a different seed and twice the games.
+
+**5. WHAT THE STARTER GAUNTLET CANNOT SEE, WHICH IS MOST OF IT.** §5's
+pool-ceiling entry already counts why. The decks that put the questions
+are the 1997 enemies and The Deck, and the same pilot A/B on them — the
+enemy in seat A, the five starters in seat B pinned in both arms — is a
+different order of number. 2 000 games a matchup, 10 000 a deck.
+
+| pilot deck (Wizard) | null | shipped | delta | matchups decided |
+| --- | --- | --- | --- | --- |
+| The Deck (playable) | 41.6% | **50.9%** | **+9.3 ±1.4** | 5 of 5 |
+| Vampire Lord | 14.7% | **23.2%** | **+8.4 ±1.1** | 5 of 5 |
+| Witch | 14.6% | 19.1% | **+4.5 ±1.0** | 5 of 5 |
+| Kzzy'n — The Dragon Lord | 12.6% | 16.6% | **+4.1 ±1.0** | 5 of 5 |
+| Priestess | 6.3% | 8.1% | **+1.7 ±0.7** | 2 of 5 |
+| Astral Visionary | 17.0% | 17.9% | +0.9 ±1.1 | 0 of 5 — a wash |
+| Crag Hydra | 28.6% | **24.5%** | **−4.2 ±1.2** | 4 of 5, every one NEGATIVE |
+| **all seven, 70 000 games** | **19.4%** | **22.9%** | **+3.5 ±0.4** | |
+
+The PRODUCT on the same seven pairings — both seats on one tree — moves
+the same way: 18.8% → 22.1%, **+3.3 ±0.4** over 70 000 games, with The
+Deck 40.1% → 50.9% (+10.8 ±1.4) and Vampire Lord 15.4% → 22.4% (+7.1
+±1.1). And the adventure's own pairing, a shipped starter against a
+random 1997 enemy drawn fresh per game (`--deck-b random --deck-pool
+decks/1997 --group originals`, 3 000 games a deck), reads the same thing
+from the other side: the starter's rate against the field falls **84.8% →
+83.6% (−1.2 ±0.8, decided) at Wizard** and 81.8% → 81.5% (−0.4 ±0.9, a
+wash) at Apprentice. **The starter gauntlet under-states this pass by
+about an order of magnitude**, and that is a pool fact rather than a
+result.
+
+**6. THE ONE DECK THAT LOST, NAMED RATHER THAN AVERAGED AWAY — AND THE
+KNOB IS `holds_x_burn`.** Crag Hydra is **−4.2 ±1.2** as a pilot and
+**−3.2 ±1.2** as a product, four of its five matchups decided and every
+one negative, the worst against Mountain Artillery (38.7% → 32.4%). Its
+own residue has the OTHER sign — the rules pass gives it +2.5 ±1.2 — so
+the knobs cost it about 5.7 points between them. One arm per knob, that
+knob alone on top of the pinned Wizard, 1 000 games a matchup:
+
+| arm | rate | delta against the pinned Wizard |
+| --- | --- | --- |
+| the pinned Wizard (null) | 28.5% | — |
+| `holds_x_burn` alone | **24.6%** | **−3.9 ±1.7, DECIDED** |
+| the shipped Wizard, all 24 | 25.1% | −3.3 ±1.7, DECIDED |
+| each of the other 23 alone | 28.5–28.8% | not one clear of ±1.8 |
+
+**One knob of twenty-four carries the whole loss, and twenty-three
+measure zero on this deck.** The list says why: 4 Fireball, 4
+Disintegrate, 2 Lightning Bolt, 4 Inferno and 22 Mountain — the X spells
+ARE this deck's removal and most of its clock, and a Wizard that holds
+them until its whole reach is five is holding the only answers it has
+while a Savannah Lions and a White Knight get on with it. The hold is right where its
+own row measured it — §2's `holds_x_burn` entry: a Wizard on three
+Mountains no longer spends one of Mountain Artillery's two Fireballs on a
+Grizzly Bears — and wrong on a mono-red deck whose X burn is its entire
+spell suite. The open question it leaves is whether the bar should read
+the deck's own count of X spells rather than a rung constant. Nothing was changed on
+this finding — it is a measurement and the fix is a separate piece of
+work.
 
 ## 5. Where the ladder still ends short
 

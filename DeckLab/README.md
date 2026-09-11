@@ -1173,6 +1173,39 @@ names the first game that moved.
   decks under the same AI remain meaningful; comparisons across AI
   versions do not.
 
+## Measuring one tree against another (2026-09-11)
+
+Comparing two checkouts of the game is a different experiment from
+comparing two decks, and the bullet above ("comparisons across AI
+versions do not [remain meaningful]") is about the naive form of it. The
+honest form has three arms and they answer three different questions.
+
+1. **The product.** The same `--matrix` on both trees, same `--games`,
+   same `--seed`, both seats at the same rung. This says how much the
+   GAME moved. It cannot say the AI got better: the same pilot sits on
+   both seats, so a capability that helps every deck equally cancels
+   exactly and only one that helps a single archetype can show.
+2. **The pilot, head to head.** ONE tree, the same deck on both seats
+   (`--deck-a X --deck-b X`, so the deck cancels), the shipped preset on
+   seat A and the same preset with every new knob overridden back to the
+   older tree's value on seat B — `--profile-b
+   "wizard:knob_a=off,knob_b=off,..."`, which `AiProfile.apply_overrides`
+   reads as one comma-separated spec. Run the NULL arm too (both seats
+   overridden): it carries the seat bias, and the answer is CANDIDATE
+   minus NULL. This is the only arm that measures the AI.
+3. **The residue.** The arm from (2) with BOTH seats overridden, run as a
+   matrix against the older tree's matrix. What is left over is
+   everything the overrides cannot reach — the engine, and any AI work
+   that widened a knob the older tree already had. A residue near zero is
+   the proof that the AI work is gated.
+
+Two practical notes. `--no-elo` on every arm, or a rerun of the same seed
+counts the same games into a deck's lifetime record twice. And check
+first whether the Lab itself changed between the two trees (`md5sum` the
+five files in `DeckLab/`): if it did not, the same Lab may run both and
+there is no output format to reconcile; if it did, reconcile by
+`matchups.csv` fields and never by report text.
+
 ## Performance
 
 Games fan out over Godot's WorkerThreadPool.

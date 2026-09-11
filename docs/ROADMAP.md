@@ -11901,6 +11901,71 @@ checks `can_afford_cost` first and passes `true`, which is the documented
 "affordable" convention rather than a bug, and the fifteen that compute a real
 hint all read the right way round.
 
+## THE RELEASE MEASURED AGAINST THE TREE (2026-09-11)
+
+*"AI player should be competent now no!?"* — and nobody could answer it, so it was
+measured instead of argued. v0.19.0 (`a6e8e04`, the last build a player held)
+against this tree, **fifty-eight commits apart, about 1.05 million duels at seed
+11**. The whole point was NOT to answer it with one number: those commits changed
+the AI **and** the engine rules, and *the AI got better by N* is a different claim
+from *the game changed by N*. Three arms; every command and every interval in
+`docs/ai-difficulty.md` §4.
+
+**THE ANSWER: yes at Sorcerer and Wizard, exactly nothing at Apprentice and
+Magician, and the five shipped starters are close to the wrong instrument for it.**
+Same deck on both seats, the shipped pilot against itself pinned to v0.19.0:
+Wizard **52.7% against a null arm that reads 50.0% over 20 000 games, +2.7 ±1.0**;
+Sorcerer +2.8 ±1.0; Magician and Apprentice **0 games of 10 000 different,
+twice** — the new capabilities are Sorcerer-and-up and the two lower rungs carry
+almost none of them. On the decks that put the questions it is **+3.5 ±0.4 over
+70 000 games**: The Deck 41.6% -> 50.9%, Vampire Lord 14.7% -> 23.2%, Witch +4.5,
+Kzzy'n +4.1.
+
+**THE PRODUCT IS A WASH ON THE STARTERS AND IT IS SAID PLAINLY.** The full
+five-deck matrix at all four rungs: **not one of forty matchups clear of its own
+interval**, one deck standing of twenty (Mountain Artillery, +1.8 ±1.5). A matrix
+puts the same pilot on both seats, so anything that helps every deck equally
+cancels exactly — which is most of this pass. The adventure's own pairing says the
+same from the other side: a starter against the 1997 enemy field falls 84.8% ->
+83.6% (−1.2 ±0.8) at Wizard and not measurably at Apprentice.
+
+**NOTHING SHIPPED UNGATED, and that is the cleanest result here.** Pin the
+twenty-four knobs to their released values on both seats and this tree replays
+v0.19.0's games: **0 wins moved of 20 000 at Apprentice, 6 at Magician, 6 at
+Sorcerer, ONE at Wizard.** The residue is the whole engine pass — the
+waiting-trigger queue, CR 616.1 on both damage branches, layer 6 in timestamp
+order, the planner's tie-break, the five "as it enters" clauses — and on the
+starters it is 0.03% of the games at worst. On the seven enemy pairings it is
++0.5 ±0.4.
+
+**THE LADDER HOLDS AND WIDENED.** Monotone on both trees, both test decks, every
+step. The Apprentice-to-Wizard span grew 33.5 -> 35.0 points on Big Green and
+39.8 -> 41.7 on Mountain Artillery; the Magician-to-Sorcerer step on Mountain
+Artillery doubled, 9.4 -> 15.6.
+
+**ONE DECK LOST AND THE KNOB IS NAMED. Crag Hydra is −4.2 ±1.2 as a pilot and
+−3.2 ±1.2 as a product**, four of five matchups decided and every one negative.
+One arm per knob says why: **`holds_x_burn` alone is −3.9 ±1.7, and the other
+twenty-three read 28.5–28.8% against a 28.5% null — not one of them clear of
+±1.8.** Four Fireball, four Disintegrate, four Inferno and twenty-two Mountain:
+the X spells are the deck's removal AND its clock, and a Wizard that holds them
+until its reach is five is holding the only answers it has. Open, not fixed:
+whether the bar should read the deck's own count of X spells instead of a rung
+constant.
+
+**AND THE INSTRUMENT ITSELF IS A FINDING.** The starter gauntlet under-states this
+pass by roughly an order of magnitude, because a matrix cancels what helps both
+seats and the five starters hold almost none of the cards the new readings are
+about. The decks that put the questions are the 1997 enemies and The Deck's own
+lists, and any future comparison should run both and keep them apart — the starter
+number is what a new player feels, the enemy number is what the pilot learned.
+
+**WHAT WAS NOT DONE.** No behaviour was changed by the measurement and nothing was
+committed from it. `decks/ratings.txt` is byte-unchanged. The Lab itself is
+md5-identical across all fifty-eight commits (only `elo_ledger.gd` differs, and
+every run was `--no-elo`), so the old tree ran on its own Lab and there was no
+format to reconcile.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
