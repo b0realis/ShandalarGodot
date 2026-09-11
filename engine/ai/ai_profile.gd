@@ -1489,6 +1489,109 @@ var holds_tricks := false
 var minds_the_vise := false
 
 
+## THE OFFER (2026-09-11) — does this profile PRICE a "you may pay"
+## before it answers it?
+##
+## THE PILOT HAD NEVER ANSWERED ONE. [method DecisionAgent.answer_yes_no]
+## returns the card author's hint, [AiPlayer] overrode it with nothing,
+## and 68 card files put such a question to a seat: every offer in the
+## pool was answered by whatever its author wrote as the default, which
+## for a mana price is almost always "can we afford it". Reproduced at
+## HEAD, a Wizard in seat 0 with four TAPPED Mana Vaults, a Sol Ring, a
+## Mox Ruby, three Mountains and an Island — seven mana on the table and
+## a Fireball in hand:
+##
+##     [Upkeep] Pay {4} to untap Mana Vault? — yes   (x4)
+##     -> Vaults untapped: 1 of 4
+##     -> mana left for the whole turn: 3      (declined: 7)
+##     -> our life: 13                         (declined: 12)
+##
+## It spent the board to untap ONE Vault, arrived at its own first main
+## phase with three mana instead of seven, and bought one point of life
+## with four. The Fireball went from X=6 to X=2 for it.
+##
+## THE ONE READING, AND WHY THERE IS EXACTLY ONE. An offer has two halves
+## — what it takes and what it buys — and the two are comparable only
+## when they are in the SAME CURRENCY at the SAME BEAT. A mana price
+## against a mana source is: pay {4} this upkeep, have {C}{C}{C} this
+## upkeep, and be asked again next upkeep. Nothing is projected forward,
+## so the horizon this repository has now refused four times
+## ([method AiPlayer._liability_price], [constant
+## EffectIntent.TOLL_UNKNOWABLE], [member minds_the_vise], [member
+## counts_the_race]) is not needed and not invented.
+##
+## Every OTHER shape in the survey is a STOCK against a STREAM and is
+## ruled unreadable for that reason, not left for later:
+##
+##  * PAY-OR-LOSE-A-PERMANENT (an upkeep rent: Cosmic Horror's
+##    {3}{B}{B}{B}, the five Elder Dragon Legends, The Tabernacle at
+##    Pendrell Vale, Forethought Amulet, Rohgahh of Kher Keep, Dance of
+##    Many, Scarwood Bandits). The rent is charged every upkeep and the
+##    permanent is kept ONCE: pricing it needs the turns the game has
+##    left, and no reader in this engine estimates that. THE ONE
+##    EXCEPTION IS WHY THIS SHAPE IS HERE AT ALL AND NOT ONLY THE UNTAP:
+##    when the permanent rented is itself a mana source, both halves are
+##    streams and the horizon cancels — an Energy Flux charging {2} a
+##    turn for a Mox that makes one is a mana down every upkeep, and
+##    charging {2} for a Sol Ring is a wash the pilot pays.
+##  * PAY-OR-SOMETHING-HAPPENS-TO-YOU (Naf's Asp, Primordial Ooze,
+##    Mishra's War Machine, Chain Lightning's copy, Tempest Efreet's
+##    ante) — mana or a card against damage or a life total, two
+##    currencies with no rate between them that this engine carries.
+##    [method AiPlayer._pain_excluded] is the whole of what it does
+##    carry, and it fires only where the pain would KILL us.
+##  * PAY-TO-UNTAP A BODY (Brass Man, Island Fish Jasconius, Paralyze's
+##    host, Magnetic Mountain's) — mana against a creature's turn, which
+##    is a block, an attack, or neither, and is the combat search's
+##    question rather than a price.
+##  * PAY-TO-KEEP-AN-EFFECT, the spell tax (Force Spike, Nether Void, In
+##    the Eye of Chaos, Invoke Prejudice) — the mana is already
+##    committed when the question is asked, so "can we afford it" IS the
+##    answer and the hint is right.
+##  * PURE UPSIDE, which is over half of the 68 (the six life rods,
+##    Verduran Enchantress's draw, Nether Shadow's return, Eureka,
+##    Gaea's Touch, Sylvan Library's two cards). Nothing is taken, or
+##    what is taken is spare; these DESERVE NO READING and get none.
+##
+## WHAT THE KNOB THEN DOES, in [method AiPlayer.answer_yes_no], and it
+## can only ever turn a YES into a NO, and only at a beat that comes round
+## on its own ([constant AiPlayer.OFFER_BEATS]), which is what makes the
+## price a RENT rather than a purchase made once. The price is read off
+## the offer's own line ([method EffectIntent.offer_price], the parser
+## [method EffectIntent.toll_of_line] already uses on a printed trigger);
+## the subject is the permanent OF OURS the question is about, found by
+## matching the question against the names on our own table rather than
+## against anything written in this repository (58 of the pool's 70 offers
+## put that name in the question — [method AiPlayer._offer_subject]); and
+## the reading fires only where that permanent's whole worth is the mana
+## it makes ([method AiPlayer._makes_only_mana] — not a creature, not a
+## land, and nothing it does survives being tapped). Then: refuse a price
+## the source cannot make back, unless the damage the offer escapes
+## covers the gap at the reaper's own rate ([method AiPlayer._life_price],
+## so a Mana Vault IS untapped at twelve life and below, where the point
+## it saves is worth the mana it costs).
+##
+## WHAT THE POOL PUTS ON IT, counted rather than claimed
+## (`tests/ai/test_ai_prices_offers_2026_09_11.gd`): twenty-four cards
+## print a mana escape at one of the beats and exactly ONE of them is a
+## mana-only permanent — Mana Vault, the card `b3d3f18` measured its own
+## regression on — and seventeen permanents in the pool make only mana,
+## which is what an upkeep rent granted from outside (Energy Flux's {2} on
+## every artifact) can be put about.
+##
+## A CAPABILITY, like [member counts_cards] and [member counts_the_race],
+## and not a difficulty concept: counting what a price buys before paying
+## it is a layer of play, and the bottom two rungs paying every rent they
+## can afford is the same honest weakness as the Apprentice never holding
+## an instant. Sorcerer and Wizard. It is deliberately NOT [member
+## prices_liabilities]' third growth, which would have been the easy
+## move: that knob prices a PERMANENT and is on for every profile, so an
+## answer riding inside it could never be measured apart from the Lich
+## reading, and every published `prices_liabilities` number would have
+## gone stale the day this shipped.
+var prices_offers := false
+
+
 ## THE OLD LOOPS (2026-09-10, `docs/forge/casting.md` P5,
 ## `docs/arzakon.strategy` §3C and §4 item 6) — Time Walk priced as a
 ## turn, Regrowth aimed at it, and the wheel priced by the two hands
@@ -1739,6 +1842,7 @@ static func sorcerer() -> AiProfile:
 	profile.reads_race = true
 	profile.minds_the_vise = true
 	profile.counts_the_race = true
+	profile.prices_offers = true
 	return profile
 
 ## Top difficulty: no mistakes at all — it plays the same decision code as
@@ -1761,6 +1865,7 @@ static func wizard() -> AiProfile:
 	profile.minds_the_vise = true
 	profile.runs_loops = true
 	profile.counts_the_race = true
+	profile.prices_offers = true
 	return profile
 
 

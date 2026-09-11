@@ -454,7 +454,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `holds_the_closer`, `counts_the_race`, `reads_race`, `holds_tricks`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `holds_the_closer`, `counts_the_race`, `reads_race`, `holds_tricks`, `prices_offers`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -733,6 +733,40 @@ the game; and run again on 2026-09-10 on HEAD's own files and on the
 `reads_pumps` tree with all three pinned off, the two `games.csv` files
 are byte for byte the same 6,000 games (22.6% null on both, which is
 what the same pair reads under the day's other knobs).
+`prices_offers` (2026-09-11) fires only where a "you may pay" question
+is put to the swept seat AT A BEAT — an upkeep, a draw step or an end
+step — with a MANA price in it and a permanent of that seat's own named
+in it whose whole worth is the mana it makes. Two card lists, and a
+control must hold neither on the swept side: a permanent whose own
+printed trigger offers a mana price to untap it (**Mana Vault and
+nothing else** in this pool is both that and a mana-only permanent — the
+other twenty-three cards that print such an escape are creatures,
+enchantments or lands, and are left to their authors' hints), and a card
+that hands an upkeep mana rent to a permanent that only makes mana
+(**Energy Flux**, whose {2} lands on every artifact, against the
+seventeen mana-only permanents the pool holds — the Moxen, Black Lotus,
+Sol Ring, Mana Crypt, the five batteries, Celestial Prism, Fellwar Stone,
+Standing Stones). **Big Green vs White Knights holds neither, and holds
+no `choose_yes_no` offer of ANY kind on either side**, so the knob's code
+is never entered at all: it replays its own null game for game, 3,000 of
+3,000 (and 10,000 of 10,000), in every arm of all ten runs of 2026-09-11.
+The live pair is the one `b3d3f18` measured its own regression on —
+`decks/1997/ancients/elementalist.deck`, four Mana Vault beside a Sol Ring
+and two Moxen — and the whole reading is in `docs/ai-difficulty.md` §4.
+**MIND THAT THE TWO HALVES WANT DIFFERENT PAIRS, and that they measured
+opposite ways.** The RENT half needs an Energy Flux on the swept side and
+artifacts to tax on the other: `decks/1997/originals/elementalist.deck`
+(2 Energy Flux, 2 Mana Vault) against `decks/1997/ancients/seer.deck`
+(3 Fellwar Stone, 3 Mightstone, 3 Mana Vault) is **+4.0 ±2.0**, the
+clearest arm of the pass. The UNTAP half is a Mana Vault deck against
+anything, and it is NOT one number: Elementalist gains (+0.9 ±1.4 over
+10,000 games an arm), Vampire Lord and Shapeshifter and Seer are washes,
+and **War Mage (Spells of the Ancients) loses, −2.6 ±1.8 against Big
+Green and −1.4 against Centaur Shaman** — a four-Vault list with
+twenty-two lands, four Gauntlets of Might and no creature that blocks, so
+pick it when you want the reading's worst case. A deck with neither card
+cannot move a game, which is why **no shipped starter measures anything
+at all** (Big Green against the whole field: 0 of 4,000 different).
 `develops_late` (2026-09-10) is a TIMING knob, so it fires on any deck
 with a nonland card in hand, a mana sink, or a land drop worth holding —
 which is every deck in this repository. **Its control is the forty-FACTORY

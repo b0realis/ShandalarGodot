@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **6029 tests, 0 failing, 351 scripts** (155 340 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **6058 tests, 0 failing, 352 scripts** (155 854 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11813,6 +11813,93 @@ what three cards do; a dated row in `docs/duel-todo.md`.
 And **Rock Hydra's own implementation note was FALSE**: it said the `{R}` shield
 is spent BEFORE the counters, the engine has always done the opposite, and the
 same paragraph contradicted itself two lines later. Corrected and dated.
+
+## THE OFFER NOBODY HAD EVER PRICED (2026-09-11) — `prices_offers`, measured
+
+Filed by `b3d3f18` that morning and by no wave. Widening `try_pay` to every mana
+source (CR 605.3a) moved a win rate the wrong way, and the commit's own diagnosis
+was that **the cause was an ANSWER, not the rule**. This is that answer.
+
+**THE PILOT HAD NEVER GIVEN ONE.** `DecisionAgent.answer_yes_no` returns the card
+author's hint, `AiPlayer` overrode it with nothing, and **68 card files put such a
+question to a seat** — so every "you may pay" in the pool was answered by whatever
+its author wrote as the default, which for a mana price is almost always "can we
+afford it". REPRODUCED AT HEAD: a Wizard with four TAPPED Mana Vaults, a Sol Ring,
+a Mox Ruby, three Mountains and an Island — seven mana — and a Fireball in hand
+said yes four times at one upkeep, untapped ONE Vault, and reached its own first
+main phase with **three** mana where declining keeps **seven**. One point of life
+bought with four mana; the Fireball down from X=6 to X=2.
+
+**ONE READING, AND THE OTHER FOUR SHAPES RULED OUT RATHER THAN DEFERRED.** The 68
+are 22 upkeep rents, 6 untaps, 7 pay-or-it-happens-to-you, 4 spell taxes and **29
+that are pure upside**. An offer's two halves are comparable only in the SAME
+CURRENCY at the SAME BEAT, and a mana price against a MANA SOURCE is the one pair
+in this pool that is — an untap (a Mana Vault's `{4}` for the `{C}{C}{C}` it
+makes) or a rent (an Energy Flux's `{2}` a turn for a Mox that makes one), both a
+stream against a stream with the horizon cancelling out of the arithmetic. A rent
+on a BODY is a stock against a stream; a life toll is two currencies with no rate
+between them; a spell tax is mana already committed, where "can we afford it" IS
+the answer; pure upside takes nothing. The four refusals stand on the ground
+`_liability_price`, `TOLL_UNKNOWABLE`, `minds_the_vise` and `counts_the_race`
+already stand on, and they are CLOSED, not filed.
+
+**NOTHING IS NAMED IN THE CODE.** `EffectIntent.offer_price` reads the run of
+`{…}` after "pay" in the question's own words — the parser `toll_of_line` already
+uses on a printed trigger. `AiPlayer._offer_subject` finds the permanent by
+matching the question against the names on the pilot's OWN table, which is how a
+player reads one (58 of the pool's 70 offers put a name there; the 12 that name
+none are left alone, and so is a question about a card not on the battlefield).
+`_makes_only_mana` keeps the reading in one currency — never a creature, never a
+land, and nothing the permanent does may survive being tapped. `OFFER_BEATS` is
+`EffectIntent.TOLL_BEATS` written as steps, so a one-off purchase is not read as a
+rent. And **the answer can only ever turn a YES into a NO**: a hint of NO is the
+card author's own refusal.
+
+THE CENSUS, counted and pinned as tests: **24 cards print a mana escape at one of
+the beats and exactly ONE of them is a mana-only permanent** — Mana Vault, the
+card `b3d3f18` measured its regression on — and **17 permanents in the pool make
+only mana**, which is what a rent granted from outside can be put about.
+
+**THE NUMBERS.** Control Big Green vs White Knights — no `choose_yes_no` offer of
+any kind on either side, and no mana-only permanent, two independent reasons it
+cannot fire — byte-identical to its own null in every arm of all ten runs, 3 000
+of 3 000 and 10 000 of 10 000. Two deltas are clear of their intervals and they
+point opposite ways: the RENT half at **+4.0 ±2.0** (Elementalist's own Energy
+Flux, 138 games flipped to a win against 19) and **WAR MAGE at −2.6 ±1.8** against
+Big Green and −1.4 against Centaur Shaman — the deck and not the matchup: four
+Mana Vaults beside twenty-two lands, four Gauntlets of Might and no creature that
+blocks. Across the eight live pairs, **586 flipped to a win against 449 away of
+1 035 discordant pairs**, where a fair toss sits at 517 ± 16 — 4.3σ. **A GAIN in
+the aggregate and NOT DECIDED per deck**; it ships at Sorcerer and Wizard with War
+Mage named rather than buried. Big Green against the whole shipped field is 0 of
+4 000 games different: no starter holds a Mana Vault, and Blue Skies' two Energy
+Flux are sideboard cards.
+
+**AND THE CANARY'S OWN ARITHMETIC COULD NOT BE CLOSED, which is said rather than
+fudged.** `b3d3f18` recorded no seed; on HEAD — its own tree — Elementalist vs
+Centaur Shaman reads 40.0% at seed 11 and 40.1% at seed 1, not the 39.1% that
+commit published, and Big Green reads 44.7%, not 42.7%. So the 1.7 and 1.8 points
+are not subtracted from anything here. What is recovered is the direction and the
+paired count: **+0.9 ±1.4 over 10 000 games an arm with 197 flips to a win against
+108**, and +1.6 ±2.5 with 115 against 68 where the rules change had cost 39
+against 90. **Quote the seed with the number** is the lesson, and it is now house
+practice.
+
+**LEFT OPEN, and named.** The sum of the offers a seat declines is a clock the
+per-offer arithmetic never adds up — four Vaults declined is four damage a turn,
+and that is what the War Mage loss is made of; summing it wants the horizon
+`counts_the_race` has already ruled only the decking clock can supply, so it is
+the same closed question in a fifth place. Narrower and cheaper, and the one to
+take: **the mana a declined price SAVES is only worth `Evaluator.W_LANDS` if the
+turn had somewhere to spend it** — `_pain_excluded`'s own rule with its sign
+flipped, and a seat that floods (War Mage's Mountains make two apiece under a
+Gauntlet) is exactly the seat it would stand down for. Unbuilt; the field exists,
+so the question is one Lab command away.
+
+**And no card's HINT is wrong** — all 70 call sites were read. Every mana offer
+checks `can_afford_cost` first and passes `true`, which is the documented
+"affordable" convention rather than a bug, and the fifteen that compute a real
+hint all read the right way round.
 
 ## Standing quality gates
 

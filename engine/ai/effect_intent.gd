@@ -1187,6 +1187,23 @@ static func hand_toll_damage(toll: Dictionary, hand_size: int) -> int:
 static var _hand_toll_cache: Dictionary = {}
 
 
+## WHAT A "YOU MAY PAY" QUESTION TAKES (2026-09-11, [member
+## AiProfile.prices_offers]) — the mana price written into the question
+## itself ("Pay {4} to untap Mana Vault?", "Pay {2} to keep Mox Ruby?"),
+## as printed, "" when the question names no mana price.
+##
+## The same run of `{…}` symbols [method toll_of_line] reads off a printed
+## TRIGGER, read off the question instead, and for the same reason: what a
+## card-local offer does lives in a Callable this code cannot look inside,
+## so the words the engine puts in front of a player are the only channel
+## there is. The precedent for reading a question rather than a card is
+## [constant AiPlayer.TRIBUTE_WORDS], which is how [method
+## AiPlayer.answer_card] tells a loss from a gain. Nothing here is keyed by
+## a card's name, and an {X} price still says nothing (see below).
+static func offer_price(prompt: String) -> String:
+	return _mana_price_in(prompt.to_lower())
+
+
 ## The mana price a printed line offers to avoid what it says — the run of
 ## `{…}` symbols right after "pay". "" when the line names no such price,
 ## or names one that is not mana.

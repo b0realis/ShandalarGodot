@@ -102,6 +102,7 @@ override any knob on any preset for a measurement
 | `minds_the_vise` | off | off | on | on | reads the two printed shapes on THEIR side of the table that decide what our own HAND should be doing, and neither of them had ever reached a decision. THE SQUEEZE: a permanent whose upkeep trigger deals damage counted off the cards in a hand (`EffectIntent.hand_toll_of_line`, read from the trigger's own line the way the wheel and the aimed discard are). Reproduced — a Wizard holding seven with a Black Vise across the table went on drawing (the Jayemdae Tome's tick is offered at a hand of five, where `_draw_need` returns exactly 0.00), cast by printed worth alone, and its one Disenchant took the Jayemdae Tome (4.20) over the Vise (1.00) while the Vise squeezed for three a turn. THE PRISON: a permanent of theirs whose static holds our creatures at home (`cur_cant_attack`, set by a static and by nothing else — the reading `_ground_the_sweep_opens` already makes), priced by `Evaluator.permanent_value` at a flat 3.20 with two Craw Wurms standing behind it. Three readings, each of them 0 with no such permanent on the table: THE ROOM (`_vise_room`, the cards the hand can still take before the toll charges for them — no Ancestral, no Tome tick and no wheel drawn into a hand a Vise is already counting), THE RELIEF (`_vise_relief`, a cast worth the point it takes off our next upkeep at `_life_price`'s rate) and THE PRICE (`_prison_relief`, what taking the card off the table is worth — the squeeze's next beat ours minus theirs, and the prison's held attack read through `_damage_through_blocks`). **THE RELIEF IS SIGNED, AND THAT IS THE HALF `docs/forge/casting.md` P4 HAS BACKWARDS**: its *"The Rack shares (a)-(c) with the threshold at three"* is one subtraction out — a Rack's X is three MINUS the hand, so emptying a hand under one is the worst play at the table, and a pilot that answered it like a Vise would take the full three every upkeep instead of nothing. The room is one-directional for the same reason (it may refuse a draw and can never demand one), and a WHEEL is charged for the seven cards it refills us to rather than credited for the one it spent, which is `docs/arzakon.strategy` §4's *"never Wheel or Twister into one"* as arithmetic. **WHAT IS NOT BUILT**: P4's *"priced at the damage it will deal over `PACE_HORIZON` turns"* is a stream times a horizon, and there is no horizon in this engine — the same ruling the `EffectIntent.TOLL_BEATS` census made on 2026-09-10 for `prices_liabilities`. Every reading here prices ONE BEAT, a number the table is showing; the horizon stays `counts_the_race`'s (§5) |
 | `runs_loops` | off | off | off | on | prices the three cards of `docs/arzakon.strategy` §3C's infinite-turn loop by what they DO on this board instead of by the printed card, which is the one thing `Evaluator.card_value` cannot see. Reproduced, all three at the same seam: a Wheel of Fortune came out at **4.00 with our hand at seven and theirs at nothing** — a gift of six cards — and at **4.00 with ours at one and theirs at seven**, a gain of six, the same number both ways round; **Time Walk came out at 3.00 with three Serra Angels on the table**, an extra turn worth twelve damage priced at a Counterspell (the flat 3.0 `docs/arzakon.strategy` §5 names); and a **Regrowth with Time Walk and a Serra Angel in our own graveyard took the Angel**, 10.00 against 3.00, which is why the loop could never start. On: an extra turn is a draw step (`w_hand`) plus a land drop when a land is held plus the attack the board makes again, read through their blocks and priced by `_face_damage_value` (`AiPlayer._extra_turn_value` — 20.70 for that Time Walk); a FIXED-COUNT wheel is worth the cards it MOVES, `their hand − ours` once the wheel itself has left our hand (CR 608.2m), refused when that is negative and priced at `w_hand` a card (`_wheel_swing`); and a card in our own graveyard is offered to a "return a card" spell at what casting it on THIS board would be worth (`_graveyard_worth`). **THE LOOP IS THOSE THREE AND NOT A FOURTH RULE**: a turn taken with a returner in hand is credited the card it does not spend, which is what puts the Walk ahead of the Regrowth beside it in the same main step — so the Walk is in the graveyard when the Regrowth is cast, and the Regrowth takes it back. Nothing is named: the shapes are "extra turn", "each player discards and draws" (`EffectIntent.wheels`, built the same morning) and "return a card from your graveyard", and a Raise Dead is not a returner because its spec admits creatures alone. `paces_draws`' and `counts_cards`' guards run FIRST and are untouched. Wizard only — the far end of the ramp, and `docs/arzakon.strategy` §4's own item 6 |
 | `counts_the_race` | off | off | on | on | reads the race to the empty library in TURNS instead of in cards — the same number only while each side loses one a turn. `paces_draws` counts CARDS and is exactly right under that assumption, because a draw step takes one from each library in turn; a MILL breaks the equality and everything built on it is then wrong by the ratio. Reproduced four times over, and the first is not a mispricing but a decision the pilot had never made: **A MILLSTONE IS NEVER ACTIVATED** — `{2}, {T}: target player mills two cards` falls out of `AiPlayer._ability_option`'s last `else` ("pumps, regeneration, mana, untaps, unknowns") because nothing there has an arm for a payload that is a card off a LIBRARY, and with the opponent's library at **two**, where the activation is the game (CR 704.5b), the option is still `{}` and the Millstone stays untapped. **OUR OWN MILLSTONE MAKES NO DIFFERENCE TO THE PACE** — our library at 12 against their 30 is a race we hold by two turns (theirs is ten turns at three cards a turn, ours is twelve) and `_library_slack` answered `1 << 20`, *"the race is lost already"*, because 12 − 30 is negative. **THEIR MILLSTONE IS PRICED AT 2.60 WHILE IT KILLS US** — with our library at six the one Disenchant took a Jayemdae Tome (4.20) and left the mill running, which is `minds_the_vise`'s malfunction in the other currency. **AND A TIMETWISTER IS CAST INTO A LIBRARY WE HAVE EMPTIED** — ours at 40, theirs at 3 with twenty cards in their graveyard, priced 11.50 and cast, their library back at 21, which is `docs/arzakon.strategy` §4 item 4 word for word. On, all four come out of ONE reading and no card is named: the rate a library loses cards at (`AiPlayer._mill_rate` — the draw step plus every repeatable mill aimed at that seat, a `{T}` ability counted ONCE because the tap is what makes a rate, and an unbounded one refused the way `TOLL_UNKNOWABLE` refuses a count) turns a library into a number of TURNS (`_deck_clock`); the pace counts those turns; a mill is bought at `LETHAL_WORTH` when it decks them and at what a card is worth otherwise, at the mana sink and never in the main phase, which is where a Millstone belongs; taking a mill of THEIRS off the table is worth the cards it hands back (`_mill_relief`, `w_hand` a card rising with the share of the library it takes — `_face_damage_value`'s own sentence about a life total, said about a library); and a wheel that shuffles the GRAVEYARDS back (`EffectIntent.wheel_recycles`, one more fact off the line the wheel count is already read from) is refused when it would lengthen the loser's clock in a race we hold. **THE HORIZON IS THE DECKING CLOCK AND NOTHING ELSE, AND THAT IS THIS ROW'S REAL ANSWER** (§5): a library is the one quantity in this game that never grows back, so a rate taken off it is a fact, while every other rate the engine can see is revisable inside a turn — which is why `RACE_HORIZON` refuses to read a combat clock more than four turns out. The bound here is `PACE_HORIZON`, the libraries' own, and there is no new number anywhere in the row. **AND THE POOL CANNOT MEASURE THE MILL AT ALL**: five decks hold a maindeck Millstone and **not one of them loads**, the three `docs/forge/casting.md` P3 names for its own measurement among them |
+| `prices_offers` | off | off | on | on | PRICES A "YOU MAY PAY" BEFORE IT ANSWERS ONE, which no seat in this project had ever done. `DecisionAgent.answer_yes_no` returns the card author's hint, `AiPlayer` overrode it with nothing, and **68 card files put such a question to a seat** — so every offer in the pool was answered by whatever its author wrote as the default, which for a mana price is almost always "can we afford it". Reproduced at HEAD with four TAPPED Mana Vaults, a Sol Ring, a Mox Ruby, three Mountains and an Island — seven mana and a Fireball in hand: **four yeses, ONE Vault untapped, three mana left for the whole turn where declining keeps seven**, one point of life bought with four mana, and the Fireball down from X=6 to X=2. **ONE READING, AND THE OTHER FOUR SHAPES ARE RULED OUT RATHER THAN DEFERRED**: an offer's two halves are comparable only in the SAME CURRENCY at the SAME BEAT, and a mana price against a MANA SOURCE is the one pair in this pool that is — an untap (a Mana Vault's {4} for the {C}{C}{C} it makes) or a rent (an Energy Flux's {2} a turn for a Mox that makes one), both a stream against a stream, with no horizon left in the arithmetic. A rent on a BODY, a toll paid in life, an untap that buys a creature's turn and a spell tax are each a STOCK against a STREAM or two currencies with no rate between them — the horizon this repository has refused four times (`_liability_price`, `TOLL_UNKNOWABLE`, `minds_the_vise`, `counts_the_race`) — and over half the 68 are PURE UPSIDE and deserve no reading at all. On, `AiPlayer.answer_yes_no` reads the price off the question's own line (`EffectIntent.offer_price`, the parser `toll_of_line` already uses on a printed trigger), finds the subject by matching the question against the names on ITS OWN TABLE (58 of the pool's 70 offers put one there — `_offer_subject`; no card is named in the code), fires only where that permanent's whole worth is the mana it makes (`_makes_only_mana`) and only at a beat that comes round on its own (`OFFER_BEATS`, `TOLL_BEATS` written as steps), then refuses a price the source cannot make back unless the damage it escapes covers the gap at `_life_price`'s rate — so a Mana Vault stays tapped at twenty and is bought back at twelve. **IT CAN ONLY EVER TURN A YES INTO A NO**: a hint of NO is the card author's own refusal, and a printed question is no reason to argue with one upward. **THE LAB SAID YES IN THE AGGREGATE AND NOT ON EVERY DECK** (§4): eight live pairs, 586 games flipped to a win against 449 away, the Energy Flux half clear at +4.0 ±2.0 and War Mage clear the other way at −2.6 ±1.8. Sorcerer and Wizard, as a CAPABILITY like `counts_cards` — and deliberately not `prices_liabilities`' third growth, which is on at every rung and would have made this unmeasurable apart from the Lich reading |
 | `crack_back_margin` | 0 | 0 | 0 | 0 | how far under our own life total the counter-swing has to reach before `AiPlayer._search_hold_back` is worth running: the gate was `reach >= life`, and it is `reach >= life - crack_back_margin`. The old gate is exact and asks exactly one question — *does this attack LOSE THE GAME to the counter-swing?* — and never the other one, whether it costs us twelve life for four points of damage. **Every preset ships 0, which is that gate unchanged**: the number is here so the Deck Lab can put the question in one command, the way `w_hand` is, and the Lab's answer of 2026-09-10 was NO (§4). Not a difficulty knob, and no rung moves it |
 | `develops_late` | off | off | off | off | keeps the hand shut until the attack is over — the whole of `docs/forge/casting.md` P1, and **every preset ships it off, which is the pilot unchanged**. `AiPlayer.act` reaches the main-phase planner in EITHER main step and the first one it reaches is Main 1, so every land, creature, artifact, enchantment, draw spell, discard and tutor this pilot has ever played went down BEFORE its own combat and with it the mana: a Wizard on four Forests with an Ironroot Treefolk in hand plays the land, casts the Treefolk, and stands at their declare-blockers with everything shown and nothing open. On, Main 1 casts only what Forge's `castPermanentInMain1` would — a win, floating mana that would be lost, a haste creature, a non-creature mana source, and what changes THIS combat (a permanent of theirs answered, an aura or a pump on a body of ours, a land that animates itself) — the mana sink waits with the rest, and the land drop is held under Forge's own four guards, the fourth of which is this pilot's own hazard: it sizes its attack and its block by the mana it holds, so a land in hand is a Carrion Ants that reads one point smaller. **THE LAB REFUSED THE RUNG** (§4): nine pairs, eight of them negative, a drift of about a point and a quarter and not one delta clear of its interval — so the field is here for the Deck Lab to ask with, the way `crack_back_margin` is, and no rung moves it |
 | `reads_race` | off | off | on | on | reads the two CLOCKS of the race — how many turns we need to take them from their life total to nothing, how many they need to do it to us — and lets the difference move what a VOLUNTARY BLOCK TRADE is allowed to cost. Rung 2 of `AiPlayer._best_block_for` takes a trade nothing forces on it whenever the body it spends is worth no more than `attacker_value + 0.5`, and that is the same margin at twenty life as at four: our Serra Angel trades itself for their Craw Wurm while we are one turn from winning at 20 against their 4, and our Craw Wurm lets an Erhnam Djinn through at 8 life because the Wurm is worth ONE POINT more. On, `AiPlayer._trade_margin` reads P1's own three states — demand a gain (−0.5) when their clock is more than a turn longer than ours, allow a small loss (+1.5) when ours is more than a turn longer than theirs, +0.5 otherwise — with a dead band of a turn between them and `AiPlayer.RACE_HORIZON` (four turns, `PACE_HORIZON`'s sentence said about the red zone) under all of it, because on a 20-20 board two Grizzly Bears against one Hill Giant is five turns against seven and that is a board, not a race. Both clocks are public numbers: the two life totals and the printed power each side could swing with once everything untaps, which is the durable reading the crack-back model has always made of theirs. **P1'S HEADLINE HALF — the ATTACK bar moved by the same difference, plus one for a clock they cannot block — WAS BUILT, MEASURED AND REFUSED** (§4): over the eight starter matchups it moved most it ended 42 games in a win against **170 in a loss**, White Knights vs Black-Red Raiders −3.1, and it is the third brake-or-licence hung on `AiPlayer._combat_tolerance` to be refused this month. The block half alone reads 16 won to 17 lost on those same eight, every delta between −0.2 and +0.2, and that wash is what ships |
@@ -2768,8 +2769,154 @@ pair: **0 of 4 000 games different**, and 0 of the control's 1 000 beside
 them. No shipped starter holds a mill or a wheel, so the starter meta
 cannot move and does not.
 
+### THE OFFER NOBODY HAD EVER PRICED (2026-09-11, `prices_offers`)
+
+Filed by `b3d3f18` the same day and by no wave: widening `try_pay` to
+every mana source (CR 605.3a) moved a win rate the wrong way, and that
+commit's own diagnosis was that **the cause was an ANSWER, not the rule**.
+
+REPRODUCED AT HEAD before a line was written. `AiPlayer` does not override
+`answer_yes_no` — the script that owns the pilot's answer is
+`res://engine/decision_agent.gd` — so the pilot returns the hint for all
+68 card files that ask. A Wizard in seat 0; four TAPPED Mana Vaults, a Sol
+Ring, a Mox Ruby, three Mountains and an Island (seven mana on the table);
+a Fireball in hand:
+
+```
+[Upkeep] Pay {4} to untap Mana Vault? — yes     (four times)
+-> Vaults untapped: 1 of 4
+-> mana left for the whole turn: 3        every offer declined: 7
+-> our life: 13                           every offer declined: 12
+```
+
+It ate its own board to untap ONE Vault and bought a single point of life
+with four mana. The Fireball went from X=6 to X=2.
+
+THE SURVEY OF THE 68, BY SHAPE, because the shape is what decides whether
+a reading is possible at all: **22 upkeep rents** (pay or lose a permanent
+— the five Elder Dragon Legends, Cosmic Horror, Energy Flux, The
+Tabernacle at Pendrell Vale, Scarwood Bandits, Imprison), **6 untaps**
+(Mana Vault, Paralyze, Brass Man, Island Fish Jasconius, Magnetic
+Mountain, Leviathan), **7 pay-or-it-happens-to-you** (Naf's Asp, Mishra's
+War Machine, Bronze Tablet, Tempest Efreet, Wand of Ith, Cleansing, Chain
+Lightning), **4 spell taxes** (Force Spike, Nether Void, In the Eye of
+Chaos, Invoke Prejudice) and **29 that are pure upside** (the six life
+rods, Verduran Enchantress, Nether Shadow, Eureka, Gaea's Touch, Sylvan
+Library). **Only one of the five can be priced**, by the test this file
+has applied four times already: the two halves have to be in the SAME
+CURRENCY at the SAME BEAT. A mana price against a MANA SOURCE is — pay {4}
+this upkeep, have {C}{C}{C} this upkeep, be asked again next upkeep, both
+sides a stream, the horizon cancelling out of the arithmetic. A rent on a
+BODY is a stock against a stream; a toll paid in life is two currencies
+with no rate between them; a spell tax is mana already committed, where
+"can we afford it" IS the answer; and pure upside takes nothing. **The
+other four shapes are ruled out, not deferred**, on the ground
+`_liability_price`, `TOLL_UNKNOWABLE`, `minds_the_vise` and
+`counts_the_race` already stand on.
+
+WHAT THE POOL PUTS ON THE ONE SHAPE, counted rather than claimed: **24
+cards print a mana escape at one of the beats, and exactly ONE of them is
+a permanent whose whole worth is the mana it makes** — Mana Vault, the
+card `b3d3f18` measured its regression on — and **17 permanents in the
+pool make only mana**, which is what a rent granted from outside (Energy
+Flux's {2} on every artifact) can be put about. Both counts are census
+tests.
+
+NOTHING IS NAMED IN THE CODE. The price is the run of `{…}` after "pay" in
+the question's own words (`EffectIntent.offer_price`, the parser
+`toll_of_line` already uses on a printed trigger); the SUBJECT is found by
+matching the question against the names on the pilot's OWN table, which is
+how a player reads one — 58 of the pool's 70 offers put a permanent's name
+in the question, the 12 that name none are left alone, and so is a
+question about a card that is not on the battlefield. The reading can only
+ever turn a YES into a NO.
+
+**THE NUMBERS.** Seed 11 unless stated, 3 000 games an arm unless stated,
+control Big Green vs White Knights — which holds no `choose_yes_no` offer
+of ANY kind on either side, so the knob's code is never entered:
+**byte-identical to its own null in every arm of all ten runs**, and the
+`off` arm replays the null game for game in every one of them.
+
+| pair (seat A) | null | `on` | games that turned |
+| --- | --- | --- | --- |
+| Elementalist (SotA) vs Centaur Shaman, **10 000 an arm** | 40.8% | 41.6% (+0.9 ±1.4) | 2 433 — 197 won, 108 lost |
+| Elementalist (SotA) vs Centaur Shaman | 40.0% | 41.1% (+1.1 ±2.5) | 696 — 61 won, 29 lost |
+| Elementalist (SotA) vs Centaur Shaman, **seed 1** | 40.1% | 41.1% (+1.1 ±2.5) | 695 — 61 won, 29 lost |
+| Elementalist (SotA) vs Big Green | 44.7% | 46.2% (+1.6 ±2.5) | 1 201 — 115 won, 68 lost |
+| Elementalist (1997) vs Seer (SotA) | 78.6% | **82.6% (+4.0 ±2.0)** | 900 — 138 won, 19 lost |
+| Vampire Lord (SotA) vs Big Green | 21.5% | 21.8% (+0.4 ±2.1) | 942 — 51 won, 40 lost |
+| Shapeshifter (SotA) vs Big Green | 27.1% | 27.0% (−0.1 ±2.2) | 430 — 19 won, 23 lost |
+| Seer (SotA) vs Big Green | 4.2% | 4.1% (−0.1 ±1.0) | 414 — 6 won, 9 lost |
+| War Mage (SotA) vs Centaur Shaman | 42.8% | 41.3% (−1.4 ±2.5) | 871 — 36 won, 79 lost |
+| War Mage (SotA) vs Big Green | 15.7% | **13.1% (−2.6 ±1.8)** | 954 — 24 won, 103 lost |
+
+**TWO DELTAS ARE CLEAR OF THEIR INTERVALS AND THEY POINT OPPOSITE WAYS**,
+which is said first rather than last. The RENT half is the clear gain:
+Elementalist's own two Energy Flux, charging {2} an upkeep on every
+artifact across the table, **+4.0 ±2.0 with 138 games flipped to a win
+against 19** — refusing to rent a Mox for twice what it makes is as close
+to free as a reading gets. And **War Mage is a clear loss at −2.6 ±1.8**,
+on a fast opponent and on a slow one alike (−1.4 against Centaur Shaman),
+so it is the DECK and not the matchup: four Mana Vaults in a list with
+twenty-two lands, four Gauntlets of Might and **not one creature that
+blocks**, where the life total IS the clock and a mana saved buys nothing
+a deck that floods already wanted.
+
+WHAT THE AGGREGATE SAYS, on the instrument this file uses when a win rate
+is inside its interval: across the eight distinct live pairs, **586 games
+flipped to a win against 449 flipped away** of 1 035 discordant pairs,
+where a fair toss sits at 517 ± 16. That is 4.3 sigma and it is positive.
+The plain reading is **a GAIN in the aggregate and NOT DECIDED per deck**:
+it ships on the top two rungs with War Mage named, not buried, and the
+question it leaves is written in §5.
+
+**THE CANARY, EXPLICITLY.** `b3d3f18` measured Elementalist (Spells of the
+Ancients) against Centaur Shaman at **40.9% → 39.1%**, 1 152 of 3 000
+games different, and against Big Green at **44.4% → 42.7%**, 834 of 3 000
+different with 39 flipped to a win against 90 away. Neither of those runs
+recorded its seed, and **this pass could not reproduce either baseline**:
+on HEAD — which IS that commit's tree — the same pair reads 40.0% at seed
+11 and 40.1% at seed 1, not 39.1%, and Big Green reads 44.7%, not 42.7%.
+So the 1.7 and 1.8 points cannot be subtracted from anything measured
+here, and no claim is made that they were. What CAN be said is the shape,
+and it is the mirror image of the regression: on the Centaur Shaman pair
+the knob buys **+0.9 ±1.4 over 10 000 games an arm with 197 flips to a win
+against 108** (5.1 sigma on the paired count), and on the Big Green pair
+**+1.6 ±2.5 with 115 against 68** where the rules change had cost 39
+against 90. The canary is answered in direction and in the paired count,
+and NOT in the published absolute numbers.
+
+**NO HARM.** Big Green against the whole shipped field, 1 000 games a
+pair: **0 of 4 000 games different**, and 0 of the control's 1 000 beside
+them. No shipped starter holds a Mana Vault, and Blue Skies' two Energy
+Flux are sideboard cards the Lab never swaps in without `--best-of`, so
+the starter meta cannot move and does not.
+
 ## 5. Where the ladder still ends short
 
+- **THE SUM OF THE OFFERS A SEAT DECLINES IS A CLOCK, AND
+  `prices_offers` CANNOT SEE IT (2026-09-11).** The reading prices ONE
+  offer at ONE beat — four mana against the three a Mana Vault makes,
+  plus the point of damage staying tapped costs at `_life_price`'s rate —
+  and that is right for one Vault. A seat with FOUR of them declines four
+  offers and takes four damage a turn, and the four together are a clock
+  the per-offer arithmetic never adds up. It is what the Lab's one clear
+  loss is made of (§4: War Mage (Spells of the Ancients), four Mana
+  Vaults, twenty-two lands, four Gauntlets of Might and **no creature
+  that blocks**, −2.6 ±1.8 against Big Green and −1.4 against Centaur
+  Shaman — the deck, not the matchup). Summing it needs the HORIZON: how
+  many turns the game has left, which is `counts_the_race`'s own ruling —
+  only the DECKING clock can be counted forward honestly here, because a
+  library never grows back and a life total under a toll can. So this is
+  the same closed question in a fifth place, not a fifth open one; what
+  is genuinely open is narrower and cheaper, and is stated as such: the
+  mana a declined price SAVES is only worth `Evaluator.W_LANDS` if the
+  turn had somewhere to spend it, which is `_pain_excluded`'s own rule
+  (*never pay a life for mana that was about to be wasted*) with its sign
+  flipped, and a seat that floods — War Mage's Mountains make two apiece
+  under a Gauntlet — is exactly the seat that rule would stand down for.
+  Unbuilt and unmeasured; the field is there, so the question is one Lab
+  command away.
 - **THE POOL'S OWN CEILING, COUNTED ONCE (2026-09-11).** Half the entries
   below and half of §4's measurement notes end the same way — *the deck
   the note names cannot be played* — so the whole of `decks/` was walked

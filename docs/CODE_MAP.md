@@ -1279,6 +1279,48 @@ shandalar/
 │   │   │                      KILLING ours only in _attack_risk and
 │   │   │                      _cohort_value, where a body of ours is
 │   │   │                      being sent into it. Sorcerer and Wizard.
+│   │   │                      counts_the_race (2026-09-10) is THE DECKING
+│   │   │                      COUNT: the race to the empty library read in
+│   │   │                      TURNS instead of in cards, which is the same
+│   │   │                      number only while each side loses one a turn.
+│   │   │                      paces_draws counts CARDS and is right under
+│   │   │                      that assumption; a MILL breaks it. A MILLSTONE
+│   │   │                      HAD NEVER BEEN ACTIVATED, because
+│   │   │                      _ability_option had no arm for a payload that
+│   │   │                      is a card off a LIBRARY, even with their
+│   │   │                      library at two where the mill is the game
+│   │   │                      (CR 704.5b). _mill_rate, _deck_clock,
+│   │   │                      _library_slack counting turns and reducing
+│   │   │                      ALGEBRAICALLY to its 2026-09-07 self at rate
+│   │   │                      one, the mill bought at LETHAL_WORTH when it
+│   │   │                      decks them, _mill_relief for taking one of
+│   │   │                      theirs off the table, _hands_back_the_race for
+│   │   │                      the wheel that shuffles the GRAVEYARDS back.
+│   │   │                      THE HORIZON FOUR ROWS SENT HERE IS REFUSED: a
+│   │   │                      library is the one quantity in this game that
+│   │   │                      never grows back, so turns off it are a fact
+│   │   │                      and turns off a combat clock, a toll or a
+│   │   │                      hidden library are a guess. Sorcerer and
+│   │   │                      Wizard.
+│   │   │                      prices_offers (2026-09-11): THE OFFER NOBODY
+│   │   │                      HAD EVER PRICED — DecisionAgent.answer_yes_no
+│   │   │                      returns the card author's hint, AiPlayer
+│   │   │                      overrode it with nothing, and 68 card files
+│   │   │                      put such a question to a seat, so every "you
+│   │   │                      may pay" was answered by "can we afford it".
+│   │   │                      ONE reading and the other four shapes RULED
+│   │   │                      OUT: an offer's halves are comparable only in
+│   │   │                      the same currency at the same beat, and a mana
+│   │   │                      price against a MANA SOURCE is the one pair in
+│   │   │                      this pool that is. AiPlayer.answer_yes_no with
+│   │   │                      EffectIntent.offer_price, _offer_subject (the
+│   │   │                      question matched against the names on our OWN
+│   │   │                      table — no card named in code),
+│   │   │                      _makes_only_mana, _offer_mana_back and
+│   │   │                      OFFER_BEATS; it can only ever turn a YES into
+│   │   │                      a NO. Sorcerer and Wizard. +4.0 on the rent
+│   │   │                      half, -2.6 on War Mage, 586 flips for against
+│   │   │                      449 across eight pairs.
 │   │   │                      develops_late (2026-09-10): DEVELOP AFTER
 │   │   │                      COMBAT — Main 1 casts only Forge's
 │   │   │                      castPermanentInMain1 list (a win, floating
@@ -2516,7 +2558,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 6029 tests / ~155 340 asserts, ~380 s
+├── tests/                   GUT suite — 6058 tests / ~155 854 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -4297,6 +4339,20 @@ shandalar/
 │    the same shape and a Hurricane that would kill us too refused; the
 │    reader naming Channel and nothing else; and the Circle of Protection
 │    board that DID NOT REPRODUCE, on both arms;
+│    tests/ai/test_ai_prices_offers_2026_09_11.gd — THE OFFER, PRICED
+│    (AiProfile.prices_offers): the price read off a question and the
+│    non-mana and {X} prices refused; the Vault not untapped for more mana
+│    than it makes and the null always untapping it; the whole four-Vault
+│    upkeep keeping seven mana against the null's three; the life gap paid
+│    at twelve and refused at thirteen; a rent above what the source makes
+│    refused and a rent it makes back paid; a tapped locked source rented
+│    for the back of the card; a body, a mana creature, a Jayemdae Tome and
+│    a land all left to their authors' hints; a question naming no permanent
+│    of ours, or one across the table, left alone; the same question outside
+│    a beat read as a one-off; a hint of NO never overturned; and the two
+│    censuses — 24 cards printing a mana escape at a beat of which exactly
+│    one is a mana-only permanent, and the pool's seventeen mana-only
+│    permanents;
 │    tests/ai/test_ai_counts_the_race_2026_09_10.gd — THE DECKING COUNT
 │    (AiProfile.counts_the_race): Millstone as the pool's only MillEffect
 │    and the mill read as a COUNT; Timetwister recycling and Wheel of

@@ -10395,6 +10395,169 @@ func choose_mulligan(game: MtgGame, p_pid: int) -> bool:
 	return super(game, p_pid)
 
 
+## THE OFFER, PRICED (2026-09-11, [member AiProfile.prices_offers]) —
+## the pilot's FIFTH answer, and the one it had never given.
+##
+## [method DecisionAgent.answer_yes_no] returns the card author's hint and
+## nothing here overrode it, so every "you may pay" in the pool — 68 card
+## files — was answered by whatever its author wrote as the default, which
+## for a mana price is almost always "can we afford it". Four tapped Mana
+## Vaults at one upkeep therefore ate a seven-mana board to untap ONE of
+## them, and the seat reached its own first main phase with three mana and
+## a Fireball it could no longer point anywhere (the knob's own docs carry
+## the probe).
+##
+## THE ANSWER CAN ONLY EVER GO FROM YES TO NO, and that is a rule and not
+## an accident. A hint of NO is the card author's own refusal — Island
+## Sanctuary's `_worth_it`, Visions' `false`, Season of the Witch's life
+## test — and reading a printed question is no reason to overturn one
+## upward. It also makes the null trivial: with the knob off this method
+## is [method DecisionAgent.answer_yes_no], byte for byte.
+##
+## WHAT IS PRICED IS ONE SHAPE, and [member AiProfile.prices_offers] says
+## why the other four in the survey are not: an offer's two halves are
+## comparable only in the SAME CURRENCY at the SAME BEAT, and a mana price
+## against a MANA SOURCE is the one pair in the pool that is — whether the
+## question is an untap (a Mana Vault's own {4} for the {C}{C}{C} it
+## makes) or a rent (an Energy Flux's {2} a turn for a Mox that makes
+## one). Everything else is a stock against a stream, which needs the
+## horizon this engine has now refused four times.
+##
+## AND THE BEAT IS HALF OF THAT SENTENCE, not a detail of it ([constant
+## OFFER_BEATS]). A price charged at a beat that comes round on its own is
+## a RENT: pay {4} this upkeep, have {C}{C}{C} this upkeep, be asked again
+## next upkeep, and the mana on both sides is the same turn's. A price
+## asked anywhere else is a one-off that buys the permanent outright — a
+## Scarwood Bandits offering {2} rather than take a Mox is the stock
+## against the stream all over again, in the other direction, so it is
+## left to its author's hint.
+func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> bool:
+	if not hint or not profile.prices_offers or p_pid != pid:
+		return hint
+	if not OFFER_BEATS.has(game.current_step()):
+		return hint                       # a one-off purchase, not a rent
+	var price := EffectIntent.offer_price(prompt)
+	if price == "":
+		return hint                       # the price is not mana: not ours to read
+	var subject := _offer_subject(game, prompt)
+	if subject == null or not _makes_only_mana(subject):
+		return hint                       # the purchase is not mana either
+	var asked := ManaCost.parse(price).mana_value()
+	var made := _offer_mana_back(game, subject, prompt)
+	if made >= asked:
+		return true
+	# THE GAP IS MANA and the only thing on the table that can cover it is
+	# the damage the offer escapes, at the reaper's own rate: half a point
+	# at twenty and a whole one at twelve, against a mana priced the way
+	# the evaluator prices one ([constant Evaluator.W_LANDS], "mana is what
+	# turns the hand into board"). So the Vault stays tapped at twenty and
+	# is bought back at twelve, where the point it saves is worth the mana.
+	var gap := float(asked - made) * Evaluator.W_LANDS
+	var saved := float(_own_toll(game, subject)["damage"]) \
+		* _life_price(game.players[p_pid].life)
+	return saved >= gap
+
+
+## THE BEATS A RENT IS CHARGED AT (2026-09-11, [member
+## AiProfile.prices_offers]) — [constant EffectIntent.TOLL_BEATS]'s three,
+## written as STEPS rather than as events because the step is what the
+## engine can tell us at the moment a question is put, and for exactly its
+## reason: these come round whether the seat likes them or not, so a price
+## charged at one of them will be charged again. Everywhere else a "you
+## may pay" is a purchase made once.
+const OFFER_BEATS: Array[int] = [Mtg.Step.UPKEEP, Mtg.Step.DRAW, Mtg.Step.END]
+
+
+## THE OFFER'S SUBJECT (2026-09-11, [member AiProfile.prices_offers]):
+## which permanent of OURS the question in front of us is about.
+##
+## Found by matching the question against the names on our own table — not
+## against anything written in this file. FIFTY-EIGHT of the pool's SEVENTY
+## offers put the permanent's own card name in the question, forty-one of
+## them by interpolating it ("Pay {4} to untap %s?", "Pay {2} to keep %s?")
+## and seventeen by writing it out ("Pay {3}{B}{B}{B} to keep Cosmic
+## Horror?"), which is how a player at the table reads one: the box says
+## which card it is talking about and you look at that card. The twelve
+## that name none (`Pay {1} to gain 1 life?`, `Pay {3} to draw a card?`,
+## `Pay {W}{W} for a life?`) find no subject and are left alone, and so is
+## a question about a card that is not on the battlefield at all —
+## Transmute Artifact's "Pay {%d} to keep %s?" names a card still in the
+## library, and Eureka's and Chain Lightning's name a sorcery.
+##
+## THE LONGEST MATCH WINS, so a table holding both a card and another whose
+## name contains it cannot answer for the wrong one, and the candidate has
+## to be OURS: an offer put to us about a permanent across the table is not
+## a purchase we are making.
+func _offer_subject(game: MtgGame, prompt: String) -> CardInstance:
+	var best: CardInstance = null
+	for inst in game.players[pid].battlefield:
+		var card_name := inst.data.card_name
+		if card_name.is_empty() or prompt.find(card_name) < 0:
+			continue
+		if best == null or card_name.length() > best.data.card_name.length():
+			best = inst
+	return best
+
+
+## IS THIS PERMANENT'S WHOLE WORTH THE MANA IT MAKES (2026-09-11,
+## [member AiProfile.prices_offers])? The gate that keeps the reading in
+## one currency.
+##
+## A near neighbour of [method _dead_weight], which asks a different
+## question with three of the same tests — that one asks whether a
+## permanent is giving us NOTHING, this one whether everything it gives us
+## is mana — and the two are kept apart on purpose: [method _dead_weight]
+## belongs to [member AiProfile.prices_liabilities] and its answer moves
+## [method _own_value]'s 76 callers.
+##
+##  * A CREATURE is never this. Untapping a body buys a block and an
+##    attack, which is the combat search's question and not a price —
+##    Brass Man's {1} and Island Fish Jasconius's {U}{U}{U} are left to
+##    their authors' hints, and so is a Llanowar Elves under a Paralyze.
+##  * A LAND is never this either: [method Evaluator.land_value] already
+##    prices one by four things that are not its mana.
+##  * It has to MAKE mana at all, and everything else it does has to need
+##    the {T} it would be spending anyway — a Jayemdae Tome under an
+##    Energy Flux draws a card a turn and is no mana source.
+##  * Its only static may be the untap lock that put the question there
+##    ([constant UNTAP_LOCK_WORDS]); a permanent whose static works while
+##    it is tapped is still working.
+func _makes_only_mana(inst: CardInstance) -> bool:
+	if inst.is_creature() or inst.is_land() or inst.cur_mana_abilities.is_empty():
+		return false
+	for ability in inst.cur_mana_abilities:
+		if not ability.taps_source:
+			return false
+	for ability in inst.cur_activated_abilities:
+		if not ability.tap_cost:
+			return false
+	for static_ability in inst.data.static_abilities:
+		if not static_ability.text.to_lower().contains(UNTAP_LOCK_WORDS):
+			return false
+	return true
+
+
+## WHAT THE OFFER HANDS BACK, in mana, at this beat — the purchase half.
+##
+## An UNTAP offer ([constant UNTAP_ESCAPE_WORD], the word
+## [method _untap_prices] already reads a price by) hands us the source
+## itself, so the purchase is its best mana ability. A KEEP offer hands us
+## nothing the source was not already going to give: a permanent that is
+## tapped and does not untap on its own is face-down on the table until
+## something frees it, and renting one is renting the card back of it.
+func _offer_mana_back(_game: MtgGame, inst: CardInstance, prompt: String) -> int:
+	if not prompt.to_lower().contains(UNTAP_ESCAPE_WORD) \
+			and inst.tapped and inst.cur_skips_untap:
+		return 0
+	var best := 0
+	for ability in inst.cur_mana_abilities:
+		var made := 0
+		for pair in ability.produces:
+			made += int(pair[1])
+		best = maxi(best, made)
+	return best
+
+
 ## Discard the least valuable cards. A land is the cheapest card in hand
 ## only once we have lands enough; short of them it outranks any spell
 ## we could not cast anyway.
