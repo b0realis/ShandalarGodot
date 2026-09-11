@@ -2321,6 +2321,18 @@ shandalar/
 │   ├── svg_charts.gd        class SvgCharts — dependency-free SVG charts
 │   │                          (win-rate bars + CI whiskers, turn
 │   │                          histograms, matrix heatmap)
+│   ├── variants/            The 2 decks of OURS, counted apart from the
+│   │                          port (tests/unit/test_decks_1997.gd,
+│   │                          VARIANT_TOTAL): the_deck_playable (the
+│   │                          Disk for Chaos Orb — The Deck as this pool
+│   │                          can play it) and the_deck_serra (two Serra
+│   │                          Angels for two Mishra's Factories), which
+│   │                          since 2026-09-11 says in its own header
+│   │                          that it is a STUDY LIST and not a better
+│   │                          deck: the only playable list holding a
+│   │                          feeder AND a creature, so the only one on
+│   │                          which checks_before_casting's appetite and
+│   │                          the refused holds_the_closer fire at all
 │   ├── elo_ledger.gd        class EloLedger — decks/ratings.txt, the Deck
 │   │                          Lab's running Elo (K=8 per game); read and
 │   │                          written through an absolute on-disk path

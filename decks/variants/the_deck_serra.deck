@@ -1,24 +1,73 @@
-# The Deck (Serra variant) — TWO SERRA ANGELS FOR TWO MISHRA'S FACTORIES.
-#   That is the whole difference from `the_deck_playable.deck`, which is
-#   itself The Deck with one card changed (Nevinyrral's Disk for Chaos
-#   Orb, and its own header carries that provenance).
+# The Deck (Serra variant) — A STUDY LIST, AND THE ONLY PLAYABLE DECK IN
+#   THE TREE THAT HOLDS A FEEDER AND A CREATURE AT ONCE. Two Serra Angels
+#   for two Mishra's Factories, which is the whole difference from
+#   `the_deck_playable.deck` — itself The Deck with one card changed
+#   (Nevinyrral's Disk for Chaos Orb, and its own header carries that
+#   provenance).
 #
-# WHY IT EXISTS. The census of the shipped pilot (docs/ROADMAP.md, "THE
-#   DECK, THIRD PASS", §6) found The Deck winning its games at turn 48 to
-#   58 on the mean, half of them by the opponent drawing from an empty
-#   library and the rest by two animated Factories over a board The Abyss
-#   had emptied. A deck that cannot close is a deck that spends twenty
-#   turns not losing. Weissman's own lists never had that problem, because
-#   they carried a finisher: four Serra Angels and two Moats in the Winter
-#   1994-95 list (`decks/community/the_deck_weissman_1994_95_winter.deck`).
-#   This variant puts the shape of that back — an Angel that ends the game
-#   in five swings instead of a Factory that ends it in twenty.
+# READ THIS BEFORE PICKING IT UP: IT IS NOT A BETTER THE DECK, AND IT WAS
+#   NEVER SHOWN TO BE ONE. It shipped on 2026-09-10 as the Angel row's own
+#   list and was settled on 2026-09-11 with the census below. Anyone
+#   wanting The Deck to play should take `the_deck_playable.deck`; anyone
+#   wanting the Angel should take
+#   `../community/the_deck_weissman_1994_95_winter.deck`, which is the
+#   shape that actually closes (below). This file's job is measurement.
 #
-# WHAT CHANGED, exactly: -2 Mishra's Factory, +2 Serra Angel. The base
-#   list holds THREE Factories, not four (the plan's own note says four;
-#   the file says three, and the file is what plays), so one Factory
-#   stays: the deck still wants a land that blocks a Savannah Lions on a
-#   turn its mana is spoken for.
+# WHAT IT IS FOR. The Abyss eats a creature at EVERY player's upkeep, its
+#   controller's included, so a list holding three copies of it AND two
+#   five-mana bodies is the only place in `decks/` where two readings of
+#   the pilot can fire at all: the appetite already in play
+#   (`AiPlayer._fed_on_arrival`, inside `checks_before_casting`) and the
+#   refused field `AiProfile.holds_the_closer`. Every other playable deck
+#   in the tree holds the feeder with no creature (`the_deck_playable`) or
+#   creatures with no feeder (everything else) — the two lists that hold
+#   The Abyss in a SIDEBOARD never see it in free play, and the seven
+#   other decks that hold it maindeck name a card the pool does not
+#   implement and cannot be dealt at all. Take this file away and both
+#   readings become unmeasurable. That, and nothing about its win rate, is
+#   why it stays; DeckLab/README.md names it as the live pair for both
+#   sweeps.
+#
+# WHAT IT COSTS, measured 2026-09-11 against the five starters, 150 games
+#   a matchup, seed 4242, Wizard on both seats, `--mulligan on`, the
+#   appetite reading ON:
+#
+#     list                        win rate    win turn   by library-out
+#     the_deck_playable.deck    50.8% (381-369)   50.3    161 of 381 (42%)
+#     this list                 49.3% (370-380)   52.9    244 of 370 (66%)
+#
+#   Game for game on the same seeds, 173 of the 750 changed hands — 81 to
+#   a win for the Angels against 92 away, where a fair toss over 173 sits
+#   at 86.5 +-6.6. So the win rate is a WASH and the SPEED is not: the
+#   Angel list wins two and a half turns LATER and two thirds of its wins
+#   are the opponent drawing from an empty library, against two fifths for
+#   the list it varies. The Angel closes when it lands — the wins by
+#   DAMAGE come at turn 38.4 here against 46.6 there — but it lands
+#   seldom: 533 Angels cast in 750 games, 210 of them eaten at our own
+#   upkeep by our own enchantment even with the appetite reading on. The
+#   reading refuses a cast into a feeder ALREADY ON THE TABLE; it cannot
+#   refuse a feeder drawn or replayed afterwards, and `_in_danger` lifts
+#   it when the body has to block. Two Factories out is two lands out, and
+#   what replaces them is a card the deck's own table will not let it
+#   play.
+#
+# AND THE SHAPE THE ANGEL WANTS IS ALREADY IN THE TREE. On the same
+#   census `../community/the_deck_weissman_1994_95_winter.deck` — four
+#   Serra Angels, two Moats, no Abyss, no Factory — measures 48.8%
+#   (366-384) and wins at turn 29.3, TWENTY-ONE TURNS SOONER than the
+#   playable list, with 355 of its 366 wins by damage and 11 by
+#   library-out. That is the Angel item's own claim ("ten to twenty turns
+#   sooner, and nothing about the loss": its losses come at 19.8 on the
+#   mean against 19.3) delivered by a list that already ships. Half
+#   conversions are what fail: this list keeps the Abyss and gets no
+#   speed, and the same shell with the three feeders out for two Moats and
+#   a Factory measures 36.4% and the one-Abyss middle 40.7%.
+#
+# WHAT CHANGED FROM THE BASE LIST, exactly: -2 Mishra's Factory, +2 Serra
+#   Angel. The base list holds THREE Factories, not four (the plan's own
+#   note says four; the file says three, and the file is what plays), so
+#   one Factory stays: the deck still wants a land that blocks a Savannah
+#   Lions on a turn its mana is spoken for.
 #
 #   Nothing else moves. The mana is untouched — the Angel's {3}{W}{W} is
 #   paid by four City of Brass, three Tundra, one Plains and the Moxen

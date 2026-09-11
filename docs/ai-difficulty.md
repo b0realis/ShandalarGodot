@@ -2576,6 +2576,62 @@ twelve points of win rate. That is why Weissman's own lists carry Moats
 where they carry Angels, and it is a DECK question rather than an AI
 one.
 
+**AND THE DECK QUESTION IS SETTLED (2026-09-11): THE VARIANT IS A STUDY
+LIST, AND THE ANGEL SHAPE THAT WORKS ALREADY SHIPS.** The row above left
+one thing to a human — a variant in the tree that measured worse than the
+list it varies and slower than it too — and the first thing to test was
+whether its census had been taken before `_fed_on_arrival` closed the
+malfunction. It was re-run at HEAD on the same command (the five starters,
+150 games a matchup, seed 4242, Wizard both seats, `--mulligan on`,
+`--no-elo`), with a scratch harness replaying the Lab's own seeds game for
+game so the win TURN and the win REASON could be read — the Lab's
+`games.csv` carries neither, and the harness's win rates are the Lab
+report's to the game (381-369 and 370-380).
+
+| list, 150 × 5 at HEAD | win rate | win turn | by library-out | wins by damage, and when |
+| --- | --- | --- | --- | --- |
+| `the_deck_playable.deck` | **50.8%** (381-369) | 50.3 | 161 of 381 (42%) | 220, at 46.6 |
+| `the_deck_serra.deck` | **49.3%** (370-380) | **52.9** | 244 of 370 (66%) | 126, at **38.4** |
+| `the_deck_weissman_1994_95_winter.deck` | **48.8%** (366-384) | **29.3** | 11 of 366 (3%) | 355, at 28.5 |
+| scratch: the shell with 2 Moats for the 3 feeders | 36.4% (273-477) | 33.5 | 23 of 273 (8%) | 250, at 31.9 |
+| scratch: the same with ONE Abyss left | 40.7% (305-445) | 47.5 | 176 of 305 (58%) | 129, at 28.5 |
+
+THE FIX DID NOT RESCUE THE VARIANT AND DID NOT HAVE TO. Game for game on
+the same seeds the base list and the Serra variant differ in 563 of 750
+games and **173 change hands — 81 to a win for the Angels against 92
+away**, where a fair toss over 173 sits at 86.5 ±6.6: the win rate is a
+WASH, and the two and a half turns are not. The appetite reading is live
+and visible in the same run — **533 Angels cast in 750 games and 210 still
+eaten at our own upkeep**, because the reading refuses a cast into a
+feeder ALREADY on the table and cannot refuse one drawn or replayed after
+the body lands, and `_in_danger` lifts it when the body has to block — so
+what the census reads now is not
+the malfunction but the deck: the Angel closes eight turns faster than the
+Factory when it lands (38.4 against 46.6) and lands too seldom to matter,
+and the list spends the difference decking the opponent instead.
+
+THE ITEM'S OWN BAND IS REACHED BY THE LIST THE ITEM NAMED, WHICH ALREADY
+SHIPS. `decks/community/the_deck_weissman_1994_95_winter.deck` — four
+Serra Angels, two Moats, no Abyss, no Factory — wins **twenty-one turns
+sooner** than the playable list with 97% of its wins by damage, for two
+points of win rate that the interval does not separate (±3.6 on each), and
+its losses are where they were (19.8 on the mean against 19.3). "An Angel
+shortens the win by ten to twenty turns and changes nothing about the
+loss" is TRUE of that list and false of a half conversion — which is what
+the two scratch rows above are, and what yesterday's "the Abyss is worth
+twelve points" was actually pricing.
+
+SO NOTHING WAS ADDED AND NOTHING WAS REMOVED, and the reason the variant
+stays is measurement rather than play. It is **the only playable deck in
+`decks/` that holds a feeder and a creature at once**, so it is the only
+list on which this knob's appetite reading and the refused field
+`holds_the_closer` can fire at all: `the_deck_playable` holds the feeder
+and no creature, two lists hold The Abyss in a sideboard that a free-play
+run never swaps in, and the seven others that hold it maindeck name a card
+the pool does not implement and cannot be dealt. Its header now says so,
+and says what it costs; `VARIANT_TOTAL` stays at 2 and `SHIPPED_FILES` at
+319.
+
 **WHETHER A CONTROL DECK'S KEEP SHOULD WANT THREE: NO** (2026-09-10, the
 Angel's second half, wave 1's row 2 continued). The census above says 35
 of the 42 short losses were keeps of one to three lands, and the question

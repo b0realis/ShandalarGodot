@@ -145,7 +145,7 @@ Library of Alexandria or a Strip Mine worth more untapped than a Forest;
 `engine/mana_planner.gd` takes equal sources in battlefield order — an
 engine change measured at every rung, not a knob.
 
-## ~~THE ANGEL~~ — **DONE 2026-09-10: the deck built, one half of the finisher shipped, the other half and the mulligan floor REFUSED**
+## ~~THE ANGEL~~ — **DONE 2026-09-10: the deck built, one half of the finisher shipped, the other half and the mulligan floor REFUSED. SETTLED 2026-09-11: the variant is a STUDY LIST, and the Angel shape that works already ships**
 
 ~~The census (ROADMAP, THE DECK, THIRD PASS §6): The Deck's wins come at
 turn 48–58 on the mean, its losses at 16–22, and 35 of the 42 short
@@ -215,6 +215,58 @@ sevens kept on exactly two mana win 44.6% of 130 games against the 45.5%
 of the sixes that would replace them. A point of win rate for seven
 tenths of a card is the wrong way round. The scratch field was removed;
 nothing in `engine/ai/ai_mulligan.gd` changed.
+
+**AND THE ONE THING LEFT TO A HUMAN IS SETTLED (2026-09-11), BY
+RE-RUNNING THE CENSUS ON THE TREE THAT HAS THE FIX.** The row above shipped
+a deck that measured worse than the list it varies and slower than it too,
+and named three ways out: the census predated `_fed_on_arrival`; the
+variant is genuinely worse; or a better Angel list exists inside the band.
+The census was re-run at HEAD — the same command, 150 games a matchup
+against the five starters, seed 4242, Wizard both seats, `--mulligan on`,
+`--no-elo` — with a scratch harness replaying the Lab's own seeds game for
+game (win rates identical to the Lab's report, 381-369 and 370-380) so
+that the win TURN and the win REASON could be read, which `games.csv` does
+not carry.
+
+**THE FIX DID NOT RESCUE IT, AND IT DID NOT HAVE TO.** `the_deck_playable`
+**50.8% (381-369)**, wins at turn **50.3**, 161 of 381 by library-out;
+`the_deck_serra` **49.3% (370-380)**, wins at turn **52.9**, 244 of 370 by
+library-out. Game for game on the same seeds, 173 of the 750 changed hands
+— **81 to a win for the Angels against 92 away**, where a fair toss over
+173 sits at 86.5 ±6.6 — so the win rate is a WASH and the two and a half
+turns are not. The appetite reading is demonstrably live: 533 Angels cast
+in the 750 games and **210 still eaten at our own upkeep**, because the
+reading refuses a cast into a feeder ALREADY on the table and cannot
+refuse one drawn or replayed after the body lands, and `_in_danger` lifts
+it when the body has to block. The Angel closes when it lands — the wins
+by DAMAGE come at **38.4** against the base list's **46.6** — and lands
+too seldom to matter, so the deck decks them instead: two thirds of its
+wins by an empty library against two fifths.
+
+**OUTCOME 3 IS THE TRUE ONE, AND IT COSTS NOTHING TO TAKE.** The item asked
+for "the Winter list's shape"; the Winter list itself is in the pool, it
+loads, and on the same census it measures **48.8% (366-384) with the win
+at turn 29.3 — TWENTY-ONE turns sooner than the playable list — 355 of
+366 wins by DAMAGE and 11 by library-out**, its losses at 19.8 on the mean
+against 19.3. That is the item's original sentence ("ten to twenty turns
+sooner and nothing about the loss") delivered in full, by
+`decks/community/the_deck_weissman_1994_95_winter.deck`, which already
+ships. HALF CONVERSIONS ARE WHAT FAIL: the same shell with the three
+feeders out for two Moats and a Factory measures **36.4%** at turn 33.5
+and the one-Abyss middle **40.7%** at 47.5 (both scratch, neither shipped)
+— so 2026-09-10's "the Abyss is worth twelve points" was pricing a half
+conversion, not the Abyss.
+
+**SO NO DECK WAS ADDED AND NONE WAS REMOVED.**
+`decks/variants/the_deck_serra.deck` stays, and its header now says what it
+is for and what it costs: it is **the only playable deck in the tree that
+holds a feeder and a creature at once**, so it is the only list on which
+`checks_before_casting`'s appetite and the refused field
+`holds_the_closer` can fire at all (`the_deck_playable` has the feeder and
+no creature; two lists hold The Abyss in a sideboard a free-play run never
+swaps in; the seven others that hold it maindeck name a card the pool does
+not implement). Remove it and two rows of this plan become unmeasurable.
+The deck-count pins stay at `VARIANT_TOTAL := 2` / `SHIPPED_FILES := 319`.
 
 ## ~~The engine pass~~ **DONE 2026-09-10** (`docs/forge/rules.md` §4)
 

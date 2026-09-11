@@ -725,7 +725,18 @@ counterspell — Big Green vs White Knights holds neither, and is
 2,000 games, on the tree with the finisher and on the tree without it.
 The live pair for both is `decks/variants/the_deck_serra.deck` vs White
 Knights: The Deck's own list plays three copies of the feeder and two of
-the closer.
+the closer. **It is the ONLY one that can be, and that is why the file
+ships** (settled 2026-09-11, and its header carries the numbers): every
+other playable deck in `decks/` holds the feeder with no creature
+(`the_deck_playable`) or creatures with no feeder, the two lists holding
+The Abyss in a SIDEBOARD never see it in a free-play run, and the seven
+that hold it maindeck name a card the pool does not implement. As a DECK
+it buys nothing — 49.3% against the base list's 50.8% over 150 games
+against each of the five starters, the win arriving 2.5 turns LATER and
+two thirds of its wins by library-out against two fifths — so measure on
+it and play `the_deck_playable.deck`, or, for an Angel that actually
+closes, `decks/community/the_deck_weissman_1994_95_winter.deck` (48.8%,
+the win at turn 29.3, 97% of them by damage).
 **`holds_the_closer` (2026-09-10) IS NOT A DIFFICULTY KNOB**: every
 preset ships it OFF — the Lab refused the rung (`docs/ai-difficulty.md`
 §4: −0.4 ±2.9 on that pair, 6 games flipped to a win against 14 away,

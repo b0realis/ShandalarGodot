@@ -11306,6 +11306,86 @@ which is the AI reading a more correct board.
 Suite 5922 -> **5953 across 346 scripts**, both soaks green modern and
 fifth, pool still 897.
 
+## THE ANGEL, SETTLED (2026-09-11) — the variant is a STUDY LIST, the shape that closes already ships, and no deck moved
+
+The Angel pass shipped `decks/variants/the_deck_serra.deck` and left one thing
+to a human: a deck in the tree that measured worse than the list it varies and
+slower than it too, which is a strange thing to ship. Three outcomes were named
+— the census had been taken before `_fed_on_arrival` closed the malfunction, the
+variant is genuinely worse, or a better Angel list exists inside the band the
+item named — and the first thing owed to all three was the census re-run on the
+tree that HAS the fix.
+
+**THE CENSUS AT HEAD, AND THE HARNESS THAT COULD READ IT.** The pass's own
+command (150 games a matchup against the five starters, seed 4242, Wizard on
+both seats, `--mulligan on`, `--no-elo`), plus a scratch harness replaying the
+Lab's own seeds and play/draw alternation game for game — because the win TURN
+and the win REASON are not in a Lab run at all: `games.csv` carries no reason and
+the report's `avg turns` is over every game, won or lost. The harness's win rates
+ARE the Lab report's, 381-369 and 370-380 of 750, which is what makes the rest of
+its columns quotable.
+
+| list, 150 × 5 at HEAD | win rate | win turn | by library-out | wins by damage, and when |
+| --- | --- | --- | --- | --- |
+| `variants/the_deck_playable.deck` | **50.8%** (381-369) | 50.3 | 161 of 381 (42%) | 220, at 46.6 |
+| `variants/the_deck_serra.deck` | **49.3%** (370-380) | **52.9** | 244 of 370 (66%) | 126, at **38.4** |
+| `community/the_deck_weissman_1994_95_winter.deck` | **48.8%** (366-384) | **29.3** | 11 of 366 (3%) | 355, at 28.5 |
+| scratch: the same shell, 2 Moats for the 3 feeders | 36.4% (273-477) | 33.5 | 23 of 273 (8%) | 250, at 31.9 |
+| scratch: the same with ONE Abyss left | 40.7% (305-445) | 47.5 | 176 of 305 (58%) | 129, at 28.5 |
+
+**OUTCOME 1 IS ANSWERED AND IS NOT THE EXPLANATION.** The fix is live and visible
+in the run — **533 Angels cast in the 750 games, 210 still eaten at our own
+upkeep**, the reading refusing a cast into a feeder ALREADY on the table and
+unable to refuse one drawn or replayed after the body lands, with `_in_danger`
+lifting it when the body has to block — and the variant is exactly where it was:
+49.3% against 50.8%, the win 2.6 turns LATER, two thirds of its wins by an empty
+library against two fifths. Game for game on the same seeds the two lists differ
+in 563 of 750 games and **173 change hands, 81 to a win for the Angels against 92
+away**, where a fair toss over 173 sits at 86.5 ±6.6: the win rate is a WASH and
+the turns are not.
+
+**OUTCOME 2 IS TRUE OF THE DECK AND NOT OF THE CARD.** The Angel closes eight
+turns faster than the Factory when it lands — the wins by DAMAGE come at 38.4
+against 46.6 — and lands too seldom to matter, so the list spends the difference
+decking the opponent instead. Two Factories out is two LANDS out, and what
+replaces them is a card the deck's own three Abysses will not let it keep.
+
+**OUTCOME 3 IS THE TRUE ONE, AND IT COSTS NOTHING TO TAKE.** The item asked for
+"the Winter list's shape", and the Winter list itself is in the pool, loads, and
+on the same census wins at **turn 29.3 — twenty-one turns sooner than the
+playable list — with 355 of its 366 wins by DAMAGE and 11 by library-out**, for
+48.8% against 50.8%, two points the intervals (±3.6) do not separate, and losses
+where they were (19.8 on the mean against 19.3). That is the item's own sentence
+— *"an Angel shortens the win by ten to twenty turns and changes nothing about
+the loss"* — delivered in full, by a file that already ships. HALF CONVERSIONS
+ARE WHAT FAIL: the same shell with the feeders out for Moats measures 36.4% and
+the one-Abyss middle 40.7%, so the pass's "the Abyss is worth about twelve
+points" was pricing a half conversion rather than the Abyss.
+
+**SO NO DECK WAS ADDED AND NONE WAS REMOVED**, and the reason
+`decks/variants/the_deck_serra.deck` stays is measurement rather than play. It is
+**the only playable deck in `decks/` that holds a feeder and a creature at
+once**, so it is the only list on which `checks_before_casting`'s appetite
+reading and the refused field `holds_the_closer` can fire at all:
+`the_deck_playable` holds the feeder with no creature, two lists hold The Abyss
+in a SIDEBOARD that a free-play run never swaps in, and the seven others holding
+it maindeck name a card the pool does not implement. Remove the file and two rows
+of `docs/AI-next-wave.md` become unmeasurable. Its header now says what it is for
+and what it costs, `DeckLab/README.md` says the same where it names the live
+pair, and the pins stay where the pass put them — `VARIANT_TOTAL := 2`,
+`SHIPPED_FILES := 319`.
+
+**AND A THING FOR THE AI LEDGER RATHER THAN THE DECK ONE, REPORTED AND NOT
+BUILT**: the appetite reading refuses the cast but nothing ever un-refuses it, so
+in a list holding three feeders the Angel is a card the pilot draws and rarely
+plays — 533 casts in 750 games of a deck that draws most of itself. A reading
+that asked whether the feeder can be ANSWERED (our own Disenchant, our own Disk)
+before writing the body off is the missing half, and it belongs with
+`holds_the_closer` rather than beside it.
+
+Gate: 5953/5953 across 346 scripts, 154 093 asserts, exit 0; both soaks clean;
+tools 158 OK; boot smoke clean. No count moved.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
