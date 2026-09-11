@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5990 tests, 0 failing, 349 scripts** (154 712 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5996 tests, 0 failing, 349 scripts** (154 730 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -2657,7 +2657,7 @@ picker before tutor casts).
 |---|---|
 | ~~Damage-order & band-spread are auto lethal-first~~ **DONE 2026-08-31** — the attacker announces the order (CR 509.2, `DecisionAgent.order_blockers` → `CombatState.damage_order`) and divides the damage (`assign_combat_damage`); the human seat gets the 1997 `%d points left` click loop. `default_damage_split` is the old heuristic, now only a default. | — |
 | ~~No damage-prevention step; prevention is applied automatically in a fixed order~~ **DONE 2026-09-01** — the 1997 window is `RulesOptions.damage_prevention_window` (default modern, so the automatic order is still what an untouched engine does). Damage is a `DamagePacket` in `MtgGame.damage_pending`; the prevention step and the regeneration step are `awaiting_damage_prevention` / `awaiting_regeneration`; `TargetSpec.Kind.DAMAGE` makes a packet targetable, `DamageMarker` / `DamageMarkerLayer` put it on the table to click, and `AiPlayer._window_action` plays both windows so the fork is a ruleset rather than a one-sided buff (docs/duel-todo.md §6.8, which also carries the 4000+2400-game measurement) | — |
-| **A prevention POOL is spent greedily across packets** (`mtg_game.gd:_land_damage_impl`). `Duel.hlp` lets the player spread Healing Salve's three points over three separate 1-point packets by hand — *"Select damage point to heal (%d of %d)"*, `@HEALING_SALVE`, `Program/prompts.txt:451`. Ours spends the pool on the packets in the order they land. Only reachable under the 1997 window, and identical whenever one packet is waiting | **RE-WEIGHED 2026-09-02 and still declined — but the 2026-09-01 reason was WRONG and is corrected below.** See the three paragraphs under this table. |
+| **A prevention POOL is spent greedily across packets** (`MtgGame._apply_damage_gate`, the `pool` gate — **re-sited 2026-09-11**: the row cited `_land_damage_impl`, which is where the damage starts, not where the marker is). `Duel.hlp` lets the player spread Healing Salve's three points over three separate 1-point packets by hand — *"Select damage point to heal (%d of %d)"*, `@HEALING_SALVE`, `Program/prompts.txt:451`. Ours spends the pool on the packets in the order they land. Only reachable under the 1997 window, and identical whenever one packet is waiting | **RE-WEIGHED 2026-09-02 and still declined — but the 2026-09-01 reason was WRONG and is corrected below.** See the three paragraphs under this table. |
 | ~~No defensive banding (`combat.gd`)~~ **DONE 2026-09-01** — if ANY creature blocking an attacker has banding, the DEFENDING player divides that attacker's combat damage among its blockers, and divides it FREELY (the lethal-first order of CR 510.1c does not apply). One flag on the damage request (`free_order`) flips the assigner and relaxes `_split_illegality`; `default_damage_split` grows a defender-minded answer (all of it onto the body they mind losing least, which also denies a trampler its spill). Lifted Fortified Area and Wall of Caltrops, whose grants were inert. Pinned by `tests/unit/test_damage_assignment.gd` | — |
 | "X target creatures" takes as many as exist when fewer than X are legal (`target_plan.gd`) | Force the caster to pick a smaller X instead (CR 601.2c) |
 | The duel UI still prompts for ONE target per effect (`duel_screen.gd`) | A multi-pick + damage-division prompt (main session's domain) |
@@ -2668,7 +2668,7 @@ picker before tutor casts).
 | Triggered payments (`MtgGame.try_pay`) auto-tap LANDS only, greedy pick (basics first) | Let the payer choose sources; include artifact mana (Sol Ring) in the auto-plan |
 | ~~No banding~~ **DONE** (attack bands wave 3, defensive banding 2026-09-01, "bands with other [quality]" 2026-09-02 — `CardInstance.cur_bands_with` / `grant_bands_with`, `CombatState.shared_bands_with` / `bands_with_offered` / `bands_with_among`; the five Legends banding lands and Master of the Hunt's Wolves grant the real per-quality restriction, not plain banding, pinned by `tests/cards/test_fidelity_2026_09_02_bands_with_other.gd`). No protection-from-artifacts etc. | As stubs demand them |
 | ~~Mid-resolution questions are answered by a heuristic~~ **DONE 2026-08-31, FINISHED 2026-09-01** — every ask is a first-class `PlayerChoice` on the record. 103 of the 109 call sites are inside a stack resolution and the engine PRE-FLIGHTS each one over a `GameSnapshot` rewind point, then holds it open on `MtgGame.awaiting_choice` until `answer_choice`. The four COST payments outside the stack (`tap_for_mana`'s sacrifice, Fellwar Stone's colour, `cast_spell`'s additional sacrifice, `activate_ability`'s sacrifice cost) are held open by `MtgGame._pending_action` — a record of the ACTION that `answer_choice` re-issues, no rewind point, because all four ask after every refusal check and before any mutation (CR 601.2h). Same overlay, same `answer_choice`, told apart by `PlayerChoice.is_cost` (docs/duel-todo.md §1.3) | Only `CardData.as_it_enters` run from a NON-resolution path is left, and reached the ordinary way (a creature resolving) even that is inside the probe. Fellwar Stone's colour moved out of the card into `ManaAbility.color_options` on the way, which also fixed it being asked TWICE per activation and being asked after the source was already tapped |
-| **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"* and Fasting's *"you may skip that step"* are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
+| **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"* and Fasting's *"you may skip that step"* are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` — **by `MtgGame.record_choice`, which is where this row's `SIMPLIFIED` marker sits and which the row had never named (2026-09-11).** The marker asks for this ledger under the words of the row struck DONE above (*"mid-resolution choices"*); the live row is this one, and the function name is what the pin holds on to | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
 | **Two draw replacements are applied in a fixed order** (`_replace_draw`): one-shots first, then statics in battlefield timestamp order. CR 616.1 gives the AFFECTED PLAYER the choice | A choice when more than one applies. No pair in the 1997 pool can be on the table at once and disagree, so this is invisible today |
 | ~~A static ability cannot outlive its source, and nothing runs at the INSTANT a permanent leaves~~ **DONE 2026-09-02** — `CardData.as_it_leaves` is the twin of `as_it_enters`: `MtgGame._run_leave_hook` calls it from all four battlefield exits (graveyard, exile, hand, ante) after the leave-triggers are on the stack and after `forget_instance`, but BEFORE `recalculate()`, and hands it the parting memory snapshot. A trigger cannot do this work — it resolves after the world has been recomputed without the departing permanent. `ContinuousEffects.add_floating_static` is what the hook registers: the same `StaticAbility`, run in the same five sub-passes of `recalculate` in the same layer order, with only the source's presence lifted (CR 611.3a — such an effect is NOT locked in). Lifted Titania's Song's rider and made Oubliette's *"until this enchantment leaves the battlefield"* the duration it is printed as rather than a trigger. Pinned by `tests/unit/test_leave_hook.gd` | — |
 | ~~Departure events carry no CAUSE (`_move_to_graveyard`)~~ **DONE 2026-09-01** — `sacrificed` rides on both the LEAVES_BATTLEFIELD and the DIES payload, set by `sacrifice_permanent` and by nothing else, which lifted Urza's Miter's *"if it wasn't sacrificed"* | — |
@@ -4084,9 +4084,13 @@ survey.
   zones fold the hand instead (s30's idea); the pile has no maximum size
   to scroll past yet. See `docs/duel-todo.md` §3.6.
 - **`StackItem.description` names no targets and no X**
-  (`engine/mtg_game.gd:1003`, `:1170`). It is the game log's sentence as
-  well as the chain window's tooltip, so filling it in improves both —
-  `docs/duel-todo.md` §3.9.
+  (`MtgGame.cast_spell`, which carries the `SIMPLIFIED` marker, and
+  `MtgGame.activate_ability` — **re-sited 2026-09-11**; this bullet cited
+  `engine/mtg_game.gd:1003`, `:1170`, a thousand lines above where either
+  of them had got to, which is why they are named by FUNCTION now and why
+  `tests/test_simplified_ledger.gd` pins engine markers by name). It is the
+  game log's sentence as well as the chain window's tooltip, so filling it
+  in improves both — `docs/duel-todo.md` §3.9.
 
 ## PROVENANCE CORRECTIONS (2026-09-02) — `Program/Text.res` is Manalink's
 
@@ -11714,6 +11718,44 @@ creature that can attack under a Moat.
 
 Gate: 5990/5990 across 349 scripts, 154 712 asserts, exit 0; both soaks clean;
 tools 158 OK; boot smoke clean; pool 897.
+
+### The third direction, built (2026-09-11)
+
+`tests/test_simplified_ledger.gd` now reads `engine/` as well as
+`cards/sets/`: **every `SIMPLIFIED` marker under `engine/` must name a doc,
+and one of the docs it names must carry its row.** Ten markers stand and all
+ten are pinned; the eleventh mention — `MtgGame`'s own header, *"Every one of
+them is marked SIMPLIFIED: inline at the exact spot"* — is excluded by a RULE
+and not by a line number: **a marker opens the sentence it labels**, and there
+the word is the object of a sentence about markers. Every mention the rule
+rejects must be named in the test's `PROSE_MENTIONS` by its words, checked both
+ways, so the rule cannot quietly swallow a real marker.
+
+**Nothing is pinned by a line number, because line numbers are what drifted.**
+The pin is an ANCHOR read out of the tree on every run: the row's own quoted key
+(`SIMPLIFIED (docs/ROADMAP.md, "The crack-back search")`), the NAME of the code
+the marker labels — the function it sits in, the declaration its doc comment
+introduces, the class whose docstring holds it, the declarations a section
+banner covers — or, for a file carrying exactly ONE marker, the file's own name,
+because there the file is the site. `mtg_game.gd` holds six, so `mtg_game.gd`
+names no site. A function that is renamed or split takes its anchor with it and
+the row must follow, which is the drift that used to pass unnoticed.
+
+**Its first run found a third stale citation** the audit had missed:
+`MtgGame.record_choice`'s marker asks for its row under *"mid-resolution
+choices"*, words this file has not carried since the 2026-09-01 row was struck
+DONE — and the live row, the draw replacement's, had never named the site its
+marker sits at. The row names `MtgGame.record_choice` now. Two more were
+re-sited the same day: the prevention-pool row cited `_land_damage_impl` where
+the marker is in `_apply_damage_gate`, and the `StackItem.description` bullet's
+`mtg_game.gd:1003`, `:1170` became `MtgGame.cast_spell` /
+`MtgGame.activate_ability` (in `docs/duel-todo.md` too) — the audit measured
+those sites at `:2077`/`:2436` on the morning of the 11th and they were past
+`:2090`/`:2450` by the afternoon, which is the whole argument for names.
+
+**The count is deliberately not asserted.** The engine ledger is meant to shrink
+one lifted row at a time; a hard ten would fail the pass that lifts one. The
+floor is that `engine/` was read.
 
 ## Standing quality gates
 

@@ -1673,9 +1673,11 @@ the target list appear nowhere on screen.
 Bolt on the chain, `StackItem.description` reads
 `"Black Wizard casts Lightning Bolt"` and the bar reads `"Upkeep Phase"`.
 So there was nothing to forward: the ENGINE's own description
-(`mtg_game.gd:1003`, `:1170`) carries neither the target list nor the
-chosen X, and the tooltip the item credits us with is showing the same
-short sentence. Two defects, not one.
+(`MtgGame.cast_spell` and `MtgGame.activate_ability`, named by FUNCTION
+since 2026-09-11 — the line numbers this paragraph used to carry,
+`mtg_game.gd:1003`, `:1170`, were a thousand lines out by then) carries
+neither the target list nor the chosen X, and the tooltip the item credits
+us with is showing the same short sentence. Two defects, not one.
 
 **AND THE 1997 SOURCES DO NOT WANT s30's SENTENCE.** The Situation Bar's
 whole vocabulary is `@PROMPT_FASTEFFECTS` + `@PROMPT_CHECKFEPHASE` (§6.7),

@@ -2516,7 +2516,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5990 tests / ~154 712 asserts, ~380 s
+├── tests/                   GUT suite — 5996 tests / ~154 730 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2678,6 +2678,17 @@ shandalar/
 │    `Mountain Stronghold` does not name `Mountain`; struck-through LIFTED
 │    rows are history. Its first run found two unmarked members of group
 │    rows.)
+│    AND, since 2026-09-11, the ENGINE half: every SIMPLIFIED marker under
+│    engine/ names a doc that carries its row. A marker is the word OPENING
+│    the sentence it labels — which takes all five forms in the tree and
+│    excludes MtgGame's header describing the convention, by RULE rather
+│    than by line number, with every rejected mention named in
+│    PROSE_MENTIONS and checked both ways. The pin is an ANCHOR read out of
+│    the tree: the row's quoted key, the name of the code the marker
+│    labels, or the file's own name while it carries exactly one marker. No
+│    line numbers and no row count — the engine ledger is meant to shrink.
+│    Its first run found MtgGame.record_choice asking for a row under words
+│    ROADMAP no longer carried.
 │   (also tests/ui/test_duel_screen.gd — duel screen boots real games,
 │    mode machine engages with the engine, fast-forward survives turns,
 │    and the BORDER STATE MACHINE: an activatable permanent is yellow, a
