@@ -2385,6 +2385,14 @@ the two with a playset are `sargent_2009_astral_visionary` and the 1997
 World is in no deck at all, so the slope is pinned by `tests/ai/` alone
 (§5). Seven decks hold a Moat and three load, all of them The Deck.
 
+*Re-counted by the whole-`decks/` census of 2026-09-11 (`DeckLab/README.md`,
+"The proxy census"), which moves three of those numbers and confirms the
+rest: `necro_montesanti_1996` is down to ONE proxy (Necropotence — Juzám
+Djinn shipped after this was written), `ptcs_justice` holds TWELVE, and
+the Black Vise decks that load are TWELVE (`noobcon2014_stalin` is the
+twelfth). The Rack's two, Storm World's none, and the Moat's seven-and-
+three are unchanged.*
+
 **THE NUMBERS.** Seed 11, 1 000 games an arm, control Big Green vs White
 Knights — no hand toll and no grounding static on either side —
 **533-467, byte-identical to its own null in every arm of every run**.
@@ -2762,6 +2770,26 @@ cannot move and does not.
 
 ## 5. Where the ladder still ends short
 
+- **THE POOL'S OWN CEILING, COUNTED ONCE (2026-09-11).** Half the entries
+  below and half of §4's measurement notes end the same way — *the deck
+  the note names cannot be played* — so the whole of `decks/` was walked
+  rather than one deck at a time (`DeckLab/README.md`, "The proxy
+  census"). **101 of 319 deck files are proxy-blocked, over 212 distinct
+  card names, and NOT ONE of those 212 is a card this pool is meant to
+  hold**: 211 were first printed in Fallen Empires through Weatherlight
+  (1994-97), sets outside the eight — Ice Age alone accounts for 65 of
+  them — and the 212th is Chaos Orb, excluded by name because a dexterity
+  card has no honest software form. Twenty of the twenty-four decks that
+  are ONE name away are one Chaos Orb away. **So the bound on
+  `counts_the_race`'s mill, on `minds_the_vise`'s Rack slope, on
+  `reads_pumps`' fourteen blind matchups and on every "the pair cannot be
+  played" line in this file is STRUCTURAL, not a backlog** — the eight
+  sets hold 897 distinct names and `cards/sets/` holds 897 files, so there
+  is no unwritten in-scope card to write and nothing that could be added
+  there would lift any of them. The right reading of those notes is that
+  `tests/ai/` is the instrument for those knobs and always will be. What
+  WOULD lift them is a set the pool does not cover, which is a scope
+  decision and not an AI one.
 - `counter_threshold` is an absolute evaluator number, so a Wizard on a
   deck with pain lands spends life on counters a Sorcerer keeps; that is
   the open knob question above, to be instrumented before it is touched.

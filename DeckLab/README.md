@@ -59,6 +59,145 @@ not-yet-implemented cards convert fine. The shipped gauntlet lives in
 `decks/` (five 40-card styles) and a CI test keeps every shipped deck
 valid as the pool evolves.
 
+## The proxy census — which cards block which decks (2026-09-11)
+
+A **proxy** is an unresolvable card name: a deck file names a card this
+pool does not implement. The Lab refuses such a deck by name at parse
+time rather than playing a thousand games with a library silently short
+of cards (`DeckLab/simulate.gd:_load_deck`, `ProxyCard.refusal_for`).
+Three days of AI measurement kept running into the same wall from the
+other side — "the pair the note names cannot be played" — so the whole
+thing was counted once, deck by deck, instead of a deck at a time.
+
+`docs/decks-1997.md` already carries the per-GROUP tables ("Proxied
+cards, per group", pinned by `tests/unit/test_decks_1997.gd`), and they
+were re-checked against this run row by row: **263 rows, every one
+agrees**, and so do all three "N of M decks affected" headings. What was
+missing, and is below, is the INVERSION across all of `decks/` at once —
+*which cards block which decks, ordered by decks unlocked* — because that
+is the only form of the question that can be answered with a decision.
+
+**Every `.deck`/`.dec`/`.dck` under `decks/` walked through a lenient
+`DeckList.load_file`, 2026-09-11:**
+
+| | |
+|---|---|
+| deck files | **319** |
+| load clean (playable) | **218** |
+| proxy-blocked | **101** |
+| distinct blocking card names | **212** |
+
+**AND THE BLOCKAGE IS ALL IN ONE PLACE.** Broken out by folder, the shape
+of it is not a gap in the pool at all — it is the historic lists reaching
+past the pool's own era:
+
+| folder | decks | blocked | load |
+|---|---|---|---|
+| `decks/1997/` — the 1997 game's own | 157 | **0** | **157** |
+| the five shipped starters | 5 | 0 | 5 |
+| `decks/variants/` | 2 | 0 | 2 |
+| `decks/community/` | 64 | 16 | 48 |
+| `decks/extended_community/` — Old School | 15 | **14** | 1 |
+| `decks/tournament/` — 1994-97 Worlds / PT | 76 | **71** | 5 |
+
+**Every one of the 157 decks the 1997 game itself shipped loads and
+plays.** The 101 are the Pro Tour and Old School lists, which are 1994-97
+tournament decks and therefore full of Ice Age, Fallen Empires, Homelands,
+Alliances, Mirage, Visions and Weatherlight — and, in the Old School
+folder, of Chaos Orb.
+
+**Blocked by exactly ONE name: 24 decks** — and the whole of that tier is
+THREE names:
+
+| blocking card | decks it appears in | decks where it is the ONLY proxy |
+|---|---|---|
+| Chaos Orb | 23 | **20** |
+| Zuran Orb | 52 | 3 |
+| Necropotence | 13 | 1 |
+
+Twenty of the twenty-four are one Chaos Orb away. Only one other deck is
+within two — `os_the_deck_weissman_2018`, Chaos Orb plus Hymn to Tourach
+— and then it stops. Taking the cards greedily, in the order that unlocks
+the most decks: **4 cards unlock 25 decks, and the next 28 cards unlock 5
+more.** All 101 wants all 212.
+
+| cards implemented | decks unlocked |
+|---|---|
+| 1 (Chaos Orb) | 20 |
+| 4 | 25 |
+| 32 | 30 |
+| 76 | 50 |
+| 133 | 70 |
+| 212 | 101 |
+
+### Why every one of them is absent, and the answer is not "nobody wrote it"
+
+**NOT ONE of the 212 is a card this pool is meant to hold**, and the
+reason is stronger than it sounds: **there is nothing left to write.**
+`cards/data/*.json` is the eight sets whole — 1303 printings, **897
+distinct names** once the reprints fold together — and `cards/sets/`
+holds **897 files**, with `cards/todo/` empty. The pool is COMPLETE
+against its own scope — which `docs/ROADMAP.md` has said since M3 closed,
+and which is exactly what settles this question. So "implementable but
+nobody wrote it" is not a bucket any card can be in today, and every one
+of the 212 was checked against that table and **none is in it**. Their
+first printings, read out of the Forge editions tables:
+
+| first printed in | blocking names |
+|---|---|
+| Ice Age (1995) | 65 |
+| Mirage (1996) | 34 |
+| Alliances (1996) | 31 |
+| Visions (1997) | 26 |
+| Fallen Empires (1994) | 19 |
+| Weatherlight (1997) | 18 |
+| Homelands (1995) | 17 |
+| Alpha (1993) — Chaos Orb | 1 |
+| a misspelling (`Grassland`, for Mirage's `Grasslands`) | 1 |
+
+So 211 of the 212 are **out of scope**: sets this pool does not cover and
+was never going to, the line Korath's account of the 1997 data files
+draws (`docs/difficult_cards.someday` §2). The 212th, **Chaos Orb**, is
+the one name that is in an in-scope set and still absent, and it is
+absent on purpose: it is a *dexterity* card — *"if it turns over
+completely at least once"* — with no honest software form, excluded by
+name in `tools/fetch_cards.py`'s `EXCLUDED_NAMES` alongside Falling Star,
+Shahrazad and Word of Command (`docs/difficult_cards.someday` §6). None
+of the other three blocks any deck.
+
+**The bucket count is therefore: 211 out of scope, 1 unimplementable, 0
+implementable-but-never-written** — and that last zero is structural, not
+a coincidence of this table: the in-scope pool has no unwritten card at
+all. There is no small piece of work hiding here. The high-leverage tier
+— the twenty decks one card away — is barred by a ruling, and the next
+tier by the pool's set boundary, neither of which a card file can move.
+
+**The one thing that WOULD unlock them is already invented here**, and it
+is not a card: `decks/variants/the_deck_playable.deck` is The Deck with
+Nevinyrral's Disk in the Orb's slot, filed under variants precisely
+because the historic lists keep their provenance and must never be
+edited. Nineteen of the twenty Chaos-Orb decks have no such sibling yet
+(the twentieth, `os_the_deck_buehler_2015`, is the one that does). That
+is a decks question and an owner's call, not an engine one — and it wants
+`VARIANT_TOTAL` in `tests/unit/test_decks_1997.gd` moved deliberately,
+which is the guard that caught a variant filed as a port once already.
+
+### What the census confirms about the measurement notes
+
+Run against the claims the last three days of AI work left behind:
+
+- **Millstone** — 5 decks play one in the maindeck, **none load**
+  (`ptcs_loconto` 13 proxies, `ptcs_regnier` 9, `wc1995_redi` 10,
+  `ptny1996_sclafani` 7, `os_tinker_the_deck_menendian_2014` 1 — Chaos
+  Orb). `counts_the_race`'s mill half is unmeasurable here, as it says.
+- **The Rack** — 2 decks, **neither loads** (`wc1995_blumke` 9,
+  `winds_of_chains_justice` 3). **Storm World** — **no deck in `decks/`
+  names it at all.** `minds_the_vise`'s slope stands on `tests/ai/`.
+- **Channel** — 9 decks name one in the maindeck, **3 load**. Confirmed.
+- **Black Vise** — 31 maindeck decks, **12 load** (this count was eleven
+  when `minds_the_vise` shipped; `noobcon2014_stalin` is the twelfth).
+- **Moat** — 7 maindeck decks, **3 load**, all three The Deck. Confirmed.
+
 ## The Elo ledger
 
 Unless `--no-elo`, every run folds its results into a persistent,
@@ -676,9 +815,12 @@ Big Green against the other four at 1 000 games a matchup is 0 of 4 000
 games different, which is the no-harm matrix and the control in one. **AND MIND THE POOL BEFORE YOU PICK THE LIVE PAIR,
 because every deck `docs/forge/casting.md` P4 names for its own
 measurement is unplayable**: `the_deck_weissman_1995_05` (Chaos Orb),
-`sligh_geeba_1996` (9 proxies), `necro_montesanti_1996` (Juzám Djinn,
-Necropotence) and `ptcs_justice` (8). Thirty-one decks in `decks/` hold a
-Black Vise and **eleven of them load**; the two that field a PLAYSET are
+`sligh_geeba_1996` (9 proxies), `necro_montesanti_1996` (Necropotence —
+Juzám Djinn was the second name when this was written and ships now,
+`cards/sets/arn/juzam_djinn.gd`, so the list is down to one) and
+`ptcs_justice` (12, re-counted 2026-09-11). Thirty-one decks in `decks/`
+hold a Black Vise and **twelve of them load** (eleven when this was
+written); the two that field a PLAYSET are
 `decks/community/sargent_2009_astral_visionary.deck` and
 `decks/1997/coyote_tex/swamp_thing.deck`, and those are the pairs the
 squeeze was measured on. **The Rack has two decks in the whole pool and

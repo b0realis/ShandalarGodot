@@ -957,6 +957,13 @@ shandalar/
 │   │                          DeckList's strict mode as the floor under
 │   │                          them. tests/unit/test_proxy_card.gd pins each
 │   │                          door and would fail if a proxy could play
+│   │                          . THE CENSUS of what proxies actually
+│   │                          block — 101 of 319 deck files, 212
+│   │                          distinct names, none of them in the eight
+│   │                          sets and none of them writable — is
+│   │                          DeckLab/README.md, "The proxy census"
+│   │                          (2026-09-11); the per-group tables it
+│   │                          agrees with are docs/decks-1997.md
 │   ├── deck_format.gd       class DeckFormat — THE FIVE 1997 FORMATS
 │   │                          (Unrestricted / Wild / Restricted (Type 1) /
 │   │                          Tournament (Type 1.5) / Highlander,

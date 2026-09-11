@@ -11386,6 +11386,125 @@ before writing the body off is the missing half, and it belongs with
 Gate: 5953/5953 across 346 scripts, 154 093 asserts, exit 0; both soaks clean;
 tools 158 OK; boot smoke clean. No count moved.
 
+## THE PROXY CENSUS: WHICH CARDS BLOCK WHICH DECKS, AND WHY NONE OF THEM IS OURS (2026-09-11)
+
+Three days of AI measurement ended the same way often enough to be a shape
+rather than an accident — *the deck the note names cannot be played*. So the
+question was asked once, of all of `decks/` at once, instead of a deck at a
+time. `DeckLab/README.md`, "The proxy census", carries the tables; this is the
+ruling that comes out of them.
+
+**319 deck files. 218 load. 101 are proxy-blocked, over 212 distinct names.**
+And the blockage is in one place: **all 157 decks the 1997 game itself shipped
+load and play**, as do the five starters and both variants. The 101 are
+`decks/tournament/` (71 of 76) and `decks/extended_community/` (14 of 15) —
+1994-97 tournament lists, reaching past this pool's own era.
+
+**NOT ONE OF THE 212 IS A CARD THIS POOL IS MEANT TO HOLD, and the reason is
+stronger than the count.** The eight sets hold 897 distinct printed names;
+`cards/sets/` holds 897 files; `cards/todo/` is empty. M3 closed the pool
+against its own scope, which means "implementable but nobody wrote it" is not a
+bucket any card can be in. Checked name by name against `cards/data/`, and
+re-checked normalised and fuzzy for a misspelling hiding a real card: **zero
+hits.** By first printing: Ice Age 65, Mirage 34, Alliances 31, Visions 26,
+Fallen Empires 19, Weatherlight 18, Homelands 17 — **211 out of scope** — one
+misspelling (`Grassland`, for Mirage's `Grasslands`, in
+`wc1997_ext_slemr.deck`; the file is historic and stays as published), and
+**one Chaos Orb**, the only name in an in-scope set, absent by our own standing
+ruling because a dexterity card has no honest software form
+(`docs/difficult_cards.someday` §6).
+
+**THE LEVER EXISTS AND IT IS BARRED, WHICH IS THE WHOLE ANSWER.** Twenty-four
+decks are ONE name away and the tier is three cards: Chaos Orb (20 of them),
+Zuran Orb (3), Necropotence (1). Greedily: 4 cards unlock 25 decks, the next 28
+cards unlock 5 more, and all 101 wants all 212. So the answer to "is unlocking
+these worth a small piece of card work" is **no, and not for want of effort** —
+there is no in-scope card left to write, and the high-leverage one is ruled out
+on its merits.
+
+**THE OWNER'S RULING, 2026-09-11: WRITE IT DOWN AND CHANGE NOTHING.** Two
+options were put and both are recorded here rather than taken.
+
+1. **Variant deck files.** The pattern already exists and is already blessed —
+   `decks/variants/the_deck_playable.deck` is The Deck with Nevinyrral's Disk
+   in the Chaos Orb's slot, counted apart from the port so a deck of ours can
+   never move one of the ported numbers. Nineteen more such files would take
+   `wc1994_lestree`, the 1994 Worlds lists and most of the Old School folder
+   from refused to playable, and would unlock the Millstone measurement
+   (`os_tinker_the_deck_menendian_2014` is one Orb away). It costs no engine
+   work at all — nineteen text files and `VARIANT_TOTAL` in
+   `tests/unit/test_decks_1997.gd` moved deliberately.
+2. **Playtest-only proxy cards.** Implementing Zuran Orb, Necropotence and Hymn
+   to Tourach — out of scope, but implementable — flagged as proxies so they
+   stay out of the adventure, the deck builder and the 897 count. It unlocks
+   five more decks and needs a mechanism this engine does not have, plus a
+   standing rule about what the pool count means. **The cost is not the work:
+   it is that "897 names, eight sets, complete" stops being true without a
+   footnote.**
+3. **AND THE FUTURE SHAPE, if this is ever wanted properly: a deck-based card
+   IMPORT.** Not cards in `cards/sets/`, but a player-side path that reads what
+   a deck needs and supplies it — the same instinct as the art import, which
+   takes what the player already owns rather than shipping it. It keeps the
+   pool's definition intact, keeps the historic lists intact, and makes the
+   question a player's to answer rather than the repository's. Nothing is
+   designed; the census above is what a design would start from.
+
+**THE MEASUREMENT BOUND IS THEREFORE STRUCTURAL, NOT A BACKLOG**
+(`docs/ai-difficulty.md` §5). Millstone is in five maindecks and not one loads;
+The Rack in two and neither loads; Storm World in none at all; `reads_pumps` is
+blind in fourteen of twenty starter matchups. Nothing that could be added under
+`cards/sets/` would lift any of them, and the right reading is that `tests/ai/`
+is the instrument for those knobs and always will be. Three figures in the
+older notes had drifted and are corrected: `necro_montesanti_1996` is ONE proxy
+(Juzám Djinn shipped since), `ptcs_justice` is TWELVE, and the Black Vise decks
+that load are TWELVE. `docs/decks-1997.md`'s per-group tables were re-checked
+row by row — **263 rows, every one agrees.**
+
+### The ledger row `_cleanup_step` never had (2026-09-11)
+
+`MtgGame._cleanup_step` carries `SIMPLIFIED: cleanup grants no priority.` and is
+written up in `docs/mechanics.md` §1/§14 and `docs/duel-todo.md` §5.20 — but it
+has no row in the engine table, which CONTRIBUTING rule 6 asks for. **SURVEYED
+2026-09-11 AND THE POOL CANNOT SEE IT**: CR 514.3a grants priority only when
+cleanup performs a state-based action or puts a trigger on the stack, and this
+pool does neither — **no card in 897 listens on `CARD_DISCARDED`**, so the
+hand-size discard raises nothing; and `_finish_cleanup` zeroes damage *then*
+expires until-EOT effects, which is CR 514.2's simultaneity, so nothing dies of
+a pump wearing off. Anything left over is swept at the next `_open_priority`
+(upkeep, CR 704.3) — one step late, never lost. A correctness row with no
+observer, sized S in §5.20 ("one line of recursion"). Take it for its own sake,
+not for a card.
+
+### And the engine markers are pinned by nothing (2026-09-11)
+
+`tests/test_simplified_ledger.gd` pins CARDS to `docs/simplified-cards.md`; it
+does not look at `engine/` at all. **Ten `SIMPLIFIED` rows live under `engine/`
+and none of them is pinned** — which is how the `StackItem.description` row came
+to cite `engine/mtg_game.gd:1003`, `:1170` when the two sites are now `:2077`
+(`cast_spell`) and `:2436` (`activate_ability`), and how a sixth row in
+`mtg_game.gd` went uncounted for writing `SIMPLIFIED (engine-wide, …)` where a
+`grep "SIMPLIFIED:"` was looking for a colon. `docs/duel-todo.md` §3.9 and §5.3
+now name their sites by FUNCTION rather than by line, which is the only form
+that survives an engine pass. A third direction on the ledger test — every
+`SIMPLIFIED` marker under `engine/` naming a doc that carries its row — is the
+durable fix and is not built.
+
+### The row with the best ratio in the audit (2026-09-11)
+
+**`MtgGame.try_pay` auto-taps LANDS only** (`_payment_plan` scans
+`inst.is_land()` and nothing else), so a mid-trigger "unless you pay {N}" cannot
+reach artifact mana — **CR 605.3a**: a player may activate a mana ability
+whenever a rule or effect asks for a payment. **Observable, and widely**: 45
+card files reach `try_pay`/`can_afford_cost` — every lucky charm, Paralyze, Mana
+Vault, Nether Void, Energy Flux, The Tabernacle at Pendrell Vale — and the pool
+is full of artifact mana (Sol Ring, five Moxen, Black Lotus, Mana Crypt, Basalt
+Monolith, Celestial Prism). A board whose untapped mana is artifacts cannot pay
+an upkeep it plainly could. **Sized S**: `ManaPlanner.plan()` already returns the
+identical shape `try_pay` executes, `[[instance, ability_index], …]`, and
+`ManaPlanner.sources` already counts floating mana as a zero-cost source the way
+`_payment_plan` seeds its sim. Written into `docs/duel-todo.md` §5.3 with the
+drop-in shape and re-sized.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
