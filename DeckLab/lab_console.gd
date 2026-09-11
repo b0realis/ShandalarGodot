@@ -208,13 +208,22 @@ static func commas(value: int) -> String:
 ## caller paints it.
 ##
 ## Reports what a waiting human actually wants: how far along, how fast,
-## and how much longer. The ETA is a straight extrapolation of the rate
-## so far, which is honest for this workload — every game is an
-## independent duel of much the same cost.
+## and how much longer.
+##
+## THE RATE IS THE CALLER'S TO MEASURE (2026-09-11). Left to itself this
+## line quotes the overall average, `done / elapsed`, and extrapolates the
+## ETA from it — which is what it did until a proper estimate existed, and
+## is still what a caller with nothing better gets. [param per_second]
+## hands it a measured rate instead ([LabEta]: the last thirty seconds of
+## completions, with the engine boot that finished no games left out), and
+## the ETA follows whichever rate is in front of it. So the two fields
+## never disagree: the eta printed here is always the games left divided
+## by the rate printed beside it, and a reader can check it by eye.
 static func progress_line(done: int, total: int, elapsed: float,
-		unit: String, columns: int) -> String:
+		unit: String, columns: int, per_second := -1.0) -> String:
 	var fraction := 0.0 if total <= 0 else clampf(float(done) / total, 0.0, 1.0)
-	var rate := 0.0 if elapsed <= 0.0 else done / elapsed
+	var rate := per_second if per_second >= 0.0 \
+		else (0.0 if elapsed <= 0.0 else done / elapsed)
 	# EVERY FIELD IS A FIXED WIDTH, so the bar does not change length as
 	# the numbers grow and the eta shortens. A bar that breathes in and
 	# out while it is redrawn four times a second is unreadable, and it

@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **6058 tests, 0 failing, 352 scripts** (155 854 asserts, the 2026-09-11 gate); tools self-tests **217 OK**, `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **6085 tests, 0 failing, 353 scripts** (156 339 asserts, the 2026-09-12 gate); tools self-tests **217 OK**, `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -12098,6 +12098,83 @@ banner leaking, and it is named here rather than buried.
 Gate: tools self-tests **217 OK** (`test_tool_banner.py` 29 → 55); the Deck Lab
 console 70/70; the whole suite 6058/6058 across 352 scripts in the branch that
 built it.
+
+## THE ETA THAT SAID TWENTY HOURS (2026-09-11)
+
+The owner asked for a progress option and a proper ETA. The option is the small
+half; **running the tool to measure the ETA is what found the bigger thing: the
+default configuration had no progress bar at all.**
+
+`_fan_out` polled its children and called `_progress(done * per, total, elapsed,
+unit, procs)` — `procs` in the parameter the signature calls `finished`. A
+non-zero int is `true`, so every tick was read as *"the run is over, erase the
+line"*, and **every fanned-out run — every run of 40 games or more, which is the
+default — drew nothing between its header and its report.** Measured: a
+3 000-game duel printed 0 progress lines before and 94 after. It had been that way
+since the fan-out shipped. A bar that cannot be drawn in the mode people actually
+run is worse than no bar, because the header promises one.
+
+**Progress is now per GAME in a fanned-out run, not per slice.** A child writes
+its records once, at the very end, so the only thing the parent could ever count
+was slices landing — 0% for nineteen seconds and then 100%. Each child now
+rewrites a four-byte count four times a second and the parent sums them. Measured,
+three runs each way: 21.0/21.2/20.6 s with the heartbeat, 20.8/21.4/19.8 s
+without — the difference between the means is smaller than the spread inside
+either group.
+
+**THE ETA, MEASURED RATHER THAN ARGUED.** The old one extrapolated the average
+since the clock started, and the clock starts before any game does. On a
+30 000-game duel that took 164 seconds, **its first answer was 72 028 seconds —
+twenty hours** — because at that moment the run had booted eight engines and
+finished one game; two seconds later it still said seven minutes. Five runs were
+instrumented through the tool itself and every candidate replayed against the
+truth: a fanned duel, an in-process duel, a sweep, and a two-pair gauntlet
+(39-turn games against The Deck, 10-turn against Twist of Fire) both fanned and
+in-process.
+
+| | first | @10% | @25% | @50% | @75% | median | jitter |
+|---|---|---|---|---|---|---|---|
+| fanned duel, overall average | +44334% | +12% | −1% | −8% | −17% | 10.7% | 0.42 |
+| fanned duel, 30 s window | +16% | −3% | −8% | −11% | −18% | 11.2% | 0.62 |
+| mixed gauntlet, overall average | +3502% | −33% | −42% | −55% | −68% | 62.5% | 0.79 |
+| mixed gauntlet, 30 s window | −14% | −38% | −43% | −59% | −33% | 31.1% | 2.83 |
+| in-process phase change, overall | +4% | +53% | +64% | +110% | +84% | 72.7% | 1.88 |
+| in-process phase change, 30 s window | +23% | +60% | +49% | +93% | +6% | 56.3% | 4.87 |
+
+(jitter = median deviation from ticking down one second per second.)
+
+**The answer is a sliding thirty-second window over finished games, anchored past
+the first one, and no estimate at all until three seconds of run have been
+measured** (`DeckLab/lab_eta.gd`). Each part earns its place: dropping the ticks in
+which nothing finished is the whole of "discard the warm-up", and the three-second
+gate took the first printed number from +172% to +16% without moving another
+figure in the table. **Thirty seconds and not five** because a short window
+recovers faster from a change of pair and jitters four to six times as much, and
+this file already knows that a number which jumps around is unreadable. An
+exponentially-weighted rate was no better on jitter, no better on accuracy and
+worse over the first tenth of a run, for a half-life nobody can point at on a
+screen. Per-slice progress — the obvious candidate for a fanned run — is the worst
+of the lot, 25 to 150% out.
+
+**WHAT IT STILL GETS WRONG, said plainly.** It cannot see a change that has not
+happened yet: half way through a gauntlet whose second pair is four times slower,
+every method is about 55% short; the difference is that this one is back within a
+third by 75% and the overall average is not back at all. And it runs **17 to 22%
+short near the end of a FANNED run** (2 to 4% in-process) — the straggler tail,
+the last child finishing its slice alone. The principled cure is max-over-children
+rather than aggregate rate, and it is deliberately NOT taken: it costs a per-slice
+estimator to save a number nobody reads at 95%.
+
+**THE OPTION**: `--progress auto|bar|log|off`, one flag with four values and not a
+third switch beside the two that already overlap. `--no-banner` drops the artwork
+and leaves progress alone, `--quiet` is exactly `--no-banner --progress off`, and
+an explicit `--progress` beats the `off` that `--quiet` implies. `bar` forces the
+redrawing bar for a terminal the shell could not see; `log` forces the
+accumulating lines even on one, because the bar erases itself and a four-hour
+sweep watched on a terminal otherwise leaves no record. **A premise worth
+correcting**: a redirected run was never silent — it has always logged a heartbeat
+a minute — it only looked silent because of the bug above. Nothing any mode can be
+set to puts a byte on stdout, and ten configurations are checked for that.
 
 ## Standing quality gates
 

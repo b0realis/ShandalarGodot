@@ -781,6 +781,100 @@ func test_the_progress_line_fits_its_terminal() -> void:
 	assert_false(done.contains("eta"))
 
 
+func test_the_bar_prints_the_rate_it_was_given_and_an_eta_that_matches() -> void:
+	# THE TWO FIELDS CANNOT DISAGREE: the eta is the work left over the
+	# rate printed beside it, whichever rate that is, so a reader can
+	# check the number by eye.
+	var measured := LabConsole.progress_line(500, 2000, 100.0, "games", 80, 50.0)
+	assert_string_contains(measured, "50.0/s")
+	assert_string_contains(measured, "eta 30.0s", "1,500 games at 50 a second")
+	# A caller with nothing to offer still gets what this line always did:
+	# the average over the whole run.
+	var average := LabConsole.progress_line(500, 2000, 100.0, "games", 80)
+	assert_string_contains(average, "5.0/s")
+	assert_string_contains(average, "eta 5m 00s")
+	assert_eq(measured.length(), average.length(),
+		"and every field keeps its width either way")
+	# A rate of nothing is NO estimate - never a made-up one, never a nan.
+	var early := LabConsole.progress_line(7, 2000, 2.5, "games", 80, 0.0)
+	assert_string_contains(early, "--/s")
+	assert_false(early.contains("eta"), early)
+	assert_false(early.to_lower().contains("nan"), early)
+
+
+# ------------------------------------------------------- the estimate --
+#
+# A run's overall average is an average of a run that is not one thing:
+# the engine boot at the start finishes no games, a fanned-out run's
+# children do not finish together, and a gauntlet's second pair can cost
+# four times its first. LabEta measures the last thirty seconds instead.
+# The evidence - five recorded runs, every candidate's error at 10, 25,
+# 50 and 75% through - is in docs/ROADMAP.md, "A PROPER ETA".
+
+
+func test_the_estimate_drops_the_boot_and_measures_the_run() -> void:
+	var eta := LabEta.new()
+	for tick in 12:
+		eta.observe(0.2 * tick, 0)      # 2.4 s of engines starting
+	assert_eq(eta.rate(), 0.0, "nothing has finished, so there is no rate")
+	# Ten games a tick, four ticks a second: 40 a second, from 2.4 s on.
+	var games := 0
+	var clock := 2.4
+	for tick in 8:                      # ... 2 s of it, short of the gate
+		clock += 0.25
+		games += 10
+		eta.observe(clock, games)
+	assert_eq(eta.rate(), 0.0,
+		"a rate measured over two seconds of a starting run is a guess")
+	for tick in 16:
+		clock += 0.25
+		games += 10
+		eta.observe(clock, games)
+	assert_almost_eq(eta.rate(), 40.0, 0.5,
+		"the run's speed, and not the boot's: 40 a second, not 24")
+
+
+func test_the_estimate_follows_the_last_half_minute_and_not_the_run() -> void:
+	# THE CASE THIS EXISTS FOR: a gauntlet whose second pair is slower
+	# than its first (39 turns a game against The Deck, 10 against Twist
+	# of Fire). An average over the whole run keeps quoting the pair that
+	# has already finished; measured on the recorded trace, three quarters
+	# of the way through, that average was 68% short and this was 33%.
+	var eta := LabEta.new()
+	var played := 0.0
+	var clock := 0.0
+	for tick in 120:                    # 30 s at 40 a second
+		clock += 0.25
+		played += 10.0
+		eta.observe(clock, int(played))
+	assert_almost_eq(eta.rate(), 40.0, 0.5)
+	for tick in 160:                    # then 40 s at 10 a second
+		clock += 0.25
+		played += 2.5
+		eta.observe(clock, int(played))
+	assert_almost_eq(eta.rate(), 10.0, 1.0,
+		"the window has moved on; the average over the whole run is 25/s")
+
+
+func test_the_estimate_still_answers_while_every_worker_grinds() -> void:
+	# A window with nothing in it is a run whose remaining games are all
+	# long ones - eight workers 300 turns into a control mirror. That is
+	# not "no estimate": it falls back to the run's own average since its
+	# first finished game, which is coarser and still an answer.
+	var eta := LabEta.new()
+	var games := 0
+	var clock := 0.0
+	for tick in 40:                     # 10 s at 40 a second
+		clock += 0.25
+		games += 10
+		eta.observe(clock, games)
+	for tick in 200:                    # 50 s in which nothing finishes
+		clock += 0.25
+		eta.observe(clock, games)
+	assert_gt(eta.rate(), 0.0, "still an answer")
+	assert_lt(eta.rate(), 40.0, "and a slower one than the last window's")
+
+
 func test_durations_and_counts_read_like_english() -> void:
 	assert_eq(LabConsole.duration(8.4), "8.4s")
 	assert_eq(LabConsole.duration(64.0), "1m 04s")
@@ -981,6 +1075,61 @@ func test_the_quiet_switches_are_chrome_and_never_reach_a_duel() -> void:
 		assert_eq(quiet[key], loud[key], key)
 
 
+func test_the_progress_flag_names_a_shape_and_refuses_anything_else() -> void:
+	var lab := _lab()
+	assert_eq(_parse(BASE).progress, "",
+		"nobody said, so nothing is decided here")
+	for mode in lab.PROGRESS_MODES:
+		assert_eq(_parse(BASE + ["--progress", String(mode)]).progress, mode)
+	assert_eq(_parse(BASE + ["--progress", "BAR"]).progress, "bar",
+		"a flag value is not case-sensitive anywhere else either")
+	var bad := _parse(BASE + ["--progress", "yes"])
+	assert_true(bad.has("error"))
+	assert_string_contains(str(bad.error), "--progress", str(bad.error))
+	assert_string_contains(str(bad.error), "auto",
+		"the refusal lists the answers it takes")
+
+
+func test_which_of_the_three_chrome_flags_wins() -> void:
+	# THE COMPOSITION RULE, and the reason this is one flag with four
+	# values rather than a third switch beside the two that already
+	# overlap: --no-banner drops the artwork and leaves the progress
+	# alone, --quiet is both, and --progress says which SHAPE the progress
+	# takes - including "none", which --quiet could not say without taking
+	# the banner with it.
+	var lab := _lab()
+	assert_eq(lab.progress_mode({}), lab.PROGRESS_AUTO, "the default")
+	assert_eq(lab.progress_mode({"no_banner": true}), lab.PROGRESS_AUTO,
+		"--no-banner is about the artwork and nothing else")
+	assert_eq(lab.progress_mode({"quiet": true, "no_banner": true}),
+		lab.PROGRESS_OFF, "--quiet is --no-banner plus --progress off")
+	assert_eq(lab.progress_mode({"quiet": true, "progress": "log"}),
+		lab.PROGRESS_LOG, "an explicit --progress wins over the implied off")
+	assert_eq(lab.progress_mode({"progress": "off"}), lab.PROGRESS_OFF,
+		"...and off on its own keeps the banner")
+
+
+func test_the_progress_shape_is_the_terminals_answer_only_when_nobody_said() -> void:
+	# `auto` asks whether stderr is a terminal; the other three have
+	# already answered, which is what makes them worth having - a bar for
+	# a terminal the shell could not see, and accumulating lines for a
+	# long run somebody wants a record of.
+	var lab := _lab()
+	var tty := OS.get_environment(LabConsole.TTY_ENV)
+	OS.set_environment(LabConsole.TTY_ENV, "0")
+	lab._progress_mode = lab.PROGRESS_AUTO
+	assert_false(lab._drawing_bar(), "auto in a log is the heartbeat")
+	lab._progress_mode = lab.PROGRESS_BAR
+	assert_true(lab._drawing_bar(), "bar draws the bar into the log too")
+	OS.set_environment(LabConsole.TTY_ENV, "1")
+	lab._progress_mode = lab.PROGRESS_AUTO
+	assert_true(lab._drawing_bar(), "auto on a terminal is the bar")
+	lab._progress_mode = lab.PROGRESS_LOG
+	assert_false(lab._drawing_bar(),
+		"log keeps the accumulating lines on a terminal, which is the point")
+	OS.set_environment(LabConsole.TTY_ENV, tty)
+
+
 # ------------------------------------------------- the process fan-out --
 #
 # Games are played in separate PROCESSES, not just separate threads,
@@ -1029,3 +1178,27 @@ func test_the_ceiling_is_a_memory_decision_and_says_so() -> void:
 	# games/s in a 240-game run); the ceiling is RAM, at ~235 MB a
 	# process. If someone raises it they should be raising it knowingly.
 	assert_eq(int(_sim_const("AUTO_PROCS")), 8)
+
+
+func test_a_worker_says_how_far_it_has_got_and_silence_reads_as_nothing() -> void:
+	# THE BAR IN A FANNED-OUT RUN, which is every run of 40 games or more.
+	# A child writes its records once, at the very end, so the parent
+	# could only count SLICES - and with eight of them a 3,000-game duel
+	# sat at 0% for nineteen seconds and then finished. Each child now
+	# rewrites its count four times a second and the parent sums them.
+	#
+	# Nothing here may fail a run: a heartbeat that is missing, empty or
+	# caught half-written reads as a count that is too small, never as a
+	# wrong one, and the parent keeps the largest it has seen.
+	var lab := _lab()
+	var path := "user://deck_lab_beat_%d.txt" % Time.get_ticks_usec()
+	assert_eq(lab._slice_beat(path), 0, "no file yet: nothing played yet")
+	lab._beat(path, 137)
+	assert_eq(lab._slice_beat(path), 137)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("")          # exactly what a read mid-write can see
+	f.close()
+	assert_eq(lab._slice_beat(path), 0, "an empty read is no news, not a crash")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	# A child whose heartbeat cannot be written plays its slice anyway.
+	lab._beat("user://deck_lab_no_such_dir_%d/beat.txt" % Time.get_ticks_usec(), 9)

@@ -199,6 +199,18 @@ OPTIONS
                       already silent when stderr is not a terminal.)
   --no-banner         Keep the progress bar, drop the artwork. Or export
                       DECK_LAB_NO_BANNER=1 once and forget it.
+  --progress MODE     Where the progress goes, and in what shape:
+                        auto  the default — a bar that redraws itself
+                              when stderr is a terminal, one heartbeat
+                              line a minute when stderr is a log
+                        bar   the redrawing bar, whatever stderr is
+                        log   the heartbeat lines, whatever stderr is:
+                              they ACCUMULATE, so a long sweep leaves a
+                              record of itself instead of one line that
+                              erases itself 14,000 times
+                        off   no progress at all; the banner stays
+                      --quiet is exactly --no-banner --progress off, and
+                      an explicit --progress wins over it.
   -h, --help          This text.
 
 DUEL SETTINGS (everything the battle-setup screen can choose)
@@ -411,6 +423,12 @@ var _quiet := false
 var _banner_wanted := true
 var _progress_open := false
 var _last_logged := 0.0
+## Resolved once in [method _main] from `--progress`, `--quiet` and
+## whether stderr is a terminal; one of [constant PROGRESS_MODES].
+var _progress_mode := PROGRESS_AUTO
+## How much longer this run has — a measured rate rather than the run's
+## average so far. Fed one sample per progress tick; see [LabEta].
+var _eta := LabEta.new()
 ## The duel settings, resolved once and READ ONLY by the worker threads
 ## (which write nothing but their own results slot, so this stays as
 ## lock-free as the rest of the run).
@@ -452,11 +470,17 @@ func _main(argv: PackedStringArray) -> int:
 	# of the aggregation, which is what keeps a fanned-out run identical
 	# to an in-process one.
 	if argv.size() >= 3 and argv[0] == WORKER_FLAG:
-		return _run_worker(argv[1], argv[2])
+		# The fourth argument (the heartbeat file) is OPTIONAL, so a
+		# parent from an older tree — or the shipped game's own
+		# `--deck-lab` route, which passes the arguments through — still
+		# starts a worker that plays its slice and says nothing.
+		return _run_worker(argv[1], argv[2],
+			argv[3] if argv.size() >= 4 else "")
 	var opts := _parse_args(argv)
 	_quiet = bool(opts.get("quiet", false))
 	_banner_wanted = not bool(opts.get("no_banner", false)) \
 		and OS.get_environment(LabConsole.NO_BANNER_ENV) != "1"
+	_progress_mode = progress_mode(opts)
 	if opts.has("help"):
 		_banner()
 		# THE HELP GOES TO stdout, the banner to stderr: `deck_lab.sh
@@ -1014,6 +1038,7 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 		var hi := mini(lo + per, _tasks.size())
 		var in_path := dir.path_join("slice_%d.json" % p)
 		var out_path := dir.path_join("done_%d.json" % p)
+		var prog_path := dir.path_join("beat_%d.txt" % p)
 		var payload := {"offset": lo, "duel": _duel_opts,
 			"tasks": _tasks.slice(lo, hi)}
 		var f := FileAccess.open(in_path, FileAccess.WRITE)
@@ -1037,28 +1062,48 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 		var child_args := PackedStringArray(["--headless", "--no-header"])
 		if OS.has_feature("template"):
 			child_args.append_array(PackedStringArray(["--", "--deck-lab",
-				WORKER_FLAG, in_path, out_path]))
+				WORKER_FLAG, in_path, out_path, prog_path]))
 		else:
 			child_args.append_array(PackedStringArray(["--path", root,
 				"--script", "res://DeckLab/simulate.gd", "--",
-				WORKER_FLAG, in_path, out_path]))
+				WORKER_FLAG, in_path, out_path, prog_path]))
 		var pid := OS.create_process(exe, child_args)
 		if pid <= 0:
 			_clean_fan(dir, pids)
 			return false
 		pids.append(pid)
-		slices.append({"lo": lo, "hi": hi, "out": out_path})
+		slices.append({"lo": lo, "hi": hi, "out": out_path, "beat": prog_path})
 
-	# Wait, reporting as the slices land. A child writes its file once, at
-	# the end, so progress is per SLICE rather than per game — coarser
-	# than the in-process bar and honest about it.
-	var done := 0
-	while done < slices.size():
-		done = 0
-		for slice in slices:
+	# Wait, reporting as the games land.
+	#
+	# PER GAME, NOT PER SLICE (2026-09-11). A child writes its records
+	# once, at the very end, so the only thing the parent could count was
+	# slices — and with eight of them a 3,000-game run sat at 0% for
+	# nineteen seconds and then finished. (It was worse than that: the
+	# call below passed `procs` where the signature takes `finished`, a
+	# non-zero int is `true`, and so every fanned-out run — which is every
+	# run of 40 games or more, i.e. the default — drew NO progress at all.
+	# Found by running one and reading the terminal, 2026-09-11.) Each
+	# child now rewrites a four-byte file with its count four times a
+	# second and the parent sums them, so the bar and the estimate see
+	# games finishing the way the in-process pool does.
+	var landed := 0
+	var played := PackedInt32Array()
+	played.resize(slices.size())
+	while landed < slices.size():
+		landed = 0
+		var games := 0
+		for s in slices.size():
+			var slice: Dictionary = slices[s]
 			if FileAccess.file_exists(String(slice["out"])):
-				done += 1
-		if done == slices.size():
+				landed += 1
+				played[s] = int(slice["hi"]) - int(slice["lo"])
+			else:
+				# NEVER BACKWARDS: a read that lands mid-write sees a
+				# shorter number, and a bar that goes down is a bug report.
+				played[s] = maxi(played[s], _slice_beat(String(slice["beat"])))
+			games += played[s]
+		if landed == slices.size():
 			break
 		# A CHILD THAT DIED CANNOT BE WAITED FOR. If every process has
 		# exited and a slice is still missing, the work is not coming —
@@ -1074,9 +1119,11 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 			printerr("deck_lab: a worker exited without writing its slice — running in-process instead")
 			_clean_fan(dir, pids)
 			return false
-		_progress(done * per, _tasks.size(),
-			(Time.get_ticks_msec() - started_at) / 1000.0, unit, procs)
+		_progress(games, _tasks.size(),
+			(Time.get_ticks_msec() - started_at) / 1000.0, unit, false)
 		OS.delay_msec(200)
+	_progress(_tasks.size(), _tasks.size(),
+		(Time.get_ticks_msec() - started_at) / 1000.0, unit, true)
 	for pid in pids:
 		if OS.is_process_running(int(pid)):
 			OS.kill(int(pid))
@@ -1096,6 +1143,17 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 	return true
 
 
+## How many games a child has finished, from the little file it rewrites
+## as it plays. Nothing here may fail a run: a heartbeat that is missing,
+## empty or half-written reads as 0, the caller keeps the largest count it
+## has seen, and the worst case is the slice-sized bar this replaced.
+func _slice_beat(path: String) -> int:
+	if not FileAccess.file_exists(path):
+		return 0
+	var text := FileAccess.get_file_as_string(path).strip_edges()
+	return text.to_int() if text.is_valid_int() else 0
+
+
 ## Stop any children still running and remove the slice directory.
 func _clean_fan(dir: String, pids: Array) -> void:
 	for pid in pids:
@@ -1108,9 +1166,25 @@ func _clean_fan(dir: String, pids: Array) -> void:
 	DirAccess.remove_absolute(dir)
 
 
+## How often a child says how far it has got — the same quarter-second
+## the parent's own bar redraws at, so the bar moves as smoothly in a
+## fanned-out run as in an in-process one.
+##
+## AND IT IS FREE, measured rather than assumed (2026-09-11): the same
+## 3,000-game fanned duel, three runs each way, took 21.0 / 21.2 / 20.6 s
+## with the heartbeat and 20.8 / 21.4 / 19.8 s with it raised out of
+## reach. The difference between the means is 0.26 s and the spread
+## inside either group is bigger than that — the write is four bytes into
+## a file the OS never has to put on a disk.
+const WORKER_BEAT_MS := 250
+
+
 ## THE CHILD. Plays a slice and writes its records; says nothing, decides
-## nothing, and never touches the report.
-func _run_worker(in_path: String, out_path: String) -> int:
+## nothing, and never touches the report. [param beat_path], when the
+## parent names one, is the one thing it does say: the count of games it
+## has finished, rewritten as it plays, which is where the parent's
+## progress bar and its estimate come from.
+func _run_worker(in_path: String, out_path: String, beat_path := "") -> int:
 	var text := FileAccess.get_file_as_string(in_path)
 	var parsed: Variant = JSON.parse_string(text)
 	if not (parsed is Dictionary):
@@ -1120,12 +1194,17 @@ func _run_worker(in_path: String, out_path: String) -> int:
 	_duel_opts = payload.get("duel", {})
 	_tasks = payload.get("tasks", [])
 	_results.resize(_tasks.size())
+	var last_beat := Time.get_ticks_msec()
 	for i in _tasks.size():
 		var record := _play_task(_tasks[i])
 		# `rng` is a RandomNumberGenerator — used inside a MATCH and never
 		# read again afterwards, and not a thing JSON can carry.
 		record.erase("rng")
 		_results[i] = record
+		if beat_path != "" \
+				and Time.get_ticks_msec() - last_beat >= WORKER_BEAT_MS:
+			last_beat = Time.get_ticks_msec()
+			_beat(beat_path, i + 1)
 	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	if f == null:
 		printerr("deck_lab worker: cannot write %s" % out_path)
@@ -1133,6 +1212,19 @@ func _run_worker(in_path: String, out_path: String) -> int:
 	f.store_string(JSON.stringify(_results))
 	f.close()
 	return 0
+
+
+## A child's count of finished games, into the file the parent polls. A
+## write that fails is a bar that stops moving for that slice, never a run
+## that stops: the slice's own records are what the run is made of, and
+## they go through [param out_path] above.
+func _beat(path: String, games: int) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(str(games))
+	f.close()
+
 
 ## The work order itself: one duel in free play, one whole MATCH with
 ## `--best-of`. Split out of [method _run_one_game] so that counting a
@@ -1551,6 +1643,7 @@ const FLAG_HINTS := {
 	"--null": "--null VALUE: the swept knob's null — off for a boolean knob, the preset's own value for a number",
 	"--control-deck-a": "--control-deck-a PATH: the sweep's control pair, deck A — a deck the knob cannot fire on",
 	"--control-deck-b": "--control-deck-b PATH: the sweep's control pair, deck B",
+	"--progress": "--progress auto|bar|log|off: auto is a redrawing bar on a terminal and a heartbeat line a minute in a log; bar and log force one shape either way; off keeps the banner",
 }
 
 ## The flags that take no value. Same contract as [constant FLAG_HINTS]:
@@ -1603,9 +1696,11 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		"profile_a": "wizard", "profile_b": "wizard",
 		"out": "", "no_svg": false, "no_elo": false,
 		"elo_file": EloLedger.DEFAULT_PATH,
-		# TERMINAL CHROME, not a duel setting: neither reaches a game, and
-		# both are already off when stderr is not a terminal.
-		"quiet": false, "no_banner": false,
+		# TERMINAL CHROME, not a duel setting: none of it reaches a game,
+		# and all of it is already off when stderr is not a terminal.
+		# `progress` is "" for "nobody said", which is how an explicit
+		# --progress can win over the one --quiet implies.
+		"quiet": false, "no_banner": false, "progress": "",
 		# The duel settings. Every default here is what this script did
 		# before the flag existed — see the class doc.
 		"lives": [20, 20], "ante": 0, "names": ["SeatZero", "SeatOne"],
@@ -1746,6 +1841,11 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				if not ["on", "off"].has(value.to_lower()):
 					return {"error": "--mulligan takes on or off"}
 				opts.mulligan = value.to_lower() == "on"
+			"--progress":
+				if not PROGRESS_MODES.has(value.to_lower()):
+					return {"error": "--progress takes one of %s, not '%s'"
+						% [", ".join(PROGRESS_MODES), value]}
+				opts.progress = value.to_lower()
 			# [MatchState.LENGTHS] AND NOTHING ELSE — 1, 3
 			# or 5, for that class's own reasons:
 			# `@DIALOG_ENDEXP1DUEL_MATCHPROGRESS` ships exactly
@@ -2528,15 +2628,64 @@ func _sweep_report(opts: Dictionary, sweep: Dictionary, arms: Array,
 # DECK_LAB_TTY. So a run redirected into a log a script parses
 # (`... > run.log 2>&1`) carries no artwork, no bar and no escape codes,
 # without anyone having to remember a flag. See [LabConsole].
+#
+# `--progress auto|bar|log|off` (2026-09-11) says which SHAPE the
+# progress takes rather than whether it survives — the bar that redraws
+# itself, or the heartbeat lines that accumulate — and `auto`, the
+# default, is the rule above. Nothing it can be set to moves a byte onto
+# stdout. See [constant PROGRESS_MODES] for the four answers and why
+# there are four of them rather than a third flag beside `--quiet` and
+# `--no-banner`.
 
 ## How often the main thread looks at the counter while the pool works.
 const PROGRESS_TICK_MS := 250
 ## A run shorter than this never says anything: a 20-game smoke should
 ## print its report and nothing else.
 const PROGRESS_QUIET_SECONDS := 2.0
-## The heartbeat when stderr is NOT a terminal — a log file wants to show
-## that a long run is alive, not to be filled with bars.
+## The heartbeat between log lines — a log file wants to show that a long
+## run is alive, not to be filled with bars.
 const PROGRESS_LOG_SECONDS := 60.0
+
+
+## WHERE THE PROGRESS GOES — the four answers `--progress` takes.
+##
+## ONE FLAG WITH FOUR VALUES, NOT A THIRD SWITCH (2026-09-11). `--quiet`
+## and `--no-banner` already overlap (`--quiet` implies `--no-banner`),
+## and a `--force-progress` beside them would have been a third thing
+## that half-means both. What was actually missing was a way to say which
+## SHAPE the progress takes rather than whether some of it survives, so
+## the two existing flags keep their meanings — `--no-banner` drops the
+## artwork and leaves the progress alone, `--quiet` is the pair of them —
+## and this one names the shape:
+##   auto  what the Lab has always done: the bar when stderr is a
+##         terminal, one heartbeat line a minute when it is not.
+##   bar   the redrawing bar even when stderr is not a terminal. For the
+##         caller that HAS a terminal the shell could not see: Godot run
+##         directly rather than through deck_lab.sh, a CI runner that
+##         renders ANSI, a pty wrapper.
+##   log   the heartbeat lines even when stderr IS a terminal. The bar
+##         erases itself, so a four-hour sweep watched on a terminal
+##         leaves nothing behind; these lines accumulate, and the
+##         scrollback (or `2>&1 | tee`) is then the record of the run.
+##   off   no progress, banner untouched — which `--quiet` could not say,
+##         because it takes the banner with it.
+const PROGRESS_MODES := ["auto", "bar", "log", "off"]
+const PROGRESS_AUTO := "auto"
+const PROGRESS_BAR := "bar"
+const PROGRESS_LOG := "log"
+const PROGRESS_OFF := "off"
+
+
+## WHICH OF THE THREE CHROME FLAGS WINS, in one place so that the answer
+## can be tested rather than read. `--quiet` still means "errors only" —
+## it says so by setting this mode — and an explicit `--progress` beats
+## the `off` that `--quiet` implies, so `--quiet --progress log` is a run
+## with no artwork, no report chatter and a trail in the log it writes.
+static func progress_mode(opts: Dictionary) -> String:
+	var asked := String(opts.get("progress", ""))
+	if asked != "":
+		return asked
+	return PROGRESS_OFF if bool(opts.get("quiet", false)) else PROGRESS_AUTO
 
 
 ## The banner, once, on stderr. Off for `--quiet` / `--no-banner` /
@@ -2585,34 +2734,68 @@ func _done_so_far() -> int:
 	return done
 
 
-## One progress update. On a terminal it rewrites its own line (and is
-## erased when the run finishes, so the report starts on a clean screen);
-## in a log it is a heartbeat once a minute.
+## Whether this run draws the bar rather than the heartbeat lines. `auto`
+## asks the terminal; `bar` and `log` have already answered.
+func _drawing_bar() -> bool:
+	if _progress_mode == PROGRESS_BAR:
+		return true
+	if _progress_mode == PROGRESS_LOG:
+		return false
+	return LabConsole.is_terminal()
+
+
+## One progress update. As a bar it rewrites its own line (and is erased
+## when the run finishes, so the report starts on a clean screen); as a
+## log it is a heartbeat once a minute, and those lines stay.
+##
+## EVERY TICK IS OBSERVED, whatever is drawn from it: the estimate is
+## measured over the last thirty seconds of completions (see [LabEta]),
+## so it wants the 250 ms ticks even in a mode that prints once a minute.
 func _progress(done: int, total: int, elapsed: float, unit: String,
 		finished: bool) -> void:
-	if _quiet:
+	if _progress_mode == PROGRESS_OFF:
 		return
+	_eta.observe(elapsed, done)
 	if finished:
 		if _progress_open:
 			printerr(LabConsole.LINE_UP)
 			_progress_open = false
+		elif not _drawing_bar() and _last_logged > 0.0:
+			# A TRAIL THAT ENDS AT 87% IS NOT A RECORD OF THE RUN. If this
+			# one has been logging, it says so when it finishes — but only
+			# then, so a short run still prints nothing at all.
+			_log_progress(total, total, elapsed, unit)
 		return
 	if elapsed < PROGRESS_QUIET_SECONDS:
 		return
-	if LabConsole.is_terminal():
+	if _drawing_bar():
 		# One column short of the width: a line that WRAPS cannot be
 		# redrawn, because the cursor can only be sent up one row.
 		var line := LabConsole.progress_line(done, total, elapsed, unit,
-			LabConsole.width() - 1)
+			LabConsole.width() - 1, _eta.rate())
 		printerr((LabConsole.LINE_UP if _progress_open else "")
 			+ LabConsole.paint(line, LabConsole.DIM, LabConsole.use_colour()))
 		_progress_open = true
 		return
 	if elapsed - _last_logged < PROGRESS_LOG_SECONDS:
 		return
+	_log_progress(done, total, elapsed, unit)
+
+
+## One heartbeat line, prefixed like every other thing the Lab says on
+## stderr. Drawn to a fixed 78 columns and stripped: these lines are read
+## in a log file, which has no width.
+##
+## THE CLOSING LINE QUOTES THE RUN'S AVERAGE, not the last thirty
+## seconds. While a run is going, the rate is there to be divided into
+## the work left, so it has to be the recent one; when it is over there
+## is nothing left to predict and the honest number is the one the report
+## prints — the whole run over the whole clock.
+func _log_progress(done: int, total: int, elapsed: float,
+		unit: String) -> void:
 	_last_logged = elapsed
-	printerr("deck_lab: %s" % LabConsole.progress_line(
-		done, total, elapsed, unit, 78).strip_edges())
+	printerr("deck_lab: %s" % LabConsole.progress_line(done, total, elapsed,
+		unit, 78, _eta.rate() if done < total else -1.0).strip_edges())
 
 
 ## The decks by name, capped so a 48-deck group does not fill the screen.

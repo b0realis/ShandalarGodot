@@ -247,8 +247,9 @@ flyers rule the starter meta.
 | `--control-deck-a DECK` / `--control-deck-b DECK` | the sweep's control pair — two decks the knob cannot fire on. Required with `--sweep`, meaningless without it | — |
 | `--out DIR` | output directory, created and NAMED BEFORE the run starts (one inside the project gets a `.gdignore`, so the editor never imports the run's `matchups.csv` as a translation table) | `DeckLab/results/run_<stamp>` |
 | `--no-svg` | skip chart files | off |
-| `--quiet` | no banner and no progress bar; errors only | off |
+| `--quiet` | no banner and no progress bar; errors only — exactly `--no-banner --progress off` | off |
 | `--no-banner` | keep the progress bar, drop the artwork (or export `DECK_LAB_NO_BANNER=1`) | off |
+| `--progress MODE` | which SHAPE the progress takes: `auto` (a redrawing bar on a terminal, one heartbeat line a minute in a log), `bar` (the bar whatever stderr is), `log` (the lines whatever stderr is — they accumulate, so a long sweep leaves a record of itself), `off` (none, and the banner stays). An explicit `--progress` wins over the `off` that `--quiet` implies | `auto` |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
 | `-h`, `--help` | switch reference | — |
 
@@ -1141,6 +1142,47 @@ minute when stderr is a log — because a tool that prints a header and then
 nothing for forty minutes is indistinguishable from a hung one, and this
 project has lost hours to exactly that ambiguity.
 
+`--progress auto|bar|log|off` says which of those two shapes a run takes
+rather than whether any of it survives, which is what `--quiet` and
+`--no-banner` already say between them:
+
+| | banner | progress |
+|---|---|---|
+| (nothing) | on a terminal | the bar on a terminal, a line a minute in a log |
+| `--no-banner` | never | unchanged |
+| `--progress off` | on a terminal | none |
+| `--quiet` | never | none |
+| `--progress bar` | on a terminal | the bar, even when stderr is a log |
+| `--progress log` | on a terminal | the lines, even on a terminal |
+
+`bar` is for a terminal the shell could not see (Godot run directly rather
+than through `deck_lab.sh`, a CI runner that renders ANSI, a pty wrapper);
+`log` is for the run somebody wants a *record* of — the bar erases itself,
+so a four-hour sweep watched on a terminal leaves nothing behind, while
+these lines accumulate and the scrollback is the record. Nothing any of
+them can be set to puts a byte on stdout.
+
+**The ETA is the last thirty seconds, not the whole run** (2026-09-11).
+The rate on the bar is measured over a sliding 30-second window of
+finished games, with the engine boot — the seconds before any game
+finishes — left out of it, and the ETA is simply the games left divided by
+that rate, so the two numbers on the line always agree with each other.
+The old estimate extrapolated the average since the clock started, and on
+a fanned-out run its first answer was *twenty hours* for a run of
+164 seconds, because at that moment the run had booted eight engines and
+finished one game. It is also why a gauntlet whose second pair is four
+times slower than its first now recovers: measured three quarters of the
+way through, the window was 33% short where the overall average was 68%
+short and falling further behind. The evidence — five recorded runs, every
+candidate estimator's error at 10, 25, 50 and 75% through — is in
+`docs/ROADMAP.md` under "A PROPER ETA"; `DeckLab/lab_eta.gd` holds the
+arithmetic and says why it is not something cleverer.
+
+The bar shows no rate and no ETA for the first few seconds of a run
+(it needs three seconds of finished games before it will claim one), and
+the report's own `(182 games/s)` is still the average over the whole run —
+that number is a measurement of the machine, not a prediction.
+
 **Exit codes**: 0 a finished run with every file written; 1 the run broke
 (a worker thread stopped, a file could not be written); 2 the command line
 was wrong (bad flag, missing or illegal deck, a `--sweep` knob or value the
@@ -1242,6 +1284,7 @@ preallocated results array — RAM stays flat.
 | `DeckLab/sim_stats.gd` | Wilson intervals, matchup summaries (unit-tested) |
 | `DeckLab/svg_charts.gd` | dependency-free SVG charts (bars, histograms, matrix heatmap) |
 | `DeckLab/lab_console.gd` | the terminal side: banner, progress bar, colour, "did you mean" |
+| `DeckLab/lab_eta.gd` | how much longer: the rate over the last thirty seconds, which is what the bar's ETA divides into the work left |
 | `DeckLab/elo_ledger.gd` | the persistent Elo ledger |
 | `engine/deck_list.gd` | multi-format deck parser/validator (strict & lenient modes) |
 | `cards/data/dck_ids.txt` | authentic MicroProse card-id table (harvested) |
