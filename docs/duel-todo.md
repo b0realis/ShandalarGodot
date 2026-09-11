@@ -2024,15 +2024,38 @@ Checked and deliberately not filed:
   is its pure predicate, `_apply_damage_gate` takes the one the damaged
   seat picked, and the rule is put again to what is left). A Circle of
   Protection: Red naming a Lightning Bolt and a Nova Pentacle watching the
-  same Bolt is the pool's own pair. Two halves are ruled rather than built
-  and both are pinned by tests rather than asserted in prose: two applicable
-  SHIELDS cannot be told apart by anything in this pool
-  (`tests/unit/test_replacement_choice_2026_09_10.gd`), and the CREATURE
-  branch — protection against Jade Monolith, Rock Hydra's counters against
-  a prevention pool, Uncle Istvan against a Samite Healer's point — still
-  runs a fixed order, pinned by
-  `tests/unit/test_damage_gate_order_2026_09_11.gd`. Scope §5.6 knowing
-  the creature branch is not included.
+  same Bolt is the pool's own pair. The CREATURE branch is built the same
+  way since later the same day (`MtgGame._has_creature_damage_gates` /
+  `_creature_damage_gates` / `_creature_damage_gate_applies` /
+  `_apply_creature_damage_gate`, with `_mark_creature_damage` left holding
+  nothing but the marking), and the choice there goes to THE AFFECTED
+  OBJECT'S CONTROLLER — the rule's own words, so a Jade Monolith the
+  opponent activated on your blocker is still your blocker's event to
+  order. The two questions that branch had been left on are answered in
+  `tests/unit/test_creature_damage_gate_order_2026_09_11.gd`: a METERED
+  gate (Rock Hydra's counters, Personal Incarnation's points, a prevention
+  pool) orders like any other because it is applied ONCE, in full, and the
+  rule is then put again to what is left; and the pool can see it with one
+  rare on its own — 2 damage into a Rock Hydra with three +1/+1 counters
+  and two of its own {R} shields leaves either a 1/1 with its shields or a
+  3/3 without them. One half is still ruled rather than built and pinned by
+  a test rather than asserted in prose: two applicable SHIELDS cannot be
+  told apart by anything in this pool
+  (`tests/unit/test_replacement_choice_2026_09_10.gd`).
+- **Whippoorwill lets three replacements through that its printed text
+  stops** (found 2026-09-11 while building the row above, NOT fixed — it is
+  a different rules question and it is one line of engine and several
+  cards). *"Damage that would be dealt to that creature this turn can't be
+  prevented or dealt instead to another permanent or player."*
+  `CardInstance.damage_unpreventable_this_turn` takes every gate off
+  `MtgGame._creature_damage_gates`'s list except the three above it:
+  Reverberation's redirect on the SOURCE, Blood of the Martyr's "dealt to
+  you instead", and Rock Hydra's "prevent that 1 damage". All three are
+  exactly what the printed line names — a prevention and two redirections —
+  and all three were outside the guard before this pass as well, so nothing
+  changed here; the reading is simply now written down. The fix is to move
+  the three inside the guard, and the cost is that it changes what three
+  cards do.
 - **Mana burn** — absent in mage-go. Our `mechanics.md §14` note stands
   as a deliberate era choice.
 - **Split second, snow, Phyrexian, hybrid, scry/surveil, ward,
@@ -3538,7 +3561,8 @@ and every one is accurate.
   is a different question from this window — which packet, not which
   effect — and the two compose: the window chooses what to point a
   prevention spell at, the CR 616.1 ask chooses what applies first once
-  the packet lands. The CREATURE branch still runs its eight in order.
+  the packet lands. Since later the same day the CREATURE branch is the
+  same: `_creature_damage_gates`, ordered by the permanent's controller.
 - **Combat damage already batches.** `_apply_damage_requests`
   (`:~4068`) sets `_defer_state_based_actions = true`, deals every packet,
   then clears it and sweeps. **That switch is the gap the two windows go

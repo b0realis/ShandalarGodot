@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **6013 tests, 0 failing, 350 scripts** (155 135 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **6029 tests, 0 failing, 351 scripts** (155 340 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11659,7 +11659,7 @@ end-to-end reading is noise-dominated on a machine running three agents (the
 speedup and is not claimed as one). At a duel's few dozen packets the cost is
 tens of microseconds against a ~10 ms game.
 
-**The CREATURE branch is NARROWED, not closed.** Its fixed order (protection,
+**The CREATURE branch was narrowed and then CLOSED the same day — see below.** Its fixed order (protection,
 Uncle Istvan, Jade Monolith, Personal Incarnation, Rock Hydra's counters, Gaseous
 Form, a per-creature pool) stands, is wider than the player branch — the gates
 span two methods and three are metered rather than one-shot — and is now **pinned
@@ -11756,6 +11756,63 @@ those sites at `:2077`/`:2436` on the morning of the 11th and they were past
 **The count is deliberately not asserted.** The engine ledger is meant to shrink
 one lifted row at a time; a hard ten would fail the pass that lifts one. The
 floor is that `engine/` was read.
+
+## THE CREATURE BRANCH CLOSED, AND A ROCK HYDRA SAYS WHY (2026-09-11)
+
+The half the morning's pass narrowed is built. Its two stated reasons for
+leaving it — the gates span two methods, and three of them are METERED rather
+than one-shot — both turned out to be surmountable, and the survey found MORE
+observable pairs than the player branch, not fewer: every whole-event gate
+against the pool is observable (which shield is spent), every redirect against
+every prevention is observable (a life total), and the two metered gates against
+the pool are observable **in the creature's own power and toughness**.
+
+**THE CHOICE IS THE AFFECTED OBJECT'S CONTROLLER'S**, CR 616.1's own words, and
+not the seat the damage lands on — a Jade Monolith the opponent activated on
+your blocker is still your blocker's event to order, and the opponent is never
+asked.
+
+**A METERED GATE ORDERS LIKE ANY OTHER.** It is applied ONCE, in full, exactly
+as the fixed chain applied it, and the rule is then put again to what is left:
+the rule never asks an effect to apply by halves, so ordering one does not change
+what it means. What it is NOT is interchangeable — and one rare says so on its
+own. **Two damage into a Rock Hydra with three +1/+1 counters and two of its own
+`{R}` shields leaves either a 1/1 that kept its shields or a 3/3 that spent
+them.** Personal Incarnation's points against the same pool disagree about the
+owner's life; a Jade Monolith against a Gaseous Form disagrees about the
+activator's by the whole blow.
+
+`_land_damage_rest` is renamed `_mark_creature_damage` and holds nothing but the
+marking — which is what "the gates span two methods" was, and why they could not
+be ordered against each other. One behaviour change beyond the ordering, and it
+is more correct: a face-down creature is turned face up AHEAD of every gate
+rather than in the middle of them, so the gates read the real body (CR 613).
+
+**PRICE, MEASURED — AND THE MEASUREMENT CHANGED THE DESIGN.** +0.16 µs a
+combat-damage packet with nothing applicable, **+1.7% of a bare `deal_damage`**,
+a third of the player branch's +0.47; and +3.0 µs (+46%) on a creature that
+actually has a gate. Matched-pair micro-bench, 100 000 packets, best of seven,
+fifteen alternating pairs. **That second number was +10.7 µs (+157%)** until the
+bench found that the prompt labels were being formatted on every packet;
+`_creature_damage_gate_label` now builds a line only when two or more gates apply
+and a question is really being put. That is the one decision in the pass that
+came out of a number rather than a rule.
+
+The null is proved rather than argued: no agent overrides `answer_option`, so a
+heuristic seat takes the hint, which is the old order — three seeds through both
+soak modes on both trees, **byte-identical**. NO pre-existing test moved.
+
+**FOUND ON THE WAY AND NOT FIXED: Whippoorwill lets three replacements through
+that its printed line stops.** *"Damage … can't be prevented or dealt instead to
+another permanent or player"* gates the shields off but not Reverberation's
+redirect, Blood of the Martyr's "dealt to you instead", or Rock Hydra's "prevent
+that 1 damage" — all three are exactly what the line names, and all three were
+outside the guard before this pass too. A different rules question that changes
+what three cards do; a dated row in `docs/duel-todo.md`.
+
+And **Rock Hydra's own implementation note was FALSE**: it said the `{R}` shield
+is spent BEFORE the counters, the engine has always done the opposite, and the
+same paragraph contradicted itself two lines later. Corrected and dated.
 
 ## Standing quality gates
 

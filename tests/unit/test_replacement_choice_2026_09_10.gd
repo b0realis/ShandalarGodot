@@ -123,18 +123,22 @@ func test_every_draw_replacement_has_a_pure_predicate() -> void:
 	assert_eq(missing, [], "a draw replacement with no `applies` half")
 
 
-# ================== THE DAMAGE HALF: RULED, NOT BUILT ==================
+# ============== THE DAMAGE HALF: SHIELD AGAINST SHIELD, RULED ==============
 #
-# The same ledger row names damage as well, and MtgGame._land_damage_impl
-# still walks its prevention gates in a fixed order. The two tests below
-# pin WHY that is a ruling rather than a shortcut: with the pool's own
-# cards, which shield is consumed first cannot be told apart.
+# The same ledger row names damage as well. The two tests below pin WHY
+# ordering one SHIELD against another is a ruling rather than a shortcut:
+# with the pool's own cards, which shield is consumed first cannot be told
+# apart, so there is nothing to ask about.
 #
 # What IS observable — ordering a prevention against a REPLACEMENT (Nova
-# Pentacle's redirect and its four siblings) — is written up at the site
-# and left alone: it needs a decision point in front of every gate in the
-# combat-damage path, which is the generic handler docs/forge/rules.md
-# §4.2 says not to port.
+# Pentacle's redirect and its four siblings) — was written up at the site
+# and left alone here, and BUILT on 2026-09-11: the damaged seat orders a
+# packet aimed at a player (tests/unit/test_damage_gate_order_2026_09_11.gd)
+# and the permanent's controller orders one aimed at a creature
+# (tests/unit/test_creature_damage_gate_order_2026_09_11.gd). The decision
+# point in front of every gate in the combat-damage path is what it cost,
+# and it is paid for by an early-out rather than by the generic handler
+# docs/forge/rules.md §4.2 says not to port.
 
 ## REASON ONE. No card writes the colour-keyed shield list, so two
 ## colour shields can never race: every Circle of Protection in the pool

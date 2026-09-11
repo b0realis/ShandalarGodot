@@ -165,14 +165,20 @@ var cur_attack_costs: Array[Dictionary] = []
 
 ## "For each 1 damage that would be dealt to this creature, if it has a
 ## <kind> counter on it, remove one and prevent that 1 damage" (Rock
-## Hydra). A REPLACEMENT, applied before every prevention gate. "" = none;
+## Hydra). A REPLACEMENT and one of the three METERED gates: it eats
+## counters point for point and lets the rest of the event through, and
+## since 2026-09-11 the creature's controller orders it against the others
+## (CR 616.1, MtgGame._creature_damage_gates). "" = none;
 ## the value is the counter kind, so the same field would serve any
 ## counter-eating armour. Set by a static each recalculation.
 var damage_eats_counters: String = ""
 
 ## "ALL damage that would be dealt this turn by this source is dealt to
 ## <player> instead" (Reverberation) — a replacement on the SOURCE rather
-## than on a victim, so it is applied before anything about the target.
+## than on a victim. It used to be applied before anything about the
+## target; since 2026-09-11 it is a candidate among the victim's own
+## effects on both branches and CR 616.1 orders it with them
+## (MtgGame._damage_gates, _creature_damage_gates).
 ## -1 = none. Cleared at cleanup and by a zone change.
 var damage_all_redirect_to: int = -1
 

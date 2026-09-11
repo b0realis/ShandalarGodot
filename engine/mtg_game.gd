@@ -3046,24 +3046,15 @@ func _land_damage(packet: DamagePacket) -> int:
 func _land_damage_impl(packet: DamagePacket) -> int:
 	var source: CardInstance = packet.source
 	var target: TargetRef = packet.target
-	var is_combat: bool = packet.is_combat
 	var amount := packet.remaining()
 	if source == null or target == null or amount <= 0:
 		return 0
 	# "ALL damage that would be dealt this turn by <this source> is dealt to
-	# <someone> instead" (Reverberation) — a replacement on the SOURCE. On a
-	# packet aimed at a CREATURE it is still the first gate of all; on one
-	# aimed at a PLAYER it is a candidate among that seat's own effects and
-	# CR 616.1 orders it with them ([method _damage_gates]). A packet that
-	# is itself the product of a redirect is left alone, or the two would
-	# loop.
-	if source.damage_all_redirect_to >= 0 and not packet.from_redirect \
-			and not target.is_player:
-		log_line("%s's damage is turned on %s" % [
-			source.data.card_name,
-			players[source.damage_all_redirect_to].player_name])
-		return _redirect_damage(packet,
-			TargetRef.player(source.damage_all_redirect_to))
+	# <someone> instead" (Reverberation) — a replacement on the SOURCE, and
+	# a candidate among the victim's own effects on BOTH branches now: CR
+	# 616.1 orders it with them ([method _damage_gates] for a player,
+	# [method _creature_damage_gates] for a creature). A packet that is
+	# itself the product of a redirect is left alone, or the two would loop.
 	if target.is_player:
 		var p := players[target.player_id]
 		# CR 616.1 — THE AFFECTED PLAYER ORDERS THEM (2026-09-11). "If two
@@ -3141,112 +3132,91 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		var inst := find_instance(target.instance_id)
 		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
 			return 0
-		# CR 616.1 ON THIS BRANCH IS NARROWED, NOT CLOSED (2026-09-11). The
-		# rule gives the AFFECTED OBJECT'S CONTROLLER the same ordering
-		# choice the branch above now puts to a damaged player, and the
-		# gates below (protection, Uncle Istvan, Jade Monolith, Personal
-		# Incarnation, Rock Hydra's counters, Gaseous Form, a per-creature
-		# prevention pool) still run in one fixed order. Pairs of them CAN
-		# co-apply, so this is a real remainder rather than an unobservable
-		# one; it is a wider job than the player branch because the gates
-		# span two methods and three of them are metered rather than
-		# one-shot. docs/duel-todo.md carries the narrowed row, and
-		# tests/unit/test_damage_gate_order_2026_09_11.gd pins the order
-		# that is here so the next pass starts from a reading.
-		#
-		# "Until end of turn, if damage would be dealt to any creature, you
-		# may have that damage dealt to you instead" (Blood of the Martyr).
-		# A replacement, so it is asked before every prevention gate, and
-		# "may" means the offer is really made — once per packet.
-		if not packet.from_redirect:
-			for taker in players:
-				if not taker.may_take_creature_damage:
-					continue
-				if not agents[taker.id].choose_yes_no(self, taker.id,
-						"Take %d damage from %s in %s's place?" % [
-							amount, source.data.card_name, inst.data.card_name],
-						true):
-					continue
-				return _redirect_damage(packet, TargetRef.player(taker.id))
-		# "For each 1 damage that would be dealt to this creature, if it has
-		# a +1/+1 counter on it, remove a counter and prevent that 1 damage"
-		# (Rock Hydra) — a replacement that eats counters point for point.
-		if inst.damage_eats_counters != "":
-			var kind := inst.damage_eats_counters
-			var have: int = int(inst.counters.get(kind, 0))
-			var eaten: int = mini(have, amount)
-			if eaten > 0:
-				_rec(inst, &"counters")
-				if have - eaten <= 0:
-					inst.counters.erase(kind)
-				else:
-					inst.counters[kind] = have - eaten
-				packet.prevent(eaten)
-				amount = packet.remaining()
-				log_line("%s sheds %d %s counter(s) and prevents %d damage" % [
-					inst.data.card_name, eaten, kind, eaten])
-				recalculate()
-				if amount <= 0:
-					check_state_based_actions()
-					return 0
 		# A face-down creature that would be dealt damage is turned face up
-		# first (Illusionary Mask) — the damage then hits its real body.
+		# FIRST (Illusionary Mask), ahead of every gate rather than in the
+		# middle of them: the gates read the creature's own characteristics
+		# (CR 613) and a face-down 2/2 has no protection, no immunity, no
+		# counters and no aura on it.
 		if inst.face_down:
 			turn_face_up(inst)
-		# "Damage that would be dealt to that creature this turn can't be
-		# prevented or dealt instead to another permanent or player"
-		# (Whippoorwill). Every gate below is a prevention or a
-		# redirection — protection included, since CR 702.16e makes
-		# protection prevent the damage — so the whole block is skipped and
-		# the damage is marked exactly as dealt.
-		if not inst.damage_unpreventable_this_turn:
-			if (inst.cur_protection & source.cur_colors) != 0:
-				packet.prevent(amount)
-				log_line("%s's damage to %s is prevented (protection)" % [
-					source.data.card_name, inst.data.card_name])
-				return 0
-			# "Prevent all damage dealt to this creature by creatures" (Uncle
-			# Istvan) — covers combat AND creature-sourced ability damage.
-			if inst.cur_prevent_damage_from_creatures and source.is_creature():
-				packet.prevent(amount)
-				log_line("%s's damage to %s is prevented (creature damage)" % [
-					source.data.card_name, inst.data.card_name])
-				return 0
-			# "That damage is dealt to you instead" (Jade Monolith) — one
-			# shot, and from the source the Monolith named when it has one
-			# (Personal Incarnation names none: any source).
-			if inst.damage_redirects > 0 and inst.damage_redirect_to >= 0 \
-					and (inst.damage_redirect_sources.is_empty()
-						or inst.damage_redirect_sources.has(source.id)):
-				if undo_log != null:
-					_rec(inst, &"damage_redirects")
-					_rec(inst, &"damage_redirect_to")
-					_rec(inst, &"damage_redirect_sources")
-				inst.damage_redirects -= 1
-				var named_at := inst.damage_redirect_sources.find(source.id)
-				if named_at >= 0:
-					inst.damage_redirect_sources.remove_at(named_at)
-				var soak := inst.damage_redirect_to
-				if inst.damage_redirects <= 0:
-					inst.damage_redirect_to = -1
-					inst.damage_redirect_sources.clear()
-				log_line("%s's damage is redirected to %s" % [
-					inst.data.card_name, players[soak].player_name])
-				return _redirect_damage(packet, TargetRef.player(soak))
-			# "The next 1 damage that would be dealt to this creature this
-			# turn is dealt to its owner instead" (Personal Incarnation) —
-			# METERED: each activation moves ONE point and the rest of the
-			# event lands here. `Duel.hlp`: *"owner may redirect any amount
-			# of damage from it to himself or herself."*
-			if inst.damage_point_redirects > 0 and inst.damage_point_redirect_to >= 0:
-				var landed_elsewhere := _divert_damage_points(packet, inst)
-				amount = packet.remaining()
-				if amount <= 0:
-					return landed_elsewhere
-				# The rest falls through the remaining gates and lands; the
-				# diverted part is added back to the answer at the end.
-				return landed_elsewhere + _land_damage_rest(packet, inst, amount, is_combat)
-		return _land_damage_rest(packet, inst, amount, is_combat)
+		# CR 616.1 — THE PERMANENT'S CONTROLLER ORDERS THEM (2026-09-11).
+		# "If two or more replacement and/or prevention effects are
+		# attempting to modify the way an event affects an object or player,
+		# the affected object's controller ... or the affected player
+		# chooses one to apply, and then the rule is applied again." The
+		# affected object here is the CREATURE, so the choice is ITS
+		# CONTROLLER'S — not the damaged player's (there is none), not the
+		# source's controller's, and not the controller of the effect: a
+		# Jade Monolith the opponent activated on your blocker is still your
+		# blocker's event to order.
+		#
+		# The chain ran ONE fixed order until today — Reverberation, Blood
+		# of the Martyr, Rock Hydra's counters, protection, Uncle Istvan,
+		# Jade Monolith, Personal Incarnation, a whole-damage prevention,
+		# Gaseous Form, the source-filtered immunities, a prevention pool —
+		# and it is a wider job than the player branch for two reasons the
+		# 2026-09-11 note named. The gates SPANNED TWO METHODS, which is why
+		# [method _mark_creature_damage] now holds nothing but the marking.
+		# And THREE OF THEM ARE METERED rather than one-shot: Rock Hydra's
+		# counters, Personal Incarnation's points and the prevention pool
+		# each absorb as much of the event as they can and let the rest
+		# carry on.
+		#
+		# A METERED GATE ORDERS LIKE ANY OTHER, and this is the question the
+		# note left open. It is applied ONCE, in full, exactly as the fixed
+		# chain applied it, and CR 616.1 is then put again to what is left —
+		# the rule never asks an effect to apply by halves, so ordering one
+		# does not change what it means. What it is not is interchangeable:
+		# a Rock Hydra with three +1/+1 counters and two points of
+		# prevention on it ends a 2-damage event as a 1/1 with its pool
+		# intact or as a 3/3 with its pool spent, and which of those happens
+		# is not the engine's to pick (tests/unit/
+		# test_creature_damage_gate_order_2026_09_11.gd).
+		#
+		# The hint is index 0 — the head of the old order — and
+		# [method DecisionAgent.answer_option] returns its hint, so every
+		# heuristic seat plays the board this engine always played. ONE
+		# candidate is not a choice and nobody is asked; NONE skips the walk
+		# altogether ([method _has_creature_damage_gates]), which is every
+		# creature in every ordinary combat and is what keeps this off the
+		# price of the combat-damage path.
+		var elsewhere := 0
+		if _has_creature_damage_gates(inst, source, packet):
+			var gates := _creature_damage_gates(packet, inst, source)
+			while not gates.is_empty():
+				var pick := 0
+				if gates.size() > 1:
+					var labels: Array[String] = []
+					for gate in gates:
+						labels.append(_creature_damage_gate_label(
+							inst, source, gate))
+					pick = maxi(0, agents[inst.controller_id].choose_option(
+						self, inst.controller_id, labels,
+						"Which effect applies to that damage first?",
+						0, false, true))
+				var chosen: Dictionary = gates[pick]
+				gates.remove_at(pick)
+				var verdict := _apply_creature_damage_gate(packet, inst, chosen)
+				# A metered REDIRECT is the one gate that both moves damage
+				# away and lets the event carry on, so what it landed
+				# elsewhere is added to this call's answer whatever happens
+				# next (see [method _apply_creature_damage_gate]).
+				elsewhere += int(chosen.get("elsewhere", 0))
+				if verdict >= 0:
+					return elsewhere + verdict
+				if packet.remaining() <= 0:
+					# The gate that emptied the packet may also have changed
+					# the body: Rock Hydra sheds +1/+1 counters to do it and
+					# can shed its last point of toughness with them.
+					check_state_based_actions()
+					return elsewhere
+				# CR 616.1 is applied again only to what STILL applies: the
+				# gate just taken may have emptied a pool, spent the last
+				# counter, or left an event nobody else is watching.
+				for i in range(gates.size() - 1, -1, -1):
+					if not _creature_damage_gate_applies(packet, inst, gates[i]):
+						gates.remove_at(i)
+		return elsewhere + _mark_creature_damage(packet, inst)
 	check_state_based_actions()
 	return amount
 
@@ -3505,45 +3475,328 @@ func _apply_damage_gate(packet: DamagePacket, p: MtgPlayer,
 	return -1
 
 
-## The tail of [method _land_damage_impl]'s creature branch: the remaining
-## prevention gates (inside `if not inst.damage_unpreventable_this_turn`)
-## and then the marking of the damage itself. Its own function so that a
-## METERED redirect (Personal Incarnation) can hand the rest of the event
-## down the same gates after it has taken its points. [param amount] is
-## `packet.remaining()` on entry. Returns what was marked on [param inst].
-func _land_damage_rest(packet: DamagePacket, inst: CardInstance, amount: int,
-		is_combat: bool) -> int:
-	var source: CardInstance = packet.source
+## Could ANY replacement or prevention touch a packet aimed at [param inst]?
+## One cheap FIELD test per gate, in front of building a candidate list at
+## all: a creature with none of these on it takes this branch, allocates
+## nothing and asks nobody. That is every creature in every ordinary
+## combat, and this branch is the combat-damage path — so the early-out is
+## not an optimisation here, it is the reason CR 616.1 can be afforded at
+## all (docs/ROADMAP.md carries the measured price).
+func _has_creature_damage_gates(inst: CardInstance, source: CardInstance,
+		packet: DamagePacket) -> bool:
+	if source.damage_all_redirect_to >= 0 and not packet.from_redirect:
+		return true
+	if inst.damage_eats_counters != "":
+		return true
+	if not packet.from_redirect:
+		for taker in players:
+			if taker.may_take_creature_damage:
+				return true
+	# Whippoorwill: "damage ... can't be prevented or dealt instead to
+	# another permanent or player". Everything below is a prevention or a
+	# redirection — protection included, since CR 702.16e makes protection
+	# prevent the damage — so none of it is even a candidate.
+	if inst.damage_unpreventable_this_turn:
+		return false
+	return (inst.cur_protection & source.cur_colors) != 0 \
+		or inst.cur_prevent_damage_from_creatures \
+		or inst.damage_redirects > 0 \
+		or inst.damage_point_redirects > 0 \
+		or inst.cur_prevent_all_damage_taken \
+		or (packet.is_combat and inst.cur_prevent_combat_damage_taken) \
+		or not inst.cur_damage_immunity.is_empty() \
+		or inst.prevention > 0
+
+
+## Every replacement and prevention effect that would apply to [param packet]
+## right now (CR 616.1) — [param inst]'s own, the one on the SOURCE, and the
+## seat-level offer Blood of the Martyr makes — built in the order the fixed
+## chain ran them before the choice existed. That order is therefore the
+## default answer, and one candidate takes it with nobody asked anything.
+##
+## NO LABELS ARE BUILT HERE, and the reason is a measurement rather than a
+## preference: this runs on the combat-damage path for every creature that
+## has ANY gate on it, and formatting eleven prompt lines for a Wall under a
+## Gaseous Form cost 10.7 microseconds a packet — more than the whole rest
+## of `deal_damage`. [method _creature_damage_gate_label] builds one only
+## when there is really a question to put, which is the rarest case of all.
+## The structural pre-checks are the same reasoning one step further:
+## whether a gate APPLIES is [method _creature_damage_gate_applies]'s
+## business alone and it is asked about every candidate below before this
+## returns, but there is no sense allocating a candidate for a redirect
+## nobody booked.
+func _creature_damage_gates(packet: DamagePacket, inst: CardInstance,
+		source: CardInstance) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	if source.damage_all_redirect_to >= 0 and not packet.from_redirect:
+		candidates.append({"kind": &"source_redirect"})
+	if not packet.from_redirect:
+		for taker in players:
+			if taker.may_take_creature_damage:
+				candidates.append({"kind": &"martyr", "pid": taker.id})
+	if inst.damage_eats_counters != "":
+		candidates.append({"kind": &"counters"})
 	if not inst.damage_unpreventable_this_turn:
+		if inst.cur_protection != 0:
+			candidates.append({"kind": &"protection"})
+		if inst.cur_prevent_damage_from_creatures:
+			candidates.append({"kind": &"istvan"})
+		if inst.damage_redirects > 0 and inst.damage_redirect_to >= 0:
+			candidates.append({"kind": &"monolith"})
+		if inst.damage_point_redirects > 0 and inst.damage_point_redirect_to >= 0:
+			candidates.append({"kind": &"incarnation"})
 		if inst.cur_prevent_all_damage_taken:
+			candidates.append({"kind": &"prevent_all"})
+		if packet.is_combat and inst.cur_prevent_combat_damage_taken:
+			candidates.append({"kind": &"prevent_combat"})
+		for immunity in inst.cur_damage_immunity:
+			candidates.append({"kind": &"immunity", "entry": immunity})
+		if inst.prevention > 0:
+			candidates.append({"kind": &"pool"})
+	var out: Array[Dictionary] = []
+	for gate in candidates:
+		if _creature_damage_gate_applies(packet, inst, gate):
+			out.append(gate)
+	return out
+
+
+## The prompt line for [param gate], built ONLY when two or more of them
+## apply and the controller really is being asked (see
+## [method _creature_damage_gates] for why that matters).
+func _creature_damage_gate_label(inst: CardInstance, source: CardInstance,
+		gate: Dictionary) -> String:
+	match StringName(gate["kind"]):
+		&"source_redirect":
+			return "%s's damage goes to %s" % [source.data.card_name,
+				players[source.damage_all_redirect_to].player_name]
+		&"martyr":
+			return "%s takes it instead" % players[int(gate["pid"])].player_name
+		&"counters":
+			return "%s sheds %s counters" % [
+				inst.data.card_name, inst.damage_eats_counters]
+		&"protection":
+			return "%s's protection" % inst.data.card_name
+		&"istvan":
+			return "no creature damage to %s" % inst.data.card_name
+		&"monolith":
+			return "all of it to %s" % players[
+				inst.damage_redirect_to].player_name
+		&"incarnation":
+			return "%d of it to %s" % [inst.damage_point_redirects,
+				players[inst.damage_point_redirect_to].player_name]
+		&"prevent_all":
+			return "all damage to %s is prevented" % inst.data.card_name
+		&"prevent_combat":
+			return "combat damage to %s is prevented" % inst.data.card_name
+		&"immunity":
+			return String(gate["entry"]["desc"])
+		&"pool":
+			return "%d prevented damage" % inst.prevention
+	return ""
+
+
+## Does [param gate] still apply to [param packet]? Asked when the list is
+## built and again after every gate taken, because CR 616.1 is re-applied
+## only to effects that are STILL "attempting to modify" the event — a
+## metered gate can have spent its last counter or its last point, and a
+## packet with nothing left is nobody's business.
+##
+## PURE: this asks, it never applies. A gate that answered by running would
+## have modified the event before the question was put, which is the same
+## trap [member CardData.draw_replacement_applies] was built to avoid
+## (2026-09-10). Blood of the Martyr's "you MAY" is the one that had to be
+## split to keep the promise: the OFFER is made in
+## [method _apply_creature_damage_gate], and all this predicate reads is
+## whether the seat is still offering.
+func _creature_damage_gate_applies(packet: DamagePacket, inst: CardInstance,
+		gate: Dictionary) -> bool:
+	var source: CardInstance = packet.source
+	var amount := packet.remaining()
+	if source == null or amount <= 0 or inst.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	match StringName(gate["kind"]):
+		&"source_redirect":
+			return source.damage_all_redirect_to >= 0 and not packet.from_redirect
+		&"martyr":
+			return not packet.from_redirect \
+				and players[int(gate["pid"])].may_take_creature_damage
+		&"counters":
+			var kind: String = inst.damage_eats_counters
+			return kind != "" and int(inst.counters.get(kind, 0)) > 0
+		&"protection":
+			# CR 702.16e: protection from a colour PREVENTS the damage, so
+			# it belongs on this list rather than above it.
+			return (inst.cur_protection & source.cur_colors) != 0
+		&"istvan":
+			# "Prevent all damage dealt to this creature by creatures"
+			# (Uncle Istvan) — combat AND creature-sourced ability damage.
+			return inst.cur_prevent_damage_from_creatures and source.is_creature()
+		&"monolith":
+			# "That damage is dealt to you instead" (Jade Monolith) — one
+			# shot, and from the source the Monolith named when it has one
+			# (Personal Incarnation names none: any source).
+			return inst.damage_redirects > 0 and inst.damage_redirect_to >= 0 \
+				and (inst.damage_redirect_sources.is_empty()
+					or inst.damage_redirect_sources.has(source.id))
+		&"incarnation":
+			return inst.damage_point_redirects > 0 \
+				and inst.damage_point_redirect_to >= 0
+		&"prevent_all":
+			return inst.cur_prevent_all_damage_taken
+		&"prevent_combat":
+			# Gaseous Form's "dealt to and dealt by" is COMBAT damage only,
+			# which is why a Bolt still kills what it protects.
+			return packet.is_combat and inst.cur_prevent_combat_damage_taken
+		&"immunity":
+			# Source-filtered immunities ("...by creatures it's blocking",
+			# "...by artifact sources", "...by Deserts"); an entry marked
+			# combat-only (Enchanted Being, Marble Priest) lets a pinger
+			# through.
+			var immunity: Dictionary = gate["entry"]
+			if bool(immunity.get("combat", false)) and not packet.is_combat:
+				return false
+			return bool(immunity["filter"].call(self, source))
+		&"pool":
+			return inst.prevention > 0
+	return false
+
+
+## Apply ONE gate the creature's controller picked. Returns -1 when the
+## event carries on with whatever is left of [param packet], or the amount
+## ACTUALLY dealt when the gate ended it — a whole-event prevention, or a
+## redirection that landed the damage somewhere else.
+##
+## A METERED REDIRECT is both at once: Personal Incarnation's points leave
+## the event and the rest of it carries on down the remaining gates, so
+## what the split-off packet dealt is written back onto [param gate] under
+## `"elsewhere"` for the caller to add to its answer. The gate dictionaries
+## are built fresh for every packet ([method _creature_damage_gates]), so
+## nothing survives the event that produced it.
+func _apply_creature_damage_gate(packet: DamagePacket, inst: CardInstance,
+		gate: Dictionary) -> int:
+	var source: CardInstance = packet.source
+	var amount := packet.remaining()
+	match StringName(gate["kind"]):
+		&"source_redirect":
+			# "All damage that would be dealt this turn by target sorcery
+			# spell is dealt to that spell's controller instead"
+			# (Reverberation) — a replacement on the SOURCE, ordered against
+			# the victim's own effects like any other (CR 616.1).
+			log_line("%s's damage is turned on %s" % [
+				source.data.card_name,
+				players[source.damage_all_redirect_to].player_name])
+			return _redirect_damage(packet,
+				TargetRef.player(source.damage_all_redirect_to))
+		&"martyr":
+			# "Until end of turn, if damage would be dealt to any creature,
+			# you MAY have that damage dealt to you instead" (Blood of the
+			# Martyr). The offer is really made, once per packet; a seat
+			# that declines simply does not apply (CR 614.6) and the
+			# candidate has already been taken off the list, so one event
+			# never asks the same seat twice.
+			var taker: int = int(gate["pid"])
+			if not agents[taker].choose_yes_no(self, taker,
+					"Take %d damage from %s in %s's place?" % [
+						amount, source.data.card_name, inst.data.card_name],
+					true):
+				return -1
+			return _redirect_damage(packet, TargetRef.player(taker))
+		&"counters":
+			# "For each 1 damage that would be dealt to this creature, if it
+			# has a +1/+1 counter on it, remove a counter and prevent that 1
+			# damage" (Rock Hydra) — METERED: a replacement that eats
+			# counters point for point and lets the rest through.
+			var kind: String = inst.damage_eats_counters
+			var have: int = int(inst.counters.get(kind, 0))
+			var eaten: int = mini(have, amount)
+			if eaten <= 0:
+				return -1
+			_rec(inst, &"counters")
+			if have - eaten <= 0:
+				inst.counters.erase(kind)
+			else:
+				inst.counters[kind] = have - eaten
+			packet.prevent(eaten)
+			log_line("%s sheds %d %s counter(s) and prevents %d damage" % [
+				inst.data.card_name, eaten, kind, eaten])
+			recalculate()
+			return -1
+		&"protection":
+			packet.prevent(amount)
+			log_line("%s's damage to %s is prevented (protection)" % [
+				source.data.card_name, inst.data.card_name])
+			return 0
+		&"istvan":
+			packet.prevent(amount)
+			log_line("%s's damage to %s is prevented (creature damage)" % [
+				source.data.card_name, inst.data.card_name])
+			return 0
+		&"monolith":
+			if undo_log != null:
+				_rec(inst, &"damage_redirects")
+				_rec(inst, &"damage_redirect_to")
+				_rec(inst, &"damage_redirect_sources")
+			inst.damage_redirects -= 1
+			var named_at := inst.damage_redirect_sources.find(source.id)
+			if named_at >= 0:
+				inst.damage_redirect_sources.remove_at(named_at)
+			var soak := inst.damage_redirect_to
+			if inst.damage_redirects <= 0:
+				inst.damage_redirect_to = -1
+				inst.damage_redirect_sources.clear()
+			log_line("%s's damage is redirected to %s" % [
+				inst.data.card_name, players[soak].player_name])
+			return _redirect_damage(packet, TargetRef.player(soak))
+		&"incarnation":
+			# "The next 1 damage that would be dealt to this creature this
+			# turn is dealt to its owner instead" (Personal Incarnation) —
+			# METERED: each booked point moves ONE point and the rest of the
+			# event carries on. `Duel.hlp`: *"owner may redirect any amount
+			# of damage from it to himself or herself."*
+			gate["elsewhere"] = _divert_damage_points(packet, inst)
+			return -1
+		&"prevent_all":
 			packet.prevent(amount)
 			log_line("all damage to %s is prevented" % inst.data.card_name)
 			return 0
-		if is_combat and inst.cur_prevent_combat_damage_taken:
+		&"prevent_combat":
 			packet.prevent(amount)
 			log_line("combat damage to %s is prevented" % inst.data.card_name)
 			return 0
-		# Source-filtered immunities ("...by creatures it's blocking",
-		# "...by artifact sources", "...by Deserts"); an entry marked
-		# combat-only (Enchanted Being, Marble Priest) lets a pinger
-		# through.
-		for immunity in inst.cur_damage_immunity:
-			if bool(immunity.get("combat", false)) and not is_combat:
-				continue
-			if immunity["filter"].call(self, source):
-				packet.prevent(amount)
-				log_line("damage to %s from %s is prevented (%s)" % [
-					inst.data.card_name, source.data.card_name, immunity["desc"]])
-				return 0
-		# Amount-based prevention (Healing Salve, Samite Healer).
-		if inst.prevention > 0:
+		&"immunity":
+			var immunity: Dictionary = gate["entry"]
+			packet.prevent(amount)
+			log_line("damage to %s from %s is prevented (%s)" % [
+				inst.data.card_name, source.data.card_name, immunity["desc"]])
+			return 0
+		&"pool":
+			# Amount-based prevention (Healing Salve, Samite Healer, Rock
+			# Hydra's own {R}) — METERED: point for point, and the rest of
+			# the event carries on down the remaining gates.
 			var soaked := packet.prevent(mini(inst.prevention, amount))
 			_rec(inst, &"prevention")
 			inst.prevention -= soaked
-			amount = packet.remaining()
-			log_line("%d damage to %s is prevented" % [soaked, inst.data.card_name])
-			if amount <= 0:
-				return 0
+			log_line("%d damage to %s is prevented" % [
+				soaked, inst.data.card_name])
+			return -1
+	return -1
+
+
+## The tail of [method _land_damage_impl]'s creature branch: the damage
+## itself, once every gate CR 616.1 ordered has had its say. Returns what
+## was marked on [param inst].
+##
+## It used to be the OTHER HALF OF THE CHAIN as well — a whole-damage
+## prevention, Gaseous Form, the source-filtered immunities and the
+## prevention pool lived here, which is what "the gates span two methods"
+## meant in the 2026-09-11 note and why they could not be ordered against
+## the four above them. They are gates in [method _creature_damage_gates]
+## now and this function only marks.
+func _mark_creature_damage(packet: DamagePacket, inst: CardInstance) -> int:
+	var source: CardInstance = packet.source
+	var amount := packet.remaining()
+	if amount <= 0:
+		return 0
 	if undo_log != null:
 		_rec(inst, &"damage")
 		_rec(inst, &"damaged_by_this_turn")

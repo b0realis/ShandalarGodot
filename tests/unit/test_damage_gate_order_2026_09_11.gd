@@ -26,11 +26,15 @@ extends GameTest
 ## answers exactly as the old chain ran and only a seat that says otherwise
 ## sees a different board.
 ##
-## WHAT IS NOT BUILT, and is narrowed rather than closed in
-## docs/duel-todo.md: the same question on the CREATURE branch (protection
+## WHAT WAS NOT BUILT WHEN THIS FILE WAS WRITTEN, and was narrowed rather
+## than closed: the same question on the CREATURE branch (protection
 ## against Jade Monolith, Rock Hydra's counters against a prevention pool).
-## The footer pins the fixed order there so a later pass starts from a
-## reading rather than from prose.
+## The footer pinned the fixed order there so a later pass would start from
+## a reading rather than from prose, and it did, LATER THE SAME DAY —
+## tests/unit/test_creature_damage_gate_order_2026_09_11.gd. The footer
+## test below is unchanged and still green: that order is now the DEFAULT
+## answer rather than the only one, which is exactly what a heuristic seat
+## still plays.
 
 
 ## Names a card when it can, answers the CR 616.1 ordering question with
@@ -261,22 +265,22 @@ func test_combat_damage_can_take_the_circle_instead() -> void:
 	assert_eq(board[0].damage, 0)
 
 
-# ================= THE CREATURE BRANCH: NARROWED, NOT BUILT =================
+# ============ THE CREATURE BRANCH: THE OLD ORDER, NOW THE DEFAULT ============
 #
 # CR 616.1 is put to the AFFECTED PLAYER, and MtgGame._land_damage_impl
-# now does that for every packet aimed at a PLAYER. A packet aimed at a
-# CREATURE is the same question asked of its controller, and the gates
-# there (protection, Uncle Istvan, Jade Monolith, Personal Incarnation,
-# Rock Hydra's counters, a per-creature prevention pool, Gaseous Form)
-# still run in a fixed order. docs/duel-todo.md carries the narrowed row;
-# the test below pins the order that is there, so the next pass starts
-# from a reading.
+# does that for every packet aimed at a PLAYER. A packet aimed at a
+# CREATURE is the same question asked of ITS CONTROLLER, and since later
+# the same day it is asked (MtgGame._creature_damage_gates,
+# tests/unit/test_creature_damage_gate_order_2026_09_11.gd). The test below
+# was written to pin the fixed order that was there; it is unchanged and
+# still green, because that order is the hint every seat that is not a
+# human still takes.
 
 ## Uncle Istvan's "prevent all damage that would be dealt to this creature
 ## by creatures" is spent before a prevention POOL sitting on the same
-## body, so the pool is never touched — the fixed order on the creature
-## branch, pinned so that changing it is a decision rather than a drift.
-func test_the_creature_branch_still_runs_a_fixed_order() -> void:
+## body, so the pool is never touched — one candidate is not a choice, so
+## nobody is even asked here, and this is the answer either way.
+func test_the_creature_branch_defaults_to_its_old_fixed_order() -> void:
 	var istvan := put_battlefield(0, "Uncle Istvan")
 	var bear := put_battlefield(1, "Grizzly Bears")
 	istvan.prevention = 2

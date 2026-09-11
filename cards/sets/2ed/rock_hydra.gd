@@ -15,14 +15,19 @@ extends CardScript
 ##   memory — so a 0/0 Hydra is never on the battlefield for state-based
 ##   actions to bury.
 ## - "For each 1 damage ... remove a +1/+1 counter and prevent that 1
-##   damage" is CardInstance.damage_eats_counters (new), applied by MtgGame
-##   before every prevention gate because it is a replacement. Counter for
-##   point: 3 damage to a Hydra with 2 counters eats both and 1 gets
-##   through, which is what kills it.
-## - The {R} shield is the engine's ordinary prevention pool, and it is
-##   spent BEFORE the counters are, because a plain prevention pool is
-##   checked after the replacement has taken what it could... which is the
-##   printed order: the counters go first, then what is left meets the pool.
+##   damage" is CardInstance.damage_eats_counters (new), a replacement and
+##   one of the engine's three METERED damage gates. Counter for point:
+##   3 damage to a Hydra with 2 counters eats both and 1 gets through,
+##   which is what kills it.
+## - The {R} shield is the engine's ordinary prevention pool, and the two
+##   meet on the same body. CORRECTED 2026-09-11: this note used to say the
+##   pool was spent before the counters were, and the engine had always
+##   done the opposite. Neither is the engine's to decide — CR 616.1 gives
+##   the ordering to the creature's controller, and it matters here as much
+##   as anywhere in the pool: 2 damage into a Hydra with three counters and
+##   two {R} shields leaves either a 1/1 with its shields or a 3/3 without
+##   them. Counters first is the default answer, which is what this card
+##   always did (tests/unit/test_creature_damage_gate_order_2026_09_11.gd).
 ## - The {R}{R}{R} regrowth is an ordinary counter ability restricted to
 ##   your upkeep step.
 ##
