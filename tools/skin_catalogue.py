@@ -54,12 +54,25 @@ WORDMARK = (
 )
 CAPTION = ("Shandalar 1997 · skin spec", "what a skin has to contain")
 
+## THE MINI-HELP under the banner (tools/tool_banner.py): the two lines
+## somebody actually types — a bare run REWRITES docs/skin-catalogue.txt,
+## which is worth saying before it happens — and where the rest is. The
+## first two open EPILOG below, one source for both. `WHERE` is `tools/`
+## in a checkout and nothing beside a packaged game, where this tool also
+## ships and a player runs it from a flat folder
+## (tool_banner.here_prefix()).
+WHERE = tool_banner.here_prefix(__file__)
+HINT = (
+    "python3 %sskin_catalogue.py                   # rewrite the catalogue" % WHERE,
+    "python3 %sskin_catalogue.py --check my.zip    # what a skin is missing" % WHERE,
+    "python3 %sskin_catalogue.py -h                # --stdout, --skin, --out" % WHERE,
+)
+
 EPILOG = """\
-    python3 tools/skin_catalogue.py                   rewrite the catalogue
-    python3 tools/skin_catalogue.py --skin DIR        measure another folder
-    python3 tools/skin_catalogue.py --stdout          print it, write nothing
-    python3 tools/skin_catalogue.py --check my.zip    what a skin is missing
-    python3 tools/skin_catalogue.py --check my_skin/  a folder works too
+%s
+    python3 %sskin_catalogue.py --skin DIR        measure another folder
+    python3 %sskin_catalogue.py --stdout          print it, write nothing
+    python3 %sskin_catalogue.py --check my_skin/  a folder works too
 
 The catalogue is GENERATED from import_original.py's MANIFEST and
 measured off an imported skin, so it cannot drift from the code; a key
@@ -68,7 +81,8 @@ with no note in this script makes the run refuse to write.
 never joins it.
 
 %s
-""" % tool_banner.BANNER_HELP
+""" % (tool_banner.examples(HINT), WHERE, WHERE, WHERE,
+       tool_banner.BANNER_HELP)
 
 DEFAULT_SKIN = ROOT / "assets" / "original"
 DEFAULT_CARDART = ROOT / "assets" / "cardart"
@@ -803,8 +817,10 @@ def main() -> int:
     tool_banner.add_version_flag(parser, TOOL, __file__)
     args = parser.parse_args()
     # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py), and
-    # here that rule earns its keep: `--stdout` IS the catalogue.
-    tool_banner.show(WORDMARK, CAPTION, __file__)
+    # here that rule earns its keep: `--stdout` IS the catalogue. The
+    # mini-help rides the same guards, and `--stdout` is an argument, so
+    # the run whose output is data never draws one anyway.
+    tool_banner.show(WORDMARK, CAPTION, __file__, hint=HINT)
     if args.check:
         return check(args.check)
     text = render(args.skin, args.cardart)

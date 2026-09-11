@@ -19,6 +19,13 @@ The second thing pinned here is the version: ONE source (project.godot's
 sides, and an honest "version unknown" wherever that file cannot be
 found — which is what the four tools that ship beside the packaged game
 see (2026-09-11).
+
+THE MINI-HELP, added the same day, is the same decoration and is held to
+the same rule with one more of its own: two or three lines under the
+banner, quoted out of the tool's own examples, and only for a BARE
+command line. `StdoutDidNotMoveTest` is the test that would actually
+catch the bug — `skin_catalogue.py --stdout` piped, redirected and
+`2>&1` is byte for byte the committed docs/skin-catalogue.txt.
 """
 
 import io
@@ -52,6 +59,50 @@ SH_TOOLS = ["build_release.sh", "deck_convert.sh", "duel_soak.sh",
 ## module they import. See test_the_package_ships_the_module_its_tools_import.
 SHIPPED_TOOLS = ["mtg_assets.py", "import_original.py", "fetch_card_art.py",
                  "skin_catalogue.py", "tool_banner.py"]
+
+## THE ONE TOOL WITH NO MINI-HELP, and why (2026-09-11): a bare
+## `mtg_assets.py` already prints its own GUIDE — "WHAT THIS NEEDS", down
+## to a TRY IT block of the same invocations — so a hint three lines above
+## it would say the same thing twice. The Deck Lab is the other one, and
+## it is not a Python tool: DeckLab/simulate.gd's `_usage_hint` had this
+## idea first and keeps it.
+NO_HINT = ["mtg_assets"]
+
+## Where each shell tool's mini-help lines have to be quoted FROM. A
+## mini-help is two or three lines lifted out of the tool's own usage
+## text, never a second wording of it — deck_convert.sh's manual lives in
+## the .gd it forwards to, so both files count as its source.
+SH_HINT_SOURCE = {
+    "build_release.sh": ["build_release.sh"],
+    "deck_convert.sh": ["deck_convert.sh", "tools/deck_convert.gd"],
+    "duel_soak.sh": ["duel_soak.sh"],
+    "run_tests.sh": ["run_tests.sh"],
+}
+
+## The call that sets a shell tool's mini-help, and the single-quoted
+## lines that follow it — read out of the script itself, because the
+## point of the test is that the script says it.
+SH_HINT_CALL = re.compile(r"^shandalar_banner_hint \"\$#\"(.*?)(?<!\\)\n",
+                          re.MULTILINE | re.DOTALL)
+SH_HINT_LINE = re.compile(r"'([^']*)'")
+
+
+def hint_of(name: str):
+    """A Python tool's HINT, or () for the one that has none."""
+    return tuple(getattr(__import__(name), "HINT", ()))
+
+
+def shell_hint_of(script: str) -> list[str]:
+    """A shell tool's mini-help lines, parsed out of its own source."""
+    text = (ROOT / script).read_text(encoding="utf-8")
+    found = SH_HINT_CALL.search(text)
+    return SH_HINT_LINE.findall(found.group(1)) if found else []
+
+
+def command_of(line: str) -> str:
+    """The part of a mini-help line a person types — everything before
+    the `# note`, which is free to be shorter than the manual's."""
+    return line.split("#")[0].rstrip()
 
 
 class FakeTerminal(io.StringIO):
@@ -201,6 +252,117 @@ class BannerShapeTest(unittest.TestCase):
         self.assertEqual(len(set(marks.values())), len(PY_TOOLS), marks.keys())
 
 
+class MiniHelpShapeTest(unittest.TestCase):
+    """THE MINI-HELP IS SHORT, IT QUOTES THE MANUAL, AND IT POINTS AT IT
+    (2026-09-11). Two or three invocations under the banner for somebody
+    who has just typed the command; the last line names `-h`, where the
+    rest is. A mini-help that scrolls is a failed mini-help, and one that
+    words the manual a second way is a second manual to maintain."""
+
+    def assert_shape(self, what: str, hint):
+        self.assertGreaterEqual(len(hint), 2, "%s: say at least two" % what)
+        self.assertLessEqual(len(hint), 3, "%s: two or three lines, no more"
+                             % what)
+        for line in hint:
+            # Two-space indent (tool_banner.hint_lines) inside eighty
+            # columns, the same limit the wordmark keeps.
+            self.assertLessEqual(len(line) + 2, 78,
+                                 "%s: fits an 80-column terminal: %s"
+                                 % (what, line))
+            self.assertEqual(line, line.rstrip(), "%s: %r" % (what, line))
+        self.assertIn(" -h", hint[-1],
+                      "%s: the last line names the flag that has the rest"
+                      % what)
+
+    def test_every_python_tool_that_has_one_is_two_or_three_lines(self):
+        for name in PY_TOOLS:
+            hint = hint_of(name)
+            if name in NO_HINT:
+                self.assertEqual(hint, (), "%s explains itself already" % name)
+                continue
+            self.assert_shape(name, hint)
+
+    def test_every_shell_tool_that_has_one_is_two_or_three_lines(self):
+        for script in SH_HINT_SOURCE:
+            self.assert_shape(script, shell_hint_of(script))
+
+    def test_the_deck_lab_keeps_its_own_rather_than_being_given_a_second(self):
+        # DeckLab/simulate.gd has answered a bare command line with two
+        # copyable invocations and a pointer to --help since it was
+        # written — the thing the rest of the family copied. A
+        # BANNER_HINT in its wrapper would say it twice, so the wrapper
+        # has none, and this is the test that keeps it that way.
+        wrapper = (ROOT / "DeckLab" / "deck_lab.sh").read_text(encoding="utf-8")
+        self.assertNotIn("shandalar_banner_hint", wrapper)
+        lab = (ROOT / "DeckLab" / "simulate.gd").read_text(encoding="utf-8")
+        self.assertIn("_usage_hint", lab)
+
+    def test_the_python_mini_help_quotes_the_tools_own_examples(self):
+        # ONE SOURCE FOR AN INVOCATION. The `# note` may be shorter than
+        # the manual's — it has to fit beside the command — but the thing
+        # a reader copies has to be a line the tool documents.
+        for name in PY_TOOLS:
+            hint = hint_of(name)
+            if not hint:
+                continue
+            epilog = getattr(__import__(name), "EPILOG")
+            for line in hint[:-1]:
+                self.assertIn(command_of(line), epilog,
+                              "%s: the mini-help invents an invocation" % name)
+
+    def test_the_shell_mini_help_quotes_the_scripts_own_usage(self):
+        for script, sources in SH_HINT_SOURCE.items():
+            text = "\n".join((ROOT / where).read_text(encoding="utf-8")
+                             for where in sources)
+            for line in shell_hint_of(script)[:-1]:
+                self.assertIn(command_of(line), text,
+                              "%s: the mini-help invents an invocation"
+                              % script)
+
+    def test_the_mini_help_is_drawn_the_same_way_in_both_languages(self):
+        # The shell side is a second implementation of the same three
+        # lines; if they ever disagree about the shape, this is where it
+        # shows. Same indent, same dimmed note, same blank line after.
+        lines = ["./x.sh          # do the thing", "./x.sh -h       # the rest"]
+        python_side = tool_banner.hint_lines(lines, False)
+        script = ('. tools/banner.sh\n'
+                  "BANNER_ROW_0=aaa; BANNER_ROW_1=bbb; BANNER_ROW_2=ccc\n"
+                  'shandalar_banner_hint 0 "$1" "$2"\n'
+                  'shandalar_banner .\n')
+        _out, terminal, status = run_on_a_pty(
+            ["bash", "-c", script, "_"] + lines)
+        self.assertEqual(status, 0)
+        drawn = SGR.sub("", terminal.decode()).replace("\r\n", "\n")
+        self.assertTrue(drawn.endswith("\n".join(python_side) + "\n\n"),
+                        repr(drawn))
+
+    def test_plain_text_has_no_escape_codes(self):
+        for line in tool_banner.hint_lines(["./x.sh  # note"], False):
+            self.assertNotIn(tool_banner.ESC, line)
+
+    def test_colour_never_changes_a_glyph(self):
+        lines = ["./x.sh          # do the thing", "./x.sh -h  # the rest"]
+        plain = tool_banner.hint_lines(lines, False)
+        coloured = tool_banner.hint_lines(lines, True)
+        self.assertEqual([SGR.sub("", line) for line in coloured], plain)
+        for line in coloured:
+            # The note is dimmed and the command is not, so the eye lands
+            # on the thing that gets typed — and the line closes its own
+            # colour, because a terminal left dim is a bug in a tool.
+            self.assertTrue(line.startswith("  ./x.sh"), repr(line))
+            self.assertTrue(line.endswith(tool_banner.RESET), repr(line))
+
+    def test_a_line_with_no_note_is_left_alone(self):
+        self.assertEqual(tool_banner.hint_lines(["python3 x.py --in A"], True),
+                         ["  python3 x.py --in A"])
+
+    def test_the_epilog_helper_drops_the_line_that_points_at_h(self):
+        # You are reading -h already: being told where -h is would be
+        # noise there, and the same lines are the point of the helper.
+        hint = ("python3 x.py --all", "python3 x.py -h   # the rest")
+        self.assertEqual(tool_banner.examples(hint), "    python3 x.py --all")
+
+
 class TerminalRuleTest(unittest.TestCase):
     """NOTHING IS DRAWN OFF A TERMINAL, and nothing decorative ever
     reaches stdout."""
@@ -310,6 +472,154 @@ class TerminalRuleTest(unittest.TestCase):
         self.assertEqual(done.stderr, b"")
 
 
+class MiniHelpRuleTest(unittest.TestCase):
+    """THE MINI-HELP RIDES THE BANNER'S GUARDS, ALL THREE, AND ONE MORE
+    OF ITS OWN (2026-09-11). stderr; a terminal; the opt-out — and only
+    for a BARE command line, because somebody who typed a flag has
+    already said what they want."""
+
+    HINT = ("./x.sh          # do the thing", "./x.sh -h       # the rest")
+
+    def setUp(self):
+        self._saved = {key: os.environ.get(key)
+                       for key in (tool_banner.NO_BANNER_ENV, "NO_COLOR")}
+        for key in self._saved:
+            os.environ.pop(key, None)
+
+    def tearDown(self):
+        for key, value in self._saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def drawn(self, stream, **kwargs) -> str:
+        tool_banner.show(("a", "b", "c"), ("x", "y"), ROOT, stream, **kwargs)
+        return SGR.sub("", stream.getvalue())
+
+    def test_a_bare_command_line_gets_it(self):
+        text = self.drawn(FakeTerminal(), hint=self.HINT, argv=[])
+        self.assertIn("W U B R G", text)
+        self.assertTrue(text.endswith("  ./x.sh          # do the thing\n"
+                                      "  ./x.sh -h       # the rest\n\n"), text)
+
+    def test_a_command_line_that_said_what_it_wants_does_not(self):
+        text = self.drawn(FakeTerminal(), hint=self.HINT, argv=["--force"])
+        self.assertIn("W U B R G", text)
+        self.assertNotIn("./x.sh", text)
+        # And the banner is exactly what it was before there was a hint.
+        self.assertEqual(text, self.drawn(FakeTerminal()))
+
+    def test_a_pipe_gets_nothing_at_all(self):
+        self.assertEqual(self.drawn(io.StringIO(), hint=self.HINT, argv=[]), "")
+
+    def test_the_opt_out_silences_it_with_the_banner(self):
+        os.environ[tool_banner.NO_BANNER_ENV] = "1"
+        self.assertEqual(self.drawn(FakeTerminal(), hint=self.HINT, argv=[]), "")
+
+    def test_no_color_keeps_the_shape_and_drops_the_colour(self):
+        os.environ["NO_COLOR"] = "1"
+        term = FakeTerminal()
+        tool_banner.show(("a", "b", "c"), ("x", "y"), ROOT, term,
+                         hint=self.HINT, argv=[])
+        self.assertIn("./x.sh -h", term.getvalue())
+        self.assertNotIn(tool_banner.ESC, term.getvalue())
+
+    def test_a_tool_with_no_hint_is_what_it_always_was(self):
+        self.assertEqual(self.drawn(FakeTerminal(), argv=[]),
+                         self.drawn(FakeTerminal()))
+
+    def test_a_broken_stream_still_cannot_be_written_to(self):
+        # A decoration that can raise is worse than no decoration, and
+        # the mini-help is more code on that path than the banner was.
+        class Broken:
+            def isatty(self):
+                raise OSError("no")
+
+            def write(self, _text):
+                raise AssertionError("nothing may be written here")
+
+        tool_banner.show(("a", "b", "c"), ("x", "y"), ROOT, Broken(),
+                         hint=self.HINT, argv=[])
+
+    def test_a_hint_that_is_not_even_lines_cannot_fail_a_tool(self):
+        term = FakeTerminal()
+        tool_banner.show(("a", "b", "c"), ("x", "y"), ROOT, term,
+                         hint=object(), argv=[])
+        self.assertIn("W U B R G", SGR.sub("", term.getvalue()))
+
+    def test_the_shell_side_obeys_the_same_four(self):
+        script = ('. tools/banner.sh\n'
+                  "BANNER_ROW_0=aaa; BANNER_ROW_1=bbb; BANNER_ROW_2=ccc\n"
+                  'shandalar_banner_hint "$1" "./x.sh  # do the thing" \\\n'
+                  '    "./x.sh -h  # the rest"\n'
+                  'echo "THE INSTRUMENT CHANNEL"\n'
+                  'shandalar_banner .\n')
+        # Bare: drawn on the terminal, and stdout is untouched.
+        out, terminal, status = run_on_a_pty(["bash", "-c", script, "_", "0"])
+        self.assertEqual((status, out), (0, b"THE INSTRUMENT CHANNEL\n"))
+        self.assertIn("./x.sh -h", SGR.sub("", terminal.decode()))
+        # With arguments: the banner, and nothing else.
+        out, terminal, status = run_on_a_pty(["bash", "-c", script, "_", "2"])
+        self.assertEqual((status, out), (0, b"THE INSTRUMENT CHANNEL\n"))
+        self.assertNotIn("./x.sh", SGR.sub("", terminal.decode()))
+        # Into a pipe, and under the opt-out: nothing at all, either way.
+        done = subprocess.run(["bash", "-c", script, "_", "0"], cwd=str(ROOT),
+                              capture_output=True, env=env_without_optouts())
+        self.assertEqual(done.stdout, b"THE INSTRUMENT CHANNEL\n")
+        self.assertEqual(done.stderr, b"")
+        out, terminal, status = run_on_a_pty(
+            ["bash", "-c", script, "_", "0"],
+            env=env_without_optouts(**{tool_banner.NO_BANNER_ENV: "1"}))
+        self.assertEqual((status, out, terminal),
+                         (0, b"THE INSTRUMENT CHANNEL\n", b""))
+
+    def test_the_shell_hint_helper_never_fails_its_caller(self):
+        # tools/banner.sh is SOURCED BY build_release.sh, and artwork may
+        # not fail a build: every function there returns 0, including
+        # this one called with nothing, with junk, and under set -e.
+        script = ('set -euo pipefail\n'
+                  '. tools/banner.sh\n'
+                  'shandalar_banner_hint\n'
+                  'shandalar_banner_hint 0\n'
+                  'shandalar_banner_hint "" "a line"\n'
+                  'shandalar_banner_hint nonsense "a line"\n'
+                  'shandalar_banner\n'
+                  'echo ALIVE\n')
+        done = subprocess.run(["bash", "-c", script], cwd=str(ROOT),
+                              capture_output=True, env=env_without_optouts())
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout, b"ALIVE\n")
+
+    def test_a_real_tool_draws_it_on_a_real_terminal(self):
+        # import_original.py is the one tool whose bare run is safe to
+        # make here — --source is required, so it refuses, writes
+        # nothing and touches no network. It is also the tool that NEEDS
+        # the mini-help most: before this, a bare run was argparse's
+        # "error: the following arguments are required: --source" and no
+        # banner at all, because argparse exits inside parse_args().
+        out, terminal, status = run_on_a_pty(
+            [sys.executable, "tools/import_original.py"])
+        self.assertEqual(status, 2)
+        self.assertEqual(out, b"")
+        drawn = SGR.sub("", terminal.decode())
+        for line in hint_of("import_original"):
+            self.assertIn(line, drawn)
+        self.assertIn("W U B R G", drawn)
+        self.assertIn("required: --source", drawn)
+
+    def test_the_tool_that_explains_itself_does_not_say_it_twice(self):
+        # mtg_assets.py prints its own GUIDE on a bare run. A hint above
+        # it would be the same invocations three lines apart.
+        out, terminal, status = run_on_a_pty(
+            [sys.executable, "tools/mtg_assets.py"])
+        self.assertEqual(status, 0)
+        self.assertIn(b"WHAT THIS NEEDS", out)
+        drawn = SGR.sub("", terminal.decode())
+        self.assertIn("W U B R G", drawn)
+        self.assertNotIn("python3", drawn)
+
+
 class EveryToolAnswersTest(unittest.TestCase):
     """-h AND --version ON ALL TWELVE, and no artwork in either — both are
     stdout, and both are run through a pipe by everything that automates
@@ -401,6 +711,38 @@ class PackagedToolsTest(unittest.TestCase):
             for wanted in SHIPPED_TOOLS:
                 self.assertIn(wanted, group, group)
 
+    def test_the_examples_carry_the_path_that_works_where_they_are(self):
+        # `python3 tools/skin_catalogue.py` is No such file or directory
+        # for a player, and `python3 skin_catalogue.py` is the same thing
+        # from the repo root. Asked from the tool's own location rather
+        # than assumed (tool_banner.here_prefix), so one line is right in
+        # both places — which is where the -h examples and the mini-help
+        # both come from.
+        self.assertEqual(tool_banner.here_prefix(TOOLS_DIR / "mtg_assets.py"),
+                         "tools/")
+        self.assertEqual(tool_banner.here_prefix(TOOLS_DIR), "tools/")
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(tool_banner.here_prefix(tmp), "")
+            stage = Path(tmp)
+            for name in SHIPPED_TOOLS:
+                (stage / name).write_bytes((TOOLS_DIR / name).read_bytes())
+            for name in ("skin_catalogue.py", "fetch_card_art.py",
+                         "import_original.py", "mtg_assets.py"):
+                done = subprocess.run(
+                    [sys.executable, str(stage / name), "-h"], cwd=tmp,
+                    capture_output=True, text=True, timeout=120,
+                    stdin=subprocess.DEVNULL, env=env_without_optouts())
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertNotIn("tools/" + name, done.stdout,
+                                 "%s: a player has no tools/ folder" % name)
+                self.assertIn("python3 " + name, done.stdout, name)
+                # And in the checkout, the other way round.
+                here = subprocess.run(
+                    [sys.executable, "tools/" + name, "-h"], cwd=str(ROOT),
+                    capture_output=True, text=True, timeout=120,
+                    stdin=subprocess.DEVNULL, env=env_without_optouts())
+                self.assertIn("python3 tools/" + name, here.stdout, name)
+
     def test_a_shipped_tool_finds_the_module_beside_it(self):
         # Copy the flat package layout into a temp dir with NO
         # project.godot anywhere above it, and check the tool starts, says
@@ -441,6 +783,96 @@ class ArtFolderFlagTest(unittest.TestCase):
                              Path("/moved/here/ornithopter.jpg"))
         finally:
             fetch_card_art.OUT_DIR = saved
+
+
+class StdoutDidNotMoveTest(unittest.TestCase):
+    """THE REGRESSION THAT WOULD ACTUALLY HURT (2026-09-11): a tool's
+    stdout is the same bytes it was before any of this decoration
+    existed, whatever is on the far end of it.
+
+    `skin_catalogue.py --stdout` is the sharpest case in the family,
+    because its stdout IS a committed file — docs/skin-catalogue.txt — so
+    the comparison is against something outside this test. Four shapes,
+    all of them real: both ends piped, a terminal on stderr, stdout
+    redirected into a file, and `2>&1` into one file, which is what a
+    script or an agent writes and where a stray byte would land."""
+
+    ARGV = [sys.executable, "tools/skin_catalogue.py", "--stdout"]
+
+    def run_to_a_file(self, merged: bool) -> bytes:
+        """The tool with its stdout REDIRECTED into a file — and its
+        stderr either a real terminal beside it, or the same file
+        (`2>&1`). Returns what the file holds."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "out.txt"
+            master, slave = pty.openpty()
+            try:
+                with open(path, "wb") as handle:
+                    proc = subprocess.Popen(
+                        self.ARGV, stdout=handle,
+                        stderr=handle if merged else slave,
+                        stdin=subprocess.DEVNULL, cwd=str(ROOT),
+                        env=env_without_optouts())
+                    self.assertEqual(proc.wait(timeout=300), 0)
+            finally:
+                os.close(master)
+                os.close(slave)
+            return path.read_bytes()
+
+    def test_the_catalogue_is_the_same_bytes_down_every_pipe(self):
+        piped = subprocess.run(self.ARGV, cwd=str(ROOT), capture_output=True,
+                               timeout=300, stdin=subprocess.DEVNULL,
+                               env=env_without_optouts())
+        self.assertEqual(piped.returncode, 0, piped.stderr)
+        self.assertEqual(piped.stderr, b"",
+                         "a pipe on stderr gets nothing at all")
+        on_a_terminal, terminal, status = run_on_a_pty(self.ARGV)
+        self.assertEqual(status, 0)
+        self.assertIn("W U B R G", SGR.sub("", terminal.decode()),
+                      "the human's channel still gets the banner")
+        redirected = self.run_to_a_file(False)
+        merged = self.run_to_a_file(True)
+        # THE FOUR AGREE, BYTE FOR BYTE. The banner and the mini-help are
+        # not in any of them.
+        self.assertEqual(on_a_terminal, piped.stdout)
+        self.assertEqual(redirected, piped.stdout)
+        self.assertEqual(merged, piped.stdout)
+        for glyph in EveryToolAnswersTest.WORDMARK_GLYPHS:
+            self.assertNotIn(glyph.encode(), merged)
+
+    def test_the_catalogue_is_the_committed_file(self):
+        # The measurement needs the skin it measures. In a checkout
+        # without assets/original (a clean clone, a CI runner) the tool
+        # says "(not on this machine)" for the files it cannot see, which
+        # is a true catalogue of a different machine — so the comparison
+        # against the committed one is made where it means something.
+        if not (ROOT / "assets" / "original").is_dir():
+            self.skipTest("no assets/original to measure")
+        piped = subprocess.run(self.ARGV, cwd=str(ROOT), capture_output=True,
+                               timeout=300, stdin=subprocess.DEVNULL,
+                               env=env_without_optouts())
+        self.assertEqual(piped.stdout,
+                         (ROOT / "docs" / "skin-catalogue.txt").read_bytes())
+
+    def test_a_refusal_reaches_a_log_without_its_artwork(self):
+        # The other half of the rule, on the tool that draws the most:
+        # import_original.py bare draws the wordmark AND the mini-help on
+        # a terminal, and `> log 2>&1` must carry neither — only the
+        # refusal a reader of that log is looking for.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.log"
+            with open(path, "wb") as handle:
+                proc = subprocess.Popen(
+                    [sys.executable, "tools/import_original.py"],
+                    stdout=handle, stderr=handle, stdin=subprocess.DEVNULL,
+                    cwd=str(ROOT), env=env_without_optouts())
+                self.assertEqual(proc.wait(timeout=300), 2)
+            log = path.read_text(encoding="utf-8")
+        self.assertIn("required: --source", log)
+        for glyph in EveryToolAnswersTest.WORDMARK_GLYPHS:
+            self.assertNotIn(glyph, log)
+        for line in hint_of("import_original"):
+            self.assertNotIn(line, log)
 
 
 if __name__ == "__main__":

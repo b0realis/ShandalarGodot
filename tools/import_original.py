@@ -87,10 +87,27 @@ WORDMARK = (
 )
 CAPTION = ("Shandalar 1997 · your own disc", "raw .PIC/.SPR into a skin")
 
+## THE MINI-HELP under the banner (tools/tool_banner.py). --source is
+## REQUIRED, so a bare command line is a refusal, and this is what it
+## should have said instead. Quoted by EPILOG below, one source for both.
+##
+## THE PATH IN FRONT OF THE NAME IS ASKED, NOT ASSUMED (2026-09-11), and
+## the examples were wrong without it: this file lives in `tools/` in a
+## checkout and in a flat folder beside a packaged game, so `python3
+## import_original.py` is "No such file or directory" from the repo root
+## — where every other example in the project is typed — and `python3
+## tools/import_original.py` is the same thing for a player. See
+## tool_banner.here_prefix().
+WHERE = tool_banner.here_prefix(__file__)
+HINT = (
+    "python3 %simport_original.py --source /path/to/the/1997/game" % WHERE,
+    "python3 %simport_original.py --source /cdrom --dest ./my_skin" % WHERE,
+    "python3 %simport_original.py -h      # every flag, and the caveats" % WHERE,
+)
+
 EPILOG = """\
-    python3 import_original.py --source /path/to/the/1997/game
-    python3 import_original.py --source /cdrom --source ~/old-install
-    python3 import_original.py --source /path/to/game --dest ./my_skin
+%s
+    python3 %simport_original.py --source /cdrom --source ~/old-install
 
 Every --source is searched recursively and case-insensitively, and the
 first source that has a file wins, so an install and a patch folder can
@@ -101,7 +118,7 @@ mtg_assets.py is the friendlier front door — it runs this and zips the
 result. Use this one to write LOOSE files into a skin folder.
 
 %s
-""" % tool_banner.BANNER_HELP
+""" % (tool_banner.examples(HINT), WHERE, tool_banner.BANNER_HELP)
 
 # ======================================================= WHERE A SOUND LIVES ==
 #
@@ -2949,11 +2966,22 @@ def main() -> int:
                              "default and not a player's door — see THE "
                              "CONVERSION DOOR")
     tool_banner.add_version_flag(parser, TOOL, __file__)
-    args = parser.parse_args()
     # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
     # per-key report below is stdout, and mtg_assets.py reads this run's
     # exit code around it.
-    tool_banner.show(WORDMARK, CAPTION, __file__)
+    #
+    # DRAWN BEFORE THE PARSE HERE, AND ONLY HERE IN THE FAMILY, because
+    # --source is required: argparse exits INSIDE parse_args() on a bare
+    # command line, so a banner after it is a banner the one reader who
+    # needs the mini-help never sees. The two calls are exclusive — bare
+    # above the parse, anything else below it — so `-h` and `-V` still
+    # answer with their own text and nothing else.
+    bare = not sys.argv[1:]
+    if bare:
+        tool_banner.show(WORDMARK, CAPTION, __file__, hint=HINT)
+    args = parser.parse_args()
+    if not bare:
+        tool_banner.show(WORDMARK, CAPTION, __file__)
 
     index = build_index([Path(s).expanduser() for s in args.source])
     dest = Path(args.dest).expanduser()

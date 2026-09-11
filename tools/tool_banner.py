@@ -36,6 +36,20 @@ returns None when there is no checkout to read — which is what a tool
 shipped beside the packaged game sees, and it says "version unknown"
 rather than inventing a number.
 
+THE MINI-HELP UNDER THE BANNER (2026-09-11) is the same decoration and
+rides the SAME THREE GUARDS — stderr, a terminal, and the opt-out. Two or
+three lines of the invocations somebody actually types, and a last line
+naming `-h`, which is where the manual is. It is drawn only for a BARE
+command line: somebody who typed flags has already said what they want,
+and the tool that is told what to do gets on with it. Before this, a bare
+run drew the wordmark and then simply ACTED — `fetch_cards.py` started
+hitting Scryfall, `gen_cards.py` started rewriting card files — with no
+reminder of what was about to happen. The lines themselves belong to each
+tool (its `HINT`), quoted out of its own examples block so the two cannot
+drift; `tools/test_tool_banner.py` pins that they are quoted rather than
+rewritten. The Deck Lab did this first, as usual (`DeckLab/simulate.gd`,
+`_usage_hint`), and keeps its own.
+
 Standard library only, and nothing here may raise: a decoration that can
 break a build is worse than no decoration. Every public function is
 unit-tested in tools/test_tool_banner.py.
@@ -164,6 +178,65 @@ def banner(wordmark, caption, version: str, colour: bool) -> str:
     return "\n".join(banner_lines(wordmark, caption, version, colour))
 
 
+def hint_lines(hint, colour: bool) -> list[str]:
+    """THE MINI-HELP, as lines: the invocations in `hint`, indented under
+    the wordmark, with the `# note` after each dimmed so the command
+    itself is what the eye lands on.
+
+    TWO OR THREE LINES AND NO MORE, for the banner's own reason: this is
+    a reminder for somebody who has just typed the command, not a manual,
+    and a mini-help that scrolls is a failed mini-help. The last line
+    always names `-h` — the manual is one flag away and should say so.
+    """
+    out: list[str] = []
+    for row in hint:
+        text = str(row).rstrip()
+        if not text:
+            continue
+        note = text.find("#")
+        if note > 0:
+            text = text[:note] + paint(text[note:], DIM, colour)
+        out.append("  " + text)
+    return out
+
+
+def here_prefix(script: str | Path | None = None) -> str:
+    """The path an example has to carry to be a line somebody can copy:
+    `tools/` in a checkout, nothing at all beside a packaged game.
+
+    FOUR OF THESE TOOLS SHIP (build_release.sh copies mtg_assets.py,
+    import_original.py, fetch_card_art.py and skin_catalogue.py into one
+    flat folder beside the binary), so every example in them is wrong in
+    one of the two places unless it is ASKED rather than assumed —
+    `python3 tools/import_original.py` is "No such file or directory" for
+    a player, and `python3 import_original.py` is the same thing for
+    anyone standing in the repo root, which is where the README's
+    examples are typed. Answered from the tool's own location: a file in
+    a `tools/` folder with a project.godot above it is in a checkout.
+    """
+    path = Path(script).resolve() if script is not None else Path(__file__).resolve()
+    folder = path.parent if path.is_file() else path
+    try:
+        if folder.name == "tools" and (folder.parent / PROJECT_FILE).is_file():
+            return "tools/"
+    except OSError:
+        pass
+    return ""
+
+
+def examples(hint) -> str:
+    """A tool's `HINT` as an argparse epilog block — every line but the
+    last, indented four.
+
+    The last one is dropped because it points at the `-h` whoever is
+    reading this already typed. Tools whose examples block is longer than
+    the mini-help quote the same lines instead of calling this; either
+    way the invocation text has ONE source, which is what
+    tools/test_tool_banner.py pins.
+    """
+    return "\n".join("    " + str(row) for row in list(hint)[:-1])
+
+
 def wanted(stream=None) -> bool:
     """Whether to draw anything at all: a terminal on the far end, and no
     opt-out. Anything that is not a terminal — a pipe, a file, a CI log —
@@ -186,19 +259,36 @@ def use_colour(stream=None) -> bool:
 
 
 def show(wordmark, caption, script: str | Path | None = None,
-         stream=None) -> None:
-    """Draw the banner on stderr if there is a human there to read it.
+         stream=None, hint=(), argv=None) -> None:
+    """Draw the banner on stderr if there is a human there to read it,
+    and `hint` — the mini-help — under it when the command line was bare.
 
     Called once at the top of a tool's main(). Silent — and harmless —
     whenever stderr is not a terminal, the opt-out is set, or anything at
     all goes wrong: a tool must never fail because of its own artwork.
+
+    `argv` is the tool's OWN arguments, which is how the mini-help tells
+    a bare command from one that already knows what it wants; None means
+    `sys.argv[1:]`, and a main() that takes an argv passes it through so
+    that an in-process call is judged by what it was handed rather than
+    by what started the interpreter.
     """
     stream = sys.stderr if stream is None else stream
     try:
         if not wanted(stream):
             return
+        colour = use_colour(stream)
         stream.write(banner(wordmark, caption, version_text(script),
-                            use_colour(stream)) + "\n\n")
+                            colour) + "\n\n")
+        # THE MINI-HELP IS A SECOND WRITE, after the wordmark has already
+        # reached the stream: a `hint` that is somehow not a list of
+        # lines must not be able to take the banner down with it.
+        given = sys.argv[1:] if argv is None else list(argv)
+        if hint and not given:
+            stream.write("\n".join(hint_lines(hint, colour)) + "\n\n")
+    except Exception:
+        pass
+    try:
         stream.flush()
     except Exception:
         pass

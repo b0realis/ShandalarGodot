@@ -860,6 +860,15 @@ def build(out_dir: Path, codes: list[str], bundle: bool, offline: bool,
     return 0
 
 
+## THE MINI-HELP under the banner (tools/tool_banner.py): the two
+## invocations somebody actually types, and where the other four are.
+## Both are quoted in EPILOG below — the invocation text has one source.
+HINT = (
+    "python3 tools/build_card_packs.py           # every local set + bundle",
+    "python3 tools/build_card_packs.py leg drk   # just these two set packs",
+    "python3 tools/build_card_packs.py -h        # --offline, --force, --out",
+)
+
 EPILOG = """\
     python3 tools/build_card_packs.py                # every local set + bundle
     python3 tools/build_card_packs.py leg drk        # just these two set packs
@@ -896,7 +905,9 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
     # per-pack lines below are stdout and get read by whoever built them.
-    tool_banner.show(WORDMARK, CAPTION, __file__)
+    # The mini-help rides the same guards and only answers a bare command
+    # line — `... leg drk` has already said what it wants.
+    tool_banner.show(WORDMARK, CAPTION, __file__, hint=HINT, argv=argv)
     codes = args.sets or local_sets()
     unknown = [c for c in codes if not holds_cards(DATA_DIR / f"{c}.json")]
     if unknown:

@@ -1,6 +1,6 @@
 # THE FAMILY BANNER, SHELL SIDE — sourced by run_tests.sh, duel_soak.sh,
 # deck_convert.sh, build_release.sh and DeckLab/deck_lab.sh. Not a script:
-# it defines four functions and returns.
+# it defines six functions and returns.
 #
 # This is the shell half of tools/tool_banner.py, which is in turn the
 # Python half of DeckLab/lab_console.gd. Read that GDScript header for the
@@ -24,6 +24,15 @@
 # Deck Lab's own DECK_LAB_NO_BANNER still works too, and deck_lab.sh maps
 # one onto the other). NO_COLOR=1 (https://no-color.org) keeps the shape
 # and drops the colour.
+#
+# THE MINI-HELP (2026-09-11) is the same decoration and rides the same
+# three guards: two or three of the invocations somebody actually types,
+# drawn under the wordmark for a BARE command line only, with a last line
+# naming -h. `shandalar_banner_hint "$#" 'line' 'line' 'line'` sets it —
+# the argument count is the caller's own, taken before any `shift`, and
+# anything on the command line means the reader has already said what
+# they want. The lines are quoted out of each script's own usage block,
+# so the two cannot drift; tools/test_tool_banner.py pins that.
 #
 # NOTHING HERE MAY FAIL A CALLER. Every function returns 0 and writes only
 # to stderr (except shandalar_version_line, which is a --version answer and
@@ -70,13 +79,30 @@ shandalar_banner_wanted() {
 	[ -t 2 ]
 }
 
+## THE MINI-HELP FOR A BARE COMMAND LINE. $1 is the caller's own argument
+## count — taken before any `shift`, and zero means nobody has said what
+## they want yet — and the rest are the lines to show, one invocation
+## each. Sets BANNER_HINT, which shandalar_banner draws under the
+## wordmark; with arguments on the line it sets nothing, because a reader
+## who typed a flag is not looking for a reminder of it.
+shandalar_banner_hint() {
+	local argc="${1:-0}"
+	shift || true
+	BANNER_HINT=""
+	if [ "$argc" = 0 ] && [ "$#" -gt 0 ]; then
+		BANNER_HINT="$(printf '%s\n' "$@")"
+	fi
+	return 0
+}
+
 ## The banner on stderr: three rows of wordmark (BANNER_ROW_0..2) with a
 ## two-line caption beside it (BANNER_CAP_0, BANNER_CAP_1) and the five
-## mana pips signing the last row with the version. The caller sets those
-## five variables; this draws them or, off a terminal, draws nothing.
+## mana pips signing the last row with the version — then the mini-help
+## in BANNER_HINT, when there is one. The caller sets those variables;
+## this draws them or, off a terminal, draws nothing at all.
 shandalar_banner() {
 	shandalar_banner_wanted || return 0
-	local amber="" dim="" reset="" w="" u="" b="" r="" g="" version
+	local amber="" dim="" reset="" w="" u="" b="" r="" g="" version line
 	if [ -z "${NO_COLOR:-}" ]; then
 		amber=$'\033[33m\033[1m'; dim=$'\033[2m'; reset=$'\033[0m'
 		# Black is grey because black on black is nothing.
@@ -94,6 +120,20 @@ shandalar_banner() {
 			"$amber" "${BANNER_ROW_2:-}" "$reset" \
 			"$w" "$reset" "$u" "$reset" "$b" "$reset" \
 			"$r" "$reset" "$g" "$reset" "$dim" "$version" "$reset"
+		# The `# note` after each invocation is dimmed and the command is
+		# not, so the eye lands on the thing that gets typed. Same shape
+		# as tools/tool_banner.py's hint_lines().
+		if [ -n "${BANNER_HINT:-}" ]; then
+			while IFS= read -r line; do
+				[ -n "$line" ] || continue
+				case "$line" in
+					?*'#'*) printf '  %s%s%s%s\n' "${line%%#*}" \
+						"$dim" "#${line#*#}" "$reset" ;;
+					*) printf '  %s\n' "$line" ;;
+				esac
+			done <<< "${BANNER_HINT:-}"
+			printf '\n'
+		fi
 	} >&2
 	return 0
 }

@@ -239,10 +239,12 @@ emits stubs, and the hand-written rules files are the project itself.
 Every one of these — the seven scripts in `tools/`, the five shell scripts
 and the Deck Lab — answers `-h` with its own manual and `-V`/`--version`
 with the one version string, read from `project.godot`; none of them keeps
-a copy of it. Each opens with a small wordmark naming itself, drawn **on
-stderr and only on a terminal**, so a redirected or piped run is exactly as
-clean as it was before there were banners. `SHANDALAR_NO_BANNER=1` turns
-them all off, `NO_COLOR=1` keeps the shape without the colour.
+a copy of it. Each opens with a small wordmark naming itself, and a **bare**
+command line gets two or three lines under it saying what that run is about
+to do and where the rest of the flags are. Both are drawn **on stderr and
+only on a terminal**, so a redirected or piped run is exactly as clean as it
+was before there were banners. `SHANDALAR_NO_BANNER=1` turns them all off,
+`NO_COLOR=1` keeps the shape without the colour.
 
 `docs/setup.txt` maps every path the built game reads or writes, and ships
 beside the binary so players read the same file you edit.

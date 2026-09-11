@@ -18,6 +18,15 @@ BANNER_ROW_1='│  │ ││││└┐┌┘├┤ ├┬┘ │ '
 BANNER_ROW_2='└─┘└─┘┘└┘ └┘ └─┘┴└─ ┴ '
 BANNER_CAP_0='Shandalar 1997 · deck files'
 BANNER_CAP_1='.deck/.dec and the 1997 .dck'
+# THE MINI-HELP, for a bare `./deck_convert.sh`. It is the tool with the
+# shortest command line and the least obvious one — two paths, and the
+# formats come from their extensions — and a bare run used to answer
+# "expected INPUT OUTPUT (try --help)" and nothing else. The lines are
+# this script's own header and tools/deck_convert.gd's EXAMPLES.
+shandalar_banner_hint "$#" \
+	'./deck_convert.sh INPUT OUTPUT              # formats from the extensions' \
+	'./deck_convert.sh my_brew.deck my_brew.dck  # one of those, for real' \
+	'./deck_convert.sh -h                        # the whole manual'
 
 want_help=0
 for arg in "$@"; do

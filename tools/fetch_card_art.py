@@ -60,10 +60,23 @@ WORDMARK = (
 )
 CAPTION = ("Shandalar 1997 · Scryfall", "one picture per card")
 
+## THE MINI-HELP under the banner (tools/tool_banner.py): what a bare run
+## is about to download, the flag that aims it somewhere else, and where
+## the rest is. Quoted by EPILOG below, so the two cannot drift.
+## `WHERE` is `tools/` in a checkout and nothing beside a packaged game,
+## which is the only way one example line is right in both — this is the
+## script setup.txt names for the 897 pictures, and a player types it in
+## a flat folder (tool_banner.here_prefix()).
+WHERE = tool_banner.here_prefix(__file__)
+HINT = (
+    "python3 %sfetch_card_art.py                 # fetch what is missing" % WHERE,
+    "python3 %sfetch_card_art.py --out cardart/  # the pictures elsewhere" % WHERE,
+    "python3 %sfetch_card_art.py -h              # --force, and the rest" % WHERE,
+)
+
 EPILOG = """\
-    python3 tools/fetch_card_art.py               # fetch what is missing
-    python3 tools/fetch_card_art.py --force       # re-fetch everything
-    python3 fetch_card_art.py --out cardart/      # beside a shipped game
+%s
+    python3 %sfetch_card_art.py --force         # re-fetch everything
 
 Two files per card: <name>.jpg (the artwork alone, which the game frames
 itself) and <name>_card.jpg (the whole card scan, for the pile that shows
@@ -72,7 +85,7 @@ interrupted fetch resumes. Nothing here is committed — the pictures are
 Scryfall's, and assets/cardart/ is gitignored.
 
 %s
-""" % tool_banner.BANNER_HELP
+""" % (tool_banner.examples(HINT), WHERE, tool_banner.BANNER_HELP)
 
 API = "https://api.scryfall.com/cards/named"
 HEADERS = {
@@ -240,8 +253,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="re-download every picture, not only the missing")
     tool_banner.add_version_flag(parser, TOOL, __file__)
     args = parser.parse_args(argv)
-    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py).
-    tool_banner.show(WORDMARK, CAPTION, __file__)
+    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py), and
+    # the mini-help under it rides the same guards: a bare run here is
+    # 897 cards off Scryfall, and it should say so before it starts.
+    tool_banner.show(WORDMARK, CAPTION, __file__, hint=HINT, argv=argv)
     OUT_DIR = args.out.expanduser()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     cards = pool()

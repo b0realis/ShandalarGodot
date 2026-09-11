@@ -52,9 +52,17 @@ CAPTION = ("Shandalar 1997 · Scryfall", "the pool as cards/data/*.json")
 SETS = ["2ed", "4ed", "arn", "atq", "leg", "drk", "past", "phpr"]
 EXCLUDED_NAMES = {"Chaos Orb", "Shahrazad", "Word of Command", "Falling Star"}
 
+## THE MINI-HELP under the banner (tools/tool_banner.py): what a bare run
+## is about to do, and where the rest is. Quoted by EPILOG below, so the
+## two say the same thing by construction.
+HINT = (
+    "python3 tools/fetch_cards.py       # refresh all eight sets from Scryfall",
+    "python3 tools/fetch_cards.py -h    # the pool, the exclusions, the rest",
+)
+
 EPILOG = """\
 the pool (%s), one file each:
-    python3 tools/fetch_cards.py          # refresh every set above
+%s
 
 It takes no other argument: the eight sets ARE the 1997 pool, and the
 network is the only thing it needs. The files it writes are committed, so
@@ -62,7 +70,7 @@ a fresh checkout never has to run this — re-run it when Scryfall's oracle
 text has moved on.
 
 %s
-""" % (" ".join(SETS), tool_banner.BANNER_HELP)
+""" % (" ".join(SETS), tool_banner.examples(HINT), tool_banner.BANNER_HELP)
 
 # CARDS THE 1997 GAME HAD THAT NO WHOLE SCRYFALL SET GIVES US.
 #
@@ -186,7 +194,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.parse_args(argv)
     # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
     # lines below are this tool's report and something may be reading them.
-    tool_banner.show(WORDMARK, CAPTION, __file__)
+    # The mini-help rides the same guards and is drawn for a bare command
+    # line — which here is every command line, and the one where the next
+    # thing to happen is a hundred Scryfall calls.
+    tool_banner.show(WORDMARK, CAPTION, __file__, hint=HINT, argv=argv)
     out_dir = Path(__file__).resolve().parent.parent / "cards" / "data"
     out_dir.mkdir(parents=True, exist_ok=True)
     total = 0

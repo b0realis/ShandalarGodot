@@ -48,8 +48,9 @@ your home directory.
                          share; not a tool of its own
 
 Every script in this folder answers `-h` for its own manual and
-`--version` for the build it came from. Those four .py files need
-nothing but Python 3 — no libraries, no installation.
+`--version` for the build it came from, and run with nothing after its
+name it shows you what to type before it does anything. Those four .py
+files need nothing but Python 3 — no libraries, no installation.
 
 The .pck holds no art of any kind, and neither does this zip: the game
 is one download, the art another. Art is read off the filesystem at

@@ -70,12 +70,16 @@ WORDMARK = (
 )
 CAPTION = ("Shandalar 1997 · the art zips", "check, import, pack a skin")
 
+## `tools/` in a checkout, nothing beside a packaged game — see the note
+## under GUIDE, and tool_banner.here_prefix().
+WHERE = tool_banner.here_prefix(__file__)
+
 EPILOG = """\
-    python3 mtg_assets.py                          explains what it needs
+    python3 mtg_assets.py                          says what it needs
     python3 mtg_assets.py --check   /path/to/game  looks, writes nothing
-    python3 mtg_assets.py --install /path/to/game  imports, writes the zip
-    python3 mtg_assets.py --from-skin my_skin/     zip a folder you already have
-    python3 fetch_card_art.py --out cardart/       the pictures, from Scryfall
+    python3 mtg_assets.py --install /path/to/game  imports, writes a zip
+    python3 mtg_assets.py --from-skin my_skin/     zip a folder you have
+    python3 fetch_card_art.py --out cardart/       the card pictures
     python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
 
 TWO ZIPS, NEVER ONE: `original_skin.zip` is the 1997 material and
@@ -273,6 +277,18 @@ TRY IT
   python3 mtg_assets.py --install "/path/to/Magic"
 """
 
+# EVERY EXAMPLE ABOVE IS WRITTEN THE WAY A PLAYER TYPES IT, because this
+# is the script a player runs and it ships in a flat folder beside the
+# game. In a CHECKOUT the same file is `tools/mtg_assets.py`, and a line
+# copied out of this guide from the repo root was "No such file or
+# directory" — the wrong half of a choice that does not have to be made
+# (tools/tool_banner.py, here_prefix). Nothing else in these two strings
+# begins with `python3 `, so one replace covers both, and beside the
+# packaged game it is a no-op.
+if WHERE:
+    EPILOG = EPILOG.replace("python3 ", "python3 " + WHERE)
+    GUIDE = GUIDE.replace("python3 ", "python3 " + WHERE)
+
 
 def look_around(root: Path) -> dict[str, list[str]]:
     """Which landmarks are present, by group. Case-insensitive, recursive,
@@ -455,6 +471,13 @@ def main() -> int:
     # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py):
     # build_release.sh runs this with its output in a log file, and that
     # log is what a failed build prints.
+    #
+    # AND NO MINI-HELP, DELIBERATELY (2026-09-11), where the other tools
+    # gained one: a bare run here already prints GUIDE — "WHAT THIS
+    # NEEDS", down to a TRY IT block of the same two invocations a hint
+    # would carry. This is the player's front door and the one tool that
+    # explained itself from the start; saying it twice, three lines
+    # apart, would be worse than not saying it at all.
     tool_banner.show(WORDMARK, CAPTION, __file__)
 
     if args.transcode_movies:

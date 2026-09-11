@@ -41,6 +41,15 @@ BANNER_ROW_1=' │││ │├┤ │    └─┐│ │├─┤├┴┐'
 BANNER_ROW_2='─┴┘└─┘└─┘┴─┘  └─┘└─┘┴ ┴┴ ┴'
 BANNER_CAP_0='Shandalar 1997 · live duels'
 BANNER_CAP_1='whole games under Xvfb'
+# THE MINI-HELP, for a bare `./duel_soak.sh` and no other: the two
+# invocations from the Usage block at the top of this file, so there is
+# nothing here to keep in step by hand, and the flag that has the rest. A
+# bare run is three seeds in both modes and takes minutes — worth saying
+# before it starts.
+shandalar_banner_hint "$#" \
+	'./duel_soak.sh                          # 3 seeds, demo AND human seat' \
+	'./duel_soak.sh --mode human --count 10  # fuzz the human seat harder' \
+	'./duel_soak.sh -h                       # --rules, --seeds, --stall'
 
 for arg in "$@"; do
 	case "$arg" in

@@ -56,6 +56,14 @@ BANNER_ROW_1=' │ ├┤ └─┐ │ └─┐'
 BANNER_ROW_2=' ┴ └─┘└─┘ ┴ └─┘'
 BANNER_CAP_0='Shandalar 1997 · GUT suite'
 BANNER_CAP_1='headless, the whole gate'
+# THE MINI-HELP, for a bare `./run_tests.sh` and no other: three lines
+# quoted out of usage() below, so there is nothing here to keep in step
+# by hand. Anything on the command line is a -gselect or a
+# -gunit_test_name and needs no reminder of itself.
+shandalar_banner_hint "$#" \
+	'./run_tests.sh                             # the whole suite' \
+	'./run_tests.sh -gselect=test_deck_lab.gd   # one script' \
+	'./run_tests.sh -h                          # every flag and env var'
 
 usage() {
 	cat <<'USAGE'

@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **6058 tests, 0 failing, 352 scripts** (155 854 asserts, the 2026-09-11 gate); tools self-tests **191 OK**, `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **6058 tests, 0 failing, 352 scripts** (155 854 asserts, the 2026-09-11 gate); tools self-tests **217 OK**, `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -12032,6 +12032,72 @@ holds 319 and the suite pins it. `build_card_packs.py` keeps a
 `TOOL_VERSION = "1.0"` of its own, stamped into every pack's provenance — a second
 version string, deliberately not the project's, and worth a ruling rather than a
 quiet change.
+
+## THE LINE UNDER THE FACE: A MINI-HELP ON A BARE COMMAND (2026-09-11)
+
+The owner, once the twelve tools had their wordmarks: *"If you run the tools, like
+decklab you should also be presented with the ascii banner, version and mini-help
+:)"* — and then, so it could not be misread: **"That banner is only CLI tlc, it
+should not change actual output."**
+
+**WHAT WAS MISSING.** A bare run drew the face and then simply ACTED:
+`fetch_cards.py` started hitting Scryfall, `gen_cards.py` started rewriting card
+files, `skin_catalogue.py` rewrote `docs/skin-catalogue.txt`, and nothing said so
+first. Two tools already read well, and neither was a coincidence: `mtg_assets.py`
+leads with its own "WHAT THIS NEEDS", and **the Deck Lab has answered a bare
+command line with two copyable invocations and a pointer to `--help` since it was
+written**. That is the thing the other ten copied. As usual, the Lab was right
+first.
+
+**WHAT IT IS.** Two or three of the invocations somebody actually types, under the
+wordmark, with the `# note` after each dimmed so the eye lands on the command; the
+last line always names `-h`. ONE implementation per language —
+`tool_banner.show(..., hint=)` and `shandalar_banner`'s `BANNER_HINT` — so the
+mini-help rides EXACTLY the three guards the banner already had: stderr, only a
+terminal, and `SHANDALAR_NO_BANNER=1` / `NO_COLOR=1`. Not twelve hand-rolled
+prints.
+
+**AND ONE GUARD OF ITS OWN: a BARE command line.** Somebody who typed `--force` or
+`-gselect=` has already said what they want and is not looking for a reminder of
+it. Python reads `sys.argv[1:]`; the shell is told `"$#"` before any `shift`, which
+is why `build_release.sh` takes the count at the top of the file, above the parse
+loop that eats it.
+
+**THE LINES ARE QUOTED, NOT WRITTEN.** Each tool's `HINT` holds them and its own
+`-h` epilog is built from the same tuple, and a test pins that every mini-help line
+appears in the tool's own manual. A second wording of a manual is a second manual
+to maintain.
+
+**AND THE EXAMPLES WERE WRONG IN ONE OF THE TWO PLACES THEY ARE READ.** Four of
+these tools SHIP — `build_release.sh` copies `mtg_assets.py`, `import_original.py`,
+`fetch_card_art.py` and `skin_catalogue.py` into one flat folder beside the binary
+— and their examples were written flat, so `python3 import_original.py --source …`
+copied from the repo root is *No such file or directory*, while `python3
+tools/skin_catalogue.py …` is the same thing for a player.
+`tool_banner.here_prefix()` now answers it from the tool's own location, so one
+line is right in both. The same rot as the `--out` that moved nothing and the
+`sed -n '2,50p'` help: **an example nobody can copy is a lie a tool tells about
+itself.**
+
+**THE PROOF, because the rule was stated twice.** `skin_catalogue.py --stdout` IS
+the catalogue and the catalogue is committed: piped, redirected with a real
+terminal on stderr, and `> file 2>&1`, its stdout is `docs/skin-catalogue.txt` byte
+for byte — sha256 `22d6bf6e…` five ways, the tool as it stood at `4ff861b`
+included. **Two checkouts, one at `4ff861b` and one with this in it, were run side
+by side through nineteen invocations with `> log 2>&1`: every log byte-identical
+and every exit code with it**, `build_release.sh` bare included (1522 bytes, exit 1
+both sides), and not one wordmark glyph in any of them. `import_original.py` bare
+is the sharpest: on a terminal it now draws a face and three lines it never drew
+before, and into a log it is the same 205 bytes it always was.
+
+**THE ONE WORKING STDOUT THAT MOVED** is `mtg_assets.py`'s GUIDE, and only in a
+checkout, where five of its example lines gained the `tools/` that makes them
+typeable; beside a packaged game it is byte-identical. An examples fix, not the
+banner leaking, and it is named here rather than buried.
+
+Gate: tools self-tests **217 OK** (`test_tool_banner.py` 29 → 55); the Deck Lab
+console 70/70; the whole suite 6058/6058 across 352 scripts in the branch that
+built it.
 
 ## Standing quality gates
 

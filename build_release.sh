@@ -117,6 +117,16 @@ BANNER_ROW_1='├┬┘├┤ │  ├┤ ├─┤└─┐├┤ '
 BANNER_ROW_2='┴└─└─┘┴─┘└─┘┴ ┴└─┘└─┘'
 BANNER_CAP_0='Shandalar 1997 · the build'
 BANNER_CAP_1='export, smoke-boot, package'
+# THE MINI-HELP, for a bare `./build_release.sh` and no other. TAKEN
+# HERE, ABOVE THE PARSE LOOP, because that loop shifts the arguments
+# away: by the time the banner is drawn there is no $# left to ask. The
+# three lines are the top of this file's own invocation block, and they
+# change nothing the build writes — like the banner, they are stderr on a
+# terminal and nothing anywhere else.
+shandalar_banner_hint "$#" \
+	'./build_release.sh            # export Linux 64, then smoke-boot it' \
+	'./build_release.sh --package  # + the zips a player unpacks and runs' \
+	'./build_release.sh -h         # --web, --skin, --cardart, --out'
 
 # THE USAGE BLOCK IS THE TOP OF THIS FILE, read down to the first prose
 # heading instead of to a fixed line number. What this replaced was

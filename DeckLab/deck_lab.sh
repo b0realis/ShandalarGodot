@@ -29,6 +29,12 @@ cd "$(cd "$(dirname "$0")/.." && pwd)"
 #   * SHANDALAR_NO_BANNER, mapped onto the Lab's own older
 #     DECK_LAB_NO_BANNER so that one export silences all twelve tools.
 # The banner itself is still simulate.gd's, drawn through LabConsole.
+# AND NO BANNER_HINT HERE (2026-09-11), where the other four shell tools
+# gained one: the Lab has answered a bare command line with two copyable
+# invocations and a pointer to --help since it was written
+# (simulate.gd, `_usage_hint`), and that is the thing the family copied.
+# It says it once, and deliberately without the wordmark — the Lab's own
+# rule is no artwork on a refusal.
 . tools/banner.sh
 for arg in "$@"; do
 	case "$arg" in
