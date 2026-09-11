@@ -323,13 +323,18 @@ player's choice among replacements (rows 2672, 2660)~~ — CR 616.1, BUILT
 for draws (the row's "no pair in the pool can disagree" was WRONG: Chains
 of Mephistopheles and Island Sanctuary both catch a Howling Mine's extra
 card) and RULED for damage (nothing in the pool can tell two applicable
-shields apart, and the case that is observable needs a decision point in
-front of every gate in `_land_damage_impl`, which is not S); ~~timestamp
-order within a layer with the bounded type-dependency step (rows 2666,
-2680, 2682)~~ — CR 613.7 for layer 6's floating half (Radjan Spirit then
-Jump) and CR 613.8 in two waves for layer 4 (Blood Moon then Conversion),
-with layer-6 grants printed as STATICS still by construction and the row
-narrowed rather than closed; ~~`EffectBase.unless_paid(cost, payer)`~~ —
+shields apart); ~~the case that IS observable — a prevention ordered
+against a replacement — **BUILT 2026-09-11**~~, the decision point in
+front of every gate of `_land_damage_impl`'s player branch
+(`_damage_gates` / `_damage_gate_applies` / `_apply_damage_gate`), a
+Circle of Protection: Red against a Nova Pentacle on one Lightning Bolt;
+~~timestamp order within a layer with the bounded type-dependency step
+(rows 2666, 2680, 2682)~~ — CR 613.7 for layer 6's floating half (Radjan
+Spirit then Jump) and CR 613.8 in two waves for layer 4 (Blood Moon then
+Conversion); ~~the layer-6 flag on `StaticAbility` the same rows named~~
+— **BUILT 2026-09-11**, `changing_abilities()` plus
+`CardInstance.layer_timestamp`, so Radjan Spirit then Flight leaves the
+Angel flying; ~~`EffectBase.unless_paid(cost, payer)`~~ —
 CR 118.12, a static helper rather than the fluent rider the plan imagined,
 because most of the pool's "unless" clauses are upkeep TRIGGERS with no
 EffectBase in reach.
@@ -338,8 +343,18 @@ The "all S" sizing HELD for three of the four and was half right on the
 third: layer 6 in timestamp order and the bounded layer-4 dependency are
 both S, but the two pieces the same rows also name — a prevention ordered
 against a replacement, and a layer-6 flag on `StaticAbility` so a static
-grant can carry its own timestamp — are each their own change and are
-written up where they live.
+grant can carry its own timestamp — were each their own change.
+**BOTH BUILT 2026-09-11, and the "not S" sizing was right on both.** The
+first is a restructure of a whole branch of `_land_damage_impl` into a
+collect / ask / apply loop and costs **+0.5 µs a player-targeted packet**
+(+4% of a bare `deal_damage` with nothing applicable, under the Lab's own
+noise and byte-identical over 4,000 Lab games, because the hint is the old
+order and a heuristic agent follows its hint). The second reached
+**twenty-six card files**, because the flag is the LAYER: six statics that
+did two things in two layers were split in two (CR 613.1), three ability
+REMOVALS needed the flag as much as the grants did, and the pool's six
+"bands with other" granters were found by a pre-existing test rather than
+by the survey.
 
 Only if wanted, and still not built: a `decider` on `StackItem` for Word
 of Command (M); Shahrazad as a second `MtgGame` (S in the engine, L in the

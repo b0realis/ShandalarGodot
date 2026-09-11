@@ -44,7 +44,8 @@ func build() -> CardData:
 		.with_supertypes(Mtg.Supertype.LEGENDARY) \
 		.with_subtypes(["angel"]) \
 		.static_ability(StaticAbility.new(
-			_apply, "Gabriel Angelfire has the ability chosen at your last upkeep.")) \
+			_apply, "Gabriel Angelfire has the ability chosen at your last upkeep.") \
+			.changing_abilities()) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _choose,
 			"At the beginning of your upkeep, choose flying, first strike, "

@@ -14,7 +14,8 @@ func build() -> CardData:
 		.with_subtypes(["kobold"]) \
 		.with_keywords([Mtg.Keyword.FIRST_STRIKE]) \
 		.static_ability(StaticAbility.new(
-			_apply, "Other Kobold creatures you control have first strike.")) \
+			_apply, "Other Kobold creatures you control have first strike.") \
+			.changing_abilities()) \
 		.oracle("First strike\nOther Kobold creatures you control have first strike.")
 
 

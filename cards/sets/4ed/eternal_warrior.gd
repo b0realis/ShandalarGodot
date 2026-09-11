@@ -10,7 +10,8 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Eternal Warrior", "{R}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
-		.static_ability(StaticAbility.new(_apply, "Enchanted creature has vigilance.")) \
+		.static_ability(StaticAbility.new(_apply, "Enchanted creature has vigilance.") \
+			.changing_abilities()) \
 		.oracle("Enchant creature\nEnchanted creature has vigilance.")
 
 

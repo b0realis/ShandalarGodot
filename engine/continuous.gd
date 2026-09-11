@@ -27,11 +27,11 @@ extends RefCounted
 ##   base-P/T statics             layer 7a/7b         (Nightmare, Keldon Warlord)
 ##   floating base-P/T sets       layer 7b, later ts  (Island of Wak-Wak)
 ##   colour changes               layer 5             (Touch of Darkness)
-##   the remaining statics        layer 7c and misc.  (Crusade, Bad Moon)
+##   LAYER 6, WHOLE, BY TIMESTAMP (Flight, Jump, Radjan Spirit, Hammerheim)
 ##   counters                     layer 7d            (any "+A/+B" kind)
+##   the remaining statics        layer 7c and misc.  (Crusade, Bad Moon)
 ##   floating pumps               layer 7c, floating  (Giant Growth)
-##   landwalk grants, block restrictions
-##   ability losses               layer 6             (Hammerheim)
+##   block restrictions, protection, rampage, granted abilities
 ##   combat-damage shields
 ##   P/T switches                 layer 7e            (Transmutation)
 ## [/codeblock]
@@ -40,18 +40,23 @@ extends RefCounted
 ## irrelevant — see docs/audit-2026-09.md for the measurements that decided
 ## which parts of it to make cheaper.
 ##
-## TIMESTAMPS AND DEPENDENCY, since 2026-09-10. Layer 6's floating half —
-## a pump's keywords, a keyword grant, a landwalk grant, an ability loss —
-## applies in TIMESTAMP order (CR 613.7, [member _timestamp],
-## [method _layer_six]), so a Jump cast after a Radjan Spirit puts the
-## wings back. Layer 4 resolves its one real dependency (CR 613.8) in two
-## waves rather than by analysis: a retyper that READS a land type
-## (Conversion, the pool's only one) is applied after every retyper that
-## WRITES one, so a Mishra's Factory under a Blood Moon and a Conversion is
-## a Plains whichever entered first. What is still by construction: a
-## layer-6 grant printed as a STATIC (Flight, Fear, Concordant Crossroads)
-## applies in the statics pass, which is ahead of every floating entry —
-## docs/ROADMAP.md carries the row and what closing it would take.
+## TIMESTAMPS AND DEPENDENCY. Layer 6 applies in TIMESTAMP order (CR 613.7,
+## [member _timestamp], [method _layer_six]), so a Jump cast after a Radjan
+## Spirit puts the wings back — and since 2026-09-11 that is the WHOLE
+## layer, printed statics included: a static flagged
+## [member StaticAbility.changes_abilities] carries its source's
+## [member CardInstance.layer_timestamp] (CR 613.7b) into the same sorted
+## pass, so a Flight cast after the Spirit wins and a Gravity Sphere that
+## enters after the Flight takes the flying away again. The pass moved with
+## it, ahead of every layer-7 pass, which is where CR 613.1 prints layer 6
+## and is what lets a rules-modifying static that READS an ability (Moat)
+## see the abilities every layer settled.
+##
+## Layer 4 resolves its one real dependency (CR 613.8) in two waves rather
+## than by analysis: a retyper that READS a land type (Conversion, the
+## pool's only one) is applied after every retyper that WRITES one, so a
+## Mishra's Factory under a Blood Moon and a Conversion is a Plains
+## whichever entered first.
 
 ## How long a floating effect lasts (CR 611.2b — a one-shot effect that
 ## creates a continuous effect states its own duration).
@@ -249,6 +254,14 @@ func _stamp() -> int:
 	return _timestamp
 
 
+## The next timestamp, for a caller outside this object: MtgGame stamps
+## every permanent as it enters the battlefield (CR 613.7b,
+## [member CardInstance.layer_timestamp]) so that a static's layer-6 effect
+## and a floating one can be compared on the same clock.
+func next_timestamp() -> int:
+	return _stamp()
+
+
 ## Note EVERY floating list — for the passes that may touch any of them
 ## ([method forget_instance], the expiries).
 func record_all() -> void:
@@ -387,6 +400,10 @@ func add_floating_static(source: CardInstance, ability: StaticAbility,
 		"instance_id": -1, "source": source, "ability": ability,
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid,
+		# A floating static is created by its source LEAVING, which is later
+		# than every permanent still on the table entered — so its layer-6
+		# half sorts after theirs (CR 613.7).
+		"ts": _stamp(),
 	})
 
 
@@ -657,25 +674,44 @@ func _floating_statics_pass(game: MtgGame, which: int) -> void:
 			_StaticPass.TYPES:
 				runs = ability.changes_types and not ability.changes_land_types \
 					and not ability.silences_abilities
+			# A layer-6 GRANT has no sub-pass of its own: it is applied
+			# from [method _layer_six], among the floating grants and the
+			# losses, in timestamp order (CR 613.7).
 			_StaticPass.BASE_PT:
 				runs = ability.sets_base_pt and not ability.changes_types \
+					and not ability.changes_abilities \
 					and not ability.silences_abilities
 			_StaticPass.REST:
 				runs = not ability.sets_base_pt and not ability.changes_types \
+					and not ability.changes_abilities \
 					and not ability.silences_abilities
 		if runs:
 			ability.apply.call(game, entry["source"])
 
 
-## CR 613 LAYER 6, the floating half, in timestamp order (CR 613.7).
+## CR 613 LAYER 6, WHOLE, in timestamp order (CR 613.7).
 ##
-## Four lists contribute and they contend: a pump's granted keywords
+## Six lists contribute and they contend: a pump's granted keywords
 ## ([member _floating]), a bare keyword grant ([member _keyword_grants]), a
-## landwalk grant ([member _landwalk_grants]) and the ability losses
-## ([member _losses]). Each entry carries the `ts` [method _stamp] gave it,
-## every stamp is unique, and applying them in that order is the whole
-## rule: "loses flying" strips a Jump cast before it and is undone by a
-## Jump cast after it.
+## landwalk grant ([member _landwalk_grants]), the ability losses
+## ([member _losses]), and — since 2026-09-11 — every STATIC flagged
+## [member StaticAbility.changes_abilities], live or floating. Each floating
+## entry carries the `ts` [method _stamp] gave it and a static carries its
+## source's [member CardInstance.layer_timestamp], which is the same clock
+## (CR 613.7b: a permanent is stamped as it enters the battlefield).
+## Applying them in that order is the whole rule: "loses flying" strips a
+## Jump — or a Flight — created before it and is undone by one created
+## after it.
+##
+## THE STATIC HALF is why this pass moved AHEAD of the layer-7 statics in
+## [method recalculate]. A grant printed on a permanent used to be applied
+## in the anthem pass, which ran before every floating entry, so a floating
+## loss beat a static grant whatever the two timestamps said: Radjan Spirit
+## then Flight left the Angel grounded. Running the whole layer here also
+## puts it where CR 613.1 prints it — layer 6 before layer 7 — which is
+## what lets a rules-modifying effect that READS an ability (Moat's
+## "creatures without flying can't attack", applied in the 7c pass) see the
+## abilities every layer settled.
 ##
 ## The other layer-6 registries — protection, granted activated abilities,
 ## rampage, block restrictions, damage immunities — are applied in their
@@ -692,10 +728,33 @@ func _layer_six(game: MtgGame) -> void:
 		entries.append({"ts": int(grant.get("ts", 0)), "walk": grant})
 	for loss in _losses:
 		entries.append({"ts": int(loss.get("ts", 0)), "loss": loss})
+	for inst in game.battlefield_with_ability_statics():
+		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+			continue   # Titania's Song silenced it in the first pass
+		for ability in inst.data.static_abilities:
+			if ability.changes_abilities and not ability.changes_types \
+					and not ability.silences_abilities:
+				entries.append({"ts": inst.layer_timestamp,
+					"static": ability, "source": inst})
+	for entry in _floating_statics:
+		var floater: StaticAbility = entry["ability"]
+		if floater.changes_abilities and not floater.changes_types \
+				and not floater.silences_abilities:
+			entries.append({"ts": int(entry.get("ts", 0)),
+				"static": floater, "source": entry["source"]})
 	if entries.size() > 1:
 		entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 			return int(a["ts"]) < int(b["ts"]))
 	for entry in entries:
+		if entry.has("static"):
+			# A layer-6 grant PRINTED on a permanent (Flight, Fear, Lance,
+			# Concordant Crossroads, the landwalk lords). Its own callback
+			# does the granting, exactly as it did in the statics pass — the
+			# only thing that changed is WHEN, and the answer is CR 613.7's:
+			# at the moment its source entered the battlefield.
+			var source: CardInstance = entry["source"]
+			entry["static"].apply.call(game, source)
+			continue
 		if entry.has("grant"):
 			var grant: Dictionary = entry["grant"]
 			var gains := game.find_instance(int(grant["instance_id"]))
@@ -848,8 +907,10 @@ func recalculate(game: MtgGame) -> void:
 		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
 			continue
 		for ability in inst.data.static_abilities:
-			# A silencer already ran on the layer-6 pass, whatever else it is.
+			# A silencer already ran on the layer-6 pass, whatever else it is;
+			# a layer-6 GRANT runs in the timestamped pass below.
 			if ability.sets_base_pt and not ability.changes_types \
+					and not ability.changes_abilities \
 					and not ability.silences_abilities:
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.BASE_PT)
@@ -881,6 +942,18 @@ func recalculate(game: MtgGame) -> void:
 			continue
 		painted.cur_colors = change.colors
 
+	# Pass 2b4: LAYER 6 WHOLE, IN TIMESTAMP ORDER (CR 613.6, 613.7) — the
+	# ability grants and the ability losses, floating and printed alike.
+	# It sits HERE, in front of every layer-7 pass, for two reasons and both
+	# are CR 613's own: 613.1 puts layer 6 before layer 7, and a continuous
+	# effect that modifies the RULES rather than an object (Moat's
+	# "creatures without flying can't attack", applied with the 7c statics
+	# below) has to read the abilities every layer settled. Before
+	# 2026-09-11 this ran at the very END of the pipeline, which put every
+	# static grant ahead of every floating loss AND left a Flight invisible
+	# to the Moat that entered before it.
+	_layer_six(game)
+
 	# Pass 2c: COUNTERS (layer 7d) — BEFORE the general statics, because a
 	# static that READS power (Meekstone's "creatures with power 3 or
 	# greater") must see the counters a Clockwork Beast entered with. The
@@ -901,8 +974,10 @@ func recalculate(game: MtgGame) -> void:
 		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
 			continue   # Titania's Song silenced it in an earlier pass
 		for ability in inst.data.static_abilities:
-			# The silencers ran first, in 2a-0; they do not run again here.
+			# The silencers ran first, in 2a-0; they do not run again here,
+			# and neither does a layer-6 grant — pass 2c-0 above took it.
 			if not ability.sets_base_pt and not ability.changes_types \
+					and not ability.changes_abilities \
 					and not ability.silences_abilities:
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.REST)
@@ -935,21 +1010,6 @@ func recalculate(game: MtgGame) -> void:
 		restricted.cur_block_restrictions.append({
 			"desc": restriction.desc, "filter": restriction.filter,
 		})
-
-	# Pass 3a2: FLOATING LAYER 6 (CR 613.6) IN TIMESTAMP ORDER (CR 613.7).
-	# Every effect that grants or removes an ability — a pump's keywords, a
-	# bare keyword grant, a landwalk grant, and the losses — is applied in
-	# the order it was created, so a later grant undoes an earlier loss and
-	# a later loss undoes an earlier grant. Radjan Spirit into Jump leaves
-	# the Angel flying; Jump into Radjan Spirit grounds it.
-	#
-	# WHAT IS STILL BY CONSTRUCTION: a layer-6 grant printed as a STATIC
-	# (Flight's flying, Fear, Concordant Crossroads' haste) applies in
-	# pass 2c above, which is earlier than every floating entry here — so a
-	# floating loss always beats a static grant, whatever their real
-	# timestamps. Closing that needs a layer-6 flag on StaticAbility, the
-	# way layers 4 and 7b already have one; docs/ROADMAP.md carries the row.
-	_layer_six(game)
 
 	# Pass 3a2b: GRANTED ACTIVATED ABILITIES (CR 613 layer 6), mostly
 	# durationless (Life Matrix). Appended to the live list the same way a

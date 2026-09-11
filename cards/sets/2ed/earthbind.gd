@@ -14,14 +14,17 @@ extends CardScript
 ## because an Aura enters the battlefield already attached (CR 303.4a,
 ## MtgGame._put_on_battlefield's `host`). When it fires it deals its 2 and
 ## arms the Aura (its own memory), and a static then strips flying for as
-## long as the Aura stays.
+## long as the Aura stays — a CR 613 LAYER 6 effect (`changing_abilities()`),
+## applied in timestamp order, so a Flight cast after the Earthbind puts
+## the wings back and one cast before it does not.
 
 
 func build() -> CardData:
 	return CardData.new("Earthbind", "{R}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
 		.static_ability(StaticAbility.new(_ground_it,
-			"Enchanted creature loses flying.")) \
+			"Enchanted creature loses flying.") \
+			.changing_abilities()) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.ENTERS_BATTLEFIELD, _shoot_it_down,
 			"When this Aura enters, if enchanted creature has flying, this Aura deals 2 damage to that creature and gains \"Enchanted creature loses flying.\"",

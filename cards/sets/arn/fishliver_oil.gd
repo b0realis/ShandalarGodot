@@ -12,7 +12,8 @@ func build() -> CardData:
 	return CardData.new("Fishliver Oil", "{1}{U}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
 		.static_ability(StaticAbility.new(
-			_apply, "Enchanted creature has islandwalk.")) \
+			_apply, "Enchanted creature has islandwalk.") \
+			.changing_abilities()) \
 		.oracle("Enchant creature\nEnchanted creature has islandwalk.")
 
 

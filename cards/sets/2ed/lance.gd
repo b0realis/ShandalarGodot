@@ -11,7 +11,8 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Lance", "{W}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
-		.static_ability(StaticAbility.new(_apply, "Enchanted creature has first strike.")) \
+		.static_ability(StaticAbility.new(_apply, "Enchanted creature has first strike.") \
+			.changing_abilities()) \
 		.oracle("Enchant creature\nEnchanted creature has first strike.")
 
 

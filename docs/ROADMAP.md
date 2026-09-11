@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5967 tests, 0 failing, 347 scripts** (154 215 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5990 tests, 0 failing, 349 scripts** (154 712 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11620,6 +11620,100 @@ the source list is built once per decision off the battlefield alone.
 
 Wave 5's last line is struck, and with it the last unstarted item of
 `docs/AI-next-wave.md`.
+
+## THE TWO THE ENGINE PASS SIZED HONESTLY (2026-09-11) — both built, and "not S" was right about both
+
+Yesterday's engine pass closed four rows and wrote up two pieces it refused to
+force into its own day. Both are built now, and the sizing call is worth keeping
+because it was right for two different reasons.
+
+**A PREVENTION ORDERED AGAINST A REPLACEMENT (CR 616.1).** The pass ruled
+shield-versus-shield unobservable in this pool and closed it, then named this
+half as real and unbuilt. It is observable with two commons and a rare: a Circle
+of Protection: Red naming a Lightning Bolt and a **Nova Pentacle** watching the
+same Bolt both apply to the same three points, and the two lines disagree about
+who takes the damage, which one-shot is spent, and — against **Eye for an Eye** —
+about the opponent's life total. `MtgGame._land_damage_impl`'s player branch is
+now **collect / ask / apply / re-ask**: `_damage_gates` builds every applicable
+replacement AND prevention in the order the fixed chain used to run them, the
+damaged seat picks which applies first, `_apply_damage_gate` takes it, and
+`_damage_gate_applies` — a PURE predicate, the trap `draw_replacement_applies`
+was built to avoid — is put again to what is left, so a halved packet can fall
+below a cap's threshold. One candidate asks nobody; none at all skips the walk
+entirely (`_has_damage_gates`, nine cheap comparisons).
+
+**THE HINT IS THE OLD ORDER**, and no agent overrides `DecisionAgent.answer_option`,
+so a heuristic seat is a **provable null** — the whole five-deck matrix, 4 000
+games, byte-identical between the trees. A human seat now gets a prompt it never
+got.
+
+**AND IT HAS A PRICE, MEASURED RATHER THAN ASSERTED: +0.47 µs a player-targeted
+packet, +4.3% of a bare `deal_damage` with nothing applicable** — a matched-pair
+micro-bench, 400 000 packets, best of five rounds, alternating builds. The Lab
+end-to-end reading is noise-dominated on a machine running three agents (the
+4 000-game matrix with both items in finished *faster* than HEAD, which is not a
+speedup and is not claimed as one). At a duel's few dozen packets the cost is
+tens of microseconds against a ~10 ms game.
+
+**The CREATURE branch is NARROWED, not closed.** Its fixed order (protection,
+Uncle Istvan, Jade Monolith, Personal Incarnation, Rock Hydra's counters, Gaseous
+Form, a per-creature pool) stands, is wider than the player branch — the gates
+span two methods and three are metered rather than one-shot — and is now **pinned
+by a test** (Uncle Istvan's whole-event prevention spent before a pool sitting on
+the same body) rather than asserted in prose. The greedy prevention-pool
+`SIMPLIFIED` marker moved into the pool gate intact.
+
+**A LAYER-6 FLAG ON `StaticAbility` (CR 613.7)**, which finishes what
+2026-09-10 started: the floating half got timestamp order, and a grant printed as
+a STATIC still applied in the statics pass ahead of every floating entry — so a
+Radjan Spirit grounded a Serra Angel a **Flight** had already lifted.
+`StaticAbility.changing_abilities()` marks it, `CardInstance.layer_timestamp`
+(CR 613.7b) carries the source's own stamp off the same clock the floating
+entries use, and `_layer_six` merges six lists instead of four **ahead of every
+layer-7 pass, where CR 613.1 prints it**.
+
+**THAT MOVE FIXED A SECOND BUG NOBODY WAS LOOKING FOR.** Moat's "creatures
+without flying can't attack" is a rules-modifier applied in the 7c statics pass,
+and a Flight granted in the SAME pass could land after it — **so a Moat that
+entered first grounded a flying creature.** It now reads the settled answer.
+
+**AND THE FLAG IS THE LAYER, WHICH IS WHY IT REACHED 26 CARD FILES** rather than
+the one-flag-plus-pipeline the note imagined. Thirteen pure statics flagged
+(Flight, Fear, Lance, Eternal Warrior, Concordant Crossroads, Burrowing,
+Fishliver Oil, Hidden Path, Kobold Overlord, Zombie Master, Gabriel Angelfire,
+and the three REMOVALS — Gravity Sphere, Earthbind, Animate Wall, which needed it
+as much as the grants or they would have inverted against them). **Six split in
+two**, because an ability doing two things in two layers is two effects
+(CR 613.1): Web, Fortified Area, Lord of Atlantis, Goblin King, Kobold Drill
+Sergeant, Primal Clay — only the layer-6 half carries the flag, the P/T half
+stays in 7c so Meekstone still reads it. And **six "bands with other" granters**,
+which CR 702.22b makes a layer-6 ability.
+
+**THOSE SIX WERE FOUND BY A PRE-EXISTING TEST FAILING, NOT BY THE SURVEY**, and
+that is the part worth remembering. `test_tolaria_strips_bands_with_other_as_well`
+went red because the Guildhouse granted from 7c while the Tolaria loss had moved
+to layer 6, so the grant put it straight back. The survey grep had looked for
+`cur_keywords` and `cur_landwalk` and never for the third shape. **The fix was the
+six cards, not the test** — it is green again, unmodified — and the survey test
+was widened to read the card SOURCE so a token's `CardData` is covered too.
+
+**Gravity Sphere's behaviour genuinely changes and its header says so**: it no
+longer strips a Flight cast AFTER it, because the Flight is the later effect.
+Five card headers were corrected where they had become false.
+
+**WAS "NOT S" RIGHT? YES, ON BOTH, FOR DIFFERENT REASONS.** Item 1 is a whole
+branch restructured into four new methods and could never have been a flag, and
+it is the one with a measurable price. Item 2 reached twenty-six card files
+because the flag is the layer. A day spent forcing either into yesterday would
+have shipped one of them half-done.
+
+`engine/ai/**` is byte-untouched. Two AI readings move and are left alone: item 1
+is a provable null for a heuristic seat, and item 2 gives the pilot a **more
+correct board** — a creature that regains flying to a later Flight, a Flight'd
+creature that can attack under a Moat.
+
+Gate: 5990/5990 across 349 scripts, 154 712 asserts, exit 0; both soaks clean;
+tools 158 OK; boot smoke clean; pool 897.
 
 ## Standing quality gates
 

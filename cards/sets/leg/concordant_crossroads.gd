@@ -11,7 +11,8 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Concordant Crossroads", "{G}", Mtg.CardType.ENCHANTMENT) \
 		.with_supertypes(Mtg.Supertype.WORLD) \
-		.static_ability(StaticAbility.new(_apply, "All creatures have haste.")) \
+		.static_ability(StaticAbility.new(_apply, "All creatures have haste.") \
+			.changing_abilities()) \
 		.oracle("All creatures have haste.")
 
 

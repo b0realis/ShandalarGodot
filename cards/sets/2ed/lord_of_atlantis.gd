@@ -14,16 +14,24 @@ func build() -> CardData:
 		.pt(2, 2) \
 		.with_subtypes(["merfolk"]) \
 		.static_ability(StaticAbility.new(
-			_apply, "Other Merfolk get +1/+1 and have islandwalk.")) \
+			_apply, "Other Merfolk get +1/+1.")) \
+		.static_ability(StaticAbility.new(
+			_walk, "Other Merfolk have islandwalk.").changing_abilities()) \
 		.oracle("Other Merfolk get +1/+1 and have islandwalk.")
 
 
+## TWO STATICS, one per CR 613 layer (613.1): the +1/+1 is layer 7c and
+## the islandwalk is layer 6, where it is timestamped against Hammerheim's
+## "loses all landwalk abilities".
 static func _apply(game: MtgGame, source: CardInstance) -> void:
 	for inst in game.all_battlefield():
-		if inst == source or not inst.is_creature():
-			continue
-		if inst.has_subtype("merfolk"):
+		if inst != source and inst.is_creature() and inst.has_subtype("merfolk"):
 			inst.cur_power += 1
 			inst.cur_toughness += 1
-			if not inst.cur_landwalk.has("island"):
-				inst.cur_landwalk.append("island")
+
+
+static func _walk(game: MtgGame, source: CardInstance) -> void:
+	for inst in game.all_battlefield():
+		if inst != source and inst.is_creature() and inst.has_subtype("merfolk") \
+				and not inst.cur_landwalk.has("island"):
+			inst.cur_landwalk.append("island")

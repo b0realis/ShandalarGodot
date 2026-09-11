@@ -16,7 +16,8 @@ func build() -> CardData:
 		.with_subtypes(["zombie"]) \
 		.static_ability(StaticAbility.new(
 			_apply,
-			"Other Zombie creatures have swampwalk and \"{B}: Regenerate this permanent.\"")) \
+			"Other Zombie creatures have swampwalk and \"{B}: Regenerate this permanent.\"") \
+			.changing_abilities()) \
 		.oracle("Other Zombie creatures have swampwalk. (They can't be blocked as long "
 			+ "as defending player controls a Swamp.)\nOther Zombies have \"{B}: "
 			+ "Regenerate this permanent.\"")

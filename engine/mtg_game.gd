@@ -815,6 +815,11 @@ var _battlefield_statics: Array[CardInstance] = []
 ## The permanents whose statics change TYPES (CR 613 layer 4) — the tiny
 ## first pass of the continuous pipeline.
 var _battlefield_type_statics: Array[CardInstance] = []
+## The permanents whose statics GRANT an ability (CR 613 layer 6 — Flight,
+## Fear, Concordant Crossroads, the landwalk lords). Their own pass merges
+## them with the floating grants and losses in timestamp order, so the
+## pipeline needs them as a list of their own.
+var _battlefield_ability_statics: Array[CardInstance] = []
 var _battlefield_cost_modifiers: Array[CardInstance] = []
 
 ## The permanents carrying a CR 614 draw replacement / draw-STEP replacement,
@@ -1110,6 +1115,15 @@ func battlefield_with_type_statics() -> Array[CardInstance]:
 	return _battlefield_type_statics
 
 
+## The battlefield permanents carrying a layer-6 ability GRANT (CR 613.6 —
+## Flight, Fear, Lance, Concordant Crossroads, Fishliver Oil, the landwalk
+## lords). [method ContinuousEffects._layer_six] applies them in timestamp
+## order among the floating grants and the ability losses (CR 613.7).
+func battlefield_with_ability_statics() -> Array[CardInstance]:
+	all_battlefield()
+	return _battlefield_ability_statics
+
+
 ## Derived indexes rebuilt with the battlefield cache:
 ## - [member _trigger_index]: which Mtg.EventType values ANY permanent
 ##   listens for, so dispatch_event can skip building a listener list for
@@ -1121,6 +1135,7 @@ func _rebuild_battlefield_index() -> void:
 	_trigger_index.clear()
 	_battlefield_statics.clear()
 	_battlefield_type_statics.clear()
+	_battlefield_ability_statics.clear()
 	_battlefield_cost_modifiers.clear()
 	_battlefield_draw_replacements.clear()
 	_battlefield_draw_step_replacements.clear()
@@ -1131,6 +1146,11 @@ func _rebuild_battlefield_index() -> void:
 		if not inst.data.static_abilities.is_empty():
 			_battlefield_statics.append(inst)
 			for st in inst.data.static_abilities:
+				# The layer-6 GRANTS (CR 613.6), which are applied from the
+				# timestamped layer-6 pass rather than from a statics pass.
+				if st.changes_abilities \
+						and not _battlefield_ability_statics.has(inst):
+					_battlefield_ability_statics.append(inst)
 				# Granted triggers (Energy Flux) are appended to OTHER
 				# permanents' live lists by the recalculation that follows
 				# this rebuild, so the granting static declares them.
@@ -3031,10 +3051,14 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 	if source == null or target == null or amount <= 0:
 		return 0
 	# "ALL damage that would be dealt this turn by <this source> is dealt to
-	# <someone> instead" (Reverberation) — a replacement on the SOURCE, so
-	# it is asked before anything about the victim. A packet that is itself
-	# the product of a redirect is left alone, or the two would loop.
-	if source.damage_all_redirect_to >= 0 and not packet.from_redirect:
+	# <someone> instead" (Reverberation) — a replacement on the SOURCE. On a
+	# packet aimed at a CREATURE it is still the first gate of all; on one
+	# aimed at a PLAYER it is a candidate among that seat's own effects and
+	# CR 616.1 orders it with them ([method _damage_gates]). A packet that
+	# is itself the product of a redirect is left alone, or the two would
+	# loop.
+	if source.damage_all_redirect_to >= 0 and not packet.from_redirect \
+			and not target.is_player:
 		log_line("%s's damage is turned on %s" % [
 			source.data.card_name,
 			players[source.damage_all_redirect_to].player_name])
@@ -3042,138 +3066,57 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 			TargetRef.player(source.damage_all_redirect_to))
 	if target.is_player:
 		var p := players[target.player_id]
-		# ONE-SHOT REPLACEMENTS aimed at this seat (Forcefield, Dark Sphere,
-		# Eye for an Eye, Nova Pentacle, Shimian Night Stalker). A
-		# replacement happens before any prevention (CR 614/616), so this is
-		# the first gate of all.
-		for i in range(p.damage_replacements.size() - 1, -1, -1):
-			var rep: Dictionary = p.damage_replacements[i]
-			if not rep["filter"].call(self, packet):
-				continue
-			if not bool(rep.get("all_turn", false)):
-				p.damage_replacements.remove_at(i)
-			log_line("%s replaces %s's damage" % [
-				String(rep["desc"]), source.data.card_name])
-			var verdict: int = rep["apply"].call(self, packet)
-			if verdict >= 0:
-				return verdict
-			amount = packet.remaining()
-			if amount <= 0:
-				return 0
-		# "All damage that would be dealt to you by artifacts is dealt to
-		# this creature instead" (Martyrs of Korlis) — a redirection, so
-		# it happens before any of the player's own prevention.
-		# DAMAGE CAPS (Forethought Amulet): a REPLACEMENT, so it happens
-		# before any prevention and the packet is not "prevented" — it was
-		# only ever this big (CR 614.1).
-		for cap in p.damage_caps:
-			if amount < int(cap["threshold"]):
-				continue
-			if not cap["filter"].call(self, source):
-				continue
-			var capped: int = int(cap["becomes"])
-			if capped >= amount:
-				continue
-			log_line("%s's damage to %s is reduced to %d (%s)" % [
-				source.data.card_name, p.player_name, capped, String(cap["desc"])])
-			packet.amount = capped
-			amount = packet.remaining()
-			if amount <= 0:
-				return 0
-		# "The next time a source of your choice would deal damage to you
-		# this turn, prevent that damage. You gain life equal to the damage
-		# prevented" (Reverse Damage) — one shot, and only from the source
-		# it named.
-		var reverse_at := p.reverse_damage_sources.find(source.id)
-		if reverse_at >= 0:
-			p.reverse_damage_sources.remove_at(reverse_at)
-			packet.prevent(amount)
-			log_line("%s turns %d damage from %s into life" % [
-				p.player_name, amount, source.data.card_name])
-			adjust_life(target.player_id, amount)
-			return 0
-		# "All damage unblocked creatures would deal to you is dealt to this
-		# creature instead" (Veteran Bodyguard).
-		# "All damage UNBLOCKED creatures would deal to you" — the blocked
-		# STATUS, not "does it have a blocker right now": a trampler whose
-		# blocker regenerated is still blocked and its spill-over is not
-		# redirected (CR 509.1h).
-		if is_combat and p.combat_damage_redirect != -1 and source.is_creature() \
-				and combat.attackers.has(source.id) \
-				and not combat.was_blocked(combat.band_of(source.id)):
-			var guard := find_instance(p.combat_damage_redirect)
-			if guard != null and guard.zone == Mtg.Zone.BATTLEFIELD and guard != source:
-				log_line("%s takes the blow for %s" % [guard.data.card_name, p.player_name])
-				return _redirect_damage(packet, TargetRef.card(guard))
-		# LIVE types (CR 611.2, 613): a creature something has turned into
-		# an artifact counts, a card printed as one but not now does not.
-		if p.artifact_damage_redirect != -1 and source.is_type(Mtg.CardType.ARTIFACT):
-			var shield := find_instance(p.artifact_damage_redirect)
-			if shield != null and shield.zone == Mtg.Zone.BATTLEFIELD:
-				log_line("%s's damage is redirected to %s" % [
-					source.data.card_name, shield.data.card_name])
-				return _redirect_damage(packet, TargetRef.card(shield))
-		# CR 616.1 AND THE SHIELDS — RULED, NOT BUILT (2026-09-10). The rule
-		# gives the affected player the order when two prevention effects
-		# would apply to one event, and this chain fixes it instead. Nothing
-		# in the 897-card pool can tell the difference, for two reasons the
-		# survey found and `tests/unit/test_replacement_choice_2026_09_10.gd`
-		# pins: no card writes the COLOUR list below at all (every Circle
-		# names one source and lands in the predicate list beneath it), and
-		# the only pair that can co-apply is a Circle bound to source X plus
-		# an ALL-TURN class shield (Scarecrow's fliers, Al-abara's Carpet's
-		# ground attackers) that also matches X — which covers every later
-		# packet from X as well, so the Circle that survives has nothing
-		# left to stop. What IS observable is ordering a prevention against
-		# a REPLACEMENT (Nova Pentacle's redirect, Forcefield, Eye for an
-		# Eye, Dark Sphere, Shimian Night Stalker): taking the Circle first
-		# would prevent the damage AND keep the redirect. That needs a
-		# decision point in front of every gate in this method, on the
-		# combat-damage path — Forge's generic ReplacementHandler, which
-		# docs/forge/rules.md §4.2 says not to port. Left as it is.
+		# CR 616.1 — THE AFFECTED PLAYER ORDERS THEM (2026-09-11). "If two
+		# or more replacement and/or prevention effects are attempting to
+		# modify the way an event affects an object or player, the affected
+		# object's controller ... or the affected player chooses one to
+		# apply, and then the rule is applied again." This chain used to
+		# run its gates in ONE fixed order with every REPLACEMENT ahead of
+		# every PREVENTION, and the pool can tell the difference: a Circle
+		# of Protection: Red naming a Lightning Bolt and a Nova Pentacle
+		# watching the same Bolt both apply to the same three points, and
+		# taking the Circle prevents them outright AND leaves the Pentacle
+		# waiting, while taking the Pentacle deflects them and leaves the
+		# Circle up. Forcefield, Dark Sphere, Eye for an Eye and Shimian
+		# Night Stalker are the same shape (tests/unit/
+		# test_damage_gate_order_2026_09_11.gd).
 		#
-		# Circle of Protection shields: one-shot, color-matched (the shield
-		# eats the WHOLE damage event, like the original CoP wording).
-		for i in p.prevention_shields.size():
-			if (p.prevention_shields[i] & source.cur_colors) != 0:
-				p.prevention_shields.remove_at(i)
-				packet.prevent(amount)
-				log_line("%s's damage to %s is prevented (circle of protection)" % [
-					source.data.card_name, p.player_name])
-				return 0
-		# Predicate shields (Circle of Protection: Artifacts, Scarecrow).
-		for i in p.prevention_shield_filters.size():
-			if p.prevention_shield_filters[i]["filter"].call(source):
-				# An "all_turn" shield is not consumed: Scarecrow buys the
-				# whole turn against one KIND of source, not one packet.
-				if not bool(p.prevention_shield_filters[i].get("all_turn", false)):
-					p.prevention_shield_filters.remove_at(i)
-				packet.prevent(amount)
-				log_line("%s's damage to %s is prevented (circle of protection)" % [
-					source.data.card_name, p.player_name])
-				return 0
-		# Amount-based prevention (Healing Salve): eats damage point for point.
-		# SIMPLIFIED (docs/ROADMAP.md), and only under the 1997 window:
-		# `Duel.hlp` lets the player SPREAD a pool across packets by hand
-		# ("you may prevent the damage from three ..."); ours is spent
-		# greedily on the packets in the order they land. Identical with
-		# one packet, which is every case outside a prevention step.
-		if p.damage_prevention > 0:
-			var soaked := packet.prevent(mini(p.damage_prevention, amount))
-			_rec(p, &"damage_prevention")
-			p.damage_prevention -= soaked
-			amount = packet.remaining()
-			log_line("%d damage to %s is prevented" % [soaked, p.player_name])
-			if amount <= 0:
-				return 0
-		# Ali from Cairo: damage can't take you below the floor.
-		if p.min_life_from_damage > 0 and p.life - amount < p.min_life_from_damage:
-			packet.prevent(amount - maxi(p.life - p.min_life_from_damage, 0))
-			amount = packet.remaining()
-			if amount <= 0:
-				log_line("%s's damage to %s is reduced to nothing (life floor)" % [
-					source.data.card_name, p.player_name])
-				return 0
+		# [method _damage_gates] collects what applies, in the order the
+		# fixed chain ran them; the damaged seat picks one; the rule is put
+		# again to what is left and still applies. ONE candidate is not a
+		# choice and nobody is asked; NONE skips the walk altogether
+		# ([method _has_damage_gates]), which is every packet of almost
+		# every duel and is why the combat-damage path costs what it did.
+		#
+		# The hint is index 0 — the head of the old order — and
+		# [method DecisionAgent.answer_option] returns its hint, so every
+		# heuristic seat plays the board this engine always played.
+		if _has_damage_gates(p, source, packet):
+			var gates := _damage_gates(packet, p, source)
+			while not gates.is_empty():
+				var pick := 0
+				if gates.size() > 1:
+					var labels: Array[String] = []
+					for gate in gates:
+						labels.append(String(gate["label"]))
+					pick = maxi(0, agents[target.player_id].choose_option(
+						self, target.player_id, labels,
+						"Which effect applies to that damage first?",
+						0, false, true))
+				var chosen: Dictionary = gates[pick]
+				gates.remove_at(pick)
+				var verdict := _apply_damage_gate(packet, p, chosen)
+				if verdict >= 0:
+					return verdict
+				amount = packet.remaining()
+				if amount <= 0:
+					return 0
+				# CR 616.1 is applied again only to what STILL applies: the
+				# gate just taken may have shrunk the packet below a cap's
+				# threshold or emptied a pool.
+				for i in range(gates.size() - 1, -1, -1):
+					if not _damage_gate_applies(packet, p, gates[i]):
+						gates.remove_at(i)
 		if undo_log != null:
 			_rec(p, &"artifact_damage_this_turn")
 			_rec(p, &"damage_taken_this_turn")
@@ -3198,6 +3141,19 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		var inst := find_instance(target.instance_id)
 		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
 			return 0
+		# CR 616.1 ON THIS BRANCH IS NARROWED, NOT CLOSED (2026-09-11). The
+		# rule gives the AFFECTED OBJECT'S CONTROLLER the same ordering
+		# choice the branch above now puts to a damaged player, and the
+		# gates below (protection, Uncle Istvan, Jade Monolith, Personal
+		# Incarnation, Rock Hydra's counters, Gaseous Form, a per-creature
+		# prevention pool) still run in one fixed order. Pairs of them CAN
+		# co-apply, so this is a real remainder rather than an unobservable
+		# one; it is a wider job than the player branch because the gates
+		# span two methods and three of them are metered rather than
+		# one-shot. docs/duel-todo.md carries the narrowed row, and
+		# tests/unit/test_damage_gate_order_2026_09_11.gd pins the order
+		# that is here so the next pass starts from a reading.
+		#
 		# "Until end of turn, if damage would be dealt to any creature, you
 		# may have that damage dealt to you instead" (Blood of the Martyr).
 		# A replacement, so it is asked before every prevention gate, and
@@ -3293,6 +3249,260 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		return _land_damage_rest(packet, inst, amount, is_combat)
 	check_state_based_actions()
 	return amount
+
+
+## Could ANY replacement or prevention touch a packet aimed at [param p]?
+## One cheap test per list, in front of building a candidate list at all:
+## a table with none of these on it takes this branch, allocates nothing
+## and asks nobody — which is nearly every packet of nearly every duel,
+## and is what keeps CR 616.1 off the price of the combat-damage path.
+func _has_damage_gates(p: MtgPlayer, source: CardInstance,
+		packet: DamagePacket) -> bool:
+	return not p.damage_replacements.is_empty() \
+		or not p.damage_caps.is_empty() \
+		or not p.reverse_damage_sources.is_empty() \
+		or not p.prevention_shields.is_empty() \
+		or not p.prevention_shield_filters.is_empty() \
+		or p.damage_prevention > 0 \
+		or p.min_life_from_damage > 0 \
+		or p.combat_damage_redirect != -1 \
+		or p.artifact_damage_redirect != -1 \
+		or (source.damage_all_redirect_to >= 0 and not packet.from_redirect)
+
+
+## Every replacement and prevention effect that would apply to [param packet]
+## right now (CR 616.1) — [param p]'s own, plus the one on the SOURCE —
+## built in the order the fixed chain ran them before the choice existed.
+## That order is therefore the default answer, and one candidate takes it
+## with nobody asked anything.
+func _damage_gates(packet: DamagePacket, p: MtgPlayer,
+		source: CardInstance) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	if source.damage_all_redirect_to >= 0 and not packet.from_redirect:
+		candidates.append({"kind": &"source_redirect",
+			"label": "%s's damage goes to %s" % [source.data.card_name,
+				players[source.damage_all_redirect_to].player_name]})
+	# The one-shot list is walked from the BACK, the way the chain walked
+	# it: the last shield put up is the first candidate offered.
+	for i in range(p.damage_replacements.size() - 1, -1, -1):
+		var rep: Dictionary = p.damage_replacements[i]
+		candidates.append({"kind": &"replacement", "entry": rep,
+			"label": String(rep["desc"])})
+	for cap in p.damage_caps:
+		candidates.append({"kind": &"cap", "entry": cap,
+			"label": String(cap["desc"])})
+	if not p.reverse_damage_sources.is_empty():
+		candidates.append({"kind": &"reverse", "label": "Reverse Damage"})
+	if p.combat_damage_redirect != -1:
+		var guard := find_instance(p.combat_damage_redirect)
+		if guard != null:
+			candidates.append({"kind": &"bodyguard",
+				"label": guard.data.card_name})
+	if p.artifact_damage_redirect != -1:
+		var soak := find_instance(p.artifact_damage_redirect)
+		if soak != null:
+			candidates.append({"kind": &"artifact",
+				"label": soak.data.card_name})
+	for mask in p.prevention_shields:
+		candidates.append({"kind": &"colour_shield", "mask": int(mask),
+			"label": "circle of protection"})
+	for entry in p.prevention_shield_filters:
+		candidates.append({"kind": &"filter_shield", "entry": entry,
+			"label": String(entry["desc"])})
+	if p.damage_prevention > 0:
+		candidates.append({"kind": &"pool",
+			"label": "%d prevented damage" % p.damage_prevention})
+	if p.min_life_from_damage > 0:
+		candidates.append({"kind": &"floor", "label": "life floor"})
+	var out: Array[Dictionary] = []
+	for gate in candidates:
+		if _damage_gate_applies(packet, p, gate):
+			out.append(gate)
+	return out
+
+
+## Does [param gate] still apply to [param packet]? Asked when the list is
+## built and again after every gate taken, because CR 616.1 is re-applied
+## only to effects that are STILL "attempting to modify" the event — a
+## halved packet can fall below a damage cap's threshold, and a packet with
+## nothing left is nobody's business.
+##
+## PURE: this asks, it never applies. A gate that answered by running would
+## have modified the event before the question was put, which is the same
+## trap [member CardData.draw_replacement_applies] was built to avoid
+## (2026-09-10).
+func _damage_gate_applies(packet: DamagePacket, p: MtgPlayer,
+		gate: Dictionary) -> bool:
+	var source: CardInstance = packet.source
+	var amount := packet.remaining()
+	if source == null or amount <= 0:
+		return false
+	match StringName(gate["kind"]):
+		&"source_redirect":
+			return source.damage_all_redirect_to >= 0 and not packet.from_redirect
+		&"replacement":
+			return bool(gate["entry"]["filter"].call(self, packet))
+		&"cap":
+			var cap: Dictionary = gate["entry"]
+			return amount >= int(cap["threshold"]) \
+				and int(cap["becomes"]) < amount \
+				and bool(cap["filter"].call(self, source))
+		&"reverse":
+			return p.reverse_damage_sources.has(source.id)
+		&"bodyguard":
+			# "All damage UNBLOCKED creatures would deal to you" — the
+			# blocked STATUS, not "does it have a blocker right now": a
+			# trampler whose blocker regenerated is still blocked and its
+			# spill-over is not redirected (CR 509.1h).
+			if not packet.is_combat or not source.is_creature() \
+					or not combat.attackers.has(source.id) \
+					or combat.was_blocked(combat.band_of(source.id)):
+				return false
+			var guard := find_instance(p.combat_damage_redirect)
+			return guard != null and guard.zone == Mtg.Zone.BATTLEFIELD \
+				and guard != source
+		&"artifact":
+			# LIVE types (CR 611.2, 613): a creature something has turned
+			# into an artifact counts, a card printed as one but not now
+			# does not.
+			if not source.is_type(Mtg.CardType.ARTIFACT):
+				return false
+			var soak := find_instance(p.artifact_damage_redirect)
+			return soak != null and soak.zone == Mtg.Zone.BATTLEFIELD
+		&"colour_shield":
+			return (int(gate["mask"]) & source.cur_colors) != 0
+		&"filter_shield":
+			return bool(gate["entry"]["filter"].call(source))
+		&"pool":
+			return p.damage_prevention > 0
+		&"floor":
+			return p.min_life_from_damage > 0 \
+				and p.life - amount < p.min_life_from_damage
+	return false
+
+
+## Apply ONE gate the affected player picked. Returns -1 when the event
+## carries on with whatever is left of [param packet], or the amount
+## ACTUALLY dealt when the gate ended it — a whole-event prevention, or a
+## redirection that landed the damage somewhere else.
+func _apply_damage_gate(packet: DamagePacket, p: MtgPlayer,
+		gate: Dictionary) -> int:
+	var source: CardInstance = packet.source
+	var amount := packet.remaining()
+	match StringName(gate["kind"]):
+		&"source_redirect":
+			log_line("%s's damage is turned on %s" % [
+				source.data.card_name,
+				players[source.damage_all_redirect_to].player_name])
+			return _redirect_damage(packet,
+				TargetRef.player(source.damage_all_redirect_to))
+		&"replacement":
+			# ONE-SHOT REPLACEMENTS aimed at this seat (Forcefield, Dark
+			# Sphere, Eye for an Eye, Nova Pentacle, Shimian Night Stalker).
+			# Consumed BEFORE it runs, so a handler that deals damage of its
+			# own cannot be caught by itself (CR 614.5).
+			var rep: Dictionary = gate["entry"]
+			if not bool(rep.get("all_turn", false)):
+				for i in p.damage_replacements.size():
+					if is_same(p.damage_replacements[i], rep):
+						p.damage_replacements.remove_at(i)
+						break
+			log_line("%s replaces %s's damage" % [
+				String(rep["desc"]), source.data.card_name])
+			return int(rep["apply"].call(self, packet))
+		&"cap":
+			# DAMAGE CAPS (Forethought Amulet): a REPLACEMENT, so the packet
+			# is not "prevented" — it was only ever this big (CR 614.1).
+			var cap: Dictionary = gate["entry"]
+			var capped: int = int(cap["becomes"])
+			log_line("%s's damage to %s is reduced to %d (%s)" % [
+				source.data.card_name, p.player_name, capped,
+				String(cap["desc"])])
+			packet.amount = capped
+			return -1
+		&"reverse":
+			# "The next time a source of your choice would deal damage to
+			# you this turn, prevent that damage. You gain life equal to the
+			# damage prevented" (Reverse Damage) — one shot, and only from
+			# the source it named.
+			var at := p.reverse_damage_sources.find(source.id)
+			if at >= 0:
+				p.reverse_damage_sources.remove_at(at)
+			packet.prevent(amount)
+			log_line("%s turns %d damage from %s into life" % [
+				p.player_name, amount, source.data.card_name])
+			adjust_life(packet.target.player_id, amount)
+			return 0
+		&"bodyguard":
+			# "All damage unblocked creatures would deal to you is dealt to
+			# this creature instead" (Veteran Bodyguard). The body is
+			# re-read here rather than carried on the gate: a replacement
+			# taken before this one may have killed it, and a replacement
+			# that cannot be applied simply does not apply (CR 614.6).
+			var guard := find_instance(p.combat_damage_redirect)
+			if guard == null or guard.zone != Mtg.Zone.BATTLEFIELD:
+				return -1
+			log_line("%s takes the blow for %s" % [
+				guard.data.card_name, p.player_name])
+			return _redirect_damage(packet, TargetRef.card(guard))
+		&"artifact":
+			# "All damage that would be dealt to you by artifacts is dealt
+			# to this creature instead" (Martyrs of Korlis) — re-read for
+			# the same reason (CR 614.6).
+			var soak := find_instance(p.artifact_damage_redirect)
+			if soak == null or soak.zone != Mtg.Zone.BATTLEFIELD:
+				return -1
+			log_line("%s's damage is redirected to %s" % [
+				source.data.card_name, soak.data.card_name])
+			return _redirect_damage(packet, TargetRef.card(soak))
+		&"colour_shield":
+			# Circle of Protection shields keyed on a COLOUR mask: one-shot,
+			# and the shield eats the WHOLE damage event, like the original
+			# CoP wording. No card in the 1997 pool writes this list — every
+			# Circle names one source and lands in the predicate list below
+			# (tests/unit/test_replacement_choice_2026_09_10.gd).
+			for i in p.prevention_shields.size():
+				if (p.prevention_shields[i] & source.cur_colors) != 0:
+					p.prevention_shields.remove_at(i)
+					break
+			packet.prevent(amount)
+			log_line("%s's damage to %s is prevented (circle of protection)" % [
+				source.data.card_name, p.player_name])
+			return 0
+		&"filter_shield":
+			# Predicate shields (Circle of Protection: Artifacts, Scarecrow).
+			# An "all_turn" shield is not consumed: Scarecrow buys the whole
+			# turn against one KIND of source, not one packet.
+			var entry: Dictionary = gate["entry"]
+			if not bool(entry.get("all_turn", false)):
+				for i in p.prevention_shield_filters.size():
+					if is_same(p.prevention_shield_filters[i], entry):
+						p.prevention_shield_filters.remove_at(i)
+						break
+			packet.prevent(amount)
+			log_line("%s's damage to %s is prevented (circle of protection)" % [
+				source.data.card_name, p.player_name])
+			return 0
+		&"pool":
+			# Amount-based prevention (Healing Salve): eats damage point for
+			# point. SIMPLIFIED (docs/ROADMAP.md), and only under the 1997
+			# window: `Duel.hlp` lets the player SPREAD a pool across packets
+			# by hand ("you may prevent the damage from three ..."); ours is
+			# spent greedily on the packets in the order they land. Identical
+			# with one packet, which is every case outside a prevention step.
+			var soaked := packet.prevent(mini(p.damage_prevention, amount))
+			_rec(p, &"damage_prevention")
+			p.damage_prevention -= soaked
+			log_line("%d damage to %s is prevented" % [soaked, p.player_name])
+			return -1
+		&"floor":
+			# Ali from Cairo: damage can't take you below the floor.
+			packet.prevent(amount - maxi(p.life - p.min_life_from_damage, 0))
+			if packet.remaining() <= 0:
+				log_line("%s's damage to %s is reduced to nothing (life floor)" % [
+					source.data.card_name, p.player_name])
+			return -1
+	return -1
 
 
 ## The tail of [method _land_damage_impl]'s creature branch: the remaining
@@ -6726,11 +6936,18 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 		_rec(inst, &"summoning_sick")
 		_rec(inst, &"tapped")
 		_rec(inst, &"counters")
+		_rec(inst, &"layer_timestamp")
 		_rec(players[controller], &"battlefield")
 		_rec(players[controller], &"acted_this_turn")
 		_rec(self, &"_battlefield_order")
 	inst.zone = Mtg.Zone.BATTLEFIELD
 	inst.controller_id = controller
+	# CR 613.7b — a permanent receives a timestamp when it enters the
+	# battlefield, and it is the same clock every floating effect is stamped
+	# from, so a static's layer-6 grant can be ordered against an
+	# until-end-of-turn loss (CardInstance.layer_timestamp, 2026-09-11).
+	# CR 400.7: what comes back is a new object and is stamped afresh.
+	inst.layer_timestamp = continuous.next_timestamp()
 	if host != null:
 		if undo_log != null:
 			_rec(inst, &"attached_to")

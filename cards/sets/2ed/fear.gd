@@ -12,7 +12,8 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Fear", "{B}{B}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
-		.static_ability(StaticAbility.new(_apply, "Enchanted creature has fear.")) \
+		.static_ability(StaticAbility.new(_apply, "Enchanted creature has fear.") \
+			.changing_abilities()) \
 		.oracle("Enchant creature\nEnchanted creature has fear. (It can't be blocked except by artifact creatures and/or black creatures.)")
 
 

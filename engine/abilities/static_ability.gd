@@ -10,12 +10,16 @@ extends RefCounted
 ## cur_* characteristics of whatever it affects:
 ## [code]func(game: MtgGame, source: CardInstance) -> void[/code]
 ##
-## Ordering: ContinuousEffects runs statics in three passes that stand in
-## for the CR 613 layers — first the ones that change TYPES (layer 4, tagged
-## with [method changing_types]), then the base-P/T SETTERS (layer 7a/7b,
+## Ordering: ContinuousEffects runs statics in passes that stand in for the
+## CR 613 layers — first the ones that change TYPES (layer 4, tagged with
+## [method changing_types]), then the base-P/T SETTERS (layer 7a/7b,
 ## [method setting_base_pt]), then everything else (layer 7c and the rest).
 ## Within a pass, battlefield timestamp order decides. Anything a card does
 ## not tag lands in the last pass, which is right for the additive majority.
+##
+## One tag takes its static OUT of the passes: [method changing_abilities]
+## (CR 613 layer 6) is applied from ContinuousEffects._layer_six, among the
+## floating grants and losses and in timestamp order with them.
 ##
 ## Two floating (until-end-of-turn) passes are interleaved between those
 ## three, and a static must expect to be on the losing side of both: the
@@ -108,6 +112,39 @@ var reads_land_types: bool = false
 ## Fluent: mark this layer-4 static as reading a land type (CR 613.8).
 func reading_land_types() -> StaticAbility:
 	reads_land_types = true
+	return self
+
+
+## Does this static GRANT or REMOVE one named ability — CR 613 LAYER 6?
+## Flying (Flight), fear, first strike (Lance), haste (Concordant
+## Crossroads), banding (Fortified Area), a landwalk (Fishliver Oil, Lord
+## of Atlantis) on the granting side; "all creatures lose flying" (Gravity
+## Sphere), "enchanted creature loses flying" (Earthbind) and "as though it
+## didn't have defender" (Animate Wall) on the other. NOT
+## [method silencing_abilities], which is "loses ALL abilities" and runs
+## before every layer because what it removes cannot contribute anywhere.
+##
+## THE TIMESTAMP (CR 613.7), since 2026-09-11. Layer 6 applies its effects
+## in the order they were created, and a static's is the moment its source
+## entered the battlefield ([member CardInstance.layer_timestamp], CR
+## 613.7b). A flagged static therefore runs inside
+## [method ContinuousEffects._layer_six] among the floating grants and the
+## floating LOSSES rather than in a statics pass, and a Flight cast after a
+## Radjan Spirit has grounded the creature puts the wings back — which it
+## could not do while every static ran ahead of every floating entry.
+##
+## The flag is the LAYER, so it names the whole ability: an ability that
+## both grants a keyword and boosts P/T is two effects in two layers (CR
+## 613.1) and is printed as two statics, the flagged one carrying only the
+## layer-6 half (Lord of Atlantis, Goblin King, Fortified Area, Web, Kobold
+## Drill Sergeant, Primal Clay). `tests/unit/
+## test_static_layer_six_2026_09_11.gd` pins that every card in the pool
+## whose static writes a layer-6 ability declares itself.
+var changes_abilities: bool = false
+
+## Fluent: mark this static as a CR 613 layer-6 ability grant or removal.
+func changing_abilities() -> StaticAbility:
+	changes_abilities = true
 	return self
 
 

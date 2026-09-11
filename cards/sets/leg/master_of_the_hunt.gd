@@ -54,7 +54,8 @@ static func _wolf_data() -> CardData:
 		.with_subtypes(["wolf"]) \
 		.static_ability(StaticAbility.new(
 			_grant_pack_banding,
-			"Bands with other creatures named Wolves of the Hunt.")) \
+			"Bands with other creatures named Wolves of the Hunt.") \
+			.changing_abilities()) \
 		.oracle("Bands with other creatures named Wolves of the Hunt.")
 
 

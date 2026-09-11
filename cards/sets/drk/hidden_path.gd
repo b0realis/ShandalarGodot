@@ -11,7 +11,8 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Hidden Path", "{2}{G}{G}{G}{G}", Mtg.CardType.ENCHANTMENT) \
 		.static_ability(StaticAbility.new(
-			_apply, "Green creatures have forestwalk.")) \
+			_apply, "Green creatures have forestwalk.") \
+			.changing_abilities()) \
 		.oracle("Green creatures have forestwalk. (They can't be blocked as long as "
 			+ "defending player controls a Forest.)")
 

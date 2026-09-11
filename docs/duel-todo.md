@@ -1869,15 +1869,35 @@ Checked and deliberately not filed:
   Blood Moon and a Conversion is a Plains whichever entered first
   (`StaticAbility.reads_land_types`, `tests/unit/test_layer_order_2026_09_10.gd`).
   No graph, no cycle detection: the pool has one reader and no cycle.
+- **CR 613.7 timestamps in layer 6** — since 2026-09-11 the layer is WHOLE
+  and sorted, printed statics included: a static that grants or removes one
+  named ability is marked `StaticAbility.changing_abilities()` and carries
+  its source's `CardInstance.layer_timestamp` (CR 613.7b) into
+  `ContinuousEffects._layer_six` with the floating grants and losses, and
+  the pass moved ahead of every layer-7 pass where CR 613.1 prints it.
+  Radjan Spirit then Flight leaves the Angel flying; Urborg then a Lance
+  gives first strike back; Hammerheim then a Fishliver Oil walks again
+  (`tests/unit/test_static_layer_six_2026_09_11.gd`). mage-go has no
+  timestamp ordering at all.
 - **CR 616.1 replacement-ordering choice** (the affected player picks) —
   absent in mage-go; ours has it for DRAWS since 2026-09-10
   (`MtgGame._replace_draw` builds the candidate list from each static's
   pure `draw_replacement_applies` and asks the drawing seat when more than
-  one applies). For DAMAGE it is a documented ruling rather than a
-  shortcut: nothing in the pool can tell two applicable shields apart, and
-  the case that IS observable — a prevention against a replacement — needs
-  a decision point in front of every gate in `_land_damage_impl`. Scope
-  §5.6 knowing that half is not included.
+  one applies) and for DAMAGE AIMED AT A PLAYER since 2026-09-11
+  (`MtgGame._damage_gates` collects every applicable replacement and
+  prevention in the order the fixed chain ran them, `_damage_gate_applies`
+  is its pure predicate, `_apply_damage_gate` takes the one the damaged
+  seat picked, and the rule is put again to what is left). A Circle of
+  Protection: Red naming a Lightning Bolt and a Nova Pentacle watching the
+  same Bolt is the pool's own pair. Two halves are ruled rather than built
+  and both are pinned by tests rather than asserted in prose: two applicable
+  SHIELDS cannot be told apart by anything in this pool
+  (`tests/unit/test_replacement_choice_2026_09_10.gd`), and the CREATURE
+  branch — protection against Jade Monolith, Rock Hydra's counters against
+  a prevention pool, Uncle Istvan against a Samite Healer's point — still
+  runs a fixed order, pinned by
+  `tests/unit/test_damage_gate_order_2026_09_11.gd`. Scope §5.6 knowing
+  the creature branch is not included.
 - **Mana burn** — absent in mage-go. Our `mechanics.md §14` note stands
   as a deliberate era choice.
 - **Split second, snow, Phyrexian, hybrid, scry/surveil, ward,
@@ -3369,14 +3389,21 @@ and every one is accurate.
   78 card call sites plus `damage_effect.gd`, `damage_all_effect.gd`,
   `random_effect_table.gd` and combat all funnel through it.
 - **Prevention is already modelled — but applied automatically.** Eight
-  gates in a fixed order on the player branch and eight on the creature
-  branch: `reverse_damage_shields`, `combat_damage_redirect`,
+  gates on the player branch and eight on the creature branch:
+  `reverse_damage_shields`, `combat_damage_redirect`,
   `artifact_damage_redirect`, `prevention_shields` (colour masks),
   `prevention_shield_filters`, `damage_prevention` (the amount pool),
   `min_life_from_damage`; and protection, `cur_prevent_*`,
   `damage_redirects`, `cur_damage_immunity`, `inst.prevention`. **The
   window does not add prevention. It moves the CHOICE of which prevention
-  applies to which packet from the engine to the player.**
+  applies to which packet from the engine to the player.** Since
+  2026-09-11 the PLAYER branch no longer runs its eight in a fixed order
+  either: CR 616.1 hands the damaged seat the order among everything
+  applicable to one packet, replacements included (`_damage_gates`). That
+  is a different question from this window — which packet, not which
+  effect — and the two compose: the window chooses what to point a
+  prevention spell at, the CR 616.1 ask chooses what applies first once
+  the packet lands. The CREATURE branch still runs its eight in order.
 - **Combat damage already batches.** `_apply_damage_requests`
   (`:~4068`) sets `_defer_state_based_actions = true`, deals every packet,
   then clears it and sweeps. **That switch is the gap the two windows go

@@ -10,7 +10,8 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Burrowing", "{R}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
-		.static_ability(StaticAbility.new(_apply, "Enchanted creature has mountainwalk.")) \
+		.static_ability(StaticAbility.new(_apply, "Enchanted creature has mountainwalk.") \
+			.changing_abilities()) \
 		.oracle("Enchant creature. Enchanted creature has mountainwalk.")
 
 

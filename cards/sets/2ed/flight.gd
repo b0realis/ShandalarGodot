@@ -6,12 +6,19 @@ extends CardScript
 ## appends FLYING to the host's live keywords on every recalculation.
 ## Because combat legality reads cur_keywords, the host immediately flies
 ## over ground blockers (and can block flyers).
+##
+## `changing_abilities()` puts it in CR 613 LAYER 6 with its own timestamp
+## (the moment the Aura entered, CR 613.7b), so a Flight cast after a
+## Radjan Spirit has grounded the creature puts the wings back and one cast
+## before it does not. Every keyword-granting card in the pool follows this
+## file; see StaticAbility.changing_abilities.
 
 
 func build() -> CardData:
 	return CardData.new("Flight", "{U}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
-		.static_ability(StaticAbility.new(_apply, "Enchanted creature has flying.")) \
+		.static_ability(StaticAbility.new(_apply, "Enchanted creature has flying.") \
+			.changing_abilities()) \
 		.oracle("Enchant creature. Enchanted creature has flying.")
 
 

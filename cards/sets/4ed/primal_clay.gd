@@ -23,6 +23,8 @@ func build() -> CardData:
 		.with_subtypes(["shapeshifter"]) \
 		.static_ability(StaticAbility.new(_wear_the_shape,
 			"It is a 3/3, a 2/2 with flying, or a 1/6 Wall with defender.").setting_base_pt()) \
+		.static_ability(StaticAbility.new(_shape_ability,
+			"The shape's own keyword.").changing_abilities()) \
 		.as_it_enters(_pick_a_shape) \
 		.oracle("As this creature enters, it becomes your choice of a 3/3 artifact creature, a 2/2 artifact creature with flying, or a 1/6 Wall artifact creature with defender in addition to its other types. (A creature with defender can't attack.)")
 
@@ -58,6 +60,9 @@ static func _pick_a_shape(game: MtgGame, source: CardInstance,
 	game.recalculate()
 
 
+## TWO STATICS, one per CR 613 layer (613.1): the body is layer 7b (and
+## the Wall's subtype rides with it), the KEYWORD is layer 6 and carries
+## the Clay's own timestamp against an Animate Wall or a Gravity Sphere.
 static func _wear_the_shape(_game: MtgGame, source: CardInstance) -> void:
 	match String(source.memory.get("shape", "brute")):
 		"wall":
@@ -65,13 +70,19 @@ static func _wear_the_shape(_game: MtgGame, source: CardInstance) -> void:
 			source.cur_toughness = 6
 			if not source.cur_subtypes.has("wall"):
 				source.cur_subtypes.append("wall")
-			if not source.cur_keywords.has(Mtg.Keyword.DEFENDER):
-				source.cur_keywords.append(Mtg.Keyword.DEFENDER)
 		"flyer":
 			source.cur_power = 2
 			source.cur_toughness = 2
-			if not source.cur_keywords.has(Mtg.Keyword.FLYING):
-				source.cur_keywords.append(Mtg.Keyword.FLYING)
 		_:
 			source.cur_power = 3
 			source.cur_toughness = 3
+
+
+static func _shape_ability(_game: MtgGame, source: CardInstance) -> void:
+	match String(source.memory.get("shape", "brute")):
+		"wall":
+			if not source.cur_keywords.has(Mtg.Keyword.DEFENDER):
+				source.cur_keywords.append(Mtg.Keyword.DEFENDER)
+		"flyer":
+			if not source.cur_keywords.has(Mtg.Keyword.FLYING):
+				source.cur_keywords.append(Mtg.Keyword.FLYING)

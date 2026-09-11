@@ -408,6 +408,18 @@ shandalar/
 │   │                          type changer (Blood Moon, Evil Presence,
 │   │                          Kormus Bell, Titania's Song) and
 │   │                          .setting_base_pt() a layer-7a/7b P/T SETTER;
+│   │   │                      .changing_abilities() (2026-09-11) marks a
+│   │   │                      CR 613 LAYER-6 grant or removal (Flight,
+│   │   │                      Fear, Concordant Crossroads, the landwalk
+│   │   │                      lords, Gravity Sphere, Earthbind, Animate
+│   │   │                      Wall) and takes it OUT of the statics
+│   │   │                      passes: ContinuousEffects._layer_six
+│   │   │                      applies it at its source's
+│   │   │                      layer_timestamp among the floating grants
+│   │   │                      and losses. The tag is the LAYER, so an
+│   │   │                      ability doing two things in two layers is
+│   │   │                      printed as TWO statics (Lord of Atlantis's
+│   │   │                      +1/+1 and its islandwalk).
 │   │                          ContinuousEffects runs them in that order,
 │   │                          then everything else (the 7c anthems).
 │   │                          .granting_triggers(event_types) declares
@@ -445,6 +457,16 @@ shandalar/
 │   │                          The human seat's double-click keeps its
 │   │                          Library of Alexandria by it
 │   ├── mtg_game.gd          class MtgGame — THE ORCHESTRATOR. Public API:
+│   │                        _has_damage_gates / _damage_gates /
+│   │                        _damage_gate_applies / _apply_damage_gate —
+│   │                        CR 616.1 for damage aimed at a PLAYER: every
+│   │                        applicable replacement and prevention
+│   │                        collected in the order the fixed chain ran
+│   │                        them, the damaged seat picks which applies
+│   │                        first, the rule put again to what still
+│   │                        applies. One candidate asks nobody; none
+│   │                        skips the walk. The creature branch still
+│   │                        runs a fixed order, pinned by a test.
 │   │                        _freeze_stack / _unfreeze_stack /
 │   │                        _waiting_triggers — triggers raised while a cost
 │   │                        is being paid WAIT and go on the stack ABOVE the
@@ -2494,7 +2516,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5967 tests / ~154 215 asserts, ~380 s
+├── tests/                   GUT suite — 5990 tests / ~154 712 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2847,6 +2869,17 @@ shandalar/
 │    drag and the ability menu read positions from the event in hand,
 │    not `get_global_mouse_position()` — the same number under a mouse,
 │    and the only one a finger on the touch layer has;
+│    tests/unit/test_damage_gate_order_2026_09_11.gd — THE AFFECTED
+│    PLAYER ORDERS THE DAMAGE GATES (CR 616.1): a Circle of Protection
+│    against a Nova Pentacle and against an Eye for an Eye on one
+│    Lightning Bolt, a Shimian Night Stalker against a Circle on combat
+│    damage, the two nulls, the pool survey of both sides, and the
+│    creature branch's fixed order pinned;
+│    tests/unit/test_static_layer_six_2026_09_11.gd — A STATIC'S LAYER-6
+│    GRANT CARRIES ITS OWN TIMESTAMP (CR 613.7): Radjan Spirit then
+│    Flight, Urborg then Lance, Hammerheim then Fishliver Oil, Tolaria
+│    then Fortified Area, Moat reading a granted flying, and the source
+│    survey that every layer-6 static declares itself;
 │    tests/unit/test_planner_tiebreak_2026_09_11.gd — THE PLANNER'S
 │    TIE-BREAK: holds_untapped read as a shape (the {T} another ability
 │    has spoken for, the body an animation buys, the mana creature

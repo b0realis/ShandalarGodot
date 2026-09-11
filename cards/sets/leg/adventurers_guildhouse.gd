@@ -24,7 +24,7 @@ func build() -> CardData:
 		.static_ability(StaticAbility.new(
 			_apply,
 			"Green legendary creatures you control have bands with other "
-			+ "legendary creatures.")) \
+			+ "legendary creatures.").changing_abilities()) \
 		.oracle("Green legendary creatures you control have \"bands with other "
 			+ "legendary creatures.\"")
 

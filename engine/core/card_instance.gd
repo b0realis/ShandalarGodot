@@ -108,6 +108,18 @@ var attached_to: int = -1
 ## Ids of auras (later: equipment) attached to this permanent.
 var attachments: Array[int] = []
 
+## THE LAYER TIMESTAMP (CR 613.7b): the moment this permanent entered the
+## battlefield, taken from the same clock [member ContinuousEffects._timestamp]
+## gives every floating effect. 0 while the object is anywhere else.
+##
+## It is what lets a static's continuous effect be compared with a floating
+## one inside a layer. Only layer 6 asks so far — a Flight granting flying
+## against a Radjan Spirit taking it away, where CR 613.7 gives the later
+## effect the last word — and everything else still settles its layer by
+## construction or by battlefield order, which is the same order this
+## number counts in.
+var layer_timestamp: int = 0
+
 ## Counters on this permanent, kind -> count ("+1/+1", "-1/-1", ...).
 ## The continuous pipeline applies any counter whose NAME parses as a P/T
 ## delta in CR 613 layer 7d — after the base-P/T setters (so a Nightmare's

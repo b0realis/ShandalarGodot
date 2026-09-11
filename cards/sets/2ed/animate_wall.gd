@@ -6,7 +6,9 @@ extends CardScript
 ## Implementation: the static strips DEFENDER from the host's live
 ## keywords — in this pool nothing else reads DEFENDER but the attack
 ## check, so removal IS "as though" (revisit if a defender-matters card
-## ever graduates).
+## ever graduates). A CR 613 LAYER 6 effect (`changing_abilities()`), so it
+## is applied in timestamp order against anything that grants defender —
+## a Primal Clay that took the Wall shape before the Aura landed on it.
 
 
 func build() -> CardData:
@@ -14,7 +16,8 @@ func build() -> CardData:
 	return CardData.new("Animate Wall", "{W}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(wall_spec) \
 		.static_ability(StaticAbility.new(
-			_liberate, "Enchanted Wall can attack as though it didn't have defender.")) \
+			_liberate, "Enchanted Wall can attack as though it didn't have defender.") \
+			.changing_abilities()) \
 		.oracle("Enchant Wall\nEnchanted Wall can attack as though it didn't have defender.")
 
 
