@@ -30,17 +30,29 @@ extends RefCounted
 ## source the AI can pay for) MINUS the one exclusion the 1997 player
 ## controls — see [param excluded].
 ##
+## AND THAT FLAG LIST IS WHERE THE TIE-BREAK COMES FROM (2026-09-11).
+## `AUTOTAP_NO_NONBASIC_LANDS` says the 1997 auto-tapper would not touch a
+## Library of Alexandria, a Strip Mine or a Mishra's Factory at all: the
+## utility land was the player's to spend by hand. A widened auto-tapper
+## cannot keep that rule — a deck of nothing but nonbasics could never
+## auto-cast — so ours keeps the INSTINCT instead and spends the basic
+## first, reaching the utility land only when the cost needs it
+## ([method holds_untapped], [method cheapest_source_first]).
+##
 ## Pure [RefCounted] with static methods only, in `engine/` because the
 ## engine and the AI both live there and neither may reach into `game/`.
 
 ## The untapped mana sources [param pid] has right now, sorted the way the
 ## planner wants them:
-## `[inst, ability_index, color, amount, sacrifice, restriction_key, pain]`.
+## `[inst, ability_index, color, amount, sacrifice, restriction_key, pain,
+## holds]`.
 ## `restriction_key` is "" for ordinary mana and the
 ## [member ManaAbility.restriction_key] of mana that may pay only for one
 ## kind of spell (Mishra's Workshop's "artifact") — a source a plan may use
 ## only when the caller's `usage_keys` include the key. `pain` is
 ## [member ManaAbility.pain], the life the tap costs (City of Brass).
+## `holds` is [method holds_untapped], what the source can still do while
+## it stands untapped — the tie-break of 2026-09-11.
 ##
 ## Split out from [method plan] because the list depends only on the
 ## battlefield, while a single "what should I cast?" pass plans a cost for
@@ -59,14 +71,14 @@ extends RefCounted
 ## null for [member AiProfile.minds_pain]; nothing else turns it off.
 static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 		mind_pain := true) -> Array:
-	var out: Array = []   # [inst, ability_index, color, amount, sacrifice, restriction_key, pain]
+	var out: Array = []   # [inst, index, color, amount, sacrifice, key, pain, holds]
 	# Mana already floating (a resolved Dark Ritual) is a source that costs
 	# nothing to "tap": a null instance the executors skip. Without it the
 	# Ritual's {B}{B}{B} sat in the pool until the step ended and burned.
 	var pool := game.players[pid].mana_pool
 	for color in Mtg.ManaColor.values():
 		for unit in pool.amount_of(color):
-			out.append([null, unit, color, 1, false, "", 0])   # one unit per entry
+			out.append([null, unit, color, 1, false, "", 0, 0])   # one unit per entry
 	for inst in game.players[pid].battlefield:
 		if inst.tapped or inst.cur_mana_abilities.is_empty():
 			continue
@@ -74,6 +86,9 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 			continue
 		if excluded.has(inst.id):
 			continue          # `Don't auto tap this card`
+		# Read once per instance, not once per comparison: the sort asks for
+		# it O(n log n) times and the answer is the same every time.
+		var holds := holds_untapped(inst)
 		for index in inst.cur_mana_abilities.size():
 			var ability: ManaAbility = inst.cur_mana_abilities[index]
 			# Only abilities the planner can actually pay for: a rider it
@@ -103,8 +118,9 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 				color = int(ability.dynamic_color.call(game, inst))
 			out.append([inst, index, color,
 				amount, ability.sacrifice_source, ability.restriction_key,
-				ability.pain if mind_pain else 0])
-	# Fewer options first; painful sources after painless; sacrifices last.
+				ability.pain if mind_pain else 0, holds])
+	# Fewer options first; painful sources after painless; sacrifices last;
+	# and last of all, the source that is holding something back.
 	out.sort_custom(cheapest_source_first)
 	return out
 
@@ -178,10 +194,20 @@ static func source_usable(s: Array, usage_keys: Array) -> bool:
 ## Comparator for [method sources]: non-sacrifice sources first, then the
 ## ones that cost no life (a Plains, and a Tundra too, before a City of
 ## Brass — the dual's flexibility is free and the City's costs a life a
-## tap), then the least flexible land (a basic before a dual). A named
-## static instead of an inline lambda — the planner runs once per
-## castable card per AI action, and a lambda allocates a fresh Callable
-## on every call.
+## tap), then the least flexible land (a basic before a dual), and last —
+## among sources that were equal on every count above, where the answer
+## used to be battlefield order — the one HOLDING NOTHING BACK
+## ([method holds_untapped]). A named static instead of an inline lambda —
+## the planner runs once per castable card per AI action, and a lambda
+## allocates a fresh Callable on every call.
+##
+## THE TIE-BREAK IS THE LAST KEY ON PURPOSE (2026-09-11). It decides only
+## what was undecided; every ordering the planner already had — the
+## sacrifice last, the painless before the painful, the basic before the
+## dual — is untouched, so a Library of Alexandria beside a lone Tundra is
+## still spent before the dual and the dual's flexibility still wins. That
+## case is a second question with a second measurement, and it is left
+## open rather than folded in here (`docs/ai-difficulty.md` §5).
 static func cheapest_source_first(a: Array, b: Array) -> bool:
 	if a[4] != b[4]:
 		return not a[4]
@@ -189,7 +215,68 @@ static func cheapest_source_first(a: Array, b: Array) -> bool:
 	var pain_b := source_pain(b)
 	if (pain_a > 0) != (pain_b > 0):
 		return pain_a == 0
-	return source_options(a) < source_options(b)
+	var options_a := source_options(a)
+	var options_b := source_options(b)
+	if options_a != options_b:
+		return options_a < options_b
+	return source_holds(a) < source_holds(b)
+
+
+## What an untapped [param inst] can still DO that tapping it for mana
+## takes away — THE PLANNER'S TIE-BREAK, 2026-09-11. 0 for a Forest, and
+## for every source whose only printed line is the mana.
+##
+## Read as a SHAPE and never as a card name, which is also the rule the
+## AI's own decision code keeps: two things a permanent prints, both of
+## them foreclosed by the tap.
+##
+## [b]THE {T} THAT IS ALREADY SPOKEN FOR.[/b] A permanent has one tap
+## symbol to spend (CR 107.5 — an already-tapped permanent cannot be
+## tapped again to pay a cost), so a mana ability and any other activated
+## ability with a tap in its cost are competing for the same thing. Tapping
+## for mana is the engine refusing the other one in as many words:
+## *"Library of Alexandria is already tapped"*, *"Strip Mine is already
+## tapped"*. In this pool that shape is SIXTEEN cards — the draw, the
+## land destruction, a Desert's shot at an attacker, a Pendelhaven's pump,
+## the five mana batteries' charge counter, Karakas, Urborg (which prints
+## two of them), Hammerheim, Tolaria, Elephant Graveyard, City of Shadows
+## and the Factory's own Assembly-Worker pump.
+##
+## [b]THE BODY IT COULD BECOME.[/b] An ability that animates the source
+## ([AnimateSelfEffect]) buys an attacker or a blocker, and a tapped
+## creature can do neither (CR 508.1a, CR 509.1a). Mishra's Factory
+## animates for {1} with NO tap in the cost, so the first shape would
+## price the Factory for the wrong ability — its Assembly-Worker pump —
+## and a manland printed without one would read as a plain land.
+##
+## WHAT IS DELIBERATELY NOT COUNTED. A creature that makes mana (Llanowar
+## Elves, Birds of Paradise — seven in the pool) is worth something
+## untapped too, but that is the AI's combat reading rather than the
+## planner's arithmetic: [method AiPlayer._attackers_excluded] and
+## [method AiPlayer._main2_mana_held] already take bodies out of the list
+## by name of the attack they are wanted for, and a planner that pushed
+## every mana creature behind every land would be re-deciding combat from
+## inside a sort. And PAYABILITY is not read either: whether the other
+## ability could be paid for depends on the rest of the turn, while this
+## list is built once per decision off the battlefield alone.
+static func holds_untapped(inst: CardInstance) -> int:
+	if inst == null:
+		return 0
+	var held := 0
+	for ability in inst.cur_activated_abilities:
+		if ability.tap_cost:
+			held += 1
+			continue      # one ability, one thing held back
+		for effect in ability.effects:
+			if effect is AnimateSelfEffect:
+				held += 1
+				break
+	return held
+
+
+## What [method holds_untapped] answered for a source row.
+static func source_holds(s: Array) -> int:
+	return int(s[7]) if s.size() > 7 else 0
 
 
 ## The life a source's tap costs its controller ([member ManaAbility.pain]).

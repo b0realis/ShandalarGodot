@@ -140,10 +140,55 @@ the loop first runs, from `games.csv`, beside the win rate.
 | ~~a liability reading~~ **DONE 2026-09-09, `prices_liabilities`** | the owner's Detonate, 2026-09-08 | all, on at every rung | ~~`Evaluator.permanent_value` never goes below zero, so `spares_own`'s one door — a permanent of ours a harmful spell may take because giving it up is worth LESS than nothing — never opens.~~ Built as three readings in `AiPlayer._own_value`, the board score untouched: THE RECKONING (a printed "you lose the game" on leaving — the Lich, and the pool's only one), THE DEAD WEIGHT (tapped, not untapping, every ability needing the {T} it cannot pay — the Mana Vault, a creature under a Paralyze) and THE TOLL, priced for the turns our mana needs to reach the price the card itself prints. Of the four candidates named here only the Vault survived: the **Lich is the OPPOSITE of a liability** (destroying it loses the game, and the old evaluator's 3.2 had the AI feeding it to its own trigger), **Illusions of Grandeur is not in the pool**, and **Pestilence is not a liability** — its harm is an activated ability nobody makes it use. `_cast_value` charges the own-side victim and the sting the card deals its controller (`EffectIntent.damage_to_target_controller`). Measured: a wash on the Detonate pairs with 13 own-side Detonates in 150 games where there had been 0, **+3.2 ±2.2 on Azaar Lichlord at 4 000 games an arm, clear of zero**, control byte-identical, the null replayed game for game over 6 000 games |
 | ~~`EffectIntent` controller damage~~ **DONE 2026-09-10, both halves** | the same look | `prices_liabilities` | ~~no field says "damage to the target's controller"~~: `EffectIntent.damage_to_target_controller` exists, Detonate carries `controller_damage: -1`, and since 2026-09-10 BOTH sides of it are read through one line (`AiPlayer._controller_sting`) under the knob that owns the field — ours charged at the reaper's rate, theirs credited on the AI's own clock (`_face_damage_value`) and worth `LETHAL_WORTH` when it is lethal. The objection that deferred it ("pricing it moves the shipped pilot on both arms") was an objection to a KNOBLESS reader change; gated on `prices_liabilities` the null is untouched and the Lab can run it. Measured on the pass's own Detonate pair, War Mage vs Crag Hydra at seed 11: the `off` arm replays the published 45.3% and the control 525-475 byte-identical, the `on` arm 45.5% → 47.1% at 1,000 games. Against Big Green — a deck with no artifact for the card to point at — the arm does not move at all (11.5% either tree) |
 
-Here too **the planner's tie-break** from the third pass — a Factory, a
+~~Here too **the planner's tie-break** from the third pass — a Factory, a
 Library of Alexandria or a Strip Mine worth more untapped than a Forest;
 `engine/mana_planner.gd` takes equal sources in battlefield order — an
-engine change measured at every rung, not a knob.
+engine change measured at every rung, not a knob.~~ **DONE 2026-09-11,
+and it ships on the human seat rather than on a win rate.** REPRODUCED
+three times over with a Forest standing untapped beside the land that got
+spent, and the three refusals are the engine's own words: `plan for {1}:
+Mishra's Factory` → *"Mishra's Factory can't attack: tapped creatures
+can't attack"*; `plan for {1}: Library of Alexandria` → *"Library of
+Alexandria is already tapped"*; `plan for {1}: Strip Mine` → *"Strip Mine
+is already tapped"*. And at **every rung**, through the real `act` path: a
+Grizzly Bears cast with a Factory and two Forests open takes the Forest
+for the {G} and the **Factory** for the {1}, Apprentice to Wizard alike.
+Built as one reading in the planner, `ManaPlanner.holds_untapped`, read as
+a SHAPE and never as a card name: an activated ability whose cost includes
+{T} — the one tap a permanent has, and the mana ability wants it too (CR
+107.5) — and an ability that ANIMATES the source, because a tapped
+creature can neither attack (CR 508.1a) nor block (CR 509.1a) and the
+Factory's animation carries no tap at all. **It is the LAST key of
+`cheapest_source_first`**, so it decides only what battlefield order was
+deciding; the sacrifice, the pain and the basic-before-a-dual orderings
+are untouched, and a Library beside a LONE Tundra is still spent first —
+that case is named and left (`docs/ai-difficulty.md` §5). **THE WIN RATE
+IS A WASH AT EVERY RUNG AND IT SAYS SO**: Dracur (Spells of the Ancients)
+vs Big Green 33.5 → 33.5, 25.8 → 26.0, 23.6 → 23.6, 22.3 → 22.2; The Deck
+(playable) vs Black-Red Raiders — the pair holding all three cards —
+10.0 → 10.0, 2.3 → 2.1, 44.0 → 44.2, 51.8 → 51.7; at 4 000 games a side
+52.7% → 52.8% and 22.2% → 22.1%. The paired count is a coin too, which is
+the difference from `counts_the_race` and is recorded rather than dressed
+up: **20 000 games tree against tree, 3 558 ending differently, 85
+flipped to a win against 77 away**, where a fair toss over 162 sits at
+81 ± 6.4. **WHAT DOES MOVE IS THE OPTION COUNT, in one direction, at
+every rung that can see it**: over 200 games of The Deck vs Black-Red
+Raiders the Library's draw is activated 293 → **319** times at Wizard and
+246 → **269** at Sorcerer, the Factory animates 1 203 → **1 264** and
+attacks 963 → **998**, Strip Mine on Dracur 51 → **54**; not one counter
+falls, and the pilot's games come in a turn shorter (36.6 → 35.5 mean
+turns). **THE FIVE SHIPPED STARTERS CANNOT SEE IT AT ALL** — not one of
+them holds any of the sixteen cards the reading can find, so the whole
+ten-matchup matrix is byte-identical between the trees, 0 of 2 000 games,
+the report differing only in its timing line. Control Big Green vs White
+Knights 0 of 1 000 different at every rung and 0 of 4 000 at the Wizard.
+**AND THE SEAT THAT DECIDES IT IS THE HUMAN ONE**: `DuelScreen.
+_auto_tap_for_pending` plans through this same file, so a player's
+double-click was spending their Library of Alexandria for a generic pip a
+basic could have paid — a defect no knob can gate, and 1997's own
+auto-tapper would not have touched a nonbasic land at all
+(`AUTOTAP_NO_NONBASIC_LANDS`, the flag list already quoted in the
+planner's header).
 
 ## ~~THE ANGEL~~ — **DONE 2026-09-10: the deck built, one half of the finisher shipped, the other half and the mulligan floor REFUSED. SETTLED 2026-09-11: the variant is a STUDY LIST, and the Angel shape that works already ships**
 
@@ -377,3 +422,14 @@ pool's non-aggro deck, which is the very shape Forge's
 rows also needed a control neither the starters nor the 1997 lists can
 give: a creatureless pair, written beside the run as two forty-land
 lists (`DeckLab/README.md`).
+And the planner's tie-break (2026-09-11) closed the plan with the same
+finding once more, this time about a change that has no knob at all:
+**not one of the five shipped starters holds any of the sixteen cards it
+can read**, so the whole ten-matchup starter matrix is byte-identical
+between the two trees, 0 of 2 000 games, and the standings are not an
+instrument for it. The decks that put the question are The Deck's lists
+(Library of Alexandria, Mishra's Factory and Strip Mine together) and the
+1997 enemies, where a Desert sits in seventeen lists and a Factory in
+thirteen; the pair used was `the_deck_playable` against
+`black_red_raiders`, with Dracur (Spells of the Ancients) vs Big Green —
+the manual's own `pays_sacrifices` pair — as the second.

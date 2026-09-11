@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **5953 tests, 0 failing, 346 scripts** (154 093 asserts, the 2026-09-10 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **5967 tests, 0 failing, 347 scripts** (154 215 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11504,6 +11504,122 @@ identical shape `try_pay` executes, `[[instance, ability_index], …]`, and
 `ManaPlanner.sources` already counts floating mana as a zero-cost source the way
 `_payment_plan` seeds its sim. Written into `docs/duel-todo.md` §5.3 with the
 drop-in shape and re-sized.
+
+## THE PLANNER'S TIE-BREAK (2026-09-11) — the last row of the plan, and
+## the one with no knob in it
+
+`docs/AI-next-wave.md`'s Wave 5 carried one line that had never been
+started, and it said what it was before anybody touched it: *"a Factory,
+a Library of Alexandria or a Strip Mine worth more untapped than a
+Forest; `engine/mana_planner.gd` takes equal sources in battlefield order
+— an engine change measured at every rung, not a knob."* It came from the
+third pass's own "still open" list, where `animates_to_attack` had fixed
+the half of it that could be fixed behind a knob — the body already
+animated is kept out of the plan — and left the tie-break itself alone.
+
+THE REPRODUCTION IS THREE REFUSALS IN THE ENGINE'S OWN WORDS, each on a
+board with a Forest standing untapped beside the land that got spent:
+
+```
+plan for {1}: Mishra's Factory
+  Mishra's Factory can't attack: tapped creatures can't attack
+plan for {1}: Library of Alexandria
+  Library of Alexandria is already tapped
+plan for {1}: Strip Mine
+  Strip Mine is already tapped
+```
+
+And at every rung through the real `act` path: a Grizzly Bears cast with
+a Mishra's Factory and two Forests open takes a Forest for the {G} and
+the FACTORY for the {1} — Apprentice, Magician, Sorcerer and Wizard
+alike, because none of them is deciding this. The planner's sort was.
+
+THE RULE IS A TIE-BREAK AND NOTHING WIDER. `ManaPlanner.holds_untapped`
+counts what an untapped permanent can still DO that the tap would take
+away, and it is the LAST key of `cheapest_source_first`, below the
+sacrifice, below the pain and below the basic-before-a-dual flexibility —
+so it decides only what battlefield order was deciding, which is to say
+what nobody had decided. Two shapes, both printed on the permanent and
+neither of them a card name: an activated ability whose cost includes {T},
+competing for the one tap the mana ability also wants (CR 107.5), which
+in this pool is SIXTEEN cards — Library of Alexandria's draw, Strip
+Mine's land destruction, a Desert's shot at an attacker, a Pendelhaven's
+pump, the five mana batteries' charge counter, Karakas, Urborg,
+Hammerheim, Tolaria, Elephant Graveyard, City of Shadows and the
+Factory's own Assembly-Worker pump — and an ability that ANIMATES the
+source, because a tapped creature can neither attack (CR 508.1a) nor
+block (CR 509.1a). The second shape is not redundant: Mishra's Factory
+animates for {1} with no tap in the cost at all, so the {T} reading alone
+would have priced the Factory for the wrong ability and read a manland
+printed without one as a plain land.
+
+WHAT IT MEASURED AS, AND THE HONEST WORD IS A WASH. An engine change has
+no arm to switch off, so the substitute is the same command on the tree
+before and the tree after, diffed game by game out of `games.csv`. The
+manual's own `pays_sacrifices` sweep — Dracur (Spells of the Ancients) vs
+Big Green, seed 11, 1,000 games an arm, control Big Green vs White
+Knights — reads 22.3% / 24.8% on HEAD's files and 22.2% / 24.9% on these,
+with the control 550-450 and PASS in both. At every rung, null arm
+against null arm: Dracur 33.5 → 33.5, 25.8 → 26.0, 23.6 → 23.6,
+22.3 → 22.2; The Deck (playable) vs Black-Red Raiders, the pair that
+holds all three of the cards the row names, 10.0 → 10.0, 2.3 → 2.1,
+44.0 → 44.2, 51.8 → 51.7. At 4,000 games a side the two headline pairs
+read 52.7% → 52.8% and 22.2% → 22.1%. THE PAIRED COUNT IS A COIN TOO, and
+that is the difference from `counts_the_race`, which shipped a wash on 88
+flips for against 28 away: across 20,000 games tree against tree, 3,558
+end differently and 85 flipped to a win against 77 flipped away, where a
+fair toss over 162 sits at 81 ± 6.4.
+
+WHAT IS NOT A COIN IS THE OPTION COUNT, and it moves one way only.
+Counted off the engine's own duel log, 200 games a rung: The Deck's
+Library of Alexandria draws 293 → 319 at the Wizard and 246 → 269 at the
+Sorcerer, its Factory animates 1,203 → 1,264 and attacks 963 → 998,
+Dracur's Strip Mine fires 51 → 54, Arzakon's Factory attacks 36 → 39. Not
+one counter falls, and the pilot's games come in about a turn shorter on
+The Deck pair (36.6 → 35.5 turns on the mean). Nothing measurable is
+worse: the control pair is byte-identical between the trees at every
+rung, the whole five-starter matrix is 0 of 2,000 games different, and
+NOT ONE PRE-EXISTING TEST MOVED — 5,953 of them, and no board in the
+suite had ever put the question.
+
+SO IT SHIPS ON AN ARGUMENT THAT IS NOT THE WIN RATE, and the day it has
+to be measured against is 2026-09-10's refused evaluator constants, whose
+own sentence was *"a wash that removes a malfunction ships for a KNOB; a
+constant with no null needs more, and it does not have it."* Two things
+separate this row from that one. THERE IS NO CONSTANT: `holds_untapped`
+is a count of printed abilities, not a number anybody chose, and there
+was no incumbent to defend either, because battlefield order is the order
+of an array rather than an answer. AND THE SEAT THAT DECIDES IT IS THE
+HUMAN ONE: `DuelScreen._auto_tap_for_pending` plans through this same
+file, so a player's double-click was spending their Library of Alexandria
+on a generic pip a basic could have paid — a defect no difficulty knob
+can gate. The 1997 auto-tapper's own default flags say the same thing
+more strongly: `AUTOTAP_NO_NONBASIC_LANDS` means the original would not
+have touched the land at all, and a widened auto-tapper that cannot keep
+that rule can at least keep the instinct.
+
+THE POOL FACT, the third of its kind in three days. Not one of the five
+shipped starters holds any of the sixteen cards the reading can find, so
+the starter gauntlet is not an instrument for this and says so by being
+byte-identical. The decks that put the question are The Deck's lists,
+seventeen 1997 enemies with a Desert and thirteen with a Factory (both
+Arzakons play all five mana batteries), and 104 of the tournament and
+community lists.
+
+WHAT IS LEFT OPEN UNDER IT, named rather than folded in
+(`docs/ai-difficulty.md` §5). THE DUAL STILL WINS: the tie-break sits
+below `source_options`, so a Library of Alexandria beside a LONE Tundra
+is still spent first — the dual's flexibility is an ordering the planner
+already had, and moving it is a second change with a second measurement.
+A MANA CREATURE IS NOT READ HERE: a Llanowar Elves is worth something
+untapped too, and that is the AI's combat reading
+(`AiPlayer._attackers_excluded`, `_main2_mana_held`) rather than a
+comparator's business. AND PAYABILITY IS NOT READ: whether the foreclosed
+ability could actually be paid for depends on the rest of the turn, while
+the source list is built once per decision off the battlefield alone.
+
+Wave 5's last line is struck, and with it the last unstarted item of
+`docs/AI-next-wave.md`.
 
 ## Standing quality gates
 

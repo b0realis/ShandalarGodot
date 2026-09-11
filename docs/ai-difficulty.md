@@ -2922,13 +2922,80 @@ cannot move and does not.
   their hand, an upkeep price we cannot pay, a Vise ticking — none of
   those lift the hold, and the first of them is a hand read this AI does
   not do at all.
-- The mana planner does not know that a Mishra's Factory, a Library or a
+- ~~The mana planner does not know that a Mishra's Factory, a Library or a
   Strip Mine is worth more untapped than a Forest: among equal sources
   it takes them in battlefield order, so a second animation can be paid
   by tapping the first animated body when the Factories come before the
-  plain lands. `animates_to_attack` excludes the body it has already
-  animated; the tie-break itself is open (`docs/ROADMAP.md`, the third
-  pass). ~~And no rung animates a Factory to BLOCK on the opponent's
+  plain lands.~~ **Closed 2026-09-11 — FIXED in the planner itself
+  (`ManaPlanner.holds_untapped`, the last key of
+  `cheapest_source_first`), an engine change with no knob and therefore
+  no null.** `animates_to_attack` excludes the body it has already
+  animated; what was open was the tie-break under it, and it is now the
+  one question the sort had never answered. THE READING IS TWO SHAPES,
+  both printed on the permanent: an activated ability whose cost includes
+  {T}, which is the same tap the mana ability wants (CR 107.5) — in this
+  pool SIXTEEN cards, from Library of Alexandria's draw and Strip Mine's
+  land destruction to a Desert's shot at an attacker, a Pendelhaven's
+  pump and the five mana batteries' charge counter — and an
+  ability that ANIMATES the source, because a tapped creature can neither
+  attack (CR 508.1a) nor block (CR 509.1a) and Mishra's Factory's
+  animation costs {1} and no tap at all, so the first shape alone would
+  have priced the Factory for its Assembly-Worker pump and read a manland
+  printed without one as a plain land. WHAT IS LEFT OPEN UNDER IT is
+  named rather than folded in. THE DUAL STILL WINS: the tie-break is the
+  LAST key, below `source_options`, so a Library of Alexandria beside a
+  LONE Tundra is still spent first — the dual's flexibility is an
+  ordering the planner already had and moving it is a second change with
+  a second measurement. A MANA CREATURE IS NOT READ HERE: a Llanowar
+  Elves is worth something untapped too, and that is the AI's combat
+  reading (`_attackers_excluded`, `_main2_mana_held`) rather than the
+  planner's sort — a planner that pushed every mana creature behind every
+  land would be re-deciding combat from inside a comparator. AND
+  PAYABILITY IS NOT READ: whether the foreclosed ability could be paid
+  for depends on the rest of the turn, while the source list is built
+  once per decision off the battlefield alone.
+  WHAT IT MEASURED AS, and the honest word for it is a WASH. Dracur
+  (Spells of the Ancients) vs Big Green at every rung: 33.5 → 33.5,
+  25.8 → 26.0, 23.6 → 23.6, 22.3 → 22.2; The Deck (playable) vs
+  Black-Red Raiders — the pair that holds all three of the cards the row
+  names — 10.0 → 10.0, 2.3 → 2.1, 44.0 → 44.2, 51.8 → 51.7. At 4 000
+  games a side, 52.7% → 52.8% and 22.2% → 22.1%. The paired count is a
+  coin as well and that is the difference from `counts_the_race`, which
+  shipped a wash on 88 flips for against 28 away: here **20 000 games
+  tree against tree end 3 558 differently, 85 flipped to a win against 77
+  away**, where a fair toss over 162 sits at 81 ± 6.4.
+  WHAT IS NOT A COIN IS THE OPTION COUNT, and it moves one way only.
+  Counted off the engine's own duel log over 200 games a rung: The Deck's
+  Library draw activated 293 → 319 at the Wizard and 246 → 269 at the
+  Sorcerer, its Factory animated 1 203 → 1 264 and attacking 963 → 998,
+  Dracur's Strip Mine 51 → 54, Arzakon's Factory attacking 36 → 39. Not
+  one counter falls, and the pilot's games come in about a turn shorter
+  (36.6 → 35.5 mean turns on The Deck pair). Nothing measurable is worse:
+  the control pair Big Green vs White Knights is byte-identical between
+  the trees at every rung, no pre-existing test moved, and the whole
+  five-starter matrix is 0 of 2 000 games different.
+  SO IT SHIPS ON AN ARGUMENT THAT IS NOT THE WIN RATE, and the argument
+  is the one the evaluator constants of 2026-09-10 did not have. That row
+  proposed an INVENTED NUMBER against an incumbent and the measurement
+  had to carry the whole case; this row invents no constant at all — the
+  reading is a count of printed abilities — and there was no incumbent to
+  defend, because battlefield order is the order of an array rather than
+  an answer anybody chose. And the seat that decides it is the HUMAN one:
+  `DuelScreen._auto_tap_for_pending` plans through this same file, so a
+  player's double-click was spending their Library of Alexandria on a
+  generic pip a basic could have paid, which is a defect no difficulty
+  knob can gate — and the 1997 auto-tapper's own default flags
+  (`AUTOTAP_NO_NONBASIC_LANDS`) say the original would not have touched
+  the land at all.
+  THE POOL FACT WORTH KEEPING: not one of the five shipped starters holds
+  any of the sixteen cards this reading can find, so the starter
+  gauntlet is not an instrument for it; the decks that put the question
+  are The Deck's lists, the 1997 enemies (seventeen of the lists under
+  `decks/1997/` hold a Desert, thirteen a Mishra's Factory, five a Strip
+  Mine, and both Arzakons play all five mana batteries) and the
+  tournament and community lists, 104 of which hold a Factory, a Strip
+  Mine or a Library.
+- ~~And no rung animates a Factory to BLOCK on the opponent's
   turn.~~ **Closed 2026-09-10 — FIXED, `reads_manlands`** (§4), and with
   it the other half of the same fact: a manland of THEIRS is a body the
   attack has to price. What is left open is smaller and is named on the

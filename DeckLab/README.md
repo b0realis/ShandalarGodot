@@ -959,6 +959,18 @@ fingerprint, which is what the verdict was read from and what a later run
 can be diffed against). It never touches the Elo ledger: a candidate
 pilot is not the shipped one, and its games are not rating games.
 
+**AND `games.csv` IS HOW AN ENGINE CHANGE IS MEASURED, which has no knob
+and therefore no arm to switch off** (2026-09-11, the planner's
+tie-break). Run the SAME sweep command on the tree before and on the tree
+after — any knob will do, the arms are only there to deal the seeds — and
+diff the two `games.csv` files row by row on `(pair, value, arm, game,
+seed)`: the fingerprint column says how many games ended differently and
+the `a_won` column how many flipped each way, which is the paired count a
+win rate on its own cannot give. The CONTROL pair is then doing double
+duty and is worth choosing for it: a pair the change cannot reach must
+come out 0 of N different BETWEEN THE TREES as well as inside each one,
+and that is the nearest thing a knobless change has to a null.
+
 ### Why `--mulligan` defaults off, and what it costs
 
 Until 2026-09-01 the Lab never mulliganed. `MtgGame.start()` is exactly

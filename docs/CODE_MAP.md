@@ -430,6 +430,20 @@ shandalar/
 │   │                          only, and the `Don't auto tap this card`
 │   │                          exclusion set. Carries the decompilation
 │   │                          evidence that 1997 auto-tapped at all
+│   │                          holds_untapped() (2026-09-11) is THE
+│   │                          TIE-BREAK, the LAST key of
+│   │                          cheapest_source_first: among sources equal
+│   │                          on sacrifice, pain and flexibility — where
+│   │                          the answer used to be battlefield order —
+│   │                          spend the one holding nothing back. Two
+│   │                          printed shapes and no card names: an
+│   │                          ability whose cost includes {T} (the same
+│   │                          tap the mana wants, CR 107.5 — sixteen
+│   │                          cards in this pool) and one that ANIMATES
+│   │                          the source (a tapped creature neither
+│   │                          attacks nor blocks, CR 508.1a / 509.1a).
+│   │                          The human seat's double-click keeps its
+│   │                          Library of Alexandria by it
 │   ├── mtg_game.gd          class MtgGame — THE ORCHESTRATOR. Public API:
 │   │                        _freeze_stack / _unfreeze_stack /
 │   │                        _waiting_triggers — triggers raised while a cost
@@ -2480,7 +2494,7 @@ shandalar/
 │                              never reads a matchups.csv as a
 │                              translation table
 │
-├── tests/                   GUT suite — 5953 tests / ~154 093 asserts, ~380 s
+├── tests/                   GUT suite — 5967 tests / ~154 215 asserts, ~380 s
 │   ├── game_test.gd         class GameTest — the test DSL (see
 │   │                          ARCHITECTURE.md "Testing"): put_battlefield,
 │   │                          give_hand, put_synthetic (a permanent
@@ -2833,6 +2847,14 @@ shandalar/
 │    drag and the ability menu read positions from the event in hand,
 │    not `get_global_mouse_position()` — the same number under a mouse,
 │    and the only one a finger on the touch layer has;
+│    tests/unit/test_planner_tiebreak_2026_09_11.gd — THE PLANNER'S
+│    TIE-BREAK: holds_untapped read as a shape (the {T} another ability
+│    has spoken for, the body an animation buys, the mana creature
+│    deliberately not read), the Forest paying before the Factory, the
+│    Library and the Strip Mine, the utility land still reached when the
+│    cost needs it, the three keys ABOVE the tie-break proved unmoved,
+│    the fix at all four rungs through the real act() path, and the human
+│    seat's own auto-cast payment;
 │    tests/unit/test_mana_planner.gd — the moved planner (sources,
 │    colour-first plans, restricted mana, `Don't auto tap`, max X), the
 │    AI still answering through it, and the engine queries the auto-cast
