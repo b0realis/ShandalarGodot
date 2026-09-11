@@ -419,6 +419,27 @@ func _type_group() -> Control:
 	return strip
 
 
+## THE MEDALLION KEEPS THE COMPARISON IT WAS GIVEN (2026-09-11). In 1997
+## the Casting Cost / Power / Toughness button toggles only its filter's
+## ENABLE bit — `CHECK_BUTTON(24, "CASTCOST", global_filter_castcost,
+## FN_ENABLE)` (`deckdll.cpp:6653`) — and the mini-menu's own `FN_GT` /
+## `FN_LT` / `FN_EQ` sit beside it untouched (`GLE_FILTER`, `:7600`:
+## `valbase &= FN_ENABLE` keeps exactly that bit). Our [enum
+## DeckFilter.Cost] folds the enable INTO the mode, so `OFF` erases the
+## comparison: a player who chose `Equal to`, pressed the medallion up to
+## look at the whole pool and pressed it down again got `Less than or
+## equal to` instead. The strip remembers what was last chosen and puts
+## that back, which is the 1997 button's behaviour with our enum's shape.
+var _last_ranged := {}
+
+
+func _flip_ranged(key: String, mode: int, off: int, first: int) -> int:
+	if mode != off:
+		_last_ranged[key] = mode
+		return off
+	return int(_last_ranged.get(key, first))
+
+
 ## `Other Filters` — the original's group of six (Casting Cost, Power,
 ## Toughness, Ability, Rarity, Artist). The first three are here as the
 ## original drew them, buttons with right-click mini-menus that compare
@@ -432,8 +453,8 @@ func _other_group() -> Control:
 
 	var cost := _toggle("cast cost",
 		func() -> bool: return filter.cost_mode != DeckFilter.Cost.OFF,
-		func() -> void: filter.cost_mode = DeckFilter.Cost.OFF \
-			if filter.cost_mode != DeckFilter.Cost.OFF else DeckFilter.Cost.LE,
+		func() -> void: filter.cost_mode = _flip_ranged("cost",
+			filter.cost_mode, DeckFilter.Cost.OFF, DeckFilter.Cost.LE),
 		true)
 	_dress_icon(cost, COST_CELL)
 	_with_menu(cost, "Casting Cost", COST_MENU,
@@ -445,8 +466,8 @@ func _other_group() -> Control:
 
 	var power := _toggle("power",
 		func() -> bool: return filter.power_mode != DeckFilter.Rank.OFF,
-		func() -> void: filter.power_mode = DeckFilter.Rank.OFF \
-			if filter.power_mode != DeckFilter.Rank.OFF else DeckFilter.Rank.GE,
+		func() -> void: filter.power_mode = _flip_ranged("power",
+			filter.power_mode, DeckFilter.Rank.OFF, DeckFilter.Rank.GE),
 		true)
 	_dress_icon(power, POWER_CELL)
 	_with_menu(power, "Power", RANK_MENU,
@@ -458,8 +479,8 @@ func _other_group() -> Control:
 
 	var toughness := _toggle("toughness",
 		func() -> bool: return filter.toughness_mode != DeckFilter.Rank.OFF,
-		func() -> void: filter.toughness_mode = DeckFilter.Rank.OFF \
-			if filter.toughness_mode != DeckFilter.Rank.OFF else DeckFilter.Rank.GE,
+		func() -> void: filter.toughness_mode = _flip_ranged("toughness",
+			filter.toughness_mode, DeckFilter.Rank.OFF, DeckFilter.Rank.GE),
 		true)
 	_dress_icon(toughness, TOUGHNESS_CELL)
 	_with_menu(toughness, "Toughness", RANK_MENU,
@@ -502,10 +523,12 @@ func _other_group() -> Control:
 ## `labels` / `ticked` / `tick` (the list itself — `entries` are the
 ## filter's own keys, `labels` what the window writes for them: the
 ## registry keeps creature types in lower case, `@CREATURENAMES` wrote
-## them capitalised) and `finder`, on for the two lists long enough to
-## need a type-ahead. Every Callable edits the [DeckFilter] live and
-## re-reads the strip, so the Inventory re-lists under the window as
-## checks are ticked; `snapshot` / `restore` are what Cancel puts back.
+## them capitalised), `tick_many` for `Select All` / `Clear All`, which is
+## the same tick over a whole list and ONE re-listing at the end, and
+## `finder`, on for the two lists long enough to need a type-ahead. Every
+## Callable edits the [DeckFilter] live and re-reads the strip, so the
+## Inventory re-lists under the window as checks are ticked; `snapshot` /
+## `restore` are what Cancel puts back.
 func window_request(page: String) -> Dictionary:
 	return {
 		"window": true,
@@ -615,6 +638,18 @@ func _page(key: String, title: String, icon: Array, heads: Array,
 		"ticked": ticked,
 		"tick": func(entry: Variant, on: bool) -> void:
 			tick.call(entry, on)
+			refresh()
+			changed.emit(),
+		# `Select All` / `Clear All` IN ONE PASS (2026-09-11). The window's
+		# pair used to call `tick` once per row, and every call re-filtered
+		# the whole pool and rebuilt the Inventory: 126 rebuilds for one
+		# `Clear All` on the Creatures page — measured at 414 ms headless,
+		# a visible freeze on a screen whose whole point is that the pool
+		# follows the click. The ticks are the same ticks; only the
+		# re-listing is done once, at the end.
+		"tick_many": func(picked: Array, on: bool) -> void:
+			for entry in picked:
+				tick.call(entry, on)
 			refresh()
 			changed.emit(),
 		"finder": finder,
@@ -840,13 +875,21 @@ func _with_menu(button: Button, title: String, entries: Array[String],
 				or event.button_index != MOUSE_BUTTON_RIGHT:
 			return
 		button.accept_event()
-		var lines: Array[String] = []
-		var at: int = chosen.call()
-		for i in entries.size():
-			lines.append(("• " if i == at else "    ") + entries[i])
+		var lines_now := func() -> Array[String]:
+			var lines: Array[String] = []
+			var at: int = chosen.call()
+			for i in entries.size():
+				lines.append(("• " if i == at else "    ") + entries[i])
+			return lines
 		menu_requested.emit({
 			"title": title,
-			"lines": lines,
+			"lines": lines_now.call(),
+			# A MENU THAT CARRIES A NUMBER STAYS OPEN, so the bullet has to
+			# move to the line just picked — see
+			# [method DeckBuilderScreen._open_filter_menu]. A menu WITHOUT
+			# one (Gold, Land) is a 1997 popup menu and closes on the pick,
+			# so it is given no relabel and asks for none.
+			"relabel": lines_now if amount.is_valid() else Callable(),
 			"pick": func(index: int) -> void:
 				pick.call(index)
 				refresh()

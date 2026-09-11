@@ -1786,7 +1786,9 @@ static func _page_icons_builder_types() -> Dictionary:
 		_icon("Abilities — an eye",
 			"Cue card: \"" + DeckFilter.filtered_by_cue_card("ability", true)
 			+ "\". The tab wears the 1997 Ability medallion. Enable Filter "
-			+ "turns the page on; Native keeps cards that simply have an "
+			+ "turns the page on, and so does unticking any of the "
+			+ "thirteen — a tick that could not change anything would not "
+			+ "be a filter; Native keeps cards that simply have an "
 			+ "ability, Gives keeps cards that can bestow one; then the "
 			+ "thirteen, by their 1997 names with today's in brackets — "
 			+ "Ward is protection, Walk is landwalk, Web is reach, Stoning "
@@ -1829,6 +1831,13 @@ static func _page_icons_builder_types() -> Dictionary:
 			+ "list, and Select All and Clear All act on the rows in view, "
 			+ "so 'all the Elves and Elementals' is a finder reading 'el' "
 			+ "and one click."),
+		_text("Abilities, Rarity and Artists each have an Enable Filter "
+			+ "switch at the head of the page, where the original had a "
+			+ "medallion on the strip. Unticking anything in the list "
+			+ "presses that switch for you, so 'only the first strikers' "
+			+ "is Clear All and one tick; Select All never presses it, "
+			+ "because a list that excludes nothing is not a filter. The "
+			+ "well below the Showcase says so when it happens."),
 		_quote("Initially, all the artists are selected. You can use the "
 			+ "Clear All button to de-select everyone and start from "
 			+ "scratch. If you change your mind, you can use Select All to "

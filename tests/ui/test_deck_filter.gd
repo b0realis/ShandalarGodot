@@ -810,10 +810,21 @@ func test_the_aura_labels_are_the_1997_menu() -> void:
 # -- abilities --
 
 func test_the_ability_filter_is_inert_until_enabled() -> void:
+	# `check_abilities` (deckdll.cpp:7126) opens on the enable bit: with
+	# the switch up the whole pool stands, whatever the thirteen say.
+	# (Rewritten 2026-09-11. It used to prove the point by unticking all
+	# thirteen and reading the pool back unchanged — which is exactly the
+	# gesture the owner reported as broken, and unticking now presses the
+	# switch itself: see [method DeckFilter.tick_ability] and
+	# tests/ui/test_filter_window_2026_09_11.gd.)
+	assert_false(filter.ability_on, "the switch starts up")
+	assert_true(filter.matches(_card("Serra Angel")))
+	assert_true(filter.matches(_card("Plains")))
+	filter.ability_on = true
+	assert_true(filter.matches(_card("Serra Angel")), "a flier has one of the thirteen")
+	assert_false(filter.matches(_card("Plains")), "a land has none, so the switch alone hides it")
 	for ability in DeckAbilities.Ability.values():
 		filter.tick_ability(ability, false)
-	assert_true(filter.matches(_card("Serra Angel")), "nothing ticked, but the filter is off")
-	filter.ability_on = true
 	assert_false(filter.matches(_card("Serra Angel")), "on with nothing ticked shows no creature")
 	assert_false(filter.matches(_card("Plains")), "and every card is asked, a land too")
 

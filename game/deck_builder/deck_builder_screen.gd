@@ -2819,24 +2819,31 @@ func _open_filter_menu(request: Dictionary) -> void:
 			master.text = _check_text(enabled.call(), "Enable Filter"))
 		dialog.body().add_child(master)
 		dialog.body().add_child(HSeparator.new())
+	var amount: Callable = request.get("amount", Callable())
+	# A MENU THAT CARRIES A NUMBER STAYS OPEN, like a menu of checks
+	# (2026-09-11). It used to close on the pick, taking the `Number` field
+	# with it: choosing `Equal to` dismissed the dialog before the number
+	# beneath it could be touched, so setting "cost = 3" meant right-
+	# clicking the medallion twice and the field looked like decoration.
+	# 1997 asks for both halves in ONE gesture too — `GLE_FILTER`
+	# (`deckdll.cpp:7600`) pops `show_dialog_filter_gle` from the menu item
+	# itself and only then writes the mode — which is what the number on
+	# this menu is for, and what its own `Done` button already implied.
+	var stays_open := relabel.is_valid() or amount.is_valid()
 	var rows: Array[Button] = []
 	for i in lines.size():
 		var line := _menu_line(String(lines[i]))
 		rows.append(line)
 		line.pressed.connect(func() -> void:
+			if not stays_open:
+				dialog.dismiss()
+			request["pick"].call(i)
 			if relabel.is_valid():
-				request["pick"].call(i)
 				var now: Array = relabel.call()
 				for j in mini(now.size(), rows.size()):
-					rows[j].text = String(now[j])
-			else:
-				dialog.dismiss()
-				request["pick"].call(i))
+					rows[j].text = String(now[j]))
 		dialog.body().add_child(line)
-	var amount: Callable = request.get("amount", Callable())
-	if relabel.is_valid():
-		dialog.add_button("Done").pressed.connect(dialog.dismiss)
-	elif amount.is_valid():
+	if amount.is_valid():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		row.add_child(OriginalDialog.label("Number", 14))
@@ -2848,9 +2855,11 @@ func _open_filter_menu(request: Dictionary) -> void:
 			request["set_amount"].call(int(value)))
 		row.add_child(spin)
 		dialog.body().add_child(row)
-		# `Done`, not `Cancel` (`@DIALOGBUTTONS` has all three): the number
-		# is applied as it is turned — the Inventory re-lists under the
-		# dialog — so a button promising to undo it would be lying.
+	if stays_open:
+		# `Done`, not `Cancel` (`@DIALOGBUTTONS` has all three): the pick
+		# and the number are applied as they are made — the Inventory
+		# re-lists under the dialog — so a button promising to undo them
+		# would be lying.
 		dialog.add_button("Done").pressed.connect(dialog.dismiss)
 	else:
 		dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
@@ -2883,11 +2892,20 @@ static func _check_text(on: bool, text: String) -> String:
 ##   the filter is edited live so the window answers "what would this
 ##   show?" as it is used. Cancel is still honest because it restores the
 ##   snapshot the window opened on — all five pages of it.
+##   AND SINCE 2026-09-11 IT FOLLOWS THE FIRST TICK TOO: unticking a check
+##   on a page whose list is dead without its `Enable Filter` switches that
+##   filter on ([method DeckFilter.tick_ability], where the 1997 medallion
+##   it replaces is written down), the head line above the list re-letters
+##   to say so, and the well says it once ([constant ENABLED_HINT]).
 ## - THE HINT. The creature list is an OR term on top of Summon
 ##   (`check_creatures`, deckdll.cpp:6995), so ticking Elf with Summon
 ##   still down changes nothing; the Situation Bar says so
 ##   ([constant LIST_HINT]) the moment the list goes on.
 const LIST_HINT := "The list adds to Summon — untick Summon to see only the listed types"
+## Said when a tick in a list switches that page's own `Enable Filter` on
+## — see [method DeckFilter.tick_ability], which is where the 1997
+## medallion this replaces is written down.
+const ENABLED_HINT := "%s filter is on — untick Enable Filter to see the whole pool again"
 const WINDOW_SIZE := Vector2(720, 560)
 const TAB_SIZE := Vector2(170, 32)
 const LIST_COLUMNS := 2
@@ -2946,13 +2964,24 @@ func _open_filter_window(request: Dictionary) -> void:
 
 	# `Select All` / `Clear All` act on the rows in view, so a finder that
 	# has narrowed the list to the Elves makes "all the Elves" one click.
+	# THE WHOLE LIST IS ONE TICK (2026-09-11): `tick_many` re-lists the
+	# Inventory once instead of once per row — see [method FilterBar._page].
 	for pair in [["Select All", true], ["Clear All", false]]:
 		dialog.add_button(String(pair[0])).pressed.connect(func() -> void:
 			var page: Dictionary = view["page"]
+			var on := bool(pair[1])
+			var keys: Array = []
 			for row in view["rows"]:
-				if row["line"].visible and page["ticked"].call(row["key"]) != bool(pair[1]):
-					page["tick"].call(row["key"], bool(pair[1]))
-					row["line"].text = _check_text(bool(pair[1]), String(row["label"])))
+				if row["line"].visible and page["ticked"].call(row["key"]) != on:
+					keys.append(row["key"])
+					row["line"].text = _check_text(on, String(row["label"]))
+			if keys.is_empty():
+				return
+			var was_on := _page_enabled(view)
+			page["tick_many"].call(keys, on)
+			_relabel_heads(view)
+			if not was_on and _page_enabled(view):
+				_say(ENABLED_HINT % String(page["title"])))
 	dialog.add_button("OK").pressed.connect(dialog.dismiss)
 	dialog.add_button("Cancel").pressed.connect(func() -> void:
 		request["restore"].call(kept)
@@ -2969,12 +2998,14 @@ func _fill_filter_page(sheet: VBoxContainer, page: Dictionary, view: Dictionary)
 	_window_page = String(page["key"])
 	view["page"] = page
 	view["rows"] = []
+	view["heads"] = []
 
 	for head in page["heads"]:
 		if head.is_empty():
 			sheet.add_child(HSeparator.new())
 			continue
 		var line := _menu_line(_check_text(head["get"].call(), String(head["text"])))
+		view["heads"].append({"line": line, "head": head})
 		line.pressed.connect(func() -> void:
 			var on: bool = not head["get"].call()
 			head["set"].call(on)
@@ -3020,8 +3051,16 @@ func _fill_filter_page(sheet: VBoxContainer, page: Dictionary, view: Dictionary)
 		var line := _menu_line(_check_text(ticked.call(key), label))
 		line.custom_minimum_size.x = 200
 		line.pressed.connect(func() -> void:
+			var was_on: bool = _page_enabled(view)
 			page["tick"].call(key, not ticked.call(key))
-			line.text = _check_text(ticked.call(key), label))
+			line.text = _check_text(ticked.call(key), label)
+			# Unticking a check puts its page's filter in force
+			# ([method DeckFilter.tick_ability]), so the `Enable Filter`
+			# line above has to say so — and the well says it once, the
+			# way [constant LIST_HINT] does for the creature list.
+			_relabel_heads(view)
+			if not was_on and _page_enabled(view):
+				_say(ENABLED_HINT % String(page["title"])))
 		column.add_child(line)
 		rows.append({"line": line, "key": key, "label": label, "needle": label.to_lower()})
 	if entries.is_empty():
@@ -3035,6 +3074,26 @@ func _fill_filter_page(sheet: VBoxContainer, page: Dictionary, view: Dictionary)
 				row["line"].visible = needle == "" or String(row["needle"]).contains(needle))
 		# Deferred: the first page is filled before the window is shown.
 		finder.call_deferred("grab_focus")
+
+
+## Re-read every check line ABOVE a page's list. They are latched at draw
+## time, and since 2026-09-11 a tick in the list can move one of them
+## (`Enable Filter`), so a page whose heads were never re-read would show
+## `[  ] Enable Filter` over a filter that is in force.
+func _relabel_heads(view: Dictionary) -> void:
+	for row in view.get("heads", []):
+		var head: Dictionary = row["head"]
+		row["line"].text = _check_text(head["get"].call(), String(head["text"]))
+
+
+## Is the page in view narrowing the Inventory through its own `Enable
+## Filter`? Read off the head lines rather than named per page, so a sixth
+## page would need nothing here.
+func _page_enabled(view: Dictionary) -> bool:
+	for row in view.get("heads", []):
+		if String(row["head"]["text"]) == "Enable Filter":
+			return bool(row["head"]["get"].call())
+	return false
 
 
 ## A clickable list line for the mini-menu and the Load Deck list. The

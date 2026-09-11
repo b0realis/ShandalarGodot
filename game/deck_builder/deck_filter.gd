@@ -353,7 +353,8 @@ var creature_types: Dictionary = {}
 var enchantments: Dictionary = {}
 ## `@ABILITY` — the filter is a whole ("Enable Filter"); Native and Gives
 ## are its two scopes and [member abilities] the thirteen it looks for.
-## Ticking everything while the filter is off is the 1997 default.
+## Ticking everything while the filter is off is the 1997 default, and
+## unticking any of the thirteen switches this on ([method tick_ability]).
 var ability_on := false:
 	set(value):
 		if ability_on != value:
@@ -617,16 +618,60 @@ func tick_enchantment(kind: int, on: bool) -> void:
 	_tick(enchantments, kind, on)
 
 
+## THE THREE `Enable Filter` PAGES — and A TICK THAT CANNOT CHANGE
+## ANYTHING IS NOT A FILTER (2026-09-11).
+##
+## `@ABILITY`, `@RARITY` and `@ARTIST` each have an `Enable Filter` switch
+## (`@LONGLIST`, `Menus.txt:21`) that their list is dead without:
+## `check_abilities` (`deckdll.cpp:7126`) opens `if (!(global_filter_
+## abilities & 1)) return true;`, and so do the other two. In 1997 that
+## switch was A MEDALLION ON THE STRIP — button 27 for Ability
+## (`CHECK_BUTTON(27, "ABILITY", global_filter_abilities, FA_ENABLE)`,
+## `deckdll.cpp:6653`) — pressed before its mini-menu was ever opened, and
+## the menu's own items re-listed the card list only once it was down
+## (`TOGGLE_FILTER(…, FA_FIRSTSTRIKE, FA_ENABLE)`, `:7701`: it flips the
+## bit, then `if (val & base) refresh_filters = true`).
+##
+## OUR STRIP HAS NO SUCH MEDALLION. There was no room for three more, so
+## the three pages live behind one funnel ([method FilterBar.window_pages])
+## and the enable is a LINE INSIDE the page. A player who unticked twelve
+## of the thirteen abilities and left First strike therefore changed
+## nothing at all, and the Inventory stood at the whole pool — the owner's
+## own report (2026-09-11): *"you select only first strike and only
+## creatures with first strike are below - now it does not work"*, and
+## *"whatever filters you click in the window should reflect in card-pool
+## in the bottom."*
+##
+## So a NARROWING tick — one that switches a check OFF — turns the page's
+## filter on with it. A WIDENING tick never does, which is what keeps
+## `Select All` meaning "stop narrowing" rather than switching a filter on
+## over a list that excludes nothing. The switch stays on the page, so the
+## view only it can reach — everything ticked and the filter on, i.e.
+## *every card that has any ability at all* — is still one click.
+##
+## THE OTHER TWO PAGES ARE LEFT ALONE, and deliberately: `@ENCHANTMENT`
+## has no enable at all, so its six checks already reach the Inventory,
+## and `@CREATURE`'s "Summon from &list..." is not a master switch but an
+## OR TERM on top of Summon (`check_creatures`, `deckdll.cpp:6995`), so
+## switching it on under a depressed Summon would show the same cards
+## again — [constant DeckBuilderScreen.LIST_HINT] is what that page needs,
+## and it has it.
 func tick_ability(ability: int, on: bool) -> void:
 	_tick(abilities, ability, on)
+	if not on:
+		ability_on = true
 
 
 func tick_rarity(rarity: int, on: bool) -> void:
 	_tick(rarities, rarity, on)
+	if not on:
+		rarity_on = true
 
 
 func tick_artist(name: String, on: bool) -> void:
 	_tick(artists, name, on)
+	if not on:
+		artist_on = true
 
 
 func _tick(list: Dictionary, key: Variant, on: bool) -> void:
