@@ -13,8 +13,10 @@ We take TWO variants per card:
   the enlarged examine view).
 - `border_crop` (the REAL full card scan) -> assets/cardart/<snake_name>_card.jpg
   Piles show it as their fully-visible bottom card, exactly like the
-  original/s30 (GameSkin.card_scan resolves it). Re-running skips files that already exist
-(resume-safe); --force re-downloads everything.
+  original/s30 (GameSkin.card_scan resolves it).
+
+Re-running skips files that already exist (resume-safe); --force
+re-downloads everything.
 
 Usage:
     python3 tools/fetch_card_art.py            # fetch missing art
@@ -29,6 +31,7 @@ Uses only the standard library; polite to the API (120 ms between calls,
 per Scryfall's guidelines).
 """
 
+import argparse
 import json
 import sys
 import time
@@ -36,9 +39,40 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+# The family banner and the one version string (tools/tool_banner.py).
+# The insert is what lets this tool find it when it is run from the flat
+# folder beside a PACKAGED game rather than from a checkout.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tool_banner  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "cards" / "data"
 OUT_DIR = ROOT / "assets" / "cardart"
+
+TOOL = "fetch_card_art.py"
+## The tool's name in the half-height box-drawing face the whole family is
+## set in (DeckLab/lab_console.gd's WORDMARK is the same font). CARD ART,
+## because the sibling that fetches the card TEXT says CARD DATA.
+WORDMARK = (
+    "┌─┐┌─┐┬─┐┌┬┐  ┌─┐┬─┐┌┬┐",
+    "│  ├─┤├┬┘ ││  ├─┤├┬┘ │ ",
+    "└─┘┴ ┴┴└──┴┘  ┴ ┴┴└─ ┴ ",
+)
+CAPTION = ("Shandalar 1997 · Scryfall", "one picture per card")
+
+EPILOG = """\
+    python3 tools/fetch_card_art.py               # fetch what is missing
+    python3 tools/fetch_card_art.py --force       # re-fetch everything
+    python3 fetch_card_art.py --out cardart/      # beside a shipped game
+
+Two files per card: <name>.jpg (the artwork alone, which the game frames
+itself) and <name>_card.jpg (the whole card scan, for the pile that shows
+its bottom card). Re-running skips what is already there, so an
+interrupted fetch resumes. Nothing here is committed — the pictures are
+Scryfall's, and assets/cardart/ is gitignored.
+
+%s
+""" % tool_banner.BANNER_HELP
 
 API = "https://api.scryfall.com/cards/named"
 HEADERS = {
@@ -87,11 +121,25 @@ def pool() -> list[tuple[str, str]]:
     1997 remake). Falls back to asking Scryfall for the eight sets when
     there is no checkout here, so the script works next to a shipped
     binary as well as inside the repo."""
-    if DATA_DIR.is_dir() and any(DATA_DIR.glob("*.json")):
-        seen: dict[str, str] = {}
+    seen: dict[str, str] = {}
+    if DATA_DIR.is_dir():
         for data_file in sorted(DATA_DIR.glob("*.json")):
-            for card in json.loads(data_file.read_text()):
+            # NOT EVERY cards/data/*.json IS A SET'S CARD LIST, and this
+            # loop assumed it was. `sets.json` (set names, dates and
+            # history, added 2026-09-03) is a DICT, and iterating a dict
+            # yields its keys — so `card["name"]` raised "string indices
+            # must be integers" and this tool, the one a player is told to
+            # run for the 897 pictures, could not start in a checkout at
+            # all from that day until 2026-09-11.
+            # tools/build_card_packs.py, which calls this, went down with
+            # it. A set's card file is a LIST; anything else in the folder
+            # is somebody else's.
+            records = json.loads(data_file.read_text())
+            if not isinstance(records, list):
+                continue
+            for card in records:
                 seen.setdefault(card["name"], card["set"])
+    if seen:
         return sorted(seen.items())
     return pool_from_scryfall()
 
@@ -117,8 +165,11 @@ def pool_from_scryfall() -> list[tuple[str, str]]:
     return sorted(seen.items())
 
 
-def fetch_art_url(name: str, set_code: str) -> str | None:
-    """The art_crop URL for a card, preferring its own set's printing."""
+def fetch_art_url(name: str, set_code: str) -> dict | None:
+    """Scryfall's whole `image_uris` map for a card — every variant, not
+    just the one this function is named after — preferring the card's own
+    set's printing. (The annotation said `str | None` until 2026-09-11;
+    every caller already read it as the dict it is.)"""
     for params in ({"exact": name, "set": set_code}, {"exact": name}):
         url = API + "?" + urllib.parse.urlencode(params)
         time.sleep(DELAY_S)   # pace EVERY metadata call, success or not
@@ -139,8 +190,15 @@ def fetch_art_url(name: str, set_code: str) -> str | None:
 VARIANTS = [(".jpg", "art_crop"), ("_card.jpg", "border_crop")]
 
 
-def targets_for(name: str, out_dir: Path = OUT_DIR) -> list[tuple[Path, str]]:
-    """[(destination file, Scryfall image variant)] for one card."""
+def targets_for(name: str, out_dir: Path | None = None) -> list[tuple[Path, str]]:
+    """[(destination file, Scryfall image variant)] for one card.
+
+    THE DEFAULT IS RESOLVED WHEN CALLED, not when this module loads. It
+    used to read `out_dir: Path = OUT_DIR`, which froze the folder at
+    import time and made `--out` a flag that created a directory and
+    wrote nothing into it (2026-09-11).
+    """
+    out_dir = OUT_DIR if out_dir is None else out_dir
     return [(out_dir / (snake(name) + suffix), variant)
             for suffix, variant in VARIANTS]
 
@@ -171,16 +229,33 @@ def fetch_missing_art(name: str, set_code: str,
     return done, failed
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     global OUT_DIR
-    force = "--force" in sys.argv
-    if "--out" in sys.argv:
-        OUT_DIR = Path(sys.argv[sys.argv.index("--out") + 1]).expanduser()
+    parser = argparse.ArgumentParser(
+        prog=TOOL, description=__doc__.split("\n\n")[0], epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--out", metavar="DIR", type=Path, default=OUT_DIR,
+                        help="where the pictures go (default: %(default)s)")
+    parser.add_argument("--force", action="store_true",
+                        help="re-download every picture, not only the missing")
+    tool_banner.add_version_flag(parser, TOOL, __file__)
+    args = parser.parse_args(argv)
+    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py).
+    tool_banner.show(WORDMARK, CAPTION, __file__)
+    OUT_DIR = args.out.expanduser()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     cards = pool()
     done = skipped = failed = 0
     for i, (name, set_code) in enumerate(cards):
-        missing = [t for t in targets_for(name) if force or not t[0].exists()]
+        # OUT_DIR IS PASSED, NOT INHERITED. `targets_for`'s default
+        # argument is bound when the module loads, so for as long as this
+        # line read `targets_for(name)` the `--out` flag moved the folder
+        # that gets CREATED and nothing else: every download still aimed
+        # at assets/cardart/ (found 2026-09-11 — beside a packaged game
+        # that folder does not exist, so a player following setup.txt got
+        # 897 failed downloads and exit 1).
+        missing = [t for t in targets_for(name, OUT_DIR)
+                   if args.force or not t[0].exists()]
         if not missing:
             skipped += 1
             continue

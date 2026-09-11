@@ -13,7 +13,7 @@ numbers:
 | | |
 |---|---|
 | Card pool | **897 implemented, `cards/todo/` EMPTY** — M3 complete |
-| Test suite | **6058 tests, 0 failing, 352 scripts** (155 854 asserts, the 2026-09-11 gate), `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
+| Test suite | **6058 tests, 0 failing, 352 scripts** (155 854 asserts, the 2026-09-11 gate); tools self-tests **191 OK**, `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
 | Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
@@ -11965,6 +11965,73 @@ committed from it. `decks/ratings.txt` is byte-unchanged. The Lab itself is
 md5-identical across all fifty-eight commits (only `elo_ledger.gd` differs, and
 every run was `--no-elo`), so the old tree ran on its own Lab and there was no
 format to reconcile.
+
+## THE TOOLS GET A FACE, AND TWO OF THEM GET THEIR LEGS BACK (2026-09-11)
+
+The owner asked for four things across the command line: a pass over every tool,
+the Deck Lab's banner on all of them, the version printed everywhere, and an `-h`
+on each. **The first of those turned out to be the one that mattered.**
+
+**WHAT THE PASS FOUND.** `tools/fetch_card_art.py` — the script a player is told
+by name to run for the 897 pictures — **could not start inside a checkout, and had
+not been able to since 2026-09-03.** `cards/data/` gained `sets.json` that day
+(set names, dates and history: a DICT), and `pool()` reads the folder by its glob
+and iterates every file as a list of card records. Iterating a dict yields its
+keys, so `card["name"]` raised *"string indices must be integers"* on the first
+one. `tools/build_card_packs.py` calls that function and went down with it — and
+separately offered `sets` as a ninth set to pack, because `local_sets()` reads the
+same folder the same way. **Eight days, two tools, one sidecar**; unnoticed because
+every test in `tools/` builds its own clean fixture folder and no fixture had a
+sidecar in it. Now one does.
+
+**The second bug was older and quieter.** `--out` on the card-art tool moved the
+directory it CREATES and nothing else: `targets_for`'s default argument was bound
+when the module loaded, so every download still aimed at `assets/cardart/`. From
+the repo root that is the same folder and the flag looked fine; **beside a packaged
+game — which is the only place `setup.txt` uses it — it resolves one level above
+the game and does not exist, so a player following the shipped instructions got 897
+failed downloads and exit 1.** The default is now resolved when the function is
+called, which is a trap that cannot be re-laid.
+
+And **`build_release.sh --help` had been reading `sed -n '2,50p'` of its own
+header** for long enough that the header outgrew it: the help stopped mid-sentence,
+inside *"WHAT SHIPS, AND WHAT DOES NOT"*. It now reads down to the first ALL-CAPS
+prose heading, so it grows and shrinks with the block it quotes. The same shape of
+rot as the `setup.txt` flag that never existed, and it is worth saying plainly: **a
+help text addressed by line number is a help text that will one day lie.**
+
+**WHAT WAS ADDED.** Twelve tools, twelve wordmarks, one design —
+`DeckLab/lab_console.gd`'s, which was already right and did not need rethinking:
+three rows of the same half-height box-drawing face, a two-line caption, the five
+mana pips signing the last row. The Lab's letterforms were re-derived rather than
+copied by eye and render byte for byte identical to the committed ones, so the
+family really is set in one face. The Python side is `tools/tool_banner.py`, the
+shell side `tools/banner.sh`, and both keep the Lab's rule exactly: **stderr, and
+only when stderr is a terminal.** That rule is not decoration policy, it is
+correctness — `skin_catalogue.py --stdout` IS the catalogue, `build_release.sh`'s
+stdout names the files a release is made of, and `run_tests.sh` and `duel_soak.sh`
+grep their own logs. `tool > log 2>&1` gets nothing, without anyone having to
+remember a flag.
+
+The version comes from `project.godot`'s `config/version` and from nowhere else:
+`ProjectSettings` in GDScript, a walk up the tree in Python and in shell. **A tool
+that cannot find the file says "version unknown" and names the folder it
+searched** — which is what the four tools shipped beside a packaged game now say,
+and the honest answer. `tool_banner.py` therefore travels with them into both
+package stages; a flat folder of four tools importing a module nobody copied would
+be a worse bug than the ones this pass fixed, so a test parses `build_release.sh`
+and pins the two copy lists to that fact.
+
+**THE LAB ITSELF** gained the version on its signature line and `-V` in its wrapper
+(answered by the shell, so asking the version never starts an engine), and
+`SHANDALAR_NO_BANNER` maps onto its own older `DECK_LAB_NO_BANNER` so one export
+silences all twelve.
+
+**STILL OPEN**: `game/deck_builder/deck_store.gd` says 317 decks twice; the tree
+holds 319 and the suite pins it. `build_card_packs.py` keeps a
+`TOOL_VERSION = "1.0"` of its own, stamped into every pack's provenance — a second
+version string, deliberately not the project's, and worth a ruling rather than a
+quiet change.
 
 ## Standing quality gates
 

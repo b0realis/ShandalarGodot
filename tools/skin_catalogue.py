@@ -16,7 +16,7 @@ The catalogue is GENERATED, not typed, so it cannot drift from the code:
 the names come from `import_original.py`'s MANIFEST (the one list the
 importer, the loader and the tests share), the dimensions are measured
 off an imported skin folder, and every key must have a note here or the
-script refuses to write. `tests/tools/test_skin_catalogue.py` holds the
+script refuses to write. `tools/test_skin_catalogue.py` holds the
 committed text to the manifest.
 
     python3 tools/skin_catalogue.py                  # rewrite docs/skin-catalogue.txt
@@ -42,6 +42,33 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import import_original as importer  # noqa: E402
+import tool_banner  # noqa: E402  — the family banner and the one version
+
+TOOL = "skin_catalogue.py"
+## The tool's name in the half-height box-drawing face the whole family is
+## set in (DeckLab/lab_console.gd's WORDMARK is the same font).
+WORDMARK = (
+    "┌─┐┌─┐┌┬┐┌─┐┬  ┌─┐┌─┐┬ ┬┌─┐",
+    "│  ├─┤ │ ├─┤│  │ ││ ┬│ │├┤ ",
+    "└─┘┴ ┴ ┴ ┴ ┴┴─┘└─┘└─┘└─┘└─┘",
+)
+CAPTION = ("Shandalar 1997 · skin spec", "what a skin has to contain")
+
+EPILOG = """\
+    python3 tools/skin_catalogue.py                   rewrite the catalogue
+    python3 tools/skin_catalogue.py --skin DIR        measure another folder
+    python3 tools/skin_catalogue.py --stdout          print it, write nothing
+    python3 tools/skin_catalogue.py --check my.zip    what a skin is missing
+    python3 tools/skin_catalogue.py --check my_skin/  a folder works too
+
+The catalogue is GENERATED from import_original.py's MANIFEST and
+measured off an imported skin, so it cannot drift from the code; a key
+with no note in this script makes the run refuse to write.
+--stdout IS the catalogue, so it goes to stdout alone and the banner
+never joins it.
+
+%s
+""" % tool_banner.BANNER_HELP
 
 DEFAULT_SKIN = ROOT / "assets" / "original"
 DEFAULT_CARDART = ROOT / "assets" / "cardart"
@@ -760,7 +787,9 @@ def check(target: Path) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(
+        prog=TOOL, description=__doc__.split("\n\n")[0], epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--skin", type=Path, default=DEFAULT_SKIN,
                         help="the imported skin folder to measure")
     parser.add_argument("--cardart", type=Path, default=DEFAULT_CARDART,
@@ -771,7 +800,11 @@ def main() -> int:
                         help="report what a skin is missing; writes nothing")
     parser.add_argument("--stdout", action="store_true",
                         help="print the catalogue instead of writing it")
+    tool_banner.add_version_flag(parser, TOOL, __file__)
     args = parser.parse_args()
+    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py), and
+    # here that rule earns its keep: `--stdout` IS the catalogue.
+    tool_banner.show(WORDMARK, CAPTION, __file__)
     if args.check:
         return check(args.check)
     text = render(args.skin, args.cardart)

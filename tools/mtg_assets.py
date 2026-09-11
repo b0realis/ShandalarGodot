@@ -54,6 +54,39 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 IMPORTER = HERE / "import_original.py"
 
+# The family banner and the one version string (tools/tool_banner.py).
+# The insert is what lets this tool find it when a PLAYER runs it from
+# the flat folder beside the packaged game rather than from a checkout.
+sys.path.insert(0, str(HERE))
+import tool_banner  # noqa: E402
+
+TOOL = "mtg_assets.py"
+## The tool's name in the half-height box-drawing face the whole family is
+## set in (DeckLab/lab_console.gd's WORDMARK is the same font).
+WORDMARK = (
+    "┌┬┐┌┬┐┌─┐  ┌─┐┌─┐┌─┐┌─┐┌┬┐┌─┐",
+    "│││ │ │ ┬  ├─┤└─┐└─┐├┤  │ └─┐",
+    "┴ ┴ ┴ └─┘  ┴ ┴└─┘└─┘└─┘ ┴ └─┘",
+)
+CAPTION = ("Shandalar 1997 · the art zips", "check, import, pack a skin")
+
+EPILOG = """\
+    python3 mtg_assets.py                          explains what it needs
+    python3 mtg_assets.py --check   /path/to/game  looks, writes nothing
+    python3 mtg_assets.py --install /path/to/game  imports, writes the zip
+    python3 mtg_assets.py --from-skin my_skin/     zip a folder you already have
+    python3 fetch_card_art.py --out cardart/       the pictures, from Scryfall
+    python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
+
+TWO ZIPS, NEVER ONE: `original_skin.zip` is the 1997 material and
+`cardart.zip` is the card pictures — different sources, different
+licences, and the game mounts each in place (Options > Skin, or dropped
+on the window). Nothing here is fatal: a missing file is reported and
+skipped, and an archive built from a partial install is a good archive.
+
+%s
+""" % tool_banner.BANNER_HELP
+
 # What an install looks like from the outside. These are the names the
 # importer hunts for; finding SOME of them is enough, and the check
 # reports on each group rather than passing or failing as a whole.
@@ -390,7 +423,7 @@ def write_zip(skin: Path, out: Path,
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=__doc__.splitlines()[0],
+        prog=TOOL, description=__doc__.splitlines()[0], epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--install", action="append", metavar="DIR",
                         help="your 1997 install; repeatable, first match wins")
@@ -417,7 +450,12 @@ def main() -> int:
     parser.add_argument("--transcode-movies", metavar="SKIN",
                         help="rebuild the coin-toss sheets from the AVIs "
                              "already in SKIN/movies/ (needs ffmpeg)")
+    tool_banner.add_version_flag(parser, TOOL, __file__)
     args = parser.parse_args()
+    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py):
+    # build_release.sh runs this with its output in a log file, and that
+    # log is what a failed build prints.
+    tool_banner.show(WORDMARK, CAPTION, __file__)
 
     if args.transcode_movies:
         return transcode_movies(Path(args.transcode_movies).expanduser())

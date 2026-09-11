@@ -24,7 +24,7 @@ your home directory.
 ---------------------------------------------------------------------
 
     Shandalar.x86_64     the game
-    Shandalar.pck        its code, the 897 cards' rules, and 317 decks
+    Shandalar.pck        its code, the 897 cards' rules, and 319 decks
     skin/                the art's folder, EMPTY BUT FOR THE CATALOGUE:
                          the art is not in this zip (see below)
     skin/SKIN.txt        the catalogue: every file a skin holds, its
@@ -38,6 +38,18 @@ your home directory.
     deck_lab.sh          headless deck testing (section 6)
     DECKLAB.md           its manual
     setup.txt            this file
+    mtg_assets.py        builds the art archive from your own 1997 disc
+                         (section 5)
+    import_original.py   the importer it runs, for loose files instead
+                         of a zip (section 5)
+    fetch_card_art.py    the card pictures, from Scryfall (section 4)
+    skin_catalogue.py    says what a skin zip of yours is missing
+    tool_banner.py       the banner and the version line those four
+                         share; not a tool of its own
+
+Every script in this folder answers `-h` for its own manual and
+`--version` for the build it came from. Those four .py files need
+nothing but Python 3 — no libraries, no installation.
 
 The .pck holds no art of any kind, and neither does this zip: the game
 is one download, the art another. Art is read off the filesystem at
@@ -252,7 +264,7 @@ interval that says how much of it to believe.
                   --deck-b res://decks/blue_skies.deck --games 200
     ./deck_lab.sh --matrix res://decks/ --games 200
 
-The 317 decks that shipped with the game live inside it and are addressed
+The 319 decks that shipped with the game live inside it and are addressed
 as `res://decks/...`; a deck of your own is an ordinary path. Results go
 to a folder you name with --out: a readable report.txt, a results.json, a
 matchups.csv and two SVG charts.

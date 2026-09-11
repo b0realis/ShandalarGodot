@@ -9,6 +9,7 @@
 #   ./duel_soak.sh --seeds 4242             # replay one seed (both modes)
 #   ./duel_soak.sh --rules fifth            # every fork the 1997 way
 #   ./duel_soak.sh --help
+#   ./duel_soak.sh --version                # the one version string
 #
 # Exit 0 only when every duel reached game over AND the log holds no
 # ERROR, WARNING or SCRIPT ERROR line beyond Xvfb's own two (the X input
@@ -30,6 +31,23 @@
 # guard is SOAK_TIMEOUT seconds (default 1800).
 set -uo pipefail
 cd "$(dirname "$0")"
+
+# THE FAMILY BANNER (tools/banner.sh): stderr, and only on a terminal.
+# stdout here is the SOAK lines and the "not clean" report, and this
+# script's own grep reads the run's log — decoration may reach neither.
+. tools/banner.sh
+BANNER_ROW_0='┌┬┐┬ ┬┌─┐┬    ┌─┐┌─┐┌─┐┬┌─'
+BANNER_ROW_1=' │││ │├┤ │    └─┐│ │├─┤├┴┐'
+BANNER_ROW_2='─┴┘└─┘└─┘┴─┘  └─┘└─┘┴ ┴┴ ┴'
+BANNER_CAP_0='Shandalar 1997 · live duels'
+BANNER_CAP_1='whole games under Xvfb'
+
+for arg in "$@"; do
+	case "$arg" in
+		-V | --version) shandalar_version_line "duel_soak.sh" .; exit 0 ;;
+	esac
+done
+shandalar_banner .
 
 GODOT="${GODOT:-../tools/godot}"
 if [ ! -x "$GODOT" ]; then GODOT=godot; fi
@@ -57,6 +75,8 @@ for arg in "$@"; do
 		timeout -k 5 60 "$GODOT" --headless --path . -s res://tools/duel_soak.gd -- --help \
 			> "$log" 2>&1 </dev/null
 		grep -v '^Godot Engine' "$log"
+		echo
+		shandalar_banner_help
 		exit 0
 	fi
 done

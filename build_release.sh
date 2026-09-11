@@ -46,6 +46,10 @@
 #                                   #    #87626's error lines in the
 #                                   #    terminal (see the export below);
 #                                   #    the default is `debug`
+#   ./build_release.sh -h           # this block
+#   ./build_release.sh -V           # the one version string, from
+#                                   #    project.godot — the same one the
+#                                   #    zips name themselves with
 #
 # WHAT SHIPS, AND WHAT DOES NOT. The .pck carries game/, engine/, cards/
 # (scripts + cards/data/) and every deck under decks/ — about 5 MB. It
@@ -101,6 +105,34 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# THE FAMILY BANNER (tools/banner.sh). IT CHANGES NOTHING THIS SCRIPT
+# WRITES: it goes to stderr and only when stderr is a terminal, while
+# every line a build is judged by — "exporting …", "ok: …", "package: …",
+# "release files: …", and every BUILD FAILED — is exactly where it was.
+# A redirected or logged build (`./build_release.sh > build.log 2>&1`) is
+# byte for byte the build it was before 2026-09-11.
+. tools/banner.sh
+BANNER_ROW_0='┬─┐┌─┐┬  ┌─┐┌─┐┌─┐┌─┐'
+BANNER_ROW_1='├┬┘├┤ │  ├┤ ├─┤└─┐├┤ '
+BANNER_ROW_2='┴└─└─┘┴─┘└─┘┴ ┴└─┘└─┘'
+BANNER_CAP_0='Shandalar 1997 · the build'
+BANNER_CAP_1='export, smoke-boot, package'
+
+# THE USAGE BLOCK IS THE TOP OF THIS FILE, read down to the first prose
+# heading instead of to a fixed line number. What this replaced was
+# `sed -n '2,50p'`, and the header had long since grown past line 50: by
+# 2026-09-11 `--help` stopped mid-sentence, in the middle of "WHAT SHIPS,
+# AND WHAT DOES NOT" (found by running it). Every prose section under the
+# invocations opens with an ALL-CAPS heading, so that is the delimiter —
+# the help now grows and shrinks with the block it quotes.
+usage() {
+	awk 'NR < 2 { next }
+	     !/^#/ { exit }
+	     /^# [A-Z][A-Z]/ { exit }
+	     { sub(/^# ?/, ""); print }' "$0"
+	shandalar_banner_help
+}
+
 OUT="../shandalar-build/linux64"
 PRESET="Linux 64"
 LINK_SKIN=0
@@ -115,7 +147,8 @@ while [ $# -gt 0 ]; do
 		--package) PACKAGE=1; shift ;;
 		--cardart) CARDART=1; shift ;;
 		--web) WEB=1; PRESET="Web"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/web"; shift ;;
-		-h|--help) sed -n '2,50p' "$0" | sed 's/^# \?//'; exit 0 ;;
+		-h|--help) usage; exit 0 ;;
+		-V|--version) shandalar_version_line "build_release.sh" .; exit 0 ;;
 		*) echo "build_release: unknown argument '$1'" >&2; exit 3 ;;
 	esac
 done
@@ -123,6 +156,7 @@ if [ "$CARDART" = 1 ] && { [ "$WEB" != 1 ] || [ "$LINK_SKIN" != 1 ]; }; then
 	echo "build_release: --cardart goes with --web --skin (the Linux play copy gets the card art on its own)" >&2
 	exit 3
 fi
+shandalar_banner .
 
 GODOT="${GODOT:-../tools/godot}"
 if [ ! -x "$GODOT" ]; then GODOT=godot; fi
@@ -355,8 +389,13 @@ if [ "$WEB" = 1 ]; then
 		cp -p "$OUT"/index.* "$STAGE/"
 		cp -p docs/skin-catalogue.txt "$STAGE/skin/SKIN.txt"
 		cp -p docs/setup-web.txt "$STAGE/README.txt"
+		# tool_banner.py is NOT optional here: the four scripts above
+		# import it for their banner and their --version, and the stage
+		# is flat, so leaving it behind ships four tools that cannot
+		# start. tools/test_tool_banner.py pins this list to that fact.
 		cp -p tools/mtg_assets.py tools/import_original.py \
-		      tools/fetch_card_art.py tools/skin_catalogue.py "$STAGE/tools/"
+		      tools/fetch_card_art.py tools/skin_catalogue.py \
+		      tools/tool_banner.py "$STAGE/tools/"
 		zip_stage "$STAGE" "Shandalar-$VERSION-web"
 		echo "release files: $PKG_DIR/Shandalar-$VERSION-web.zip + $PKG_DIR/Shandalar-$VERSION-web-with-skin.zip"
 	fi
@@ -469,7 +508,7 @@ SHORTCUT
 #   ./deck_lab.sh --deck-a res://decks/big_green.deck \
 #                 --deck-b res://decks/blue_skies.deck --games 200
 #
-# The 317 shipped decks live inside the game and are addressed as
+# The 319 shipped decks live inside the game and are addressed as
 # `res://decks/...`; your own are ordinary paths. DECKLAB.md is the manual.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -477,8 +516,10 @@ cd "$(dirname "$0")"
 exec ./Shandalar.x86_64 --headless --no-header -- --deck-lab "$@"
 LAB
 	chmod +x "$STAGE/deck_lab.sh"
+	# tool_banner.py rides with them — see the web stage above.
 	cp -p tools/mtg_assets.py tools/import_original.py \
-	      tools/fetch_card_art.py tools/skin_catalogue.py "$STAGE/"
+	      tools/fetch_card_art.py tools/skin_catalogue.py \
+	      tools/tool_banner.py "$STAGE/"
 	cp -p docs/skin-catalogue.txt "$STAGE/skin/SKIN.txt"
 	cat > "$STAGE/run.sh" <<'RUNNER'
 #!/usr/bin/env bash

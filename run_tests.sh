@@ -9,6 +9,8 @@
 #   ./run_tests.sh -gunit_test_name=test_bolt_kills_a_bear   # one test
 #   ./run_tests.sh -gselect=test_deck_lab.gd                  # one script
 #   SUITE_TIMEOUT=600 ./run_tests.sh   # whole-run guard in seconds (1800)
+#   ./run_tests.sh --help          # the block above, and the env vars
+#   ./run_tests.sh --version       # the one version string, from project.godot
 #
 # WHY THIS SCRIPT CHECKS THE LOG ITSELF
 # -------------------------------------
@@ -42,6 +44,56 @@
 # used to wedge this script forever.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+# THE FAMILY BANNER, AND -h / -V (tools/banner.sh). The wordmark says
+# TESTS; the banner itself goes to stderr and only to a terminal, so
+# `./run_tests.sh > log 2>&1` and the gate that greps that log never see
+# it. Everything else on the command line is GUT's, untouched — GUT's own
+# flags all begin with `-g`, so these four can never collide with one.
+. tools/banner.sh
+BANNER_ROW_0='┌┬┐┌─┐┌─┐┌┬┐┌─┐'
+BANNER_ROW_1=' │ ├┤ └─┐ │ └─┐'
+BANNER_ROW_2=' ┴ └─┘└─┘ ┴ └─┘'
+BANNER_CAP_0='Shandalar 1997 · GUT suite'
+BANNER_CAP_1='headless, the whole gate'
+
+usage() {
+	cat <<'USAGE'
+run_tests.sh — the whole GUT suite, headless, and the gate around it.
+
+  ./run_tests.sh                                   the whole suite
+  ./run_tests.sh -gunit_test_name=test_bolt_kills_a_bear    one test
+  ./run_tests.sh -gselect=test_deck_lab.gd                  one script
+  ./run_tests.sh -h | --help                       this
+  ./run_tests.sh -V | --version                    the project's version
+
+Every other argument is passed to GUT unchanged (its own flags all start
+with `-g`; `-gh` prints GUT's list of them).
+
+Environment:
+  GODOT                     the binary to run (default ../tools/godot,
+                            then `godot` on PATH)
+  SUITE_TIMEOUT             whole-run guard in seconds (default 1800)
+  SHANDALAR_TEST_DATA_HOME  where user:// goes, so a test can never write
+                            the player's own profile (default
+                            $TMPDIR/shandalar-test-data)
+
+Exit 0 only when GUT's own tally says every test passed AND Godot exited
+0 AND the log holds no parse error, no risky/pending test, no ERROR line
+and no leaked-object line. Read the header of this file for why each of
+those is checked here rather than trusted to GUT.
+USAGE
+	echo
+	shandalar_banner_help
+}
+
+for arg in "$@"; do
+	case "$arg" in
+		-h | --help) usage; exit 0 ;;
+		-V | --version) shandalar_version_line "run_tests.sh" .; exit 0 ;;
+	esac
+done
+shandalar_banner .
 
 GODOT="${GODOT:-../tools/godot}"
 if [ ! -x "$GODOT" ]; then GODOT=godot; fi

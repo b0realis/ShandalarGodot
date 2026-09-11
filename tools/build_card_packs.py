@@ -83,7 +83,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fetch_card_art  # noqa: E402
 import fetch_cards  # noqa: E402
+import tool_banner  # noqa: E402  — the family banner and the one version
 from gen_cards import POOL  # noqa: E402  — dedupe priority, first printing wins
+
+TOOL = "build_card_packs.py"
+## The tool's name in the half-height box-drawing face the whole family is
+## set in (DeckLab/lab_console.gd's WORDMARK is the same font).
+WORDMARK = (
+    "┌─┐┌─┐┬─┐┌┬┐  ┌─┐┌─┐┌─┐┬┌─┌─┐",
+    "│  ├─┤├┬┘ ││  ├─┘├─┤│  ├┴┐└─┐",
+    "└─┘┴ ┴┴└──┴┘  ┴  ┴ ┴└─┘┴ ┴└─┘",
+)
+CAPTION = ("Shandalar 1997 · set archives", "one .tar.gz per set + bundle")
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "cards" / "data"
@@ -733,9 +744,26 @@ def update_index(out_dir: Path, rows: list[dict]) -> Path:
     return path
 
 
+def holds_cards(path: Path) -> bool:
+    """Whether a `cards/data/*.json` is a set's CARD LIST — the only kind
+    of file a pack can be built from.
+
+    The folder holds one that is not: `sets.json` (set names, dates and
+    history, added 2026-09-03) is a dict. Until 2026-09-11 `local_sets`
+    read the folder by its glob alone, so a plain
+    `python3 tools/build_card_packs.py` set out to build a ninth pack
+    called `sets` and died inside it.
+    """
+    try:
+        return isinstance(json.loads(path.read_text(encoding="utf-8")), list)
+    except (OSError, ValueError):
+        return False
+
+
 def local_sets() -> list[str]:
-    """Set codes with a cards/data/<code>.json, POOL order first."""
-    codes = [p.stem for p in DATA_DIR.glob("*.json")]
+    """Set codes with a cards/data/<code>.json card list, POOL order
+    first."""
+    codes = [p.stem for p in DATA_DIR.glob("*.json") if holds_cards(p)]
     return sorted(codes, key=lambda c: (c not in POOL, POOL.index(c) if c in POOL else 0, c))
 
 
@@ -832,8 +860,28 @@ def build(out_dir: Path, codes: list[str], bundle: bool, offline: bool,
     return 0
 
 
+EPILOG = """\
+    python3 tools/build_card_packs.py                # every local set + bundle
+    python3 tools/build_card_packs.py leg drk        # just these two set packs
+    python3 tools/build_card_packs.py --bundle-only  # just dotp-1997.tar.gz
+    python3 tools/build_card_packs.py --offline      # never touch the network
+    python3 tools/build_card_packs.py --force        # refetch everything
+    python3 tools/build_card_packs.py --out DIR      # somewhere else
+
+A pack is built from LOCAL data: `cards/data/<code>.json` has to exist
+(tools/fetch_cards.py writes it) or the run stops with exit 2 and names
+the set. Everything fetched is cached under <out>/cache/, so the second
+build of the same set needs no network at all. Exit 1 when a pack came
+out incomplete, 2 for a set with no local data.
+
+%s
+""" % tool_banner.BANNER_HELP
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(
+        prog=TOOL, description=__doc__.split("\n\n")[0], epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sets", nargs="*", help="set codes (default: every cards/data/*.json)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
                     help=f"packs directory (default {DEFAULT_OUT})")
@@ -844,11 +892,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bundle-only", action="store_true", help=f"build only {BUNDLE_ID}.tar.gz")
     ap.add_argument("--max-art-fetch", type=int, default=300,
                     help="most art files to download per pack (default 300; 0 = no limit)")
+    tool_banner.add_version_flag(ap, TOOL, __file__)
     args = ap.parse_args(argv)
+    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
+    # per-pack lines below are stdout and get read by whoever built them.
+    tool_banner.show(WORDMARK, CAPTION, __file__)
     codes = args.sets or local_sets()
-    unknown = [c for c in codes if not (DATA_DIR / f"{c}.json").exists()]
+    unknown = [c for c in codes if not holds_cards(DATA_DIR / f"{c}.json")]
     if unknown:
-        print(f"no cards/data/<code>.json for: {', '.join(unknown)} — run "
+        print(f"no card list at cards/data/<code>.json for: "
+              f"{', '.join(unknown)} — run "
               f"tools/fetch_cards.py first (a pack is built from local data)")
         return 2
     if args.bundle_only:

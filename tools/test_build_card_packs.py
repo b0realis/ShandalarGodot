@@ -87,6 +87,69 @@ class Fixture:
         self.tmp.cleanup()
 
 
+class NotEverySidecarIsASetTest(unittest.TestCase):
+    """`cards/data/` HOLDS ONE FILE THAT IS NOT A POOL, and both tools
+    read the folder by its glob.
+
+    `sets.json` — set names, dates and printed sizes, added 2026-09-03 —
+    is a DICT. `fetch_card_art.pool()` iterated every `*.json` as a list
+    of card records, so it raised `TypeError: string indices must be
+    integers` on the dict's first key, and `build_card_packs.local_sets()`
+    offered `sets` as a ninth set to pack. Between them that was the card
+    art tool refusing to start in a checkout at all, and a plain
+    `build_card_packs.py` dying on a pack it should never have begun —
+    from 2026-09-03 until 2026-09-11, unnoticed because every test here
+    builds its own fixture folder and no fixture had a sidecar in it.
+    This one does.
+    """
+
+    def setUp(self):
+        self.fixture = Fixture()
+        (self.fixture.data / "sets.json").write_text(
+            json.dumps({"_source": "set history, not a pool",
+                        "sets": {"tst": {"name": "Test Set"}}}),
+            encoding="utf-8")
+
+    def tearDown(self):
+        self.fixture.close()
+
+    def test_a_sidecar_is_not_a_set_code(self):
+        self.assertEqual(bcp.local_sets(), ["rep", "tst"])
+        self.assertFalse(bcp.holds_cards(self.fixture.data / "sets.json"))
+        self.assertTrue(bcp.holds_cards(self.fixture.data / "tst.json"))
+        self.assertFalse(bcp.holds_cards(self.fixture.data / "nothing.json"))
+
+    def test_asking_for_the_sidecar_by_name_is_refused_not_crashed(self):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = bcp.main(["sets", "--out", str(self.fixture.out)])
+        self.assertEqual(code, 2)
+        self.assertIn("sets", buffer.getvalue())
+
+    def test_the_pool_reads_past_it_and_still_finds_every_card(self):
+        names = [name for name, _set in fetch_card_art.pool()]
+        self.assertIn("Serra Angel", names)
+        self.assertIn("Dandân", names)
+        self.assertNotIn("_source", names)
+        self.assertNotIn("sets", names)
+
+    def test_a_folder_with_no_card_list_falls_back_to_the_network(self):
+        # A folder that holds ONLY the sidecar is a folder with no pool,
+        # which is the shipped-binary case: ask Scryfall rather than
+        # return nothing.
+        for stale in self.fixture.data.glob("*.json"):
+            if stale.name != "sets.json":
+                stale.unlink()
+        called = []
+        saved = fetch_card_art.pool_from_scryfall
+        fetch_card_art.pool_from_scryfall = lambda: called.append(1) or []
+        try:
+            self.assertEqual(fetch_card_art.pool(), [])
+        finally:
+            fetch_card_art.pool_from_scryfall = saved
+        self.assertEqual(called, [1])
+
+
 class NamingTest(unittest.TestCase):
     def test_snake_matches_the_games_key(self):
         # GameSkin._snake: ASCII-only, runs of anything else -> one "_".

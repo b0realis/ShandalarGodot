@@ -99,6 +99,24 @@ A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
   piece of work.
 - Python tool self-tests (no Godot, no network):
   `python3 -m unittest discover -s tools -p 'test_*.py'`
+- EVERY TOOL HERE ANSWERS `-h` AND `--version`, and opens with a
+  wordmark naming itself (2026-09-11). The version comes from ONE place,
+  `project.godot`'s `config/version` — no tool keeps a copy, and one that
+  cannot find the file says "version unknown" and where it looked rather
+  than guessing (which is what the four tools shipped beside a packaged
+  game see). The wordmark, the caption and the five mana pips are
+  `DeckLab/lab_console.gd`'s design, shared by `tools/tool_banner.py`
+  (Python) and `tools/banner.sh` (shell); all three draw ONLY on stderr
+  and ONLY when stderr is a terminal, because several of these tools have
+  a stdout something reads — `skin_catalogue.py --stdout` IS the
+  catalogue, `build_release.sh`'s stdout names the release's files, and
+  `run_tests.sh`/`duel_soak.sh` grep their own logs. So `tool > log 2>&1`
+  gets no decoration without anyone remembering a flag.
+  `SHANDALAR_NO_BANNER=1` switches them all off (the Deck Lab's own
+  `DECK_LAB_NO_BANNER` still works, and `deck_lab.sh` maps one onto the
+  other); `NO_COLOR=1` keeps the shape and drops the colour.
+  `tools/test_tool_banner.py` pins all of it, including the rule that
+  would actually hurt: nothing decorative in stdout.
 - Screenshots under Xvfb: see **Commands that can hang** below. Do not
   pipe a Godot run into anything. It has already cost 12.7 hours once.
 

@@ -83,7 +83,8 @@ control changes, ante, and state-based actions.
 **M2 — duel screen: shipped.** **M3 — card pool: complete** — all **897**
 cards of the eight 1997 sets, one documented file each, no stubs left.
 **M4 — AI: attacking, blocking and casting audited and measured.**
-**317 decks** ported with their provenance recorded.
+**319 decks** ship — 312 of them ported with their provenance
+recorded, five the 1997 starters, two our own.
 
 Verified by **6058 tests / ~155 854 assertions** across 352 scripts, running
 headless, plus a duel soak that plays whole games through the live UI.
@@ -235,6 +236,14 @@ machine, and the game zip that goes up carries no art at all.
 The 897 card implementations are **authored, not generated** — `gen_cards.py`
 emits stubs, and the hand-written rules files are the project itself.
 
+Every one of these — the seven scripts in `tools/`, the five shell scripts
+and the Deck Lab — answers `-h` with its own manual and `-V`/`--version`
+with the one version string, read from `project.godot`; none of them keeps
+a copy of it. Each opens with a small wordmark naming itself, drawn **on
+stderr and only on a terminal**, so a redirected or piped run is exactly as
+clean as it was before there were banners. `SHANDALAR_NO_BANNER=1` turns
+them all off, `NO_COLOR=1` keeps the shape without the colour.
+
 `docs/setup.txt` maps every path the built game reads or writes, and ships
 beside the binary so players read the same file you edit.
 
@@ -296,7 +305,7 @@ format documentation and the long threads where the file formats in
 
 **The Dojo**, and the 1990s deck-building and strategy writing it collected.
 Decks of that era survive because that community wrote them down; a good part
-of the 317 decks here trace back to lists it preserved.
+of the 319 decks here trace back to lists it preserved.
 
 **Ben Prew and the 30th-anniversary authors** —
 [s30](https://github.com/benprew/s30), its rules engine

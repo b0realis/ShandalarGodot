@@ -24,7 +24,12 @@ extends RefCounted
 ## Colour follows the same switch, plus the `NO_COLOR` convention
 ## (https://no-color.org) and `--quiet` / `--no-banner` /
 ## [constant NO_BANNER_ENV] for anyone who runs a hundred sweeps a day and
-## has stopped enjoying the artwork.
+## has stopped enjoying the artwork. Since 2026-09-11 every command-line
+## tool in this repository draws a banner of this shape — the Python side
+## is `tools/tool_banner.py`, the shell side `tools/banner.sh` — and they
+## share one opt-out, `SHANDALAR_NO_BANNER`, which `DeckLab/deck_lab.sh`
+## maps onto [constant NO_BANNER_ENV] so a single export covers the Lab
+## as well.
 
 ## Set to "1" by deck_lab.sh when stderr is a terminal.
 const TTY_ENV := "DECK_LAB_TTY"
@@ -87,17 +92,31 @@ const WORDMARK := [
 
 ## The caption beside the wordmark, one entry per wordmark line ("" for
 ## the rows that stay bare). The last one is filled in with the mana
-## letters, which are the only coloured thing here.
+## letters and the version, which are the only coloured things here.
 ## SHORT ENOUGH FOR EIGHTY COLUMNS, which is a hard limit and not a
-## preference: the two-space indent plus the wordmark's 43 columns plus
-## the three-space gap leaves 32 for the caption, and the corrected
-## letterforms (2026-09-05) are wider than the squeezed ones these lines
-## were first written against.
+## preference: the two-space indent plus the wordmark's 23 columns plus
+## the three-space gap leaves 50 for the caption. (This paragraph still
+## said 43 and 32 on 2026-09-11 — the numbers from the four-row face the
+## half-height one replaced on 2026-09-05, kept while the conclusion they
+## supported stayed true. tests/tools/test_deck_lab.gd measures the real
+## lines, which is why it never mattered.)
 const CAPTION := [
 	"Shandalar 1997 · AI vs AI",
 	"headless deck measurement",
 	"",
 ]
+
+
+## THE PROJECT'S VERSION, from the one place that holds it:
+## `project.godot`'s `config/version`, which ProjectSettings hands over
+## without anyone parsing a file. The banner signs itself with this, and
+## every other tool in the family reads the same line off disk
+## (tools/tool_banner.py, tools/banner.sh) — there is no second copy of
+## the number anywhere. A project without the setting says so rather than
+## guessing, which is what the Python and shell sides do too.
+static func version() -> String:
+	var found := str(ProjectSettings.get_setting("application/config/version", ""))
+	return found if found != "" else "version unknown"
 
 
 ## Whether stderr is a terminal, as deck_lab.sh found it. False when the
@@ -132,8 +151,8 @@ static func paint(text: String, code: String, colour: bool) -> String:
 	return code + text + RESET
 
 
-## The banner, as lines. Four rows of wordmark with the caption beside
-## it; the mana letters sign the last row.
+## The banner, as lines. Three rows of wordmark with the caption beside
+## it; the mana letters and the version sign the last row.
 static func banner_lines(colour: bool) -> PackedStringArray:
 	var mana := PackedStringArray()
 	for pair in MANA:
@@ -142,7 +161,11 @@ static func banner_lines(colour: bool) -> PackedStringArray:
 	for i in WORDMARK.size():
 		var caption: String = CAPTION[i]
 		if i == WORDMARK.size() - 1:
-			caption = " ".join(mana)
+			# THE SIGNATURE LINE: the five pips, then the version. Every
+			# tool in this family signs itself the same way (2026-09-11),
+			# so a report, a log or a screenshot says which build drew it
+			# without anyone having to ask.
+			caption = " ".join(mana) + "   " + paint(version(), DIM, colour)
 		var line := "  " + paint(WORDMARK[i], AMBER + BOLD, colour)
 		if caption != "":
 			line += "   " + (caption if i == WORDMARK.size() - 1

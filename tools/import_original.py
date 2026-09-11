@@ -71,6 +71,38 @@ import tempfile
 import zlib
 from pathlib import Path
 
+# The family banner and the one version string (tools/tool_banner.py).
+# The insert is what lets this tool find it when a PLAYER runs it from
+# the flat folder beside the packaged game rather than from a checkout.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tool_banner  # noqa: E402
+
+TOOL = "import_original.py"
+## The tool's name in the half-height box-drawing face the whole family is
+## set in (DeckLab/lab_console.gd's WORDMARK is the same font).
+WORDMARK = (
+    "┬┌┬┐┌─┐┌─┐┬─┐┌┬┐┌─┐┬─┐",
+    "││││├─┘│ │├┬┘ │ ├┤ ├┬┘",
+    "┴┴ ┴┴  └─┘┴└─ ┴ └─┘┴└─",
+)
+CAPTION = ("Shandalar 1997 · your own disc", "raw .PIC/.SPR into a skin")
+
+EPILOG = """\
+    python3 import_original.py --source /path/to/the/1997/game
+    python3 import_original.py --source /cdrom --source ~/old-install
+    python3 import_original.py --source /path/to/game --dest ./my_skin
+
+Every --source is searched recursively and case-insensitively, and the
+first source that has a file wins, so an install and a patch folder can
+be given together. Nothing here is fatal: a key the sources do not hold
+is reported and skipped, and the game draws its own fallback for it.
+
+mtg_assets.py is the friendlier front door — it runs this and zips the
+result. Use this one to write LOOSE files into a skin folder.
+
+%s
+""" % tool_banner.BANNER_HELP
+
 # ======================================================= WHERE A SOUND LIVES ==
 #
 # A CANDIDATE MAY NAME ITS DIRECTORY, and for audio it always does.
@@ -2902,7 +2934,9 @@ def _is_conversion(name: str) -> bool:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        prog=TOOL, description=__doc__.splitlines()[0], epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--source", action="append", required=True,
                         help="directory to search (repeatable)")
     parser.add_argument("--dest", default=str(default_dest()),
@@ -2914,7 +2948,12 @@ def main() -> int:
                              "art (a reimplementation's tree). Off by "
                              "default and not a player's door — see THE "
                              "CONVERSION DOOR")
+    tool_banner.add_version_flag(parser, TOOL, __file__)
     args = parser.parse_args()
+    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
+    # per-key report below is stdout, and mtg_assets.py reads this run's
+    # exit code around it.
+    tool_banner.show(WORDMARK, CAPTION, __file__)
 
     index = build_index([Path(s).expanduser() for s in args.source])
     dest = Path(args.dest).expanduser()

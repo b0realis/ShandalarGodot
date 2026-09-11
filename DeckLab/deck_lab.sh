@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Deck Lab — headless AI-vs-AI deck testing. All arguments are forwarded
 # to DeckLab/simulate.gd; run `DeckLab/deck_lab.sh --help` for the full manual,
-# and see DeckLab/README.md for the long-form documentation.
+# `-V`/`--version` for the project's version, and see DeckLab/README.md
+# for the long-form documentation.
 #
 # Uses the project-pinned Godot (../tools/godot), falling back to PATH.
 #
@@ -19,6 +20,26 @@ set -euo pipefail
 # root and `./deck_lab.sh` from inside the folder now land in the same
 # place.
 cd "$(cd "$(dirname "$0")/.." && pwd)"
+
+# THE FAMILY JOINS THE LAB, rather than the other way round. The Lab drew
+# the first banner here and owns the rules the rest copied; all this adds
+# is the two things the family has that the Lab did not:
+#   * `-V` / `--version`, answered HERE so that a version question never
+#     has to start an engine, and
+#   * SHANDALAR_NO_BANNER, mapped onto the Lab's own older
+#     DECK_LAB_NO_BANNER so that one export silences all twelve tools.
+# The banner itself is still simulate.gd's, drawn through LabConsole.
+. tools/banner.sh
+for arg in "$@"; do
+	case "$arg" in
+		-V | --version) shandalar_version_line "deck_lab.sh" .; exit 0 ;;
+	esac
+done
+case "${SHANDALAR_NO_BANNER:-}" in
+	"" | 0) ;;
+	*) export DECK_LAB_NO_BANNER=1 ;;
+esac
+
 GODOT="${GODOT:-../tools/godot}"
 if [ ! -x "$GODOT" ] && ! command -v "$GODOT" >/dev/null 2>&1; then
 	GODOT=godot

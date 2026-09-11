@@ -23,6 +23,7 @@ Re-running refreshes the data (Scryfall oracle text updates over time).
 Uses only the standard library; be polite to the API (100 ms between calls).
 """
 
+import argparse
 import json
 import sys
 import time
@@ -30,8 +31,38 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+# The family banner and the one version string (tools/tool_banner.py).
+# The insert is what lets the four tools that SHIP beside the packaged
+# game find it when they are run from a flat folder rather than a
+# checkout — the same line build_card_packs.py already carries.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tool_banner  # noqa: E402
+
+TOOL = "fetch_cards.py"
+## The tool's name in the half-height box-drawing face the whole family
+## is set in (DeckLab/lab_console.gd's WORDMARK is the same font). This
+## one says CARD DATA: the pool's text, not its pictures.
+WORDMARK = (
+    "┌─┐┌─┐┬─┐┌┬┐  ┌┬┐┌─┐┌┬┐┌─┐",
+    "│  ├─┤├┬┘ ││   ││├─┤ │ ├─┤",
+    "└─┘┴ ┴┴└──┴┘  ─┴┘┴ ┴ ┴ ┴ ┴",
+)
+CAPTION = ("Shandalar 1997 · Scryfall", "the pool as cards/data/*.json")
+
 SETS = ["2ed", "4ed", "arn", "atq", "leg", "drk", "past", "phpr"]
 EXCLUDED_NAMES = {"Chaos Orb", "Shahrazad", "Word of Command", "Falling Star"}
+
+EPILOG = """\
+the pool (%s), one file each:
+    python3 tools/fetch_cards.py          # refresh every set above
+
+It takes no other argument: the eight sets ARE the 1997 pool, and the
+network is the only thing it needs. The files it writes are committed, so
+a fresh checkout never has to run this — re-run it when Scryfall's oracle
+text has moved on.
+
+%s
+""" % (" ".join(SETS), tool_banner.BANNER_HELP)
 
 # CARDS THE 1997 GAME HAD THAT NO WHOLE SCRYFALL SET GIVES US.
 #
@@ -147,7 +178,15 @@ def fetch_one(name: str, from_set: str, as_set: str) -> dict:
     return trim(fetch_one_raw(name, from_set), as_set)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog=TOOL, description=__doc__.split("\n\n")[0], epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    tool_banner.add_version_flag(parser, TOOL, __file__)
+    parser.parse_args(argv)
+    # THE BANNER IS stderr-AND-A-TERMINAL ONLY (tools/tool_banner.py): the
+    # lines below are this tool's report and something may be reading them.
+    tool_banner.show(WORDMARK, CAPTION, __file__)
     out_dir = Path(__file__).resolve().parent.parent / "cards" / "data"
     out_dir.mkdir(parents=True, exist_ok=True)
     total = 0
