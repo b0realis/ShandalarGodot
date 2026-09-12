@@ -3,6 +3,12 @@
 A GDScript remake of MicroProse's 1997 MTG game on Godot 4.7. Read
 `docs/ARCHITECTURE.md` first, `docs/CODE_MAP.md` to locate anything.
 
+New to the project? `DEVELOPMENT.md` (repo root) is the orientation that
+comes before these rules: the folder tour and what may depend on what, the
+gate commands and their exit-code contracts, how a change is measured and
+refused here, and the traps that have already cost this project days. This
+file stays the authority on the rules themselves.
+
 ## Commands
 
 - Test suite: `./run_tests.sh` (headless GUT; pinned binary `../tools/godot`).

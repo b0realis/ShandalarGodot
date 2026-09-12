@@ -253,6 +253,7 @@ beside the binary so players read the same file you edit.
 
 | Read | To learn |
 |---|---|
+| [DEVELOPMENT.md](DEVELOPMENT.md) | **Start here if you have just cloned this.** The folder tour, the gate commands, how the work is done here, and the traps that have already cost time |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The design: two-layer rule, one mutation surface, how everything fits |
 | [docs/CODE_MAP.md](docs/CODE_MAP.md) | Where every file is and what's in it |
 | [docs/adding-cards.md](docs/adding-cards.md) | How to add a card or a set (the most common contribution) |
