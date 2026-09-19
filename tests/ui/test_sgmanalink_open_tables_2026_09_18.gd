@@ -224,6 +224,9 @@ func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> 
 	var message := func(action: Dictionary) -> Dictionary:
 		return {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}
 	assert_true(SgProtocol.valid(message.call({"op": "host", "name": "Kitchen table", "decks": "own", "deck": {}})))
+	var smoke: Script = load("res://tools/lan_smoke.gd")
+	assert_true(SgProtocol.valid(message.call(smoke.HOST_ACTION)),
+		"the two-process release probe must speak the current host protocol")
 	assert_true(SgProtocol.valid(message.call({"op": "host", "name": "Knights only", "decks": "fixed", "deck": _deck()})))
 	for action in [
 			{"op": "host", "name": "Old shape"},

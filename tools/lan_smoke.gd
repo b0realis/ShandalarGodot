@@ -51,6 +51,8 @@ extends Node
 const PILOT := "res://tests/support/sg_network_pilot.gd"
 const DEFAULT_HOST_DECK := "res://decks/white_knights.deck"
 const DEFAULT_GUEST_DECK := "res://decks/black_red_raiders.deck"
+## Protocol 21 requires an explicit table deck rule even for bring-your-own.
+const HOST_ACTION := {"op": "host", "name": "LAN smoke duel", "decks": "own", "deck": {}}
 ## A whole seat's turn can need a dozen commands (prepare, autopay,
 ## submit); this is the ceiling on one duel, not a target.
 const MAX_COMMANDS := 4000
@@ -326,7 +328,9 @@ func _host() -> void:
 	_server = service
 	_metered = service
 	var started := Time.get_ticks_msec()
-	var result := service.start_lan(address, port, discovery, nickname)
+	# This probe's private-invitation contract is deliberate; open tables
+	# advertise their invitation by design and are covered by the UI suite.
+	var result := service.start_lan(address, port, discovery, nickname, SgLanDiscovery.PORT, false)
 	if not _check(result == OK, "start_lan(%s:%d) failed with %d" % [address, port, result]):
 		return
 	_say("hosting wss://%s:%d, took %dms" % [service.lan_address, service.port, Time.get_ticks_msec() - started])
@@ -345,7 +349,7 @@ func _host() -> void:
 		return
 	if not await _connect(invitation):
 		return
-	if not await _act({"op": "host", "name": "LAN smoke duel"}):
+	if not await _act(HOST_ACTION.duplicate(true)):
 		return
 	_say("room %s open" % String(_client.state.room.get("id", "?")))
 	var deck := _deck()
@@ -481,6 +485,8 @@ func _search(parsed: Dictionary) -> bool:
 		advert.address, int(advert.port), int(advert.rooms), JSON.stringify(advert.stamp)])
 	_check(not JSON.stringify(_scanner.hosts).contains(String(parsed.access)),
 		"the discovery reply carried the access secret")
+	_check(advert.access == "invitation" and not advert.has("invitation"),
+		"the private host advertised its invitation")
 	_check(advert.fingerprint == parsed.fingerprint,
 		"the advertised certificate fingerprint is not the invitation's")
 	_scanner.stop()

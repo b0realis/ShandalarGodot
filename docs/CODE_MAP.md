@@ -9,6 +9,8 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Release packages
 
+- `docs/releases/0.40.3.md`: concise AutoDeck, open-LAN, controls and duel
+  highlights; six-target downloads, toolkit placement and compatibility.
 - `docs/releases/0.32.0.md`: prepared release highlights, organiser controls,
   gameplay fixes, six-platform downloads and bundled construction tools.
 - `docs/releases/0.31.0.md`: concise release highlights, six architecture-specific

@@ -301,7 +301,7 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   window is about, and no printed cost on a face — the client prices a
   named card off its own registry);
   the invitation keeps the `sglan1:` envelope prefix and carries the same
-  protocol-20 compatibility check inside it. A handshake fingerprint additionally
+  protocol-21 compatibility check inside it. A handshake fingerprint additionally
   checks the release version, maintained rules revision and printed card catalogue,
   and a readable stamp `{game, rules, packs}` travels beside it in the hello and
   in every LAN advert, so a refusal — and the game browser's BUILD column — can

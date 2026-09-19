@@ -354,7 +354,9 @@ func test_encode_and_decode_round_trip() -> void:
 		assert_not_null(back, "%s decodes" % word)
 		assert_true(Controls._same(event, back), "%s is the same event again" % word)
 		assert_eq(Controls.encode(back), word, "and encodes to the same word")
-	assert_eq(words, ["key:Ctrl+T", "key:Kp Enter", "key:F12", "key:Alt+Shift+K",
+	# The OS calls Alt Option on macOS; the event round-trip above is identical.
+	var alt_name := "Option" if OS.has_feature("macos") else "Alt"
+	assert_eq(words, ["key:Ctrl+T", "key:Kp Enter", "key:F12", "key:%s+Shift+K" % alt_name,
 		"key:Space", "key:Escape", "pad:A", "pad:Start", "pad:D-pad left", "pad:Touchpad",
 		"pad:Button 25"] as Array[String])
 	assert_null(Controls.decode("key:NoSuchKey"))

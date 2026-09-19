@@ -38,16 +38,15 @@ engine, and the freedom to keep the game alive.
   <em>A spell chain in progress during a duel.</em>
 </p>
 
-## Play — 0.32.0
+## Play — 0.40.3
 
 **Duels, deck building, optional expansions, Booster Draft and LAN play.**
 
-Download **[Shandalar 0.32.0](https://github.com/b0realis/ShandalarGodot/releases/tag/v0.32.0)**
+Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/releases/tag/v0.40.3)**
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below): `main` carries **0.40.3**, the next
-release in the making.
+run the source with Godot 4.7 (below).
 
 Play with an **897-card early-Magic core**, historic decks, four computer
 opponents, local hotseat, Gauntlet, sealed decks and best-of matches with
