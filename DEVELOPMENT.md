@@ -112,8 +112,10 @@ gate proves.
 
 ### The gate
 
-Two commands, and both are gates rather than reports — read their exit codes,
-not their output.
+Follow `CONTRIBUTING.md`'s **Test scope** policy: targeted tests around changed
+code during feature work, the full suite only before releases or when the
+owner explicitly requests it. The full release-gate commands below are gates
+rather than reports — read their exit codes, not just their output.
 
 ```sh
 ./run_tests.sh                                  # the whole GUT suite, headless
@@ -180,8 +182,10 @@ through the real duel screen under Xvfb on Linux or a native window on macOS,
 with AI seats and a fuzzed human seat;
 a bare run is three seeds in both modes — six whole duels, about three
 minutes, ending in `SOAK done: 6 duel(s) finished`. Run it after
-touching anything under `game/duel/`: the suite drives one widget at a time
-and cannot see what the soak catches. It passes only on `SOAK done` with no
+changes that need live duel-flow coverage, choosing relevant seeds and rules.
+Isolated cosmetic changes need widget tests and visual checks, not an automatic
+soak. The suite drives one widget at a time and cannot see what the soak
+catches. It passes only on `SOAK done` with no
 `ERROR`/`WARNING`/`STALL` line — exit 2 means a duel stood still or never
 started (a stuck prompt, which is what it exists to catch), 3 a bad argument,
 124 the whole-run guard, 1 a stray line Godot printed. Its header has the
@@ -512,8 +516,10 @@ it exercises every convention above.
    class with its own engine test, and the card file stays declarative.
 4. **If you took a shortcut, mark it and write the row** — §1. The ledger test
    will find you if you do half of it.
-5. **Run the gate.** `./run_tests.sh` (exit 0, nothing else counts) and the
-   boot smoke. `./duel_soak.sh` too if you went anywhere near `game/duel/`.
+5. **Run targeted checks.** Select the changed feature's tests and immediate
+   interactions with `./run_tests.sh -gselect=<test_script.gd>`. Use a boot
+   smoke, visual check or bounded duel soak where the change needs it. Reserve
+   the full suite for release preparation; follow `CONTRIBUTING.md`'s Test scope.
 6. **Update `docs/CODE_MAP.md`** if you added a file or a class, and
    `docs/mechanics.md` if the card taught the engine a new mechanic.
 

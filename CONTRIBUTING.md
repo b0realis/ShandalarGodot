@@ -11,6 +11,12 @@ file stays the authority on the rules themselves.
 
 ## Publication
 
+Owner policy (2026-09-20): every pushed change increments the LAST numeric
+version component in `project.godot` (for example, `0.40.3` -> `0.40.4`;
+the owner's term for this is a "minor version" bump). Group one coherent
+change and its verification before pushing; do not create or replace a
+release unless requested.
+
 Keep commit subjects short and descriptive. Use a pseudonymous author and
 committer with a GitHub noreply address. Keep personal home paths, private
 email addresses and local tooling metadata out of tracked files. Ignore
@@ -22,6 +28,19 @@ at the commit rather than at the upload — and to the CODE_MAP rule below.
 
 ## Commands
 
+### Test scope
+
+Owner policy (2026-09-23): during feature development, run targeted tests
+for the changed code and its immediate callers/interactions. Do not run the
+full suite for every feature; reserve it for release preparation unless the
+owner explicitly asks for it. Add focused regressions for fixes and use
+visual checks for presentation changes. Run a bounded duel soak only when
+the changed behavior needs live duel-flow coverage, not automatically for
+every cosmetic edit under `game/duel/`. Report exactly what was tested.
+This policy governs local development; existing CI configuration is unchanged.
+
+### Commands and safety
+
 macOS setup and the local baseline record: `docs/macos-baseline-2026-09-12.md`.
 The shared `tools/runtime.sh` discovers the sibling macOS Godot app and
 GNU `timeout`/`gtimeout`. `./build_release.sh --macos` exports a native app;
@@ -30,8 +49,9 @@ isolation uses XDG on Linux and a distinct `Shandalar Integration Tests` profile
 (Godot ignores XDG there). Manual Mac probes must use that runtime feature
 or their own named project; changing XDG alone does not protect player data.
 
-- Test suite: `./run_tests.sh` (headless GUT; pinned binary `../tools/godot`).
-  Single test: `./run_tests.sh -gunit_test_name=<name>`.
+- Targeted tests: `./run_tests.sh -gselect=<test_script.gd>` or
+  `./run_tests.sh -gunit_test_name=<name>`.
+  Full release gate: `./run_tests.sh` (headless GUT; pinned binary `../tools/godot`).
   `SHARDS=4 ./run_tests.sh` runs the same suite over four Godot
   processes at once (since 2026-09-17: 979 s in one process, ~210 s over
   six on this desk); each shard has its own `user://` and its own gate
@@ -79,9 +99,9 @@ or their own named project; changing XDG alone does not protect player data.
   never started, 3 = bad argument, 124 = whole-run timeout, 1 = a stray
   line). `--rules fifth|modern` plays every duel under that ruleset
   instead of whatever the (isolated — see above) `user://settings.cfg`
-  holds, which with no player file to read is the built-in defaults. Run
-  it after touching `game/duel/`; the suite drives one widget at a time
-  and cannot see what it catches.
+  holds, which with no player file to read is the built-in defaults. Use
+  relevant seeds, modes and rules for changes needing live duel-flow coverage;
+  widget tests and visual checks suffice for isolated presentation changes.
 - Boot scene smoke: `../tools/godot --headless --path . --quit-after 3`
 - Release build: `./build_release.sh` exports the `Linux 64` preset
   (`export_presets.cfg`, copied from `export_presets.cfg.example`) to

@@ -244,14 +244,14 @@ func test_all_new_cards_are_reachable_through_the_live_extra_filter() -> void:
 	for entry in screen._inventory._visible_entries():
 		assert_true(FallenEmpiresPack.names().has(entry[0].card_name))
 
-func test_fallen_empires_card_preview_wears_the_gold_crown() -> void:
+func test_fallen_empires_card_preview_wears_the_common_white_crown() -> void:
 	var preview := CardPreview.new()
 	preview.docked = true
 	add_child_autofree(preview)
 	preview.size = CardPreview.SIZE
 	preview.show_card(CardInstance.new(CardRegistry.get_card("Thallid"), 7, 0))
 	await get_tree().process_frame
-	assert_eq(preview._set_icon.texture, GameSkin.set_icon("fem"))
+	assert_eq(preview._set_icon.texture, GameSkin.set_icon("fem", "common"))
 	assert_true(preview._set_icon.visible)
 	assert_false(preview._set_text.visible, "no FEM text fallback remains")
 

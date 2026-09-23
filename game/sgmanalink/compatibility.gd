@@ -6,7 +6,7 @@ extends RefCounted
 ## The readable stamp travels beside the digest so a mismatch can be named
 ## ("you run 0.31.0", "the host has Pack 3 enabled") instead of only detected.
 
-const RULES_REVISION := "sgmanalink-packs-2026-09-17-2"
+const RULES_REVISION := "sgmanalink-damage-window-2026-09-23"
 const MAX_PACKS := 12
 static var _fingerprint := ""
 static var _cache_key := ""

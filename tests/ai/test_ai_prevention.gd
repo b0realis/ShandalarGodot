@@ -93,6 +93,48 @@ func test_the_ai_circles_the_damage_that_would_kill_it() -> void:
 	assert_false(g.awaiting_damage_prevention, "and the window is shut")
 
 
+func test_ai_reverses_a_resolved_lethal_bolt_and_does_not_buy_a_second_shield() -> void:
+	var ai := _arm(1)
+	g.players[1].life = 3
+	for i in 6:
+		put_battlefield(1, "Plains")
+	put_battlefield(0, "Craw Wurm") # a tempting but irrelevant source
+	give_hand(1, "Reverse Damage")
+	give_hand(1, "Reverse Damage")
+	var bolt := give_hand(0, "Lightning Bolt")
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.cast_spell(0, bolt, [TargetRef.player(1)]))
+	resolve_stack()
+	assert_eq(bolt.zone, Mtg.Zone.GRAVEYARD)
+	var said := _play_the_window(ai)
+	assert_true(str(said).contains("Reverse Damage"), str(said))
+	assert_eq(g.players[1].life, 6, "AI names the pending Bolt, not the Wurm")
+	assert_false(g.game_over)
+	assert_eq(g.players[1].hand.size(), 1, "the first shield already covers this packet")
+	var untapped := 0
+	for land in g.players[1].battlefield:
+		if not land.tapped: untapped += 1
+	assert_eq(untapped, 3, "only one spell's mana was spent")
+
+
+func test_ai_does_not_use_reverse_damage_to_save_a_creature() -> void:
+	var ai := _arm(1)
+	for i in 3:
+		put_battlefield(1, "Plains")
+	var bears := put_battlefield(1, "Grizzly Bears")
+	var reverse := give_hand(1, "Reverse Damage")
+	var bolt := give_hand(0, "Lightning Bolt")
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.cast_spell(0, bolt, [TargetRef.card(bears)]))
+	resolve_stack()
+	assert_true(g.awaiting_damage_prevention)
+	assert_false(ai._effects_answer(g, reverse.data.spell_effects, g.damage_pending[0], reverse))
+	_play_the_window(ai)
+	assert_eq(reverse.zone, Mtg.Zone.HAND)
+	assert_eq(bears.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.players[1].life, 20)
+
+
 func test_the_ai_does_not_spend_a_circle_on_a_scratch() -> void:
 	# 20 life against 3 damage is not the profile's panic line, and a
 	# Circle is worth more next turn than three points are now.

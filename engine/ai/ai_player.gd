@@ -11066,6 +11066,12 @@ func _effects_answer(game: MtgGame, effects: Array, packet: DamagePacket,
 	var e: EffectBase = effects[0]
 	if not e.is_damage_prevention:
 		return false
+	# Reverse Damage names a source rather than targeting a packet. The
+	# existing holds_instants/window policy may spend it to protect us,
+	# never a creature; the shared ordered source chooser names the threat.
+	if source.data.card_name == "Reverse Damage":
+		return packet.target.is_player and packet.target.player_id == pid \
+			and packet.source != null
 	if profile.forecasts_tactics:
 		if not packet.target.is_player:
 			var victim := game.find_instance(packet.target.instance_id)
@@ -11130,7 +11136,10 @@ func _uncovered(game: MtgGame, packet: DamagePacket) -> int:
 		return 0
 	var pool := 0
 	if packet.target.is_player:
-		pool = game.players[packet.target.player_id].damage_prevention
+		var player := game.players[packet.target.player_id]
+		if packet.source != null and player.reverse_damage_sources.has(packet.source.id):
+			return 0 # the one-shot source shield is spent when damage lands
+		pool = player.damage_prevention
 	else:
 		var inst := game.find_instance(packet.target.instance_id)
 		if inst != null:

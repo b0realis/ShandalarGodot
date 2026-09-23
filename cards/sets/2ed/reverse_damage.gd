@@ -11,7 +11,9 @@ extends CardScript
 ## source goes into MtgPlayer.reverse_damage_sources; MtgGame.deal_damage
 ## prevents its next damage event whole and pays it back as life. Cast
 ## with nothing on the table and nothing on the stack, it names nothing
-## and does nothing (CR 608.2) — it is cast in RESPONSE to the Bolt.
+## and does nothing (CR 608.2). In modern play it is cast in RESPONSE to
+## the Bolt; in the classic prevention window it can name the resolved
+## Bolt while its damage is still pending. It never shields creatures.
 ## `@REVERSE_DAMAGE` (Program/prompts.txt:753) is the original's own
 ## line for the choice: "Select a card that has damaged you." — its
 ## first line is the 1997 damage-window click.
@@ -24,6 +26,9 @@ func build() -> CardData:
 
 
 class ReverseDamageEffect extends EffectBase:
+	func _init() -> void:
+		is_damage_prevention = true
+
 	func resolve(game: MtgGame, _source: CardInstance, controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
 		var choices := game.damage_sources(Callable(), TargetRef.player(controller))

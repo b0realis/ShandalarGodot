@@ -427,7 +427,65 @@ const MEDALLION_RADIUS := 0.45
 ## either.
 static var _set_icon_cache: Dictionary = {}
 
-static func set_icon(set_code: String) -> Texture2D:
+## [QoL] On-card rarity colours, requested 2026-09-20. The original gold
+## texture stays untouched for rare/unknown cards and for set-only buttons.
+## White is deliberately brighter than silver; every ramp retains a dark rim.
+const SET_SYMBOL_RAMPS := {
+	"common": [Color(0.78, 0.79, 0.82), Color.WHITE],
+	"uncommon": [Color(0.30, 0.35, 0.43), Color(0.90, 0.94, 1.0)],
+	"legendary": [Color(0.38, 0.12, 0.62), Color(0.90, 0.63, 1.0)],
+}
+const SET_SYMBOL_INK := {
+	"common": Color.WHITE,
+	"uncommon": Color(0.72, 0.77, 0.85),
+	"rare": Color(0.94, 0.75, 0.30),
+	"legendary": Color(0.77, 0.43, 0.98),
+}
+
+
+static func set_symbol_tier(rarity: String, legendary := false) -> String:
+	return "legendary" if legendary or rarity == "mythic" else rarity
+
+
+## Letter-only sets (PR) follow the same scheme, with the existing white
+## fallback where rarity is unknown. Legendary overrides printed rarity.
+static func set_symbol_ink(rarity: String, legendary := false) -> Color:
+	return SET_SYMBOL_INK.get(set_symbol_tier(rarity, legendary), Color.WHITE)
+
+
+static func set_icon(set_code: String, rarity := "", legendary := false) -> Texture2D:
+	var tier := set_symbol_tier(rarity, legendary)
+	if SET_SYMBOL_RAMPS.has(tier):
+		var key := "%s:%s" % [set_code, tier]
+		if _set_icon_cache.has(key):
+			return _set_icon_cache[key]
+		var source := set_icon(set_code)
+		if source == null:
+			return null
+		# Remap the authored gold relief, not CanvasItem.modulate: multiplying
+		# yellow by white cannot make it white. Preserve alpha and the bevel,
+		# and never modify the shared texture used by the medallions.
+		var img: Image = source.get_image().duplicate()
+		img.convert(Image.FORMAT_RGBA8)
+		var ramp: Array = SET_SYMBOL_RAMPS[tier]
+		var dark: Color = ramp[0]
+		var lit: Color = ramp[1]
+		var rim := Color(0.10, 0.09, 0.12)
+		for y in img.get_height():
+			for x in img.get_width():
+				var pixel := img.get_pixel(x, y)
+				if pixel.a == 0.0:
+					continue
+				# Gold's red channel measures the authored relief light; the
+				# rim starts at 0.16 and the brightest highlights reach 1.0.
+				var light := clampf((pixel.r - 0.16) / 0.84, 0.0, 1.0)
+				var ink: Color = rim.lerp(dark, light / 0.4) if light < 0.4 \
+					else dark.lerp(lit, (light - 0.4) / 0.6)
+				ink.a = pixel.a
+				img.set_pixel(x, y, ink)
+		var tinted := ImageTexture.create_from_image(img)
+		_set_icon_cache[key] = tinted
+		return tinted
 	if _set_icon_cache.has(set_code):
 		return _set_icon_cache[set_code]
 	# THE SET SYMBOL IS ALWAYS OURS, whatever the player imported (the

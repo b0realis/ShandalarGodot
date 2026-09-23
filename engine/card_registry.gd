@@ -95,6 +95,7 @@ static func unload() -> void:
 	_cards.clear()
 	_original_set.clear()
 	_artists.clear()
+	_rarities.clear()
 	_pack_rarities.clear()
 	_loaded = false
 	_printings_loaded = false
@@ -435,9 +436,19 @@ static func artist_of(card_name: String, set_code := "") -> String:
 
 ## card name -> artist, and "<set>|<name>" -> that printing's artist.
 static var _artists: Dictionary = {}
+## Printing metadata only: first printing by name, exact printing by set|name.
+static var _rarities: Dictionary = {}
 
 
-## THE ONE PASS over `cards/data/` that fills both indexes, run from
+## Rarity of the displayed printing, falling back to the first known printing.
+## Built eagerly with artist credits; cleared whenever enabled packs change.
+static func rarity_of(card_name: String, set_code := "") -> String:
+	_ensure_printings()
+	return String(_rarities.get("%s|%s" % [set_code, card_name],
+		_rarities.get(card_name, "")))
+
+
+## THE ONE PASS over `cards/data/` that fills the printing indexes, run from
 ## [method ensure_loaded] so it is complete before anything else can ask.
 ##
 ## THREAD SAFETY, and the bug that put this comment here. This was two
@@ -465,6 +476,7 @@ static func _ensure_printings() -> void:
 	var artists := {}
 	var original := {}
 	var pack_rarities := {}
+	var rarities := {}
 	for code in SET_ORDER:
 		var path := "res://cards/data/%s.json" % code
 		if not FileAccess.file_exists(path):
@@ -480,6 +492,10 @@ static func _ensure_printings() -> void:
 				continue
 			if not original.has(name):
 				original[name] = code   # first set in printing order wins
+			var rarity := String(entry.get("rarity", ""))
+			rarities["%s|%s" % [code, name]] = rarity
+			if not rarities.has(name):
+				rarities[name] = rarity
 			var who: String = String(entry.get("artist", ""))
 			if who == "":
 				continue
@@ -499,6 +515,10 @@ static func _ensure_printings() -> void:
 				continue
 			if not pack_rarities.has(name):
 				pack_rarities[name] = String(entry.get("rarity", ""))
+			var rarity := String(entry.get("rarity", ""))
+			rarities["%s|%s" % [code, name]] = rarity
+			if not rarities.has(name):
+				rarities[name] = rarity
 			if not original.has(name):
 				original[name] = code
 			var who := String(entry.get("artist", ""))
@@ -507,6 +527,7 @@ static func _ensure_printings() -> void:
 				if not artists.has(name):
 					artists[name] = who
 	_artists = artists
+	_rarities = rarities
 	_original_set = original
 	_pack_rarities = pack_rarities
 	_printings_loaded = true

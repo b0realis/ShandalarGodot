@@ -1276,6 +1276,10 @@ static func _page_icons_builder_sets() -> Dictionary:
 			+ "ring that marks a set medallion. The cards themselves carry "
 			+ "a plainer drawing of the same symbol at the end of their "
 			+ "type line — those are on the 'around the table' page."),
+		_text("On cards, set symbols are white for common, silver for uncommon, "
+			+ "gold for rare, and purple for legendary or mythic. Legendary "
+			+ "takes precedence over printed rarity. Reprints use the rarity "
+			+ "of the displayed set; set-filter medallions keep their usual colors."),
 		{"kind": ICONS, "entries": set_entries},
 		_text("Unlimited and the promotional cards use the labels 2nd and PR."),
 		_quote("Astral, a card set created specifically for the MicroProse "

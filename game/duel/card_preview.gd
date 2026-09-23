@@ -305,6 +305,8 @@ var _text_bg: ColorRect
 ## the original does exactly this, and for exactly this reason
 ## (`fullcard_expand_text_box`, `drawfullcard.c:1128-1151`).
 var _text_plate: TextureRect
+## Procedural two-color rings, only for the ten original dual lands.
+var _dual_land_plate: TextureRect
 var _oracle: ManaText
 var _pt_label: Label
 var _artist_label: Label
@@ -323,6 +325,8 @@ var _illus_size: int
 ## The instance on show, so a live `Expand` toggle can re-lay-out the card
 ## the player is looking at instead of waiting for the next hover.
 var _shown: CardInstance = null
+## Presentation-only reprint choice must survive the same live redraw.
+var _shown_printing_set := ""
 
 
 ## The x-height of [param f] as a share of its em, read off the outline of
@@ -605,6 +609,13 @@ func _init() -> void:
 	_text_plate.stretch_mode = TextureRect.STRETCH_SCALE
 	_text_plate.visible = false
 	add_child(_text_plate)
+	_dual_land_plate = TextureRect.new()
+	_anchor(_dual_land_plate, 0.083, TEXT_TOP, 0.917, PLATE_BOTTOM)
+	_dual_land_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_dual_land_plate.stretch_mode = TextureRect.STRETCH_SCALE
+	_dual_land_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dual_land_plate.visible = false
+	add_child(_dual_land_plate)
 	# THE RULES TEXT IS A [ManaText], NOT A `Label`: the oracle text writes
 	# its mana and tap costs as `{R}`/`{T}` codes, and this is the widget
 	# that sets the 1997 sheet's own symbols in their place — wrapping,
@@ -745,7 +756,7 @@ func set_text_expanded(on: bool) -> void:
 	# Showcase's own right-click menu while looking at a card, so the card
 	# in front of them has to answer.
 	if _shown != null:
-		show_card(_shown)
+		show_card(_shown, _shown_printing_set)
 	else:
 		_lay_out_text_box(TEXT_TOP)
 
@@ -760,6 +771,7 @@ func text_is_expanded() -> bool:
 func _lay_out_text_box(top: float) -> void:
 	_text_bg.anchor_top = top
 	_text_plate.anchor_top = top
+	_dual_land_plate.anchor_top = top
 	_oracle.anchor_top = top + 0.019
 
 
@@ -820,7 +832,10 @@ func show_back() -> void:
 		_back.add_theme_stylebox_override("panel", box)
 	_back.visible = true
 	_shown = null
+	_shown_printing_set = ""
 	_text_plate.visible = false
+	_dual_land_plate.visible = false
+	_dual_land_plate.texture = null
 	visible = true
 
 
@@ -830,6 +845,7 @@ func show_back() -> void:
 func show_card(inst: CardInstance, printing_set := "") -> void:
 	_back.visible = false
 	_shown = inst
+	_shown_printing_set = printing_set
 	var d := inst.data
 	var shown_set: String = printing_set if printing_set != "" else d.set_code
 	var frame_key := MiniCard.frame_skin_key(d)
@@ -852,7 +868,9 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	# The set symbol: the printed one for the five expansions, this
 	# project's Roman II and IV for Unlimited and Fourth Edition, and
 	# none for the promos, which letter themselves `PR`.
-	_set_icon.texture = GameSkin.set_icon(shown_set)
+	var rarity := CardRegistry.rarity_of(d.card_name, shown_set)
+	var legendary := (d.supertypes & Mtg.Supertype.LEGENDARY) != 0
+	_set_icon.texture = GameSkin.set_icon(shown_set, rarity, legendary)
 	_set_icon.visible = _set_icon.texture != null
 	_set_text.text = "" if _set_icon.visible else GameSkin.set_label(shown_set)
 	_set_text.visible = not _set_icon.visible
@@ -962,9 +980,13 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 		_text_bg.visible = true
 		_text_bg.color = Color(0.90, 0.87, 0.78)   # parchment rules box
 		_text_plate.visible = false
+	_dual_land_plate.texture = DualLandTextBox.texture_for(d.card_name)
+	_dual_land_plate.visible = _dual_land_plate.texture != null
 	for label in [_name_label, _type_label, _pt_label, _set_text, _set_suffix,
 			_artist_label]:
 		label.add_theme_color_override("font_color", BODY_INK)
+	for label in [_set_text, _set_suffix]:
+		label.add_theme_color_override("font_color", GameSkin.set_symbol_ink(rarity, legendary))
 	_oracle.add_theme_color_override("font_color", RULES_INK)
 	visible = true
 

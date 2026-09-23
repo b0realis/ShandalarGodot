@@ -222,6 +222,41 @@ func test_reverse_damage_only_answers_the_source_it_named() -> void:
 	assert_eq(g.players[0].reverse_damage_sources, [giant.id], "and the Giant is still watched")
 
 
+# Playtest 2026-09-23: "you" is the player, not that player's creatures.
+# The spell is legal at instant speed; it is not a creature-saving trick.
+func test_reverse_damage_in_response_does_not_save_a_bolted_creature() -> void:
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var bolt := give_hand(1, "Lightning Bolt")
+	var reverse := give_hand(0, "Reverse Damage")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(1, Mtg.ManaColor.R)
+	assert_ok(g.pass_priority(0))
+	assert_ok(g.cast_spell(1, bolt, [TargetRef.card(bear)]))
+	assert_ok(g.pass_priority(1))
+	_seat(0).cards = [bolt.id]
+	add_mana(0, Mtg.ManaColor.W, 2)
+	add_mana(0, Mtg.ManaColor.C)
+	assert_ok(g.cast_spell(0, reverse, []))
+	resolve_stack()
+	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD, "damage to a creature is not damage to you")
+	assert_eq(g.players[0].life, 20)
+	assert_eq(g.players[0].reverse_damage_sources, [bolt.id], "the player shield was not consumed")
+
+
+func test_reverse_damage_cast_after_blockers_protects_only_the_player() -> void:
+	var pair := _two_red_attackers_unblocked()
+	var giant: CardInstance = pair[0]
+	var reverse := give_hand(0, "Reverse Damage")
+	_seat(0).cards = [giant.id]
+	add_mana(0, Mtg.ManaColor.W, 2)
+	add_mana(0, Mtg.ManaColor.C)
+	assert_ok(g.cast_spell(0, reverse, []))
+	resolve_stack()
+	advance_to_step(Mtg.Step.COMBAT_END)
+	assert_eq(g.players[0].life, 21, "gain 3 from the Giant; lose 2 to the other attacker")
+	assert_true(g.players[0].reverse_damage_sources.is_empty())
+
+
 # ----------------------------------------------------------- Jade Monolith --
 
 func _bear_blocked_by_wurm() -> Array:

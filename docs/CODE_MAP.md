@@ -9,6 +9,8 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Release packages
 
+- `docs/releases/0.40.5.md`: rarity symbols, dual-land rules panels, reprint
+  preservation, and classic Reverse Damage/AI corrections.
 - `docs/releases/0.40.3.md`: concise AutoDeck, open-LAN, controls and duel
   highlights; six-target downloads, toolkit placement and compatibility.
 - `docs/releases/0.32.0.md`: prepared release highlights, organiser controls,
@@ -19,6 +21,33 @@ needed); card files have NO class_name (they register by name instead);
   packs, portable folder layout and browser limitations; included in release READMEs.
 - Release builder metadata includes a generated Pack 1 `base_assignments.json`
   snapshot of the source registry, so players need no `cards/sets/` scripts.
+
+## Classic damage-window corrections (2026-09-23)
+
+`tests/cards/test_reverse_damage_window.gd` pins Reverse Damage's classic
+window legality, queued spell-source selection and threat ordering, and its
+player-only protection. `MtgGame.damage_sources` retains pending packet
+sources; its shared ranking ignores prevented damage and other victims.
+The rules compatibility stamp changes with this behavior.
+`tests/ai/test_ai_prevention.gd` also checks that the existing reactive-window
+policy spends Reverse Damage on lethal player damage, never on creature
+damage, and does not buy a second answer for an already shielded packet.
+
+## Dual-land rules panels (2026-09-23)
+
+`game/duel/dual_land_text_box.gd` (`DualLandTextBox`) draws cached, original
+two-color concentric rules panels for the ten original dual lands. Shared
+`CardPreview` puts the panel under text with either skin; geometry, scope,
+palette, cache and reset behavior are pinned by `tests/ui/test_dual_land_text_box.gd`.
+
+## On-card rarity colours (2026-09-20)
+
+`GameSkin.set_icon` accepts printed rarity
+and legendary status, caching colour variants without altering menu icons.
+`CardRegistry.rarity_of(name, set)` reads the displayed printing's metadata.
+`tests/ui/test_card_set_rarity.gd` pins colours, reprints, pack reloads,
+transparent edges, texture caching and shared CardPreview integration,
+including preservation of the selected reprint through text expansion.
 
 ## AutoDeck and mana analysis (2026-09-18)
 

@@ -4545,7 +4545,9 @@ func find_packet(id: int) -> DamagePacket:
 ## "A source of your choice" (CR 609.7): every object a player may name
 ## as a source of damage right now — each permanent on either side and
 ## each spell on the stack (the objects on the stack refer to; the
-## command zone does not exist here). [param accept] narrows it
+## command zone does not exist here). Classic pending damage also retains
+## its source after that spell resolves or permanent leaves play.
+## [param accept] narrows it
 ## (`func(source: CardInstance) -> bool` — "a red source", "an artifact
 ## source"); a source need not be able to deal damage to be chosen.
 ## Ranked by [method rank_damage_sources] for [param threatened] when it
@@ -4561,6 +4563,10 @@ func damage_sources(accept: Callable = Callable(),
 				and not out.has(item.card):
 			if not accept.is_valid() or bool(accept.call(item.card)):
 				out.append(item.card)
+	for packet in damage_pending:
+		if packet.source != null and not out.has(packet.source):
+			if not accept.is_valid() or bool(accept.call(packet.source)):
+				out.append(packet.source)
 	if threatened != null:
 		out = rank_damage_sources(out, threatened)
 	return out
@@ -4569,8 +4575,9 @@ func damage_sources(accept: Callable = Callable(),
 ## [param sources] ordered by how likely each is to be the NEXT to deal
 ## damage to [param victim] — the hint of every "source of your choice"
 ## question (the Circles of Protection, Reverse Damage, Jade Monolith,
-## Nova Pentacle): a spell or ability on the stack aimed at the victim
-## (topmost first), then a creature it is fighting in the current combat
+## Nova Pentacle): damage already waiting for this victim in a classic
+## window (largest remaining packet first), then a spell or ability on the
+## stack aimed at the victim (topmost first), then a creature in combat
 ## (an unblocked attacker for a player, a blocker or blocked attacker for
 ## a creature; the biggest first), then the other side's creatures by
 ## power, then the other side's other permanents, then the chooser's own.
@@ -4590,6 +4597,13 @@ func rank_damage_sources(sources: Array[CardInstance],
 
 
 func _threat_score(inst: CardInstance, victim: TargetRef) -> int:
+	var pending := 0
+	for packet in damage_pending:
+		if packet.source == inst and packet.target != null \
+				and packet.target.same_object(victim):
+			pending = maxi(pending, packet.remaining())
+	if pending > 0:
+		return 20000 + mini(pending, 9999)
 	var whose := victim.player_id if victim.is_player else -1
 	var victim_inst: CardInstance = null
 	if not victim.is_player:
