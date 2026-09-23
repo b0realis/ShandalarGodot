@@ -52,6 +52,37 @@ func _play_the_window(ai: AiPlayer) -> PackedStringArray:
 
 # ------------------------------------------------------- who opens one --
 
+func test_ai_uses_dark_sphere_against_a_resolved_lethal_bolt() -> void:
+	var ai := _arm(1)
+	g.players[1].life = 3
+	var sphere := put_battlefield(1, "Dark Sphere")
+	put_battlefield(0, "Craw Wurm")
+	var bolt := give_hand(0, "Lightning Bolt")
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.cast_spell(0, bolt, [TargetRef.player(1)]))
+	resolve_stack()
+	var said := _play_the_window(ai)
+	assert_true(str(said).contains("Dark Sphere"), str(said))
+	assert_eq(sphere.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.players[1].life, 1)
+	assert_false(g.game_over)
+
+
+func test_jade_does_not_save_a_creature_at_the_cost_of_lethal_combined_damage() -> void:
+	var ai := _arm(1)
+	g.players[1].life = 5
+	put_battlefield(1, "Jade Monolith")
+	put_battlefield(1, "Plains")
+	var bears := put_battlefield(1, "Grizzly Bears")
+	var giant := put_battlefield(0, "Hill Giant")
+	var other := put_battlefield(0, "Hill Giant")
+	var said := _combat_with_ai(ai, [giant.id, other.id], {bears.id: giant.id})
+	assert_false(str(said).contains("Jade Monolith"), str(said))
+	assert_eq(g.players[1].life, 2)
+	assert_false(g.game_over)
+	assert_eq(bears.zone, Mtg.Zone.GRAVEYARD)
+
+
 func test_the_apprentice_never_uses_the_window() -> void:
 	# Phase-1, my-turn-only Magic is that profile's whole feel — the same
 	# `holds_instants` that keeps it off counterspells keeps it out of a
@@ -133,6 +164,61 @@ func test_ai_does_not_use_reverse_damage_to_save_a_creature() -> void:
 	assert_eq(reverse.zone, Mtg.Zone.HAND)
 	assert_eq(bears.zone, Mtg.Zone.GRAVEYARD)
 	assert_eq(g.players[1].life, 20)
+
+
+func test_ai_does_not_name_an_already_shielded_source_for_a_second_threat() -> void:
+	var ai := _arm(1)
+	g.players[1].life = 3
+	for i in 6: put_battlefield(1, "Plains")
+	give_hand(1, "Reverse Damage")
+	give_hand(1, "Reverse Damage")
+	var wurm := put_battlefield(0, "Craw Wurm")
+	var giant := put_battlefield(0, "Hill Giant")
+	_combat_with_ai(ai, [wurm.id, giant.id])
+	assert_true(g.players[1].reverse_damage_sources.is_empty(),
+		"each spell must protect a different uncovered source")
+	assert_false(g.game_over)
+	assert_eq(g.players[1].life, 12, "both named sources become life, not two shields on the Wurm")
+
+
+func test_ai_can_use_reverse_polarity_in_the_classic_window() -> void:
+	var ai := _arm(1)
+	g.players[1].life = 3
+	for i in 2: put_battlefield(1, "Plains")
+	give_hand(1, "Reverse Polarity")
+	var attacker := put_battlefield(0, "Juggernaut")
+	var said := _combat_with_ai(ai, [attacker.id])
+	assert_string_contains(str(said), "Reverse Polarity")
+	assert_eq(g.players[1].life, 8)
+
+
+func test_ai_can_use_simulacrum_in_the_classic_window() -> void:
+	var ai := _arm(1)
+	g.players[1].life = 3
+	put_battlefield(1, "Swamp")
+	put_battlefield(1, "Swamp")
+	var wall := put_battlefield(1, "Wall of Stone")
+	give_hand(1, "Simulacrum")
+	var attacker := put_battlefield(0, "Craw Wurm")
+	var said := _combat_with_ai(ai, [attacker.id])
+	assert_string_contains(str(said), "Simulacrum")
+	assert_eq(g.players[1].life, 3)
+	assert_eq(wall.damage, 6)
+
+
+func test_ai_can_save_a_creature_with_jade_monolith() -> void:
+	var ai := _arm(1)
+	put_battlefield(1, "Jade Monolith")
+	put_battlefield(1, "Plains")
+	var bears := put_battlefield(1, "Grizzly Bears")
+	var bolt := give_hand(0, "Lightning Bolt")
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.cast_spell(0, bolt, [TargetRef.card(bears)]))
+	resolve_stack()
+	var said := _play_the_window(ai)
+	assert_string_contains(str(said), "Jade Monolith")
+	assert_eq(bears.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(g.players[1].life, 17)
 
 
 func test_the_ai_does_not_spend_a_circle_on_a_scratch() -> void:

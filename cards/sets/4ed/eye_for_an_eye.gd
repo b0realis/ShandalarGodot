@@ -54,6 +54,8 @@ class MirrorEffect extends EffectBase:
 			pick = candidates[0]
 		game.players[controller].damage_replacements.append({
 			"desc": "Eye for an Eye",
+			"chosen_source": pick.id,
+			"display_effect": "mirror damage to its controller; does not prevent your damage",
 			"filter": MirrorEffect._from_that_source.bind(pick.id),
 			"apply": MirrorEffect._reflect.bind(source),
 		})

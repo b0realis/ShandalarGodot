@@ -9,6 +9,8 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Release packages
 
+- `docs/releases/0.40.6.md`: classic prevention/AI fixes, active protection
+  details and an illustrated Help key for set-symbol colors; LAN protocol 22.
 - `docs/releases/0.40.5.md`: rarity symbols, dual-land rules panels, reprint
   preservation, and classic Reverse Damage/AI corrections.
 - `docs/releases/0.40.3.md`: concise AutoDeck, open-LAN, controls and duel
@@ -22,7 +24,30 @@ needed); card files have NO class_name (they register by name instead);
 - Release builder metadata includes a generated Pack 1 `base_assignments.json`
   snapshot of the source registry, so players need no `cards/sets/` scripts.
 
+## Serendib Djinn upkeep checks (2026-09-23)
+
+Serendib Djinn's mandatory upkeep land choice is covered by
+`tests/unit/test_choice_preflight.gd` (successive upkeeps, two Djinns,
+Island damage and the final land), `tests/ui/test_instant_windows_2026_09_08.gd`
+(automatic passing and Done across turn entry, modern/classic rules), and
+`tests/ui/test_sgmanalink_shared_duel.gd` (remote seat's dialog and land answer).
+
 ## Classic damage-window corrections (2026-09-23)
+
+`tests/cards/test_prevention_audit.gd` extends the audit to Jade Monolith,
+Simulacrum, Reverse Polarity and Dark Sphere. `recover_damage_this_turn` and
+`DamagePacket.retroactive_heals` preserve actual-damage accounting in classic
+windows without changing modern retroactive healing. The AI uses these
+answers, avoids duplicate Reverse Damage sources and refuses a Jade redirect
+that would make the combined pending damage lethal to itself.
+
+`game/duel/player_protection_badge.gd` (`PlayerProtectionBadge`) displays
+bounded public damage-effect labels from `MtgGame.player_damage_effects`, with
+live details and keyboard/controller-safe closing. `tests/ui/test_player_protection.gd`
+pins source privacy, expiry, grouping, wording and long-name layout. The
+SGManalink presentation/projection mirrors the labels for either seat;
+`tests/ui/test_sgmanalink_shared_duel.gd` checks refresh, seat mapping and input
+isolation, while `tests/unit/test_sgmanalink.gd` validates the wire bounds.
 
 `tests/cards/test_reverse_damage_window.gd` pins Reverse Damage's classic
 window legality, queued spell-source selection and threat ordering, and its
@@ -48,6 +73,9 @@ and legendary status, caching colour variants without altering menu icons.
 `tests/ui/test_card_set_rarity.gd` pins colours, reprints, pack reloads,
 transparent edges, texture caching and shared CardPreview integration,
 including preservation of the selected reprint through text expansion.
+The same tests keep set/rarity text out of the original illustrator/P/T footer.
+`HelpPages` illustrates the four symbol colors through the shared accessor;
+`tests/ui/test_help_screen.gd` pins the key and legendary color override.
 
 ## AutoDeck and mana analysis (2026-09-18)
 

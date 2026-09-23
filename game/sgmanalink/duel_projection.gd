@@ -5,6 +5,7 @@ extends MtgGame
 ## only a validated, seat-filtered host view can change the displayed state.
 
 signal action_requested(action: Dictionary)
+var _damage_effect_labels: Array = [[], []]
 var seat := 0
 var locked := false
 var view: Dictionary = {}
@@ -18,6 +19,12 @@ var _block_matrix: Dictionary = {}
 var _used_handles: Dictionary = {}
 var _hidden_slots: Array = [{}, {}]
 var _journal_serial := 0
+
+
+func player_damage_effects(pid: int) -> Array[String]:
+	var out: Array[String] = []
+	out.assign(_damage_effect_labels[pid])
+	return out
 
 
 func local_seat(remote: int) -> int:
@@ -77,6 +84,7 @@ func ingest(room: Dictionary) -> void:
 		extra_land_plays[pid] = int(presentation.players[remote].extra_lands)
 		if presentation.players[remote].unlimited_lands: unlimited_land_plays[pid] = true
 		p.hand_revealed = presentation.players[remote].hand_revealed
+		_damage_effect_labels[pid] = presentation.players[remote].damage_effects.duplicate()
 		p.deck_names.assign(room.deck.cards if pid == 0 and not room.deck.is_empty() else [])
 		p.mana_pool.clear()
 		var colors := [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B, Mtg.ManaColor.R, Mtg.ManaColor.G, Mtg.ManaColor.C]

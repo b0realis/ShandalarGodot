@@ -113,6 +113,59 @@ func test_the_probe_leaves_no_trace_in_the_log() -> void:
 	assert_eq(g.choice_log.size(), 0, "the probe files nothing")
 
 
+func test_serendib_djinn_waits_for_the_players_land_each_upkeep() -> void:
+	_human_seat()
+	var forest := put_battlefield(0, "Forest")
+	var island := put_battlefield(0, "Island")
+	var djinn := put_battlefield(0, "Serendib Djinn")
+	_to_upkeep_of_turn(3)
+	assert_ok(g.pass_priority(g.priority_player))
+	assert_ok(g.pass_priority(g.priority_player))
+	assert_not_null(g.awaiting_choice)
+	if g.awaiting_choice == null: return
+	assert_eq(g.awaiting_choice.kind, PlayerChoice.Kind.CARD)
+	assert_eq(g.awaiting_choice.source, "Serendib Djinn")
+	assert_false(g.awaiting_choice.optional, "the land sacrifice is mandatory")
+	assert_eq(g.awaiting_choice.candidates, [forest, island])
+	assert_refused(g.pass_priority(g.priority_player), "choice")
+	assert_eq(forest.zone, Mtg.Zone.BATTLEFIELD, "preflight sacrificed nothing")
+	assert_ok(g.answer_choice(island.id))
+	assert_eq(island.zone, Mtg.Zone.GRAVEYARD, "the player can override the non-Island hint")
+	assert_eq(forest.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(g.players[0].life, 17)
+	assert_eq(djinn.zone, Mtg.Zone.BATTLEFIELD)
+	_to_upkeep_of_turn(4)
+	assert_true(g.stack.is_empty(), "no tithe on the opponent's upkeep")
+	_to_upkeep_of_turn(5)
+	assert_ok(g.pass_priority(g.priority_player))
+	assert_ok(g.pass_priority(g.priority_player))
+	assert_not_null(g.awaiting_choice, "even the only remaining land is offered")
+	if g.awaiting_choice == null: return
+	assert_eq(g.awaiting_choice.candidates, [forest])
+	assert_ok(g.answer_choice(forest.id))
+	assert_eq(forest.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(djinn.zone, Mtg.Zone.GRAVEYARD, "no lands remain")
+	assert_eq(g.unanswered_choices.size(), 0)
+
+
+func test_two_serendib_djinns_each_ask_for_a_land() -> void:
+	_human_seat()
+	var first := put_battlefield(0, "Forest")
+	var second := put_battlefield(0, "Forest")
+	put_battlefield(0, "Island")
+	put_battlefield(0, "Serendib Djinn")
+	put_battlefield(0, "Serendib Djinn")
+	_to_upkeep_of_turn(3)
+	for land in [second, first]:
+		assert_ok(g.pass_priority(g.priority_player))
+		assert_ok(g.pass_priority(g.priority_player))
+		assert_not_null(g.awaiting_choice, "each trigger needs its own answer")
+		if g.awaiting_choice == null: return
+		assert_ok(g.answer_choice(land.id))
+		assert_eq(land.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.unanswered_choices.size(), 0)
+
+
 func test_answering_no_resolves_the_players_way() -> void:
 	_human_seat(0)
 	var efreet := _junun(0)

@@ -289,7 +289,7 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   dispatch. Duplicate/contradictory card locations, absent combat-card references
   and unknown keyword values are rejected before replacing the client view.
   Seat authorization comes from the connection, not a player
-  number submitted by the client. The data protocol is version 21 (all players
+  number submitted by the client. The data protocol is version 22 (all players
   need this updated build, including the table's deck rule and assigned deck,
   the open host's published invitation, viewer-specific exile-play permissions,
   public hack-effect reminders, live ability badges, the protection-from-
@@ -298,10 +298,10 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   the tournament table's `hold` reason, each seat's land-drop allowance
   beside its counter, the public half of a damage division — its amount
   and targets — for the watching seat, the creatures an open regeneration
-  window is about, and no printed cost on a face — the client prices a
+  window is about, public active player-protection descriptions, and no printed cost on a face — the client prices a
   named card off its own registry);
   the invitation keeps the `sglan1:` envelope prefix and carries the same
-  protocol-21 compatibility check inside it. A handshake fingerprint additionally
+  protocol-22 compatibility check inside it. A handshake fingerprint additionally
   checks the release version, maintained rules revision and printed card catalogue,
   and a readable stamp `{game, rules, packs}` travels beside it in the hello and
   in every LAN advert, so a refusal — and the game browser's BUILD column — can

@@ -31,7 +31,7 @@ class ReverseDamageEffect extends EffectBase:
 
 	func resolve(game: MtgGame, _source: CardInstance, controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		var choices := game.damage_sources(Callable(), TargetRef.player(controller))
+		var choices := game.reverse_damage_choices(controller)
 		if choices.is_empty():
 			game.log_line("Reverse Damage has no source to name")
 			return

@@ -62,6 +62,8 @@ class PentacleEffect extends EffectBase:
 			pick = candidates[0]
 		game.players[controller].damage_replacements.append({
 			"desc": "Nova Pentacle",
+			"chosen_source": pick.id,
+			"redirect_target": victim.id,
 			"filter": PentacleEffect._from_that_source.bind(pick.id),
 			"apply": PentacleEffect._deflect.bind(victim.id),
 		})

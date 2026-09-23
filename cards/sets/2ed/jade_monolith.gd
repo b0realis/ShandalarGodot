@@ -28,6 +28,7 @@ func build() -> CardData:
 
 class MonolithEffect extends EffectBase:
 	func _init() -> void:
+		is_damage_prevention = true
 		target_spec = TargetSpec.creature()
 
 	func resolve(game: MtgGame, _source: CardInstance, controller: int,

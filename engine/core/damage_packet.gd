@@ -101,6 +101,11 @@ var id: int = 0
 ## prevented, because that is what the card's own `if dealt > 0` expects.
 var after_landing: Array[Callable] = []
 
+## Classic retroactive healing is tied to THIS victim and window, not to
+## the source's later damage. Unlike after_landing it never follows a
+## redirected packet to a different victim. Value records are undoable.
+var retroactive_heals: Array[Dictionary] = []
+
 
 ## The source's instance id, or -1 for a sourceless packet. DERIVED rather
 ## than stored — a second field could drift, and a computed property would

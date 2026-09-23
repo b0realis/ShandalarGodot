@@ -82,6 +82,27 @@ func test_server_dtos_validate_nested_shapes_before_ui_use() -> void:
 	assert_false(SgViewProtocol.valid({"type": "ack", "seq": 1, "ok": "yes", "error": ""}))
 
 
+func test_player_protection_crosses_the_wire_as_bounded_public_text() -> void:
+	var source := put_battlefield(0, "Hill Giant")
+	g.players[1].reverse_damage_sources.append(source.id)
+	var match_state := SgPracticeMatch.new(42)
+	match_state.game = g
+	for viewer in 2:
+		var view := match_state.view(viewer)
+		assert_true(SgViewProtocol.game(view))
+		assert_string_contains(str(view.presentation.players[1].damage_effects), "Hill Giant")
+		var broken := view.duplicate(true)
+		broken.presentation.players[1].damage_effects = [42]
+		assert_false(SgViewProtocol.game(broken))
+		broken.presentation.players[1].damage_effects = ["x".repeat(4097)]
+		assert_false(SgViewProtocol.game(broken))
+		broken.presentation.players[1].damage_effects = []
+		for i in 65: broken.presentation.players[1].damage_effects.append("shield")
+		assert_false(SgViewProtocol.game(broken))
+	source.face_down = true
+	assert_false(str(match_state.view(1).presentation.players[1].damage_effects).contains("Hill Giant"))
+
+
 func test_text_effect_snapshots_are_public_detached_and_cleared() -> void:
 	var host := put_battlefield(0, "Swamp")
 	g.change_text(host, "land_type", "swamp", "island")

@@ -11072,6 +11072,19 @@ func _effects_answer(game: MtgGame, effects: Array, packet: DamagePacket,
 	if source.data.card_name == "Reverse Damage":
 		return packet.target.is_player and packet.target.player_id == pid \
 			and packet.source != null
+	if source.data.card_name == "Reverse Polarity":
+		return packet.target.is_player and packet.target.player_id == pid \
+			and packet.source != null and packet.source.is_type(Mtg.CardType.ARTIFACT)
+	if source.data.card_name == "Dark Sphere":
+		return packet.target.is_player and packet.target.player_id == pid \
+			and packet.remaining() >= 2 and packet.source != null
+	if source.data.card_name == "Simulacrum":
+		return packet.target.is_player and packet.target.player_id == pid \
+			and not e.target_spec.legal_targets(game, source).is_empty()
+	if source.data.card_name == "Jade Monolith":
+		# A saved creature is not worth redirecting lethal damage to ourselves.
+		return not packet.target.is_player and game.players[pid].life > _pending_player_risk(game) + packet.remaining() \
+			and e.target_spec.is_legal(game, _victim_ref(packet), source)
 	if profile.forecasts_tactics:
 		if not packet.target.is_player:
 			var victim := game.find_instance(packet.target.instance_id)
@@ -11101,6 +11114,20 @@ func _window_targets(game: MtgGame, effects: Array, packet: DamagePacket,
 	var e: EffectBase = effects[0]
 	if e.target_spec == null:
 		return []
+	if source.data.card_name == "Simulacrum":
+		var choices := e.target_spec.legal_targets(game, source)
+		var incoming := game.players[pid].damage_taken_this_turn
+		for pending in game.damage_pending:
+			if pending.target.is_player and pending.target.player_id == pid:
+				incoming += pending.remaining()
+		choices.sort_custom(func(a: TargetRef, b: TargetRef) -> bool:
+			var ca := game.find_instance(a.instance_id)
+			var cb := game.find_instance(b.instance_id)
+			# Prefer a survivor, then the least valuable loss, using public state.
+			var va := 0.0 if ca.cur_toughness - ca.damage > incoming else Evaluator.permanent_value(ca, profile)
+			var vb := 0.0 if cb.cur_toughness - cb.damage > incoming else Evaluator.permanent_value(cb, profile)
+			return ca.id < cb.id if is_equal_approx(va, vb) else va < vb)
+		return [] if choices.is_empty() else [choices[0]]
 	if e.target_spec.kind == TargetSpec.Kind.DAMAGE:
 		return [TargetRef.damage(packet)]
 	var victim := _victim_ref(packet)
@@ -11130,6 +11157,22 @@ func _packet_source_name(packet: DamagePacket) -> String:
 ## The packet itself still reads its full [method DamagePacket.remaining]
 ## (pools are spent when the damage LANDS), so without this the AI would
 ## answer the same packet twice.
+## Conservative public total, including redirects already committed to us.
+## Do not spend one prevention pool separately against every packet.
+func _pending_player_risk(game: MtgGame) -> int:
+	var total := 0
+	for pending in game.damage_pending:
+		if pending.target.is_player:
+			if pending.target.player_id == pid:
+				total += pending.remaining()
+		else:
+			var victim := game.find_instance(pending.target.instance_id)
+			if victim != null and victim.damage_redirect_to == pid and victim.damage_redirects > 0 \
+					and victim.damage_redirect_sources.has(pending.source_id()):
+				total += pending.remaining()
+	return total
+
+
 func _uncovered(game: MtgGame, packet: DamagePacket) -> int:
 	if profile.forecasts_tactics and game._damage_prevented_before_gates(
 			packet.source, packet.target, packet.is_combat):
@@ -11137,12 +11180,15 @@ func _uncovered(game: MtgGame, packet: DamagePacket) -> int:
 	var pool := 0
 	if packet.target.is_player:
 		var player := game.players[packet.target.player_id]
+		if not packet.retroactive_heals.is_empty(): return 0
 		if packet.source != null and player.reverse_damage_sources.has(packet.source.id):
 			return 0 # the one-shot source shield is spent when damage lands
 		pool = player.damage_prevention
 	else:
 		var inst := game.find_instance(packet.target.instance_id)
 		if inst != null:
+			if packet.source != null and inst.damage_redirects > 0 \
+					and inst.damage_redirect_sources.has(packet.source.id): return 0
 			if profile.forecasts_tactics and inst.damage_unpreventable_this_turn:
 				return packet.remaining()
 			pool = inst.prevention

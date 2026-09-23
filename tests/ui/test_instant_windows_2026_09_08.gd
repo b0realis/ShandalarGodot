@@ -311,6 +311,60 @@ func test_your_own_quiet_upkeep_still_runs_with_a_bolt_in_hand() -> void:
 	assert_true(screen._auto_pass_applies(), "their upkeep goes")
 
 
+func test_serendib_djinn_stops_automatic_upkeep_for_a_land() -> void:
+	_serendib_upkeep_choice(false, "modern")
+	await get_tree().process_frame
+
+
+func test_serendib_djinn_stops_done_for_a_land() -> void:
+	_serendib_upkeep_choice(true, "modern")
+	await get_tree().process_frame
+
+
+func test_serendib_djinn_stops_automatic_upkeep_under_classic_rules() -> void:
+	_serendib_upkeep_choice(false, "fifth")
+	await get_tree().process_frame
+
+
+func test_serendib_djinn_stops_done_under_classic_rules() -> void:
+	_serendib_upkeep_choice(true, "fifth")
+	await get_tree().process_frame
+
+
+func _serendib_upkeep_choice(done_order: bool, edition: String) -> void:
+	screen.game.rules.set_edition(edition)
+	var forest := _summon("Forest", 0)
+	var island := _summon("Island", 0)
+	_summon("Serendib Djinn", 0)
+	# Start before upkeep: do not bypass its real step entry or the
+	# screen's synchronous state-change / automatic-pass callbacks.
+	var g := _window(1, Mtg.Step.END)
+	if done_order:
+		screen._begin_advance(DuelScreen.Advance.DONE)
+	else:
+		screen._refresh()
+	for _i in 8:
+		if g.awaiting_choice != null: break
+		if g.priority_player == 1:
+			screen._ais[1].act(g)
+		else:
+			screen._drive_advance()
+	assert_eq(g.current_step(), Mtg.Step.UPKEEP, "no automatic draw before the sacrifice choice")
+	assert_not_null(g.awaiting_choice, "automatic priority passing must still ask which land")
+	if g.awaiting_choice == null: return
+	assert_eq(g.awaiting_choice.source, "Serendib Djinn")
+	assert_eq(DuelScreen.choice_options(g.awaiting_choice), ["Forest", "Island"])
+	assert_eq(forest.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(island.zone, Mtg.Zone.BATTLEFIELD)
+	assert_false(screen._auto_pass_applies())
+	screen._drive_advance()
+	assert_not_null(g.awaiting_choice, "Done cannot dismiss a required choice")
+	screen._on_choice_option(0)
+	assert_eq(forest.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(island.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(g.unanswered_choices.size(), 0)
+
+
 # ====================================================== what is NOT a window --
 
 func test_a_declaration_still_owed_is_not_a_window() -> void:

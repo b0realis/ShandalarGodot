@@ -7,7 +7,9 @@ extends CardScript
 ## Implementation: the engine now tracks how much damage each player has
 ## taken this turn (MtgPlayer.damage_taken_this_turn, cleared at cleanup),
 ## which is the number both halves of the card ask for. The life is gained
-## first, so the creature's fate never changes the amount.
+## first, so the creature's fate never changes the amount. The classic
+## damage window also recovers its pending damage when it lands, before
+## state-based deaths; modern play never covers future damage.
 
 
 static func _yours(_game: MtgGame, source: CardInstance, inst: CardInstance) -> bool:
@@ -24,15 +26,13 @@ func build() -> CardData:
 
 class SimulacrumEffect extends EffectBase:
 	func _init(spec: TargetSpec) -> void:
+		is_damage_prevention = true
 		target_spec = spec
 
 	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
-		var taken := game.players[controller].damage_taken_this_turn
-		if taken <= 0:
-			return
-		game.adjust_life(controller, taken)
-		game.deal_damage(source, target, taken)
+		game.recover_damage_this_turn(controller, 1, false, source,
+			game.find_instance(target.instance_id))
 
 	func describe() -> String:
 		return "you gain the damage you took this turn and pass it to your own creature"

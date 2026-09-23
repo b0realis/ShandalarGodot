@@ -48,6 +48,8 @@ class SoakEffect extends EffectBase:
 			return
 		game.players[controller].damage_replacements.append({
 			"desc": "Shimian Night Stalker",
+			"chosen_source": attacker.id,
+			"redirect_target": source.id,
 			"filter": SoakEffect._from_that_attacker.bind(attacker.id),
 			"apply": SoakEffect._soak.bind(source.id),
 			"all_turn": true,

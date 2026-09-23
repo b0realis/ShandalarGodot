@@ -63,7 +63,8 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 		result.players.append({"poison": p.poison, "lands": p.lands_played_this_turn,
 			"extra_lands": int(g.extra_land_plays.get(seat, 0)),
 			"unlimited_lands": g.unlimited_land_plays.has(seat),
-			"hand_revealed": p.hand_revealed, "color": m.panel_colors[seat]})
+			"hand_revealed": p.hand_revealed, "color": m.panel_colors[seat],
+			"damage_effects": g.player_damage_effects(seat)})
 		var visible: Array = p.battlefield + p.graveyard + p.exile + p.ante
 		for card in p.hand:
 			if m._visible(pid, card): visible.append(card)

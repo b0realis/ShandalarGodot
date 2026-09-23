@@ -121,6 +121,41 @@ func test_online_hack_reminders_survive_the_wire_for_either_seat(seat = use_para
 	assert_true(screen.find_children("TextChangeGhost*", "", true, false).is_empty())
 
 
+func test_online_protection_badges_map_both_seats_and_clear_live(seat = use_parameters([0, 1])) -> void:
+	advance_to_step(Mtg.Step.MAIN1)
+	var giant := put_battlefield(0, "Hill Giant")
+	g.players[1].reverse_damage_sources.append(giant.id)
+	var screen := _screen(seat)
+	await _pump()
+	var protected_pid := screen.projection.local_seat(1)
+	var badge: PlayerProtectionBadge = screen._protection_badges[protected_pid]
+	assert_true(badge.visible)
+	assert_false(screen._protection_badges[1 - protected_pid].visible)
+	assert_string_contains(badge.tooltip_text, "Hill Giant")
+	assert_true(badge.get_parent().get_global_rect().encloses(badge.get_global_rect()), "badge stays within portrait")
+	badge.open_details()
+	assert_not_null(badge._dialog)
+	assert_true(commands.is_empty(), "reading public shields never sends a game command")
+	assert_true(screen._modal_open())
+	var enter := InputEventKey.new()
+	enter.keycode = KEY_ENTER
+	enter.pressed = true
+	screen._on_control(enter)
+	assert_true(commands.is_empty(), "Return must not advance the duel behind the details")
+	screen._on_escape()
+	assert_false(badge.details_open())
+	badge.open_details()
+	var detached := screen.projection.player_damage_effects(protected_pid)
+	detached.clear()
+	assert_false(screen.projection.player_damage_effects(protected_pid).is_empty())
+	g.deal_damage(giant, TargetRef.player(1), 3)
+	revision += 1
+	screen.present(_room(seat), true, false)
+	await _pump()
+	assert_false(badge.visible)
+	assert_null(badge._dialog)
+
+
 func test_auto_payment_waits_for_color_and_resumes_once() -> void:
 	advance_to_step(Mtg.Step.MAIN1)
 	var bears := give_hand(0, "Grizzly Bears")
@@ -334,6 +369,45 @@ func test_shared_choice_dialog_and_authorized_library_search() -> void:
 	await _pump()
 	assert_null(g.awaiting_choice)
 	assert_eq(g.players[0].hand.back().data.card_name, "Forest")
+	assert_eq(refusals, [])
+
+
+func test_serendib_djinn_online_auto_pass_keeps_the_land_choice_for_seat_two() -> void:
+	var forest := put_battlefield(1, "Forest")
+	var island := put_battlefield(1, "Island")
+	put_battlefield(1, "Serendib Djinn")
+	g.active_player = 1
+	g._enter_step(Mtg.STEP_ORDER.find(Mtg.Step.UPKEEP))
+	var screen := _screen(1)
+	screen.stops.clear_all()
+	revision += 1
+	screen.present(_room(1), true, false)
+	for _i in 8:
+		await _pump()
+		if g.awaiting_choice != null: break
+		if g.priority_player == 0:
+			assert_ok(g.pass_priority(0))
+		revision += 1
+		screen.present(_room(1), true, false)
+	assert_not_null(g.awaiting_choice)
+	if g.awaiting_choice == null: return
+	revision += 1
+	screen.present(_room(1), true, false)
+	await _pump()
+	assert_eq(g.current_step(), Mtg.Step.UPKEEP)
+	assert_eq(g.awaiting_choice.pid, 1)
+	assert_not_null(screen._choice_overlay)
+	var labels := DuelScreen.choice_options(screen.game.awaiting_choice)
+	assert_eq(labels.size(), 2)
+	assert_string_contains(labels[0], "Forest")
+	assert_string_contains(labels[1], "Island")
+	assert_true(referee.view(0).choice.is_empty(), "the opponent cannot answer the land choice")
+	assert_eq(forest.zone, Mtg.Zone.BATTLEFIELD)
+	screen._on_choice_option(0)
+	await _pump()
+	assert_eq(forest.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(island.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(g.unanswered_choices.size(), 0)
 	assert_eq(refusals, [])
 
 

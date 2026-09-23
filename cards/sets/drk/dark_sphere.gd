@@ -10,8 +10,8 @@ extends CardScript
 ## point coming at you — 5 damage becomes 3, not 2.
 ##
 ## "A source of your choice" is chosen when the ability resolves, and the
-## choices offered are the opponent's permanents plus whatever is on the
-## stack, which is every source that can actually be pointed at you.
+## choices include both battlefields, spells and pending damage sources,
+## including a resolved spell already in the graveyard in a classic window.
 ##
 ## Free to play, one mana-less sacrifice to use: the Dark Sphere is the
 ## cheapest possible answer to one huge burn spell, and nothing else.
@@ -37,11 +37,13 @@ class HalveEffect extends EffectBase:
 		if candidates.is_empty():
 			return
 		var pick := game.agents[controller].choose_card(game, controller,
-			candidates, "Choose a source for Dark Sphere")
+			candidates, "Choose a source for Dark Sphere", false, false, true)
 		if pick == null or not candidates.has(pick):
 			pick = candidates[0]
 		game.players[controller].damage_replacements.append({
 			"desc": "Dark Sphere",
+			"chosen_source": pick.id,
+			"display_effect": "prevent half the damage, rounded down",
 			"filter": HalveEffect._from_that_source.bind(pick.id),
 			"apply": HalveEffect._halve,
 		})
@@ -53,14 +55,7 @@ class HalveEffect extends EffectBase:
 	## Brass, Mana Crypt, Electric Eel, Elves of Deep Shadow or Wormwood
 	## Treefolk are all sources that deal damage to you.
 	static func _sources(game: MtgGame, pid: int) -> Array[CardInstance]:
-		var out: Array[CardInstance] = []
-		for inst in game.all_battlefield():
-			out.append(inst)
-		for item in game.stack:
-			if item.card != null and item.card.zone == Mtg.Zone.STACK \
-					and not out.has(item.card):
-				out.append(item.card)
-		return out
+		return game.damage_sources(Callable(), TargetRef.player(pid))
 
 	static func _from_that_source(_game: MtgGame, packet: DamagePacket,
 			chosen_id: int) -> bool:

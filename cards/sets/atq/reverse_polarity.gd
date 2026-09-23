@@ -5,8 +5,10 @@ extends CardScript
 ##
 ## Implementation: reads MtgPlayer.artifact_damage_this_turn — the
 ## per-turn counter MtgGame.deal_damage keeps whenever an ARTIFACT source
-## damages a player — and doubles it. A dead card against anything but
-## the artifact deck, which is exactly its job.
+## damages a player — and doubles it. In the classic prevention window,
+## also recovers that window's damage when it actually lands; prevention
+## and redirection cannot manufacture extra life. Modern play still only
+## counts damage already dealt when the spell resolves.
 
 
 func build() -> CardData:
@@ -17,11 +19,12 @@ func build() -> CardData:
 
 
 class PolarityEffect extends EffectBase:
+	func _init() -> void:
+		is_damage_prevention = true
+
 	func resolve(game: MtgGame, _source: CardInstance, controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		var taken := game.players[controller].artifact_damage_this_turn
-		if taken > 0:
-			game.adjust_life(controller, taken * 2)
+		game.recover_damage_this_turn(controller, 2, true)
 
 	func describe() -> String:
 		return "gain twice the artifact damage you took this turn"

@@ -53,6 +53,8 @@ class ShieldEffect extends EffectBase:
 			pick = candidates[0]
 		game.players[controller].damage_replacements.append({
 			"desc": "Forcefield",
+			"chosen_source": pick.id,
+			"display_effect": "reduce unblocked combat damage to 1",
 			"filter": ShieldEffect._unblocked_combat_damage.bind(pick.id),
 			"apply": ShieldEffect._all_but_one,
 		})

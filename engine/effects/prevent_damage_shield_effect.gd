@@ -127,6 +127,7 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 		named = choices[0]
 	game.players[controller].prevention_shield_filters.append({
 		"desc": "%s (%s)" % [source.data.card_name, named.data.card_name],
+		"chosen_source": named.id,
 		"filter": PreventDamageShieldEffect._is_source.bind(named.id),
 	})
 	game.log_line("%s shields %s against %s this turn" % [

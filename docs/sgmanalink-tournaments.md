@@ -153,7 +153,7 @@ application cannot reclaim an entry by matching its nickname.
 
 ## Play on a LAN
 
-1. Use matching 0.40.3 builds (protocol 21) and enabled card packs. Open the globe, choose a
+1. Use matching builds (0.40.6 uses protocol 22) and enabled card packs. Open the globe, choose a
    temporary name, and check the LAN address/port under **Host Game →
    Network settings…** if the computer has several adapters.
 2. Open **Tournament**. Name the event, choose 2–20 maximum entrants and a

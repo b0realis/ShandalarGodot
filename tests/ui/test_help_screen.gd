@@ -222,6 +222,22 @@ func test_an_unknown_icon_source_resolves_to_null_rather_than_erroring() -> void
 	assert_null(HelpPages.icon_texture({}))
 
 
+func test_set_symbol_color_key_uses_the_actual_card_textures() -> void:
+	var seen: Array[String] = []
+	for entry in HelpPages.icon_entries():
+		var spec: Dictionary = entry.get("icon", {})
+		if spec.get("src", "") != HelpPages.SRC_SET or not spec.has("rarity"):
+			continue
+		var rarity := String(spec.rarity)
+		seen.append(rarity)
+		assert_eq(HelpPages.icon_texture(spec), GameSkin.set_icon(String(spec.code), rarity))
+		assert_string_contains(entry.name, {"common": "White", "uncommon": "Silver",
+			"rare": "Gold", "mythic": "Purple"}[rarity])
+	assert_eq(seen, ["common", "uncommon", "rare", "mythic"] as Array[String])
+	assert_eq(HelpPages.icon_texture({"src": HelpPages.SRC_SET, "code": "4ed",
+		"rarity": "uncommon", "legendary": true}), GameSkin.set_icon("4ed", "mythic"))
+
+
 func test_the_duel_icons_match_the_screens_that_draw_them() -> void:
 	# The inventory is taken FROM THE CODE, so it has to stay tied to it:
 	# these are the exact tables the duel screen renders from.

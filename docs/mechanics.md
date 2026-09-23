@@ -303,6 +303,25 @@ holds lethal damage, with state-based actions still deferred, and only
 seat (`DecisionAgent.wants_damage_prevention_window`), so an AI-only duel and
 every headless test never pause even with the fork on.
 
+**Retroactive healing in that classic window.** Reverse Polarity and
+Simulacrum are legal prevention-family responses, as documented in the
+original help (see `docs/duel-todo.md` §6.8). `recover_damage_this_turn` first
+recovers damage already dealt, then attaches `DamagePacket.retroactive_heals`
+to matching packets currently waiting for that player. Landing measures the
+damage that actually reaches the original player, heals before lethal state
+checks, and, for Simulacrum, creates damage to the original creature incarnation.
+Prevented damage and damage redirected away earn no recovery. These records
+are not copied to redirected packets or extended to later windows. Modern
+rules use only the already-dealt counter; they never install these records.
+Snapshot and undo restore the pending records. `tests/cards/test_prevention_audit.gd`
+covers the timing fork, mixed artifact damage, redirection, prior damage,
+later damage, changed creature incarnation and rollback.
+
+**Public protection details.** `player_damage_effects` describes existing
+player-side shields, pools, replacements and pending recoveries. Source names
+are restricted to face-up public zones. The portrait badge is presentation-only;
+LAN sends bounded text, never the effects' Callables or private card identity.
+
 Damage to a **player** is filtered in this order:
 
 1. source has "prevent all damage it would deal" (`cur_prevent_all_damage_dealt`);

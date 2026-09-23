@@ -119,6 +119,23 @@ func test_letter_only_set_labels_also_follow_the_scheme() -> void:
 	assert_eq(GameSkin.set_symbol_ink("mythic"), GameSkin.set_symbol_ink("rare", true))
 	assert_eq(GameSkin.set_symbol_ink("common"), Color.WHITE)
 
+func test_preview_keeps_the_original_footer_without_set_or_rarity_text() -> void:
+	var preview := _preview()
+	preview.show_card(CardInstance.new(CardRegistry.get_card("Jedit Ojanen"), 7, 0))
+	assert_string_contains(preview._type_label.text, "Legendary")
+	assert_lte(preview._oracle.get_rect().end.y, preview._artist_label.position.y)
+	assert_almost_eq(preview._artist_label.anchor_bottom, 0.995, 0.00001,
+		"the artist keeps the original footer band")
+	var wizard := CardInstance.new(CardRegistry.get_card("Apprentice Wizard"), 8, 0)
+	for set_code in ["drk", "4ed"]:
+		preview.show_card(wizard, set_code)
+		preview.set_text_expanded(true)
+		for child in preview.get_children():
+			if child is Label:
+				assert_false(child.text.contains(DeckFilter.SET_LABELS[set_code]))
+				assert_false(child.text.contains("Common") or child.text.contains("Rare"))
+		assert_string_starts_with(preview._artist_label.text, CardPreview.ILLUS_PREFIX)
+
 func test_clearing_the_skin_cache_rebuilds_variants_without_changing_their_pixels() -> void:
 	var old := GameSkin.set_icon("ice", "uncommon")
 	var pixels := old.get_image().get_data()

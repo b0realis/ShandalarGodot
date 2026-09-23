@@ -85,7 +85,7 @@ const SRC_TEXTURE := "texture" ## `key` — a whole skin texture.
 const SRC_PHASE := "phase"     ## `slot` — one Phase Bar icon.
 const SRC_COMBAT := "combat"   ## `slot` — one Combat Bar icon.
 const SRC_FILTER := "filter"   ## `row`/`col` — a deck-builder medallion.
-const SRC_SET := "set"         ## `code` — a set symbol.
+const SRC_SET := "set"         ## `code`, optional `rarity`/`legendary` — a set symbol.
 const SRC_CURSOR := "cursor"   ## the targeting cursor.
 const SRC_COUNTER := "counter" ## `row` — one counter stone off the 1997 strip.
 const SRC_DRAWN := "drawn"     ## no texture: the game draws this in code.
@@ -278,6 +278,9 @@ static func _page_damage() -> Dictionary:
 		_text("After choosing blockers, press Done to enter the fast-effects window. Activate regeneration and let it resolve before you pass into combat damage. You cannot regenerate a creature that is already in the graveyard."),
 		_heading("1997 damage prevention step: wait for the prompt"),
 		_text("With Damage prevention step enabled, damage waits for prevention, healing and redirection. A regeneration window follows for creatures that would still be destroyed. Use regeneration there when the prompt asks for it."),
+		_text("Reverse Damage protects you, not a creature. Jade Monolith can save a creature by redirecting its damage to you. In the classic window, Simulacrum and Reverse Polarity also recover damage from that window as it actually reaches you; prevented or redirected-away damage earns no life. In modern rules they count only damage already dealt when they resolve."),
+		_heading("Read your active protection"),
+		_text("A small shield on a player's portrait shows active damage effects. Click it for the source, what the effect does and its duration. The list updates as shields are used or expire, including online. Eye for an Eye mirrors damage; it does not prevent your damage."),
 		_heading("What regeneration cannot save"),
 		_text("Sacrifice, exile, toughness of 0 or less, and destruction that says it cannot be regenerated. Ordinary damage remains marked until cleanup and adds up across hits; reducing toughness is not damage."),
 	]}
@@ -1276,9 +1279,18 @@ static func _page_icons_builder_sets() -> Dictionary:
 			+ "ring that marks a set medallion. The cards themselves carry "
 			+ "a plainer drawing of the same symbol at the end of their "
 			+ "type line — those are on the 'around the table' page."),
-		_text("On cards, set symbols are white for common, silver for uncommon, "
-			+ "gold for rare, and purple for legendary or mythic. Legendary "
-			+ "takes precedence over printed rarity. Reprints use the rarity "
+		_heading("Set-symbol colors on cards"),
+		{"kind": ICONS, "entries": [
+			_icon("White — Common", "The displayed printing is common.",
+				{"src": SRC_SET, "code": "4ed", "rarity": "common"}, "C"),
+			_icon("Silver — Uncommon", "The displayed printing is uncommon.",
+				{"src": SRC_SET, "code": "4ed", "rarity": "uncommon"}, "U"),
+			_icon("Gold — Rare", "The displayed printing is rare.",
+				{"src": SRC_SET, "code": "4ed", "rarity": "rare"}, "R"),
+			_icon("Purple — Legendary or mythic", "Legendary cards use purple regardless of printed rarity; mythic cards also use purple.",
+				{"src": SRC_SET, "code": "4ed", "rarity": "mythic"}, "L/M"),
+		]},
+		_text("Legendary is a supertype, not a rarity. Reprints use the rarity "
 			+ "of the displayed set; set-filter medallions keep their usual colors."),
 		{"kind": ICONS, "entries": set_entries},
 		_text("Unlimited and the promotional cards use the labels 2nd and PR."),
@@ -1494,7 +1506,8 @@ static func icon_texture(spec: Dictionary) -> Texture2D:
 			return FilterBar.sheet_cell("filter_icons",
 				int(spec.get("row", -1)), int(spec.get("col", -1)))
 		SRC_SET:
-			return GameSkin.set_icon(String(spec.get("code", "")))
+			return GameSkin.set_icon(String(spec.get("code", "")),
+				String(spec.get("rarity", "")), bool(spec.get("legendary", false)))
 		SRC_CURSOR:
 			# Target.pic is a strip of square frames; the duel screen shows
 			# the first one as the cursor, and so does this.

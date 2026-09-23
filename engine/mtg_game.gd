@@ -3461,13 +3461,55 @@ func _land_damage(packet: DamagePacket) -> int:
 	_rec(packet, &"prevented")
 	_rec(packet, &"redirected")
 	_rec(packet, &"applied_creature_redirects")
+	var patient := packet.target.player_id if packet.target != null and packet.target.is_player else -1
+	var taken_before := players[patient].damage_taken_this_turn if patient >= 0 else 0
 	var dealt := _land_damage_impl(packet)
+	# Count only damage that reached the ORIGINAL player. _land_damage_impl
+	# can instead return damage redirected elsewhere; that must not heal us.
+	if patient >= 0 and not packet.retroactive_heals.is_empty():
+		var taken := maxi(0, players[patient].damage_taken_this_turn - taken_before)
+		var recoveries := packet.retroactive_heals.duplicate()
+		_rec(packet, &"retroactive_heals")
+		packet.retroactive_heals.clear()
+		for recovery in recoveries:
+			_apply_damage_recovery(patient, taken, recovery)
 	# EVERY path fires the callbacks, 0 included: "you gain life equal to
 	# the damage dealt this way" gains nothing when the damage was
 	# prevented, and the card's own `if dealt > 0` is what says so.
 	for cb in packet.after_landing:
 		cb.call(dealt)
 	return dealt
+
+
+## Reverse Polarity / Simulacrum: Oracle's already-dealt damage, plus the
+## current prevention window under the classic timing fork (Duel.hlp,
+## Damage Prevention). A window recovery waits for actual damage, then
+## runs inside its simultaneous bracket, before lethal state checks.
+func recover_damage_this_turn(pid: int, multiplier: int, artifacts_only := false,
+		source: CardInstance = null, recipient: CardInstance = null) -> void:
+	var recovery := {"multiplier": multiplier, "source": source,
+		"recipient": recipient.id if recipient != null else -1,
+		"timestamp": recipient.layer_timestamp if recipient != null else -1}
+	var taken := players[pid].artifact_damage_this_turn if artifacts_only else players[pid].damage_taken_this_turn
+	# Capture the window BEFORE Simulacrum creates any new damage of its own.
+	if rules.damage_prevention_window and awaiting_damage_prevention:
+		for packet in damage_pending:
+			if packet.target == null or not packet.target.is_player or packet.target.player_id != pid:
+				continue
+			if artifacts_only and (packet.source == null or not packet.source.is_type(Mtg.CardType.ARTIFACT)):
+				continue
+			_rec(packet, &"retroactive_heals")
+			packet.retroactive_heals.append(recovery.duplicate())
+	_apply_damage_recovery(pid, taken, recovery)
+
+
+func _apply_damage_recovery(pid: int, taken: int, recovery: Dictionary) -> void:
+	if taken <= 0: return
+	adjust_life(pid, taken * int(recovery.multiplier))
+	var recipient := find_instance(int(recovery.recipient))
+	if recovery.source != null and recipient != null and recipient.zone == Mtg.Zone.BATTLEFIELD \
+			and recipient.layer_timestamp == int(recovery.timestamp):
+		deal_damage(recovery.source, TargetRef.card(recipient), taken)
 
 
 func _land_damage_impl(packet: DamagePacket) -> int:
@@ -4594,6 +4636,79 @@ func rank_damage_sources(sources: Array[CardInstance],
 	for pair in scored:
 		out.append(pair[1])
 	return out
+
+
+## Keep every legal choice available to the human, but do not recommend
+## spending a second Reverse Damage on a source already covered this turn.
+func reverse_damage_choices(pid: int) -> Array[CardInstance]:
+	var choices := damage_sources(Callable(), TargetRef.player(pid))
+	var uncovered: Array[CardInstance] = []
+	var covered: Array[CardInstance] = []
+	for source in choices:
+		if players[pid].reverse_damage_sources.has(source.id): covered.append(source)
+		else: uncovered.append(source)
+	uncovered.append_array(covered)
+	return uncovered
+
+
+## Public, presentation-only descriptions. No Callables, hidden identities
+## or engine ids cross the LAN boundary; remote projections override this.
+func player_damage_effects(pid: int) -> Array[String]:
+	var p := players[pid]
+	var raw: Array[String] = []
+	for source_id in p.reverse_damage_sources:
+		raw.append("Reverse Damage — %s: prevent the next hit and gain that much life; this turn" % _public_damage_source_name(source_id))
+	if p.damage_prevention > 0:
+		raw.append("Prevent the next %d damage; this turn" % p.damage_prevention)
+	for mask in p.prevention_shields:
+		var colors: Array[String] = []
+		for color in Mtg.COLOR_NAMES:
+			if (int(mask) & int(color)) != 0: colors.append(Mtg.COLOR_NAMES[color])
+		raw.append("Prevent the next hit from a %s source; this turn" % "/".join(colors))
+	for row in p.prevention_shield_filters:
+		var description := String(row.get("desc", "Damage prevention"))
+		if row.has("chosen_source"):
+			description = description.get_slice(" (", 0) + " — " + _public_damage_source_name(int(row.chosen_source))
+		raw.append(description + (": prevent all matching damage; this turn" if row.get("all_turn", false) else ": prevent the next matching hit; this turn"))
+	for row in p.damage_replacements:
+		var description := String(row.get("desc", "Damage replacement"))
+		if row.has("chosen_source"): description += " — " + _public_damage_source_name(int(row.chosen_source))
+		var action := String(row.get("display_effect", "replace damage"))
+		if row.has("redirect_target"): action = "redirect damage to " + _public_damage_source_name(int(row.redirect_target))
+		raw.append(description + ": " + action + ("; all matching hits this turn" if row.get("all_turn", false) else "; next matching hit this turn"))
+	for row in p.static_prevention_shields:
+		raw.append(String(row.get("desc", "Damage prevention")) + "; while active")
+	if combat_damage_prevented: raw.append("Prevent all combat damage; this turn")
+	if p.combat_damage_redirect >= 0:
+		raw.append("Unblocked combat damage goes to %s; while active" % _public_damage_source_name(p.combat_damage_redirect))
+	if p.artifact_damage_redirect >= 0:
+		raw.append("Artifact damage goes to %s; while active" % _public_damage_source_name(p.artifact_damage_redirect))
+	for packet in damage_pending:
+		if packet.target != null and packet.target.is_player and packet.target.player_id == pid:
+			for row in packet.retroactive_heals:
+				var action := "gain twice the damage that reaches you"
+				if int(row.multiplier) == 1:
+					action = "regain actual damage; deal that much to " + _public_damage_source_name(int(row.recipient))
+				raw.append("%s — %s: %s; this prevention window" % [
+					"Reverse Polarity" if int(row.multiplier) == 2 else "Simulacrum", _public_damage_source_name(packet.source_id()), action])
+	var counts := {}
+	for line in raw: counts[line] = int(counts.get(line, 0)) + 1
+	var out: Array[String] = []
+	for line in counts:
+		if out.size() == 63:
+			out.append("Additional damage effects are active.")
+			break
+		out.append(("%d × " % int(counts[line]) if int(counts[line]) > 1 else "") + String(line))
+	return out
+
+
+func _public_damage_source_name(id: int) -> String:
+	var source := find_instance(id)
+	if source == null: return "the chosen source"
+	if source.face_down: return "a face-down card"
+	if source.zone not in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD, Mtg.Zone.STACK, Mtg.Zone.EXILE]:
+		return "the chosen source"
+	return source.data.card_name
 
 
 func _threat_score(inst: CardInstance, victim: TargetRef) -> int:

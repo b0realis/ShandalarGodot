@@ -351,6 +351,7 @@ var _exile_labels: Array[Label] = []        # per-seat exile count
 ## its name bound to the portrait's width — the owner's ask of
 ## 2026-09-03. See [method _seat_portrait_block] for the whole record.
 var _seat_portraits: Array[TextureRect] = []
+var _protection_badges: Array[PlayerProtectionBadge] = []
 var _seat_name_labels: Array[Label] = []
 ## The deck's name under (opponent) / over (player) the piles — the
 ## owner's ask of 2026-09-08. See [constant DECK_NAME_INK].
@@ -3346,6 +3347,8 @@ func _on_cancel() -> void:
 ## bar's keys must not reach past them into the duel (Return used to
 ## fast-forward several priority windows with the X question still open).
 func _modal_open() -> bool:
+	for badge in _protection_badges:
+		if badge != null and badge.details_open(): return true
 	return graveyard_is_open() or _mode_overlay != null \
 		or _search_dialog != null or _x_dialog != null \
 		or _choice_overlay != null or is_paused()
@@ -3477,6 +3480,10 @@ func _done_applies() -> bool:
 ## original has no "quit" on that key either; leaving is Concede
 ## (`docs/duel-todo.md` §6.3), and it asks first.
 func _on_escape() -> void:
+	for badge in _protection_badges:
+		if badge != null and badge.details_open():
+			badge.close_details()
+			return
 	# THE TWO BARE DIALOGS FIRST, because they are the last thing opened
 	# and stand over everything else: `Give up this duel?` ([method
 	# _ask_to_concede]) and `Duel Options...`. Neither had a rung here,
@@ -5293,6 +5300,8 @@ func _refresh() -> void:
 		# the duelist and no number — *"click on the face instead of a
 		# card"* — and the flip back happens on its own the moment nothing
 		# can target a player any more.
+		if _protection_badges.size() == 2 and _protection_badges[pid] != null:
+			_protection_badges[pid].present(game.players[pid].player_name, game.player_damage_effects(pid))
 		var face_up := _face_shown(pid)
 		_dress_life_panel(pid, face_up)
 		# The original's huge life NUMERAL (s30 drawLife: 64px text) —
@@ -9275,6 +9284,14 @@ func _seat_portrait_block(pid: int, name_above: bool) -> Control:
 		face.add_child(frame)
 	_seat_portraits.resize(2)
 	_seat_portraits[pid] = face
+	var protection := PlayerProtectionBadge.new()
+	protection.name = "PlayerProtection"
+	protection.popup_host = self
+	# A corner badge does not widen the tightly packed portrait/pile row.
+	protection.position = Vector2(SEAT_PORTRAIT.x - 32, SEAT_PORTRAIT.y - 20)
+	face.add_child(protection)
+	_protection_badges.resize(2)
+	_protection_badges[pid] = protection
 
 	if name_above:
 		block.add_child(name_label)
@@ -9410,6 +9427,11 @@ func _unhandled_input(event: InputEvent) -> void:
 ## the action's modifiers and no others — so `Show ID tags` on Ctrl+T
 ## leaves a bare T free, as the 1997 accelerator did (§6.3a).
 func _on_control(event: InputEvent) -> void:
+	# Inspection owns the keyboard/controller, never the duel beneath it.
+	for badge in _protection_badges:
+		if badge != null and badge.details_open():
+			if Controls.pressed(event, "duel_cancel"): badge.close_details()
+			return
 	# NOTHING UNDER THE COIN TOSS. The toss and the opening hand play
 	# over a table the engine has not started (turn 0): a Return here
 	# used to leave a standing Done order that auto-passed the first
