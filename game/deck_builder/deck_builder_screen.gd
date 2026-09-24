@@ -1830,6 +1830,10 @@ func _refresh_legality() -> void:
 	# states its main-deck rule. It rides after whatever else the line
 	# says, because it is the least of the three and never a refusal — see
 	# [method DeckModel.sideboard_advice] for why fifteen is fifteen.
+	var size_warning := DeckModel.size_advice(deck.total())
+	if not size_warning.is_empty():
+		full = size_warning if full == "This deck can be used in the duel." else full + "  " + size_warning
+		if problems.is_empty(): color = OriginalDialog.CHOICE
 	var side := deck.sideboard_advice()
 	if not side.is_empty():
 		full += "  " + " ".join(side)
@@ -4500,6 +4504,8 @@ func _stats_page_deck(page: VBoxContainer) -> void:
 	if deck.proxy_problem() != "":
 		complaints.append(deck.proxy_problem())
 	complaints.append_array(deck.problems())
+	if not DeckModel.size_advice(deck.total()).is_empty():
+		complaints.append(DeckModel.size_advice(deck.total()))
 	complaints.append_array(deck.sideboard_advice())
 	for problem in complaints:
 		var warn := OriginalDialog.label(problem, 13)

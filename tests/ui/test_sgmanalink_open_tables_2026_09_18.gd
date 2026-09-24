@@ -74,6 +74,32 @@ func _deck() -> Dictionary:
 	return {"name": "White Knights", "cards": Array(StarterDecks.WHITE_KNIGHTS), "sideboard": []}
 
 
+func test_short_casual_decks_cross_the_socket_for_own_fixed_and_bot_seats() -> void:
+	_host()
+	var fox := await _client("Fox")
+	var small := _deck()
+	small.cards = small.cards.slice(0, 35)
+	small.name = "Casual 35"
+	await _act(fox, {"op": "host", "name": "Short decks", "decks": "own", "deck": {}})
+	var hare := await _client("Hare")
+	await _act(hare, {"op": "join", "room": String(fox.state.room.id)})
+	await _act(fox, small.merged({"op": "deck"}))
+	await _act(hare, small.merged({"op": "deck"}))
+	await _act(fox, {"op": "ready", "value": true})
+	await _act(hare, {"op": "ready", "value": true})
+	var room: Dictionary = server._rooms[fox.state.room.id]
+	assert_not_null(room.match)
+	if room.match != null:
+		for player in room.match.game.players:
+			assert_eq(player.hand.size() + player.library.size(), 35, "no fallback or padding")
+	var owl := await _client("Owl")
+	await _act(owl, {"op": "host", "name": "Fixed short", "decks": "fixed", "deck": small})
+	await _act(owl, {"op": "add_bot", "bot": SgBotPlayer.defaults(), "deck": small})
+	assert_eq(owl.state.room.deck.cards.size(), 35)
+	assert_eq(refusals, [])
+	assert_false(SgTournament.valid_deck(small), "a friendly table does not relax tournaments")
+
+
 func test_printing_preferences_cross_the_socket_only_for_their_visible_seat() -> void:
 	_host()
 	var fox := await _client("Fox")

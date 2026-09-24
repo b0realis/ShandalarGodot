@@ -73,7 +73,8 @@ const TEXT := "text"           ## Our own prose.
 const QUOTE := "quote"         ## A sourced quotation: `text` + `cite`.
 const ICONS := "icons"         ## A list of `entries` (see below).
 const CARDS := "cards"         ## Live in-game card examples with captions.
-const KINDS: Array[String] = [HEADING, TEXT, QUOTE, ICONS, CARDS]
+const LINKS := "links"         ## Contents entries: title + generated page index.
+const KINDS: Array[String] = [HEADING, TEXT, QUOTE, ICONS, CARDS, LINKS]
 
 ## Icon sources. Each names the accessor that the SCREEN ITSELF draws the
 ## icon with — see [method icon_texture].
@@ -94,7 +95,8 @@ const SRC_DRAWN := "drawn"     ## no texture: the game draws this in code.
 ## The reference, in reading order: the newcomer's primer first, then the
 ## icon reference — the duel's icons, then the deck builder's.
 static func pages() -> Array:
-	return [
+	var chapters := [
+	["Learning to play", [
 		_page_duel(),
 		_page_table(),
 		_page_mana(),
@@ -109,6 +111,9 @@ static func pages() -> Array:
 		_page_ruleset(),
 		_page_formats(),
 		_page_format_lists(),
+	]],
+	["Portal starter decks", [preload("res://game/help/ability_glossary.gd").portal_intro(), _page_portal_a(), _page_portal_b()]],
+	["Reading the dueling table", [
 		_page_icons_mana(),
 		_page_icons_abilities(),
 		_page_icons_protection(),
@@ -120,11 +125,65 @@ static func pages() -> Array:
 		_page_icons_phase_marks(),
 		_page_icons_combat_bar(),
 		_page_icons_table(),
+	]],
+	["Building your deck", [
 		_page_builder(),
 		_page_icons_builder_colors(),
 		_page_icons_builder_sets(),
 		_page_icons_builder_types(),
-	] + preload("res://game/help/ability_glossary.gd").pages()
+	]],
+	["Abilities and card effects", preload("res://game/help/ability_glossary.gd").pages()],
+	]
+	var contents := {"title": "Help · Contents", "blocks": [
+		_text("Choose a topic below. New to Magic? Start with The Duel, or try the Portal starter guides. Use Contents or the Home key to return here; Back and Next turn individual pages."),
+	]}
+	var result: Array = [contents]
+	for chapter in chapters:
+		contents.blocks.append(_heading(chapter[0]))
+		var entries: Array = []
+		for page in chapter[1]:
+			entries.append({"title": page.title, "page": result.size()})
+			result.append(page)
+		contents.blocks.append({"kind": LINKS, "entries": entries})
+	return result
+
+
+## Original teaching prose, not excerpts from the 1997 guide. Decklist
+## provenance and exact five-card additions: docs/portal-starters.md.
+static func _page_portal_a() -> Dictionary:
+	return {"title": "Portal · Starter A", "blocks": [
+		_heading("White · Red · Green — creatures and fire"),
+		_text("Enable Pack 6 · Portal in Options → Card Packs. In Magic Battle, look under Playable variants for Portal Starter A (40-card play version). Pair it with Starter B for a gentle first matchup."),
+		_heading("Your game plan"),
+		_text("Play inexpensive creatures, keep enough defenders to survive, and attack where your opponent cannot trade profitably. Plains and Mountains cast most of your spells; a Forest unlocks your green creatures."),
+		_cards([
+			["Armored Pegasus", "1 · Take to the skies", "Flying creatures can get past ground blockers. Armored Pegasus is a small early threat; Spotted Griffin gives you a larger one later."],
+			["Volcanic Hammer", "2 · Clear the way", "Three damage can remove a blocker so your creatures keep attacking. This is a sorcery: cast it in your main phase with an empty stack, usually before combat."],
+			["Blaze", "3 · Plan the finish", "Blaze needs one red mana plus X more mana to deal X damage. Lava Axe deals five damage to a player, not a creature. Count the opponent's life before spending your finishing spell."],
+		], "por"),
+		_heading("Watch the timing"),
+		_text("Defiant Stand is a defensive trick: after your opponent declares attackers, but before blockers, it untaps your creature and gives it +1/+3 for the turn. Keep the right mana available. Tap lands when you need their mana; unused mana can hurt you if mana burn is enabled."),
+		_heading("Original or play version?"),
+		_text("You can also play the unchanged 35-card Starter A: choose Portal 1997 starters in Magic Battle. The 40-card play version adds one Plains, Mountain, Armored Pegasus, Grizzly Bears and Volcanic Hammer. These guides describe the card rules used in this game."),
+	]}
+
+
+static func _page_portal_b() -> Dictionary:
+	return {"title": "Portal · Starter B", "blocks": [
+		_heading("Blue · Black · Green — delay and outlast"),
+		_text("Enable Pack 6 · Portal in Options → Card Packs. In Magic Battle, choose Portal Starter B (40-card play version) under Playable variants. Try it against Starter A, then swap decks to learn the other side."),
+		_heading("Your game plan"),
+		_text("Use creatures to hold the ground while your flyers attack. Removal and return-to-hand effects buy time; drawing cards helps you keep playing threats. Look for Islands and Swamps early, with a Forest for your green creatures."),
+		_cards([
+			["Snapping Drake", "1 · Win in the air", "Snapping Drake attacks over creatures without flying or reach. Do not leave yourself defenseless: your opponent has flyers too, and some of your creatures cannot block."],
+			["Hand of Death", "2 · Choose your answer", "Destroy a nonblack creature during your main phase. Time Ebb instead puts a creature on top of its owner's library, delaying its return and using up the next normal draw."],
+			["Gravedigger", "3 · Get a creature back", "When Gravedigger enters, you may return a creature card from your graveyard to your hand. Cast that creature again when you have the mana; it does not go straight onto the battlefield."],
+		], "por"),
+		_heading("Watch the timing"),
+		_text("Command of Unsummoning can return one or two attacking creatures, but only after attackers are declared and before blockers. Monstrous Growth is a sorcery: use its +4/+4 before combat, not as a surprise after blocking. Touch of Brilliance draws two cards, so check how many remain in your library."),
+		_heading("Original or play version?"),
+		_text("You can also play the unchanged 35-card Starter B: choose Portal 1997 starters in Magic Battle. The 40-card play version adds one Island, Swamp, Coral Eel, Snapping Drake and Hand of Death. Keep a useful opening hand with lands and affordable spells; mulligans give you one fewer card each time."),
+	]}
 
 
 # ---------------------------------------------------------- the primer --
@@ -1047,6 +1106,8 @@ static func _page_icons_table() -> Dictionary:
 ## companions, and to [constant DeckBuilderScreen.SHORTCUTS].
 static func _page_builder() -> Dictionary:
 	return {"title": "The Deck Builder", "blocks": [
+		_heading("Deck size: casual or tournament?"),
+		_text("Casual duels, including hotseat, demos and friendly LAN games, allow decks below 40 cards. The Deck Builder warns you: smaller decks draw their key cards more often but run out sooner. At least 8 cards are needed for an opening hand and possible ante. Gauntlets and LAN tournaments still require at least 40. Format and card-copy restrictions remain separate."),
 		_quote("Along the bottom of the Deck Builder screen is the "
 			+ "Inventory area. Here, every card you can put into a deck is "
 			+ "available…", "Duel.hlp, topic \"All Cards Inventory\""),
@@ -1571,8 +1632,8 @@ static func _text(text: String) -> Dictionary:
 	return {"kind": TEXT, "text": text}
 
 
-static func _cards(examples: Array) -> Dictionary:
-	return {"kind": CARDS, "examples": examples}
+static func _cards(examples: Array, printing := "") -> Dictionary:
+	return {"kind": CARDS, "examples": examples, "printing": printing}
 
 
 static func _quote(text: String, cite: String) -> Dictionary:

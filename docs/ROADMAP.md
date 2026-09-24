@@ -4,6 +4,27 @@ The plan of record, and the honest list of what v0.1 simplifies. Every
 simplification is also marked `SIMPLIFIED:` at the exact code site it
 replaces, so `grep -rn "SIMPLIFIED:" engine/` always tells the truth.
 
+## 2026-09-24 — Portal starters, Help contents and casual deck sizes
+
+Added the two unchanged 35-card Portal starter lists and two explicitly
+labelled 40-card adaptations, with exact additions and historical sources
+in `docs/portal-starters.md`. Illustrated strategy guidance lives in Help,
+whose new generated contents links every page. The Portal overview now
+sits with its starter guides, not inside the abilities chapter; its stale
+claim that printing choices were not saved is corrected.
+
+Owner-approved casual local/LAN duels accept 8–39 cards with a warning;
+eight leaves room for the seven-card opening hand and one ante. No padding.
+Gauntlets and LAN tournaments still enforce 40, including their bot seats
+and deck selectors. Names, card-copy rules and upper limits are unchanged.
+The LAN compatibility revision distinguishes the new casual policy.
+
+Verification: 367 targeted GUT tests, six tree/privacy checks, eight full
+engine games and two native UI games. The UI probe reported `SOAK done: 2
+duel(s) finished`; neither game stalled. Native screenshots checked the
+contents and both guides. Details and exact seeds are in the starter doc.
+No full-suite/release claim is made.
+
 ## STATE AS OF 2026-09-02 — read this before the milestone sections below
 
 The sections that follow are kept as the historical record, so several of

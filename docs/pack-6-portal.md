@@ -79,6 +79,10 @@ packs are enabled. Other core reprints keep their original implementation.
 
 ## Rules and computer player
 
+The [Portal starter decks](portal-starters.md) include both unchanged
+35-card teaching lists and clearly labelled 40-card play adaptations.
+**Help → Contents → Portal starter decks** provides illustrated guidance.
+
 Gameplay uses the current Oracle snapshot, not the obsolete starter-only
 rules printed on some original cards. Several original sorceries are now
 instants. The special after-being-attacked restriction on cards such as

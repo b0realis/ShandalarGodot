@@ -77,6 +77,7 @@ var _gutter: MarginContainer = null
 var _scroll: ScrollContainer = null
 var _prev_button: Button = null
 var _next_button: Button = null
+var _contents_button: Button = null
 
 
 func _ready() -> void:
@@ -130,6 +131,7 @@ func _ready() -> void:
 	# viewport's width — which is what lets every body label word-wrap.
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.follow_focus = true
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# The gutters that hold the body to MAX_TEXT_WIDTH are recomputed from
@@ -153,6 +155,10 @@ func _ready() -> void:
 	_prev_button.tooltip_text = "Previous page (Left arrow, Page Up)"
 	_prev_button.pressed.connect(func() -> void: go_to(_page - 1))
 	footer.add_child(_prev_button)
+	_contents_button = UiChrome.menu_button("Contents", Vector2(130, 40))
+	_contents_button.tooltip_text = "Help index (Home)"
+	_contents_button.pressed.connect(func() -> void: go_to(0))
+	footer.add_child(_contents_button)
 	var close := UiChrome.menu_button("Close", Vector2(150, 40))
 	close.tooltip_text = "Back to the main menu (Esc)"
 	close.pressed.connect(_close)
@@ -241,6 +247,7 @@ func _rebuild() -> void:
 	_title_label.text = String(page.get("title", ""))
 	_counter_label.text = "Page %d of %d" % [_page + 1, _pages.size()]
 	_prev_button.disabled = _page == 0
+	_contents_button.disabled = _page == 0
 	_next_button.disabled = _page == _pages.size() - 1
 	# remove_child BEFORE queue_free: a queued node is still a child until
 	# the end of the frame, so freeing without detaching left the VBox
@@ -279,7 +286,29 @@ func _add_block(block: Dictionary) -> void:
 				_body.add_child(_icon_row(entry))
 		HelpPages.CARDS:
 			for example in block.get("examples", []):
-				_body.add_child(_card_example(example))
+				_body.add_child(_card_example(example, String(block.get("printing", ""))))
+		HelpPages.LINKS:
+			_body.add_child(_contents_links(block.get("entries", [])))
+
+
+func _contents_links(entries: Array) -> Control:
+	var grid := GridContainer.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 8)
+	grid.resized.connect(func() -> void: grid.columns = 2 if grid.size.x >= 720 else 1)
+	for entry in entries:
+		var index := int(entry.page)
+		var button := UiChrome.menu_button(String(entry.title), Vector2(0, 44))
+		button.name = "HelpTopic%d" % index
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.clip_text = true
+		button.add_theme_font_size_override("font_size", BODY_SIZE)
+		button.tooltip_text = "Page %d · %s" % [index + 1, entry.title]
+		button.pressed.connect(go_to.bind(index))
+		grid.add_child(button)
+	return grid
 
 
 ## A wrapping body paragraph. `custom_minimum_size.x = 0` plus EXPAND_FILL
@@ -316,14 +345,17 @@ func _example_panel() -> PanelContainer:
 
 ## Use the same small-card renderer as the duel. The example is an
 ## isolated display instance, never a permanent in the player's game.
-func _card_example(example: Array) -> Control:
+func _card_example(example: Array, printing := "") -> Control:
 	var panel := _example_panel()
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 20)
 	panel.add_child(row)
-	var data := CardRegistry.get_card(String(example[0]))
+	# Optional pack examples remain readable when their pack is disabled.
+	var card_name := String(example[0])
+	var data := CardRegistry.get_card(card_name) if CardRegistry.has_card(card_name) else null
 	if data != null:
 		var sample := CardInstance.new(data, -1, 0)
+		if not printing.is_empty(): sample.set_meta(CardPrintings.META, printing)
 		var card := MiniCard.new(sample)
 		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER

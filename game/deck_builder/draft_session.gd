@@ -200,7 +200,11 @@ func _show_result() -> void:
 	add_child(_result)
 	var advice := "Your deck is held in memory. Retry the save or choose the default folder below."
 	if _save_warning == "":
-		advice = "Your deck and dealt pool are saved." if builder.deck.total() >= DeckModel.MIN_CARDS else "Saved as an unfinished deck. It needs at least %d cards to play." % DeckModel.MIN_CARDS
+		advice = "Your deck and dealt pool are saved."
+		if builder.deck.total() < DeckModel.CASUAL_MIN_CARDS:
+			advice += " " + DeckModel.TOO_FEW_CARDS
+		elif builder.deck.total() < DeckModel.MIN_CARDS:
+			advice += " " + DeckModel.size_advice(builder.deck.total())
 	var text := "%d cards in deck · %d in sideboard\n\n%s\n\n%s" % [builder.deck.total(), builder.deck.side_total(),
 		"Saved to:\n" + store.deck_path if _save_warning == "" else _save_warning,
 		advice]

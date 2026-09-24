@@ -4,9 +4,10 @@ extends RefCounted
 ## The referee validates names again. Sideboards are retained privately for
 ## review; a friendly single duel does not have a between-games sideboard step.
 
-static func validate(cards: Array, sideboard: Array = []) -> String:
-	if cards.size() < DeckModel.MIN_CARDS or cards.size() > 250 or sideboard.size() > 250:
-		return "Choose a deck with %d-250 cards and at most 250 sideboard cards." % DeckModel.MIN_CARDS
+static func validate(cards: Array, sideboard: Array = [], casual := true) -> String:
+	var minimum := DeckModel.CASUAL_MIN_CARDS if casual else DeckModel.MIN_CARDS
+	if cards.size() < minimum or cards.size() > 250 or sideboard.size() > 250:
+		return "Choose a deck with %d-250 cards and at most 250 sideboard cards." % minimum
 	CardRegistry.ensure_loaded()
 	for card_name in cards + sideboard:
 		if not CardRegistry.has_card(card_name):
@@ -14,11 +15,16 @@ static func validate(cards: Array, sideboard: Array = []) -> String:
 	return ""
 
 
-static func available() -> Array:
+static func valid_payload(value: Variant, casual := true) -> bool:
+	return SgViewProtocol.deck(value) and not value.is_empty() and not value.name.strip_edges().is_empty() \
+		and validate(value.cards, value.sideboard, casual).is_empty()
+
+
+static func available(casual := true) -> Array:
 	var result: Array = []
 	for path in DeckStore.all_deck_paths():
 		var deck := DeckList.load_file(path)
-		if not deck.errors.is_empty() or not validate(deck.cards, deck.sideboard).is_empty():
+		if not deck.errors.is_empty() or not validate(deck.cards, deck.sideboard, casual).is_empty():
 			continue
 		result.append(payload({"name": deck.deck_name, "cards": Array(deck.cards),
 			"sideboard": Array(deck.sideboard), "printings": deck.printings}).merged({"group": _group(path)}))

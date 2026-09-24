@@ -407,6 +407,10 @@ func test_the_label_rule_is_one_rule_for_the_row_and_the_duel() -> void:
 		var text := picker.get_item_text(i)
 		if text.ends_with(" proxy)"):
 			continue
+		if screen._pack_paths.has(meta):
+			var packs: Array = screen._pack_paths[meta]
+			assert_eq(text, screen._deck_label(meta) + "  (needs %s)" % CardPacks.label_for(packs[0]), "pack-labelled row %d" % i)
+			continue
 		assert_eq(text, screen._deck_label(meta), "row %d" % i)
 
 

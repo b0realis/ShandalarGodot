@@ -46,8 +46,7 @@ static func valid_config(value: Variant) -> bool:
 
 
 static func valid_deck(value: Variant) -> bool:
-	return SgViewProtocol.deck(value) and not value.is_empty() and not value.name.strip_edges().is_empty() \
-		and SgDeckCatalog.validate(value.cards, value.sideboard).is_empty()
+	return SgDeckCatalog.valid_payload(value, false)
 
 
 func configure(options: Dictionary, seed_value := -1) -> String:

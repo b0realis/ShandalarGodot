@@ -98,10 +98,13 @@ extends RefCounted
 ## `@TOOFEWCARDS` (`s30/assets/text/Menus.txt:277`) — the duel's floor.
 ## Shandalar itself scales this by difficulty (manual ch.10: Apprentice 25,
 ## Magician 30, Sorcerer 35, Wizard 40, and *"the Shandalar Dueling
-## Commission temporarily adds random basic lands"* below the line). The
-## Deck Builder is not in Shandalar, so the Wizard number — the one the
-## string table states — is the one this screen advises against.
+## Commission temporarily adds random basic lands"* below the line).
+## Casual duels now advise this size rather than enforcing it. Gauntlets
+## and LAN tournaments retain the Wizard number as their required floor.
 const MIN_CARDS := 40
+## Casual play needs a seven-card opening hand plus one possible ante.
+## The usual 40-card floor remains a requirement for Gauntlets/tournaments.
+const CASUAL_MIN_CARDS := 8
 ## `@TOOMANYCARDS` (`s30/assets/text/Menus.txt:281`), and the same limits
 ## again in `@GAUNTLETERRORS` (`Program/UIStrings.txt:1372`): *"Decks are
 ## limited to 200 unique cards / 500 total cards."* The audit pass split
@@ -117,9 +120,9 @@ const MIN_CARDS := 40
 const MAX_UNIQUE := 200
 const MAX_TOTAL := 500
 
-## The string table's own words, quoted. `%s`-free so they can be shown
-## verbatim; `docs/glossary-1997.md` is the rule that they must be.
-const TOO_FEW_CARDS := "Your deck must have at least 40 cards to be used in the duel."
+## The casual floor is project policy; the upper-size/name messages below
+## retain the original wording.
+const TOO_FEW_CARDS := "Casual duels need at least 8 cards for an opening hand and possible ante."
 const TOO_MANY_CARDS := "Your deck has too many cards.\nThe duel allows 200 unique cards - 500 total. The extra cards in the deck will not be used."
 const NAME_YOUR_DECK := "You must name your deck before saving."
 
@@ -515,11 +518,10 @@ func deck_type() -> String:
 	return DeckFormat.classify(to_card_list(), to_side_list())
 
 
-## Every reason the DUEL would reject this deck, in the 1997 string
-## table's own words. Empty = the deck can be played.
+## Size refusals for casual play. The 40-card advice is not a refusal.
 func problems() -> Array[String]:
 	var found: Array[String] = []
-	if total() < MIN_CARDS:
+	if total() < CASUAL_MIN_CARDS:
 		found.append(TOO_FEW_CARDS)
 	if total() > MAX_TOTAL or unique() > MAX_UNIQUE:
 		found.append(TOO_MANY_CARDS)
@@ -528,6 +530,11 @@ func problems() -> Array[String]:
 
 func is_legal() -> bool:
 	return problems().is_empty()
+
+
+static func size_advice(count: int) -> String:
+	if count < CASUAL_MIN_CARDS or count >= MIN_CARDS: return ""
+	return "%d cards: casual play only. Gauntlets and tournaments need 40. Smaller decks run out sooner." % count
 
 
 ## [QoL] WHAT THE SCREEN SAYS ABOUT THE SIDEBOARD, in the same place and

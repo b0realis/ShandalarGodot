@@ -84,12 +84,21 @@ func test_basic_lands_are_exempt_from_the_duplicate_rule() -> void:
 	assert_eq(deck.over_duplicate_limit(), [], "as many basics as you like")
 
 
-func test_a_short_deck_is_refused_in_the_1997_words() -> void:
+func test_a_short_deck_is_casual_legal_with_an_advisory() -> void:
 	_add("Mountain", 10)
+	assert_true(deck.is_legal())
+	assert_eq(deck.problems().size(), 0)
+	assert_string_contains(DeckModel.size_advice(deck.total()), "casual play only")
+	assert_string_contains(DeckModel.size_advice(deck.total()), "tournaments need 40")
+
+
+func test_casual_deck_floor_leaves_room_for_opening_hand_and_ante() -> void:
+	_add("Mountain", 7)
 	assert_false(deck.is_legal())
-	assert_eq(deck.problems()[0],
-		"Your deck must have at least 40 cards to be used in the duel.",
-		"@TOOFEWCARDS, verbatim")
+	assert_eq(deck.problems(), [DeckModel.TOO_FEW_CARDS])
+	_add("Mountain", 1)
+	assert_true(deck.is_legal())
+	assert_eq(DeckModel.size_advice(40), "")
 
 
 func test_a_forty_card_deck_is_legal() -> void:

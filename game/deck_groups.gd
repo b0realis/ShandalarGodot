@@ -71,6 +71,8 @@ const KEVIN_BANE := "Kevin Bane's decks"
 const OTHER := "Other MicroProse decks"
 ## This project's own starter decks — see the class doc.
 const STARTER := "Starter decks"
+## The two unmodified 35-card decks in the 1997 Portal starter product.
+const PORTAL_STARTERS := "Portal 1997 starters"
 ## Real event lists, 1994-97 — NOT MicroProse's. World Championship
 ## 1994-97, Pro Tour 1996 (the Collector Set finalists among them) and the
 ## other sanctioned events whose lists carry a pilot, an event and a year
@@ -103,7 +105,7 @@ const USER := "User-created"
 ## player decks by designer, then ours, then the tournament lists, the
 ## community's, the community's extended lists, then yours.
 const ORDER: Array[String] = [ORIGINALS, ANCIENTS, PLANESWALKERS,
-	COYOTE_TEX, KEVIN_BANE, OTHER, STARTER, TOURNAMENT, COMMUNITY,
+	COYOTE_TEX, KEVIN_BANE, OTHER, STARTER, PORTAL_STARTERS, TOURNAMENT, COMMUNITY,
 	EXTENDED_COMMUNITY, VARIANTS, USER]
 
 ## The line a deck file declares its group with. Written this way; read

@@ -1,5 +1,10 @@
 # Code Map
 
+Portal starter regression: `tests/ui/test_portal_starters.gd` pins the two
+35-card lists, exact 40-card additions, pack/printing metadata, selectors,
+small-library engine behavior and Help fallback with Portal disabled.
+Deck provenance and teaching references: `docs/portal-starters.md`.
+
 Every file in the project and what lives in it. Keep this current: **any PR
 that adds/moves a file updates this map** (the review checklist enforces it).
 
@@ -6469,7 +6474,7 @@ shandalar/
 │   │   │                      "Dueling Help" reached by right-clicking the
 │   │   │                      table (manual p.14/112); we have neither, so
 │   │   │                      this is the front door for both
-│   │   ├── help_screen.gd/.tscn  class HelpScreen — the RENDERER: 29 pages
+│   │   ├── help_screen.gd/.tscn  class HelpScreen — the paged RENDERER
 │   │   │                      on the menu's own UiChrome stone panel,
 │   │   │                      turned with ◀/▶, Left/Right, PageUp/PageDown
 │   │   │                      and Home/End (read in _input and marked
@@ -6480,8 +6485,11 @@ shandalar/
 │   │   │                      MAX_TEXT_WIDTH; the ground is `Menubak.pic`
 │   │   ├── help_pages.gd    class HelpPages — the CONTENT, as pure data
 │   │                          (title + blocks; TEXT / QUOTE / HEADING /
-│   │                          ICONS / CARDS), so it is testable without a scene.
-│   │                          The first fourteen pages use native MiniCard
+│   │                          ICONS / CARDS / LINKS), so it is testable without a scene.
+│   │                          A generated clickable Contents page links every
+│   │                          chapter, including the two Portal starter guides.
+│   │                          Contents/Home return to the responsive index.
+│   │                          The fourteen primer pages use native MiniCard
 │   │                          examples and interface icons in structured panels.
 │   │                          Source metadata is never rendered to the player.
 │   │                          The Deck Builder page also explains the
@@ -6501,7 +6509,7 @@ shandalar/
 │   │                          moment it breaks that screen. The word
 │   │                          "interrupt" is banned here per
 │   │                          glossary-1997.md §5 and a test enforces it.
-│   │                          Twenty-nine pages: the primer, the duel's
+│   │                          Chapters cover the primer, the duel's
 │   │                          icons — including THE COUNTER STONES
 │   │                          (2026-09-09), two pages of their own with
 │   │                          all 24 stones, every one addressed by CARD

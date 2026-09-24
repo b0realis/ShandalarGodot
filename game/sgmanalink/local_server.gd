@@ -578,7 +578,7 @@ func _command(sid: int, action: Dictionary, revision: int) -> String:
 			room.ready = [false, false]
 		else:
 			if room.seats[1] != 0: return "The opponent's seat is occupied."
-			if not SgBotPlayer.valid(action.bot) or not SgTournament.valid_deck(action.deck): return "Choose a computer level and valid deck."
+			if not SgBotPlayer.valid(action.bot) or not SgDeckCatalog.valid_payload(action.deck): return "Choose a computer level and valid deck."
 			var bot_sid := _new_bot(action.bot, SgBotPlayer.label(action.bot) + " bot")
 			if bot_sid == 0: return "Host is full."
 			room.seats[1] = bot_sid

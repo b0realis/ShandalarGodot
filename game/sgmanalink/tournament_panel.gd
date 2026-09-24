@@ -372,7 +372,7 @@ func _update_approved() -> void:
 
 
 func _available_decks() -> Array:
-	if _catalog.is_empty(): _catalog = SgDeckCatalog.available()
+	if _catalog.is_empty(): _catalog = SgDeckCatalog.available(false)
 	return _catalog
 
 

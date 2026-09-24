@@ -43,12 +43,56 @@ func _labels_of(node: Node) -> Array:
 # ========================================================== the content ==
 
 func test_primer_pages_have_in_game_graphics() -> void:
-	for page in HelpPages.pages().slice(0, 14):
+	for page in HelpPages.pages().slice(1, 15):
 		var illustrated := false
 		for block in page["blocks"]:
 			if block["kind"] in ["cards", HelpPages.ICONS]:
 				illustrated = true
 		assert_true(illustrated, String(page["title"]))
+
+
+func test_contents_links_cover_every_page_exactly_once() -> void:
+	var pages := HelpPages.pages()
+	assert_eq(pages[0].title, "Help · Contents")
+	var seen: Array[int] = []
+	for block in pages[0].blocks:
+		if block.kind != HelpPages.LINKS: continue
+		for entry in block.entries:
+			assert_gt(int(entry.page), 0)
+			assert_lt(int(entry.page), pages.size())
+			assert_false(seen.has(int(entry.page)))
+			assert_eq(entry.title, pages[int(entry.page)].title)
+			seen.append(int(entry.page))
+	assert_eq(seen.size(), pages.size() - 1)
+
+
+func test_contents_buttons_jump_and_footer_returns_to_index() -> void:
+	var pages := HelpPages.pages()
+	for index in [1, 15, 16, pages.size() - 1]:
+		var topic := screen.find_child("HelpTopic%d" % index, true, false) as Button
+		assert_not_null(topic)
+		if topic == null: continue
+		topic.pressed.emit()
+		assert_eq(screen.current_page(), index)
+		assert_eq(screen._title_label.text, pages[index].title)
+		assert_false(screen._contents_button.disabled)
+		screen._contents_button.pressed.emit()
+		assert_eq(screen.current_page(), 0)
+		assert_true(screen._contents_button.disabled)
+
+
+func test_contents_topics_wrap_and_collapse_on_narrow_widths() -> void:
+	var grid := screen._contents_links([{ "title": "A long help topic", "page": 1 }]) as GridContainer
+	add_child_autofree(grid)
+	grid.size.x = 980
+	await get_tree().process_frame
+	assert_eq(grid.columns, 2)
+	grid.size.x = 600
+	await get_tree().process_frame
+	assert_eq(grid.columns, 1)
+	var topic := grid.get_child(0) as Button
+	assert_eq(topic.autowrap_mode, TextServer.AUTOWRAP_WORD_SMART)
+	assert_true(topic.clip_text)
 
 
 func test_visible_help_is_facts_without_source_or_development_notes() -> void:

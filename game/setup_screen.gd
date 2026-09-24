@@ -287,18 +287,18 @@ func _scan_decks() -> void:
 		_deck_masks[path] = DeckStore.colors_of(lenient)
 		var missing := CardPacks.missing_requirements(lenient.required_packs)
 		if not missing.is_empty() and lenient.errors.is_empty() \
-				and lenient.cards.size() >= DeckModel.MIN_CARDS:
+				and lenient.cards.size() >= DeckModel.CASUAL_MIN_CARDS:
 			_deck_paths.append(path)
 			_pack_paths[path] = missing
 			_deck_titles[path] = lenient.deck_name
 			continue
-		if deck.errors.is_empty() and deck.cards.size() >= DeckModel.MIN_CARDS:
+		if deck.errors.is_empty() and deck.cards.size() >= DeckModel.CASUAL_MIN_CARDS:
 			_deck_paths.append(path)
 			_playable_paths.append(path)
 			_deck_titles[path] = deck.deck_name
 			continue
 		if lenient.errors.is_empty() and not lenient.proxies.is_empty() \
-				and lenient.cards.size() >= DeckModel.MIN_CARDS:
+				and lenient.cards.size() >= DeckModel.CASUAL_MIN_CARDS:
 			_deck_paths.append(path)
 			_proxy_paths[path] = lenient.proxies
 			_deck_titles[path] = lenient.deck_name
@@ -1185,6 +1185,8 @@ func _refresh_format_note() -> void:
 			text += "\n Seat %d — %s" % [pid + 1, _pack_refusal(path)]
 			continue
 		var listed := DeckList.load_file(path, false)
+		var size_warning := DeckModel.size_advice(listed.cards.size())
+		if not size_warning.is_empty(): text += "\n Seat %d — %s" % [pid + 1, size_warning]
 		var proxied := ProxyCard.refusal_for(listed.cards, listed.sideboard)
 		if proxied != "":
 			text += "\n Seat %d — %s" % [pid + 1, proxied]
@@ -1526,6 +1528,10 @@ func _build_config() -> DuelConfig:
 			UiChrome.explain_popup(self,
 				"Seat %d cannot play this deck" % (pid + 1),
 				"\n".join(PackedStringArray(deck.errors)))
+			return null
+		# Recheck at launch: a file may have changed after scanning it.
+		if deck.cards.size() < DeckModel.CASUAL_MIN_CARDS:
+			UiChrome.explain_popup(self, "Seat %d cannot play this deck" % (pid + 1), DeckModel.TOO_FEW_CARDS)
 			return null
 		config.decks[pid] = deck.cards
 		config.printings[pid] = deck.printings.duplicate()

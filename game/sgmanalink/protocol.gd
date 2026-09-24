@@ -150,9 +150,10 @@ static func valid(message: Dictionary) -> bool:
 		return false
 	if op.begins_with("t_") and not token(action.event): return false
 	match op:
-		"add_bot", "t_bots":
+		"add_bot": return SgBotPlayer.valid(action.bot) and SgDeckCatalog.valid_payload(action.deck)
+		"t_bots":
 			return SgBotPlayer.valid(action.bot) and SgTournament.valid_deck(action.deck) \
-				and (op == "add_bot" or integer(action.count, 1, SgTournament.MAX_PLAYERS))
+				and integer(action.count, 1, SgTournament.MAX_PLAYERS)
 		"t_recover": return token(action.code)
 		"t_remove": return integer(action.player, 1)
 		"t_rule": return integer(action.pair, 1, SgTournament.MAX_PAIR_ID) and integer(action.winner, 1)
@@ -188,7 +189,7 @@ static func valid(message: Dictionary) -> bool:
 		"host":
 			if not short_text(action.name) or not action.decks in DECK_RULES or not action.deck is Dictionary:
 				return false
-			return action.deck.is_empty() if action.decks == "own" else SgTournament.valid_deck(action.deck)
+			return action.deck.is_empty() if action.decks == "own" else SgDeckCatalog.valid_payload(action.deck)
 		"join": return short_text(action.room, 16)
 		"ready": return action.value is bool
 		"t_ready": return action.value is bool and integer(action.round, 0, SgTournament.MAX_ROUNDS) and integer(action.game, 0, SgTournament.MAX_GAMES)

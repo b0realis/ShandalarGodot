@@ -1150,6 +1150,8 @@ func _open_decks() -> void:
 
 static func _deck_text(deck: Dictionary) -> String:
 	var result := "%s\n%d cards · %d sideboard\n" % [deck.name, deck.cards.size(), deck.sideboard.size()]
+	var warning := DeckModel.size_advice(deck.cards.size())
+	if not warning.is_empty(): result += warning + "\n"
 	for zone in ["cards", "sideboard"]:
 		var counts := {}
 		for card_name in deck[zone]: counts[card_name] = int(counts.get(card_name, 0)) + 1
