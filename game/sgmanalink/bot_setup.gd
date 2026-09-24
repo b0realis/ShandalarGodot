@@ -103,7 +103,7 @@ func build(maximum: int, decks: Array, previous: Dictionary = {}) -> void:
 	add_child(choose)
 	var select := func(index: int) -> void:
 		var source: Dictionary = decks[int(list.get_item_metadata(index))]
-		_deck = {"name": source.name, "cards": source.cards.duplicate(), "sideboard": source.sideboard.duplicate()}
+		_deck = SgDeckCatalog.payload(source)
 		detail.text = SgLobby._deck_text(_deck)
 		choose.set_meta("available", true)
 		choose.disabled = false

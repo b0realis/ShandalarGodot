@@ -183,6 +183,7 @@ const SET_LABELS := {
 	"ice": "Ice Age",
 	"hml": "Homelands",
 	"all": "Alliances",
+	"por": "Portal",
 	"2ed": "Unlimited",
 	"arn": "Arabian nights",
 	"atq": "Antiquities",

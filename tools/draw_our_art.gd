@@ -116,7 +116,7 @@ const OUT_DIR := "res://game/art"
 func _init() -> void:
 	var dir := ProjectSettings.globalize_path(OUT_DIR)
 	DirAccess.make_dir_recursive_absolute(dir)
-	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all"]:
+	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por"]:
 		var img := _render(Vector2i(GLYPH_SIZE, GLYPH_SIZE),
 			[[_glyph(code), GOLD_LIT, GOLD_DARK]], RIM)
 		_write(img, dir, "set_icon_%s.png" % code)
@@ -128,10 +128,14 @@ func _init() -> void:
 	_write(_stone_medallion(false, _homelands()), dir, "filter_hml_off.png")
 	_write(_stone_medallion(true, _alliances()), dir, "filter_all_on.png")
 	_write(_stone_medallion(false, _alliances()), dir, "filter_all_off.png")
+	_write(_stone_medallion(true, _portal()), dir, "filter_por_on.png")
+	_write(_stone_medallion(false, _portal()), dir, "filter_por_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
 	_write(_stone_medallion(false, _completed_cards()), dir, "filter_pack1_off.png")
+	_write(_variant_medallion(true), dir, "card_variant_on.png")
+	_write(_variant_medallion(false), dir, "card_variant_off.png")
 	# The blade and the furniture are two GROUPS, each with its own metal
 	# and its own rim — which is what puts a dark seam between the guard
 	# and the blade instead of one gold-into-red smear.
@@ -190,7 +194,32 @@ func _glyph(code: String) -> Array:
 			return _homelands()
 		"all":
 			return _alliances()
+		"por":
+			return _portal()
 	return []
+
+
+## PORTAL — the original set's round gate: solid center, two concentric
+## rings and ten radial divisions. Authored geometry, not an embedded SVG.
+## The printed card symbol is the visual reference (Scryfall's por.svg);
+## wide openings keep the same shape readable as gold and incised stone.
+func _portal() -> Array:
+	var ops: Array = []
+	var center := Vector2(0.5, 0.5)
+	for band in [["add", 0.456], ["sub", 0.402],
+			["add", 0.266], ["sub", 0.227], ["add", 0.160]]:
+		var circle := PackedVector2Array()
+		for n in 96:
+			circle.append(center + Vector2.from_angle(TAU * float(n) / 96.0) * float(band[1]))
+		ops.append({"op": band[0], "poly": circle})
+	for n in 10:
+		var angle := TAU * float(n) / 10.0
+		var inner := center + Vector2.from_angle(angle + 0.04) * 0.145
+		var outer := center + Vector2.from_angle(angle) * 0.430
+		var edge := (outer - inner).normalized().orthogonal() * 0.015
+		ops.append({"op": "add", "poly": PackedVector2Array([
+			inner - edge, outer - edge, outer + edge, inner + edge])})
+	return ops
 
 
 ## ALLIANCES — an authored forked banner. Broad gold folds and the same
@@ -294,6 +323,39 @@ func _completed_cards() -> Array:
 			Vector2(0.50, 0.30), Vector2(0.54, 0.43), Vector2(0.61, 0.49), Vector2(0.54, 0.54),
 			Vector2(0.50, 0.68), Vector2(0.46, 0.54), Vector2(0.39, 0.49), Vector2(0.46, 0.43)])},
 	]
+
+
+## Two overlapping picture frames: choose an illustration, not a card pool.
+## A round stone edge leaves the compact Showcase control light on the page.
+func _variant_medallion(on: bool) -> Image:
+	var glyph := [
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.17, 0.16), Vector2(0.62, 0.16), Vector2(0.62, 0.72), Vector2(0.17, 0.72)])},
+		{"op": "sub", "poly": PackedVector2Array([
+			Vector2(0.25, 0.24), Vector2(0.54, 0.24), Vector2(0.54, 0.64), Vector2(0.25, 0.64)])},
+		{"op": "sub", "poly": PackedVector2Array([
+			Vector2(0.33, 0.28), Vector2(0.86, 0.28), Vector2(0.86, 0.88), Vector2(0.33, 0.88)])},
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.38, 0.33), Vector2(0.81, 0.33), Vector2(0.81, 0.84), Vector2(0.38, 0.84)])},
+		{"op": "sub", "poly": PackedVector2Array([
+			Vector2(0.46, 0.41), Vector2(0.73, 0.41), Vector2(0.73, 0.76), Vector2(0.46, 0.76)])},
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.43, 0.74), Vector2(0.56, 0.54), Vector2(0.63, 0.65),
+			Vector2(0.69, 0.58), Vector2(0.76, 0.74)])},
+	]
+	var img := _stone_medallion(true, glyph)
+	for y in GLYPH_SIZE:
+		for x in GLYPH_SIZE:
+			var delta := Vector2(x, y) - Vector2.ONE * (GLYPH_SIZE - 1) * 0.5
+			var radius := delta.length()
+			var pixel := img.get_pixel(x, y)
+			pixel.a = clampf(23.5 - radius, 0.0, 1.0)
+			if radius > 21.0:
+				var light := 0.37 + delta.normalized().dot(LIGHT) * 0.25
+				pixel = Color(light * 0.87, light * 0.96, light * 1.08, pixel.a)
+			if not on: pixel = Color(pixel.r * 0.5, pixel.g * 0.5, pixel.b * 0.5, pixel.a)
+			img.set_pixel(x, y, pixel)
+	return img
 
 
 ## Blue-grey square stone with a bevel, gold ring and dark carved emblem:

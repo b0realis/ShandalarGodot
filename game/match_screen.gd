@@ -149,6 +149,7 @@ func _start_duel() -> void:
 func _config_for_this_duel() -> DuelConfig:
 	var out := DuelConfig.new()
 	out.decks = [config.decks[0].duplicate(), config.decks[1].duplicate()]
+	out.printings = config.printings.duplicate(true)
 	out.sideboards = [config.sideboards[0].duplicate(),
 		config.sideboards[1].duplicate()]
 	out.player_names = config.player_names.duplicate()

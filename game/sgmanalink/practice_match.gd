@@ -55,6 +55,7 @@ func _init(seed_value := -1, decks: Array = [{}, {}], names: Array = ["Player 1"
 		# list just as local setup does; never infer it from a hidden hand.
 		panel_colors[pid] = DuelConfig.dominant_color(selected[pid])
 	game.setup(selected[0], selected[1], names[0], names[1], 20, 20, seed_value)
+	CardPrintings.apply_game(game, [decks[0].get("printings", {}), decks[1].get("printings", {})])
 	actions = SgDuelActions.new(game)
 	game.rules.mana_burn = true
 	# Free assignment avoids a silent ordering decision by the base agent.
@@ -148,6 +149,7 @@ func _cards(pid: int, list: Array) -> Array:
 			if chosen.is_empty(): chosen = "No creatures"
 		out.append({"id": _handle(pid, card), "name": "Face-down creature" if masked else card.data.card_name,
 			"rules": "" if masked else card.data.oracle_text, "land": card.is_land(),
+			"printing": "" if masked else CardPrintings.of(card),
 			"power": card.cur_power, "toughness": card.cur_toughness,
 			# The PRINTED pair beside the live one. A guest reads a named
 			# card's print off its own registry, but a TOKEN has no entry

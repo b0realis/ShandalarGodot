@@ -628,6 +628,7 @@ func _new_game() -> void:
 	game.setup(config.decks[0], config.decks[1],
 		config.seat_name(0), config.seat_name(1),
 		config.lives[0], config.lives[1], duel_seed)
+	CardPrintings.apply_game(game, config.printings)
 	game.log_line("Duel seed: %d" % duel_seed)
 	if config.challenge_label() != "": game.log_line(config.challenge_label())
 	# THE ANTE (§6.19) — the original's `&Ante` match parameter. Staked

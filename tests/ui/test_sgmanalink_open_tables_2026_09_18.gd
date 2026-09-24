@@ -74,6 +74,28 @@ func _deck() -> Dictionary:
 	return {"name": "White Knights", "cards": Array(StarterDecks.WHITE_KNIGHTS), "sideboard": []}
 
 
+func test_printing_preferences_cross_the_socket_only_for_their_visible_seat() -> void:
+	_host()
+	var fox := await _client("Fox")
+	await _act(fox, {"op": "host", "name": "Artwork", "decks": "own", "deck": {}})
+	var hare := await _client("Hare")
+	await _act(hare, {"op": "join", "room": String(fox.state.room.id)})
+	var chosen := _deck().merged({"printings": {"Plains": "por:199"}})
+	await _act(fox, chosen.merged({"op": "deck"}))
+	assert_eq(fox.state.room.deck.printings, chosen.printings)
+	assert_false(JSON.stringify(hare.state.room).contains("por:199"))
+	await _act(hare, _deck().merged({"op": "deck"}))
+	await _act(fox, {"op": "ready", "value": true})
+	await _act(hare, {"op": "ready", "value": true})
+	assert_eq(refusals, [])
+	var room: Dictionary = server._rooms[fox.state.room.id]
+	assert_not_null(room.match)
+	if room.match == null: return
+	for card: CardInstance in room.match.game.players[0].library + room.match.game.players[0].hand:
+		if card.data.card_name == "Plains": assert_eq(CardPrintings.of(card), "por:199")
+	assert_false(JSON.stringify(hare.state.room).contains("por:199"), "no hidden deck metadata crosses to the other player")
+
+
 func test_an_open_host_advertises_its_invitation_and_each_table_with_its_deck_rule() -> void:
 	_host()
 	var advert := await _advert()
@@ -218,8 +240,8 @@ func test_an_assigned_deck_is_dealt_to_both_seats_and_refused_as_a_choice() -> v
 
 
 func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> void:
-	assert_eq(SgProtocol.VERSION, 22)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v22")
+	assert_eq(SgProtocol.VERSION, 23)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v23")
 	assert_eq(SgLanDiscovery.MAX_PACKET, 16384, "room for the certificate inside an open advert")
 	var message := func(action: Dictionary) -> Dictionary:
 		return {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}

@@ -616,7 +616,7 @@ func _command(sid: int, action: Dictionary, revision: int) -> String:
 			return "This table plays the host's assigned deck: %s." % room.fixed.name
 		var error := SgDeckCatalog.validate(action.cards, action.sideboard)
 		if not error.is_empty(): return error
-		room.decks[seat] = {"name": action.name, "cards": action.cards.duplicate(), "sideboard": action.sideboard.duplicate()}
+		room.decks[seat] = SgDeckCatalog.payload(action)
 		room.ready = [_is_bot(room.seats[0]), _is_bot(room.seats[1])]
 		room.revision += 1
 		return ""

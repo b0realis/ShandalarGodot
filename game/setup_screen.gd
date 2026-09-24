@@ -1528,6 +1528,7 @@ func _build_config() -> DuelConfig:
 				"\n".join(PackedStringArray(deck.errors)))
 			return null
 		config.decks[pid] = deck.cards
+		config.printings[pid] = deck.printings.duplicate()
 		# The `SB:` cards the file has always carried. Nothing read them
 		# until `Side&board between duels` existed (docs/ROADMAP.md).
 		config.sideboards[pid] = deck.sideboard

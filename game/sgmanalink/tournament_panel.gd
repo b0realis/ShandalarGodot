@@ -377,7 +377,7 @@ func _available_decks() -> Array:
 
 
 static func _clean_deck(deck: Dictionary) -> Dictionary:
-	return {"name": deck.name, "cards": deck.cards.duplicate(), "sideboard": deck.sideboard.duplicate()}
+	return SgDeckCatalog.payload(deck)
 
 
 func _deck_browser(parent: Node, decks: Array, choose: Callable, caption: String) -> void:

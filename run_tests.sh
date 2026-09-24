@@ -192,6 +192,10 @@ python3 tools/test_pack_5_alliances.py >/dev/null
 PACK_FIVE_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-5-Alliances.zip"
 python3 tools/pack_5_alliances.py build "$PACK_FIVE_PATH" --metadata-only >/dev/null
 export SHANDALAR_PACK_5="$PACK_FIVE_PATH"
+python3 tools/test_pack_6_portal.py >/dev/null
+PACK_SIX_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-6-Portal.zip"
+python3 tools/pack_6_portal.py build "$PACK_SIX_PATH" --metadata-only >/dev/null
+export SHANDALAR_PACK_6="$PACK_SIX_PATH"
 
 # Import step (quick no-op when the .godot cache is warm; a cold import
 # of the card art is minutes, not hours, so 600 s is generous). ONCE, and

@@ -1294,6 +1294,7 @@ const FALLEN_EMPIRES_TACTICS := preload("res://engine/ai/fallen_empires_tactics.
 const ICE_AGE_TACTICS := preload("res://engine/ai/ice_age_tactics.gd")
 const HOMELANDS_TACTICS := preload("res://engine/ai/homelands_tactics.gd")
 const ALLIANCES_TACTICS := preload("res://engine/ai/alliances_tactics.gd")
+const PORTAL_TACTICS := preload("res://engine/ai/portal_tactics.gd")
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
@@ -3836,6 +3837,8 @@ const SWEEP_BAR := 3.0
 func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		max_x: int, mode: int) -> Dictionary:
 	var data := inst.data
+	var portal: Variant = PORTAL_TACTICS.spell_choice(game, self, inst, max_x)
+	if portal != null: return portal
 	var alliances: Variant = ALLIANCES_TACTICS.spell_choice(game, self, inst)
 	if alliances != null: return alliances
 	var homelands: Variant = HOMELANDS_TACTICS.spell_choice(game, self, inst)
@@ -4993,6 +4996,8 @@ func _respond_action(game: MtgGame) -> String:
 		return ""
 	if profile.mistake_chance > 0.0 and game.rng.randf() < profile.mistake_chance:
 		return ""   # a fumbled reaction is no reaction
+	var portal_response := PORTAL_TACTICS.special_spell(game, self)
+	if portal_response != "": return portal_response
 	var alliances_response := ALLIANCES_TACTICS.special_spell(game, self, true)
 	if alliances_response != "": return alliances_response
 	var ice_response: String = ICE_AGE_TACTICS.respond(game, self)

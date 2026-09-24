@@ -49,6 +49,8 @@ var proxies: Array[String] = []
 ## These are comments to older builds and other deck readers, so adding the
 ## metadata never changes the name-based card lines.
 var required_packs: Array[String] = []
+## Preferred artwork per name; ignored by game rules and older readers.
+var printings: Dictionary = {}
 
 const REQUIRED_PACK_PREFIX := "# requires-pack:"
 
@@ -167,6 +169,7 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 		if line.is_empty():
 			if infer_sideboard and saw_main_card: in_sideboard = true
 			continue
+		if DeckPrintings.read_comment(line, printings): continue
 		if line.to_lower().begins_with(REQUIRED_PACK_PREFIX):
 			var pack_id := line.substr(REQUIRED_PACK_PREFIX.length()).strip_edges()
 			if pack_id != "" and not required_packs.has(pack_id):

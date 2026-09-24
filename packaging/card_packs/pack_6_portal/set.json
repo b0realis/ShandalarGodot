@@ -1,0 +1,11 @@
+{
+  "all_printings": 215,
+  "code": "por",
+  "name": "Portal",
+  "released_at": "1997-05-01",
+  "retrieved_at": "2026-09-23",
+  "selection": "Original English numbered printings 1–215; excludes demo/starter and foreign variants.",
+  "source_url": "https://api.scryfall.com/cards/search?include_extras=true&include_variations=true&order=set&q=e%3Apor&unique=prints",
+  "standard_printings": 215,
+  "unique_names": 200
+}

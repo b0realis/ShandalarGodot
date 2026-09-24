@@ -107,7 +107,7 @@ static func cards(value: Variant) -> bool:
 			"power", "toughness", "print_power", "print_toughness", "tapped", "sick", "damage",
 			"attacking", "blocking", "playable",
 			"creature", "owner", "controller", "masked", "types", "colors", "keywords", "subtypes", "counters",
-			"protection", "landwalk", "rampage", "prevention", "regeneration", "chosen", "shield", "attached", "abilities", "actions", "exile_playable", "text_effects", "warded"]) \
+			"protection", "landwalk", "rampage", "prevention", "regeneration", "chosen", "shield", "attached", "abilities", "actions", "exile_playable", "text_effects", "warded"] + (["printing"] if card.has("printing") else [])) \
 			or not SgProtocol.short_text(card.id, 16) or not card_name(card.name) \
 			or not text(card.rules, 4096) \
 			or not text(card.shield, 128) \
@@ -126,6 +126,8 @@ static func cards(value: Variant) -> bool:
 		# A masked face carries no ward: the board badges nothing on a
 		# face-down card, and the flag would name what the mask hides.
 		if card.masked and card.warded: return false
+		var printing: Variant = card.get("printing", "")
+		if not SgProtocol.literal(printing, "") and (card.masked or not DeckPrintings.valid_id(printing)): return false
 		# ...and no PRINTED pair, for the same reason: the print is the
 		# identity a face-down card exists to withhold.
 		if card.masked and (card.print_power != 0 or card.print_toughness != 0): return false
@@ -305,8 +307,9 @@ static func damage(value: Variant) -> bool:
 
 
 static func deck(value: Variant) -> bool:
-	return value is Dictionary and (value.is_empty() or (SgProtocol.exact(value, ["name", "cards", "sideboard"]) \
-		and text(value.name, 128) and SgProtocol.names(value.cards, 250) and SgProtocol.names(value.sideboard, 250)))
+	return value is Dictionary and (value.is_empty() or (SgProtocol.exact(value, ["name", "cards", "sideboard"] + (["printings"] if value.has("printings") else [])) \
+		and text(value.name, 128) and SgProtocol.names(value.cards, 250) and SgProtocol.names(value.sideboard, 250) \
+		and DeckPrintings.valid_map(value.get("printings", {}), value.cards + value.sideboard)))
 
 
 static func card_name(value: Variant) -> bool:

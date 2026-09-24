@@ -320,6 +320,7 @@ func _apply_options() -> bool:
 		_refuse_your_deck(problem % GauntletOptions.deck_title(mine))
 		return false
 	config.decks[0] = deck.cards
+	config.printings[0] = deck.printings.duplicate()
 	config.sideboards[0] = deck.sideboard
 	config.player_names[0] = "You"
 	# The deck's name, for the splash under your portrait and the duel's
@@ -444,6 +445,7 @@ func _config_for_this_round() -> DuelConfig:
 		return null
 	var out := DuelConfig.new()
 	out.decks = [(config.decks[0] as Array).duplicate(), deck.cards]
+	out.printings = [config.printings[0].duplicate(), deck.printings.duplicate()]
 	out.sideboards = [(config.sideboards[0] as Array).duplicate(),
 		deck.sideboard]
 	out.player_names = [config.player_names[0], state.opponent_name()]

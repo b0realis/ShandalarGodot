@@ -1136,6 +1136,12 @@ static func _page_builder() -> Dictionary:
 			+ "Inventory keeps its size. If the window is short, scroll "
 			+ "the information below the card to read it all. This is "
 			+ "separate from the Text switch that expands a card's rules box."),
+		_text("The Card variant stone medallion just below the large preview's lower-right corner "
+			+ "chooses artwork from your enabled sets. "
+			+ "Select a printing, preview it and press Use variant. Automatic follows the set filter. "
+			+ "Your saved deck remembers one printing for every copy of that card name, including the sideboard. "
+			+ "Rules, copy limits and draft pools stay the same. Missing artwork falls back to the normal face. "
+			+ "Portal includes four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
 		_text("LOAD is a door to the Load Deck dialog from the bar: "
 			+ "your own decks head the list, a finder above it keeps the "
 			+ "rows whose title or file name contains what you type, "

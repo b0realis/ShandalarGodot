@@ -8,6 +8,7 @@ extends RefCounted
 
 ## Deck card lists per seat (already loaded/validated).
 var decks: Array = [[], []]
+var printings: Array = [{}, {}]
 ## Display names per seat.
 var player_names: Array[String] = ["Player 1", "Player 2"]
 ## Which DECK each seat brought, by name — what the pre-duel splash means

@@ -60,7 +60,7 @@ or non-classic lands, the Power Nine on or off — and a Stats window that audit
 the mana base. The duel's keys are rebindable
 under Options, Controls, and a controller's face buttons play beside the mouse.
 Further optional packs
-add **Fallen Empires, Ice Age, Homelands and Alliances**, with engine and AI support.
+add **Fallen Empires, Ice Age, Homelands, Alliances and Portal**, with engine and AI support.
 Adventure and public Internet matchmaking remain future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
@@ -146,7 +146,7 @@ python3 tools/pack_3_ice_age.py verify cardpacks/Pack-3-Ice_Age.zip
 
 The [card artwork and pack guide](docs/card-art-and-packs.md) gives complete
 commands for **Pack 1 (1-tDotP), Fallen Empires, Ice Age, Homelands and
-Alliances**, cache locations and platform-specific installation details.
+Alliances and Portal**, cache locations and platform-specific installation details.
 It also ships as `CARD-ART-AND-PACKS.md` and is included in each package's README.
 
 On desktop, keep `original_skin.zip` and `cardart.zip` in **`skin/`**, and
@@ -219,6 +219,14 @@ Work completed or planned after the 0.20.0 release:
   Build locally with `python3 tools/pack_5_alliances.py fetch-art`, then
   `python3 tools/pack_5_alliances.py`. Included in 0.32.0;
   generated packs and card pictures are not distributed.
+- [x] **Pack 6 — Portal (1997)** — 200 names from 215 original English
+  printings, including 173 new identities. A welcoming first set, original
+  artwork and large-symbol land previews, with independent Extras filters.
+  **Card variant** selects all twenty Portal lands or reprints from enabled
+  sets; saved decks remember the chosen artwork.
+  See the [pack guide](docs/pack-6-portal.md). Build locally with
+  `python3 tools/pack_6_portal.py fetch-art`, then
+  `python3 tools/pack_6_portal.py`. Requires 0.40.7; ZIPs and art stay local.
 - [ ] **Internet play and community MElo (Magic Elo)** — parked until
   resources allow. No authentication or ranking service is required for LAN play.
 

@@ -22,6 +22,9 @@ var _fourth_disable: Button
 var _fifth_status: Label
 var _fifth_enable: Button
 var _fifth_disable: Button
+var _sixth_status: Label
+var _sixth_enable: Button
+var _sixth_disable: Button
 
 
 func _ready() -> void:
@@ -148,11 +151,27 @@ func _ready() -> void:
 	_fifth_disable.pressed.connect(_request_disable.bind(AlliancesPack.ID))
 	fifth_actions.add_child(_fifth_disable)
 	content.add_child(fifth_actions)
+	content.add_child(UiChrome.body_label("6-POR — Pack 6: Portal", 18))
+	_sixth_status = UiChrome.body_label("", 14)
+	_sixth_status.name = "Pack6Status"
+	_sixth_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_sixth_status)
+	var sixth_actions := HBoxContainer.new()
+	sixth_actions.add_theme_constant_override("separation", 10)
+	_sixth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
+	_sixth_enable.name = "EnablePack6"
+	_sixth_enable.pressed.connect(CardPacks.set_enabled.bind(PortalPack.ID, true))
+	sixth_actions.add_child(_sixth_enable)
+	_sixth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
+	_sixth_disable.name = "DisablePack6"
+	_sixth_disable.pressed.connect(_request_disable.bind(PortalPack.ID))
+	sixth_actions.add_child(_sixth_disable)
+	content.add_child(sixth_actions)
 
 	var local_only := UiChrome.body_label(
 		"Packs are not distributed with the game. Build them locally with "
 		+ "tools/pack_1_dotp_complete.py, tools/pack_2_fallen_empires.py, "
-		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py or tools/pack_5_alliances.py, "
+		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py or tools/pack_6_portal.py, "
 		+ "place the exact ZIP here, then Rescan.", 13)
 	local_only.name = "LocalOnly"
 	local_only.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -191,6 +210,16 @@ func _ready() -> void:
 
 
 func _refresh() -> void:
+	var sixth := CardPacks.status(PortalPack.ID)
+	_sixth_enable.disabled = not sixth.available or sixth.enabled
+	_sixth_disable.disabled = not sixth.available or not sixth.enabled
+	if sixth.available:
+		_sixth_status.text = "Status: %s — Version: %s — Minimum game: %s\n" % [
+			"Enabled" if sixth.enabled else "Disabled", sixth.version, sixth.minimum_game_version]
+		_sixth_status.text += "200 names · 215 printings · 173 new identities\nDeck Builder filter: Extras > Portal"
+	else:
+		_sixth_status.text = "Status: Not available\nExpected: %s\nReason: %s" % [
+			PortalPack.FILE_NAME, sixth.rejection]
 	var fifth := CardPacks.status(AlliancesPack.ID)
 	_fifth_enable.disabled = not fifth.available or fifth.enabled
 	_fifth_disable.disabled = not fifth.available or not fifth.enabled
@@ -255,7 +284,7 @@ func _refresh() -> void:
 	rescan.disabled = not refusal.is_empty()
 	rescan.tooltip_text = refusal
 	for button in [_enable, _disable, _second_enable, _second_disable,
-		_third_enable, _third_disable, _fourth_enable, _fourth_disable, _fifth_enable, _fifth_disable]:
+		_third_enable, _third_disable, _fourth_enable, _fourth_disable, _fifth_enable, _fifth_disable, _sixth_enable, _sixth_disable]:
 		button.disabled = button.disabled or not refusal.is_empty()
 		button.tooltip_text = refusal
 	if not refusal.is_empty(): _status.text += "\n" + refusal

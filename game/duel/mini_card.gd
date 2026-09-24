@@ -1112,8 +1112,10 @@ func refresh() -> void:
 	# The ART window — real art when fetched, identity color otherwise.
 	# art_name, not card_name: a land whose SUBTYPE has been changed wears
 	# the new basic land's art (§2.12).
-	var art := art_override if art_override != null \
-		else GameSkin.card_art(art_name(instance))
+	var art := art_override
+	if art == null and art_name(instance) == instance.data.card_name:
+		art = CardPrintings.texture(art_name(instance), CardPrintings.of(instance))
+	if art == null: art = GameSkin.card_art(art_name(instance))
 	_art.texture = art
 	_art.visible = art != null
 	_art_placeholder.color = frame_color(d).darkened(0.35)

@@ -1,0 +1,15 @@
+{
+  "badge": "6-POR",
+  "description": "The original 1997 beginner set: 200 distinct cards, including its signature basic lands.",
+  "file_name": "Pack-6-Portal.zip",
+  "id": "pack-6",
+  "minimum_game_version": "0.40.7",
+  "name": "Portal",
+  "number": 6,
+  "pack_format": 1,
+  "rules_note": "Original Portal artwork with current Oracle rules, including modern card types and special casting restrictions.",
+  "set_order": [
+    "por"
+  ],
+  "version": "1.1.0"
+}

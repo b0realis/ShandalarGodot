@@ -7,6 +7,13 @@ extends RefCounted
 
 static func pages() -> Array:
 	return [
+		_page("Portal — A first step into Magic", [
+			["Original Portal, 1997", "Pack 6 adds the original Portal set: straightforward creatures, spells and beautiful basic lands. Enable it in Options → Card Packs, then choose Portal in Deck Builder → Extras. Turn the other sources off to browse its 200 different cards and 215 printings. Select a card, then use the Card variant stone medallion just below the large preview's lower-right corner to choose artwork, including four versions of each basic land. Your saved deck remembers the choice."],
+			["Read the current rules", "The original pictures preserve their printed wording. Gameplay uses current card types and rules. Some cards printed as sorceries are now instants. Assassin's Blade, Deep Wood and similar tricks can be cast only after an opponent attacks you, during Declare Attackers — before blockers are declared."],
+			["More lands and fewer blockers", "Summer Bloom allows three additional land plays this turn. Charging Rhino and Stalking Tiger cannot be blocked by more than one creature. If such a creature also requires two or more blockers, it cannot be blocked."],
+			["Last Chance", "Last Chance grants an extra turn, but you lose at the beginning of that turn's end step. The most recently created extra turn happens first. A normal Time Walk turn does not inherit Last Chance's loss condition."],
+			["The large mana symbols", "Portal basic-land previews retain the original printed card and its large mana symbol. Animated lands show the live game frame so their creature statistics remain visible. Decks store card names, not a permanent choice of printing."],
+		]),
 		_page("Abilities — Combat", [
 			["Flying and reach", "A flying attacker can be blocked only by creatures with flying or reach. Reach does not let a creature fly. Giving flying after blockers are chosen does not remove an existing block."],
 			["First strike", "First strikers deal combat damage before creatures without first strike. A creature killed by that early damage does not strike back. First strike does not double the damage."],

@@ -12472,7 +12472,12 @@ the 0.20.0 duel and Deck Builder release:
   expanded Help, engine/AI integration and a future-pack authoring guide.
   See [the Alliances audit](pack-5-alliances.md) and [adding packs](adding-card-packs.md).
 
-With all five optional packs enabled: **2,004 named set entries / 1,608 unique
+- [x] **Pack 6 — Portal (1997)** — 200 names / 215 original English printings,
+  173 new identities and 27 reprints, independent local builder, original
+  land scans, Extras medallions, current rules and public-information AI.
+  See [Portal](pack-6-portal.md) and its [mechanics inventory](pack-6-mechanics-audit.md).
+
+With all six optional packs enabled: **2,204 named set entries / 1,781 unique
 cards**. The 897-card original pool remains the default. Numbered ZIPs and
 downloaded card artwork are local-only; construction tools and metadata are
 the distributable artifacts. Balduvian Shaman and Game of Chaos add two explicit
@@ -16090,6 +16095,88 @@ SHA-256, `test_our_art` regenerates it, `test_skin` sizes it,
 `test_stack_hand` shows Island wearing the `II` and a HarperPrism promo
 still lettered. Gate: 483 scripts, **7,549/7,549 tests, 334,273
 asserts**, exit 0 in 202 s over 6 shards; Python 291, exit 0.
+
+## 2026-09-23 — Pack 6: original Portal (0.40.7)
+
+The independent sixth pack adds the first Portal set: 200 card names from
+215 original English printings, with 173 new identities and 27 reprints.
+The core plus Portal contains 1,076 unique cards; all six packs contain
+1,781. New rules cover restricted combat instants, maximum blockers,
+next-turn effects, direct returns to library top and Last Chance's extra-turn
+loss trigger. Computer-player estimates use public information and its own
+hand; hidden-information-invariance has a focused regression.
+
+The pack has the same discovery, enable/disable, deck filtering, drafting
+and LAN compatibility paths as the earlier packs, plus its own original
+gold circular-portal glyph. Original basic-land scans preserve Portal's large mana
+symbols when that printing is previewed. Saved decks still identify cards
+by name, not by printing. Artwork and the constructed ZIP remain local;
+the repository carries the builder, trusted metadata and rules.
+
+Feature verification: 159 selected GUT tests and 29 Python checks passed;
+ten complete Wizard duels covered both rulesets, and a human-seat UI soak
+completed a further duel without errors or warnings. Native viewport
+captures checked the land preview and menus, including the seven-row Extras
+dialog at 960×720. A resource export loaded Portal outside the checkout.
+This is not a full release-suite or cross-platform binary certification.
+See [the pack guide](pack-6-portal.md) and
+[all 200 mechanics entries](pack-6-mechanics-audit.md).
+
+## 2026-09-23 — Portal's original circular emblem
+
+The first Pack 6 glyph was a generic archway. The original Portal symbol,
+checked against its Archangel printing and the Scryfall set-symbol reference,
+is a round gate with a solid center, two rings and ten radial divisions.
+The new silhouette regression failed the old image (`1 failing test(s)`),
+then passed with authored circular geometry in `tools/draw_our_art.gd`.
+The gold card emblem and both Extras stone faces share that geometry,
+retaining the existing bevel, antique-gold ring and 2:1 On/Off brightness.
+
+Only the three Portal PNGs changed; every other generated picture remained
+byte-identical. The artwork inventory carries the new hashes and provenance.
+Verification: 20 artwork tests and five Portal interface tests passed,
+including the actual buttons' texture bindings. Native viewport captures
+checked the Archangel preview and both Extras buttons in the original skin.
+No rules or release binaries changed in this visual follow-up.
+
+## 2026-09-23 — Saved card variants and all Portal lands
+
+The Deck Builder's **Card variant** chooser previews and saves one preferred
+printing per card name, across installed, enabled sets. Portal pack revision
+1.1.0 carries all 215 original printings, including twenty basic lands, while
+the inventory and game rules still use 200 distinct names. The compact count
+distinguishes cards from printings without widening the bottom strip.
+
+Optional, bounded comments survive native/community deck saves, imports,
+Undo and deck-slot copies. Local duel setup, matches, Gauntlets, LAN tables
+and tournament checkpoints carry the preference. Legacy `.dck` cannot save
+it. Unavailable artwork falls back without adding a gameplay dependency.
+LAN protocol 23 carries cosmetic identifiers only on visible faces; masked
+cards and opponents' hidden hands do not expose artwork choices.
+
+Verification: 250 selected GUT tests, eight Portal builder tests and six
+tree/privacy checks passed. One live human-seat Portal duel with selected
+land printings completed in 13 turns (73 automated clicks). Native macOS
+viewport checks exercised the chooser at 1280×800 and 960×720, four distinct
+Forest scans and Fourth Edition/Portal reprints. These are focused feature
+checks, not a full release gate or cross-platform export certification.
+
+## 2026-09-24 — Floating card-variant medallion
+
+The artwork selector is now a compact 32px round stone medallion with two
+carved picture frames. It floats just below the Showcase's lower-right
+corner, over the information area; it reserves no row or gutter. Existing
+card, deck, sideboard, filter and information geometry stays unchanged.
+The original text widths, font sizes and scroll behavior are retained.
+Hover identifies the action and current printing; focus, pressed and
+disabled states remain distinct. Proxies do not offer printing choices.
+
+Verification: 44 focused interface/artwork tests and six tree/privacy checks
+passed, including real pointer activation over the scroll area, both card
+sizes and original layout coordinates. Native macOS viewport inspection
+confirmed the floating button and readable stats, sideboard count, legality
+and status lines in a populated deck. Saved printing behavior is unchanged.
+No release binaries or full release-suite certification in this UI pass.
 
 ## Standing quality gates
 

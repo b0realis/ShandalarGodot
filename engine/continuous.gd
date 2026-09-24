@@ -824,6 +824,7 @@ func recalculate(game: MtgGame) -> void:
 	game.nullified_landwalk.clear()   # rebuilt by statics in pass 2
 	game.max_attackers = 0
 	game.max_blockers = 0
+	game.skip_combat_this_turn = false
 	game.ghostly_flame_active = false
 	game.black_symbol_sacrifices = 0
 	game.block_chooser_override = -1

@@ -67,6 +67,26 @@ no 1997 game and no Manalink install and it produces exactly its bytes.
 
 ## The pictures
 
+Portal follows the original set's circular gate: a solid center, two
+concentric rings and ten radial divisions. `_portal` draws it from our own
+geometry, with the same gold bevel and lit/dark carved-stone treatment as
+the earlier packs. The original card symbol is the reference, not a generic
+arched doorway; no downloaded SVG or scan is embedded in these pictures.
+
+| File | Artwork | Generator | License | SHA-256 |
+|---|---|---|---|---|
+| `set_icon_por.png` | Portal — segmented circular gold gate, 48x48 | `tools/draw_our_art.gd` (`_portal`) | GPL-3.0 | `17e96ba63092397274be1fcff166de67cb05b9b6cebba8b44549fb2ce3e9b85c` |
+| `filter_por_on.png` | Portal — circular gate carved into lit stone, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `3773788eac04da5731e2cd0c8260791f9c8175a02fbc2ecd5ec8f39b5f2cfd12` |
+| `filter_por_off.png` | Portal — matching dim stone gate, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `8090a968ecf3ebf110018b04039f39fb607e5717af69e89baaf39e68d597590e` |
+| `card_variant_on.png` | Card variants — two picture frames carved into a round stone medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `e9479fd2cc33a330f880ba9f73b4f39c56e78403ed955513c51e8fe039c0072a` |
+| `card_variant_off.png` | Card variants — matching recessed/dim medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `1d036fde388f708a42e77e337e405b2a132e3048b7f96ae0185128d05aa51034` |
+
+The card-variant medallion floats at 32px just below the large card's lower-right
+corner, over the unchanged information area. Its overlapping frames distinguish artwork selection
+from Pack 1's fanned-card pool emblem. The transparent circular edge,
+blue-grey stone, carved recesses and antique-gold rim are drawn by the same
+generator; no external image or original skin is needed.
+
 Alliances uses an original forked-banner silhouette drawn by `_alliances`,
 with the same gold card emblem and bevelled stone on/off tiles as the other packs.
 

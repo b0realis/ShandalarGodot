@@ -65,6 +65,7 @@ static func make(card: Dictionary, seat: int, zone: int, existing: CardInstance 
 		instance.cur_target_bans.append({"desc": "artifact sources",
 			"filter": func(_game: MtgGame, _targeting: CardInstance, _spec: TargetSpec) -> bool: return false})
 	instance.face_down = card.masked
+	instance.set_meta(CardPrintings.META, "" if card.masked else String(card.get("printing", "")))
 	var effects: Array = card.text_effects.duplicate(true)
 	for effect in effects:
 		# JSON numbers arrive as floats; normalize color enum keys for hover text.

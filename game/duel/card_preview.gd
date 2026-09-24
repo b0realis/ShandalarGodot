@@ -311,6 +311,7 @@ var _oracle: ManaText
 var _pt_label: Label
 var _artist_label: Label
 var _back: Panel
+var _portal_land_scan: TextureRect
 
 ## The two faces this card letters with (the imported skin's, or the
 ## engine fallback when no skin is imported), and the sizes resolved
@@ -663,6 +664,13 @@ func _init() -> void:
 
 	# The card BACK covers the whole face, so it is added LAST (on top of
 	# every other child) and simply toggled — see show_back().
+	_portal_land_scan = TextureRect.new()
+	_portal_land_scan.name = "PortalLandScan"
+	_anchor(_portal_land_scan, 0, 0, 1, 1)
+	_portal_land_scan.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_portal_land_scan.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_portal_land_scan.visible = false
+	add_child(_portal_land_scan)
 	_back = Panel.new()
 	_anchor(_back, 0, 0, 1, 1)
 	_back.visible = false
@@ -831,6 +839,8 @@ func show_back() -> void:
 		box.set_corner_radius_all(10)
 		_back.add_theme_stylebox_override("panel", box)
 	_back.visible = true
+	_portal_land_scan.visible = false
+	_portal_land_scan.texture = null
 	_shown = null
 	_shown_printing_set = ""
 	_text_plate.visible = false
@@ -847,7 +857,18 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	_shown = inst
 	_shown_printing_set = printing_set
 	var d := inst.data
-	var shown_set: String = printing_set if printing_set != "" else d.set_code
+	var choice_id := printing_set if printing_set != "" else CardPrintings.of(inst)
+	var printing := CardPrintings.resolve(d.card_name, choice_id)
+	var shown_set: String = printing.get("set", d.set_code)
+	# Portal's iconic giant mana symbol belongs to its printed layout.
+	# Use the pinned original scan for an unanimated basic land, without
+	# changing any other set's frame or hiding live creature statistics.
+	# Command-line tools compile this class before autoload identifiers exist.
+	var portal_packs := (Engine.get_main_loop() as SceneTree).root.get_node_or_null("CardPacks")
+	_portal_land_scan.texture = CardPrintings.texture(d.card_name, choice_id, true) \
+		if portal_packs != null and shown_set == "por" and d.is_land() and not inst.is_creature() \
+		and (d.supertypes & Mtg.Supertype.BASIC) != 0 else null
+	_portal_land_scan.visible = _portal_land_scan.texture != null
 	var frame_key := MiniCard.frame_skin_key(d)
 	var skinned := GameSkin.texture(frame_key) != null
 	_name_label.text = d.card_name
@@ -868,7 +889,7 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	# The set symbol: the printed one for the five expansions, this
 	# project's Roman II and IV for Unlimited and Fourth Edition, and
 	# none for the promos, which letter themselves `PR`.
-	var rarity := CardRegistry.rarity_of(d.card_name, shown_set)
+	var rarity: String = printing.get("rarity", CardRegistry.rarity_of(d.card_name, shown_set))
 	var legendary := (d.supertypes & Mtg.Supertype.LEGENDARY) != 0
 	_set_icon.texture = GameSkin.set_icon(shown_set, rarity, legendary)
 	_set_icon.visible = _set_icon.texture != null
@@ -896,7 +917,7 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	# nothing after it. `CardData.artist` comes from the `cards/data/`
 	# snapshot, and an older snapshot (or a printing Scryfall does not
 	# credit) simply leaves it empty.
-	var shown_artist := CardRegistry.artist_of(d.card_name, shown_set)
+	var shown_artist: String = printing.get("artist", CardRegistry.artist_of(d.card_name, shown_set))
 	if shown_artist == "":
 		shown_artist = d.artist
 	_artist_label.text = (ILLUS_PREFIX + shown_artist) if shown_artist != "" else ""
@@ -942,7 +963,8 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	# identifiers are registered. Resolve the service at render time.
 	var tree := Engine.get_main_loop() as SceneTree
 	var packs := tree.root.get_node_or_null("CardPacks")
-	var art: Texture2D = packs.art_texture(d.card_name, shown_set) if packs != null else null
+	var art: Texture2D = CardPrintings.texture(d.card_name, choice_id) if choice_id != "" \
+		else (packs.art_texture(d.card_name, shown_set) if packs != null else null)
 	if art == null:
 		art = GameSkin.card_art(d.card_name)
 	_art.texture = art

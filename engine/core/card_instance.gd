@@ -192,6 +192,8 @@ var cur_attack_costs: Array[Dictionary] = []
 var cur_attacks_alone := false
 var cur_min_attack_group := 1
 var cur_min_block_group := 1
+## Zero means unlimited; a restriction, so it takes precedence over Lure.
+var cur_max_blockers := 0
 var cur_attack_land_sacrifices := 0
 var cur_block_power_tax_threshold := 0
 var cur_block_power_tax := 0
@@ -732,6 +734,7 @@ func reset_characteristics() -> void:
 	cur_attacks_alone = false
 	cur_min_attack_group = 1
 	cur_min_block_group = 1
+	cur_max_blockers = 0
 	cur_attack_land_sacrifices = 0
 	cur_block_power_tax_threshold = 0
 	cur_block_power_tax = 0

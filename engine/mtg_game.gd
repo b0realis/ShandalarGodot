@@ -130,6 +130,13 @@ var is_draw := false
 ## Extra turns queued by Time Walk-style effects: player ids, taken in
 ## order before the turn passes normally (CR 500.7).
 var extra_turns: Array[int] = []
+## Extra-turn riders travel with their exact queued turn, not simply the
+## player's next turn. Skipping that turn also skips its end-step rider.
+var extra_turn_losses := {}
+var _pending_extra_turn_loss: CardInstance = null
+var _resume_after_extra := -1
+var next_turn_statics: Array[Dictionary] = []
+var skip_combat_this_turn := false # derived by continuous effects
 
 ## Fog: all combat damage this turn is prevented. Cleared at cleanup.
 var combat_damage_prevented := false
@@ -566,6 +573,7 @@ const RESOLUTION_TABLES: Array[StringName] = [
 	&"_end_of_combat_actions", &"_end_step_actions", &"_cleanup_actions", &"_next_main_actions",
 	&"life_on_damage_watchers", &"death_watchers", &"damage_watchers",
 	&"extra_turns", &"combat_damage_prevented", &"no_attacks_this_turn",
+	&"extra_turn_losses", &"_pending_extra_turn_loss", &"_resume_after_extra", &"next_turn_statics",
 	&"camouflage_this_turn", &"attacks_without_tapping",
 	&"_one_shot_draws", &"delayed_triggers",
 ]
@@ -2251,6 +2259,7 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		# The spell remembers what it ate — Metamorphosis' X reads it.
 		_rec(inst, &"memory")
 		inst.memory["sacrificed_mv"] = extra_sacrifice.data.cost.mana_value()
+		inst.memory["sacrificed_power"] = extra_sacrifice.cur_power
 		inst.memory["paid_creature_subtypes"] = extra_sacrifice.cur_subtypes.duplicate()
 		if inst.data.additional_sacrifice.get("exile", false):
 			exile_permanent(extra_sacrifice)
@@ -2272,6 +2281,8 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	item.controller = pid
 	item.cost_paid["restricted_x_paid"] = restricted_x_paid
 	item.cost_paid["_object_costs"] = object_receipt
+	if extra_sacrifice != null:
+		item.cost_paid["_sacrificed_power"] = inst.memory["sacrificed_power"]
 	item.mode = mode
 	if inst.data.is_modal():
 		var mode_effects: Array[EffectBase] = []
@@ -3126,6 +3137,10 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 			# and beats the requirement (CR 509.1c/508.1d).
 			if max_blockers > 0 and declared_blocks.size() >= max_blockers:
 				continue
+			var lured_count := 0
+			for against in declared_blocks.values():
+				if against.has(lured.id): lured_count += 1
+			if lured.cur_max_blockers > 0 and lured_count >= lured.cur_max_blockers: continue
 			if lured.cur_must_be_blocked_filter.is_valid() \
 					and not lured.cur_must_be_blocked_filter.call(candidate):
 				continue
@@ -5432,10 +5447,18 @@ func _detach_departing_aura(inst: CardInstance) -> void:
 ## Bounce a permanent to its OWNER's hand (Unsummon). Not destruction:
 ## no dies-trigger, regeneration irrelevant; attached auras fall off via SBA.
 func return_to_hand(inst: CardInstance) -> void:
+	_return_from_battlefield(inst, Mtg.Zone.HAND)
+
+
+func return_permanent_to_library_top(inst: CardInstance) -> void:
+	_return_from_battlefield(inst, Mtg.Zone.LIBRARY)
+
+
+func _return_from_battlefield(inst: CardInstance, destination: int) -> void:
 	if inst.zone != Mtg.Zone.BATTLEFIELD:
 		return
 	if _exile_departure_instead(inst): return
-	_rec_departure(inst, inst.owner_id, Mtg.Zone.HAND)
+	_rec_departure(inst, inst.owner_id, destination)
 	_detach_departing_aura(inst)
 	players[inst.controller_id].battlefield.erase(inst)
 	_battlefield_order.erase(inst.id)
@@ -5449,13 +5472,16 @@ func return_to_hand(inst: CardInstance) -> void:
 	var parting_memory := inst.memory.duplicate()
 	var was_token := inst.is_token
 	inst.clear_battlefield_state()
-	inst.zone = Mtg.Zone.HAND
+	inst.zone = destination
 	# A TOKEN that would go anywhere but the battlefield ceases to exist
 	# (CR 111.7): it must never become a card in a hand, where it could be
 	# cast again — for free, in The Hive's case.
 	if was_token:
 		inst.zone = Mtg.Zone.EXILE   # nowhere, really — it stops existing
 		log_line("%s ceases to exist" % inst.data.card_name)
+	elif destination == Mtg.Zone.LIBRARY:
+		players[inst.owner_id].library.append(inst)
+		log_line("%s goes on top of its owner's library" % inst.data.card_name)
 	else:
 		players[inst.owner_id].hand.append(inst)
 		log_line("%s returns to %s's hand" % [
@@ -7135,6 +7161,8 @@ func spell_cost_for(pid: int, data: CardData, x_value := 0, mode := 0) -> ManaCo
 
 
 func can_meet_minimum_blockers(attacker: CardInstance, defender: int) -> bool:
+	if attacker.cur_max_blockers > 0 and attacker.cur_min_blockers > attacker.cur_max_blockers:
+		return false
 	if attacker.cur_min_blockers <= 1:
 		return true
 	if max_blockers > 0 and max_blockers < attacker.cur_min_blockers:
@@ -8935,11 +8963,22 @@ func shuffle_library(pid: int) -> void:
 	_emit_state()
 
 
-## Put the top cards of [param pid]'s library back in the order given —
-## [param ordered][0] ends on TOP (Natural Selection's "put them back in
-## any order"). Every card in [param ordered] must already be one of the
-## top [code]ordered.size()[/code] cards, or nothing moves: this reorders
-## what a player has looked at, it never fetches. Journaled.
+## Move a selected library card without visiting another zone or exposing
+## its name. Only resolving legal search/look effects call this helper.
+func move_library_card_to_top(inst: CardInstance) -> void:
+	if inst == null or inst.zone != Mtg.Zone.LIBRARY: return
+	var p := players[inst.owner_id]
+	if not p.library.has(inst): return
+	_rec(p, &"library")
+	p.library.erase(inst)
+	p.library.append(inst)
+	_emit_state()
+
+
+## Reorder the looked-at top cards ("put them back in any order"). Every
+## card in [param ordered] must already be one of the top
+## [code]ordered.size()[/code] cards, or nothing moves. [param ordered][0]
+## ends on top (Natural Selection's ordering). Journaled.
 func reorder_top_of_library(pid: int, ordered: Array[CardInstance]) -> void:
 	var p := players[pid]
 	var n := ordered.size()
@@ -10284,6 +10323,8 @@ func _advance_step() -> void:
 		recalculate()
 	# Skip blockers/damage when no attackers were declared.
 	var next_index := _step_index + 1
+	if Mtg.STEP_ORDER[next_index] == Mtg.Step.COMBAT_BEGIN and skip_combat_this_turn:
+		next_index = Mtg.STEP_ORDER.find(Mtg.Step.MAIN2)
 	if Mtg.STEP_ORDER[_step_index] == Mtg.Step.DECLARE_ATTACKERS \
 			and combat.attackers.is_empty():
 		while Mtg.STEP_ORDER[next_index] != Mtg.Step.COMBAT_END:
@@ -10415,7 +10456,42 @@ func _begin_turn() -> bool:
 		_skip_turn()
 		return false
 	_release_hand_locks(pid)   # "until your next turn" — it is here
+	for entry in next_turn_statics.duplicate():
+		if int(entry.pid) == pid:
+			_rec(self, &"next_turn_statics")
+			next_turn_statics.erase(entry)
+			continuous.add_floating_static(entry.source, entry.ability)
+	if _pending_extra_turn_loss != null:
+		var trigger := TriggeredAbility.new(Mtg.EventType.END_STEP_START,
+			_extra_turn_lose, "At this extra turn's end step, you lose the game.",
+			_extra_turn_end.bind(turn_number, pid))
+		schedule_delayed_trigger(trigger, pid, _pending_extra_turn_loss)
+		_rec(self, &"_pending_extra_turn_loss")
+		_pending_extra_turn_loss = null
 	return true
+
+
+func queue_next_turn_static(pid: int, source: CardInstance, ability: StaticAbility) -> void:
+	_rec(self, &"next_turn_statics")
+	next_turn_statics.append({"pid": pid, "source": source, "ability": ability})
+
+
+func add_extra_turn(pid: int, lose_at_end: CardInstance = null) -> void:
+	_rec(self, &"extra_turns")
+	_rec(self, &"extra_turn_losses")
+	var shifted := {}
+	for index in extra_turn_losses: shifted[int(index) + 1] = extra_turn_losses[index]
+	if lose_at_end != null: shifted[0] = lose_at_end
+	extra_turn_losses = shifted
+	extra_turns.push_front(pid) # CR 500.7: most recently created turn first.
+
+
+static func _extra_turn_end(g: MtgGame, _s: CardInstance, e: GameEvent, turn: int, pid: int) -> bool:
+	return g.turn_number == turn and int(e.data.player) == pid
+
+
+static func _extra_turn_lose(g: MtgGame, _s: CardInstance, e: GameEvent) -> void:
+	g.lose_game(int(e.data.player), "Last Chance")
 
 
 ## Skip the turn that was about to begin: proceed past it as though it did
@@ -11470,12 +11546,21 @@ func _end_turn() -> void:
 ## _skip_turn]); the hand locks of "until your next turn" are released as
 ## the new turn actually begins (see [method _begin_turn]).
 func _next_turn() -> void:
+	_rec_turn()
+	_pending_extra_turn_loss = null
 	if not extra_turns.is_empty():
+		if _resume_after_extra < 0: _resume_after_extra = opponent_of(active_player)
+		_pending_extra_turn_loss = extra_turn_losses.get(0)
+		var shifted := {}
+		for index in extra_turn_losses:
+			if int(index) > 0: shifted[int(index) - 1] = extra_turn_losses[index]
+		extra_turn_losses = shifted
 		# Time Walk: the queued player takes the next turn (CR 500.7).
 		active_player = extra_turns.pop_front()
 		log_line("%s takes an extra turn!" % players[active_player].player_name)
 	else:
-		active_player = opponent_of(active_player)
+		active_player = _resume_after_extra if _resume_after_extra >= 0 else opponent_of(active_player)
+		_resume_after_extra = -1
 	turn_number += 1
 	_skip_first_draw = false
 	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],

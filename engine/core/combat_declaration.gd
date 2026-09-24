@@ -53,9 +53,15 @@ static func block_fee(g: MtgGame, blocks: Dictionary) -> int:
 	return total
 
 static func block_error(g: MtgGame, blocks: Dictionary) -> String:
+	var counts := {}
 	for id in blocks:
 		var i := g.find_instance(id)
 		if blocks.size() < i.cur_min_block_group: return "%s needs at least %d blocking creatures" % [i.data.card_name, i.cur_min_block_group]
+		for target in blocks[id]:
+			counts[target] = int(counts.get(target, 0)) + 1
+			var attacker := g.find_instance(target)
+			if attacker.cur_max_blockers > 0 and counts[target] > attacker.cur_max_blockers:
+				return "%s can't be blocked by more than %d creature(s)" % [attacker.data.card_name, attacker.cur_max_blockers]
 	return ""
 
 ## Repair a proposed AI army, retaining its preferred attackers whenever
@@ -110,6 +116,13 @@ static func repair_attacks(g: MtgGame, pid: int, proposed: Array) -> Array:
 
 static func repair_blocks(g: MtgGame, pid: int, proposed: Dictionary) -> Dictionary:
 	var out := g._normalise_block_map(proposed)
+	var counts := {}
+	for id in out.keys():
+		for target in out[id].duplicate():
+			var attacker := g.find_instance(target)
+			if attacker == null or (attacker.cur_max_blockers > 0 and int(counts.get(target, 0)) >= attacker.cur_max_blockers): out[id].erase(target)
+			else: counts[target] = int(counts.get(target, 0)) + 1
+		if out[id].is_empty(): out.erase(id)
 	for id in out.keys():
 		if g.find_instance(id).cur_min_block_group > out.size(): out.erase(id)
 	# Optional block fees must fit the ENTIRE declaration. Prefer keeping
@@ -124,4 +137,13 @@ static func repair_blocks(g: MtgGame, pid: int, proposed: Dictionary) -> Diction
 		if not removed: break
 	for id in out.keys():
 		if g.find_instance(id).cur_min_block_group > out.size(): out.erase(id)
+	# A maximum-one restriction combined with menace cannot be satisfied
+	# by trimming a two-creature block to one; that attacker is unblocked.
+	counts.clear()
+	for id in out:
+		for target in out[id]: counts[target] = int(counts.get(target, 0)) + 1
+	for id in out.keys():
+		for target in out[id].duplicate():
+			if int(counts[target]) < g.find_instance(target).cur_min_blockers: out[id].erase(target)
+		if out[id].is_empty(): out.erase(id)
 	return out

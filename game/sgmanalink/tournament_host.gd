@@ -159,7 +159,7 @@ func command(sid: int, action: Dictionary, revision: int) -> String:
 			if op == "t_choose":
 				if action.index >= event.config.decks.size(): return "Approved deck unavailable."
 				deck = event.config.decks[int(action.index)]
-			else: deck = {"name": action.name, "cards": action.cards, "sideboard": action.sideboard}
+			else: deck = SgDeckCatalog.payload(action)
 			error = event.select_deck(pid, deck)
 		"t_ready":
 			if not room.is_empty(): return "Return to the Tournament Hall first."

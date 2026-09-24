@@ -376,7 +376,7 @@ func _deck_chooser(parent: Control, prefix: String, caption: String, choose: Cal
 		var selected := list.get_selected_items()
 		if selected.is_empty(): return
 		var deck: Dictionary = _catalog[int(list.get_item_metadata(selected[0]))]
-		choose.call({"name": deck.name, "cards": deck.cards.duplicate(), "sideboard": deck.sideboard.duplicate()}))
+		choose.call(SgDeckCatalog.payload(deck)))
 	use.name = prefix + "Use"
 	use.disabled = true
 	use.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -1119,7 +1119,7 @@ func _open_decks() -> void:
 			_close_decks()
 			return
 		var deck := _deck_selected.duplicate(true)
-		if _send({"op":"deck", "name":deck.name, "cards":deck.cards, "sideboard":deck.sideboard}):
+		if _send(SgDeckCatalog.payload(deck).merged({"op": "deck"})):
 			_deck_submission = deck
 			_deck_status.text = "Waiting for the host to confirm your deck…"
 			_deck_use.disabled = true)
@@ -1127,7 +1127,7 @@ func _open_decks() -> void:
 	_deck_use.disabled = true
 	column.add_child(_deck_use)
 	var show_deck := func(deck: Dictionary) -> void:
-		_deck_selected = {"name":deck.name, "cards":deck.cards.duplicate(), "sideboard":deck.sideboard.duplicate()}
+		_deck_selected = SgDeckCatalog.payload(deck)
 		details.text = _deck_text(deck)
 		_deck_use.disabled = not client.online or client.busy()
 	list.item_selected.connect(func(index: int) -> void: show_deck.call(_catalog[int(list.get_item_metadata(index))]))

@@ -6,17 +6,27 @@ const SETTING := "deck_big_cards"
 var screen: DeckBuilderScreen
 var _had_setting: bool
 var _old_setting: Variant
+var _had_extras: bool
+var _old_extras: Variant
 
 
 func before_each() -> void:
 	_had_setting = Settings.has_value(SETTING)
 	_old_setting = Settings.get_value(SETTING, false)
+	# Layout tests must not inherit a prior Portal-only browsing session.
+	_had_extras = Settings.has_value(DeckBuilderScreen.EXTRAS_SETTING)
+	_old_extras = Settings.get_value(DeckBuilderScreen.EXTRAS_SETTING, {})
+	Settings.clear_value(DeckBuilderScreen.EXTRAS_SETTING)
 	# Most tests exercise the transition from classic to big explicitly.
 	Settings.set_value(SETTING, false)
 	await _open()
 
 
 func after_each() -> void:
+	if _had_extras:
+		Settings.set_value(DeckBuilderScreen.EXTRAS_SETTING, _old_extras)
+	else:
+		Settings.clear_value(DeckBuilderScreen.EXTRAS_SETTING)
 	if _had_setting:
 		Settings.set_value(SETTING, _old_setting)
 	else:

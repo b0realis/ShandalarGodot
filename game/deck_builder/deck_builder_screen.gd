@@ -328,6 +328,10 @@ var _undo: DeckModel = null
 var _undo_label := ""
 
 var _showcase: CardPreview
+var _variant_button: Button
+const VARIANT_BUTTON_SIZE := 32.0
+var _printing_count := 0
+var _drawn_printings: Dictionary = {}
 var _big_cards := true
 ## [QoL] The Showcase's proxy face — the enlarged [ProxyFace], stacked in
 ## the same slot as [member _showcase] and shown instead of it.
@@ -557,6 +561,12 @@ func _layout() -> void:
 	_showcase.scale = Vector2.ONE * card_scale
 	_proxy_showcase.position = _showcase.position
 	_proxy_showcase.scale = _showcase.scale
+	# Float over the information area's upper-right, just below the card.
+	# No reserved row or gutter: every pre-existing region keeps its layout.
+	_variant_button.position = _showcase.position + Vector2(
+		CardPreview.SIZE.x * card_scale - VARIANT_BUTTON_SIZE,
+		CardPreview.SIZE.y * card_scale + 6.0)
+	_variant_button.size = Vector2.ONE * VARIANT_BUTTON_SIZE
 	_left_scroll.position = Vector2(MARGIN,
 		_showcase.position.y + CardPreview.SIZE.y * card_scale + 6.0)
 	_left_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if _big_cards \
@@ -941,7 +951,7 @@ static func _style_emerald_done(button: Button) -> void:
 func _open_extra_sets() -> void:
 	if _dialog_busy():
 		return
-	var dialog := OriginalDialog.create("Extras", Vector2(410, 580))
+	var dialog := OriginalDialog.create("Extras", Vector2(410, 660))
 	dialog.set_meta("extra_sets", true)
 	var body := dialog.body()
 	body.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -972,6 +982,11 @@ func _open_extra_sets() -> void:
 			if filter.set_on("all") != on:
 				filter.toggle_set("all"),
 		"Alliances: 144 distinct cards across 199 printings.\nOther set, colour, type and search filters still apply.")
+	_extra_source_row(body, "Pack6", "Portal Pack 6", CardRegistry.extra_set_order().has("por"),
+		filter.set_on("por"), func(on: bool) -> void:
+			if filter.set_on("por") != on:
+				filter.toggle_set("por"),
+		"Portal (1997): 200 distinct cards, with original artwork and current rules.\nTurn off the other sets to explore this beginner-friendly pool.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 
@@ -1137,6 +1152,29 @@ func _build_showcase() -> void:
 	_proxy_showcase.visible = false
 	add_child(_proxy_showcase)
 
+	_variant_button = Button.new()
+	_variant_button.name = "CardVariant"
+	_variant_button.z_index = 1
+	_variant_button.focus_mode = Control.FOCUS_ALL
+	_variant_button.custom_minimum_size = Vector2.ONE * VARIANT_BUTTON_SIZE
+	_variant_button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_variant_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_variant_button.tooltip_text = "Card variant — select a card to choose its artwork"
+	var lit := GameSkin.our_art("card_variant_on")
+	var dim := GameSkin.our_art("card_variant_off")
+	_variant_button.add_theme_stylebox_override("normal", FilterBar._box_for(lit))
+	_variant_button.add_theme_stylebox_override("hover", FilterBar._box_for(lit, 1.18))
+	for state in ["pressed", "hover_pressed", "disabled"]:
+		_variant_button.add_theme_stylebox_override(state, FilterBar._box_for(dim))
+	var focus := StyleBoxFlat.new()
+	focus.draw_center = false
+	focus.border_color = OriginalDialog.HIGHLIGHT
+	focus.set_border_width_all(1)
+	focus.set_corner_radius_all(int(VARIANT_BUTTON_SIZE / 2))
+	_variant_button.add_theme_stylebox_override("focus", focus)
+	_variant_button.disabled = true
+	_variant_button.pressed.connect(_open_variant_dialog)
+	add_child(_variant_button)
 	_left_column = VBoxContainer.new()
 	_left_column.custom_minimum_size.x = LEFT_W
 	_left_column.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -1250,6 +1288,9 @@ func _build_showcase() -> void:
 	_left_scroll.follow_focus = true
 	_left_scroll.add_child(_left_column)
 	add_child(_left_scroll)
+	# Last sibling for pointer hit-testing as well as drawing: the scroll
+	# container underneath must not swallow clicks on the floating button.
+	_variant_button.move_to_front()
 
 
 # --------------------------------------------------------- the Deck area --
@@ -1257,6 +1298,7 @@ func _build_showcase() -> void:
 func _build_deck_area() -> void:
 	_deck_area = CardArea.new(true)
 	_deck_area.source_name = "deck"
+	_deck_area.art_set_for = _preferred_printing
 	# The quilt: every slot, filled or empty, carries a carved 1997 mana
 	# watermark. It is what makes this area read as a deck's worth of
 	# places rather than a blue field with some cards on it.
@@ -1311,6 +1353,7 @@ func _build_deck_area() -> void:
 func _build_sideboard_area() -> void:
 	_sideboard_area = CardArea.new(false)
 	_sideboard_area.source_name = "sideboard"
+	_sideboard_area.art_set_for = _preferred_printing
 	_sideboard_area.corner_tag = "SB"
 	_sideboard_area.card_activated.connect(_remove_one_side)
 	_sideboard_area.card_bulk.connect(_remove_all_side)
@@ -1375,8 +1418,7 @@ func _build_inventory() -> void:
 	_inventory.badge_min = 1
 	_inventory.count_source = func(card_name: String) -> int:
 		return deck.count_of(card_name)
-	_inventory.art_set_for = func(data: CardData) -> String:
-		return filter.preferred_printing(data)
+	_inventory.art_set_for = _preferred_printing
 	_inventory.card_activated.connect(_add_one)
 	_inventory.card_bulk.connect(_add_playset)
 	_inventory.card_shifted.connect(_add_one_side)
@@ -1393,6 +1435,7 @@ func _build_inventory() -> void:
 ## [CardInstance] to hand [method CardPreview.show_card], and it would be
 ## drawn in a coloured frame if it had.
 func _show_in_showcase(data: CardData) -> void:
+	_variant_button.visible = not ProxyCard.is_proxy_data(data)
 	if ProxyCard.is_proxy_data(data):
 		_proxy_showcase.set_proxy_name(data.card_name)
 		_proxy_showcase.visible = true
@@ -1400,7 +1443,35 @@ func _show_in_showcase(data: CardData) -> void:
 		return
 	_proxy_showcase.visible = false
 	_showcase.show_card(CardInstance.new(data, -1, 0),
-		filter.preferred_printing(data))
+		_preferred_printing(data))
+	var choices := CardPrintings.choices(data.card_name)
+	_variant_button.disabled = choices.size() < 2 and not deck.printings.has(data.card_name)
+	var selected := CardPrintings.resolve(data.card_name, _preferred_printing(data))
+	var current := CardPrintings.label(selected) if not selected.is_empty() else "Automatic artwork"
+	_variant_button.tooltip_text = "Card variant — %d printings\n%s" % [choices.size(), current]
+
+
+func _preferred_printing(data: CardData) -> String:
+	return deck.printings.get(data.card_name, filter.preferred_printing(data))
+
+
+func _open_variant_dialog() -> void:
+	if _dialog_busy() or _showcase._shown == null: return
+	var data := _showcase._shown.data
+	_show_dialog(CardVariantDialog.create(data.card_name, _preferred_printing(data),
+		func(id: String) -> void: _choose_printing(data.card_name, id)))
+
+
+func _choose_printing(card_name: String, id: String) -> void:
+	if not id.is_empty() and CardPrintings.resolve(card_name, id).is_empty(): return
+	if deck.printings.get(card_name, "") == id: return
+	var before := deck.duplicate_model()
+	if id.is_empty(): deck.printings.erase(card_name)
+	else: deck.printings[card_name] = id
+	_remember(before, "Change artwork for " + card_name)
+	_dirty = true
+	refresh()
+	_say("Artwork selected for " + card_name)
 
 
 func _add_one(card_name: String) -> bool:
@@ -1632,6 +1703,12 @@ func refresh() -> void:
 	var order: Array = deck.names() if _sorted else deck.counts.keys()
 	_deck_area.set_entries(_entries_for(order, deck.counts))
 	_refresh_sideboard_area()
+	if _drawn_printings != deck.printings:
+		_drawn_printings = deck.printings.duplicate()
+		_inventory.refresh_art()
+		_sideboard_area.refresh_art()
+		if _showcase._shown != null and not _proxy_showcase.visible:
+			_show_in_showcase(_showcase._shown.data)
 	# `Stats (%d cards)` (`@STATS`) is the original's own heading for these
 	# numbers; the second line is s30's land/creature/spell split
 	# (drawDeckStats).
@@ -1811,6 +1888,14 @@ func _refresh_inventory(keep_scroll := false) -> void:
 			var left: int = sealed.copies_of(data.card_name) - deck.copies_of(data.card_name)
 			if left > 0:
 				entries.append([data, left])
+	_printing_count = 0
+	if sealed == null:
+		for entry in entries:
+			var count := 0
+			for printing in CardPrintings.choices(entry[0].card_name):
+				if filter.set_on(printing.set) and CardRegistry.card_in_set(entry[0].card_name,
+						printing.set, filter.completion_pack_on, filter.original_cards_on): count += 1
+			_printing_count += maxi(1, count)
 	_inventory.set_entries(entries)
 	if not keep_scroll:
 		_inventory.reset_scroll()
@@ -1859,6 +1944,11 @@ func _update_count_line() -> void:
 	if _inventory.entry_count() > _inventory.page_size():
 		_count_label.text += " — showing %d-%d" % [first, last]
 	_inventory.tally = "%d card%s" % [total, "" if total == 1 else "s"]
+	if sealed == null and _printing_count > total:
+		_count_label.text = "%d cards / %d printings" % [total, _printing_count]
+		_count_label.tooltip_text = "Showing %d-%d. Use Card variant to choose a printing." % [first, last]
+	else:
+		_count_label.tooltip_text = ""
 
 
 ## A line ON THE DARK WELL: white, no outline, and emboldened when it is

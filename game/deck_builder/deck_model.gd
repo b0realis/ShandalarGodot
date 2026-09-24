@@ -186,6 +186,8 @@ var group := ""
 ## also derives requirements from the actual card names before every save,
 ## so metadata cannot go stale after editing.
 var required_packs: Array[String] = []
+## One preferred printing per card name, shared by main deck and sideboard.
+var printings: Dictionary = {}
 
 
 ## Fold an expanded [DeckList] (what the loader and the engine use) into
@@ -198,6 +200,7 @@ static func from_deck_list(list: DeckList) -> DeckModel:
 	for card_name in list.sideboard:
 		model.sideboard[card_name] = int(model.sideboard.get(card_name, 0)) + 1
 	model.required_packs = list.required_packs.duplicate()
+	model.printings = DeckPrintings.keep_present(list.printings, list.cards + list.sideboard)
 	return model
 
 
@@ -407,6 +410,7 @@ func clear() -> void:
 	group = ""
 	draft_comments = ""
 	required_packs.clear()
+	printings.clear()
 	deck_name = DEFAULT_NAME
 
 
@@ -984,6 +988,7 @@ func to_text() -> String:
 	for pack_id in required_pack_ids():
 		lines.append("%s %s" % [DeckList.REQUIRED_PACK_PREFIX, pack_id])
 	lines.append("name: %s" % deck_name)
+	lines.append_array(DeckPrintings.comments(printings, names() + side_names()))
 	for line in notes.strip_edges().split("\n"):
 		if line.strip_edges() != "":
 			lines.append("# note: %s" % line.strip_edges())
@@ -997,9 +1002,7 @@ func to_text() -> String:
 
 
 ## Declared requirements plus any pack implied by a name in either pile.
-## No printing id is stored: a deck continues to mean "four Disenchant",
-## not "four Fourth Edition Disenchant", unless a future explicit pinning
-## feature introduces a separate field.
+## Cosmetic printing choices do not add gameplay pack requirements.
 func required_pack_ids() -> Array[String]:
 	var out: Array[String] = required_packs.duplicate()
 	var all_names := names()
@@ -1059,6 +1062,7 @@ static func draft_comments_from_text(text: String) -> String:
 func to_dec_text() -> String:
 	var lines := PackedStringArray()
 	lines.append("// NAME : %s" % deck_name)
+	lines.append_array(DeckPrintings.comments(printings, names() + side_names(), true))
 	for line in notes.strip_edges().split("\n"):
 		if line.strip_edges() != "":
 			lines.append("// %s" % line.strip_edges())
@@ -1120,6 +1124,7 @@ func duplicate_model() -> DeckModel:
 	copy.draft_comments = draft_comments
 	copy.group = group
 	copy.required_packs = required_packs.duplicate()
+	copy.printings = printings.duplicate()
 	return copy
 
 

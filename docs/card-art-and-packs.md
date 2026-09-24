@@ -73,6 +73,19 @@ python3 tools/pack_5_alliances.py build cardpacks/Pack-5-Alliances.zip
 python3 tools/pack_5_alliances.py verify cardpacks/Pack-5-Alliances.zip
 ```
 
+Pack 6 — Portal (original 1997 set; requires game 0.40.7 or later).
+Revision 1.1.0 includes all 215 printings, with four illustrations for each
+basic land. Use the **Card variant** stone medallion just below the lower-right
+corner of the Deck Builder's large preview to
+choose and save artwork, including reprints from other enabled sets.
+Rebuild an older local Pack 6 ZIP to include the alternate illustrations:
+
+```sh
+python3 tools/pack_6_portal.py fetch-art
+python3 tools/pack_6_portal.py build cardpacks/Pack-6-Portal.zip
+python3 tools/pack_6_portal.py verify cardpacks/Pack-6-Portal.zip
+```
+
 Run `build` only after `fetch-art` succeeds. Each builder's default artwork
 cache is `../shandalar-packs/cache/pack_N_art/`, relative to the game folder.
 To put it elsewhere, pass the same `--art-dir PATH` to `fetch-art` and `build`.
@@ -102,7 +115,8 @@ extracted-game-folder/
     ├── Pack-2-Fallen-Empires.zip
     ├── Pack-3-Ice_Age.zip
     ├── Pack-4-Homelands.zip
-    └── Pack-5-Alliances.zip
+    ├── Pack-5-Alliances.zip
+    └── Pack-6-Portal.zip
 ```
 
 On Mac, `skin/` and `cardpacks/` go **beside Shandalar.app**, never inside

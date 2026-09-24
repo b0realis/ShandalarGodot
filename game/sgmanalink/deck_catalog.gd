@@ -20,9 +20,16 @@ static func available() -> Array:
 		var deck := DeckList.load_file(path)
 		if not deck.errors.is_empty() or not validate(deck.cards, deck.sideboard).is_empty():
 			continue
-		result.append({"name": deck.deck_name, "cards": Array(deck.cards),
-			"sideboard": Array(deck.sideboard), "group": _group(path)})
+		result.append(payload({"name": deck.deck_name, "cards": Array(deck.cards),
+			"sideboard": Array(deck.sideboard), "printings": deck.printings}).merged({"group": _group(path)}))
 	return result
+
+
+static func payload(deck: Dictionary) -> Dictionary:
+	var out := {"name": deck.name, "cards": deck.cards.duplicate(), "sideboard": deck.sideboard.duplicate()}
+	var printings := DeckPrintings.keep_present(deck.get("printings", {}), deck.cards + deck.sideboard)
+	if not printings.is_empty(): out.printings = printings
+	return out
 
 
 ## The lobby's tooltip for a deck row: the shelf under the shipped decks

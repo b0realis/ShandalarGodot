@@ -205,7 +205,7 @@ func test_fallen_empires_crown_is_gold_with_an_open_center() -> void:
 
 
 func test_pack_medallions_are_bevelled_square_tiles_with_darker_off_faces() -> void:
-	for key in ["fem", "source", "pack1"]:
+	for key in ["fem", "source", "pack1", "por"]:
 		var on_tex := GameSkin.our_art("filter_" + key + "_on")
 		var off_tex := GameSkin.our_art("filter_" + key + "_off")
 		assert_not_null(on_tex)
@@ -231,6 +231,54 @@ func test_pack_medallions_are_bevelled_square_tiles_with_darker_off_faces() -> v
 				off_light += dim.get_luminance() * dim.a
 		assert_gt(on_light, 100.0, "the stone face is not blank")
 		assert_almost_eq(off_light / on_light, 0.5, 0.02)
+
+
+func test_variant_medallion_has_a_round_stone_rim_and_two_picture_frames() -> void:
+	var on := GameSkin.our_art("card_variant_on").get_image()
+	var off := GameSkin.our_art("card_variant_off").get_image()
+	assert_eq(on.get_size(), Vector2i(48, 48))
+	assert_eq(off.get_size(), on.get_size())
+	for corner in [Vector2i(0, 0), Vector2i(47, 0), Vector2i(0, 47), Vector2i(47, 47)]:
+		assert_eq(on.get_pixelv(corner).a, 0.0, "round medallion, no square backing")
+	assert_gt(on.get_pixel(24, 4).r, on.get_pixel(24, 4).b * 1.3, "antique-gold rim")
+	assert_lt(on.get_pixel(13, 14).get_luminance(), 0.15, "rear picture frame")
+	assert_lt(on.get_pixel(20, 21).get_luminance(), 0.15, "front picture frame")
+	var on_light := 0.0
+	var off_light := 0.0
+	for y in 48:
+		for x in 48:
+			on_light += on.get_pixel(x, y).get_luminance() * on.get_pixel(x, y).a
+			off_light += off.get_pixel(x, y).get_luminance() * off.get_pixel(x, y).a
+	assert_almost_eq(off_light / on_light, 0.5, 0.02)
+	assert_ne(on.get_data(), GameSkin.our_art("filter_pack1_on").get_image().get_data(),
+		"art variants and the card-pool filter are distinct icons")
+
+
+func test_portal_is_a_round_segmented_gate_not_an_archway() -> void:
+	var texture := GameSkin.our_art("set_icon_por")
+	assert_not_null(texture)
+	if texture == null: return
+	var img := texture.get_image()
+	assert_eq(img.get_size(), Vector2i(48, 48))
+	assert_gt(img.get_pixel(24, 24).a, 0.95, "solid central portal")
+	assert_lt(img.get_pixel(0, 0).a, 0.05, "transparent outside the circular silhouette")
+	assert_lt(img.get_pixel(5, 43).a, 0.05, "no flat archway sill")
+	# A complete outer ring and ten separated openings in its outer band.
+	var gaps := 0
+	var in_gap := false
+	for n in 360:
+		var angle := deg_to_rad(float(n))
+		var rim := (Vector2(23.5, 23.5) + Vector2.from_angle(angle) * 20.9).round()
+		assert_gt(img.get_pixel(int(rim.x), int(rim.y)).a, 0.8, "closed round rim")
+		var sample := (Vector2(23.5, 23.5) + Vector2.from_angle(angle) * 16.4).round()
+		var gap := img.get_pixel(int(sample.x), int(sample.y)).a < 0.3
+		if gap and not in_gap: gaps += 1
+		in_gap = gap
+	assert_eq(gaps, 10, "ten radial divisions surround the portal")
+	var gold := img.get_pixel(24, 24)
+	assert_gt(gold.r, gold.b * 1.5, "same gold as the other set emblems")
+	var stone := GameSkin.our_art("filter_por_on").get_image()
+	assert_lt(stone.get_pixel(24, 24).get_luminance(), 0.12, "matching portal is incised in the stone")
 
 
 # ------------------------------------------------- 2. the bytes are ours --

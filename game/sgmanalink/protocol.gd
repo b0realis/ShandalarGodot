@@ -3,8 +3,8 @@ extends RefCounted
 ## [QoL] Unrated loopback/LAN protocol. Data only; no Variant object decoding or RPC.
 ## Version this independently from the application release and future rated protocol.
 
-const VERSION := 22
-const SUBPROTOCOL := "sgmanalink-local-v22"
+const VERSION := 23
+const SUBPROTOCOL := "sgmanalink-local-v23"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]
@@ -144,7 +144,9 @@ static func valid(message: Dictionary) -> bool:
 	var op: Variant = action.get("op")
 	if not op is String or not FIELDS.has(op):
 		return false
-	if not exact(action, ["op"] + FIELDS[op]):
+	var keys: Array = ["op"] + FIELDS[op]
+	if op in ["deck", "t_deck"] and action.has("printings"): keys.append("printings")
+	if not exact(action, keys):
 		return false
 	if op.begins_with("t_") and not token(action.event): return false
 	match op:
@@ -165,7 +167,8 @@ static func valid(message: Dictionary) -> bool:
 		"special": return integer(action.index, 0, MAX_CARDS)
 		"deck", "t_deck":
 			return SgViewProtocol.text(action.name, 128) and not action.name.strip_edges().is_empty() \
-				and names(action.cards, 250) and names(action.sideboard, 250)
+				and names(action.cards, 250) and names(action.sideboard, 250) \
+				and DeckPrintings.valid_map(action.get("printings", {}), action.cards + action.sideboard)
 		"prepare":
 			return short_text(action.card, 16) and action.kind in ["spell", "ability", "mana"] \
 				and integer(action.index, 0, 63) and integer(action.x, 0, 1000) and integer(action.mode, 0, 63)

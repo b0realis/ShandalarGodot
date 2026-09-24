@@ -253,6 +253,7 @@ static func _divided(g: MtgGame, pilot, s: CardInstance, e: EffectBase) -> Dicti
 	var refs: Array = []
 	var value := 0.0
 	for candidate in candidates:
+		if e.target_max > 0 and refs.size() >= e.target_max: break
 		if candidate.need > left: continue
 		candidate.ref.amount = candidate.need
 		left -= int(candidate.need)

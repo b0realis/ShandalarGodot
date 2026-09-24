@@ -24,7 +24,7 @@ PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel",
 MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
 LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64"}
 PACK_BUILDERS = ("pack_1_dotp_complete", "pack_2_fallen_empires", "pack_3_ice_age",
-                 "pack_4_homelands", "pack_5_alliances")
+                 "pack_4_homelands", "pack_5_alliances", "pack_6_portal")
 TOOLS = ("mtg_assets.py", "import_original.py", "fetch_card_art.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
          *(name + ".py" for name in PACK_BUILDERS))

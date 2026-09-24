@@ -1368,12 +1368,11 @@ func _bind_cell(cell: Cell, data: CardData, count: int) -> void:
 		else:
 			cell.face.instance = CardInstance.new(data, -1, 0)
 			cell.face.hovered = false
-			cell.face.art_override = CardPacks.art_texture(
-				data.card_name, printing_set)
+			cell.face.art_override = CardPrintings.texture(data.card_name, printing_set)
 			cell.face.refresh()
 			cell.tooltip_text = "%s\n%s" % [data.card_name, data.oracle_text]
 	elif cell.face != null and cell.printing_set != printing_set:
-		cell.face.art_override = CardPacks.art_texture(data.card_name, printing_set)
+		cell.face.art_override = CardPrintings.texture(data.card_name, printing_set)
 		cell.face.refresh()
 	cell.printing_set = printing_set
 	cell.source = source_name
@@ -1401,6 +1400,10 @@ func refresh_counts() -> void:
 	for cell in _cells:
 		if cell.visible:
 			_bind_badge(cell, 0)
+
+
+func refresh_art() -> void:
+	_rebuild()
 
 
 ## [QoL] THE PILE MARKER, at the card's TOP-LEFT so it can never be read
