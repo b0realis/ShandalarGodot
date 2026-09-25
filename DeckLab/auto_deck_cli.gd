@@ -201,6 +201,12 @@ and the same wishes, one deck file per deck in a folder, a manifest that
 says how each one was made, and a plain list of the files for the Lab to
 walk. The long-form manual is DeckLab/README.md.
 
+THIS TOOL BUILDS DECKS AND PLAYS NO GAME. The Deck Lab (deck_lab.sh)
+plays games and builds no deck. They meet at one folder: this tool
+writes it, the Lab's --field (or --matrix) reads it — and at one switch,
+--packs, explained under THE POOL, because a deck built from a card
+pack's cards can only be played with that pack in play.
+
 USAGE
   DeckLab/auto_deck_cli.sh --out DIR [--count N] [wishes]
   DeckLab/auto_deck_cli.sh -h | --help
@@ -214,8 +220,9 @@ QUICK START — copy one of these
   DeckLab/auto_deck_cli.sh --out mine --count 900 --colors random \\
       --lean creatures,balanced,spells --speed fast,medium,slow --size 40,60
 
-  # and then mine them
-  DeckLab/deck_lab.sh --matrix mine/ --games 50 --no-elo
+  # and then mine them: each against the tournament decks, ranked
+  DeckLab/deck_lab.sh --field mine/ --gauntlet decks/ --group tournament \\
+                      --games 20 --no-elo
 
 THE POOL — `--source`
   sets    the cards of the sets `--sets` names (the default; `--sets`
@@ -235,11 +242,22 @@ THE POOL — `--source`
   builds some decks from each. `--sets every` is every active set.
   (`all` is not that word: `all` is Alliances' own set code.)
 
-  The sets in play are the game's enabled card packs. `--packs LIST`
-  enables packs for THIS RUN ALONE — `all`, `none`, or ids like
-  pack-3,pack-7 (bare 3,7 too) — so `--packs 3 --sets ice` mines Ice
-  Age without touching the game's own setting. The Deck Lab's own
-  switch: play the field with the same `--packs`.
+  WHAT --packs HAS TO DO WITH BUILDING DECKS. A set's cards exist only
+  while its card pack is in play: the base game is 4ed, 2ed, arn, atq,
+  leg, drk, past and phpr, and fem (pack 2), ice (3), hml (4), all (5),
+  por and p02 (6) and 5ed (7) arrive with their packs. `--sets ice` with
+  no pack in play is refused by name, and `--sets every` builds from
+  whatever is in play at the time. `--packs LIST` puts packs in play
+  for THIS RUN ALONE — `all`, `none`, or ids like pack-3,pack-7 (bare
+  3,7 too) — and never touches the game's own setting, so
+  `--packs 3 --sets ice` mines Ice Age from any checkout that has the
+  pack. This tool never plays a game with them.
+
+  THE COUPLING, in one sentence: a deck built with `--packs X` is a deck
+  of proxies to any run without them, so play the field with the Lab's
+  own `--packs X` (the same switch, the same words) — the Lab skips a
+  pack deck it cannot play and, when every deck of a field is skipped,
+  says why.
 
 THE WISHES — every one of them the AutoDeck window's own
   --colors WU        build in white and blue; letters from WUBRG
@@ -308,12 +326,15 @@ OUTPUT — what lands in `--out DIR`
 
   A folder that already holds files is REFUSED unless --force is given.
 
-MINING WORKFLOW
-  1. make the field          auto_deck_cli.sh --out mine --count 500 --colors random
-  2. play it off             deck_lab.sh --matrix mine/ --games 50 --no-elo
-  3. read the standings, take the best few deck files
-  4. play those properly     deck_lab.sh --matrix best/ --games 2000 --no-elo
-  5. rebuild the winner in the AutoDeck window from its seed and its row
+MINING WORKFLOW (the Lab's tournament mode: the field vs the known good)
+  1. make the field          auto_deck_cli.sh --out mine --count 1000 --colors random
+  2. play it off             deck_lab.sh --field mine/ --gauntlet decks/ --group tournament \
+                                         --games 10 --top 30 --no-elo --out round1
+  3. round1/top.txt names the best thirty; play those properly
+                             deck_lab.sh --field round1/top.txt --gauntlet decks/ --group all \
+                                         --games 50 --no-elo --out round2
+  4. rebuild the winner in the AutoDeck window from its seed and its row
+  (a field mined with --packs X is played with --packs X — see THE POOL)
 
 OTHER SWITCHES
   --gold                        the same as --gold on
@@ -1045,8 +1066,24 @@ func _main(argv: PackedStringArray) -> int:
 	print("seeds %d..%d (base %d, stride %d) — any row of %s rebuilds in the AutoDeck window"
 		% [deck_seed(base_seed, 0), deck_seed(base_seed, count - 1), base_seed,
 			SEED_STRIDE, MANIFEST_NAME])
-	print("next: DeckLab/deck_lab.sh --matrix %s --games 50 --no-elo" % out_dir)
+	print(next_step_line(out_dir, _packs_in_force))
 	return 0
+
+
+## WHAT TO TYPE NEXT, packs included: a field mined with `--packs X` is
+## a field of proxies to a Lab run without them, so the Lab command
+## carries the same switch (`--packs none` when that was the wish).
+## `packs` is null when no --packs was given.
+static func next_step_line(out_dir: String, packs: Variant) -> String:
+	var packs_word := ""
+	if packs != null:
+		var ids: Array = packs
+		var numbers := PackedStringArray()
+		for id in ids:
+			numbers.append(String(id).trim_prefix("pack-"))
+		packs_word = " --packs %s" % ("none" if ids.is_empty() else ",".join(numbers))
+	return "next: DeckLab/deck_lab.sh --field %s --gauntlet decks/ --group tournament --games 20%s --no-elo" \
+		% [out_dir, packs_word]
 
 
 ## The non-land cards of a `--keep` deck — what [member AutoDeck.keep]
@@ -1072,7 +1109,15 @@ static func unknown_sets_message(opts: Dictionary) -> String:
 			if String(code) == SETS_EVERY or active.has(String(code)):
 				continue
 			if String(code) == "all":
-				return "unknown set code 'all' — `every` is the word for every active set; `all` is Alliances' own code and needs card pack 5"
+				return "unknown set code 'all' — `every` is the word for every active set; `all` is Alliances' own code and needs card pack 5 (--packs 5)"
+			# A SET THAT EXISTS BUT IS NOT IN PLAY is not a typo, and the
+			# fix is a switch rather than a spelling: name the pack.
+			var pack := CardPacks.pack_of_set(String(code))
+			if pack != "":
+				return "set '%s' (%s) is in card pack %s, which is not in play — add `--packs %s`, or `--packs all` for every pack found (active sets: %s)" % [
+					code, DeckFilter.SET_LABELS.get(String(code), code),
+					pack.trim_prefix("pack-"), pack.trim_prefix("pack-"),
+					", ".join(PackedStringArray(active))]
 			return "unknown set code '%s' (active: %s)" % [code,
 				", ".join(PackedStringArray(active))]
 	return ""

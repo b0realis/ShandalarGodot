@@ -110,6 +110,8 @@ USAGE
   DeckLab/deck_lab.sh --deck-a DECK --deck-b random     [options]  (vs the field)
   DeckLab/deck_lab.sh --deck-a DECK --gauntlet LIST|DIR [options]  (gauntlet)
   DeckLab/deck_lab.sh --matrix LIST|DIR                 [options]  (matrix)
+  DeckLab/deck_lab.sh --field LIST|DIR|FILE.txt --gauntlet LIST|DIR
+                                                        [options]  (tournament)
   DeckLab/deck_lab.sh --deck-a DECK --deck-b DECK --sweep KNOB=V1,V2
                       --control-deck-a DECK --control-deck-b DECK  (sweep)
   DeckLab/deck_lab.sh -h | --help
@@ -124,6 +126,10 @@ QUICK START — copy one of these
 
   # the whole shipped gauntlet against itself, with a heatmap
   DeckLab/deck_lab.sh --matrix decks/ --games 2000
+
+  # a folder of brews, each against the 43 tournament decks, ranked
+  DeckLab/deck_lab.sh --field mine/ --gauntlet decks/ --group tournament \\
+                      --games 20 --no-elo
 
 DECK ARGUMENTS ARE PATHS, NOT DECK NAMES
   `--deck-a decks/big_green.deck`, not `--deck-a "Big Green"`. A path is
@@ -154,6 +160,17 @@ MODES
   matrix    every deck vs every other deck (round robin), --games N per
             pair, plus a standings table and a win-rate heatmap
             (matrix.svg).
+  tournament  ONE OR MANY decks under test (--field) against ONE OR MANY
+            defined opponents (--gauntlet or --deck-b): every field deck
+            plays every gauntlet deck, --games N per matchup, and the
+            report RANKS THE FIELD by its record over the whole gauntlet
+            — a gauntlet run for each field deck, in one run, with one
+            standings table. This is how a folder of brews (or the
+            AutoDeck CLI's thousand mined decks) is measured against the
+            decks that are known to be good. It writes standings.csv
+            (every field deck, ranked) and top.txt (the best N, one path
+            per line — a FILE.txt that --field takes for the next round),
+            and never touches the Elo ledger. See TOURNAMENTS below.
 
 OPTIONS
   --deck-a DECK       The deck under test (duel/gauntlet modes).
@@ -163,6 +180,18 @@ OPTIONS
                       deck under test is excluded, and --group narrows it
                       the same way it narrows --gauntlet.
   --matrix LIST|DIR   Round-robin pool of >= 2 decks (matrix mode).
+  --field LIST|DIR|FILE.txt
+                      The decks under test, in tournament mode: one deck,
+                      a comma-separated list, a folder, or a text file
+                      naming one deck per line (`#` comments; a relative
+                      name is read beside the file — the AutoDeck CLI's
+                      decklist.txt and a previous run's top.txt both
+                      qualify). A folder is taken WHOLE: --group narrows
+                      the gauntlet, never the field. Replaces --deck-a;
+                      needs --gauntlet or --deck-b; `random` is refused
+                      on either side.
+  --top N             Tournament mode: how many of the field's best the
+                      report details and top.txt lists (default 10).
   --games N           Games per matchup (default 1000). See HOW MANY
                       GAMES DO I NEED below — it is the flag that decides
                       whether the answer means anything.
@@ -176,9 +205,9 @@ OPTIONS
   --procs N           Separate worker PROCESSES (default 8 once a run is
                       big enough to pay for starting them; 1 turns it
                       off). This is where the speed is: the same
-                      1,000-game duel takes 19.0s in one process and 8.7s
-                      across eight, and writes the same matchups.csv
-                      byte for byte. Each process is a whole engine
+                      1,000-game duel takes 80s in one process and 39s
+                      across eight (2026-09-25, with every pack in play),
+                      and writes the same matchups.csv byte for byte. Each process is a whole engine
                       holding the card pool, about 235 MB, so the default
                       stops at eight; raise it if you have the RAM.
   --profile-a NAME    AI skill piloting deck A / the row deck:
@@ -238,14 +267,18 @@ DUEL SETTINGS (everything the battle-setup screen can choose)
   --group NAME        Keep only decks of one group when a DIR is expanded:
                       originals | ancients | planeswalkers | coyote_tex |
                       kevin_bane | other | starter | tournament |
-                      community | extended_community | user.
+                      community | extended_community | user — or `all`,
+                      every group at once.
                       With --group set, a DIR is walked INTO its
                       subfolders (decks/1997/<group>/, decks/tournament/,
                       decks/community/, decks/extended_community/);
                       without it a DIR is its own files only, so the
-                      default field stays the five starter decks. A DIR
-                      deck that holds proxies is skipped with a note on
-                      stderr (a named file is never skipped).
+                      default field stays the five starter decks. So
+                      `--gauntlet decks/ --group all` is the whole
+                      library, every deck the Lab can play. A DIR deck
+                      that holds proxies is skipped with a note on stderr
+                      (a named file is never skipped); with --packs all
+                      the pack decks stop being proxies.
   --mulligan on|off   Offer the mulligan before turn 1 — the Paris one,
                       each seat keeping or redrawing one card fewer until
                       it keeps, judged by its pilot (AiProfile.mulligans)
@@ -299,6 +332,36 @@ THE SWEEP (measuring one AI knob the way this project measures every one)
                       preset's own value for a number.
   --control-deck-a DECK  The control pair. Both are required with --sweep,
   --control-deck-b DECK  and mean nothing without it.
+
+TOURNAMENTS (one or many decks vs the decks that are known to be good)
+  The question "is this deck any good?" is answered by playing it
+  against defined good decks, and the question "which of THESE decks is
+  any good?" is the same question asked of a list. Both are --field:
+
+    # one deck vs one known deck (a duel, but ranked and unrated)
+    --field decks/my_brew.deck --deck-b decks/tournament/necro.deck
+    # one deck vs the tournament group (a gauntlet, unrated)
+    --field decks/my_brew.deck --gauntlet decks/ --group tournament
+    # a folder of decks vs a list of good decks
+    --field mine/ --gauntlet decks/big_green.deck,decks/tournament/necro.deck
+    # a thousand mined decks vs the whole library, in two rounds
+    DeckLab/auto_deck_cli.sh --out mine --count 1000 --colors random \\
+                             --packs all --sets every
+    DeckLab/deck_lab.sh --field mine/ --gauntlet decks/ --group tournament \\
+                        --games 10 --packs all --no-elo --top 30 --out round1
+    DeckLab/deck_lab.sh --field round1/top.txt --gauntlet decks/ --group all \\
+                        --games 50 --packs all --no-elo --top 30 --out round2
+
+  The report has one line per FIELD deck (its record over the whole
+  gauntlet, with the interval), one per GAUNTLET deck (its record
+  against the whole field — the good decks, ranked by how hard they
+  were), and for the best --top N field decks the opponents they beat
+  and lost to most. The per-matchup figures are in matchups.csv, not
+  in the report: a thousand decks against forty-three is 43,000 lines.
+  A field deck that is also in the gauntlet does not play itself.
+  Nothing is rated: a tournament is a measurement of the field, and a
+  seed replayed into the ledger would count the same games twice — so
+  --no-elo is implied, and the report says so.
 
 HOW MANY GAMES DO I NEED
   Every win rate is printed with its Wilson 95% interval, and THE
@@ -358,7 +421,7 @@ EXAMPLES
   DeckLab/deck_lab.sh --deck-a a.deck --deck-b b.deck --profile-b apprentice --no-elo
   DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --games 2000
   DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --deck-pool tier1/ --games 2000
-  DeckLab/deck_lab.sh --matrix mined/ --packs all --games 500 --no-elo
+  DeckLab/deck_lab.sh --field mined/ --gauntlet decks/ --group tournament --packs all --games 10 --no-elo
   DeckLab/deck_lab.sh --deck-a a.deck --deck-b b.deck --best-of 3 --sideboard on --no-elo
   DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.deck \\
                       --sweep pays_sacrifices=on --control-deck-a big_green.deck \\
@@ -398,6 +461,30 @@ static func decks_under_test(opts: Dictionary) -> PackedStringArray:
 		if not is_random(opponent):
 			named.append(String(opponent).get_file())
 	return named
+
+
+## WHAT A TOURNAMENT REFUSES, in one place so the parser and the tests
+## read the same list. "" when `--field` is well formed. A tournament is
+## the decks under test (--field) against the defined opponents
+## (--gauntlet or --deck-b) and nothing else: no --deck-a (the field IS
+## the deck-a side), no `random` (the opponents are DEFINED good decks,
+## that is the point), no --deck-pool, no --sweep.
+static func tournament_options_error(opts: Dictionary) -> String:
+	if opts.deck_a != "":
+		return "--field replaces --deck-a: the field is the decks under test, and every one of them is deck A"
+	if opts.opponents.is_empty():
+		return "--field needs the decks to play against: --gauntlet LIST|DIR or --deck-b DECK"
+	for spec in opts.field_specs:
+		if is_random(spec):
+			return "--field does not take `%s`: name the decks under test" % RANDOM_TOKEN
+	for opponent in opts.opponents:
+		if is_random(opponent):
+			return "a tournament's opponents are DEFINED decks, so `%s` is refused; name them with --gauntlet or --deck-b" % RANDOM_TOKEN
+	if opts.deck_pool != "":
+		return "--deck-pool only means something with a `%s` deck, which a tournament refuses" % RANDOM_TOKEN
+	# (`--sweep` is refused by [method sweep_options_error], which the
+	# parser asks first.)
+	return ""
 
 
 ## NO DECK UNDER TEST IS IN ITS OWN FIELD, whichever side it sits on.
@@ -539,7 +626,38 @@ func _main(argv: PackedStringArray) -> int:
 	## because they are unique by construction and two deck FILES may
 	## carry the same `name:`.
 	var field_paths: Array[String] = []
-	if opts.matrix_pool.is_empty():
+	## THE TOURNAMENT'S TWO SIDES, as counts into `decks`: the first
+	## `contestants` entries are the field, the rest the gauntlet.
+	var contestants := 0
+	if not opts.field.is_empty():
+		# THE FIELD FIRST, THEN THE GAUNTLET, every deck loaded before a
+		# game is played; a pair for every field deck against every
+		# gauntlet deck, except a deck against its own file.
+		for deck_path in opts.field:
+			var deck := _load_deck(deck_path, opts.format)
+			if deck == null:
+				return 2
+			decks.append(deck)
+			# RESOLVED, not as typed: top.txt names these decks for the
+			# next round, and `big_green.deck` beside a top.txt in an
+			# output folder is not a deck.
+			field_paths.append(resolved_deck_path(deck_path))
+		contestants = decks.size()
+		var opponent_paths: Array[String] = []
+		for deck_path in opts.opponents:
+			var deck := _load_deck(deck_path, opts.format)
+			if deck == null:
+				return 2
+			decks.append(deck)
+			opponent_paths.append(deck_path)
+		for i in contestants:
+			for j in opponent_paths.size():
+				if field_paths[i].get_file() != opponent_paths[j].get_file():
+					pairs.append([i, contestants + j])
+		if pairs.is_empty():
+			printerr("deck_lab: the field and the gauntlet are the same deck(s); nothing to play")
+			return 2
+	elif opts.matrix_pool.is_empty():
 		var deck_a: DeckList = null
 		if is_random(opts.deck_a):
 			deck_a = _field_placeholder()
@@ -616,7 +734,14 @@ func _main(argv: PackedStringArray) -> int:
 	# made it safe to move.
 	var jobs: int = opts.jobs if opts.jobs > 0 else mini(4, OS.get_processor_count())
 	var mode := "matrix" if not opts.matrix_pool.is_empty() \
-		else ("gauntlet" if pairs.size() > 1 else "duel")
+		else ("tournament" if contestants > 0 \
+		else ("gauntlet" if pairs.size() > 1 else "duel"))
+	# A TOURNAMENT RATES NOTHING (see TOURNAMENTS in HELP): the same
+	# field replayed into the ledger would count the same games twice,
+	# and a thousand mined decks are not decks anybody keeps a rating
+	# for. Implied rather than required, so the command line stays short.
+	if mode == "tournament":
+		opts.no_elo = true
 	# WHERE THE RUN IS WRITING, DECIDED BEFORE IT STARTS — printed with
 	# the plan, so a sweep interrupted after forty minutes still says
 	# where its half of a result was going, and a bad --out fails now
@@ -649,7 +774,13 @@ func _main(argv: PackedStringArray) -> int:
 	# WHICH DECKS, BY NAME. "5 deck(s)" is not enough to know that the
 	# folder expanded to what was meant — a --group typo that finds four
 	# decks instead of forty-eight looks identical otherwise.
-	print("decks: %s" % _deck_summary(decks))
+	if mode == "tournament":
+		print("field: %d deck(s) — %s" % [contestants,
+			_deck_summary(decks.slice(0, contestants))])
+		print("gauntlet: %d deck(s) — %s" % [decks.size() - contestants,
+			_deck_summary(decks.slice(contestants))])
+	else:
+		print("decks: %s" % _deck_summary(decks))
 	if random_index >= 0:
 		print("field: %d deck(s) — %s" % [field.size(),
 			", ".join(_deck_names(field))])
@@ -825,15 +956,19 @@ func _main(argv: PackedStringArray) -> int:
 		# still write the report this tool has always written, so that
 		# a diff against a baseline report shows only the timing line.
 		var drawn_note := "" if stats.draws == 0 else ", %d drawn" % stats.draws
-		report.append("%-24s vs %-24s %s  CI [%s..%s]  (%d-%d, %d stalled%s)" % [
-			row_name, col_name, SimStats.percent(stats.winrate.mid),
-			SimStats.percent(stats.winrate.low).strip_edges(),
-			SimStats.percent(stats.winrate.high).strip_edges(),
-			stats.a_wins, stats.b_wins, stats.stalled, drawn_note])
-		report.append("   on the play %s   on the draw %s   avg %.1f turns (median %d)" % [
-			SimStats.percent(stats.winrate_on_play.mid),
-			SimStats.percent(stats.winrate_on_draw.mid),
-			stats.avg_turns, stats.median_turns])
+		# A TOURNAMENT'S MATCHUPS GO TO matchups.csv ONLY: a thousand
+		# decks against forty-three is 43,000 pairs, and the report is
+		# the ranking (below), not the pairs.
+		if mode != "tournament":
+			report.append("%-24s vs %-24s %s  CI [%s..%s]  (%d-%d, %d stalled%s)" % [
+				row_name, col_name, SimStats.percent(stats.winrate.mid),
+				SimStats.percent(stats.winrate.low).strip_edges(),
+				SimStats.percent(stats.winrate.high).strip_edges(),
+				stats.a_wins, stats.b_wins, stats.stalled, drawn_note])
+			report.append("   on the play %s   on the draw %s   avg %.1f turns (median %d)" % [
+				SimStats.percent(stats.winrate_on_play.mid),
+				SimStats.percent(stats.winrate_on_draw.mid),
+				stats.avg_turns, stats.median_turns])
 		csv.append("%s,%s,%d,%d,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%d" % [
 			csv_cell(row_name), csv_cell(col_name),
 			stats.games, stats.a_wins, stats.b_wins, stats.stalled,
@@ -856,8 +991,15 @@ func _main(argv: PackedStringArray) -> int:
 	# the gauntlet aggregate, and what a sample this size can see.
 	# report.txt only — results.json and matchups.csv are read by other
 	# tooling and their shape does not move.
-	report.append_array(_reading_block(mode, opts, decks, pairs,
-		per_pair_stats, unit))
+	var tournament := {}
+	if mode == "tournament":
+		tournament = _tournament_tables(decks, contestants, field_paths,
+			pairs, per_pair_records, per_pair_stats, opts.top)
+		report.append_array(_tournament_block(opts, tournament, decks,
+			contestants, pairs, per_pair_stats, unit))
+	else:
+		report.append_array(_reading_block(mode, opts, decks, pairs,
+			per_pair_stats, unit))
 	if not field_rows.is_empty():
 		report.append("")
 		var against: String = decks[1 if random_index == 0 else 0].deck_name
@@ -906,12 +1048,31 @@ func _main(argv: PackedStringArray) -> int:
 	# report header above for why this file and report.txt cannot be.)
 	if not field_rows.is_empty():
 		results_json["field"] = _field_json(field_rows)
+	if mode == "tournament":
+		results_json["standings"] = tournament.standings_json
+		results_json["gauntlet"] = tournament.gauntlet_json
+		results_json["rated"] = false
 	wrote_all = _write(out_dir + "/results.json",
 		JSON.stringify(results_json, "  ") + "\n") and wrote_all
 	wrote_all = _write(out_dir + "/matchups.csv", "\n".join(csv) + "\n") and wrote_all
 	var chart_names := PackedStringArray(["report.txt", "results.json", "matchups.csv"])
+	if mode == "tournament":
+		wrote_all = _write(out_dir + "/standings.csv",
+			tournament.standings_csv) and wrote_all
+		wrote_all = _write(out_dir + "/top.txt", tournament.top_txt) and wrote_all
+		chart_names.append_array(["standings.csv", "top.txt"])
 	if not opts.no_svg:
-		if mode == "matrix":
+		if mode == "tournament":
+			# THE BEST N AS A CHART, the gauntlet chart's own shape: one
+			# bar per field deck, its record over the whole gauntlet.
+			var chart_rows: Array = []
+			for row in tournament.standings.slice(0, tournament.shown):
+				chart_rows.append({"label": row.name, "stats": row.stats})
+			wrote_all = _write(out_dir + "/winrates.svg",
+				SvgCharts.winrate_chart("the field's best %d" % tournament.shown,
+					chart_rows)) and wrote_all
+			chart_names.append("winrates.svg")
+		elif mode == "matrix":
 			var names: Array = []
 			for deck in decks:
 				names.append(deck.deck_name)
@@ -1197,13 +1358,27 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 ## 9007199254740992, 17 turns became 38 (2026-09-13). Carry seeds as
 ## decimal strings on this private wire, then restore ints before play.
 ## A shallow copy keeps the parent's task and report seed untouched.
+##
+## THE PILES GO ONCE (2026-09-26). A task used to carry both decks and
+## both sideboards in full, so a slice of 54,000 tasks — a thousand-deck
+## tournament's eighth — was 120 MB of JSON for a child to parse into
+## six million strings. The payload now carries a table of the distinct
+## piles and each task the four indices into it; [method _run_worker]
+## puts the arrays back before a game is played, so the child plays the
+## same task it always did.
 func _worker_payload(lo: int, hi: int) -> Dictionary:
+	var piles: Array = []
+	var pile_index := {}
 	var tasks: Array = []
 	for i in range(lo, hi):
 		var task: Dictionary = _tasks[i].duplicate()
 		task["seed"] = str(task["seed"])
+		for key in PILE_KEYS:
+			if task.has(key):
+				task[key] = _pile_slot(task[key], piles, pile_index)
 		tasks.append(task)
-	var payload := {"offset": lo, "duel": _duel_opts, "tasks": tasks}
+	var payload := {"offset": lo, "duel": _duel_opts, "tasks": tasks,
+		"piles": piles}
 	# THE PACKS RIDE THE PAYLOAD, not the command line: a child is a
 	# fresh engine reading the player's own settings, and `--packs all`
 	# in the parent would otherwise be a child that plays proxies
@@ -1212,6 +1387,24 @@ func _worker_payload(lo: int, hi: int) -> Dictionary:
 	if _packs_in_force != null:
 		payload["packs"] = _packs_in_force
 	return payload
+
+
+## The task keys that hold a pile of card names — the two decks and the
+## two sideboards — and travel to a child as indices into the payload's
+## pile table.
+const PILE_KEYS := ["deck_a", "deck_b", "sb_a", "sb_b"]
+
+
+## The slot of [param pile] in the payload's table, adding it on first
+## sight. Keyed by content: two tasks of the same deck share one entry,
+## and two decks that happen to hold the same sixty cards are the same
+## pile to a game.
+static func _pile_slot(pile: Array, piles: Array, pile_index: Dictionary) -> int:
+	var key := ",".join(PackedStringArray(pile))
+	if not pile_index.has(key):
+		pile_index[key] = piles.size()
+		piles.append(pile)
+	return int(pile_index[key])
 
 
 ## How many games a child has finished, from the little file it rewrites
@@ -1269,10 +1462,17 @@ func _run_worker(in_path: String, out_path: String, beat_path := "") -> int:
 			return 1
 	_duel_opts = payload.get("duel", {})
 	_tasks = payload.get("tasks", [])
+	var piles: Array = payload.get("piles", [])
 	_results.resize(_tasks.size())
 	var last_beat := Time.get_ticks_msec()
 	for i in _tasks.size():
 		_tasks[i]["seed"] = int(_tasks[i]["seed"])
+		# The piles back from the table (see `_worker_payload`); a
+		# payload without one carries the arrays in place.
+		if not piles.is_empty():
+			for key in PILE_KEYS:
+				if _tasks[i].has(key) and not (_tasks[i][key] is Array):
+					_tasks[i][key] = piles[int(_tasks[i][key])]
 		var record := _play_task(_tasks[i])
 		# `rng` is a RandomNumberGenerator — used inside a MATCH and never
 		# read again afterwards, and not a thing JSON can carry.
@@ -1652,6 +1852,19 @@ static func enable_packs(ids: Array) -> String:
 	return ""
 
 
+## The path [method _load_deck] would read `path` from, spelled so that
+## it reads the same from any folder: a library deck named bare or as
+## `decks/NAME` becomes its `res://decks/NAME`; an absolute or scheme
+## path is already that.
+static func resolved_deck_path(path: String) -> String:
+	if path.is_absolute_path() or path.contains("://"):
+		return path
+	for candidate in ["res://" + path, "res://decks/" + path]:
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return path
+
+
 func _load_deck(path: String, format := "") -> DeckList:
 	var tries := [path, "decks/" + path, "res://decks/" + path]
 	for candidate in tries:
@@ -1807,6 +2020,8 @@ const FLAG_HINTS := {
 	"--deck-b": "--deck-b PATH: one opponent deck, or the word `random`",
 	"--gauntlet": "--gauntlet LIST|DIR: opponents, comma-separated or a folder",
 	"--matrix": "--matrix LIST|DIR: >= 2 decks to play a round robin",
+	"--field": "--field LIST|DIR|FILE.txt: the decks under test in tournament mode, each played against every --gauntlet/--deck-b deck",
+	"--top": "--top N: tournament mode — how many of the field's best the report details and top.txt lists, default 10",
 	"--deck-pool": "--deck-pool LIST|DIR: what `random` draws from (default decks/)",
 	"--games": "--games N: games per matchup, default 1000",
 	"--seed": "--seed N: base RNG seed, default 1 — the same seed replays a run",
@@ -1821,7 +2036,7 @@ const FLAG_HINTS := {
 	"--ante": "--ante N: cards staked per seat before the deal, default 0",
 	"--names": "--names A,B: the two seat names, default SeatZero,SeatOne",
 	"--format": "--format NAME: unrestricted|wild|type1|type1.5|highlander",
-	"--group": "--group NAME: keep one deck group when a folder is expanded",
+	"--group": "--group NAME: keep one deck group when a folder is expanded, or `all` for every group",
 	"--mulligan": "--mulligan on|off: offer the mulligan before turn 1, default off",
 	"--rules": "--rules fifth|modern: which ruleset, default modern",
 	"--rule": "--rule KEY=on|off: override one rules fork; repeatable",
@@ -1872,13 +2087,19 @@ static func unknown_option(arg: String) -> String:
 
 ## The flags whose value must be a whole number. `String.to_int()` is
 ## silent about "abc" (it is 0), so `_parse_args` refuses these up front.
-const WHOLE_NUMBER_FLAGS := ["--games", "--seed", "--jobs", "--procs", "--ante", "--best-of"]
+const WHOLE_NUMBER_FLAGS := ["--games", "--seed", "--jobs", "--procs", "--ante", "--best-of", "--top"]
 
 
 func _parse_args(argv: PackedStringArray) -> Dictionary:
 	var opts := {
 		"deck_a": "", "opponents": [], "gauntlets": [], "matrix_pool": [],
 		"deck_pool": "",
+		# THE TOURNAMENT (2026-09-26): `field_specs` is what --field was
+		# given, `field` the deck paths it expanded to after the loop —
+		# like the gauntlet, so a folder or a FILE.txt may be typed
+		# before or after anything else. `top` is how much of the
+		# ranking the report details.
+		"field_specs": [], "field": [], "top": 10,
 		"games": 1000,
 		"seed": 1, "jobs": 0, "procs": 0,
 		"profile_a": "wizard", "profile_b": "wizard",
@@ -1911,9 +2132,12 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	# filter parsed afterwards would silently do nothing on half the
 	# command lines people will actually type.
 	_group_filter = ""
+	_walk_every_group = false
+	_proxy_decks_skipped = 0
 	for scan in argv.size() - 1:
 		if argv[scan] == "--group":
 			_group_filter = GROUP_FLAGS.get(argv[scan + 1].to_lower(), "")
+			_walk_every_group = argv[scan + 1].to_lower() == EVERY_GROUP
 	var i := 0
 	while i < argv.size():
 		var arg := argv[i]
@@ -1960,6 +2184,13 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 			"--gauntlet": opts.gauntlets.append(value)
 			# Likewise, and for the same reason.
 			"--deck-pool": opts.deck_pool = value
+			# And the field: expanded after the loop, unfiltered — see
+			# `_expand_pool`'s `filtered` and the tournament checks.
+			"--field": opts.field_specs.append(value)
+			"--top":
+				opts.top = value.to_int()
+				if opts.top < 1:
+					return {"error": "--top must be >= 1"}
 			"--matrix":
 				var pool := _expand_pool(value, "")
 				if pool.size() < 2:
@@ -2027,8 +2258,10 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				opts.format = format
 			"--group":
 				var group: String = GROUP_FLAGS.get(value.to_lower(), "")
+				if value.to_lower() == EVERY_GROUP:
+					group = EVERY_GROUP
 				if group == "":
-					return {"error": "unknown deck group '%s' (try %s)" % [
+					return {"error": "unknown deck group '%s' (try %s, or all)" % [
 						value, ", ".join(GROUP_FLAGS.keys())]}
 				opts.group = group
 			"--mulligan":
@@ -2097,7 +2330,8 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	for value in opts.gauntlets:
 		var pool := _expand_pool(value, opts.deck_a)
 		if pool.is_empty():
-			return {"error": "no opponent decks found in '%s'%s" % [value, _subfolders_note(value)]}
+			return {"error": "no opponent decks found in '%s'%s%s"
+				% [value, _subfolders_note(value), _proxies_note()]}
 		opts.opponents.append_array(pool)
 	# `Side&board between duels` HAS NO MOMENT IN FREE PLAY — nor in a
 	# best-of-ONE match, which is a single duel with a scoreboard: the
@@ -2112,11 +2346,26 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	if not opts.matrix_pool.is_empty():
 		if opts.deck_a != "" or not opts.opponents.is_empty():
 			return {"error": "--matrix does not combine with --deck-a/--deck-b/--gauntlet"}
+		if not opts.field_specs.is_empty():
+			return {"error": "--matrix does not combine with --field (a tournament is --field against --gauntlet)"}
 		if opts.deck_pool != "":
 			return {"error": "--deck-pool has nothing to draw for in --matrix mode"}
 		return opts
+	if not opts.field_specs.is_empty():
+		var field_error := tournament_options_error(opts)
+		if field_error != "":
+			return {"error": field_error}
+		for value in opts.field_specs:
+			var pool := _expand_pool(value, "", false)
+			if pool.is_empty():
+				return {"error": "no decks found in the field '%s'%s%s"
+					% [value, _subfolders_note(value), _proxies_note()]}
+			opts.field.append_array(pool)
+		return opts
+	if opts.top != 10:
+		return {"error": "--top only means something in tournament mode (--field)"}
 	if opts.deck_a == "":
-		return {"error": "--deck-a is required (or use --matrix)"}
+		return {"error": "--deck-a is required (or use --matrix, or --field for a tournament)"}
 	if opts.opponents.is_empty():
 		return {"error": "need --deck-b, --gauntlet, or --matrix"}
 	# `random` on both sides would make the per-opponent breakdown
@@ -2195,9 +2444,11 @@ static func _keep_the_importer_out(out_dir: String) -> void:
 ## pool: `--gauntlet decks/ --group extended_community` then honestly
 ## finds only the proxy-free few. A single named file is never skipped —
 ## if you named it, you meant it, and [method _load_deck] says why not.
-func _expand_pool(value: String, exclude_path: String) -> Array:
+func _expand_pool(value: String, exclude_path: String, filtered := true) -> Array:
 	if value.contains(","):
 		return Array(value.split(",", false))
+	if value.to_lower().ends_with(".txt"):
+		return deck_list_file(value)
 	var dir_path := value
 	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
 		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("res://" + dir_path)):
@@ -2205,9 +2456,40 @@ func _expand_pool(value: String, exclude_path: String) -> Array:
 		else:
 			return [value]   # maybe a single file; deck loading will judge
 	var found: Array = []
-	_collect_decks(dir_path, exclude_path, _group_filter != "", found)
+	_collect_decks(dir_path, exclude_path,
+		_group_filter != "" or _walk_every_group, found, filtered)
 	found.sort()
 	return found
+
+
+## A DECK LIST AS A TEXT FILE (2026-09-26): one deck path per line, blank
+## lines and `#` comments skipped, a relative name read beside the file
+## itself — which is exactly what the AutoDeck CLI's decklist.txt and a
+## tournament's top.txt are, so either names the field of the next run.
+## [] when the file cannot be read, which the caller refuses as an empty
+## pool. Absolute paths and `res://`/`user://` paths are taken as typed.
+static func deck_list_file(path: String) -> Array:
+	var tries := [path, "res://" + path]
+	var text := ""
+	var home := ""
+	for candidate in tries:
+		if FileAccess.file_exists(candidate):
+			text = FileAccess.get_file_as_string(candidate)
+			home = candidate.get_base_dir()
+			break
+	if text == "":
+		return []
+	var out: Array = []
+	for raw_line in text.split("\n"):
+		var line := raw_line.strip_edges()
+		if line == "" or line.begins_with("#"):
+			continue
+		if line.is_absolute_path() or line.contains("://") \
+				or FileAccess.file_exists(line):
+			out.append(line)
+		else:
+			out.append(home.path_join(line))
+	return out
 
 
 ## Why a DIR came up empty when it did not look empty: the deck files
@@ -2216,7 +2498,7 @@ func _expand_pool(value: String, exclude_path: String) -> Array:
 ## without a word about the 157 decks one folder down). "" when there
 ## are none, or when the value was no folder at all.
 func _subfolders_note(value: String) -> String:
-	if _group_filter != "":
+	if _group_filter != "" or _walk_every_group:
 		return ""
 	var dir_path := value
 	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
@@ -2260,7 +2542,7 @@ func _deck_files_under(dir_path: String) -> int:
 ## The deck files of one directory into [param found] — and, when
 ## [param recurse] is set, of every subfolder under it, depth-first.
 func _collect_decks(dir_path: String, exclude_path: String, recurse: bool,
-		found: Array) -> void:
+		found: Array, filtered := true) -> void:
 	var dir := DirAccess.open(dir_path)
 	if dir == null:
 		return
@@ -2270,16 +2552,20 @@ func _collect_decks(dir_path: String, exclude_path: String, recurse: bool,
 		var full := dir_path.path_join(entry)
 		if dir.current_is_dir():
 			if recurse and not entry.begins_with("."):
-				_collect_decks(full, exclude_path, recurse, found)
+				_collect_decks(full, exclude_path, recurse, found, filtered)
 		elif (entry.ends_with(".deck") or entry.ends_with(".dec") or entry.ends_with(".dck")) \
 				and entry != exclude_path.get_file():
 			# `--group`: a DIR expands to one group's decks only. A single
 			# named file is never filtered — if you named it, you meant it.
-			if _group_filter == "" or DeckGroups.of(full) == _group_filter:
+			# Nor is the FIELD of a tournament (`filtered` off): a folder
+			# of mined decks is not filed under any group, and --group
+			# is there to choose the gauntlet.
+			if not filtered or _group_filter == "" or DeckGroups.of(full) == _group_filter:
 				var lenient := DeckList.load_file(full, false)
 				if lenient.proxies.is_empty():
 					found.append(full)
 				else:
+					_proxy_decks_skipped += 1
 					printerr("deck_lab: skipping %s (%d proxy card%s — see docs/decks-1997.md)"
 						% [full, lenient.proxies.size(),
 							"" if lenient.proxies.size() == 1 else "s"])
@@ -2288,6 +2574,25 @@ func _collect_decks(dir_path: String, exclude_path: String, recurse: bool,
 
 ## Set from `--group` before the pools are expanded; "" means every group.
 var _group_filter := ""
+## How many DIR decks this run's expansions skipped for proxy cards —
+## so an empty pool can say that the folder was not empty, it was
+## unplayable without a pack (see [method _proxies_note]).
+var _proxy_decks_skipped := 0
+
+
+## Why a pool came up empty when its folder held deck files: they were
+## skipped as proxies, which with a mined field means the packs it was
+## built from are not in play. "" when nothing was skipped.
+func _proxies_note() -> String:
+	if _proxy_decks_skipped == 0:
+		return ""
+	return " — %d deck file%s skipped for proxy cards; a field mined with --packs X is played with the same --packs X (or --packs all)" \
+		% [_proxy_decks_skipped, "" if _proxy_decks_skipped == 1 else "s"]
+## `--group all` (2026-09-26): walk a DIR into its subfolders the way a
+## group does, and keep every deck found — the whole library in one word.
+var _walk_every_group := false
+## The `--group` value that means every group.
+const EVERY_GROUP := "all"
 
 
 ## The non-default duel settings, one line, or "" when everything is at
@@ -2304,6 +2609,8 @@ func _settings_line(opts: Dictionary) -> String:
 		parts.append("format %s" % opts.format)
 	if opts.group != "":
 		parts.append("group %s" % opts.group)
+	if not opts.get("field", []).is_empty() and int(opts.get("top", 10)) != 10:
+		parts.append("top %d" % opts.top)
 	if opts.mulligan:
 		parts.append("mulligan on")
 	if opts.best_of != MatchState.FREE_PLAY:
@@ -2464,6 +2771,8 @@ static func sweep_options_error(opts: Dictionary) -> String:
 		return ""
 	if not opts.matrix_pool.is_empty():
 		return "--sweep does not combine with --matrix (the candidate sits on seat A, and a matrix has no seat A)"
+	if not opts.field_specs.is_empty():
+		return "--sweep does not combine with --field (a sweep measures one deck A; a field is many)"
 	if is_random(opts.deck_a):
 		return "--sweep needs a named deck on seat A, not `%s`" % RANDOM_TOKEN
 	for opponent in opts.opponents:
@@ -3137,6 +3446,257 @@ func _reading_block(mode: String, opts: Dictionary, decks: Array[DeckList],
 			% [LabConsole.commas(SimStats.games_for_margin(0.03)), unit,
 				LabConsole.commas(SimStats.games_for_margin(0.01))])
 	return out
+
+
+## THE TOURNAMENT'S TABLES (2026-09-26), computed once and read by the
+## report, the CSV, top.txt, the chart and results.json. The field is the
+## first [param contestants] entries of [param decks]; every field deck's
+## record is the sum of its records against every gauntlet deck, and
+## every gauntlet deck's record is the same games seen from its side.
+## Rows are sorted best first: win rate, then wins, then name — the
+## matrix standings' own order, so two runs of a tie read the same.
+func _tournament_tables(decks: Array[DeckList], contestants: int,
+		field_paths: Array[String], pairs: Array, per_pair_records: Array,
+		per_pair_stats: Array, top: int) -> Dictionary:
+	var standings: Array = []
+	for i in contestants:
+		var records: Array = []
+		var opponents: Array = []
+		for pair_index in pairs.size():
+			if pairs[pair_index][0] != i:
+				continue
+			records.append_array(per_pair_records[pair_index])
+			opponents.append({"name": decks[pairs[pair_index][1]].deck_name,
+				"stats": per_pair_stats[pair_index]})
+		standings.append({"name": decks[i].deck_name, "file": field_paths[i],
+			"stats": SimStats.summarize(records), "opponents": opponents})
+	var gauntlet: Array = []
+	for j in range(contestants, decks.size()):
+		var records: Array = []
+		for pair_index in pairs.size():
+			if pairs[pair_index][1] != j:
+				continue
+			for record in per_pair_records[pair_index]:
+				records.append(flipped_record(record))
+		gauntlet.append({"name": decks[j].deck_name,
+			"stats": SimStats.summarize(records)})
+	standings.sort_custom(best_first)
+	gauntlet.sort_custom(best_first)
+	for rank in standings.size():
+		standings[rank]["rank"] = rank + 1
+	for rank in gauntlet.size():
+		gauntlet[rank]["rank"] = rank + 1
+	var shown := mini(top, standings.size())
+	# standings.csv: every field deck, ranked — the table the report
+	# only shows the head of.
+	var csv := PackedStringArray()
+	csv.append("rank,deck,file,games,wins,losses,stalled,winrate,ci_low,ci_high,avg_turns,median_turns")
+	for row in standings:
+		var st: Dictionary = row.stats
+		csv.append("%d,%s,%s,%d,%d,%d,%d,%.4f,%.4f,%.4f,%.2f,%d" % [
+			row.rank, csv_cell(row.name), csv_cell(row.file), st.games,
+			st.a_wins, st.b_wins, st.stalled, st.winrate.mid, st.winrate.low,
+			st.winrate.high, st.avg_turns, st.median_turns])
+	# top.txt: the best N as a deck list `--field` reads back.
+	var top_txt := PackedStringArray()
+	top_txt.append("# Deck Lab tournament: the field's best %d of %d, best first."
+		% [shown, standings.size()])
+	top_txt.append("# One deck path per line; `--field %s` plays them in the next round." % "top.txt")
+	for row in standings.slice(0, shown):
+		top_txt.append("# %d. %s  %s  (%d-%d)" % [row.rank, row.name,
+			SimStats.percent(row.stats.winrate.mid).strip_edges(),
+			row.stats.a_wins, row.stats.b_wins])
+		top_txt.append(String(row.file))
+	var standings_json: Array = []
+	for row in standings:
+		standings_json.append(_standing_json(row, true))
+	var gauntlet_json: Array = []
+	for row in gauntlet:
+		gauntlet_json.append(_standing_json(row, false))
+	return {"standings": standings, "gauntlet": gauntlet, "shown": shown,
+		"standings_csv": "\n".join(csv) + "\n",
+		"top_txt": "\n".join(top_txt) + "\n",
+		"standings_json": standings_json, "gauntlet_json": gauntlet_json}
+
+
+## One standings row as plain data for results.json — the aggregate
+## without its turn list, plus the rank and (for the field) the file.
+static func _standing_json(row: Dictionary, with_file: bool) -> Dictionary:
+	var st: Dictionary = row.stats
+	var out := {"rank": row.rank, "deck": row.name, "games": st.games,
+		"wins": st.a_wins, "losses": st.b_wins, "stalled": st.stalled,
+		"winrate": st.winrate, "winrate_on_play": st.winrate_on_play,
+		"winrate_on_draw": st.winrate_on_draw,
+		"avg_turns": st.avg_turns, "median_turns": st.median_turns}
+	if int(st.draws) > 0:
+		out["draws"] = st.draws
+	if with_file:
+		out["file"] = row.file
+	return out
+
+
+## The same game from the other seat: a win for A is a loss for B, and
+## A on the play is B on the draw. Stalls and draws stay what they are.
+static func flipped_record(record: Dictionary) -> Dictionary:
+	var out := record.duplicate()
+	out["a_on_play"] = not bool(record.get("a_on_play", true))
+	if bool(record.get("stalled", false)) or bool(record.get("drawn", false)):
+		return out
+	out["a_won"] = not bool(record.get("a_won", false))
+	return out
+
+
+## Best first: win rate, then wins (more games decided the same way), then
+## the name — so a tie reads the same in every run.
+static func best_first(a: Dictionary, b: Dictionary) -> bool:
+	var wa: float = a.stats.winrate.mid
+	var wb: float = b.stats.winrate.mid
+	if wa != wb:
+		return wa > wb
+	if a.stats.a_wins != b.stats.a_wins:
+		return a.stats.a_wins > b.stats.a_wins
+	return String(a.name) < String(b.name)
+
+
+## One standings line, the same shape in every table of the report; the
+## name column is [param width] wide (see [method _name_width]).
+static func _standing_line(row: Dictionary, width: int) -> String:
+	var st: Dictionary = row.stats
+	return "  %4d  %-*s %9s  %s  %-16s %9.1f" % [
+		row.rank, width, _fit(row.name, width), "%d-%d" % [st.a_wins, st.b_wins],
+		SimStats.percent(st.winrate.mid),
+		"[%s..%s]" % [SimStats.percent(st.winrate.low).strip_edges(),
+			SimStats.percent(st.winrate.high).strip_edges()], st.avg_turns]
+
+
+## The table's header, over the same columns.
+static func _standing_header(width: int) -> String:
+	return "  %4s  %-*s %9s  %6s  %-16s %9s" % [
+		"rank", width, "deck", "record", "win%", "95% interval", "avg turns"]
+
+
+## How wide a table's name column is: the longest name it prints, within
+## bounds — a field of mined decks keeps a narrow table, and the
+## library's longest titles (71 characters) are cut to fit rather than
+## pushing every other column off the right edge. standings.csv and
+## matchups.csv hold every name whole.
+const NAME_WIDTH_MIN := 24
+const NAME_WIDTH_MAX := 42
+static func _name_width(rows: Array) -> int:
+	var longest := 0
+	for row in rows:
+		longest = maxi(longest, String(row.name).length())
+	return clampi(longest, NAME_WIDTH_MIN, NAME_WIDTH_MAX)
+
+
+## [param name] cut to [param width] characters, the cut marked.
+static func _fit(name: String, width: int) -> String:
+	if name.length() <= width:
+		return name
+	return name.substr(0, width - 2) + ".."
+
+
+## The tournament's report (2026-09-26): the ranking of the field, the
+## gauntlet ranked by how hard it was, the best decks' easiest and
+## hardest opponents, and the reading — what a record over the whole
+## gauntlet can see, which is much more than one matchup of the same
+## games can, and what a single matchup at this size cannot.
+func _tournament_block(opts: Dictionary, t: Dictionary, decks: Array[DeckList],
+		contestants: int, pairs: Array, per_pair_stats: Array,
+		unit: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var gauntlet_size := decks.size() - contestants
+	var standings: Array = t.standings
+	var shown: int = t.shown
+	out.append("TOURNAMENT: %s field deck%s vs %s gauntlet deck%s — %s matchups x %s %s = %s %s"
+		% [LabConsole.commas(contestants), "" if contestants == 1 else "s",
+			LabConsole.commas(gauntlet_size), "" if gauntlet_size == 1 else "s",
+			LabConsole.commas(pairs.size()), LabConsole.commas(opts.games), unit,
+			LabConsole.commas(pairs.size() * opts.games), unit])
+	out.append("")
+	out.append("STANDINGS — each field deck's record over the whole gauntlet, best first")
+	if shown < standings.size():
+		out.append("  (the best %d of %s; every deck is in standings.csv, and top.txt names these %d)"
+			% [shown, LabConsole.commas(standings.size()), shown])
+	var width := _name_width(standings.slice(0, shown))
+	out.append(_standing_header(width))
+	for row in standings.slice(0, shown):
+		out.append(_standing_line(row, width))
+	out.append("")
+	out.append("THE GAUNTLET — each opponent's record against the whole field, hardest first")
+	width = _name_width(t.gauntlet)
+	out.append(_standing_header(width))
+	for row in t.gauntlet:
+		out.append(_standing_line(row, width))
+	# THE BEST DECKS' OPPONENTS: the three each did best against and the
+	# three it did worst against, from the per-matchup figures that
+	# matchups.csv holds in full. Only once a gauntlet is big enough for
+	# "best" and "worst" to name different decks.
+	if gauntlet_size >= OPPONENTS_NAMED * 2:
+		out.append("")
+		out.append("THE BEST %d, opponent by opponent (the whole grid is matchups.csv)" % shown)
+		for row in standings.slice(0, shown):
+			var opponents: Array = row.opponents
+			opponents.sort_custom(best_first)
+			out.append("  %d. %s" % [row.rank, row.name])
+			out.append("     best against:  " + _opponent_list(opponents.slice(0, OPPONENTS_NAMED)))
+			var hardest: Array = opponents.slice(opponents.size() - OPPONENTS_NAMED)
+			hardest.reverse()
+			out.append("     worst against: " + _opponent_list(hardest))
+	# THE READING. Two sizes matter here and the report names both: the
+	# record over the gauntlet, which is what the ranking is made of, and
+	# the single matchup, which at ten games is a hint and not a result.
+	var per_deck: int = gauntlet_size * opts.games
+	var deck_margin := SimStats.margin_at(per_deck)
+	var pair_margin := SimStats.margin_at(opts.games)
+	var decided := 0
+	for row in standings:
+		if SimStats.is_decided(row.stats.winrate):
+			decided += 1
+	var pairs_decided := 0
+	for stats in per_pair_stats:
+		if SimStats.is_decided(stats["winrate"]):
+			pairs_decided += 1
+	out.append("")
+	out.append("reading these numbers:")
+	out.append("  a field deck's record is %s %s (%s opponent%s x %s %s): its 95%% interval"
+		% [LabConsole.commas(per_deck), unit, LabConsole.commas(gauntlet_size),
+			"" if gauntlet_size == 1 else "s", LabConsole.commas(opts.games), unit])
+	out.append("  is +-%.1f points at an even win rate, so no edge smaller than %.0f/%.0f is"
+		% [deck_margin * 100.0, 50.0 + deck_margin * 100.0, 50.0 - deck_margin * 100.0])
+	out.append("  visible in the standings. decided: %s of %s field deck%s (interval clear of"
+		% [LabConsole.commas(decided), LabConsole.commas(standings.size()),
+			"" if standings.size() == 1 else "s"])
+	out.append("  50%%); %s still even." % LabConsole.commas(standings.size() - decided))
+	out.append("  one matchup is %s %s, +-%.1f points: a per-opponent figure is a hint, not"
+		% [LabConsole.commas(opts.games), unit, pair_margin * 100.0])
+	out.append("  a result, until it is replayed with more. decided: %s of %s matchups."
+		% [LabConsole.commas(pairs_decided), LabConsole.commas(pairs.size())])
+	if decided < standings.size():
+		var per_opponent := int(ceil(float(SimStats.games_for_margin(0.03)) / gauntlet_size))
+		out.append("  a +-3.0 point interval on a field deck needs %s %s over its gauntlet"
+			% [LabConsole.commas(SimStats.games_for_margin(0.03)), unit])
+		out.append("  (--games %s against these %s); +-1.0 needs %s."
+			% [LabConsole.commas(per_opponent), LabConsole.commas(gauntlet_size),
+				LabConsole.commas(SimStats.games_for_margin(0.01))])
+	out.append("")
+	out.append("Elo: not written — a tournament measures the field and rates nothing")
+	out.append("  (a deck earns its rating in a duel or gauntlet run without --no-elo).")
+	return out
+
+
+## How many opponents the "best against" and "worst against" lines name.
+const OPPONENTS_NAMED := 3
+
+
+## "Necropotence (9-1), Sligh (8-2), Stasis (8-2)" — a field deck's
+## record against each of a few opponents, from its own side.
+static func _opponent_list(rows: Array) -> String:
+	var parts := PackedStringArray()
+	for row in rows:
+		var st: Dictionary = row.stats
+		parts.append("%s (%d-%d)" % [row.name, st.a_wins, st.b_wins])
+	return ", ".join(parts)
 
 
 ## A STALL IS A BUG, NOT A STATISTIC — the AI driver gave up on a game

@@ -167,7 +167,44 @@ needed); card files have NO class_name (they register by name instead);
   each with its flag and its `chmod`.
 - `docs/releases/0.40.19.md`: the release note.
 
+## The tournament mode and the two tools' packs (2026-09-26)
+
+- `DeckLab/simulate.gd`: tournament mode — `--field LIST|DIR|FILE.txt`
+  (the decks under test) against `--gauntlet LIST|DIR` / `--deck-b`
+  (the defined good decks), every field deck vs every gauntlet deck,
+  the field ranked; `--top N`; `--group all` walks the whole library;
+  a deck list as a `.txt` file (`deck_list_file`, relative names read
+  beside the file); `tournament_options_error` (no `--deck-a`, no
+  `random`, no `--deck-pool`; `--sweep` is refused by the sweep's own
+  check); `_tournament_tables` / `_tournament_block` (standings, the
+  gauntlet's own record, the best N opponent by opponent, the reading
+  paragraph, "Elo: not written"); `standings.csv` and `top.txt`
+  (resolved paths, `resolved_deck_path`, so `--field top.txt` is the
+  next round); `_proxies_note` names the packs coupling when a mined
+  field comes up empty; the worker payload's pile table (`PILE_KEYS`,
+  `_pile_slot`, `piles`) carries each deck once per slice.
+- `DeckLab/auto_deck_cli.gd`: the tool builds decks and plays no game
+  (HELP says so first); `unknown_sets_message` names the card pack a
+  set is in and the `--packs` that puts it in play; `next_step_line`
+  is the tournament to run on what was built, `--packs` included.
+- `game/card_packs.gd`: `pack_of_set(code)` — the set → pack table,
+  which `art_path` now reads too.
+- `tests/tools/test_deck_lab_tournament_2026_09_26.gd`: the parser and
+  its refusals, `--group all`, the field folder unfiltered while the
+  gauntlet is, the deck list file, the proxies note, the tables and the
+  report block, the pile table on the wire, a tournament end to end
+  (self-pair skipped, no ledger, top.txt reads as the next field), and
+  the CLI's pack-aware refusal and next line.
+- `DeckLab/README.md`: the tournament section, the two-round mining
+  funnel, and "The two tools and the packs".
+- `docs/releases/0.40.20.md`: the release note.
+
 ## Release package files
+
+- `docs/releases/0.40.20.md`: the Deck Lab's tournament mode — a field
+  of decks against the decks that are known to be good, ranked — with
+  `--group all`, deck list files, `standings.csv` and `top.txt`; the
+  AutoDeck CLI names the pack a set needs.
 
 - `docs/releases/0.40.19.md`: the local build ships `auto_deck.sh`
   beside `deck_lab.sh`, as the CI packages already did.

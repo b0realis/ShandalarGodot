@@ -114,7 +114,7 @@ func test_the_switch_is_parsed_documented_and_off_by_default() -> void:
 	assert_true(lab.FLAG_HINTS.has("--packs"))
 	assert_string_contains(lab.HELP, "--packs LIST")
 	assert_string_contains(lab.HELP, "SHANDALAR_PACK_N")
-	assert_string_contains(lab.HELP, "--packs all --games 500 --no-elo")
+	assert_string_contains(lab.HELP, "--group tournament --packs all --games 10 --no-elo")
 
 
 func test_the_settings_line_names_the_packs_in_force() -> void:

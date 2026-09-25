@@ -578,7 +578,7 @@ LAB
 #
 #   ./auto_deck.sh --help
 #   ./auto_deck.sh --out mine --count 1000 --colors random
-#   ./deck_lab.sh --matrix mine --games 50 --no-elo
+#   ./deck_lab.sh --field mine --gauntlet decks/ --group tournament --games 20 --no-elo
 #
 # DECKLAB.md is the manual.
 set -euo pipefail

@@ -496,17 +496,9 @@ func printing_choices(card_name: String) -> Array:
 ## Pack-aware art remains cosmetic: only a validated catalogue row can
 ## select a numbered variant. No saved/remote identifier becomes a path.
 func art_path(card_name: String, set_code: String, full_card := false, number := "") -> String:
-	var id := FallenEmpiresPack.ID if set_code == "fem" else ID
-	if set_code == "ice":
-		id = IceAgePack.ID
-	if set_code == "hml":
-		id = HomelandsPack.ID
-	if set_code == "all":
-		id = AlliancesPack.ID
-	if PortalPack.SET_COUNTS.has(set_code):
-		id = PortalPack.ID
-	if FifthEditionPack.SET_COUNTS.has(set_code):
-		id = FifthEditionPack.ID
+	var id := pack_of_set(set_code)
+	if id == "":
+		id = ID
 	if not is_enabled(id) or set_code == "":
 		return ""
 	var report: Dictionary = _available[id]
@@ -618,6 +610,26 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 			ids.append(AlliancesPack.ID)
 	ids.sort()
 	return ids
+
+
+## THE PACK A SET'S CARDS COME IN, or "" for a set of the base game
+## (2026-09-26). The one table of it: `fem` is Fallen Empires' pack,
+## `ice` Ice Age's, `hml` Homelands', `all` Alliances', `por`/`p02`
+## Portal's and `5ed` Fifth Edition's — so a tool that is asked for a
+## set can say which pack must be in play for it, rather than "unknown
+## set code" (which is what the AutoDeck CLI said about `ice` with no
+## pack enabled).
+static func pack_of_set(set_code: String) -> String:
+	match set_code:
+		"fem": return FallenEmpiresPack.ID
+		"ice": return IceAgePack.ID
+		"hml": return HomelandsPack.ID
+		"all": return AlliancesPack.ID
+	if PortalPack.SET_COUNTS.has(set_code):
+		return PortalPack.ID
+	if FifthEditionPack.SET_COUNTS.has(set_code):
+		return FifthEditionPack.ID
+	return ""
 
 
 ## The expansion packs this build knows, in pack-number order: the

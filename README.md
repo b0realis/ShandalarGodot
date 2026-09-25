@@ -46,7 +46,7 @@ Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/release
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below): `main` carries **0.40.19**, the next
+run the source with Godot 4.7 (below): `main` carries **0.40.20**, the next
 release in the making.
 
 Play with an **897-card early-Magic core**, historic decks, four computer
@@ -113,8 +113,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The local build's AutoDeck launcher](docs/ROADMAP.md#2026-09-25--the-local-builds-autodeck-launcher-04019)):
-**7,852 GUT tests / 358,334 assertions**, plus **319 Python tests**
+Latest local verification ([The tournament mode and the two tools' packs](docs/ROADMAP.md#2026-09-26--the-tournament-mode-and-the-two-tools-packs-04020)):
+**7,867 GUT tests / 358,894 assertions**, plus **319 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
@@ -182,11 +182,16 @@ Seeded runs make it useful for experimenting with decks and comparing ideas.
 
 Run `./deck_lab.sh --help` on Linux/macOS or `.\deck_lab.bat --help`
 on Windows. `--procs` and `--jobs` control parallel workers;
-`--no-elo` keeps experiments out of the ratings ledger.
+`--no-elo` keeps experiments out of the ratings ledger. A tournament —
+one deck or a folder of decks, each played against the decks that are
+known to be good — is `--field mine/ --gauntlet decks/ --group tournament`:
+the field is ranked in `report.txt`, `standings.csv` and `top.txt`, and
+`--group all` makes the gauntlet the whole deck library.
 Beside it, `./auto_deck.sh --help` (`.\auto_deck.bat` on Windows) is the
 AutoDeck tool as a command line: it builds a folder of seeded decks from
-every combination of the switches you give it, and `--packs` restricts the
-pool to one card pack, so a field for one set can be mined with the Lab.
+every combination of the switches you give it, and plays no game; its
+`--packs` names the card packs the cards come from, and a field mined with
+`--packs X` is played by the Lab with the same `--packs X`.
 The [DeckLab manual](DeckLab/README.md) has examples and all options.
 
 ## Post-0.20.0 roadmap

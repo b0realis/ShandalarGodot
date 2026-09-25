@@ -16633,6 +16633,48 @@ the same field is proxies and the matrix refuses with exit 2.
 Gate: 511 scripts, **7,852/7,852 tests, 358,334 asserts**, exit 0 in
 243 s over 6 shards; Python 319, exit 0.
 
+## 2026-09-26 — The tournament mode and the two tools' packs (0.40.20)
+
+*"It should be well documented that what we want: is one deck or list
+of decks tested on one deck or list of defined good decks. We want this
+in a single / tournament or multiple gauntlet style."* The Lab's
+`--matrix` played a folder against itself and a `--gauntlet` measured
+one deck; neither was that. Tournament mode is: `--field LIST|DIR|FILE.txt`
+names the decks under test, `--gauntlet LIST|DIR` (or one `--deck-b`)
+the defined good decks, and every field deck plays every gauntlet deck
+(a deck on both sides never plays its own file). The report ranks the
+field — standings over the whole gauntlet, the gauntlet's own record
+against the field (hardest first), the best `--top N` opponent by
+opponent, and a reading paragraph that says what the interval of a
+field deck's record is and how many games would close it. Every deck is
+in `standings.csv`; `top.txt` names the best N by paths a next round can
+read (`--field top.txt`), which makes the mining funnel two commands:
+a thousand mined decks at ten games each against the tournament decks,
+then the thirty survivors at fifty against `--group all`, the whole
+library. A tournament rates nothing: `--no-elo` is implied and the
+report says so. A field mined with `--packs X` comes up empty without
+that switch, and the refusal now says why.
+
+*"In the auto deck cli tool it is a bit confusing the packs switch (what
+do existing packs have to do with generation of new "random" decks?
+These two tools should be separate, and their coupling well
+documented."* They are separate: the AutoDeck CLI builds decks and
+plays no game, and its help says so in its first paragraph; the Lab
+plays games and builds no deck. `--packs` on the builder is the pool —
+a card pack is a set of cards, and a deck of Ice Age cards can only be
+built from a pool that has them. The coupling is one sentence, in both
+manuals: a field mined with `--packs X` is played with `--packs X`,
+because to a Lab run without the pack those decks are proxies. The
+builder's last line is now that Lab command, packs included, and a set
+whose pack is not in play is refused by pack number
+(`CardPacks.pack_of_set`), not as an unknown code.
+
+Underneath: the worker payload carries each deck once per slice (a pile
+table), so a thousand-deck field fans out in megabytes, not hundreds.
+
+Gate: 512 scripts, **7,867/7,867 tests, 358,894 asserts**, exit 0 in
+248 s over 6 shards; Python 319, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

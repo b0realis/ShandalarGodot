@@ -249,6 +249,80 @@ winrate vs column deck). The first full run of the shipped gauntlet
 crowned Blue Skies (1635 Elo) and demoted Mountain Artillery (1403) —
 flyers rule the starter meta.
 
+## Tournament mode — one or many decks vs the decks that are known to be good (2026-09-26)
+
+The question this mode answers, in the owner's words: *"what we want is
+one deck or list of decks tested on one deck or list of defined good
+decks. We want this in a single / tournament or multiple gauntlet
+style."* A duel answers it for one deck against one; a gauntlet for one
+deck against many; a matrix plays a pool against itself, which is a
+different question (and `N(N-1)/2` matchups). `--field` is the fourth
+shape: **every deck of the field plays every deck of the gauntlet**, and
+the report ranks the field.
+
+```
+# one brew vs one known deck             (a duel, ranked and unrated)
+DeckLab/deck_lab.sh --field decks/my_brew.deck --deck-b decks/tournament/necro.deck --games 200
+# one brew vs the tournament group        (a gauntlet, unrated)
+DeckLab/deck_lab.sh --field decks/my_brew.deck --gauntlet decks/ --group tournament --games 100
+# a folder of brews vs a list of good decks
+DeckLab/deck_lab.sh --field mine/ --gauntlet decks/big_green.deck,decks/tournament/necro.deck
+# a thousand mined decks vs the whole library, in two rounds
+DeckLab/auto_deck_cli.sh --out mine --count 1000 --colors random --packs all --sets every
+DeckLab/deck_lab.sh --field mine/ --gauntlet decks/ --group tournament --games 10 \
+                    --packs all --top 30 --out round1
+DeckLab/deck_lab.sh --field round1/top.txt --gauntlet decks/ --group all --games 50 \
+                    --packs all --top 30 --out round2
+```
+
+- **`--field LIST|DIR|FILE.txt`** is the decks under test: one deck, a
+  comma-separated list, a folder, or a text file naming one deck per line
+  (`#` comments; a relative name is read beside the file). The AutoDeck
+  CLI's `decklist.txt` and a previous round's `top.txt` are both such
+  files, which is how a funnel is typed. A folder is taken **whole**:
+  `--group` narrows the gauntlet and never the field, because a folder of
+  mined decks is filed under no group.
+- **The gauntlet** is `--gauntlet LIST|DIR` and/or `--deck-b DECK`: the
+  defined good decks, one or many. `--group all` (new with this mode)
+  walks `decks/` into every subfolder and keeps every group — the whole
+  library, every deck the Lab can play, 293 of the 330 files with
+  `--packs all`.
+- **Refused:** `--deck-a` (the field *is* the deck-A side), `random` on
+  either side (the opponents are defined decks — that is the point),
+  `--deck-pool`, `--matrix` and `--sweep`. A field deck that is also in
+  the gauntlet does not play itself.
+- **Unrated, always.** A tournament measures the field; the same seed
+  replayed into `decks/ratings.txt` would count the same games twice, and
+  a thousand mined decks are not decks anybody keeps a rating for. So
+  `--no-elo` is implied (typing it is harmless) and the report says so.
+- **`--top N`** (default 10) is how many of the field's best the report
+  details and `top.txt` lists.
+
+What the report holds, top to bottom: the **TOURNAMENT** line (field
+size × gauntlet size = matchups × games); **STANDINGS**, each field deck's
+record over the whole gauntlet with its interval, best first — the head
+of the table in the report, every deck in `standings.csv`; **THE
+GAUNTLET**, each opponent's record against the whole field, hardest
+first, which is the good decks ranked by how good they were against this
+field; **THE BEST N, opponent by opponent**, the three opponents each did
+best and worst against (once the gauntlet has six or more); and the
+**reading** — two sizes matter and both are named: a field deck's record
+is `gauntlet × games` games, so a 43-deck gauntlet at 10 games a matchup
+is a 430-game record with a ±4.7-point interval, while any single
+matchup at 10 games is ±31 points and a hint rather than a result. The
+per-matchup grid is `matchups.csv` only: a thousand decks against
+forty-three is 43,000 lines. `results.json` gains `"standings"` and
+`"gauntlet"` (the two tables) and `"rated": false`; `winrates.svg` charts
+the best N.
+
+The memory of a run this size (2026-09-26): 430,000 tasks used to ship
+both decks and both sideboards in full to every worker — 120 MB of JSON
+a slice, six million strings for a child to hold. The payload now
+carries one table of the distinct piles and each task four indices into
+it; the child puts the arrays back before it plays, and the run is
+byte-identical to the in-process one (checked: `matchups.csv` of the
+same tournament at `--procs 1` and `--procs 3`).
+
 ## Switches
 
 | Switch | Meaning | Default |
@@ -1171,6 +1245,10 @@ Printed to stdout AND written to `--out`:
 - **matchups.csv** — one row per matchup, for spreadsheets.
   Deck titles containing commas, quotes or line breaks are CSV-quoted,
   preserving the exact title rather than replacing its punctuation.
+- **standings.csv** and **top.txt** — tournament mode only: every field
+  deck ranked (`rank,deck,file,games,wins,losses,stalled,winrate,ci_low,
+  ci_high,avg_turns,median_turns`), and the best `--top N` as a deck
+  list `--field` reads back.
 - **winrates.svg** — win-rate bars with CI whiskers and a 50% reference
   line (opens in any browser; no plotting software involved anywhere).
 - **turns.svg** — game-length histograms per matchup on a shared axis.
@@ -1375,18 +1453,26 @@ cached. Budget the disk rather than the clock — 10,000 decks are about
 
 ### The mining workflow
 
-1. **Make the field.** `auto_deck_cli.sh --out mine --count 500 --colors
-   random` — 500 deck files, `mine/decks.csv`, `mine/decklist.txt`.
-2. **Play it off cheaply.** `deck_lab.sh --matrix mine/ --games 50
-   --no-elo` — a round robin is *N(N-1)/2* matchups, so keep the first
-   pass small and the field a few dozen decks; for a bigger field, run a
-   `--gauntlet` against a fixed reference instead.
-3. **Read the standings**, take the best few `.deck` files into a folder
-   of their own.
-4. **Play those properly.** `deck_lab.sh --matrix best/ --games 2000
-   --no-elo` — the interval is what decides anything (see *Methodology*);
-   `--no-elo` keeps a mined field out of `decks/ratings.txt`, the shipped
-   decks' own ledger.
+1. **Make the field.** `auto_deck_cli.sh --out mine --count 1000 --colors
+   random --packs all --sets every` — 1,000 deck files from every card
+   in play, `mine/decks.csv`, `mine/decklist.txt`. 78 s on this desk.
+2. **Round one, cheap and wide.** `deck_lab.sh --field mine/ --gauntlet
+   decks/ --group tournament --games 10 --packs all --top 30 --out
+   round1` — every mined deck against the 43 tournament decks, 430,000
+   games, about five hours at 25 games/s. Ten games a matchup is a hint
+   per opponent but a 430-game record per deck (±4.7 points), which is
+   enough to find the thirty worth a second look. A round robin of the
+   field (`--matrix mine/`) is the wrong tool here: *N(N-1)/2* is half a
+   million matchups of decks against decks nobody vouches for.
+3. **Round two, the best against everything.** `deck_lab.sh --field
+   round1/top.txt --gauntlet decks/ --group all --games 50 --packs all
+   --top 30 --out round2` — the thirty against the whole library, 50
+   games a matchup: a 14,650-game record per deck. About the same clock.
+4. **Read `round2/report.txt`**: the standings are the answer, the
+   interval is what decides it (see *Methodology*), and `top.txt` is the
+   list to carry into a `--games 2000` duel against the one deck you
+   care about. Nothing was rated: a tournament never writes
+   `decks/ratings.txt`, the shipped decks' own ledger.
 5. **Rebuild the winner in the game.** Open the Deck Builder → AutoDeck,
    set the options from that deck's row of `decks.csv` — the
    `colors_built` letters, not the `colors_asked` word — type its seed
@@ -1408,15 +1494,45 @@ because `all` is Alliances' own set code (card pack 5), and a keyword that
 shadows a real value is a trap. The tool refuses `--sets all` with that
 sentence rather than quietly building from Alliances.
 
-The sets in play are the game's enabled card packs. `--packs LIST` — the
-Lab's own switch, read by the Lab's own code — enables packs for this run
-alone, so `--packs 3 --sets ice` mines Ice Age without touching the game's
-setting, and `--packs none --sets ice` is refused as a set code the
-registry does not have. Play the field with the same `--packs`:
+### The two tools and the packs (2026-09-26)
+
+The owner's question, verbatim: *"In the auto deck cli tool it is a bit
+confusing the packs switch (what do existing packs have to do with
+generation of new 'random' decks? These two tools should be separate,
+and their coupling well documented — if you run the tests directly from
+auto deck cli then you use packs?"*
+
+**They are separate.** The AutoDeck CLI builds decks and plays no game;
+the Deck Lab plays games and builds no deck. Nothing runs a test from
+the AutoDeck CLI — its last line is the Lab command to type next, and
+that is the whole of the connection. They meet at a folder (this tool
+writes it, `--field` or `--matrix` reads it) and at one switch.
+
+**What `--packs` has to do with building a deck.** A set's cards exist
+only while its card pack is in play. The base game is `4ed 2ed arn atq
+leg drk past phpr`; `fem` arrives with pack 2, `ice` with 3, `hml` with
+4, `all` with 5, `por`/`p02` with 6 and `5ed` with 7 (the one table of
+this is `CardPacks.pack_of_set`). So `--sets ice` with no pack in play is
+not a typo, and the tool now says what it is — *set 'ice' (Ice Age) is in
+card pack 3, which is not in play — add `--packs 3`, or `--packs all` for
+every pack found* — and `--sets every` builds from whatever is in play at
+the time: 8 sets without the switch, 15 with `--packs all`. `--packs`
+puts packs in play for this run alone and never writes the game's own
+setting; the CLI reads it with the Lab's own code (`Lab.parse_packs`,
+`Lab.enable_packs`) so the two tools cannot drift on it.
+
+**The coupling, in one sentence:** a deck built with `--packs X` is a deck
+of proxies to any run without them, so the field is played with the
+Lab's same `--packs X`. The Lab skips a folder deck it cannot play (the
+census rule) and, when every deck of a field is skipped, says why in the
+refusal: *3 deck files skipped for proxy cards; a field mined with
+--packs X is played with the same --packs X (or --packs all)*. The
+`next:` line the CLI prints carries the packs it was run with, so
+copying it is enough.
 
 ```
 DeckLab/auto_deck_cli.sh --out ice_mine --count 200 --packs 3 --sets ice --colors random
-DeckLab/deck_lab.sh --matrix ice_mine/ --packs 3 --games 50 --no-elo
+DeckLab/deck_lab.sh --field ice_mine/ --gauntlet decks/ --group tournament --packs 3 --games 20
 ```
 
 ### Switches
