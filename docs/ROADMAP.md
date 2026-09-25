@@ -16618,6 +16618,21 @@ to mine a really good deck!"*
 Gate: 511 scripts, **7,852/7,852 tests, 358,446 asserts**, exit 0 in
 246 s over 6 shards; Python 318, exit 0.
 
+## 2026-09-25 — The local build's AutoDeck launcher (0.40.19)
+
+The 0.40.18 play copy had `deck_lab.sh` and no `auto_deck.sh`:
+`build_release.sh` writes the Linux launchers by hand, while
+`package_release.py` — the CI path — had gained the new one. The local
+stage now writes `auto_deck.sh` beside `deck_lab.sh` (the game's own
+`--auto-deck` behind it), and `test_package_release` holds both scripts
+to both doors. Verified on the play copy: `./auto_deck.sh --packs 3
+--sets ice` mines an Ice Age field, `./deck_lab.sh --matrix … --packs 3
+--no-elo` plays it and results.json names the pack; without the switch
+the same field is proxies and the matrix refuses with exit 2.
+
+Gate: 511 scripts, **7,852/7,852 tests, 358,334 asserts**, exit 0 in
+243 s over 6 shards; Python 319, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

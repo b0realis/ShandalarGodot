@@ -157,7 +157,20 @@ needed); card files have NO class_name (they register by name instead);
   folders under `--packs all`, and the AutoDeck CLI manual.
 - `docs/releases/0.40.18.md`: the release note.
 
+## The local build's AutoDeck launcher (2026-09-25)
+
+- `build_release.sh`: the Linux stage writes its launchers by hand, so
+  `auto_deck.sh` is written beside `deck_lab.sh` there too (the CI
+  packages already had it from `package_release.py`).
+- `tools/test_package_release.py`:
+  `test_the_local_build_ships_both_headless_launchers` — both doors,
+  each with its flag and its `chmod`.
+- `docs/releases/0.40.19.md`: the release note.
+
 ## Release package files
+
+- `docs/releases/0.40.19.md`: the local build ships `auto_deck.sh`
+  beside `deck_lab.sh`, as the CI packages already did.
 
 - `docs/releases/0.40.18.md`: the Sealed Deck dialog picks the sets its
   packs are dealt from; the Deck Lab and the new AutoDeck command line

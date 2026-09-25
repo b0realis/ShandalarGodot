@@ -183,6 +183,16 @@ class PackageReleaseTest(unittest.TestCase):
         source = (pack.ROOT / 'build_release.sh').read_text(encoding='utf-8')
         self.assertEqual(source.count('stage_player_tools(Path(sys.argv[1]))'), 2)
 
+    def test_the_local_build_ships_both_headless_launchers(self):
+        # build_release.sh writes the Linux launchers by hand (the CI path
+        # is build_release() above); the two doors must match.
+        source = (pack.ROOT / 'build_release.sh').read_text(encoding='utf-8')
+        for launcher, flag in (("deck_lab.sh", "--deck-lab"), ("auto_deck.sh", "--auto-deck")):
+            with self.subTest(launcher=launcher):
+                self.assertIn(f'cat > "$STAGE/{launcher}"', source)
+                self.assertIn(f'exec ./Shandalar.x86_64 --headless --no-header -- {flag} "$@"', source)
+                self.assertIn(f'chmod +x "$STAGE/{launcher}"', source)
+
     def test_card_pack_and_traversal_are_refused(self):
         for name in ("skin/cardart/island.jpg", "skin/../secret", "/skin/frame.png", "skin\\frame.png"):
             with self.subTest(name=name):

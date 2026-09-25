@@ -570,6 +570,23 @@ cd "$(dirname "$0")"
 exec ./Shandalar.x86_64 --headless --no-header -- --deck-lab "$@"
 LAB
 	chmod +x "$STAGE/deck_lab.sh"
+	# THE AUTODECK CLI beside it (2026-09-25), by the game's `--auto-deck`.
+	cat > "$STAGE/auto_deck.sh" <<'AUTO'
+#!/usr/bin/env bash
+# AutoDeck — the Deck Builder's AutoDeck as a command line, run by the
+# game itself: a folder of seeded decks for the Deck Lab to play.
+#
+#   ./auto_deck.sh --help
+#   ./auto_deck.sh --out mine --count 1000 --colors random
+#   ./deck_lab.sh --matrix mine --games 50 --no-elo
+#
+# DECKLAB.md is the manual.
+set -euo pipefail
+cd "$(dirname "$0")"
+[ -t 2 ] && export DECK_LAB_TTY=1 || export DECK_LAB_TTY=0
+exec ./Shandalar.x86_64 --headless --no-header -- --auto-deck "$@"
+AUTO
+	chmod +x "$STAGE/auto_deck.sh"
 	# tool_banner.py rides with them — see the web stage above.
 	cp -p tools/mtg_assets.py tools/import_original.py \
 	      tools/fetch_card_art.py tools/skin_catalogue.py \
