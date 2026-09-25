@@ -118,7 +118,51 @@ needed); card files have NO class_name (they register by name instead);
   with Ice Age enabled, in both orders and in a loop.
 - `docs/releases/0.40.16.md`: the release note.
 
+## Sealed pools, the Lab's packs and the AutoDeck CLI (2026-09-25)
+
+- `game/deck_builder/deck_builder_screen.gd`: the Sealed Deck dialog
+  gained a card pool — a grid of ticks over the active sets, Select All
+  and Clear All, the pool line naming the sets and the sheet the packs
+  are dealt from (`_sealed_sets`, `_sealed_source`, `_sealed_pool_name`,
+  `_deal_sealed(settings, roll, sets)`); the choice remembered under
+  `sealed_sets`, an empty tick set refused with a word.
+- `tests/ui/test_sealed_deck_pool_2026_09_25.gd`: the chooser, the deal
+  from one set alone, the memory and the refusal.
+- `DeckLab/simulate.gd`: `--packs LIST` (`all`, `none`, ids, bare
+  numbers) enabled in memory for the run alone — `available_packs`,
+  `parse_packs`, `enable_packs`, the settings line and results.json
+  naming them, the worker payload carrying them; `_subfolders_note` on a
+  `--matrix DIR` whose decks all lie below it.
+- `game/card_packs.gd`: `expansions()` and `known_ids()` for the tools.
+- `game/setup_screen.gd`: the packs autoload found through the tree
+  (`_card_packs`, `_missing_packs`, `_pack_label`).
+- `tests/tools/test_deck_lab_packs_2026_09_25.gd`: the switch end to end,
+  the player's settings file untouched, and the AutoDeck CLI's reading of
+  the same word.
+- `DeckLab/auto_deck_cli.gd`, `DeckLab/auto_deck_cli.sh`: the AutoDeck
+  window as a command line — every wish a switch, alternatives walked as
+  a cartesian product, a seed per deck stepped 524287 around 999999, a
+  folder of `.deck` files with `decks.csv` and `decklist.txt`;
+  `--colors random` draws the colours from the deck's own seed because
+  `AutoDeck._choose_colors` reads no random number; `--packs` by the
+  Lab's own code.
+- `game/main.gd`: `AUTO_DECK_FLAG` (`--auto-deck`) beside `--deck-lab`,
+  both through `_run_headless_tool`.
+- `tools/package_release.py`: `auto_deck.sh` / `auto_deck.bat` beside the
+  Lab's launchers in every desktop release.
+- `tests/tools/test_auto_deck_cli.gd`, `tools/test_auto_deck_cli_sh.py`,
+  `tools/test_package_release.py`, `tools/test_tool_banner.py`: the CLI,
+  its shell, the package and the banner contract.
+- `DeckLab/README.md`: the packs subsection with the census of the deck
+  folders under `--packs all`, and the AutoDeck CLI manual.
+- `docs/releases/0.40.18.md`: the release note.
+
 ## Release package files
+
+- `docs/releases/0.40.18.md`: the Sealed Deck dialog picks the sets its
+  packs are dealt from; the Deck Lab and the new AutoDeck command line
+  take `--packs` for a run alone; `auto_deck.sh` / `auto_deck.bat` ship
+  beside the Lab's launchers.
 
 - `docs/releases/0.40.17.md`: the AI plays Aggression as removal on a
   creature the clause kills, or as trample for a big attacker of its own
@@ -3108,6 +3152,11 @@ shandalar/
 │   │                          guard_private, pointed at the tree instead of
 │   │                          at a staged package), a private address or a
 │   │                          tool vendor. Skips outside a git checkout
+│   ├── test_auto_deck_cli_sh.py  unittest for DeckLab/auto_deck_cli.sh
+│   │                          (2026-09-25): -V answered without an engine,
+│   │                          no artwork in stdout, exit 3 with no Godot,
+│   │                          and the exec line's `--` before the user's
+│   │                          arguments
 │   ├── deal_tests.py        The deal behind run_tests.sh's SHARDS=N
 │   │                          (2026-09-17): reads the sorted test scripts
 │   │                          on stdin and prints the i-th of N deals as
@@ -3430,6 +3479,39 @@ shandalar/
 │   │                          no banner), warms the import cache only
 │   │                          when a script is newer than it, and exits
 │   │                          3 when there is no engine to run
+│   ├── auto_deck_cli.sh     Entry point for the AutoDeck CLI (see --help;
+│   │                          2026-09-25). The Lab's own shell rules: -V
+│   │                          answered here so a version question never
+│   │                          starts an engine, SHANDALAR_NO_BANNER mapped
+│   │                          onto DECK_LAB_NO_BANNER, DECK_LAB_TTY set
+│   │                          from stderr, the import cache warmed only
+│   │                          when a script is newer than it, and exit 3
+│   │                          when there is no engine to run
+│   ├── auto_deck_cli.gd     THE AUTODECK CLI (SceneTree script,
+│   │                          2026-09-25) — the Deck Builder's AutoDeck by
+│   │                          the thousand, so the Lab has a FIELD to
+│   │                          play: every wish of the AutoDeck window as
+│   │                          a switch, any of them given ALTERNATIVES
+│   │                          that the decks walk as a cartesian product
+│   │                          (cycling, so --count spreads evenly), one
+│   │                          .deck per deck in --out plus decks.csv (a
+│   │                          row per deck: seed, every wish, the colors
+│   │                          the builder chose, the counts, the pool)
+│   │                          and decklist.txt. A seed per deck stepped
+│   │                          524287 around the 999999 the AutoDeck
+│   │                          window accepts, so no two decks of a run
+│   │                          share one AND any deck rebuilds in the
+│   │                          window from its row. `--colors random`
+│   │                          draws 1..max per deck from that deck's
+│   │                          seed, because AutoDeck._choose_colors
+│   │                          reads no random number and `none` would
+│   │                          give 10,000 decks of one color pair.
+│   │                          Pools: sets, a card list, or a sealed deal
+│   │                          per deck; `--packs` is the Lab's own switch
+│   │                          (read by simulate.gd's code), so a field
+│   │                          mined from a pack is played with the same
+│   │                          word. Manual: DeckLab/README.md; ~160
+│   │                          decks/s, 10k in a minute
 │   ├── simulate.gd          THE DECK LAB (SceneTree script) — headless
 │   │                          AI-vs-AI deck testing: duel, gauntlet,
 │   │                          matrix and `random` (the field) modes,
@@ -3450,6 +3532,15 @@ shandalar/
 │   │                          seeds as strings; CSV preserves punctuation;
 │   │                          an unsaved Elo ledger means exit 1 while
 │   │                          matchup reports are retained
+│   │                          2026-09-25 THE PACKS: `--packs LIST` (all,
+│   │                          none, pack-3,pack-7 or bare 3,7) enables
+│   │                          card packs for the run in memory alone —
+│   │                          the player's settings file is never
+│   │                          written — in the parent and every worker;
+│   │                          the report's settings line and results.json
+│   │                          name them. A DIR whose decks all lie in
+│   │                          subfolders is refused with the count and
+│   │                          the `--group NAME` that walks into them
 │   ├── lab_console.gd       class LabConsole — the terminal side of the
 │   │                          Lab: the banner, the in-place progress bar
 │   │                          with its ETA, colour that degrades to plain
@@ -4908,6 +4999,18 @@ shandalar/
 │    down from the second copy, the last copy taking the card away;
 │    every door refusing beyond what is held; the type-ahead narrowing
 │    the pool; the badge source restored on leaving;
+│    tests/ui/test_sealed_deck_pool_2026_09_25.gd — **[QoL]** the Sealed
+│    Deck window's CARD POOL (the owner: a tournament for one set): the
+│    sets in play as the AutoDeck window's grid of ticks with Select All
+│    / Clear All, the pool line naming the choice ("Every set", up to
+│    three names, "N sets", "Tick a set to deal from." with the dice
+│    grey), a deal drawing its sheets from the ticked sets alone through
+│    `CardRegistry.card_in_set` under the Extras switches, the five
+│    basics on every sheet whatever the set (the registry files them
+│    under Unlimited alone — a Fourth Edition pool dealt no land before),
+│    the choice remembered under `sealed_sets` and trimmed to the sets
+│    still in play, nothing remembered for an empty choice, the whole
+│    library when nothing was ever chosen;
 │    tests/ui/test_deck_stats.gd — the probability page's arithmetic,
 │    EXACT: the hypergeometric against values computed by hand and
 │    surviving a deck too big for a factorial, the land row a real
@@ -5349,6 +5452,36 @@ shandalar/
 │    constant, a game's fingerprint is the game (same seed same md5), a
 │    2-game sweep writes the table with its PASS rows and the four files,
 │    and a knob that fires on any deck moves the control and is exit 4;
+│    tests/tools/test_deck_lab_packs_2026_09_25.gd — THE LAB'S PACKS
+│    (`--packs LIST`): all / none / ids / bare numbers deduped in the
+│    order given, every bad token refused with the flag's own wording,
+│    an id the build does not know against `CardPacks.known_ids()`, a
+│    known pack not on this machine listed with every path it was looked
+│    for at, the parser's default null, the settings line naming the
+│    packs, `enable_packs` in memory alone (Zuran Orb appears, the
+│    player's settings file untouched, the base pool back after), the
+│    worker payload carrying the packs and a worker refusing an unknown
+│    one, a duel end to end with an Ice Age card in the deck (exit 2
+│    without the pack, exit 0 with `--packs 3`, results.json naming it),
+│    and the subfolders note on a DIR whose decks all lie below it, plus
+│    the AutoDeck CLI's `--packs` (the same reading: a bad word is exit 2
+│    before a folder is made, `--packs 3 --sets ice` mines Ice Age and
+│    `--packs none --sets ice` is an unknown set code);
+│    tests/tools/test_auto_deck_cli.gd — THE AUTODECK CLI **[QoL]**: the
+│    defaults are AutoDeckWindow.DEFAULTS to the value, every switch
+│    parses to AutoDeck's own constants and every refusal names its flag
+│    (exit 2 through _main), a mistyped flag names the one that was meant,
+│    every flag is in --help and in the parser's own table, the cartesian
+│    walk is the product in a fixed order and cycles so 900 decks are 50
+│    of each of 18, every deck's seed is one the window accepts and
+│    10,000 decks are 10,000 seeds, `--colors random` draws 1..max from
+│    the deck's own seed while the builder's own choice does NOT follow
+│    the seed (the finding), a whole run rebuilds from decks.csv card for
+│    card, two runs of one command line are identical folders, the
+│    manifest's columns and quoting, the deck list's order, the file
+│    names, unique deck names, a non-empty folder refused without
+│    --force, the list and sealed pools, an unknown set code before a
+│    build, and a run inside the project leaving a .gdignore;
 │    tests/ai/test_ai_counts_cards_2026_09_07.gd — THE COUNT
 │    (AiProfile.counts_cards): Mind Twist sized to their hand, waiting at
 │    an empty one, a Twist for one held while they hold three, the null

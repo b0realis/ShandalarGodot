@@ -100,6 +100,10 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertEqual(archive.getinfo(prefix + binary).external_attr >> 16 & 0o777, 0o755)
                             self.assertIn(binary, archive.read(prefix + "run.sh").decode())
                             self.assertIn(binary, archive.read(prefix + "deck_lab.sh").decode())
+                            self.assertIn("-- --auto-deck", archive.read(prefix + "auto_deck.sh").decode())
+                            self.assertEqual(archive.getinfo(prefix + "auto_deck.sh").external_attr >> 16 & 0o777, 0o755)
+                        if platform == "windows64":
+                            self.assertIn("-- --auto-deck %*", archive.read(prefix + "auto_deck.bat").decode())
                         if platform in pack.MAC_PLATFORMS:
                             entry = archive.getinfo(prefix + "Shandalar.app/Contents/MacOS/Shandalar")
                             self.assertEqual(entry.external_attr >> 16 & 0o777, 0o755)

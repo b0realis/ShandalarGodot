@@ -32,6 +32,7 @@ const EXPECTED_SET_COUNTS := {
 	"past": [12, 12], "phpr": [6, 6],
 }
 const ADDED_NAMES := ["Chaos Orb", "Word of Command", "Shahrazad", "Falling Star"]
+
 const CARD_SCRIPTS := [
 	{"name": "Chaos Orb", "set": "2ed",
 		"path": "res://cards/optional/pack_1/chaos_orb.gd"},
@@ -619,6 +620,23 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 	return ids
 
 
+## The expansion packs this build knows, in pack-number order: the
+## contracts `_configure_registry` loads. Pack 1 is this file's own. (A
+## function and not a constant — a list of classes is no constant
+## expression to GDScript.)
+static func expansions() -> Array:
+	return [FallenEmpiresPack, IceAgePack, HomelandsPack, AlliancesPack, PortalPack, FifthEditionPack]
+
+
+## Every pack id this build knows, Pack 1 first, found or not — the
+## ids a `--packs` list may name (DeckLab/simulate.gd).
+static func known_ids() -> Array[String]:
+	var ids: Array[String] = [ID]
+	for contract in expansions():
+		ids.append(contract.ID)
+	return ids
+
+
 static func file_name_for(id: String) -> String:
 	if id == FifthEditionPack.ID:
 		return FifthEditionPack.FILE_NAME
@@ -660,7 +678,7 @@ func _configure_registry() -> void:
 	var records: Array = []
 	var provided := {}
 	# Original expansions first: their scripts win over the reprint packs.
-	for contract in [FallenEmpiresPack, IceAgePack, HomelandsPack, AlliancesPack, PortalPack, FifthEditionPack]:
+	for contract in expansions():
 		if is_enabled(contract.ID):
 			var report: Dictionary = _available[contract.ID]
 			sets.merge(report.catalog.sets)

@@ -16567,6 +16567,57 @@ facing two Wurms, both conscripts).
 Gate: 508 scripts, **7,795/7,795 tests, 357,468 asserts**, exit 0 in
 255 s over 6 shards; Python 307, exit 0.
 
+## 2026-09-25 — Sealed pools, the Lab's packs and the AutoDeck CLI (0.40.18)
+
+*"Deck builder: Sealed deck tournament simulation needs a card pool
+selection similar as AutoDeck. (So tournaments for A specific set can be
+simulated). And now that we have more cards test cli tool DeckLab and go
+one code pass over it."* And: *"in the gui we have AutoDeck tool. Can you
+make also an AutoDeck cli tool that you run with argparsing command line
+switches and all parameters as in the gui tool, but you can make many
+decks in a folder along with deck list of made decks. … For example you
+make 10k random decks and the general idea is to test them with DeckLab
+to mine a really good deck!"*
+
+- **The sealed pool.** The Sealed Deck dialog dealt from every set in
+  play. It now carries the AutoDeck window's grid of ticks over the
+  active sets with Select All and Clear All, a pool line naming the sets
+  and the sheet the packs are dealt from, the choice remembered under
+  `sealed_sets`, and an empty pool refused with a word. One set alone
+  deals from that set alone (`test_sealed_deck_pool_2026_09_25`).
+- **The Lab with more cards.** The pass over the Deck Lab found it
+  playing the base pool whatever the packs installed — the autoload's
+  registry is configured in `_ready`, which a `--script` never reaches
+  by name, and a pack deck failed with the card missing. `--packs LIST`
+  (`all`, `none`, ids, bare numbers) enables packs in memory for the
+  run alone through the CardPacks NODE found in the tree; the player's
+  settings file is untouched (asserted), the settings line and
+  results.json name the packs, every worker carries them, a bad word is
+  exit 2 before a game. The census under `--packs all`: `tournament/`
+  43 of 76 decks load (5 before), `community/` 61 of 64 (48),
+  `extended_community/` 14 of 15 (1); the rest name Mirage, Visions and
+  Weatherlight cards. A `--matrix DIR` with its decks in subfolders
+  says so.
+- **The AutoDeck CLI.** Every wish of the
+  window as a switch, alternatives walked as a cartesian product that
+  cycles so `--count` spreads evenly, a seed per deck stepped 524287
+  around the 999999 the window accepts (10,000 decks, 10,000 seeds, and
+  any row rebuilds in the window), a folder of `.deck` files with
+  `decks.csv` and `decklist.txt` for `--matrix`. The finding along the
+  way: `AutoDeck._choose_colors` reads no random number, so `--colors
+  none` would have given ten thousand decks of one colour pair —
+  `--colors random` draws 1..max per deck from that deck's own seed.
+  `--packs` is the Lab's own reading, so a field mined with `--packs 3
+  --sets ice` is played with the same word; the mining loop was run end
+  to end on Ice Age. A mined field is played with `--no-elo` — it must
+  not write `decks/ratings.txt`.
+- **The release door.** `--auto-deck` in `main.gd` beside `--deck-lab`
+  (one `_run_headless_tool`), and `auto_deck.sh` / `auto_deck.bat` in
+  every desktop package beside the Lab's launchers.
+
+Gate: 511 scripts, **7,852/7,852 tests, 358,446 asserts**, exit 0 in
+246 s over 6 shards; Python 318, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -254,6 +254,32 @@ func _shell_music_call(method: StringName) -> void:
 		music.call(method)
 
 
+## The `CardPacks` autoload, looked up in the tree for the reason
+## `ShellMusic` is: a bare `CardPacks` in this file was the compile
+## error every `deck_lab.sh` log opened with from the day the packs
+## arrived until 2026-09-25 (Godot retried and ran, so nobody read it).
+## `null` only where the autoload is not running at all.
+func _card_packs() -> Node:
+	return get_node_or_null(^"/root/CardPacks")
+
+
+## Which of [param ids] the CardPacks autoload has NOT enabled — none
+## when it is not running, so a deck is never refused for a pack this
+## process cannot see.
+func _missing_packs(ids: Array[String]) -> Array[String]:
+	var packs := _card_packs()
+	if packs == null:
+		return []
+	return packs.missing_requirements(ids)
+
+
+## The pack's label for a note or a refusal; the bare id without the
+## autoload.
+func _pack_label(id: String) -> String:
+	var packs := _card_packs()
+	return String(packs.label_for(id)) if packs != null else id
+
+
 ## Every deck this screen LISTS, from both deck directories — the ones the
 ## project ships and the ones the Deck Builder saves. DeckStore.all_deck_paths
 ## is the single list, so a deck saved in the builder is a deck that turns
@@ -285,7 +311,7 @@ func _scan_decks() -> void:
 		# below agree, and a deck listed for its proxies still shows the
 		# colours of the cards it does hold.
 		_deck_masks[path] = DeckStore.colors_of(lenient)
-		var missing := CardPacks.missing_requirements(lenient.required_packs)
+		var missing := _missing_packs(lenient.required_packs)
 		if not missing.is_empty() and lenient.errors.is_empty() \
 				and lenient.cards.size() >= DeckModel.CASUAL_MIN_CARDS:
 			_deck_paths.append(path)
@@ -1007,7 +1033,7 @@ func _fill_deck_options(option: OptionButton) -> void:
 			var proxies: Array = _proxy_paths.get(path, [])
 			var packs: Array = _pack_paths.get(path, [])
 			if not packs.is_empty():
-				label += "  (needs %s)" % CardPacks.label_for(packs[0])
+				label += "  (needs %s)" % _pack_label(String(packs[0]))
 			elif not proxies.is_empty():
 				label += "  (%d proxy)" % proxies.size()
 			# [QoL] COLOUR PIPS BEFORE THE TITLE, as the Deck Builder's Load
@@ -1054,7 +1080,7 @@ func _deck_label(path: String, title := "") -> String:
 func _pack_refusal(path: String) -> String:
 	var labels := PackedStringArray()
 	for pack_id in _pack_paths.get(path, []):
-		labels.append(CardPacks.label_for(String(pack_id)))
+		labels.append(_pack_label(String(pack_id)))
 	var noun := "pack" if labels.size() == 1 else "packs"
 	return "This deck requires %s, which is disabled. Enable the %s under Options, Card packs, and come back." \
 		% [", ".join(labels), noun]

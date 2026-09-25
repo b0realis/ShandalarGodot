@@ -190,6 +190,16 @@ OPTIONS
                       with the knob off on seat B, same seeds.
                       Separate challenge: `unfair` = Wizard + current-hand
                       knowledge. Always unrated; excluded from fair sweeps.
+  --packs LIST        The card packs the engine loads for this run: `all`
+                      for every pack it finds, `none` for the base cards
+                      alone, or pack ids, `pack-3,pack-7` (`3,7` works).
+                      Default: the packs the game's own settings enable —
+                      and this switch never writes those settings; it
+                      holds for the one run, workers included. A pack
+                      that is not found is refused with where it was
+                      looked for. The report's settings line names the
+                      packs in force, since a deck of Ice Age cards is
+                      not the same experiment as one without them.
   --out DIR           Output directory (default DeckLab/results/run_<stamp>,
                       printed before the run starts).
   --no-svg            Skip chart generation.
@@ -335,6 +345,8 @@ EXIT CODES
 
 ENVIRONMENT
   GODOT               Which Godot to run (default ../tools/godot, then PATH).
+  SHANDALAR_PACK_N    Where Pack N's ZIP is, when it is not in the game's
+                      card-pack folder or beside the checkout.
   NO_COLOR            Set to anything: never colour the output.
   DECK_LAB_NO_BANNER  Set to 1: never print the banner.
 
@@ -346,6 +358,7 @@ EXAMPLES
   DeckLab/deck_lab.sh --deck-a a.deck --deck-b b.deck --profile-b apprentice --no-elo
   DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --games 2000
   DeckLab/deck_lab.sh --deck-a my_brew.deck --deck-b random --deck-pool tier1/ --games 2000
+  DeckLab/deck_lab.sh --matrix mined/ --packs all --games 500 --no-elo
   DeckLab/deck_lab.sh --deck-a a.deck --deck-b b.deck --best-of 3 --sideboard on --no-elo
   DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.deck \\
                       --sweep pays_sacrifices=on --control-deck-a big_green.deck \\
@@ -480,6 +493,21 @@ func _main(argv: PackedStringArray) -> int:
 		# starts a worker that plays its slice and says nothing.
 		return _run_worker(argv[1], argv[2],
 			argv[3] if argv.size() >= 4 else "")
+	# THE CARD PACKS GO ON BEFORE THE PARSER RUNS (2026-09-25), the way
+	# `--group` is read first: a folder given to --gauntlet or --matrix is
+	# expanded as it is parsed, and a deck of Ice Age cards is a deck of
+	# proxies until the pack is in the registry. A bad value is left for
+	# the parser to refuse, with its own wording; the last of two is the
+	# one the parser keeps, so it is the one that goes on.
+	var packs_at := argv.rfind("--packs")
+	if packs_at >= 0 and packs_at + 1 < argv.size():
+		var chosen := parse_packs(argv[packs_at + 1], available_packs())
+		if not chosen.has("error"):
+			var refusal := enable_packs(chosen.ids)
+			if refusal != "":
+				printerr("deck_lab: %s" % refusal)
+				return 2
+			_packs_in_force = chosen.ids
 	var opts := _parse_args(argv)
 	_quiet = bool(opts.get("quiet", false))
 	_banner_wanted = not bool(opts.get("no_banner", false)) \
@@ -550,8 +578,9 @@ func _main(argv: PackedStringArray) -> int:
 			var paths := without_decks_under_test(
 				_expand_pool(source, ""), decks_under_test(opts))
 			if paths.is_empty():
-				printerr("deck_lab: no decks in the field '%s'%s" % [source,
-					"" if _group_filter == "" else " for --group " + _group_filter])
+				printerr("deck_lab: no decks in the field '%s'%s%s" % [source,
+					"" if _group_filter == "" else " for --group " + _group_filter,
+					_subfolders_note(source)])
 				return 2
 			for path in paths:
 				var deck := _load_deck(path, opts.format)
@@ -857,6 +886,9 @@ func _main(argv: PackedStringArray) -> int:
 		"lives": opts.lives, "ante": opts.ante, "mulligan": opts.mulligan,
 		"rules": opts.rules, "rule_overrides": opts.rule_overrides,
 		"format": opts.format,
+		# The packs `--packs` put on, or null for the game's own setting —
+		# a deck of Ice Age cards is a different experiment.
+		"packs": _packs_in_force,
 		"elapsed_seconds": elapsed, "matchups": json_matchups,
 	}
 	if _is_unfair_run(opts):
@@ -1171,7 +1203,15 @@ func _worker_payload(lo: int, hi: int) -> Dictionary:
 		var task: Dictionary = _tasks[i].duplicate()
 		task["seed"] = str(task["seed"])
 		tasks.append(task)
-	return {"offset": lo, "duel": _duel_opts, "tasks": tasks}
+	var payload := {"offset": lo, "duel": _duel_opts, "tasks": tasks}
+	# THE PACKS RIDE THE PAYLOAD, not the command line: a child is a
+	# fresh engine reading the player's own settings, and `--packs all`
+	# in the parent would otherwise be a child that plays proxies
+	# (2026-09-25). Absent when the switch was not given, so a child
+	# keeps the game's own choice the way the parent did.
+	if _packs_in_force != null:
+		payload["packs"] = _packs_in_force
+	return payload
 
 
 ## How many games a child has finished, from the little file it rewrites
@@ -1222,6 +1262,11 @@ func _run_worker(in_path: String, out_path: String, beat_path := "") -> int:
 		printerr("deck_lab worker: cannot read %s" % in_path)
 		return 1
 	var payload: Dictionary = parsed
+	if payload.has("packs"):
+		var refusal := enable_packs(Array(payload["packs"]))
+		if refusal != "":
+			printerr("deck_lab worker: %s" % refusal)
+			return 1
 	_duel_opts = payload.get("duel", {})
 	_tasks = payload.get("tasks", [])
 	_results.resize(_tasks.size())
@@ -1505,6 +1550,108 @@ static func _profile(spec: String) -> AiProfile:
 ## something. The strict load below is what stops that; this is what
 ## EXPLAINS it, because "unknown/unimplemented card" is a parse complaint
 ## and "this deck is proxies, you cannot duel with it" is the answer.
+# ------------------------------------------------------------ the packs --
+
+## The packs `--packs` put in force for this process, `null` until the
+## switch is applied: the game's own settings then decide, as they did
+## before the switch existed.
+var _packs_in_force: Variant = null
+
+
+## The CardPacks autoload, reached through the tree: a `--script` run
+## compiles before the autoloads are named, so `CardPacks` is not an
+## identifier here (the isolated `tools/pack_N_deck_lab.gd` entry points
+## go through `root.get_node` for the same reason), but the node is in
+## the tree by the time `_initialize` runs — and under a test or the
+## shipped build's `--deck-lab` route alike. `null` without it.
+static func card_packs() -> Node:
+	var loop := Engine.get_main_loop()
+	if loop is SceneTree:
+		return (loop as SceneTree).root.get_node_or_null("CardPacks")
+	return null
+
+
+## The pack ids the CardPacks autoload found, or none without it. The
+## Lab runs inside `_initialize`, which Godot calls BEFORE any autoload's
+## `_ready` — the node is in the tree, its scan has not happened — so
+## the scan is asked for here when it has not been (`_ready` repeats it
+## later, which is why a Lab log lists the packs it found twice).
+static func available_packs() -> Array:
+	var packs := card_packs()
+	if packs == null:
+		return []
+	if packs.available_ids().is_empty():
+		packs.discover()
+	return packs.available_ids()
+
+
+## `--packs` read: `all` is every id in [param available] (the packs the
+## CardPacks autoload found), `none` is the base cards alone, and a list
+## is ids — `pack-3` or the bare `3` — each of which must be found.
+## Returns `{"ids": Array[String]}` or `{"error": String}`.
+static func parse_packs(value: String, available: Array) -> Dictionary:
+	var word := value.strip_edges().to_lower()
+	var ids: Array[String] = []
+	if word == "all":
+		for id in available:
+			ids.append(String(id))
+		return {"ids": ids}
+	if word == "none":
+		return {"ids": ids}
+	for piece in word.split(",", false):
+		var id := piece.strip_edges()
+		if id.is_valid_int():
+			id = "pack-" + id
+		if not id.begins_with("pack-") or not id.trim_prefix("pack-").is_valid_int() \
+				or int(id.trim_prefix("pack-")) < 1:
+			return {"error": "--packs takes all, none or pack ids like pack-3,pack-7 — not '%s'" % piece.strip_edges()}
+		if not available.has(id):
+			var packs := card_packs()
+			if packs == null:
+				return {"error": "%s was not found — the card packs are not loaded in this run" % id}
+			var known: Array = packs.known_ids()
+			if not known.has(id):
+				return {"error": "%s is not a pack this build knows — its packs are %s"
+					% [id, ", ".join(PackedStringArray(known))]}
+			var looked := PackedStringArray()
+			for path in packs.candidate_paths(id):
+				looked.append(ProjectSettings.globalize_path(String(path)))
+			return {"error": "%s was not found — looked for %s at: %s"
+				% [id, packs.file_name_for(id), ", ".join(looked)]}
+		if not ids.has(id):
+			ids.append(id)
+	return {"ids": ids}
+
+
+## Put [param ids] and no other pack in force for this process: the
+## setting is changed IN MEMORY and never saved — the player's own
+## choice in the game is untouched — and the CardPacks autoload
+## re-reads it the way the Extras window's switch makes it, so the
+## registry reloads with those packs' sets. The three isolated
+## `tools/pack_N_deck_lab.gd` entry points did this by hand for one
+## pack each under the test profile; this is the ordinary route
+## (2026-09-25). Empty is the base cards alone. Returns a refusal, or
+## "" when every pack is on.
+static func enable_packs(ids: Array) -> String:
+	var packs := card_packs()
+	if packs == null:
+		return "the card packs are not loaded in this run"
+	# A worker comes here straight from its payload, before any scan
+	# (`_initialize` runs before the autoload's `_ready`) — a pack no scan
+	# has found is a pack that cannot be enabled.
+	available_packs()
+	var wanted: Array[String] = []
+	for id in ids:
+		wanted.append(String(id))
+	Settings.set_value("enabled_card_packs", wanted, false)
+	packs._configure_registry()
+	CardRegistry.ensure_loaded()
+	var missing: Array = packs.missing_requirements(wanted)
+	if not missing.is_empty():
+		return "could not enable %s" % ", ".join(PackedStringArray(missing))
+	return ""
+
+
 func _load_deck(path: String, format := "") -> DeckList:
 	var tries := [path, "decks/" + path, "res://decks/" + path]
 	for candidate in tries:
@@ -1668,6 +1815,7 @@ const FLAG_HINTS := {
 	"--profile-a": "--profile-a NAME[:knob=value,...]: apprentice|magician|sorcerer|wizard; separate unrated challenge: unfair",
 	"--profile-b": "--profile-b NAME[:knob=value,...]: apprentice|magician|sorcerer|wizard; separate unrated challenge: unfair",
 	"--out": "--out DIR: where report.txt/results.json/matchups.csv are written",
+	"--packs": "--packs all|none|LIST: the card packs loaded for this run, e.g. pack-3,pack-7 (default: the game's own settings)",
 	"--elo-file": "--elo-file PATH: the Elo ledger, default " + EloLedger.DEFAULT_PATH,
 	"--lives": "--lives N or A,B: starting life per seat, default 20,20",
 	"--ante": "--ante N: cards staked per seat before the deal, default 0",
@@ -1754,6 +1902,9 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		# is "" until `sweep_options_error` has filled it in, because the
 		# default depends on the knob and on `--profile-a`.
 		"sweep": {}, "sweep_null": "", "control_a": "", "control_b": "",
+		# THE CARD PACKS in force, `null` for the game's own choice — see
+		# `packs_in_force`; `_main` applies them before this parser runs.
+		"packs": null,
 	}
 	# `--group` IS READ FIRST, before the loop, because `--gauntlet DIR`
 	# and `--matrix DIR` expand their pools as they are parsed — so a
@@ -1812,7 +1963,8 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 			"--matrix":
 				var pool := _expand_pool(value, "")
 				if pool.size() < 2:
-					return {"error": "--matrix needs at least 2 decks in '%s'" % value}
+					return {"error": "--matrix needs at least 2 decks in '%s'%s"
+						% [value, _subfolders_note(value)]}
 				opts.matrix_pool = pool
 			"--games":
 				opts.games = value.to_int()
@@ -1929,6 +2081,11 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 			# Checked against the knob's type once the knob is known, in
 			# `sweep_options_error` — `--null` may be typed first.
 			"--null": opts.sweep_null = value.to_lower()
+			"--packs":
+				var chosen := parse_packs(value, available_packs())
+				if chosen.has("error"):
+					return {"error": chosen.error}
+				opts.packs = chosen.ids
 			"--control-deck-a": opts.control_a = value
 			"--control-deck-b": opts.control_b = value
 		i += 1
@@ -1940,7 +2097,7 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	for value in opts.gauntlets:
 		var pool := _expand_pool(value, opts.deck_a)
 		if pool.is_empty():
-			return {"error": "no opponent decks found in '%s'" % value}
+			return {"error": "no opponent decks found in '%s'%s" % [value, _subfolders_note(value)]}
 		opts.opponents.append_array(pool)
 	# `Side&board between duels` HAS NO MOMENT IN FREE PLAY — nor in a
 	# best-of-ONE match, which is a single duel with a scoreboard: the
@@ -2053,6 +2210,53 @@ func _expand_pool(value: String, exclude_path: String) -> Array:
 	return found
 
 
+## Why a DIR came up empty when it did not look empty: the deck files
+## its subfolders hold, which a DIR is walked into only with `--group`
+## (2026-09-25: `--gauntlet decks/1997/` found nothing and said so
+## without a word about the 157 decks one folder down). "" when there
+## are none, or when the value was no folder at all.
+func _subfolders_note(value: String) -> String:
+	if _group_filter != "":
+		return ""
+	var dir_path := value
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+		dir_path = "res://" + value
+		if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
+			return ""
+	var below := 0
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return ""
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		if dir.current_is_dir() and not entry.begins_with("."):
+			below += _deck_files_under(dir_path.path_join(entry))
+		entry = dir.get_next()
+	if below == 0:
+		return ""
+	return " — its subfolders hold %d deck file%s, and a DIR is walked into them with --group NAME" \
+		% [below, "" if below == 1 else "s"]
+
+
+## How many deck files are under [param dir_path], subfolders included.
+func _deck_files_under(dir_path: String) -> int:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return 0
+	var count := 0
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		if dir.current_is_dir():
+			if not entry.begins_with("."):
+				count += _deck_files_under(dir_path.path_join(entry))
+		elif entry.ends_with(".deck") or entry.ends_with(".dec") or entry.ends_with(".dck"):
+			count += 1
+		entry = dir.get_next()
+	return count
+
+
 ## The deck files of one directory into [param found] — and, when
 ## [param recurse] is set, of every subfolder under it, depth-first.
 func _collect_decks(dir_path: String, exclude_path: String, recurse: bool,
@@ -2110,6 +2314,9 @@ func _settings_line(opts: Dictionary) -> String:
 		parts.append("rules %s" % opts.rules)
 	for key in opts.rule_overrides:
 		parts.append("%s=%s" % [key, "on" if opts.rule_overrides[key] else "off"])
+	if opts.get("packs") != null:
+		var ids: Array = opts.packs
+		parts.append("packs %s" % ("none" if ids.is_empty() else ", ".join(PackedStringArray(ids))))
 	return "settings: " + "   ".join(parts) if not parts.is_empty() else ""
 
 
@@ -2542,6 +2749,7 @@ func _run_sweep(opts: Dictionary, decks: Array[DeckList], pairs: Array,
 		"lives": opts.lives, "ante": opts.ante, "mulligan": opts.mulligan,
 		"rules": opts.rules, "rule_overrides": opts.rule_overrides,
 		"format": opts.format, "best_of": opts.best_of, "sideboard": opts.sideboard,
+		"packs": _packs_in_force,
 		"elapsed_seconds": elapsed,
 		"matchups": json_matchups, "control": json_control,
 		"control_pass": control_pass,

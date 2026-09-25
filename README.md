@@ -46,7 +46,7 @@ Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/release
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below): `main` carries **0.40.17**, the next
+run the source with Godot 4.7 (below): `main` carries **0.40.18**, the next
 release in the making.
 
 Play with an **897-card early-Magic core**, historic decks, four computer
@@ -113,8 +113,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([Aggression, the owner's ruling](docs/ROADMAP.md#2026-09-25--aggression-the-owners-ruling-04017)):
-**7,795 GUT tests / 357,468 assertions**, plus **307 Python tests**
+Latest local verification ([Sealed pools, the Lab's packs and the AutoDeck CLI](docs/ROADMAP.md#2026-09-25--sealed-pools-the-labs-packs-and-the-autodeck-cli-04018)):
+**7,852 GUT tests / 358,446 assertions**, plus **318 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
@@ -183,6 +183,10 @@ Seeded runs make it useful for experimenting with decks and comparing ideas.
 Run `./deck_lab.sh --help` on Linux/macOS or `.\deck_lab.bat --help`
 on Windows. `--procs` and `--jobs` control parallel workers;
 `--no-elo` keeps experiments out of the ratings ledger.
+Beside it, `./auto_deck.sh --help` (`.\auto_deck.bat` on Windows) is the
+AutoDeck tool as a command line: it builds a folder of seeded decks from
+every combination of the switches you give it, and `--packs` restricts the
+pool to one card pack, so a field for one set can be mined with the Lab.
 The [DeckLab manual](DeckLab/README.md) has examples and all options.
 
 ## Post-0.20.0 roadmap

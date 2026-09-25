@@ -256,6 +256,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
             prefix = '#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$0")"\n'
             extra["run.sh"] = (prefix + f'exec "{binary}" "$@"\n').encode()
             extra["deck_lab.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --deck-lab "$@"\n').encode()
+            extra["auto_deck.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --auto-deck "$@"\n').encode()
             if platform == "raspberry-pi5-arm64":
                 extra["run.sh"] = (prefix +
                     'exec "./Shandalar.arm64" --rendering-method gl_compatibility '
@@ -263,6 +264,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
         elif platform == "windows64":
             extra["deck_lab.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
                                      "Shandalar.console.exe --headless --no-header -- --deck-lab %*\r\n").encode()
+            extra["auto_deck.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
+                                      "Shandalar.console.exe --headless --no-header -- --auto-deck %*\r\n").encode()
         selected = dict(files)
         if included:
             selected["skin/original_skin.zip"] = skin

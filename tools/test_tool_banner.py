@@ -54,7 +54,7 @@ PY_TOOLS = ["build_card_packs", "fetch_card_art", "fetch_cards",
 
 ## Every shell tool, relative to the repo root.
 SH_TOOLS = ["build_release.sh", "deck_convert.sh", "duel_soak.sh",
-            "run_tests.sh", "DeckLab/deck_lab.sh"]
+            "run_tests.sh", "DeckLab/deck_lab.sh", "DeckLab/auto_deck_cli.sh"]
 
 ## THE TOOLS THAT ARRIVED WITH THE NUMBERED CARD PACKS. They are NOT in
 ## PY_TOOLS: five of them carry a four-line HINT and no EPILOG attribute
@@ -709,8 +709,8 @@ class EveryToolAnswersTest(unittest.TestCase):
 
     def test_the_shell_tools_that_need_no_engine_have_a_help(self):
         # build_release.sh and run_tests.sh answer -h themselves;
-        # deck_convert.sh and deck_lab.sh forward it to Godot, and
-        # duel_soak.sh to Godot under Xvfb, so those are the gate's job
+        # deck_convert.sh, deck_lab.sh and auto_deck_cli.sh forward it to
+        # Godot, and duel_soak.sh to Godot under Xvfb, so those are the gate's job
         # rather than a unit test's.
         for script in ("build_release.sh", "run_tests.sh"):
             for flag in ("-h", "--help"):
@@ -947,6 +947,7 @@ class RuntimeContractTest(unittest.TestCase):
             "build_release.sh": ["--macos"],
             "deck_convert.sh": ["--help"],
             "DeckLab/deck_lab.sh": ["--help"],
+            "DeckLab/auto_deck_cli.sh": ["--help"],
         }
         for script, args in commands.items():
             with self.subTest(script=script):

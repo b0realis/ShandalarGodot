@@ -270,7 +270,52 @@ flyers rule the starter meta.
 | `--no-banner` | keep the progress bar, drop the artwork (or export `DECK_LAB_NO_BANNER=1`) | off |
 | `--progress MODE` | which SHAPE the progress takes: `auto` (a redrawing bar on a terminal, one heartbeat line a minute in a log), `bar` (the bar whatever stderr is), `log` (the lines whatever stderr is — they accumulate, so a long sweep leaves a record of itself), `off` (none, and the banner stays). An explicit `--progress` wins over the `off` that `--quiet` implies | `auto` |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
+| `--packs LIST` | the card packs in force for THIS RUN: `all` (every pack found), `none` (the base cards alone), or ids — `pack-3,pack-7`, or bare `3,7`. In memory only, workers included; the game's own setting is never written. Omitted, the run plays with whatever the game has enabled (see [the packs](#the-card-packs----packs-2026-09-25)) | — |
 | `-h`, `--help` | switch reference | — |
+
+### The card packs — `--packs` (2026-09-25)
+
+Until this switch the Lab played with whatever `settings.cfg` said, which
+in a fresh checkout is the base cards alone — so 71 of the 76 tournament
+lists were proxy decks to it (the census above), and a run over Ice Age
+meant one of the isolated `tools/pack_N_deck_lab.gd` entry points under
+the test profile. `--packs LIST` puts packs in force for one run:
+
+```
+DeckLab/deck_lab.sh --deck-a decks/tournament/wc1995_blumke.deck \
+                    --deck-b decks/tournament/wc1996_hovi.deck --packs all --games 200 --no-elo
+DeckLab/deck_lab.sh --matrix mine/ --packs 3 --games 50 --no-elo
+```
+
+- `all` is every pack FOUND on this machine (`SHANDALAR_PACK_N`, the
+  `cardpacks/` folder beside the executable, `../shandalar-packs/` in a
+  checkout), `none` is the base cards, and a list names them — `pack-3`
+  or `3`, once each, in the order given. A word that is none of those, a
+  pack this build does not know (`pack-9`) and a known pack that was not
+  found (the refusal lists every path it was looked for at) are each exit
+  2 before a game is played.
+- The packs are enabled **in memory alone**: the player's `settings.cfg`
+  is never written, and a fanned-out worker enables the same list before
+  it plays (its results are byte-identical to the in-process run).
+- The report's `settings:` line names them (`packs pack-3, pack-7` —
+  `packs none` for the base cards) and `results.json` carries `"packs"`,
+  so a run says what it was played with.
+- A deck that needs a pack the run does not have is still a proxy deck
+  and still skipped by name — the census rule is unchanged, the
+  denominator is what moved.
+
+What `--packs all` unlocks, the census re-run with all seven packs
+(2026-09-25):
+
+| folder | decks | blocked | load | what still blocks |
+|---|---|---|---|---|
+| `decks/tournament/` | 76 | 33 | **43** (was 5) | Mirage, Visions and Weatherlight names |
+| `decks/community/` | 64 | 3 | **61** (was 48) | the same three sets |
+| `decks/extended_community/` | 15 | 1 | **14** (was 1) | `reanimator_comer_1997`, four Mirage-era names |
+
+Chaos Orb, the census's twenty-deck card, is in Pack 1 — which is why the
+Old School folder opens. The AutoDeck CLI below takes the same switch, so
+a field mined from a pack is played with the same word.
 
 ### `random` — measuring a deck against the field
 
@@ -1303,11 +1348,232 @@ move.
 Memory: each worker holds one game (~a few MB); 10k games stream through a
 preallocated results array — RAM stays flat.
 
+## AutoDeck CLI — making the field the Lab plays (2026-09-25)
+
+`DeckLab/auto_deck_cli.sh` is the Deck Builder's **AutoDeck** tool on the
+command line: the same builder, the same wishes, one deck file per deck in
+a folder, a manifest that says how each one was made, and a plain list of
+the files for the Lab to walk. It exists because the Lab needs a FIELD,
+and typing one deck at a time into a window is not how you get ten
+thousand of them. In the owner's words (2026-09-25): *"you make 10k random
+decks and the general idea is to test them with DeckLab to mine a really
+good deck!"*
+
+```
+DeckLab/auto_deck_cli.sh --out mine --count 1000 --colors random
+DeckLab/deck_lab.sh --matrix mine/ --games 50 --no-elo
+DeckLab/auto_deck_cli.sh --help
+```
+
+Measured on this desk, one process and one loop: **166 decks a second** —
+500 decks of Fourth Edition in 3.0 s, and the ten-thousand-deck run the
+tool was written for in **1m 00s**, ten thousand distinct seeds and ten
+thousand distinct deck files. There is no fan-out and no thread: a build is
+milliseconds, and the pool is walked once per set selection and then
+cached. Budget the disk rather than the clock — 10,000 decks are about
+42 MB.
+
+### The mining workflow
+
+1. **Make the field.** `auto_deck_cli.sh --out mine --count 500 --colors
+   random` — 500 deck files, `mine/decks.csv`, `mine/decklist.txt`.
+2. **Play it off cheaply.** `deck_lab.sh --matrix mine/ --games 50
+   --no-elo` — a round robin is *N(N-1)/2* matchups, so keep the first
+   pass small and the field a few dozen decks; for a bigger field, run a
+   `--gauntlet` against a fixed reference instead.
+3. **Read the standings**, take the best few `.deck` files into a folder
+   of their own.
+4. **Play those properly.** `deck_lab.sh --matrix best/ --games 2000
+   --no-elo` — the interval is what decides anything (see *Methodology*);
+   `--no-elo` keeps a mined field out of `decks/ratings.txt`, the shipped
+   decks' own ledger.
+5. **Rebuild the winner in the game.** Open the Deck Builder → AutoDeck,
+   set the options from that deck's row of `decks.csv` — the
+   `colors_built` letters, not the `colors_asked` word — type its seed
+   into the **Seed** field, and the deck that comes out is the deck in the
+   file, card for card.
+
+### The card pool — `--source`
+
+| `--source` | the pool |
+|---|---|
+| `sets` (default) | every card of the sets `--sets` names. The Extras window's two switches are honored by `--original-cards on\|off` and `--completion-pack on\|off` |
+| `list` | the cards of `--list FILE` — `4 Lightning Bolt` lines, the same lines a `.deck` file holds, `SB:` lines counted too. Giving `--list` selects this source on its own |
+| `sealed` | a SEALED POOL DEALT PER DECK from that deck's own seed, out of the sets `--sets` names; `--boosters`, `--starters`, `--free-lands` and `--extras` are the Sealed Deck window's four numbers. Every deck opens its own packs, so a field varies without a single wish changing |
+
+`--sets 4ed,drk` is **one** pool of two sets, the way the window ticks two
+boxes; **repeat** the flag for alternative pools (`--sets 4ed --sets 2ed`).
+`--sets every` is every active set — and it is `every` rather than `all`
+because `all` is Alliances' own set code (card pack 5), and a keyword that
+shadows a real value is a trap. The tool refuses `--sets all` with that
+sentence rather than quietly building from Alliances.
+
+The sets in play are the game's enabled card packs. `--packs LIST` — the
+Lab's own switch, read by the Lab's own code — enables packs for this run
+alone, so `--packs 3 --sets ice` mines Ice Age without touching the game's
+setting, and `--packs none --sets ice` is refused as a set code the
+registry does not have. Play the field with the same `--packs`:
+
+```
+DeckLab/auto_deck_cli.sh --out ice_mine --count 200 --packs 3 --sets ice --colors random
+DeckLab/deck_lab.sh --matrix ice_mine/ --packs 3 --games 50 --no-elo
+```
+
+### Switches
+
+Everything marked **axis** takes a comma-separated list of ALTERNATIVES
+and may be repeated; see *Alternatives and the cartesian walk* below.
+
+| Switch | Meaning | Default |
+|---|---|---|
+| `--out DIR` | where the deck files, `decks.csv` and `decklist.txt` are written (required). A folder that already holds something is refused unless `--force` | — |
+| `--count N` | how many decks to make | 1 |
+| `--seed N` | the base seed, 1..999999. Omitted, a fresh one is rolled, printed and written into every row | rolled |
+| `--source sets\|list\|sealed` | where the card pool comes from (above) | `sets` |
+| `--sets CODE,CODE` | the sets of one pool, or `every` (**axis**, by repetition) | `4ed` |
+| `--packs LIST` | the card packs in force for this run — `all`, `none`, or ids like `pack-3,pack-7` (bare `3,7` too); the Lab's switch, the Lab's reading and refusals | the game's own setting |
+| `--list FILE` | a card list to build from; selects `--source list` | — |
+| `--colors WU` / `none` / `random` | colors to build in: letters from WUBRG, `none` for the builder's own choice, `random` for 1..`--max-colors` drawn from that deck's seed (**axis**) | `none` |
+| `--max-colors 1..5` | how many colors a deck may have (**axis**) | 2 |
+| `--gold on\|off` | multicolored cards preferred, two colors at least (**axis**; bare `--gold` means on) | off |
+| `--size 40\|60` | cards in the deck (**axis**) | 60 |
+| `--lean creatures\|balanced\|spells` | the creature share (**axis**) | balanced |
+| `--speed fast\|medium\|slow` | the curve and the land count (**axis**) | medium |
+| `--rarity any\|pauper\|no-rares\|uncommon-up\|rares` | the rarity window (**axis**) | any |
+| `--lands classic\|non-classic` | basics only, or the pool's own lands first (**axis**) | classic |
+| `--tournament on\|off` | no banned cards, restricted cards once (**axis**; `--no-tournament` means off) | on |
+| `--power-nine on\|off` | the Lotus, the Moxen and the blue three (**axis**; bare `--power-nine` means on) | off |
+| `--keep FILE` | a deck file whose non-land cards every deck is built around | — |
+| `--original-cards on\|off` | the Extras window's `Original 1997` switch | on |
+| `--completion-pack on\|off` | the Extras window's `tDotP Pack 1` switch | on |
+| `--boosters N` / `--starters N` / `--free-lands N` / `--extras N` | the sealed deal's four numbers | 3 / 1 / 0 / 0 |
+| `--force` | write into an output folder that already holds files | off |
+| `--progress auto\|bar\|log\|off` | the shape of the progress, the Lab's own four | auto |
+| `--quiet` / `--no-banner` | the Lab's own two | off |
+| `-h`, `--help` | switch reference | — |
+| `-V`, `--version` | the project's version, answered by the shell | — |
+
+Exit codes: **0** every deck written, **1** the run broke (no output
+folder, a folder that is not empty and no `--force`, a pool with nothing
+in it), **2** the command line was wrong, **3** no Godot to run.
+
+### Alternatives and the cartesian walk
+
+Every **axis** switch takes a comma list of alternatives — `--lean
+creatures,spells --speed fast,slow` is four combinations — and may also be
+repeated. `--sets` is the one exception to the comma rule, because there a
+comma joins sets into one pool.
+
+The decks walk the combinations in a fixed order, the LAST axis moving
+fastest, the way a number counts:
+
+```
+sets, colors, max-colors, gold, size, lean, speed, rarity, lands,
+tournament, power-nine
+```
+
+and start again from the first when the list runs out. So `--count N`
+spreads N decks **evenly** over however many combinations were asked for —
+900 decks over `--lean` x `--speed` x `--size` is 50 of each of the 18 —
+and the same command line always deals the same combination to deck K.
+
+### The seeds, and the promise they carry
+
+`--seed N` is the BASE seed. **Deck 1 gets it**; deck K+1 gets the base
+stepped K times by **524287** around the 999999 seeds the AutoDeck window
+accepts. 524287 is prime and does not divide 999999 (= 3³ × 7 × 11 × 13 ×
+37), so a run of up to 999,999 decks cannot deal the same seed twice — a
+hash of the index could not promise that (10,000 draws from 999,999 values
+collide about fifty times). With no `--seed` a fresh base is rolled,
+printed, and written into `decks.csv`, so a run is never lost.
+
+**THE PROMISE: any deck this tool made can be built again in the game.**
+Open the Deck Builder → AutoDeck, set the options of that deck's row of
+`decks.csv`, type its seed into the Seed field, and the deck that comes out
+is the deck in the file, card for card. The seed is also the last of the
+deck file's own `# note:` lines, so a deck separated from its manifest
+still says how it was made. `tests/tools/test_auto_deck_cli.gd` holds the
+tool to it by reading the rows back and rebuilding every deck of a run.
+
+### Why `--colors random` exists
+
+**`--colors none` — the AutoDeck window's own default — is deterministic.**
+`AutoDeck._choose_colors` reads no random number at all: it rates all 31
+color sets by the sum of their best castable cards and takes the best, and
+the only randomness in a build is a 0.05 jitter on the fill's tie-breaks,
+which moves a card or two and never a color. One pool and one set of wishes
+therefore land on ONE color pair however many seeds are thrown at them, and
+a 10,000-deck mining run with no colors asked for would be 10,000 decks of
+the same two colors — the opposite of mining.
+
+`--colors random` draws 1..`--max-colors` colors per deck from **that
+deck's own seed**, so the draw is part of the deck's reproducible identity
+even though the window has no `random` button: the letters land in
+`colors_built` and in the file name, and typing those into the window
+replays the deck.
+
+The draw is what is ASKED FOR, and the builder may still ADD colors up to
+`--max-colors`, exactly as ticking one color in the window does. Measured
+over 10,000 decks of Fourth Edition at `--max-colors 2`: all ten color
+pairs appear, but black-red takes a quarter of them (2,557) and blue-green
+a twentieth (482) — because half the draws are a single color and the
+builder completes those with the pool's strongest partner. **For an even sweep of the pairs, name them instead** —
+`--colors WU,WB,WR,WG,UB,UR,UG,BR,BG,RG` is ten alternatives and the walk
+deals them equally. `--colors random --max-colors 1` is a mono sweep.
+
+### What a run leaves in `--out DIR`
+
+```
+deck_00001_WU_s004242.deck   index, the colors the builder CHOSE, the seed
+decks.csv                    one row per deck
+decklist.txt                 the deck files in order, one path a line
+```
+
+The deck files are the project's `.deck` format, which the Deck Lab and the
+Deck Builder both read; each carries the AutoDeck report as `# note:` lines
+and a name of its own (`Red-Green Beatdown 00042`), because a field of
+forty decks all called *Blue-Black Midrange* is a matrix nobody can read.
+`decklist.txt` is the list to walk, or to paste into a `--gauntlet`. A run
+written inside the project gets a `.gdignore`, so the editor never imports
+`decks.csv` as a translation table.
+
+`decks.csv` columns, in order:
+
+| Column | What it holds |
+|---|---|
+| `file` | the deck file's name, inside `--out DIR` |
+| `index` | 1-based, the build order |
+| `seed` | THIS deck's seed — the number to type into the window |
+| `source` | `sets`, `list` or `sealed` |
+| `sets` | the set codes of this deck's pool, space-separated (empty for a list) |
+| `pool` | the pool's name, the AutoDeck window's own wording |
+| `colors_asked` | the letters asked for, or `none`, or `random` |
+| `colors_built` | the colors the builder actually chose — **this is what to tick in the window** |
+| `max_colors` | 1..5 |
+| `gold` | `on` / `off` |
+| `size` | 40 or 60 |
+| `lean` | `creatures` / `balanced` / `spells` |
+| `speed` | `fast` / `medium` / `slow` |
+| `rarity` | `any` / `pauper` / `no-rares` / `uncommon-up` / `rares` |
+| `lands` | `classic` / `non-classic` |
+| `tournament` | `on` / `off` |
+| `power_nine` | `on` / `off` |
+| `cards` | cards in the deck |
+| `land_count` | lands in it |
+| `creature_count` | creatures in it |
+| `spell_count` | everything else |
+| `deck_name` | the name in the file, and the name a Lab report prints |
+
+Every option column is spelled the way the switch takes it, so a row can be
+pasted back onto a command line. A pool label with a comma in it
+(`Fourth Edition, The Dark`) is quoted, the ordinary CSV way.
+
 ## Files
 
 | File | Role |
 |---|---|
 | `deck_lab.sh` | entry point (wraps the headless Godot invocation) |
+| `auto_deck_cli.sh` / `DeckLab/auto_deck_cli.gd` | the AutoDeck CLI: the deck builder's AutoDeck by the thousand, with a manifest — the field this Lab plays (see above) |
 | `deck_convert.sh` / `tools/deck_convert.gd` | format converter (.deck/.dec ↔ .dck) |
 | `DeckLab/simulate.gd` | the tool: CLI parsing, thread fan-out, reporting |
 | `DeckLab/sim_stats.gd` | Wilson intervals, matchup summaries (unit-tested) |
@@ -1321,3 +1587,5 @@ preallocated results array — RAM stays flat.
 | `decks/ratings.txt` | the default Elo ledger (created on first rated run) |
 | `tests/tools/test_deck_lab.gd` | component tests |
 | `tests/tools/test_deck_lab_sweep.gd` | the sweep: its flags, the three arms, the control verdict read from the games, a small run end to end (exit 0 and exit 4) |
+| `tests/tools/test_auto_deck_cli.gd` | the AutoDeck CLI: every switch and refusal, the cartesian walk, the seeds, and the promise that a row of `decks.csv` rebuilds its deck |
+| `tools/test_auto_deck_cli_sh.py` | the AutoDeck CLI's shell wrapper: `-V` without an engine, exit 3 with no Godot, the exec line |

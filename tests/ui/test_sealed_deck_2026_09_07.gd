@@ -14,6 +14,7 @@ func before_each() -> void:
 	# The window remembers its numbers; the tests must not.
 	var settings: Array = DeckBuilderScreen.SEALED_SETTINGS.values()
 	settings.append(DeckBuilderScreen.SEALED_FRESH_SETTING)
+	settings.append(DeckBuilderScreen.SEALED_SETS_SETTING)
 	for setting in settings:
 		_saved[setting] = Settings.get_value(setting, 0) if Settings.has_value(setting) else null
 		Settings.clear_value(setting)

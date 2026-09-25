@@ -244,6 +244,13 @@ const SEALED_SETTINGS := {
 }
 ## Whether `Done` in the sealed window clears the deck first, remembered.
 const SEALED_FRESH_SETTING := "sealed_fresh_deck"
+## [QoL] The Sealed Deck window's card pool — the sets its packs are
+## dealt from, remembered the way the four numbers are (2026-09-25, the
+## owner: *"Sealed deck tournament simulation needs a card pool selection
+## similar as AutoDeck. (So tournaments for a specific set can be
+## simulated)"*). Absent, every set in play — the whole library, which
+## is what the window dealt from before it had a pool of its own.
+const SEALED_SETS_SETTING := "sealed_sets"
 ## [QoL] The Extras window's switches — the 1997 originals, Pack 1 and
 ## each expansion pack — remembered between visits and across restarts
 ## the way the marks above are (2026-09-17 playtest: *"if user selects
@@ -2303,6 +2310,13 @@ const SEALED_SLOT_LETTERS := {"legendary": "L", "rare": "R", "uncommon": "U",
 	"common": "C", "land": "•"}
 ## Under the brief, the line that asks whether to start from nothing.
 const SEALED_FRESH_LINE := "Start from an empty deck (Restore deck brings this one back)"
+## The card pool's heading, its two 1997 list-window buttons
+## (`@LONGLIST`: "Select All" / "Clear All"), and the pool line's word
+## for no set ticked — the dice stay grey until one is.
+const SEALED_POOL_HEAD := "Card pool — the packs are dealt from these sets"
+const SEALED_ALL_SETS := "Select All"
+const SEALED_NO_SETS := "Clear All"
+const SEALED_EMPTY_POOL := "Tick a set to deal from."
 ## The right-hand list before the first throw.
 const SEALED_EMPTY_HINT := "Open the packs to see what you are dealt."
 
@@ -2439,32 +2453,97 @@ func _leave_sealed() -> void:
 
 
 ## Deal a pool from the four numbers in [param settings] (the
-## [SealedPool] property names), remembering them; [param roll] is the
-## seed, 0 for a fresh one.
-func _deal_sealed(settings: Dictionary, roll := 0) -> SealedPool:
+## [SealedPool] property names) and the cards of [param sets],
+## remembering both; [param roll] is the seed, 0 for a fresh one. No
+## sets at all: the whole library, the window's deal before it had a
+## pool of its own (2026-09-25) — nothing is remembered for it.
+func _deal_sealed(settings: Dictionary, roll := 0, sets: Array = []) -> SealedPool:
 	var pool := SealedPool.new()
 	for key in settings:
 		pool.set(key, int(settings[key]))
 		Settings.set_value(String(SEALED_SETTINGS[key]), int(settings[key]))
+	if not sets.is_empty():
+		Settings.set_value(SEALED_SETS_SETTING, sets.duplicate())
 	var seed_used := roll
 	while seed_used == 0:
 		seed_used = randi()
-	pool.deal(_pool, seed_used)
+	pool.deal(_pool if sets.is_empty() else _sealed_source(sets), seed_used)
 	return pool
 
 
-## THE WINDOW. The title and the brief, the four numbers with what each
-## one holds and `Each player gets N cards` under them, then the dice —
-## every press of them a fresh deal — and, once there is a deal, the
-## foil-pack screen's two lists: the packs down the left, the selected
-## pack's cards down the right lettered by slot, with a hover on a card
-## putting it in the Showcase, which the window leaves uncovered. `Done`
-## puts the pool in force; `Cancel` and Escape leave the library as it
-## was. The medallion is up throughout, and goes down with Done.
+## The sets the Sealed Deck window deals from: the remembered choice
+## trimmed to the sets in play, or every set in play when nothing was
+## remembered. A remembered choice none of whose sets is in play — an
+## expansion pack turned off since — leaves the window with nothing
+## ticked and says so, rather than dealing from a library the player
+## did not ask for.
+func _sealed_sets() -> Array[String]:
+	var active := CardRegistry.active_set_order()
+	if not Settings.has_value(SEALED_SETS_SETTING):
+		return active
+	var out: Array[String] = []
+	var saved: Variant = Settings.get_value(SEALED_SETS_SETTING, [])
+	if saved is Array or saved is PackedStringArray:
+		for code in saved:
+			if active.has(String(code)) and not out.has(String(code)):
+				out.append(String(code))
+	return out
+
+
+## The cards of [param sets] as the Inventory would list them — the
+## Extras window's two switches honoured through [method
+## CardRegistry.card_in_set], the way [method AutoDeck.pool_from_sets]
+## honours them — and the five basic lands whatever the sets: a
+## booster's land slot is a basic, whichever set printed it, and the
+## registry files each basic under Unlimited alone, which dealt a
+## Fourth Edition pool with no land at all. The library a sealed deal
+## draws its sheets from.
+func _sealed_source(sets: Array) -> Array:
+	var out: Array = []
+	for data in _pool:
+		if SealedPool.LAND_NAMES.has(data.card_name):
+			out.append(data)
+			continue
+		for code in sets:
+			if CardRegistry.card_in_set(data.card_name, String(code),
+					filter.completion_pack_on, filter.original_cards_on):
+				out.append(data)
+				break
+	return out
+
+
+## [param sets] named for the pool line, the AutoDeck window's way:
+## "Every set" for all of them, up to three names, "N sets" beyond.
+static func _sealed_pool_name(sets: Array) -> String:
+	var active := CardRegistry.active_set_order()
+	var names: PackedStringArray = []
+	for code in active:
+		if sets.has(code):
+			names.append(String(DeckFilter.SET_LABELS.get(code, String(code).to_upper())))
+	if names.is_empty():
+		return "No set"
+	if names.size() == active.size():
+		return "Every set"
+	if names.size() > 3:
+		return "%d sets" % names.size()
+	return ", ".join(names)
+
+
+## THE WINDOW. The title and the brief, the card pool — the sets in
+## play as a grid of ticks, the AutoDeck window's own, with what the
+## ticked ones put on the sheets under it (2026-09-25) — the four
+## numbers with what each one holds and `Each player gets N cards`
+## under them, then the dice — every press of them a fresh deal — and,
+## once there is a deal, the foil-pack screen's two lists: the packs
+## down the left, the selected pack's cards down the right lettered by
+## slot, with a hover on a card putting it in the Showcase, which the
+## window leaves uncovered. `Done` puts the pool in force; `Cancel` and
+## Escape leave the library as it was. The medallion is up throughout,
+## and goes down with Done.
 func _open_sealed_window() -> void:
 	if _dialog_busy():
 		return
-	var dialog := OriginalDialog.create(SEALED_TITLE, WINDOW_SIZE)
+	var dialog := OriginalDialog.create(SEALED_TITLE, SEALED_WINDOW_SIZE)
 	dialog.set_meta("sealed_window", true)
 	var body := dialog.body()
 	body.add_theme_constant_override("separation", 6)
@@ -2478,6 +2557,79 @@ func _open_sealed_window() -> void:
 		fresh_line.text = _check_text(fresh["on"], SEALED_FRESH_LINE)
 		Settings.set_value(SEALED_FRESH_SETTING, fresh["on"]))
 	body.add_child(fresh_line)
+	body.add_child(HSeparator.new())
+
+	# The dice first, though they sit under the numbers: the pool's line
+	# greys them while no set is ticked.
+	var throw := OriginalDialog.button("Open the packs",
+		Vector2(196, FilterBar.DICE_SIZE + 8))
+	throw.name = "DealButton"
+
+	# The card pool: the sets in play as a grid of ticks, and under it
+	# what the ticked ones put on the four sheets — a starter wants three
+	# rares it has not dealt already, and a small set says so here.
+	body.add_child(OriginalDialog.label(SEALED_POOL_HEAD, 14, true))
+	var chosen := {"sets": _sealed_sets()}
+	var set_grid := GridContainer.new()
+	set_grid.name = "SetGrid"
+	set_grid.columns = 4
+	set_grid.add_theme_constant_override("h_separation", 6)
+	set_grid.add_theme_constant_override("v_separation", 0)
+	var set_lines := {}
+	var pool_line := OriginalDialog.label("", 12)
+	pool_line.name = "PoolLine"
+	pool_line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pool_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	pool_line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var repool := func() -> void:
+		for code in set_lines:
+			set_lines[code].text = _check_text(chosen["sets"].has(code),
+				String(DeckFilter.SET_LABELS.get(code, String(code).to_upper())))
+		throw.disabled = chosen["sets"].is_empty()
+		if chosen["sets"].is_empty():
+			pool_line.text = SEALED_EMPTY_POOL
+			return
+		var sheet := SealedPool.sheets(_sealed_source(chosen["sets"]))
+		var spells: int = sheet["rare"].size() + sheet["uncommon"].size() + sheet["common"].size()
+		pool_line.text = "%s — %d cards: %d rare, %d uncommon, %d common, %d land" % [
+			_sealed_pool_name(chosen["sets"]), spells + sheet["land"].size(),
+			sheet["rare"].size(), sheet["uncommon"].size(), sheet["common"].size(),
+			sheet["land"].size()]
+	for code in CardRegistry.active_set_order():
+		var set_code := String(code)
+		var line := _menu_line("")
+		line.name = "Set_" + set_code
+		line.custom_minimum_size = Vector2(150, 22)
+		line.add_theme_font_size_override("font_size", 13)
+		line.pressed.connect(func() -> void:
+			var sets: Array[String] = chosen["sets"].duplicate()
+			if sets.has(set_code):
+				sets.erase(set_code)
+			else:
+				sets.append(set_code)
+			chosen["sets"] = sets
+			repool.call())
+		set_lines[set_code] = line
+		set_grid.add_child(line)
+	body.add_child(set_grid)
+	var pool_row := HBoxContainer.new()
+	pool_row.add_theme_constant_override("separation", 8)
+	var all_sets := OriginalDialog.button(SEALED_ALL_SETS, Vector2(92, 24))
+	all_sets.name = "AllSetsButton"
+	all_sets.pressed.connect(func() -> void:
+		chosen["sets"] = CardRegistry.active_set_order()
+		repool.call())
+	pool_row.add_child(all_sets)
+	var no_sets := OriginalDialog.button(SEALED_NO_SETS, Vector2(92, 24))
+	no_sets.name = "NoSetsButton"
+	no_sets.pressed.connect(func() -> void:
+		var none: Array[String] = []
+		chosen["sets"] = none
+		repool.call())
+	pool_row.add_child(no_sets)
+	pool_row.add_child(pool_line)
+	body.add_child(pool_row)
+	repool.call()
 	body.add_child(HSeparator.new())
 
 	# The four numbers, each with what one of them holds beside it.
@@ -2515,9 +2667,6 @@ func _open_sealed_window() -> void:
 	var throw_row := HBoxContainer.new()
 	throw_row.add_theme_constant_override("separation", 12)
 	# The medallion itself, at its own size, on the button that throws.
-	var throw := OriginalDialog.button("Open the packs",
-		Vector2(196, FilterBar.DICE_SIZE + 8))
-	throw.name = "DealButton"
 	var dice_art := FilterBar.sheet_cell("filter_icons", FilterBar.DICE_CELL[0],
 		FilterBar.DICE_CELL[1])
 	if dice_art != null:
@@ -2584,7 +2733,7 @@ func _open_sealed_window() -> void:
 		var settings := {}
 		for key in spins:
 			settings[key] = int(spins[key].value)
-		var pool := _deal_sealed(settings)
+		var pool := _deal_sealed(settings, 0, chosen["sets"])
 		view["pool"] = pool
 		tally.text = pool.summary()
 		done.disabled = pool.total() == 0
@@ -3377,6 +3526,10 @@ const LIST_HINT := "Only selected creature types are shown; choose either or bot
 ## medallion this replaces is written down.
 const ENABLED_HINT := "%s filter is on — untick Enable Filter to see the whole pool again"
 const WINDOW_SIZE := Vector2(720, 560)
+## The Sealed Deck window's: the card pool's grid of ticks and its line
+## under the brief took the height (2026-09-25); the width is the other
+## windows', so the Showcase stays uncovered at 1280×800.
+const SEALED_WINDOW_SIZE := Vector2(720, 700)
 const TAB_SIZE := Vector2(170, 32)
 const LIST_COLUMNS := 2
 const LIST_COLUMNS_FROM := 16

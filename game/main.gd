@@ -36,6 +36,10 @@ const MANALINK_SIZE := Vector2(72, 72)
 ## that just played their duel. `DeckLab/README.md` is its manual and
 ## ships beside the binary.
 const DECK_LAB_FLAG := "--deck-lab"
+## The Lab's feeder by the same door (2026-09-25): `auto_deck.sh` in a
+## release is `--auto-deck`, and DeckLab/auto_deck_cli.gd builds the
+## field the Lab then plays.
+const AUTO_DECK_FLAG := "--auto-deck"
 ## Release-only integration probe: validates a real external ZIP, activates
 ## its dormant trusted scripts, checks every set-specific art pair, then exits.
 const VERIFY_PACK_1_FLAG := "--verify-pack-1"
@@ -57,7 +61,10 @@ func _ready() -> void:
 	# lab loads its own and the shell has nothing to contribute to a
 	# headless run.
 	if OS.get_cmdline_user_args().has(DECK_LAB_FLAG):
-		_run_deck_lab()
+		_run_headless_tool(DECK_LAB_FLAG, "res://DeckLab/simulate.gd")
+		return
+	if OS.get_cmdline_user_args().has(AUTO_DECK_FLAG):
+		_run_headless_tool(AUTO_DECK_FLAG, "res://DeckLab/auto_deck_cli.gd")
 		return
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_1_FLAG):
 		_verify_exported_pack_1()
@@ -417,22 +424,22 @@ func _open_manalink_notice() -> void:
 ## Hand the rest of the command line to the Deck Lab and quit with its
 ## exit code.
 ##
-## `simulate.gd` extends [SceneTree] because it is normally the whole
-## program; constructed here it is an ordinary Object that happens to
-## build a root window, so it is freed explicitly rather than left to a
-## queue it never reaches. Nothing of the shell is touched — this
-## function does not return.
-func _run_deck_lab() -> void:
+## `simulate.gd` and `auto_deck_cli.gd` extend [SceneTree] because each
+## is normally the whole program; constructed here the tool is an
+## ordinary Object that happens to build a root window, so it is freed
+## explicitly rather than left to a queue it never reaches. Nothing of
+## the shell is touched — this function does not return.
+func _run_headless_tool(flag: String, script_path: String) -> void:
 	var args := OS.get_cmdline_user_args()
 	var forwarded := PackedStringArray()
 	for arg in args:
-		if arg != DECK_LAB_FLAG:
+		if arg != flag:
 			forwarded.append(arg)
-	var lab: Object = load("res://DeckLab/simulate.gd").new()
+	var tool: Object = load(script_path).new()
 	var code := 1
-	if lab.has_method("_main"):
-		code = int(lab.call("_main", forwarded))
-	lab.free()
+	if tool.has_method("_main"):
+		code = int(tool.call("_main", forwarded))
+	tool.free()
 	get_tree().quit(code)
 
 
