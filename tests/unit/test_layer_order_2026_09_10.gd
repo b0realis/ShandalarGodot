@@ -203,10 +203,12 @@ func test_blood_moon_alone_is_unchanged() -> void:
 	assert_eq(factory.cur_subtypes, ["mountain"] as Array[String])
 
 
-## Conversion is the only card in the pool that reads a land type in layer
-## 4 — which is what makes two waves the whole analysis, with no graph and
-## no cycle to break (CR 613.8b). A second reader would need this test
-## updated and the claim above re-checked.
+## Conversion is the only card in the BASE pool that reads a land type in
+## layer 4 — which is what makes two waves the whole analysis there, with
+## no graph and no cycle to break (CR 613.8b). Ice Age brings two more
+## (Glaciers, Illusionary Terrain), and the readers' wave orders its own
+## members by the same rule: test_layer_four_readers_2026_09_25 pins that
+## with the pack enabled, and test_every_pack_invariants names all three.
 func test_only_one_card_in_the_pool_reads_a_land_type() -> void:
 	var readers: Array[String] = []
 	for card_name in CardRegistry.all_names():

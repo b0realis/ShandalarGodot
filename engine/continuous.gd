@@ -677,6 +677,44 @@ enum _StaticPass { SILENCE, LAND_TYPES, LAND_TYPE_READERS, TYPES, BASE_PT, REST,
 ## layer it would have run in while its source was on the battlefield.
 ## What is deliberately NOT mirrored is the two skips: a source that has
 ## left the battlefield can be neither silenced nor tap-suspended.
+## CR 613.8 AMONG THE READERS THEMSELVES. [param readers] arrive in
+## timestamp order; a reader depends on another when the other WRITES a
+## type it READS (Illusionary Terrain's "Plains are Forests" depends on
+## Conversion's "Mountains are Plains", so a Mountain under both is a
+## Forest whichever entered first). The next to apply is the earliest
+## reader no unapplied reader is a dependency of; when every one left
+## depends on another — "Plains are Mountains" against "Mountains are
+## Plains" — the loop is broken by timestamp order (CR 613.8b).
+func _ordered_readers(readers: Array[Dictionary]) -> Array[Dictionary]:
+	if readers.size() < 2:
+		return readers
+	var out: Array[Dictionary] = []
+	var pending := readers.duplicate()
+	while not pending.is_empty():
+		var pick := 0
+		for i in pending.size():
+			var free := true
+			for j in pending.size():
+				if i != j and _reader_depends_on(pending[i], pending[j]):
+					free = false
+					break
+			if free:
+				pick = i
+				break
+		out.append(pending[pick])
+		pending.remove_at(pick)
+	return out
+
+
+static func _reader_depends_on(reader: Dictionary, other: Dictionary) -> bool:
+	var reads: Array = reader["ability"].land_type_edge(reader["source"])[0]
+	var writes: Array = other["ability"].land_type_edge(other["source"])[1]
+	for land_type in writes:
+		if reads.has(land_type):
+			return true
+	return false
+
+
 func _floating_statics_pass(game: MtgGame, which: int) -> void:
 	if _floating_statics.is_empty():
 		return
@@ -913,17 +951,25 @@ func recalculate(game: MtgGame) -> void:
 	# ("All Mountains are Plains") under Blood Moon ("Nonbasic lands are
 	# Mountains") turns a Mishra's Factory into a Plains, and did not until
 	# 2026-09-10 if the Conversion had entered first. Conversion is the
-	# pool's only reader ([member StaticAbility.reads_land_types]), so two
-	# waves are the whole analysis — no graph, and CR 613.8b's cycle rule
-	# has nothing to break.
+	# base pool's only reader ([member StaticAbility.reads_land_types]);
+	# Ice Age brings Glaciers and Illusionary Terrain, and a reader can
+	# then read what another reader writes, so the second wave orders its
+	# own members by the same rule ([method _ordered_readers]).
 	for wave in [false, true]:
+		var readers: Array[Dictionary] = []
 		for inst in type_sources:
 			if inst.cur_abilities_silenced or inst.cur_statics_suspended:
 				continue
 			for ability in inst.data.static_abilities:
-				if ability.changes_land_types \
-						and ability.reads_land_types == wave:
+				if not ability.changes_land_types \
+						or ability.reads_land_types != wave:
+					continue
+				if wave:
+					readers.append({"source": inst, "ability": ability})
+				else:
 					ability.apply.call(game, inst)
+		for reader in _ordered_readers(readers):
+			reader["ability"].apply.call(game, reader["source"])
 		_floating_statics_pass(game, _StaticPass.LAND_TYPE_READERS if wave
 			else _StaticPass.LAND_TYPES)
 	# 2a-2 — LAYER 4, the rest: animations that ADD a type ("all Swamps

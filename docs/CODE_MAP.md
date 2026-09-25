@@ -71,7 +71,36 @@ needed); card files have NO class_name (they register by name instead);
   packs and runs the invariant over the full 1,898-card pool.
 - `docs/releases/0.40.15.md`: the release note.
 
+## Every pack, every invariant (2026-09-25)
+
+- `tests/cards/test_every_pack_invariants_2026_09_25.gd`: the registry-wide
+  invariants that ran over the base pool only — draw-replacement
+  predicates, layer-4 land-type readers, the mana-text split, aftermath
+  opt-ins, Aura aim, token abilities — asked of all seven packs in one
+  registry reload; the base tests keep their own pins.
+- `engine/abilities/static_ability.gd`: a layer-4 reader says what it
+  reads and writes (`reading_land_types(reads, writes)`,
+  `reading_chosen_land_types(edge)`, `land_type_edge`).
+- `engine/continuous.gd`: `_ordered_readers` — the readers' wave applies
+  its members in CR 613.8 dependency order, timestamps breaking a loop
+  (613.8b); Illusionary Terrain "Plains are Forests" under Conversion.
+- `cards/sets/2ed/conversion.gd`, `cards/sets/ice/_worlds.gd`: Conversion,
+  Glaciers and Illusionary Terrain declare their types.
+- `cards/sets/por/_triggers.gd`, `cards/sets/p02/_triggers.gd`,
+  `cards/sets/hml/_combat.gd`: sixteen combat-declaration triggers no
+  longer claim the aftermath forecast (an inert mark; the forecast reads
+  damage and death triggers only).
+- `engine/ai/effect_intent.gd`: `AURA_HOSTILE` rows for Merseine, Essence
+  Flare and Phyrexian Boon.
+- `tests/unit/test_layer_four_readers_2026_09_25.gd`: the three readers
+  with Ice Age enabled, in both orders and in a loop.
+- `docs/releases/0.40.16.md`: the release note.
+
 ## Release package files
+
+- `docs/releases/0.40.16.md`: pack Auras that hurt their host are aimed
+  across the table; Illusionary Terrain reads what Conversion writes in
+  either order; the every-pack invariants sweep.
 
 - `docs/releases/0.40.15.md`: the registry sanity check covers every pack;
   Wiitigo's counters are a known body.
@@ -3686,6 +3715,11 @@ shandalar/
 │   └── cards/
 │       ├── test_2ed_cards.gd      per-card behavior for the hand-written
 │       │                            showcase cards + registry count
+│       ├── test_every_pack_invariants_2026_09_25.gd  the base-only
+│       │                            invariants (draw predicates, layer-4
+│       │                            readers, mana-text split, aftermath
+│       │                            opt-ins, Aura aim, token abilities)
+│       │                            asked of all seven packs at once
 │       ├── test_generated_pool.gd registry-wide sanity invariants over the
 │       │                            base pool AND all seven packs (Wiitigo's
 │       │                            entering counters are a body) + spot
@@ -5141,6 +5175,14 @@ shandalar/
 │    other unblocked, the Lions on a bystander Hill Giant still refused,
 │    the empty declaration still refused, Two-Headed Giant of Foriys
 │    must take both, the AI declares two blocks and does not concede;
+│    tests/unit/test_layer_four_readers_2026_09_25.gd — LAYER 4 WITH MORE
+│    THAN ONE READER (2026-09-25, Ice Age enabled): Conversion, Glaciers
+│    and Illusionary Terrain are the pool's three readers and say what
+│    they read and write; a Terrain set to "Plains are Forests" applies
+│    after Conversion whichever entered first (a Mountain is a Forest);
+│    "Plains are Mountains" against Conversion is a loop broken by
+│    timestamps both ways; two readers of one type are independent; an
+│    unset Terrain is no one's dependency; Blood Moon still goes first;
 │    tests/unit/test_card_discarded_event_2026_09_06.gd — CARD_DISCARDED
 │    once per card, after the move, from discard_cards / discard_random /
 │    discard_hand and the cleanup discard (by_effect false), an empty hand

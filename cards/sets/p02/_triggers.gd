@@ -27,16 +27,16 @@ static func configure(c: CardData) -> bool:
 			trigger.target_min = 2
 			trigger.target_max = 2
 			c.triggered(trigger)
-		"Lurking Nightstalker": c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, T._charge.bind(2, 0), c.oracle_text, F._self_attack).public_aftermath())
-		"Town Sentry": c.triggered(TriggeredAbility.new(Mtg.EventType.BECOMES_BLOCKER, T._charge.bind(0, 2), c.oracle_text, F._self_enter).public_aftermath())
+		"Lurking Nightstalker": c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, T._charge.bind(2, 0), c.oracle_text, F._self_attack))
+		"Town Sentry": c.triggered(TriggeredAbility.new(Mtg.EventType.BECOMES_BLOCKER, T._charge.bind(0, 2), c.oracle_text, F._self_enter))
 		"Norwood Warrior", "Razorclaw Bear":
 			var amount := 1 if c.card_name == "Norwood Warrior" else 2
-			c.triggered(TriggeredAbility.new(Mtg.EventType.BECOMES_BLOCKED, T._charge.bind(amount, amount), c.oracle_text, F._self_enter).public_aftermath())
+			c.triggered(TriggeredAbility.new(Mtg.EventType.BECOMES_BLOCKED, T._charge.bind(amount, amount), c.oracle_text, F._self_enter))
 		"Abyssal Nightstalker": c.triggered(TriggeredAbility.new(Mtg.EventType.UNBLOCKED_ATTACKER, T._toad, c.oracle_text, F._self_enter))
-		"Goblin General": c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, _general, c.oracle_text, F._self_attack).public_aftermath())
+		"Goblin General": c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, _general, c.oracle_text, F._self_attack))
 		"Alaborn Zealot", "Sylvan Basilisk":
 			var zealot := c.card_name == "Alaborn Zealot"
-			c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKED, _kill_pair.bind(zealot), c.oracle_text, _fights.bind(zealot)).capturing(_fight_context).public_aftermath())
+			c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKED, _kill_pair.bind(zealot), c.oracle_text, _fights.bind(zealot)).capturing(_fight_context))
 		_: return false
 	return true
 

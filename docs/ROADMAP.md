@@ -16459,6 +16459,63 @@ bite: with the counters clause removed the run fails once, on Wiitigo.
 Gate: 505 scripts, **7,763/7,763 tests, 355,586 asserts**, exit 0 in
 243 s over 6 shards; Python 307, exit 0.
 
+## 2026-09-25 — Every pack, every invariant (0.40.16)
+
+*"Do the sweep improvement you suggest (but always keep compatibility if
+user only has base cards!)."* The suggestion, corrected: the cast-gate
+arity sweep and the LAN card boundary already ran over every available
+pack; what ran over the base pool only were the registry-wide
+INVARIANTS — draw-replacement predicates, layer-4 land-type readers,
+the mana-text split, aftermath opt-ins, Aura aim, token abilities.
+`test_every_pack_invariants_2026_09_25` enables all seven packs in one
+registry reload and asks the pack cards the same questions; the base
+tests keep every pin they had, so a player with no pack installed loses
+nothing, and no production path reads a pack. Four findings, three of
+them fixes:
+
+- **Layer 4 with more than one reader.** The two-wave dependency step
+  (CR 613.8) was the whole analysis because Conversion was the only card
+  that reads a land type. Ice Age brings Glaciers (Conversion's twin)
+  and Illusionary Terrain, whose two types are chosen as it enters — and
+  a Terrain set to "Plains are Forests" reads the type Conversion
+  writes. It is dependent on Conversion whichever entered first (a
+  Mountain under both is a Forest); the engine applied the older one
+  first and answered Plains. A reader now says what it reads and writes
+  (`reading_land_types(["mountain"], ["plains"])`; the Terrain through
+  `reading_chosen_land_types` off its choice), and the readers' wave
+  applies its members in dependency order — the earliest reader that no
+  unapplied reader writes into goes next, and a loop ("Plains are
+  Mountains" against Conversion, each reading what the other writes)
+  falls back to timestamp order (CR 613.8b), which is what the engine
+  already did. `test_layer_four_readers_2026_09_25` pins both orders,
+  both loops, Glaciers beside Conversion, an unset Terrain, and Blood
+  Moon still first; proven to bite (ordering off: one failure, the
+  Terrain-first case). `test_layer_order`'s base claim is untouched.
+- **Sixteen inert aftermath opt-ins.** Portal, Portal Second Age and
+  Homelands combat-declaration triggers (Charging Paladin, Ghost Hounds,
+  Greater Werewolf, Alaborn Zealot, …) carried `.public_aftermath()`,
+  the mark of a reviewed public damage/death payload. The forecast reads
+  damage and death triggers only, so the marks did nothing; gone. Baron
+  Sengir and Sengir Bats keep theirs — Sengir Vampire's shape.
+- **Forty-four unclassified pack Auras**, all aimed at our own board by
+  default. Swept: Merseine (holds its host tapped while it keeps a net
+  counter), Essence Flare (+2/+0 and a -0/-1 counter every upkeep — a
+  slow kill, Immolation's asymmetry) and Phyrexian Boon (-1/-2 unless
+  the host is black) join `AURA_HOSTILE`; the other forty-one are
+  listed as reviewed friendly. Aggression stays friendly on purpose: its
+  first strike and trample read as grants that pick an attacker.
+- **Token abilities: no gap.** The text scan named ten pack cards with
+  no `TOKEN_MAKERS` row, but the pack makers build their token from a
+  `CreateTokenEffect` the reader prices for itself (the five base rows
+  exist because those cards make theirs in a Callable). The sweep asks
+  the reader, not the table: eight are priced, Caribou Range's own line
+  only sacrifices a token, and Homarid Spawning Bed is refused on the
+  base file's ruling — "X is the sacrificed creature's mana value"
+  guarantees nothing, a Camarid fed back to it makes none.
+
+Gate: 507 scripts, **7,779/7,779 tests, 356,758 asserts**, exit 0 in
+242 s over 6 shards; Python 307, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

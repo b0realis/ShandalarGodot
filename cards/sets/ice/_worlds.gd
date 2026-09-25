@@ -11,10 +11,10 @@ static func configure(c: CardData) -> bool:
 			c.static_ability(StaticAbility.new(_mana_replacement.bind(c.card_name), "Replace the type of mana produced by affected lands."))
 		"Glaciers":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, F._upkeep_payment.bind("{W}{U}"), "Pay {W}{U} or sacrifice this enchantment.", F._your_upkeep))
-			c.static_ability(StaticAbility.new(_glaciers, "Mountains are Plains.").changing_land_types().reading_land_types())
+			c.static_ability(StaticAbility.new(_glaciers, "Mountains are Plains.").changing_land_types().reading_land_types(["mountain"], ["plains"]))
 		"Illusionary Terrain":
 			c.as_it_enters(_terrain_enter)
-			c.static_ability(StaticAbility.new(_terrain, "Basic lands of the first chosen type are the second type.").changing_land_types().reading_land_types())
+			c.static_ability(StaticAbility.new(_terrain, "Basic lands of the first chosen type are the second type.").changing_land_types().reading_chosen_land_types(_terrain_edge))
 		"Earthlink":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, F._upkeep_payment.bind("{2}"), "Pay {2} or sacrifice this enchantment.", F._your_upkeep))
 			c.triggered(TriggeredAbility.new(Mtg.EventType.DIES, _earthlink, "That creature's controller sacrifices a land.", _creature_died))
@@ -53,6 +53,11 @@ static func _terrain_enter(g: MtgGame, s: CardInstance, pid: int) -> void:
 	g._rec(s, &"memory")
 	s.memory["terrain_from"] = from
 	s.memory["terrain_to"] = to
+## The reader's two chosen types for the CR 613.8 step among readers —
+## nothing before the choice, so nothing depends on an unset Terrain.
+static func _terrain_edge(s: CardInstance) -> Array:
+	if not s.memory.has("terrain_from"): return [[], []]
+	return [[TYPES[int(s.memory.terrain_from)]], [TYPES[int(s.memory.terrain_to)]]]
 static func _terrain(g: MtgGame, s: CardInstance) -> void:
 	if not s.memory.has("terrain_from"): return
 	var from := int(s.memory.terrain_from)

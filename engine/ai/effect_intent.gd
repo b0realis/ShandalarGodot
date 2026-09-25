@@ -950,6 +950,17 @@ const AURA_HOSTILE := {
 	"Wanderlust": true,            # 1 damage each of their upkeeps
 	"Warp Artifact": true,         # 1 damage each of their upkeeps
 	"Weakness": true,              # -2/-1
+	# THE PACKS (2026-09-25), from the every-pack sweep: the same readings
+	# over Fallen Empires, Ice Age and Alliances. Merseine holds its host
+	# tapped for three of their untap steps, or three payments of its
+	# mana cost. Essence Flare's +2/+0 comes with a -0/-1 counter every
+	# upkeep — a slow kill, and Immolation's asymmetry exactly: on our
+	# own board it eats the host, on theirs the worst case is a bigger
+	# creature for a few turns. Phyrexian Boon is -1/-2 on anything that
+	# is not black, which reads the same way.
+	"Merseine": true,              # no untap while it keeps a net counter
+	"Essence Flare": true,         # -0/-1 counter every upkeep
+	"Phyrexian Boon": true,        # -1/-2 unless the host is black
 }
 
 

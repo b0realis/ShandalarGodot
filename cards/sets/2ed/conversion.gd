@@ -20,7 +20,7 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Conversion", "{2}{W}{W}", Mtg.CardType.ENCHANTMENT) \
 		.static_ability(StaticAbility.new(_apply, "All Mountains are Plains.") \
-			.changing_land_types().reading_land_types()) \
+			.changing_land_types().reading_land_types(["mountain"], ["plains"])) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _rent,
 			"At the beginning of your upkeep, sacrifice Conversion unless you pay {W}{W}.",

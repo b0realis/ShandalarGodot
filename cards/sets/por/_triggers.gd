@@ -25,7 +25,7 @@ static func configure(c: CardData) -> bool:
 		"Charging Paladin", "Charging Bandits":
 			var power := 2 if c.card_name == "Charging Bandits" else 0
 			var toughness := 3 if c.card_name == "Charging Paladin" else 0
-			c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, _charge.bind(power, toughness), "Gets %+d/%+d until end of turn." % [power, toughness], F._self_attack).public_aftermath())
+			c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, _charge.bind(power, toughness), "Gets %+d/%+d until end of turn." % [power, toughness], F._self_attack))
 		"Seasoned Marshal":
 			c.triggered(trigger(TapEffect.new(TargetSpec.creature()), Mtg.EventType.DECLARED_ATTACKERS, F._self_attack, true))
 		"Fire Snake": c.triggered(trigger(DestroyEffect.new(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target land", S._land)), Mtg.EventType.DIES, F._self_enter))

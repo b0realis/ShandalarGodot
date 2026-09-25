@@ -7,9 +7,9 @@ const K := preload("res://cards/sets/ice/_combat_more.gd")
 static func configure(c: CardData) -> bool:
 	match c.card_name:
 		"Folk of An-Havva", "Root Spider":
-			c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKERS_DECLARED, _block_bonus, "Gets a blocking bonus until end of turn.", _blocking).public_aftermath())
-		"Ghost Hounds": c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKED, _ghost, "Gains first strike until end of turn.", _fought_white).public_aftermath())
-		"Rashka the Slayer", "Serra Inquisitors": c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKERS_DECLARED, _black_bonus, "Gets a bonus for blocking or being blocked by black creatures.", _fought_black).public_aftermath())
+			c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKERS_DECLARED, _block_bonus, "Gets a blocking bonus until end of turn.", _blocking))
+		"Ghost Hounds": c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKED, _ghost, "Gains first strike until end of turn.", _fought_white))
+		"Rashka the Slayer", "Serra Inquisitors": c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKERS_DECLARED, _black_bonus, "Gets a bonus for blocking or being blocked by black creatures.", _fought_black))
 		"Labyrinth Minotaur": c.triggered(TriggeredAbility.new(Mtg.EventType.BLOCKED, _labyrinth, "The blocked creature skips its next untap.", _as_blocker).capturing(K._fight_context))
 		"Sea Troll": c.activated(F._ability("{U}", false, RegenerateEffect.new()).only_if(_fought_blue))
 		"Clockwork Steed", "Clockwork Swarm":
@@ -18,9 +18,9 @@ static func configure(c: CardData) -> bool:
 			else: c.static_ability(StaticAbility.new(_no_artifact_blockers, "Can't be blocked by artifact creatures."))
 			c.triggered(TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT, _wind_down, "Remove a +1/+0 counter if this creature fought this combat.", _participated))
 			c.activated(F._ability("{X}", true, F.Action.new(_wind_up, "put up to X +1/+0 counters on this creature, to a maximum of four", null, true)).during_step(Mtg.Step.UPKEEP).your_turn_only())
-		"Greater Werewolf": c.triggered(TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT, _werewolf, "Put a -0/-2 counter on each creature blocking or blocked by this creature.", K._in_combat).capturing(K._combat_context).public_aftermath())
+		"Greater Werewolf": c.triggered(TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT, _werewolf, "Put a -0/-2 counter on each creature blocking or blocked by this creature.", K._in_combat).capturing(K._combat_context))
 		"Joven's Ferrets":
-			c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, _ferret_bonus, "Gets +0/+2 until end of turn.", F._self_attack).public_aftermath())
+			c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, _ferret_bonus, "Gets +0/+2 until end of turn.", F._self_attack))
 			c.triggered(TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT, _ferret_lock, "Tap creatures that blocked this creature this turn; they skip their next untap.").capturing(_ferret_context))
 		"Spectral Bears": c.triggered(TriggeredAbility.new(Mtg.EventType.DECLARED_ATTACKERS, _spectral, "Skip your next untap if defending player controls no black nontoken permanent.", _spectral_attacks))
 		"Heart Wolf": c.activated(F._ability("", true, HeartWolf.new()).combat_only())

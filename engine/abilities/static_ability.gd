@@ -107,15 +107,46 @@ func changing_land_types() -> StaticAbility:
 ## after it WHATEVER the two timestamps say: a Mishra's Factory under both
 ## is a Plains, not a Mountain. [method ContinuousEffects.recalculate]
 ## runs the retypers in two waves for exactly this — writers, then readers.
-## No graph and no cycle detection: Conversion is the only card in the pool
-## that reads a land type in layer 4, and nothing writes the type it reads
-## while reading the type something else writes.
+## The base pool has one reader, Conversion, and two waves are the whole
+## analysis there. Ice Age adds two more — Glaciers (its twin) and
+## Illusionary Terrain, which READS whichever basic type its controller
+## chose, Plains included, the type the other two WRITE — so the readers'
+## wave orders its own members by the same rule ([method
+## ContinuousEffects._ordered_readers]), from the reader's own words below.
 var reads_land_types: bool = false
 
-## Fluent: mark this layer-4 static as reading a land type (CR 613.8).
-func reading_land_types() -> StaticAbility:
+## What this reader READS and WRITES, as basic land type names, for the
+## dependency step among readers: Conversion reads "mountain" and writes
+## "plains". A reader whose two types are chosen as it enters answers
+## through [member land_types_edge] instead.
+var land_types_read: Array[String] = []
+var land_types_written: Array[String] = []
+## func(source: CardInstance) -> [reads: Array[String], writes: Array[String]]
+var land_types_edge: Callable = Callable()
+
+## Fluent: mark this layer-4 static as reading a land type (CR 613.8),
+## with the types it reads and writes when they are printed on the card.
+func reading_land_types(reads: Array[String] = [], writes: Array[String] = []) -> StaticAbility:
 	reads_land_types = true
+	land_types_read = reads
+	land_types_written = writes
 	return self
+
+
+## Fluent: a reader whose types are chosen as its source enters
+## (Illusionary Terrain) — [param edge] reads them off the source.
+func reading_chosen_land_types(edge: Callable) -> StaticAbility:
+	reads_land_types = true
+	land_types_edge = edge
+	return self
+
+
+## `[reads, writes]` of this reader on [param source] — its printed types,
+## or the chosen ones (empty before the choice, so nothing depends on it).
+func land_type_edge(source: CardInstance) -> Array:
+	if land_types_edge.is_valid():
+		return land_types_edge.call(source)
+	return [land_types_read, land_types_written]
 
 
 ## Does this static READ a creature's live POWER or TOUGHNESS to decide
