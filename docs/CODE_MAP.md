@@ -71,6 +71,28 @@ needed); card files have NO class_name (they register by name instead);
   packs and runs the invariant over the full 1,898-card pool.
 - `docs/releases/0.40.15.md`: the release note.
 
+## Aggression, the owner's ruling (2026-09-25)
+
+- `engine/ai/effect_intent.gd`: `AURA_HOSTILE` row for Aggression;
+  `aura_conscripts` (the "destroy … if it didn't attack this turn"
+  clause, read off the text); `_read_conjunctions` — "has first strike
+  and trample" matched as two grants by `aura_gifts`.
+- `engine/ai/ai_player.gd`: `_conscription_kills` (their creature the
+  clause removes: cannot attack, or an untapped blocker of ours survives
+  its first-strike hit and kills it), `_conscription_host` (our own
+  ≥ `CONSCRIPTION_POWER` attacker without trample, first main phase,
+  the declaration probe `_would_attack_with` saying yes), both from
+  `_pick_for_spec`; `_conscripted` = `_must_attack` or `_attacks_or_dies`
+  at every planner site the requirement was read (candidates, lethal
+  push, the final loop, the mistake drop, the cap trim, the combat
+  model's `a_forced`).
+- `tests/ai/test_ai_aggression_2026_09_25.gd`: the reader, the removal
+  side, the owner's exception and the conscript's attack, with the
+  controls beside each.
+- `tests/cards/test_every_pack_invariants_2026_09_25.gd`: Aggression off
+  the reviewed-friendly list.
+- `docs/releases/0.40.17.md`: the release note.
+
 ## Every pack, every invariant (2026-09-25)
 
 - `tests/cards/test_every_pack_invariants_2026_09_25.gd`: the registry-wide
@@ -97,6 +119,11 @@ needed); card files have NO class_name (they register by name instead);
 - `docs/releases/0.40.16.md`: the release note.
 
 ## Release package files
+
+- `docs/releases/0.40.17.md`: the AI plays Aggression as removal on a
+  creature the clause kills, or as trample for a big attacker of its own
+  that the declaration would send; an enchanted creature attacks rather
+  than die at home.
 
 - `docs/releases/0.40.16.md`: pack Auras that hurt their host are aimed
   across the table; Illusionary Terrain reads what Conversion writes in
@@ -5850,6 +5877,17 @@ shandalar/
 │    source judged exactly as on 2026-09-08; every rung keeping it, and
 │    the plain rule with the knob off untouched (a Mox is not a land to
 │    MtgGame.hand_is_a_mulligan_hand);
+│    tests/ai/test_ai_aggression_2026_09_25.gd — THE CONSCRIPTION AURA
+│    (Aggression, the owner's ruling): the reader seeing both gifts of
+│    "has first strike and trample" and the destroy clause; hung on their
+│    creature a Giant Spider blocks, survives and kills, on one our Moat
+│    grounds, and their board before our own big attacker; kept in hand
+│    against a Hill Giant that walks through our Bears, against a trade
+│    (first strike makes it no trade), with only a tapped blocker; our
+│    Craw Wurm wearing it in the first main phase and swinging, and not
+│    at two power, not on a trampler, not summoning sick, not after
+│    combat, not into two Craw Wurms; an enchanted Bears attacking into a
+│    Hill Giant whoever hung the aura, the bare Bears staying home
 │    tests/ai/test_ai_w_hand_2026_09_10.gd — THE HAND'S WEIGHT, EXPOSED
 │    FOR A SWEEP: every preset ships Evaluator.W_HAND (the pin that keeps
 │    the constant and the field from drifting, since the evaluator reads

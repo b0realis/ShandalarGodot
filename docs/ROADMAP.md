@@ -16516,6 +16516,57 @@ them fixes:
 Gate: 507 scripts, **7,779/7,779 tests, 356,758 asserts**, exit 0 in
 242 s over 6 shards; Python 307, exit 0.
 
+## 2026-09-25 — Aggression, the owner's ruling (0.40.17)
+
+*"Yes aggression can be played on enemy creature to destroy it if the
+creature is a threat. Cast on own creatures only if trample and first
+strike would gain critical advantage (especially trample for creatures
+with large power, 4 and above lets say…)."* The every-pack sweep had
+left Aggression friendly — its first strike and trample read as grants
+that pick an attacker — and flagged the aim as a judgment call. Ruled:
+
+- **Removal first.** Aggression joins `AURA_HOSTILE`, and the clause is
+  read off the text rather than the name (`EffectIntent.aura_conscripts`:
+  "destroy … if it didn't attack this turn"). Their side is shopped only
+  for a body the clause actually takes off the table
+  (`AiPlayer._conscription_kills`): one that cannot attack (a Moat, a
+  "can't attack"), or one some UNTAPPED creature of ours can block,
+  survive and kill. Survive, not trade — the aura gives it first strike,
+  so a blocker that trades with it today dies for nothing tomorrow. A
+  Hill Giant across from our Bears is not a threat the card removes; it
+  is a threat the card arms, and the aura waits in hand. Their board
+  comes before our own attacker, as everywhere in the picker.
+- **The gift second.** With nothing of theirs worth it, our own creature
+  of four power or more (`CONSCRIPTION_POWER`) that lacks trample — in
+  our FIRST main phase, so the host has an attack to make before the end
+  step, and only when the declaration itself says it would attack once
+  it has the gifts (`_would_attack_with`, the keywords granted under the
+  journal and unmade, exactly as the Factory probe asks). A 2/2, a body
+  that already tramples, a summoning-sick Wurm, the second main phase,
+  a Wurm facing two Wurms: kept.
+- **The conscript swings.** A creature of ours under Aggression — ours
+  or one they hung on us — is no blocker if it stays home; it is
+  destroyed at our own end step first. `_conscripted` (the requirement
+  or the attach) replaces `_must_attack` at every planner site: the
+  candidates, the lethal push, the final loop, the mistake drop, the cap
+  trim and the combat model's forced mask. The engine's refusal-repair
+  rung keeps `_must_attack`, because that rung is about what the engine
+  demands. The bare Bears still stay home.
+- **The conjunction.** `aura_gifts` matched phrases on the raw text, so
+  "has first strike and trample" was first strike alone (and Wings of
+  Aesthir's "flying and first strike" was flying alone).
+  `_read_conjunctions` rewrites only the tail of a sentence after its
+  "has", so "loses flying and trample" stays what it says; every base
+  reading in `test_ai_aura_hosts` is unchanged.
+
+`test_ai_aggression_2026_09_25`: sixteen tests, proven to bite against
+the previous planner with the new reader (seven failures: the walk-
+through, the trade, the tapped blocker, the Wurm's gift, the Wurm
+facing two Wurms, both conscripts).
+
+Gate: 508 scripts, **7,795/7,795 tests, 357,468 asserts**, exit 0 in
+255 s over 6 shards; Python 307, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

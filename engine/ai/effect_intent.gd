@@ -961,6 +961,19 @@ const AURA_HOSTILE := {
 	"Merseine": true,              # no untap while it keeps a net counter
 	"Essence Flare": true,         # -0/-1 counter every upkeep
 	"Phyrexian Boon": true,        # -1/-2 unless the host is black
+	# THE CONSCRIPTION (2026-09-25). Aggression grants first strike and
+	# trample, and destroys its host at its controller's end step if it
+	# did not attack — a removal spell for a body that will not swing
+	# into our board, which the owner ruled is its first use: *"aggression
+	# can be played on enemy creature to destroy it if the creature is a
+	# threat. Cast on own creatures only if trample and first strike would
+	# gain critical advantage (especially trample for creatures with large
+	# power, 4 and above lets say…)"*. The row aims it across the table;
+	# the friendly exception is [method AiPlayer._conscription_host], and
+	# what makes the hostile side an actual kill is
+	# [method AiPlayer._conscription_kills]. Read as a clause, not a name:
+	# [method aura_conscripts].
+	"Aggression": true,            # attack or be destroyed
 }
 
 
@@ -989,6 +1002,22 @@ static func aura_is_classified(data: CardData) -> bool:
 		return false
 	return data.aura_steals or data.aura_reanimates or data.aura_graveyard_entry \
 		or data.aura_grants_protection != 0 or AURA_HOSTILE.has(data.card_name)
+
+
+## THE CLAUSE THAT CONSCRIPTS (2026-09-25): does [param data] destroy the
+## creature it enchants when that creature "didn't attack this turn"
+## (Aggression)? Read off the oracle text like [method aura_gifts], so a
+## second card with the same clause is read the same way without a row
+## anywhere. A host under such an aura is no blocker on the turn it stays
+## home — it is destroyed at its controller's end step first — so the
+## attack planner sends it ([method AiPlayer._conscripted]), and the
+## picker treats the aura as removal that only works on a body we can
+## afford to see attack ([method AiPlayer._conscription_kills]).
+static func aura_conscripts(data: CardData) -> bool:
+	if data == null or not data.is_aura():
+		return false
+	var text := data.oracle_text.to_lower()
+	return text.contains("destroy") and text.contains("didn't attack this turn")
 
 
 ## WHAT A FRIENDLY AURA GIVES ITS HOST, read off the card's own words —
@@ -1042,7 +1071,7 @@ static func aura_gifts(data: CardData) -> Array:
 	if _aura_gifts_cache.has(data.card_name):
 		return _aura_gifts_cache[data.card_name]
 	var out: Array = []
-	var text := data.oracle_text.to_lower()
+	var text := _read_conjunctions(data.oracle_text.to_lower())
 	for phrase in AURA_GRANTS:
 		if text.contains(phrase):
 			var grant: Dictionary = AURA_GRANTS[phrase]
@@ -1053,6 +1082,27 @@ static func aura_gifts(data: CardData) -> Array:
 			out.append({"keyword": -1, "landwalk": land, "attack_only": true})
 	_aura_gifts_cache[data.card_name] = out
 	return out
+
+
+## "has first strike and trample" spelt out as "has first strike has
+## trample", so every keyword of a conjunctive grant is matched by the
+## phrase table (2026-09-25 — Aggression's trample and Wings of Aesthir's
+## first strike were read as nothing). Only the tail of a sentence AFTER
+## its "has" is rewritten: "loses flying and trample" stays what it says,
+## and a sentence with no grant in it is not touched at all.
+static func _read_conjunctions(text: String) -> String:
+	var lines := PackedStringArray()
+	for line in text.split("\n"):
+		var sentences := PackedStringArray()
+		for sentence in line.split(". "):
+			var at := sentence.find(" has ")
+			if at < 0:
+				sentences.append(sentence)
+				continue
+			sentences.append(sentence.substr(0, at)
+				+ sentence.substr(at).replace(" and ", " has ").replace(", ", " has "))
+		lines.append(". ".join(sentences))
+	return "\n".join(lines)
 
 
 ## Would [param host] get anything from [param data]? False when every

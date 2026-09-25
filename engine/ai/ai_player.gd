@@ -1285,6 +1285,9 @@ static func _combined_cost(a: ManaCost, b: ManaCost) -> ManaCost:
 const ABILITY_BAR_MAIN := 3.0
 const ABILITY_BAR_UPKEEP := 2.0
 const ABILITY_BAR_SINK := 0.5
+## The power from which trample is worth an aura that destroys its host
+## if it stays home — the owner's "4 and above" ([method _conscription_host]).
+const CONSCRIPTION_POWER := 4
 
 ## COMBAT is THEIR combat with the attackers declared and the damage not
 ## yet dealt (2026-09-08, [member AiProfile.times_sweeps]): the one
@@ -8047,7 +8050,7 @@ func _attack_candidates(game: MtgGame, defender: int) -> Array[CardInstance]:
 		if inst.is_creature() \
 				and CombatState.attack_illegality(game, inst, defender) == "" \
 				and _attack_costs_payable(game, inst):
-			if held.has(inst.id) and not _must_attack(inst):
+			if held.has(inst.id) and not _conscripted(game, inst):
 				continue
 			candidates.append(inst)
 	return candidates
@@ -8077,7 +8080,7 @@ func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
 	var attackers: Array = []
 	if lethal_push:
 		for inst in candidates:
-			if inst.cur_power <= 0 and not _must_attack(inst):
+			if inst.cur_power <= 0 and not _conscripted(game, inst):
 				continue
 			attackers.append(inst.id)
 	else:
@@ -8117,9 +8120,12 @@ func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
 	# the turn (Nettling Imp, Siren's Call — `must_attack_this_turn`).
 	# Both are requirements the engine refuses to see broken (CR 508.1d);
 	# before the 2026-09-02 sweep the AI knew only the keyword and an
-	# ordered Bears wedged the declare-attackers step for good.
+	# ordered Bears wedged the declare-attackers step for good. A body
+	# that ATTACKS OR DIES (Aggression, 2026-09-25) goes with them: the
+	# engine would let it stay home, and destroy it at our end step for
+	# it, before it could block anything ([method _conscripted]).
 	for inst in candidates:
-		if _must_attack(inst) and not attackers.has(inst.id):
+		if _conscripted(game, inst) and not attackers.has(inst.id):
 			attackers.append(inst.id)
 	return attackers
 
@@ -8663,7 +8669,7 @@ func _declare_attacks(game: MtgGame) -> String:
 	if attackers.size() > 0 and game.rng.randf() < profile.mistake_chance:
 		var drop_index := game.rng.randi_range(0, attackers.size() - 1)
 		var dropped := game.find_instance(attackers[drop_index])
-		if not _must_attack(dropped):
+		if not _conscripted(game, dropped):
 			attackers.remove_at(drop_index)
 	# RESTRICTIONS beat requirements (CR 508.1d): a blanket ban (Festival)
 	# empties the declaration; an attacker cap (Caverns of Despair) trims
@@ -8727,8 +8733,38 @@ func _declare_attacks(game: MtgGame) -> String:
 
 ## Is [param inst] under an attack REQUIREMENT — "attacks each combat if
 ## able" (Juggernaut) or "attacks this turn if able" (Nettling Imp)?
+## The engine's question: a declaration that leaves such a body home is
+## refused (CR 508.1d). The planner's wider one is [method _conscripted].
 static func _must_attack(inst: CardInstance) -> bool:
 	return inst.has_keyword(Mtg.Keyword.MUST_ATTACK) or inst.must_attack_this_turn
+
+
+## THE CONSCRIPTION (2026-09-25). Is [param inst] a body this planner
+## sends whatever the analysis said — under an attack requirement
+## ([method _must_attack]), or under an aura that destroys it at its
+## controller's end step if it did not attack (Aggression,
+## [method EffectIntent.aura_conscripts])? The second is no requirement
+## — the engine accepts the declaration without it — but it is the same
+## decision: the creature that stays home is destroyed before the
+## opponent's turn, so it blocks nothing by staying, and attacking it can
+## lose no more than staying already has. Every site that once asked
+## [method _must_attack] asks this instead, except the refusal-repair rung
+## of [method _declare_attacks], which is about what the ENGINE demands.
+func _conscripted(game: MtgGame, inst: CardInstance) -> bool:
+	return _must_attack(inst) or _attacks_or_dies(game, inst)
+
+
+## Is [param inst] enchanted by an aura that destroys it if it does not
+## attack this turn? Read off the attachments, so it is true for our own
+## Aggression and for one the opponent hung on us alike.
+func _attacks_or_dies(game: MtgGame, inst: CardInstance) -> bool:
+	if inst == null:
+		return false
+	for id in inst.attachments:
+		var aura := game.find_instance(id)
+		if aura != null and EffectIntent.aura_conscripts(aura.data):
+			return true
+	return false
 
 
 ## Can every attack cost on [param inst] (Brainwash's "{3}") be paid right
@@ -8753,7 +8789,7 @@ func _trim_attackers_to_cap(game: MtgGame, ids: Array) -> Array:
 		var inst := game.find_instance(id)
 		if inst == null:
 			continue
-		if _must_attack(inst):
+		if _conscripted(game, inst):
 			keep.append(id)
 		else:
 			optional.append(inst)
@@ -9051,7 +9087,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.a_val[i] = AiContextValue.of(game, inst, profile)
 		search.a_id[i] = inst.id
 		search.a_can_attack[i] = 1 if candidates.has(inst) else 0
-		search.a_forced[i] = 1 if (candidates.has(inst) and _must_attack(inst)) else 0
+		search.a_forced[i] = 1 if (candidates.has(inst) and _conscripted(game, inst)) else 0
 		# THE FACTORY ANIMATED FOR NOTHING (2026-09-08,
 		# [member AiProfile.animates_to_attack]): a body that is a creature
 		# only until end of turn is a land again before they swing, so it
@@ -10639,6 +10675,16 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 		# Wall that blocked it, the permanent that shares its type), and
 		# the partner may sit on either side of the table.
 		pools.append(game.opponent_of(pool_pid))
+	# THE CONSCRIPTION AURA (2026-09-25, Aggression — see
+	# EffectIntent.AURA_HOSTILE's row): removal for a body that will not
+	# attack into us, and only for one. Hung on a creature of theirs that
+	# swings freely it is first strike and trample for them, so their loop
+	# below keeps to the bodies [method _conscription_kills] answers for.
+	# And with nothing of theirs worth it, the owner's exception: our own
+	# big attacker that lacks trample, when the declaration itself says it
+	# would swing with the gifts ([method _conscription_host]).
+	var conscripts := harmful and profile.fits_auras and source.data.is_aura() \
+		and EffectIntent.aura_conscripts(source.data)
 	var best: CardInstance = null
 	var best_value := -1.0
 	for scan_pid in pools:
@@ -10648,6 +10694,8 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 				continue
 			if _already_chosen(ref, earlier):
 				continue   # "two target creatures" are two DIFFERENT ones (CR 601.2c)
+			if conscripts and scan_pid != pid and not _conscription_kills(game, inst):
+				continue
 			# Don't waste damage — fixed or X — on what it can't kill.
 			if harmful and intent != null and intent.damage_at(x_value) > 0 \
 					and inst.is_creature() and not intent.kills(inst, x_value):
@@ -10675,6 +10723,10 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			break
 	if best != null:
 		return TargetRef.card(best)
+	if conscripts:
+		var host := _conscription_host(game, source, spec, x_value, earlier)
+		if host != null:
+			return TargetRef.card(host)
 	# THE LIABILITY (2026-09-09, AiProfile.prices_liabilities), and the
 	# LAST thing this picker tries, because their board comes first: with
 	# nothing of theirs worth taking, is one of OURS worth giving up? A
@@ -10708,6 +10760,94 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 				x_value, earlier):
 		return TargetRef.player(opponent)
 	return null
+
+
+## THE CONSCRIPTION AS REMOVAL (2026-09-25). Would an aura that destroys
+## its host "if it didn't attack this turn" actually take [param theirs]
+## off the table? Yes when it cannot attack at all — a Wall, a body under
+## a "can't attack" — and otherwise only when some untapped creature of
+## ours can block it, SURVIVE its hit (the aura gives it first strike, so
+## the hit lands first and lands whole: a blocker that would trade with
+## it today is a blocker that dies for nothing tomorrow) and kill it. A
+## creature that walks through our board every turn is not a threat this
+## card removes; it is a threat this card arms.
+func _conscription_kills(game: MtgGame, theirs: CardInstance) -> bool:
+	if not theirs.is_creature():
+		return false
+	if theirs.cur_cant_attack or theirs.has_keyword(Mtg.Keyword.DEFENDER):
+		return true
+	var grows := _pump_reach(game, theirs)
+	for blocker in game.players[pid].battlefield:
+		if not blocker.is_creature() or blocker.tapped:
+			continue
+		if CombatState.block_illegality(game, blocker, theirs, pid, true, pid) != "":
+			continue
+		if blocker.cur_toughness - blocker.damage \
+				<= _damage_after_prevention(theirs, blocker, grows):
+			continue
+		if _dies_to(game, theirs, blocker):
+			return true
+	return false
+
+
+## THE OWNER'S EXCEPTION (2026-09-25): the creature of our OWN a
+## conscription aura may go on — *"only if trample and first strike would
+## gain critical advantage (especially trample for creatures with large
+## power, 4 and above lets say…)"*. So: our first main phase (the aura
+## must have an attack to send its host into before the end step
+## destroys it), a body of at least [constant CONSCRIPTION_POWER] power
+## that lacks trample where the aura grants it, and the declaration
+## itself — the aura's keywords granted under the journal and unmade,
+## as [method _would_attack_once_animated] asks it — says it would
+## attack. The most valuable such body; null when there is none, and the
+## aura waits in hand for a turn that has one.
+func _conscription_host(game: MtgGame, source: CardInstance, spec: TargetSpec,
+		x_value: int, earlier: Array) -> CardInstance:
+	if game.active_player != pid or game.current_step() != Mtg.Step.MAIN1:
+		return null
+	var keywords: Array = []
+	for gift in EffectIntent.aura_gifts(source.data):
+		if int(gift["keyword"]) >= 0:
+			keywords.append(int(gift["keyword"]))
+	if not keywords.has(Mtg.Keyword.TRAMPLE):
+		return null
+	var defender := game.opponent_of(pid)
+	var best: CardInstance = null
+	for inst in game.players[pid].battlefield:
+		if not inst.is_creature() or inst.cur_power < CONSCRIPTION_POWER \
+				or inst.has_keyword(Mtg.Keyword.TRAMPLE):
+			continue
+		var ref := TargetRef.card(inst)
+		if not game.target_legal_at(spec, ref, source, x_value, earlier) \
+				or _already_chosen(ref, earlier):
+			continue
+		if CombatState.attack_illegality(game, inst, defender) != "":
+			continue
+		if best != null and Evaluator.permanent_value(inst, profile) \
+				<= Evaluator.permanent_value(best, profile):
+			continue
+		if _would_attack_with(game, inst, keywords, defender):
+			best = inst
+	return best
+
+
+## Would the declaration send [param inst] once it has [param keywords]
+## until end of turn? The deterministic half of the declaration under the
+## journal, exactly as [method _would_attack_once_animated] asks it.
+func _would_attack_with(game: MtgGame, inst: CardInstance, keywords: Array,
+		defender: int) -> bool:
+	var owned := game.undo_log == null
+	var mark := game.make_mark()
+	game.continuous.add_until_eot_keywords(inst.id, keywords)
+	game.recalculate()
+	var would := false
+	var candidates := _attack_candidates(game, defender)
+	if candidates.has(inst):
+		would = _attack_choice(game, candidates, defender).has(inst.id)
+	game.unmake_to(mark)
+	if owned:
+		game.end_search()
+	return would
 
 
 ## THE ONE DOOR (2026-09-09, [member AiProfile.prices_liabilities] and

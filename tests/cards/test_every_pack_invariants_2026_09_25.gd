@@ -140,11 +140,12 @@ func test_only_reviewed_pack_triggers_opt_into_aftermath() -> void:
 func test_every_pack_aura_is_classified() -> void:
 	# Swept 2026-09-25: pumps, grants, wards and engines the pack Auras
 	# put on our own creature or land; the three that hurt their host are
-	# in AURA_HOSTILE. Aggression stays friendly on purpose — its first
-	# strike and trample are read as grants that pick an attacker, and
-	# the end-step destroy is the price of not attacking with it.
+	# in AURA_HOSTILE, and so is Aggression since the owner's ruling the
+	# same day — removal for a body that will not attack into us, with
+	# the friendly exception (a big attacker that lacks trample) decided
+	# per board by AiPlayer, not by this table. See test_ai_aggression.
 	const REVIEWED_FRIENDLY: Array[String] = [
-		"Aggression", "Armor of Faith", "Awesome Presence", "Bestial Fury",
+		"Armor of Faith", "Awesome Presence", "Bestial Fury",
 		"Black Scarab", "Blue Scarab", "Carapace", "Caribou Range",
 		"Casting of Bones", "Chromatic Armor", "Cloak of Confusion", "Cooperation",
 		"Earthlore", "Errantry", "False Demise", "Farrel's Mantle",
