@@ -16341,6 +16341,52 @@ window is not known client-side (the host referees the play itself).
 Gate: 502 scripts, **7,747/7,747 tests, 345,776 asserts**, exit 0 in
 236 s over 6 shards; Python 299, exit 0; boot smoke clean.
 
+## 2026-09-25 — Pack 7: Fifth Edition (0.40.13)
+
+*"Similarly as previous sets are built, please create pack 7 - 5th
+edition, along with our set icons and everything else."* Fifth Edition
+is the core set of the game's own year, and it is REPRINTS ALONE: the
+Scryfall snapshot (`set:5ed`, English numbered 1–449, the five `†`
+misprints and foreign printings out) is 449 printings of 434 names, 287
+of them the core pool and 147 first printed in Ice Age (89), Homelands
+(29) and Fallen Empires (29) — none from Alliances or Portal, and Serra
+Angel not among them. So the pack contract is a new shape: `new_names()`
+is empty, `reprint_names.json` is every name, and `shared_names.json`
+keys the 147 to the expansion whose script the pack reuses
+(`FifthEditionPack.scripts()` points at `cards/sets/<orig>/`, `"set":
+"5ed"`, so the card wears the V when Pack 7 is its only provider).
+`CardPacks` generalised what Portal's six shared reprints had by hand:
+`_shared_source(name)` (Portal's table, then Fifth Edition's),
+`_shared_provider(name, excluding)` walks original → Portal → Fifth
+Edition and answers the first enabled, `_numbered_set(code)` gives the
+basic lands `5ed:<n>` variant ids and `stem__<n>` art like Portal's;
+`_configure_registry` walks the originals first so their scripts win
+when both are on. The gold Roman **V** (`_roman_five`: the IV's own V,
+moved 0.18 left to stand centred) is the set icon and the Extras stone
+medallions; the Card Packs screen has its seventh block, the Deck
+Builder its `Fifth Ed. Pack 7` row, `DeckFilter.SET_LABELS` its
+"Fifth Edition", Help's variant paragraph its four illustrations per
+basic land. Builder `tools/pack_7_fifth_edition.py` (fetch / fetch-art /
+build / verify; 1,196 entries: four metadata, 898 namespaced pictures,
+294 `skin/cardart/` fallbacks for the shared names only), registered in
+`run_tests.sh` (metadata-only stub as `SHANDALAR_PACK_7`),
+`package_release.py` and its test. The real ZIP was built from the 449
+pinned printings (116 MB, verify ok) and checked through the loader in
+Godot: `has_art`, `forest__447.jpg`, `CardPrintings.texture("Forest",
+"5ed:448")` a real picture; it stays in `../shandalar-packs/`. Pins:
+`tests/cards/test_pack_7_catalogue.gd` (alone: 434 names in set, 1,044
+identities, every shared card `set_code` 5ed and required by `pack-7`,
+Shivan Dragon in the set and Serra Angel not; beside Ice Age: `ice` wins,
+no disable warning until the last provider goes; Portal's two shared
+Ice Age names; all packs still 1,898; four `5ed:` Forests),
+`tests/ui/test_pack_7_integration.gd` (badge `7-5ED`, "1,331 set
+entries · 1,044 unique cards", Extras medallions `filter_5ed_*` with 434
+live rows, Options block, emblems 48×48, LAN fingerprint),
+`tools/test_pack_7_fifth_edition.py` (checklist entirely reprints, the
+shared map's sets and scripts, determinism, tampering). Gate: 504
+scripts, **7,757/7,757 tests, 346,186 asserts**, exit 0 in 246 s over 6
+shards; Python 307, exit 0; boot smoke clean.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

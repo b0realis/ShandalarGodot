@@ -83,7 +83,7 @@ func discover() -> void:
 	_available.clear()
 	_rejections.clear()
 	_art_cache.clear()
-	for path in candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) + candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID):
+	for path in candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) + candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID) + candidate_paths(FifthEditionPack.ID):
 		if not FileAccess.file_exists(path):
 			continue
 		var id := FallenEmpiresPack.ID if path.get_file() == FallenEmpiresPack.FILE_NAME else ID
@@ -95,6 +95,8 @@ func discover() -> void:
 			id = AlliancesPack.ID
 		if path.get_file() == PortalPack.FILE_NAME:
 			id = PortalPack.ID
+		if path.get_file() == FifthEditionPack.FILE_NAME:
+			id = FifthEditionPack.ID
 		if _available.has(id):
 			continue
 		var report := inspect(path)
@@ -151,6 +153,8 @@ static func candidate_paths(id := ID) -> Array[String]:
 ## metadata-only build is accepted only by the isolated test profile; a pack a
 ## player can enable carries the exact 754 expected image paths and still no code.
 static func inspect(path: String) -> Dictionary:
+	if path.get_file() == FifthEditionPack.FILE_NAME:
+		return FifthEditionPack.inspect(path)
 	if path.get_file() == PortalPack.FILE_NAME:
 		return PortalPack.inspect(path)
 	if path.get_file() == HomelandsPack.FILE_NAME:
@@ -459,13 +463,13 @@ func open_folder() -> void:
 
 
 ## Available installed printings. Earlier packs expose their supplied
-## printing per name/set; both Portal sets carry every numbered version.
+## printing per name/set; the Portal sets and Fifth Edition carry every numbered version.
 func printing_choices(card_name: String) -> Array:
 	if not _printing_cache_ready:
 		for id in available_ids():
 			if not is_enabled(id): continue
 			for row in _available[id].cards:
-				var choice_id: String = row.set + (":" + row.collector_number if PortalPack.SET_COUNTS.has(row.set) else "")
+				var choice_id: String = row.set + (":" + row.collector_number if _numbered_set(row.set) else "")
 				var entries: Array = _printing_cache.get(row.name, [])
 				var duplicate := false
 				for old in entries:
@@ -500,6 +504,8 @@ func art_path(card_name: String, set_code: String, full_card := false, number :=
 		id = AlliancesPack.ID
 	if PortalPack.SET_COUNTS.has(set_code):
 		id = PortalPack.ID
+	if FifthEditionPack.SET_COUNTS.has(set_code):
+		id = FifthEditionPack.ID
 	if not is_enabled(id) or set_code == "":
 		return ""
 	var report: Dictionary = _available[id]
@@ -516,8 +522,10 @@ func art_path(card_name: String, set_code: String, full_card := false, number :=
 		prefix = AlliancesPack.PREFIX
 	if id == PortalPack.ID:
 		prefix = PortalPack.PREFIX
+	if id == FifthEditionPack.ID:
+		prefix = FifthEditionPack.PREFIX
 	var stem := _snake(card_name)
-	if PortalPack.SET_COUNTS.has(set_code) and number != "":
+	if _numbered_set(set_code) and number != "":
 		var first := ""
 		var found := false
 		for row in report.cards:
@@ -566,9 +574,11 @@ func current_deck_conflicts(id: String) -> Array[String]:
 	if id == PortalPack.ID:
 		names = PortalPack.new_names()
 		names.append_array(PortalPack.SHARED.keys())
+	if id == FifthEditionPack.ID:
+		names = FifthEditionPack.shared().keys()
 	for name in names:
 		if _current_deck_names.has(name):
-			if PortalPack.SHARED.has(name) and not _shared_provider(name, id).is_empty(): continue
+			if _shared_source(name) != "" and not _shared_provider(name, id).is_empty(): continue
 			found.append(name)
 	return found
 
@@ -590,7 +600,7 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 	var fifth := AlliancesPack.new_names()
 	var sixth := PortalPack.new_names()
 	for name in names:
-		if PortalPack.SHARED.has(name):
+		if _shared_source(name) != "":
 			var provider := _shared_provider(name)
 			if not ids.has(provider): ids.append(provider)
 			continue
@@ -610,6 +620,8 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 
 
 static func file_name_for(id: String) -> String:
+	if id == FifthEditionPack.ID:
+		return FifthEditionPack.FILE_NAME
 	if id == PortalPack.ID:
 		return PortalPack.FILE_NAME
 	if id == AlliancesPack.ID:
@@ -647,7 +659,8 @@ func _configure_registry() -> void:
 	var scripts: Array = []
 	var records: Array = []
 	var provided := {}
-	for contract in [FallenEmpiresPack, IceAgePack, HomelandsPack, AlliancesPack, PortalPack]:
+	# Original expansions first: their scripts win over the reprint packs.
+	for contract in [FallenEmpiresPack, IceAgePack, HomelandsPack, AlliancesPack, PortalPack, FifthEditionPack]:
 		if is_enabled(contract.ID):
 			var report: Dictionary = _available[contract.ID]
 			sets.merge(report.catalog.sets)
@@ -659,10 +672,25 @@ func _configure_registry() -> void:
 	CardRegistry.configure_expansion_packs(sets, scripts, records)
 
 
-## A reprint needs any one enabled provider, not both packs.
+## Sets whose basic lands ship several numbered illustrations.
+static func _numbered_set(set_code: String) -> bool:
+	return PortalPack.SET_COUNTS.has(set_code) or FifthEditionPack.SET_COUNTS.has(set_code)
+
+
+## The expansion whose script a Portal or Fifth Edition reprint reuses.
+static func _shared_source(name: String) -> String:
+	if PortalPack.SHARED.has(name):
+		return PortalPack.SHARED[name]
+	return String(FifthEditionPack.shared().get(name, ""))
+
+
+## A reprint needs any one enabled provider, not every pack that carries it.
 func _shared_provider(name: String, excluding := "") -> String:
-	var original := {"ice": IceAgePack.ID, "hml": HomelandsPack.ID, "all": AlliancesPack.ID}
-	var first: String = original[PortalPack.SHARED[name]]
-	for id in [first, PortalPack.ID]:
+	var original := {"fem": FallenEmpiresPack.ID, "ice": IceAgePack.ID,
+		"hml": HomelandsPack.ID, "all": AlliancesPack.ID}
+	var ids: Array[String] = [original[_shared_source(name)]]
+	if PortalPack.SHARED.has(name): ids.append(PortalPack.ID)
+	if FifthEditionPack.shared().has(name): ids.append(FifthEditionPack.ID)
+	for id in ids:
 		if id != excluding and is_enabled(id): return id
-	return first if excluding.is_empty() else ""
+	return ids[0] if excluding.is_empty() else ""

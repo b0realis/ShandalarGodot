@@ -1242,7 +1242,7 @@ static func _page_builder() -> Dictionary:
 			+ "Select a printing, preview it and press Use variant. Automatic follows the set filter. "
 			+ "Your saved deck remembers one printing for every copy of that card name, including the sideboard. "
 			+ "Rules, copy limits and draft pools stay the same. Missing artwork falls back to the normal face. "
-			+ "Portal includes four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
+			+ "Portal and Fifth Edition include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
 		_text("LOAD is a door to the Load Deck dialog from the bar: "
 			+ "your own decks head the list, a finder above it keeps the "
 			+ "rows whose title or file name contains what you type, "

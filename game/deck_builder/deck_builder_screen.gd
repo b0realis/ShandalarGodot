@@ -1000,6 +1000,11 @@ func _open_extra_sets() -> void:
 			if filter.set_on("p02") != on:
 				filter.toggle_set("p02"),
 		"Portal Second Age (1998): 155 distinct cards and 165 printings.\nA second beginner set within Pack 6, with its own artwork and filters.")
+	_extra_source_row(body, "Pack7", "Fifth Ed. Pack 7", CardRegistry.extra_set_order().has("5ed"),
+		filter.set_on("5ed"), func(on: bool) -> void:
+			if filter.set_on("5ed") != on:
+				filter.toggle_set("5ed"),
+		"Fifth Edition (1997): 434 distinct cards across 449 printings, all reprints.\nFour illustrations for each basic land; other filters still apply.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 

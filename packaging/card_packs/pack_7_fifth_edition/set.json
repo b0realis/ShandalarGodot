@@ -1,0 +1,11 @@
+{
+  "all_printings": 449,
+  "code": "5ed",
+  "name": "Fifth Edition",
+  "released_at": "1997-03-24",
+  "retrieved_at": "2026-09-25",
+  "selection": "Original English numbered printings 1–449; excludes the five † misprint variants and foreign printings.",
+  "source_url": "https://api.scryfall.com/cards/search?include_extras=true&include_variations=true&order=set&q=e%3A5ed&unique=prints",
+  "standard_printings": 449,
+  "unique_names": 434
+}

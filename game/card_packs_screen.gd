@@ -25,6 +25,9 @@ var _fifth_disable: Button
 var _sixth_status: Label
 var _sixth_enable: Button
 var _sixth_disable: Button
+var _seventh_status: Label
+var _seventh_enable: Button
+var _seventh_disable: Button
 
 
 func _ready() -> void:
@@ -167,11 +170,27 @@ func _ready() -> void:
 	_sixth_disable.pressed.connect(_request_disable.bind(PortalPack.ID))
 	sixth_actions.add_child(_sixth_disable)
 	content.add_child(sixth_actions)
+	content.add_child(UiChrome.body_label("7-5ED — Pack 7: Fifth Edition", 18))
+	_seventh_status = UiChrome.body_label("", 14)
+	_seventh_status.name = "Pack7Status"
+	_seventh_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_seventh_status)
+	var seventh_actions := HBoxContainer.new()
+	seventh_actions.add_theme_constant_override("separation", 10)
+	_seventh_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
+	_seventh_enable.name = "EnablePack7"
+	_seventh_enable.pressed.connect(CardPacks.set_enabled.bind(FifthEditionPack.ID, true))
+	seventh_actions.add_child(_seventh_enable)
+	_seventh_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
+	_seventh_disable.name = "DisablePack7"
+	_seventh_disable.pressed.connect(_request_disable.bind(FifthEditionPack.ID))
+	seventh_actions.add_child(_seventh_disable)
+	content.add_child(seventh_actions)
 
 	var local_only := UiChrome.body_label(
 		"Packs are not distributed with the game. Build them locally with "
 		+ "tools/pack_1_dotp_complete.py, tools/pack_2_fallen_empires.py, "
-		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py or tools/pack_6_portal.py, "
+		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py, tools/pack_6_portal.py or tools/pack_7_fifth_edition.py, "
 		+ "place the exact ZIP here, then Rescan.", 13)
 	local_only.name = "LocalOnly"
 	local_only.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -210,6 +229,16 @@ func _ready() -> void:
 
 
 func _refresh() -> void:
+	var seventh := CardPacks.status(FifthEditionPack.ID)
+	_seventh_enable.disabled = not seventh.available or seventh.enabled
+	_seventh_disable.disabled = not seventh.available or not seventh.enabled
+	if seventh.available:
+		_seventh_status.text = "Status: %s — Version: %s — Minimum game: %s\n" % [
+			"Enabled" if seventh.enabled else "Disabled", seventh.version, seventh.minimum_game_version]
+		_seventh_status.text += "434 names · 449 printings · 0 new identities\nDeck Builder filter: Extras > Fifth Edition"
+	else:
+		_seventh_status.text = "Status: Not available\nExpected: %s\nReason: %s" % [
+			FifthEditionPack.FILE_NAME, seventh.rejection]
 	var sixth := CardPacks.status(PortalPack.ID)
 	_sixth_enable.disabled = not sixth.available or sixth.enabled
 	_sixth_disable.disabled = not sixth.available or not sixth.enabled

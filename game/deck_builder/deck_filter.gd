@@ -185,6 +185,7 @@ const SET_LABELS := {
 	"all": "Alliances",
 	"por": "Portal",
 	"p02": "Portal Second Age",
+	"5ed": "Fifth Edition",
 	"2ed": "Unlimited",
 	"arn": "Arabian nights",
 	"atq": "Antiquities",

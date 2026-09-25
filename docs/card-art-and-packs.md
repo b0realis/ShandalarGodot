@@ -87,6 +87,18 @@ python3 tools/pack_6_portal.py build cardpacks/Pack-6-Portal.zip
 python3 tools/pack_6_portal.py verify cardpacks/Pack-6-Portal.zip
 ```
 
+Pack 7 — Fifth Edition (requires game 0.40.13 or later). The 1997 core
+set: 434 names and 449 printings, every one a reprint of the base game or
+of Packs 2 to 4, with four illustrations for each basic land. The pack adds
+pictures and a Fifth Edition source for the 147 Ice Age, Homelands and
+Fallen Empires cards it reprints; it adds no rules of its own:
+
+```sh
+python3 tools/pack_7_fifth_edition.py fetch-art
+python3 tools/pack_7_fifth_edition.py build cardpacks/Pack-7-Fifth-Edition.zip
+python3 tools/pack_7_fifth_edition.py verify cardpacks/Pack-7-Fifth-Edition.zip
+```
+
 Run `build` only after `fetch-art` succeeds. Each builder's default artwork
 cache is `../shandalar-packs/cache/pack_N_art/`, relative to the game folder.
 To put it elsewhere, pass the same `--art-dir PATH` to `fetch-art` and `build`.
@@ -117,7 +129,8 @@ extracted-game-folder/
     ├── Pack-3-Ice_Age.zip
     ├── Pack-4-Homelands.zip
     ├── Pack-5-Alliances.zip
-    └── Pack-6-Portal.zip
+    ├── Pack-6-Portal.zip
+    └── Pack-7-Fifth-Edition.zip
 ```
 
 On Mac, `skin/` and `cardpacks/` go **beside Shandalar.app**, never inside

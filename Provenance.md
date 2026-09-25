@@ -771,6 +771,23 @@ including the separate blocking-event conditions in 509.3 and banding.
 computer players continue to use public information and their own hands;
 legal resolution choices do not grant advance access to hidden information.
 
+## Fifth Edition Pack 7 (2026-09-25)
+
+The checked-in snapshot is Scryfall's `set:5ed` catalogue and Oracle text
+from [the set API](https://api.scryfall.com/sets/5ed), filtered to the
+English collector numbers 1–449: 449 printings and 434 names. The five
+`†` misprint variants and foreign-language printings are excluded. Exact
+Scryfall IDs pin each crop and full scan to the credited artist and
+number. Metadata is checked in; downloaded artwork and the built ZIP
+remain local.
+
+Fifth Edition adds no rules identity. Its 434 names are all reprints:
+287 of the 1997 pool, and 147 of Ice Age, Homelands and Fallen Empires,
+whose existing scripts the pack reuses under `packaging/card_packs/pack_7_fifth_edition/shared_names.json`.
+No printed Fifth Edition card wears a set symbol; the emblem is our own
+gold Roman `V`, the Fourth Edition numeral's sibling, drawn by
+`tools/draw_our_art.gd` and recorded with its hashes in `game/art/README.md`.
+
 ## Where the citations live
 
 This file is the register; the citations themselves are in the work.

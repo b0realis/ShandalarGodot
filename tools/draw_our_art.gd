@@ -116,7 +116,7 @@ const OUT_DIR := "res://game/art"
 func _init() -> void:
 	var dir := ProjectSettings.globalize_path(OUT_DIR)
 	DirAccess.make_dir_recursive_absolute(dir)
-	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02"]:
+	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02", "5ed"]:
 		var img := _render(Vector2i(GLYPH_SIZE, GLYPH_SIZE),
 			[[_glyph(code), GOLD_LIT, GOLD_DARK]], RIM)
 		_write(img, dir, "set_icon_%s.png" % code)
@@ -132,6 +132,8 @@ func _init() -> void:
 	_write(_stone_medallion(false, _portal()), dir, "filter_por_off.png")
 	_write(_stone_medallion(true, _second_age()), dir, "filter_p02_on.png")
 	_write(_stone_medallion(false, _second_age()), dir, "filter_p02_off.png")
+	_write(_stone_medallion(true, _roman_five()), dir, "filter_5ed_on.png")
+	_write(_stone_medallion(false, _roman_five()), dir, "filter_5ed_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
@@ -200,6 +202,8 @@ func _glyph(code: String) -> Array:
 			return _portal()
 		"p02":
 			return _second_age()
+		"5ed":
+			return _roman_five()
 	return []
 
 
@@ -564,6 +568,17 @@ func _roman_four() -> Array:
 		Vector2(0.605, 0.865), Vector2(0.44, 0.265), Vector2(0.395, 0.265),
 	])
 	return [{"op": "add", "poly": i_bar}, {"op": "add", "poly": v}]
+
+
+## FIFTH EDITION — a Roman `V`, the third numeral of the family. The
+## very same slab-serif V the IV wears, moved left by 0.18 so it stands
+## centred in the square on its own; no printed Fifth Edition card wears
+## a symbol either, so the numeral keeps the core editions on one row.
+func _roman_five() -> Array:
+	var v := PackedVector2Array()
+	for point in _roman_four()[1]["poly"]:
+		v.append(Vector2(point.x - 0.18, point.y))
+	return [{"op": "add", "poly": v}]
 
 
 ## UNLIMITED — a Roman `II`, the Fourth Edition numeral's sibling

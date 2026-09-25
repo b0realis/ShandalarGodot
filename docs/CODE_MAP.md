@@ -30,8 +30,35 @@ needed); card files have NO class_name (they register by name instead);
   rules, undo, public-information planning and LAN integration.
 - `tests/ui/test_second_age_decks.gd`: exact lists, counts and printing IDs.
 
+## Fifth Edition, Pack 7 (2026-09-25)
+
+- `game/fifth_edition_pack.gd`: Pack 7's trusted 449-printing/434-name
+  snapshot, bounded ZIP inventory and hashes; a pure reprint contract
+  whose `scripts()` point at the 147 Ice Age, Homelands and Fallen Empires
+  originals it reuses, read from `shared_names.json`.
+- `packaging/card_packs/pack_7_fifth_edition/manifest.json`,
+  `reprint_names.json` (all 434 names), `shared_names.json` (147 names →
+  original set), `cards.json`, `set.json`, `README.txt`: the pack's
+  identity (`pack-7`, `Pack-7-Fifth-Edition.zip`, minimum game 0.40.13,
+  set order `5ed`); text only, no artwork.
+- `game/art/set_icon_5ed.png`, `filter_5ed_on.png`, `filter_5ed_off.png`:
+  the gold Roman V and its lit/dim carved-stone medallions; drawn by
+  `tools/draw_our_art.gd` (`_roman_five`), hashed in `game/art/README.md`.
+- `tools/pack_7_fifth_edition.py`, `tools/test_pack_7_fifth_edition.py`:
+  pinned-printing fetcher, deterministic local builder and bounded archive
+  validation tests (1,196 entries with art, 898 namespaced pictures plus
+  294 shared-name fallbacks).
+- `tests/cards/test_pack_7_catalogue.gd`, `tests/ui/test_pack_7_integration.gd`:
+  the pack alone and beside the originals (script ownership, providers,
+  disable warnings, numbered basic lands) and its title badge, Extras
+  medallions, Options block, LAN fingerprint.
+- `docs/pack-7-fifth-edition.md`, `docs/releases/0.40.13.md`: the pack
+  guide and the release note.
+
 ## Release package files
 
+- `docs/releases/0.40.13.md`: Pack 7, Fifth Edition — a pure reprint pack
+  with its own emblem, filter and printings.
 - `docs/releases/0.40.12.md`: the printed timing riders read the turn as it
   is (an extra combat opens "before attackers" again); the duel screen and
   the AI ask the engine's one timing query, so an untapped Nettling Imp

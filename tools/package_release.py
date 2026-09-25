@@ -24,7 +24,7 @@ PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel",
 MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
 LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64"}
 PACK_BUILDERS = ("pack_1_dotp_complete", "pack_2_fallen_empires", "pack_3_ice_age",
-                 "pack_4_homelands", "pack_5_alliances", "pack_6_portal")
+                 "pack_4_homelands", "pack_5_alliances", "pack_6_portal", "pack_7_fifth_edition")
 TOOLS = ("mtg_assets.py", "import_original.py", "fetch_card_art.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
          *(name + ".py" for name in PACK_BUILDERS))
@@ -36,6 +36,7 @@ PACK_DATA = {
        for name in PACK_BUILDERS[2:]},
 }
 PACK_DATA["pack_6_portal"] += ("cards_p02.json", "set_p02.json")
+PACK_DATA["pack_7_fifth_edition"] += ("shared_names.json",)
 BUILDER_DATA = tuple(f"cards/data/{code}.json" for code in pack_one.SET_ORDER) + tuple(
     f"packaging/card_packs/{pack}/{name}" for pack, names in PACK_DATA.items() for name in names)
 BASE_ASSIGNMENTS = "packaging/card_packs/pack_1_dotp_complete/base_assignments.json"

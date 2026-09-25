@@ -338,7 +338,7 @@ func _mount_art_cardpacks() -> void:
 	for path in cardpacks():
 		# Numbered gameplay archives have their own metadata prefix. Only
 		# CardPacks validates/mounts them, even when they are disabled.
-		if not [CardPacks.FILE_NAME, FallenEmpiresPack.FILE_NAME, IceAgePack.FILE_NAME, HomelandsPack.FILE_NAME, AlliancesPack.FILE_NAME, PortalPack.FILE_NAME].has(path.get_file()):
+		if not [CardPacks.FILE_NAME, FallenEmpiresPack.FILE_NAME, IceAgePack.FILE_NAME, HomelandsPack.FILE_NAME, AlliancesPack.FILE_NAME, PortalPack.FILE_NAME, FifthEditionPack.FILE_NAME].has(path.get_file()):
 			_mount_if_present(path, false)
 
 

@@ -87,6 +87,16 @@ by its printed set emblem. No reference bitmap or SVG is copied into these asset
 | `set_icon_p02.png` | Second Age gold gate, 48x48 | `tools/draw_our_art.gd` (`_second_age`) | GPL-3.0 | `c91a8f22bdce69b53756df56c41eab59ccbf255d8042eab1b00c3d0ee98d7d2e` |
 | `filter_p02_on.png` | Lit carved gate medallion, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `a143ca9be87d83b033e37e92426b6cb820b8f38fe68692193754c617df233998` |
 | `filter_p02_off.png` | Dim carved gate medallion, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `9552ee240dd7b567533bf05d6e89e73c75b1c1ccc29a47017bfe9f493c6d1be9` |
+
+Fifth Edition wears a Roman `V`: the same slab-serif V as the Fourth
+Edition `IV`, recentred on its own. No printed Fifth Edition card carries
+a set symbol, so the numeral keeps the core editions on one row.
+
+| File | Artwork | Generator | License | SHA-256 |
+|---|---|---|---|---|
+| `set_icon_5ed.png` | Fifth Edition — gold Roman V, 48x48 | `tools/draw_our_art.gd` (`_roman_five`) | GPL-3.0 | `8d519a87d10ec778056849f79cbf16139339a1f40a848b2f87edbc68c925d99e` |
+| `filter_5ed_on.png` | Fifth Edition — Roman V carved into lit stone, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `155226e7c77ef042dd60895c80764688bcb571003b3407a67665331236a0918e` |
+| `filter_5ed_off.png` | Fifth Edition — matching dim stone numeral, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `d1ff622048ab1b86b1709c27e683f5a97e8f5aedadb2ceb086a21b6ebd7d7522` |
 | `card_variant_on.png` | Card variants — two picture frames carved into a round stone medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `e9479fd2cc33a330f880ba9f73b4f39c56e78403ed955513c51e8fe039c0072a` |
 | `card_variant_off.png` | Card variants — matching recessed/dim medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `1d036fde388f708a42e77e337e405b2a132e3048b7f96ae0185128d05aa51034` |
 

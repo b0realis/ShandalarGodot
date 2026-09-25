@@ -196,6 +196,10 @@ python3 tools/test_pack_6_portal.py >/dev/null
 PACK_SIX_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-6-Portal.zip"
 python3 tools/pack_6_portal.py build "$PACK_SIX_PATH" --metadata-only >/dev/null
 export SHANDALAR_PACK_6="$PACK_SIX_PATH"
+python3 tools/test_pack_7_fifth_edition.py >/dev/null
+PACK_SEVEN_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-7-Fifth-Edition.zip"
+python3 tools/pack_7_fifth_edition.py build "$PACK_SEVEN_PATH" --metadata-only >/dev/null
+export SHANDALAR_PACK_7="$PACK_SEVEN_PATH"
 
 # Import step (quick no-op when the .godot cache is warm; a cold import
 # of the card art is minutes, not hours, so 600 s is generous). ONCE, and
@@ -206,7 +210,7 @@ export SHANDALAR_PACK_6="$PACK_SIX_PATH"
 # THE SUITE IN SHARDS
 # -------------------
 # One headless Godot took sixteen to seventeen minutes for the 469
-# scripts (502 on 2026-09-25) on a 22-core machine (the gate of 2026-09-17: 959 s of GUT's
+# scripts (504 on 2026-09-25) on a 22-core machine (the gate of 2026-09-17: 959 s of GUT's
 # own time), and a gate nobody runs between commits is a gate that
 # catches things a day late. Nothing in the suite needs another script's
 # process: every test script is a fresh GutTest, every network test binds

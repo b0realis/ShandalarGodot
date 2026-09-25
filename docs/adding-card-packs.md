@@ -46,6 +46,17 @@ its whole name count to the global unique total. Check overlap against the
 core **and every earlier pack**, and test enabling packs in different orders.
 Do not overwrite a shared identity with a second competing script.
 
+A pack may be **reprints alone**. Fifth Edition (Pack 7) adds no identity:
+its loader's `scripts()` list the 147 Ice Age, Homelands and Fallen Empires
+originals it reuses, keyed by name to their set in `shared_names.json`,
+with `"set"` set to the pack's own code so the card wears the pack's
+symbol when that pack is its only provider. `CardPacks._configure_registry`
+walks the original expansions first, so their scripts win when both are
+on; `_shared_source` and `_shared_provider` answer which pack a deck needs
+and whether disabling one loses a card's last provider. Such a pack still
+ships fallback pictures (`skin/cardart/`) for the shared names, since the
+original pack's artwork may be absent.
+
 Commit metadata and the reviewed reprint checklist, not downloaded art.
 Card headers must retain the actual Oracle text, including Unicode names;
 filenames must use the same ASCII normalization as `GameSkin` and the

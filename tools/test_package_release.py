@@ -89,6 +89,7 @@ class PackageReleaseTest(unittest.TestCase):
                         self.assertIn('tools/fetch_card_art.py --out cache/cardart', readme)
                         self.assertIn('build cardpacks/Pack-5-Alliances.zip', readme)
                         self.assertIn('build cardpacks/Pack-6-Portal.zip', readme)
+                        self.assertIn('build cardpacks/Pack-7-Fifth-Edition.zip', readme)
                         self.assertIn('browser import/auto-fetch path', readme)
                         self.assertIn("LAN SGManalink", readme)
                         self.assertNotIn("Manalink multiplayer are future features", readme)
@@ -148,7 +149,7 @@ class PackageReleaseTest(unittest.TestCase):
         for builder, filename in zip(pack.PACK_BUILDERS, (
                 'Pack-1-DotP-complete.zip', 'Pack-2-Fallen-Empires.zip',
                 'Pack-3-Ice_Age.zip', 'Pack-4-Homelands.zip', 'Pack-5-Alliances.zip',
-                'Pack-6-Portal.zip')):
+                'Pack-6-Portal.zip', 'Pack-7-Fifth-Edition.zip')):
             for command in ('build', 'verify'):
                 result = subprocess.run([
                     sys.executable, '-I', str(standalone / 'tools' / (builder + '.py')),

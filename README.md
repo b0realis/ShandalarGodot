@@ -46,7 +46,7 @@ Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/release
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below): `main` carries **0.40.12**, the next
+run the source with Godot 4.7 (below): `main` carries **0.40.13**, the next
 release in the making.
 
 Play with an **897-card early-Magic core**, historic decks, four computer
@@ -61,7 +61,8 @@ or non-classic lands, the Power Nine on or off — and a Stats window that audit
 the mana base. The duel's keys are rebindable
 under Options, Controls, and a controller's face buttons play beside the mouse.
 Further optional packs
-add **Fallen Empires, Ice Age, Homelands, Alliances, Portal and Portal Second Age**, with engine and AI support.
+add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age and
+Fifth Edition**, with engine and AI support.
 Adventure and public Internet matchmaking remain future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
@@ -112,8 +113,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([Before attackers are declared](docs/ROADMAP.md#2026-09-25--before-attackers-are-declared-04012)):
-**7,747 GUT tests / 345,776 assertions**, plus **299 Python tests**
+Latest local verification ([Pack 7: Fifth Edition](docs/ROADMAP.md#2026-09-25--pack-7-fifth-edition-04013)):
+**7,757 GUT tests / 346,186 assertions**, plus **307 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
@@ -147,7 +148,7 @@ python3 tools/pack_3_ice_age.py verify cardpacks/Pack-3-Ice_Age.zip
 
 The [card artwork and pack guide](docs/card-art-and-packs.md) gives complete
 commands for **Pack 1 (1-tDotP), Fallen Empires, Ice Age, Homelands,
-Alliances, Portal and Second Age**, cache locations and platform-specific installation details.
+Alliances, Portal, Second Age and Fifth Edition**, cache locations and platform-specific installation details.
 It also ships as `CARD-ART-AND-PACKS.md` and is included in each package's README.
 
 On desktop, keep `original_skin.zip` and `cardart.zip` in **`skin/`**, and
@@ -228,6 +229,15 @@ Work completed or planned after the 0.20.0 release:
   See the [pack guide](docs/pack-6-portal.md). Build locally with
   `python3 tools/pack_6_portal.py fetch-art`, then
   `python3 tools/pack_6_portal.py`. Requires 0.40.9 or later; rebuild older Pack 6 ZIPs.
+  ZIPs and downloaded art stay local.
+- [x] **Pack 7 — Fifth Edition** — the 1997 core set: 434 names across 449
+  original English printings, all reprints of the base game and Packs 2 to 4,
+  with four illustrations for each basic land and a gold Roman V emblem.
+  The pack adds pictures and a Fifth Edition source for 147 Ice Age,
+  Homelands and Fallen Empires cards; it adds no rules of its own. See the
+  [pack guide](docs/pack-7-fifth-edition.md). Build locally with
+  `python3 tools/pack_7_fifth_edition.py fetch-art`, then
+  `python3 tools/pack_7_fifth_edition.py`. Requires 0.40.13 or later.
   ZIPs and downloaded art stay local.
 - [ ] **Internet play and community MElo (Magic Elo)** — parked until
   resources allow. No authentication or ranking service is required for LAN play.

@@ -1,0 +1,15 @@
+{
+  "badge": "7-5ED",
+  "description": "Fifth Edition (1997): 434 distinct cards and 449 original English printings, every one a reprint of the 1997 pool or of Packs 2 to 4.",
+  "file_name": "Pack-7-Fifth-Edition.zip",
+  "id": "pack-7",
+  "minimum_game_version": "0.40.13",
+  "name": "Fifth Edition",
+  "number": 7,
+  "pack_format": 1,
+  "rules_note": "Fifth Edition adds no new rules identity: every card already has a script in the game or in Packs 2 to 4. The pack contributes its 449 printings with artwork, four illustrations for each basic land, and a Fifth Edition source for the 147 Ice Age, Homelands and Fallen Empires cards it reprints.",
+  "set_order": [
+    "5ed"
+  ],
+  "version": "1.0.0"
+}
