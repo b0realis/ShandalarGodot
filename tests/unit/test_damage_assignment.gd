@@ -76,11 +76,11 @@ func test_free_division_is_the_default_and_both_editions_agree() -> void:
 		var rules := RulesOptions.new()
 		rules.set_edition(edition)
 		assert_true(rules.free_damage_assignment, edition)
-		assert_eq(rules.edition(), edition, "the shared answer keeps the preset readable")
+		assert_eq(rules.preset(), edition, "the shared answer keeps the preset readable")
 	var rules := RulesOptions.new()
 	rules.set_edition("modern")
 	rules.free_damage_assignment = false
-	assert_eq(rules.edition(), "custom", "the 2009-2024 order is a custom choice")
+	assert_eq(rules.preset(), "custom", "the 2009-2024 order is a custom choice")
 	g.agents[0] = PromptAgent.new()
 	var cast := _gang_block()
 	advance_to_step(Mtg.Step.COMBAT_DAMAGE)

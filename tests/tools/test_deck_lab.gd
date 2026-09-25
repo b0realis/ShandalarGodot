@@ -464,9 +464,9 @@ func test_fifth_edition_really_flips_every_fork() -> void:
 	# The point of --rules: a whole pool replayed under the 1997 ruleset.
 	var rules := RulesOptions.new()
 	rules.set_edition("fifth")
-	assert_eq(rules.edition(), "fifth")
+	assert_eq(rules.preset(), "fifth")
 	rules.set_edition("modern")
-	assert_eq(rules.edition(), "modern")
+	assert_eq(rules.preset(), "modern")
 
 
 func test_mulligan_takes_on_or_off_only() -> void:

@@ -646,13 +646,13 @@ func _new_game() -> void:
 		for pid in 2:
 			game.stake_ante(pid, config.ante, not config.is_ai(pid))
 	# The RULES FORKS, per Options (see RulesOptions / Settings.rule).
-	# Logged when any of them leaves the modern default, so a bug report
-	# says which ruleset the duel was actually played under.
+	# Logged by preset name when any of them leaves plain modern, so a
+	# bug report says which ruleset the duel was actually played under.
 	for fork in RulesOptions.FORKS:
 		game.rules.set_fork(fork["key"], Settings.rule(fork["key"]))
-	var edition: String = game.rules.edition()
-	if edition != "modern":
-		game.log_line("Rules: %s" % edition)
+	var preset: String = game.rules.preset()
+	if preset != "modern":
+		game.log_line("Rules: %s" % RulesOptions.preset_label(preset))
 	# A placement and a `Don't auto tap` mark are both about THIS table
 	# (§2.3b, `@MENU_SMALLCARD`): a new duel starts with neither.
 	_placements.clear()

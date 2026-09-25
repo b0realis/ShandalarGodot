@@ -32,6 +32,8 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Release package files
 
+- `docs/releases/0.40.11.md`: the rules presets as data; "Modern rules, mana
+  burn on" is the named player default, every other mix reads "Custom".
 - `docs/releases/0.40.10.md`: the set filter's printing restored in the
   enlarged card, the suite green again after Second Age, documentation drift.
 - `docs/releases/0.40.9.md`: Portal Second Age in Pack 6, its seven archived

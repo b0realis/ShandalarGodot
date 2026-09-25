@@ -104,10 +104,19 @@ func test_saved_mana_burn_off_overrides_the_player_default() -> void:
 
 func _preset() -> OptionButton:
 	for node in _walk(screen):
-		if node is OptionButton and node.item_count == 3 \
-				and node.get_item_text(2) == "Custom":
+		if node is OptionButton \
+				and node.item_count == RulesOptions.PRESETS.size() + 1 \
+				and node.get_item_text(node.item_count - 1) == RulesOptions.CUSTOM_LABEL:
 			return node
 	return null
+
+
+## The preset box's row for a preset id.
+func _row_of(id: String) -> int:
+	for index in RulesOptions.PRESETS.size():
+		if RulesOptions.PRESETS[index]["id"] == id:
+			return index
+	return -1
 
 
 func test_the_preset_writes_the_settings_file_once() -> void:
@@ -115,7 +124,7 @@ func test_the_preset_writes_the_settings_file_once() -> void:
 	assert_not_null(preset, "the rules preset is an OptionButton with a Custom readout")
 	Settings.flush()
 	var before: int = Settings.write_count
-	preset.item_selected.emit(1)          # 1997 — Fifth Edition
+	preset.item_selected.emit(_row_of("fifth"))          # 1997 — Fifth Edition
 	assert_eq(Settings.write_count - before, 1,
 		"seven forks, ONE write — not one per fork")
 	assert_false(Settings.is_dirty(), "and nothing is left waiting")
@@ -123,7 +132,7 @@ func test_the_preset_writes_the_settings_file_once() -> void:
 	for fork in RulesOptions.FORKS:
 		assert_eq(Settings.rule(fork["key"]), fork["fifth_value"], fork["key"])
 	before = Settings.write_count
-	preset.item_selected.emit(0)          # Modern rules
+	preset.item_selected.emit(_row_of("modern"))          # Modern rules
 	assert_eq(Settings.write_count - before, 1, "and back, in one write")
 	for fork in RulesOptions.FORKS:
 		assert_eq(Settings.rule(fork["key"]), RulesOptions.modern_answer(fork), fork["key"])
@@ -133,5 +142,54 @@ func test_the_custom_readout_is_not_a_command() -> void:
 	var preset := _preset()
 	Settings.flush()
 	var before: int = Settings.write_count
-	preset.item_selected.emit(2)          # Custom
+	preset.item_selected.emit(RulesOptions.PRESETS.size())          # Custom
 	assert_eq(Settings.write_count, before, "selecting the readout writes nothing")
+
+
+# ============================== the named default, and "Custom" ==
+#
+# Since 2026-09-13 a fresh player's flags are modern with mana burn ON,
+# and until 2026-09-25 the box read "Custom" for a player who had chosen
+# nothing. The owner's word: that one mix is a preset with a name of its
+# own, and *"all other mix and match should be custom"*.
+
+
+func test_a_fresh_player_reads_the_named_default_not_custom() -> void:
+	var preset := _preset()
+	assert_eq(preset.selected, _row_of("modern_mana_burn"))
+	assert_eq(preset.get_item_text(preset.selected), "Modern rules, mana burn on")
+	assert_ne(preset.get_item_text(preset.selected), RulesOptions.CUSTOM_LABEL)
+	# The box shows the four rows in RulesOptions' order, the readout last.
+	var labels: Array = []
+	for index in preset.item_count:
+		labels.append(preset.get_item_text(index))
+	assert_eq(labels, ["Modern rules", "Modern rules, mana burn on",
+		"1997 — Fifth Edition", "Custom"])
+
+
+func test_choosing_the_named_default_writes_once_and_burns_mana() -> void:
+	var preset := _preset()
+	preset.item_selected.emit(_row_of("modern"))
+	assert_false(Settings.rule("mana_burn"), "plain modern turns the burn off")
+	Settings.flush()
+	var before: int = Settings.write_count
+	preset.item_selected.emit(_row_of("modern_mana_burn"))
+	assert_eq(Settings.write_count - before, 1, "seven forks, ONE write")
+	assert_true(Settings.rule("mana_burn"))
+	for fork in RulesOptions.FORKS:
+		if fork["key"] != "mana_burn":
+			assert_eq(Settings.rule(fork["key"]), RulesOptions.modern_answer(fork), fork["key"])
+	assert_true(_rows()["Mana burn"].button_pressed, "and the row shows it")
+
+
+func test_one_more_flip_reads_custom_and_flipping_back_reads_the_name() -> void:
+	var preset := _preset()
+	var rows := _rows()
+	assert_eq(preset.selected, _row_of("modern_mana_burn"))
+	rows["Tapped artifacts stop working"].button_pressed = true
+	assert_eq(preset.get_item_text(preset.selected), "Custom",
+		"mana burn plus one more 1997 answer is a custom mix")
+	rows["Tapped artifacts stop working"].button_pressed = false
+	assert_eq(preset.selected, _row_of("modern_mana_burn"), "and back")
+	rows["Mana burn"].button_pressed = false
+	assert_eq(preset.selected, _row_of("modern"), "no burn at all is plain modern")

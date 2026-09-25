@@ -33,6 +33,27 @@ const IMPLEMENTED := ["mana_burn", "attackers_revocable",
 	"pool_empties_on_attack", "free_damage_assignment",
 	"damage_prevention_window"]
 
+## THE PRESETS — the Options screen's list, in its order. A preset is one
+## edition's answers ([method set_edition]) with named exceptions on top,
+## and the readout names the preset the flags match EXACTLY; any other
+## mix reads "Custom". "Modern rules, mana burn on" is what a fresh
+## install plays under: the owner's ruling of 2026-09-13 has mana burn on
+## by default (Settings.rule), and their word of 2026-09-25 is that this
+## one mix has a name — *"all other mix and match should be custom"*.
+const PRESETS := [
+	{"id": "modern", "label": "Modern rules", "edition": "modern", "except": {}},
+	{"id": "modern_mana_burn", "label": "Modern rules, mana burn on",
+		"edition": "modern", "except": {"mana_burn": true}},
+	{"id": "fifth", "label": "1997 — Fifth Edition", "edition": "fifth", "except": {}},
+]
+
+## The preset a fresh install plays under — Settings.rule's fallback, so
+## the player default and the readout's name for it cannot drift apart.
+const DEFAULT_PRESET := "modern_mana_burn"
+
+## The Options screen's word for flags that match no preset.
+const CUSTOM_LABEL := "Custom"
+
 ## Every fork, with the label and explanation the Options screen shows.
 ## Order is the order they appear on screen.
 ##
@@ -226,26 +247,47 @@ func set_edition(edition: String) -> void:
 		set_fork(fork["key"], fork["fifth_value"] if fifth else modern_answer(fork))
 
 
-## Which edition the current flags amount to: "fifth", "modern", or
-## "custom" when they are mixed. The Options screen shows this back. A
-## fork the two editions agree on cannot tell them apart; it only says
-## "custom" when it is off its shared answer.
-func edition() -> String:
-	var as_fifth := 0
-	var as_modern := 0
-	for fork in FORKS:
-		var fifth_value: bool = fork["fifth_value"]
-		var modern_value := modern_answer(fork)
-		var value := get_fork(fork["key"])
-		if fifth_value == modern_value:
-			if value != fifth_value:
-				return "custom"
-		elif value == fifth_value:
-			as_fifth += 1
-		else:
-			as_modern += 1
-	if as_modern == 0:
-		return "fifth"
-	if as_fifth == 0:
-		return "modern"
+## One of [member PRESETS] by id, or `{}`.
+static func find_preset(id: String) -> Dictionary:
+	for preset in PRESETS:
+		if preset["id"] == id:
+			return preset
+	return {}
+
+
+## The Options screen's name for a preset id; [member CUSTOM_LABEL] for
+## anything else, "custom" included.
+static func preset_label(id: String) -> String:
+	return String(find_preset(id).get("label", CUSTOM_LABEL))
+
+
+## Turn every fork to one preset's answers: its edition, then its
+## exceptions. An unknown id is plain modern — the engine's own default —
+## so a stale saved name cannot break a duel.
+func set_preset(id: String) -> void:
+	var preset := find_preset(id)
+	set_edition(String(preset.get("edition", "modern")))
+	var except: Dictionary = preset.get("except", {})
+	for key in except:
+		set_fork(key, bool(except[key]))
+
+
+## The preset the current flags match exactly — "modern",
+## "modern_mana_burn", "fifth" — or "custom" when they match none. The
+## Options screen shows this back; one fork off any preset's answer is
+## enough for "custom", a fork the presets agree on included.
+func preset() -> String:
+	for candidate in PRESETS:
+		var wanted := RulesOptions.new()
+		wanted.set_preset(candidate["id"])
+		if matches(wanted):
+			return candidate["id"]
 	return "custom"
+
+
+## Every fork answered the same as [param other]'s.
+func matches(other: RulesOptions) -> bool:
+	for fork in FORKS:
+		if get_fork(fork["key"]) != other.get_fork(fork["key"]):
+			return false
+	return true

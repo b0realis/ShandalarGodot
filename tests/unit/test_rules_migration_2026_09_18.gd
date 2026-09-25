@@ -67,7 +67,7 @@ func test_an_older_modern_preset_file_moves_with_the_preset() -> void:
 	var live := RulesOptions.new()
 	for fork in RulesOptions.FORKS:
 		live.set_fork(fork["key"], Settings.rule(fork["key"]))
-	assert_eq(live.edition(), "modern", "the Options preset still reads Modern")
+	assert_eq(live.preset(), "modern", "the Options preset still reads Modern")
 
 
 func test_a_file_with_only_the_one_fork_stored_is_the_presets_too() -> void:

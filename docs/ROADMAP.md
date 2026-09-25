@@ -16268,6 +16268,35 @@ Disharmony among them), and the Options screen's rules preset reads
 modern. Gate: 500 scripts, **7,724/7,724 tests, 344,458 asserts**, exit 0
 in 230 s over 6 shards; Python 299, exit 0; boot smoke clean.
 
+## 2026-09-25 — The default has a name (0.40.11)
+
+*"So now the rules say custom not 1997 and not Modern ? Why?"* — because
+since 2026-09-13 a fresh player's flags are modern with mana burn ON
+(`Settings.rule`'s fallback), and `RulesOptions.edition()` could only
+answer "fifth", "modern" or "custom"; a player who had chosen nothing
+was told they had chosen something. The owner's ruling: *"I agree on
+the first suggestion, all other mix and match should be custom."* So
+the presets are data now — `RulesOptions.PRESETS`, an edition's answers
+with named exceptions on top: "Modern rules", "Modern rules, mana burn
+on" (`DEFAULT_PRESET`, the exception `mana_burn: true`), "1997 — Fifth
+Edition" — and `preset()` names the one the flags match EXACTLY or
+"custom"; `set_preset(id)` builds one; `set_edition` stays, for the
+soak tools' `--rules`. `Settings.rule` falls back to the default
+preset's answers instead of a hand-written `true if key == "mana_burn"`,
+so the default and the readout's name for it cannot drift apart. The
+Options box lists the presets in that order with "Custom" last (a
+readout, as before; 262 px wide against a 428 px column in the bare
+skin); the duel journal's "Rules:" line names the preset ("Rules: Modern
+rules, mana burn on") instead of "custom"; Help's ruleset page says the
+same. A saved plain-modern file still reads "Modern rules"; a file that
+stored only `rule_mana_burn = true` now reads the default's name; a
+mixed file reads "Custom" — no migration. Pins: `test_mana_burn` (the
+named preset, an unknown id is modern, three other mixes are custom),
+`test_options_rules` (a fresh player's box, the one-write gesture, one
+more flip to "Custom" and back). Gate: 500 scripts, **7,728/7,728 tests,
+344,783 asserts**, exit 0 in 227 s over 6 shards; Python 299, exit 0;
+boot smoke clean.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

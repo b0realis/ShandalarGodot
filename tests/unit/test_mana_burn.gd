@@ -158,22 +158,46 @@ func test_every_fork_declares_its_1997_answer() -> void:
 
 func test_the_presets_round_trip() -> void:
 	var rules := RulesOptions.new()
-	assert_eq(rules.edition(), "modern", "a fresh engine plays by modern rules")
+	assert_eq(rules.preset(), "modern", "a fresh engine plays by modern rules")
 	rules.set_edition("fifth")
-	assert_eq(rules.edition(), "fifth")
+	assert_eq(rules.preset(), "fifth")
 	assert_true(rules.mana_burn, "1997 burns mana")
 	assert_false(rules.attackers_revocable,
 		"and does NOT let an attacker be taken back")
 	rules.set_edition("modern")
-	assert_eq(rules.edition(), "modern")
+	assert_eq(rules.preset(), "modern")
 	assert_false(rules.mana_burn)
 	assert_true(rules.attackers_revocable)
 
 
-func test_a_mixed_set_reads_as_custom() -> void:
+func test_modern_with_mana_burn_is_a_named_preset() -> void:
+	# The owner's word (2026-09-25): the player default — modern rules
+	# with mana burn on — has a name of its own on the Options screen;
+	# *"all other mix and match should be custom"*.
 	var rules := RulesOptions.new()
-	rules.mana_burn = true          # one 1997 answer among modern ones
-	assert_eq(rules.edition(), "custom")
+	rules.mana_burn = true          # the one 1997 answer among modern ones
+	assert_eq(rules.preset(), "modern_mana_burn")
+	assert_eq(RulesOptions.preset_label("modern_mana_burn"), "Modern rules, mana burn on")
+	assert_eq(RulesOptions.DEFAULT_PRESET, "modern_mana_burn", "and it is the player default")
+	var named := RulesOptions.new()
+	named.set_preset("modern_mana_burn")
+	assert_true(named.matches(rules), "set_preset builds the same flags")
+	named.set_preset("no such preset")
+	assert_eq(named.preset(), "modern", "an unknown id is plain modern")
+
+
+func test_any_other_mix_reads_as_custom() -> void:
+	var rules := RulesOptions.new()
+	rules.mana_burn = true
+	rules.tapped_artifacts_stop = true      # a second 1997 answer
+	assert_eq(rules.preset(), "custom")
+	assert_eq(RulesOptions.preset_label(rules.preset()), "Custom")
+	rules = RulesOptions.new()
+	rules.attackers_revocable = false       # one 1997 answer, not mana burn
+	assert_eq(rules.preset(), "custom", "only the mana-burn mix is named")
+	rules.set_edition("fifth")
+	rules.mana_burn = false                 # 1997 less one
+	assert_eq(rules.preset(), "custom")
 
 
 func test_attackers_are_revocable_by_default() -> void:

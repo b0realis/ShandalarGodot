@@ -19,7 +19,7 @@ func _fifth() -> void:
 
 func test_the_preset_really_turns_every_fork_to_1997() -> void:
 	_fifth()
-	assert_eq(g.rules.edition(), "fifth")
+	assert_eq(g.rules.preset(), "fifth")
 	for fork in RulesOptions.FORKS:
 		assert_eq(g.rules.get_fork(fork["key"]), fork["fifth_value"],
 			"%s is at its 1997 answer" % fork["key"])

@@ -400,7 +400,7 @@ static func _page_start_finish() -> Dictionary:
 static func _page_ruleset() -> Dictionary:
 	var blocks: Array = [
 		_heading("Choose the rules before the duel"),
-		_text("Options offers Modern rules, 1997 — Fifth Edition, or your own Custom combination. Mana burn is on by default; a saved choice is remembered."),
+		_text("Options offers Modern rules, Modern rules with mana burn on (the default), 1997 — Fifth Edition, or your own Custom combination of the switches below; a saved choice is remembered."),
 		{"kind": ICONS, "entries": [_icon("Mana burn", "Lose 1 life per unspent mana when your pool empties. Turn this off for the modern no-burn rule.", {"src": SRC_MANA, "sym": "B"}, "{B}")]},
 	]
 	for fork in RulesOptions.FORKS:

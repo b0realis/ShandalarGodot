@@ -723,18 +723,20 @@ func _add_coin_toss_section(content: VBoxContainer) -> void:
 ## THE RULES FORKS. The original enforced the FIFTH EDITION rules (manual
 ## p.108) where our engine cites the modern Comprehensive Rules, and the
 ## two genuinely disagree in a handful of places. Each is a switch here,
-## with a preset that flips them all — and a fork that is not implemented
-## yet is shown DISABLED rather than offered as a switch that does
-## nothing. RulesOptions.FORKS is the single source for this list.
+## with the presets that set them all (RulesOptions.PRESETS, in that
+## order, then the "Custom" readout for any other mix) — and a fork that
+## is not implemented yet is shown DISABLED rather than offered as a
+## switch that does nothing. RulesOptions.FORKS is the single source for
+## this list.
 func _add_rules_section(content: VBoxContainer) -> void:
 	var heading := UiChrome.body_label("Rules — 1997 (Fifth Edition) or modern:")
 	content.add_child(heading)
 
 	var boxes: Dictionary = {}
 	var preset := OptionButton.new()
-	preset.add_item("Modern rules", 0)
-	preset.add_item("1997 — Fifth Edition", 1)
-	preset.add_item("Custom", 2)
+	for entry in RulesOptions.PRESETS:
+		preset.add_item(entry["label"])
+	preset.add_item(RulesOptions.CUSTOM_LABEL)
 	UiChrome.shadowed_button(preset)
 	content.add_child(preset)
 
@@ -762,7 +764,7 @@ func _add_rules_section(content: VBoxContainer) -> void:
 		row.toggled.connect(func(on: bool) -> void:
 			Settings.set_rule(key, on)
 			live.set_fork(key, on)
-			preset.selected = _preset_index(live.edition()))
+			preset.selected = _preset_index(live.preset()))
 		UiChrome.shadowed_button(row)
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var line := HBoxContainer.new()
@@ -772,11 +774,11 @@ func _add_rules_section(content: VBoxContainer) -> void:
 		content.add_child(line)
 		boxes[key] = row
 
-	preset.selected = _preset_index(live.edition())
+	preset.selected = _preset_index(live.preset())
 	preset.item_selected.connect(func(index: int) -> void:
-		if index == 2:
+		if index >= RulesOptions.PRESETS.size():
 			return       # "Custom" is a readout, not a command
-		live.set_edition("fifth" if index == 1 else "modern")
+		live.set_preset(RulesOptions.PRESETS[index]["id"])
 		for key in boxes:
 			var on: bool = live.get_fork(key)
 			# In memory per fork and ONE write for the gesture — the
@@ -798,11 +800,13 @@ func _explain_rule(fork: Dictionary) -> void:
 	UiChrome.explain_popup(self, fork["label"], body)
 
 
-static func _preset_index(edition: String) -> int:
-	match edition:
-		"modern": return 0
-		"fifth": return 1
-	return 2
+## The preset box's row for a RulesOptions.preset() id: its place in
+## PRESETS, or the "Custom" row after them.
+static func _preset_index(id: String) -> int:
+	for index in RulesOptions.PRESETS.size():
+		if RulesOptions.PRESETS[index]["id"] == id:
+			return index
+	return RulesOptions.PRESETS.size()
 
 
 func _volume_slider(key: String, current: float) -> HSlider:
