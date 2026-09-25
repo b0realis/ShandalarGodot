@@ -32,6 +32,14 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Release package files
 
+- `docs/releases/0.40.10.md`: the set filter's printing restored in the
+  enlarged card, the suite green again after Second Age, documentation drift.
+- `docs/releases/0.40.9.md`: Portal Second Age in Pack 6, its seven archived
+  decks, extra phases and blocking transitions; LAN protocol 24.
+- `docs/releases/0.40.8.md`: Portal starters and their Help guides, the
+  generated Help contents page, casual 8–39-card friendly duels.
+- `docs/releases/0.40.7.md`: Pack 6 — Portal, saved card variants and the
+  floating medallion, Portal's circular emblem; LAN protocol 23.
 - `docs/releases/0.40.6.md`: classic prevention/AI fixes, active protection
   details and an illustrated Help key for set-symbol colors; LAN protocol 22.
 - `docs/releases/0.40.5.md`: rarity symbols, dual-land rules panels, reprint
@@ -660,6 +668,15 @@ per-card reveals and is respected by network views and fair observations.
 - `docs/adding-card-packs.md`: future-pack end-to-end contributor checklist.
 - `game/portal_pack.gd`: Pack 6's trusted 215-printing/200-name snapshot,
   bounded ZIP inventory, hashes and independent shared-reprint providers.
+- `packaging/card_packs/pack_6_portal/manifest.json`, `reprint_names.json`,
+  `cards.json`, `set.json`, `README.txt`: the pack's identity (`pack-6`,
+  `Pack-6-Portal.zip`, minimum game version, set order `por`, `p02`), the
+  28 names Portal reprints from the core and earlier packs, the
+  215-printing snapshot and the player README; text only, no artwork.
+- `game/art/set_icon_por.png`, `filter_por_on.png`, `filter_por_off.png`:
+  Portal's segmented circular gold gate and its lit/dim carved-stone
+  medallions; drawn by `tools/draw_our_art.gd` (`_portal`), hashed in
+  `game/art/README.md`.
 - `engine/deck_printings.gd`: bounded cosmetic IDs and optional deck comments;
   rules identities, copy limits and draft pools stay name-based.
 - `game/card_printings.gd`: catalogue lookup, artwork fallback and per-instance

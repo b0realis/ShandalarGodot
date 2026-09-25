@@ -53,14 +53,18 @@ const PORTED_TOTAL := 312
 ## deck of ours must not be able to move one of them. The Deck's playable
 ## variant went into `extended_community` once and these tests caught it
 ## (2026-09-06) — this constant is how the guard keeps working while the
-## variants still ship. TWO since 2026-09-10: `the_deck_serra.deck`, the
-## same list with two Serra Angels in for two Mishra's Factories (the
-## Angel row, docs/ai-difficulty.md §4).
+## variants still ship. Two since 2026-09-10 (`the_deck_serra.deck`, the
+## same list with two Serra Angels in for two Mishra's Factories — the
+## Angel row, docs/ai-difficulty.md §4), four since 2026-09-24 with the
+## 40-card adaptations of Portal's two starters (docs/portal-starters.md).
 const VARIANT_TOTAL := 4
 ## Portal's separately archived, unmodified 35-card teaching decks.
 const PORTAL_TOTAL := 2
+## Portal Second Age's archived originals (docs/portal-second-age-decks.md):
+## five 40-card theme decks and the two unmodified 30-card starters.
+const SECOND_AGE_TOTAL := 7
 ## Every `.deck` under `decks/`, ported and ours together.
-const SHIPPED_TOTAL := PORTED_TOTAL + VARIANT_TOTAL + PORTAL_TOTAL
+const SHIPPED_TOTAL := PORTED_TOTAL + VARIANT_TOTAL + PORTAL_TOTAL + SECOND_AGE_TOTAL
 ## The enemy-deck groups: one deck per enemy, each with a `# tier:` line.
 const ENEMY_GROUPS := ["originals", "ancients", "duels"]
 
@@ -275,7 +279,8 @@ func test_the_ported_folders_are_the_only_subfolders() -> void:
 		expected.append(ROOT + "/" + folder)
 	expected.sort()
 	assert_eq(DeckStore.subfolders_of(ROOT), expected)
-	var top: Array[String] = [ROOT, DeckStore.SHIPPED_DIR + "/variants", DeckStore.SHIPPED_DIR + "/portal"]
+	var top: Array[String] = [ROOT, DeckStore.SHIPPED_DIR + "/variants",
+		DeckStore.SHIPPED_DIR + "/portal", DeckStore.SHIPPED_DIR + "/portal_second_age"]
 	for folder in NON_MICROPROSE:
 		top.append(DeckStore.SHIPPED_DIR + "/" + folder)
 	top.sort()
@@ -290,13 +295,20 @@ func test_every_ported_deck_loads_with_no_parse_error() -> void:
 	# can ship at all. Sizes: nothing under the forty a duel needs (two
 	# period lists ARE forty — Edwards' Proto-Zoo, Merritt's Twist of
 	# Fire — and say so in their headers), nothing over the caps the
-	# gauntlet checks.
+	# gauntlet checks. The archived Portal originals are the exception
+	# and are pinned to their printed size instead — 35 for the 1997
+	# starters, 30 for Second Age's two — because they ship UNALTERED
+	# (the owner, 2026-09-25: *"Leave original decks otherwise"*); a
+	# casual duel takes them, a tournament does not (`CASUAL_MIN_CARDS`).
 	var seen := 0
 	for path in DeckStore.shipped_subfolder_paths():
 		var deck := DeckList.load_file(path, false)
 		assert_eq(deck.errors, [], path)
 		if path.begins_with("res://decks/portal/"):
 			assert_eq(deck.cards.size(), 35, "unaltered Portal starter reference: " + path)
+		elif path.begins_with("res://decks/portal_second_age/preconstructed_deck_"):
+			assert_eq(deck.cards.size(), 30, "unaltered Second Age starter reference: " + path)
+			assert_gte(deck.cards.size(), DeckModel.CASUAL_MIN_CARDS, path)
 		else:
 			assert_gte(deck.cards.size(), DeckModel.MIN_CARDS, path)
 		assert_lte(deck.cards.size(), DeckModel.MAX_TOTAL, path)

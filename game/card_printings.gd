@@ -17,6 +17,14 @@ static func resolve(card_name: String, id: String) -> Dictionary:
 		if row.id == id or (not id.contains(":") and row.set == id): return row
 	return {}
 
+## A bare set code — the set filter's choice of a reprint, or a saved
+## preference without a collector number. The catalogue lists only what
+## an ENABLED pack ships, so a core reprint (Apprentice Wizard under The
+## Dark) or a set whose pack is off has no row and still names the set to
+## show; a numbered variant nothing carries is not a set at all.
+static func is_set_code(id: String) -> bool:
+	return DeckPrintings.valid_id(id) and not id.contains(":")
+
 static func label(row: Dictionary) -> String:
 	var title: String = DeckFilter.SET_LABELS.get(row.set, String(row.set).to_upper())
 	if not String(row.get("number", "")).is_empty(): title += " · #" + String(row.number)

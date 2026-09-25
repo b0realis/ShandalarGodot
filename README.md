@@ -46,7 +46,8 @@ Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/release
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below).
+run the source with Godot 4.7 (below): `main` carries **0.40.10**, the next
+release in the making.
 
 Play with an **897-card early-Magic core**, historic decks, four computer
 opponents, local hotseat, Gauntlet, sealed decks and best-of matches with
@@ -111,8 +112,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([Gold Roman II for Unlimited](docs/ROADMAP.md#2026-09-18--gold-roman-ii-for-unlimited-0403)):
-**7,549 GUT tests / 334,273 assertions**, plus **291 Python tests**
+Latest local verification ([The filter's printing, and the suite green again](docs/ROADMAP.md#2026-09-25--the-filters-printing-and-the-suite-green-again-04010)):
+**7,724 GUT tests / 344,458 assertions**, plus **299 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
@@ -226,7 +227,7 @@ Work completed or planned after the 0.20.0 release:
   Second Age theme decks, both original starters and illustrated Help.
   See the [pack guide](docs/pack-6-portal.md). Build locally with
   `python3 tools/pack_6_portal.py fetch-art`, then
-  `python3 tools/pack_6_portal.py`. Requires 0.40.9; rebuild older Pack 6 ZIPs.
+  `python3 tools/pack_6_portal.py`. Requires 0.40.9 or later; rebuild older Pack 6 ZIPs.
   ZIPs and downloaded art stay local.
 - [ ] **Internet play and community MElo (Magic Elo)** — parked until
   resources allow. No authentication or ranking service is required for LAN play.
@@ -234,7 +235,7 @@ Work completed or planned after the 0.20.0 release:
 Experienced multiplayer, networking and backend developers are especially
 welcome to help improve LAN play and explore those longer-term ideas.
 
-With all five packs enabled: **2,004 set entries · 1,608 unique cards**.
+With all six packs enabled: **2,359 set entries · 1,898 unique cards**.
 Want to add another set? Follow the [card-pack authoring guide](docs/adding-card-packs.md).
 
 See the [development roadmap](docs/ROADMAP.md#major-features-for-the-future)

@@ -54,7 +54,10 @@ func test_a_deck_row_s_group_is_its_shelf_or_the_player_s_own_folder() -> void:
 	var own := SgDeckCatalog._group(DeckStore.USER_DIR + "/mine.deck")
 	assert_false(own.begins_with("user://"), own)
 	assert_eq(own, GamePaths.shown(DeckStore.USER_DIR))
-	assert_true(SgDeckCatalog.validate([]).begins_with("Choose a deck with %d-250 cards" % DeckModel.MIN_CARDS))
+	# A friendly table is casual since 2026-09-24 (eight cards and a
+	# warning); the tournament's referee still asks for forty.
+	assert_true(SgDeckCatalog.validate([]).begins_with("Choose a deck with %d-250 cards" % DeckModel.CASUAL_MIN_CARDS))
+	assert_true(SgDeckCatalog.validate([], [], false).begins_with("Choose a deck with %d-250 cards" % DeckModel.MIN_CARDS))
 
 
 func test_targeted_spell_counterspell_and_private_announcements() -> void:

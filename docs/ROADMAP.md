@@ -12516,12 +12516,14 @@ the 0.20.0 duel and Deck Builder release:
   expanded Help, engine/AI integration and a future-pack authoring guide.
   See [the Alliances audit](pack-5-alliances.md) and [adding packs](adding-card-packs.md).
 
-- [x] **Pack 6 — Portal (1997)** — 200 names / 215 original English printings,
-  173 new identities and 27 reprints, independent local builder, original
-  land scans, Extras medallions, current rules and public-information AI.
-  See [Portal](pack-6-portal.md) and its [mechanics inventory](pack-6-mechanics-audit.md).
+- [x] **Pack 6 — Portal (1997) and Portal Second Age (1998)** — 318 distinct
+  names / 380 original English printings, 290 new identities, independent
+  local builder, original land scans, Extras medallions, current rules,
+  public-information AI and the seven archived Second Age decks.
+  See [Portal](pack-6-portal.md), its [mechanics inventory](pack-6-mechanics-audit.md)
+  and the [Second Age audit](pack-6-second-age-audit.md).
 
-With all six optional packs enabled: **2,204 named set entries / 1,781 unique
+With all six optional packs enabled: **2,359 named set entries / 1,898 unique
 cards**. The 897-card original pool remains the default. Numbered ZIPs and
 downloaded card artwork are local-only; construction tools and metadata are
 the distributable artifacts. Balduvian Shaman and Game of Chaos add two explicit
@@ -16221,6 +16223,50 @@ sizes and original layout coordinates. Native macOS viewport inspection
 confirmed the floating button and readable stats, sideboard count, legality
 and status lines in a populated deck. Saved printing behavior is unchanged.
 No release binaries or full release-suite certification in this UI pass.
+
+## 2026-09-25 — The filter's printing, and the suite green again (0.40.10)
+
+*"Yes analyze all and do all fixes you suggest along with all
+documentation. (Leave original decks otherwise)."* — the six commits from
+0.40.5 to 0.40.9 were pulled and read; the gate had been red since 0.40.7
+and the causes were exactly eight: seven pins the Second Age commit
+never re-counted, and one regression. The regression: 0.40.7 taught
+`CardPreview.show_card` to ask the printing catalogue
+(`CardPrintings.resolve`) for the set to show, and to fall back to the
+card's HOME set when the catalogue has no row — but the catalogue lists
+only what an ENABLED pack ships, so the set filter's own choice of a core
+reprint (`DeckFilter.preferred_printing` hands a bare set code) had no
+row, and Apprentice Wizard under The Dark wore Fourth Edition's symbol,
+rarity and artist. `CardPrintings.is_set_code` now tells a bare set code
+from a numbered variant, and `show_card` shows the set the filter named
+when the catalogue is silent — as every build before 0.40.7 did — while
+a numbered variant nothing carries still returns to the home set. Art
+follows the same rule (`packs.art_texture` by the shown set). Pins:
+`test_card_set_rarity` (the reprint under the filter, which 0.40.7 had
+failing) is green again.
+
+The seven pins: `test_decks_1997` counts the seven archived Second Age
+lists (`SECOND_AGE_TOTAL`, `decks/portal_second_age/`) and pins the two
+30-card starters to their printed size, as the 35-card Portal originals
+already were — the owner: *"Leave original decks otherwise"*, so the
+pins guard the lists rather than pad them; `test_deck_provenance` counts
+330 shipped files; `test_sgmanalink_full_pool` asks the friendly table
+for `CASUAL_MIN_CARDS` and the tournament's referee for `MIN_CARDS`,
+which is what 0.40.8 made them say.
+
+Documentation: the README's pack totals (six packs: 2,359 set entries /
+1,898 unique cards, the figure `test_sgmanalink_packs` pins), `main`
+carrying 0.40.10, the LAN docs at 0.40.10 / protocol 24, release notes
+for 0.40.8 and 0.40.9 written from these sections and 0.40.10's own,
+the code map's rows for Pack 6's metadata, Portal's three pictures and
+the release notes, and the gate's script counts (500 scripts, seventeen
+skin-marked, 483 on a runner). Not changed, noted for the owner: nine
+core scripts still key on `Mtg.STEP_ORDER` where the engine now walks a
+per-turn `_turn_steps` list (Berserk, Nettling Imp, Siren's Call,
+Disharmony among them), and the Options screen's rules preset reads
+"Custom" because mana burn defaults on while the other six forks default
+modern. Gate: 500 scripts, **7,724/7,724 tests, 344,458 asserts**, exit 0
+in 230 s over 6 shards; Python 299, exit 0; boot smoke clean.
 
 ## Standing quality gates
 

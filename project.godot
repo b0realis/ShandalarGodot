@@ -38,7 +38,7 @@ config/name="Shandalar"
 ; Keep integration tests separate from concurrent base and pack checkouts.
 ; This feature is never selected by exported player builds.
 config/name.shandalar_test="Shandalar Integration Tests"
-config/version="0.40.9"
+config/version="0.40.10"
 config/description="Open-source remake of MicroProse's 1997 Magic: The Gathering (Shandalar), with a modular GDScript MTG rules engine."
 run/main_scene="res://game/main.tscn"
 ; THE PROJECT'S OWN MARK. Godot draws this in the editor, on the window

@@ -859,7 +859,14 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	var d := inst.data
 	var choice_id := printing_set if printing_set != "" else CardPrintings.of(inst)
 	var printing := CardPrintings.resolve(d.card_name, choice_id)
-	var shown_set: String = printing.get("set", d.set_code)
+	# The catalogue answers for a pack's printings; a bare set code it has
+	# no row for is the set filter's own choice (a core reprint, or a set
+	# whose pack is off) and is shown as asked. 0.40.7 sent such a card
+	# back to its home set — Apprentice Wizard under The Dark wore Fourth
+	# Edition's symbol, rarity and artist — and 0.40.10 shows the printing
+	# the filter named, as every build before 0.40.7 did.
+	var shown_set: String = printing.get("set",
+		choice_id if CardPrintings.is_set_code(choice_id) else d.set_code)
 	# Portal's iconic giant mana symbol belongs to its printed layout.
 	# Use the pinned original scan for an unanimated basic land, without
 	# changing any other set's frame or hiding live creature statistics.
@@ -963,7 +970,7 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	# identifiers are registered. Resolve the service at render time.
 	var tree := Engine.get_main_loop() as SceneTree
 	var packs := tree.root.get_node_or_null("CardPacks")
-	var art: Texture2D = CardPrintings.texture(d.card_name, choice_id) if choice_id != "" \
+	var art: Texture2D = CardPrintings.texture(d.card_name, choice_id) if not printing.is_empty() \
 		else (packs.art_texture(d.card_name, shown_set) if packs != null else null)
 	if art == null:
 		art = GameSkin.card_art(d.card_name)
