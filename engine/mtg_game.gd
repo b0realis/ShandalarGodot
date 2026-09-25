@@ -3134,6 +3134,21 @@ func blocks_allowed(blocker: CardInstance) -> int:
 	return 1 + maxi(blocker.cur_extra_blocks, blocker.extra_blocks_this_turn)
 
 
+## Every block [param candidate] has declared is on a lured attacker, and
+## it may declare no more (CR 509.1c: a blocker that cannot obey every
+## lure obeys as many as it can, so the rest are not asked of it).
+func _blocks_lures_to_capacity(candidate: CardInstance, declared_blocks: Dictionary) -> bool:
+	var declared: Array = declared_blocks.get(candidate.id, [])
+	var allowed := blocks_allowed(candidate)
+	if declared.is_empty() or (allowed < 0 or declared.size() < allowed):
+		return false
+	for attacker_id in declared:
+		var other := find_instance(int(attacker_id))
+		if other == null or not other.cur_must_be_blocked:
+			return false
+	return true
+
+
 func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 	var pid := opponent_of(active_player)
 	if game_over:
@@ -3219,6 +3234,15 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 			# CR 509.1c: the requirement is "all creatures able to block IT
 			# do so" — blocking some OTHER attacker does not satisfy it.
 			if (declared_blocks.get(candidate.id, []) as Array).has(lured.id):
+				continue
+			# ... but a creature already blocking as many LURED attackers
+			# as it may block has obeyed every requirement it can: 509.1c
+			# asks for the greatest number, not for all of them. Two Elvish
+			# Bards attacking together used to refuse every declaration,
+			# the empty one included — no legal answer existed, the AI
+			# conceded and a human seat could never leave the step
+			# (found by the all-packs engine sweep, 2026-09-25).
+			if _blocks_lures_to_capacity(candidate, declared_blocks):
 				continue
 			# ... but a cap on blockers (Caverns of Despair) is a restriction
 			# and beats the requirement (CR 509.1c/508.1d).

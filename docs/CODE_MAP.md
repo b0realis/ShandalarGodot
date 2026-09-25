@@ -55,8 +55,19 @@ needed); card files have NO class_name (they register by name instead);
 - `docs/pack-7-fifth-edition.md`, `docs/releases/0.40.13.md`: the pack
   guide and the release note.
 
+## Two lured attackers (2026-09-25)
+
+- `tests/unit/test_two_lures_2026_09_25.gd`: two Lures attacking together —
+  one blocker on each, both on one, a block on a bystander still refused, a
+  two-block creature taking both, and the AI declaring instead of
+  conceding (`MtgGame._blocks_lures_to_capacity`, CR 509.1c).
+- `docs/releases/0.40.14.md`: the release note.
+
 ## Release package files
 
+- `docs/releases/0.40.14.md`: two lured attackers at once no longer refuse
+  every block declaration; a blocker at its allowance on lures has obeyed
+  all it can.
 - `docs/releases/0.40.13.md`: Pack 7, Fifth Edition — a pure reprint pack
   with its own emblem, filter and printings.
 - `docs/releases/0.40.12.md`: the printed timing riders read the turn as it
@@ -5112,6 +5123,12 @@ shandalar/
 │    Reincarnation for the turn's last combat, Angus Mackenzie's
 │    before-step reading the next combat damage; the AI's
 │    _ability_available reading the riders through the same query;
+│    tests/unit/test_two_lures_2026_09_25.gd — TWO LURES AT ONCE
+│    (2026-09-25): two lured Bears attacking, the Wall on one and the
+│    Lions on the other accepted, both on one lure accepted with the
+│    other unblocked, the Lions on a bystander Hill Giant still refused,
+│    the empty declaration still refused, Two-Headed Giant of Foriys
+│    must take both, the AI declares two blocks and does not concede;
 │    tests/unit/test_card_discarded_event_2026_09_06.gd — CARD_DISCARDED
 │    once per card, after the move, from discard_cards / discard_random /
 │    discard_hand and the cleanup discard (by_effect false), an empty hand

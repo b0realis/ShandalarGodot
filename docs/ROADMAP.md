@@ -16387,6 +16387,51 @@ shared map's sets and scripts, determinism, tampering). Gate: 504
 scripts, **7,757/7,757 tests, 346,186 asserts**, exit 0 in 246 s over 6
 shards; Python 307, exit 0; boot smoke clean.
 
+## 2026-09-25 — Two lures at once (0.40.14)
+
+*"Check that engine supports all packs."* The suite pins support pack by
+pack against metadata-only fixtures, and its registry-wide invariants
+run on the base 897; nothing had ever mounted all seven REAL archives
+and walked the whole pool. A throwaway sweep did (deleted, as probes
+are): the seven ZIPs from `../shandalar-packs/` discovered with art,
+all seven enabled, the registry at 1,898 identities across fourteen
+set folders. EVERY PRINTING — 1,936 rows over the seven catalogues
+(373 · 102 · 373 · 115 · 144 · 380 · 449) — registered, no proxy, in
+its set, reviewed rules (no `_pending` guard anywhere, Homelands
+included, which no test had asked), a card picture AND a full-card
+scan resolved from the archive, a printing-choice row for it (the
+numbered Portal and Fifth Edition basics by collector number). The
+registry-wide sanity of `test_generated_pool` and the predicate
+arities of the cast-gate sweep held over all 1,898 (Wiitigo is the
+one 0/0 that enters with counters — the sanity check's third
+legitimate exemption). Then THE ENGINE: each of the 1,898 cards in its
+own game with Wizard AI on both seats, a mana base of its own colours,
+bodies on both sides, the card in hand and — a permanent — on the
+battlefield too, eight AI turns, under both rulesets and two seeds:
+0 stalls, 0 script errors, 1,632 of them cast or played from hand by
+the AI unprompted. ONE FAULT in 3,796 games, and a real one: Elvish
+Bard cast beside its fielded twin, both attacking — *"AiPlayer: no
+legal block declaration for seat 1 (Grizzly Bears must block Elvish
+Bard if able)"* and the AI conceded. Reproduced without the AI: with
+TWO lured attackers `declare_blockers` refused every map there is —
+both blockers on one Bard, one on each, none — because the requirement
+loop asked each able creature to be on EVERY lure, and a creature
+blocks one. No legal declaration existed, so a human seat could never
+have left the step either. CR 509.1c asks for the greatest number of
+requirements a blocker can obey, not all of them:
+`MtgGame._blocks_lures_to_capacity(candidate, declared)` — every block
+it declared is on a lured attacker and it may declare no more — now
+excuses it from the other lure; a block on a bystander still breaks
+the requirement, the empty declaration is still refused, and a
+creature that may block two (Two-Headed Giant of Foriys) still takes
+both. Same flag, same fix for Lure, Marble Priest and Portal's
+must-be-blocked effect. Pin `tests/unit/test_two_lures_2026_09_25.gd`
+(5): one blocker each, both on one lure, the bystander refusal, the
+two-block Giant, and the AI declaring two blocks instead of conceding.
+Gate: 505 scripts, **7,762/7,762 tests, 346,555 asserts**, exit 0 in
+236 s over 6 shards; Python 307, exit 0. The sweep after the fix: 1,898
+cards × 8 turns, both rulesets, 0 errors, 0 stalls.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
