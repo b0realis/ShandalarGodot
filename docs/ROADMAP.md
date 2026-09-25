@@ -16675,6 +16675,21 @@ table), so a thousand-deck field fans out in megabytes, not hundreds.
 Gate: 512 scripts, **7,867/7,867 tests, 358,894 asserts**, exit 0 in
 248 s over 6 shards; Python 319, exit 0.
 
+0.40.21, the same day: the first funnel run found the CLI would not
+start from a checkout — `CardPacks.pack_of_set` on a code line of a
+`--script`, which compiles before the autoloads are named, and which
+the GUT suite (autoloads in the tree) had passed. The table is reached
+through `preload("res://game/card_packs.gd")` now, and
+`tools/test_script_entry_points.py` reads every `extends SceneTree`
+script outside the addons and tests for an autoload named on a code
+line; run against 0.40.20 it names the line. And the 0.40.20 play copy
+refused `--gauntlet decks/`: a shipped library is inside the `.pck`,
+where only `DirAccess` sees a folder and a globalized path sees
+nothing; `_expand_pool` asks `DirAccess` for `res://decks/` now, and
+the packaged `deck_lab.sh` plays the tournament the checkout plays.
+Gate: 512 scripts, **7,868/7,868 tests, 359,426 asserts**, exit 0
+in 250 s over 6 shards; Python 323, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -193,6 +193,10 @@ const WHOLE_NUMBER_FLAGS: Array[String] = ["--count", "--seed", "--boosters",
 ## same word. Reached as a script and not a class name: simulate.gd has
 ## none, being a `--script` of its own.
 const Lab := preload("res://DeckLab/simulate.gd")
+## The CardPacks autoload's SCRIPT, for its static set → pack table: a
+## `--script` run compiles before the autoloads are named, so `CardPacks`
+## is not an identifier here (see [method Lab.card_packs]).
+const PacksScript := preload("res://game/card_packs.gd")
 
 const HELP := """AutoDeck CLI — build decks by the thousand, for the Deck Lab to mine
 ===================================================================
@@ -1112,7 +1116,7 @@ static func unknown_sets_message(opts: Dictionary) -> String:
 				return "unknown set code 'all' — `every` is the word for every active set; `all` is Alliances' own code and needs card pack 5 (--packs 5)"
 			# A SET THAT EXISTS BUT IS NOT IN PLAY is not a typo, and the
 			# fix is a switch rather than a spelling: name the pack.
-			var pack := CardPacks.pack_of_set(String(code))
+			var pack: String = PacksScript.pack_of_set(String(code))
 			if pack != "":
 				return "set '%s' (%s) is in card pack %s, which is not in play — add `--packs %s`, or `--packs all` for every pack found (active sets: %s)" % [
 					code, DeckFilter.SET_LABELS.get(String(code), code),

@@ -126,6 +126,28 @@ func test_group_all_walks_every_subfolder_and_keeps_every_group() -> void:
 	assert_string_contains(lab._settings_line(opts), "group all")
 
 
+func test_the_library_folder_is_found_the_way_a_pck_is_read() -> void:
+	# A play copy has no decks/ on disk — the library is inside the .pck,
+	# where only DirAccess (not a globalized path) sees the folder.
+	# `res://decks/` is that folder in a checkout too, so the expansion
+	# must accept it as typed.
+	var lab = _lab()
+	assert_true(DirAccess.dir_exists_absolute("res://decks/"), "the library is a res:// folder")
+	var pool: Array = lab._expand_pool("res://decks/", "", true)
+	assert_gt(pool.size(), 2, "the starters, from the res:// folder")
+	for path in pool:
+		assert_true(String(path).begins_with("res://decks/"), path)
+	var opts: Dictionary = lab._parse_args(PackedStringArray(
+		["--field", "big_green.deck", "--gauntlet", "res://decks/", "--group", "ancients"]))
+	assert_false(opts.has("error"), str(opts.get("error", "")))
+	var on_disk: Dictionary = _lab()._parse_args(PackedStringArray(
+		["--field", "big_green.deck", "--gauntlet", "decks/", "--group", "ancients"]))
+	assert_gt(opts.opponents.size(), 20, "the ancients, through res://")
+	assert_eq(opts.opponents.size(), on_disk.opponents.size(), "the same decks either way")
+	for i in opts.opponents.size():
+		assert_eq(opts.opponents[i], "res://" + String(on_disk.opponents[i]))
+
+
 func test_a_field_folder_is_taken_whole_while_group_narrows_the_gauntlet() -> void:
 	var folder := _scratch("field")
 	assert_eq(DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder)), OK)

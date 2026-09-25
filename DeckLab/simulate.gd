@@ -2451,7 +2451,11 @@ func _expand_pool(value: String, exclude_path: String, filtered := true) -> Arra
 		return deck_list_file(value)
 	var dir_path := value
 	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
-		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("res://" + dir_path)):
+		# THE SHIPPED LIBRARY IS INSIDE THE .pck: on a play copy there is
+		# no `decks/` on disk, and `res://decks/` is a folder only to
+		# DirAccess itself, never to the globalized path (2026-09-26 —
+		# `--gauntlet decks/` refused on the 0.40.20 play copy).
+		if DirAccess.dir_exists_absolute("res://" + dir_path):
 			dir_path = "res://" + dir_path
 		else:
 			return [value]   # maybe a single file; deck loading will judge

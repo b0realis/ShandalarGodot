@@ -198,8 +198,23 @@ needed); card files have NO class_name (they register by name instead);
 - `DeckLab/README.md`: the tournament section, the two-round mining
   funnel, and "The two tools and the packs".
 - `docs/releases/0.40.20.md`: the release note.
+- `tools/test_script_entry_points.py` (0.40.21): a `--script` entry
+  point (`extends SceneTree` outside addons and tests) never names an
+  autoload on a code line — it compiles before they are named, and the
+  test runner, where they are in the tree, cannot tell. The CLI reaches
+  the set → pack table as `PacksScript.pack_of_set` (a `preload` of
+  `game/card_packs.gd`).
+- `DeckLab/simulate.gd` (0.40.21): `_expand_pool` finds `res://decks/`
+  through `DirAccess` itself, which is the only way a folder inside a
+  shipped `.pck` is a folder — a play copy has no `decks/` on disk.
+- `docs/releases/0.40.21.md`: the release note.
 
 ## Release package files
+
+- `docs/releases/0.40.21.md`: the AutoDeck CLI's set → pack refusal
+  starts from the shell again (a `--script` cannot name an autoload),
+  a Python test holds every entry point to that, and a play copy's
+  `--gauntlet decks/` finds the library inside the `.pck`.
 
 - `docs/releases/0.40.20.md`: the Deck Lab's tournament mode — a field
   of decks against the decks that are known to be good, ranked — with
