@@ -63,8 +63,18 @@ needed); card files have NO class_name (they register by name instead);
   conceding (`MtgGame._blocks_lures_to_capacity`, CR 509.1c).
 - `docs/releases/0.40.14.md`: the release note.
 
+## Sanity over every pack (2026-09-25)
+
+- `tests/cards/test_generated_pool.gd`: `_derives_its_body` exempts a
+  printed 0/0 that enters with +1/+1 counters (Wiitigo) beside the statics
+  and the copies; `test_every_card_of_every_pack_is_sane` enables all seven
+  packs and runs the invariant over the full 1,898-card pool.
+- `docs/releases/0.40.15.md`: the release note.
+
 ## Release package files
 
+- `docs/releases/0.40.15.md`: the registry sanity check covers every pack;
+  Wiitigo's counters are a known body.
 - `docs/releases/0.40.14.md`: two lured attackers at once no longer refuse
   every block declaration; a blocker at its allowance on lures has obeyed
   all it can.
@@ -3676,7 +3686,9 @@ shandalar/
 │   └── cards/
 │       ├── test_2ed_cards.gd      per-card behavior for the hand-written
 │       │                            showcase cards + registry count
-│       ├── test_generated_pool.gd registry-wide sanity invariants + spot
+│       ├── test_generated_pool.gd registry-wide sanity invariants over the
+│       │                            base pool AND all seven packs (Wiitigo's
+│       │                            entering counters are a body) + spot
 │       │                            integration proving generated cards
 │       │                            play identically to hand-written ones
 │       ├── test_pool_wave1.gd     wave-1 graduations: Hyppie discards, Erg

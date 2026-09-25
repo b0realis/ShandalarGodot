@@ -16432,6 +16432,33 @@ Gate: 505 scripts, **7,762/7,762 tests, 346,555 asserts**, exit 0 in
 236 s over 6 shards; Python 307, exit 0. The sweep after the fix: 1,898
 cards × 8 turns, both rulesets, 0 errors, 0 stalls.
 
+## 2026-09-25 — Sanity over every pack (0.40.15)
+
+*"What is the problem with Wiitigo card? Fix it."* Nothing is wrong with
+the card: Wiitigo is a printed 0/0 that enters with six +1/+1 counters,
+grows one for a block and shrinks one for a quiet upkeep, and the
+engine plays it that way (`test_pack_3_additional` pins the counters).
+The problem was `test_every_registered_card_is_sane`: it refuses a
+creature with toughness 0 unless a characteristic-defining static
+(Nightmare, Rock Hydra) or a copy effect (Clone) supplies the body, and
+counters on entry were not on that list — so the check would have
+flagged Wiitigo the first time anyone ran it with Ice Age enabled. Nobody
+had: the gate ran the registry-wide invariant over the base pool only,
+and the sweep of 0.40.14 was the first thing to look at all 1,898. Two
+fixes. `_derives_its_body` now names the third legitimate shape, +1/+1
+counters on entry (Wiitigo is the only creature across the seven packs
+whose whole body is its counters; Triskelion and Clockwork Beast enter
+with counters over a real body). And the invariant now runs over every
+pack: `test_every_card_of_every_pack_is_sane` enables all seven from the
+suite's own metadata-only archives (`SHANDALAR_PACK_1..7`, one registry
+reload via `Settings.set_enabled_card_packs` + `CardPacks.rescan()`, not
+seven), asserts each is available and Wiitigo is in the pool, and asks
+every identity the same questions — 13,451 assertions in a few seconds,
+`after_each` restoring the empty pack set for the neighbours. Proven to
+bite: with the counters clause removed the run fails once, on Wiitigo.
+Gate: 505 scripts, **7,763/7,763 tests, 355,586 asserts**, exit 0 in
+243 s over 6 shards; Python 307, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
