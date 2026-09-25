@@ -88,7 +88,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 				row.abilities.append({"kind": option.kind, "index": option.index, "cost": str(cost), "budget": budget})
 				if option.kind == "ability":
 					var ability: ActivatedAbility = card.cur_activated_abilities[option.index]
-					if DuelScreen._ability_usable(card, ability) and g.can_afford_cost(pid, cost):
+					if DuelScreen._ability_usable(card, ability) and g.ability_timing_refusal(pid, card, ability).is_empty() and g.can_afford_cost(pid, cost):
 						result.respond = true
 						result.floating = true
 			result.cards.append(row)

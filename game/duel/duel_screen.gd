@@ -4217,7 +4217,7 @@ func _has_affordable_fast_effect(pid: int) -> bool:
 		# mana from a mana source is neither a spell nor an effect"
 		# (manual p.95), so it is not a fast effect either.
 		for ability in inst.cur_activated_abilities:
-			if _ability_usable(inst, ability) \
+			if _ability_open(pid, inst, ability) \
 					and game.can_afford_cost(pid, ability.cost):
 				return true
 	return false
@@ -4242,6 +4242,22 @@ static func _ability_usable(inst: CardInstance, ability: ActivatedAbility) -> bo
 		return false
 	return not (inst.is_creature() and inst.summoning_sick
 		and not inst.has_keyword(Mtg.Keyword.HASTE))
+
+
+## [method _ability_usable] AND the ability's printed timing riders, the
+## engine's own reading of them ([method MtgGame.ability_timing_refusal]).
+##
+## WITHOUT THIS (the owner, 2026-09-25: Nettling Imp *"plays like
+## instant on the opponent turns only"*) an untapped Imp — a free {T},
+## payable in every step — held every priority window of BOTH turns
+## open, and lit the cue on its own turn, although its only moment is an
+## opponent's turn before attackers are declared; a Jade Statue did the
+## same outside combat, an Illusionary Mask on the opponent's turn. The
+## ability was refused on the click, with the engine's own words; the
+## stop before the click was the wrong one.
+func _ability_open(pid: int, inst: CardInstance, ability: ActivatedAbility) -> bool:
+	return _ability_usable(inst, ability) \
+		and game.ability_timing_refusal(pid, inst, ability) == ""
 
 
 ## Has this instant in [param pid]'s hand anything to be cast AT? A spell
@@ -4294,7 +4310,8 @@ func _has_something_to_aim_at(inst: CardInstance) -> bool:
 ## _instant_window_reason]), where the chain is empty — so the instant
 ## half now also asks whether the spell has anything to be cast at
 ## ([method _has_something_to_aim_at]), and the ability half whether the
-## permanent is untapped when its cost says {T} ([method _ability_usable]).
+## permanent is untapped when its cost says {T} and its printed timing
+## riders admit the moment ([method _ability_open]).
 ## Neither narrows a real response: a spell with no legal target is
 ## refused by the engine, and a tapped {T} is not "handy".
 func _could_respond(pid: int) -> bool:
@@ -4312,7 +4329,7 @@ func _could_respond(pid: int) -> bool:
 			# `can_afford_cost` builds the engine's own tap plan, so an
 			# ability's mana is priced the same way an instant's is:
 			# floating first, then the lands the plan could still tap.
-			if _ability_usable(inst, ability) \
+			if _ability_open(pid, inst, ability) \
 					and game.can_afford_cost(pid, ability.cost):
 				return true
 	return false
@@ -8239,7 +8256,7 @@ func _can_act_on(inst: CardInstance) -> bool:
 	if inst.controller_id != game.priority_player:
 		return false
 	for ability in inst.cur_activated_abilities:
-		if not _ability_usable(inst, ability):
+		if not _ability_open(inst.controller_id, inst, ability):
 			continue
 		if game.can_afford_cost(inst.controller_id, ability.cost):
 			return true

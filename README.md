@@ -46,7 +46,7 @@ Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/release
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below): `main` carries **0.40.11**, the next
+run the source with Godot 4.7 (below): `main` carries **0.40.12**, the next
 release in the making.
 
 Play with an **897-card early-Magic core**, historic decks, four computer
@@ -112,8 +112,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The default has a name](docs/ROADMAP.md#2026-09-25--the-default-has-a-name-04011)):
-**7,728 GUT tests / 344,783 assertions**, plus **299 Python tests**
+Latest local verification ([Before attackers are declared](docs/ROADMAP.md#2026-09-25--before-attackers-are-declared-04012)):
+**7,747 GUT tests / 345,776 assertions**, plus **299 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 

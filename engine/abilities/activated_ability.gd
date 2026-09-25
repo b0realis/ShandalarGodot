@@ -114,8 +114,9 @@ func during_step(step: int) -> ActivatedAbility:
 
 
 ## "Activate only before [step]" (Angus Mackenzie's "only before the
-## combat damage step"). -1 = no restriction; compared against the
-## current position in Mtg.STEP_ORDER.
+## combat damage step"). -1 = no restriction; open while such a step
+## still lies ahead this turn (MtgGame.step_is_ahead — so a turn with an
+## extra combat has the window before each of them).
 var only_before_step: int = -1
 
 ## Fluent: restrict activation to before a given step of the turn.

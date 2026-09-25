@@ -25,11 +25,12 @@ static func _is_wall(inst: CardInstance) -> bool:
 
 ## "Cast this spell only after combat" — after the whole COMBAT PHASE, so
 ## the postcombat main phase onwards. The end-of-combat step is still part
-## of combat (CR 511), which is why the bar sits at MAIN2 and not at the
-## combat damage step.
+## of combat (CR 511), which is why the bar is the end of combat BEHIND
+## us (MtgGame.step_is_behind) and not the combat damage step; and in a
+## turn with an extra combat (Relentless Assault) the bar is the last
+## one — between the two combats the Wall's turn is not over.
 static func _after_combat(game: MtgGame, _pid: int) -> String:
-	if Mtg.STEP_ORDER.find(game.current_step()) \
-			< Mtg.STEP_ORDER.find(Mtg.Step.MAIN2):
+	if not game.step_is_behind(Mtg.Step.COMBAT_END):
 		return "cast Glyph of Reincarnation only after combat"
 	return ""
 

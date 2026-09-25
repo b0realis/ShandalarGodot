@@ -28,8 +28,9 @@ static func _defending_players_creature(game: MtgGame, inst: CardInstance) -> bo
 static func _before_blockers(game: MtgGame, _pid: int) -> String:
 	if not Mtg.is_combat_step(game.current_step()):
 		return "cast Blaze of Glory only during combat"
-	if Mtg.STEP_ORDER.find(game.current_step()) \
-			> Mtg.STEP_ORDER.find(Mtg.Step.DECLARE_ATTACKERS):
+	# A declare-blockers step still ahead this turn (MtgGame.step_is_ahead):
+	# the beginning of combat and the declare-attackers step.
+	if not game.step_is_ahead(Mtg.Step.DECLARE_BLOCKERS):
 		return "cast Blaze of Glory only before blockers are declared"
 	return ""
 

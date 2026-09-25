@@ -21,8 +21,8 @@ func build() -> CardData:
 static func _after_their_upkeep(game: MtgGame, pid: int) -> String:
 	if game.active_player == pid:
 		return "cast Reset only during an opponent's turn"
-	if Mtg.STEP_ORDER.find(game.current_step()) \
-			<= Mtg.STEP_ORDER.find(Mtg.Step.UPKEEP):
+	# Their upkeep BEHIND us (MtgGame.step_is_behind): the draw step on.
+	if not game.step_is_behind(Mtg.Step.UPKEEP):
 		return "cast Reset only after their upkeep step"
 	return ""
 

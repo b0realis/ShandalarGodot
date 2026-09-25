@@ -1534,23 +1534,13 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 			or (inst.is_creature() and inst.summoning_sick
 				and not inst.has_keyword(Mtg.Keyword.HASTE))):
 		return false
-	var step := game.current_step()
-	if ability.only_during_combat and not Mtg.is_combat_step(step):
-		return false
-	if ability.only_during_step >= 0 and step != ability.only_during_step:
-		return false
-	if ability.only_before_step >= 0 \
-			and Mtg.STEP_ORDER.find(step) >= Mtg.STEP_ORDER.find(ability.only_before_step):
-		return false
-	if ability.turn_restriction > 0 and pid != game.active_player:
-		return false
-	if ability.turn_restriction < 0 and pid == game.active_player:
+	# The printed timing riders, the engine's own reading of them — a
+	# "before X" that knows about the extra combat a Relentless Assault
+	# inserted, the card's `only_if`, the turn the rider names.
+	if game.ability_timing_refusal(pid, inst, ability) != "":
 		return false
 	if ability.max_per_turn > 0 \
 			and int(inst.ability_uses.get(index, 0)) >= ability.max_per_turn:
-		return false
-	if ability.activation_condition.is_valid() \
-			and ability.activation_condition.call(game, inst) != "":
 		return false
 	return true
 
@@ -6396,7 +6386,7 @@ func _cheapest_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 		if ability.tap_cost or ability.cost == null:
 			continue
-		if not _animation_timing_open(game, ability, who):
+		if not _animation_timing_open(game, inst, ability, who):
 			continue   # the printed timing riders, read for THEIR seat
 		if ability.only_owner_may_activate and inst.owner_id != who:
 			continue   # a stolen Personal Incarnation answers to its owner
@@ -7436,7 +7426,7 @@ func _combat_animation(game: MtgGame) -> String:
 			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 			if not _ability_available(game, inst, index):
 				continue
-			if not _animation_timing_open(game, ability, pid):
+			if not _animation_timing_open(game, inst, ability, pid):
 				continue
 			var anim := EffectIntent.read(ability.effects,
 				inst.data.card_name).animates
@@ -8636,7 +8626,7 @@ func _animatable_bodies(game: MtgGame, who: int) -> Array:
 			continue
 		for index in inst.cur_activated_abilities.size():
 			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
-			if not _animation_timing_open(game, ability, who):
+			if not _animation_timing_open(game, inst, ability, who):
 				continue
 			var anim := EffectIntent.read(ability.effects,
 				inst.data.card_name).animates
@@ -8651,28 +8641,15 @@ func _animatable_bodies(game: MtgGame, who: int) -> Array:
 	return out
 
 
-## The printed timing riders on [param ability], asked of the step we are
-## actually in for the seat [param who]. A thin mirror of the three
-## clauses [method MtgGame.activate_ability] enforces — it exists so the
-## reading of THEIR permanent can be made without asking the engine to
-## pay for anything.
-func _animation_timing_open(game: MtgGame, ability: ActivatedAbility,
-		who: int) -> bool:
+## The printed timing riders on [param ability] of [param inst], asked of
+## the step we are actually in for the seat [param who] — [method
+## MtgGame.ability_timing_refusal], the engine's own reading, which pays
+## for nothing, so the reading of THEIR permanent costs nothing to make.
+func _animation_timing_open(game: MtgGame, inst: CardInstance,
+		ability: ActivatedAbility, who: int) -> bool:
 	if ability.only_opponents_may_activate or ability.cost.has_x:
 		return false
-	if ability.only_during_combat and not Mtg.is_combat_step(game.current_step()):
-		return false
-	if ability.only_during_step >= 0 and game.current_step() != ability.only_during_step:
-		return false
-	if ability.only_before_step >= 0 \
-			and Mtg.STEP_ORDER.find(game.current_step()) \
-				>= Mtg.STEP_ORDER.find(ability.only_before_step):
-		return false
-	if ability.turn_restriction > 0 and game.active_player != who:
-		return false
-	if ability.turn_restriction < 0 and game.active_player == who:
-		return false
-	return true
+	return game.ability_timing_refusal(who, inst, ability) == ""
 
 
 ## Attack declaration: per-attacker favorable-trade analysis (mage-go's

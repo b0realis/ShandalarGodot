@@ -16297,6 +16297,50 @@ more flip to "Custom" and back). Gate: 500 scripts, **7,728/7,728 tests,
 344,783 asserts**, exit 0 in 227 s over 6 shards; Python 299, exit 0;
 boot smoke clean.
 
+## 2026-09-25 — Before attackers are declared (0.40.12)
+
+*"Nettling Imp plays like instant on the opponent turns only"* — the
+owner's example, and the audit it ordered: everything that read the
+turn's clock through `Mtg.STEP_ORDER`. Nine card scripts compared the
+current step's index against the CANONICAL order (Nettling Imp, Siren's
+Call, Blaze of Glory, Disharmony, Berserk, Rapid Fire, Reset, Glyph of
+Reincarnation, Ice Age's Arcum's Whistle/Norritt), which knows nothing
+of the extra combat a Relentless Assault (Portal Second Age, 2026-09-24)
+inserts into the turn; the engine's own `only_before_step` rider (Angus
+Mackenzie) read the FIRST occurrence of the step; and the AI carried two
+more copies of the same five comparisons. So the turn's own array
+answers now: `MtgGame.step_is_ahead(step)` — a step of that kind still
+to come this turn — for every "before X" (Berserk is castable again in
+the main phase before the extra combat; the Imp conscripts into it),
+and `step_is_behind(step)` — every X of the turn taken — for every
+"after X" (Glyph of Reincarnation waits for the LAST combat; Reset for
+their upkeep). The abilities' riders are ONE query,
+`MtgGame.ability_timing_refusal(pid, inst, ability)` (combat-only,
+during-step, before-step, `only_if`, your/their turn), which
+`activate_ability` refuses on, the AI's `_ability_available` and
+`_animation_timing_open` answer through (their copies deleted), and the
+duel screen asks in `_ability_open` before pricing a cost — the fix the
+owner saw: an untapped Imp, a free {T} payable in every step, was a
+"fast effect" in every priority window of BOTH turns, so the automatic
+pass stopped for it on its own turn and after their attackers were
+declared, and the actionable cue lit a card the engine then refused; a
+Jade Statue did the same outside combat. The LAN projection
+(`duel_presentation.gd`) reads the same query for the cue. Pins:
+`tests/unit/test_timing_riders_2026_09_25.gd` (the two queries with
+and without an extra combat; the Imp refused on its own turn in every
+step, open on theirs until attackers are declared, refused after, and
+open again in the main before our extra combat; Berserk, Rapid Fire,
+Blaze of Glory, Disharmony, Reset, Glyph, Angus; the AI's
+`_ability_available` agreeing), `tests/ui/test_imp_windows_2026_09_25.gd`
+(the screen's three predicates and the automatic pass on both turns,
+a Bolt still holding the windows). Open: the AI has no `EffectIntent`
+reading for the conscriptions (Nettling Imp, Arcum's Whistle, Norritt)
+and never activates them; the LAN client's projection keeps the
+canonical `_turn_steps`, so under an extra combat the between-mains
+window is not known client-side (the host referees the play itself).
+Gate: 502 scripts, **7,747/7,747 tests, 345,776 asserts**, exit 0 in
+236 s over 6 shards; Python 299, exit 0; boot smoke clean.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

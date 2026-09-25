@@ -48,8 +48,10 @@ func build() -> CardData:
 static func _opponents_turn_before_attackers(game: MtgGame, pid: int) -> String:
 	if game.active_player == pid:
 		return "cast Siren's Call only during an opponent's turn"
-	if Mtg.STEP_ORDER.find(game.current_step()) \
-			>= Mtg.STEP_ORDER.find(Mtg.Step.DECLARE_ATTACKERS):
+	# A declare-attackers step still ahead this turn — the one of the
+	# combat to come (MtgGame.step_is_ahead), so a turn with an extra
+	# combat has the window before each of them.
+	if not game.step_is_ahead(Mtg.Step.DECLARE_ATTACKERS):
 		return "cast Siren's Call only before attackers are declared"
 	return ""
 

@@ -20,11 +20,14 @@ static func _draftable(game: MtgGame, source: CardInstance,
 		and not inst.has_subtype("wall") and not inst.summoning_sick
 
 
+## "Before attackers are declared": a declare-attackers step still ahead
+## this turn (MtgGame.step_is_ahead) — the one of the combat to come,
+## which in a turn with an extra combat (Relentless Assault) is open again
+## in the main phase between them.
 static func _before_attackers(game: MtgGame, pid: int) -> String:
 	if game.active_player == pid:
 		return "activate only during an opponent's turn"
-	if Mtg.STEP_ORDER.find(game.current_step()) \
-			>= Mtg.STEP_ORDER.find(Mtg.Step.DECLARE_ATTACKERS):
+	if not game.step_is_ahead(Mtg.Step.DECLARE_ATTACKERS):
 		return "activate only before attackers are declared"
 	return ""
 

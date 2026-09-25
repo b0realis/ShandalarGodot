@@ -26,9 +26,11 @@ func build() -> CardData:
 			+ "attacked this turn.")
 
 
+## A combat damage step still ahead this turn (MtgGame.step_is_ahead): in
+## a turn with an extra combat (Relentless Assault) the second main phase
+## is before the next one, and Berserk is legal there again.
 static func _before_combat_damage(game: MtgGame, _pid: int) -> String:
-	if Mtg.STEP_ORDER.find(game.current_step()) \
-			>= Mtg.STEP_ORDER.find(Mtg.Step.COMBAT_DAMAGE):
+	if not game.step_is_ahead(Mtg.Step.COMBAT_DAMAGE):
 		return "cast Berserk only before the combat damage step"
 	return ""
 

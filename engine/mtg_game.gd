@@ -1150,6 +1150,28 @@ func _shuffle(cards: Array[CardInstance]) -> void:
 func current_step() -> int:
 	return _turn_steps[_step_index]
 
+
+## Does a [param step] still lie AHEAD this turn — after the one we are
+## in, counting the combat and main a Relentless Assault inserted? This
+## is what a printed "before X" rider asks: an X step yet to come. In an
+## ordinary turn it is the canonical order read from the step we are in;
+## with an extra combat pending, "before attackers are declared" is open
+## again in the main phase that precedes it (the Master Warcraft ruling:
+## a turn with several combat phases has the window before each of them).
+## The step we are IN is not ahead: "before the combat damage step" is
+## refused in the combat damage step.
+func step_is_ahead(step: int) -> bool:
+	return _turn_steps.find(step, _step_index + 1) != -1
+
+
+## Is [param step] BEHIND us this turn — taken already and not coming
+## back? "After X" riders read this: true only once every X step of the
+## turn has passed. In an ordinary turn it is the canonical order again
+## (Reset "after their upkeep" is open from the draw step on); a Glyph of
+## Reincarnation "after combat" waits for the last combat of the turn.
+func step_is_behind(step: int) -> bool:
+	return _turn_steps.find(step) < _step_index and not step_is_ahead(step)
+
 ## The seat with id [param pid] (0 or 1).
 func player(pid: int) -> MtgPlayer:
 	return players[pid]
@@ -2384,6 +2406,44 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	return ""
 
 
+## THE PRINTED TIMING RIDERS of [param ability] on [param inst], asked
+## for the seat [param pid] in the step we are in: "" when the moment is
+## open, else the refusal [method activate_ability] would give. "Activate
+## only during combat" (Jade Statue), "only during the X step" (Desert),
+## "only before the X step" (Angus Mackenzie — an X step still ahead this
+## turn, [method step_is_ahead]), the card's own `only_if` condition
+## (Nettling Imp's "before attackers are declared", Illusionary Mask's
+## sorcery speed), and "only during your turn" / "an opponent's turn".
+##
+## ONE READING FOR EVERY ASKER (2026-09-25). This was inline in
+## activate_ability and copied twice into the AI, each copy comparing
+## against the canonical step order — which knows nothing of the extra
+## combat a Relentless Assault inserts — and the duel screen's "has a
+## fast effect" predicates never asked at all, so an untapped Nettling
+## Imp held every priority window of BOTH turns open although its only
+## moment is the opponent's turn before attackers. Nothing here pays,
+## records or asks a seat anything: the conditions are pure reads, so
+## the AI and the screen may ask as often as they like.
+func ability_timing_refusal(pid: int, inst: CardInstance, ability: ActivatedAbility) -> String:
+	if ability.only_during_combat and not Mtg.is_combat_step(current_step()):
+		return "activate only during combat"
+	if ability.only_during_step >= 0 and current_step() != ability.only_during_step:
+		return "activate only during the %s step" % \
+			Mtg.step_name(ability.only_during_step).to_lower()
+	if ability.only_before_step >= 0 and not step_is_ahead(ability.only_before_step):
+		return "activate only before the %s step" % \
+			Mtg.step_name(ability.only_before_step).to_lower()
+	if ability.activation_condition.is_valid():
+		var why: String = ability.activation_condition.call(self, inst)
+		if why != "":
+			return why
+	if ability.turn_restriction > 0 and pid != active_player:
+		return "activate only during your turn"
+	if ability.turn_restriction < 0 and pid == active_player:
+		return "activate only during an opponent's turn"
+	return ""
+
+
 ## Activate a (non-mana) activated ability of a battlefield permanent.
 func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array = [],
 		x_value := 0) -> String:
@@ -2425,24 +2485,9 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	var ability_window_why := _damage_window_refusal(ability.effects)
 	if ability_window_why != "":
 		return ability_window_why
-	if ability.only_during_combat and not Mtg.is_combat_step(current_step()):
-		return "activate only during combat"
-	if ability.only_during_step >= 0 and current_step() != ability.only_during_step:
-		return "activate only during the %s step" % \
-			Mtg.step_name(ability.only_during_step).to_lower()
-	if ability.only_before_step >= 0 \
-			and _turn_steps.find(current_step()) \
-				>= _turn_steps.find(ability.only_before_step):
-		return "activate only before the %s step" % \
-			Mtg.step_name(ability.only_before_step).to_lower()
-	if ability.activation_condition.is_valid():
-		var why: String = ability.activation_condition.call(self, inst)
-		if why != "":
-			return why
-	if ability.turn_restriction > 0 and pid != active_player:
-		return "activate only during your turn"
-	if ability.turn_restriction < 0 and pid == active_player:
-		return "activate only during an opponent's turn"
+	var timing_why := ability_timing_refusal(pid, inst, ability)
+	if timing_why != "":
+		return timing_why
 	if ability.max_per_turn > 0 \
 			and int(inst.ability_uses.get(index, 0)) >= ability.max_per_turn:
 		return "activate only %s each turn" % (

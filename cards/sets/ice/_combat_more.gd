@@ -59,7 +59,7 @@ static func _bounce(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, stamp:
 static func _draftable(g: MtgGame, _s: CardInstance, i: CardInstance) -> bool:
 	return i.controller_id == g.active_player and not i.has_subtype("wall") and not i.summoning_sick
 static func _before_attackers(g: MtgGame, _s: CardInstance) -> String:
-	return "" if Mtg.STEP_ORDER.find(g.current_step()) < Mtg.STEP_ORDER.find(Mtg.Step.DECLARE_ATTACKERS) else "Activate only before attackers are declared"
+	return "" if g.step_is_ahead(Mtg.Step.DECLARE_ATTACKERS) else "Activate only before attackers are declared"
 static func _draft(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x: int, whistle: bool) -> void:
 	var i := g.find_instance(t.instance_id)
 	if whistle and EffectBase.unless_paid(g, i.controller_id, ManaCost.parse("{%d}" % i.data.cost.mana_value()), "Pay to ignore Arcum's Whistle?"): return

@@ -36,9 +36,10 @@ func build() -> CardData:
 			+ "each creature blocking it beyond the first.)")
 
 
+## A declare-blockers step still ahead this turn (MtgGame.step_is_ahead):
+## with an extra combat pending, the second main phase is before the next.
 static func _before_blockers(game: MtgGame, _pid: int) -> String:
-	if Mtg.STEP_ORDER.find(game.current_step()) \
-			>= Mtg.STEP_ORDER.find(Mtg.Step.DECLARE_BLOCKERS):
+	if not game.step_is_ahead(Mtg.Step.DECLARE_BLOCKERS):
 		return "cast Rapid Fire only before blockers are declared"
 	return ""
 

@@ -32,6 +32,10 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Release package files
 
+- `docs/releases/0.40.12.md`: the printed timing riders read the turn as it
+  is (an extra combat opens "before attackers" again); the duel screen and
+  the AI ask the engine's one timing query, so an untapped Nettling Imp
+  holds no window on its own turn.
 - `docs/releases/0.40.11.md`: the rules presets as data; "Modern rules, mana
   burn on" is the named player default, every other mix reads "Custom".
 - `docs/releases/0.40.10.md`: the set filter's printing restored in the
@@ -4358,6 +4362,13 @@ shandalar/
 │    as `Begin Combat`, not asked for as `Choose Attackers` a step
 │    early — the owner's playtest); and the report end to end — a Bolt
 │    cast through the engine at their declared Gray Ogre;
+│    tests/ui/test_imp_windows_2026_09_25.gd — THE PRINTED RIDERS AT THE
+│    SCREEN (2026-09-25): an untapped Nettling Imp is no fast effect, no
+│    response and no cue on its own turn (main, its own attack window,
+│    end) and the automatic pass goes; on their upkeep and beginning of
+│    combat it is all three and the pass waits, a tapped one is not
+│    handy; once their attackers are declared it is none again through
+│    blockers and their end step; a Bolt still holds the windows;
 │    tests/ui/test_skip_combat_2026_09_08.gd — THE SKIP (2026-09-08):
 │    "Begin Combat or skip?" with [Begin] [Skip] at your own beginning of
 │    combat, Done and no Skip anywhere else; the Skip walking to the
@@ -5061,6 +5072,19 @@ shandalar/
 │    the hint sends it back, Teleport past the Wall at six life and held
 │    when the attacker is unblockable anyway; Camouflage never cast; the
 │    reader's shape and pump_keywords; the knob off passing; the ladder;
+│    tests/unit/test_timing_riders_2026_09_25.gd — THE PRINTED TIMING
+│    RIDERS (2026-09-25): step_is_ahead reads the turn from here on and
+│    step_is_behind needs every occurrence taken, an extra combat
+│    (Relentless Assault) putting the combat steps ahead again; Nettling
+│    Imp refused on its own turn in every step, open on theirs until
+│    attackers are declared and refused after, their Imp refused in a
+│    plain second main and conscripting into our extra combat; Berserk
+│    and Rapid Fire legal again before an extra combat, Berserk refused
+│    from combat damage on, Blaze of Glory and Disharmony wanting combat
+│    before blockers, Reset waiting for their upkeep to pass, Glyph of
+│    Reincarnation for the turn's last combat, Angus Mackenzie's
+│    before-step reading the next combat damage; the AI's
+│    _ability_available reading the riders through the same query;
 │    tests/unit/test_card_discarded_event_2026_09_06.gd — CARD_DISCARDED
 │    once per card, after the move, from discard_cards / discard_random /
 │    discard_hand and the cleanup discard (by_effect false), an empty hand
