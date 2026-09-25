@@ -165,6 +165,7 @@ var a_free: PackedByteArray = PackedByteArray()
 var a_vigilant: PackedByteArray = PackedByteArray()
 ## Our creature has trample: what a blocker cannot soak goes to the face.
 var a_trample: PackedByteArray = PackedByteArray()
+var a_bypass: PackedByteArray = PackedByteArray()
 ## Toughness left on our creature, for the trample arithmetic.
 var a_soak: PackedInt32Array = PackedInt32Array()
 
@@ -176,6 +177,7 @@ var d_free: PackedByteArray = PackedByteArray()
 ## the durable half of `CombatState.attack_illegality` only.
 var d_can_attack: PackedByteArray = PackedByteArray()
 var d_trample: PackedByteArray = PackedByteArray()
+var d_bypass: PackedByteArray = PackedByteArray()
 var d_soak: PackedInt32Array = PackedInt32Array()
 
 # --- the GANG-BLOCK arithmetic (2026-09-05) --------------------------------
@@ -326,6 +328,14 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 	# --- 4. trample: only what is left after EVERY blocker has been
 	# assigned lethal damage spills to the face (CR 702.19b).
 	var through := remaining if atk_trample != 0 else 0
+	var bypass := a_bypass if ours_attacks else d_bypass
+	if attacker < bypass.size() and bypass[attacker] != 0:
+		var killed_value := 0.0
+		for b in blockers:
+			if dead & (1 << b): killed_value += _value_of(b, ours_attacks)
+		var life := their_life if ours_attacks else my_life
+		if atk_pow >= life or float(atk_pow) > killed_value + through:
+			return [atk_immune == 0 and total >= maxi(1, atk_soak), 0, atk_pow]
 	return [atk_dies, dead, through]
 
 

@@ -95,7 +95,11 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 		for color in pool._restricted[key]:
 			for unit in int(pool._restricted[key][color]):
 				out.append([null, unit, int(color), 1, false, String(key), 0, 0])
-	for inst in game.players[pid].battlefield + game.players[pid].hand:
+	var candidates: Array[CardInstance] = game.players[pid].battlefield + game.players[pid].hand
+	if game.foreign_land_mana.has(pid):
+		for land in game.players[1 - pid].battlefield:
+			if game.may_tap_foreign_land(pid, land): candidates.append(land)
+	for inst in candidates:
 		if inst.cur_mana_abilities.is_empty():
 			continue
 		if excluded.has(inst.id):
@@ -107,7 +111,9 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 		# it O(n log n) times and the answer is the same every time.
 		var holds := holds_untapped(inst)
 		for index in inst.cur_mana_abilities.size():
-			var ability: ManaAbility = inst.cur_mana_abilities[index]
+			var ability := game.mana_ability_for(pid, inst, index)
+			var borrowed := inst.zone == Mtg.Zone.BATTLEFIELD and inst.controller_id != pid
+			if borrowed and not game.may_tap_foreign_land(pid, inst, index): continue
 			if not ability.object_costs.is_empty(): continue # not free, must be chosen explicitly
 			if inst.zone != ability.activation_zone: continue
 			# Sacrificing a Swamp is never an implicit auto-tap. A player may
@@ -125,9 +131,7 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 					or ability.sacrifice_filter.is_valid():
 				continue
 			if ability.counter_cost_kind != "" and int(inst.counters.get(ability.counter_cost_kind, 0)) < ability.counter_cost_count: continue
-			var amount: int = ability.produces[0][1]
-			if ability.dynamic_amount.is_valid():
-				amount = int(ability.dynamic_amount.call(game, inst))
+			var amount := ability.amount_for(game, inst, pid)
 			# Storage lands have no guaranteed base output; the announced
 			# counter choice (whose default is all available fuel) supplies it.
 			if amount == 0 and ability.any_number_counter_kind != "":
@@ -154,7 +158,15 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 				colors = [int(ability.dynamic_color.call(game, inst))]
 			for color_choice in colors:
 				var row := _source_row(game, pool, inst, index, ability,
-					int(color_choice), amount, holds, mind_pain)
+					int(color_choice), amount, holds, mind_pain, borrowed)
+				if borrowed and not row.is_empty():
+					# These legacy restrictions already mean spells only;
+					# conjunct keys preserve any other restriction as well.
+					row[5] = "spell" if ability.restriction_key == "" else "spell:" + ability.restriction_key
+					if row.size() > 8 and row[8].has("outputs"):
+						# Only the land's own output is restricted. Independently
+						# triggered bonus mana retains the trigger's restriction.
+						for n in ability.produces.size(): row[8].outputs[n][2] = row[5]
 				if not row.is_empty():
 					out.append(row)
 	# Fewer options first; painful sources after painless; sacrifices last;
@@ -168,7 +180,7 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 ## [method sources]); `[]` when the ability is not one the planner models.
 static func _source_row(game: MtgGame, pool: ManaPool, inst: CardInstance,
 		index: int, ability: ManaAbility, color: int, amount: int, holds: int,
-		mind_pain: bool) -> Array:
+		mind_pain: bool, borrowed := false) -> Array:
 	# Only public descriptors, never speculative callbacks or RNG.
 	# Snowfall's restricted blue bonus is not ordinary island mana,
 	# and High Tide still adds BLUE after Darkness recolors the land.
@@ -184,7 +196,7 @@ static func _source_row(game: MtgGame, pool: ManaPool, inst: CardInstance,
 			if restriction == "cumulative_upkeep" and game.current_step() != Mtg.Step.UPKEEP: continue
 			var bonus: int = trigger.mana_bonus_amount
 			if (inst.cur_supertypes & Mtg.Supertype.SNOW) != 0: bonus += trigger.mana_bonus_snow_extra
-			if trigger.mana_bonus_color == color and restriction == ability.restriction_key: amount += bonus
+			if not borrowed and trigger.mana_bonus_color == color and restriction == ability.restriction_key: amount += bonus
 			else: bonuses.append([trigger.mana_bonus_color, bonus, restriction])
 	var row: Array = [inst, index, color,
 		amount, ability.sacrifice_source or ability.exile_source, ability.restriction_key,
@@ -341,6 +353,12 @@ static func plan(game: MtgGame, pid: int, cost: ManaCost, x_value: int,
 static func source_usable(s: Array, usage_keys: Array) -> bool:
 	# A card being cast cannot exile itself to fund its own spell.
 	if s[0] != null and usage_keys.has("spell_instance:%d" % s[0].id): return false
+	# Coupled output can have different restrictions: Piracy's borrowed
+	# land mana is spell-only, while High Tide's independent bonus is not.
+	if s.size() > 8 and s[8].has("outputs"):
+		for output in s[8].outputs:
+			if int(output[1]) > 0 and (output[2] == "" or usage_keys.has(output[2])): return true
+		return false
 	var key: String = String(s[5]) if s.size() > 5 else ""
 	return key == "" or usage_keys.has(key)
 

@@ -1394,7 +1394,7 @@ func _on_card_clicked(inst: CardInstance) -> void:
 			# permanent here: activating something else would swap the
 			# pending cast out from under itself, which is the same trap
 			# `_modal_open()` closed for the X dialog (2026-09-02).
-			if _modal_open() or not _is_human(inst.controller_id):
+			if _modal_open() or (inst.controller_id != _pending_pid and not game.may_tap_foreign_land(_pending_pid, inst)):
 				return
 			if inst.zone == Mtg.Zone.BATTLEFIELD or _hand_mana(inst):
 				_tap_for_payment(inst)
@@ -1408,7 +1408,7 @@ func _on_card_clicked(inst: CardInstance) -> void:
 			# then read a card that was no longer there (2026-09-02).
 			if _modal_open():
 				return
-			if not _is_human(inst.controller_id):
+			if not _is_human(inst.controller_id) and not (_is_human(game.priority_player) and game.may_tap_foreign_land(game.priority_player, inst)):
 				return   # AI cards are not the human's to operate
 			if inst.zone == Mtg.Zone.HAND:
 				_click_hand_card(inst)
@@ -1652,6 +1652,11 @@ func _damage_candidates() -> Array[int]:
 	var out: Array[int] = []
 	if request.is_empty():
 		return out
+	var special: String = request.get("special", "")
+	if special == "redirect" or (special == "bypass" and int(request.get("normal_assigner", request.assigner)) != int(request.assigner)):
+		for id in request.targets: out.append(int(id))
+		out.append(MtgGame.DAMAGE_TO_PLAYER)
+		return out
 	var assigned: Dictionary = request["assigned"]
 	var all_lethal := true
 	var first_short := -1
@@ -1665,12 +1670,14 @@ func _damage_candidates() -> Array[int]:
 			all_lethal = false
 			if first_short < 0:
 				first_short = int(id)
-	if game.rules.free_damage_assignment or all_lethal:
+	if game.rules.free_damage_assignment or bool(request.get("free_order", false)) or all_lethal:
 		for id in request["targets"]:
 			out.append(int(id))
 	elif first_short >= 0:
 		out.append(first_short)
 	if all_lethal and bool(request["trample"]):
+		out.append(MtgGame.DAMAGE_TO_PLAYER)
+	if special == "bypass" and _damage_picks.is_empty() and not out.has(MtgGame.DAMAGE_TO_PLAYER):
 		out.append(MtgGame.DAMAGE_TO_PLAYER)
 	return out
 
@@ -1719,7 +1726,10 @@ func _assign_one_point(id: int) -> void:
 		# The original's own refusal vocabulary (`@PROMPT_ILLEGALTARGET`).
 		_set_prompt("Illegal target (wrong attack group)")
 		return
-	_damage_picks[id] = int(_damage_picks.get(id, 0)) + 1
+	var whole: bool = request.get("special", "") == "redirect" \
+		or (request.get("special", "") == "bypass" and (id == MtgGame.DAMAGE_TO_PLAYER \
+		or int(request.get("normal_assigner", request.assigner)) != int(request.assigner)))
+	_damage_picks[id] = int(request.amount) if whole else int(_damage_picks.get(id, 0)) + 1
 	if _points_left() <= 0 or _damage_candidates().is_empty():
 		_confirm_damage()
 		return
@@ -1733,6 +1743,12 @@ func _damage_prompt() -> String:
 	if request.is_empty():
 		return ""
 	var source: CardInstance = request["source"]
+	if request.get("special", "") == "redirect":
+		return "%s: choose the opponent or one of their creatures for all %d damage" % [source.data.card_name, int(request.amount)]
+	if request.get("special", "") == "bypass":
+		if request.targets.is_empty():
+			return "%s: click the opponent for all %d damage, or Done to deal none" % [source.data.card_name, int(request.amount)]
+		return "%s: click the opponent to deal all %d damage, or assign to blockers" % [source.data.card_name, int(request.amount)]
 	var verb := "Assign trample damage to blockers" if bool(request["trample"]) \
 		else "Assign damage to blockers"
 	return "%s: %s, %d points left" % [
@@ -1929,6 +1945,9 @@ func _continue_cast_chain() -> void:
 
 
 func _click_permanent(inst: CardInstance) -> void:
+	if game.may_tap_foreign_land(game.priority_player, inst):
+		_open_ability_menu(inst, true)
+		return
 	var mana_count := inst.cur_mana_abilities.size()
 	var ability_count := inst.cur_activated_abilities.size()
 	if mana_count == 1 and ability_count == 0:
@@ -1950,7 +1969,7 @@ func _tap_for_payment(inst: CardInstance) -> void:
 	if mana_count == 1:
 		if _pending_mana_conflicts(inst, 0):
 			return
-		_report(game.tap_for_mana(inst.controller_id, inst))
+		_report(game.tap_for_mana(_pending_pid, inst))
 		return
 	_open_ability_menu(inst, true)
 	# Permanents with nothing to activate: click is a no-op (hover shows
@@ -5094,11 +5113,15 @@ func _on_x_confirmed() -> void:
 ## cast the player is in the middle of paying for.
 func _open_ability_menu(inst: CardInstance, mana_only := false) -> void:
 	_ability_menu.clear()
+	var actor := _pending_pid if mode == Mode.PAYING else game.priority_player
+	var borrowed := inst.controller_id != actor and game.may_tap_foreign_land(actor, inst)
+	if borrowed: mana_only = true
 	var id := 0
 	for ability in inst.cur_mana_abilities:
-		_ability_menu.add_item(str(ability), id)
+		_ability_menu.add_item(str(game.mana_ability_for(actor, inst, id)), id)
 		_ability_menu.set_item_disabled(id, inst.zone != ability.activation_zone
-			or (mana_only and _pending_mana_conflicts(inst, id)))
+			or (borrowed and not game.may_tap_foreign_land(actor, inst, id))
+			or (mode == Mode.PAYING and _pending_mana_conflicts(inst, id)))
 		id += 1
 	if not mana_only:
 		for ability in inst.cur_activated_abilities:
@@ -5113,6 +5136,7 @@ func _open_ability_menu(inst: CardInstance, mana_only := false) -> void:
 					break
 			id += 1
 	_ability_menu.set_meta("mana_only", mana_only)
+	_ability_menu.set_meta("actor", actor if borrowed or mode == Mode.PAYING else inst.controller_id)
 	_ability_menu.set_meta("instance_id", inst.id)
 	_ability_menu.position = Vector2i(_pointer())
 	_ability_menu.popup()
@@ -5132,9 +5156,9 @@ func _on_ability_chosen(id: int) -> void:
 		return
 	var mana_count := inst.cur_mana_abilities.size()
 	if id < mana_count:
-		if bool(_ability_menu.get_meta("mana_only", false)) and _pending_mana_conflicts(inst, id):
+		if mode == Mode.PAYING and _pending_mana_conflicts(inst, id):
 			return
-		_report(game.tap_for_mana(inst.controller_id, inst, id))
+		_report(game.tap_for_mana(int(_ability_menu.get_meta("actor", inst.controller_id)), inst, id))
 		return
 	if bool(_ability_menu.get_meta("mana_only", false)):
 		return   # the menu offered nothing else; the board changed under it

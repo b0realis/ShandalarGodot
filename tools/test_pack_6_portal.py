@@ -35,23 +35,28 @@ class PackSixTests(unittest.TestCase):
     def test_full_checklist_and_independent_names(self):
         manifest, catalog, cards, _ = pack.assembled()
         names = {row['name'] for row in cards}
-        self.assertEqual(len(names), 200)
+        self.assertEqual(len(names), 318)
         self.assertEqual(len(pack.read_json(pack.SOURCE / 'cards.json')), 215)
-        self.assertEqual(set(catalog['sets']), {'por'})
-        self.assertEqual(set(catalog['sets']['por']['names']), names)
+        self.assertEqual(set(catalog['sets']), {'por', 'p02'})
+        self.assertEqual(len(catalog['sets']['por']['names']), 200)
+        self.assertEqual(len(catalog['sets']['p02']['names']), 155)
+        self.assertEqual(set(catalog['sets']['por']['names']) | set(catalog['sets']['p02']['names']), names)
         previous = {name for _, name in first.assigned_pairs()}
         for path in (pack.ROOT / 'packaging/card_packs').glob('*/cards.json'):
             if path.parent == pack.SOURCE:
                 continue
             previous.update(row['name'] for row in pack.read_json(path))
         self.assertEqual(names & previous, set(pack.read_json(pack.SOURCE / 'reprint_names.json')))
-        self.assertEqual(len(manifest['new_rules_identities']), 173)
-        self.assertEqual(len(set(manifest['new_rules_identities'])), 173)
+        self.assertEqual(len(manifest['new_rules_identities']), 290)
+        self.assertEqual(len(set(manifest['new_rules_identities'])), 290)
         self.assertEqual(manifest['id'], 'pack-6')
-        self.assertEqual(len(cards), 215)
-        self.assertEqual(len(pack.art_targets(Path('unused'))), 430)
-        self.assertEqual(len({str(path) for path, _, _ in pack.art_targets(Path('unused'))}), 430)
-        self.assertEqual([row['collector_number'] for row in cards if row['name'] == 'Forest'], ['212', '213', '214', '215'])
+        self.assertEqual(len(cards), 380)
+        self.assertEqual(len(pack.art_targets(Path('unused'))), 760)
+        self.assertEqual(len({str(path) for path, _, _ in pack.art_targets(Path('unused'))}), 760)
+        self.assertEqual([row['collector_number'] for row in cards if row['name'] == 'Forest' and row['set'] == 'por'], ['212', '213', '214', '215'])
+        self.assertEqual([row['collector_number'] for row in cards if row['name'] == 'Forest' and row['set'] == 'p02'], ['163', '164', '165'])
+        self.assertEqual(manifest['counts']['named_set_entries'], 355)
+        self.assertEqual(manifest['counts']['reprint_entries'], 65)
 
     def test_deterministic_art_archive_and_no_scripts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -64,9 +69,9 @@ class PackSixTests(unittest.TestCase):
             pack.build(out, root / 'art')
             pack.build(again, root / 'art')
             self.assertEqual(out.read_bytes(), again.read_bytes())
-            self.assertEqual(pack.verify(out)['checksums']['artwork']['files'], 788)
+            self.assertEqual(pack.verify(out)['checksums']['artwork']['files'], 1352)
             with zipfile.ZipFile(out) as archive:
-                self.assertEqual(len(archive.namelist()), 792)
+                self.assertEqual(len(archive.namelist()), 1356)
                 self.assertFalse(any(name.endswith('.gd') for name in archive.namelist()))
                 for name in pack.read_json(pack.SOURCE / 'reprint_names.json'):
                     if name in pack.SHARED_NAMES:

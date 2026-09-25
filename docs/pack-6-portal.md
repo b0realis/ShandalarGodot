@@ -1,14 +1,27 @@
-# Pack 6 — Portal (1997)
+# Pack 6 — Portal & Second Age
 
-Portal is an optional, independent beginner-oriented set with **200 card
-names from 215 original English printings**. It adds **173 new identities**
-and reprints 27 previously supported names. Core plus Portal has 1,097 set
-entries and 1,076 unique cards; all six packs have 2,204 set entries and
-1,781 unique cards. The original core remains 897 cards.
+We included the **first Portal set** for its beautiful illustrations and
+distinctive card design—especially the basic lands with their large mana
+symbols. Its straightforward creatures and spells can also offer new
+players a gentler introduction to Magic and Shandalar.
 
-Requires **Shandalar 0.40.7 or later**. This is the first Portal set, not
-Portal Second Age or Portal Three Kingdoms. The snapshot includes English
-collector numbers 1–215, excluding demo, starter-text and foreign variants.
+Try the [Portal starter decks](portal-starters.md) and their illustrated
+guides in **Help → Contents → Portal starter decks**, then explore the
+wider card pool at your own pace. Gameplay still uses the game's normal
+rules, not a separate Portal ruleset.
+
+Pack revision **2.0.0** includes original **Portal (1997): 200 names / 215
+printings**, and **Portal Second Age (1998): 155 names / 165 printings**.
+Together: **318 distinct names, 355 set entries and 380 printings**. Second
+Age adds 117 rules identities; the pack supplies 290 new identities in total.
+Core plus Pack 6 has 1,252 set entries / 1,193 unique cards; all six packs
+have 2,359 set entries / 1,898 unique cards. The core remains 897 cards.
+
+Requires **Shandalar 0.40.9 or later**. Rebuild older Pack 6 ZIPs using the
+matching tool; the filename and saved decks do not change. Original Portal
+remains independently selectable. Portal Three Kingdoms is not included.
+The snapshots contain English numbered printings only: POR 1–215 and P02
+1–165, excluding demo, starter-text and foreign variants.
 
 ## Build and enable
 
@@ -39,10 +52,10 @@ existing gold and carved-stone styles for the card icon and On/Off buttons.
 
 ## Art and printings
 
-All 215 numbered English printings are pinned by Scryfall ID: an art crop
-plus a full-card scan, **430 physical images**. Each basic land has all four
-original illustrations. Pack revision 1.1.0 adds those fifteen alternate
-land printings; rebuild an older local Portal ZIP with the current tool.
+All 380 numbered English printings are pinned by Scryfall ID: an art crop
+plus a full-card scan, **760 physical images**. Each basic land has all four
+Portal illustrations and all three Second Age illustrations. Separate set
+namespaces preserve both versions of shared cards such as Archangel.
 The artwork ZIP and downloaded pictures stay local; only builder source,
 metadata and original interface assets are distributed.
 
@@ -69,7 +82,7 @@ Gauntlets, LAN tables and tournament decks retain the preference. Legacy
 `.dck` exports cannot retain it. Counts, formats, draft verification and
 game rules remain name-based. Missing or disabled artwork falls back to
 the normal face without making an otherwise playable deck illegal; the
-saved preference survives. LAN protocol 23 sends printing IDs only with
+saved preference survives. LAN protocol 24 sends printing IDs only with
 visible card faces; hidden hands and masked cards reveal no art preference.
 
 Six reprints reuse trusted earlier-pack definitions even when those packs
@@ -78,6 +91,22 @@ Pyroclasm and Storm Crow. Shared identities are deduplicated when several
 packs are enabled. Other core reprints keep their original implementation.
 
 ## Rules and computer player
+
+Second Age has its own Extras stone medallions and gold set symbol, inspired
+by its five-notched gate emblem. Switch off Portal and other sources to see
+155 Second Age names / 165 printings. Draft pools can select either set.
+The [seven original Second Age decks](portal-second-age-decks.md) live under
+**Portal Second Age decks**. Help's clickable Contents includes illustrated
+set, theme-deck and two-player-starter guides.
+
+Second Age adds extra combat/main phases, optional whole-combat-damage
+assignments (Lone Wolf, Deathcoil Wurm, Cunning Giant), and Piracy's permission
+to tap opponents' lands for spell-only mana without changing control.
+Local and LAN interfaces share these choices. Characteristic power works
+in other zones as well as on the battlefield for the four Second Age stars.
+Its before-attack tap abilities, sacrifice choices, random discard, tutors,
+two-target spells and destruction-dependent life changes use the shared
+engine. See the [Second Age inventory](pack-6-second-age-audit.md).
 
 The [Portal starter decks](portal-starters.md) include both unchanged
 35-card teaching lists and clearly labelled 40-card play adaptations.
@@ -104,9 +133,9 @@ resolves. These are heuristic policies, not a claim of perfect play.
 
 ## Archive contract
 
-The ZIP contains four metadata entries plus 788 artwork entries: 430
-set-namespaced entries and 358 fallbacks for the 179 identities Portal must
-supply without earlier packs. There are **792 entries total**. The archive
+The ZIP contains four metadata entries plus 1,352 artwork entries: 760
+set-namespaced entries and 592 fallbacks for the 296 identities Pack 6 must
+supply without earlier packs. There are **1,356 entries total**. The archive
 never supplies executable scripts. The loader checks exact inventory,
 trusted metadata, minimum version and SHA-256 hashes. Uncompressed sizes
 are checked before reading members: 8 MiB per member, 256 MiB total.
@@ -115,7 +144,44 @@ Builds are staged, verified and atomically replaced; identical inputs
 produce identical ZIP bytes. Metadata-only archives are accepted solely
 under the explicit isolated test feature, never as ordinary player packs.
 
-## Verification
+## Second Age verification (2026-09-24)
+
+Godot 4.7.2: **336 distinct targeted tests passed**, with successful wrapper
+exit codes and no engine errors or leaked-object reports in those runs.
+
+| Scope | Tests |
+|---|---:|
+| New Second Age rules, decisions, LAN choices and exact deck lists | 44 |
+| Existing Portal catalogue, mechanics, choices, AI and integration | 47 |
+| Combat damage and mana planning | 30 |
+| LAN protocol, packs, socket tables and shared duel screens | 74 |
+| Printing preferences, Help and original Portal starters | 72 |
+| Ice Age blocking interactions and Fallen Empires/Extras regressions | 69 |
+
+The `pack_6` selection also reruns twelve new Second Age cases; these are
+counted only once above. The Python checks passed **29 tests**: eight Pack 6
+builder checks, fifteen release-toolkit tests and six tree/privacy checks.
+The real artwork ZIP passed verification. Extracted construction tools can
+build the combined pack without a source checkout.
+
+`tools/pack_6_duel_audit.gd --second-age --seed 68000` completed **14 full
+Wizard-versus-Wizard duels**, using all seven original decks: modern seeds
+68000–68006 and fifth-edition seeds 168000–168006. Games finished in 15–28
+turns without stalls or engine errors. This is bounded flow coverage, not
+proof that every card was drawn or every strategic decision was optimal.
+
+Six real native macOS captures checked the Deck Builder, Extras, and all
+three illustrated Help pages at 1280×800, plus Extras at 960×600. The full
+Second Age land scan, separate set counts, buttons and footer are readable.
+Three distinct P02 Forest scans were checked against the original Portal
+scan. The player's normal profile was not used.
+
+A combined test-selection attempt unexpectedly expanded discovery; it was
+stopped, and affected scripts were checked individually. The resulting
+Extras test fixes replace assumptions about the old fixed dialog nesting.
+No full-suite gate, exported-binary test or new release is claimed here.
+
+## Earlier Portal verification
 
 The artwork-selector follow-up passed 250 selected deck, rendering and LAN
 tests, eight Python builder checks and six tree/privacy checks. It includes

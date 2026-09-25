@@ -78,6 +78,15 @@ arched doorway; no downloaded SVG or scan is embedded in these pictures.
 | `set_icon_por.png` | Portal — segmented circular gold gate, 48x48 | `tools/draw_our_art.gd` (`_portal`) | GPL-3.0 | `17e96ba63092397274be1fcff166de67cb05b9b6cebba8b44549fb2ce3e9b85c` |
 | `filter_por_on.png` | Portal — circular gate carved into lit stone, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `3773788eac04da5731e2cd0c8260791f9c8175a02fbc2ecd5ec8f39b5f2cfd12` |
 | `filter_por_off.png` | Portal — matching dim stone gate, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `8090a968ecf3ebf110018b04039f39fb607e5717af69e89baaf39e68d597590e` |
+
+Second Age uses original procedural five-notched concentric gates, inspired
+by its printed set emblem. No reference bitmap or SVG is copied into these assets.
+
+| File | Description | Generator | License | SHA-256 |
+|---|---|---|---|---|
+| `set_icon_p02.png` | Second Age gold gate, 48x48 | `tools/draw_our_art.gd` (`_second_age`) | GPL-3.0 | `c91a8f22bdce69b53756df56c41eab59ccbf255d8042eab1b00c3d0ee98d7d2e` |
+| `filter_p02_on.png` | Lit carved gate medallion, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `a143ca9be87d83b033e37e92426b6cb820b8f38fe68692193754c617df233998` |
+| `filter_p02_off.png` | Dim carved gate medallion, 48x48 | `tools/draw_our_art.gd` | GPL-3.0 | `9552ee240dd7b567533bf05d6e89e73c75b1c1ccc29a47017bfe9f493c6d1be9` |
 | `card_variant_on.png` | Card variants — two picture frames carved into a round stone medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `e9479fd2cc33a330f880ba9f73b4f39c56e78403ed955513c51e8fe039c0072a` |
 | `card_variant_off.png` | Card variants — matching recessed/dim medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `1d036fde388f708a42e77e337e405b2a132e3048b7f96ae0185128d05aa51034` |
 

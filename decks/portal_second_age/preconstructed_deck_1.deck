@@ -1,0 +1,48 @@
+# Original Portal Second Age 2-Player Starter deck (1998), unchanged card counts.
+# source: https://mtg.wtf/deck/p02/preconstructed-deck-1
+# provenance: docs/portal-second-age-decks.md
+# Normal shuffled duel; no scripted demonstration-game order.
+# Basic-land artwork is one saved variant per name, not the boxed mix.
+# group: Portal Second Age decks
+# requires-pack: pack-6
+name: Second Age — Starter 1 (original, 30 cards)
+# printing: ["Dakmor Bat","p02"]
+# printing: ["Dakmor Scorpion","p02"]
+# printing: ["Goblin Cavaliers","p02"]
+# printing: ["Goblin Piker","p02"]
+# printing: ["Goblin Raider","p02"]
+# printing: ["Lynx","p02"]
+# printing: ["Moaning Spirit","p02"]
+# printing: ["Norwood Ranger","p02"]
+# printing: ["Obsidian Giant","p02"]
+# printing: ["Ogre Berserker","p02"]
+# printing: ["Plated Wurm","p02"]
+# printing: ["Prowling Nightstalker","p02"]
+# printing: ["Raging Goblin","p02"]
+# printing: ["Coercion","p02"]
+# printing: ["Hand of Death","p02"]
+# printing: ["Mind Rot","p02"]
+# printing: ["Volcanic Hammer","p02"]
+# printing: ["Forest","p02"]
+# printing: ["Mountain","p02"]
+# printing: ["Swamp","p02"]
+1 Dakmor Bat
+1 Dakmor Scorpion
+1 Goblin Cavaliers
+1 Goblin Piker
+1 Goblin Raider
+1 Lynx
+1 Moaning Spirit
+1 Norwood Ranger
+1 Obsidian Giant
+1 Ogre Berserker
+1 Plated Wurm
+1 Prowling Nightstalker
+1 Raging Goblin
+1 Coercion
+1 Hand of Death
+1 Mind Rot
+1 Volcanic Hammer
+3 Forest
+5 Mountain
+5 Swamp

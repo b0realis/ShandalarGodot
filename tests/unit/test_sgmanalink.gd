@@ -427,7 +427,7 @@ func test_protocol_20_pins_the_land_allowance_the_public_division_and_the_droppe
 	# THE PUBLIC HALF OF A DAMAGE DIVISION reaches both seats. Without the
 	# amount or the targets the watching board could paint no group at all.
 	var division := {"source": "c1", "assigner": 0, "amount": 6,
-		"targets": ["c2", "c3"], "trample": false, "assigned": [["c2", 3]]}
+		"targets": ["c2", "c3"], "trample": false, "assigned": [["c2", 3]], "special": "", "normal_assigner": 0, "free_order": false}
 	var shape: Dictionary = view.presentation.duplicate(true)
 	shape.assignment = division.duplicate(true)
 	assert_true(SgViewProtocol.presentation(shape))

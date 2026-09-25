@@ -9,7 +9,7 @@ func test_portal_alone_and_alongside_every_previous_pack() -> void:
 	assert_false(CardRegistry.has_card("Alabaster Dragon"))
 	assert_true(CardPacks.set_enabled("pack-6", true))
 	assert_eq(CardRegistry.names_in_set("por").size(), 200)
-	assert_eq(CardRegistry.size(), 1076)
+	assert_eq(CardRegistry.size(), 1193)
 	for name in PortalPack.SHARED:
 		var shared_names: Array[String] = [name]
 		assert_eq(CardPacks.packs_required_by(shared_names), ["pack-6"])
@@ -18,7 +18,7 @@ func test_portal_alone_and_alongside_every_previous_pack() -> void:
 		var c := CardRegistry.get_card(row.name)
 		assert_false(c.cast_condition.is_valid() and c.cast_condition.get_method() == "_pending", row.name)
 	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, true)
-	assert_eq(CardRegistry.size(), 1781)
+	assert_eq(CardRegistry.size(), 1898)
 	assert_eq(CardRegistry.names_in_set("por").size(), 200)
 	CardPacks.set_enabled("pack-6", false)
 	assert_false(CardRegistry.has_card("Alabaster Dragon"))
@@ -26,7 +26,7 @@ func test_portal_alone_and_alongside_every_previous_pack() -> void:
 
 func test_original_english_printings_and_native_keywords() -> void:
 	CardPacks.set_enabled("pack-6", true)
-	assert_eq(PortalPack.records().size(), 200)
+	assert_eq(PortalPack.records().size(), 318)
 	assert_eq(CardRegistry.get_card("Armored Pegasus").power, 1)
 	assert_true(CardRegistry.get_card("Archangel").keywords.has(Mtg.Keyword.VIGILANCE))
 	assert_true(CardRegistry.get_card("Anaconda").landwalk.has("swamp"))

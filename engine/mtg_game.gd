@@ -89,8 +89,11 @@ var rng := RandomNumberGenerator.new()
 
 var turn_number := 0
 var active_player := 0
-## Index into Mtg.STEP_ORDER; see [method current_step].
+## Index into _turn_steps; see [method current_step].
 var _step_index := 0
+## Per-turn phase sequence. Extra combats insert their own main phase
+## without starting a turn, untapping lands or granting another land play.
+var _turn_steps: Array = Mtg.STEP_ORDER.duplicate()
 var priority_player := 0
 var _passes := 0
 
@@ -137,6 +140,38 @@ var _pending_extra_turn_loss: CardInstance = null
 var _resume_after_extra := -1
 var next_turn_statics: Array[Dictionary] = []
 var skip_combat_this_turn := false # derived by continuous effects
+var foreign_land_mana: Array[int] = [] # derived permission until cleanup
+
+## CR 101.1 / Piracy: permission to activate a foreign land's TAP mana
+## ability is not control and cannot pay a sacrifice of that foreign land.
+func may_tap_foreign_land(pid: int, inst: CardInstance, index := -1) -> bool:
+	if inst.zone != Mtg.Zone.BATTLEFIELD or not inst.is_land() or inst.controller_id == pid or not foreign_land_mana.has(pid): return false
+	for n in inst.cur_mana_abilities.size():
+		if index >= 0 and index != n: continue
+		var ability: ManaAbility = inst.cur_mana_abilities[n]
+		if ability.activation_zone == Mtg.Zone.BATTLEFIELD and ability.taps_source and not ability.sacrifice_source: return true
+	return false
+
+## Resolve the actual player's version of a mana ability.
+func mana_ability_for(pid: int, inst: CardInstance, index: int) -> ManaAbility:
+	var ability: ManaAbility = inst.cur_mana_abilities[index]
+	# Deep Water requires its player to tap a land they control. Piracy
+	# satisfies neither half for that player; land-wide replacements remain.
+	if pid != inst.controller_id and ability.controller_replacement and ability.unreplaced_ability != null:
+		ability = ability.unreplaced_ability
+		if not inst.cur_land_mana_replacements.is_empty(): ability = ability.forcing_color(inst.cur_land_mana_replacements[0])
+	return ability
+
+
+## CR 500.8: an additional combat followed by a main phase goes directly
+## after THIS main phase. Repeated resolutions insert repeated pairs.
+func add_combat_after_current_main() -> void:
+	if current_step() not in [Mtg.Step.MAIN1, Mtg.Step.MAIN2]: return
+	_rec(self, &"_turn_steps")
+	var extra := [Mtg.Step.COMBAT_BEGIN, Mtg.Step.DECLARE_ATTACKERS, Mtg.Step.DECLARE_BLOCKERS,
+		Mtg.Step.FIRST_STRIKE_DAMAGE, Mtg.Step.COMBAT_DAMAGE, Mtg.Step.COMBAT_END, Mtg.Step.MAIN2]
+	for n in extra.size(): _turn_steps.insert(_step_index + 1 + n, extra[n])
+	log_line("An additional combat and main phase follow this main phase")
 
 ## Fog: all combat damage this turn is prevented. Cleared at cleanup.
 var combat_damage_prevented := false
@@ -614,7 +649,7 @@ const PLAYER_RESOLUTION_FIELDS: Array[StringName] = [
 ## [constant RESOLUTION_TABLES], which [method _rec_turn] records as well.
 const TURN_FIELDS: Array[StringName] = [
 	# where the turn is
-	&"_step_index", &"turn_number", &"active_player", &"priority_player",
+	&"_step_index", &"_turn_steps", &"turn_number", &"active_player", &"priority_player",
 	&"_passes", &"_skip_first_draw",
 	# the steps that hold themselves open
 	&"awaiting_attackers", &"awaiting_blockers", &"awaiting_discard",
@@ -1113,7 +1148,7 @@ func _shuffle(cards: Array[CardInstance]) -> void:
 
 ## The current Mtg.Step.
 func current_step() -> int:
-	return Mtg.STEP_ORDER[_step_index]
+	return _turn_steps[_step_index]
 
 ## The seat with id [param pid] (0 or 1).
 func player(pid: int) -> MtgPlayer:
@@ -1497,12 +1532,13 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		return "%s has no mana ability" % inst.data.card_name
 	if ability_index < 0 or ability_index >= inst.cur_mana_abilities.size():
 		return "no such mana ability"
-	var ability: ManaAbility = inst.cur_mana_abilities[ability_index]
+	var ability := mana_ability_for(pid, inst, ability_index)
+	var borrowed := may_tap_foreign_land(pid, inst, ability_index)
 	var object_why := OBJECT_COSTS.refusal(self, pid, ability.object_costs, inst)
 	if object_why != "": return object_why
-	if inst.zone == Mtg.Zone.BATTLEFIELD and inst.controller_id != pid:
+	if inst.zone == Mtg.Zone.BATTLEFIELD and inst.controller_id != pid and not borrowed:
 		return "you don't control that permanent"
-	if inst.zone != ability.activation_zone or (inst.owner_id if inst.zone == Mtg.Zone.HAND else inst.controller_id) != pid:
+	if inst.zone != ability.activation_zone or ((inst.owner_id if inst.zone == Mtg.Zone.HAND else inst.controller_id) != pid and not borrowed):
 		return "that mana ability is not available to you from this zone"
 	# {T} in the cost: the usual case. Ashnod's Altar-style abilities skip
 	# both the tap and (CR 302.6) the summoning-sickness gate.
@@ -1654,7 +1690,8 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	# pool and only its total crosses over — which keeps this working for
 	# dynamic amounts (the Urzatron) without knowing how they are computed.
 	var recolor: int = ability.forced_output_color
-	if recolor == 0: recolor = players[pid].land_mana_becomes
+	if recolor == 0 and not borrowed: recolor = players[pid].land_mana_becomes
+	var output := ManaPool.new() if borrowed else players[pid].mana_pool
 	# EVERY type this activation made, for "one mana of any type that land
 	# produced" (Mana Flare): the first colour as it came out above, plus
 	# any later literal entry — a two-type ability lets the Flare's player
@@ -1665,24 +1702,30 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		produced_types.clear() # a land with no mana ability supplies no type
 	elif recolor != 0 and inst.is_land() and not ability.scales_with_sacrifice_mv:
 		var scratch := ManaPool.new()
-		ability.produce_into_for(scratch, self, inst, chosen_color, bonus)
-		if ability.restriction_key == "": players[pid].mana_pool.add(recolor, scratch.total())
-		else: players[pid].mana_pool.add_restricted(recolor, scratch.total(), ability.restriction_key)
+		ability.produce_into_for(scratch, self, inst, chosen_color, bonus, pid)
+		if ability.restriction_key == "": output.add(recolor, scratch.total())
+		else: output.add_restricted(recolor, scratch.total(), ability.restriction_key)
 		produced_color = recolor
 		produced_types = [recolor]
 	elif ability.scales_with_sacrifice_mv and mana_sacrifice != null:
 		var scaled: int = mana_sacrifice.data.cost.mana_value()
 		if ability.restriction_key == "":
-			players[pid].mana_pool.add(ability.produces[0][0], scaled)
+			output.add(ability.produces[0][0], scaled)
 		else:
-			players[pid].mana_pool.add_restricted(
+			output.add_restricted(
 				ability.produces[0][0], scaled, ability.restriction_key)
 	else:
-		ability.produce_into_for(players[pid].mana_pool, self, inst, chosen_color, bonus)
+		ability.produce_into_for(output, self, inst, chosen_color, bonus, pid)
 		for i in range(1, ability.produces.size()):
 			var extra: int = int(ability.produces[i][0])
 			if int(ability.produces[i][1]) > 0 and not produced_types.has(extra):
 				produced_types.append(extra)
+	if borrowed:
+		for color in output._mana:
+			players[pid].mana_pool.add_restricted(int(color), int(output._mana[color]), "spell")
+		for key in output._restricted:
+			for color in output._restricted[key]:
+				players[pid].mana_pool.add_restricted(int(color), int(output._restricted[key][color]), "spell:" + String(key))
 	if mana_sacrifice != null:
 		sacrifice_permanent(mana_sacrifice)
 	if ability.side_effect.is_valid():
@@ -1696,11 +1739,8 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	# "ITS CONTROLLER", meaning the land's. So it carries both, the way
 	# Mtg.EventType.ABILITY_ACTIVATED does: `controller` is the
 	# PERMANENT'S controller, as on every other event in the catalogue,
-	# and `player` is the ACTING one. Here the two are the same seat —
-	# the refusal at the top of this method turns away a permanent its
-	# activator does not control — so this changed nothing for any card in
-	# the pool; it means the day something taps another player's land for
-	# mana, the event does not have to lie to half its readers.
+	# and `player` is the ACTING one. Piracy can make these different seats:
+	# borrowing a land's mana ability does not change its controller.
 	if inst.is_land() and ability.taps_source:
 		dispatch_event(Mtg.EventType.TAPPED_FOR_MANA,
 			{"instance": inst, "controller": inst.controller_id, "player": pid,
@@ -1809,7 +1849,7 @@ func play_banned(pid: int, data: CardData) -> String:
 ## The RESTRICTION KEYS a spell qualifies for — which restricted mana
 ## ("spend this mana only to cast artifact spells") may pay for it.
 func mana_usage_keys(data: CardData, inst: CardInstance = null) -> Array:
-	var keys: Array = []
+	var keys: Array = ["spell"]
 	if inst != null: keys.append("spell_instance:%d" % inst.id)
 	if inst != null and inst.zone == Mtg.Zone.EXILE:
 		keys.append("exiled_card:%d:%d" % [inst.id, inst.exile_entry])
@@ -1817,6 +1857,8 @@ func mana_usage_keys(data: CardData, inst: CardInstance = null) -> Array:
 		keys.append("artifact")
 	if data.is_creature():
 		keys.append("creature")
+	for key in keys.duplicate():
+		if key != "spell": keys.append("spell:" + String(key))
 	return keys
 
 ## Public characteristics only. This answers what a chosen land could
@@ -1959,7 +2001,7 @@ func rider_admits_own_main(pid: int, inst: CardInstance) -> bool:
 	active_player = pid
 	var admitted := false
 	for step in [Mtg.Step.MAIN1, Mtg.Step.MAIN2]:
-		_step_index = Mtg.STEP_ORDER.find(step)
+		_step_index = _turn_steps.find(step)
 		if String(inst.data.cast_condition.call(self, pid)) == "":
 			admitted = true
 			break
@@ -2389,8 +2431,8 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		return "activate only during the %s step" % \
 			Mtg.step_name(ability.only_during_step).to_lower()
 	if ability.only_before_step >= 0 \
-			and Mtg.STEP_ORDER.find(current_step()) \
-				>= Mtg.STEP_ORDER.find(ability.only_before_step):
+			and _turn_steps.find(current_step()) \
+				>= _turn_steps.find(ability.only_before_step):
 		return "activate only before the %s step" % \
 			Mtg.step_name(ability.only_before_step).to_lower()
 	if ability.activation_condition.is_valid():
@@ -3229,10 +3271,14 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 	# (Cockatrice/Basilisk hear both directions from the same event) — so a
 	# creature blocking two attackers fires two.
 	for blocker_id in declared_blocks:
+		var heard := {}
 		for attacker_id in declared_blocks[blocker_id]:
-			dispatch_event(Mtg.EventType.BLOCKED, {
-				"attacker": find_instance(int(attacker_id)),
-				"blocker": find_instance(int(blocker_id))})
+			for member_id in combat.band_of(int(attacker_id)):
+				if heard.has(member_id): continue
+				heard[member_id] = true
+				dispatch_event(Mtg.EventType.BLOCKED, {
+					"attacker": find_instance(int(member_id)),
+					"blocker": find_instance(int(blocker_id))})
 	# RAMPAGE (CR 702.23): a blocked attacker with rampage N gets +N/+N
 	# for each blocker beyond the first. Applied before the
 	# blockers-declared event so triggers that read power see the pumped
@@ -3271,6 +3317,13 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 				ordered.append(id)
 		combat.damage_order[int(band[0])] = ordered
 	# …then the all-blocks-final event ("attacks and isn't blocked").
+	for blocker_id in declared_blocks:
+		var body := find_instance(int(blocker_id))
+		dispatch_event(Mtg.EventType.BECOMES_BLOCKER, {"instance": body, "controller": body.controller_id})
+	for attacker_id in combat.attackers:
+		if combat.was_blocked(combat.band_of(attacker_id)):
+			var body := find_instance(int(attacker_id))
+			dispatch_event(Mtg.EventType.BECOMES_BLOCKED, {"instance": body, "controller": body.controller_id})
 	dispatch_event(Mtg.EventType.BLOCKERS_DECLARED, {})
 	for id in combat.attackers.keys():
 		var i := find_instance(id)
@@ -8709,6 +8762,9 @@ func remove_from_combat(inst: CardInstance, unblock_solo_attackers := false) -> 
 func set_block(blocker: CardInstance, attacker: CardInstance) -> void:
 	if blocker == null or attacker == null:
 		return
+	var previously_blocking := combat.blocks.has(blocker.id)
+	var previously_blocked := combat.was_blocked(combat.band_of(attacker.id))
+	var previous_targets := combat.attackers_blocked_by(blocker.id)
 	if undo_log != null:
 		undo_log.record_object(combat)
 		_rec(blocker, &"blocked_this_turn")
@@ -8721,7 +8777,17 @@ func set_block(blocker: CardInstance, attacker: CardInstance) -> void:
 	combat.blocked_attackers[attacker.id] = true
 	blocker.blocked_this_turn = true
 	blocker.blocked_ids_this_turn[attacker.id] = attacker.controller_id
-	record_combat_pair(attacker, blocker)
+	for id in combat.band_of(attacker.id):
+		var body := find_instance(int(id))
+		if body == null: continue
+		if not previous_targets.has(id): dispatch_event(Mtg.EventType.BLOCKED, {"attacker": body, "blocker": blocker})
+		else: record_combat_pair(body, blocker)
+	if not previously_blocking:
+		dispatch_event(Mtg.EventType.BECOMES_BLOCKER, {"instance": blocker, "controller": blocker.controller_id})
+	if not previously_blocked:
+		for id in combat.band_of(attacker.id):
+			var body := find_instance(int(id))
+			if body != null: dispatch_event(Mtg.EventType.BECOMES_BLOCKED, {"instance": body, "controller": body.controller_id})
 	log_line("%s now blocks %s" % [blocker.data.card_name, attacker.data.card_name])
 	recalculate()
 
@@ -10307,13 +10373,13 @@ func _advance_step() -> void:
 			return
 	# "Until the end of your next upkeep" (Halfdane) ends as the upkeep
 	# step ends (CR 611.2b) — the effects created before this turn only.
-	if Mtg.STEP_ORDER[_step_index] == Mtg.Step.UPKEEP \
+	if _turn_steps[_step_index] == Mtg.Step.UPKEEP \
 			and continuous.expire_end_of_upkeep_of(active_player, turn_number):
 		recalculate()   # only when something actually ended
 	# Leaving the end-of-combat step = the combat phase is over: "until
 	# end of combat" effects expire NOW, not at cleanup (CR 700.5 — a
 	# Jade Statue is a plain artifact again in the second main phase).
-	if Mtg.STEP_ORDER[_step_index] == Mtg.Step.COMBAT_END:
+	if _turn_steps[_step_index] == Mtg.Step.COMBAT_END:
 		continuous.expire_end_of_combat()
 		attacks_without_tapping.clear()   # Johan's offer is per-combat
 		# "Attacking"/"blocking" status ends with the combat PHASE, not at
@@ -10323,18 +10389,18 @@ func _advance_step() -> void:
 		recalculate()
 	# Skip blockers/damage when no attackers were declared.
 	var next_index := _step_index + 1
-	if Mtg.STEP_ORDER[next_index] == Mtg.Step.COMBAT_BEGIN and skip_combat_this_turn:
-		next_index = Mtg.STEP_ORDER.find(Mtg.Step.MAIN2)
-	if Mtg.STEP_ORDER[_step_index] == Mtg.Step.DECLARE_ATTACKERS \
+	if _turn_steps[next_index] == Mtg.Step.COMBAT_BEGIN and skip_combat_this_turn:
+		while _turn_steps[next_index] != Mtg.Step.MAIN2: next_index += 1
+	if _turn_steps[_step_index] == Mtg.Step.DECLARE_ATTACKERS \
 			and combat.attackers.is_empty():
-		while Mtg.STEP_ORDER[next_index] != Mtg.Step.COMBAT_END:
+		while _turn_steps[next_index] != Mtg.Step.COMBAT_END:
 			next_index += 1
 	# CR 510.5: there IS no first-strike damage step unless someone in
 	# combat has first strike.
-	if Mtg.STEP_ORDER[next_index] == Mtg.Step.FIRST_STRIKE_DAMAGE \
+	if _turn_steps[next_index] == Mtg.Step.FIRST_STRIKE_DAMAGE \
 			and not _has_first_strike_damage():
 		next_index += 1
-	if next_index >= Mtg.STEP_ORDER.size():
+	if next_index >= _turn_steps.size():
 		_end_turn()
 		return
 	_enter_step(next_index)
@@ -10384,10 +10450,10 @@ func _pool_empties_now() -> bool:
 ## than steps: the mana-pool emptying and the lethal-life check.
 func _phase_ends_now() -> bool:
 	var next_index := _step_index + 1
-	if next_index >= Mtg.STEP_ORDER.size():
+	if next_index >= _turn_steps.size():
 		return true        # the turn is ending
-	return Mtg.phase_of(Mtg.STEP_ORDER[_step_index]) \
-		!= Mtg.phase_of(Mtg.STEP_ORDER[next_index])
+	return Mtg.phase_of(_turn_steps[_step_index]) \
+		!= Mtg.phase_of(_turn_steps[next_index])
 
 
 ## The untap step's turn-based actions (CR 502.2–502.3). True when done;
@@ -11062,6 +11128,16 @@ func _collect_damage_requests(first_strike_wave: bool) -> Array:
 				"free_order": banded_block,
 				"defender": defender,
 			})
+			var request: Dictionary = out[-1]
+			if was_blocked and member.cur_damage_as_unblocked:
+				request["special"] = "bypass"
+				request["normal_assigner"] = request.assigner
+				request.assigner = member.controller_id
+			elif not was_blocked and member.cur_unblocked_damage_to_creature:
+				request["special"] = "redirect"
+				request.blocked = true # Explicit split; combat's blocked status is unchanged.
+				for creature in players[defender].battlefield:
+					if creature.is_creature(): request.targets.append(creature.id)
 
 		# --- blocker side ---
 		# COLLECTED, NOT EMITTED, because a blocker may be in more than one
@@ -11173,6 +11249,8 @@ func _request_is_a_choice(request: Dictionary) -> bool:
 	if int(request["amount"]) <= 0:
 		return false
 	var targets: Array = request["targets"]
+	if request.get("special", "") == "bypass": return true
+	if request.get("special", "") == "redirect": return not targets.is_empty()
 	if bool(request["spill_to_last"]):
 		return targets.size() >= 2
 	return targets.size() >= 2 or (bool(request["trample"]) and targets.size() >= 1)
@@ -11185,13 +11263,14 @@ func _split_illegality(request: Dictionary, split: Dictionary) -> String:
 	var amount := int(request["amount"])
 	var trample := bool(request["trample"])
 	var spill := bool(request["spill_to_last"])
+	var special: String = request.get("special", "")
 	var total := 0
 	for key in split:
 		var points := int(split[key])
 		if points < 0:
 			return "damage can't be negative"
 		if key == DAMAGE_TO_PLAYER:
-			if not trample:
+			if not trample and special.is_empty():
 				return "only a trampling attacker may assign damage to the player"
 		elif not targets.has(int(key)):
 			var stray := find_instance(int(key))
@@ -11202,6 +11281,17 @@ func _split_illegality(request: Dictionary, split: Dictionary) -> String:
 	if total > amount:
 		return "%s has only %d points to assign" % [
 			request["source"].data.card_name, amount]
+	# These are alternative whole-damage assignments, not trample. Choosing
+	# ordinary damage against banding hands its division back to the defender.
+	if not special.is_empty():
+		if int(split.get(DAMAGE_TO_PLAYER, 0)) == amount and total == amount: return ""
+		if special == "redirect":
+			var recipients := 0
+			for key in split:
+				if int(split[key]) > 0: recipients += 1
+			return "" if total == amount and recipients == 1 else "Choose one creature or the player for all damage."
+		if int(request.get("normal_assigner", request.assigner)) != int(request.assigner):
+			return "" if total == amount and int(split.get(DAMAGE_TO_PLAYER, 0)) == 0 else "Choose the player or ordinary blocker damage."
 	# CR 510.1c: lethal to each blocker before the next one in the order.
 	# The 1997 ruleset had no order at all — RulesOptions.free_damage_assignment.
 	var all_lethal := true
@@ -11267,6 +11357,12 @@ func assign_combat_damage(pid: int, split: Dictionary) -> String:
 ## step's running total so the next division's "lethal" accounts for it.
 func _commit_split(split: Dictionary) -> void:
 	var request: Dictionary = _damage_requests[_damage_cursor]
+	if request.get("special", "") == "bypass" \
+			and int(split.get(DAMAGE_TO_PLAYER, 0)) == 0 \
+			and int(request.get("normal_assigner", request.assigner)) != int(request.assigner):
+		request.assigner = request.normal_assigner
+		request.erase("special")
+		return
 	var final := split.duplicate()
 	if bool(request["spill_to_last"]):
 		# CR 510.1d: a blocker's leftover power has to land somewhere — it
@@ -11312,6 +11408,12 @@ func _resume_damage_assignment() -> void:
 ## replaced by [method default_damage_split] rather than refused: an agent
 ## is engine code, and a duel must not stall on a bad one.
 func _agent_split(request: Dictionary) -> Dictionary:
+	if not String(request.get("special", "")).is_empty() and int(request.amount) > 0:
+		var visible := request.duplicate()
+		visible["assigned"] = _wave_assigned.duplicate()
+		var special_split := agents[int(request.assigner)].assign_special_combat_damage(self, visible)
+		if _split_illegality(request, special_split).is_empty(): return special_split
+		return {DAMAGE_TO_PLAYER: int(request.amount)}
 	if not bool(request["blocked"]):
 		return {}   # unblocked: the whole amount goes to the player
 	var targets: Array = request["targets"]
@@ -11562,6 +11664,7 @@ func _next_turn() -> void:
 		active_player = _resume_after_extra if _resume_after_extra >= 0 else opponent_of(active_player)
 		_resume_after_extra = -1
 	turn_number += 1
+	_turn_steps = Mtg.STEP_ORDER.duplicate()
 	_skip_first_draw = false
 	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],
 		null, "turn", active_player)

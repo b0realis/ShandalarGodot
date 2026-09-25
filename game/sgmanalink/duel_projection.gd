@@ -289,6 +289,13 @@ func tap_for_mana(_pid: int, inst: CardInstance, ability_index := 0, _chosen := 
 	return send({"op": "mana", "card": handle(inst.id), "index": ability_index})
 
 
+func may_tap_foreign_land(pid: int, inst: CardInstance, index := -1) -> bool:
+	if pid != 0 or inst.controller_id == pid or not inst.is_land(): return false
+	for option in faces.get(handle(inst.id), {}).get("actions", []):
+		if option.kind == "mana" and (index < 0 or int(option.index) == index): return true
+	return false
+
+
 func pass_priority(_pid: int) -> String:
 	return send({"op": "pass"})
 
@@ -357,7 +364,9 @@ func damage_assignment_request() -> Dictionary:
 	var assigned := {}
 	for pair in a.assigned: assigned[local_id(pair[0])] = int(pair[1])
 	return {"source": find_instance(local_id(a.source)), "assigner": local_seat(int(a.assigner)),
-		"amount": int(a.amount), "targets": targets, "trample": a.trample, "assigned": assigned}
+		"amount": int(a.amount), "targets": targets, "trample": a.trample, "assigned": assigned,
+		"special": a.get("special", ""), "normal_assigner": local_seat(int(a.get("normal_assigner", a.assigner))),
+		"free_order": bool(a.get("free_order", false))}
 
 
 func attack_refusal(card: CardInstance) -> String:

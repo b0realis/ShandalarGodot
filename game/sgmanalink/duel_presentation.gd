@@ -77,7 +77,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 				if card.data.is_type(Mtg.CardType.INSTANT):
 					result.floating = result.floating or SgPayment.affordable(g, pid, card)
 					result.respond = result.respond or (SgPayment.affordable(g, pid, card, true) and has_aim(g, card))
-			for option in ([] if card.face_down else SgDuelActions.options(card, pid)):
+			for option in ([] if card.face_down else SgDuelActions.options(card, pid, g)):
 				var cost: ManaCost = card.data.cost if option.kind == "spell" else ManaCost.new()
 				if option.kind == "ability": cost = card.cur_activated_abilities[option.index].cost
 				var budget := 0
@@ -165,7 +165,9 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 			if target != null: targets.append(m._handle(pid, target))
 		result.assignment = {"source": m._handle(pid, request.source), "assigner": int(request.assigner),
 			"amount": int(request.amount), "targets": targets,
-			"trample": bool(request.trample), "assigned": assigned}
+			"trample": bool(request.trample), "assigned": assigned,
+			"special": String(request.get("special", "")), "normal_assigner": int(request.get("normal_assigner", request.assigner)),
+			"free_order": bool(request.get("free_order", false))}
 	if not view.announcement.is_empty():
 		for slot in view.announcement.slots:
 			for target in slot.targets:

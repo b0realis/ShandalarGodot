@@ -1,0 +1,11 @@
+{
+  "code": "p02",
+  "name": "Portal Second Age",
+  "released_at": "1998-06-24",
+  "all_printings": 165,
+  "standard_printings": 165,
+  "unique_names": 155,
+  "source_url": "https://api.scryfall.com/cards/search?include_extras=true&include_variations=true&order=set&q=e%3Ap02&unique=prints",
+  "selection": "Original English numbered printings 1–165.",
+  "retrieved_at": "2026-09-24"
+}

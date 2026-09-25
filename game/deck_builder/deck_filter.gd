@@ -184,6 +184,7 @@ const SET_LABELS := {
 	"hml": "Homelands",
 	"all": "Alliances",
 	"por": "Portal",
+	"p02": "Portal Second Age",
 	"2ed": "Unlimited",
 	"arn": "Arabian nights",
 	"atq": "Antiquities",

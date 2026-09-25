@@ -866,7 +866,7 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 	# Command-line tools compile this class before autoload identifiers exist.
 	var portal_packs := (Engine.get_main_loop() as SceneTree).root.get_node_or_null("CardPacks")
 	_portal_land_scan.texture = CardPrintings.texture(d.card_name, choice_id, true) \
-		if portal_packs != null and shown_set == "por" and d.is_land() and not inst.is_creature() \
+		if portal_packs != null and shown_set in ["por", "p02"] and d.is_land() and not inst.is_creature() \
 		and (d.supertypes & Mtg.Supertype.BASIC) != 0 else null
 	_portal_land_scan.visible = _portal_land_scan.texture != null
 	var frame_key := MiniCard.frame_skin_key(d)

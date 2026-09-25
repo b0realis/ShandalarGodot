@@ -12,7 +12,25 @@ Conventions: engine classes use `class_name` (globally visible, no imports
 needed); card files have NO class_name (they register by name instead);
 `snake_case.gd` filenames throughout; tabs for indentation (Godot default).
 
-## Release packages
+## Portal Second Age in Pack 6 (2026-09-24)
+
+- `cards/sets/p02/`: 117 new card definitions; `_rules.gd` dispatches to
+  `_simple.gd`, `_triggers.gd`, `_spells.gd` and `_combat_mana.gd`.
+- `engine/ai/second_age_tactics.gd`: public-board/own-hand semantic choices;
+  combat assignment also uses `ai_player.gd` and `combat_search.gd`.
+- `packaging/card_packs/pack_6_portal/cards_p02.json`, `set_p02.json`:
+  trusted English 165-printing snapshot, merged with POR by the pack tool.
+- `game/art/set_icon_p02.png`, `filter_p02_on.png`, `filter_p02_off.png`:
+  original procedural five-notched gate glyph and stone medallions.
+- `decks/portal_second_age/`: seven unchanged historical theme/starter lists.
+- `docs/portal-second-age-decks.md`: deck sources and display limitations.
+- `docs/pack-6-second-age-audit.md`: full named-card implementation inventory.
+- `tests/cards/test_pack_6_second_age.gd`, `test_second_age_engine.gd`,
+  `test_second_age_more.gd`, `test_second_age_ai_network.gd`:
+  rules, undo, public-information planning and LAN integration.
+- `tests/ui/test_second_age_decks.gd`: exact lists, counts and printing IDs.
+
+## Release package files
 
 - `docs/releases/0.40.6.md`: classic prevention/AI fixes, active protection
   details and an illustrated Help key for set-symbol colors; LAN protocol 22.

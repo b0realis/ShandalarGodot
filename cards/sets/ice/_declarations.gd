@@ -141,6 +141,12 @@ static func _jarkeld(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x:
 	if targets.size() != 2 or _t != targets[0]: return
 	var changed := jarkeld_map(g, g.find_instance(targets[0].instance_id), g.find_instance(targets[1].instance_id))
 	if changed.is_empty(): return
+	var previous := {}
+	for id in changed:
+		var members := {}
+		for target in g.combat.attackers_blocked_by(id):
+			for member in g.combat.band_of(target): members[member] = true
+		previous[id] = members
 	g._rec(g.combat, &"blocks")
 	g._rec(g.combat, &"extra_blocks")
 	g._rec(g.combat, &"damage_order")
@@ -156,5 +162,17 @@ static func _jarkeld(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x:
 		for target in targets_now:
 			var attacker := g.find_instance(target)
 			blocker.blocked_ids_this_turn[target] = attacker.controller_id
-			g.record_combat_pair(attacker, blocker)
+	# CR 509.3d: a different blocking pair triggers "becomes blocked by a
+	# creature", even though neither creature becomes blocked/blocking anew.
+	# Finish every assignment first so trigger conditions see the full swap.
+	for id in changed:
+		var heard := {}
+		for target in changed[id]:
+			for member in g.combat.band_of(target):
+				if heard.has(member): continue
+				heard[member] = true
+				var attacker := g.find_instance(member)
+				var blocker := g.find_instance(id)
+				if previous[id].has(member): g.record_combat_pair(attacker, blocker)
+				else: g.dispatch_event(Mtg.EventType.BLOCKED, {"attacker": attacker, "blocker": blocker})
 	g.recalculate()

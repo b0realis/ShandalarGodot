@@ -11,7 +11,7 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Urza's Tower", "", Mtg.CardType.LAND) \
 		.with_subtypes(["urza's", "tower"]) \
-		.mana(ManaAbility.new(Mtg.ManaColor.C).with_dynamic_amount(_amount)) \
+		.mana(ManaAbility.new(Mtg.ManaColor.C).with_dynamic_amount(_amount, true)) \
 		.oracle("{T}: Add {C}. If you control an Urza's Mine and an Urza's "
 			+ "Power-Plant, add {C}{C}{C} instead.")
 
@@ -23,8 +23,7 @@ static func _controls(game: MtgGame, pid: int, card_name: String) -> bool:
 	return false
 
 
-static func _amount(game: MtgGame, source: CardInstance) -> int:
-	var pid := source.controller_id
+static func _amount(game: MtgGame, _source: CardInstance, pid: int) -> int:
 	if _controls(game, pid, "Urza's Mine") and _controls(game, pid, "Urza's Power Plant"):
 		return 3
 	return 1

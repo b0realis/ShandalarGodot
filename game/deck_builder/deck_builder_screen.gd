@@ -951,9 +951,17 @@ static func _style_emerald_done(button: Button) -> void:
 func _open_extra_sets() -> void:
 	if _dialog_busy():
 		return
-	var dialog := OriginalDialog.create("Extras", Vector2(410, 660))
+	var dialog := OriginalDialog.create("Extras", Vector2(460, 720).min(get_viewport_rect().size - Vector2(24, 24)))
+	dialog.name = "ExtraSetsDialog"
 	dialog.set_meta("extra_sets", true)
-	var body := dialog.body()
+	var scroll := ScrollContainer.new()
+	scroll.name = "ExtraSetsScroll"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	dialog.body().add_child(scroll)
+	var body := VBoxContainer.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(body)
 	body.alignment = BoxContainer.ALIGNMENT_CENTER
 	body.add_theme_constant_override("separation", 12)
 	_extra_source_row(body, "Original", "1997", true, filter.original_cards_on,
@@ -987,6 +995,11 @@ func _open_extra_sets() -> void:
 			if filter.set_on("por") != on:
 				filter.toggle_set("por"),
 		"Portal (1997): 200 distinct cards, with original artwork and current rules.\nTurn off the other sets to explore this beginner-friendly pool.")
+	_extra_source_row(body, "SecondAge", "Second Age Pack 6", CardRegistry.extra_set_order().has("p02"),
+		filter.set_on("p02"), func(on: bool) -> void:
+			if filter.set_on("p02") != on:
+				filter.toggle_set("p02"),
+		"Portal Second Age (1998): 155 distinct cards and 165 printings.\nA second beginner set within Pack 6, with its own artwork and filters.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 

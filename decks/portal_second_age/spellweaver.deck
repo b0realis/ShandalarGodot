@@ -1,0 +1,36 @@
+# Original Portal Second Age theme deck (1998), unchanged card counts.
+# source: https://mtg.wtf/deck/p02/spellweaver
+# provenance: docs/portal-second-age-decks.md
+# Normal shuffled duel; no scripted demonstration-game order.
+# Basic-land artwork is one saved variant per name, not the boxed mix.
+# group: Portal Second Age decks
+# requires-pack: pack-6
+name: Second Age — Spellweaver
+# printing: ["Air Elemental","p02"]
+# printing: ["Apprentice Sorcerer","p02"]
+# printing: ["Talas Air Ship","p02"]
+# printing: ["Talas Explorer","p02"]
+# printing: ["Talas Merchant","p02"]
+# printing: ["Talas Researcher","p02"]
+# printing: ["Talas Scout","p02"]
+# printing: ["Talas Warrior","p02"]
+# printing: ["False Summoning","p02"]
+# printing: ["Mystic Denial","p02"]
+# printing: ["Exhaustion","p02"]
+# printing: ["Time Ebb","p02"]
+# printing: ["Touch of Brilliance","p02"]
+# printing: ["Island","p02"]
+2 Air Elemental
+2 Apprentice Sorcerer
+2 Talas Air Ship
+2 Talas Explorer
+3 Talas Merchant
+1 Talas Researcher
+3 Talas Scout
+1 Talas Warrior
+2 False Summoning
+2 Mystic Denial
+1 Exhaustion
+2 Time Ebb
+2 Touch of Brilliance
+15 Island

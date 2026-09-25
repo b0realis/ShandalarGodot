@@ -80,6 +80,9 @@ var triggered_abilities: Array[TriggeredAbility] = []
 
 ## Static abilities contributing continuous effects while on the battlefield.
 var static_abilities: Array[StaticAbility] = []
+## A self-only characteristic definition outside the battlefield (CR 604.3).
+## Its battlefield half remains a normal, removable layer-7a static.
+var characteristic_definition: Callable
 
 ## Triggered abilities that listen while this card is in a GRAVEYARD
 ## (Nether Shadow's upkeep crawl). Only the turn-based events —

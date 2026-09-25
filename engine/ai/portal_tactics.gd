@@ -5,6 +5,8 @@ const H := preload("res://engine/ai/homelands_tactics.gd")
 const A := preload("res://engine/ai/alliances_tactics.gd")
 
 static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x := 0) -> Variant:
+	var second: Variant = preload("res://engine/ai/second_age_tactics.gd").spell_choice(g, pilot, s)
+	if second != null: return second
 	if not pilot.profile.forecasts_tactics or s.data.spell_effects.is_empty(): return null
 	var e: EffectBase = s.data.spell_effects[0]
 	var pid: int = pilot.pid

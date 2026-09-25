@@ -20,7 +20,7 @@ func test_main_menu_has_compact_pack_six_information_and_live_counts() -> void:
 	if button == null: return
 	assert_eq(button.text, "6-POR")
 	assert_lt(button.size.y, button.size.x)
-	assert_string_contains(title.find_child("Version", true, false).text, "1,097 set entries · 1,076 unique cards")
+	assert_string_contains(title.find_child("Version", true, false).text, "1,252 set entries · 1,193 unique cards")
 	button.pressed.emit()
 	await get_tree().process_frame
 	assert_not_null(title._pack_notice)
@@ -32,6 +32,7 @@ func test_extras_has_portal_radio_medallions_and_live_filtering() -> void:
 	await get_tree().process_frame
 	screen.filter.original_cards_on = false
 	screen.filter.completion_pack_on = false
+	screen.filter.sets["p02"] = false
 	screen._open_extra_sets()
 	await get_tree().process_frame
 	var off := screen.find_child("ExtraPack6Off", true, false) as Button
@@ -71,7 +72,7 @@ func test_options_exposes_pack_six_and_deck_requirements_survive_disable() -> vo
 	assert_eq(CardPacks.missing_requirements(["pack-6"]), ["pack-6"])
 
 func test_portal_gold_emblem_and_two_stone_faces_ship() -> void:
-	for key in ["set_icon_por", "filter_por_on", "filter_por_off"]:
+	for key in ["set_icon_por", "filter_por_on", "filter_por_off", "set_icon_p02", "filter_p02_on", "filter_p02_off"]:
 		var texture := GameSkin.our_art(key)
 		assert_not_null(texture, key)
 		if texture != null: assert_eq(texture.get_size(), Vector2(48, 48))
@@ -81,6 +82,7 @@ func test_portal_is_in_draft_selection_and_lan_compatibility() -> void:
 	add_child_autofree(page)
 	await get_tree().process_frame
 	assert_true(page.groups.has("por"))
+	assert_true(page.groups.has("p02"))
 	assert_true(SgCompatibility.enabled_packs().has("pack-6"))
 	var stamp := SgCompatibility.fingerprint()
 	CardPacks.set_enabled("pack-6", false)

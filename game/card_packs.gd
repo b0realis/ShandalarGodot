@@ -459,13 +459,13 @@ func open_folder() -> void:
 
 
 ## Available installed printings. Earlier packs expose their supplied
-## printing per name/set; Portal carries all 215 original numbered versions.
+## printing per name/set; both Portal sets carry every numbered version.
 func printing_choices(card_name: String) -> Array:
 	if not _printing_cache_ready:
 		for id in available_ids():
 			if not is_enabled(id): continue
 			for row in _available[id].cards:
-				var choice_id: String = row.set + (":" + row.collector_number if row.set == "por" else "")
+				var choice_id: String = row.set + (":" + row.collector_number if PortalPack.SET_COUNTS.has(row.set) else "")
 				var entries: Array = _printing_cache.get(row.name, [])
 				var duplicate := false
 				for old in entries:
@@ -498,7 +498,7 @@ func art_path(card_name: String, set_code: String, full_card := false, number :=
 		id = HomelandsPack.ID
 	if set_code == "all":
 		id = AlliancesPack.ID
-	if set_code == "por":
+	if PortalPack.SET_COUNTS.has(set_code):
 		id = PortalPack.ID
 	if not is_enabled(id) or set_code == "":
 		return ""
@@ -517,11 +517,11 @@ func art_path(card_name: String, set_code: String, full_card := false, number :=
 	if id == PortalPack.ID:
 		prefix = PortalPack.PREFIX
 	var stem := _snake(card_name)
-	if set_code == "por" and number != "":
+	if PortalPack.SET_COUNTS.has(set_code) and number != "":
 		var first := ""
 		var found := false
 		for row in report.cards:
-			if row.name != card_name: continue
+			if row.name != card_name or row.set != set_code: continue
 			if first == "": first = row.collector_number
 			if row.collector_number == number: found = true
 		if not found: return ""

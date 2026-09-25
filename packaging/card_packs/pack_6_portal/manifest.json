@@ -1,15 +1,16 @@
 {
   "badge": "6-POR",
-  "description": "The original 1997 beginner set: 200 distinct cards, including its signature basic lands.",
+  "description": "Portal (1997) and Portal Second Age (1998): two beginner sets, 318 distinct cards and 380 printings.",
   "file_name": "Pack-6-Portal.zip",
   "id": "pack-6",
-  "minimum_game_version": "0.40.7",
-  "name": "Portal",
+  "minimum_game_version": "0.40.9",
+  "name": "Portal & Second Age",
   "number": 6,
   "pack_format": 1,
-  "rules_note": "Original Portal artwork with current Oracle rules, including modern card types and special casting restrictions.",
+  "rules_note": "Original Portal and Second Age artwork with current Oracle rules, including modern card types and special casting restrictions.",
   "set_order": [
-    "por"
+    "por",
+    "p02"
   ],
-  "version": "1.1.0"
+  "version": "2.0.0"
 }

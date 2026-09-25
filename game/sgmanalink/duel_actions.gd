@@ -22,7 +22,7 @@ func _information_received(viewer: int, title: String, names: Array) -> void:
 		if information[pid].size() > 12: information[pid].pop_front()
 
 
-static func options(card: CardInstance, pid: int) -> Array:
+static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Array:
 	var result: Array = []
 	var spell_source := (card.zone == Mtg.Zone.HAND and card.owner_id == pid) \
 		or (card.zone == Mtg.Zone.EXILE and not card.face_down and card.exile_playable_by == pid)
@@ -32,10 +32,12 @@ static func options(card: CardInstance, pid: int) -> Array:
 			modes.append(String(mode.get("label", mode.get("name", "Mode"))))
 		result.append({"kind": "spell", "index": 0, "label": "Cast " + card.data.card_name,
 			"x": card.data.cost.has_x or not card.data.repeated_additional_cost.is_empty(), "modes": modes})
-	if (card.zone == Mtg.Zone.BATTLEFIELD and card.controller_id == pid) or (card.zone == Mtg.Zone.HAND and card.owner_id == pid):
+	var borrowed := referee != null and referee.may_tap_foreign_land(pid, card)
+	if borrowed or (card.zone == Mtg.Zone.BATTLEFIELD and card.controller_id == pid) or (card.zone == Mtg.Zone.HAND and card.owner_id == pid):
 		for i in card.cur_mana_abilities.size():
+			if borrowed and not referee.may_tap_foreign_land(pid, card, i): continue
 			if card.cur_mana_abilities[i].activation_zone != card.zone: continue
-			result.append({"kind": "mana", "index": i, "label": str(card.cur_mana_abilities[i]), "x": false, "modes": []})
+			result.append({"kind": "mana", "index": i, "label": str(referee.mana_ability_for(pid, card, i) if referee != null else card.cur_mana_abilities[i]), "x": false, "modes": []})
 	if card.zone not in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD]: return result
 	for i in card.cur_activated_abilities.size():
 		var ability: ActivatedAbility = card.cur_activated_abilities[i]
@@ -54,7 +56,7 @@ func prepare(pid: int, card: CardInstance, action: Dictionary) -> String:
 	if card == null or game.priority_player != pid or game.awaiting_choice != null:
 		return "This action is unavailable."
 	var found := false
-	for option in options(card, pid):
+	for option in options(card, pid, game):
 		if option.kind == action.kind and option.index == action.index:
 			if (not option.x and action.x != 0) or action.mode >= maxi(1, option.modes.size()):
 				return "Invalid mode or X."

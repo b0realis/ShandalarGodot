@@ -113,6 +113,7 @@ static func pages() -> Array:
 		_page_format_lists(),
 	]],
 	["Portal starter decks", [preload("res://game/help/ability_glossary.gd").portal_intro(), _page_portal_a(), _page_portal_b()]],
+	["Portal Second Age", [_page_second_age(), _page_second_age_themes(), _page_second_age_starters()]],
 	["Reading the dueling table", [
 		_page_icons_mana(),
 		_page_icons_abilities(),
@@ -187,6 +188,45 @@ static func _page_portal_b() -> Dictionary:
 
 
 # ---------------------------------------------------------- the primer --
+static func _page_second_age() -> Dictionary:
+	return {"title": "Second Age · Explore the set", "blocks": [
+		_heading("A second doorway into Magic"),
+		_text("Enable Pack 6 · Portal & Second Age in Options → Card Packs. Deck Builder → Extras has separate Portal and Second Age switches. Second Age has 155 different cards and 165 original English printings, including three illustrations for each basic land. Use the floating Card variant medallion to choose your artwork."),
+		_cards([
+			["Forest", "Keep the original land design", "The large mana symbol remains visible on the original basic-land face. Your saved deck remembers one printing for each card name."],
+			["Lone Wolf", "A choice, not trample", "When blocked, you may put all its combat damage on the opponent instead of its blockers. The blockers still deal their damage to the Wolf. Cunning Giant has a different choice: when unblocked, it can deal all its damage to one of the defending player's creatures."],
+			["Relentless Assault", "Attack again", "Untap every creature that attacked this turn. If cast during a main phase, this adds a combat and another main phase immediately after that main phase. Lands do not untap."],
+			["Piracy", "Borrow mana, not ownership", "For this turn, you may tap opponents' lands for mana to cast spells. Click an eligible land or use automatic payment. The mana cannot pay activated abilities, and the opponent keeps control of the land."],
+		], "p02"),
+		_heading("Read the timing"),
+		_text("Several tap abilities work only on your turn before attackers are declared. Just Fate, Rally the Troops, Remove and Warrior's Stand instead need an opponent to have attacked you during Declare Attackers. Use that response window before choosing blockers. Current card rules apply even when an old scan uses different wording."),
+	]}
+
+static func _page_second_age_themes() -> Dictionary:
+	return {"title": "Second Age · Five theme decks", "blocks": [
+		_heading("Pick a color and learn its plan"),
+		_text("Magic Battle → Portal Second Age decks includes the five original 40-card theme decks. These are unchanged lists. Try them against one another, then edit a copy in the Deck Builder."),
+		_cards([
+			["Alaborn Cavalier", "Martial Law · White", "Build a small army, attack with flyers, and use the Cavalier to tap a defender. Righteous Charge rewards a wide battlefield. Armageddon destroys your lands too: save it for a strong board, not an empty one."],
+			["Talas Researcher", "Spellweaver · Blue", "Fly over ground defenses, delay a creature with Time Ebb, and counter an important spell while it is on the Spell Chain. Tap the Researcher before attackers are declared to draw an extra card."],
+			["Predatory Nightstalker", "The Nightstalkers · Black", "Use discard and creature removal to wear down the opponent. Return of the Nightstalkers can rebuild your army from the graveyard, but then destroys your Swamps. Count what you gain before committing."],
+			["Goblin General", "Goblin Fire · Red", "Develop Goblins early. The attacking General strengthens your Goblins for the turn; burn removes blockers or finishes the opponent. Wildfire sacrifices four lands per player and hits every creature for four, including your own."],
+			["Sylvan Basilisk", "Nature's Assault · Green", "Play sturdy creatures and choose good attacks. Landwalk can make River Bear or Wild Ox unblockable. A creature blocking Sylvan Basilisk is destroyed by its trigger before ordinary combat damage. Hurricane hits both players as well as flyers."],
+		], "p02"),
+	]}
+
+static func _page_second_age_starters() -> Dictionary:
+	return {"title": "Second Age · Two-player starters", "blocks": [
+		_heading("Two unchanged 30-card teaching decks"),
+		_text("In Magic Battle → Portal Second Age decks, choose Starter 1 and Starter 2. Both work in casual duels, including hotseat and LAN casual play. The Deck Builder warns that they are below 40 cards; tournaments and gauntlets still require at least 40. Games use normal shuffling and rules, not a scripted teaching order."),
+		_cards([
+			["Prowling Nightstalker", "Starter 1 · Black, red and green", "Put creatures on the board, use discard to limit replies, and clear a blocker with Hand of Death or Volcanic Hammer. Prowling Nightstalker can be blocked only by black creatures. Ogre Berserker can attack immediately thanks to haste."],
+			["Angel of Mercy", "Starter 2 · White, blue and green", "Defend the ground and attack with flyers. Temple Acolyte and Angel of Mercy give you life when they enter. Time Ebb delays a creature; Theft of Dreams draws one card for each tapped creature the opponent controls."],
+		], "p02"),
+		_heading("Swap sides after a game"),
+		_text("Look for lands in your main colors and creatures you can cast early. A smaller library runs out sooner: having no cards left is not itself a loss, but trying to draw from an empty library is. For a one-color introduction with fewer mana-color problems, try the five 40-card theme decks."),
+	]}
+
 
 ## Player primer, revised after the 2026-09-13 playtest. Rules provenance
 ## remains in the engine and repository documentation; pages teach play.

@@ -35,6 +35,7 @@ PACK_DATA = {
     **{name: ("README.txt", "manifest.json", "cards.json", "set.json", "reprint_names.json")
        for name in PACK_BUILDERS[2:]},
 }
+PACK_DATA["pack_6_portal"] += ("cards_p02.json", "set_p02.json")
 BUILDER_DATA = tuple(f"cards/data/{code}.json" for code in pack_one.SET_ORDER) + tuple(
     f"packaging/card_packs/{pack}/{name}" for pack, names in PACK_DATA.items() for name in names)
 BASE_ASSIGNMENTS = "packaging/card_packs/pack_1_dotp_complete/base_assignments.json"

@@ -266,8 +266,8 @@ func test_an_assigned_deck_is_dealt_to_both_seats_and_refused_as_a_choice() -> v
 
 
 func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> void:
-	assert_eq(SgProtocol.VERSION, 23)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v23")
+	assert_eq(SgProtocol.VERSION, 24)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v24")
 	assert_eq(SgLanDiscovery.MAX_PACKET, 16384, "room for the certificate inside an open advert")
 	var message := func(action: Dictionary) -> Dictionary:
 		return {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}

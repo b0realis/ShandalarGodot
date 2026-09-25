@@ -74,6 +74,11 @@ func test_builder_selector_and_undo_keep_one_preference_per_name() -> void:
 	screen.filter.original_cards_on = false
 	screen.filter.completion_pack_on = false
 	screen._refresh_inventory()
+	assert_eq(screen._inventory.entry_count(), 318, "both Portal sets deduplicate shared names")
+	assert_eq(screen._printing_count, 380)
+	screen.filter.sets["p02"] = false
+	screen.filter.revision += 1
+	screen._refresh_inventory()
 	assert_eq(screen._inventory.entry_count(), 200)
 	assert_eq(screen._printing_count, 215)
 	assert_eq(screen._count_label.text, "200 cards / 215 printings")

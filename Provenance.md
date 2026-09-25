@@ -747,6 +747,30 @@ player to search, look or reveal. No external implementation was copied.
 The scope, printing limitations and checks are recorded in
 `docs/pack-6-portal.md` and `docs/pack-6-mechanics-audit.md`.
 
+## Portal Second Age (2026-09-24)
+
+Pack 6 revision 2.0.0 adds the English numbered P02 snapshot from
+[Scryfall's set API](https://api.scryfall.com/sets/p02): 165 printings and
+155 names. Exact Scryfall IDs pin each crop and full scan. Metadata is
+checked in; downloaded card artwork and the built ZIP remain local.
+The [P02 emblem](https://svgs.scryfall.io/sets/p02.svg) is the visual
+reference for our procedural five-notched gate, drawn in the existing gold
+and stone-medallion style. No external SVG or game implementation is copied.
+The generator and PNG hashes are in `game/art/README.md`.
+
+The seven historical deck lists are transcribed from the individually linked
+MTG.wtf product-catalogue entries in `docs/portal-second-age-decks.md`, with
+unchanged quantities and explicit printing preferences. That catalogue is
+a historical reference, not a newly located official Wizards strategy guide.
+The illustrated Help advice is original guidance, not a guide transcription.
+
+Rules use current Oracle text and the
+[June 19, 2026 Comprehensive Rules](https://media.wizards.com/2026/downloads/MagicCompRules%2020260619.pdf),
+including the separate blocking-event conditions in 509.3 and banding.
+`docs/pack-6-second-age-audit.md` inventories every named card. Ordinary
+computer players continue to use public information and their own hands;
+legal resolution choices do not grant advance access to hidden information.
+
 ## Where the citations live
 
 This file is the register; the citations themselves are in the work.

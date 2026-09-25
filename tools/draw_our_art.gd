@@ -116,7 +116,7 @@ const OUT_DIR := "res://game/art"
 func _init() -> void:
 	var dir := ProjectSettings.globalize_path(OUT_DIR)
 	DirAccess.make_dir_recursive_absolute(dir)
-	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por"]:
+	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02"]:
 		var img := _render(Vector2i(GLYPH_SIZE, GLYPH_SIZE),
 			[[_glyph(code), GOLD_LIT, GOLD_DARK]], RIM)
 		_write(img, dir, "set_icon_%s.png" % code)
@@ -130,6 +130,8 @@ func _init() -> void:
 	_write(_stone_medallion(false, _alliances()), dir, "filter_all_off.png")
 	_write(_stone_medallion(true, _portal()), dir, "filter_por_on.png")
 	_write(_stone_medallion(false, _portal()), dir, "filter_por_off.png")
+	_write(_stone_medallion(true, _second_age()), dir, "filter_p02_on.png")
+	_write(_stone_medallion(false, _second_age()), dir, "filter_p02_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
@@ -196,6 +198,8 @@ func _glyph(code: String) -> Array:
 			return _alliances()
 		"por":
 			return _portal()
+		"p02":
+			return _second_age()
 	return []
 
 
@@ -219,6 +223,27 @@ func _portal() -> Array:
 		var edge := (outer - inner).normalized().orthogonal() * 0.015
 		ops.append({"op": "add", "poly": PackedVector2Array([
 			inner - edge, outer - edge, outer + edge, inner + edge])})
+	return ops
+
+
+## SECOND AGE — two concentric, five-notched gates around a center opening.
+## Authored geometry following the printed emblem, not an SVG conversion.
+func _second_age() -> Array:
+	var ops: Array = []
+	var center := Vector2(0.5, 0.5)
+	for band in [["add", 0.45], ["sub", 0.385], ["add", 0.29], ["sub", 0.102]]:
+		var circle := PackedVector2Array()
+		for n in 120:
+			circle.append(center + Vector2.from_angle(TAU * float(n) / 120.0) * float(band[1]))
+		ops.append({"op": band[0], "poly": circle})
+	# Five radial slots stop short of the inner face; the ring remains a gate.
+	for n in 5:
+		var direction := Vector2.from_angle(-PI * 0.5 + TAU * float(n) / 5.0)
+		var side := direction.orthogonal() * 0.03
+		for radii in [[0.415, 0.49], [0.25, 0.32]]:
+			var inside: Vector2 = center + direction * float(radii[0])
+			var outside: Vector2 = center + direction * float(radii[1])
+			ops.append({"op": "sub", "poly": PackedVector2Array([inside - side, outside - side, outside + side, inside + side])})
 	return ops
 
 

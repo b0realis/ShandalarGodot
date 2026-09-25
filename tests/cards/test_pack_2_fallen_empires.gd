@@ -78,8 +78,7 @@ func test_each_extra_can_be_hidden_without_disabling_packs_or_editing_the_deck()
 	assert_eq(Settings.get_value("enabled_card_packs", []), enabled_before)
 	assert_eq(screen.deck.counts, deck_before)
 	# Reopening the panel retains the selections; Close does not reset filters.
-	var row := screen.find_child("ExtraSourceRow_Original", true, false)
-	var dialog := row.get_parent().get_parent().get_parent() as OriginalDialog
+	var dialog := screen.find_child("ExtraSetsDialog", true, false) as OriginalDialog
 	dialog._buttons.get_child(0).pressed.emit()
 	await get_tree().process_frame
 	screen._open_extra_sets()
@@ -267,7 +266,7 @@ func test_extras_button_groups_are_centered_on_the_stone_panel() -> void:
 		if row == null:
 			return
 		rows.append(row)
-	var dialog := rows[0].get_parent().get_parent().get_parent() as OriginalDialog
+	var dialog := screen.find_child("ExtraSetsDialog", true, false) as OriginalDialog
 	assert_not_null(dialog)
 	if dialog == null:
 		return
@@ -286,8 +285,10 @@ func test_extras_button_groups_are_centered_on_the_stone_panel() -> void:
 		dialog.size.x = width
 		for _frame in 3:
 			await get_tree().process_frame
-		var middle := dialog.get_global_rect().get_center().x
 		for group in rows + [dialog._buttons]:
+			# A visible scrollbar occupies one edge; center each group in
+			# its actual content column, and Close in the full footer.
+			var middle: float = group.get_global_rect().get_center().x
 			var first := group.get_child(0) as Control
 			var last := group.get_child(group.get_child_count() - 1) as Control
 			var group_middle := (first.get_global_rect().position.x + last.get_global_rect().end.x) * 0.5

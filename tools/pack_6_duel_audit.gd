@@ -15,6 +15,7 @@ func _run() -> void:
 		print("Pack 6 Portal audit — complete Wizard duels and actual card-use counts in both rulesets.")
 		print("--rounds N (default 1, max 1000); --seed N (default 67000). Five themed decks, 10 duels per round.")
 		print("--only-index N replays that matchup in both rulesets for debugging (zero based).")
+		print("--second-age uses the seven original Second Age theme/starter decks (14 duels per round).")
 		print("Use tools/runtime.sh: shandalar_find_godot; shandalar_find_timeout; shandalar_test_profile.")
 		print("Set SHANDALAR_PACK_6 to your locally built Pack-6-Portal.zip; run with --script res://tools/pack_6_duel_audit.gd.")
 		quit(0)
@@ -22,8 +23,13 @@ func _run() -> void:
 	var rounds := 1
 	var base_seed := 67000
 	var only_index := -1
+	var second_age := false
 	var at := 0
 	while at < args.size():
+		if args[at] == "--second-age":
+			second_age = true
+			at += 1
+			continue
 		if args[at] not in ["--rounds", "--seed", "--only-index"] or at + 1 >= args.size() or not args[at + 1].is_valid_int():
 			printerr("Invalid audit arguments; use --help")
 			quit(3)
@@ -43,7 +49,7 @@ func _run() -> void:
 	Settings.set_value("enabled_card_packs", ["pack-6"], false)
 	root.get_node("CardPacks")._configure_registry()
 	CardRegistry.ensure_loaded()
-	if CardRegistry.size() != 1076:
+	if CardRegistry.size() != 1193:
 		printerr("PACK 6 AI AUDIT: install the real local Pack-6-Portal.zip first")
 		quit(2)
 		return
@@ -131,6 +137,17 @@ func _run() -> void:
 			for _i in 4: deck.append(name)
 		decks.append(deck)
 	var completed := 0
+	if second_age:
+		decks.clear()
+		specs.clear()
+		for slug in ["goblin_fire", "martial_law", "natures_assault", "spellweaver", "the_nightstalkers", "preconstructed_deck_1", "preconstructed_deck_2"]:
+			var list := DeckList.load_file("res://decks/portal_second_age/" + slug + ".deck")
+			if not list.errors.is_empty():
+				printerr("SECOND AGE AUDIT: invalid deck ", slug)
+				quit(2)
+				return
+			decks.append(list.cards)
+			specs.append([list.deck_name])
 	var use_counts := {}
 	for edition in ["modern", "fifth"]:
 		for match_index in decks.size() * rounds:

@@ -4,6 +4,29 @@ The plan of record, and the honest list of what v0.1 simplifies. Every
 simplification is also marked `SIMPLIFIED:` at the exact code site it
 replaces, so `grep -rn "SIMPLIFIED:" engine/` always tells the truth.
 
+## 2026-09-24 — Portal Second Age
+
+Pack 6 now combines both Portal sets: 380 printings / 318 distinct names.
+Second Age contributes 155 names, of which 117 are new rules identities.
+Independent Extras filters, procedural gold/stone set icons, three variants
+of each Second Age basic land, deck printing preferences and draft selection
+use the existing pack flow. The Deck Builder's preview layout is unchanged.
+
+Five original 40-card theme decks and two original 30-card starters have
+their own library group and three illustrated Help pages. The short starters
+remain casual-only; tournament minimums are unchanged. Sources, implementation
+inventory and targeted verification are linked from `docs/pack-6-portal.md`.
+
+Shared rules now support Piracy's spell-only borrowed mana, extra combat/main
+phases, whole-damage alternatives and distinct blocking transitions. LAN
+protocol 24 transmits these choices. Normal computer players remain non-cheating.
+This is feature development, not a new release or full-suite certification.
+
+Verification: 336 distinct targeted game/UI tests, 29 tooling checks,
+14 complete Wizard duels and six native menu captures. The pack guide
+records exact selections, seeds and scope; source and pack revision require
+0.40.9, while the combined artwork ZIP remains a local artifact.
+
 ## 2026-09-24 — Portal starters, Help contents and casual deck sizes
 
 Added the two unchanged 35-card Portal starter lists and two explicitly

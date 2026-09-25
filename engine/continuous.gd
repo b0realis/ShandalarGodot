@@ -825,6 +825,7 @@ func recalculate(game: MtgGame) -> void:
 	game.max_attackers = 0
 	game.max_blockers = 0
 	game.skip_combat_this_turn = false
+	game.foreign_land_mana.clear()
 	game.ghostly_flame_active = false
 	game.black_symbol_sacrifices = 0
 	game.block_chooser_override = -1
@@ -1116,6 +1117,12 @@ func recalculate(game: MtgGame) -> void:
 			if ability.reads_pt:
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.PT_READERS)
+	# Characteristic definitions work in every zone. Ordinary battlefield
+	# statics must not run here: a lord in hand grants no battlefield bonus.
+	for id in game._instances:
+		var card: CardInstance = game._instances[id]
+		if card.zone != Mtg.Zone.BATTLEFIELD and card.data.characteristic_definition.is_valid():
+			card.data.characteristic_definition.call(game, card)
 
 	# These replacements change mana PRODUCTION, not land subtypes or the
 	# abilities a land has. Each applicable final color is an equivalent
@@ -1132,5 +1139,5 @@ func recalculate(game: MtgGame) -> void:
 			if not ability.taps_source:
 				replaced.append(ability)
 				continue
-			for color in colors: replaced.append(ability.forcing_color(color))
+			for color in colors: replaced.append(ability.forcing_color(color, color == deep and not inst.cur_land_mana_replacements.has(color)))
 		inst.cur_mana_abilities = replaced

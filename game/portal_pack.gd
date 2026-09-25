@@ -6,9 +6,11 @@ const ID := "pack-6"
 const FILE_NAME := "Pack-6-Portal.zip"
 const PREFIX := "card_packs/pack_6_portal/"
 const SOURCE := "res://packaging/card_packs/pack_6_portal/"
-const COUNTS := {"published_printings": 215, "named_set_entries": 200,
-	"distinct_cards": 200, "pack_card_entries": 215,
-	"reprint_entries": 27, "new_rules_identities": 173}
+const SET_COUNTS := {"por": [215, 200], "p02": [165, 155]}
+const COUNTS := {"published_printings": 380, "named_set_entries": 355,
+	"distinct_cards": 318, "pack_card_entries": 380,
+	"reprint_entries": 65, "new_rules_identities": 290}
+const MAX_ENTRIES := 1356
 
 ## Reuse trusted earlier implementations even when their own pack is off.
 const SHARED := {"Dry Spell": "hml", "Elvish Ranger": "all",
@@ -19,7 +21,20 @@ static var _records: Array = []
 static var _names: Array[String] = []
 
 static func printings() -> Array:
-	return JSON.parse_string(FileAccess.get_file_as_string(SOURCE + "cards.json"))
+	var rows: Array = JSON.parse_string(FileAccess.get_file_as_string(SOURCE + "cards.json"))
+	rows.append_array(JSON.parse_string(FileAccess.get_file_as_string(SOURCE + "cards_p02.json")))
+	return rows
+
+static func catalog_sets() -> Dictionary:
+	var sets := {}
+	for code in SET_COUNTS:
+		var members: Array[String] = []
+		for row in printings():
+			if row.set == code and not members.has(row.name): members.append(row.name)
+		members.sort()
+		sets[code] = {"names": members, "named_cards": SET_COUNTS[code][1],
+			"published_printings": SET_COUNTS[code][0]}
+	return sets
 
 static func records() -> Array:
 	if not _records.is_empty():
@@ -53,9 +68,11 @@ static func new_names() -> Array[String]:
 
 static func scripts() -> Array:
 	var out: Array = []
-	for name in new_names():
-		out.append({"name": name, "set": "por",
-			"path": "res://cards/sets/por/%s.gd" % snake(name)})
+	var additions := new_names()
+	for row in records():
+		if additions.has(row.name):
+			out.append({"name": row.name, "set": row.set,
+				"path": "res://cards/sets/%s/%s.gd" % [row.set, snake(row.name)]})
 	for name in SHARED:
 		out.append({"name": name, "set": "por",
 			"path": "res://cards/sets/%s/%s.gd" % [SHARED[name], snake(name)]})
@@ -97,7 +114,7 @@ static func _bounded_zip(path: String) -> bool:
 		end -= 1
 	if end < 0 or tail.decode_u16(end + 4) != 0 or tail.decode_u16(end + 6) != 0: return false
 	var count := tail.decode_u16(end + 10)
-	if count > 792 or count != tail.decode_u16(end + 8): return false
+	if count > MAX_ENTRIES or count != tail.decode_u16(end + 8): return false
 	var directory_end := file.get_length() - tail_size + end
 	var offset := tail.decode_u32(end + 16)
 	if offset + tail.decode_u32(end + 12) != directory_end: return false
@@ -122,17 +139,17 @@ static func _inspect(reader: ZIPReader) -> Dictionary:
 	var artwork: Array = []
 	var additions := new_names()
 	additions.append_array(SHARED.keys())
-	for name in names():
-		for suffix in [".jpg", "_card.jpg"]:
-			artwork.append(PREFIX + "art/por/" + snake(name) + suffix)
-			if additions.has(name):
-				artwork.append("skin/cardart/" + snake(name) + suffix)
 	var seen := {}
+	var fallback := {}
 	for row in printings():
-		if seen.has(row.name):
-			for suffix in [".jpg", "_card.jpg"]:
-				artwork.append(PREFIX + "art/por/" + snake(row.name) + "__" + row.collector_number + suffix)
-		seen[row.name] = true
+		var key: String = row.set + ":" + row.name
+		var stem := snake(row.name) + ("__" + String(row.collector_number) if seen.has(key) else "")
+		for suffix in [".jpg", "_card.jpg"]:
+			artwork.append(PREFIX + "art/" + row.set + "/" + stem + suffix)
+			if additions.has(row.name) and not fallback.has(row.name):
+				artwork.append("skin/cardart/" + stem + suffix)
+		seen[key] = true
+		fallback[row.name] = true
 	var all_files := core + artwork
 	all_files.sort()
 	core.sort()
@@ -140,7 +157,7 @@ static func _inspect(reader: ZIPReader) -> Dictionary:
 	got.sort()
 	var has_art := got == all_files
 	if not has_art and (got != core or not OS.has_feature("shandalar_test")):
-		return {"ok": false, "why": "expected the exact metadata and all 788 Pack 6 artwork files; no scripts are allowed"}
+		return {"ok": false, "why": "Pack 6 now includes Portal Second Age. Rebuild Pack-6-Portal.zip with the matching tools/pack_6_portal.py; saved decks are unchanged. Expected %d artwork files and exact metadata, without scripts." % artwork.size()}
 	var manifest: Variant = JSON.parse_string(reader.read_file(PREFIX + "manifest.json").get_string_from_utf8())
 	var catalog: Variant = JSON.parse_string(reader.read_file(PREFIX + "catalog.json").get_string_from_utf8())
 	var cards: Variant = JSON.parse_string(reader.read_file(PREFIX + "cards.json").get_string_from_utf8())
@@ -156,7 +173,7 @@ static func _inspect(reader: ZIPReader) -> Dictionary:
 	if not _same(manifest.get("counts"), COUNTS) or not _same(manifest.get("new_rules_identities"), new_names()):
 		return {"ok": false, "why": "Pack 6 counts or names do not match Portal"}
 	var wanted_catalog := {"pack_format": 1, "pack_id": ID, "counts": COUNTS,
-		"sets": {"por": {"names": names(), "named_cards": 200, "published_printings": 215}}}
+		"sets": catalog_sets()}
 	if not _same(catalog, wanted_catalog) or cards != printings():
 		return {"ok": false, "why": "Pack 6 checklist differs from the trusted Portal data"}
 	var sums := {}

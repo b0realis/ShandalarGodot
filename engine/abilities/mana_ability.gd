@@ -21,12 +21,16 @@ var produces: Array = []
 ## or amount. Separate variants let a player choose which of several
 ## applicable "instead of any other type" replacements applies last.
 var forced_output_color: int = 0
+var controller_replacement := false
+var unreplaced_ability: ManaAbility
 
-func forcing_color(color: int) -> ManaAbility:
+func forcing_color(color: int, controller_only := false) -> ManaAbility:
 	var copy := ManaAbility.new(0, 0)
 	for prop in get_property_list():
 		if int(prop.usage) & PROPERTY_USAGE_SCRIPT_VARIABLE: copy.set(prop.name, get(prop.name))
 	copy.forced_output_color = color
+	copy.controller_replacement = controller_only
+	copy.unreplaced_ability = self
 	copy.dynamic_color = Callable()
 	copy.color_options = Callable()
 	copy.produces = []
@@ -220,11 +224,20 @@ func with_side_effect(cb: Callable) -> ManaAbility:
 ## the Urza lands, whose output depends on which siblings you control.
 ## When set, it replaces produces[0][1]; later entries are unaffected.
 var dynamic_amount: Callable = Callable()
+var amount_reads_activator := false
 
 ## Fluent: compute the amount at activation time (see [member dynamic_amount]).
-func with_dynamic_amount(cb: Callable) -> ManaAbility:
+func with_dynamic_amount(cb: Callable, reads_activator := false) -> ManaAbility:
 	dynamic_amount = cb
+	amount_reads_activator = reads_activator
 	return self
+
+## "You" on an activated ability is its activating player (CR 109.5),
+## which can differ from the land's controller under Piracy.
+func amount_for(game: MtgGame, source: CardInstance, actor := -1) -> int:
+	if not dynamic_amount.is_valid(): return int(produces[0][1])
+	if amount_reads_activator: return int(dynamic_amount.call(game, source, source.controller_id if actor < 0 else actor))
+	return int(dynamic_amount.call(game, source))
 
 
 ## Optional DYNAMIC COLOUR for the first produced entry:
@@ -339,7 +352,7 @@ func produce_into(pool: ManaPool) -> void:
 ## what the counters a battery just spent bought ([member bonus_per_counter]
 ## times the count MtgGame.tap_for_mana was told).
 func produce_into_for(pool: ManaPool, game: MtgGame, source: CardInstance,
-		forced_color := -1, bonus := 0) -> void:
+		forced_color := -1, bonus := 0, actor := -1) -> void:
 	if forced_color == -1 and bonus == 0 and not dynamic_amount.is_valid() \
 			and not dynamic_color.is_valid():
 		produce_into(pool)
@@ -351,7 +364,7 @@ func produce_into_for(pool: ManaPool, game: MtgGame, source: CardInstance,
 		first_color = int(dynamic_color.call(game, source))
 	var first_amount: int = produces[0][1]
 	if dynamic_amount.is_valid():
-		first_amount = int(dynamic_amount.call(game, source))
+		first_amount = amount_for(game, source, actor)
 	_pour(pool, first_color, first_amount + bonus)
 	for i in range(1, produces.size()):
 		_pour(pool, produces[i][0], produces[i][1])

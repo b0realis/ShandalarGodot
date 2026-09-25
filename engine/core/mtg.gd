@@ -224,6 +224,8 @@ enum EventType {
 	CONTROL_CHANGED,     ## data: {instance, from_controller, to_controller}.
 	COUNTERS_REMOVED,    ## data: {instance, kind, removed, remaining}.
 	REGENERATED,         ## data: {instance, controller}; actual replacement, not shield creation.
+	BECOMES_BLOCKED,     ## data: {instance, controller}; once on unblocked -> blocked.
+	BECOMES_BLOCKER,     ## data: {instance, controller}; once when a creature starts blocking.
 }
 
 ## What kind of object a StackItem is.

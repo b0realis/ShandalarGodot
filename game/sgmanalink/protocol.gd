@@ -3,8 +3,8 @@ extends RefCounted
 ## [QoL] Unrated loopback/LAN protocol. Data only; no Variant object decoding or RPC.
 ## Version this independently from the application release and future rated protocol.
 
-const VERSION := 23
-const SUBPROTOCOL := "sgmanalink-local-v23"
+const VERSION := 24
+const SUBPROTOCOL := "sgmanalink-local-v24"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]

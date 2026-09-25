@@ -637,6 +637,8 @@ var cur_cant_be_spell_target: bool = false
 var cur_prevent_combat_damage_dealt: bool = false
 ## Delif/Farrel replacements suppress assignment, not damage prevention.
 var cur_assigns_no_combat_damage: bool = false
+var cur_damage_as_unblocked: bool = false
+var cur_unblocked_damage_to_creature: bool = false
 ## Vodalian War Machine retains defender but may ignore it while attacking.
 var cur_can_attack_with_defender: bool = false
 ## "Prevent all COMBAT damage that would be dealt TO this creature"
@@ -751,6 +753,8 @@ func reset_characteristics() -> void:
 	cur_must_be_blocked_filter = Callable()
 	cur_prevent_combat_damage_dealt = false
 	cur_assigns_no_combat_damage = false
+	cur_damage_as_unblocked = false
+	cur_unblocked_damage_to_creature = false
 	cur_can_attack_with_defender = false
 	cur_prevent_combat_damage_taken = false
 	cur_prevent_all_damage_taken = false

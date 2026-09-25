@@ -174,7 +174,7 @@ func _cards(pid: int, list: Array) -> Array:
 			"text_effects": [] if masked else _text_effects(card),
 			"attached": attached,
 			"abilities": [] if masked else _abilities(card),
-			"actions": [] if masked else SgDuelActions.options(card, pid),
+			"actions": [] if masked else SgDuelActions.options(card, pid, game),
 			"exile_playable": game.can_play_from_exile(pid, card)})
 		if masked and card.zone != Mtg.Zone.BATTLEFIELD:
 			var hidden: Dictionary = out.back()
@@ -313,7 +313,7 @@ func view(pid: int) -> Dictionary:
 					targets.append({"id": _handle(pid, card), "name": "Face-down creature" if card.face_down else card.data.card_name,
 						"lethal": maxi(0, card.cur_toughness - card.damage \
 							- int(request.assigned.get(id, 0)))})
-			if bool(request.trample):
+			if bool(request.trample) or not String(request.get("special", "")).is_empty():
 				targets.append({"id": "player", "name": "Opponent", "lethal": 0})
 			damage = {"source": "Face-down creature" if request.source.face_down else request.source.data.card_name,
 				"amount": int(request.amount), "targets": targets}

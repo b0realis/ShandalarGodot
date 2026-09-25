@@ -171,6 +171,13 @@ func wants_to_assign_combat_damage() -> bool:
 	return false
 
 
+## Optional whole-damage assignment (Lone Wolf / Cunning Giant). Like
+## assign_combat_damage, this is an agent extension point; only public
+## battlefield information is supplied. The baseline chooses the player.
+func assign_special_combat_damage(_game: MtgGame, request: Dictionary) -> Dictionary:
+	return {MtgGame.DAMAGE_TO_PLAYER: int(request.amount)}
+
+
 ## The DAMAGE ASSIGNMENT ORDER (CR 509.2), announced as blockers are
 ## declared: return [param blocker_ids] permuted. Default: the order the
 ## defender declared them in, which is what the engine always did.

@@ -1,0 +1,2844 @@
+[
+  {
+    "name": "Alaborn Cavalier",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Creature — Human Knight",
+    "oracle_text": "Whenever this creature attacks, you may tap target creature.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "1",
+    "artist": "Kev Walker",
+    "set": "p02",
+    "scryfall_id": "8e865658-67c8-43b2-8d3a-909fb1c17e8a"
+  },
+  {
+    "name": "Alaborn Grenadier",
+    "mana_cost": "{W}{W}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "Vigilance",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Vigilance"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "2",
+    "artist": "David A. Cherry",
+    "set": "p02",
+    "scryfall_id": "153b7197-57a7-4e38-bd4a-4550b9d22dd8"
+  },
+  {
+    "name": "Alaborn Musketeer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Reach"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "3",
+    "artist": "Heather Hudson",
+    "set": "p02",
+    "scryfall_id": "4776a9ed-dbc6-44d2-9761-b2d09ff34008"
+  },
+  {
+    "name": "Alaborn Trooper",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "4",
+    "artist": "Lubov",
+    "set": "p02",
+    "scryfall_id": "e1cd30b4-4ed8-467e-808e-b0caf4196d90"
+  },
+  {
+    "name": "Alaborn Veteran",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Knight",
+    "oracle_text": "{T}: Target creature gets +2/+2 until end of turn. Activate only during your turn, before attackers are declared.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "collector_number": "5",
+    "artist": "Henry Van Der Linde",
+    "set": "p02",
+    "scryfall_id": "79d7992d-9acd-4eaa-b6e0-a47acb880548"
+  },
+  {
+    "name": "Alaborn Zealot",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "When this creature blocks a creature, destroy both creatures.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "6",
+    "artist": "David Horne",
+    "set": "p02",
+    "scryfall_id": "a5eba273-0b83-42a7-b8b0-9e0cd6a7aa6f"
+  },
+  {
+    "name": "Angel of Fury",
+    "mana_cost": "{4}{W}{W}",
+    "type_line": "Creature — Angel",
+    "oracle_text": "Flying\nWhen this creature dies, you may shuffle it into its owner's library.",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "collector_number": "7",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "2461bf0b-53e4-4103-8485-88a940ad66fd"
+  },
+  {
+    "name": "Angel of Mercy",
+    "mana_cost": "{4}{W}",
+    "type_line": "Creature — Angel",
+    "oracle_text": "Flying\nWhen this creature enters, you gain 3 life.",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "8",
+    "artist": "Melissa A. Benson",
+    "set": "p02",
+    "scryfall_id": "dac5c913-4eb5-4cfb-9c24-223f14f07064"
+  },
+  {
+    "name": "Angelic Blessing",
+    "mana_cost": "{2}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target creature gets +3/+3 and gains flying until end of turn. (It can't be blocked except by creatures with flying or reach.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "9",
+    "artist": "Henry Van Der Linde",
+    "set": "p02",
+    "scryfall_id": "25d409ef-9635-4ebe-944f-03e371bc40f0"
+  },
+  {
+    "name": "Angelic Wall",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Wall",
+    "oracle_text": "Defender (This creature can't attack.)\nFlying",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Defender"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "10",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "e0bb39fb-29fc-4e69-9918-47277b8af0d3"
+  },
+  {
+    "name": "Archangel",
+    "mana_cost": "{5}{W}{W}",
+    "type_line": "Creature — Angel",
+    "oracle_text": "Flying, vigilance",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "collector_number": "11",
+    "artist": "rk post",
+    "set": "p02",
+    "scryfall_id": "be73364e-d833-410f-b460-c36fe14c52ca"
+  },
+  {
+    "name": "Armageddon",
+    "mana_cost": "{3}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy all lands.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "collector_number": "12",
+    "artist": "Rob Alexander",
+    "set": "p02",
+    "scryfall_id": "9591f2ab-e09c-48d5-9c87-d27368e60750"
+  },
+  {
+    "name": "Armored Griffin",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Griffin",
+    "oracle_text": "Flying, vigilance",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "13",
+    "artist": "Bradley Williams",
+    "set": "p02",
+    "scryfall_id": "54866603-c80c-4dc8-9655-eaf54ed2c5ab"
+  },
+  {
+    "name": "Bargain",
+    "mana_cost": "{2}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target opponent draws a card.\nYou gain 7 life.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "14",
+    "artist": "Phil Foglio",
+    "set": "p02",
+    "scryfall_id": "de7f3064-a378-4ca4-99f5-b46518ddc43d"
+  },
+  {
+    "name": "Breath of Life",
+    "mana_cost": "{3}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Return target creature card from your graveyard to the battlefield.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "15",
+    "artist": "Lubov",
+    "set": "p02",
+    "scryfall_id": "a10f24f7-f82e-413e-824f-384607c7d858"
+  },
+  {
+    "name": "Festival of Trokin",
+    "mana_cost": "{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "You gain 2 life for each creature you control.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "16",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "f5bd783b-d4cd-4a53-8fec-a5ead7c14738"
+  },
+  {
+    "name": "Just Fate",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant",
+    "oracle_text": "Cast this spell only during the declare attackers step and only if you've been attacked this step.\nDestroy target attacking creature.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "collector_number": "17",
+    "artist": "Bradley Williams",
+    "set": "p02",
+    "scryfall_id": "a6e5e572-030d-4a41-89e6-e720b49bc131"
+  },
+  {
+    "name": "Path of Peace",
+    "mana_cost": "{3}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy target creature. Its owner gains 4 life.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "18",
+    "artist": "David A. Cherry",
+    "set": "p02",
+    "scryfall_id": "cb14d3f4-09f3-4113-bdc3-0fd753137f7c"
+  },
+  {
+    "name": "Rally the Troops",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "oracle_text": "Cast this spell only during the declare attackers step and only if you've been attacked this step.\nUntap all creatures you control.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "19",
+    "artist": "Mark Poole",
+    "set": "p02",
+    "scryfall_id": "61d92577-c3e2-4129-8974-89eb896cdc2d"
+  },
+  {
+    "name": "Righteous Charge",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Creatures you control get +2/+2 until end of turn.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "20",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "9f7bd958-20c7-4394-8beb-06b32db90d32"
+  },
+  {
+    "name": "Righteous Fury",
+    "mana_cost": "{4}{W}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy all tapped creatures. You gain 2 life for each creature destroyed this way.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "collector_number": "21",
+    "artist": "Edward P. Beard, Jr.",
+    "set": "p02",
+    "scryfall_id": "c408f43e-9092-440d-a15f-bef4ad58bcc6"
+  },
+  {
+    "name": "Steam Catapult",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "{T}: Destroy target tapped creature. Activate only during your turn, before attackers are declared.",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "collector_number": "22",
+    "artist": "Mark Tedin",
+    "set": "p02",
+    "scryfall_id": "cdbf23ff-e095-4c5c-afe6-76badfc422c5"
+  },
+  {
+    "name": "Temple Acolyte",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Cleric",
+    "oracle_text": "When this creature enters, you gain 3 life.",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "23",
+    "artist": "Lubov",
+    "set": "p02",
+    "scryfall_id": "7be7cba2-5673-4bef-aa3d-cbfad8932610"
+  },
+  {
+    "name": "Temple Elder",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Cleric",
+    "oracle_text": "{T}: You gain 1 life. Activate only during your turn, before attackers are declared.",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "24",
+    "artist": "David Horne",
+    "set": "p02",
+    "scryfall_id": "db4d4b14-d774-430c-a483-be04a238718d"
+  },
+  {
+    "name": "Town Sentry",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "Whenever this creature blocks, it gets +0/+2 until end of turn.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "25",
+    "artist": "Bradley Williams",
+    "set": "p02",
+    "scryfall_id": "e5e9db36-0592-4e59-951a-d9d6c1522b99"
+  },
+  {
+    "name": "Trokin High Guard",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Human Knight",
+    "oracle_text": "",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "26",
+    "artist": "Ron Spencer",
+    "set": "p02",
+    "scryfall_id": "9c2b9302-fca6-43ca-a01c-03aec51acd0d"
+  },
+  {
+    "name": "Vengeance",
+    "mana_cost": "{3}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy target tapped creature.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "27",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "3209ee48-4485-44fc-b71d-cd6241674e64"
+  },
+  {
+    "name": "Volunteer Militia",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "28",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "de307b2e-9a1c-4f95-887f-14c9d99577aa"
+  },
+  {
+    "name": "Warrior's Stand",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "oracle_text": "Cast this spell only during the declare attackers step and only if you've been attacked this step.\nCreatures you control get +2/+2 until end of turn.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "29",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "2a24f00c-7e2e-4609-b956-ca3d5fb365b2"
+  },
+  {
+    "name": "Wild Griffin",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Griffin",
+    "oracle_text": "Flying",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "collector_number": "30",
+    "artist": "Jeff Miracola",
+    "set": "p02",
+    "scryfall_id": "a3b6541a-cda3-4c8a-a5b0-1845169b9b71"
+  },
+  {
+    "name": "Air Elemental",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Creature — Elemental",
+    "oracle_text": "Flying",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "31",
+    "artist": "Doug Chaffee",
+    "set": "p02",
+    "scryfall_id": "cd01ed7d-45d5-420c-836c-aec52250f161"
+  },
+  {
+    "name": "Apprentice Sorcerer",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Wizard Sorcerer",
+    "oracle_text": "{T}: This creature deals 1 damage to any target. Activate only during your turn, before attackers are declared.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "32",
+    "artist": "Christopher Rush",
+    "set": "p02",
+    "scryfall_id": "9e1fd317-5500-40e8-ad79-323832815f81"
+  },
+  {
+    "name": "Armored Galleon",
+    "mana_cost": "{4}{U}",
+    "type_line": "Creature — Human Pirate",
+    "oracle_text": "This creature can't attack unless defending player controls an Island.",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "33",
+    "artist": "Doug Chaffee",
+    "set": "p02",
+    "scryfall_id": "484b2978-2da5-41cf-85d4-128e9dae75c0"
+  },
+  {
+    "name": "Coastal Wizard",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Creature — Human Wizard",
+    "oracle_text": "{T}: Return this creature and another target creature to their owners' hands. Activate only during your turn, before attackers are declared.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "collector_number": "34",
+    "artist": "Edward P. Beard, Jr.",
+    "set": "p02",
+    "scryfall_id": "0b8c7377-1404-44a4-9689-1fc6cdc286c8"
+  },
+  {
+    "name": "Denizen of the Deep",
+    "mana_cost": "{6}{U}{U}",
+    "type_line": "Creature — Serpent",
+    "oracle_text": "When this creature enters, return each other creature you control to its owner's hand.",
+    "power": "11",
+    "toughness": "11",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "collector_number": "35",
+    "artist": "Anson Maddocks",
+    "set": "p02",
+    "scryfall_id": "620478b8-47b7-48c5-ac22-1ba4d234c794"
+  },
+  {
+    "name": "Déjà Vu",
+    "mana_cost": "{2}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Return target sorcery card from your graveyard to your hand.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "36",
+    "artist": "David Horne",
+    "set": "p02",
+    "scryfall_id": "ade6a71a-e8ec-4d41-8a39-3eacf0097c8b"
+  },
+  {
+    "name": "Exhaustion",
+    "mana_cost": "{2}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Creatures and lands target opponent controls don't untap during their next untap step.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "collector_number": "37",
+    "artist": "Kaja Foglio",
+    "set": "p02",
+    "scryfall_id": "fcc103a6-7888-4e35-b35b-a796a48caf70"
+  },
+  {
+    "name": "Extinguish",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "oracle_text": "Counter target sorcery spell.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "38",
+    "artist": "Douglas Shuler",
+    "set": "p02",
+    "scryfall_id": "641f4e66-b46b-4da3-a053-f3763400d4f5"
+  },
+  {
+    "name": "Eye Spy",
+    "mana_cost": "{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Look at the top card of target player's library. You may put that card into their graveyard.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "39",
+    "artist": "DiTerlizzi",
+    "set": "p02",
+    "scryfall_id": "ee109b81-96ef-494a-9d6d-0ea4a49b76a0"
+  },
+  {
+    "name": "False Summoning",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "oracle_text": "Counter target creature spell.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "40",
+    "artist": "DiTerlizzi",
+    "set": "p02",
+    "scryfall_id": "cd7d30a8-bc7a-42bc-8d1b-600cbf78ab98"
+  },
+  {
+    "name": "Mystic Denial",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Instant",
+    "oracle_text": "Counter target creature or sorcery spell.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "41",
+    "artist": "DiTerlizzi",
+    "set": "p02",
+    "scryfall_id": "30bb424f-f3d6-4616-a368-df12af3ad024"
+  },
+  {
+    "name": "Piracy",
+    "mana_cost": "{U}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Until end of turn, you may tap lands you don't control for mana. Spend this mana only to cast spells.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "collector_number": "42",
+    "artist": "Bradley Williams",
+    "set": "p02",
+    "scryfall_id": "daeab88f-2bfc-4f40-8eed-ee44a9e90bd7"
+  },
+  {
+    "name": "Remove",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "oracle_text": "Cast this spell only during the declare attackers step and only if you've been attacked this step.\nReturn target attacking creature to its owner's hand.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "43",
+    "artist": "DiTerlizzi",
+    "set": "p02",
+    "scryfall_id": "adb08549-8ff8-410f-b817-0255abaf8b1e"
+  },
+  {
+    "name": "Screeching Drake",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Drake",
+    "oracle_text": "Flying\nWhen this creature enters, draw a card, then discard a card.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "44",
+    "artist": "Anson Maddocks",
+    "set": "p02",
+    "scryfall_id": "6c16faac-b093-425b-b1e9-f71602d2f6dd"
+  },
+  {
+    "name": "Sea Drake",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Drake",
+    "oracle_text": "Flying\nWhen this creature enters, return two target lands you control to their owner's hand.",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "45",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "d87a40cb-b30d-41ce-8e11-5fe3136fdadd"
+  },
+  {
+    "name": "Sleight of Hand",
+    "mana_cost": "{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Look at the top two cards of your library. Put one of them into your hand and the other on the bottom of your library.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "46",
+    "artist": "Phil Foglio",
+    "set": "p02",
+    "scryfall_id": "f3405184-dcda-4bb6-ade6-c2a87bc3296d"
+  },
+  {
+    "name": "Steam Frigate",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Pirate",
+    "oracle_text": "This creature can't attack unless defending player controls an Island.",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "47",
+    "artist": "Mark Tedin",
+    "set": "p02",
+    "scryfall_id": "ec3193cb-2c00-4ef8-bf2e-d3b1e3b875a3"
+  },
+  {
+    "name": "Talas Air Ship",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Human Pirate",
+    "oracle_text": "Flying",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "48",
+    "artist": "Mark Tedin",
+    "set": "p02",
+    "scryfall_id": "80bc3159-f585-45cd-8578-f3bf2fa9b2d1"
+  },
+  {
+    "name": "Talas Explorer",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Pirate Scout",
+    "oracle_text": "Flying\nWhen this creature enters, look at target opponent's hand.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "49",
+    "artist": "Douglas Shuler",
+    "set": "p02",
+    "scryfall_id": "64f184c9-a716-4ba8-8efa-495358660de5"
+  },
+  {
+    "name": "Talas Merchant",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Pirate",
+    "oracle_text": "",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "50",
+    "artist": "Lubov",
+    "set": "p02",
+    "scryfall_id": "2f779d7e-6e37-49bc-b76d-3bb490ff142b"
+  },
+  {
+    "name": "Talas Researcher",
+    "mana_cost": "{4}{U}",
+    "type_line": "Creature — Human Pirate Wizard",
+    "oracle_text": "{T}: Draw a card. Activate only during your turn, before attackers are declared.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "collector_number": "51",
+    "artist": "Kaja Foglio",
+    "set": "p02",
+    "scryfall_id": "1c51008b-7031-4dbc-b4d6-7433c05bf6dc"
+  },
+  {
+    "name": "Talas Scout",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Pirate Scout",
+    "oracle_text": "Flying",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "52",
+    "artist": "Heather Hudson",
+    "set": "p02",
+    "scryfall_id": "48e12f17-855e-47e0-b7e3-df5c388b01bb"
+  },
+  {
+    "name": "Talas Warrior",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Creature — Human Pirate Warrior",
+    "oracle_text": "This creature can't be blocked.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "collector_number": "53",
+    "artist": "Douglas Shuler",
+    "set": "p02",
+    "scryfall_id": "de3d8cc5-5889-4e52-a32c-d15556fd2166"
+  },
+  {
+    "name": "Temporal Manipulation",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Take an extra turn after this one.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "collector_number": "54",
+    "artist": "Anson Maddocks",
+    "set": "p02",
+    "scryfall_id": "b3964160-79d6-4cdd-8b43-7a8f5dde9da7"
+  },
+  {
+    "name": "Theft of Dreams",
+    "mana_cost": "{2}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Draw a card for each tapped creature target opponent controls.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "55",
+    "artist": "Randy Gallegos",
+    "set": "p02",
+    "scryfall_id": "a826f84c-24c4-41f9-88a9-a18dc860b9a1"
+  },
+  {
+    "name": "Tidal Surge",
+    "mana_cost": "{1}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Tap up to three target creatures without flying.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "56",
+    "artist": "Phil Foglio",
+    "set": "p02",
+    "scryfall_id": "5d9ecba0-3d9d-4383-a45c-103300442799"
+  },
+  {
+    "name": "Time Ebb",
+    "mana_cost": "{2}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Put target creature on top of its owner's library.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "57",
+    "artist": "Sam Wood",
+    "set": "p02",
+    "scryfall_id": "ea285582-2279-4393-885d-e471d00681e9"
+  },
+  {
+    "name": "Touch of Brilliance",
+    "mana_cost": "{3}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Draw two cards.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "58",
+    "artist": "Kaja Foglio",
+    "set": "p02",
+    "scryfall_id": "277d38ee-09e5-4266-a077-d737f6c8b8d3"
+  },
+  {
+    "name": "Undo",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "Return two target creatures to their owners' hands.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "59",
+    "artist": "Henry Van Der Linde",
+    "set": "p02",
+    "scryfall_id": "4ca55da2-33e1-44b5-88b2-ac159d842b1f"
+  },
+  {
+    "name": "Wind Sail",
+    "mana_cost": "{1}{U}",
+    "type_line": "Sorcery",
+    "oracle_text": "One or two target creatures gain flying until end of turn.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "collector_number": "60",
+    "artist": "Matt Stawicki",
+    "set": "p02",
+    "scryfall_id": "17ef39fd-96d0-4a02-97d5-580d121b92a3"
+  },
+  {
+    "name": "Abyssal Nightstalker",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Nightstalker",
+    "oracle_text": "Whenever this creature attacks and isn't blocked, defending player discards a card.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "61",
+    "artist": "Sam Wood",
+    "set": "p02",
+    "scryfall_id": "0b688039-7441-490b-ad06-8a72086c4023"
+  },
+  {
+    "name": "Ancient Craving",
+    "mana_cost": "{3}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "You draw three cards and you lose 3 life.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "collector_number": "62",
+    "artist": "Rob Alexander",
+    "set": "p02",
+    "scryfall_id": "37ee59a7-0f41-4d5d-b049-71ca1ba335b1"
+  },
+  {
+    "name": "Bloodcurdling Scream",
+    "mana_cost": "{X}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target creature gets +X/+0 until end of turn.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "63",
+    "artist": "Dan Frazier",
+    "set": "p02",
+    "scryfall_id": "dcb0ec62-6d6f-4d10-bc2d-37f25495f884"
+  },
+  {
+    "name": "Brutal Nightstalker",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Creature — Nightstalker",
+    "oracle_text": "When this creature enters, you may have target opponent discard a card.",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "64",
+    "artist": "Brom",
+    "set": "p02",
+    "scryfall_id": "b471102b-a66e-4cdc-b20f-7ae1f9bd0e8a"
+  },
+  {
+    "name": "Chorus of Woe",
+    "mana_cost": "{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Creatures you control get +1/+0 until end of turn.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "65",
+    "artist": "Randy Gallegos",
+    "set": "p02",
+    "scryfall_id": "0289ddb3-b35c-4edf-92bb-06f84a3475d9"
+  },
+  {
+    "name": "Coercion",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target opponent reveals their hand. You choose a card from it. That player discards that card.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "66",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "de6ff6af-22f4-46fb-97d3-6f8f20f8b16c"
+  },
+  {
+    "name": "Cruel Edict",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target opponent sacrifices a creature of their choice.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "67",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "f6018d90-cfcc-4fb1-8ecd-4e0f1c71550d"
+  },
+  {
+    "name": "Dakmor Bat",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Bat",
+    "oracle_text": "Flying",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "68",
+    "artist": "Una Fricker",
+    "set": "p02",
+    "scryfall_id": "f45994db-776d-420e-9241-99bf3b71fa59"
+  },
+  {
+    "name": "Dakmor Plague",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Dakmor Plague deals 3 damage to each creature and each player.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "69",
+    "artist": "Jeff Miracola",
+    "set": "p02",
+    "scryfall_id": "58b38ef1-5839-4292-91d6-e45698c69a75"
+  },
+  {
+    "name": "Dakmor Scorpion",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Scorpion",
+    "oracle_text": "",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "70",
+    "artist": "Randy Gallegos",
+    "set": "p02",
+    "scryfall_id": "2d860dee-93a9-48e5-ba7a-80ad8cdc84e4"
+  },
+  {
+    "name": "Dakmor Sorceress",
+    "mana_cost": "{5}{B}",
+    "type_line": "Creature — Human Wizard Sorcerer",
+    "oracle_text": "Dakmor Sorceress's power is equal to the number of Swamps you control.",
+    "power": "*",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "collector_number": "71",
+    "artist": "Matthew D. Wilson",
+    "set": "p02",
+    "scryfall_id": "985ef9ad-b842-40b7-8d56-98143ecef0dc"
+  },
+  {
+    "name": "Dark Offering",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy target nonblack creature. You gain 3 life.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "72",
+    "artist": "Edward P. Beard, Jr.",
+    "set": "p02",
+    "scryfall_id": "3ce0cef9-6de4-4a71-b76a-eb0198387294"
+  },
+  {
+    "name": "Foul Spirit",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Spirit",
+    "oracle_text": "Flying\nWhen this creature enters, sacrifice a land.",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "73",
+    "artist": "rk post",
+    "set": "p02",
+    "scryfall_id": "64b63e5f-b2cf-42c2-8111-1ebb9ed5ca33"
+  },
+  {
+    "name": "Hand of Death",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy target nonblack creature.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "74",
+    "artist": "Heather Hudson",
+    "set": "p02",
+    "scryfall_id": "a9761136-9e1c-4d86-98ce-7abe1d8e6a8d"
+  },
+  {
+    "name": "Hidden Horror",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Creature — Horror",
+    "oracle_text": "When this creature enters, sacrifice it unless you discard a creature card.",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "collector_number": "75",
+    "artist": "Brom",
+    "set": "p02",
+    "scryfall_id": "64243f71-0941-47d5-816b-4548986726b4"
+  },
+  {
+    "name": "Kiss of Death",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Kiss of Death deals 4 damage to target opponent or planeswalker. You gain 4 life.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "76",
+    "artist": "Melissa A. Benson",
+    "set": "p02",
+    "scryfall_id": "bf6832c1-a0a9-49ec-a787-879e510aee08"
+  },
+  {
+    "name": "Lurking Nightstalker",
+    "mana_cost": "{B}{B}",
+    "type_line": "Creature — Nightstalker",
+    "oracle_text": "Whenever this creature attacks, it gets +2/+0 until end of turn.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "77",
+    "artist": "Kev Walker",
+    "set": "p02",
+    "scryfall_id": "002715a3-b84f-40ba-8fa9-6b2854626f4d"
+  },
+  {
+    "name": "Mind Rot",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target player discards two cards.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "78",
+    "artist": "Douglas Shuler",
+    "set": "p02",
+    "scryfall_id": "7553a2bf-2038-42f7-a311-bdc889dd773d"
+  },
+  {
+    "name": "Moaning Spirit",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Spirit",
+    "oracle_text": "Flying",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "79",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "cdd99210-5201-4ecc-b86a-aee9dafe2657"
+  },
+  {
+    "name": "Muck Rats",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Rat",
+    "oracle_text": "",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "80",
+    "artist": "Una Fricker",
+    "set": "p02",
+    "scryfall_id": "ded268ef-f1a3-4d53-82f6-9562fe51c3e4"
+  },
+  {
+    "name": "Nightstalker Engine",
+    "mana_cost": "{4}{B}",
+    "type_line": "Creature — Nightstalker",
+    "oracle_text": "Nightstalker Engine's power is equal to the number of creature cards in your graveyard.",
+    "power": "*",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "collector_number": "81",
+    "artist": "Mark Tedin",
+    "set": "p02",
+    "scryfall_id": "61e440ad-462f-4c7e-a646-8c5123a9f6b2"
+  },
+  {
+    "name": "Predatory Nightstalker",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Creature — Nightstalker",
+    "oracle_text": "When this creature enters, you may have target opponent sacrifice a creature of their choice.",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "82",
+    "artist": "D. Alexander Gregory",
+    "set": "p02",
+    "scryfall_id": "7fd4c782-bd7f-495e-8a4d-ea7c9ac1f58b"
+  },
+  {
+    "name": "Prowling Nightstalker",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Nightstalker",
+    "oracle_text": "This creature can't be blocked except by black creatures.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "83",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "749e3992-693b-4b4f-b410-b5f2faac0040"
+  },
+  {
+    "name": "Raiding Nightstalker",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Nightstalker",
+    "oracle_text": "Swampwalk (This creature can't be blocked as long as defending player controls a Swamp.)",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Landwalk",
+      "Swampwalk"
+    ],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "84",
+    "artist": "Pete Venters",
+    "set": "p02",
+    "scryfall_id": "0df2887c-e70b-4ff3-a437-450c0037fb07"
+  },
+  {
+    "name": "Rain of Daggers",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy all creatures target opponent controls. You lose 2 life for each creature destroyed this way.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "collector_number": "85",
+    "artist": "Melissa A. Benson",
+    "set": "p02",
+    "scryfall_id": "bb09a5bb-9730-43cd-8dea-3842634c9983"
+  },
+  {
+    "name": "Raise Dead",
+    "mana_cost": "{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Return target creature card from your graveyard to your hand.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "86",
+    "artist": "Anson Maddocks",
+    "set": "p02",
+    "scryfall_id": "99ec4a57-003e-40fd-9998-ed10b38eeed7"
+  },
+  {
+    "name": "Ravenous Rats",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Rat",
+    "oracle_text": "When this creature enters, target opponent discards a card.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "87",
+    "artist": "Edward P. Beard, Jr.",
+    "set": "p02",
+    "scryfall_id": "8899244b-737a-43a9-9241-15a650b47bed"
+  },
+  {
+    "name": "Return of the Nightstalkers",
+    "mana_cost": "{5}{B}{B}",
+    "type_line": "Sorcery",
+    "oracle_text": "Return all Nightstalker permanent cards from your graveyard to the battlefield. Then destroy all Swamps you control.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "collector_number": "88",
+    "artist": "Randy Gallegos",
+    "set": "p02",
+    "scryfall_id": "e85d85c2-9f34-4375-adcd-a1c5b487cacc"
+  },
+  {
+    "name": "Swarm of Rats",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Rat",
+    "oracle_text": "Swarm of Rats's power is equal to the number of Rats you control.",
+    "power": "*",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "collector_number": "89",
+    "artist": "Kev Walker",
+    "set": "p02",
+    "scryfall_id": "f154e89e-bb64-4579-9ff5-f3fc1c480105"
+  },
+  {
+    "name": "Vampiric Spirit",
+    "mana_cost": "{2}{B}{B}",
+    "type_line": "Creature — Spirit",
+    "oracle_text": "Flying\nWhen this creature enters, you lose 4 life.",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "collector_number": "90",
+    "artist": "Anson Maddocks",
+    "set": "p02",
+    "scryfall_id": "f636e46a-9d35-47b8-8df0-6dcb18105d30"
+  },
+  {
+    "name": "Blaze",
+    "mana_cost": "{X}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Blaze deals X damage to any target.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "91",
+    "artist": "David A. Cherry",
+    "set": "p02",
+    "scryfall_id": "3940d0ca-0ca2-4446-9330-a554c3e89824"
+  },
+  {
+    "name": "Brimstone Dragon",
+    "mana_cost": "{6}{R}{R}",
+    "type_line": "Creature — Dragon",
+    "oracle_text": "Flying, haste",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying",
+      "Haste"
+    ],
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "collector_number": "92",
+    "artist": "David A. Cherry",
+    "set": "p02",
+    "scryfall_id": "54c72f51-2e8c-4a2f-9b61-80f36f8af521"
+  },
+  {
+    "name": "Cunning Giant",
+    "mana_cost": "{5}{R}",
+    "type_line": "Creature — Giant",
+    "oracle_text": "If this creature is unblocked, you may have it assign its combat damage to a creature defending player controls.",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "collector_number": "93",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "0aa284a7-3aac-4e88-becb-548a28c77401"
+  },
+  {
+    "name": "Earthquake",
+    "mana_cost": "{X}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Earthquake deals X damage to each creature without flying and each player.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "collector_number": "94",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "05126438-e806-43e6-bd81-233b629b4a1b"
+  },
+  {
+    "name": "Goblin Cavaliers",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin",
+    "oracle_text": "",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "95",
+    "artist": "DiTerlizzi",
+    "set": "p02",
+    "scryfall_id": "edc6ea02-0642-4fc5-b50c-543dc393bfdd"
+  },
+  {
+    "name": "Goblin Firestarter",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Goblin",
+    "oracle_text": "Sacrifice this creature: It deals 1 damage to any target. Activate only during your turn, before attackers are declared.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "96",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "84ee21ef-26c0-4def-9046-5d6fcfa3bfeb"
+  },
+  {
+    "name": "Goblin General",
+    "mana_cost": "{1}{R}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "oracle_text": "Whenever this creature attacks, Goblin creatures you control get +1/+1 until end of turn.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "collector_number": "97",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "7fdce2e5-60dd-4993-b74c-f49f013b28f0"
+  },
+  {
+    "name": "Goblin Glider",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin",
+    "oracle_text": "Flying\nThis creature can't block.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "98",
+    "artist": "Pete Venters",
+    "set": "p02",
+    "scryfall_id": "9c29491b-dec1-429d-9950-062582f8164f"
+  },
+  {
+    "name": "Goblin Lore",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Draw four cards, then discard three cards at random.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "99",
+    "artist": "D. Alexander Gregory",
+    "set": "p02",
+    "scryfall_id": "f26f34db-732c-43d4-a6ef-e170538c0235"
+  },
+  {
+    "name": "Goblin Matron",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin",
+    "oracle_text": "When this creature enters, you may search your library for a Goblin card, reveal that card, put it into your hand, then shuffle.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "100",
+    "artist": "Daniel Gelon",
+    "set": "p02",
+    "scryfall_id": "f99dc21c-8600-49bf-b0a3-c981f7ec7ac3"
+  },
+  {
+    "name": "Goblin Mountaineer",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Goblin Scout",
+    "oracle_text": "Mountainwalk (This creature can't be blocked as long as defending player controls a Mountain.)",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Landwalk",
+      "Mountainwalk"
+    ],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "101",
+    "artist": "DiTerlizzi",
+    "set": "p02",
+    "scryfall_id": "f841fe25-237f-4303-b75e-392b82767eea"
+  },
+  {
+    "name": "Goblin Piker",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "oracle_text": "",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "102",
+    "artist": "DiTerlizzi",
+    "set": "p02",
+    "scryfall_id": "2786834d-dbda-40ce-82a4-e518cd554312"
+  },
+  {
+    "name": "Goblin Raider",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "oracle_text": "This creature can't block.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "103",
+    "artist": "Matt Stawicki",
+    "set": "p02",
+    "scryfall_id": "68fe9691-d788-42cb-8d13-005724939b62"
+  },
+  {
+    "name": "Goblin War Cry",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target opponent chooses a creature they control. Other creatures they control can't block this turn.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "104",
+    "artist": "Anson Maddocks",
+    "set": "p02",
+    "scryfall_id": "3822880c-a559-409c-8390-6d57eacc3a7c"
+  },
+  {
+    "name": "Goblin War Strike",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Goblin War Strike deals damage to target player or planeswalker equal to the number of Goblins you control.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "105",
+    "artist": "Michael Weaver",
+    "set": "p02",
+    "scryfall_id": "738fecfd-1119-4dcb-acd6-ec9715d9c074"
+  },
+  {
+    "name": "Jagged Lightning",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Jagged Lightning deals 3 damage to each of two target creatures.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "106",
+    "artist": "Michael Weaver",
+    "set": "p02",
+    "scryfall_id": "148e6704-9cf0-45cf-9bab-db318c016593"
+  },
+  {
+    "name": "Lava Axe",
+    "mana_cost": "{4}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Lava Axe deals 5 damage to target player or planeswalker.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "107",
+    "artist": "Edward P. Beard, Jr.",
+    "set": "p02",
+    "scryfall_id": "fe6cff90-ecec-4610-82ea-0f2a109959cf"
+  },
+  {
+    "name": "Magma Giant",
+    "mana_cost": "{5}{R}{R}",
+    "type_line": "Creature — Giant",
+    "oracle_text": "When this creature enters, it deals 2 damage to each creature and each player.",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "collector_number": "108",
+    "artist": "Michael Weaver",
+    "set": "p02",
+    "scryfall_id": "92bec2e0-a016-42bd-85d9-fbb262998110"
+  },
+  {
+    "name": "Obsidian Giant",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Giant",
+    "oracle_text": "",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "109",
+    "artist": "David A. Cherry",
+    "set": "p02",
+    "scryfall_id": "aad8a194-cee7-4671-8310-19357fc1a450"
+  },
+  {
+    "name": "Ogre Arsonist",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Ogre",
+    "oracle_text": "When this creature enters, destroy target land.",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "110",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "b67e28b2-9d25-4873-8db2-1f0853ab0c47"
+  },
+  {
+    "name": "Ogre Berserker",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Ogre Berserker",
+    "oracle_text": "Haste",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Haste"
+    ],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "111",
+    "artist": "David A. Cherry",
+    "set": "p02",
+    "scryfall_id": "b6969d4d-c311-4663-bcd6-77a4d6458335"
+  },
+  {
+    "name": "Ogre Taskmaster",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Ogre",
+    "oracle_text": "This creature can't block.",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "112",
+    "artist": "Dan Frazier",
+    "set": "p02",
+    "scryfall_id": "d674a92e-b268-48f7-b082-f8ca2e63d43b"
+  },
+  {
+    "name": "Ogre Warrior",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Ogre Warrior",
+    "oracle_text": "",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "113",
+    "artist": "Jeff Miracola",
+    "set": "p02",
+    "scryfall_id": "66e72970-df1f-4ded-a686-036008555a76"
+  },
+  {
+    "name": "Raging Goblin",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Goblin Berserker",
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Haste"
+    ],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "114",
+    "artist": "Jeff Miracola",
+    "set": "p02",
+    "scryfall_id": "e6df5a36-7bd4-4456-a462-54f65089826c"
+  },
+  {
+    "name": "Relentless Assault",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Untap all creatures that attacked this turn. After this main phase, there is an additional combat phase followed by an additional main phase.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "collector_number": "115",
+    "artist": "Tom Wänerstrand",
+    "set": "p02",
+    "scryfall_id": "c641c3d6-0364-4209-b908-1717e5e612ad"
+  },
+  {
+    "name": "Spitting Earth",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Spitting Earth deals damage to target creature equal to the number of Mountains you control.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "116",
+    "artist": "David Horne",
+    "set": "p02",
+    "scryfall_id": "f868b8b0-2be2-4833-8e9a-43a08c6d9c96"
+  },
+  {
+    "name": "Stone Rain",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Destroy target land.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "117",
+    "artist": "Doug Chaffee",
+    "set": "p02",
+    "scryfall_id": "2d0b04bc-54ba-48a8-9181-233e08774a8b"
+  },
+  {
+    "name": "Tremor",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Tremor deals 1 damage to each creature without flying.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "118",
+    "artist": "Pete Venters",
+    "set": "p02",
+    "scryfall_id": "e2509285-a88e-4f5c-86c1-c0386da0f0c5"
+  },
+  {
+    "name": "Volcanic Hammer",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Volcanic Hammer deals 3 damage to any target.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "collector_number": "119",
+    "artist": "Edward P. Beard, Jr.",
+    "set": "p02",
+    "scryfall_id": "58c0489d-b073-4ad4-b044-447fcc865b6c"
+  },
+  {
+    "name": "Wildfire",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Sorcery",
+    "oracle_text": "Each player sacrifices four lands of their choice. Wildfire deals 4 damage to each creature.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "collector_number": "120",
+    "artist": "Rob Alexander",
+    "set": "p02",
+    "scryfall_id": "b69cfcb0-db68-4494-a3e1-7c2ca279fcf5"
+  },
+  {
+    "name": "Alluring Scent",
+    "mana_cost": "{1}{G}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "All creatures able to block target creature this turn do so.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "collector_number": "121",
+    "artist": "Melissa A. Benson",
+    "set": "p02",
+    "scryfall_id": "65d66645-a5e5-4d29-9dc0-a058f7a3f24b"
+  },
+  {
+    "name": "Barbtooth Wurm",
+    "mana_cost": "{5}{G}",
+    "type_line": "Creature — Wurm",
+    "oracle_text": "",
+    "power": "6",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "122",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "0f627db9-c63e-4353-94f4-3e28db7b222a"
+  },
+  {
+    "name": "Bear Cub",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Bear",
+    "oracle_text": "",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "123",
+    "artist": "Ron Spencer",
+    "set": "p02",
+    "scryfall_id": "d71abb70-bee5-4823-83dc-db0707023b37"
+  },
+  {
+    "name": "Bee Sting",
+    "mana_cost": "{3}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Bee Sting deals 2 damage to any target.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "124",
+    "artist": "Cris Dornaus",
+    "set": "p02",
+    "scryfall_id": "74dc1f90-8227-47ad-8551-a4e7e565738d"
+  },
+  {
+    "name": "Deathcoil Wurm",
+    "mana_cost": "{6}{G}{G}",
+    "type_line": "Creature — Wurm",
+    "oracle_text": "You may have this creature assign its combat damage as though it weren't blocked.",
+    "power": "7",
+    "toughness": "6",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "collector_number": "125",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "7c17e3b5-d609-4289-9b74-5ac96ab4ccfa"
+  },
+  {
+    "name": "Deep Wood",
+    "mana_cost": "{1}{G}",
+    "type_line": "Instant",
+    "oracle_text": "Cast this spell only during the declare attackers step and only if you've been attacked this step.\nPrevent all damage that would be dealt to you this turn by attacking creatures.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "126",
+    "artist": "Jeff Miracola",
+    "set": "p02",
+    "scryfall_id": "cfa04db1-bf4a-4824-9dc9-f5c510ba62bc"
+  },
+  {
+    "name": "Golden Bear",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Bear",
+    "oracle_text": "",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "127",
+    "artist": "Una Fricker",
+    "set": "p02",
+    "scryfall_id": "d7dfc789-7ea0-4eb8-8c3b-2c50fd52cbab"
+  },
+  {
+    "name": "Harmony of Nature",
+    "mana_cost": "{2}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Tap any number of untapped creatures you control. You gain 4 life for each creature tapped this way.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "128",
+    "artist": "Kaja Foglio",
+    "set": "p02",
+    "scryfall_id": "e3fa08d9-d41b-4696-b81a-42c8eebdeb49"
+  },
+  {
+    "name": "Hurricane",
+    "mana_cost": "{X}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Hurricane deals X damage to each creature with flying and each player.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "collector_number": "129",
+    "artist": "Rob Alexander",
+    "set": "p02",
+    "scryfall_id": "6b4dd722-4729-444a-9d81-e2e93317fbd5"
+  },
+  {
+    "name": "Ironhoof Ox",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Creature — Ox",
+    "oracle_text": "This creature can't be blocked by more than one creature.",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "130",
+    "artist": "Una Fricker",
+    "set": "p02",
+    "scryfall_id": "7c2528c2-6405-4db9-9137-623946a4de2f"
+  },
+  {
+    "name": "Lone Wolf",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Wolf",
+    "oracle_text": "You may have this creature assign its combat damage as though it weren't blocked.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "131",
+    "artist": "Michael Weaver",
+    "set": "p02",
+    "scryfall_id": "7ff4d831-7388-4321-a636-79cf7bde25bb"
+  },
+  {
+    "name": "Lynx",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Cat",
+    "oracle_text": "Forestwalk (This creature can't be blocked as long as defending player controls a Forest.)",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Landwalk",
+      "Forestwalk"
+    ],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "132",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "2e8648e1-bc40-4eff-ad7b-ab0b62a47570"
+  },
+  {
+    "name": "Monstrous Growth",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target creature gets +4/+4 until end of turn.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "133",
+    "artist": "Una Fricker",
+    "set": "p02",
+    "scryfall_id": "3816da20-4434-4bf7-a9dd-3eb3bb735f08"
+  },
+  {
+    "name": "Natural Spring",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Target player gains 8 life.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "134",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "79d73903-182d-4fc8-a1e4-8a1738e7a67b"
+  },
+  {
+    "name": "Nature's Lore",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for a Forest card, put that card onto the battlefield, then shuffle.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "135",
+    "artist": "Lubov",
+    "set": "p02",
+    "scryfall_id": "f43fb749-5672-4a5c-ac89-e443195b95bc"
+  },
+  {
+    "name": "Norwood Archers",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Elf Archer",
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Reach"
+    ],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "136",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "c545fa63-d0dd-422b-8d3b-88b444f13fce"
+  },
+  {
+    "name": "Norwood Priestess",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "{T}: You may put a green creature card from your hand onto the battlefield. Activate only during your turn, before attackers are declared.",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "collector_number": "137",
+    "artist": "Melissa A. Benson",
+    "set": "p02",
+    "scryfall_id": "7afd472f-1ede-4e78-b44c-3298ee4c8694"
+  },
+  {
+    "name": "Norwood Ranger",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Elf Scout Ranger",
+    "oracle_text": "",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "138",
+    "artist": "Ron Spencer",
+    "set": "p02",
+    "scryfall_id": "c557c0c2-eb0f-4a9d-9192-577a684b3426"
+  },
+  {
+    "name": "Norwood Riders",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Elf",
+    "oracle_text": "This creature can't be blocked by more than one creature.",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "139",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "904ba8db-853e-4f51-acfe-83e472524380"
+  },
+  {
+    "name": "Norwood Warrior",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elf Warrior",
+    "oracle_text": "Whenever this creature becomes blocked, it gets +1/+1 until end of turn.",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "140",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "6f7ddf0a-1081-4ae0-ab91-b052153bab4c"
+  },
+  {
+    "name": "Plated Wurm",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Wurm",
+    "oracle_text": "",
+    "power": "4",
+    "toughness": "5",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "141",
+    "artist": "Daniel Gelon",
+    "set": "p02",
+    "scryfall_id": "b51f8724-8f26-4a9d-b586-4223354ae7fc"
+  },
+  {
+    "name": "Razorclaw Bear",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Creature — Bear",
+    "oracle_text": "Whenever this creature becomes blocked, it gets +2/+2 until end of turn.",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "collector_number": "142",
+    "artist": "Heather Hudson",
+    "set": "p02",
+    "scryfall_id": "08c0cdbe-ca74-4edc-96ea-6db8eefe99d8"
+  },
+  {
+    "name": "Renewing Touch",
+    "mana_cost": "{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Shuffle any number of target creature cards from your graveyard into your library.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "143",
+    "artist": "Rebecca Guay",
+    "set": "p02",
+    "scryfall_id": "b63ec869-f933-4b27-9f0b-b583e71a1110"
+  },
+  {
+    "name": "River Bear",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Bear",
+    "oracle_text": "Islandwalk (This creature can't be blocked as long as defending player controls an Island.)",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Landwalk",
+      "Islandwalk"
+    ],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "144",
+    "artist": "Una Fricker",
+    "set": "p02",
+    "scryfall_id": "b8508e3b-a934-4795-a2df-07e792f2685f"
+  },
+  {
+    "name": "Salvage",
+    "mana_cost": "{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Put target card from your graveyard on top of your library.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "145",
+    "artist": "Keith Parkinson",
+    "set": "p02",
+    "scryfall_id": "f3012e10-566b-447c-bb0a-dfc38c8e0fdf"
+  },
+  {
+    "name": "Sylvan Basilisk",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Creature — Basilisk",
+    "oracle_text": "Whenever this creature becomes blocked by a creature, destroy that creature.",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "collector_number": "146",
+    "artist": "Ron Spencer",
+    "set": "p02",
+    "scryfall_id": "b9c09886-a733-4797-a489-46150cecfc13"
+  },
+  {
+    "name": "Sylvan Yeti",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Creature — Yeti",
+    "oracle_text": "Sylvan Yeti's power is equal to the number of cards in your hand.",
+    "power": "*",
+    "toughness": "4",
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "collector_number": "147",
+    "artist": "Brom",
+    "set": "p02",
+    "scryfall_id": "0a8686e2-1e14-4b4a-b45b-cab4d5c57fce"
+  },
+  {
+    "name": "Tree Monkey",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Monkey",
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Reach"
+    ],
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "collector_number": "148",
+    "artist": "Una Fricker",
+    "set": "p02",
+    "scryfall_id": "c60bbbf7-a005-4b4b-b8e4-e95bbb67f529"
+  },
+  {
+    "name": "Untamed Wilds",
+    "mana_cost": "{2}{G}",
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for a basic land card, put that card onto the battlefield, then shuffle.",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "149",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "c6890024-246c-42ba-8ccc-ffabb5867530"
+  },
+  {
+    "name": "Wild Ox",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Ox",
+    "oracle_text": "Swampwalk (This creature can't be blocked as long as defending player controls a Swamp.)",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Landwalk",
+      "Swampwalk"
+    ],
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "collector_number": "150",
+    "artist": "Jeffrey R. Busch",
+    "set": "p02",
+    "scryfall_id": "2c5a7890-86dc-4fb8-a47b-99331bbe7c29"
+  },
+  {
+    "name": "Plains",
+    "mana_cost": "",
+    "type_line": "Basic Land — Plains",
+    "oracle_text": "({T}: Add {W}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "151",
+    "artist": "Fred Fields",
+    "set": "p02",
+    "scryfall_id": "27ecf285-c48f-4ac3-9b75-0ee0ff052767"
+  },
+  {
+    "name": "Plains",
+    "mana_cost": "",
+    "type_line": "Basic Land — Plains",
+    "oracle_text": "({T}: Add {W}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "152",
+    "artist": "Fred Fields",
+    "set": "p02",
+    "scryfall_id": "8a136975-e513-4c50-9d4a-855d03630470"
+  },
+  {
+    "name": "Plains",
+    "mana_cost": "",
+    "type_line": "Basic Land — Plains",
+    "oracle_text": "({T}: Add {W}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "153",
+    "artist": "Fred Fields",
+    "set": "p02",
+    "scryfall_id": "f67f2ecd-d5fb-406b-b14d-34eb087eb08b"
+  },
+  {
+    "name": "Island",
+    "mana_cost": "",
+    "type_line": "Basic Land — Island",
+    "oracle_text": "({T}: Add {U}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "154",
+    "artist": "John Avon",
+    "set": "p02",
+    "scryfall_id": "b0a83b1a-a734-4726-9d14-c75ef04798d1"
+  },
+  {
+    "name": "Island",
+    "mana_cost": "",
+    "type_line": "Basic Land — Island",
+    "oracle_text": "({T}: Add {U}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "155",
+    "artist": "John Avon",
+    "set": "p02",
+    "scryfall_id": "b165ada0-7f52-4047-8596-c54247d13704"
+  },
+  {
+    "name": "Island",
+    "mana_cost": "",
+    "type_line": "Basic Land — Island",
+    "oracle_text": "({T}: Add {U}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "156",
+    "artist": "John Avon",
+    "set": "p02",
+    "scryfall_id": "3cf8ecec-8925-470b-994d-79694d056834"
+  },
+  {
+    "name": "Swamp",
+    "mana_cost": "",
+    "type_line": "Basic Land — Swamp",
+    "oracle_text": "({T}: Add {B}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "157",
+    "artist": "Susan Van Camp",
+    "set": "p02",
+    "scryfall_id": "80c0bd18-fdee-4cb2-8a7e-dd86bb8a6bbe"
+  },
+  {
+    "name": "Swamp",
+    "mana_cost": "",
+    "type_line": "Basic Land — Swamp",
+    "oracle_text": "({T}: Add {B}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "158",
+    "artist": "Susan Van Camp",
+    "set": "p02",
+    "scryfall_id": "adb62dd9-266b-4de9-8a11-3228b5f1e03a"
+  },
+  {
+    "name": "Swamp",
+    "mana_cost": "",
+    "type_line": "Basic Land — Swamp",
+    "oracle_text": "({T}: Add {B}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "159",
+    "artist": "Susan Van Camp",
+    "set": "p02",
+    "scryfall_id": "c103ed69-b73b-4789-a28d-1fd071bc9029"
+  },
+  {
+    "name": "Mountain",
+    "mana_cost": "",
+    "type_line": "Basic Land — Mountain",
+    "oracle_text": "({T}: Add {R}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "160",
+    "artist": "Rob Alexander",
+    "set": "p02",
+    "scryfall_id": "bdfbb15a-d7f4-470a-9d36-78c710a6d397"
+  },
+  {
+    "name": "Mountain",
+    "mana_cost": "",
+    "type_line": "Basic Land — Mountain",
+    "oracle_text": "({T}: Add {R}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "161",
+    "artist": "Rob Alexander",
+    "set": "p02",
+    "scryfall_id": "4453a5c0-76f2-422d-8cbc-4b21c17cdf1e"
+  },
+  {
+    "name": "Mountain",
+    "mana_cost": "",
+    "type_line": "Basic Land — Mountain",
+    "oracle_text": "({T}: Add {R}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "162",
+    "artist": "Rob Alexander",
+    "set": "p02",
+    "scryfall_id": "9006aa97-884f-404a-9ead-af8437ea9596"
+  },
+  {
+    "name": "Forest",
+    "mana_cost": "",
+    "type_line": "Basic Land — Forest",
+    "oracle_text": "({T}: Add {G}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "163",
+    "artist": "Quinton Hoover",
+    "set": "p02",
+    "scryfall_id": "89f4fcbb-86a8-475f-a547-d59014bb7a98"
+  },
+  {
+    "name": "Forest",
+    "mana_cost": "",
+    "type_line": "Basic Land — Forest",
+    "oracle_text": "({T}: Add {G}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "164",
+    "artist": "Quinton Hoover",
+    "set": "p02",
+    "scryfall_id": "aa863815-1dcc-43d8-8076-a35037688b20"
+  },
+  {
+    "name": "Forest",
+    "mana_cost": "",
+    "type_line": "Basic Land — Forest",
+    "oracle_text": "({T}: Add {G}.)",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "colors": [],
+    "rarity": "common",
+    "collector_number": "165",
+    "artist": "Quinton Hoover",
+    "set": "p02",
+    "scryfall_id": "abebee47-5205-4855-ae72-475b58a02240"
+  }
+]

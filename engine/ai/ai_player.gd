@@ -1636,6 +1636,8 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		expansion = HOMELANDS_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
 		expansion = ALLIANCES_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
+	if expansion == null:
+		expansion = preload("res://engine/ai/second_age_tactics.gd").option(game, self, inst, index)
 	if moment == Moment.RESPONSE and expansion == null:
 		return {}
 	if moment == Moment.COMBAT and intent.sweeper == null and tactical == null and expansion == null:
@@ -9061,6 +9063,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	search.a_free.resize(n)
 	search.a_vigilant.resize(n)
 	search.a_trample.resize(n)
+	search.a_bypass.resize(n)
 	search.a_soak.resize(n)
 	search.a_first.resize(n)
 	search.a_immune.resize(n)
@@ -9082,6 +9085,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 			and _creature_until_end_of_turn(game, inst)) else 1
 		search.a_vigilant[i] = 1 if inst.has_keyword(Mtg.Keyword.VIGILANCE) else 0
 		search.a_trample[i] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
+		search.a_bypass[i] = 1 if inst.cur_damage_as_unblocked else 0
 		search.a_soak[i] = maxi(inst.cur_toughness - inst.damage, 0)
 		search.a_first[i] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
 		search.a_immune[i] = 1 if (inst.cur_indestructible
@@ -9095,6 +9099,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	search.d_free.resize(m)
 	search.d_can_attack.resize(m)
 	search.d_trample.resize(m)
+	search.d_bypass.resize(m)
 	search.d_soak.resize(m)
 	search.d_first.resize(m)
 	search.d_immune.resize(m)
@@ -9106,6 +9111,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_free[j] = 0 if inst.tapped else 1
 		search.d_can_attack[j] = 1 if _could_attack_next_turn(game, inst) else 0
 		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
+		search.d_bypass[j] = 1 if inst.cur_damage_as_unblocked else 0
 		search.d_soak[j] = maxi(inst.cur_toughness - inst.damage, 0)
 		search.d_first[j] = 1 if inst.has_keyword(Mtg.Keyword.FIRST_STRIKE) else 0
 		search.d_immune[j] = 1 if (inst.cur_indestructible
@@ -11560,6 +11566,36 @@ func _offer_mana_back(_game: MtgGame, inst: CardInstance, prompt: String) -> int
 ## nothing can be gained from — a regenerator with its mana open, an
 ## indestructible one — are worth 0 here and sort to the back, so damage
 ## is never spent burying something that gets up again.
+func assign_special_combat_damage(game: MtgGame, request: Dictionary) -> Dictionary:
+	var source: CardInstance = request.source
+	var amount := int(request.amount)
+	var defender := int(request.defender)
+	var forecast := preload("res://engine/ai/ice_age_tactics.gd")
+	var face := forecast.damage_through(game, source, TargetRef.player(defender), amount)
+	var best := {MtgGame.DAMAGE_TO_PLAYER: amount}
+	var value := _face_damage_value(game, face, defender)
+	if face >= game.players[defender].life: return best
+	if request.special == "redirect":
+		for id in request.targets:
+			var body := game.find_instance(int(id))
+			if body == null or body.cur_indestructible or _shieldable(game, body): continue
+			if forecast.damage_through(game, source, TargetRef.card(body), amount) + body.damage >= body.cur_toughness:
+				var gain := _victim_value(game, body)
+				if gain > value:
+					value = gain
+					best = {body.id: amount}
+	else:
+		var split := game.default_damage_split(source, request.targets, amount, bool(request.trample), request.get("assigned", {}), bool(request.free_order))
+		var gain := 0.0
+		for id in split:
+			if id == MtgGame.DAMAGE_TO_PLAYER: continue
+			var body := game.find_instance(int(id))
+			if body != null and not body.cur_indestructible and not _shieldable(game, body) and forecast.damage_through(game, source, TargetRef.card(body), int(split[id])) + body.damage >= body.cur_toughness:
+				gain += _victim_value(game, body)
+		if gain > value: best = split
+	return best
+
+
 func order_blockers(game: MtgGame, attacker: CardInstance,
 		blocker_ids: Array) -> Array:
 	if blocker_ids.size() < 2:

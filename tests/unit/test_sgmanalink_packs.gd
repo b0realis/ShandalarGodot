@@ -102,7 +102,7 @@ func test_spirit_guide_mana_is_offered_from_hand_not_battlefield() -> void:
 
 func test_all_six_pack_catalogues_cross_the_strict_card_dto_boundary() -> void:
 	for id in CardPacks.available_ids(): assert_true(CardPacks.set_enabled(id, true))
-	assert_eq(CardRegistry.size(), 1781)
+	assert_eq(CardRegistry.size(), 1898)
 	var duel := referee()
 	for name in CardRegistry.all_names():
 		var card := CardInstance.new(CardRegistry.get_card(name), 90000, 0)

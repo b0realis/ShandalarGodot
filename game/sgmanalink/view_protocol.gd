@@ -483,7 +483,9 @@ static func presentation(value: Variant) -> bool:
 		or not SgProtocol.integer(value.draft.mode, 0, 63)): return false
 	if not value.assignment is Dictionary: return false
 	return value.assignment.is_empty() or (SgProtocol.exact(value.assignment, ["source", "assigner", "amount",
-		"targets", "trample", "assigned"]) \
+		"targets", "trample", "assigned", "special", "normal_assigner", "free_order"]) \
+		and value.assignment.special in ["", "bypass", "redirect"] \
+		and SgProtocol.integer(value.assignment.normal_assigner, 0, 1) and value.assignment.free_order is bool \
 		and SgProtocol.short_text(value.assignment.source, 16) and SgProtocol.integer(value.assignment.assigner, 0, 1) \
 		and SgProtocol.integer(value.assignment.amount, 0, 1000000) and SgProtocol.handles(value.assignment.targets) \
 		and value.assignment.trample is bool and pairs(value.assignment.assigned, true))
