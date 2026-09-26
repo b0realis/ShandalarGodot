@@ -86,8 +86,13 @@ func save() -> bool:
 		int(K), int(STARTING_ELO)])
 	file.store_line("# deck | elo | games | wins | losses | updated")
 	var names := entries.keys()
+	# Rating first, name second, so two decks at one rating keep one
+	# order and the ledger's diff shows ratings that moved and nothing
+	# else (2026-09-26).
 	names.sort_custom(func(a: String, b: String) -> bool:
-		return entries[a].elo > entries[b].elo)
+		if entries[a].elo != entries[b].elo:
+			return entries[a].elo > entries[b].elo
+		return a < b)
 	for deck_name in names:
 		var e: Dictionary = entries[deck_name]
 		file.store_line("%s | %.1f | %d | %d | %d | %s" % [

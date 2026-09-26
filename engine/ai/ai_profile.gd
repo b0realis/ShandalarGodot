@@ -182,7 +182,16 @@ var pays_sacrifices := false
 ## THE WINDOW: does this profile cast a spell whose ONLY legal moment is
 ## outside its own main phase — a Festival at their upkeep, a Siren's Call
 ## before they declare attackers, a Reset once they are past their upkeep,
-## a Teleport in the declare-attackers step?
+## a Teleport in the declare-attackers step? Since 2026-09-26 the same
+## knob answers for an ABILITY whose only moment is one of these: a
+## Nettling Imp, a Norritt or an Arcum's Whistle at their beginning of
+## combat ([method AiPlayer._pre_attack_option]) — the same layer of
+## play, read off the same rider. And, from the same day, for a Maze of
+## Ith's kind of ability at their declare-blockers step ([member
+## EffectIntent.fogs_attacker], declared by the card through [member
+## EffectBase.ai_role] `fog_attacker`): a `{T}` land whose only moment is
+## the combat it answers, priced at the damage it keeps off us or the
+## blocker of ours it keeps alive ([method AiPlayer._maze_pick]).
 ##
 ## A CAPABILITY, like [member plays_engines] and [member pays_sacrifices]
 ## — not a second difficulty concept. Knowing that a card in hand has a
@@ -497,6 +506,13 @@ var tutors_for_the_turn := false
 ## and Wizard. Nothing here names a card: the rule reads the supertype
 ## bits and the names on the battlefield ([method
 ## AiPlayer._arrival_wasted]).
+##
+## THE PRECONDITION (2026-09-26) is the same question about a SPELL: a
+## sorcery that does nothing at all unless a permanent of ours passes its
+## own filter — Transmute Artifact with no artifact on our side resolves
+## as a log line — is the same card thrown away, and is held under the
+## same knob ([member EffectIntent.needs_own], declared by the card
+## through [member EffectBase.ai_role] `needs_own_permanent`).
 var holds_duplicates := false
 
 ## THE FACTORY ANIMATED FOR NOTHING: does this profile animate a
@@ -1761,6 +1777,104 @@ var holds_the_closer := false
 ## reading below is the number it was before this knob existed.
 var counts_the_race := false
 
+## THE RENT (2026-09-26, `docs/ROADMAP.md` "The prison, read", item 1):
+## does this profile keep the mana for a permanent that charges its own
+## upkeep — "sacrifice this enchantment unless you pay {U}" — and cast
+## such a permanent only when the mana to keep it will be there?
+##
+## THE CASE IS STASIS, AND THE REASON IS THE UNTAP STEP IT TAKES AWAY. A
+## rent on any other permanent is paid out of a full untap: tapping out
+## in our main phase costs a Phantasmal Forces nothing, because every
+## land is back before the upkeep asks. Under a freeze — our lands
+## marked [member CardInstance.cur_skips_untap], by a Stasis of either
+## side's or an island lock — every point tapped is gone until the
+## freeze ends, so the rent has to be BOOKED the way a held instant's
+## mana is ([method AiPlayer._held_reserve], through [method
+## AiPlayer._rent_reserve]): a cast or an activation that would spend it
+## waits unless it is worth half again what the rent keeps, at every
+## moment including the mana sink. Twenty-seven instrumented Turbo
+## Stasis duels at Wizard: seventeen Stasis cast, nine sacrificed for a
+## {U} the seat had tapped away, a Howling Mine cast under its own
+## Stasis with the last Island, and a Stasis cast with exactly two
+## Islands, leaving none.
+##
+## AND THE CAST IS GATED BY WHAT THE FREEZE IS WORTH ([method
+## AiPlayer._lock_worth]): what of THEIRS the freeze holds tapped, minus
+## what of OURS it holds, minus the attackers of theirs it leaves
+## standing — a vigilance Serra Angel untapped across the table is the
+## whole game against a Stasis, and the pilot cast into it. A rent
+## permanent that does not freeze is cast only when a full untap reaches
+## its price ([method AiPlayer._mana_reach]); a freezer only when the
+## spell and its first rent are both payable from what is untapped now.
+## At the upkeep itself the same worth answers the rent's question
+## ([method AiPlayer.answer_yes_no]): a freeze that is against us is let
+## go rather than paid for.
+##
+## Nothing here names a card: the rent is read off the trigger's own
+## printed line ([method EffectIntent.rent_of_line]) and the freeze off
+## a static's ("skip their untap step"), the way the toll is read. Sorcerer
+## and Wizard, as a capability like [member counts_the_race].
+var pays_the_rent := false
+
+## THE LIFE THAT KEEPS US ALIVE (2026-09-26, "The prison, read", item 3):
+## does this profile spend a permanent — a land under a Zuran Orb, a
+## Dark Heart of the Wood's Forest — for the life that turns a lethal
+## swing into a survived one?
+##
+## The life-gain arm of [method AiPlayer._ability_option] prices two
+## life at 1.0, and 3.0 under ten, against a sacrifice priced at the
+## body's own worth and answering to the main phase's bar: a Zuran Orb
+## at four life against a Serra Angel was 1.50 against 3.0, and in
+## twenty-seven duels it was activated ZERO times, four of them lost with
+## six Islands on the table. On, the arm reads THE DAMAGE THAT IS COMING
+## ([method AiPlayer._incoming_damage] — the unblocked attackers once
+## blocks are known, the declared attack through our value blocks before
+## them, and nothing outside their combat, because a life bought before
+## the attack is a land spent on a swing that may not come) and prices
+## the gain that keeps our life above it at [constant
+## AiPlayer.LETHAL_WORTH], once per activation until it does: each
+## activation is one act, the ability resolves, and the next act reads
+## the new life total. It is offered in RESPONSE — the moment their
+## attack is declared — and nowhere else at that worth. Sorcerer and
+## Wizard.
+var buys_life := false
+
+## THE MIRROR (2026-09-26, "The prison, read", item 5): does this profile
+## trade life totals when theirs is the larger — a Mirror Universe at
+## three against thirty, the turn-ten kill The Deck holds it for?
+##
+## Mirror Universe's effect is card-local, so [method EffectIntent.read]
+## marked it `unknown` and the scorer's last `else` refused it at every
+## moment; and its only moment is OUR upkeep, which [method AiPlayer.act]
+## reaches through [method AiPlayer._respond_action] and the RESPONSE
+## moment, a gate that until now admitted nothing but an expansion
+## reading. On, the card declares its shape ([member
+## EffectIntent.swaps_life], through `swap_life`), the gate admits it,
+## and the swing is priced as the damage it deals them ([method
+## AiPlayer._face_damage_value]) plus the life it hands us at the
+## reaper's rate ([method AiPlayer._life_price]), against the artifact
+## the activation sacrifices — so a two-point swap is refused and a
+## twenty-seven-point one is the game. Sorcerer and Wizard.
+var swaps_life := false
+
+## THE EXTRA TURN OFF THE TABLE (2026-09-26, "The prison, read", item
+## 4): does this profile tap a Time Vault for the turn it makes, and
+## skip a turn to untap it only when the turn it skips is worth nothing?
+##
+## The spell side has priced an extra turn since 2026-09-08 ([method
+## AiPlayer._extra_turn_value]); the ability side fell into the scorer's
+## last `else`, so an untapped Vault was never tapped. And the Vault's
+## own question at the beginning of a turn — "Skip this turn to untap
+## Time Vault?" — was answered by the 1997 heuristic's one-in-five roll
+## whether the seat was being raced or not. On, the arm prices the turn
+## the way the spell does, at the sink's bar (a `{T}` that costs no
+## mana competes with no spell), and the question is answered off the
+## board: skip when we are not in danger ([method AiPlayer._in_danger]),
+## hold no spell to cast and have no creature to attack with — a dead
+## turn banked for a live one — and play otherwise ([method
+## AiPlayer._turn_is_dead]). Sorcerer and Wizard.
+var takes_the_turn := false
+
 
 func _init(p_name := "Custom", p_mistakes := 0.0, p_aggression := 0.5,
 		p_chump := 5, p_holds := true, p_counter_threshold := 5.0,
@@ -1810,12 +1924,24 @@ func apply_overrides(spec: String) -> String:
 		if knob == "profile_name" or knob.is_empty() or get(knob) == null:
 			return knob
 		var current = get(knob)
+		# A VALUE THE KNOB CANNOT READ is the part returned, so a typo is
+		# a refusal and never a silent 0 or off (2026-09-26 — the Lab's
+		# `--profile-a wizard:counter_threshold=abc` used to sweep 0).
 		match typeof(current):
 			TYPE_BOOL:
-				set(knob, raw in ["on", "true", "1", "yes"])
+				if raw in ["on", "true", "1", "yes"]:
+					set(knob, true)
+				elif raw in ["off", "false", "0", "no"]:
+					set(knob, false)
+				else:
+					return part.strip_edges()
 			TYPE_INT:
-				set(knob, int(raw.to_float()))
+				if not raw.is_valid_int():
+					return part.strip_edges()
+				set(knob, raw.to_int())
 			TYPE_FLOAT:
+				if not raw.is_valid_float():
+					return part.strip_edges()
 				set(knob, raw.to_float())
 			_:
 				return knob
@@ -1872,6 +1998,10 @@ static func sorcerer() -> AiProfile:
 	profile.reads_race = true
 	profile.minds_the_vise = true
 	profile.counts_the_race = true
+	profile.pays_the_rent = true
+	profile.buys_life = true
+	profile.swaps_life = true
+	profile.takes_the_turn = true
 	profile.prices_offers = true
 	profile.studies_deck = true
 	profile.studies_combat = true
@@ -1903,6 +2033,10 @@ static func wizard() -> AiProfile:
 	profile.minds_the_vise = true
 	profile.runs_loops = true
 	profile.counts_the_race = true
+	profile.pays_the_rent = true
+	profile.buys_life = true
+	profile.swaps_life = true
+	profile.takes_the_turn = true
 	profile.prices_offers = true
 	profile.studies_deck = true
 	profile.studies_combat = true

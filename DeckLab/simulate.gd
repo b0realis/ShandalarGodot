@@ -233,14 +233,17 @@ OPTIONS
                       packs in force, since a deck of Ice Age cards is
                       not the same experiment as one without them.
   --out DIR           Output directory (default DeckLab/results/run_<stamp>,
-                      printed before the run starts).
+                      printed before the run starts; a relative DIR is
+                      under the project root, where the shell runs; a
+                      DIR that holds an older run is written over).
   --no-svg            Skip chart generation.
   --no-elo            Do NOT update the Elo ledger. Use it for every rerun
                       and experiment: a repeated seed re-counts the same
                       games into a deck's lifetime record.
   --elo-file PATH     Ledger location (default decks/ratings.txt).
-  --quiet             No banner, no progress bar — errors only. (Both are
-                      already silent when stderr is not a terminal.)
+  --quiet             No banner, no progress bar; the report still prints.
+                      (Both are already silent when stderr is not a
+                      terminal.)
   --no-banner         Keep the progress bar, drop the artwork. Or export
                       DECK_LAB_NO_BANNER=1 once and forget it.
   --progress MODE     Where the progress goes, and in what shape:
@@ -736,9 +739,13 @@ func _main(argv: PackedStringArray) -> int:
 	# `matchups.csv` is byte-identical at every job count, which is what
 	# made it safe to move.
 	var jobs: int = opts.jobs if opts.jobs > 0 else mini(4, OS.get_processor_count())
+	# A `--gauntlet` of one deck is a gauntlet (2026-09-26): the mode
+	# names what was asked, not how many pairs it came to, so a
+	# `--gauntlet decks/` folder holding one deck writes the gauntlet's
+	# report and results.json says what the line said.
 	var mode := "matrix" if not opts.matrix_pool.is_empty() \
 		else ("tournament" if contestants > 0 \
-		else ("gauntlet" if pairs.size() > 1 else "duel"))
+		else ("gauntlet" if not opts.gauntlets.is_empty() or pairs.size() > 1 else "duel"))
 	# A TOURNAMENT RATES NOTHING (see TOURNAMENTS in HELP): the same
 	# field replayed into the ledger would count the same games twice,
 	# and a thousand mined decks are not decks anybody keeps a rating
@@ -756,10 +763,14 @@ func _main(argv: PackedStringArray) -> int:
 	if _is_unfair_run(opts):
 		opts.no_elo = true
 		print("UNFAIR CHALLENGE: sees the current opposing hand. Unrated; not a fair benchmark.")
-	var made := DirAccess.make_dir_recursive_absolute(
-		ProjectSettings.globalize_path(out_dir))
-	if made != OK and not DirAccess.dir_exists_absolute(
-			ProjectSettings.globalize_path(out_dir)):
+	var out_absolute := ProjectSettings.globalize_path(out_dir)
+	if FileAccess.file_exists(out_absolute) and not DirAccess.dir_exists_absolute(out_absolute):
+		# `make_dir_recursive` on a path that is a FILE says OK, and the
+		# run's first write failed after the games (2026-09-26).
+		printerr("deck_lab: --out '%s' is a file, not a directory" % out_dir)
+		return 1
+	var made := DirAccess.make_dir_recursive_absolute(out_absolute)
+	if made != OK and not DirAccess.dir_exists_absolute(out_absolute):
 		printerr("deck_lab: cannot create the output directory '%s' (error %d)"
 			% [out_dir, made])
 		printerr("  --out takes a directory this user may write to.")
@@ -966,7 +977,8 @@ func _main(argv: PackedStringArray) -> int:
 		# the ranking (below), not the pairs.
 		if mode != "tournament":
 			report.append("%-24s vs %-24s %s  CI [%s..%s]  (%d-%d, %d stalled%s)" % [
-				row_name, col_name, SimStats.percent(stats.winrate.mid),
+				_fit(row_name, NAME_WIDTH_MAX), _fit(col_name, NAME_WIDTH_MAX),
+				SimStats.percent(stats.winrate.mid),
 				SimStats.percent(stats.winrate.low).strip_edges(),
 				SimStats.percent(stats.winrate.high).strip_edges(),
 				stats.a_wins, stats.b_wins, stats.stalled, drawn_note])
@@ -1391,9 +1403,13 @@ func _gather(slices: Array, exe: String, root: String, unit: String,
 				if status == SLICE_LANDED and not _take_slice(slice):
 					status = SLICE_DEAD
 				if status == SLICE_DEAD:
+					# The heartbeat before `_launch` clears it, so the
+					# abandon line names the game the last child was on
+					# and not "game 1" (2026-09-26).
+					var last_beat := _slice_beat(String(slice["beat"]))
 					if int(slice["attempts"]) >= FAN_ATTEMPTS \
 							or not _launch(exe, root, slice):
-						printerr(_abandon_message(s, slice))
+						printerr(_abandon_message(s, slice, last_beat))
 						return false
 					printerr("deck_lab: slice %d of %d came back without its records — a fresh worker is playing it (attempt %d of %d)"
 						% [s + 1, slices.size(), int(slice["attempts"]), FAN_ATTEMPTS])
@@ -1463,11 +1479,15 @@ static func slice_records(path: String) -> Variant:
 
 ## The last word on a slice no child could finish: which games of the
 ## run are unplayed, and the one the last heartbeat was on, by its pair
-## and seed — the thing to play alone.
-func _abandon_message(index: int, slice: Dictionary) -> String:
+## and seed — the thing to play alone. [param last_beat] is the count
+## the heartbeat held before a relaunch cleared the file (see
+## [method _gather]); the file itself when not given.
+func _abandon_message(index: int, slice: Dictionary, last_beat := -1) -> String:
 	var lo := int(slice["lo"])
 	var hi := int(slice["hi"])
-	var at := mini(lo + _slice_beat(String(slice["beat"])), hi - 1)
+	if last_beat < 0:
+		last_beat = _slice_beat(String(slice["beat"]))
+	var at := mini(lo + last_beat, hi - 1)
 	var task: Dictionary = _tasks[at]
 	return ("deck_lab: slice %d died %d times — games %d to %d are unplayed and the run is not a result. "
 		+ "The last heartbeat was on game %d (pair %s, seed %s).") % [index + 1,
@@ -1508,7 +1528,7 @@ func _worker_payload(lo: int, hi: int) -> Dictionary:
 				task[key] = _pile_slot(task[key], piles, pile_index)
 		tasks.append(task)
 	var payload := {"offset": lo, "duel": _duel_opts, "tasks": tasks,
-		"piles": piles}
+		"piles": piles, "parent": OS.get_process_id()}
 	# THE PACKS RIDE THE PAYLOAD, not the command line: a child is a
 	# fresh engine reading the player's own settings, and `--packs all`
 	# in the parent would otherwise be a child that plays proxies
@@ -1595,7 +1615,20 @@ func _run_worker(in_path: String, out_path: String, beat_path := "") -> int:
 	var piles: Array = payload.get("piles", [])
 	_results.resize(_tasks.size())
 	var last_beat := Time.get_ticks_msec()
+	var parent := int(payload.get("parent", 0))
+	var last_look := 0   # the first look is before the first game
 	for i in _tasks.size():
+		# AN ORPHAN STOPS (2026-09-26). A parent killed with the driver
+		# — Ctrl-C on the shell, `kill` on the pid — took its children's
+		# answers with it but not the children: eight engines went on
+		# playing a run nobody would read, for hours. The parent's pid
+		# rides the payload; every couple of seconds the child looks,
+		# and when it is gone the child leaves without writing.
+		if parent > 0 and Time.get_ticks_msec() - last_look >= PARENT_LOOK_MS:
+			last_look = Time.get_ticks_msec()
+			if not _parent_alive(parent):
+				printerr("deck_lab worker: the run that started this worker is gone; stopping")
+				return 1
 		_tasks[i]["seed"] = int(_tasks[i]["seed"])
 		# The piles back from the table (see `_worker_payload`); a
 		# payload without one carries the arrays in place.
@@ -1632,6 +1665,25 @@ func _run_worker(in_path: String, out_path: String, beat_path := "") -> int:
 		printerr("deck_lab worker: cannot write %s" % out_path)
 		return 1
 	return 0
+
+
+## How often a worker looks for its parent, in milliseconds.
+const PARENT_LOOK_MS := 2000
+
+
+## Whether the process [param pid] is still running, asked in the ways a
+## CHILD may ask about a process that is not its own: `OS.is_process_running`
+## is for children only (on a stranger's pid it is an engine error) —
+## so `/proc/<pid>` where there is a `/proc` (Linux), `kill -0`
+## elsewhere but Windows, and "yes" where nothing can be asked.
+static func _parent_alive(pid: int) -> bool:
+	if pid <= 0:
+		return true
+	if DirAccess.dir_exists_absolute("/proc/self"):
+		return DirAccess.dir_exists_absolute("/proc/%d" % pid)
+	if OS.get_name() == "Windows":
+		return true
+	return OS.execute("kill", ["-0", str(pid)]) == 0
 
 
 ## A child's count of finished games, into the file the parent polls. A
@@ -2172,7 +2224,7 @@ const FLAG_HINTS := {
 	"--procs": "--procs N: separate worker processes, default 8 when the run is big enough (1 = none). Each is ~235 MB and about 8x the speed of threads",
 	"--profile-a": "--profile-a NAME[:knob=value,...]: apprentice|magician|sorcerer|wizard; separate unrated challenge: unfair",
 	"--profile-b": "--profile-b NAME[:knob=value,...]: apprentice|magician|sorcerer|wizard; separate unrated challenge: unfair",
-	"--out": "--out DIR: where report.txt/results.json/matchups.csv are written",
+	"--out": "--out DIR: where report.txt/results.json/matchups.csv are written (a relative DIR is under the project root)",
 	"--packs": "--packs all|none|LIST: the card packs loaded for this run, e.g. pack-3,pack-7 (default: the game's own settings)",
 	"--elo-file": "--elo-file PATH: the Elo ledger, default " + EloLedger.DEFAULT_PATH,
 	"--lives": "--lives N or A,B: starting life per seat, default 20,20",
@@ -2200,7 +2252,7 @@ const TOGGLE_HINTS := {
 	"--help": "--help: this help",
 	"--no-svg": "--no-svg: skip the SVG charts",
 	"--no-elo": "--no-elo: do not touch the Elo ledger (use it for reruns)",
-	"--quiet": "--quiet: no banner and no progress bar — errors only",
+	"--quiet": "--quiet: no banner and no progress bar — the report still prints",
 	"--no-banner": "--no-banner: keep the progress bar, drop the artwork",
 }
 
@@ -2332,6 +2384,7 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 			"--field": opts.field_specs.append(value)
 			"--top":
 				opts.top = value.to_int()
+				opts.top_given = true
 				if opts.top < 1:
 					return {"error": "--top must be >= 1"}
 			"--matrix":
@@ -2364,11 +2417,14 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				if preset == UNFAIR and colon >= 0:
 					return {"error": "unfair is a separate Wizard challenge; profile overrides are not supported"}
 				if colon >= 0:
-					var bad := _profile(preset).apply_overrides(spec.substr(colon + 1))
-					if bad != "":
-						return {"error": "unknown knob '%s' in profile '%s'" % [bad, value]}
+					var check := profile_overrides_error(preset, spec.substr(colon + 1), value)
+					if check != "":
+						return {"error": check}
 				opts["profile_a" if arg == "--profile-a" else "profile_b"] = spec
-			"--out": opts.out = value
+			"--out":
+				# `results/` and `results` are the same folder; the
+				# slash used to reach the "wrote results//{...}" line.
+				opts.out = value.rstrip("/") if value.length() > 1 else value
 			"--elo-file": opts.elo_file = value
 			"--lives":
 				var parts := value.split(",", false)
@@ -2473,6 +2529,8 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	for value in opts.gauntlets:
 		var pool := _expand_pool(value, opts.deck_a)
 		if pool.is_empty():
+			if not _expand_pool(value, "").is_empty():
+				return {"error": "no opponent decks in '%s' but deck A itself (a gauntlet excludes deck A; --deck-b plays the mirror)" % value}
 			return {"error": "no opponent decks found in '%s'%s%s"
 				% [value, _subfolders_note(value), _proxies_note()]}
 		opts.opponents.append_array(pool)
@@ -2498,14 +2556,28 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		var field_error := tournament_options_error(opts)
 		if field_error != "":
 			return {"error": field_error}
+		var seen := {}
+		var repeated := 0
 		for value in opts.field_specs:
 			var pool := _expand_pool(value, "", false)
 			if pool.is_empty():
 				return {"error": "no decks found in the field '%s'%s%s"
 					% [value, _subfolders_note(value), _proxies_note()]}
-			opts.field.append_array(pool)
+			# ONCE EACH (2026-09-26): `--field a/ --field a/top.txt` named
+			# the same deck twice and ranked it twice — against itself
+			# too, in matchups.csv. The same file by its resolved path
+			# is one contestant.
+			for path in pool:
+				var key := resolved_deck_path(String(path))
+				if seen.has(key):
+					repeated += 1
+					continue
+				seen[key] = true
+				opts.field.append(path)
+		if repeated > 0:
+			printerr("deck_lab: %d deck(s) named more than once by --field play once" % repeated)
 		return opts
-	if opts.top != 10:
+	if bool(opts.get("top_given", false)):
 		return {"error": "--top only means something in tournament mode (--field)"}
 	if opts.deck_a == "":
 		return {"error": "--deck-a is required (or use --matrix, or --field for a tournament)"}
@@ -2566,7 +2638,10 @@ static func _keep_the_importer_out(out_dir: String) -> void:
 	if dir == null:
 		return
 	var project_root := ProjectSettings.globalize_path("res://")
-	if not dir.get_current_dir().path_join("").begins_with(project_root):
+	# Globalized, because `DirAccess.open("res://x")` says `res://x` and
+	# the comparison missed every `res://` output directory (2026-09-26).
+	var here := ProjectSettings.globalize_path(dir.get_current_dir())
+	if not here.path_join("").begins_with(project_root):
 		return
 	var marker := FileAccess.open(out_dir.path_join(".gdignore"), FileAccess.WRITE)
 	if marker != null:
@@ -2588,10 +2663,15 @@ static func _keep_the_importer_out(out_dir: String) -> void:
 ## finds only the proxy-free few. A single named file is never skipped —
 ## if you named it, you meant it, and [method _load_deck] says why not.
 func _expand_pool(value: String, exclude_path: String, filtered := true) -> Array:
+	# A LISTED GAUNTLET DROPS DECK A TOO (2026-09-26): "deck A excluded"
+	# is what `--gauntlet` promises, and a comma list or a deck-list
+	# file that named it was a mirror match diluting the record — the
+	# thing the manual warns about — while `--gauntlet decks/` kept the
+	# promise. Excluded by file name, as the directory walk does.
 	if value.contains(","):
-		return Array(value.split(",", false))
+		return _without_deck(Array(value.split(",", false)), exclude_path)
 	if value.to_lower().ends_with(".txt"):
-		return deck_list_file(value)
+		return _without_deck(deck_list_file(value), exclude_path)
 	var dir_path := value
 	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(dir_path)):
 		# THE SHIPPED LIBRARY IS INSIDE THE .pck: on a play copy there is
@@ -2601,12 +2681,25 @@ func _expand_pool(value: String, exclude_path: String, filtered := true) -> Arra
 		if DirAccess.dir_exists_absolute("res://" + dir_path):
 			dir_path = "res://" + dir_path
 		else:
-			return [value]   # maybe a single file; deck loading will judge
+			# maybe a single file; deck loading will judge
+			return _without_deck([value], exclude_path)
 	var found: Array = []
 	_collect_decks(dir_path, exclude_path,
 		_group_filter != "" or _walk_every_group, found, filtered)
 	found.sort()
 	return found
+
+
+## [param paths] less the entries that name [param exclude_path]'s file
+## (none when it is "" or `random`).
+static func _without_deck(paths: Array, exclude_path: String) -> Array:
+	if exclude_path == "" or is_random(exclude_path):
+		return paths
+	var kept: Array = []
+	for path in paths:
+		if String(path).get_file() != exclude_path.get_file():
+			kept.append(path)
+	return kept
 
 
 ## A DECK LIST AS A TEXT FILE (2026-09-26): one deck path per line, blank
@@ -2866,6 +2959,30 @@ static func parse_sweep(value: String) -> Dictionary:
 	if values.is_empty():
 		return {"error": "--sweep %s: no values (KNOB=V1,V2,...)" % knob}
 	return {"knob": knob, "type": knob_type, "values": values}
+
+
+## What is wrong with the `knob=value,...` tail of a `--profile-a
+## PRESET:...` spec, or "". The knob's NAME is checked by trying it on
+## (the profile knows its own knobs); the VALUE is checked against the
+## knob's type the way `--sweep` checks its values (2026-09-26 — until
+## then `wizard:counter_threshold=abc` read 0 and `pays_sacrifices=maybe`
+## read off, silently, and the report's settings line printed the typo
+## as if it were the knob's value).
+static func profile_overrides_error(preset: String, tail: String, spec: String) -> String:
+	var probe := _profile(preset)
+	for part in tail.split(",", false):
+		var eq := part.find("=")
+		if eq < 0:
+			return "unknown knob '%s' in profile '%s' (knobs are KNOB=VALUE)" % [part, spec]
+		var knob := part.substr(0, eq).strip_edges()
+		var raw := part.substr(eq + 1).strip_edges()
+		if knob == "profile_name" or knob.is_empty() or probe.get(knob) == null:
+			return "unknown knob '%s' in profile '%s'" % [knob, spec]
+		var knob_type := typeof(probe.get(knob))
+		if knob_value(knob_type, raw) == "":
+			return "profile '%s': '%s' is not a %s (the knob %s takes one)" \
+				% [spec, raw, knob_type_name(knob_type), knob]
+	return probe.apply_overrides(tail)
 
 
 ## [param raw] as a value of a knob of [param knob_type], normalised —
@@ -3635,6 +3752,10 @@ func _tournament_tables(decks: Array[DeckList], contestants: int,
 		for pair_index in pairs_of_col.get(j, []):
 			for record in per_pair_records[pair_index]:
 				records.append(flipped_record(record))
+		# A gauntlet deck that is also the whole field played nobody:
+		# no row, rather than a 50% row over no games (2026-09-26).
+		if records.is_empty():
+			continue
 		gauntlet.append({"name": decks[j].deck_name,
 			"stats": SimStats.summarize(records)})
 	standings.sort_custom(best_first)
@@ -3803,7 +3924,18 @@ func _tournament_block(opts: Dictionary, t: Dictionary, decks: Array[DeckList],
 	# THE READING. Two sizes matter here and the report names both: the
 	# record over the gauntlet, which is what the ranking is made of, and
 	# the single matchup, which at ten games is a hint and not a result.
+	# The games a field deck's record is over: the most any row played,
+	# which is `gauntlet_size * games` less the mirror a field deck that
+	# is also in the gauntlet did not play (2026-09-26).
 	var per_deck: int = gauntlet_size * opts.games
+	var opponents_of := {}
+	for pair in pairs:
+		opponents_of[pair[0]] = int(opponents_of.get(pair[0], 0)) + 1
+	var most_opponents := 0
+	for i in opponents_of:
+		most_opponents = maxi(most_opponents, int(opponents_of[i]))
+	if most_opponents > 0:
+		per_deck = most_opponents * opts.games
 	var deck_margin := SimStats.margin_at(per_deck)
 	var pair_margin := SimStats.margin_at(opts.games)
 	var decided := 0
@@ -3816,9 +3948,10 @@ func _tournament_block(opts: Dictionary, t: Dictionary, decks: Array[DeckList],
 			pairs_decided += 1
 	out.append("")
 	out.append("reading these numbers:")
-	out.append("  a field deck's record is %s %s (%s opponent%s x %s %s): its 95%% interval"
+	out.append("  a field deck's record is %s %s (%s opponent%s x %s %s%s): its 95%% interval"
 		% [LabConsole.commas(per_deck), unit, LabConsole.commas(gauntlet_size),
-			"" if gauntlet_size == 1 else "s", LabConsole.commas(opts.games), unit])
+			"" if gauntlet_size == 1 else "s", LabConsole.commas(opts.games), unit,
+			"" if per_deck == gauntlet_size * opts.games else ", less the mirror"])
 	out.append("  is +-%.1f points at an even win rate, so no edge smaller than %.0f/%.0f is"
 		% [deck_margin * 100.0, 50.0 + deck_margin * 100.0, 50.0 - deck_margin * 100.0])
 	out.append("  visible in the standings. decided: %s of %s field deck%s (interval clear of"

@@ -276,6 +276,39 @@ enum Shape {
 }
 var window: int = Shape.NONE
 
+## THE CONSCRIPTION (2026-09-26): a card-local effect that makes its
+## target attack this turn or be destroyed at the next end step (Nettling
+## Imp, Norritt, Arcum's Whistle) — declared by the card through
+## [member EffectBase.ai_role] `conscript_attacker`, the way the Portal
+## and Homelands readings are, so the three of them share one reading in
+## [method AiPlayer._conscription_option] and nothing there is
+## card-named. [member conscription_ransom] is the price the target's
+## controller may pay to ignore it, from the effect's `ai_parameters`:
+## `"mana_value"` (Arcum's Whistle: the creature's own), or "" for none.
+var conscripts_attacker := false
+var conscription_ransom := ""
+
+## THE PRISON READINGS (2026-09-26, `docs/ROADMAP.md` "The prison, read"):
+## three card-local effects the vocabulary cannot express, declared by
+## their cards through [member EffectBase.ai_role] the way the
+## conscriptions are — so the reader does not mark them `unknown`, the
+## scorer has an arm for each, and nothing in the decision is card-named.
+##
+##  * `swap_life` → [member swaps_life]: the two life totals trade places
+##    (Mirror Universe's SwapEffect). [member AiProfile.swaps_life].
+##  * `fog_attacker` → [member fogs_attacker]: one attacking creature is
+##    untapped and deals and takes no combat damage this turn (Maze of
+##    Ith's MazeEffect). [member AiProfile.casts_timed_spells].
+##  * `needs_own_permanent` → [member needs_own]: the effect does nothing
+##    at all unless a permanent of the caster's passes the filter in its
+##    `ai_parameters` (Transmute Artifact with no artifact to sacrifice
+##    resolves as a log line). Read ALONGSIDE `unknown`, which stays set:
+##    the precondition is one fact about the cast, not a pricing of it.
+##    [member AiProfile.holds_duplicates] — "a card thrown away".
+var swaps_life := false
+var fogs_attacker := false
+var needs_own: Callable = Callable()
+
 
 # ---------------------------------------------------------------- the table --
 # Card-local effects (`class X extends EffectBase` inside a card file) that
@@ -577,6 +610,11 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 	for e in effects:
 		if intent.target_spec == null and e.target_spec != null:
 			intent.target_spec = e.target_spec
+		if e.ai_role == &"conscript_attacker":
+			intent.conscripts_attacker = true
+			intent.conscription_ransom = String(e.ai_parameters.get("ransom", ""))
+		if e.ai_role == &"needs_own_permanent":
+			intent.needs_own = e.ai_parameters.get("filter", Callable())
 		if e is CreateTokenEffect:
 			intent.makes_token = {"power": e.token.power * e.count,
 				"toughness": e.token.toughness * e.count}
@@ -660,6 +698,10 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 				or e is ReturnFromGraveyardEffect or e is PreventDamageEffect \
 				or e is PreventDamageShieldEffect:
 			pass   # priced elsewhere (card_value); nothing here to sum
+		elif e.ai_role == &"swap_life":
+			intent.swaps_life = true   # THE PRISON READINGS: [member swaps_life]
+		elif e.ai_role == &"fog_attacker":
+			intent.fogs_attacker = true
 		elif note.is_empty():
 			intent.unknown = true
 			# ...but an AIMED DISCARD says so in its own description, and
@@ -1234,6 +1276,47 @@ static func toll_of_line(text: String) -> Dictionary:
 			out["damage"] = maxi(int(m.get_string(1)), 0)
 			break
 	_toll_cache[text] = out
+	return out
+
+
+static var _rent_cache: Dictionary = {}
+
+
+## THE RENT (2026-09-26, [member AiProfile.pays_the_rent]): the mana one
+## printed upkeep line charges its own controller to KEEP the permanent —
+## "sacrifice this enchantment unless you pay {U}" (Stasis), "destroy
+## this creature unless you pay {3}{B}{B}{B}" (Cosmic Horror), "unless
+## you pay {B}{B}{B}, tap this creature and sacrifice a land" (Demonic
+## Hordes) — as printed, or "" for a line that charges none this reader
+## can price.
+##
+## A TOLL ([method toll_of_line]) is what a permanent TAKES and the escape
+## it prints from that; a RENT is what it costs to keep, and the two are
+## reserved for differently. A toll's escape is paid when the toll is
+## dearer than the mana ([method AiPlayer.answer_yes_no]); a rent is paid
+## while the permanent is worth more than the mana, and the mana has to
+## STILL BE THERE at the upkeep it is charged — which only matters once
+## the untap step no longer refills it, and that is the question [method
+## AiPlayer._rent_reserve] asks.
+##
+## Unread on purpose, for [constant TOLL_UNKNOWABLE]'s reason: a price
+## "for each" counter (Cyclone, Musician) is a count this reader will not
+## do, and a line with neither a sacrifice nor a destruction in it is not
+## a rent — Cosmic Horror's eight damage is a toll and is read as one.
+## Cached by the line itself, like the toll.
+static func rent_of_line(text: String) -> String:
+	if _rent_cache.has(text):
+		return _rent_cache[text]
+	var lower := text.to_lower()
+	var out := ""
+	if lower.contains("unless you pay {") and not lower.contains("for each") \
+			and (lower.contains("sacrifice") or lower.contains("destroy")):
+		out = _mana_price_in(lower)
+		for word in TOLL_UNKNOWABLE:
+			if lower.contains(word):
+				out = ""
+				break
+	_rent_cache[text] = out
 	return out
 
 

@@ -299,8 +299,52 @@ needed); card files have NO class_name (they register by name instead);
   turn's line carries the cleanup step; the turn after one assault, and
   after two, opens without an engine error and carries the same.
 
+## The prison, read (2026-09-26)
+
+- `engine/ai/effect_intent.gd`: `conscripts_attacker` / `conscription_ransom`
+  (the card's `ai_role` `conscript_attacker`), `swaps_life` (`swap_life`),
+  `fogs_attacker` (`fog_attacker`), `needs_own` (`needs_own_permanent`,
+  a filter read alongside `unknown`); `rent_of_line` — the mana an upkeep
+  line charges to keep the permanent ("unless you pay {U}" with a
+  sacrifice or a destruction in the line, never "for each"), cached like
+  the toll.
+- `engine/ai/ai_player.gd`: `Moment.PRE_ATTACK` and `_pre_attack_option`
+  (their beginning of combat: a conscription or an untap aimed at a
+  blocker of ours, `_conscription_option`, `_untap_blocker_option`); the
+  rent — `_rent_of`, `_rent_of_data`, `_card_freezes`, `_mana_frozen`,
+  `_rent_reserve` (booked through `_held_reserve` only under a freeze),
+  `_lock_worth`, `_rent_affordable` (the cast gate), the sink kept for
+  the rent under a freeze, the held instant too, and the rent's own
+  question at the upkeep in `answer_yes_no`; `_incoming_damage` and the
+  life arm's `LETHAL_WORTH` in RESPONSE; the swap arm; the extra-turn
+  arm at the sink's bar; `_maze_pick` and the Maze arm at COMBAT (the
+  COMBAT gate now admits the sweeper shapes under `times_sweeps` and the
+  Maze under `casts_timed_spells`); `_turn_is_dead` and the Vault's
+  question in `answer_option`; `_has_own_passing` beside
+  `_arrival_wasted`.
+- `engine/ai/ai_profile.gd`: `pays_the_rent`, `buys_life`, `swaps_life`,
+  `takes_the_turn` — Sorcerer and Wizard.
+- `cards/sets/2ed/nettling_imp.gd`, `cards/sets/ice/_combat_more.gd`
+  (Norritt, Arcum's Whistle), `cards/sets/leg/mirror_universe.gd`,
+  `cards/sets/drk/maze_of_ith.gd`, `cards/sets/atq/transmute_artifact.gd`:
+  the declared `ai_role`s.
+- `DeckLab/simulate.gd`, `DeckLab/elo_ledger.gd`, `DeckLab/sim_stats.gd`,
+  `DeckLab/svg_charts.gd`, `DeckLab/auto_deck_cli.gd`, `game/card_packs.gd`
+  (the pack scan on stderr): the two bug passes,
+  `tests/tools/test_deck_lab_fixes_2026_09_26.gd` and
+  `tests/tools/test_auto_deck_cli_fixes_2026_09_26.gd` naming each.
+- Tests: `tests/ai/test_ai_conscriptions_2026_09_26.gd`,
+  `test_ai_pays_the_rent_2026_09_26.gd`, `test_ai_buys_life_2026_09_26.gd`,
+  `test_ai_swaps_life_2026_09_26.gd`, `test_ai_takes_the_turn_2026_09_26.gd`,
+  `test_ai_maze_and_transmute_2026_09_26.gd` — both arms of every knob.
+
 ## Release package files
 
+- `docs/releases/0.40.26.md`: the AI plays the conscriptions (Nettling Imp,
+  Norritt, Arcum's Whistle) at their beginning of combat and the prison —
+  Stasis's rent, Zuran Orb's life, Mirror Universe, Time Vault, Maze of
+  Ith, Transmute Artifact — under four new Sorcerer/Wizard knobs; the
+  Deck Lab and AutoDeck CLI bug passes.
 - `docs/releases/0.40.25.md`: the AutoDeck builder fits its lands to the
   curve and its sources to the pips, chooses colours on the mana they
   would be laid and drops a splash the lands cannot carry; a Variety

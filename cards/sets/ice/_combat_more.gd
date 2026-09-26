@@ -15,7 +15,7 @@ static func configure(c: CardData) -> bool:
 		"Norritt", "Arcum's Whistle":
 			var whistle := c.card_name == "Arcum's Whistle"
 			if not whistle: c.activated(F._ability("", true, UntapEffect.new(TargetSpec.creature("target blue creature", F._color.bind(Mtg.ManaColor.U)))))
-			c.activated(F._ability("{3}" if whistle else "", true, F.Action.new(_draft.bind(whistle), "force an eligible creature to attack or be destroyed", TargetSpec.creature("target eligible non-Wall creature").with_source_filter(_draftable))).only_if(_before_attackers))
+			c.activated(F._ability("{3}" if whistle else "", true, F.Action.new(_draft.bind(whistle), "force an eligible creature to attack or be destroyed", TargetSpec.creature("target eligible non-Wall creature").with_source_filter(_draftable)).with_ai_role(&"conscript_attacker", {"ransom": "mana_value"} if whistle else {})).only_if(_before_attackers))
 		"Goblin Sappers":
 			for both in [true, false]:
 				var a := F._ability("{R}{R}" if both else "{R}{R}{R}{R}", true, M.own_pump(0, 0, [Mtg.Keyword.UNBLOCKABLE]))

@@ -38,7 +38,7 @@ func build() -> CardData:
 	return CardData.new("Nettling Imp", "{2}{B}", Mtg.CardType.CREATURE) \
 		.pt(1, 1) \
 		.with_subtypes(["imp"]) \
-		.activated(ActivatedAbility.new("", true, [NettleEffect.new(spec)],
+		.activated(ActivatedAbility.new("", true, [NettleEffect.new(spec).with_ai_role(&"conscript_attacker")],
 			"{T}: Target non-Wall creature the active player controls attacks this turn if able, or is destroyed at the beginning of the next end step.") \
 			.only_if(_before_attackers_condition)) \
 		.oracle("{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only during an opponent's turn, before attackers are declared.")

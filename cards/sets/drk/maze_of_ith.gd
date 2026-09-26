@@ -17,7 +17,7 @@ func build() -> CardData:
 	var spec := TargetSpec.creature("target attacking creature")
 	spec.with_game_filter(_is_attacking)
 	return CardData.new("Maze of Ith", "", Mtg.CardType.LAND) \
-		.activated(ActivatedAbility.new("", true, [MazeEffect.new(spec)],
+		.activated(ActivatedAbility.new("", true, [MazeEffect.new(spec).with_ai_role(&"fog_attacker")],
 			"{T}: Untap target attacking creature. Prevent all combat damage that would be dealt to and dealt by that creature this turn.")) \
 		.oracle("{T}: Untap target attacking creature. Prevent all combat damage that would be dealt to and dealt by that creature this turn.")
 

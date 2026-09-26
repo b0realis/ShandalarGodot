@@ -12,7 +12,7 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Mirror Universe", "{6}", Mtg.CardType.ARTIFACT) \
 		.activated(ActivatedAbility.new(
-			"", true, [SwapEffect.new()],
+			"", true, [SwapEffect.new().with_ai_role(&"swap_life")],
 			"{T}, Sacrifice Mirror Universe: Exchange life totals with target "
 			+ "opponent. Activate only during your upkeep.") \
 			.with_sacrifice_cost() \

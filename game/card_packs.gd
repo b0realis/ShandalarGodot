@@ -109,7 +109,9 @@ func discover() -> void:
 				push_warning("card pack: %s refused — %s" % [path, why])
 				continue
 			_available[id] = report
-			print("card pack: found %s" % path)
+			# stderr, because the Deck Lab's stdout is its report and a
+			# tool reading it saw this line first (2026-09-26).
+			printerr("card pack: found %s" % path)
 			continue
 		_rejections.append({"id": id, "path": path, "why": report.get("why", "invalid")})
 		push_warning("card pack: %s refused — %s" % [path, report.get("why", "invalid")])

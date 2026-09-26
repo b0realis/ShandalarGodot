@@ -17,6 +17,18 @@ const CI_COLOR := "#2b2118"
 const GRID_COLOR := "#c9bfa8"
 const BG := "#efe8d6"
 const INK := "#2b2118"
+## The most characters a row label keeps: the label column is 218 px
+## wide and 14 px Georgia averages about 7 px a character, so a longer
+## title ran under the bars (the library has 71-character titles,
+## 2026-09-26). The cut is marked; report.txt and the CSVs keep the name.
+const LABEL_CHARS := 30
+
+
+## [param label] cut to [constant LABEL_CHARS] characters, the cut marked.
+static func label_fit(label: String) -> String:
+	if label.length() <= LABEL_CHARS:
+		return label
+	return label.substr(0, LABEL_CHARS - 1) + "…"
 
 
 ## [param rows]: [{label: String, stats: Dictionary (SimStats.summarize)}].
@@ -44,7 +56,7 @@ static func winrate_chart(deck_a_name: String, rows: Array) -> String:
 		var stats: Dictionary = row.stats
 		var wr: Dictionary = stats.winrate
 		parts.append('<text x="%d" y="%d" %s font-size="14" fill="%s" text-anchor="end">%s</text>' % [
-			chart_left - 12, y + 19, FONT, INK, String(row.label).xml_escape()])
+			chart_left - 12, y + 19, FONT, INK, label_fit(String(row.label)).xml_escape()])
 		var bar_width: float = chart_width * wr.mid
 		parts.append('<rect x="%d" y="%d" width="%.1f" height="22" fill="%s" rx="3"/>' % [
 			chart_left, y + 4, bar_width, BAR_COLOR])
@@ -138,7 +150,7 @@ static func turns_chart(deck_a_name: String, rows: Array) -> String:
 	var y := top
 	for row in rows:
 		parts.append('<text x="%d" y="%d" %s font-size="14" fill="%s" text-anchor="end">%s</text>' % [
-			chart_left - 12, y + band / 2, FONT, INK, String(row.label).xml_escape()])
+			chart_left - 12, y + band / 2, FONT, INK, label_fit(String(row.label)).xml_escape()])
 		parts.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s"/>' % [
 			chart_left, y + band - 18, chart_left + chart_width, y + band - 18, GRID_COLOR])
 		var slot: float = float(chart_width) / max_turn

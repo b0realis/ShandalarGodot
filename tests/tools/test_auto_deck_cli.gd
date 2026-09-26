@@ -891,8 +891,10 @@ func test_a_list_pool_builds_and_a_bad_one_is_refused() -> void:
 	empty.close()
 	assert_eq(_run(["--out", out, "--count", "1", "--list", empty_path,
 		"--force"]), 1)
+	# A file that is not there is a command line that is wrong — exit 2,
+	# the wrapper's own code for it, not the run's 1 (2026-09-26).
 	assert_eq(_run(["--out", out, "--count", "1", "--list",
-		out.path_join("no_such_file.txt"), "--force"]), 1)
+		out.path_join("no_such_file.txt"), "--force"]), 2)
 
 
 func test_a_sealed_pool_is_dealt_per_deck_from_that_decks_seed() -> void:

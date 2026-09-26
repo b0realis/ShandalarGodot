@@ -620,6 +620,17 @@ func _try_cast_best(game: MtgGame) -> String:
 		if plan.is_empty() and not (_cost_is_free(inst.data.cost) and surcharge == 0):
 			continue
 		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
+		# THE RENT (2026-09-26, AiProfile.pays_the_rent): a permanent that
+		# charges its own upkeep is cast only when the mana to keep it
+		# will be there — and a freezer only when the freeze favours us.
+		if profile.pays_the_rent and not _rent_affordable(game, inst, sources, surcharge, keys):
+			continue
+		# THE PRECONDITION (2026-09-26, AiProfile.holds_duplicates): a
+		# spell that does nothing without a permanent of ours to act on
+		# is a card thrown away, like the second legend.
+		if profile.holds_duplicates and intent.needs_own.is_valid() \
+				and not _has_own_passing(game, intent.needs_own):
+			continue
 		var max_x := 0
 		if inst.data.cost.has_x:
 			max_x = _max_affordable_x(game, inst.data.cost, surcharge, sources,
@@ -1105,6 +1116,16 @@ func _cast_gate(game: MtgGame, inst: CardInstance) -> String:
 ## second and third The Abyss over the first, four mana and a card each.
 ## The supertype bits and the names on the battlefield: nothing here
 ## names a card.
+## Does a permanent of ours pass [param filter] — the precondition a
+## spell declares through [member EffectIntent.needs_own] (2026-09-26,
+## [member AiProfile.holds_duplicates])?
+func _has_own_passing(game: MtgGame, filter: Callable) -> bool:
+	for perm in game.players[pid].battlefield:
+		if filter.call(perm):
+			return true
+	return false
+
+
 func _arrival_wasted(game: MtgGame, data: CardData) -> bool:
 	if not profile.holds_duplicates:
 		return false
@@ -1232,6 +1253,15 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 	var trick := _trick_reserve(game)
 	if not trick.is_empty() and float(trick["value"]) > float(out.get("value", 0.0)):
 		out = {"cost": trick["cost"], "value": trick["value"]}
+	# AND SO DOES THE RENT, UNDER A FREEZE (2026-09-26, [member
+	# AiProfile.pays_the_rent]): the {U} a Stasis charges at our upkeep is
+	# mana that must still be there when the moment comes, and with the
+	# untap step gone nothing refills it — see [method _rent_reserve],
+	# which books nothing at all while our lands untap.
+	if profile.pays_the_rent:
+		var rent := _rent_reserve(game)
+		if not rent.is_empty() and float(rent["value"]) > float(out.get("value", 0.0)):
+			out = {"cost": rent["cost"], "value": rent["value"]}
 	return out
 
 
@@ -1255,6 +1285,263 @@ static func _combined_cost(a: ManaCost, b: ManaCost) -> ManaCost:
 	for c in b.colored:
 		out.colored[c] = int(out.colored.get(c, 0)) + int(b.colored[c])
 	return out
+
+
+# ================================================================= the rent --
+#
+# THE PRISON, READ (2026-09-26, docs/ROADMAP.md): the readings that let
+# the pilot keep a Stasis, spend a land for the life that survives a
+# swing, trade life totals through a Mirror Universe, tap a Time Vault
+# and answer an attack with a Maze of Ith. Each is a knob of its own
+# ([member AiProfile.pays_the_rent], [member AiProfile.buys_life],
+# [member AiProfile.swaps_life], [member AiProfile.takes_the_turn]; the
+# Maze rides [member AiProfile.casts_timed_spells]), each is read off a
+# printed line or a shape the card declares ([member EffectBase.ai_role]),
+# and nothing below names a card.
+
+## The mana [param inst], on our battlefield, charges us at our upkeep to
+## keep it — "" when it charges none. Every upkeep trigger the permanent
+## actually has, its own condition asked with a probe event the way
+## [method _own_toll] asks it, its line read by [method
+## EffectIntent.rent_of_line].
+func _rent_of(game: MtgGame, inst: CardInstance) -> String:
+	for trig in inst.cur_triggered_abilities:
+		if trig.event_type != Mtg.EventType.UPKEEP_START:
+			continue
+		if trig.condition.is_valid():
+			var probe := GameEvent.new(trig.event_type, {"player": pid})
+			if not trig.condition.call(game, inst, probe):
+				continue
+		var rent := EffectIntent.rent_of_line(trig.text)
+		if rent != "":
+			return rent
+	return ""
+
+
+## The rent a card still in hand prints, read off its printed triggers —
+## the card is not on the battlefield, so there is no condition to probe.
+static func _rent_of_data(data: CardData) -> String:
+	for trig in data.triggered_abilities:
+		if trig.event_type != Mtg.EventType.UPKEEP_START:
+			continue
+		var rent := EffectIntent.rent_of_line(trig.text)
+		if rent != "":
+			return rent
+	return ""
+
+
+## Does a static of [param data] take the untap step away — "Players
+## skip their untap steps"? The one shape in the pool is Stasis's, and
+## it is read as words, not as a name.
+static func _card_freezes(data: CardData) -> bool:
+	for ability in data.static_abilities:
+		var lower: String = ability.text.to_lower()
+		if lower.contains("skip their untap step") or lower.contains("skip your untap step"):
+			return true
+	return false
+
+
+## Is our mana frozen — a LAND of ours that will not untap ([member
+## CardInstance.cur_skips_untap], set by a Stasis of either side's or an
+## island lock)? A mana rock that never untaps on its own (a Basalt
+## Monolith, a Mana Vault) is not a freeze: it is the rock's own price.
+func _mana_frozen(game: MtgGame) -> bool:
+	for perm in game.players[pid].battlefield:
+		if perm.is_land() and perm.cur_skips_untap:
+			return true
+	return false
+
+
+## THE RENT RESERVE ([member AiProfile.pays_the_rent]): the mana every
+## rent permanent of ours charges at our next upkeep, as one cost, and
+## what keeping them is worth — `{"cost", "value"}` in [method
+## _held_reserve]'s shape, or `{}`.
+##
+## Booked ONLY UNDER A FREEZE ([method _mana_frozen]): while our lands
+## untap, a rent is paid out of a full untap step whatever we tapped
+## today, and a reserve would refuse casts for nothing. The worth is each
+## permanent's own ([method _own_value], and never less than the card's
+## printed worth, because a rent permanent is on the table for a reason
+## the snapshot may not see) plus, for the freezer itself, what the
+## freeze is holding for us ([method _lock_worth]) — which can be
+## negative, and then the rent books nothing: a freeze that is against us
+## is not one to keep the mana for.
+func _rent_reserve(game: MtgGame) -> Dictionary:
+	if not _mana_frozen(game):
+		return {}
+	var cost: ManaCost = null
+	var value := 0.0
+	var freezer := false
+	for perm in game.players[pid].battlefield:
+		var rent := _rent_of(game, perm)
+		if rent == "":
+			continue
+		var price := ManaCost.parse(rent)
+		cost = price if cost == null else _combined_cost(cost, price)
+		value += maxf(_own_value(game, perm), Evaluator.card_value(perm.data))
+		if _card_freezes(perm.data):
+			freezer = true
+	if cost == null:
+		return {}
+	if freezer:
+		value += _lock_worth(game, [])
+	if value <= 0.0:
+		return {}
+	return {"cost": cost, "value": value}
+
+
+## WHAT A FREEZE IS WORTH TO US ([member AiProfile.pays_the_rent]): the
+## board read as a Stasis holds it. Everything of THEIRS that is tapped
+## stays tapped — a creature that attacked neither attacks nor blocks
+## again, a land tapped for a spell makes no more mana — and counts for
+## us at its worth; everything of OURS that is tapped is lost the same
+## way, [param plan]'s sources included (the taps a cast under
+## consideration would make, [method _plan_taps_from]'s steps). Their
+## UNTAPPED attackers are the freeze's hole: a vigilance creature attacks
+## every turn and never taps, and is charged twice its worth; any other
+## attacks once and is then held, and is charged the one hit at the
+## reaper's rate ([method _life_price]). Their untapped lands are one
+## more round of spells and are not priced, no more than ours are.
+## Positive is a lock worth keeping; at or below zero a Stasis is not
+## cast, and one on the table is let go at its upkeep.
+func _lock_worth(game: MtgGame, plan: Array) -> float:
+	var me := game.players[pid]
+	var them := game.players[game.opponent_of(pid)]
+	var worth := 0.0
+	for inst in them.battlefield:
+		if inst.tapped:
+			worth += Evaluator.permanent_value(inst, profile)
+		elif inst.is_creature() and inst.cur_power > 0 \
+				and not inst.has_keyword(Mtg.Keyword.DEFENDER):
+			if inst.has_keyword(Mtg.Keyword.VIGILANCE):
+				worth -= 2.0 * Evaluator.permanent_value(inst, profile)
+			else:
+				worth -= float(inst.cur_power) * _life_price(me.life)
+	var planned: Dictionary = {}
+	for step in plan:
+		if step[0] != null:
+			planned[step[0].id] = true
+	for inst in me.battlefield:
+		if inst.tapped or planned.has(inst.id):
+			worth -= Evaluator.permanent_value(inst, profile)
+	return worth
+
+
+## THE RENT AT CAST TIME ([member AiProfile.pays_the_rent]): may [param
+## inst], a card in hand that charges its own upkeep, be cast now? True
+## for a card that charges none. A card that FREEZES the untap step, or
+## any rent card cast while our mana is already frozen, needs the spell
+## and its first rent both payable from what is untapped now, and the
+## freezer needs the freeze to be worth having with those sources gone
+## ([method _lock_worth]); any other rent card needs a full untap to
+## reach its price ([method _mana_reach] — generic reach, the colours
+## unchecked, which overstates what we can pay: the safe direction for a
+## gate whose wrong answer is a card never cast).
+func _rent_affordable(game: MtgGame, inst: CardInstance, sources: Array,
+		surcharge: int, keys: Array) -> bool:
+	var rent := _rent_of_data(inst.data)
+	if rent == "":
+		return true
+	var price := ManaCost.parse(rent)
+	var freezes := _card_freezes(inst.data)
+	if freezes or _mana_frozen(game):
+		var plan := _plan_taps_from(sources, _combined_cost(inst.data.cost, price),
+			surcharge, keys)
+		if plan.is_empty():
+			return false
+		return not freezes or _lock_worth(game, plan) > 0.0
+	return _mana_reach(game, null) >= price.mana_value()
+
+
+## THE DAMAGE THAT IS COMING ([member AiProfile.buys_life]): what their
+## combat, as it stands, will deal us. Once blocks are known, the power
+## of the unblocked attackers; once attackers are declared and before
+## the blocks, the declared attack through our value blocks ([method
+## _damage_after_value_blocks]); outside their combat, nothing — a life
+## bought before the attack is a land spent on a swing that may not come,
+## and the reading that prices a whole board is [method _in_danger]'s.
+func _incoming_damage(game: MtgGame) -> int:
+	if game.active_player == pid or game.combat.attackers.is_empty() \
+			or game.combat_damage_prevented:
+		return 0
+	var me := game.players[pid]
+	var attackers: Array[CardInstance] = []
+	for attacker_id in game.combat.attackers:
+		var attacker := game.find_instance(attacker_id)
+		if attacker != null and attacker.zone == Mtg.Zone.BATTLEFIELD:
+			attackers.append(attacker)
+	if game.current_step() >= Mtg.Step.DECLARE_BLOCKERS and not game.awaiting_blockers:
+		var unblocked := 0
+		for attacker in attackers:
+			if not game.combat.was_blocked(game.combat.band_of(attacker.id)):
+				unblocked += maxi(attacker.cur_power, 0)
+		return unblocked
+	var mine: Array[CardInstance] = []
+	for inst in me.battlefield:
+		if inst.is_creature():
+			mine.append(inst)
+	return _damage_after_value_blocks(game, attackers, mine)
+
+
+## THE MAZE'S PICK ([member AiProfile.casts_timed_spells], [member
+## EffectIntent.fogs_attacker]): which declared attacker, blocks known,
+## is worth untapping out of the combat — `{"target", "value"}` or `{}`.
+## An UNBLOCKED attacker is worth the damage it would land, at the
+## reaper's rate, plus one; and the whole game when the unblocked swing
+## is lethal and taking this one out of it makes it not. A BLOCKED
+## attacker is worth the blocker of ours it would kill and not die to.
+func _maze_pick(game: MtgGame, source: CardInstance, spec: TargetSpec) -> Dictionary:
+	var me := game.players[pid]
+	var unblocked_total := 0
+	var candidates: Array = []
+	for attacker_id in game.combat.attackers:
+		var attacker := game.find_instance(attacker_id)
+		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD:
+			continue
+		var blocked := game.combat.was_blocked(game.combat.band_of(attacker_id))
+		if not blocked:
+			unblocked_total += maxi(attacker.cur_power, 0)
+		if spec != null and not spec.is_legal(game, TargetRef.card(attacker), source):
+			continue
+		candidates.append([attacker, blocked])
+	var out: Dictionary = {}
+	for pair in candidates:
+		var attacker: CardInstance = pair[0]
+		var worth := 0.0
+		if not bool(pair[1]):
+			var power := maxi(attacker.cur_power, 0)
+			if power <= 0:
+				continue
+			worth = float(power) * _life_price(me.life) + 1.0
+			if unblocked_total >= me.life and unblocked_total - power < me.life:
+				worth = LETHAL_WORTH
+		else:
+			for blocker_id in game.combat.blockers_of(attacker.id):
+				var blocker := game.find_instance(blocker_id)
+				if blocker == null or blocker.controller_id != pid:
+					continue
+				if _dies_to(game, blocker, attacker) and not _dies_to(game, attacker, blocker):
+					worth = maxf(worth, Evaluator.permanent_value(blocker, profile))
+		if worth > float(out.get("value", 0.0)):
+			out = {"target": attacker, "value": worth}
+	return out
+
+
+## A TURN WORTH SKIPPING ([member AiProfile.takes_the_turn]): nothing to
+## cast, nothing to attack with, and no danger to answer — the turn a
+## Time Vault's question is answered "skip" on, banked for the extra one
+## its untap buys.
+func _turn_is_dead(game: MtgGame) -> bool:
+	if _in_danger(game):
+		return false
+	var me := game.players[pid]
+	for inst in me.hand:
+		if not inst.is_land():
+			return false
+	for inst in me.battlefield:
+		if inst.is_creature() and inst.cur_power > 0 and not inst.cur_cant_attack:
+			return false
+	return true
 
 
 # ===================================================== activated abilities --
@@ -1292,7 +1579,10 @@ const CONSCRIPTION_POWER := 4
 ## COMBAT is THEIR combat with the attackers declared and the damage not
 ## yet dealt (2026-09-08, [member AiProfile.times_sweeps]): the one
 ## moment at which only a sweeper is offered, at the upkeep's bar.
-enum Moment { MAIN, UPKEEP, SINK, COMBAT, RESPONSE }
+## PRE_ATTACK is THEIR beginning of combat (2026-09-26), the last moment
+## before they declare: the conscription's moment, and the moment an
+## untap stands a blocker of ours back up ([method _pre_attack_option]).
+enum Moment { MAIN, UPKEEP, SINK, COMBAT, RESPONSE, PRE_ATTACK }
 const FALLEN_EMPIRES_TACTICS := preload("res://engine/ai/fallen_empires_tactics.gd")
 const ICE_AGE_TACTICS := preload("res://engine/ai/ice_age_tactics.gd")
 const HOMELANDS_TACTICS := preload("res://engine/ai/homelands_tactics.gd")
@@ -1304,7 +1594,8 @@ const PORTAL_TACTICS := preload("res://engine/ai/portal_tactics.gd")
 ## or "" when nothing does. One activation per call, like every other action.
 func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 	var bar: float = ABILITY_BAR_MAIN
-	if moment == Moment.UPKEEP or moment == Moment.COMBAT or moment == Moment.RESPONSE:
+	if moment == Moment.UPKEEP or moment == Moment.COMBAT or moment == Moment.RESPONSE \
+			or moment == Moment.PRE_ATTACK:
 		bar = ABILITY_BAR_UPKEEP
 	elif moment == Moment.SINK:
 		bar = ABILITY_BAR_SINK
@@ -1314,7 +1605,13 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 	# reserve _try_cast_best keeps (mage-go's `canCastWhileReserving`). At
 	# the mana sink the instant has had its moment, and every open point
 	# is about to be lost anyway.
-	var reserve: Dictionary = {} if moment == Moment.SINK else _held_reserve(game)
+	# ...unless our mana is FROZEN (2026-09-26, [member
+	# AiProfile.pays_the_rent]): with the untap step gone, the point a
+	# Rod would ping with at their end step is the {U} the Stasis asks
+	# for at our upkeep, and the sink is no sink at all.
+	var reserve: Dictionary = {} if moment == Moment.SINK \
+			and not (profile.pays_the_rent and _mana_frozen(game)) \
+		else _held_reserve(game)
 	for inst in _activation_sources(game):
 		for index in inst.cur_activated_abilities.size():
 			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
@@ -1619,6 +1916,8 @@ func _counter_cost_spendable(inst: CardInstance, ability: ActivatedAbility) -> b
 ## lifegain 3...) adjusted by hand size, life cost and mana price the way
 ## `cardDrawNeedAdjustment` and `lifeCost*15/life` adjust them.
 func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int) -> Dictionary:
+	if moment == Moment.PRE_ATTACK:
+		return _pre_attack_option(game, inst, index)   # theirs before attackers: two shapes, nothing else
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 	var intent := EffectIntent.read(ability.effects, inst.data.card_name)
 	var tactical := EffectIntent.tactical_effect(ability.effects) if profile.uses_tactical_effects else null
@@ -1631,10 +1930,24 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		expansion = ALLIANCES_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
 		expansion = preload("res://engine/ai/second_age_tactics.gd").option(game, self, inst, index)
-	if moment == Moment.RESPONSE and expansion == null:
+	# THE RESPONSE MOMENT admits an expansion reading and, since 2026-09-26,
+	# the two prison readings whose only moment it is: the life that keeps
+	# us alive as their attack is declared ([member AiProfile.buys_life])
+	# and the swap at our own upkeep ([member AiProfile.swaps_life]),
+	# which [method act] reaches through [method _respond_action] alone.
+	if moment == Moment.RESPONSE and expansion == null \
+			and not (profile.buys_life and intent.life_gain > 0 and intent.target_spec == null) \
+			and not (profile.swaps_life and intent.swaps_life):
 		return {}
-	if moment == Moment.COMBAT and intent.sweeper == null and tactical == null and expansion == null:
-		return {}   # their combat is a sweeper's moment and nobody else's
+	# Their combat is a sweeper's moment ([member AiProfile.times_sweeps],
+	# which used to gate the whole call and now gates the shapes it
+	# brought), the Maze's ([member AiProfile.casts_timed_spells]), and
+	# nobody else's.
+	if moment == Moment.COMBAT \
+			and not (profile.times_sweeps
+				and (intent.sweeper != null or tactical != null or expansion != null)) \
+			and not (profile.casts_timed_spells and intent.fogs_attacker):
+		return {}
 	var me := game.players[pid]
 	var opponent := game.opponent_of(pid)
 	var them := game.players[opponent]
@@ -1731,6 +2044,27 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 			value += 1.0
 	elif intent.life_gain > 0 and intent.target_spec == null:
 		value = 1.0 + (2.0 if me.life <= 10 else 0.0)
+		# THE LIFE THAT KEEPS US ALIVE (2026-09-26, [member
+		# AiProfile.buys_life]): against the damage their combat is about
+		# to deal ([method _incoming_damage]), the gain that puts our life
+		# back above it is the game, once per activation — the ability
+		# resolves, the next act reads the new total, and a Zuran Orb
+		# with six Islands under it spends exactly as many as it must.
+		# A sacrifice rider's price and bar still apply below; against
+		# LETHAL_WORTH they decide nothing, which is the point.
+		if profile.buys_life:
+			var incoming := _incoming_damage(game)
+			var repeats := 1
+			if ability.sacrifice_filter.is_valid():
+				repeats = 0
+				for body in me.battlefield:
+					if (body != inst or ability.sacrifice_may_be_source) \
+							and ability.sacrifice_filter.call(body):
+						repeats += 1
+			if incoming >= me.life and me.life + intent.life_gain * repeats > incoming:
+				value = LETHAL_WORTH
+		if moment == Moment.RESPONSE and value < LETHAL_WORTH:
+			return {}   # the response moment is for the life that survives, not for a point
 	elif intent.sweeper != null:
 		# THE DEFERRAL (2026-09-10, [member AiProfile.times_sweeps]): their
 		# combat is the better moment for the same activation, so a sweeper
@@ -1835,6 +2169,48 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		# ability that empties it has every later moment to be used at and
 		# the main phase's bar is the right one for it to fail. What it
 		# fails into is the mana sink, which is where a Millstone belongs.
+	elif intent.swaps_life and profile.swaps_life:
+		# THE MIRROR (2026-09-26, [member AiProfile.swaps_life]): the two
+		# life totals trade places. Worth the damage the swing deals them
+		# plus the life it hands us at the reaper's rate; the artifact the
+		# activation sacrifices is charged below like any other rider, so
+		# a two-point swap loses to it and a twenty-seven-point one is
+		# the game. Reached at our own upkeep through the RESPONSE moment.
+		var gain := them.life - me.life
+		if gain <= 0:
+			return {}
+		if intent.target_spec != null:
+			if not _spec_allows_player(intent.target_spec, game, inst, opponent):
+				return {}
+			targets = [TargetRef.player(opponent)]
+		value = _face_damage_value(game, gain, opponent) + float(gain) * _life_price(me.life)
+	elif intent.extra_turns > 0 and profile.takes_the_turn:
+		# THE EXTRA TURN OFF THE TABLE (2026-09-26, [member
+		# AiProfile.takes_the_turn]): priced the way the spell is
+		# ([method _extra_turn_value]), refused the way the spell is when
+		# the draw step it adds loses the race to deck, and answering to
+		# the sink's bar — a {T} that costs no mana competes with no spell.
+		if _library_slack(game) < intent.extra_turns:
+			return {}
+		value = _extra_turn_value(game, intent.extra_turns)
+		if value <= 0.0:
+			return {}
+		own_bar = ABILITY_BAR_SINK
+	elif intent.fogs_attacker and profile.casts_timed_spells:
+		# THE MAZE (2026-09-26, [member EffectIntent.fogs_attacker]): one
+		# attacker untapped out of their combat, blocks known — see
+		# [method _maze_pick]. A {T} land with no other moment answers to
+		# the sink's bar.
+		if moment != Moment.COMBAT or game.active_player == pid \
+				or game.current_step() != Mtg.Step.DECLARE_BLOCKERS \
+				or game.awaiting_blockers or game.combat_damage_prevented:
+			return {}
+		var pick := _maze_pick(game, inst, intent.target_spec)
+		if pick.is_empty():
+			return {}
+		targets = [TargetRef.card(pick["target"])]
+		value = float(pick["value"])
+		own_bar = ABILITY_BAR_SINK
 	else:
 		return {}   # pumps, regeneration, mana, untaps, unknowns: not here
 	var sacrifice := _sacrifice_price(game, inst, ability)
@@ -4922,6 +5298,11 @@ func _fire_held_instant(game: MtgGame) -> String:
 	var best: CardInstance = null
 	var best_targets: Array = []
 	var best_value := 0.0
+	# THE RENT UNDER A FREEZE (2026-09-26, [member AiProfile.pays_the_rent]):
+	# their end step is the last call for a held instant because our
+	# untap is next — and with the untap step gone it is not, so the Bolt
+	# that would tap the Stasis's {U} away waits like a main-phase cast.
+	var rent: Dictionary = _rent_reserve(game) if profile.pays_the_rent else {}
 	for inst in me.hand:
 		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
 		if not _is_held_instant(inst, intent) or intent.pumps:
@@ -4971,6 +5352,10 @@ func _fire_held_instant(game: MtgGame) -> String:
 		if targets.is_empty() and value <= 0.0:
 			continue
 		value -= intent.self_damage * 0.5
+		if not rent.is_empty() and value < float(rent["value"]) * 1.5 \
+				and _plan_taps_from(sources, _combined_cost(inst.data.cost, rent["cost"]),
+					surcharge).is_empty():
+			continue   # the Stasis's {U} is not mana about to be wasted
 		if value > best_value:
 			best = inst
 			best_targets = targets
@@ -5043,6 +5428,11 @@ func _respond_action(game: MtgGame) -> String:
 				response = _fire_tap_instant(game)
 				if response == "":
 					response = _try_activate(game, Moment.UPKEEP)
+			Mtg.Step.COMBAT_BEGIN:
+				# THE LAST MOMENT BEFORE THEY DECLARE (2026-09-26): the
+				# conscription's, and the untap's — see
+				# [method _pre_attack_option].
+				response = _try_activate(game, Moment.PRE_ATTACK)
 			Mtg.Step.END:
 				response = _end_of_their_turn(game)
 	if response != "":
@@ -5325,6 +5715,157 @@ func _worth_forcing_attacks(game: MtgGame) -> Dictionary:
 	if value <= 0.0:
 		return {}
 	return {"targets": [], "value": value}
+
+
+## THE MOMENT BEFORE THEY DECLARE (2026-09-26). Their beginning of
+## combat is the last priority before attackers are declared, and until
+## today nothing of ours was asked anything there: the Nettling Imp,
+## Norritt and Arcum's Whistle sat untapped through every duel because
+## the only windows the ability scorer knew were their upkeep and their
+## end step, and "activate only before attackers are declared" is
+## neither. So, like their combat is a sweeper's moment and nobody
+## else's, this moment offers exactly two shapes and prices each from
+## the board in front of it: a CONSCRIPTION ([member
+## EffectIntent.conscripts_attacker], [method _conscription_option]),
+## and an UNTAP aimed at a creature ([method _untap_blocker_option]) —
+## the Norritt's other ability, standing back up a blocker of ours that
+## their Icy Manipulator laid down. Gated by [member
+## AiProfile.casts_timed_spells], the capability that knows a moment on
+## the other side of the table exists at all.
+func _pre_attack_option(game: MtgGame, inst: CardInstance, index: int) -> Dictionary:
+	if not profile.casts_timed_spells or game.active_player == pid \
+			or game.current_step() != Mtg.Step.COMBAT_BEGIN \
+			or not game.combat.attackers.is_empty():
+		return {}
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+	if intent.target_spec == null:
+		return {}
+	if intent.conscripts_attacker:
+		return _conscription_option(game, inst, index, intent)
+	if intent.untaps and not intent.unknown and ability.effects.size() == 1:
+		return _untap_blocker_option(game, inst, index, intent)
+	return {}
+
+
+## THE CONSCRIPTION, priced the way a Siren's Call is ([method
+## _worth_forcing_attacks]) for ONE body of theirs, the one it is worth
+## most against. Two readings, the Imp's own two clauses:
+##
+## (a) A creature that CANNOT attack this turn — tapped for mana or an
+##     ability in their first main phase, a defender, a "can't attack" —
+##     is destroyed at their end step. Gain: the body, unless it is
+##     indestructible or a shield is in reach ([method _shieldable]).
+## (b) A creature that can attack MUST, or is destroyed: gain is the
+##     Siren's Call arithmetic for that one body — the best untapped
+##     blocker of ours that kills it, less the blocker if it dies too.
+##     A body no blocker of ours can punish is never conscripted: a swing
+##     we cannot answer is a swing we did not want to order.
+##
+## And the RANSOM (Arcum's Whistle: "unless that creature's controller
+## pays {X}"): read through [method _their_open_mana], our fair public
+## seat — a Whistle they can pay to ignore is a Whistle they will ignore,
+## so it waits for a turn they are tapped low. Never while their whole
+## board attacking would be lethal (forcing one more body into a swing
+## that already kills us buys nothing), never on our own turn (the
+## card's own rider, and the summoning-sick body they just cast is not
+## a legal target anyway — CR: "controlled continuously since the
+## beginning of the turn").
+##
+## The price is the moment's own bar plus the standard mana price; a
+## {T} on a creature source is a blocker fewer this combat, half a
+## point. Public information only: their battlefield, their open mana
+## through our seat, our own board.
+func _conscription_option(game: MtgGame, inst: CardInstance, index: int,
+		intent: EffectIntent) -> Dictionary:
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var me := game.players[pid]
+	var opponent := game.opponent_of(pid)
+	var open := _their_open_mana(game, opponent)
+	var through := 0
+	for theirs in game.players[opponent].battlefield:
+		if theirs.is_creature() and CombatState.attack_illegality(game, theirs, pid) == "":
+			through += maxi(theirs.cur_power, 0)
+	if through >= me.life:
+		return {}
+	var free := _untapped_creatures(game, pid)
+	var best: CardInstance = null
+	var best_gain := 0.0
+	var best_ref: TargetRef = null
+	for ref in intent.target_spec.legal_targets(game, inst):
+		var victim := game.find_instance(ref.instance_id)
+		if victim == null or victim.controller_id != opponent or not victim.is_creature():
+			continue
+		if intent.conscription_ransom == "mana_value" \
+				and open >= victim.data.cost.mana_value():
+			continue
+		var gain := 0.0
+		if CombatState.attack_illegality(game, victim, pid) != "":
+			if victim.cur_indestructible or _shieldable(game, victim):
+				continue
+			gain = Evaluator.permanent_value(victim, profile)
+		else:
+			var worth := Evaluator.permanent_value(victim, profile)
+			for blocker in free:
+				if blocker == inst and ability.tap_cost:
+					continue   # the source taps to order the attack; it blocks nothing
+				if CombatState.block_illegality(game, blocker, victim, pid) != "" \
+						or not _dies_to(game, victim, blocker):
+					continue
+				var trade := worth
+				if _dies_to(game, blocker, victim):
+					trade -= Evaluator.permanent_value(blocker, profile)
+				gain = maxf(gain, trade)
+		if gain > best_gain:
+			best_gain = gain
+			best = victim
+			best_ref = ref
+	if best == null:
+		return {}
+	var price: float = maxf(ability.cost.mana_value() - 1, 0) * 0.5
+	if ability.tap_cost and inst.is_creature() and not inst.tapped:
+		price += 0.5   # a blocker fewer this combat
+	return {"inst": inst, "index": index, "targets": [best_ref],
+		"value": best_gain - price, "bar": ABILITY_BAR_UPKEEP}
+
+
+## AN UNTAP AIMED AT A CREATURE, before they declare: worth what the
+## body of ours it stands back up would do as a blocker — a share of its
+## worth ([method Evaluator.permanent_value]), when they have an
+## attacker for it to meet. Ours only, and only a tapped one: an untap
+## aimed at THEIR creature hands them an attacker. The Norritt's second
+## ability, and any other "untap target creature" the pool prints; the
+## conscription wins the Norritt's tap when both are on offer, because
+## the body it destroys is worth more than the block it enables.
+func _untap_blocker_option(game: MtgGame, inst: CardInstance, index: int,
+		intent: EffectIntent) -> Dictionary:
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var opponent := game.opponent_of(pid)
+	var attackers := 0
+	for theirs in game.players[opponent].battlefield:
+		if theirs.is_creature() and CombatState.attack_illegality(game, theirs, pid) == "":
+			attackers += 1
+	if attackers == 0:
+		return {}
+	var best: CardInstance = null
+	var best_ref: TargetRef = null
+	for ref in intent.target_spec.legal_targets(game, inst):
+		var ours := game.find_instance(ref.instance_id)
+		if ours == null or ours.controller_id != pid or not ours.is_creature() \
+				or not ours.tapped or ours == inst:
+			continue
+		if best == null or Evaluator.permanent_value(ours, profile) \
+				> Evaluator.permanent_value(best, profile):
+			best = ours
+			best_ref = ref
+	if best == null:
+		return {}
+	var price: float = maxf(ability.cost.mana_value() - 1, 0) * 0.5
+	if ability.tap_cost and inst.is_creature() and not inst.tapped:
+		price += 0.5
+	return {"inst": inst, "index": index, "targets": [best_ref],
+		"value": Evaluator.permanent_value(best, profile) * 0.4 - price,
+		"bar": ABILITY_BAR_UPKEEP}
 
 
 ## UNTAPS_LANDS (Reset, their turn past their upkeep): every land we
@@ -7270,7 +7811,11 @@ func _defensive_combat_response(game: MtgGame) -> String:
 	# before the damage — the moment it is also a Fog. Priced by
 	# _sweep_value with the declared attack as its relief; the upkeep's
 	# bar, because their turn is the moment's own.
-	if profile.times_sweeps and not game.combat_damage_prevented \
+	# ...and, since 2026-09-26, the Maze's moment too (AiProfile.casts_timed_spells,
+	# EffectIntent.fogs_attacker): an attacker untapped out of the combat once
+	# the blocks are known. The scorer's COMBAT gate admits the two shapes
+	# and nothing else.
+	if (profile.times_sweeps or profile.casts_timed_spells) and not game.combat_damage_prevented \
 			and game.current_step() <= Mtg.Step.DECLARE_BLOCKERS:
 		var swept := _try_activate(game, Moment.COMBAT)
 		if swept != "":
@@ -11517,6 +12062,14 @@ func cumulative_upkeep_hint(game: MtgGame, p_pid: int, source: CardInstance,
 	return value >= price
 
 func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[String], hint: int) -> int:
+	# THE VAULT'S QUESTION (2026-09-26, [member AiProfile.takes_the_turn]):
+	# "Skip this turn to untap X?" is put by the engine's turn-based hold
+	# ([method MtgGame._begin_turn]) with the 1997 one-in-five as its
+	# hint. Answered off the board instead: a dead turn is banked, a live
+	# one is played. The prompt is the engine's own line, not a card's.
+	if p_pid == pid and profile.takes_the_turn and options.size() == 2 \
+			and prompt.begins_with("Skip this turn to untap"):
+		return 1 if _turn_is_dead(game) else 0
 	if p_pid == pid and profile.forecasts_tactics and game.current_resolution_source() == "Deflection" \
 			and prompt == "Deflection: choose the spell's new target":
 		var refs := game.current_targets()
@@ -11537,6 +12090,23 @@ func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[Str
 func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> bool:
 	if profile.forecasts_tactics and p_pid == pid and prompt == "Exile the targeted creature cards and gain life instead of assigning combat damage?":
 		return HOMELANDS_TACTICS.trade_damage_for_life(game, self, hint)
+	# THE FREEZE THAT IS AGAINST US (2026-09-26, [member
+	# AiProfile.pays_the_rent]): a rent on a permanent that takes the
+	# untap step away is paid while the freeze is worth having ([method
+	# _lock_worth], the rent's own source counted as gone) and declined
+	# once it is not — a Stasis holding two Islands of ours and a
+	# vigilance Angel of theirs is let go, not paid for. Any other rent
+	# keeps its author's hint: "can we afford it" is the right answer
+	# for a permanent whose keeping costs us nothing else.
+	if hint and profile.pays_the_rent and p_pid == pid \
+			and game.current_step() == Mtg.Step.UPKEEP:
+		var price := EffectIntent.offer_price(prompt)
+		var subject := _offer_subject(game, prompt)
+		if price != "" and subject != null and _card_freezes(subject.data) \
+				and _rent_of(game, subject) == price:
+			var worth := _lock_worth(game, []) \
+				- float(ManaCost.parse(price).mana_value()) * Evaluator.W_LANDS
+			return worth > 0.0
 	if not hint or not profile.prices_offers or p_pid != pid:
 		return hint
 	if not OFFER_BEATS.has(game.current_step()):

@@ -16333,11 +16333,11 @@ open again in the main before our extra combat; Berserk, Rapid Fire,
 Blaze of Glory, Disharmony, Reset, Glyph, Angus; the AI's
 `_ability_available` agreeing), `tests/ui/test_imp_windows_2026_09_25.gd`
 (the screen's three predicates and the automatic pass on both turns,
-a Bolt still holding the windows). Open: the AI has no `EffectIntent`
-reading for the conscriptions (Nettling Imp, Arcum's Whistle, Norritt)
-and never activates them; the LAN client's projection keeps the
-canonical `_turn_steps`, so under an extra combat the between-mains
-window is not known client-side (the host referees the play itself).
+a Bolt still holding the windows). Open: the LAN client's projection
+keeps the canonical `_turn_steps`, so under an extra combat the
+between-mains window is not known client-side (the host referees the
+play itself). (The AI's own reading of the conscriptions came with
+0.40.26, "The prison, read".)
 Gate: 502 scripts, **7,747/7,747 tests, 345,776 asserts**, exit 0 in
 236 s over 6 shards; Python 299, exit 0; boot smoke clean.
 
@@ -16886,6 +16886,176 @@ Edition (166 before: the colour choice on its mana and the land fit).
 
 Gate: 515 scripts, **7,901/7,901 tests, 359,746 asserts**, exit 0
 in 246 s over 6 shards; Python 323, exit 0.
+
+## 2026-09-26 — The prison, read (0.40.26)
+
+The order: *"do an AI pass so we solve: the AI can't pilot
+Stasis/combo/prison; no reading for Nettling Imp / Arcum's Whistle /
+Norritt; Mirage/Visions/Weatherlight names block 33 tournament decks"*,
+*"do one pass over deck lab cli and auto deck cli and find bugs"*, and
+the ruling on the third item — *"we dont have packs yet"* — so this pass
+is the AI and the two command lines, and the sets are counted rather
+than written.
+
+**The conscriptions.** Their beginning of combat is the last priority
+before attackers are declared, and until today nothing of ours was asked
+anything there: the only windows the ability scorer knew were their
+upkeep and their end step, so a Nettling Imp, a Norritt and an Arcum's
+Whistle sat untapped through every duel. Now that moment offers exactly
+two shapes (`AiPlayer._pre_attack_option`, under `casts_timed_spells`):
+a CONSCRIPTION — the card declares it (`ai_role` `conscript_attacker`,
+`EffectIntent.conscripts_attacker`, the Whistle's `ransom`), the pilot
+prices it the way a Siren's Call is priced for the one body it is worth
+most against: a creature that cannot attack this turn (tapped in their
+first main, a defender) is the body itself, destroyed at their end step
+unless a shield is in reach; a creature that can attack must, and is
+worth the best untapped blocker of ours that kills it, less the blocker
+if it dies too — a body no blocker of ours can punish is never
+conscripted, and the Whistle's ransom is read through their open mana
+(a Whistle they can pay to ignore waits for the turn they are tapped
+low); never into a swing that already kills us, never on our own turn.
+And an UNTAP aimed at a creature — the Norritt's other ability —
+standing back up a tapped blocker of ours when they have an attacker
+for it to meet. Nothing card-named in the decision; the three cards
+declare their role and `tests/ai/test_ai_conscriptions_2026_09_26.gd`
+pins the moment, the two clauses, the ransom, the lethal refusal and the
+off arm.
+
+**The rent** (`pays_the_rent`, Sorcerer and Wizard). Twenty-seven
+instrumented Turbo Stasis duels at Wizard before a line was written:
+seventeen Stasis cast, nine sacrificed at the next upkeep for a {U} the
+seat had tapped away, and a Howling Mine cast under its own Stasis with
+the last Island. A permanent that charges its own upkeep — "sacrifice
+this enchantment unless you pay {U}" — is read off the trigger's line
+(`EffectIntent.rent_of_line`: "unless you pay {…}" with a sacrifice or
+a destruction in the line, never "for each"), and the freeze off the
+static's ("skip their untap step"). Any other rent is paid out of a full
+untap whatever we tapped today, so the reserve books NOTHING while our
+lands untap (`_rent_reserve`, asked through `_held_reserve`,
+`_mana_frozen` the gate); under a freeze it books every rent
+permanent's price at the permanent's worth, and a cast, a sink or a
+held instant that would spend the {U} waits unless it is worth half
+again as much. The cast is gated by what the freeze is worth
+(`_lock_worth`: what of theirs it holds tapped, minus what of ours,
+minus the attackers it leaves standing — a vigilance Serra Angel
+untapped across the table is the whole game against a Stasis, and the
+pilot cast into it) and by the spell and its first rent both payable
+from what is untapped now (`_rent_affordable`); at the upkeep the same
+worth answers the rent's own question (`answer_yes_no`), and a freeze
+that is against us is let go rather than paid for.
+
+**The life** (`buys_life`). The life-gain arm priced a Zuran Orb's two
+life at 1.0 (3.0 under ten) against a land at its own worth and the
+main phase's bar of 3.0: a Zuran Orb at four life against a Serra
+Angel was 1.50 against 3.0, activated ZERO times in twenty-seven duels,
+four of them lost with six Islands on the table. On, the arm is offered
+at RESPONSE, the moment their attack is declared, and reads the damage
+that is coming (`_incoming_damage`: the unblocked power once blocks are
+known, the declared attack through our value blocks before) — when the
+swing is lethal and enough lands make it survived, the gain is
+`LETHAL_WORTH` and exactly as many lands go as must, one act at a
+time; otherwise the arm stands down as it did. **The mirror**
+(`swaps_life`): Mirror Universe's effect is card-local, so the reader
+marked it unknown and RESPONSE admitted nothing but an expansion; the
+card declares `swap_life`, the swing is priced as the damage it deals
+them plus the life it hands us at the reaper's rate, and a two-point
+swap is refused where a twenty-seven point one is the game. **The turn** (`takes_the_turn`): Time Vault's
+`{T}` is priced the way Time Walk is (`_extra_turn_value`, refused when
+the draw it adds loses the race to deck) at the sink's bar, and "Skip
+this turn to untap?" is answered off the board (`_turn_is_dead`: not in
+danger, no spell to cast, no creature to attack with — a dead turn
+banked for a live one) instead of the 1997 one-in-five roll. **Maze of
+Ith** (`casts_timed_spells`): the `{T}` at their declare-blockers step,
+once the blocks are known, aimed at the unblocked attacker worth most
+in damage — lethal-worth when it is the one that makes the swing
+lethal — or at the attacker that kills a blocker of ours it cannot be
+killed by (`_maze_pick`; the COMBAT gate admits the sweeper shapes under
+`times_sweeps` and the Maze under this knob, which the first cut had
+wrong and a Disk test caught). **Transmute Artifact**
+(`holds_duplicates`): a spell that does nothing without a permanent of
+ours to act on (`needs_own_permanent`, `EffectIntent.needs_own`) waits
+for one. Each knob its own test pinning both arms:
+`test_ai_pays_the_rent_2026_09_26.gd` (11), `test_ai_buys_life` (4),
+`test_ai_swaps_life` (5), `test_ai_takes_the_turn` (6),
+`test_ai_maze_and_transmute` (7). Knob rows in `docs/ai-difficulty.md`;
+§5 there says what the pass does NOT read — the two-card engine
+(a Vault under a Twiddle, a Monolith under a Power Artifact), which is
+an evaluator question and not a knob.
+
+**The Lab** (`shandalar-build/mining/2026-09-26/prison/`, Wizard
+against Wizard, 1,000 games an arm, seed 11, `--null off`, the Big
+Green / White Knights control byte-identical to its null in every arm
+of every run, no stall, no `SCRIPT ERROR`). The first pairs were the
+period decks against White Knights, and three of them were floors, not
+readings: Turbo Stasis wins 4 games in 1,000 there (the knob fired in
+409 of them and held the lock a turn longer, 15.1 to 16.4 turns, 7
+wins for 4), the Time Vault prison wins none (the Vault's turn taken in
+81 games and the deck lost every one — its win is the Animate Artifact
+on the Vault under an Instill Energy, the engine §5 names), the blue
+prison wins 32 (47 with the Maze, +1.5 ±1.7). So the knobs were measured
+again on pairs that can turn: **`pays_the_rent` +7.7 ±2.4** (Turbo
+Stasis against Big Green, 4.4% to 12.1%, 86 games flipped our way for
+9 the other, the games two and a half turns longer); **`swaps_life`
++10.4 ±3.1** (The Deck, Weissman summer 1996, against Mountain
+Artillery, 9.8% to 20.2%); **`buys_life` +2.9 ±2.7** (the Zuran Orb
+recursion deck against White Knights, 8.8% to 11.7%, the one delta the
+first round marked clear of zero); **the Maze +17.2 ±4.2** (Big Green
+with two Forests swapped for two Mazes, against White Knights, 50.7% to
+67.9%, 184 flips for 12 — the plain deck is 60.4% there, so the two
+mana-less lands cost ten points and the Maze pays them back and seven
+more); **`takes_the_turn` +3.2 ±4.2** (White Knights with a Plains
+swapped for a Time Vault, against Big Green, 33.4% to 36.6% — inside
+the interval, 37 flips for 5 in the 260 games one Vault in sixty cards
+changed); **`holds_duplicates`' Transmute clause −0.2 ±1.3** (the Power
+Artifact deck against White Knights, 2.3% to 2.1%, 64 games changed —
+the deck's Transmute is for the Monolith and the Power Artifact, which
+is the engine, not the precondition; the clause keeps a card, and a
+card is what it shows at the table). **The conscription +0.4 ±3.7**
+(Vampire Lord, the one deck in `decks/` with the Imp — four of them —
+against Big Green, 22.4% to 22.8%, 66 games changed, 7 for 3): the Imp
+orders only a body a blocker of ours can punish, and a Sengir Vampire
+punishes little of Big Green's; the Norritt and the Whistle are in no
+deck, and `tests/ai/` is their instrument.
+
+**The Deck Lab's bug pass** (`DeckLab/deck_lab.sh`, `simulate.gd`,
+`sim_stats.gd`, `elo_ledger.gd`, `svg_charts.gd`;
+`tests/tools/test_deck_lab_fixes_2026_09_26.gd`): `--profile-a
+wizard:counter_threshold=abc` swept 0 in silence — refused; a worker
+whose parent was killed played on — it stops; a comma-list or FILE.txt
+gauntlet kept deck A in the field where a folder dropped it; a field
+that names a deck twice ranked it twice; `--top` was refused for the
+wrong reason; a one-deck `--gauntlet` was reported as a duel; `--out`
+naming a file was accepted and failed after the games; the abandon line
+said "game 1" after a relaunch; a gauntlet deck that played nobody had a
+50% row, and a mirror's unplayed games were counted; `median 12.0`
+after a results.json round trip; equal ledger ratings swapped places;
+a chart label ran under the bars; a `res://` output folder had no
+`.gdignore`; the pack scan printed on stdout, into the report.
+
+**The AutoDeck CLI's bug pass** (`DeckLab/auto_deck_cli.gd`;
+`tests/tools/test_auto_deck_cli_fixes_2026_09_26.gd`): `--keep FILE
+--vary` at variety 0 built the same deck back; the manifest lacked
+`--packs`, the two pool toggles, the list file and the sealed numbers,
+so a row could not rebuild its deck; `--force` left the old decks
+beside the new for `--field DIR`; a sealed retry put the `--vary` cards
+back; a twenty-digit `--count` saturated `to_int`; the seeds line was
+wrong after a retry; the `--distinct` shortfalls were counted and not
+named; the `next:` line left a path with a space unquoted; a kept deck
+that needs a pack listed its cards as unknown; `--out` naming a file
+was accepted; a missing `--list`/`--keep` file exited 1 where the
+command line's contract is 2; `.gdignore` was written into any folder.
+
+**The three sets, counted** (`shandalar-build/mining/2026-09-26/`):
+with all seven packs on, 37 of the 330 deck files are still blocked —
+33 of the 76 tournament decks, 3 community, 1 extended — over 77
+distinct names, all of them Mirage, Visions or Weatherlight (Hammer of
+Bogardan and Mystical Tutor in 8 decks each, Political Trickery and
+Undiscovered Paradise in 7, Abeyance, Dissipate, Enlightened Tutor and
+Wildfire Emissary in 6). No pack for those sets exists yet, by the
+owner's word, so the census is the deliverable and the decks wait.
+
+Gate: 523 scripts, **7,977/7,977 tests, 361,200 asserts**, exit 0
+in 254 s over 6 shards; Python 323, exit 0.
 
 ## Standing quality gates
 

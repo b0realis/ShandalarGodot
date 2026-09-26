@@ -281,7 +281,10 @@ DeckLab/deck_lab.sh --field round1/top.txt --gauntlet decks/ --group all --games
   CLI's `decklist.txt` and a previous round's `top.txt` are both such
   files, which is how a funnel is typed. A folder is taken **whole**:
   `--group` narrows the gauntlet and never the field, because a folder of
-  mined decks is filed under no group.
+  mined decks is filed under no group. A deck named twice — a list that
+  repeats a file, a folder and one of its files — plays once, with a
+  note on stderr (2026-09-26); its record would otherwise have been
+  counted twice in the standings.
 - **The gauntlet** is `--gauntlet LIST|DIR` and/or `--deck-b DECK`: the
   defined good decks, one or many. `--group all` (new with this mode)
   walks `decks/` into every subfolder and keeps every group — the whole
@@ -329,19 +332,19 @@ same tournament at `--procs 1` and `--procs 3`).
 |---|---|---|
 | `--deck-a DECK` | the deck under test (required) | — |
 | `--deck-b DECK` | single opponent → duel mode | — |
-| `--gauntlet LIST\|DIR` | comma list of .deck files, or a directory of them (deck A excluded, whichever flag was typed first) → gauntlet mode | — |
+| `--gauntlet LIST\|DIR\|FILE.txt` | comma list of .deck files, a directory of them, or a text file naming one per line (deck A excluded from all three, by file name, whichever flag was typed first; `--deck-b` is the way to ask for the mirror) → gauntlet mode, one opponent or forty | — |
 | `--games N` | games **per matchup** | 1000 |
 | `--seed N` | base RNG seed — same seed + decks = identical results at ANY `--jobs` | 1 |
 | `--jobs N` | worker threads per process (0 = default) | min(4, cores) |
 | `--procs N` | separate worker **processes**, each a whole engine holding the card pool (~235 MB) and about 8× the speed of threads; `1` turns the fan-out off, `0` decides from the size of the run. A worker that dies is replaced by a fresh one for the same slice (three in all); a slice no worker can finish stops the run, naming the game the last heartbeat was on (see [Performance](#performance)) | 8 once a run is big enough |
 | `--profile-a NAME` / `--profile-b NAME` | pilot skill: `apprentice`, `magician`, `sorcerer`, `wizard` | wizard |
-| `--profile-a NAME:knob=value,...` | the same preset with knobs overridden — `wizard:pays_sacrifices=off`, `wizard:minds_pain=off,counter_threshold=4`. Booleans read on/off (true/false, 1/0), numbers as the knob's own type; an unknown knob is refused at parse time. How one AI capability is measured against its own null: the candidate on seat A, the knob off on seat B, same seeds | — |
+| `--profile-a NAME:knob=value,...` | the same preset with knobs overridden — `wizard:pays_sacrifices=off`, `wizard:minds_pain=off,counter_threshold=4`. Booleans read on/off (true/false, 1/0), numbers as the knob's own type; an unknown knob, or a value the knob cannot take (`counter_threshold=abc`, `chump_threshold=1.5` for a whole-number knob), is refused at parse time. How one AI capability is measured against its own null: the candidate on seat A, the knob off on seat B, same seeds | — |
 | `--sweep KNOB=V1,V2,...` | the three-pair measurement of one AI knob in ONE run over one seed set: per value the CANDIDATE pair (deck A with the knob at that value vs deck B at the null), once the NULL pair (both seats at the null), and per value the CONTROL pair (below), which must replay its own null run game for game. One report with a row per value: win rate, interval, delta vs null, and the control's PASS/FAIL. Needs `--deck-a`/`--deck-b` or `--gauntlet` plus both control decks; never writes the Elo ledger; refuses `--matrix`, `random`, and a knob also set in `--profile-a/-b`. An unknown knob or a value the knob cannot read is exit 2 (see [the sweep](#the-sweep--one-knob-three-pairs-one-run-2026-09-06)) | — |
 | `--null VALUE` | the sweep's null | `off` for a boolean knob, the seat-A preset's own value for a number |
 | `--control-deck-a DECK` / `--control-deck-b DECK` | the sweep's control pair — two decks the knob cannot fire on. Required with `--sweep`, meaningless without it | — |
-| `--out DIR` | output directory, created and NAMED BEFORE the run starts (one inside the project gets a `.gdignore`, so the editor never imports the run's `matchups.csv` as a translation table) | `DeckLab/results/run_<stamp>` |
+| `--out DIR` | output directory, created and NAMED BEFORE the run starts (one inside the project gets a `.gdignore`, so the editor never imports the run's `matchups.csv` as a translation table). A relative DIR is under the project root, where the shell runs; a DIR that holds an older run is written over; a path that is a FILE is refused before a game is played | `DeckLab/results/run_<stamp>` |
 | `--no-svg` | skip chart files | off |
-| `--quiet` | no banner and no progress bar; errors only — exactly `--no-banner --progress off` | off |
+| `--quiet` | no banner and no progress bar; the report still prints — exactly `--no-banner --progress off` | off |
 | `--no-banner` | keep the progress bar, drop the artwork (or export `DECK_LAB_NO_BANNER=1`) | off |
 | `--progress MODE` | which SHAPE the progress takes: `auto` (a redrawing bar on a terminal, one heartbeat line a minute in a log), `bar` (the bar whatever stderr is), `log` (the lines whatever stderr is — they accumulate, so a long sweep leaves a record of itself), `off` (none, and the banner stays). An explicit `--progress` wins over the `off` that `--quiet` implies | `auto` |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
@@ -594,7 +597,7 @@ DeckLab/deck_lab.sh --deck-a decks/1997/ancients/dracur.deck --deck-b big_green.
 ```
 
 `KNOB` is any `AiProfile` knob (`pays_sacrifices`, `casts_timed_spells`, `counts_cards`, `levels_boards`,
-`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `holds_the_closer`, `counts_the_race`, `reads_race`, `holds_tricks`, `prices_offers`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
+`paces_draws`, `holds_duplicates`, `animates_to_attack`, `times_sweeps`, `trusts_abyss`, `pumps_to_attack`, `spends_counters`, `ranks_counters`, `tutors_for_the_turn`, `reads_gaze`, `reads_manlands`, `reads_pumps`, `counters_by_shape`, `reads_lethal_x`, `minds_pain`, `fits_auras`, `feeds_worst`, `spares_own`, `prices_liabilities`, `checks_before_casting`, `reinforces_blocks`, `minds_the_vise`, `runs_loops`, `holds_the_closer`, `counts_the_race`, `reads_race`, `holds_tricks`, `prices_offers`, `pays_the_rent`, `buys_life`, `swaps_life`, `takes_the_turn`, `counter_threshold=4,5,6`, `holds_x_burn=0,3,5`, `crack_back_margin=0,6,10`, `aggression=0.3,0.7`, `w_hand=1.5,2.0,2.5`, `defender_scale=0,0.4`, `ability_bonus=0,0.5`, ...); the values read as
 the knob's own type, so `pays_sacrifices=maybe` and `counter_threshold=x`
 are refused with exit 2, as is a knob that does not exist. The null is
 `off` for a boolean and the seat-A preset's own value for a number unless
@@ -1417,7 +1420,12 @@ child that goes without an answer — killed for memory, crashed on a game
 play on; the slice file is still on disk, so the retried games are the
 same games with the same seeds. A slice still missing after the third
 child stops the run (exit 1) naming the unplayed games and the one the
-last heartbeat was on, by pair and seed — the thing to play alone. The
+last heartbeat was on, by pair and seed — the thing to play alone. And
+a child whose PARENT is gone — Ctrl-C on the shell, `kill` on the pid —
+stops before its next game and writes nothing (2026-09-26): the
+parent's pid rides the slice file and every child looks for it every
+two seconds, so a killed run no longer leaves eight engines playing
+games nobody will read. The
 first thousand-deck tournament (430,000 games, 3 h 21 m) is why: the
 parent of that day took a child's file for its landing the instant the
 file was *opened*, killed the last child mid-write, read an empty file,
@@ -1512,15 +1520,16 @@ selection and then cached. Budget the disk rather than the clock —
 6. **Then improve it.** `auto_deck_cli.sh --out tries --count 100 --keep
    round2/best.deck --vary "Mijae Djinn, 2 Lava Axe" --packs all --sets
    every` holds the winner but for the cards named and fills their slots
-   a hundred ways; the Lab plays the hundred against the same gauntlet
-   with the winner itself in the field as the control (*Varying a deck
-   you have*, below).
+   a hundred ways (`--keep` implies `--variety 50`, as `--distinct`
+   does, or the hundred fills would be one fill); the Lab plays the
+   hundred against the same gauntlet with the winner itself in the
+   field as the control (*Varying a deck you have*, below).
 
 ### The card pool — `--source`
 
 | `--source` | the pool |
 |---|---|
-| `sets` (default) | every card of the sets `--sets` names. The Extras window's two switches are honored by `--original-cards on\|off` and `--completion-pack on\|off` |
+| `sets` (default) | every card of the sets `--sets` names that is in play — the default `--sets 4ed` pool is the 149 Fourth Edition names the base game has (596 copies) unless `--packs 1` puts the pack's completion in. The Extras window's two switches are honored by `--original-cards on\|off` and `--completion-pack on\|off` |
 | `list` | the cards of `--list FILE` — `4 Lightning Bolt` lines, the same lines a `.deck` file holds, `SB:` lines counted too. Giving `--list` selects this source on its own |
 | `sealed` | a SEALED POOL DEALT PER DECK from that deck's own seed, out of the sets `--sets` names; `--boosters`, `--starters`, `--free-lands` and `--extras` are the Sealed Deck window's four numbers. Every deck opens its own packs, so a field varies without a single wish changing |
 
@@ -1565,7 +1574,11 @@ census rule) and, when every deck of a field is skipped, says why in the
 refusal: *3 deck files skipped for proxy cards; a field mined with
 --packs X is played with the same --packs X (or --packs all)*. The
 `next:` line the CLI prints carries the packs it was run with, so
-copying it is enough.
+copying it is enough (a path with a space in it is quoted there, so the
+line pastes). A `--keep` deck whose `# requires-pack:` header names a
+pack that is not in play is refused the same way — *needs card pack 3,
+which is not in play — add `--packs 3`* — rather than as a list of
+cards the game lacks.
 
 ```
 DeckLab/auto_deck_cli.sh --out ice_mine --count 200 --packs 3 --sets ice --colors random
@@ -1579,8 +1592,8 @@ and may be repeated; see *Alternatives and the cartesian walk* below.
 
 | Switch | Meaning | Default |
 |---|---|---|
-| `--out DIR` | where the deck files, `decks.csv` and `decklist.txt` are written (required). A folder that already holds something is refused unless `--force` | — |
-| `--count N` | how many decks to make | 1 |
+| `--out DIR` | where the deck files, `decks.csv` and `decklist.txt` are written (required; a relative DIR is under the project root, where the wrapper runs). A folder that already holds something is refused unless `--force`; a path that is a file is refused outright | — |
+| `--count N` | how many decks to make, up to 999999 (the seed range) | 1 |
 | `--seed N` | the base seed, 1..999999. Omitted, a fresh one is rolled, printed and written into every row | rolled |
 | `--source sets\|list\|sealed` | where the card pool comes from (above) | `sets` |
 | `--sets CODE,CODE` | the sets of one pool, or `every` (**axis**, by repetition) | `4ed` |
@@ -1598,20 +1611,22 @@ and may be repeated; see *Alternatives and the cartesian walk* below.
 | `--power-nine on\|off` | the Lotus, the Moxen and the blue three (**axis**; bare `--power-nine` means on) | off |
 | `--variety 0\|25\|50\|100` | how far the seed's taste moves a card's worth — the window's Variety row, Best / A little / Some / Wild (**axis**) | 0 |
 | `--distinct PCT` | every deck at least PCT% different by cards from every earlier deck of the run, built again from fresh seeds until it is (implies `--variety 50`, then `100`) | off |
-| `--keep FILE` | a deck file whose non-land cards every deck is built around — or, with `--vary`, the deck held but for the cards named | — |
+| `--keep FILE` | a deck file whose non-land cards every deck is built around — or, with `--vary`, the deck held but for the cards named. Implies `--variety 50` when none was spoken, as `--distinct` does; a relative FILE is under the project root | — |
 | `--vary "Fireball, 2 Lightning Bolt"` | with `--keep`: hold the deck — its size, its lands, its colours, every other card — and fill the named cards' slots from the pool without them; a bare name is every copy | — |
 | `--original-cards on\|off` | the Extras window's `Original 1997` switch | on |
 | `--completion-pack on\|off` | the Extras window's `tDotP Pack 1` switch | on |
 | `--boosters N` / `--starters N` / `--free-lands N` / `--extras N` | the sealed deal's four numbers | 3 / 1 / 0 / 0 |
-| `--force` | write into an output folder that already holds files | off |
+| `--force` | write into an output folder that already holds files — the previous run's `deck_*.deck`, `decks.csv` and `decklist.txt` go first, so the folder is the new run and nothing else (the Lab's `--field DIR` plays the folder); other files stay | off |
 | `--progress auto\|bar\|log\|off` | the shape of the progress, the Lab's own four | auto |
-| `--quiet` / `--no-banner` | the Lab's own two | off |
+| `--quiet` / `--no-banner` | the Lab's own two (`--quiet` is no banner and no progress bar; the report still prints) | off |
 | `-h`, `--help` | switch reference | — |
 | `-V`, `--version` | the project's version, answered by the shell | — |
 
 Exit codes: **0** every deck written, **1** the run broke (no output
 folder, a folder that is not empty and no `--force`, a pool with nothing
-in it), **2** the command line was wrong, **3** no Godot to run.
+in it), **2** the command line was wrong (a switch, a value, a `--keep`
+or `--list` file that is not there, a kept deck that needs a pack not in
+play), **3** no Godot to run.
 
 ### Alternatives and the cartesian walk
 
@@ -1652,7 +1667,8 @@ still says how it was made. `tests/tools/test_auto_deck_cli.gd` holds the
 tool to it by reading the rows back and rebuilding every deck of a run.
 A second attempt under `--distinct` takes the next seed PAST the run's
 own `--count`, so the seeds the rows would have had are never touched and
-a row's seed is still its own.
+a row's seed is still its own; the `seeds A..B` line the run ends on
+names the least and the most seed a row holds, retries included.
 
 ### Colours — `none`, letters, `=letters`, `random`, and the coverage words
 
@@ -1715,8 +1731,9 @@ from every earlier deck by at least PCT per cent of its builder's cards
 larger of the two — basic lands and the `--keep` cards do not count). A
 deck that falls short is built again from a fresh seed, up to twenty
 times, and the most distinct attempt is kept when none reaches it; the
-summary says how many second attempts the run took and how many decks
-never got there. Every seed a second attempt spends is dealt from the
+summary says how many second attempts the run took and names the decks
+that never got there, with how close each came (eight named, then a
+count). Every seed a second attempt spends is dealt from the
 base seed past the run's own, so the same line still deals the same
 field. At variety 0 the promise would fail on the second deck of any one
 wish, so `--distinct` implies `--variety 50` when none was spoken, and
@@ -1849,6 +1866,10 @@ written inside the project gets a `.gdignore`, so the editor never imports
 | `source` | `sets`, `list` or `sealed` |
 | `sets` | the set codes of this deck's pool, space-separated (empty for a list) |
 | `pool` | the pool's name, the AutoDeck window's own wording |
+| `packs` | the packs in play when the deck was built, the way `--packs` takes them — `none`, or `1,3`; the game's own setting when the line said nothing (2026-09-26) |
+| `original_cards` / `completion_pack` | the two pool toggles, `on` / `off` |
+| `list` | the `--list` file's name (empty unless `--source list`) |
+| `boosters` / `starters` / `free_lands` / `extras` | the sealed deal's four numbers (empty unless `--source sealed`) |
 | `colors_asked` | the letters asked for, or `none`, or `random` |
 | `colors_built` | the colors the builder actually chose — **this is what to tick in the window** |
 | `max_colors` | 1..5 |
@@ -1870,7 +1891,13 @@ written inside the project gets a `.gdignore`, so the editor never imports
 
 Every option column is spelled the way the switch takes it, so a row can be
 pasted back onto a command line. A pool label with a comma in it
-(`Fourth Edition, The Dark`) is quoted, the ordinary CSV way.
+(`Fourth Edition, The Dark`) is quoted, the ordinary CSV way. The pool
+columns are what make the promise whole: before them, `--packs none` and
+`--packs 1` wrote the same row for two decks that shared no card, and a
+row rebuilt its deck only from the default pool. A `sets` row rebuilds in
+the AutoDeck window (with the packs the row names in play); a `sealed` or
+`list` row rebuilds on this command line, which is where those pools
+live.
 
 ## Files
 

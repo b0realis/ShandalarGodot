@@ -173,8 +173,19 @@ const DECKLIST_NAME := "decklist.txt"
 ## a gold deck — so the row rebuilds as it is. `distinct` is the deck's
 ## distance to the nearest earlier deck of the run, in per cent of its
 ## builder's cards (100 for the first deck, which has none).
+##
+## THE POOL SWITCHES ARE COLUMNS TOO (2026-09-26): `packs` is the packs
+## in force when the deck was built (`none`, or `1,3` the way `--packs`
+## takes it — the game's own setting when the line said nothing),
+## `original_cards` and `completion_pack` the two pool toggles, `list`
+## the `--list` file and the four sealed numbers the deal. Without them
+## two runs of one seed — `--packs none` and `--packs 1` — wrote the same
+## row for two decks that shared no card, and "a row rebuilds its deck"
+## was true only of the default pool.
 const MANIFEST_COLUMNS: Array[String] = ["file", "index", "seed", "source",
-	"sets", "pool", "colors_asked", "colors_built", "max_colors", "gold",
+	"sets", "pool", "packs", "original_cards", "completion_pack", "list",
+	"boosters", "starters", "free_lands", "extras",
+	"colors_asked", "colors_built", "max_colors", "gold",
 	"size", "lean", "speed", "rarity", "lands", "tournament", "power_nine",
 	"variety", "cards", "land_count", "creature_count", "spell_count",
 	"distinct", "deck_name"]
@@ -196,7 +207,7 @@ const PROGRESS_LOG_SECONDS := 60.0
 ## an unknown option, and a flag with nothing after it answers its own
 ## question by quoting its line.
 const FLAG_HINTS := {
-	"--out": "--out DIR: where the deck files, decks.csv and decklist.txt are written (required)",
+	"--out": "--out DIR: where the deck files, decks.csv and decklist.txt are written (required; a relative DIR is under the project root, where the wrapper runs)",
 	"--count": "--count N: how many decks to make, default 1",
 	"--seed": "--seed N: the base seed, 1..999999; omitted, a fresh one is rolled and recorded",
 	"--source": "--source sets|list|sealed: where the card pool comes from, default sets",
@@ -240,7 +251,7 @@ const TOGGLE_HINTS := {
 	"--gold": "--gold: the same as --gold on",
 	"--power-nine": "--power-nine: the same as --power-nine on",
 	"--no-tournament": "--no-tournament: the same as --tournament off",
-	"--quiet": "--quiet: no banner and no progress — errors only",
+	"--quiet": "--quiet: no banner and no progress bar — the report still prints",
 	"--no-banner": "--no-banner: keep the progress, drop the artwork",
 }
 
@@ -715,7 +726,7 @@ static func parse_args(argv: PackedStringArray) -> Dictionary:
 			return {"error": "%s needs a value  (%s)" % [arg, FLAG_HINTS[arg]]}
 		var value := argv[i]
 		i += 1
-		if WHOLE_NUMBER_FLAGS.has(arg) and not value.is_valid_int():
+		if WHOLE_NUMBER_FLAGS.has(arg) and not is_whole_number(value):
 			return {"error": "%s takes a whole number, not '%s'  (%s)"
 				% [arg, value, FLAG_HINTS[arg]]}
 		match arg:
@@ -725,6 +736,9 @@ static func parse_args(argv: PackedStringArray) -> Dictionary:
 				opts.count = value.to_int()
 				if opts.count < 1:
 					return {"error": "--count must be >= 1"}
+				if opts.count > SEED_MOST:
+					return {"error": "--count must be <= %s — past that a run would deal a seed twice (see --seed)"
+						% LabConsole.commas(SEED_MOST)}
 			"--seed":
 				opts.seed = value.to_int()
 				if opts.seed < SEED_LEAST or opts.seed > SEED_MOST:
@@ -804,8 +818,11 @@ static func parse_args(argv: PackedStringArray) -> Dictionary:
 		return {"error": "--vary needs --keep FILE, the deck to hold  (%s)" % FLAG_HINTS["--keep"]}
 	# `--distinct` at variety 0 would fail on the second deck of any one
 	# wish (the class doc), so it brings the variety the window's middle
-	# choice has — unless the line said what variety it wants.
-	if int(opts.distinct) > 0 and not spoken.has("variety"):
+	# choice has — unless the line said what variety it wants. So does
+	# `--keep` (2026-09-26): the held cards fix the colors and the fill
+	# from what is left is the same fill every time, and twenty `--vary`
+	# decks at variety 0 were one deck twenty times.
+	if (int(opts.distinct) > 0 or String(opts.keep) != "") and not spoken.has("variety"):
 		opts.variety = [DISTINCT_VARIETY]
 	opts.spoken = spoken
 	return opts
@@ -1207,8 +1224,12 @@ func _main(argv: PackedStringArray) -> int:
 	var list_pool: Dictionary = {}
 	var list_label := ""
 	if opts.source == SOURCE_LIST:
-		var text := FileAccess.get_file_as_string(
-			ProjectSettings.globalize_path(String(opts.list)))
+		var list_path := ProjectSettings.globalize_path(String(opts.list))
+		if not FileAccess.file_exists(list_path):
+			printerr("auto_deck: --list: no card list at '%s'" % opts.list)
+			_usage_hint(false)
+			return 2
+		var text := FileAccess.get_file_as_string(list_path)
 		if text == "":
 			printerr("auto_deck: cannot read the card list '%s'" % opts.list)
 			return 1
@@ -1228,9 +1249,20 @@ func _main(argv: PackedStringArray) -> int:
 	var held: DeckModel = null
 	var varied: Dictionary = {}
 	if String(opts.keep) != "":
-		var kept := DeckList.load_file(
-			ProjectSettings.globalize_path(String(opts.keep)))
+		var kept_path := ProjectSettings.globalize_path(String(opts.keep))
+		if not FileAccess.file_exists(kept_path):
+			printerr("auto_deck: --keep: no deck file at '%s'" % opts.keep)
+			_usage_hint(false)
+			return 2
+		var kept := DeckList.load_file(kept_path)
 		if not kept.errors.is_empty():
+			# A PACK THE LINE DID NOT PUT ON is a switch, not a spelling
+			# (the `--sets` refusal's own standard): the file's
+			# `# requires-pack:` header names it, so name it back.
+			var wanted := missing_packs_message(kept.required_packs)
+			if wanted != "":
+				printerr("auto_deck: '%s' %s" % [opts.keep, wanted])
+				return 2
 			printerr("auto_deck: problems reading '%s':" % opts.keep)
 			for problem in kept.errors:
 				printerr("  " + String(problem))
@@ -1270,12 +1302,14 @@ func _main(argv: PackedStringArray) -> int:
 	# THE RUN-LEVEL OPTIONS THAT ARE NOT AXES, said out loud only when
 	# they are not the default: a log of a run has to be enough to repeat
 	# it, and `--keep` in particular decides the colors of every deck.
+	var implied := "" if (opts.spoken as Dictionary).has("variety") \
+		else " (--variety %d implied)" % DISTINCT_VARIETY
 	if held != null:
-		print("held: %s (%d cards, %d lands) but for %s — those leave the pool"
-			% [opts.keep, held.total(), held.land_count(), _varied_line(varied)])
+		print("held: %s (%d cards, %d lands) but for %s — those leave the pool%s"
+			% [opts.keep, held.total(), held.land_count(), _varied_line(varied), implied])
 	elif keep != null:
-		print("built around: %s (%d non-land card(s))" % [opts.keep,
-			_non_lands(keep)])
+		print("built around: %s (%d non-land card(s))%s" % [opts.keep,
+			_non_lands(keep), implied])
 	if int(opts.distinct) > 0:
 		print("distinct: every deck %d%% from every earlier one by its builder's cards, %d seeds tried a deck%s"
 			% [int(opts.distinct), DISTINCT_TRIES,
@@ -1291,6 +1325,7 @@ func _main(argv: PackedStringArray) -> int:
 
 	var started_at := Time.get_ticks_msec()
 	var width := index_width(count)
+	var packs_column := packs_word(_packs_in_force)
 	var manifest := PackedStringArray([manifest_header()])
 	var files := PackedStringArray()
 	var by_colors := {}
@@ -1302,14 +1337,14 @@ func _main(argv: PackedStringArray) -> int:
 	var distinct := int(opts.distinct)
 	var retries := 0
 	var unreached := 0
+	var short_decks := PackedStringArray()
 	var nearest := 100
+	var seed_low := 0
+	var seed_high := 0
 	for index in count:
 		var wish := combo_at(opts, index)
-		var pool := _pool_for(wish, opts, list_pool, deck_seed(base_seed, index))
-		if not varied.is_empty():
-			pool = pool.duplicate()
-			for name in varied:
-				pool.erase(name)
+		var pool := _without_varied(
+			_pool_for(wish, opts, list_pool, deck_seed(base_seed, index)), varied)
 		var pool_label := _pool_label_for(wish, opts, list_label, pool)
 		if AutoDeck.pool_total(pool) == 0:
 			printerr("auto_deck: the pool for deck %d is empty (%s)"
@@ -1342,7 +1377,8 @@ func _main(argv: PackedStringArray) -> int:
 			if String(opts.source) == SOURCE_SEALED and attempt > 0:
 				# A sealed pool is the seed's own, so a fresh seed is a
 				# fresh deal too.
-				auto.pool = _pool_for(wish, opts, list_pool, seed_value)
+				auto.pool = _without_varied(
+					_pool_for(wish, opts, list_pool, seed_value), varied)
 				auto.pool_label = _pool_label_for(wish, opts, list_label, auto.pool)
 			var deck := auto.build()
 			var cards := AutoDeck.builders_cards(deck, keep)
@@ -1356,14 +1392,14 @@ func _main(argv: PackedStringArray) -> int:
 			attempt += 1
 			if distinct <= 0 or percent >= distinct or attempt >= DISTINCT_TRIES:
 				break
-		if distinct > 0 and best_percent < distinct:
-			unreached += 1
 		if index > 0:
 			nearest = mini(nearest, best_percent)
 		field.add(best_cards)
 		var auto := best_auto
 		var deck := best_deck
 		var seed_value := best_seed
+		seed_low = seed_value if index == 0 else mini(seed_low, seed_value)
+		seed_high = maxi(seed_high, seed_value)
 		# A NAME PER DECK, because a whole field of "Blue-Black Midrange"
 		# is a matrix report nobody can read: the builder's own archetype
 		# name plus the index the file carries — or the held deck's own
@@ -1373,6 +1409,9 @@ func _main(argv: PackedStringArray) -> int:
 		if held != null:
 			_note_varied(deck, varied, held.deck_name)
 		var file_name := deck_file_name(index, width, auto.chosen_colors, seed_value)
+		if distinct > 0 and best_percent < distinct:
+			unreached += 1
+			short_decks.append("%s (%d%%)" % [file_name, best_percent])
 		var written := FileAccess.open(out_dir.path_join(file_name), FileAccess.WRITE)
 		if written == null:
 			printerr("auto_deck: cannot write '%s' (error %d)"
@@ -1382,7 +1421,7 @@ func _main(argv: PackedStringArray) -> int:
 		written.close()
 		files.append(out_dir.path_join(file_name))
 		manifest.append(manifest_row(_record(file_name, index, seed_value,
-			opts, wish, auto, deck, best_percent)))
+			opts, wish, auto, deck, best_percent, packs_column)))
 		var letters := color_letters(auto.chosen_colors)
 		by_colors[letters] = int(by_colors.get(letters, 0)) + 1
 		if auto.short_by > 0:
@@ -1410,14 +1449,22 @@ func _main(argv: PackedStringArray) -> int:
 		print("distinct: the nearest two decks are %d%% apart; %d second attempt(s) over the run"
 			% [nearest if count > 1 else 100, retries])
 		if unreached > 0:
-			print("%d deck(s) could not reach --distinct %d in %d tries (the most distinct attempt kept)"
-				% [unreached, distinct, DISTINCT_TRIES])
+			print("%d deck(s) could not reach --distinct %d in %d tries (the most distinct attempt kept): %s"
+				% [unreached, distinct, DISTINCT_TRIES, short_list(short_decks)])
 	print("manifest: %s   deck list: %s" % [manifest_path, decklist_path])
+	# THE SEEDS ARE THE ONES WRITTEN (2026-09-26): with --distinct a deck
+	# keeps a retry's seed, so the run's own stride named a seed no row
+	# held; and a row rebuilds in the WINDOW only from a source the window
+	# has — a sealed deal or a card list is this command line's alone.
+	var rebuilds := "in the AutoDeck window"
+	if held != null:
+		rebuilds = "with the same --keep and --vary"
+	elif String(opts.source) != SOURCE_SETS:
+		rebuilds = "on this command line (--source %s is the CLI's own)" % opts.source
 	print("seeds %d..%d (base %d, stride %d%s) — any row of %s rebuilds %s"
-		% [deck_seed(base_seed, 0), deck_seed(base_seed, count - 1), base_seed,
+		% [seed_low, seed_high, base_seed,
 			SEED_STRIDE, ", %d more for second attempts" % retries if retries > 0 else "",
-			MANIFEST_NAME, "with the same --keep and --vary" if held != null
-			else "in the AutoDeck window"])
+			MANIFEST_NAME, rebuilds])
 	print(next_step_line(out_dir, _packs_in_force, String(opts.keep) if held != null else ""))
 	return 0
 
@@ -1553,9 +1600,9 @@ static func next_step_line(out_dir: String, packs: Variant, held_file := "") -> 
 		for id in ids:
 			numbers.append(String(id).trim_prefix("pack-"))
 		packs_word = " --packs %s" % ("none" if ids.is_empty() else ",".join(numbers))
-	var control := " --field %s" % held_file if held_file != "" else ""
+	var control := " --field %s" % shell_word(held_file) if held_file != "" else ""
 	return "next: DeckLab/deck_lab.sh --field %s%s --gauntlet decks/ --group tournament --games 20%s --no-elo" \
-		% [out_dir, control, packs_word]
+		% [shell_word(out_dir), control, packs_word]
 
 
 ## The non-land cards of a `--keep` deck — what [member AutoDeck.keep]
@@ -1677,13 +1724,22 @@ func _pool_label_for(wish: Dictionary, opts: Dictionary, list_label: String,
 ## One manifest row's worth of facts about a finished deck.
 static func _record(file_name: String, index: int, seed_value: int,
 		opts: Dictionary, wish: Dictionary, auto: AutoDeck,
-		deck: DeckModel, distinct_percent: int) -> Dictionary:
+		deck: DeckModel, distinct_percent: int, packs: String) -> Dictionary:
+	var sealed := String(opts.source) == SOURCE_SEALED
 	return {
 		"file": file_name, "index": index + 1, "seed": seed_value,
 		"source": String(opts.source),
 		"sets": " ".join(PackedStringArray(_strings(expand_sets(wish["sets"]))))
 			if String(opts.source) != SOURCE_LIST else "",
 		"pool": auto.pool_label,
+		"packs": packs,
+		"original_cards": on_off(bool(opts.original_cards)),
+		"completion_pack": on_off(bool(opts.completion_pack)),
+		"list": String(opts.list).get_file() if String(opts.source) == SOURCE_LIST else "",
+		"boosters": int(opts.boosters) if sealed else "",
+		"starters": int(opts.starters) if sealed else "",
+		"free_lands": int(opts.free_lands) if sealed else "",
+		"extras": int(opts.extras) if sealed else "",
 		"colors_asked": colors_word(wish["colors"]),
 		"colors_built": color_letters(auto.chosen_colors),
 		# The count IN FORCE after the build (the class doc of
@@ -1711,21 +1767,124 @@ static func _record(file_name: String, index: int, seed_value: int,
 ## SOMETHING unless --force: a mining run writes thousands of files, and
 ## a second run into the same folder silently mixes two fields into one
 ## manifest that describes neither. Returns "" or the refusal.
+##
+## `--force` CLEARS THE PREVIOUS RUN (2026-09-26): its deck files, its
+## manifest and its deck list go before the new ones are written,
+## because the Lab's `--field DIR` plays the FOLDER, and ten old decks
+## beside three new ones were thirteen decks under a three-row
+## manifest. Foreign files are left alone. And a path that is a FILE is
+## refused here rather than at the first deck's write.
 func _prepare_out_dir(out_dir: String, force: bool) -> String:
 	var absolute := ProjectSettings.globalize_path(out_dir)
+	if FileAccess.file_exists(absolute) and not DirAccess.dir_exists_absolute(absolute):
+		return "'%s' is a file, not a folder" % out_dir
+	var ours := false
 	if DirAccess.dir_exists_absolute(absolute):
 		var dir := DirAccess.open(absolute)
-		if dir != null and not force:
+		if dir != null:
 			var held := dir.get_files().size() + dir.get_directories().size()
-			if held > 0:
+			ours = held == 0 or dir.file_exists(MANIFEST_NAME)
+			if held > 0 and not force:
 				return "'%s' already holds %d file(s) — --force writes into it anyway" \
 					% [out_dir, held]
+			if held > 0 and force:
+				_clear_previous_run(dir)
 	else:
 		var made := DirAccess.make_dir_recursive_absolute(absolute)
 		if made != OK and not DirAccess.dir_exists_absolute(absolute):
 			return "cannot create the output directory '%s' (error %d)" % [out_dir, made]
-	_keep_the_importer_out(out_dir)
+		ours = true
+	# The marker goes into a folder this tool made or filled, never into
+	# a source folder somebody pointed `--out DeckLab --force` at.
+	if ours:
+		_keep_the_importer_out(out_dir)
 	return ""
+
+
+## The files a previous run of this tool left in [param dir]: its
+## `deck_*.deck` files, the manifest and the deck list.
+static func _clear_previous_run(dir: DirAccess) -> void:
+	for file_name in dir.get_files():
+		if (file_name.begins_with("deck_") and file_name.ends_with(".deck")) \
+				or file_name == MANIFEST_NAME or file_name == DECKLIST_NAME:
+			dir.remove(file_name)
+
+
+## [param pool] less the varied cards — the `--vary` names leave the
+## pool so the builder fills their slots with something else. Applied to
+## every pool a deck is built from, a sealed retry's fresh deal included
+## (which used to put them back, 2026-09-26).
+static func _without_varied(pool: Dictionary, varied: Dictionary) -> Dictionary:
+	if varied.is_empty():
+		return pool
+	var out := pool.duplicate()
+	for name in varied:
+		out.erase(name)
+	return out
+
+
+## The `packs` column: the packs in force for this run's builds, spelled
+## the way `--packs` takes them — `none`, or the bare numbers. When the
+## line said nothing it is the game's own setting, read from the
+## autoload, so the row still says what the deck was built from.
+static func packs_word(in_force: Variant) -> String:
+	var ids: Array = []
+	if in_force != null:
+		ids = in_force
+	else:
+		var packs := Lab.card_packs()
+		if packs != null:
+			for id in Lab.available_packs():
+				if packs.is_enabled(String(id)):
+					ids.append(String(id))
+	if ids.is_empty():
+		return "none"
+	var numbers := PackedStringArray()
+	for id in ids:
+		numbers.append(String(id).trim_prefix("pack-"))
+	return ",".join(numbers)
+
+
+## "needs card pack 6 — add `--packs 6`" for a kept deck whose
+## `# requires-pack:` header names a pack that is not in play, or "".
+static func missing_packs_message(required: Array) -> String:
+	var packs := Lab.card_packs()
+	var missing := PackedStringArray()
+	for id in required:
+		if packs == null or not packs.is_enabled(String(id)):
+			missing.append(String(id).trim_prefix("pack-"))
+	if missing.is_empty():
+		return ""
+	return "needs card pack %s, which is not in play — add `--packs %s`, or `--packs all` for every pack found" \
+		% [", ".join(missing), ",".join(missing)]
+
+
+## A whole number the way the parser wants one: digits (a sign allowed)
+## that fit an int64. `is_valid_int` is true of a twenty-digit string,
+## and `to_int` of one is an engine error and a saturated value — a
+## `--count` of nine quintillion (2026-09-26).
+static func is_whole_number(value: String) -> bool:
+	return value.is_valid_int() and value.lstrip("+-").length() <= 18
+
+
+## [param path] as one word of a shell line: quoted when it holds
+## whitespace or a shell character, so the `next:` line can be pasted.
+static func shell_word(path: String) -> String:
+	for c in path:
+		if c == " " or c == "\t" or c == "'" or c == "\"" or c == "$" or c == "&" \
+				or c == "(" or c == ")" or c == ";" or c == "|" or c == "<" or c == ">" \
+				or c == "*" or c == "?" or c == "!" or c == "`" or c == "\\":
+			return "'" + path.replace("'", "'\\''") + "'"
+	return path
+
+
+## Up to [constant SHORT_NAMED] entries of [param names], "and N more"
+## past that — the decks a `--distinct` run could not place.
+const SHORT_NAMED := 8
+static func short_list(names: PackedStringArray) -> String:
+	if names.size() <= SHORT_NAMED:
+		return ", ".join(names)
+	return ", ".join(names.slice(0, SHORT_NAMED)) + " and %d more" % (names.size() - SHORT_NAMED)
 
 
 ## A run's folder inside the project must not be imported by the editor:

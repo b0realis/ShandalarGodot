@@ -29,7 +29,8 @@ static func _any_artifact(inst: CardInstance) -> bool:
 
 func build() -> CardData:
 	return CardData.new("Transmute Artifact", "{U}{U}", Mtg.CardType.SORCERY) \
-		.spell(TransmuteEffect.new(_any_artifact)) \
+		.spell(TransmuteEffect.new(_any_artifact) \
+			.with_ai_role(&"needs_own_permanent", {"filter": _any_artifact})) \
 		.oracle("Sacrifice an artifact. If you do, search your library for an artifact card. If that card's mana value is less than or equal to the sacrificed artifact's mana value, put it onto the battlefield. If it's greater, you may pay {X}, where X is the difference. If you do, put it onto the battlefield. If you don't, put it into its owner's graveyard. Then shuffle.")
 
 

@@ -86,7 +86,9 @@ static func summarize(records: Array) -> Dictionary:
 		s["avg_turns"] = float(total) / s.turns.size()
 		var sorted_turns: Array = s.turns.duplicate()
 		sorted_turns.sort()
-		s["median_turns"] = sorted_turns[sorted_turns.size() / 2]
+		# An int on purpose: a record read back from results.json holds
+		# floats, and "median 12.0" is not the report's line (2026-09-26).
+		s["median_turns"] = int(sorted_turns[sorted_turns.size() / 2])
 	return s
 
 

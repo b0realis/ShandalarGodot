@@ -273,5 +273,7 @@ func test_the_ai_reads_the_riders_through_the_same_query() -> void:
 	_their_step(Mtg.Step.UPKEEP)
 	assert_true(ai._ability_available(g, imp, 0), "the Imp at their upkeep")
 	assert_true(ai._ability_available(g, angus, 0))
+	_their_step(Mtg.Step.COMBAT_BEGIN)
+	assert_true(ai._ability_available(g, imp, 0), "the Imp at their beginning of combat — the conscription's moment (2026-09-26)")
 	_their_step(Mtg.Step.DECLARE_ATTACKERS)
 	assert_false(ai._ability_available(g, imp, 0), "their attackers are declared")
