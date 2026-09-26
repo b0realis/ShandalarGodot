@@ -11734,6 +11734,11 @@ func _next_turn() -> void:
 		_resume_after_extra = -1
 	turn_number += 1
 	_turn_steps = Mtg.STEP_ORDER.duplicate()
+	# The turn line below is logged from the old turn's cleanup. After an
+	# extra combat (Relentless Assault) that index lies past the standard
+	# order just put back — point it at the new order's cleanup first, the
+	# step a plain turn's line has always carried (2026-09-26).
+	_step_index = _turn_steps.size() - 1
 	_skip_first_draw = false
 	log_line("== Turn %d — %s ==" % [turn_number, players[active_player].player_name],
 		null, "turn", active_player)

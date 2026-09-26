@@ -16763,6 +16763,52 @@ Turbo-Stasis last at 6.6%, which is the AI's reading of Stasis, not the
 deck's. Gate: 514 scripts, **7,879/7,879 tests, 358,558 asserts**,
 exit 0 in 244 s over 6 shards; Python 323, exit 0.
 
+## 2026-09-26 — The turn after an extra combat (0.40.24)
+
+Round 2 of the deck funnel — the first round's best 30 against every
+deck in the library, all seven packs in force, fifty games a matchup —
+printed `Out of bounds get index '19' (on base: 'Array[int]')` from
+`MtgGame.current_step` 250 times in 439,500 games: every game in which
+Goblin Fire's Relentless Assault resolved. The assault makes the turn
+twenty steps long; `_next_turn` put the standard thirteen back while
+`_step_index` still said 19, and the "== Turn N ==" line asked
+`current_step()` before `_enter_step(0)` corrected it. Play went on
+(the read fails, the line's step is wrong, the next step is entered as
+ever), so the round's numbers stand; the suite never saw it because the
+one test that crossed that boundary did so inside a search, where log
+lines are not written. `_next_turn` now points the index at the new
+order's cleanup before it writes the line — the step a plain turn's
+line has always carried — and
+`tests/unit/test_extra_combat_turn_boundary_2026_09_26.gd` crosses the
+boundary outside a search after one assault and after two (the runner
+counts the engine error as a failure), and pins the line's step either
+way.
+
+The second report (`shandalar-build/mining/2026-09-26/round2/`): 30
+field decks × 293 opponents × 50 games, 439,500 games in 3 h 10 m at
+39 games/s, exit 0, no slice retried. At 14,650 games a deck the
+interval is ±0.8 points, and the 30 finish between 59.0% and 61.2% —
+round 1's rank 1 is rank 5 and its rank 7 is rank 1, both inside round
+1's ±4.7. They are one deck: 16 of their 21 card names are in all 30
+lists, and 00145 differs from 00158 by a Blaze for a Disintegrate and
+a 2/3 swap of two Hordes. That is the mining tool's reading, not the
+Lab's — a colour-locked AutoDeck window draws the same list with
+different edges, so a 1,000-deck "random" field is about eleven decks
+in shuffles, and the funnel's next round should widen the window, not
+the field. The gauntlet, 293 decks hardest first: Azaar (Sargent, 2009)
+78.5%, Blue Skies 72.7%, Darkfall 72.5%, Abysmal Onslaught 71.3%,
+Azaar - Lichlord (Spells of the Ancients) 68.6%, Mono Brown Workshop
+Aggro 67.1%; by library group, portal_second_age averages 53.5%,
+community 40.0%, 1997 39.3%, tournament 38.6%, extended_community
+30.5%; the median deck beats the field 40.3% of the time, 77 of 293 are
+above even. The bottom is the AI's reading of combo and prison, not
+the decks': The Churning Deck 1.3%, Vercursion 3.2%, Turbo Stasis 3.8%,
+Hovi's Turbo-Stasis 4.8%, The Deck (Summer 1996) 5.3%, Recursion Combo
+5.7%, Time Vault Prison 6.4%. No game stalled.
+
+Gate: 515 scripts, **7,882/7,882 tests, 358,729 asserts**, exit 0
+in 248 s over 6 shards; Python 323, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

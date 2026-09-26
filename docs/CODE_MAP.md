@@ -233,7 +233,23 @@ needed); card files have NO class_name (they register by name instead);
   inside a bucket, 200,000 tasks grouped under ten seconds, the tables'
   reading of the buckets.
 
+## The turn after an extra combat (2026-09-26)
+
+- `engine/mtg_game.gd` — `_next_turn` points `_step_index` at the new
+  turn order's cleanup before it logs the turn line: after a Relentless
+  Assault the old index (19, or 26 after two) lies past the thirteen
+  steps just put back, and `current_step()` read out of bounds on every
+  such turn of round 2 of the deck funnel.
+- `tests/unit/test_extra_combat_turn_boundary_2026_09_26.gd` — a plain
+  turn's line carries the cleanup step; the turn after one assault, and
+  after two, opens without an engine error and carries the same.
+
 ## Release package files
+
+- `docs/releases/0.40.24.md`: the turn after a Relentless Assault opened
+  with an out-of-bounds read of the step — the line's step was wrong
+  and the engine printed an error every such turn; it is the cleanup
+  step now, as on any other turn.
 
 - `docs/releases/0.40.23.md`: the Deck Lab's aggregate after the games
   is one pass over the tasks — a thousand-deck tournament's report
