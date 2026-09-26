@@ -117,6 +117,7 @@ func test_the_defaults_are_the_autodeck_windows_own() -> void:
 	assert_eq(opts["lands"], [String(window["lands"])], "lands")
 	assert_eq(opts["tournament"], [bool(window["tournament"])], "tournament")
 	assert_eq(opts["power_nine"], [bool(window["power_nine"])], "power_nine")
+	assert_eq(opts["variety"], [int(window["variety"])], "variety")
 	# The window's blank colors are 0; the CLI's word for them is `none`.
 	assert_eq(opts["colors"], [cli.COLORS_NONE])
 	assert_eq(cli.asked_colors(cli.COLORS_NONE, 1, 2, false),
@@ -387,7 +388,8 @@ func test_every_axis_takes_alternatives_and_the_list_is_closed() -> void:
 		"gold": ["--gold", "on,off"], "size": ["--size", "40,60"],
 		"lean": ["--lean", "creatures,spells"], "speed": ["--speed", "fast,slow"],
 		"rarity": ["--rarity", "any,pauper"], "lands": ["--lands", "classic,non-classic"],
-		"tournament": ["--tournament", "on,off"], "power_nine": ["--power-nine", "on,off"]}
+		"tournament": ["--tournament", "on,off"], "power_nine": ["--power-nine", "on,off"],
+		"variety": ["--variety", "0,50"]}
 	assert_eq(Array(cli.AXES).size(), flags.size(), "one entry per axis")
 	for axis in cli.AXES:
 		assert_true(flags.has(String(axis)), "%s is reachable as a list" % axis)
@@ -396,6 +398,147 @@ func test_every_axis_takes_alternatives_and_the_list_is_closed() -> void:
 		assert_eq((opts[String(axis)] as Array).size(), 2,
 			"--%s took two alternatives" % String(axis).replace("_", "-"))
 		assert_eq(cli.combo_total(opts), 2)
+
+
+func test_a_coverage_word_is_every_color_set_of_that_size_in_wubrg_order() -> void:
+	# THE SWITCH THAT ASSURES THE COLOR COMBINATIONS (2026-09-26): `--colors
+	# pairs` IS ten alternatives, `=WU` to `=RG`, in the order a player
+	# lists them — so `--count 10` walks every pair once, `every` all 31
+	# sets, and the manifest's colors_asked column says which was which.
+	var sizes := {"mono": 5, "pairs": 10, "triples": 10, "quads": 5,
+		"five": 1, "every": 31}
+	assert_eq(sizes.keys(), cli.COLORS_COVERAGE.keys(), "the words there are")
+	for word in sizes:
+		var opts := _parse(["--out", "x", "--colors", String(word)])
+		assert_false(opts.has("error"), str(opts.get("error", "")))
+		var alternatives: Array = opts["colors"]
+		assert_eq(alternatives.size(), int(sizes[word]), "--colors %s" % word)
+		assert_eq(cli.combo_total(opts), int(sizes[word]))
+		var exact := 0
+		for wish in alternatives:
+			if cli.is_exact_wish(wish):
+				exact += 1
+		assert_eq(exact, alternatives.size(), "%s: every one is exact" % word)
+		assert_eq(cli.coverage_word(alternatives), String(word),
+			"and the list reads back as the word, for the run's header")
+	assert_eq(_parse(["--out", "x", "--colors", "mono"])["colors"],
+		["=W", "=U", "=B", "=R", "=G"])
+	assert_eq(_parse(["--out", "x", "--colors", "pairs"])["colors"],
+		["=WU", "=WB", "=WR", "=WG", "=UB", "=UR", "=UG", "=BR", "=BG", "=RG"])
+	assert_eq(_parse(["--out", "x", "--colors", "five"])["colors"], ["=WUBRG"])
+	var every: Array = _parse(["--out", "x", "--colors", "every"])["colors"]
+	assert_eq(every.slice(0, 5), ["=W", "=U", "=B", "=R", "=G"], "mono first")
+	assert_eq(every[every.size() - 1], "=WUBRG", "the five-color deck last")
+	assert_eq(cli.exact_masks(0).size(), 31)
+	assert_eq(cli.coverage_word(["=WU", "=WB"]), "", "two pairs are not a word")
+	assert_eq(cli.coverage_word([Mtg.ManaColor.W]), "", "and a mask is not one")
+	# A word ADDS to a spoken list like any alternative, and a word after
+	# a letter list is the list plus the sets.
+	assert_eq(_parse(["--out", "x", "--colors", "WU", "--colors", "mono"])["colors"].size(), 6)
+
+
+func test_an_exact_wish_is_those_colors_and_no_other() -> void:
+	# `=WU` builds white-blue and nothing else: the mask asked for AND
+	# max_colors set to their count — the window's "tick them, At most
+	# 2". `random` draws exactly too; `WU` on its own lets the builder
+	# add a third color of its own choosing.
+	var opts := _parse(["--out", "x", "--colors", "=wu"])
+	assert_false(opts.has("error"), str(opts.get("error", "")))
+	assert_eq(opts["colors"], ["=WU"], "kept as the word, in WUBRG letters")
+	assert_true(cli.is_exact_wish("=WU"))
+	assert_true(cli.is_exact_wish(cli.COLORS_RANDOM), "random is an exact draw")
+	assert_false(cli.is_exact_wish(Mtg.ManaColor.W | Mtg.ManaColor.U),
+		"a mask is a wish the builder may add to")
+	assert_false(cli.is_exact_wish(cli.COLORS_NONE))
+	var wu: int = Mtg.ManaColor.W | Mtg.ManaColor.U
+	assert_eq(cli.asked_colors("=WU", 4242, 5, false), wu)
+	assert_eq(cli.asked_max_colors("=WU", wu, 5), 2,
+		"exactly two, whatever --max-colors said")
+	assert_eq(cli.asked_max_colors(wu, wu, 5), 5, "plain letters keep --max-colors")
+	assert_eq(cli.asked_max_colors(cli.COLORS_RANDOM, Mtg.ManaColor.R, 3), 1,
+		"a random draw of one color is a mono deck")
+	assert_eq(cli.exact_word(wu), "=WU")
+	assert_eq(cli.colors_word("=WU"), "=WU", "the manifest's colors_asked")
+	assert_string_contains(str(_parse(["--out", "x", "--colors", "=WX"]).error),
+		"'=WX' is not colors")
+	assert_string_contains(str(_parse(["--out", "x", "--colors", "="]).error),
+		"is not colors")
+
+
+func test_variety_and_distinct_are_refused_outside_their_ranges() -> void:
+	assert_eq(_parse(["--out", "x", "--variety", "50"])["variety"], [50])
+	assert_eq(_parse(["--out", "x", "--variety", "0,100"])["variety"], [0, 100])
+	assert_string_contains(str(_parse(["--out", "x", "--variety", "30"]).error),
+		"--variety takes `0`, `25`, `50`, `100`, not '30'")
+	assert_string_contains(str(_parse(["--out", "x", "--variety", "wild"]).error),
+		"--variety takes")
+	assert_eq(_parse(["--out", "x"]).distinct, 0, "off unless asked")
+	assert_eq(_parse(["--out", "x", "--distinct", "60"]).distinct, 60)
+	assert_eq(_parse(["--out", "x", "--distinct", "1"]).distinct, 1)
+	assert_eq(_parse(["--out", "x", "--distinct", "100"]).distinct, 100)
+	assert_string_contains(str(_parse(["--out", "x", "--distinct", "0"]).error),
+		"--distinct takes 1..100, a percentage")
+	assert_string_contains(str(_parse(["--out", "x", "--distinct", "101"]).error),
+		"--distinct takes 1..100")
+	assert_string_contains(str(_parse(["--out", "x", "--distinct", "lots"]).error),
+		"--distinct takes a whole number, not 'lots'")
+
+
+func test_distinct_brings_the_variety_it_needs_unless_the_line_said() -> void:
+	# At variety 0 one wish and a hundred seeds are a hundred decks a card
+	# or two apart, so --distinct on its own would fail on the second deck
+	# of every wish: it implies the window's middle choice — and never
+	# overrides a spoken one, in either order.
+	var implied := _parse(["--out", "x", "--distinct", "60"])
+	assert_eq(implied["variety"], [cli.DISTINCT_VARIETY])
+	assert_false((implied.spoken as Dictionary).has("variety"), "implied, not spoken")
+	assert_true(AutoDeck.VARIETY_LEVELS.has(cli.DISTINCT_VARIETY), "a level the builder has")
+	var spoken := _parse(["--out", "x", "--distinct", "60", "--variety", "25"])
+	assert_eq(spoken["variety"], [25])
+	assert_true((spoken.spoken as Dictionary).has("variety"))
+	assert_eq(_parse(["--out", "x", "--variety", "100", "--distinct", "60"])["variety"],
+		[100], "spoken first, then --distinct: still the spoken one")
+	assert_eq(_parse(["--out", "x"])["variety"], [0], "and nothing without --distinct")
+
+
+func test_vary_is_refused_without_a_deck_and_names_what_it_takes() -> void:
+	assert_string_contains(str(_parse(["--out", "x", "--vary", "Fireball"]).error),
+		"--vary needs --keep FILE, the deck to hold")
+	var both := _parse(["--out", "x", "--keep", "big_red.deck",
+		"--vary", "Fireball, 2 Lightning Bolt"])
+	assert_false(both.has("error"), str(both.get("error", "")))
+	assert_eq(String(both.keep), "big_red.deck")
+	assert_eq(both.vary, [{"name": "Fireball", "copies": 0},
+		{"name": "Lightning Bolt", "copies": 2}],
+		"a bare name is every copy (0); a count before it is that many")
+	assert_string_contains(str(_parse(["--out", "x", "--keep", "d",
+		"--vary", "0 Fireball"]).error), "the count before a name is 1 or more")
+	assert_string_contains(str(_parse(["--out", "x", "--keep", "d",
+		"--vary", ","]).error), "--vary needs at least one card name")
+	assert_string_contains(str(_parse(["--out", "x", "--keep", "d",
+		"--vary", ""]).error), "--vary needs at least one card name")
+	# Against the deck: the card has to be in it, in that many copies,
+	# and a name is found without regard to case.
+	var deck := DeckModel.new()
+	deck.counts = {"Lightning Bolt": 4, "Fireball": 2, "Mountain": 20}
+	var read: Dictionary = cli.varied_cards(deck,
+		cli.parse_vary("lightning bolt, 1 Fireball")["cards"], "big_red.deck")
+	assert_eq(read.get("cards", {}), {"Lightning Bolt": 4, "Fireball": 1},
+		"every Bolt, one Fireball, by the deck's own spelling")
+	assert_string_contains(str(cli.varied_cards(deck,
+		cli.parse_vary("Shivan Dragon")["cards"], "big_red.deck").error),
+		"--vary: 'Shivan Dragon' is not in big_red.deck")
+	assert_string_contains(str(cli.varied_cards(deck,
+		cli.parse_vary("3 Fireball")["cards"], "big_red.deck").error),
+		"--vary: big_red.deck holds 2 Fireball, not 3")
+	assert_string_contains(str(cli.varied_cards(deck,
+		cli.parse_vary("1 Fireball, 2 Fireball")["cards"], "big_red.deck").error),
+		"holds 2 Fireball, not 3")
+	# And the Lab command the run ends on plays the held deck as the
+	# control the field is measured against.
+	assert_string_contains(cli.next_step_line("out", null, "decks/x.deck"),
+		"--field out --field decks/x.deck --gauntlet")
+	assert_false(cli.next_step_line("out", null).contains("--field decks"))
 
 
 # ------------------------------------------------------------ the seeds --
@@ -496,11 +639,12 @@ func test_a_deck_the_tool_made_rebuilds_from_its_row() -> void:
 	var out := _out_dir()
 	assert_eq(_run(["--out", out, "--count", "6", "--seed", "4242",
 		"--colors", "random", "--lean", "creatures,spells",
-		"--speed", "fast,slow", "--size", "40,60"]), 0)
+		"--speed", "fast,slow", "--size", "40,60", "--variety", "0,50"]), 0)
 	var rows := _rows_of(out.path_join(cli.MANIFEST_NAME))
 	assert_eq(rows.size(), 7, "a header and six decks")
 	var rebuilt_all := 0
 	var same_colors := 0
+	var varied := 0
 	for i in range(1, rows.size()):
 		var cell := _cells(rows[0], rows[i])
 		var auto := AutoDeck.new()
@@ -517,6 +661,9 @@ func test_a_deck_the_tool_made_rebuilds_from_its_row() -> void:
 		auto.land_kind = String(cli.LANDS_FLAGS[String(cell["lands"])])
 		auto.tournament = String(cell["tournament"]) == "on"
 		auto.power_nine = String(cell["power_nine"]) == "on"
+		auto.variety = int(cell["variety"])
+		if auto.variety > 0:
+			varied += 1
 		auto.seed = int(cell["seed"])
 		var rebuilt := auto.build()
 		var written := DeckList.load_file(out.path_join(String(cell["file"])))
@@ -532,6 +679,7 @@ func test_a_deck_the_tool_made_rebuilds_from_its_row() -> void:
 			"the row's card count is the file's")
 	assert_eq(rebuilt_all, 6, "all six decks rebuilt")
 	assert_eq(same_colors, 6, "and in the colors the row records")
+	assert_eq(varied, 3, "half of them with the seed's taste in the cards")
 
 
 func test_the_same_base_seed_and_options_build_identical_folders() -> void:
@@ -592,6 +740,14 @@ func test_the_manifest_has_a_row_per_deck_and_the_columns_it_says() -> void:
 		assert_eq(String(cell["lands"]), "non-classic")
 		assert_eq(String(cell["power_nine"]), "on")
 		assert_eq(String(cell["tournament"]), "off")
+		assert_eq(int(cell["variety"]), 0, "the variety the deck was built at")
+		# One wish at variety 0 is decks a card or two apart (the hair of
+		# chance in the fill), and the column says how far.
+		if i == 1:
+			assert_eq(int(cell["distinct"]), 100, "the first deck has nothing to be near")
+		else:
+			assert_between(int(cell["distinct"]), 0, 25,
+				"deck %d: a card or two from an earlier one" % i)
 		assert_eq(int(cell["cards"]), 60)
 		assert_eq(int(cell["cards"]), int(cell["land_count"])
 			+ int(cell["creature_count"]) + int(cell["spell_count"]),
@@ -781,6 +937,135 @@ func test_an_unknown_set_code_is_refused_before_a_deck_is_built() -> void:
 	# `every` is every active set, in the registry's own order.
 	assert_eq(cli.expand_sets(["every"]), Array(CardRegistry.active_set_order()))
 	assert_eq(cli.expand_sets(["4ed", "4ed"]), ["4ed"], "and never twice")
+
+
+func test_a_coverage_run_builds_every_color_set_it_names_exactly() -> void:
+	# `--colors mono --count 5` is the five mono decks, each built in its
+	# color and no other — max_colors is the count of the colors asked.
+	var out := _out_dir()
+	assert_eq(_run(["--out", out, "--count", "5", "--seed", "4242",
+		"--sets", "4ed", "--colors", "mono", "--size", "40"]), 0)
+	var rows := _rows_of(out.path_join(cli.MANIFEST_NAME))
+	assert_eq(rows.size(), 6)
+	var built := PackedStringArray()
+	for i in range(1, rows.size()):
+		var cell := _cells(rows[0], rows[i])
+		assert_eq(String(cell["colors_asked"]), "=" + String(cell["colors_built"]),
+			"deck %d is built in exactly the color asked" % i)
+		assert_eq(int(cell["max_colors"]), 1, "at most their count")
+		built.append(String(cell["colors_built"]))
+	assert_eq(Array(built), ["W", "U", "B", "R", "G"], "the five, in WUBRG order")
+
+
+func test_distinct_holds_every_deck_that_far_from_the_field() -> void:
+	# THE SWITCH FOR A FIELD THAT IS NOT ONE DECK IN A HUNDRED COATS
+	# (2026-09-26): each deck at least --distinct percent from every
+	# earlier one by AutoDeck.difference over the builder's cards, built
+	# again from fresh seeds until it is — and the manifest's `distinct`
+	# column IS that distance, checked here against the files.
+	var out := _out_dir()
+	assert_eq(_run(["--out", out, "--count", "4", "--seed", "4242",
+		"--sets", "4ed", "--colors", "=RG", "--distinct", "40"]), 0)
+	var rows := _rows_of(out.path_join(cli.MANIFEST_NAME))
+	assert_eq(rows.size(), 5)
+	var earlier: Array = []
+	var far_enough := 0
+	var seeds := {}
+	for i in range(1, rows.size()):
+		var cell := _cells(rows[0], rows[i])
+		var written := DeckList.load_file(out.path_join(String(cell["file"])))
+		assert_eq(written.errors, [] as Array[String], String(cell["file"]))
+		var cards := AutoDeck.builders_cards(DeckModel.from_deck_list(written))
+		var nearest := 1.0
+		for other in earlier:
+			nearest = minf(nearest, AutoDeck.difference(cards, other))
+		assert_eq(int(cell["distinct"]), int(floor(nearest * 100.0 + 0.000001)),
+			"deck %d's distinct column is its distance to the nearest earlier deck" % i)
+		if i == 1:
+			assert_eq(int(cell["distinct"]), 100, "the first deck has nothing to be near")
+		if int(cell["distinct"]) >= 40:
+			far_enough += 1
+		assert_true([cli.DISTINCT_VARIETY, 100].has(int(cell["variety"])),
+			"variety %d implied, 100 after %d seeds" % [cli.DISTINCT_VARIETY,
+			cli.DISTINCT_WILD_AFTER])
+		assert_eq(String(cell["colors_built"]), "RG", "the wish holds through the retries")
+		assert_eq(int(cell["cards"]), 60)
+		seeds[int(cell["seed"])] = true
+		earlier.append(cards)
+	assert_eq(far_enough, 4, "four red-green decks, each 40% from the rest")
+	assert_eq(seeds.size(), 4, "and no two of them share a seed")
+	# The same line builds the same field again: the second attempts are
+	# dealt from the base seed too.
+	var again := _out_dir()
+	assert_eq(_run(["--out", again, "--count", "4", "--seed", "4242",
+		"--sets", "4ed", "--colors", "=RG", "--distinct", "40"]), 0)
+	assert_eq(FileAccess.get_file_as_string(again.path_join(cli.MANIFEST_NAME)),
+		FileAccess.get_file_as_string(out.path_join(cli.MANIFEST_NAME)),
+		"the manifest is byte for byte the same")
+
+
+func test_a_held_deck_is_varied_in_the_named_cards_alone() -> void:
+	# THE SWITCH FOR FINDING BETTER CARDS FOR A DECK YOU HAVE (2026-09-26):
+	# `--keep FILE --vary "..."` holds the deck — its size, its lands, its
+	# colors and every other card — and fills the named cards' slots from
+	# the pool without them, so every deck of the run is that deck with
+	# those slots tried again.
+	var out := _out_dir()
+	assert_eq(_run(["--out", out, "--count", "1", "--seed", "4242",
+		"--sets", "4ed", "--colors", "=R", "--size", "40"]), 0)
+	var held_path := out.path_join(String(_cells(_rows_of(
+		out.path_join(cli.MANIFEST_NAME))[0], _rows_of(out.path_join(cli.MANIFEST_NAME))[1])["file"]))
+	var held := DeckModel.from_deck_list(DeckList.load_file(held_path))
+	assert_eq(held.total(), 40)
+	# The card to vary: the deck's first non-land, whatever it is.
+	var name := ""
+	for card in held.names():
+		if not DeckModel._card(String(card)).is_land():
+			name = String(card)
+			break
+	assert_ne(name, "", "a non-land card to vary")
+	var copies := held.count_of(name)
+	var varied := _out_dir()
+	# At variety 0 the best card for the slot wins under every seed, so
+	# a permute run is a run with variety, as the help's own example is.
+	assert_eq(_run(["--out", varied, "--count", "3", "--seed", "77", "--variety", "50",
+		"--sets", "4ed", "--keep", held_path, "--vary", name.to_lower()]), 0)
+	var rows := _rows_of(varied.path_join(cli.MANIFEST_NAME))
+	assert_eq(rows.size(), 4, "a header and three decks")
+	var different := {}
+	for i in range(1, rows.size()):
+		var cell := _cells(rows[0], rows[i])
+		var text := FileAccess.get_file_as_string(varied.path_join(String(cell["file"])))
+		var deck := DeckModel.from_deck_list(DeckList.load_file(
+			varied.path_join(String(cell["file"]))))
+		assert_eq(deck.total(), held.total(), "the size is the deck's own")
+		assert_eq(deck.land_count(), held.land_count(), "and so is the land count")
+		assert_eq(deck.count_of(name), 0, "%s leaves the pool" % name)
+		# Every other card is held — and the slots are filled from the
+		# pool, which still has the deck's own cards in it, so a fourth
+		# copy of a held three-of is one way to fill one.
+		var lost := 0
+		var filled := 0
+		for card in deck.names():
+			if String(card) == name:
+				continue
+			var change := deck.count_of(String(card)) - held.count_of(String(card))
+			if change < 0:
+				lost += 1
+			filled += maxi(change, 0)
+		assert_eq(lost, 0, "no held card lost a copy")
+		assert_eq(filled, copies, "the %d slots varied are the slots filled" % copies)
+		assert_eq(String(cell["colors_built"]), "R", "in the deck's own colors")
+		assert_eq(int(cell["max_colors"]), 1)
+		assert_eq(int(cell["variety"]), 50)
+		assert_eq(deck.deck_name, "%s %0*d" % [held.deck_name, cli.index_width(3), i],
+			"named after the deck it varies")
+		var notes := DeckModel.notes_from_text(text).split("\n")
+		assert_true(notes[notes.size() - 1].begins_with("Seed "), "the seed line stays last")
+		assert_eq(notes[notes.size() - 2], "Varied: %d %s — the rest of %s held."
+			% [copies, name, held.deck_name], "and the note says what was held")
+		different[_cards_of(deck)] = true
+	assert_gt(different.size(), 1, "three seeds, more than one way to fill the slots")
 
 
 func test_a_run_inside_the_project_keeps_the_importer_out() -> void:

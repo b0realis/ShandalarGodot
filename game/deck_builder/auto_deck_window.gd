@@ -23,7 +23,10 @@ extends RefCounted
 ## Power Nine on or off — off by default, the builder avoids them, on it
 ## puts the Lotus and the Moxen in every deck and the blue three in a
 ## blue deck, when the pool has them; whether to build around the cards
-## already on the surface; and a seed
+## already on the surface; a variety — best (the best card wins every
+## slot), a little, some or wild, how far the seed's taste moves a card's
+## worth, so that two seeds build two decks rather than one (2026-09-26,
+## [member AutoDeck.variety]); and a seed
 ## — blank for a fresh roll every build, a number for the same deck
 ## again, since the builder is seeded and its notes give the roll back
 ## (`Seed 565933: …`). All of it is remembered between visits under one
@@ -32,7 +35,7 @@ extends RefCounted
 ## the same deck.
 
 const TITLE := "AutoDeck"
-const WINDOW_SIZE := Vector2(680, 770)
+const WINDOW_SIZE := Vector2(680, 800)
 ## The `[Settings]` key the wishes are kept under.
 const OPTIONS_SETTING := "auto_deck_options"
 ## The three pools.
@@ -44,7 +47,8 @@ const DEFAULTS := {
 	"source": SOURCE_SETS, "sets": ["4ed"], "colors": 0, "max_colors": 2, "gold": false,
 	"size": 60, "lean": AutoDeck.LEAN_BALANCED, "speed": AutoDeck.SPEED_MEDIUM,
 	"rarity": AutoDeck.RARITY_ANY, "lands": AutoDeck.LANDS_CLASSIC,
-	"tournament": true, "power_nine": false, "keep": false, "seed": 0, "last_seed": 0,
+	"tournament": true, "power_nine": false, "variety": 0, "keep": false, "seed": 0,
+	"last_seed": 0,
 }
 ## The seed field's word for a blank, and the most a seed may be — what
 ## [method AutoDeck.build] rolls.
@@ -216,9 +220,9 @@ func _build() -> void:
 		[AutoDeck.LEAN_BALANCED, "Balanced", "A little over half creatures."],
 		[AutoDeck.LEAN_SPELLS, "More spells", "Under four in ten are creatures; the rest do things."]])
 	_choice_row(body, "Speed", "speed", [
-		[AutoDeck.SPEED_FAST, "Fast", "Three spells in ten cast on the first turn, few above three mana; %d lands in 60." % int(AutoDeck.LANDS[60][AutoDeck.SPEED_FAST])],
-		[AutoDeck.SPEED_MEDIUM, "Medium", "A curve that peaks at two and three; %d lands in 60." % int(AutoDeck.LANDS[60][AutoDeck.SPEED_MEDIUM])],
-		[AutoDeck.SPEED_SLOW, "Slow", "Hardly a one-drop; big spells and the lands to cast them, %d in 60." % int(AutoDeck.LANDS[60][AutoDeck.SPEED_SLOW])]])
+		[AutoDeck.SPEED_FAST, "Fast", "Three spells in ten cast on the first turn, few above three mana; around %d lands in 60, settled to the curve." % int(AutoDeck.LANDS[60][AutoDeck.SPEED_FAST])],
+		[AutoDeck.SPEED_MEDIUM, "Medium", "A curve that peaks at two and three; around %d lands in 60, settled to the curve." % int(AutoDeck.LANDS[60][AutoDeck.SPEED_MEDIUM])],
+		[AutoDeck.SPEED_SLOW, "Slow", "Hardly a one-drop; big spells and the lands to cast them, around %d in 60, settled to the curve." % int(AutoDeck.LANDS[60][AutoDeck.SPEED_SLOW])]])
 	_choice_row(body, "Rarity", "rarity", [
 		[AutoDeck.RARITY_ANY, RARITY_LABELS[AutoDeck.RARITY_ANY], "Every card in the pool."],
 		[AutoDeck.RARITY_PAUPER, RARITY_LABELS[AutoDeck.RARITY_PAUPER], "Commons only — a pauper deck."],
@@ -242,6 +246,11 @@ func _build() -> void:
 		options["keep"] = not bool(options["keep"])
 		_refresh())
 	body.add_child(_keep_line)
+	_choice_row(body, "Variety", "variety", [
+		[AutoDeck.VARIETY_LEVELS[0], "Best", "The best card wins every slot; the seed decides only among cards worth the same."],
+		[AutoDeck.VARIETY_LEVELS[1], "A little", "The seed's taste moves a card's worth by up to %.3f points — a card or two changes hands between seeds." % (AutoDeck.TASTE_SPAN * AutoDeck.VARIETY_LEVELS[1] / 100.0)],
+		[AutoDeck.VARIETY_LEVELS[2], "Some", "Up to %.2f points — two seeds build decks about half alike." % (AutoDeck.TASTE_SPAN * AutoDeck.VARIETY_LEVELS[2] / 100.0)],
+		[AutoDeck.VARIETY_LEVELS[3], "Wild", "Up to %.1f points, a whole mana step — two seeds share a third of their cards." % (AutoDeck.TASTE_SPAN * AutoDeck.VARIETY_LEVELS[3] / 100.0)]])
 	_seed_row(body)
 
 	# --- the summary and the foot ---
@@ -497,6 +506,8 @@ func _refresh() -> void:
 		extras.append("non-classic lands")
 	if bool(options["power_nine"]):
 		extras.append("the Power Nine")
+	if int(options["variety"]) > 0:
+		extras.append("variety %d" % int(options["variety"]))
 	if not extras.is_empty():
 		var sentence := ", ".join(extras)
 		_summary.text += " %s%s." % [sentence.left(1).to_upper(), sentence.substr(1)]
@@ -581,6 +592,7 @@ func builder() -> AutoDeck:
 	auto.land_kind = String(options["lands"])
 	auto.tournament = bool(options["tournament"])
 	auto.power_nine = bool(options["power_nine"])
+	auto.variety = int(options["variety"])
 	auto.seed = int(options["seed"])
 	if bool(options["keep"]) and _keepable() > 0:
 		auto.keep = screen.deck.duplicate_model()

@@ -1,9 +1,12 @@
 extends GutTest
 ## AUTODECK'S HEAD ([AutoDeck], 2026-09-18): the pools it reads,
 ## the deck it builds from a pool and a handful of wishes — legal, in the
-## colours asked for, the lands the speed asks for, the caps the rules
-## set — and the report it writes into the notes. Nothing here opens the
-## window; that is `tests/ui/test_auto_deck_window.gd`.
+## colours asked for, the lands the speed asks for settled by the curve
+## (2026-09-26: Karsten's fit, and the basics split by what the spells
+## want), the caps the rules set — and the report it writes into the
+## notes; the variety knob, and a deck held but for a few cards
+## (2026-09-26). Nothing here opens the window; that is
+## `tests/ui/test_auto_deck_window.gd`.
 
 
 func before_all() -> void:
@@ -30,6 +33,20 @@ func _lands(deck: DeckModel) -> int:
 	return n
 
 
+## The band the land count may settle in: the speed's count within
+## [constant AutoDeck.LAND_PLAY] either way (2026-09-26).
+func _assert_lands_settled(deck: DeckModel, auto: AutoDeck) -> void:
+	var table := int(AutoDeck.LANDS[auto.size_key()][auto.speed])
+	assert_between(_lands(deck), table - AutoDeck.LAND_PLAY, table + AutoDeck.LAND_PLAY,
+		"%d lands within %d of the %s speed's %d" % [_lands(deck), AutoDeck.LAND_PLAY, auto.speed, table])
+	var asked := AutoDeck.lands_for(_average_mana(deck), AutoDeck._cheap_mana_or_draw(deck), auto.size_key())
+	var settled := clampi(asked, table - AutoDeck.LAND_PLAY, table + AutoDeck.LAND_PLAY)
+	assert_between(_lands(deck), settled - 1, settled + 1,
+		"the curve's own count (%d for an average of %.2f) within one: %d lands" % [asked, _average_mana(deck), _lands(deck)])
+	if auto.land_total <= 0 and auto.short_by == 0:
+		assert_true(deck.notes.contains("the %s speed's %d settled at %d." % [auto.speed, table, _lands(deck)]), deck.notes)
+
+
 func _creatures(deck: DeckModel) -> int:
 	var n := 0
 	for name in deck.names():
@@ -39,11 +56,13 @@ func _creatures(deck: DeckModel) -> int:
 
 
 ## The first-turn castables: non-land cards of mana value 0 or 1.
+## The spells cast for one mana — a Fireball is not one ([method
+## AutoDeck.cast_value]).
 func _one_drops(deck: DeckModel) -> int:
 	var n := 0
 	for name in deck.names():
 		var data := DeckModel._card(name)
-		if not data.is_land() and data.cost.mana_value() <= 1:
+		if not data.is_land() and AutoDeck.cast_value(data) <= 1:
 			n += int(deck.counts[name])
 	return n
 
@@ -131,26 +150,44 @@ func test_the_pool_becomes_a_sealed_pool_with_free_basics() -> void:
 
 # ------------------------------------------------------------ the build --
 
-func test_sixty_from_the_library_is_legal_and_two_coloured() -> void:
+func test_sixty_from_the_library_is_legal_and_in_the_colours_worth_most() -> void:
 	var auto := _builder(_library())
 	var deck := auto.build()
 	_assert_legal(deck, auto, 60)
-	assert_eq(_lands(deck), int(AutoDeck.LANDS[60][AutoDeck.SPEED_MEDIUM]), "medium: 24 lands")
-	assert_eq(AutoDeck._count_colors(auto.chosen_colors), 2, "the builder's own choice is two colours")
+	_assert_lands_settled(deck, auto)
+	# The builder's own choice is the colour set worth most ON ITS OWN
+	# MANA (2026-09-26): each set's best castable cards less the strain
+	# their pips put on the lands the set would be laid, one per cent off
+	# per extra colour — blue-green in the library once the red cards
+	# with a drawback (a coin flip, a Horde's discard, an X spell priced
+	# at its cast value) were read as such, and every other set rates
+	# under it by that measure.
+	assert_eq(auto.chosen_colors, Mtg.ManaColor.U | Mtg.ManaColor.G,
+		"the library's own choice: %s" % deck.deck_name)
+	var candidates := auto._candidates(4)
+	var chosen := auto._mask_worth(candidates, auto.chosen_colors, 60 - _lands(deck), 0) \
+		* (1.0 - 0.01 * (AutoDeck._count_colors(auto.chosen_colors) - 1))
+	for mask in [Mtg.ManaColor.R, Mtg.ManaColor.R | Mtg.ManaColor.G, Mtg.ManaColor.U | Mtg.ManaColor.R,
+			Mtg.ManaColor.G, Mtg.ManaColor.W | Mtg.ManaColor.U, Mtg.ManaColor.U | Mtg.ManaColor.B | Mtg.ManaColor.G]:
+		var other := auto._mask_worth(candidates, mask, 60 - _lands(deck), 0)
+		assert_gte(chosen, other * (1.0 - 0.01 * (AutoDeck._count_colors(mask) - 1)),
+			"%s is worth %.1f on its mana, the choice %.1f" % [AutoDeck.color_phrase(mask), other, chosen])
 	assert_eq(auto.short_by, 0, "the library never runs short")
 	assert_eq(deck.deck_name, auto.deck_name())
 	assert_true(deck.deck_name.ends_with(" Midrange"), deck.deck_name)
 	assert_true(deck.notes.begins_with("Built by AutoDeck: 60 cards, "), deck.notes)
 	assert_true(deck.notes.contains("Card pool: the library (%d cards on offer)." % AutoDeck.pool_total(auto.pool)))
-	assert_true(deck.notes.contains("24 lands: "), deck.notes)
-	assert_true(deck.notes.contains("36 spells: "), deck.notes)
+	assert_true(deck.notes.contains("%d lands: " % _lands(deck)), deck.notes)
+	assert_true(deck.notes.contains("%d spells: " % (60 - _lands(deck))), deck.notes)
+	assert_true(deck.notes.contains("The curve asks for "), deck.notes)
 	assert_true(deck.notes.contains("Seed 7: the same pool and wishes build this deck again."), deck.notes)
 	assert_false(deck.notes.contains("ran out"), "no ran-short line")
 	assert_false(deck.notes.contains("Built around"), "nothing was kept")
 	assert_false(deck.notes.contains("without the tournament rules"))
+	assert_false(deck.notes.contains("Variety"), "no variety line at variety 0")
 	assert_true(deck.notes.contains("The Power Nine left out: the switch is off."),
 		"the library holds them; the notes say why none is in (2026-09-18): " + deck.notes)
-	assert_eq(auto.report.size(), 6)
+	assert_eq(auto.report.size(), 7)
 
 
 func test_forty_from_a_set_is_legal_with_three_of_a_card() -> void:
@@ -158,7 +195,7 @@ func test_forty_from_a_set_is_legal_with_three_of_a_card() -> void:
 	auto.size = 40
 	var deck := auto.build()
 	_assert_legal(deck, auto, 40)
-	assert_eq(_lands(deck), int(AutoDeck.LANDS[40][AutoDeck.SPEED_MEDIUM]), "medium: 16 lands in 40")
+	_assert_lands_settled(deck, auto)
 	for name in deck.names():
 		if not AutoDeck.BASICS.has(name):
 			assert_true(int(deck.counts[name]) <= 3, "%s: three copies at most in 40 (manual ch.10)" % name)
@@ -214,8 +251,9 @@ func test_the_speed_sets_the_lands_and_the_curve() -> void:
 	var slow_deck := slow.build()
 	_assert_legal(fast_deck, fast, 60)
 	_assert_legal(slow_deck, slow, 60)
-	assert_eq(_lands(fast_deck), 22, "fast: 22 lands in 60")
-	assert_eq(_lands(slow_deck), 25, "slow: 25 lands in 60")
+	_assert_lands_settled(fast_deck, fast)
+	_assert_lands_settled(slow_deck, slow)
+	assert_lt(_lands(fast_deck), _lands(slow_deck), "fast: %d lands, slow: %d" % [_lands(fast_deck), _lands(slow_deck)])
 	assert_lt(_average_mana(fast_deck), _average_mana(slow_deck),
 		"the fast deck's spells are cheaper: %.2f against %.2f" % [
 			_average_mana(fast_deck), _average_mana(slow_deck)])
@@ -233,12 +271,380 @@ func test_the_speed_sets_the_lands_and_the_curve() -> void:
 	assert_between(_average_mana(medium_deck), 2.6, 3.2, "medium sits between")
 	fast.size = 40
 	var fast_forty := fast.build()
-	assert_eq(_lands(fast_forty), 15, "fast: 15 lands in 40")
+	_assert_lands_settled(fast_forty, fast)
 	assert_gte(_one_drops(fast_forty), 7, "and the curve scales with the size: %d one-drops" % _one_drops(fast_forty))
 	slow.size = 40
 	var slow_forty := slow.build()
-	assert_eq(_lands(slow_forty), 17, "slow: 17 lands in 40")
+	_assert_lands_settled(slow_forty, slow)
+	assert_lt(_lands(fast_forty), _lands(slow_forty), "fast: %d lands in 40, slow: %d" % [_lands(fast_forty), _lands(slow_forty)])
 	assert_lte(_one_drops(slow_forty), 2, "slow: %d one-drops in 40" % _one_drops(slow_forty))
+
+
+## The land count settles on the curve (2026-09-26): Karsten's fit over
+## 95,000 tournament decks — 19.59 + 1.90 x the average mana value, less
+## 0.28 a cheap mana or draw spell — within [constant AutoDeck.LAND_PLAY]
+## of the speed's count, and two thirds of it in forty.
+func test_the_curve_settles_the_land_count() -> void:
+	assert_eq(AutoDeck.lands_for(2.0, 0, 60), 23, "two mana a spell: 23 lands (Karsten)")
+	assert_eq(AutoDeck.lands_for(2.5, 0, 60), 24)
+	assert_eq(AutoDeck.lands_for(3.0, 0, 60), 25)
+	assert_eq(AutoDeck.lands_for(3.5, 0, 60), 26)
+	assert_eq(AutoDeck.lands_for(4.0, 0, 60), 27)
+	assert_eq(AutoDeck.lands_for(2.0, 4, 60), 22, "four cheap mana or draw spells take one off")
+	assert_eq(AutoDeck.lands_for(1.8, 0, 40), 15, "two thirds in forty")
+	assert_eq(AutoDeck.lands_for(2.0, 0, 40), 16)
+	assert_eq(AutoDeck.lands_for(3.0, 0, 40), 17)
+	assert_eq(AutoDeck.lands_for(3.5, 0, 40), 17)
+	# The count is laid exactly when the deck names it ([member
+	# AutoDeck.land_total]) — a varied deck keeps its own.
+	var own := _builder(_library())
+	own.land_total = 21
+	var deck := own.build()
+	_assert_legal(deck, own, 60)
+	assert_eq(_lands(deck), 21, "the deck's own count, whatever the curve")
+	assert_true(deck.notes.contains("The land count is the deck's own: 21."), deck.notes)
+	assert_false(deck.notes.contains("The curve asks for"), deck.notes)
+	# The curve is read off the deck: a slow deck of the library asks for
+	# more than the speed's count and gets it, a fast deck of one-drops
+	# hardly more than its own.
+	var slow := _builder(_library())
+	slow.speed = AutoDeck.SPEED_SLOW
+	deck = slow.build()
+	assert_gt(AutoDeck.lands_for(_average_mana(deck), 0, 60), 25, "a slow curve asks for more than 25")
+	_assert_lands_settled(deck, slow)
+	assert_eq(AutoDeck._cheap_mana_or_draw(deck), _cheap(deck), "the cheap count is what the deck holds")
+
+
+## Cheap mana and draw as the test counts them: non-lands of two mana
+## or less that make mana or read as draw or acceleration.
+func _cheap(deck: DeckModel) -> int:
+	var n := 0
+	for name in deck.names():
+		var data := DeckModel._card(name)
+		if data.is_land() or data.cost.mana_value() > 2:
+			continue
+		var roles := AiDeckStudy.classify(data)
+		if AutoDeck.produces(data) != 0 or roles.has("draw") or roles.has("acceleration"):
+			n += int(deck.counts[name])
+	return n
+
+
+## Karsten's source counts (2026-09-26): what a card's pips want of the
+## lands, and what that does to the fill and the basics. A two-colour
+## deck's double pip is marked down by every source it is short; the
+## basics are split by what the spells want, not by the raw pips.
+func test_the_sources_the_pips_want() -> void:
+	assert_eq(AutoDeck.sources_for(1, 1, 60), 14, "a one-drop of one pip: 14 of 60")
+	assert_eq(AutoDeck.sources_for(1, 2, 60), 13)
+	assert_eq(AutoDeck.sources_for(1, 3, 60), 12)
+	assert_eq(AutoDeck.sources_for(1, 4, 60), 11)
+	assert_eq(AutoDeck.sources_for(1, 6, 60), 9, "five and up")
+	assert_eq(AutoDeck.sources_for(2, 2, 60), 20, "a double pip of two mana wants nearly every land")
+	assert_eq(AutoDeck.sources_for(2, 3, 60), 18)
+	assert_eq(AutoDeck.sources_for(3, 3, 60), 23)
+	assert_eq(AutoDeck.sources_for(4, 4, 60), 21, "a fourth pip one more")
+	assert_eq(AutoDeck.sources_for(1, 1, 40), 10, "forty")
+	assert_eq(AutoDeck.sources_for(2, 2, 40), 14)
+	assert_eq(AutoDeck.sources_for(0, 3, 60), 0, "no pips, no want")
+	# Mono-red expects every land red: no strain on anything red.
+	var mono := _builder(_library())
+	mono.colors = Mtg.ManaColor.R
+	mono.max_colors = 1
+	mono.build()
+	assert_almost_eq(mono._source_strain(_card("Ball Lightning")), 0.0, 0.001, "RRR in mono-red is free")
+	# Blue-black splits the lands: a double pip is strained, a single
+	# pip of three mana hardly at all.
+	var two := _builder(_library())
+	two.colors = Mtg.ManaColor.U | Mtg.ManaColor.B
+	two.build()
+	var double := two._source_strain(_card("Hypnotic Specter"))
+	var single := two._source_strain(_card("Erg Raiders"))
+	assert_gt(double, single, "1BB is strained more than 1B: %.2f against %.2f" % [double, single])
+	assert_gt(double, 0.2, "and the strain is felt: %.2f" % double)
+	assert_lt(single, 0.4, "a single pip is nearly free: %.2f" % single)
+	# The basics by what the spells want: two Black Knights (BB, two
+	# mana: 20 sources) against four Lightning Bolts (R, one mana: 14)
+	# are even in pips, and the Swamps still outnumber the Mountains.
+	var keep := DeckModel.new()
+	for i in 2:
+		keep.add("Black Knight")
+	for i in 4:
+		keep.add("Lightning Bolt")
+	var split := _builder({})
+	split.keep = keep
+	var deck := split.build()
+	assert_eq(deck.total(), 60)
+	assert_gt(deck.count_of("Swamp"), deck.count_of("Mountain"),
+		"the double pip wants the more sources: %d Swamp, %d Mountain" % [deck.count_of("Swamp"), deck.count_of("Mountain")])
+	assert_gte(deck.count_of("Mountain"), 2, "and every colour with a pip gets two at least")
+
+
+## A deck held but for a few cards (2026-09-26, the CLI's `--vary`):
+## the kept deck's lands go in as they are ([member
+## AutoDeck.keep_lands]), the land count is the deck's own ([member
+## AutoDeck.land_total]) and any size will do.
+func test_a_deck_held_but_for_a_few_cards_keeps_its_lands() -> void:
+	var held := DeckModel.new()
+	for i in 20:
+		held.add("Mountain")
+	for i in 4:
+		held.add("Taiga")
+	for i in 4:
+		held.add("Lightning Bolt")
+	for i in 4:
+		held.add("Llanowar Elves")
+	for i in 3:
+		held.add("Shivan Dragon")
+	var auto := _builder(_library())
+	auto.keep = held
+	auto.keep_lands = true
+	auto.size = 61
+	auto.land_total = 24
+	auto.colors = Mtg.ManaColor.R | Mtg.ManaColor.G
+	var deck := auto.build()
+	assert_eq(deck.total(), 61, "the size is the deck's own")
+	assert_eq(deck.count_of("Mountain"), 20, "the kept lands as they were")
+	assert_eq(deck.count_of("Taiga"), 4)
+	assert_eq(_lands(deck), 24, "and no more: the land count is the deck's own")
+	assert_eq(deck.count_of("Lightning Bolt"), 4)
+	assert_eq(deck.count_of("Shivan Dragon"), 3)
+	assert_eq(auto.chosen_colors, Mtg.ManaColor.R | Mtg.ManaColor.G)
+	assert_true(deck.notes.contains("Built around the 35 cards already on the surface, 24 lands among them."), deck.notes)
+	assert_true(deck.notes.contains("The land count is the deck's own: 24."), deck.notes)
+	# A land varied out is made up in basics by the whole deck's pips.
+	held.remove_all("Taiga")
+	auto.keep = held
+	deck = auto.build()
+	assert_eq(deck.total(), 61)
+	assert_eq(_lands(deck), 24, "four lands laid fresh for the four Taigas out")
+	assert_eq(deck.count_of("Taiga"), 0, "the library holds Taiga, but classic lands are basics")
+	assert_gte(deck.count_of("Forest"), 2, "green pips (the Elves) get Forests: %s" % str(deck.counts))
+	# Without the lands kept, a bad size still falls back to sixty.
+	auto.keep_lands = false
+	auto.land_total = 0
+	deck = auto.build()
+	assert_eq(deck.total(), 60)
+
+
+## The mana a spell is cast for (2026-09-26): an X spell is no one-drop
+## — a Fireball is cast for three and buckets with the three-drops
+## ([method AutoDeck.cast_value], [constant AutoDeck.X_AS]).
+func test_an_x_spell_is_cast_for_more_than_its_printed_value() -> void:
+	assert_eq(AutoDeck.cast_value(_card("Lightning Bolt")), 1)
+	assert_eq(AutoDeck._bucket(_card("Lightning Bolt")), 0, "the one-drop bucket")
+	assert_eq(AutoDeck.cast_value(_card("Fireball")), 1 + AutoDeck.X_AS, "X R: cast for three")
+	assert_eq(AutoDeck._bucket(_card("Fireball")), 2, "the three-drop bucket")
+	assert_eq(AutoDeck.cast_value(_card("Braingeyser")), 2 + AutoDeck.X_AS, "X U U")
+	assert_eq(AutoDeck._bucket(_card("Braingeyser")), 3)
+	assert_eq(AutoDeck.cast_value(_card("Craw Wurm")), 6, "no X: the printed value")
+	assert_eq(AutoDeck._bucket(_card("Craw Wurm")), 4, "five or more")
+
+
+## The mana a colour set would be laid (2026-09-26, [method
+## AutoDeck._mana_expected]): the lands split among the set's colours
+## as the laying splits them, from the best cards castable under the
+## set — every land to a mono deck's colour, the deeper colour's share
+## the larger, a colour asked for never under an even share — and the
+## strain a card's pips cost it reads that expectation.
+func test_the_mana_a_colour_set_would_be_laid() -> void:
+	var auto := _builder(AutoDeck.pool_from_sets(["4ed"]))
+	auto.build()
+	var candidates := auto._candidates(4)
+	var mono := auto._mana_expected(candidates, Mtg.ManaColor.R, 36, 24, 0)
+	assert_almost_eq(float(mono[Mtg.ManaColor.R]), 24.0, 0.001, "a mono deck's colour gets every land")
+	assert_eq(mono.size(), 1)
+	var pair := auto._mana_expected(candidates, Mtg.ManaColor.R | Mtg.ManaColor.G, 36, 24, 0)
+	assert_almost_eq(float(pair[Mtg.ManaColor.R]) + float(pair[Mtg.ManaColor.G]), 24.0, 0.001,
+		"the pair shares the 24: %s" % pair)
+	assert_gt(float(pair[Mtg.ManaColor.R]), float(pair[Mtg.ManaColor.G]), "Fourth Edition's red is the deeper: %s" % pair)
+	assert_lt(float(pair[Mtg.ManaColor.G]), 12.0, "green under an even share on its cards")
+	var asked := auto._mana_expected(candidates, Mtg.ManaColor.R | Mtg.ManaColor.G, 36, 24, Mtg.ManaColor.G)
+	assert_almost_eq(float(asked[Mtg.ManaColor.G]), 12.0, 0.001, "green asked for: the even share at least")
+	assert_almost_eq(float(asked[Mtg.ManaColor.R]), float(pair[Mtg.ManaColor.R]), 0.001, "red's share as it was")
+	# The strain: Craw Wurm's double pip wants fifteen Forests and on
+	# green's share of the pair is short most of them; a Bolt on red's
+	# share wants nothing; and green asked for eases the Wurm.
+	var wurm := _card("Craw Wurm")
+	assert_almost_eq(auto._source_strain(wurm, pair),
+		AutoDeck.SOURCE_STRAIN * (AutoDeck.sources_for(2, 6, 60) - float(pair[Mtg.ManaColor.G])), 0.001)
+	assert_eq(auto._source_strain(_card("Lightning Bolt"), pair), 0.0, "a red one-drop on twenty Mountains")
+	assert_lt(auto._source_strain(wurm, asked), auto._source_strain(wurm, pair))
+	assert_eq(auto._source_strain(wurm, mono), AutoDeck.SOURCE_STRAIN * AutoDeck.sources_for(2, 6, 60),
+		"nothing expected of a colour the set is not")
+	# A colour with no card among the best gets no land — and, asked
+	# for, the even share still.
+	var five := auto._mana_expected(candidates, 31, 36, 24, 0)
+	assert_eq(five.size(), 5)
+	var floored := auto._mana_expected(candidates, 31, 36, 24, 31)
+	for color in Mtg.WUBRG:
+		assert_gte(float(floored[color]), 24.0 / 5, "%s asked for: 4.8 at least" % AutoDeck.color_phrase(color))
+		assert_gte(float(floored[color]), float(five[color]))
+
+
+## The splash the lands cannot carry (2026-09-26, [method
+## AutoDeck._drop_splashes]): The Dark's red is worth a second colour
+## to the choice, but the fill takes a card or two of it — under
+## [constant AutoDeck.SPLASH_CARDS] — and the deck is better mono-green
+## than green with a Mountain or three. Asked for, red stays: the
+## quota's cards of it at least, on the lands its pips are laid for,
+## and the notes own how light that is.
+func test_a_splash_the_lands_cannot_carry_leaves_the_deck() -> void:
+	for size in [60, 40]:
+		var auto := _builder(AutoDeck.pool_from_sets(["drk"]))
+		auto.size = size
+		var deck := auto.build()
+		assert_eq(auto._first_choice, Mtg.ManaColor.R | Mtg.ManaColor.G, "%d: red-green chosen at first" % size)
+		assert_eq(auto._splashed, Mtg.ManaColor.R, "%d: red was the splash" % size)
+		assert_eq(auto.chosen_colors, Mtg.ManaColor.G, "%d: green stays" % size)
+		assert_eq(auto.cast_colors, Mtg.ManaColor.G)
+		assert_true(deck.deck_name.begins_with("Mono-Green "), deck.deck_name)
+		assert_eq(int(auto._cards_of_colors(deck).get(Mtg.ManaColor.R, 0)), 0, "no red card left")
+		assert_eq(deck.count_of("Mountain"), 0)
+		_assert_legal(deck, auto, size)
+		_assert_lands_settled(deck, auto)
+		assert_true(deck.notes.contains("Red-Green chosen, but the lands could not carry the red the fill took a card or two of; the spells are green."),
+			deck.notes)
+		assert_false(deck.notes.contains("light on the lands"), deck.notes)
+	for size in [60, 40]:
+		var asked := _builder(AutoDeck.pool_from_sets(["drk"]))
+		asked.size = size
+		asked.colors = Mtg.ManaColor.R | Mtg.ManaColor.G
+		var deck := asked.build()
+		assert_eq(asked.chosen_colors, Mtg.ManaColor.R | Mtg.ManaColor.G)
+		assert_eq(asked._splashed, 0, "a colour asked for is never dropped")
+		var red := int(asked._cards_of_colors(deck).get(Mtg.ManaColor.R, 0))
+		assert_gte(red, int(AutoDeck.SPLASH_CARDS[size]), "%d: %d red cards, the quota at least" % [size, red])
+		assert_true(deck.deck_name.begins_with("Red-Green "), deck.deck_name)
+		_assert_legal(deck, asked, size)
+		assert_eq(asked._thin_colors(deck), Mtg.ManaColor.R, "%d: The Dark's red is light" % size)
+		assert_lt(asked._sources_in(deck, Mtg.ManaColor.R), AutoDeck.sources_for(1, 5, size))
+		assert_true(deck.notes.contains("Red asked for, and light on the lands: %s." % asked._thin_words(deck, Mtg.ManaColor.R)),
+			deck.notes)
+		assert_false(deck.notes.contains("could not carry"), deck.notes)
+
+
+## The builder's own second colour, kept for the cards it has but laid
+## for by its pips (2026-09-26): Arabian Nights' green is six cards on
+## six Forests behind the blue, and the notes say what that is.
+func test_a_light_second_colour_is_owned_in_the_notes() -> void:
+	var auto := _builder(AutoDeck.pool_from_sets(["arn"]), 1)
+	var deck := auto.build()
+	assert_eq(auto.chosen_colors, Mtg.ManaColor.U | Mtg.ManaColor.G, deck.deck_name)
+	assert_eq(auto._splashed, 0, "green's cards are a colour, not a splash")
+	var green := int(auto._cards_of_colors(deck).get(Mtg.ManaColor.G, 0))
+	assert_gte(green, int(AutoDeck.SPLASH_CARDS[60]))
+	assert_eq(auto._thin_colors(deck), Mtg.ManaColor.G, "green's Forests are under what one late pip wants")
+	assert_lt(auto._sources_in(deck, Mtg.ManaColor.G), AutoDeck.sources_for(1, 5, 60))
+	assert_eq(auto._thin_words(deck, Mtg.ManaColor.G),
+		"%d cards of it on %d sources" % [green, auto._sources_in(deck, Mtg.ManaColor.G)])
+	assert_true(deck.notes.contains("Green chosen for its cards, and light on the lands: %s." % auto._thin_words(deck, Mtg.ManaColor.G)),
+		deck.notes)
+	assert_false(deck.notes.contains("Blue chosen"), "blue is laid for: " + deck.notes)
+	# One card on one source reads in the singular.
+	var one := DeckModel.new()
+	one.add("Llanowar Elves")
+	one.add("Forest")
+	assert_eq(auto._thin_words(one, Mtg.ManaColor.G), "1 card of it on 1 source")
+
+
+## The colours asked for are in the deck (2026-09-26): five colours
+## from the library, whose red runs deepest, still hold [constant
+## AutoDeck.SPLASH_CARDS] cards of each — the quota is a nudge on the
+## fill, not on the lands — and the light ones are owned in the notes.
+func test_every_colour_asked_for_has_its_quota_of_cards() -> void:
+	var auto := _builder(_library())
+	auto.colors = 31
+	var deck := auto.build()
+	var cards := auto._cards_of_colors(deck)
+	for color in Mtg.WUBRG:
+		assert_gte(int(cards.get(color, 0)), int(AutoDeck.SPLASH_CARDS[60]),
+			"%s: %d cards" % [AutoDeck.color_phrase(color), int(cards.get(color, 0))])
+	assert_gt(int(cards[Mtg.ManaColor.R]), int(cards[Mtg.ManaColor.W]), "red the deepest: %s" % cards)
+	var thin := auto._thin_colors(deck)
+	assert_ne(thin, 0, "five colours on 24 lands: some are light")
+	for color in Mtg.WUBRG:
+		var line := "%s asked for, and light on the lands: " % AutoDeck.color_phrase(color).replace("Mono-", "")
+		assert_eq(deck.notes.contains(line), (thin & color) != 0, line)
+	# Four in forty: three cards of each, and none of the fifth.
+	var forty := _builder(_library())
+	forty.size = 40
+	forty.colors = Mtg.ManaColor.W | Mtg.ManaColor.U | Mtg.ManaColor.B | Mtg.ManaColor.G
+	deck = forty.build()
+	cards = forty._cards_of_colors(deck)
+	for color in [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B, Mtg.ManaColor.G]:
+		assert_gte(int(cards.get(color, 0)), int(AutoDeck.SPLASH_CARDS[40]), "%s: %s" % [AutoDeck.color_phrase(color), cards])
+	assert_eq(int(cards.get(Mtg.ManaColor.R, 0)), 0, "no red card in a deck not red")
+	_assert_legal(deck, forty, 40)
+
+
+## Variety (2026-09-26): at 0 the seed is a hair, at 100 a taste for
+## every name — different seeds build genuinely different decks, the
+## same seed the same deck.
+func test_variety_lets_the_seed_into_the_cards() -> void:
+	var stiff: Array = []
+	var loose: Array = []
+	var wild: Array = []
+	for seed in [11, 22, 33, 44]:
+		var auto := _builder(_library(), seed)
+		auto.colors = Mtg.ManaColor.W | Mtg.ManaColor.G
+		stiff.append(AutoDeck.builders_cards(auto.build()))
+		auto.variety = 50
+		var deck := auto.build()
+		_assert_legal(deck, auto, 60)
+		assert_true(deck.notes.contains("Variety 50: the seed's taste moved each card's worth by up to 0.75."), deck.notes)
+		loose.append(AutoDeck.builders_cards(deck))
+		auto.variety = 100
+		deck = auto.build()
+		_assert_legal(deck, auto, 60)
+		wild.append(AutoDeck.builders_cards(deck))
+	var stiff_gap := _least_difference(stiff)
+	var loose_gap := _least_difference(loose)
+	var wild_gap := _least_difference(wild)
+	assert_lt(stiff_gap, 0.15, "at variety 0 four seeds are one deck but for a hair: %.2f apart at least" % stiff_gap)
+	assert_gt(loose_gap, stiff_gap, "at 50 they part: %.2f" % loose_gap)
+	assert_gt(loose_gap, 0.2, "by a fifth at least: %.2f" % loose_gap)
+	assert_gt(wild_gap, loose_gap, "at 100 further: %.2f" % wild_gap)
+	var again := _builder(_library(), 33)
+	again.colors = Mtg.ManaColor.W | Mtg.ManaColor.G
+	again.variety = 100
+	assert_eq(AutoDeck.builders_cards(again.build()), wild[2], "the same seed and variety, the same deck")
+	assert_eq(AutoDeck.VARIETY_LEVELS, [0, 25, 50, 100] as Array[int])
+	# Above 0 the builder's own colour choice follows the seed too.
+	var choices := {}
+	for seed in [11, 22, 33, 44, 55, 66]:
+		var free := _builder(_library(), seed)
+		free.variety = 100
+		free.build()
+		choices[free.chosen_colors] = true
+	assert_gt(choices.size(), 1, "six seeds at variety 100 choose more than one colour pair")
+
+
+## The least difference between any two of the decks ([method
+## AutoDeck.difference]).
+func _least_difference(decks: Array) -> float:
+	var least := 1.0
+	for i in decks.size():
+		for j in range(i + 1, decks.size()):
+			least = minf(least, AutoDeck.difference(decks[i], decks[j]))
+	return least
+
+
+func test_the_difference_between_two_decks() -> void:
+	var a := {"Lightning Bolt": 4, "Serra Angel": 2, "Counterspell": 4}
+	var b := {"Lightning Bolt": 4, "Serra Angel": 1, "Wrath of God": 2}
+	assert_almost_eq(AutoDeck.difference(a, a), 0.0, 0.001, "a deck and itself")
+	assert_almost_eq(AutoDeck.difference(a, b), 0.5, 0.001, "five of ten shared")
+	assert_almost_eq(AutoDeck.difference(a, {}), 1.0, 0.001, "nothing shared")
+	assert_almost_eq(AutoDeck.difference({}, {}), 0.0, 0.001, "two empty decks are one")
+	var deck := DeckModel.new()
+	for i in 4:
+		deck.add("Lightning Bolt")
+	deck.add("Mountain")
+	deck.add("Taiga")
+	var kept := DeckModel.new()
+	kept.add("Lightning Bolt")
+	assert_eq(AutoDeck.builders_cards(deck), {"Lightning Bolt": 4, "Taiga": 1}, "no basics")
+	assert_eq(AutoDeck.builders_cards(deck, kept), {"Lightning Bolt": 3, "Taiga": 1}, "less the kept")
 
 
 func test_the_lean_sets_the_creature_share() -> void:
@@ -361,7 +767,8 @@ func test_the_kept_cards_go_in_first_and_set_the_colours() -> void:
 	assert_eq(deck.count_of("Lightning Bolt"), 4)
 	assert_eq(deck.count_of("Serra Angel"), 2)
 	assert_true(deck.notes.contains("Built around the 6 cards already on the surface."), deck.notes)
-	assert_eq(_lands(deck), 24, "the kept Plains is not counted; the lands are laid fresh")
+	_assert_lands_settled(deck, auto)
+	assert_eq(deck.count_of("Plains") + deck.count_of("Mountain"), _lands(deck), "the kept Plains is not counted; the lands are laid fresh")
 
 
 func test_a_seed_is_a_deck() -> void:
@@ -412,7 +819,7 @@ func test_five_colours_when_asked_for() -> void:
 	assert_true(deck.deck_name.begins_with("White-Blue-Black-Red-Green "), deck.deck_name)
 	for land in AutoDeck.BASICS:
 		assert_gte(deck.count_of(land), 2, "%s: every colour with pips gets at least two" % land)
-	assert_eq(_lands(deck), 24)
+	_assert_lands_settled(deck, auto)
 	# At most five with nothing ticked: the builder may still settle on
 	# fewer — the per-colour discount is what keeps a deep pool from
 	# always ending five colours — but never on more.
@@ -465,8 +872,8 @@ func test_a_gold_deck_prefers_multicoloured_cards() -> void:
 	var free_deck := free.build()
 	_assert_legal(free_deck, free, 60)
 	assert_gte(_gold_cards(free_deck), 10, "%s: %d gold" % [free_deck.deck_name, _gold_cards(free_deck)])
-	assert_true(gold_deck.notes.contains("A gold deck: multicoloured cards preferred; %d of the 36 spells are gold." % _gold_cards(gold_deck)),
-		gold_deck.notes)
+	assert_true(gold_deck.notes.contains("A gold deck: multicoloured cards preferred; %d of the %d spells are gold." % [
+		_gold_cards(gold_deck), 60 - _lands(gold_deck)]), gold_deck.notes)
 	assert_false(plain_deck.notes.contains("A gold deck"), plain_deck.notes)
 	var goblins := _card("Marsh Goblins")
 	assert_almost_eq(gold.worth(goblins), plain.worth(goblins) + AutoDeck.GOLD_BONUS, 0.001, "the bonus")
@@ -486,7 +893,18 @@ func test_a_gold_deck_prefers_multicoloured_cards() -> void:
 	none.rarity = AutoDeck.RARITY_RARES
 	var none_deck := none.build()
 	assert_eq(AutoDeck._count_colors(none.chosen_colors), 2, "two colours, not mono-red: %s" % none_deck.deck_name)
+	assert_eq(none._splashed, 0, "a gold deck's second colour is never dropped as a splash (2026-09-26)")
 	assert_eq(_gold_cards(none_deck), 0)
+	# And a pool that ran out keeps every card it had (2026-09-26): the
+	# three white cards of a seven-card list are no splash to drop.
+	var seven := _builder(AutoDeck.pool_from_counts({"Lightning Bolt": 4, "Serra Angel": 2, "Disenchant": 1}))
+	var seven_deck := seven.build()
+	assert_eq(seven.chosen_colors, Mtg.ManaColor.W | Mtg.ManaColor.R, seven_deck.deck_name)
+	assert_eq(seven._splashed, 0, "nothing to pick again: the white stays")
+	assert_eq(seven_deck.count_of("Serra Angel"), 2)
+	assert_eq(seven_deck.count_of("Disenchant"), 1)
+	assert_eq(seven_deck.total(), 60)
+	assert_gte(seven_deck.count_of("Plains"), 2, "and Plains for them")
 	assert_true(none_deck.notes.contains("A gold deck: multicoloured cards preferred, but the pool had none the deck could cast."),
 		none_deck.notes)
 
@@ -577,7 +995,8 @@ func test_classic_lands_are_the_basics_alone() -> void:
 	_assert_legal(deck, auto, 60)
 	assert_eq(auto.land_kind, AutoDeck.LANDS_CLASSIC, "the default")
 	assert_eq(_nonbasics(deck), 0, "no Taiga, no Mishra's Factory: %s" % str(deck.counts))
-	assert_eq(deck.count_of("Mountain") + deck.count_of("Forest"), 24)
+	assert_eq(deck.count_of("Mountain") + deck.count_of("Forest"), _lands(deck))
+	_assert_lands_settled(deck, auto)
 	assert_false(deck.notes.contains("Non-classic"), deck.notes)
 
 
@@ -592,10 +1011,10 @@ func test_non_classic_lands_take_the_duals_and_the_lands_with_abilities_first() 
 	_assert_legal(deck, auto, 60)
 	assert_eq(deck.count_of("Taiga"), 4, "the red-green dual, all four")
 	assert_eq(deck.count_of("Tundra"), 0, "a white-blue dual makes nothing the deck casts")
-	assert_true(_nonbasics(deck) <= int(floor(AutoDeck.NONBASIC_SHARE * 24)),
+	assert_true(_nonbasics(deck) <= int(floor(AutoDeck.NONBASIC_SHARE * _lands(deck))),
 		"%d non-basic lands within the share" % _nonbasics(deck))
-	assert_eq(_lands(deck), 24)
-	assert_true(deck.notes.contains("Non-classic lands: %d of the 24 lands are not basics." % _nonbasics(deck)), deck.notes)
+	_assert_lands_settled(deck, auto)
+	assert_true(deck.notes.contains("Non-classic lands: %d of the %d lands are not basics." % [_nonbasics(deck), _lands(deck)]), deck.notes)
 	# The whole library, blue-black: the dual first, then the Factory
 	# and the Library within the colourless room, the Maze within the
 	# room for lands that make no mana, the restricted ones once.
@@ -736,6 +1155,57 @@ func test_the_speed_prices_the_cost_and_the_lean_the_roles() -> void:
 		"and the counters")
 	assert_eq(medium.score(_card("Terror")), creatures.score(_card("Terror")),
 		"removal is removal in any deck")
+
+
+## The 2026-09-26 A/B's two lessons ([method AutoDeck._spell_score],
+## [method AutoDeck._drawbacks], [method AutoDeck._sacrifice_cost]): an
+## X spell is priced at the mana it is cast for, not the cheapest card in
+## the pool; a spell that asks for a Goblin to be sacrificed is as dead
+## as colour hate in a deck with no Goblin; a creature that enters asking
+## for another, or flips a coin to attack, is worth less than its body.
+func test_a_spell_is_priced_at_the_mana_it_is_cast_for_and_what_it_asks() -> void:
+	var auto := _builder({})
+	var bolt := auto.score(_card("Lightning Bolt"))
+	assert_lt(auto.score(_card("Fireball")), bolt, "a Fireball is cast for three, a Bolt for one")
+	assert_gt(auto.score(_card("Fireball")), 2.0, "and is still a good card: %.2f" % auto.score(_card("Fireball")))
+	var five := CardData.new("Test Five", "{R}", Mtg.CardType.SORCERY)
+	five.spell(DamageEffect.new(5).any_target())
+	five.oracle("Test Five deals 5 damage to any target.")
+	var grenade := CardData.new("Test Grenade", "{R}", Mtg.CardType.SORCERY)
+	grenade.spell(DamageEffect.new(5).any_target())
+	grenade.oracle("As an additional cost to cast this spell, sacrifice a Goblin.\nTest Grenade deals 5 damage to any target.")
+	grenade.with_additional_sacrifice("Goblin", Callable())
+	var blade := CardData.new("Test Blade", "{R}", Mtg.CardType.SORCERY)
+	blade.spell(DamageEffect.new(5).any_target())
+	blade.with_additional_sacrifice("a creature", Callable())
+	assert_gt(auto.score(five), bolt, "five damage for one, no strings")
+	assert_lt(auto.score(grenade), bolt, "five damage for one and a Goblin the deck may not have")
+	assert_lt(auto.score(blade), auto.score(five), "a creature spent is a card spent")
+	assert_gt(auto.score(blade), auto.score(grenade), "but a creature is easier found than a Goblin")
+	assert_eq(AutoDeck._sacrifice_cost(five), 0.0)
+	assert_eq(AutoDeck._sacrifice_cost(grenade), 1.8)
+	assert_eq(AutoDeck._sacrifice_cost(blade), 0.8)
+	var dead := CardData.new("Test Dead", "{B}", Mtg.CardType.CREATURE).pt(3, 1)
+	dead.oracle("When this creature enters, sacrifice a creature.")
+	var elemental := CardData.new("Test Elemental", "{1}{G}", Mtg.CardType.CREATURE).pt(3, 4)
+	elemental.oracle("When this creature enters the battlefield, sacrifice it unless you sacrifice a Forest.")
+	var force := CardData.new("Test Force", "{2}{G}{G}{G}", Mtg.CardType.CREATURE).pt(8, 8)
+	force.oracle("When this creature enters, sacrifice it unless you sacrifice three Forests.")
+	var horde := CardData.new("Test Horde", "{2}{R}{R}", Mtg.CardType.CREATURE).pt(5, 5)
+	horde.oracle("When this creature enters, sacrifice it unless you discard a card at random.")
+	var plain := CardData.new("Test Plain", "{B}", Mtg.CardType.CREATURE).pt(3, 1)
+	assert_eq(AutoDeck._drawbacks(plain), 0.0)
+	assert_eq(AutoDeck._drawbacks(dead), 1.0, "enters asking for a creature")
+	assert_eq(AutoDeck._drawbacks(horde), 1.0, "enters asking for a card from the hand")
+	assert_eq(AutoDeck._drawbacks(elemental), 2.0, "enters asking for a Forest from the table")
+	assert_eq(AutoDeck._drawbacks(force), 6.0, "enters asking for three of them")
+	var fair := CardData.new("Test Fair", "{2}{G}{G}{G}", Mtg.CardType.CREATURE).pt(5, 5)
+	assert_almost_eq(auto.score(force), auto.score(fair), 0.001,
+		"an 8/8 for five that eats three Forests is a 5/5 for five")
+	assert_lt(auto.score(dead), auto.score(plain), "a 3/1 for one that eats a creature is not a 3/1 for one")
+	assert_eq(AutoDeck._drawbacks(_card("Mijae Djinn")), 0.6, "a coin flip to attack")
+	assert_gt(AutoDeck._drawbacks(_card("Ball Lightning")), 0.0, "sacrificed at end of turn")
+	assert_eq(AutoDeck._drawbacks(_card("Grizzly Bears")), 0.0)
 
 
 func test_castable_and_produces_read_the_card() -> void:

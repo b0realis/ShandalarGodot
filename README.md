@@ -46,7 +46,7 @@ Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/release
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below): `main` carries **0.40.24**, the next
+run the source with Godot 4.7 (below): `main` carries **0.40.25**, the next
 release in the making.
 
 Play with an **897-card early-Magic core**, historic decks, four computer
@@ -57,8 +57,9 @@ entries, for **1,270 set entries / 901 unique rules identities**. The Deck Build
 supports large cards, live filters and keyboard browsing, **AutoDeck**, which
 builds a deck from a set, a dealt pool or a pasted list to your wishes —
 colours up to five, a gold deck, the rarity from pauper to rares only, classic
-or non-classic lands, the Power Nine on or off — and a Stats window that audits
-the mana base. The duel's keys are rebindable
+or non-classic lands, the Power Nine on or off, the variety between one seed
+and the next — with its lands fitted to the curve and its basics to the pips,
+and a Stats window that audits the mana base. The duel's keys are rebindable
 under Options, Controls, and a controller's face buttons play beside the mouse.
 Further optional packs
 add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age and
@@ -113,8 +114,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The turn after an extra combat](docs/ROADMAP.md#2026-09-26--the-turn-after-an-extra-combat-04024)):
-**7,882 GUT tests / 358,729 assertions**, plus **323 Python tests**
+Latest local verification ([The field that varies, and what the builder knows](docs/ROADMAP.md#2026-09-26--the-field-that-varies-and-what-the-builder-knows-04025)):
+**7,901 GUT tests / 359,746 assertions**, plus **323 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
@@ -192,7 +193,10 @@ Beside it, `./auto_deck.sh --help` (`.\auto_deck.bat` on Windows) is the
 AutoDeck tool as a command line: it builds a folder of seeded decks from
 every combination of the switches you give it, and plays no game; its
 `--packs` names the card packs the cards come from, and a field mined with
-`--packs X` is played by the Lab with the same `--packs X`.
+`--packs X` is played by the Lab with the same `--packs X`; `--colors pairs
+--distinct 60` is a field of every colour pair with no two decks less than
+60% different, and `--keep FILE --vary "Fireball, 2 Lightning Bolt"` holds a
+deck but for the named cards, for the Lab to find a better card for a slot.
 The [DeckLab manual](DeckLab/README.md) has examples and all options.
 
 ## Post-0.20.0 roadmap

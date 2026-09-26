@@ -16809,6 +16809,84 @@ Hovi's Turbo-Stasis 4.8%, The Deck (Summer 1996) 5.3%, Recursion Combo
 Gate: 515 scripts, **7,882/7,882 tests, 358,729 asserts**, exit 0
 in 248 s over 6 shards; Python 323, exit 0.
 
+## 2026-09-26 — The field that varies, and what the builder knows (0.40.25)
+
+The order after round 2: a switch for decks *"that must be some percent
+different by card lists (60% different)"*, a field that covers *"certain
+or all possible color combinations"*, the deck-building theory looked up
+and put in the builder, and *"an option to be able to permutate only
+specific cards from the supplied deck"*.
+
+**The builder** (`game/deck_builder/auto_deck.gd`). Its land count is
+fitted to the curve the fill made — Frank Karsten's 2022 regression over
+95,143 tournament decklists, 19.59 + 1.90 × the average mana value −
+0.28 a cheap mana or draw spell, two thirds of it for 40 cards, settled
+within two of the speed's own 22/24/25 — and its basics are split by
+Karsten's source counts for the pips and mana values the spells carry
+(a one-pip one-drop wants 14 of 24 lands its colour, a double pip of two
+mana 20, a triple pip 23), weighted by the demand. The fill knows what
+that mana base will bear: a card whose pips want more sources than the
+lands will give is marked down 0.08 a source short, so a two-colour deck
+reaches for single pips and a mono deck minds nothing. The colours are
+chosen on the mana they would be laid — each of the 31 sets rated by its
+best castable cards less that strain, one per cent off per extra colour
+— and a colour the fill then takes fewer than four cards of (three in
+40) leaves the deck with its cards, the slots picked again from what
+stays, unless it was asked for, kept or a gold deck's second; a colour
+asked for gets its quota of cards, so `=WUBRG` is five colours and not a
+green deck with a Plains; an X spell is cast for two more than its
+printed cost and priced as such. A Variety wish — Best, A little, Some,
+Wild — rolls a taste for every name from the seed that moves a card's
+worth by up to 0.375, 0.75 or 1.5 points, so two seeds build two decks
+rather than one with a card or two changed; the AutoDeck window has the
+row.
+
+**The CLI** (`DeckLab/auto_deck_cli.gd`). `--colors =WU` is exactly those
+colours; `mono`, `pairs`, `triples`, `quads`, `five` and `every` are
+every colour set of that size as `=` alternatives in WUBRG order, dealt
+equally by the walk; `random` draws exactly. `--variety` is the twelfth
+axis. `--distinct 60` builds a deck again from seeds past the run's own
+until it is 60% different by its builder's cards from every earlier
+deck (one less the copies shared over the larger; basics and kept cards
+do not count), twenty tries, the most distinct kept and the summary
+counting what fell short; it implies `--variety 50`, then `100` after
+five seeds. `--keep FILE --vary "Fireball, 2 Lightning Bolt"` holds a
+deck but for the named cards — its size, its lands as they are, its
+colours — and fills their slots from the pool without them; the field is
+named after the deck, each file notes what was varied, and the `next:`
+line plays the held deck as the control. `decks.csv` gains `variety` and
+`distinct`.
+
+**The A/B.** The same 45 wishes and seeds — every mono and pair colour
+wish at `--max-colors 2`, three seeds each, from every set and pack —
+through 0.40.24's builder and this one, both fields against the 43-deck
+tournament gauntlet at 20 games a matchup (38,700 games an arm,
+`shandalar-build/mining/2026-09-26/ab/`). The first pass of the new
+builder averaged 45.2% to the old 43.7% but lost six points on mono-red:
+priced at its printed mana value an X spell was the cheapest card in the
+pool, and the fill took four Meteor Showers for a mono-red deck's
+five-drops; four Goblin Grenades went into a deck with no Goblin; a
+black-green deck was four Kjeldoran Dead, four Plant Elementals and
+four Primeval Forces. So a spell is priced at the mana it is cast for,
+a spell that asks for a Goblin is as dead as colour hate, and a creature
+that enters asking for a card costs a card on top of itself, for a
+permanent two — an 8/8 for five that eats three Forests is a 5/5 for
+five — and a coin flip to attack six tenths. The second pass: **45.4% to
+43.7%** over the 45 decks, median 47.2% to 46.1%, the new builder ahead
+on 29 of 45 seed-for-seed pairs and on 8 of 15 wishes — mono-red held
+(61.0% to 61.4%, the same three decks on top of both fields), black
++7.8, red-green +5.3, blue-black +4.9, black-red +3.8, white-blue +3.6,
+blue-red +3.0; the losses (white-green −1.7, blue-green −1.4,
+white-black −1.1) are inside a wish's ±1.9. The builder's own choice for
+a mono wish moved from red every time to white-blue, blue-green,
+blue-black and blue-green — the red cards with strings (the Hordes'
+discard, the Djinn's coin, the Efreet's) read as such — and the library's
+own choice is blue-green. The tool builds 123 decks a second from Fourth
+Edition (166 before: the colour choice on its mana and the land fit).
+
+Gate: 515 scripts, **7,901/7,901 tests, 359,746 asserts**, exit 0
+in 246 s over 6 shards; Python 323, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -1465,19 +1465,28 @@ DeckLab/deck_lab.sh --matrix mine/ --games 50 --no-elo
 DeckLab/auto_deck_cli.sh --help
 ```
 
-Measured on this desk, one process and one loop: **166 decks a second** —
-500 decks of Fourth Edition in 3.0 s, and the ten-thousand-deck run the
-tool was written for in **1m 00s**, ten thousand distinct seeds and ten
-thousand distinct deck files. There is no fan-out and no thread: a build is
-milliseconds, and the pool is walked once per set selection and then
-cached. Budget the disk rather than the clock — 10,000 decks are about
-42 MB.
+Measured on this desk, one process and one loop: **123 decks a second** —
+500 decks of Fourth Edition in 4.1 s (0.40.24's builder did 166; the
+colour choice on its own mana and the land fit are the difference), and
+the ten-thousand-deck run the tool was written for in about **1m 20s**
+after the ten seconds the engine takes to load, ten thousand distinct
+seeds and ten thousand distinct deck files. `--distinct` costs what its
+second attempts cost — 200 decks of Fourth Edition at `--colors pairs
+--distinct 60` took 1,810 of them and 26 s. There is no fan-out and no
+thread: a build is milliseconds, and the pool is walked once per set
+selection and then cached. Budget the disk rather than the clock —
+10,000 decks are about 42 MB.
 
 ### The mining workflow
 
 1. **Make the field.** `auto_deck_cli.sh --out mine --count 1000 --colors
-   random --packs all --sets every` — 1,000 deck files from every card
-   in play, `mine/decks.csv`, `mine/decklist.txt`. 78 s on this desk.
+   pairs --distinct 60 --packs all --sets every` — 1,000 deck files from
+   every card in play, a hundred of each colour pair, every deck at least
+   60% different by cards from every other (*A field that varies*, below),
+   `mine/decks.csv`, `mine/decklist.txt`. The 2026-09-26 run was `--colors
+   random` before those two switches existed: 1,000 decks in 78 s on this
+   desk, and — the finding that made the switches — its best thirty were
+   thirty Mono-Red Midrange decks a card or two apart.
 2. **Round one, cheap and wide.** `deck_lab.sh --field mine/ --gauntlet
    decks/ --group tournament --games 10 --packs all --top 30 --out
    round1` — every mined deck against the 43 tournament decks, 430,000
@@ -1497,9 +1506,15 @@ cached. Budget the disk rather than the clock — 10,000 decks are about
    `decks/ratings.txt`, the shipped decks' own ledger.
 5. **Rebuild the winner in the game.** Open the Deck Builder → AutoDeck,
    set the options from that deck's row of `decks.csv` — the
-   `colors_built` letters, not the `colors_asked` word — type its seed
-   into the **Seed** field, and the deck that comes out is the deck in the
-   file, card for card.
+   `colors_built` letters, not the `colors_asked` word, and the row's
+   `variety` — type its seed into the **Seed** field, and the deck that
+   comes out is the deck in the file, card for card.
+6. **Then improve it.** `auto_deck_cli.sh --out tries --count 100 --keep
+   round2/best.deck --vary "Mijae Djinn, 2 Lava Axe" --packs all --sets
+   every` holds the winner but for the cards named and fills their slots
+   a hundred ways; the Lab plays the hundred against the same gauntlet
+   with the winner itself in the field as the control (*Varying a deck
+   you have*, below).
 
 ### The card pool — `--source`
 
@@ -1571,7 +1586,7 @@ and may be repeated; see *Alternatives and the cartesian walk* below.
 | `--sets CODE,CODE` | the sets of one pool, or `every` (**axis**, by repetition) | `4ed` |
 | `--packs LIST` | the card packs in force for this run — `all`, `none`, or ids like `pack-3,pack-7` (bare `3,7` too); the Lab's switch, the Lab's reading and refusals | the game's own setting |
 | `--list FILE` | a card list to build from; selects `--source list` | — |
-| `--colors WU` / `none` / `random` | colors to build in: letters from WUBRG, `none` for the builder's own choice, `random` for 1..`--max-colors` drawn from that deck's seed (**axis**) | `none` |
+| `--colors WU` / `=WU` / `none` / `random` / `pairs` … | colors to build in (**axis**): letters from WUBRG for "these, and the builder may add up to `--max-colors`"; `=WU` for "exactly these"; `none` for the builder's own choice; `random` for 1..`--max-colors` drawn from that deck's seed, exactly; or a coverage word — `mono`, `pairs`, `triples`, `quads`, `five`, `every` — which IS every colour set of that size as `=` alternatives, in WUBRG order (*Colours*, below) | `none` |
 | `--max-colors 1..5` | how many colors a deck may have (**axis**) | 2 |
 | `--gold on\|off` | multicolored cards preferred, two colors at least (**axis**; bare `--gold` means on) | off |
 | `--size 40\|60` | cards in the deck (**axis**) | 60 |
@@ -1581,7 +1596,10 @@ and may be repeated; see *Alternatives and the cartesian walk* below.
 | `--lands classic\|non-classic` | basics only, or the pool's own lands first (**axis**) | classic |
 | `--tournament on\|off` | no banned cards, restricted cards once (**axis**; `--no-tournament` means off) | on |
 | `--power-nine on\|off` | the Lotus, the Moxen and the blue three (**axis**; bare `--power-nine` means on) | off |
-| `--keep FILE` | a deck file whose non-land cards every deck is built around | — |
+| `--variety 0\|25\|50\|100` | how far the seed's taste moves a card's worth — the window's Variety row, Best / A little / Some / Wild (**axis**) | 0 |
+| `--distinct PCT` | every deck at least PCT% different by cards from every earlier deck of the run, built again from fresh seeds until it is (implies `--variety 50`, then `100`) | off |
+| `--keep FILE` | a deck file whose non-land cards every deck is built around — or, with `--vary`, the deck held but for the cards named | — |
+| `--vary "Fireball, 2 Lightning Bolt"` | with `--keep`: hold the deck — its size, its lands, its colours, every other card — and fill the named cards' slots from the pool without them; a bare name is every copy | — |
 | `--original-cards on\|off` | the Extras window's `Original 1997` switch | on |
 | `--completion-pack on\|off` | the Extras window's `tDotP Pack 1` switch | on |
 | `--boosters N` / `--starters N` / `--free-lands N` / `--extras N` | the sealed deal's four numbers | 3 / 1 / 0 / 0 |
@@ -1607,7 +1625,7 @@ fastest, the way a number counts:
 
 ```
 sets, colors, max-colors, gold, size, lean, speed, rarity, lands,
-tournament, power-nine
+tournament, power-nine, variety
 ```
 
 and start again from the first when the list runs out. So `--count N`
@@ -1632,32 +1650,177 @@ is the deck in the file, card for card. The seed is also the last of the
 deck file's own `# note:` lines, so a deck separated from its manifest
 still says how it was made. `tests/tools/test_auto_deck_cli.gd` holds the
 tool to it by reading the rows back and rebuilding every deck of a run.
+A second attempt under `--distinct` takes the next seed PAST the run's
+own `--count`, so the seeds the rows would have had are never touched and
+a row's seed is still its own.
 
-### Why `--colors random` exists
+### Colours — `none`, letters, `=letters`, `random`, and the coverage words
 
 **`--colors none` — the AutoDeck window's own default — is deterministic.**
 `AutoDeck._choose_colors` reads no random number at all: it rates all 31
-color sets by the sum of their best castable cards and takes the best, and
-the only randomness in a build is a 0.05 jitter on the fill's tie-breaks,
-which moves a card or two and never a color. One pool and one set of wishes
-therefore land on ONE color pair however many seeds are thrown at them, and
-a 10,000-deck mining run with no colors asked for would be 10,000 decks of
-the same two colors — the opposite of mining.
+colour sets by the sum of their best castable cards on the mana each set
+would be laid (*What the builder knows*, below) and takes the best. One
+pool and one set of wishes therefore land on ONE colour set however many
+seeds are thrown at them, and a 10,000-deck mining run with no colours
+asked for would be 10,000 decks of the same two colours — the opposite of
+mining. That is why the other four kinds of wish exist.
 
-`--colors random` draws 1..`--max-colors` colors per deck from **that
-deck's own seed**, so the draw is part of the deck's reproducible identity
-even though the window has no `random` button: the letters land in
-`colors_built` and in the file name, and typing those into the window
-replays the deck.
+**Letters** (`--colors WU`) are what the window's tick boxes are: these
+colours, and the builder may ADD colours up to `--max-colors`. **`=WU`**
+is "exactly these": the mask asked for AND `max_colors` set to their
+count, which is the window with those boxes ticked and *At most* set to
+their number. The manifest's `max_colors` column records the count in
+force, so a row still rebuilds.
 
-The draw is what is ASKED FOR, and the builder may still ADD colors up to
-`--max-colors`, exactly as ticking one color in the window does. Measured
-over 10,000 decks of Fourth Edition at `--max-colors 2`: all ten color
-pairs appear, but black-red takes a quarter of them (2,557) and blue-green
-a twentieth (482) — because half the draws are a single color and the
-builder completes those with the pool's strongest partner. **For an even sweep of the pairs, name them instead** —
-`--colors WU,WB,WR,WG,UB,UR,UG,BR,BG,RG` is ten alternatives and the walk
-deals them equally. `--colors random --max-colors 1` is a mono sweep.
+**`--colors random`** draws 1..`--max-colors` colours per deck from
+**that deck's own seed**, exactly, so the draw is part of the deck's
+reproducible identity even though the window has no `random` button: the
+letters land in `colors_built` and in the file name, and ticking those
+in the window replays the deck. Measured over 10,000 decks of Fourth
+Edition at `--max-colors 2` before the draw was exact: black-red took a
+quarter of them and blue-green a twentieth, because half the draws were a
+single colour and the builder completed those with the pool's strongest
+partner. The draw is exact now, but it is still a draw, and a draw does
+not promise every pair.
+
+**The coverage words promise it.** `--colors pairs` IS the ten
+alternatives `=WU,=WB,=WR,=WG,=UB,=UR,=UG,=BR,=BG,=RG`, in the order a
+player lists them, and the walk deals them equally: `--count 1000` is a
+hundred decks of every pair. `mono` is the five, `triples` the ten,
+`quads` the five, `five` the one, and `every` all thirty-one colour sets
+mono first. The run's header names the word (`colors pairs`), and each
+row's `colors_asked` names its set (`=UG`). A word ADDS to a letter list
+like any alternative — `--colors R --colors pairs` is eleven.
+
+### A field that varies — `--variety` and `--distinct` (2026-09-26)
+
+The first mining run's top thirty (*The mining workflow*) were thirty
+Mono-Red Midrange decks a card or two apart, and the owner's order was a
+switch *"to generate decks that are not too similar and not just
+one/couple of card derivatives … decks that must be some percent different
+by card lists (60% different)"*.
+
+**`--variety`** is the builder's own dial (`AutoDeck.variety`, and the
+AutoDeck window's Variety row — Best, A little, Some, Wild). At 0 the best
+card wins every slot and the only randomness in a build is a 0.05 jitter
+on the fill's tie-breaks, which moves a card or two and never a colour.
+Above it the seed rolls a TASTE for every name in the pool, a number that
+moves the card's worth by up to 0.375, 0.75 or 1.5 points in the colour
+choice and the fill, so different seeds build genuinely different decks
+of the same wish. It is an axis, and the row records it.
+
+**`--distinct PCT`** is the promise on top: every deck of the run differs
+from every earlier deck by at least PCT per cent of its builder's cards
+(`AutoDeck.difference`: one less the copies two decks share over the
+larger of the two — basic lands and the `--keep` cards do not count). A
+deck that falls short is built again from a fresh seed, up to twenty
+times, and the most distinct attempt is kept when none reaches it; the
+summary says how many second attempts the run took and how many decks
+never got there. Every seed a second attempt spends is dealt from the
+base seed past the run's own, so the same line still deals the same
+field. At variety 0 the promise would fail on the second deck of any one
+wish, so `--distinct` implies `--variety 50` when none was spoken, and
+after five seeds that fell short, `100` — which is what reaches 60% in
+one set of one pair; the row records the variety the kept deck was built
+at, so the row still rebuilds it. A small pool cannot always keep the
+promise — Fourth Edition's 596 cards hold twenty decks of one colour
+pair about 55% apart at the tightest, and the summary says which decks
+fell short and by how much; the whole library with the packs holds it
+easily.
+
+```
+DeckLab/auto_deck_cli.sh --out mine --count 1000 --colors pairs --sets every --packs all --distinct 60
+```
+
+### Varying a deck you have — `--keep FILE --vary "…"` (2026-09-26)
+
+The owner's second order: *"an option to be able to permutate only
+specific cards from the supplied deck if we want to find better cards for
+already built deck."* `--keep FILE` on its own builds every deck around
+the file's non-land cards (the window's own Keep). With `--vary`, the deck
+is HELD — its size, its lands as they are, its colours (unless the line
+says otherwise) and every other card — but for the cards named, which
+leave the pool, and the builder fills their slots from what is left:
+
+```
+DeckLab/auto_deck_cli.sh --out tries --count 100 --keep decks/big_red.deck --vary "Fireball, 2 Lightning Bolt" --sets every --packs all
+DeckLab/deck_lab.sh --field tries --field decks/big_red.deck --gauntlet decks/ --group tournament --games 20 --packs all --no-elo
+```
+
+A bare name is every copy the deck holds, `2 Lightning Bolt` two of the
+four; a name is found without regard to case; a card the deck has not
+got, or has fewer of, is refused on the command line. Every deck of the
+field is named after the held deck (`Big Red 00042`) and carries a note
+above its seed line — `Varied: 4 Fireball, 2 Lightning Bolt — the rest
+of Big Red held.` The `next:` line the run ends on plays the held deck in
+the field as the control the tries are measured against, which is the
+whole point: a try that beats the original by more than the interval is a
+better card for that slot. A row of such a run rebuilds with the same
+`--keep` and `--vary`, not in the window, since the window has no slot
+for them. `--distinct` works on a varied field too, over the filled
+slots alone.
+
+### What the builder knows about deck-building theory (2026-09-26)
+
+The order was also to *"inspect online the MTG deck-building theory and
+improve the AutoDeck builder tool"*. What went in, with its source, is
+in `game/deck_builder/auto_deck.gd`'s constants; the short of it:
+
+- **The land count is fitted to the curve the fill made** (`lands_for`):
+  Frank Karsten's 2022 regression over 95,143 tournament decklists — 19.59
+  + 1.90 x the average mana value of the spells, less 0.28 for every cheap
+  mana or card-draw spell — for 60 cards, two thirds of it for 40, settled
+  within two of the speed's own count (22/24/25). A deck of one-drops
+  lands at 22, a deck of five-drops at 26, and the report says which
+  (`The curve asks for 25 lands …; the medium speed's 24 settled at 25.`).
+- **The basics are split by what the spells need to be cast on time**
+  (`sources_for`): Karsten's 2022 source counts by pips and mana value —
+  a one-pip one-drop wants 14 of a 60-card deck's lands its colour, a
+  double pip of two mana 20, a triple pip 23 — weighted by the demand,
+  with a 40-card deck's counts under them.
+- **The fill knows what the mana base will bear** (`_source_strain`): a
+  card whose pips want more sources of a colour than the deck's lands
+  will give — a double pip of the second colour, most of a third — is
+  marked down by every source it is short, so a two-colour deck reaches
+  for single pips and a mono deck minds nothing.
+- **The colours are chosen on the mana they would be laid** (`_mask_worth`,
+  `_mana_expected`): each of the 31 sets is rated by its best castable
+  cards LESS that strain, one per cent off per extra colour, so a pool
+  whose second-best colour is all double pips builds mono rather than a
+  splash the lands cannot carry. Before this the choice reached for two
+  colours the fill then could not carry.
+- **A splash the lands cannot carry leaves the deck** (`_drop_splashes`):
+  a colour the fill took fewer than four cards of (three in 40) is no
+  colour to build on — its lands would be two or three — so it goes,
+  its cards with it, and the slots are picked again from the colours that
+  stay. A colour asked for or kept stays however thin, and so does a gold
+  deck's second colour; the notes own each case (`Red-Green chosen, but
+  the lands could not carry the red the fill took a card or two of; the
+  spells are green.` / `Red asked for, and light on the lands: 2 cards of
+  it on 5 sources.`).
+- **A colour asked for gets its quota of cards**: the fill nudges towards
+  at least four cards (three in 40) of every required colour, so `=WUBRG`
+  is a five-colour deck and not a green deck with a Plains.
+- **An X spell is cast for more than its printed value** (`cast_value`):
+  a Fireball counts as a three-mana spell on the curve, and is priced as
+  one — priced at its printed one it was the cheapest card in the pool,
+  and the first A/B's mono-red deck ran four Meteor Showers as its
+  five-drops.
+- **A card's strings are read** (`_drawbacks`, `_sacrifice_cost`): a
+  creature that enters asking for a card from the hand costs a card on
+  top of itself, one asking for a permanent from the table two (a land
+  is a turn) — an 8/8 for five that eats three Forests is a 5/5 for five
+  — a coin flip to attack loses it half its combats, and a spell that
+  asks for a Goblin to be sacrificed is as dead as colour hate in a deck
+  with no Goblin. The first A/B built four Goblin Grenades into a
+  Goblin-less deck and a black-green deck of Kjeldoran Dead, Plant
+  Elementals and Primeval Forces.
+
+What is NOT in: no matchup knowledge, no opponent, no metagame — the
+builder is blind to the field by design, and the Lab is the judge. The
+2026-09-26 A/B of the builder before and after these changes — the same
+45 wishes and seeds through the 0.40.24 builder and this one, both
+fields against the tournament gauntlet — is in `docs/ROADMAP.md`.
 
 ### What a run leaves in `--out DIR`
 
@@ -1669,8 +1832,9 @@ decklist.txt                 the deck files in order, one path a line
 
 The deck files are the project's `.deck` format, which the Deck Lab and the
 Deck Builder both read; each carries the AutoDeck report as `# note:` lines
-and a name of its own (`Red-Green Beatdown 00042`), because a field of
-forty decks all called *Blue-Black Midrange* is a matrix nobody can read.
+and a name of its own (`Red-Green Beatdown 00042`, or the held deck's own
+name for a `--vary` run), because a field of forty decks all called
+*Blue-Black Midrange* is a matrix nobody can read.
 `decklist.txt` is the list to walk, or to paste into a `--gauntlet`. A run
 written inside the project gets a `.gdignore`, so the editor never imports
 `decks.csv` as a translation table.
@@ -1696,10 +1860,12 @@ written inside the project gets a `.gdignore`, so the editor never imports
 | `lands` | `classic` / `non-classic` |
 | `tournament` | `on` / `off` |
 | `power_nine` | `on` / `off` |
+| `variety` | `0` / `25` / `50` / `100` — the variety the deck was BUILT at, which with `--distinct` may be higher than the line said |
 | `cards` | cards in the deck |
 | `land_count` | lands in it |
 | `creature_count` | creatures in it |
 | `spell_count` | everything else |
+| `distinct` | how far, in per cent, this deck is from the nearest EARLIER deck of the run by its builder's cards (`100` for the first; with `--distinct`, the promise kept or the most distinct attempt) |
 | `deck_name` | the name in the file, and the name a Lab report prints |
 
 Every option column is spelled the way the switch takes it, so a row can be

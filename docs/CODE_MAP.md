@@ -233,6 +233,61 @@ needed); card files have NO class_name (they register by name instead);
   inside a bucket, 200,000 tasks grouped under ten seconds, the tables'
   reading of the buckets.
 
+## The field that varies, and what the builder knows (2026-09-26)
+
+- `game/deck_builder/auto_deck.gd` — the builder learns the theory: the
+  land count is FITTED to the curve the fill made (`lands_for`, Karsten's
+  2022 regression 19.59 + 1.90 × avg MV − 0.28 × cheap, settled within
+  `LAND_PLAY` of the speed's own count; `LAND_BASE`, `LAND_PER_MANA`,
+  `LAND_PER_CHEAP`); the basics are split by what the spells need to be
+  cast on time (`sources_for`, `SOURCES` by pips and mana value for 60
+  and 40); the fill marks a card down for every source of its colour the
+  lands will not give (`_source_strain`, `SOURCE_STRAIN`); the colours
+  are chosen on the mana they would be laid (`_choose_colors` via
+  `_mask_worth`/`_mana_expected`, one per cent off per extra colour); a
+  colour the fill took fewer than `SPLASH_CARDS` of is dropped and its
+  slots picked again (`_drop_splashes`, unless asked for, kept or a gold
+  deck's second); a colour asked for gets its quota of cards
+  (`_required`); an X spell is cast for `X_AS` more than its printed cost
+  (`cast_value`). And the builder learns to differ: `variety`
+  (`VARIETY_LEVELS` 0/25/50/100, `TASTE_SPAN`) rolls a taste per name
+  from the seed that moves a card's worth in the colour choice and the
+  fill; `difference(a, b)` is one less the copies two decks share over
+  the larger; `builders_cards(deck, kept)` is the deck without its basics
+  and kept cards; `keep_lands` / `land_total` hold a deck's lands as they
+  are for `--vary`; `color_phrase`, `cast_colors`, `short_by` for the
+  notes.
+- `game/deck_builder/auto_deck_window.gd` — a Variety row (Best, A
+  little, Some, Wild) under Speed, remembered with the other wishes and
+  named in the report's option line when it is not Best; the speed
+  tooltips say "around N lands, settled to the curve".
+- `DeckLab/auto_deck_cli.gd` — `--colors` takes `=WU` (exactly these),
+  and the coverage words `mono`, `pairs`, `triples`, `quads`, `five`,
+  `every` (`COLORS_COVERAGE`, `exact_masks`, `exact_word`,
+  `coverage_word`), each the `=` alternatives of every colour set of that
+  size in WUBRG order; `random` draws exactly; `--variety` is the
+  twelfth axis; `--distinct PCT` builds a deck again from seeds past the
+  run's own until it is that far from every earlier deck
+  (`DISTINCT_TRIES` 20, implying `--variety 50` then `100` after
+  `DISTINCT_WILD_AFTER`), and the summary says what it cost; `--vary
+  "Fireball, 2 Lightning Bolt"` with `--keep` holds the deck but for the
+  named cards (`parse_vary`, `varied_cards`, `_builder_for`,
+  `_note_varied`), names the field after the held deck and ends on a
+  `next:` line that plays it as the control; `decks.csv` gains `variety`
+  and `distinct` (the distance to the nearest earlier deck, 100 for the
+  first).
+- `tests/unit/test_auto_deck.gd`, `tests/ui/test_auto_deck_window.gd`,
+  `tests/tools/test_auto_deck_cli.gd` — the fit, the sources, the
+  strain, the drop, the quota, the difference and the variety levels
+  pinned on Fourth Edition; the Variety row remembered and reported; the
+  coverage words, `=WU`, `--distinct` (the column IS the floored
+  distance, the promise held, the run byte-identical twice) and
+  `--keep --vary` (every other card held copy for copy, the note, the
+  name) on real runs.
+- `DeckLab/README.md` — the AutoDeck section: *Colours*, *A field that
+  varies*, *Varying a deck you have*, *What the builder knows about
+  deck-building theory*, the switches and the columns.
+
 ## The turn after an extra combat (2026-09-26)
 
 - `engine/mtg_game.gd` — `_next_turn` points `_step_index` at the new
@@ -246,6 +301,11 @@ needed); card files have NO class_name (they register by name instead);
 
 ## Release package files
 
+- `docs/releases/0.40.25.md`: the AutoDeck builder fits its lands to the
+  curve and its sources to the pips, chooses colours on the mana they
+  would be laid and drops a splash the lands cannot carry; a Variety
+  row; the CLI's `=WU`, coverage words, `--variety`, `--distinct` and
+  `--keep --vary`.
 - `docs/releases/0.40.24.md`: the turn after a Relentless Assault opened
   with an out-of-bounds read of the step — the line's step was wrong
   and the engine printed an error every such turn; it is the cleanup

@@ -139,8 +139,18 @@ func test_the_window_shows_the_pool_and_the_wishes_with_their_defaults() -> void
 		"the Power Nine off by default (2026-09-18)")
 	assert_eq((_in("PowerNineLine") as Button).tooltip_text, AutoDeckWindow.POWER_TIP)
 	assert_false(_window_of().builder().power_nine)
-	# One more line (2026-09-18) and the wishes still fit the window, the
-	# window the 1280x800 viewport.
+	# Variety (2026-09-26): a row of the builder's four levels, best by
+	# default, each with a tooltip saying what the seed then moves.
+	for level in AutoDeck.VARIETY_LEVELS:
+		var button: Button = _in("Variety_%d" % level)
+		assert_not_null(button, "a variety button for %d" % level)
+		assert_eq(button.button_pressed, level == 0, "variety %d: %s" % [level, "down" if level == 0 else "up"])
+		assert_false(button.tooltip_text.is_empty(), "variety %d has its tooltip" % level)
+	assert_eq((_in("Variety_0") as Button).text, "Best")
+	assert_eq((_in("Variety_100") as Button).text, "Wild")
+	assert_eq(_window_of().builder().variety, 0, "the builder gets the default")
+	# One more line (2026-09-18), the variety row (2026-09-26), and the
+	# wishes still fit the window, the window the 1280x800 viewport.
 	await get_tree().process_frame
 	var body := _window().body()
 	gut.p("AutoDeck window: body needs %.0f of %.0f; window %.0f tall" % [
@@ -189,7 +199,8 @@ func test_build_me_a_deck_puts_the_deck_on_the_surface_and_the_pool_in_force() -
 	assert_null(_window(), "the window came down")
 	assert_eq(screen.deck.total(), 60, "sixty cards on the surface")
 	assert_eq(screen.deck.side_total(), 0)
-	assert_eq(_lands(), 24, "medium: 24 lands")
+	assert_between(_lands(), 24 - AutoDeck.LAND_PLAY, 24 + AutoDeck.LAND_PLAY,
+		"medium: 24 lands, settled to the curve (2026-09-26): %d" % _lands())
 	assert_true(screen.deck.deck_name.ends_with(" Midrange"), screen.deck.deck_name)
 	assert_true(screen.deck.notes.begins_with("Built by AutoDeck: 60 cards, "), screen.deck.notes)
 	assert_true(screen.deck.notes.contains("Card pool: Fourth Edition ("), screen.deck.notes)
@@ -248,10 +259,18 @@ func test_the_wishes_reach_the_builder() -> void:
 	assert_eq((_in("PowerNineLine") as Button).text, "[x] " + AutoDeckWindow.POWER_TEXT)
 	assert_true(summary.text.ends_with("creatures, fast. A gold deck, uncommon up, non-classic lands, the Power Nine."), summary.text)
 	assert_true(_window_of().builder().power_nine, "the wish reaches the builder")
+	# Variety (2026-09-26): the summary says it, the builder gets it.
+	_in("Variety_50").pressed.emit()
+	assert_true(summary.text.ends_with("the Power Nine, variety 50."), summary.text)
+	assert_eq(_window_of().builder().variety, 50)
+	_in("Variety_0").pressed.emit()
+	assert_true(summary.text.ends_with("the Power Nine."), "back to best: " + summary.text)
+	assert_eq(_window_of().builder().variety, 0)
 	_in("BuildButton").pressed.emit()
 	await get_tree().process_frame
 	assert_eq(screen.deck.total(), 40)
-	assert_eq(_lands(), 15, "fast: 15 lands in 40")
+	assert_between(_lands(), 15 - AutoDeck.LAND_PLAY, 15 + AutoDeck.LAND_PLAY,
+		"fast: 15 lands in 40, settled to the curve (2026-09-26): %d" % _lands())
 	assert_true(screen.deck.deck_name.begins_with("Blue-Black "), screen.deck.deck_name)
 	assert_true(screen.deck.deck_name.ends_with(" Rush"), screen.deck.deck_name)
 	assert_true(screen.deck.notes.contains("Built without the tournament rules"), screen.deck.notes)
