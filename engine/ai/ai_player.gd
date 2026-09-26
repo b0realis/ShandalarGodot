@@ -1454,12 +1454,14 @@ func _rent_affordable(game: MtgGame, inst: CardInstance, sources: Array,
 
 
 ## THE DAMAGE THAT IS COMING ([member AiProfile.buys_life]): what their
-## combat, as it stands, will deal us. Once blocks are known, the power
-## of the unblocked attackers; once attackers are declared and before
-## the blocks, the declared attack through our value blocks ([method
-## _damage_after_value_blocks]); outside their combat, nothing — a life
-## bought before the attack is a land spent on a swing that may not come,
-## and the reading that prices a whole board is [method _in_danger]'s.
+## combat, as it stands, will deal us. Once blocks are known, what the
+## declared combat lands on us ([method _declared_damage] — the unblocked
+## power and every blocked trampler's spill); once attackers are declared
+## and before the blocks, the declared attack through our value blocks
+## ([method _damage_after_value_blocks]); outside their combat, nothing —
+## a life bought before the attack is a land spent on a swing that may
+## not come, and the reading that prices a whole board is [method
+## _in_danger]'s.
 func _incoming_damage(game: MtgGame) -> int:
 	if game.active_player == pid or game.combat.attackers.is_empty() \
 			or game.combat_damage_prevented:
@@ -1471,11 +1473,10 @@ func _incoming_damage(game: MtgGame) -> int:
 		if attacker != null and attacker.zone == Mtg.Zone.BATTLEFIELD:
 			attackers.append(attacker)
 	if game.current_step() >= Mtg.Step.DECLARE_BLOCKERS and not game.awaiting_blockers:
-		var unblocked := 0
-		for attacker in attackers:
-			if not game.combat.was_blocked(game.combat.band_of(attacker.id)):
-				unblocked += maxi(attacker.cur_power, 0)
-		return unblocked
+		var through := 0
+		for landed in _declared_damage(game).values():
+			through += int(landed)
+		return through
 	var mine: Array[CardInstance] = []
 	for inst in me.battlefield:
 		if inst.is_creature():
@@ -1483,39 +1484,95 @@ func _incoming_damage(game: MtgGame) -> int:
 	return _damage_after_value_blocks(game, attackers, mine)
 
 
+## WHAT THE DECLARED COMBAT LANDS ON US, blocks in: attacker id → the
+## damage that attacker deals US and not a blocker, for every attacker
+## that lands any. An unblocked attacker lands its power. A BLOCKED
+## attacker lands nothing — unless it tramples, and then it lands what is
+## left once every blocker still standing has been assigned its lethal
+## (CR 702.19b), which is the engine's own division ([method
+## MtgGame.default_damage_split]) run over the band in the engine's own
+## order, so this reading and the damage step cannot disagree: a
+## trampler whose blockers all died lands the whole of its power (CR
+## 702.19c), a band-mate without trample fills the blockers' lethal
+## ahead of it, and a DEFENSIVE band denies the spill outright (CR
+## 702.22f-h — the defender divides the damage and none of it is ours).
+## Rampage is already on `cur_power` here; the engine applied it as the
+## blockers were declared. The first cut summed the unblocked power and
+## nothing else, and a Force of Nature through a chump was six damage
+## the life reading never saw (2026-09-26).
+func _declared_damage(game: MtgGame) -> Dictionary:
+	var out: Dictionary = {}
+	for band in game.combat.all_bands():
+		var members: Array[CardInstance] = []
+		for id in band:
+			var member := game.find_instance(int(id))
+			if member != null and member.zone == Mtg.Zone.BATTLEFIELD:
+				members.append(member)
+		if members.is_empty():
+			continue
+		var blocked := game.combat.was_blocked(band)
+		var blockers: Array[CardInstance] = []
+		var blocker_ids: Array = []
+		if blocked:
+			for blocker_id in game.combat.ordered_blockers_of_band(band):
+				var blocker := game.find_instance(int(blocker_id))
+				if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD:
+					blockers.append(blocker)
+					blocker_ids.append(blocker.id)
+		var free_order := blocked and CombatState.bands_with_among(blockers)
+		for blocker in blockers:
+			if blocker.has_keyword(Mtg.Keyword.BANDING):
+				free_order = true
+				break
+		var already: Dictionary = {}
+		for member in members:
+			if member.cur_assigns_no_combat_damage:
+				continue
+			var power := maxi(member.cur_power, 0)
+			if power <= 0:
+				continue
+			if not blocked or member.cur_damage_as_unblocked:
+				out[member.id] = power
+				continue
+			var split := game.default_damage_split(member, blocker_ids, power,
+				member.has_keyword(Mtg.Keyword.TRAMPLE), already, free_order)
+			for key in split:
+				if int(key) == MtgGame.DAMAGE_TO_PLAYER:
+					out[member.id] = int(split[key])
+				else:
+					already[key] = int(already.get(key, 0)) + int(split[key])
+	return out
+
+
 ## THE MAZE'S PICK ([member AiProfile.casts_timed_spells], [member
 ## EffectIntent.fogs_attacker]): which declared attacker, blocks known,
 ## is worth untapping out of the combat — `{"target", "value"}` or `{}`.
-## An UNBLOCKED attacker is worth the damage it would land, at the
-## reaper's rate, plus one; and the whole game when the unblocked swing
-## is lethal and taking this one out of it makes it not. A BLOCKED
-## attacker is worth the blocker of ours it would kill and not die to.
+## An attacker that LANDS damage on us ([method _declared_damage] — an
+## unblocked one, or a blocked trampler's spill) is worth that damage at
+## the reaper's rate, plus one; and the whole game when the swing is
+## lethal and taking this one out of it makes it not. A BLOCKED attacker
+## is worth the blocker of ours it would kill and not die to, and a
+## blocked trampler is worth the larger of the two.
 func _maze_pick(game: MtgGame, source: CardInstance, spec: TargetSpec) -> Dictionary:
 	var me := game.players[pid]
-	var unblocked_total := 0
-	var candidates: Array = []
+	var landing := _declared_damage(game)
+	var total := 0
+	for landed in landing.values():
+		total += int(landed)
+	var out: Dictionary = {}
 	for attacker_id in game.combat.attackers:
 		var attacker := game.find_instance(attacker_id)
 		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD:
 			continue
-		var blocked := game.combat.was_blocked(game.combat.band_of(attacker_id))
-		if not blocked:
-			unblocked_total += maxi(attacker.cur_power, 0)
 		if spec != null and not spec.is_legal(game, TargetRef.card(attacker), source):
 			continue
-		candidates.append([attacker, blocked])
-	var out: Dictionary = {}
-	for pair in candidates:
-		var attacker: CardInstance = pair[0]
 		var worth := 0.0
-		if not bool(pair[1]):
-			var power := maxi(attacker.cur_power, 0)
-			if power <= 0:
-				continue
-			worth = float(power) * _life_price(me.life) + 1.0
-			if unblocked_total >= me.life and unblocked_total - power < me.life:
+		var landed := int(landing.get(attacker.id, 0))
+		if landed > 0:
+			worth = float(landed) * _life_price(me.life) + 1.0
+			if total >= me.life and total - landed < me.life:
 				worth = LETHAL_WORTH
-		else:
+		if game.combat.was_blocked(game.combat.band_of(attacker_id)):
 			for blocker_id in game.combat.blockers_of(attacker.id):
 				var blocker := game.find_instance(blocker_id)
 				if blocker == null or blocker.controller_id != pid:

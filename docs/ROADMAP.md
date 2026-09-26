@@ -17057,6 +17057,62 @@ owner's word, so the census is the deliverable and the decks wait.
 Gate: 523 scripts, **7,977/7,977 tests, 361,200 asserts**, exit 0
 in 254 s over 6 shards; Python 323, exit 0.
 
+## 2026-09-26 — The trampler's spill (0.40.27)
+
+The release review of 0.40.26 found one thing to fix before
+publication and two documents to correct: *"the AI's emergency-life-gain
+estimate can miss blocked trample damage. Combat itself resolves
+correctly."*
+
+**The reading that was short.** `AiPlayer._incoming_damage`, once the
+blocks are in, summed the power of the unblocked attackers and nothing
+else. The reviewer's probe: an 8/8 Force of Nature blocked by a 2/2
+Grizzly Bears — the helper read 0, the engine dealt 6. So a Zuran Orb
+at five life against that swing was never offered (the life arm prices
+the gain that keeps our life above the damage that is coming, and it
+saw none coming), and the Maze of Ith's lethal check, built on the same
+sum, had the same gap. The engine's division was always right; the
+AI's estimate of it was not.
+
+**The reading now.** `_declared_damage(game)` walks the combat's bands
+the way the engine's own damage step does and returns attacker id → the
+damage that attacker lands on US: an unblocked attacker its power; a
+blocked one the surplus of `MtgGame.default_damage_split` over its live
+blockers in the engine's blocker order — a trampler's spill lands, a
+band-mate without trample fills the blockers' lethal ahead of it, a
+trampler whose blockers all left the battlefield lands the whole power
+(CR 702.19c), a DEFENSIVE band (a Benalish Hero among the blockers)
+takes free order and denies the spill (CR 702.22f-h), a body that
+assigns no combat damage lands nothing, one that deals damage as though
+unblocked lands its power. Rampage is already on `cur_power` at that
+step. `_incoming_damage`'s post-block branch and `_maze_pick` read it;
+the pre-block reading through our value blocks was already
+trample-aware and is unchanged.
+
+**The regression** (`tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`,
+4 tests): the Force through the Bears reads 6; a Craw Wurm through the
+Bears reads 0; the Orb at five life spends exactly one Island against
+the six and keeps the next; a Maze against a blocked Force (six
+through) and an unblocked Bears (two) at seven life goes on the
+trampler at `LETHAL_WORTH`, and the turn ends at five. Against the
+old branch three of the four fail and the Orb stays untapped.
+
+**The two documents.** `docs/pack-7-fifth-edition.md` (and
+`docs/pack-6-portal.md`, the same sentence) told web players to "use
+the existing card-pack upload flow"; the web build offers none — the
+numbered packs are desktop-only, as `docs/card-art-and-packs.md` has
+said all along. `docs/release-builds.md` counted "five numbered-pack
+builders" in the package; there are seven (`tools/pack_1_…` through
+`pack_7_…`).
+
+**Open, from the same review:** six tests in the Deck Builder filter and
+sound expectations read the persisted profile (`sound_enabled`, the
+set filter) and fail on a profile a previous local probe left behind;
+the tests should own and reset those settings. Not in this commit.
+
+Gate: 524 scripts, **7,981/7,981 tests, 361,335 asserts**, exit 0
+in 245 s over 6 shards; Python 323, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

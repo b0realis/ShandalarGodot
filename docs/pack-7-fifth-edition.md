@@ -32,8 +32,9 @@ python3 tools/pack_7_fifth_edition.py verify cardpacks/Pack-7-Fifth-Edition.zip
 
 On Windows, `py -3` may replace `python3`. Leave the ZIP intact and enable
 it through **Options → Card Packs → Rescan**. On Mac, `cardpacks/` belongs
-beside the app, not inside it. Web players construct the ZIP on their own
-computer and use the existing card-pack upload flow.
+beside the app, not inside it. The numbered packs are desktop-only: the web
+build offers no browser import or upload path for them (see
+`card-art-and-packs.md`), so use the built ZIP with a desktop build.
 
 With no explicit output path, the builder writes
 `../shandalar-packs/Pack-7-Fifth-Edition.zip`; its reusable cache is

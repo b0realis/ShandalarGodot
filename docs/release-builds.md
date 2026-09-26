@@ -46,7 +46,7 @@ package, copies the whole build directory, or builds a card pack. It streams
 the approved files into two ZIPs, checks their integrity, preserves launcher
 permissions and app signatures, and writes no UID/GID or extended metadata.
 All packages carry tools under `tools/`, a README and per-file SHA256SUMS.
-The five numbered-pack builders and their Python dependencies are bundled,
+The seven numbered-pack builders and their Python dependencies are bundled,
 alongside explicitly allowlisted `cards/data/` and `packaging/card_packs/`
 metadata. Pack 1's base assignments are generated from the source registry
 at packaging time, avoiding a dependency on the checkout's card scripts.

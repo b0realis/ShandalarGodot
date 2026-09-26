@@ -338,8 +338,23 @@ needed); card files have NO class_name (they register by name instead);
   `test_ai_swaps_life_2026_09_26.gd`, `test_ai_takes_the_turn_2026_09_26.gd`,
   `test_ai_maze_and_transmute_2026_09_26.gd` — both arms of every knob.
 
+## The trampler's spill (2026-09-26)
+
+- `engine/ai/ai_player.gd`: `_declared_damage` — attacker id → the damage
+  that attacker lands on us with the blocks in, each band run through
+  `MtgGame.default_damage_split` in the engine's own blocker order
+  (trample spills to `DAMAGE_TO_PLAYER`, a defensive band's free order
+  denies it, `cur_assigns_no_combat_damage` and `cur_damage_as_unblocked`
+  honoured, a blocked trampler whose blockers all left lands the whole
+  power); `_incoming_damage`'s post-block branch and `_maze_pick` read
+  it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
+
 ## Release package files
 
+- `docs/releases/0.40.27.md`: the AI's post-block damage reading runs the
+  engine's own division, so a blocked trampler's spill is counted by the
+  life arm and the Maze; two documents corrected (desktop-only packs,
+  seven builders).
 - `docs/releases/0.40.26.md`: the AI plays the conscriptions (Nettling Imp,
   Norritt, Arcum's Whistle) at their beginning of combat and the prison —
   Stasis's rent, Zuran Orb's life, Mirror Universe, Time Vault, Maze of

@@ -35,9 +35,10 @@ python3 tools/pack_6_portal.py verify cardpacks/Pack-6-Portal.zip
 
 On Windows, `py -3` may replace `python3`. Leave the ZIP intact and enable
 it through **Options → Card Packs → Rescan**. On Mac, `cardpacks/` belongs
-beside the app, not inside it. Web players construct the ZIP on their own
-computer and use the existing card-pack upload flow. The rules and source
-tools are platform-independent; no network service is needed to play.
+beside the app, not inside it. The numbered packs are desktop-only: the web
+build offers no browser import or upload path for them (see
+`card-art-and-packs.md`). The rules and source tools are
+platform-independent; no network service is needed to play.
 
 With no explicit output path, the builder writes
 `../shandalar-packs/Pack-6-Portal.zip`; its reusable cache is
