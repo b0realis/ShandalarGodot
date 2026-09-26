@@ -224,8 +224,20 @@ needed); card files have NO class_name (they register by name instead);
   not at all, only a whole slice is records, the landing name, one record
   per task, a dead child replaced (a real one-game child), a slice no
   child can finish, no in-process replay.
+- `DeckLab/simulate.gd` (0.40.23): `_records_by_pair` — the run's
+  records grouped by pair in one pass over the tasks (the scan it
+  replaced was 18.5 billion reads for a thousand-deck tournament);
+  `_tournament_tables` takes each deck's pairs from one pass over the
+  pair list.
+- `tests/tools/test_deck_lab_aggregate_2026_09_26.gd` — task order
+  inside a bucket, 200,000 tasks grouped under ten seconds, the tables'
+  reading of the buckets.
 
 ## Release package files
+
+- `docs/releases/0.40.23.md`: the Deck Lab's aggregate after the games
+  is one pass over the tasks — a thousand-deck tournament's report
+  follows its last game in seconds, not twenty-two minutes.
 
 - `docs/releases/0.40.22.md`: a Deck Lab worker writes its slice whole
   or not at all, a worker that dies is replaced by a fresh one for the

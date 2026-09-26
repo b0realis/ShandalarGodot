@@ -843,15 +843,17 @@ func _main(argv: PackedStringArray) -> int:
 		return 1
 
 	# ---- aggregate ----
+	# ONE PASS OVER THE TASKS (2026-09-26). This used to scan the whole
+	# task list once per pair, which is nothing for a duel and 18.5
+	# billion dictionary reads for a thousand-deck tournament — the
+	# first one's parent sat at 100% for twenty-two minutes after the
+	# last game, with three and a half hours of records in memory and
+	# no way to tell it from a hang. Records land in task order, as they
+	# always did, so the report is byte for byte the one the scan wrote.
+	var per_pair_records := _records_by_pair(pairs.size())
 	var per_pair_stats: Array = []
-	var per_pair_records: Array = []
 	for pair_index in pairs.size():
-		var records: Array = []
-		for i in _tasks.size():
-			if _tasks[i].pair == pair_index:
-				records.append(_results[i])
-		per_pair_records.append(records)
-		per_pair_stats.append(SimStats.summarize(records))
+		per_pair_stats.append(SimStats.summarize(per_pair_records[pair_index]))
 
 	# ---- the field, deck by deck ----
 	# An aggregate `58.2% vs the field` is the number that was asked for,
@@ -1128,6 +1130,20 @@ func _duel_options(opts: Dictionary) -> Dictionary:
 		"best_of": opts.best_of, "sideboard": opts.sideboard,
 		"format": opts.format,
 	}
+
+
+## The run's records grouped by the pair that played them, one Array
+## per pair in pair order, each in task order: one pass over the tasks,
+## however many pairs there are. A task's `pair` is its index into the
+## caller's pair list.
+func _records_by_pair(pair_count: int) -> Array:
+	var by_pair: Array = []
+	by_pair.resize(pair_count)
+	for pair_index in pair_count:
+		by_pair[pair_index] = []
+	for i in _tasks.size():
+		(by_pair[int(_tasks[i].pair)] as Array).append(_results[i])
+	return by_pair
 
 
 ## Play every work order in [member _tasks] into [member _results], in
@@ -3589,13 +3605,25 @@ func _reading_block(mode: String, opts: Dictionary, decks: Array[DeckList],
 func _tournament_tables(decks: Array[DeckList], contestants: int,
 		field_paths: Array[String], pairs: Array, per_pair_records: Array,
 		per_pair_stats: Array, top: int) -> Dictionary:
+	# The pairs each side played, in pair order, from one pass over the
+	# pair list rather than one per deck (a thousand decks against
+	# forty-three is 43,000 pairs; see the aggregate in `_main`).
+	var pairs_of_row: Array = []
+	pairs_of_row.resize(contestants)
+	for i in contestants:
+		pairs_of_row[i] = []
+	var pairs_of_col := {}
+	for pair_index in pairs.size():
+		(pairs_of_row[int(pairs[pair_index][0])] as Array).append(pair_index)
+		var col: int = pairs[pair_index][1]
+		if not pairs_of_col.has(col):
+			pairs_of_col[col] = []
+		(pairs_of_col[col] as Array).append(pair_index)
 	var standings: Array = []
 	for i in contestants:
 		var records: Array = []
 		var opponents: Array = []
-		for pair_index in pairs.size():
-			if pairs[pair_index][0] != i:
-				continue
+		for pair_index in pairs_of_row[i]:
 			records.append_array(per_pair_records[pair_index])
 			opponents.append({"name": decks[pairs[pair_index][1]].deck_name,
 				"stats": per_pair_stats[pair_index]})
@@ -3604,9 +3632,7 @@ func _tournament_tables(decks: Array[DeckList], contestants: int,
 	var gauntlet: Array = []
 	for j in range(contestants, decks.size()):
 		var records: Array = []
-		for pair_index in pairs.size():
-			if pairs[pair_index][1] != j:
-				continue
+		for pair_index in pairs_of_col.get(j, []):
 			for record in per_pair_records[pair_index]:
 				records.append(flipped_record(record))
 		gauntlet.append({"name": decks[j].deck_name,

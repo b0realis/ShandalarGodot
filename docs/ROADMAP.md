@@ -16740,6 +16740,29 @@ no longer walks into it.
 Gate: 513 scripts, **7,876/7,876 tests, 358,555 asserts**, exit 0
 in 254 s over 6 shards; Python 323, exit 0.
 
+0.40.23, the same morning: the second round 1 landed — 430,000 games in
+3 h 27 m, seven slices whole and the eighth twenty minutes behind them,
+no retry needed — and then the parent sat at 100% for twenty-two
+minutes with nothing to tell it from a hang. The aggregate scanned the
+whole task list once per pair: 43,000 × 430,000 = 18.5 billion
+dictionary reads (a scratch probe measured 14 M/s). It is one pass now
+(`_records_by_pair`), and the tournament tables take their pairs per
+deck from one pass over the pair list too. Proof it is the same report:
+the 3,440-game tournament of the crash investigation, replayed on the
+new code across eight processes, writes `matchups.csv`, `standings.csv`
+and `top.txt` byte for byte as 0.40.22 wrote them in-process.
+`tests/tools/test_deck_lab_aggregate_2026_09_26.gd` pins the task
+order inside a bucket, a 200,000-task grouping under ten seconds (the
+scan is five minutes), and the tables' reading of the buckets.
+
+The first report (`shandalar-build/mining/2026-09-26/round1/`): the
+best 30 of 1,000 mined decks are ALL Mono-Red Midrange (95 of the
+field were mono-red; the best two-colour deck is rank 95 at 56%), and
+the gauntlet ranked itself — de Foucaud 1994 hardest at 76.3%, Hovi's
+Turbo-Stasis last at 6.6%, which is the AI's reading of Stasis, not the
+deck's. Gate: 514 scripts, **7,879/7,879 tests, 358,558 asserts**,
+exit 0 in 244 s over 6 shards; Python 323, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

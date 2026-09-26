@@ -15,9 +15,9 @@
 # (docs/release-builds.md). Card art and the 1997 skin are not in the
 # repository and never reach a runner: run_tests.sh builds the card packs
 # it needs from cards/data/, and leaves out BY NAME the scripts that pin
-# the 1997 look (seventeen of 513 on 2026-09-26, each marked "Needs the
+# the 1997 look (seventeen of 514 on 2026-09-26, each marked "Needs the
 # imported 1997 skin") — those run on a desk that has imported it. The
-# gate here is 496 scripts, and the log's first lines name the rest.
+# gate here is 497 scripts, and the log's first lines name the rest.
 name: Gate
 
 on:
