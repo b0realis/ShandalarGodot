@@ -210,7 +210,7 @@ export SHANDALAR_PACK_7="$PACK_SEVEN_PATH"
 # THE SUITE IN SHARDS
 # -------------------
 # One headless Godot took sixteen to seventeen minutes for the 469
-# scripts (512 on 2026-09-26) on a 22-core machine (the gate of 2026-09-17: 959 s of GUT's
+# scripts (513 on 2026-09-26) on a 22-core machine (the gate of 2026-09-17: 959 s of GUT's
 # own time), and a gate nobody runs between commits is a gate that
 # catches things a day late. Nothing in the suite needs another script's
 # process: every test script is a fresh GutTest, every network test binds

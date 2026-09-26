@@ -16690,6 +16690,56 @@ the packaged `deck_lab.sh` plays the tournament the checkout plays.
 Gate: 512 scripts, **7,868/7,868 tests, 359,426 asserts**, exit 0
 in 250 s over 6 shards; Python 323, exit 0.
 
+## 2026-09-26 — The fan-out's answer files and its retry (0.40.22)
+
+The first thousand-deck tournament — 1,000 mined decks against the 43
+tournament decks, 430,000 games over eight workers, 3 h 21 m — ended
+with an empty output folder. The log said why, in two backtraces. The
+parent took a child's answer file for the slice's landing the instant
+the file existed, and the child OPENED that file before it spent
+seconds turning 54,000 records into JSON; when the last file appeared
+the parent took the run for finished, killed the children still
+running — the last one, mid-write — and read an empty file. On that it
+threw all eight slices away and replayed every game in the thread pool
+(the fallback written for a fan-out that could not start), where the
+run crashed within the minute, `DeckStudy.analyze` under four threads.
+No report, no standings, no `top.txt`.
+
+Three changes, each with the day's date on it. A worker writes its
+records under a working name (`done_N.json.part`) and renames the
+file whole once it is closed, so the parent cannot see a landing that
+is not one. The parent lands a slice only under its final name, reads
+it as it lands, and a slice that comes back without records — a dead
+child, a file that is not a slice — is asked of a fresh child for the
+same slice, three children in all, while the others play on; the slice
+file is still on disk, so the retried games are the same games with
+the same seeds. And a run is never replayed in-process any more: a
+slice still missing after the third child stops the run with exit 1,
+naming the unplayed games and the one the last heartbeat was on, by
+pair and seed — the thing to play alone to see what kills a worker. A
+game that kills three children would kill the parent too, and with it
+the slices that did come back.
+
+`tests/tools/test_deck_lab_fan_2026_09_26.gd` pins it: the answer
+whole or not at all, only a whole slice is records (an empty file — the
+crash's exact shape — is null, quietly), a slice lands only under its
+final name, one record per task, and two tests that start a REAL child
+for one game: a dead child (a reaped one, not a made-up pid —
+`is_process_running` on a number that was never our child is an engine
+error) is replaced and the retried record's fingerprint is the direct
+play's; a slice no child can finish leaves its four records missing and
+names game 3, pair 0, seed 4244. The suite's old rule that spawning is
+not unit-tested gave way to the three hours it cost.
+
+Open: the thread-pool crash itself (`deck_study.gd:62`, signal 11, in
+a parent that had just finished a three-hour fan-out) is not
+reproduced and not understood; every in-process run of the suite and
+every `--procs 1` run since is fine. Noted, not chased — the fan-out
+no longer walks into it.
+
+Gate: 513 scripts, **7,876/7,876 tests, 358,555 asserts**, exit 0
+in 254 s over 6 shards; Python 323, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

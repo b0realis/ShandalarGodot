@@ -333,6 +333,7 @@ same tournament at `--procs 1` and `--procs 3`).
 | `--games N` | games **per matchup** | 1000 |
 | `--seed N` | base RNG seed — same seed + decks = identical results at ANY `--jobs` | 1 |
 | `--jobs N` | worker threads per process (0 = default) | min(4, cores) |
+| `--procs N` | separate worker **processes**, each a whole engine holding the card pool (~235 MB) and about 8× the speed of threads; `1` turns the fan-out off, `0` decides from the size of the run. A worker that dies is replaced by a fresh one for the same slice (three in all); a slice no worker can finish stops the run, naming the game the last heartbeat was on (see [Performance](#performance)) | 8 once a run is big enough |
 | `--profile-a NAME` / `--profile-b NAME` | pilot skill: `apprentice`, `magician`, `sorcerer`, `wizard` | wizard |
 | `--profile-a NAME:knob=value,...` | the same preset with knobs overridden — `wizard:pays_sacrifices=off`, `wizard:minds_pain=off,counter_threshold=4`. Booleans read on/off (true/false, 1/0), numbers as the knob's own type; an unknown knob is refused at parse time. How one AI capability is measured against its own null: the candidate on seat A, the knob off on seat B, same seeds | — |
 | `--sweep KNOB=V1,V2,...` | the three-pair measurement of one AI knob in ONE run over one seed set: per value the CANDIDATE pair (deck A with the knob at that value vs deck B at the null), once the NULL pair (both seats at the null), and per value the CONTROL pair (below), which must replay its own null run game for game. One report with a row per value: win rate, interval, delta vs null, and the control's PASS/FAIL. Needs `--deck-a`/`--deck-b` or `--gauntlet` plus both control decks; never writes the Elo ledger; refuses `--matrix`, `random`, and a knob also set in `--profile-a/-b`. An unknown knob or a value the knob cannot read is exit 2 (see [the sweep](#the-sweep--one-knob-three-pairs-one-run-2026-09-06)) | — |
@@ -1400,7 +1401,28 @@ there is no output format to reconcile; if it did, reconcile by
 
 ## Performance
 
-Games fan out over Godot's WorkerThreadPool.
+Games fan out over separate worker **processes** (`--procs`, eight by
+default once a run is 40 games or more), each playing one contiguous
+slice of the run's task list with Godot's WorkerThreadPool inside it
+(`--jobs`). The slices are decided before any game is played — every
+seed is computed by the parent — so a fanned-out run is the same games as
+the in-process one, byte for byte in `matchups.csv`.
+
+**A worker that dies is replaced, and a run is never replayed
+in-process (2026-09-26).** A child writes its slice's records under a
+working name and renames the file whole once it is closed; the parent
+lands a slice only under that final name and reads it as it lands. A
+child that goes without an answer — killed for memory, crashed on a game
+— gets a fresh child for the same slice, three in all, while the others
+play on; the slice file is still on disk, so the retried games are the
+same games with the same seeds. A slice still missing after the third
+child stops the run (exit 1) naming the unplayed games and the one the
+last heartbeat was on, by pair and seed — the thing to play alone. The
+first thousand-deck tournament (430,000 games, 3 h 21 m) is why: the
+parent of that day took a child's file for its landing the instant the
+file was *opened*, killed the last child mid-write, read an empty file,
+threw all eight slices away and replayed every game in the thread pool,
+where it crashed within the minute.
 
 **MORE THREADS IS NOT FASTER, AND PAST FOUR IT IS MUCH SLOWER.** Measured
 on an idle 22-core machine, the same 60-game duel:

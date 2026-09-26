@@ -209,7 +209,10 @@ OPTIONS
                       across eight (2026-09-25, with every pack in play),
                       and writes the same matchups.csv byte for byte. Each process is a whole engine
                       holding the card pool, about 235 MB, so the default
-                      stops at eight; raise it if you have the RAM.
+                      stops at eight; raise it if you have the RAM. A
+                      worker that dies is replaced by a fresh one for
+                      the same slice (three in all); a slice no worker
+                      can finish stops the run, naming the game.
   --profile-a NAME    AI skill piloting deck A / the row deck:
   --profile-b NAME    apprentice|magician|sorcerer|wizard (default wizard
                       both — skill-neutral deck comparison). A preset may
@@ -1148,7 +1151,10 @@ func _duel_options(opts: Dictionary) -> Dictionary:
 ##
 ## FALLS BACK RATHER THAN FAILING. If a child cannot be spawned (a
 ## sandbox, no executable path, a full disk for the slice files), the
-## in-process pool runs the same work and the only cost is time.
+## in-process pool runs the same work and the only cost is time. That is
+## the fallback for a fan-out that could not START; a child that dies
+## once it is running is replaced by another for the same slice (see
+## THE RETRY under [method _gather]), never by the pool.
 func _play_tasks(opts: Dictionary, jobs: int, unit: String) -> float:
 	var started_at := Time.get_ticks_msec()
 	var procs := _process_count(opts, _tasks.size())
@@ -1167,7 +1173,7 @@ func _play_tasks(opts: Dictionary, jobs: int, unit: String) -> float:
 	var elapsed := (Time.get_ticks_msec() - started_at) / 1000.0
 	var missing := missing_records(_results)
 	if missing > 0:
-		printerr("deck_lab: %d of %d games produced no record — a worker thread stopped on an error (see above)"
+		printerr("deck_lab: %d of %d games produced no record — a worker stopped on an error (see above)"
 			% [missing, _results.size()])
 		return -1.0
 	return elapsed
@@ -1225,9 +1231,34 @@ func _process_count(opts: Dictionary, task_count: int) -> int:
 	return mini(AUTO_PROCS, maxi(1, OS.get_processor_count()))
 
 
-## Play [member _tasks] in [param procs] child processes. Returns false if
-## the fan-out could not start, in which case the caller runs the work
-## in-process instead and nothing is lost but time.
+## A slice is asked of a child this many times before the run is given
+## up — the first child and two more. See THE RETRY under [method _gather].
+const FAN_ATTEMPTS := 3
+
+## The name a child writes its answer under until the answer is whole.
+const SLICE_PART := ".part"
+
+## Where a slice stands, from [method _slice_status].
+const SLICE_RUNNING := 0
+const SLICE_LANDED := 1
+const SLICE_DEAD := 2
+
+
+## Play [member _tasks] in [param procs] child processes. Returns false
+## only if the fan-out could not START — no executable path, a slice file
+## that cannot be written, a child that cannot be spawned — in which case
+## the caller runs the work in-process and nothing is lost but time.
+##
+## Once the children are running the answer is true whatever becomes of
+## them. A child that dies is replaced by another for the same slice
+## ([method _gather]); a slice no child can finish leaves its records
+## missing, which the caller reports. It is NEVER replayed in-process:
+## that was the rule until 2026-09-26, and the first thousand-deck
+## tournament (430,000 games, 3 h 21 m) ended with one slice's file empty,
+## all eight slices thrown away, and every game started again in the
+## thread pool — which crashed within the minute. A game that kills
+## three children would kill the parent too, and with it the slices that
+## did come back.
 func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 	var exe := OS.get_executable_path()
 	if exe == "":
@@ -1241,116 +1272,199 @@ func _fan_out(procs: int, unit: String, started_at: int) -> bool:
 	# in-process run would have.
 	var per := int(ceil(float(_tasks.size()) / float(procs)))
 	var slices: Array = []
-	var pids: Array = []
 	for p in procs:
 		var lo := p * per
 		if lo >= _tasks.size():
 			break
-		var hi := mini(lo + per, _tasks.size())
-		var in_path := dir.path_join("slice_%d.json" % p)
-		var out_path := dir.path_join("done_%d.json" % p)
-		var prog_path := dir.path_join("beat_%d.txt" % p)
-		var payload := _worker_payload(lo, hi)
-		var f := FileAccess.open(in_path, FileAccess.WRITE)
+		var slice := {"lo": lo, "hi": mini(lo + per, _tasks.size()),
+			"in": dir.path_join("slice_%d.json" % p),
+			"out": dir.path_join("done_%d.json" % p),
+			"beat": dir.path_join("beat_%d.txt" % p),
+			"pid": 0, "attempts": 0, "landed": false}
+		var f := FileAccess.open(String(slice["in"]), FileAccess.WRITE)
 		if f == null:
-			_clean_fan(dir, pids)
+			_clean_fan(dir, _slice_pids(slices))
 			return false
-		f.store_string(JSON.stringify(payload))
+		f.store_string(JSON.stringify(_worker_payload(lo, int(slice["hi"]))))
 		f.close()
-		# `--no-header` on every child: without it each one greets the
-		# terminal with Godot's version line and a fanned-out run opens
-		# with eight identical banners (caught by running it, 2026-09-05).
-		# The shell already passes it for the parent.
-		# TWO WAYS IN, because there are two kinds of binary. From a
-		# checkout the child is `--script simulate.gd`, the route the
-		# shell uses. From the SHIPPED GAME that flag does nothing: a
-		# release export template ignores `--script` and launches the
-		# title screen instead (measured 2026-09-05 — the children ran
-		# the game, never wrote a slice, and the parent polled until the
-		# run was killed). There the way in is the game's own
-		# `--deck-lab`, which `MainScreen._ready` intercepts.
-		var child_args := PackedStringArray(["--headless", "--no-header"])
-		if OS.has_feature("template"):
-			child_args.append_array(PackedStringArray(["--", "--deck-lab",
-				WORKER_FLAG, in_path, out_path, prog_path]))
-		else:
-			child_args.append_array(PackedStringArray(["--path", root,
-				"--script", "res://DeckLab/simulate.gd", "--",
-				WORKER_FLAG, in_path, out_path, prog_path]))
-		var pid := OS.create_process(exe, child_args)
-		if pid <= 0:
-			_clean_fan(dir, pids)
+		if not _launch(exe, root, slice):
+			_clean_fan(dir, _slice_pids(slices))
 			return false
-		pids.append(pid)
-		slices.append({"lo": lo, "hi": hi, "out": out_path, "beat": prog_path})
+		slices.append(slice)
+	_gather(slices, exe, root, unit, started_at)
+	_clean_fan(dir, _slice_pids(slices))
+	return true
 
-	# Wait, reporting as the games land.
-	#
-	# PER GAME, NOT PER SLICE (2026-09-11). A child writes its records
-	# once, at the very end, so the only thing the parent could count was
-	# slices — and with eight of them a 3,000-game run sat at 0% for
-	# nineteen seconds and then finished. (It was worse than that: the
-	# call below passed `procs` where the signature takes `finished`, a
-	# non-zero int is `true`, and so every fanned-out run — which is every
-	# run of 40 games or more, i.e. the default — drew NO progress at all.
-	# Found by running one and reading the terminal, 2026-09-11.) Each
-	# child now rewrites a four-byte file with its count four times a
-	# second and the parent sums them, so the bar and the estimate see
-	# games finishing the way the in-process pool does.
-	var landed := 0
+
+## Start — or start again — the child for one slice. The slice's own
+## file is already on disk; whatever an earlier child left behind (a
+## heartbeat, an answer that was not one) goes first, so the parent
+## cannot take the old attempt's leavings for the new one's.
+func _launch(exe: String, root: String, slice: Dictionary) -> bool:
+	if int(slice["pid"]) > 0 and OS.is_process_running(int(slice["pid"])):
+		OS.kill(int(slice["pid"]))
+	for stale in [String(slice["out"]), String(slice["out"]) + SLICE_PART,
+			String(slice["beat"])]:
+		if FileAccess.file_exists(stale):
+			DirAccess.remove_absolute(stale)
+	# `--no-header` on every child: without it each one greets the
+	# terminal with Godot's version line and a fanned-out run opens
+	# with eight identical banners (caught by running it, 2026-09-05).
+	# The shell already passes it for the parent.
+	# TWO WAYS IN, because there are two kinds of binary. From a
+	# checkout the child is `--script simulate.gd`, the route the
+	# shell uses. From the SHIPPED GAME that flag does nothing: a
+	# release export template ignores `--script` and launches the
+	# title screen instead (measured 2026-09-05 — the children ran
+	# the game, never wrote a slice, and the parent polled until the
+	# run was killed). There the way in is the game's own
+	# `--deck-lab`, which `MainScreen._ready` intercepts.
+	var child_args := PackedStringArray(["--headless", "--no-header"])
+	if OS.has_feature("template"):
+		child_args.append_array(PackedStringArray(["--", "--deck-lab",
+			WORKER_FLAG, String(slice["in"]), String(slice["out"]), String(slice["beat"])]))
+	else:
+		child_args.append_array(PackedStringArray(["--path", root,
+			"--script", "res://DeckLab/simulate.gd", "--",
+			WORKER_FLAG, String(slice["in"]), String(slice["out"]), String(slice["beat"])]))
+	var pid := OS.create_process(exe, child_args)
+	if pid <= 0:
+		return false
+	slice["pid"] = pid
+	slice["attempts"] = int(slice["attempts"]) + 1
+	return true
+
+
+## Wait for the slices, reporting as the games land, and put each child's
+## records back into the places its tasks came from. Returns false when a
+## slice could not be had; its records are then missing and the caller
+## says so.
+##
+## PER GAME, NOT PER SLICE (2026-09-11). A child writes its records
+## once, at the very end, so the only thing the parent could count was
+## slices — and with eight of them a 3,000-game run sat at 0% for
+## nineteen seconds and then finished. (It was worse than that: the
+## call below passed `procs` where the signature takes `finished`, a
+## non-zero int is `true`, and so every fanned-out run — which is every
+## run of 40 games or more, i.e. the default — drew NO progress at all.
+## Found by running one and reading the terminal, 2026-09-11.) Each
+## child now rewrites a four-byte file with its count four times a
+## second and the parent sums them, so the bar and the estimate see
+## games finishing the way the in-process pool does.
+##
+## THE RETRY (2026-09-26). A child that goes without an answer — killed
+## for memory, crashed on a game, or (the case that taught this) killed
+## by the parent itself mid-write — is replaced by a fresh child for the
+## same slice, FAN_ATTEMPTS children in all, while the others play on.
+## The slice's file is still on disk, so nothing is re-decided: the
+## retried games are the same games with the same seeds. A slice that
+## is still not there after the last child stops the run, saying which
+## games are unplayed and which one the last heartbeat was on — the one
+## to play alone to see what kills a worker.
+func _gather(slices: Array, exe: String, root: String, unit: String,
+		started_at: int) -> bool:
 	var played := PackedInt32Array()
 	played.resize(slices.size())
-	while landed < slices.size():
-		landed = 0
+	while true:
 		var games := 0
+		var waiting := 0
 		for s in slices.size():
 			var slice: Dictionary = slices[s]
-			if FileAccess.file_exists(String(slice["out"])):
-				landed += 1
+			if not bool(slice["landed"]):
+				var status := _slice_status(slice)
+				if status == SLICE_LANDED and not _take_slice(slice):
+					status = SLICE_DEAD
+				if status == SLICE_DEAD:
+					if int(slice["attempts"]) >= FAN_ATTEMPTS \
+							or not _launch(exe, root, slice):
+						printerr(_abandon_message(s, slice))
+						return false
+					printerr("deck_lab: slice %d of %d came back without its records — a fresh worker is playing it (attempt %d of %d)"
+						% [s + 1, slices.size(), int(slice["attempts"]), FAN_ATTEMPTS])
+			if bool(slice["landed"]):
 				played[s] = int(slice["hi"]) - int(slice["lo"])
 			else:
+				waiting += 1
 				# NEVER BACKWARDS: a read that lands mid-write sees a
 				# shorter number, and a bar that goes down is a bug report.
+				# (A retried slice's bar waits where the first child left
+				# it until the second one has caught up, for the same
+				# reason.)
 				played[s] = maxi(played[s], _slice_beat(String(slice["beat"])))
 			games += played[s]
-		if landed == slices.size():
+		if waiting == 0:
 			break
-		# A CHILD THAT DIED CANNOT BE WAITED FOR. If every process has
-		# exited and a slice is still missing, the work is not coming —
-		# polling on is a hang, and this project has lost hours to a wait
-		# that could never end. Give up; the caller plays the games
-		# in-process instead and the only cost is time.
-		var alive := false
-		for pid in pids:
-			if OS.is_process_running(int(pid)):
-				alive = true
-				break
-		if not alive:
-			printerr("deck_lab: a worker exited without writing its slice — running in-process instead")
-			_clean_fan(dir, pids)
-			return false
 		_progress(games, _tasks.size(),
 			(Time.get_ticks_msec() - started_at) / 1000.0, unit, false)
 		OS.delay_msec(200)
 	_progress(_tasks.size(), _tasks.size(),
 		(Time.get_ticks_msec() - started_at) / 1000.0, unit, true)
-	for pid in pids:
-		if OS.is_process_running(int(pid)):
-			OS.kill(int(pid))
-
-	# Read the records back into the places their tasks came from.
-	for slice in slices:
-		var text := FileAccess.get_file_as_string(String(slice["out"]))
-		var parsed: Variant = JSON.parse_string(text)
-		if not (parsed is Array):
-			_clean_fan(dir, [])
-			return false
-		var lo := int(slice["lo"])
-		for i in (parsed as Array).size():
-			_results[lo + i] = (parsed as Array)[i]
-	_games_done = _tasks.size()
-	_clean_fan(dir, [])
 	return true
+
+
+## Where one slice stands. Its answer exists only whole — the child
+## writes under another name and renames when it has closed the file
+## (see [method _run_worker]) — so a file is a landing, and no file from
+## a process that is gone is a death. The file is looked at again after
+## the process because a child that renamed and exited between the two
+## looks has landed, not died.
+func _slice_status(slice: Dictionary) -> int:
+	if FileAccess.file_exists(String(slice["out"])):
+		return SLICE_LANDED
+	if int(slice["pid"]) > 0 and OS.is_process_running(int(slice["pid"])):
+		return SLICE_RUNNING
+	return SLICE_LANDED if FileAccess.file_exists(String(slice["out"])) else SLICE_DEAD
+
+
+## A landed slice's records, into the places its tasks came from. False
+## when the file is not a whole slice — one record per task — which the
+## retry treats as no file at all.
+func _take_slice(slice: Dictionary) -> bool:
+	var records: Variant = slice_records(String(slice["out"]))
+	var lo := int(slice["lo"])
+	if not (records is Array) or (records as Array).size() != int(slice["hi"]) - lo:
+		return false
+	for i in (records as Array).size():
+		_results[lo + i] = (records as Array)[i]
+	slice["landed"] = true
+	return true
+
+
+## What a child wrote, or null when that is not a slice: nothing, part of
+## one, or not an array. Parsed through an instance so that a bad file is
+## a quiet null for the retry to act on rather than an engine error in
+## the log — the static `JSON.parse_string` prints one, and the first
+## thousand-deck tournament's log ends with it.
+static func slice_records(path: String) -> Variant:
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty():
+		return null
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return null
+	return json.data if json.data is Array else null
+
+
+## The last word on a slice no child could finish: which games of the
+## run are unplayed, and the one the last heartbeat was on, by its pair
+## and seed — the thing to play alone.
+func _abandon_message(index: int, slice: Dictionary) -> String:
+	var lo := int(slice["lo"])
+	var hi := int(slice["hi"])
+	var at := mini(lo + _slice_beat(String(slice["beat"])), hi - 1)
+	var task: Dictionary = _tasks[at]
+	return ("deck_lab: slice %d died %d times — games %d to %d are unplayed and the run is not a result. "
+		+ "The last heartbeat was on game %d (pair %s, seed %s).") % [index + 1,
+		int(slice["attempts"]), lo + 1, hi, at + 1, str(task.get("pair", "?")),
+		str(task.get("seed", "?"))]
+
+
+func _slice_pids(slices: Array) -> Array:
+	var pids: Array = []
+	for slice in slices:
+		if int(slice["pid"]) > 0:
+			pids.append(int(slice["pid"]))
+	return pids
 
 
 ## JSON numbers are doubles when read back. A seed above 2^53 used to
@@ -1482,12 +1596,25 @@ func _run_worker(in_path: String, out_path: String, beat_path := "") -> int:
 				and Time.get_ticks_msec() - last_beat >= WORKER_BEAT_MS:
 			last_beat = Time.get_ticks_msec()
 			_beat(beat_path, i + 1)
-	var f := FileAccess.open(out_path, FileAccess.WRITE)
+	# WHOLE OR NOT AT ALL (2026-09-26). The answer is written under
+	# another name and renamed once the file is closed, because the
+	# parent takes the file's existence for the slice's landing. It used
+	# to see the file the instant it was opened, take the run for
+	# finished when the last one appeared, and kill every child still
+	# running — this one, mid-write: a slice of 54,000 records is seconds
+	# of stringify and the parent looks five times a second, so the last
+	# slice of the first thousand-deck tournament came back as an empty
+	# file and three hours of games went with it.
+	var part := out_path + SLICE_PART
+	var f := FileAccess.open(part, FileAccess.WRITE)
 	if f == null:
-		printerr("deck_lab worker: cannot write %s" % out_path)
+		printerr("deck_lab worker: cannot write %s" % part)
 		return 1
 	f.store_string(JSON.stringify(_results))
 	f.close()
+	if DirAccess.rename_absolute(part, out_path) != OK:
+		printerr("deck_lab worker: cannot write %s" % out_path)
+		return 1
 	return 0
 
 

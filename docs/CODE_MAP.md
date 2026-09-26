@@ -209,7 +209,29 @@ needed); card files have NO class_name (they register by name instead);
   shipped `.pck` is a folder — a play copy has no `decks/` on disk.
 - `docs/releases/0.40.21.md`: the release note.
 
+## The fan-out's answer files and its retry (2026-09-26)
+
+- `DeckLab/simulate.gd` — `_fan_out` launches (`_launch`) and gathers
+  (`_gather`): a worker writes `done_N.json.part` and renames it whole
+  (`SLICE_PART`); the parent lands a slice only under its final name
+  (`_slice_status`: running / landed / dead), reads it as it lands
+  (`_take_slice`, `slice_records` — an empty or cut-short file is a quiet
+  null), replaces a dead child with a fresh one for the same slice up to
+  `FAN_ATTEMPTS` (3), and gives the run up with `_abandon_message` (the
+  unplayed games, and the one the last heartbeat was on by pair and
+  seed) rather than replay it in-process.
+- `tests/tools/test_deck_lab_fan_2026_09_26.gd` — the answer whole or
+  not at all, only a whole slice is records, the landing name, one record
+  per task, a dead child replaced (a real one-game child), a slice no
+  child can finish, no in-process replay.
+
 ## Release package files
+
+- `docs/releases/0.40.22.md`: a Deck Lab worker writes its slice whole
+  or not at all, a worker that dies is replaced by a fresh one for the
+  same slice, and a fanned-out run is never replayed in-process — the
+  three-hour tournament that ended with an empty folder cannot happen
+  the same way again.
 
 - `docs/releases/0.40.21.md`: the AutoDeck CLI's set → pack refusal
   starts from the shell again (a `--script` cannot name an autoload),

@@ -46,7 +46,7 @@ Download **[Shandalar 0.40.3](https://github.com/b0realis/ShandalarGodot/release
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
-run the source with Godot 4.7 (below): `main` carries **0.40.21**, the next
+run the source with Godot 4.7 (below): `main` carries **0.40.22**, the next
 release in the making.
 
 Play with an **897-card early-Magic core**, historic decks, four computer
@@ -113,8 +113,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The tournament mode and the two tools' packs](docs/ROADMAP.md#2026-09-26--the-tournament-mode-and-the-two-tools-packs-04020)):
-**7,868 GUT tests / 359,426 assertions**, plus **323 Python tests**
+Latest local verification ([The fan-out's answer files and its retry](docs/ROADMAP.md#2026-09-26--the-fan-outs-answer-files-and-its-retry-04022)):
+**7,876 GUT tests / 358,555 assertions**, plus **323 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
@@ -181,7 +181,8 @@ and study win rates, confidence intervals, charts and CSV/JSON reports.
 Seeded runs make it useful for experimenting with decks and comparing ideas.
 
 Run `./deck_lab.sh --help` on Linux/macOS or `.\deck_lab.bat --help`
-on Windows. `--procs` and `--jobs` control parallel workers;
+on Windows. `--procs` and `--jobs` control parallel workers (a worker
+that dies is replaced by a fresh one for the same slice of the run);
 `--no-elo` keeps experiments out of the ratings ledger. A tournament —
 one deck or a folder of decks, each played against the decks that are
 known to be good — is `--field mine/ --gauntlet decks/ --group tournament`:
