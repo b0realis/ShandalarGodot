@@ -20,9 +20,19 @@ import pack_1_dotp_complete as pack_one
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel",
-             "raspberry-pi5-arm64", "web")
+             "raspberry-pi5-arm64", "steam-deck", "arkos-rk3326-experimental", "web")
 MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
-LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64"}
+LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64",
+                  "steam-deck": "Shandalar.x86_64",
+                  "arkos-rk3326-experimental": "Shandalar.arm64"}
+HANDHELD_FILES = {
+    "steam-deck": {"run.sh": "packaging/handhelds/steam-deck.sh",
+                   "HANDHELD.md": "docs/handhelds.md"},
+    "arkos-rk3326-experimental": {
+        "shandalar.gptk": "packaging/handhelds/shandalar.gptk",
+        "HANDHELD.md": "docs/handhelds.md"},
+}
+ARKOS_LAUNCHER = "packaging/handhelds/arkos.sh"
 PACK_BUILDERS = ("pack_1_dotp_complete", "pack_2_fallen_empires", "pack_3_ice_age",
                  "pack_4_homelands", "pack_5_alliances", "pack_6_portal", "pack_7_fifth_edition")
 # THE ONE DOOR of a release (2026-09-27), after the launcher prefix: the
@@ -111,6 +121,17 @@ START["raspberry-pi5-arm64"] = (
     "Extract the whole folder and run ./run.sh in a graphical desktop session.\n"
     "If needed: chmod +x run.sh Shandalar.arm64\n"
     "Not a 32-bit Raspberry Pi OS binary. Performance needs on-device testing.")
+START["steam-deck"] = (
+    "Steam Deck / SteamOS: native Linux x86-64, no Proton required.\n"
+    "Extract the whole folder in Desktop Mode and add run.sh as a Non-Steam Game.\n"
+    "Use a keyboard/mouse Steam Input layout; see HANDHELD.md for bindings.\n"
+    "Local test package, not hardware-validated or Steam Deck Verified.")
+START["arkos-rk3326-experimental"] = (
+    "EXPERIMENTAL: RK3326 / R36 Ultra with 64-bit ArkOS and current PortMaster.\n"
+    "Copy Shandalar.sh and the shandalar folder together into your ports folder.\n"
+    "Launch Shandalar from Ports. WestonPack 0.2.6+ is required.\n"
+    "See HANDHELD.md for controls, setup, saves and troubleshooting.\n"
+    "Not hardware-validated; performance and small-screen readability are unproven.")
 
 
 def digest(path: Path) -> str:
@@ -138,6 +159,10 @@ def check_skin(path: Path) -> None:
 
 def payload(folder: Path, platform: str) -> dict[str, Path]:
     family = "macos" if platform in MAC_PLATFORMS else platform
+    if platform == "steam-deck":
+        family = "linux64"
+    elif platform == "arkos-rk3326-experimental":
+        family = "raspberry-pi5-arm64"
     required = {
         "linux64": ("Shandalar.x86_64", "Shandalar.pck"),
         "raspberry-pi5-arm64": ("Shandalar.arm64", "Shandalar.pck"),
@@ -210,6 +235,7 @@ def player_tool_files(root: Path = ROOT) -> dict[str, Path]:
     files = {"tools/" + name: root / "tools" / name for name in TOOLS}
     files.update({name: root / name for name in BUILDER_DATA})
     files["CARD-ART-AND-PACKS.md"] = root / "docs/card-art-and-packs.md"
+    files["agentic-playgude-mtg.md"] = root / "agentic-playgude-mtg.md"
     return files
 
 
@@ -261,6 +287,9 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                   "icon.png": root / "game" / "icon.png"})
     if platform == "web":
         files["setup-web.txt"] = root / "docs" / "setup-web.txt"
+    files.update({name: root / source for name, source in HANDHELD_FILES.get(platform, {}).items()})
+    if platform == "arkos-rk3326-experimental":
+        guard_private([root / ARKOS_LAUNCHER])
     guard_private(list(files.values()))
     name = f"Shandalar-{version}-{platform}"
     outputs = [out / f"{name}{suffix}.zip" for suffix in ("", "-with-skin")]
@@ -313,9 +342,20 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                                       "Shandalar.console.exe --headless --no-header -- --lab-query %*\r\n").encode()
             extra["referee.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
                                     "Shandalar.console.exe --headless --no-header -- --referee %*\r\n").encode()
+        if platform == "steam-deck":
+            # Use the reviewed launcher rather than the generic Linux one.
+            extra.pop("run.sh")
+        elif platform == "arkos-rk3326-experimental":
+            extra["run.sh"] = (prefix + 'exec bash ../Shandalar.sh "$@"\n').encode()
         selected = dict(files)
         if included:
             selected["skin/original_skin.zip"] = skin
+        if platform == "arkos-rk3326-experimental":
+            # PortMaster wants one entry script beside a stable game directory.
+            # Keep the outer versioned ZIP folder for safe manual extraction.
+            selected = {"shandalar/" + key: value for key, value in selected.items()}
+            extra = {"shandalar/" + key: value for key, value in extra.items()}
+            selected["Shandalar.sh"] = root / ARKOS_LAUNCHER
         checksums = [f"{digest(path)}  {key}" for key, path in sorted(selected.items())]
         checksums.extend(f"{hashlib.sha256(data).hexdigest()}  {key}" for key, data in sorted(extra.items()))
         extra["SHA256SUMS"] = ("\n".join(checksums) + "\n").encode()

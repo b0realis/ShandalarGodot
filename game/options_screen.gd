@@ -163,6 +163,20 @@ func _add_display_section(content: VBoxContainer) -> void:
 	UiChrome.shadowed_button(fullscreen)
 	content.add_child(fullscreen)
 
+	var cards := CheckButton.new()
+	cards.name = "FullscreenCards"
+	cards.text = "Full-screen card on click"
+	cards.button_pressed = Settings.fullscreen_cards()
+	cards.toggled.connect(func(on: bool) -> void:
+		Settings.set_value("fullscreen_cards", on))
+	UiChrome.shadowed_button(cards)
+	content.add_child(cards)
+	var card_hint := UiChrome.body_label(
+		"For small screens: click or tap the large card in a duel or "
+		+ "Deck Builder to enlarge it. Click again or press Esc to close.", 14)
+	card_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(card_hint)
+
 	# `[QoL]` TOUCH CONTROLS — the finger-as-mouse layer (`TouchControls`,
 	# `game/input/touch_controls.gd`) for the web export on a tablet or a
 	# phone and for touch laptops. Three states, one stored key, and the

@@ -22,6 +22,7 @@ extends GutTest
 
 var screen: Control
 var _saved: Variant = null
+var _saved_cards: Variant = null
 
 
 func before_each() -> void:
@@ -30,12 +31,18 @@ func before_each() -> void:
 	_saved = Settings.get_value(GameDisplay.KEY, null) \
 		if Settings.has_value(GameDisplay.KEY) else null
 	Settings.clear_value(GameDisplay.KEY)
+	_saved_cards = Settings.get_value("fullscreen_cards", false) if Settings.has_value("fullscreen_cards") else null
+	Settings.clear_value("fullscreen_cards")
 	screen = load("res://game/options_screen.tscn").instantiate()
 	add_child_autofree(screen)
 	await get_tree().process_frame
 
 
 func after_each() -> void:
+	if _saved_cards == null:
+		Settings.clear_value("fullscreen_cards")
+	else:
+		Settings.set_value("fullscreen_cards", _saved_cards)
 	if _saved == null:
 		Settings.clear_value(GameDisplay.KEY)
 	else:
@@ -47,6 +54,30 @@ func _walk(node: Node) -> Array:
 	for child in node.get_children():
 		out.append_array(_walk(child))
 	return out
+
+
+func test_fullscreen_card_option_is_off_by_default_without_writing() -> void:
+	var switch := screen.find_child("FullscreenCards", true, false) as CheckButton
+	assert_not_null(switch)
+	assert_false(switch.button_pressed)
+	assert_false(Settings.fullscreen_cards())
+	assert_false(Settings.has_value("fullscreen_cards"))
+
+
+func test_fullscreen_card_choice_is_persisted_and_restored() -> void:
+	var switch := screen.find_child("FullscreenCards", true, false) as CheckButton
+	switch.button_pressed = true
+	assert_eq(_on_disk("fullscreen_cards"), true)
+	Settings.reload()
+	assert_true(Settings.fullscreen_cards())
+	var fresh: Control = load("res://game/options_screen.tscn").instantiate()
+	add_child_autofree(fresh)
+	await get_tree().process_frame
+	var restored := fresh.find_child("FullscreenCards", true, false) as CheckButton
+	assert_true(restored.button_pressed)
+	restored.button_pressed = false
+	assert_false(Settings.fullscreen_cards())
+	assert_eq(_on_disk("fullscreen_cards"), false)
 
 
 ## The one CheckButton that says so.

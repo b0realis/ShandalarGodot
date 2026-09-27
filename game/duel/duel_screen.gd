@@ -203,6 +203,7 @@ var _duel_log: DuelLog = null                # the log window, `L` [QoL]
 var _log_file: DuelLogFile = null            # the running `duel_log.txt` [QoL]
 var _log_button: Button = null                # its switch on the reserve strip
 var _card_preview: CardPreview = null        # shared enlarged-card popup
+var _fullscreen_card: FullscreenCard = null
 var _phase_bar: PhaseBar = null
 ## The COMBAT BAR, which REPLACES the Phase Bar for the length of an attack
 ## (manual p.117, Duel.hlp topic "Combat Bar" — see combat_bar.gd). It
@@ -3371,7 +3372,11 @@ func _modal_open() -> bool:
 		if badge != null and badge.details_open(): return true
 	return graveyard_is_open() or _mode_overlay != null \
 		or _search_dialog != null or _x_dialog != null \
-		or _choice_overlay != null or is_paused()
+		or _choice_overlay != null or is_paused() or _fullscreen_card_open()
+
+
+func _fullscreen_card_open() -> bool:
+	return _fullscreen_card != null and _fullscreen_card.is_open()
 
 
 ## Is there anything to cancel? Drives BOTH the Escape key and whether the
@@ -3673,7 +3678,8 @@ func _maybe_schedule_ai() -> void:
 	# PAUSE MEANS PAUSE (see [DuelPause]): no new dwell is armed while the
 	# window is up, and [method _ai_step] refuses an already-armed one, so
 	# a player who walks away does not come back to three lost turns.
-	if _ai_pending or _toss_active or is_paused() or _ai_seat_to_act() == -1:
+	if _ai_pending or _toss_active or is_paused() or _fullscreen_card_open() \
+			or _ai_seat_to_act() == -1:
 		return
 	_ai_pending = true
 	var mine := _humans.has(game.active_player)
@@ -3688,7 +3694,7 @@ func _ai_step() -> void:
 	# The dwell this timer belongs to was armed before the Pause window
 	# opened. Drop it on the floor: [method _close_pause] refreshes, and
 	# that arms a fresh one.
-	if is_paused():
+	if is_paused() or _fullscreen_card_open():
 		return
 	var pid := _ai_seat_to_act()
 	if pid != -1:
@@ -8767,6 +8773,14 @@ func _build_ui() -> void:
 	_card_preview.gui_input.connect(_on_showcase_input)
 	_card_preview.set_text_expanded(
 		CardPreview.expand_wanted())
+	_fullscreen_card = FullscreenCard.new()
+	add_child(_fullscreen_card)
+	_fullscreen_card.watch(_card_preview, func() -> bool:
+		return not _toss_active and not _modal_open() and not _dialogs_open() \
+			and not result_window_up())
+	# Local AI/automatic passing wait while reading. Online play inherits
+	# only the viewing/input guard; its remote referee keeps running.
+	_fullscreen_card.closed.connect(func() -> void: _refresh.call_deferred())
 	if _hand_rows[1] is StackHand:
 		_hand_rows[1].preview = _card_preview
 	# `@MENU_HAND` (§6.12) on both hand windows. The 1997 table has one
@@ -9469,6 +9483,9 @@ func _unhandled_input(event: InputEvent) -> void:
 ## the action's modifiers and no others — so `Show ID tags` on Ctrl+T
 ## leaves a bare T free, as the 1997 accelerator did (§6.3a).
 func _on_control(event: InputEvent) -> void:
+	if _fullscreen_card_open():
+		_fullscreen_card._input(event)
+		return
 	# Inspection owns the keyboard/controller, never the duel beneath it.
 	for badge in _protection_badges:
 		if badge != null and badge.details_open():

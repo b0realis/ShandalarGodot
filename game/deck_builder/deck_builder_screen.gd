@@ -335,6 +335,7 @@ var _undo: DeckModel = null
 var _undo_label := ""
 
 var _showcase: CardPreview
+var _fullscreen_card: FullscreenCard
 var _variant_button: Button
 const VARIANT_BUTTON_SIZE := 32.0
 var _printing_count := 0
@@ -1159,6 +1160,10 @@ func _build_showcase() -> void:
 	_showcase.set_text_expanded(CardPreview.expand_wanted())
 	_showcase.show_back()
 	add_child(_showcase)
+	_fullscreen_card = FullscreenCard.new()
+	add_child(_fullscreen_card)
+	_fullscreen_card.watch(_showcase, func() -> bool:
+		return not _dialog_busy() and not is_menu_open())
 	# [QoL] THE SHOWCASE'S OTHER FACE. *"Whatever card the mouse cursor is
 	# hovering over is displayed here"* — and a PROXY is one of the things
 	# the cursor can be over, so it needs an enlarged form too. It is a
@@ -3337,7 +3342,8 @@ func open_dialogs() -> Array[OriginalDialog]:
 ## could reach. Some openers checked and some did not, so a second click
 ## on `Stats`, on the Deck Header or on `Load deck` stacked a second copy.
 func _dialog_busy() -> bool:
-	return not open_dialogs().is_empty() or _notice_open()
+	return not open_dialogs().is_empty() or _notice_open() \
+		or (_fullscreen_card != null and _fullscreen_card.is_open())
 
 
 ## The pack-requirement question is a [method UiChrome.action_popup] veil,
@@ -5596,6 +5602,9 @@ const SHORTCUTS := {
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	if _fullscreen_card != null and _fullscreen_card.is_open():
+		_fullscreen_card._input(event)
+		return
 	# NOT AN AUTO-REPEAT. A held Q would otherwise toggle the menu sixty
 	# times a second, and a held Ctrl+S would save that often.
 	if not (event is InputEventKey and event.pressed) or event.is_echo():
@@ -5698,6 +5707,9 @@ func _input(event: InputEvent) -> void:
 ## and all. One Escape now empties the box and gives the keyboard back;
 ## a second leaves, exactly as before.
 func _on_escape() -> void:
+	if _fullscreen_card != null and _fullscreen_card.is_open():
+		_fullscreen_card.dismiss()
+		return
 	# 1. THE MENU OWNS THE KEY WHILE IT IS UP — *"Deck builder menu on Q or
 	#    Esc should turn off if you press Q or Esc again."*
 	if is_menu_open():

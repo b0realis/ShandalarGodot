@@ -68,6 +68,15 @@ a performance guarantee. The Mac minimum versions are declared in the
 generated app's Info.plist, not inferred from generic Godot documentation.
 Verify actual Mach-O slices (do not assume an export option thins the binary).
 
+Optional handheld packages reuse these verified exports: `--platform steam-deck`
+uses the Linux x86-64 payload; `--platform arkos-rk3326-experimental` uses the
+Linux ARM64 payload. Each produces plain and skin ZIPs. See
+[handhelds.md](handhelds.md) for install, controls, runtime dependencies and
+hardware-test requirements. ArkOS archives contain a `Shandalar.sh` entry
+beside a stable `shandalar/` directory, inside the versioned extraction folder.
+These are local test targets, not a claim of Steam Deck verification or
+PortMaster catalogue inclusion. Do not silently add them to a public release.
+
 The official Mac template contains only `godot_macos_debug.universal` and
 `godot_macos_release.universal`. Architecture-specific presets need derived
 template ZIPs, not merely a changed architecture dropdown. Extract `macos.zip`

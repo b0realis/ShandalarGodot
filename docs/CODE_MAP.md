@@ -12,6 +12,17 @@ Conventions: engine classes use `class_name` (globally visible, no imports
 needed); card files have NO class_name (they register by name instead);
 `snake_case.gd` filenames throughout; tabs for indentation (Godot default).
 
+## Agent play guide
+
+- `agentic-playgude-mtg.md`: tool-neutral MTG learning and play manual for
+  agents, covering fair information, safe action sequencing, rules presets,
+  combat study, worked decisions and deck-building strategy.
+- `tools/shandalar_mcp.py`: `play_guide` serves the whole guide or one of its
+  16 chapters without starting an engine; `shandalar://play-guide` exposes the
+  same document as a read-only resource. The release tool stages the guide.
+- `docs/releases/0.40.33.md`: full-screen card reading, the guide's MCP
+  integration and handheld packaging alongside the upstream command-line tools.
+
 ## Portal Second Age in Pack 6 (2026-09-24)
 
 - `cards/sets/p02/`: 117 new card definitions; `_rules.gd` dispatches to
@@ -1439,6 +1450,12 @@ base `SET_ORDER`. Saved decks remain name-based and record required pack ids.
 - `docs/releases/0.20.0.md`: player announcement, platform downloads,
   fair-play pledge, scope, limitations and community thanks.
 - `docs/release-builds.md`: repeatable cross-platform export and packaging.
+- `packaging/handhelds/steam-deck.sh`, `arkos.sh`, `shandalar.gptk`:
+  native SteamOS launcher and experimental ArkOS/WestonPack launcher with
+  scoped controller-to-mouse mapping, portable saves and owned-mount cleanup.
+- `tools/test_handheld_launchers.py`: offline launcher simulations for paths,
+  arguments, controller scope, runtime failure, cleanup and saved profiles.
+- `docs/handhelds.md`: handheld install, controls and hardware-validation limits.
 
 The release soak's `HumanClicker._float_mana_for` skips the mana planner's
 null-source entries (mana already floating), as `_tick_paying` already did.
@@ -5224,6 +5241,13 @@ shandalar/
 │    writes to disk at once, survives Settings.reload), the Display row
 │    above Sound, borderless not exclusive, applying silent headless,
 │    and the Lifecycle autoload applying it at boot;
+│    tests/ui/test_fullscreen_card.gd — [QoL] optional full-screen card
+│    reader: aspect-fit, printing, modal input, click-through prevention,
+│    focus restoration and clearing concealed faces;
+│    tests/ui/test_fullscreen_card_screens.gd — real Deck Builder and duel
+│    click/touch integration, hotseat privacy, local AI pause/resume and
+│    keyboard isolation. Online projection coverage lives in
+│    tests/ui/test_sgmanalink_shared_duel.gd;
 │    tests/ui/test_options_controls.gd — [QoL] CONTROLS ON THE OPTIONS
 │    SCREEN (2026-09-18): a row per listed action saying what the map
 │    says (Space / A, Ctrl+T, a dash for nothing; the digits have no
@@ -8411,6 +8435,13 @@ shandalar/
 │       │                      p.114 shows as its title bar alone; same
 │       │                      nine-patch, same margins, arrows left to
 │       │                      the texture (fortieth pass).
+│       ├── fullscreen_card.gd class FullscreenCard — [QoL] off-by-default
+│       │                      full-screen reader attached only to the
+│       │                      duel/editor showcase. Reuses CardPreview,
+│       │                      preserves printing and sidebar geometry,
+│       │                      closes on click/tap, Escape or Cancel;
+│       │                      forgets hidden faces and blocks underlying
+│       │                      input. Options stores `fullscreen_cards`.
 │       ├── card_preview.gd  class CardPreview — the enlarged card, docked
 │       │                      in the sidebar (s30 cardPreviewX/Y); frame
 │       │                      fraction-anchored to the 1997 Cardbk frames;

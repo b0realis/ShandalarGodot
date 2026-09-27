@@ -123,13 +123,17 @@ func test_the_screen_has_the_1997_regions() -> void:
 	var areas := 0
 	var bars := 0
 	for node in _walk(screen):
-		if node is CardPreview:
+		# The optional reader owns another preview, hidden until requested;
+		# it is not a second region of the normal Deck Builder layout.
+		if node is CardPreview and node.is_visible_in_tree():
 			showcase += 1
 		elif node is CardArea:
 			areas += 1
 		elif node is FilterBar:
 			bars += 1
-	assert_eq(showcase, 1, "the Showcase")
+	assert_eq(showcase, 1, "the one visible Showcase")
+	assert_true(screen._showcase.is_visible_in_tree())
+	assert_false(screen._fullscreen_card.is_open(), "the reader starts closed")
 	# THREE card surfaces since the sideboard shipped: the Deck area, the
 	# Inventory area and the [QoL] sideboard strip carved out of the deck
 	# area's bottom edge.

@@ -7,6 +7,9 @@ what each command is for, what it prints where, what its exit codes
 mean, what files it leaves and under which keys.
 The house rules for **editing** the repository are in `CONTRIBUTING.md`;
 the manuals with the reasoning are `DeckLab/README.md` and `docs/`.
+For **learning to play**, read [the MTG play guide](agentic-playgude-mtg.md):
+rules, fair information, combat study, worked examples and deck-building
+strategy. It complements this interface contract; it does not replace it.
 Every claim below is pinned by
 `tests/tools/test_lab_for_machines_2026_09_27.gd`,
 `tests/tools/test_lab_records_and_queries_2026_09_27.gd`,
@@ -431,7 +434,8 @@ python3 tools/shandalar_mcp.py [--door PATH] [--workspace DIR]
 ```
 
 **The tools** (`tools/list`): `status` (version, folders, open games),
-`contract` (this page), `manual` (one tool's `--help`); `packs`, `cards`,
+`contract` (this page), `play_guide` (the MTG learning guide),
+`manual` (one tool's `--help`); `packs`, `cards`,
 `check_deck` (the Lab Query, quoted); `list_decks`, `read_deck`,
 `write_deck` (rows of `4 Lightning Bolt`, written in the format
 `engine/deck_list.gd` reads and **checked by the engine as it is
@@ -444,8 +448,16 @@ written** — the answer is `check_deck`'s), `convert_deck`; `autodeck`,
 `structuredContent` (and the same text in `content`); a refusal is
 `isError: true` with the door's envelope untouched under `error`; an
 argument a tool does not take is refused with `suggestions`, like a
-flag. Resources: `shandalar://contract` (this page) and
+flag. Resources: `shandalar://contract` (this page),
+`shandalar://play-guide` (the full guide), and
 `shandalar://manual/VERB`.
+
+**Learning before playing.** `play_guide {}` returns the full Markdown guide;
+`play_guide {chapter: 8}` returns combat, `chapter: 9` the game's rules
+differences, and `chapter: 16` deck building. Chapters 1–16 can be requested
+separately to keep an observation small. Reading the guide starts no engine,
+changes no settings and exposes no game state. The same file ships beside
+the release's command-line tools.
 
 **Playing is a session.** `referee_start {deck_a, deck_b, seat_a,
 seat_b, seed, turns, packs, log, view}` opens the referee's pipe and

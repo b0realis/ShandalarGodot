@@ -27,7 +27,7 @@ class PackageReleaseTest(unittest.TestCase):
         for name in (*("tools/" + n for n in pack.TOOLS), "LICENSE",
                      "docs/setup.txt", "docs/skin-catalogue.txt",
                      "docs/releases/1.2.3.md", "DeckLab/README.md", "AGENTS.md", "game/icon.png",
-                     "docs/setup-web.txt", "docs/card-art-and-packs.md"):
+                     "docs/setup-web.txt", "docs/card-art-and-packs.md", "agentic-playgude-mtg.md"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"fixture")
@@ -40,9 +40,18 @@ class PackageReleaseTest(unittest.TestCase):
             json.dumps(sorted(pack.pack_one.assigned_pairs())), encoding='utf-8')
         shutil.copyfile(pack.ROOT / 'docs/card-art-and-packs.md',
                         self.root / 'docs/card-art-and-packs.md')
+        handheld_sources = {pack.ARKOS_LAUNCHER}
+        for files in pack.HANDHELD_FILES.values():
+            handheld_sources.update(files.values())
+        for name in handheld_sources:
+            dest = self.root / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(pack.ROOT / name, dest)
 
     def make_export(self, platform):
         family = "macos" if platform in pack.MAC_PLATFORMS else platform
+        family = {"steam-deck": "linux64", "arkos-rk3326-experimental":
+                  "raspberry-pi5-arm64"}.get(family, family)
         names = {
             "linux64": ("Shandalar.x86_64", "Shandalar.pck"),
             "raspberry-pi5-arm64": ("Shandalar.arm64", "Shandalar.pck"),
@@ -72,7 +81,13 @@ class PackageReleaseTest(unittest.TestCase):
                 for output, included in zip(self.build(platform), (False, True)):
                     with zipfile.ZipFile(output) as archive:
                         prefix = f"Shandalar-1.2.3-{platform}/"
+                        outer = prefix
+                        if platform == "arkos-rk3326-experimental":
+                            prefix += "shandalar/"
+                            self.assertEqual(archive.getinfo(outer + "Shandalar.sh").external_attr >> 16 & 0o777, 0o755)
                         entries = archive.namelist()
+                        self.assertIn(prefix + "agentic-playgude-mtg.md", entries)
+                        self.assertEqual(archive.read(prefix + "agentic-playgude-mtg.md"), b"fixture")
                         for name in names:
                             self.assertIn(prefix + name, entries)
                         for name in (*pack.BUILDER_DATA, pack.BASE_ASSIGNMENTS):
@@ -82,9 +97,9 @@ class PackageReleaseTest(unittest.TestCase):
                         for entry in archive.infolist():
                             self.assertEqual(entry.extra, b"")
                             self.assertFalse(stat.S_ISLNK(entry.external_attr >> 16))
-                        for line in archive.read(prefix + "SHA256SUMS").decode().splitlines():
+                        for line in archive.read(outer + "SHA256SUMS").decode().splitlines():
                             checksum, name = line.split("  ", 1)
-                            self.assertEqual(hashlib.sha256(archive.read(prefix + name)).hexdigest(), checksum)
+                            self.assertEqual(hashlib.sha256(archive.read(outer + name)).hexdigest(), checksum)
                         readme = archive.read(prefix + "README.txt").decode()
                         self.assertIn('tools/fetch_card_art.py --out cache/cardart', readme)
                         self.assertIn('build cardpacks/Pack-5-Alliances.zip', readme)
@@ -98,7 +113,10 @@ class PackageReleaseTest(unittest.TestCase):
                         if platform in pack.LINUX_BINARIES:
                             binary = pack.LINUX_BINARIES[platform]
                             self.assertEqual(archive.getinfo(prefix + binary).external_attr >> 16 & 0o777, 0o755)
-                            self.assertIn(binary, archive.read(prefix + "run.sh").decode())
+                            if platform == "arkos-rk3326-experimental":
+                                self.assertIn('../Shandalar.sh', archive.read(prefix + "run.sh").decode())
+                            else:
+                                self.assertIn(binary, archive.read(prefix + "run.sh").decode())
                             self.assertIn(binary, archive.read(prefix + "deck_lab.sh").decode())
                             self.assertIn("-- --auto-deck", archive.read(prefix + "auto_deck.sh").decode())
                             self.assertEqual(archive.getinfo(prefix + "auto_deck.sh").external_attr >> 16 & 0o777, 0o755)
@@ -130,6 +148,13 @@ class PackageReleaseTest(unittest.TestCase):
                         if platform == "raspberry-pi5-arm64":
                             launcher = archive.read(prefix + "run.sh").decode()
                             self.assertIn("--rendering-driver opengl3_es", launcher)
+                            self.assertIn("--max-fps 60", launcher)
+                        if platform in pack.HANDHELD_FILES:
+                            self.assertIn(prefix + "HANDHELD.md", entries)
+                            self.assertIn("hardware", readme)
+                        if platform == "steam-deck":
+                            launcher = archive.read(prefix + "run.sh").decode()
+                            self.assertIn("--resolution 1280x800", launcher)
                             self.assertIn("--max-fps 60", launcher)
 
     def test_architecture_specific_launch_instructions(self):

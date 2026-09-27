@@ -41,6 +41,9 @@ extends Control
 const CARD_H := 428.0
 const SIZE := Vector2(300, CARD_H)
 
+## Presentation listeners must forget a card as soon as privacy hides it.
+signal face_changed
+
 ## THE ILLUSTRATOR CREDIT'S PREFIX, as every card of this era prints it in
 ## its bottom-left corner. `Duel.hlp`'s "Parts of the Card" topic numbers
 ## the twelve labelled parts of this view and calls part 6 **`Artist`**;
@@ -847,6 +850,7 @@ func show_back() -> void:
 	_dual_land_plate.visible = false
 	_dual_land_plate.texture = null
 	visible = true
+	face_changed.emit()
 
 
 ## Fill and show the preview for one card instance. [param printing_set]
@@ -1018,6 +1022,7 @@ func show_card(inst: CardInstance, printing_set := "") -> void:
 		label.add_theme_color_override("font_color", GameSkin.set_symbol_ink(rarity, legendary))
 	_oracle.add_theme_color_override("font_color", RULES_INK)
 	visible = true
+	face_changed.emit()
 
 
 ## The size at which the body face sets the letter [param step] points of

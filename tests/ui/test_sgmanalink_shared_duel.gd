@@ -5,10 +5,13 @@ var referee: SgPracticeMatch
 var revision := 1
 var commands: Array = []
 var refusals: Array = []
+var _saved_fullscreen_cards: Variant
 
 
 func before_each() -> void:
 	super.before_each()
+	_saved_fullscreen_cards = Settings.get_value("fullscreen_cards", false) \
+		if Settings.has_value("fullscreen_cards") else null
 	referee = SgPracticeMatch.new(42)
 	referee.game = g
 	revision = 1
@@ -17,6 +20,40 @@ func before_each() -> void:
 	g.interactive_choices = true
 	g.set_agent(0, HumanAgent.new())
 	g.set_agent(1, HumanAgent.new())
+
+
+func after_each() -> void:
+	if _saved_fullscreen_cards == null: Settings.clear_value("fullscreen_cards")
+	else: Settings.set_value("fullscreen_cards", _saved_fullscreen_cards)
+	super.after_each()
+
+
+func test_fullscreen_reader_uses_only_visible_projection_and_sends_no_actions() -> void:
+	Settings.set_value("fullscreen_cards", true, false)
+	advance_to_step(Mtg.Step.MAIN1)
+	var own := give_hand(0, "Grizzly Bears")
+	give_hand(1, "Craw Wurm")
+	var screen := _screen()
+	await _pump()
+	screen._card_preview.show_card(_local(screen, own))
+	assert_true(screen._fullscreen_card.open_card())
+	assert_eq(screen._fullscreen_card._card._shown, _local(screen, own))
+	assert_ne(screen._fullscreen_card._card._shown, own, "never the referee's private instance")
+	assert_eq(screen.game.players[1].hand[0].data.card_name, "Unknown card")
+	var key := InputEventKey.new()
+	key.keycode = KEY_ENTER
+	key.pressed = true
+	screen._on_control(key)
+	assert_true(commands.is_empty(), "reading cannot submit Done or another command")
+	# The referee still runs; incoming snapshots apply even with the reader up.
+	g.players[1].life = 17
+	revision += 1
+	screen.present(_room(), true, false)
+	assert_eq(screen.game.players[1].life, 17)
+	screen._card_preview.show_back()
+	assert_false(screen._fullscreen_card.is_open())
+	assert_null(screen._fullscreen_card._card._shown)
+	await _pump()
 
 
 func _room(seat := 0) -> Dictionary:

@@ -285,6 +285,10 @@ class FakeDoorTest(unittest.TestCase):
         cls.door.write_text(FAKE_DOOR, encoding="utf-8")
         cls.door.chmod(0o755)
         (cls.home / "AGENTS.md").write_text("# The contract\n\n## The MCP server\n", encoding="utf-8")
+        cls.guide = "# Play guide\n\n## Contents\n\n" + "".join(
+            f"## {chapter}. Chapter {chapter}\n\nLesson {chapter}.\n\n"
+            for chapter in range(1, 17))
+        (cls.home / "agentic-playgude-mtg.md").write_text(cls.guide, encoding="utf-8")
         decks = cls.home / "decks" / "tournament"
         decks.mkdir(parents=True)
         (decks / "burn.deck").write_text("// NAME: Burn\n4 Lightning Bolt\n20 Mountain\nSB: 3 Red Elemental Blast\n", encoding="utf-8")
@@ -318,6 +322,7 @@ class FakeDoorTest(unittest.TestCase):
         self.assertIn("resources", result["capabilities"])
         self.assertIn("referee_start", result["instructions"])
         self.assertIn("write_deck", result["instructions"])
+        self.assertIn("play_guide", result["instructions"])
 
     def test_initialize_unknown_version_answers_latest(self):
         answer = self.client.ask("initialize", {"protocolVersion": "1999-01-01"})
@@ -394,6 +399,43 @@ class FakeDoorTest(unittest.TestCase):
         self.assertIn("error", self.client.ask("resources/read", {"uri": "shandalar://nothing"}))
 
     # --- the small tools ------------------------------------------------
+
+    def test_play_guide_is_read_only_and_can_be_read_by_chapter(self):
+        names = [tool["name"] for tool in self.client.ask("tools/list")["result"]["tools"]]
+        self.assertIn("play_guide", names)
+        before = self.calls()
+        page = self.client.payload("play_guide")
+        self.assertEqual(page["text"], self.guide)
+        self.assertTrue(page["file"].endswith("agentic-playgude-mtg.md"))
+        for chapter in range(1, 17):
+            page = self.client.payload("play_guide", {"chapter": chapter})
+            self.assertEqual(page["chapter"], chapter)
+            self.assertEqual(page["text"], f"## {chapter}. Chapter {chapter}\n\nLesson {chapter}.\n")
+        self.assertEqual(self.calls(), before, "reading guidance never invokes the engine")
+
+    def test_play_guide_rejects_invalid_chapters(self):
+        for chapter in (0, 17, -1, True, 1.5, "8", None):
+            with self.subTest(chapter=chapter):
+                result = self.client.call("play_guide", {"chapter": chapter})
+                self.assertTrue(result["isError"])
+                self.assertEqual(result["structuredContent"]["error"]["kind"], "option")
+
+    def test_play_guide_resource_matches_tool(self):
+        rows = self.client.ask("resources/list")["result"]["resources"]
+        self.assertIn("shandalar://play-guide", [row["uri"] for row in rows])
+        page = self.client.ask("resources/read", {"uri": "shandalar://play-guide"})["result"]["contents"][0]
+        self.assertEqual(page["mimeType"], "text/markdown")
+        self.assertEqual(page["text"], self.client.payload("play_guide")["text"])
+
+    def test_missing_play_guide_is_a_clear_refusal(self):
+        page = self.home / "agentic-playgude-mtg.md"
+        page.rename(page.with_suffix(".saved"))
+        try:
+            result = self.client.call("play_guide")
+            self.assertTrue(result["isError"])
+            self.assertEqual(result["structuredContent"]["error"]["kind"], "path")
+        finally:
+            page.with_suffix(".saved").rename(page)
 
     def test_status_and_contract_and_manual(self):
         status = self.client.payload("status")
@@ -812,6 +854,13 @@ class LiveTest(unittest.TestCase):
         status = self.client.payload("status", timeout=120)
         self.assertEqual(status["version"], version)
         self.assertEqual(status["root"], str(ROOT))
+        full = self.client.payload("play_guide")["text"]
+        self.assertEqual(full, (ROOT / "agentic-playgude-mtg.md").read_text(encoding="utf-8"))
+        for chapter in range(1, 17):
+            page = self.client.payload("play_guide", {"chapter": chapter})["text"]
+            self.assertTrue(page.startswith(f"## {chapter}. "))
+            self.assertEqual(len(re.findall(r"^## \d+\. ", page, re.MULTILINE)), 1)
+        self.assertIn("Deck-building strategy", page)
 
     def test_packs_cards_check(self):
         packs = self.client.payload("packs", timeout=180)

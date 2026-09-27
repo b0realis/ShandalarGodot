@@ -206,6 +206,12 @@ static func fullscreen() -> bool:
 	return get_value("fullscreen", false)
 
 
+## [QoL] Optional click-to-enlarge for the duel and Deck Builder showcases.
+## Reading the default never writes it to the player's settings file.
+static func fullscreen_cards() -> bool:
+	return get_value("fullscreen_cards", false)
+
+
 ## [QoL] `Touch controls` on the Options screen — `auto`, `on` or `off`;
 ## see the `TouchControls` autoload for what each means. `auto` by
 ## default: a desk with a mouse never sees the layer, a tablet always

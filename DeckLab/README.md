@@ -2092,7 +2092,7 @@ a deck, measure it and play it has to spawn processes, parse stdout and
 keep the referee's pipe open itself. `tools/shandalar_mcp.py` does that
 once, for everyone: ONE MCP SERVER on stdio (`./shandalar.sh mcp`, in a
 release `python3 tools/shandalar_mcp.py`) whose `tools/list` is the
-catalogue an MCP client reads before it acts — `status`, `contract`,
+catalogue an MCP client reads before it acts — `status`, `contract`, `play_guide`,
 `manual`, `packs`, `cards`, `check_deck`, `list_decks`, `read_deck`,
 `write_deck`, `convert_deck`, `autodeck`, `lab`, `lab_resume`,
 `read_run`, `lab_next`, `referee_start`, `referee_join`, `referee_act`,
@@ -2116,6 +2116,11 @@ default). [AGENTS.md](../AGENTS.md) has the tool list and the session;
 and, behind `SHANDALAR_MCP_LIVE=1`, against the real one —
 `tests/tools/test_mcp_2026_09_27.gd` runs that live half inside the
 gate.
+
+For learning the game rather than the interface, `play_guide` serves the
+[MTG play guide](../agentic-playgude-mtg.md), optionally one chapter (1–16).
+`shandalar://play-guide` exposes the full document as a read-only resource.
+The guide also ships with the release's tools; reading it starts no engine.
 
 ## Files
 

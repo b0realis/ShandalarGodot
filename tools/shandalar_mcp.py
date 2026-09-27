@@ -74,6 +74,7 @@ PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
 LATEST_PROTOCOL = PROTOCOL_VERSIONS[-1]
 DOOR_NAME = "shandalar.sh"
 CONTRACT = "AGENTS.md"
+PLAY_GUIDE = "agentic-playgude-mtg.md"
 WORKSPACE = "workspace"
 DEFAULT_TIMEOUT = 900
 DECISION_TIMEOUT = 120
@@ -95,7 +96,9 @@ INSTRUCTIONS = (
     "one duel (you in a seat against a computer player, or against yourself "
     "in both seats), `referee_act` answers the pending decision with one of "
     "its `options`, `referee_join` sits at a table a person hosts in the "
-    "game. `contract` is the whole contract page; `manual` a tool's own help."
+    "game. `contract` is the whole contract page; `manual` a tool's own help. "
+    "Read `play_guide` for MTG rules, fair-information play, combat and deck "
+    "building; optionally request one chapter (1-16) instead of the full guide."
 )
 
 
@@ -641,6 +644,12 @@ class Server:
             self._tool("contract", "The whole contract page (AGENTS.md): every command-line tool, "
                        "its channels, exit codes, files and JSON keys — the reference behind "
                        "these tools.", {}, self.tool_contract),
+            self._tool("play_guide", "Learn to play MTG fairly: rules, timing, tactical combat, "
+                       "worked decisions and deck-building strategy. Reads documentation only; "
+                       "omit chapter for the full guide, or request one of its 16 chapters.",
+                       {"chapter": prop("integer", "chapter number, 1-16; 8 is combat, "
+                                        "9 game-specific rules, 16 deck building",
+                                        minimum=1, maximum=16)}, self.tool_play_guide),
             self._tool("manual", "One tool's own `--help` text: `lab` (the Deck Lab), `autodeck`, "
                        "`query` (check/packs/cards), `referee`, `convert`, or `door` (the verb list).",
                        {"verb": prop("string", "which manual", enum=list(MANUALS))},
@@ -905,6 +914,27 @@ class Server:
             raise refusal("shandalar", "path", f"{CONTRACT} is not beside the door", exit_code=1,
                           path=str(path))
         return {"file": str(path), "text": path.read_text(encoding="utf-8")}
+
+    def tool_play_guide(self, args: dict) -> dict:
+        chapter = args.get("chapter")
+        if "chapter" in args and (type(chapter) is not int or not 1 <= chapter <= 16):
+            raise refusal("play_guide", "option", "chapter must be an integer from 1 to 16",
+                          flag="chapter")
+        path = self.root / PLAY_GUIDE
+        if not path.is_file():
+            raise refusal("play_guide", "path", f"{PLAY_GUIDE} is not beside the door",
+                          exit_code=1, path=str(path))
+        text = path.read_text(encoding="utf-8")
+        if chapter is not None:
+            headings = list(re.finditer(r"^## ([1-9][0-9]*)\. .+$", text, re.MULTILINE))
+            found = next((i for i, heading in enumerate(headings)
+                          if int(heading.group(1)) == chapter), None)
+            if found is None:
+                raise refusal("play_guide", "guide", f"chapter {chapter} is missing from {PLAY_GUIDE}",
+                              exit_code=1)
+            end = headings[found + 1].start() if found + 1 < len(headings) else len(text)
+            text = text[headings[found].start():end].rstrip() + "\n"
+        return {"file": str(path), "chapter": chapter, "text": text}
 
     def tool_manual(self, args: dict) -> dict:
         verb = str(args["verb"])
@@ -1340,7 +1370,9 @@ class Server:
 
     def resources(self) -> list[dict]:
         rows = [{"uri": "shandalar://contract", "name": CONTRACT, "mimeType": "text/markdown",
-                 "description": "the contract page for every command-line tool"}]
+                 "description": "the contract page for every command-line tool"},
+                {"uri": "shandalar://play-guide", "name": PLAY_GUIDE, "mimeType": "text/markdown",
+                 "description": "MTG rules, fair-information play, combat and deck-building strategy"}]
         rows += [{"uri": f"shandalar://manual/{verb}", "name": f"manual {verb}", "mimeType": "text/plain",
                   "description": f"the `--help` of the {verb} tool"} for verb in MANUALS]
         return rows
@@ -1348,6 +1380,9 @@ class Server:
     def read_resource(self, uri: str) -> dict:
         if uri == "shandalar://contract":
             page = self.tool_contract({})
+            return {"uri": uri, "mimeType": "text/markdown", "text": page["text"]}
+        if uri == "shandalar://play-guide":
+            page = self.tool_play_guide({})
             return {"uri": uri, "mimeType": "text/markdown", "text": page["text"]}
         found = re.fullmatch(r"shandalar://manual/([a-z]+)", uri or "")
         if found and found.group(1) in MANUALS:

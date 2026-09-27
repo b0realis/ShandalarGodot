@@ -15,7 +15,7 @@ extends GutTest
 
 const SERVER := "res://tools/shandalar_mcp.py"
 const SELF_TEST := "tools.test_shandalar_mcp"
-const TOOLS := ["status", "contract", "manual", "packs", "cards", "list_decks",
+const TOOLS := ["status", "contract", "play_guide", "manual", "packs", "cards", "list_decks",
 	"read_deck", "write_deck", "check_deck", "convert_deck", "autodeck", "lab",
 	"lab_resume", "read_run", "lab_next", "referee_start", "referee_join",
 	"referee_act", "referee_autoplay", "referee_wait", "referee_stop"]
@@ -80,11 +80,12 @@ func test_the_catalogue_is_printed_for_a_program() -> void:
 			assert_true(String(property.get("description", "")).length() > 0, "%s.%s is described" % [tool.name, key])
 		for key in schema.get("required", []):
 			assert_true(schema.properties.has(key), "%s requires %s, which it names" % [tool.name, key])
-	assert_eq(names, TOOLS, "the twenty-one tools, in the order the manual lists them")
+	assert_eq(names, TOOLS, "the tools, in the order the manual lists them")
 	var uris: Array = []
 	for resource in catalogue.get("resources", []):
 		uris.append(resource.uri)
 	assert_true(uris.has("shandalar://contract"), "the contract page is a resource")
+	assert_true(uris.has("shandalar://play-guide"), "the play guide is a resource")
 	assert_true(uris.has("shandalar://manual/referee"), "the manuals are resources")
 
 

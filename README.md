@@ -69,6 +69,11 @@ Card artwork and constructed pack ZIPs are intentionally not release downloads.
 Every platform package includes the Python builders and
 [construction instructions](docs/card-art-and-packs.md); no source checkout is needed.
 
+The [agent play guide](agentic-playgude-mtg.md) teaches MTG rules, fair-information
+play, combat decisions and deck-building strategy without assuming a particular
+automation interface. MCP clients can read it through `play_guide`, a chapter
+at a time, or the `shandalar://play-guide` resource.
+
 ## LAN play and Booster Draft
 
 The desktop release includes local-network duels and
@@ -113,7 +118,7 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The MCP server](docs/ROADMAP.md#2026-09-27--the-mcp-server-04032)):
+Most recent full-suite verification ([The MCP server](docs/ROADMAP.md#2026-09-27--the-mcp-server-04032)):
 **8,050 GUT tests / 365,714 assertions**, plus **377 Python tests**
 (the MCP server's five live tests play inside the GUT gate; one
 platform-specific skip). The same gate runs on GitHub Actions for
