@@ -628,6 +628,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.36.md`: a card is opaque — no part of a `MiniCard`
+  carries a `z_index`; the child list is the stack, `HOST_Z` is retired,
+  and a card placed over another covers every pixel of it.
 - `docs/releases/0.40.35.md`: a deck the MCP server wrote is named by
   its file name — `write_deck` then `lab`/`check_deck`/`referee_start`
   on the bare name, the server handing the door the workspace's
@@ -5224,11 +5227,21 @@ shandalar/
 │    controls the aura, while a plain row still piles;
 │    tests/ui/test_enchanted_host_z_2026_09_07.gd — THE AURA THAT DREW
 │    OVER ITS HOST: Instill Energy's yellow ring across the Llanowar
-│    Elves it enchanted, because a MiniCard's name, (T) and ring sit at
-│    z 2 and the canvas sorts by z before child order — the host of a
-│    fan now carries DuelScreen.HOST_Z (3, on the holder when tapped),
-│    pinned over every pixel of the aura's subtree, and the right-hold
-│    lift puts a card back where it RESTED (_lifted_rest_z), not at 0;
+│    Elves it enchanted, because a MiniCard's name, (T) and ring sat at
+│    z 2 and the canvas sorts by z before child order — answered first
+│    with DuelScreen.HOST_Z (3) on the host, retired 2026-09-27: the
+│    host is the last child of its wrap and covers every pixel of the
+│    aura's subtree by that alone, and the right-hold lift puts it back
+│    at 0 (_lifted_rest_z);
+│    tests/ui/test_card_over_card_2026_09_27.gd — A CARD IS OPAQUE: the
+│    owner's card placed over another showed the one underneath's name
+│    and P/T through it, because a MiniCard's parts carried z 1 and 2 of
+│    their own and z is sorted globally — now nothing inside a card
+│    carries a z, the child list is the stack (_build_face builds the
+│    read parts last, _add_overlay moves each lazy overlay back before
+│    the counter row, the shield's words before the name, the ring
+│    last), and the card touched last covers every part of the one it
+│    lies on, host or plain, tapped or not, and in a pile;
 │    tests/ui/test_ability_target.gd — CLICKING AN ABILITY ON THE CHAIN
 │    (TargetSpec.Kind.ABILITY, which the picker had no case for): the
 │    click naming the ACTIVATION and not its source permanent, the

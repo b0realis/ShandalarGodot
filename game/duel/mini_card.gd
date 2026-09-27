@@ -610,45 +610,8 @@ func _build_face() -> void:
 	_band_texture.stretch_mode = TextureRect.STRETCH_SCALE
 	_band_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_band_texture)
-	_name_label = Label.new()
-	_name_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_name_label.offset_left = 6
-	_name_label.offset_right = -4
-	_name_label.offset_top = 2
-	_name_label.offset_bottom = 18
-	_name_label.add_theme_font_size_override("font_size", NAME_FONT_SIZE)
-	_name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-	_name_label.add_theme_constant_override("shadow_offset_x", 1)
-	_name_label.add_theme_constant_override("shadow_offset_y", 1)
-	_name_label.add_theme_constant_override("shadow_outline_size", 3)
-	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# Never shrink the font — a long name is TRIMMED with an ellipsis so
-	# every card name on screen reads at the same size.
-	_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_name_label.z_index = 2
-	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_name_label)
-	# THE LETTERED HALF of the flat tap cue, in the name's own ink and
-	# wearing the name's outline so it reads on a pale marble bar as well
-	# as on a dark one. Same z as the name: both sit over the wash.
-	_tap_mark = Label.new()
-	_tap_mark.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_tap_mark.offset_left = 6
-	_tap_mark.offset_top = 2
-	_tap_mark.offset_right = 6 + TAP_MARK_W
-	_tap_mark.offset_bottom = 18
-	_tap_mark.text = TAPPED_MARK
-	_tap_mark.add_theme_font_size_override("font_size", NAME_FONT_SIZE)
-	_tap_mark.add_theme_color_override("font_color", Color(0.95, 0.95, 0.92))
-	_tap_mark.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-	_tap_mark.add_theme_constant_override("shadow_offset_x", 1)
-	_tap_mark.add_theme_constant_override("shadow_offset_y", 1)
-	_tap_mark.add_theme_constant_override("shadow_outline_size", 3)
-	_tap_mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_tap_mark.z_index = 2
-	_tap_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tap_mark.visible = false
-	add_child(_tap_mark)
+	# The NAME that stands on the bar is the last thing the face builds —
+	# see the end of this function.
 	_art_placeholder = ColorRect.new()
 	_art_placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_set_art_region(_art_placeholder)
@@ -705,28 +668,6 @@ func _build_face() -> void:
 	_badges.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_badges)
 
-	# THE COUNTER ROW — the stones a permanent's counters wear, just under
-	# the title bar where the 1997 renderer put them (`Magic.exe`
-	# 0x4d3a00 draws its ovals in a band starting 20/256 of the card down,
-	# 27% of the card tall — at our 106 px that is the stone's own 28 px,
-	# so the stones are blitted at their native size, never scaled).
-	# LEFT-aligned where the original right-aligned: the right end of that
-	# band is the WILL_UNTAP arrow's ([method _ensure_overlay]) and the ID
-	# tag's, and the left end was only ever the status text's, which now
-	# follows the stones. Built empty; [method _rebuild_counter_chips]
-	# fills it on every refresh. z 1 like the P/T: readable over the
-	# DYING cracks and the summoning spiral.
-	_counter_row = Control.new()
-	_counter_row.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_counter_row.offset_left = COUNTER_ROW_LEFT
-	_counter_row.offset_top = COUNTER_ROW_TOP
-	_counter_row.offset_right = SIZE.x - (CORNER_MARK + 8)
-	_counter_row.offset_bottom = COUNTER_ROW_TOP + CounterMarks.STONE.size.y
-	_counter_row.clip_contents = true
-	_counter_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_counter_row.z_index = 1
-	add_child(_counter_row)
-
 	# Status text ("stolen") rides just under the title bar so it never
 	# collides with the badges — and to the RIGHT of the counter stones
 	# when there are any ([method _rebuild_counter_chips] moves it).
@@ -770,31 +711,6 @@ func _build_face() -> void:
 	_damage_count.add_theme_constant_override("shadow_offset_y", 1)
 	_damage_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_damage_count)
-	# PENDING DAMAGE [QoL] — the same dagger and the same box, in
-	# [constant PENDING_COLOR]. Placed by [method _refresh_pending]: in the
-	# marker's own place while the card is unwounded, one row above it
-	# when a real "2" is already there (first-strike damage marked before
-	# the regular step's division), so the two numbers never overprint.
-	_pending_icon = TextureRect.new()
-	_pending_icon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_pending_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_pending_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_pending_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pending_icon.visible = false
-	_pending_icon.z_index = 1
-	add_child(_pending_icon)
-	_pending_count = Label.new()
-	_pending_count.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_pending_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_pending_count.add_theme_font_size_override("font_size", 16)
-	_pending_count.add_theme_color_override("font_color", PENDING_COLOR)
-	_pending_count.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	_pending_count.add_theme_constant_override("outline_size", 3)
-	_pending_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pending_count.visible = false
-	_pending_count.z_index = 1
-	add_child(_pending_count)
-	_refresh_pending()
 
 	# THE ID TAG — `Show ID tags\tCtrl+T` (`@MENU_TERRITORY` entry 18 and
 	# `@MENU_SMALLCARD` entry 5, `docs/duel-todo.md` §6.3/§6.12), off by
@@ -845,6 +761,65 @@ func _build_face() -> void:
 	_overlays[State.DAMAGE] = _damage_icon
 	# The other five overlays are NOT built here — see _ensure_overlay.
 
+	# EVERYTHING FROM HERE DOWN IS READ, and is drawn OVER the art and
+	# every cue that lies on it — by the child list, never by a z of its
+	# own. A card's parts used to carry z 1 and 2 to sort themselves, and
+	# z is relative but SORTED GLOBALLY: a name at 2 inside the card
+	# underneath stood above the whole face of the card the player had
+	# just put on top of it (the owner's playtest, 2026-09-27 — *"the
+	# title text and power and toughness and other is seen on the top
+	# card"*). Now nothing inside a card carries a z, so the card sorts
+	# as ONE thing against its neighbours and whatever is drawn after it
+	# covers every pixel of it. `tests/ui/test_card_over_card_2026_09_27.gd`
+	# pins both the rule and the order below.
+
+	# THE COUNTER ROW — the stones a permanent's counters wear, just under
+	# the title bar where the 1997 renderer put them (`Magic.exe`
+	# 0x4d3a00 draws its ovals in a band starting 20/256 of the card down,
+	# 27% of the card tall — at our 106 px that is the stone's own 28 px,
+	# so the stones are blitted at their native size, never scaled).
+	# LEFT-aligned where the original right-aligned: the right end of that
+	# band is the WILL_UNTAP arrow's ([method _ensure_overlay]) and the ID
+	# tag's, and the left end was only ever the status text's, which now
+	# follows the stones. Built empty; [method _rebuild_counter_chips]
+	# fills it on every refresh. AFTER the spiral and the lazily added
+	# overlays in the child list, like the P/T: readable over the DYING
+	# cracks and the summoning spiral. `_add_overlay` puts each overlay
+	# it builds right BEFORE this row, so the row is the line between the
+	# art with its cues and the marks a player reads.
+	_counter_row = Control.new()
+	_counter_row.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_counter_row.offset_left = COUNTER_ROW_LEFT
+	_counter_row.offset_top = COUNTER_ROW_TOP
+	_counter_row.offset_right = SIZE.x - (CORNER_MARK + 8)
+	_counter_row.offset_bottom = COUNTER_ROW_TOP + CounterMarks.STONE.size.y
+	_counter_row.clip_contents = true
+	_counter_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_counter_row)
+	# PENDING DAMAGE [QoL] — the same dagger and the same box, in
+	# [constant PENDING_COLOR]. Placed by [method _refresh_pending]: in the
+	# marker's own place while the card is unwounded, one row above it
+	# when a real "2" is already there (first-strike damage marked before
+	# the regular step's division), so the two numbers never overprint.
+	_pending_icon = TextureRect.new()
+	_pending_icon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_pending_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_pending_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_pending_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pending_icon.visible = false
+	add_child(_pending_icon)
+	_pending_count = Label.new()
+	_pending_count.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_pending_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_pending_count.add_theme_font_size_override("font_size", 16)
+	_pending_count.add_theme_color_override("font_color", PENDING_COLOR)
+	_pending_count.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	_pending_count.add_theme_constant_override("outline_size", 3)
+	_pending_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pending_count.visible = false
+	add_child(_pending_count)
+	_refresh_pending()
+
 	# MANA STRIPES: each colour owns a FIXED SLOT along the title bar, so
 	# a card that makes several colours shows several slashes at once,
 	# each in its own place (Black Lotus wears all five).
@@ -855,13 +830,10 @@ func _build_face() -> void:
 	_stripes.offset_left = 3
 	_stripes.offset_right = -3
 	_stripes.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# z 1: above the lazily added state overlays (z 0, and they land after
-	# this in the child list), below the name (z 2). See _ensure_overlay.
-	_stripes.z_index = 1
 	add_child(_stripes)
-	# THE TAP WASH goes over the bar AND over the mana stripes — same z as
-	# the stripes and added after them, so it wins — while the name (z 2)
-	# stays bright and readable. Dimming the slashes is the point rather
+	# THE TAP WASH goes over the bar AND over the mana stripes — added
+	# after them, so it wins — while the name, added after IT, stays
+	# bright and readable. Dimming the slashes is the point rather
 	# than an accident: `Duel.hlp`, topic **Tap**, calls a tapped card one
 	# whose *"effects have been temporarily used up"*, and the slashes are
 	# exactly the effect a land has spent. An untapped Mountain shows a
@@ -874,7 +846,6 @@ func _build_face() -> void:
 	_tap_wash.offset_top = 2
 	_tap_wash.offset_bottom = 18
 	_tap_wash.color = TAPPED_WASH
-	_tap_wash.z_index = 1
 	_tap_wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tap_wash.visible = false
 	add_child(_tap_wash)
@@ -901,8 +872,52 @@ func _build_face() -> void:
 	_pt_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	_pt_label.add_theme_constant_override("outline_size", PT_OUTLINE_SIZE)
 	_pt_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pt_label.z_index = 1   # over the DYING cracks, as it always was
-	add_child(_pt_label)
+	add_child(_pt_label)   # over the DYING cracks, as it always was
+
+	# THE NAME, LAST — with the `(T)` that shares its bar: over the wash,
+	# over the stripes, over everything the face draws. The one thing a
+	# player must always be able to read is the one thing nothing on the
+	# card is allowed to cover; only the highlight ring
+	# ([method _refresh_highlight_ring]) comes after, and it paints the
+	# card's outermost three pixels and nothing else. A shield's words
+	# ([method _refresh_shield]) are slotted in just BEFORE the name.
+	_name_label = Label.new()
+	_name_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_name_label.offset_left = 6
+	_name_label.offset_right = -4
+	_name_label.offset_top = 2
+	_name_label.offset_bottom = 18
+	_name_label.add_theme_font_size_override("font_size", NAME_FONT_SIZE)
+	_name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	_name_label.add_theme_constant_override("shadow_offset_x", 1)
+	_name_label.add_theme_constant_override("shadow_offset_y", 1)
+	_name_label.add_theme_constant_override("shadow_outline_size", 3)
+	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Never shrink the font — a long name is TRIMMED with an ellipsis so
+	# every card name on screen reads at the same size.
+	_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_name_label)
+	# THE LETTERED HALF of the flat tap cue, in the name's own ink and
+	# wearing the name's outline so it reads on a pale marble bar as well
+	# as on a dark one. After the name, over the wash like it.
+	_tap_mark = Label.new()
+	_tap_mark.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_tap_mark.offset_left = 6
+	_tap_mark.offset_top = 2
+	_tap_mark.offset_right = 6 + TAP_MARK_W
+	_tap_mark.offset_bottom = 18
+	_tap_mark.text = TAPPED_MARK
+	_tap_mark.add_theme_font_size_override("font_size", NAME_FONT_SIZE)
+	_tap_mark.add_theme_color_override("font_color", Color(0.95, 0.95, 0.92))
+	_tap_mark.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	_tap_mark.add_theme_constant_override("shadow_offset_x", 1)
+	_tap_mark.add_theme_constant_override("shadow_offset_y", 1)
+	_tap_mark.add_theme_constant_override("shadow_outline_size", 3)
+	_tap_mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tap_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tap_mark.visible = false
+	add_child(_tap_mark)
 
 
 ## Size of a CENTRE stamp (crosshair / circle-slash) over the art, and of
@@ -924,15 +939,16 @@ const CORNER_MARK := 22
 ## them the first time a card actually enters one of those states took a
 ## card from 222 to 173 microseconds (fortieth pass).
 ##
-## Z-ORDER STILL MATTERS AND IS STILL DECIDED HERE, not by accident of
+## THE ORDER STILL MATTERS AND IS STILL DECIDED HERE, not by accident of
 ## creation order: a creature can legitimately be sick AND dying AND
 ## targeted at once. Bottom to top: spiral, cracks (the whole art), the
 ## corner arrow, then the centre stamp — the transient targeting news, on
-## top. Lazily added children land at the END of the child list, so the
-## two face parts that would otherwise fall UNDER them — the mana stripes
-## and the P/T — carry an explicit `z_index` of 1 (see `_build_face`), and
-## the name keeps its 2. Everything else was already before the overlays
-## in the child list and stays there.
+## top; that is this list's order. A lazily added child lands at the END
+## of the child list, which is where the name is, so [method _add_overlay]
+## MOVES each one back to just before the counter row — after the spiral
+## and after any overlay this list ranks below it, before every part the
+## player reads (the stones, the stripes, the P/T, the name). No part of
+## a card carries a `z_index` for this any more (see `_build_face`).
 ##
 ## THE THREE CENTRE STAMPS COME AS A SET. They share one spot and are
 ## mutually exclusive, so any one of them means the card is in a targeting
@@ -985,6 +1001,17 @@ func _add_overlay(state: int, rect: TextureRect) -> void:
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.visible = false
 	add_child(rect)
+	# ITS PLACE IN THE CHILD LIST IS ITS PLACE IN THE STACK: just before
+	# the counter row, and before any overlay LAZY_OVERLAYS ranks above
+	# it that is already built — so the cracks go under a stamp that was
+	# built first, and the order the class note states holds whichever
+	# state the card entered first.
+	var at := _counter_row.get_index()
+	var rank := LAZY_OVERLAYS.find(state)
+	for other in LAZY_OVERLAYS:
+		if LAZY_OVERLAYS.find(other) > rank and _overlays.has(other):
+			at = mini(at, _overlays[other].get_index())
+	move_child(rect, at)
 	_overlays[state] = rect
 
 
@@ -1050,8 +1077,9 @@ func _refresh_shield(centre_stamp: bool) -> void:
 		_shield_words.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 		_shield_words.add_theme_constant_override("outline_size", PT_OUTLINE_SIZE)
 		_shield_words.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_shield_words.z_index = 1   # over the DYING cracks, like the P/T
 		add_child(_shield_words)
+		# Over the DYING cracks like the P/T, under the name like everything.
+		move_child(_shield_words, _name_label.get_index())
 	_shield_words.text = shield_words(pool)
 	_shield_words.visible = not centre_stamp
 
@@ -2148,11 +2176,10 @@ func _refresh_highlight_ring(textured: bool) -> void:
 		_highlight_ring.set_anchors_preset(Control.PRESET_FULL_RECT)
 		# See the class note above: a Panel defaults to STOP.
 		_highlight_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# Over everything the face draws. The name and the `(T)` carry z 2
-		# and the ring shares it, winning on child order because it is
-		# added last — and it only ever paints the card's outermost three
-		# pixels, which nothing else claims.
-		_highlight_ring.z_index = 2
+		# Over everything the face draws, by being the LAST child: the
+		# lazy overlays and the shield's words are slotted in earlier when
+		# they come later, so this stays last — and it only ever paints
+		# the card's outermost three pixels, which nothing else claims.
 		add_child(_highlight_ring)
 	_highlight_ring.add_theme_stylebox_override("panel", _ring_box(mode))
 	_highlight_ring.visible = true

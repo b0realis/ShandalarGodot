@@ -121,7 +121,7 @@ func test_a_salved_creature_wears_the_salve_behind_it() -> void:
 	assert_eq(ghost.position, _fan_corner(host_w)
 		+ Vector2(DuelScreen.AURA_PEEK.x, -DuelScreen.AURA_PEEK.y),
 		"one fan step out, exactly where an aura would stand")
-	assert_eq(host_w.z_index, DuelScreen.HOST_Z, "the host covers it, as it does an aura")
+	assert_eq(host_w.z_index, 0, "the host covers it by child order, as it does an aura")
 
 
 func test_the_ghost_takes_no_click_and_no_focus() -> void:

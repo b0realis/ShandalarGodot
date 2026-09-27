@@ -385,24 +385,27 @@ var _grave_rings: Array[Panel] = []
 ## host, i.e. 4.5% of the card's width = 5.9px on ours.
 const AURA_PEEK := Vector2(6, 18)
 
-## z_index of an enchanted host over its fan of attachments. Child order
-## puts the host last, but z beats it: a card's name, its (T) and its
-## highlight ring sit at z 2 inside the card (`MiniCard._build_face`,
-## `_refresh_highlight_ring`), so an attachment that had something to
-## offer — Instill Energy, ringed yellow for "you may untap" — painted its
-## whole ring OVER the host's face (the owner's Llanowar Elves, 2026-09-07).
-## One above the highest z a card gives its own children covers all of an
-## attachment but the strip that peeks out; the host's children ride on top
-## of this (z is relative) and it is well inside one row's step
-## ([constant ROW_Z_STEP]), so still under the next row and the windows.
-const HOST_Z := 3
+## A CARD IS OPAQUE, AND CHILD ORDER IS THE WHOLE OF THE STACKING inside
+## a fan, a pile, a row and the free layer. There used to be a `HOST_Z`
+## (3) here: a card's name, its (T) and its highlight ring carried z 2
+## inside the card, so an attachment that had something to offer —
+## Instill Energy, ringed yellow for "you may untap" — painted its whole
+## ring OVER its host's face (the owner's Llanowar Elves, 2026-09-07), and
+## the host was lifted one above the tallest thing a card gave its own
+## children. That was the same defect one level up: z is relative but
+## SORTED GLOBALLY, so a card underneath at 3 — or its name at 2 — stood
+## above the face of the plain card the player had just put on top of it
+## (the owner's playtest, 2026-09-27). Now nothing inside a [MiniCard]
+## carries a z (`MiniCard._build_face`), a host is last in its wrap and
+## covers its attachments by that alone, and the card touched last in the
+## free layer ([method _rebuild_placed]) covers every pixel of the one it
+## lies on. `tests/ui/test_card_over_card_2026_09_27.gd` pins it.
 
 ## THE BOARD'S Z LADDER, from the table up. A half's rows stand on steps —
 ## LANDS at 0, OTHER one step up, CREATURES two — because the column they
 ## sit in lets an overflowing row slide UNDER the next ([SqueezeColumn]),
 ## and under means DRAWN under: a row's cards carry z of their own (a
-## pile's fifth card is at 4 and its name band 2 above that, an enchanted
-## host at [constant HOST_Z]), so one step has to clear the tallest thing
+## pile's fifth card is at 4), so one step has to clear the tallest thing
 ## a row draws, or a land's name band would show through the creature
 ## lying over it. The free layer, where the cards the player moved by hand
 ## live, is one step above the last row. Everything that floats starts
@@ -7357,8 +7360,8 @@ func _on_card_look(event: InputEvent, w: MiniCard, inst: CardInstance) -> void:
 			_card_preview.show_card(inst)
 		# The lift, held only while the button is. z_index, not a reparent:
 		# the card stays exactly where the row put it and simply stops
-		# being overlapped. It is put back where it RESTED, which is 0 for
-		# most cards and HOST_Z for one wearing an aura.
+		# being overlapped. It is put back where it RESTED, which is 0 —
+		# a card carries no z of its own on the table, its holder does.
 		_lifted_rest_z = w.z_index
 		w.z_index = LIFT_Z - _z_under(w)
 		_lifted_card = w
@@ -8099,11 +8102,10 @@ func _make_widget(inst: CardInstance, chain_item: StackItem = null) -> Control:
 		if result == w:
 			w.size = MiniCard.SIZE
 		wrap.add_child(result)
-		# ...and z says so too, or the attachment's ring wins (HOST_Z).
-		# On the holder when tapped, on the card itself when not — the
-		# right-hold lift raises `w` from whatever it rests at
-		# (_drop_lifted_card), so the two never fight.
-		result.z_index = HOST_Z
+		# ...and that is the whole of it: nothing inside a card carries a
+		# z (`MiniCard._build_face`), so the host, added last, covers its
+		# attachments' rings and names by child order alone — and a card
+		# placed over the fan later covers the host the same way.
 		return wrap
 	return result
 

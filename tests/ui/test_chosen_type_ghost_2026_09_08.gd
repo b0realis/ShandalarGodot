@@ -125,7 +125,7 @@ func test_the_jaguar_wears_its_choice_behind_it() -> void:
 	assert_eq(ghost.size, MiniCard.SIZE, "a whole card, like an aura")
 	assert_eq(ghost.position, host_w.position + _step(1.0),
 		"one fan step out, exactly where an aura would stand")
-	assert_eq(host_w.z_index, DuelScreen.HOST_Z, "the host covers it, as it does an aura")
+	assert_eq(host_w.z_index, 0, "the host covers it by child order, as it does an aura")
 
 
 func test_the_ghost_is_an_aura_in_the_jaguars_colour() -> void:

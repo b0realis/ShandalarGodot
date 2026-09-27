@@ -53,10 +53,17 @@ and section 3 says which is which for each one.
 ## 2. Where things sit on the card
 
 A quick map, in the card's own 132x106 coordinates, so a mark can be found
-by eye. Z-order runs bottom to top: the spiral, the cracks, the corner
-arrow, then the centre stamp — the transient targeting news, on top. The
-mana stripes and the P/T carry an explicit `z_index` of 1 and the name and
-the `(T)` a 2, so the lazily-added overlays cannot land over them.
+by eye. The stack runs bottom to top: the spiral, the cracks, the corner
+arrow, then the centre stamp — the transient targeting news — then the
+counter stones, the pending dagger, the mana stripes, the tap wash, the
+P/T and the shield's words, and the name and the `(T)` over everything,
+with the highlight ring last. Since 2026-09-27 that order is the CHILD
+LIST alone — nothing inside a card carries a `z_index` (the stripes and
+the P/T used to carry 1, the name, the `(T)` and the ring 2), because z is
+sorted globally and a name at 2 inside the card underneath painted over
+the face of the card placed on top of it. `MiniCard._add_overlay` slots
+each lazily built overlay in before the counter row, so it still lands
+under everything a player reads.
 
 ```
  +--------------------------------------------------+

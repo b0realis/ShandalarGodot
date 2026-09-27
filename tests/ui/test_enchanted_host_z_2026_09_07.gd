@@ -19,11 +19,17 @@ extends GutTest
 ## whose own face sits at 0. What the player saw was a yellow frame around
 ## the Elves that belonged to the aura.
 ##
-## THE RULE THIS PINS: the host of a fan stands one z above the highest z
-## any card gives its own children ([constant DuelScreen.HOST_Z]), so it
-## covers all of an attachment but the strip that peeks out; and the
-## right-hold lift, which raises a card by z and puts it back, puts an
-## enchanted host back at HOST_Z and not at 0.
+## THE RULE THIS PINNED FIRST was a `DuelScreen.HOST_Z` (3): the host of
+## a fan stood one z above the highest z any card gave its own children.
+## That was the same defect one level up — a host at 3 stood above the
+## face of a plain card placed over it — and 2026-09-27 retired it with
+## the z's it answered (`tests/ui/test_card_over_card_2026_09_27.gd`).
+##
+## THE RULE THIS PINS NOW: no part of a card carries a z, so the host,
+## LAST in its wrap, covers all of an attachment but the strip that peeks
+## out by child order alone; and the right-hold lift, which raises a card
+## by z and puts it back, puts an enchanted host back at 0 like any card,
+## which is still over its aura.
 
 var screen: DuelScreen
 
@@ -93,6 +99,37 @@ func _top_z_in(node: Node, top: Node) -> int:
 	return best
 
 
+## Does [param over] draw over [param under]? The canvas's own order:
+## the higher z wins, and at equal z the node later in the tree does.
+func _draws_over(over: Node, under: Node, top: Node) -> bool:
+	var a := _z_under(over, top)
+	var b := _z_under(under, top)
+	if a != b:
+		return a > b
+	return over.is_greater_than(under)
+
+
+## Every CanvasItem in [param node]'s subtree, itself included.
+func _parts(node: Node) -> Array:
+	var out: Array = []
+	var stack: Array = [node]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is CanvasItem:
+			out.append(n)
+		for c in n.get_children():
+			stack.append(c)
+	return out
+
+
+## Does [param over]'s own face draw over EVERY part of [param under]?
+func _covers(over: CanvasItem, under: Node, top: Node) -> bool:
+	for part in _parts(under):
+		if not _draws_over(over, part, top):
+			return false
+	return true
+
+
 ## The fan the report describes, drawn. The aura's ring is put up by hand
 ## — `_refresh_highlight_ring(true)` — because it only ever exists on the
 ## skinned frame and the gate may run without the 1997 art imported;
@@ -124,38 +161,42 @@ func test_the_host_stands_above_every_pixel_of_its_attachment() -> void:
 	var wrap: Node = fan[2]
 	assert_not_null(back._highlight_ring, "the aura is ringed — yellow, "
 		+ "because Instill Energy has an untap to offer")
-	# What the player saw: the ring two above the host's face.
-	assert_eq(_z_under(back._highlight_ring, wrap), 2,
-		"the ring rides at z 2 inside the aura, as the name and (T) do")
-	assert_gt(_z_under(host_w, wrap), _top_z_in(back, wrap),
-		"...and the host stands above ALL of it, ring included")
-	assert_eq(host_w.z_index, DuelScreen.HOST_Z,
-		"the untapped host carries HOST_Z itself")
+	# What the player saw: the ring two above the host's face. Now the
+	# ring, like the name and the (T), carries no z at all...
+	assert_eq(_z_under(back._highlight_ring, wrap), 0,
+		"the ring rides at 0 inside the aura, as the name and (T) do")
+	assert_eq(_top_z_in(back, wrap), 0, "nothing in the aura is above 0")
+	assert_eq(host_w.z_index, 0, "and the host carries none either")
+	# ...so child order is the whole of it, and it says the right thing.
 	assert_lt(back.get_index(), host_w.get_index(),
-		"child order still says the same thing")
+		"the host is added after the aura")
+	assert_true(_covers(host_w, back, wrap),
+		"...and so stands above ALL of it, ring included")
 
 
-func test_a_tapped_host_is_lifted_by_its_holder() -> void:
+func test_a_tapped_host_covers_its_aura_from_inside_its_holder() -> void:
 	# Turned, the card sits inside its rotation holder and the holder is
-	# the fan's last child — so the holder is what carries the z.
+	# the fan's last child — so the holder's place is what covers.
 	var fan: Array = await _the_elves_and_their_energy(true)
 	var host_w: MiniCard = fan[0]
 	var back: MiniCard = fan[1]
 	var wrap: Node = fan[2]
 	assert_ne(host_w.get_parent(), wrap, "the tapped host is in a holder")
 	assert_eq(host_w.z_index, 0, "the card inside rests at 0...")
-	assert_eq(_z_under(host_w, wrap), DuelScreen.HOST_Z,
-		"...its holder at HOST_Z")
-	assert_gt(_z_under(host_w, wrap), _top_z_in(back, wrap),
+	assert_eq(_z_under(host_w, wrap), 0, "...and so does its holder")
+	assert_eq(host_w.get_parent().get_index(), wrap.get_child_count() - 1,
+		"the holder is the fan's last child")
+	assert_true(_covers(host_w, back, wrap),
 		"and the turned host still covers the aura's ring")
 
 
-func test_host_z_is_one_above_a_cards_own_children() -> void:
-	# The number is not free: one above the highest z a card gives its own
-	# children, or the fix is by luck; inside one row step, or a host in the
-	# land row draws through the creature lying over it; and, from the free
-	# layer's step, under the combat window, or an attacker wearing an aura
-	# draws through the window it stands in.
+func test_a_card_gives_none_of_its_children_a_z() -> void:
+	# The rule is not free: a card whose parts carry a z of their own is a
+	# card whose parts show through whatever lies on it, one row step or
+	# one free-layer step notwithstanding — and a host lifted to clear
+	# them showed through in turn. So the tallest thing on a card is the
+	# card, at 0; a pile's last card is inside its row's step; and the
+	# free layer is under the combat window and under a right-held card.
 	var lion := _summon("Savannah Lions", 0)
 	screen.game.recalculate()
 	screen._refresh()
@@ -163,16 +204,13 @@ func test_host_z_is_one_above_a_cards_own_children() -> void:
 	var w: MiniCard = _drawn().get(lion.id)
 	w.set_highlight(MiniCard.Highlight.OPTIONAL)
 	w._refresh_highlight_ring(true)
-	assert_eq(DuelScreen.HOST_Z, _top_z_in(w, w) + 1,
-		"HOST_Z is exactly one above the tallest thing on a card")
-	assert_lt(DuelScreen.HOST_Z + _top_z_in(w, w), DuelScreen.ROW_Z_STEP,
-		"and a host's tallest child is still inside its row's step")
+	assert_eq(_top_z_in(w, w), 0, "nothing on a card is above the card")
 	assert_lt(DuelScreen.PILE_SIZE - 1 + _top_z_in(w, w), DuelScreen.ROW_Z_STEP,
-		"as is a pile's last card and its name band")
-	assert_lt(DuelScreen.FREE_LAYER_Z + DuelScreen.HOST_Z + _top_z_in(w, w),
+		"a pile's last card is still inside its row's step")
+	assert_lt(DuelScreen.FREE_LAYER_Z + _top_z_in(w, w),
 		screen._combat_window.z_index,
-		"and a host on the free layer is still under the combat window")
-	assert_gt(DuelScreen.LIFT_Z, DuelScreen.HOST_Z + _top_z_in(w, w),
+		"and a card on the free layer is still under the combat window")
+	assert_gt(DuelScreen.LIFT_Z, DuelScreen.FREE_LAYER_Z + _top_z_in(w, w),
 		"and under a right-held neighbour")
 
 
@@ -186,19 +224,23 @@ func _right(pressed: bool) -> InputEventMouseButton:
 
 
 func test_a_right_held_host_drops_back_onto_its_aura_not_under_it() -> void:
-	# The lift is a z_index of LIFT_Z and a reset — and a reset to 0 would
-	# have put the Elves back UNDER the ring the moment the button was let
-	# go, until the next rebuild.
+	# The lift is a z_index of LIFT_Z and a reset. A reset to 0 used to put
+	# the Elves back UNDER the ring the moment the button was let go, until
+	# the next rebuild — because the ring stood at 2. It stands at 0 now,
+	# so 0 IS over the aura, by child order.
 	var fan: Array = await _the_elves_and_their_energy()
 	var host_w: MiniCard = fan[0]
+	var back: MiniCard = fan[1]
+	var wrap: Node = fan[2]
 	screen._on_card_look(_right(true), host_w, host_w.instance)
 	# LIFT_Z on the SCREEN's ladder: z is relative and the row stands on
 	# a step of its own (ROW_Z_STEP), which the lift takes off.
 	assert_eq(host_w.z_index + screen._z_under(host_w), DuelScreen.LIFT_Z,
 		"held to the front")
 	screen._on_card_look(_right(false), host_w, host_w.instance)
-	assert_eq(host_w.z_index, DuelScreen.HOST_Z,
-		"and put back where it RESTED — over the aura, not at 0")
+	assert_eq(host_w.z_index, 0,
+		"and put back where it RESTED — 0, like any card")
+	assert_true(_covers(host_w, back, wrap), "which is still over the aura")
 
 
 func test_a_plain_card_still_drops_back_to_zero() -> void:

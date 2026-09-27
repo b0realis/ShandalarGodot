@@ -17543,6 +17543,56 @@ eleven turns).
 Gate: 531 scripts, **8,073/8,073 tests, 366,268 asserts**, exit 0 in
 262 s over 6 shards; Python 392, exit 0.
 
+## 2026-09-27 — A card is opaque (0.40.36)
+
+The owner's playtest: *"If you put one small card over the other in the
+playfield the title text and power and toughness and other is seen on
+the top card. I mean picked up small card should just cover what is in
+the bottom."* The free layer was right — `_rebuild_placed` adds the
+cards the player moved by hand in the order they were last touched, so
+the one on top is the last child — and it still lost, because the
+canvas sorts by `z_index` before it sorts by child order, and a
+`MiniCard` gave its own parts a z of their own to order them among
+themselves: the mana stripes, the tap wash, the counter stones, the
+pending dagger and the P/T at 1, the name, the `(T)` and the highlight
+ring at 2. z is relative, but it is sorted globally: a name at 2 inside
+the card underneath stood above the whole face of the card on top,
+whose face sat at 0. The same escape had already been met once, one
+level up — the aura's ring over its host (2026-09-07), answered then
+with `HOST_Z` (3) on the host — and a host at 3 showed through a plain
+card placed over it in exactly the same way.
+
+**Nothing inside a card carries a z.** `MiniCard._build_face` builds
+its parts in the order they stack: the band, the art and its frame,
+the badges, the status text, the damage marker, the ID tag and the
+summoning spiral; then the counter stones, the pending dagger, the
+stripes, the wash and the P/T; then the name and the `(T)`, last. The
+five lazily built overlays (`_add_overlay`) are moved back to just
+before the counter row — after the spiral and after any overlay
+`LAZY_OVERLAYS` ranks below them — so the cracks still pass under the
+numbers and a stamp still lands over the cracks whichever state the
+card entered first; a shield's words are slotted in before the name;
+the ring is appended last and stays last. `HOST_Z` is gone: a host is
+the last child of its wrap and covers its attachments by that alone,
+and the right-hold lift puts every card back at 0.
+
+**How it is pinned.** `tests/ui/test_card_over_card_2026_09_27.gd`
+(new, six tests) reads what the canvas sorts by — z summed to the free
+layer, then tree order — and asserts that a card placed over another,
+the one underneath tapped and wearing a name, a P/T, counters, a
+pending dagger, a shield, every overlay and a ring, has not one part
+showing through the card on top; the same over an enchanted host; a
+host still covering its aura's ring; no part of a card above 0; the
+stack's order by the child list, a late-built overlay included; and a
+pile's second card covering every part of the first it lies over.
+`test_enchanted_host_z_2026_09_07.gd`, `test_mini_card.gd`'s cracks and
+wash tests, `test_shield_ghost_2026_09_07.gd` and
+`test_chosen_type_ghost_2026_09_08.gd` now pin draw order rather than
+the retired z's.
+
+Gate: 532 scripts, **8,079/8,079 tests, 366,394 asserts**, exit 0 in
+261 s over 6 shards; Python 392, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

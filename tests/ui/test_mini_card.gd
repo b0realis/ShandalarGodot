@@ -525,18 +525,26 @@ func test_the_big_numbers_clear_the_damage_marker_and_the_badges() -> void:
 
 
 func test_the_numbers_stay_over_the_dying_cracks() -> void:
-	# Both of 2026-09-03's changes land on the same corner. The pair is
-	# z 1 and the state overlays are z 0, so a destroyed creature's cracks
-	# pass UNDER its numbers rather than through them.
+	# Both of 2026-09-03's changes land on the same corner. The pair used
+	# to be z 1 over state overlays at z 0; since 2026-09-27 nothing on a
+	# card carries a z (a card must be opaque to the card placed over it),
+	# and the lazily built cracks are slotted in BEFORE the numbers in the
+	# child list instead — so a destroyed creature's cracks still pass
+	# UNDER its numbers rather than through them.
 	var lion := put_battlefield(0, "Savannah Lions")
 	var card := _mini(lion)
 	card.force_dying = true
 	card.refresh()
-	assert_eq(card._pt_label.z_index, 1)
+	assert_eq(card._pt_label.z_index, 0)
 	var cracks: TextureRect = card._overlays.get(MiniCard.State.DYING)
 	assert_not_null(cracks, "the cracks were built")
-	assert_lt(cracks.z_index, card._pt_label.z_index,
-		"and they pass under the numbers")
+	assert_eq(cracks.z_index, 0, "no z on either")
+	assert_lt(cracks.get_index(), card._pt_label.get_index(),
+		"and they pass under the numbers, being before them")
+	assert_lt(cracks.get_index(), card._counter_row.get_index(),
+		"and under the counter stones")
+	assert_gt(cracks.get_index(), card._sick_spiral.get_index(),
+		"but over the summoning spiral")
 
 
 func test_the_badge_row_still_holds_every_badge_the_pool_can_print() -> void:
@@ -1251,13 +1259,13 @@ func test_the_wash_dims_the_mana_slashes_but_never_the_name() -> void:
 	var land := put_battlefield(0, "Mountain")
 	land.tapped = true
 	var card := _flat(land)
-	assert_eq(card._tap_wash.z_index, card._stripes.z_index,
-		"same layer as the stripes...")
+	assert_eq(card._tap_wash.z_index, 0, "no z of its own...")
+	assert_eq(card._stripes.z_index, 0, "...on either")
 	assert_gt(card._tap_wash.get_index(), card._stripes.get_index(),
-		"...and drawn after them, so it covers them")
-	assert_gt(card._name_label.z_index, card._tap_wash.z_index,
-		"the name is above the wash")
-	assert_gt(card._tap_mark.z_index, card._tap_wash.z_index)
+		"the wash is drawn after the stripes, so it covers them")
+	assert_gt(card._name_label.get_index(), card._tap_wash.get_index(),
+		"the name is drawn after the wash")
+	assert_gt(card._tap_mark.get_index(), card._tap_wash.get_index())
 
 
 func test_only_a_permanent_on_the_table_is_ever_marked() -> void:

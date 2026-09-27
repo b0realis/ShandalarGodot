@@ -114,9 +114,9 @@ const BAND_RULE := 3
 
 
 func _init() -> void:
-	# ABOVE the board: a mini-card's own name label carries `z_index = 2`
-	# (mini_card.gd), so a window at the default zero would have the
-	# territory's card names painted straight through it — and the board's
+	# ABOVE the board: a pile's holders and the board's rows carry z of
+	# their own, so a window at the default zero would have the
+	# territory's cards painted straight through it — and the board's
 	# three rows and its free layer each stand a step higher than the last
 	# (`DuelScreen.ROW_Z_STEP`, the whole ladder is documented there), so
 	# the window starts above the free layer's tallest card. The arrow

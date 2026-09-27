@@ -284,8 +284,9 @@ bottom-right corner. Ours was 14px on a 106px card.
   pair's left edge and `clip_contents = true`, so a card wearing four or
   more badges clips the row rather than running it under the numbers. That
   precedence is stated rather than hoped for: a clipped fifth badge is a
-  cost, an unreadable 6/4 is the defect. And the pair keeps its
-  `z_index = 1`, so the same day's DYING cracks pass UNDER it.
+  cost, an unreadable 6/4 is the defect. And the pair stays AFTER the
+  DYING cracks in the child list (it carried `z_index = 1` for this
+  until 2026-09-27), so the same day's cracks pass UNDER it.
 
 Shots: `shot_pt_board.png` (a row reading 3/2 green on a Crusaded
 Savannah Lions, 6/4 white on Craw Wurm, 5/5 green on a Serra Angel that
@@ -1394,8 +1395,10 @@ while the card is still childless — `add_theme_stylebox_override` raises
 the WILL UNTAP arrow and the three CENTRE stamps are invisible on nearly
 every card nearly all the time, and were being made and thrown away by the
 thousand. Z-order is still decided explicitly rather than by creation
-order: the stripes and the P/T carry `z_index = 1` so a lazily added
-overlay cannot land on top of them.
+order: the stripes and the P/T carried `z_index = 1` so a lazily added
+overlay could not land on top of them — since 2026-09-27 nothing on a
+card carries a z (a card must be opaque to the card placed over it) and
+`_add_overlay` moves each overlay back before the counter row instead.
 
 **TWO MORE DEFECTS IN THE FAN**, both only visible with a hand big enough
 to fan. `mouse_entered` can fire more than once without an intervening
@@ -2474,9 +2477,11 @@ attack`, our attacker in the lower lane, the upper lane reserved). Each
 was read back and the bar column, the title bar, the minimise button and
 the window icon cropped and upscaled with PIL. The tour finishes with
 zero script errors. One defect it caught and fixed: a `MiniCard`'s name
-label carries `z_index = 2` (`mini_card.gd:158`), so a window at the
-default zero had the territory's card names painted straight through its
-title bar — the window sits at 10 and the arrow layer at 20, keeping
+label carried `z_index = 2` (`mini_card.gd:158` then; no part of a card
+carries a z since 2026-09-27, but a pile's holders and the board's rows
+still do), so a window at the default zero had the territory's card names
+painted straight through its title bar — the window sits at 10 and the
+arrow layer at 20, keeping
 s30's order (arrows over the board, under the hand window).
 
 Pinned by `tests/ui/test_combat_bar.gd` (12) and
