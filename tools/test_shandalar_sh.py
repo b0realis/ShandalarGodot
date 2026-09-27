@@ -42,7 +42,7 @@ QUERY = "DeckLab/lab_query.sh"
 VERBS = {"lab": "DeckLab/deck_lab.sh", "autodeck": "DeckLab/auto_deck_cli.sh",
          "check | packs | cards": 'DeckLab/lab_query.sh "$verb"',
          "query": "DeckLab/lab_query.sh", "referee": "DeckLab/referee.sh",
-         "convert": "./deck_convert.sh"}
+         "convert": "./deck_convert.sh", "mcp": "python3 tools/shandalar_mcp.py"}
 
 
 def run(argv, **extra_env):
@@ -73,14 +73,15 @@ class DoorTest(unittest.TestCase):
             with self.subTest(verb=verb):
                 self.assertIn(f'{verb}) exec {target} "$@" ;;', self.text)
         for target in VERBS.values():
-            self.assertTrue((ROOT / target.split(" ")[0]).is_file(), target)
+            script = [word for word in target.split(" ") if "/" in word][0]
+            self.assertTrue((ROOT / script).is_file(), target)
 
     def test_help_is_the_list_on_stdout_without_an_engine(self):
         for argv in (["./" + DOOR], ["./" + DOOR, "--help"], ["./" + DOOR, "-h"]):
             with self.subTest(argv=argv):
                 done = run(argv, GODOT="/nonexistent/godot")
                 self.assertEqual(done.returncode, 0, done.stderr)
-                for verb in ("lab", "autodeck", "check", "packs", "cards", "referee", "convert"):
+                for verb in ("lab", "autodeck", "check", "packs", "cards", "referee", "convert", "mcp"):
                     self.assertRegex(done.stdout, r"shandalar\.sh %s\b" % verb)
                 self.assertIn("AGENTS.md", done.stdout)
                 self.assertNotIn("set -euo", done.stdout, "the list, not the script")
@@ -102,7 +103,7 @@ class DoorTest(unittest.TestCase):
                 self.assertEqual(error["tool"], "shandalar")
                 self.assertEqual(error["exit"], 2)
                 self.assertEqual(error["kind"], "option")
-                self.assertIn("the verbs are lab, autodeck, check, packs, cards, referee, convert",
+                self.assertIn("the verbs are lab, autodeck, check, packs, cards, referee, convert, mcp",
                               error["message"])
                 self.assertIn("unknown verb", done.stderr)
 

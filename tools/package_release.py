@@ -33,7 +33,7 @@ DISPATCHER = """verb="${1:-}"
 case "$verb" in
 	"" | -h | --help)
 		printf '%s\\n' \\
-			'shandalar.sh lab|autodeck|check|packs|cards|referee|play ARGS...' \\
+			'shandalar.sh lab|autodeck|check|packs|cards|referee|play|mcp ARGS...' \\
 			'  lab       the Deck Lab (deck_lab.sh)' \\
 			'  autodeck  the AutoDeck CLI (auto_deck.sh)' \\
 			'  check     is this deck playable, and why not (lab_query.sh)' \\
@@ -41,6 +41,7 @@ case "$verb" in
 			'  cards     a card record' \\
 			'  referee   one duel through a pipe, a program in a seat (referee.sh)' \\
 			'  play      the game itself (run.sh)' \\
+			'  mcp       the tools as an MCP server on stdio (tools/shandalar_mcp.py)' \\
 			'VERB --help is that tool manual; -V the version; AGENTS.md is the contract page.'
 		exit 0 ;;
 	-V | --version) echo "shandalar.sh — Shandalar @VERSION@"; exit 0 ;;
@@ -53,9 +54,10 @@ case "$verb" in
 	query) exec ./lab_query.sh "$@" ;;
 	referee) exec ./referee.sh "$@" ;;
 	play) exec ./run.sh "$@" ;;
+	mcp) exec python3 tools/shandalar_mcp.py "$@" ;;
 esac
 safe="$(printf '%s' "$verb" | tr -d '"\\\\\\n\\r\\t')"
-printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s - the verbs are lab, autodeck, check, packs, cards, referee, play","verb":"%s"}}\\n' \\
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s - the verbs are lab, autodeck, check, packs, cards, referee, play, mcp","verb":"%s"}}\\n' \\
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' - try ./shandalar.sh --help" >&2
 exit 2
@@ -63,6 +65,7 @@ exit 2
 
 TOOLS = ("mtg_assets.py", "import_original.py", "fetch_card_art.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
+         "shandalar_mcp.py",
          *(name + ".py" for name in PACK_BUILDERS))
 # Explicit metadata allowlist: never recurse into a download/art cache.
 PACK_DATA = {

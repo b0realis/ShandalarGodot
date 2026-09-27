@@ -1,9 +1,10 @@
 # Driving Shandalar's tools from a program
 
 This is the contract for **running** the headless tools — the Deck Lab,
-the AutoDeck CLI, the Lab Query, the deck converter — from a script, a
-pipeline or an agent: what each command is for, what it prints where,
-what its exit codes mean, what files it leaves and under which keys.
+the AutoDeck CLI, the Lab Query, the referee, the deck converter, and
+the MCP server that wraps them — from a script, a pipeline or an agent:
+what each command is for, what it prints where, what its exit codes
+mean, what files it leaves and under which keys.
 The house rules for **editing** the repository are in `CONTRIBUTING.md`;
 the manuals with the reasoning are `DeckLab/README.md` and `docs/`.
 Every claim below is pinned by
@@ -11,6 +12,7 @@ Every claim below is pinned by
 `tests/tools/test_lab_records_and_queries_2026_09_27.gd`,
 `tests/tools/test_lab_resume_2026_09_27.gd`,
 `tests/tools/test_referee_2026_09_27.gd`,
+`tests/tools/test_mcp_2026_09_27.gd` (with `tools/test_shandalar_mcp.py`),
 `tests/tools/test_deck_lab.gd` and `tests/tools/test_auto_deck_cli.gd`.
 
 ## The one door — `./shandalar.sh`
@@ -24,6 +26,8 @@ Every claim below is pinned by
 ./shandalar.sh referee ARGS...    one duel through a pipe, a program
                                   in a seat            (DeckLab/referee.sh)
 ./shandalar.sh convert IN OUT     .deck <-> .dck      (deck_convert.sh)
+./shandalar.sh mcp                the tools as an MCP server on stdio
+                                                       (tools/shandalar_mcp.py)
 ./shandalar.sh VERB --help        that tool's own manual
 ./shandalar.sh -h | --help        the list, on stdout;  -V | --version
 ```
@@ -34,7 +38,8 @@ refused the way every tool refuses — one JSON line on stdout,
 `{"error":{"tool":"shandalar","exit":2,"kind":"option",...}}`, exit 2.
 A release folder carries the same `shandalar.sh` (`play` runs the game;
 `convert` stays in the checkout) beside `deck_lab.sh`, `auto_deck.sh`,
-`lab_query.sh` and `referee.sh`, each a one-liner into the game binary.
+`lab_query.sh` and `referee.sh`, each a one-liner into the game binary,
+and `tools/shandalar_mcp.py` behind `mcp`.
 
 ## The two channels
 
@@ -407,6 +412,77 @@ sees an ordinary guest.
 line could not be run (a deck, a seat, a switch, a table) — the
 envelope on stdout; 1 a file would not write.
 
+## The MCP server — `./shandalar.sh mcp`
+
+Every tool above as **one MCP server on stdio** (`tools/shandalar_mcp.py`,
+JSON-RPC 2.0, one message a line; no third-party module — the Python
+that runs the other tools runs this one). An MCP client is pointed at
+the command; `tools/list` is the whole catalogue, each tool with the
+description and the schema a program reads before it calls, and
+`initialize` carries a short guide as its `instructions`. The same
+script ships in a release at `tools/shandalar_mcp.py`, so the same
+verb works in the checkout and in the release folder
+(`python3 tools/shandalar_mcp.py` where the door is not a shell).
+
+```
+./shandalar.sh mcp                       the server, on the standard streams
+python3 tools/shandalar_mcp.py --catalogue   the tool list as JSON, no client needed
+python3 tools/shandalar_mcp.py [--door PATH] [--workspace DIR]
+```
+
+**The tools** (`tools/list`): `status` (version, folders, open games),
+`contract` (this page), `manual` (one tool's `--help`); `packs`, `cards`,
+`check_deck` (the Lab Query, quoted); `list_decks`, `read_deck`,
+`write_deck` (rows of `4 Lightning Bolt`, written in the format
+`engine/deck_list.gd` reads and **checked by the engine as it is
+written** — the answer is `check_deck`'s), `convert_deck`; `autodeck`,
+`lab` (structured arguments for every switch, `--no-elo` unless `rated`,
+`--quiet` always, `dry_run` for the plan; or a whole `argv`),
+`lab_resume`, `read_run`, `lab_next` (runs `run.json`'s `next.argv`);
+`referee_start`, `referee_join`, `referee_act`, `referee_autoplay`,
+`referee_wait`, `referee_stop`. Every answer is the door's JSON as
+`structuredContent` (and the same text in `content`); a refusal is
+`isError: true` with the door's envelope untouched under `error`; an
+argument a tool does not take is refused with `suggestions`, like a
+flag. Resources: `shandalar://contract` (this page) and
+`shandalar://manual/VERB`.
+
+**Playing is a session.** `referee_start {deck_a, deck_b, seat_a,
+seat_b, seed, turns, packs, log, view}` opens the referee's pipe and
+answers `{game: "g1", hello, decision}`; `referee_act {game, action}`
+writes one answer and returns the next `decision` (or the `result`);
+nothing is played between calls, so a client may think as long as it
+likes. `action` is one of the decision's `options` as the wire takes
+it (the `seat` is filled in) or the string `default` — the built-in
+pilot's answer (keep, play a land, cast the first castable spell,
+attack with everything, block nothing; after a refusal on the same
+decision the quiet answer, the third refusal concedes).
+`referee_autoplay {game, decisions}` lets the pilot answer N decisions
+or run to the `result`. A `refused` entry in an answer means the
+referee could not apply the action and the same decision is back. The
+decision's board is rendered `brief` by default — `turn`, `step`,
+`active`, `actor`, both `players` (life, hand and library counts,
+mana, graveyard and exile names, the `battlefield` with `pt`,
+`tapped`, `sick`, `attacking`, `blocking`, `damage`, `counters`,
+`rules`), this seat's `hand` with `cost` and `castable`, the `stack`,
+the open prompts (`announcement`, `choice`, `damage_request`,
+`discard_count`), the new `journal` lines — a tenth of the wire's
+view; `view: "full"` is the referee's own line, `"options"` the legal
+answers alone. `referee_join {invitation, deck, port, name, wait}`
+sits at a table a person hosts in the game — a human opponent; the
+answer is `pending: true` until the table starts and `referee_wait`
+reads on. A `result` closes the game; `referee_stop` closes the pipe
+(`reason: eof`); the server's own end closes every game it opened.
+
+**The rules the server keeps**: stdout is the protocol's (each game's
+stderr goes to `workspace/games/GAME.stderr`); a path a tool writes —
+`out`, `log`, `file`, a conversion's output — lies under the checkout
+or the workspace (`--workspace`, default `workspace/` beside the door,
+ignored by git), or the tool refuses with `kind: "path"`; a tool never
+invents a result. Pinned by `tools/test_shandalar_mcp.py` (a fake door,
+no engine) and `tests/tools/test_mcp_2026_09_27.gd` (the real one: a
+deck written and checked, a duel played to its end through the pilot).
+
 ## Deck convert — `./deck_convert.sh INPUT OUTPUT`
 
 Formats come from the extensions (`.deck`/`.dec` ↔ `.dck`). Exit 0 with
@@ -445,6 +521,11 @@ jq -r '.next.argv // empty | @sh' mined_run/run.json                         # w
 The referee's stdout is `hello`, then `decision` lines each answered on
 its stdin (`{"op": ...}`), then one `result`; a `refused` line means the
 same decision follows again.
+
+The same session through the MCP server is `packs` → `autodeck` (or
+`write_deck`) → `check_deck` → `lab` (`dry_run`, then the run) →
+`read_run`/`lab_next` → `referee_start` and `referee_act` until the
+`result` — every tool listed by `tools/list`, none needing a shell.
 
 A non-zero exit: read stdout for `{"error":...}`, branch on `kind`, offer
 `suggestions`; never retry the same line. A zero exit: read `run.json`,

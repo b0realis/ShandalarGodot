@@ -223,7 +223,8 @@ class PackageReleaseTest(unittest.TestCase):
         for script in (source, pack.DISPATCHER):
             for verb, target in (("lab", "./deck_lab.sh"), ("autodeck", "./auto_deck.sh"),
                                  ("check | packs | cards", './lab_query.sh "$verb"'),
-                                 ("referee", "./referee.sh"), ("play", "./run.sh")):
+                                 ("referee", "./referee.sh"), ("play", "./run.sh"),
+                                 ("mcp", "python3 tools/shandalar_mcp.py")):
                 self.assertIn(f'{verb}) exec {target} "$@" ;;', script)
             self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', script)
             # -V is answered by the door itself, from the version stamped
@@ -233,7 +234,8 @@ class PackageReleaseTest(unittest.TestCase):
         repo_door = (pack.ROOT / 'shandalar.sh').read_text(encoding='utf-8')
         for verb, target in (("lab", "DeckLab/deck_lab.sh"), ("autodeck", "DeckLab/auto_deck_cli.sh"),
                              ("check | packs | cards", 'DeckLab/lab_query.sh "$verb"'),
-                             ("referee", "DeckLab/referee.sh"), ("convert", "./deck_convert.sh")):
+                             ("referee", "DeckLab/referee.sh"), ("convert", "./deck_convert.sh"),
+                             ("mcp", "python3 tools/shandalar_mcp.py")):
             self.assertIn(f'{verb}) exec {target} "$@" ;;', repo_door)
         self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', repo_door)
 

@@ -17355,6 +17355,84 @@ hold the launchers and the verbs.
 Gate: 528 scripts, **8,047/8,047 tests, 364,778 asserts**, exit 0 in
 253 s over 6 shards; Python 338, exit 0.
 
+## 2026-09-27 — The MCP server (0.40.32)
+
+Phase D, the last of the pass that makes the tools usable by a program:
+every tool on one pipe, in the protocol a program's client already
+speaks, so it can find them, read what each takes, and use them — build
+a deck, check it, measure it, play it against the computer, against a
+person at a hosted table, or against itself.
+
+**One server, twenty-one tools.** `tools/shandalar_mcp.py` — at the
+door `./shandalar.sh mcp`, in a release `python3 tools/shandalar_mcp.py`
+— speaks the Model Context Protocol over stdio: JSON-RPC, one message
+a line, the standard library only, so the Python that runs the other
+tools runs this one. `tools/list` is the catalogue: `status`,
+`contract`, `manual`, `packs`, `cards`, `list_decks`, `read_deck`,
+`write_deck`, `check_deck`, `convert_deck`, `autodeck`, `lab`,
+`lab_resume`, `read_run`, `lab_next`, `referee_start`, `referee_join`,
+`referee_act`, `referee_autoplay`, `referee_wait`, `referee_stop`, each
+with a description a program can act on and a schema with every
+argument typed and described, nothing unnamed accepted — an argument
+the tool does not take is refused with the spellings meant, a missing
+one names its flag. The contract page and every `--help` are resources
+(`shandalar://contract`, `shandalar://manual/VERB`), and `initialize`
+carries the session in order as `instructions`. Every tool is thin:
+the door runs as a subprocess, its JSON is the answer's
+`structuredContent`, its refusal envelope comes back untouched as an
+`isError` answer — the server never invents a result the tools did not
+produce.
+
+**What the server adds.** The things a subprocess cannot be. A deck is
+written from rows (`4 Lightning Bolt`, or `{count, name}`) and checked
+by the engine as it is written, so the answer already says `playable`
+and names the unknown cards with their neighbours. A Lab run's
+`run.json` and `results.json` come back trimmed to what a program
+reads (`read_run`), and `lab_next` runs the `next.argv` a run left
+behind. And the game is a session: `referee_start` (or `referee_join`,
+at a hosted table) opens the referee's pipe and returns `hello` with
+the first decision; `referee_act` answers one decision and returns the
+next — nothing is played between calls, so a program may think as long
+as it likes; the decision's board is rendered `brief` (the seat's
+players, hand with what is castable, stack and journal — a tenth of
+the wire's view), `full` or `options` on request; `"default"` answers
+with the referee's own dumb pilot (keep, a land, the first castable
+spell, attack with everything, block nothing, pass), and
+`referee_autoplay` runs that pilot to the `result` or to a limit — a
+program can skip to the part it cares about and still reach an end.
+The pilot keeps strikes: a decision the referee refused an answer to
+gets the quiet answer, three refusals concede, so a spell the engine
+will not allow can never loop a game to its twenty-refusal end.
+`referee_stop` closes the pipe (the referee concedes at EOF);
+`referee_wait` blocks until the other seat has moved. Whatever a tool
+writes lies under the checkout or the workspace (`workspace/` beside
+the door, ignored by git) — a path outside is refused, `kind: path`.
+The referee's stderr lands in `workspace/games/GAME.stderr`; stdout is
+the protocol's alone.
+
+**How it is pinned.** `tools/test_shandalar_mcp.py` drives the server
+against a FAKE DOOR — a Python script that answers the verbs with
+canned JSON and plays a scripted referee — so the protocol (the
+versions, silent notifications, -32700/-32600/-32601/-32602, a batch),
+the self-describing catalogue, the quoted refusals, the suggestions,
+the deck files, the path rule for seven tools, the Lab's line and its
+run, the game's lifecycle, the pilot and its strikes, the brief view
+and the pins of the door, the release and the pages all run without an
+engine, in the Python gate before Godot is even downloaded. Its
+`LiveTest`, behind `SHANDALAR_MCP_LIVE=1`, runs the real door: packs,
+cards and a checked deck, a deck written with a bogus card and named
+as such, the Lab's and the AutoDeck's plans, a duel from `keep`
+through one refused attack and the pilot to a concluded `result` —
+and `tests/tools/test_mcp_2026_09_27.gd` runs that live half inside
+the gate with the gate's own engine as the door's Godot (through
+`env`: `OS.execute` with an output array goes through a shell that
+expands `$`), reads the printed catalogue as a program would, and
+holds the doors and the pages. `test_shandalar_sh.py` and
+`test_package_release.py` hold the verb in the three doors.
+
+Gate: 529 scripts, **8,050/8,050 tests, 365,714 asserts**, exit 0 in
+267 s over 6 shards; Python 377, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -2048,7 +2048,7 @@ pool does not know, the pack that would supply it and the nearest
 real names.
 
 `./shandalar.sh` at the project root is the one door to all of it:
-`lab`, `autodeck`, `check`, `packs`, `cards`, `referee`, `convert`,
+`lab`, `autodeck`, `check`, `packs`, `cards`, `referee`, `convert`, `mcp`,
 each `exec`ing the tool with the rest of the line, `--help` the list; a verb it does
 not know is refused as one JSON line, exit 2, the way every tool
 refuses. [AGENTS.md](../AGENTS.md) is the contract.
@@ -2085,15 +2085,48 @@ through the game's door (`referee.sh` is that line). [AGENTS.md](../AGENTS.md)
 has every line and every answer; `tests/tools/test_referee_2026_09_27.gd`
 pins them, the coverage pilot in the agent's seat.
 
+## The MCP server — every tool for a program that speaks the protocol (2026-09-27)
+
+The door's verbs are still command lines: a program that wants to build
+a deck, measure it and play it has to spawn processes, parse stdout and
+keep the referee's pipe open itself. `tools/shandalar_mcp.py` does that
+once, for everyone: ONE MCP SERVER on stdio (`./shandalar.sh mcp`, in a
+release `python3 tools/shandalar_mcp.py`) whose `tools/list` is the
+catalogue an MCP client reads before it acts — `status`, `contract`,
+`manual`, `packs`, `cards`, `check_deck`, `list_decks`, `read_deck`,
+`write_deck`, `convert_deck`, `autodeck`, `lab`, `lab_resume`,
+`read_run`, `lab_next`, `referee_start`, `referee_join`, `referee_act`,
+`referee_autoplay`, `referee_wait`, `referee_stop` — each with a
+description a program can act on and a schema with every argument
+described. Dependency-free: the Python that runs the other tools runs
+this one. Every tool is thin: the door runs as a subprocess, its JSON is
+the answer's `structuredContent`, its refusal envelope comes back as an
+`isError` answer untouched. What the server adds is what a process
+cannot: **the game as a session** (`referee_start` opens the pipe,
+`referee_act` answers one decision and returns the next — nothing is
+played between calls, so a client may think as long as it likes; the
+decision's board rendered `brief`, a tenth of the wire's view; the
+referee's own dumb pilot as `"default"` and `referee_autoplay`, so a
+client can skip to the part it cares about and still reach a
+`result`), the deck file written from rows and checked by the engine
+as it is written, and the path rule (whatever a tool writes lies under
+the checkout or the workspace, `workspace/` beside the door by
+default). [AGENTS.md](../AGENTS.md) has the tool list and the session;
+`tools/test_shandalar_mcp.py` pins it against a fake door (no engine)
+and, behind `SHANDALAR_MCP_LIVE=1`, against the real one —
+`tests/tools/test_mcp_2026_09_27.gd` runs that live half inside the
+gate.
+
 ## Files
 
 | File | Role |
 |---|---|
-| `../shandalar.sh` | the one door: `lab`, `autodeck`, `check`, `packs`, `cards`, `referee`, `convert` |
+| `../shandalar.sh` | the one door: `lab`, `autodeck`, `check`, `packs`, `cards`, `referee`, `convert`, `mcp` |
 | `deck_lab.sh` | entry point (wraps the headless Godot invocation) |
 | `auto_deck_cli.sh` / `DeckLab/auto_deck_cli.gd` | the AutoDeck CLI: the deck builder's AutoDeck by the thousand, with a manifest — the field this Lab plays (see above) |
 | `lab_query.sh` / `DeckLab/lab_query.gd` | the Lab Query: `check`, `packs`, `cards` as one JSON document each (see above) |
 | `referee.sh` / `DeckLab/referee.gd` | the referee: one duel through a pipe, a program in a seat, JSON lines both ways (see above) |
+| `tools/shandalar_mcp.py` | the MCP server: every tool above for a program that speaks the Model Context Protocol, the referee's pipe kept as a game across calls (see above) |
 | `deck_convert.sh` / `tools/deck_convert.gd` | format converter (.deck/.dec ↔ .dck) |
 | `DeckLab/simulate.gd` | the tool: CLI parsing, thread fan-out, reporting |
 | `DeckLab/sim_stats.gd` | Wilson intervals, matchup summaries (unit-tested) |
@@ -2112,4 +2145,6 @@ pins them, the coverage pilot in the agent's seat.
 | `tests/tools/test_lab_records_and_queries_2026_09_27.gd` | `--record` and its cap, `run.json` and `next` for a duel, a tournament, a sweep and the AutoDeck, the Lab Query's three answers and its refusals, the one door |
 | `tests/tools/test_lab_resume_2026_09_27.gd` | `--resume`: the checkpoint, the line read back from `run.json`, the games kept and the games played, what is refused beside it |
 | `tests/tools/test_referee_2026_09_27.gd` | the referee: hello, decision, refused and result lines, the options per mode, a refused answer asked again, the pipe's ends (EOF, twenty refusals, the turn limit, the decision cap), self-play, a joined table through the client's face, the doors |
+| `tests/tools/test_mcp_2026_09_27.gd` | the MCP server against the real engine: `tools/test_shandalar_mcp.py`'s live half (a deck written and checked, a duel to its end through the pilot, the Lab's plan), and the pins of the door, the release and the pages |
+| `tools/test_shandalar_mcp.py` | the MCP server against a fake door: the protocol, the self-describing catalogue, the quoted refusals, the deck files, the path rule, the game session, the pilot, the pins |
 | `tools/test_auto_deck_cli_sh.py` | the AutoDeck CLI's shell wrapper: `-V` without an engine, exit 3 with no Godot, the exec line |

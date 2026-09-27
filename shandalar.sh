@@ -10,6 +10,8 @@
 #   ./shandalar.sh referee ARGS...    one duel through a pipe, a program
 #                                     in a seat            (DeckLab/referee.sh)
 #   ./shandalar.sh convert IN OUT     .deck <-> .dck      (deck_convert.sh)
+#   ./shandalar.sh mcp                the tools as an MCP server on stdio
+#                                                          (tools/shandalar_mcp.py)
 #   ./shandalar.sh VERB --help        that tool's own manual
 #   ./shandalar.sh -h | --help        this list, on stdout
 #   ./shandalar.sh -V | --version     the one version string
@@ -23,7 +25,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 usage() {
-	sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 verb="${1:-}"
@@ -39,11 +41,12 @@ case "$verb" in
 	query) exec DeckLab/lab_query.sh "$@" ;;
 	referee) exec DeckLab/referee.sh "$@" ;;
 	convert) exec ./deck_convert.sh "$@" ;;
+	mcp) exec python3 tools/shandalar_mcp.py "$@" ;;
 esac
 # The verb goes into the line with the characters JSON would need
 # escaped removed, so the line is always one valid document.
 safe="$(printf '%s' "$verb" | tr -d '"\\\n\r\t')"
-printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, convert","verb":"%s"}}\n' \
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, convert, mcp","verb":"%s"}}\n' \
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2
 exit 2

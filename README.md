@@ -113,9 +113,10 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The resume and the referee](docs/ROADMAP.md#2026-09-27--the-resume-and-the-referee-04031)):
-**8,047 GUT tests / 364,778 assertions**, plus **338 Python tests**
-(one platform-specific skip). The same gate runs on GitHub Actions for
+Latest local verification ([The MCP server](docs/ROADMAP.md#2026-09-27--the-mcp-server-04032)):
+**8,050 GUT tests / 365,714 assertions**, plus **377 Python tests**
+(the MCP server's five live tests play inside the GUT gate; one
+platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
 ## Art and skins
@@ -199,7 +200,11 @@ deck but for the named cards, for the Lab to find a better card for a slot.
 The [DeckLab manual](DeckLab/README.md) has examples and all options.
 Driving either tool from a script or an agent — the exit codes, the
 refusal as one line of JSON, `--dry-run`'s plan, every output file and
-its keys — is [AGENTS.md](AGENTS.md).
+its keys — is [AGENTS.md](AGENTS.md). `./shandalar.sh` is the one door to
+all of it, and `./shandalar.sh mcp` serves every tool — the packs, the
+deck files, the AutoDeck CLI, the Lab and a duel played decision by
+decision through the referee — over the Model Context Protocol, so a
+program's client finds them by name and reads what each takes.
 
 ## Post-0.20.0 roadmap
 

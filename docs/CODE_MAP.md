@@ -536,8 +536,83 @@ run finishes from its checkpoint, and a program sits in a seat.
   played to a result and conceded at EOF, a table that never opens, the
   doors and the docs as text).
 
+## The MCP server (2026-09-27)
+
+Phase D of the tools-for-a-program pass (0.40.32): every tool on one
+pipe, for a program that speaks the Model Context Protocol.
+
+- `tools/shandalar_mcp.py`: THE MCP SERVER — JSON-RPC 2.0 over stdio,
+  one message a line, stdlib only (the Python that runs the other tools
+  runs this one). `initialize` echoes a version of `PROTOCOL_VERSIONS`
+  (the latest to an unknown one), `capabilities{tools, resources}`,
+  `serverInfo{name: shandalar, version}` (the door's `-V`) and
+  `INSTRUCTIONS` (the session in order); `ping`, `tools/list`,
+  `tools/call` (`content[text]` + `structuredContent`, `isError` for a
+  refusal), `resources/list`/`resources/read` (`shandalar://contract`
+  = AGENTS.md, `shandalar://manual/VERB` = the door's `--help`);
+  notifications are silent, a batch is answered as a batch, -32700 /
+  -32600 / -32601 / -32602 (with `data.suggestions`) as the protocol
+  says. `Server(door, workspace)`: `run` (the door as a subprocess, cwd
+  the checkout, stdin closed), `quote` (the door's own envelope raised
+  as `ToolError`, or one synthesized with `kind` `godot`/`run` and the
+  stderr tail), `inside` (THE PATH RULE — a path a tool writes lies
+  under the checkout or the workspace, else `kind: path`),
+  `_catalogue` (the twenty-one tools, each `{name, description,
+  inputSchema}` with every property typed and described,
+  `additionalProperties: false`, `required`), `call` (an argument the
+  tool does not take → `suggestions`; a required one missing → `flag`).
+  The tools: `status`, `contract`, `manual`, `packs`, `cards`,
+  `list_decks`, `read_deck`, `write_deck` (`parse_deck` /
+  `deck_rows` / `deck_text`: rows as strings or `{count, name}`, the
+  file written then `check`ed by the engine, `playable` in the answer),
+  `check_deck`, `convert_deck`, `autodeck` and `lab` (`lab_argv`:
+  structured flags or a raw `argv`, `--no-elo` unless `rated`, `--quiet`
+  last; `run_lab`: exit 4 → `warning`; `dry_run` → the plan),
+  `lab_resume`, `read_run` (`run.json` + `results.json` trimmed to
+  `RESULT_LIMIT` with `*_total`/`truncated`, the files), `lab_next`
+  (runs `run.json`'s `next.argv` or says why not), and THE GAME AS A
+  SESSION — `Game` (Popen of `door referee …`, a stdout pump thread
+  into a queue, stderr to `workspace/games/GAME.stderr`, `send`,
+  `advance` collecting `refused` lines and counting decisions by `n`,
+  `memory.strikes` per decision, `close`, `summary`), `referee_start`
+  / `referee_join` (`open_game` → `hello` + the first decision),
+  `referee_act` (one action — or `"default"`, the dumb pilot
+  `default_answer`: keep, a land, the first castable spell once per
+  step, attack with everything, block nothing, pass; a strike after a
+  refusal makes it quiet, three concede — then the next decision), `referee_autoplay` (the pilot to the `result` or
+  `limit` decisions, every `refused` returned), `referee_wait`,
+  `referee_stop` (EOF, the referee concedes); `brief_view` (the LAN
+  view cut to the seat's board, hand, stack and journal — a tenth of the
+  wire; `view: full` / `options`), `render_decision`. `main`: `--door`,
+  `--workspace` (default `workspace/` beside the door), `--catalogue`
+  (the tools and resources as one JSON document, no protocol), `-V`;
+  `find_door` looks beside `tools/` (checkout and release alike).
+- `shandalar.sh` (verb `mcp`), `build_release.sh` and
+  `tools/package_release.py` (the release door's verb; `TOOLS` ships the
+  server at `tools/shandalar_mcp.py`); `.gitignore` (`workspace/`).
+  `tools/test_shandalar_sh.py` and `tools/test_package_release.py` pin
+  the verb.
+- `AGENTS.md`: *The MCP server* — the tools, the session, the rules the
+  server keeps. `DeckLab/README.md`: *The MCP server*, the files table.
+- Tests: `tools/test_shandalar_mcp.py` (the server against a FAKE DOOR
+  — a Python script answering the verbs with canned JSON and a scripted
+  referee, so no engine: the protocol, the self-describing catalogue,
+  the quoted refusals, the deck files, the path rule, the game session,
+  the pilot and its strikes, the brief view, the door/release/page
+  pins; `LiveTest` behind `SHANDALAR_MCP_LIVE=1` runs the real door: a
+  deck written and checked, the Lab's plan, a duel to its `result`);
+  `tests/tools/test_mcp_2026_09_27.gd` (that live half inside the gate
+  with this engine as the door's Godot — through `env`, since
+  `OS.execute` with an output array runs through a shell that expands
+  `$`; the printed catalogue read as a program would; the doors and the
+  pages).
+
 ## Release package files
 
+- `docs/releases/0.40.32.md`: the MCP server — `tools/shandalar_mcp.py`
+  behind the door's `mcp` verb: every tool on one pipe for a program
+  that speaks the Model Context Protocol, the referee's duel kept as a
+  session across calls, a pilot for the decisions a program skips.
 - `docs/releases/0.40.31.md`: the resume and the referee — `--resume
   OUT` for an interrupted Lab run; `DeckLab/referee.gd` behind the
   game's `--referee`, `referee.sh` in a release, the door's `referee`
@@ -3595,6 +3670,19 @@ shandalar/
 │   │                          verb is one JSON line and exit 2, --help
 │   │                          and -V without an engine; the query
 │   │                          wrapper's -V, exit 3, exec line, no banner
+│   ├── shandalar_mcp.py     THE MCP SERVER (2026-09-27): every tool for a
+│   │                          program that speaks the Model Context
+│   │                          Protocol — JSON-RPC over stdio, stdlib
+│   │                          only; the door as a subprocess, its JSON
+│   │                          quoted, its refusals as isError; the
+│   │                          referee's pipe kept as a game across calls,
+│   │                          a brief view, a dumb pilot; --catalogue
+│   ├── test_shandalar_mcp.py  unittest for the MCP server (2026-09-27):
+│   │                          the protocol, the self-describing
+│   │                          catalogue, the refusals, the deck files,
+│   │                          the path rule and the game session against
+│   │                          a FAKE door (no engine); LiveTest behind
+│   │                          SHANDALAR_MCP_LIVE=1 runs the real one
 │   ├── test_auto_deck_cli_sh.py  unittest for DeckLab/auto_deck_cli.sh
 │   │                          (2026-09-25): -V answered without an engine,
 │   │                          no artwork in stdout, exit 3 with no Godot,

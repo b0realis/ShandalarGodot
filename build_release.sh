@@ -638,6 +638,8 @@ REFEREE
 #   ./shandalar.sh referee ARGS...    one duel through a pipe, a program
 #                                     in a seat            (referee.sh)
 #   ./shandalar.sh play ARGS...       the game itself     (run.sh)
+#   ./shandalar.sh mcp                the tools as an MCP server on stdio
+#                                                          (tools/shandalar_mcp.py)
 #   ./shandalar.sh VERB --help        that tool's own manual
 #   ./shandalar.sh -h | --help        this list, on stdout;  -V the version
 #
@@ -649,7 +651,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 verb="${1:-}"
 case "$verb" in
-	"" | -h | --help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	"" | -h | --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-V | --version) echo "shandalar.sh — Shandalar @VERSION@"; exit 0 ;;
 esac
 shift
@@ -660,9 +662,10 @@ case "$verb" in
 	query) exec ./lab_query.sh "$@" ;;
 	referee) exec ./referee.sh "$@" ;;
 	play) exec ./run.sh "$@" ;;
+	mcp) exec python3 tools/shandalar_mcp.py "$@" ;;
 esac
 safe="$(printf '%s' "$verb" | tr -d '"\\\n\r\t')"
-printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, play","verb":"%s"}}\n' \
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, play, mcp","verb":"%s"}}\n' \
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2
 exit 2

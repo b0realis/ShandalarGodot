@@ -30,3 +30,8 @@ export_presets.cfg
 # a scan of `git status` on every commit for weeks. Untracked 2026-09-09.
 __pycache__/
 *.pyc
+
+# The MCP server's workspace (tools/shandalar_mcp.py, 2026-09-27): the
+# decks and runs a client makes through the server go here by default
+# — a client's own work, never the repository's.
+workspace/
