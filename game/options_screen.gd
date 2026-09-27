@@ -25,6 +25,8 @@ const PANEL_MARGIN := 24.0
 ## The `Touch controls` row's items, in the order they are listed: the
 ## index the OptionButton reports IS the index into this.
 const TOUCH_MODES: Array[String] = ["auto", "on", "off"]
+## The `Pad pointer` row's items, the same way.
+const PAD_MODES: Array[String] = ["auto", "on", "off"]
 ## The `Controls:` rows' two slots, by action: `action -> [key button,
 ## pad button]`, so a rebind can redraw every row (a key that moved off
 ## another action changes two of them).
@@ -68,6 +70,10 @@ func _ready() -> void:
 	# margin, so the panel is exactly as tall as it can be and no taller.
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# THE LIST WALKS (2026-09-27): a focus that moves down the rows on
+	# the arrows or a D-pad brings the panel along, so a row below the
+	# fold is reached without a wheel.
+	scroll.follow_focus = true
 	scroll.add_child(content)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var panel := UiChrome.panel_around(scroll, 18.0)
@@ -139,6 +145,27 @@ func _ready() -> void:
 	back_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	back_row.add_child(back)
 	content.add_child(back_row)
+	# The keyboard and the D-pad start on the first row (2026-09-27, the
+	# Steam Deck release): a screen with nothing focused has nothing for
+	# an arrow to move from. The mouse and the pad pointer are untouched.
+	_focus_first(content)
+
+
+## The first thing on the panel that takes the keyboard.
+static func _focus_first(root: Node) -> void:
+	for node in _focusables(root):
+		(node as Control).grab_focus()
+		return
+
+
+static func _focusables(node: Node) -> Array[Control]:
+	var out: Array[Control] = []
+	if node is Control and (node as Control).focus_mode == Control.FOCUS_ALL \
+			and (node as Control).is_visible_in_tree():
+		out.append(node as Control)
+	for child in node.get_children():
+		out.append_array(_focusables(child))
+	return out
 
 
 ## DISPLAY — ONE SWITCH, and it is `[QoL]` outright. See [GameDisplay]
@@ -177,6 +204,23 @@ func _add_display_section(content: VBoxContainer) -> void:
 	card_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(card_hint)
 
+	# `[QoL]` POWER SAVER (2026-09-27, the Steam Deck release) — the
+	# engine's `low_processor_usage_mode`, see [GameDisplay]. A view of
+	# the stored key like the switches above; the default it opens on is
+	# the desk's (off) or the handheld launcher's (on), and ticking it
+	# writes the player's word over either.
+	var power := CheckButton.new()
+	power.name = "PowerSaver"
+	power.text = "Power saver"
+	power.tooltip_text = "Redraw only when something on the screen " \
+		+ "changes and rest between frames - for a handheld's battery. " \
+		+ "Takes effect at once and is remembered for the next run."
+	power.button_pressed = Settings.power_saver()
+	power.toggled.connect(func(on: bool) -> void:
+		GameDisplay.set_power_saver(on))
+	UiChrome.shadowed_button(power)
+	content.add_child(power)
+
 	# `[QoL]` TOUCH CONTROLS — the finger-as-mouse layer (`TouchControls`,
 	# `game/input/touch_controls.gd`) for the web export on a tablet or a
 	# phone and for touch laptops. Three states, one stored key, and the
@@ -202,6 +246,30 @@ func _add_display_section(content: VBoxContainer) -> void:
 	UiChrome.shadowed_button(touch)
 	touch_row.add_child(touch)
 	content.add_child(touch_row)
+
+	# `[QoL]` PAD POINTER (2026-09-27) — the controller-as-mouse layer
+	# (`PadControls`, `game/input/pad_controls.gd`), the touch layer's
+	# twin for a Steam Deck in its gamepad layout or a pad on a desk.
+	# Three states, one stored key, the row a VIEW of it.
+	var pad_row := HBoxContainer.new()
+	pad_row.add_theme_constant_override("separation", 12)
+	pad_row.add_child(UiChrome.body_label("Pad pointer:"))
+	var pad := OptionButton.new()
+	pad.name = "PadPointer"
+	pad.add_item("Auto", 0)
+	pad.add_item("On", 1)
+	pad.add_item("Off", 2)
+	pad.tooltip_text = "Play with a controller: the left stick moves a " \
+		+ "pointer, the D-pad hops it between cards and buttons, A " \
+		+ "clicks, LB opens the right-click menu, the right stick " \
+		+ "scrolls. Auto turns it on when a controller is present; On " \
+		+ "forces it; Off leaves the pad to the duel's own buttons."
+	pad.selected = PAD_MODES.find(Settings.pad_pointer())
+	pad.item_selected.connect(func(index: int) -> void:
+		PadControls.choose(PAD_MODES[index]))
+	UiChrome.shadowed_button(pad)
+	pad_row.add_child(pad)
+	content.add_child(pad_row)
 
 
 ## `[QoL]` CONTROLS — the duel's keys as actions ([Controls],

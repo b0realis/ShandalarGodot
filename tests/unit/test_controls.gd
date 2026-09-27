@@ -74,7 +74,7 @@ static func _on_disk() -> Variant:
 
 func test_the_project_declares_every_action_with_the_1997_keys() -> void:
 	var expected := {
-		"duel_space": ["Space", "A"],
+		"duel_space": ["Space", "RB"],
 		"duel_done": ["Enter", "X"],
 		"duel_cancel": ["Escape", "B"],
 		"duel_pause": ["Q", "Start"],
@@ -113,9 +113,11 @@ func test_done_also_answers_to_the_keypads_enter() -> void:
 
 func test_the_defaults_come_from_project_godot_not_a_second_table() -> void:
 	var space := Controls.defaults("duel_space")
-	assert_eq(space.size(), 2, "Space and A")
+	assert_eq(space.size(), 2, "Space and RB")
 	assert_true(space[0] is InputEventKey and space[0].keycode == KEY_SPACE)
-	assert_true(space[1] is InputEventJoypadButton and space[1].button_index == JOY_BUTTON_A)
+	assert_true(space[1] is InputEventJoypadButton
+		and space[1].button_index == JOY_BUTTON_RIGHT_SHOULDER,
+		"RB since 2026-09-27: A is the pad pointer's click")
 	assert_eq(Controls.defaults("no_such_action").size(), 0, "an unknown action has none")
 	var setting: Variant = ProjectSettings.get_setting("input/duel_space", null)
 	assert_true(setting is Dictionary, "the project setting is the source")
@@ -159,21 +161,25 @@ func test_a_release_or_an_echo_presses_nothing() -> void:
 	var echo := _key(KEY_SPACE)
 	echo.echo = true
 	assert_false(Controls.pressed(echo, "duel_space"), "an echo — holding Space is one press")
-	var pad_up := _pad(JOY_BUTTON_A)
+	var pad_up := _pad(JOY_BUTTON_RIGHT_SHOULDER)
 	pad_up.pressed = false
 	assert_false(Controls.pressed(pad_up, "duel_space"), "a pad release")
 
 
 func test_the_pad_buttons_press_the_duels_actions() -> void:
-	assert_true(Controls.pressed(_pad(JOY_BUTTON_A), "duel_space"), "A is the one button")
+	assert_true(Controls.pressed(_pad(JOY_BUTTON_RIGHT_SHOULDER), "duel_space"),
+		"RB is the one button — the pad's advance")
 	assert_true(Controls.pressed(_pad(JOY_BUTTON_X), "duel_done"))
 	assert_true(Controls.pressed(_pad(JOY_BUTTON_B), "duel_cancel"))
 	assert_true(Controls.pressed(_pad(JOY_BUTTON_START), "duel_pause"))
 	assert_true(Controls.pressed(_pad(JOY_BUTTON_Y), "duel_hand"))
 	assert_true(Controls.pressed(_pad(JOY_BUTTON_BACK), "duel_log"))
-	assert_false(Controls.pressed(_pad(JOY_BUTTON_A), "duel_done"), "A is not X")
-	assert_false(Controls.pressed(_pad(JOY_BUTTON_RIGHT_SHOULDER), "duel_space"),
-		"a shoulder is nothing by default")
+	assert_false(Controls.pressed(_pad(JOY_BUTTON_RIGHT_SHOULDER), "duel_done"), "RB is not X")
+	for action in Controls.names():
+		assert_false(Controls.pressed(_pad(JOY_BUTTON_A), action),
+			"A is the pad pointer's click, no duel action's by default (%s)" % action)
+		assert_false(Controls.pressed(_pad(JOY_BUTTON_LEFT_SHOULDER), action),
+			"LB is the pad pointer's right button (%s)" % action)
 
 
 func test_choice_index_is_the_digit_less_one() -> void:
@@ -191,10 +197,10 @@ func test_choice_index_is_the_digit_less_one() -> void:
 func test_a_key_replaces_the_key_and_keeps_the_pad() -> void:
 	assert_true(Controls.bind("duel_space", _key(KEY_K)))
 	assert_eq(Controls.key_text("duel_space"), "K")
-	assert_eq(Controls.pad_text("duel_space"), "A", "the pad slot is untouched")
+	assert_eq(Controls.pad_text("duel_space"), "RB", "the pad slot is untouched")
 	assert_true(Controls.pressed(_key(KEY_K), "duel_space"))
 	assert_false(Controls.pressed(_key(KEY_SPACE), "duel_space"), "Space is gone")
-	assert_true(Controls.pressed(_pad(JOY_BUTTON_A), "duel_space"), "A still is")
+	assert_true(Controls.pressed(_pad(JOY_BUTTON_RIGHT_SHOULDER), "duel_space"), "RB still is")
 	assert_false(Controls.is_default("duel_space"))
 
 
@@ -215,8 +221,8 @@ func test_a_binding_takes_the_same_event_off_any_other_action() -> void:
 	assert_eq(Controls.pad_text("duel_hand"), "Y", "but the hand keeps its Y")
 	assert_true(Controls.pressed(_key(KEY_H), "duel_mute"))
 	assert_false(Controls.pressed(_key(KEY_H), "duel_hand"), "one press, one action")
-	assert_true(Controls.bind("duel_log", _pad(JOY_BUTTON_A)))
-	assert_eq(Controls.pad_text("duel_space"), Controls.UNBOUND, "A left the one button")
+	assert_true(Controls.bind("duel_log", _pad(JOY_BUTTON_RIGHT_SHOULDER)))
+	assert_eq(Controls.pad_text("duel_space"), Controls.UNBOUND, "RB left the one button")
 	assert_eq(Controls.key_text("duel_space"), "Space", "which keeps its Space")
 
 
@@ -279,9 +285,9 @@ func test_the_file_holds_only_what_differs_from_the_defaults() -> void:
 	var stored: Dictionary = Settings.get_value(Controls.SETTINGS_KEY, {})
 	assert_eq(stored, {"duel_mute": ["key:N"]}, "one action, in words")
 	assert_eq(_on_disk(), {"duel_mute": ["key:N"]}, "on disk at once")
-	assert_true(Controls.bind("duel_space", _pad(JOY_BUTTON_RIGHT_SHOULDER)))
+	assert_true(Controls.bind("duel_space", _pad(JOY_BUTTON_RIGHT_STICK)))
 	stored = Settings.get_value(Controls.SETTINGS_KEY, {})
-	assert_eq(stored, {"duel_mute": ["key:N"], "duel_space": ["key:Space", "pad:RB"]},
+	assert_eq(stored, {"duel_mute": ["key:N"], "duel_space": ["key:Space", "pad:R3"]},
 		"both slots of a changed action, in the map's order")
 
 
@@ -304,7 +310,7 @@ func test_reset_is_the_defaults_again_and_forgets() -> void:
 		assert_true(Controls.is_default(action), "%s is back" % action)
 	assert_false(Settings.has_value(Controls.SETTINGS_KEY))
 	assert_true(Controls.pressed(_key(KEY_H), "duel_hand"))
-	assert_true(Controls.pressed(_pad(JOY_BUTTON_A), "duel_space"))
+	assert_true(Controls.pressed(_pad(JOY_BUTTON_RIGHT_SHOULDER), "duel_space"))
 
 
 func test_apply_lays_a_stored_file_over_the_defaults() -> void:
@@ -370,7 +376,7 @@ func test_the_players_words_for_the_bindings() -> void:
 	assert_eq(Controls.describe(_key(KEY_T, true)), "Ctrl+T")
 	assert_eq(Controls.describe(_key(KEY_KP_ENTER)), "Kp Enter")
 	assert_eq(Controls.describe(_pad(JOY_BUTTON_GUIDE)), "Guide")
-	assert_eq(Controls.text("duel_space"), "Space or A", "both slots for a sentence")
+	assert_eq(Controls.text("duel_space"), "Space or RB", "both slots for a sentence")
 	assert_eq(Controls.text("duel_mute"), "M", "one slot alone")
 	assert_eq(Controls.hint("duel_space"), "  [Space]", "the tooltip's hint is the key")
 	assert_eq(Controls.hint("duel_cancel"), "  [Escape]")
@@ -390,13 +396,13 @@ func test_the_help_page_reads_the_live_bindings() -> void:
 	var before := _keys_handy()
 	assert_true(before.begins_with("Enter: Done · Escape: Cancel · Space: press the sole available action button."),
 		"the 1997 keys, as the page always said: %s" % before)
-	assert_string_contains(before, "On a controller A is that button, X is Done, B is Cancel and Start opens the pause menu.")
+	assert_string_contains(before, "On a controller RB is that button, X is Done, B is Cancel and Start opens the pause menu.")
 	assert_string_contains(before, "Options, Controls")
 	assert_true(Controls.bind("duel_done", _key(KEY_D)))
-	assert_true(Controls.bind("duel_space", _pad(JOY_BUTTON_RIGHT_SHOULDER)))
+	assert_true(Controls.bind("duel_space", _pad(JOY_BUTTON_RIGHT_STICK)))
 	var after := _keys_handy()
 	assert_true(after.begins_with("D: Done · Escape: Cancel · Space:"), "the new key: %s" % after)
-	assert_string_contains(after, "On a controller RB is that button")
+	assert_string_contains(after, "On a controller R3 is that button")
 
 
 ## The `Keep these keys handy` text of the Dueling Table page.

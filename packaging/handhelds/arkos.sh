@@ -97,6 +97,9 @@ CONFDIR="$GAMEDIR/conf"
 mkdir -p "$CONFDIR" || sg_fail 'The game folder must be writable for saves.'
 chmod +x "$GAMEDIR/Shandalar.arm64" || sg_fail 'Cannot make the game executable.'
 export SDL_GAMECONTROLLERCONFIG="${sdl_controllerconfig:-}"
+# The device's name: settings never written open on a handheld's defaults
+# (full screen, the card reader, the power saver); see game/settings.gd.
+export SHANDALAR_HANDHELD=arkos
 sg_width=${DISPLAY_WIDTH:-720}
 sg_height=${DISPLAY_HEIGHT:-720}
 [[ "$sg_width" =~ ^[1-9][0-9]{2,3}$ && "$sg_height" =~ ^[1-9][0-9]{2,3}$ ]] ||

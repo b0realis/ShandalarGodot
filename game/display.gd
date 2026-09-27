@@ -29,10 +29,31 @@ extends RefCounted
 ## a second monitor behave; `EXCLUSIVE_FULLSCREEN` buys nothing for a 2D
 ## card game drawn through the compatibility renderer and costs a mode
 ## switch on the way in and out.
+##
+## THE LAUNCHER'S WORD (2026-09-27). A handheld launcher starts the
+## engine with `--fullscreen` (`packaging/handhelds/arkos.sh`), and
+## until this date the boot pass here put the window straight back —
+## the key was unwritten, unwritten read `false`, and `false` is a
+## window. Now an unwritten key defers to the flag: the window the
+## engine was asked to open is the window it keeps. A WRITTEN key is
+## the player's and still wins, either way. The Steam Deck launcher does
+## not need the flag at all — it names the device ([constant
+## Settings.HANDHELD_ENV]) and the unwritten key reads `true` there.
+##
+## THE POWER SAVER lives here too (2026-09-27), because it is the other
+## thing the display does with a setting: [member OS.low_processor_usage_mode]
+## makes the engine redraw only when something changed and rest between
+## frames, which on a handheld is the difference between a duel that
+## drains the battery like a shooter and one that sips it like a book.
+## Off on a desk unless asked; on under a handheld launcher unless the
+## player says otherwise ([method Settings.power_saver]). Applied at boot
+## with the window mode, and at once from the Options row.
 
 ## The [Settings] key. `false` is the shipped window — 1280x800, resizable
 ## — which is what the game has always opened into.
 const KEY := "fullscreen"
+## The [Settings] key of the power saver.
+const POWER_KEY := "power_saver"
 
 
 ## What the stored setting asks the window to be.
@@ -46,12 +67,23 @@ static func wanted_mode() -> int:
 ## every screen that wants to be sure — and silent headless, where there
 ## is no window to set (the test suite, the soak, the Deck Lab).
 static func apply_settings() -> void:
+	apply_power_saver()
 	if DisplayServer.get_name() == "headless":
 		return
+	if not Settings.has_value(KEY) and launcher_asked_fullscreen():
+		return          # the launcher's word, until the player has one
 	var wanted := wanted_mode()
 	if DisplayServer.window_get_mode() == wanted:
 		return
 	DisplayServer.window_set_mode(wanted)
+
+
+## Whether the engine was started with `--fullscreen` (or its short
+## `-f`) — a launcher's request for the window, honoured while the
+## player has not written one of their own (class doc).
+static func launcher_asked_fullscreen() -> bool:
+	var args := OS.get_cmdline_args()
+	return args.has("--fullscreen") or args.has("-f")
 
 
 ## The switch's own setter: store, then apply. The Options screen calls
@@ -59,3 +91,18 @@ static func apply_settings() -> void:
 static func set_fullscreen(on: bool) -> void:
 	Settings.set_value(KEY, on)
 	apply_settings()
+
+
+## Put the stored power saver onto the engine's main loop. Idempotent,
+## and harmless headless: the flag only lengthens the rest between
+## frames of a loop that has nothing to draw anyway.
+static func apply_power_saver() -> void:
+	var wanted := Settings.power_saver()
+	if OS.low_processor_usage_mode != wanted:
+		OS.low_processor_usage_mode = wanted
+
+
+## The switch's own setter: store, then apply.
+static func set_power_saver(on: bool) -> void:
+	Settings.set_value(POWER_KEY, on)
+	apply_power_saver()

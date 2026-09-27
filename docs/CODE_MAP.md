@@ -628,6 +628,16 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.41.md`: the Steam Deck release — `PadControls`
+  (`game/input/pad_controls.gd`, autoload) types the mouse for a
+  controller (left stick pointer, D-pad hop, A/LB the two buttons,
+  right stick the wheel; `Options → Display → Pad pointer` auto/on/off),
+  RB is the pad's `duel_space`, the shell/Options/setup/gauntlet windows
+  start the focus ring on their first button and `ui_accept`/`ui_cancel`
+  take the pad's A and B, the launchers export `SHANDALAR_HANDHELD` for
+  handheld defaults (full screen, card reader, power saver on while
+  unwritten), the `Power saver` row (`OS.low_processor_usage_mode`), and
+  the boot respects a launcher's `--fullscreen`.
 - `docs/releases/0.40.40.md`: Berserk is removal on their attacker —
   with their blocks in, `AiPlayer._berserk_their_attacker` prices the
   end-step doom against what the doubled, trampling body lands on the
@@ -877,6 +887,21 @@ The same tests keep set/rarity text out of the original illustrator/P/T footer.
   with a key slot and a pad slot, each a `Press a key` popup, and `Reset controls`.
 - `tests/unit/test_controls.gd`, `tests/ui/test_options_controls.gd`, and two pad
   tests in `tests/ui/test_duel_pause.gd`; none needs the skin.
+
+## The pad layer and the handheld defaults (2026-09-27)
+
+- `game/input/pad_controls.gd` (autoload `PadControls`): a controller becomes
+  the mouse — left stick pointer, D-pad hop, A/LB the two buttons, right stick
+  the wheel; `Settings.pad_pointer()` auto/on/off, the Options row a view of it.
+  RB is `duel_space`'s pad default; `ui_accept`/`ui_cancel` carry A and B.
+- `game/settings.gd`: `handheld()` (the launchers' `SHANDALAR_HANDHELD`) and
+  `default_for` — full screen, the card reader and the power saver on while
+  unwritten. `game/display.gd`: the power saver and the launcher's `--fullscreen`.
+- `game/main.gd`, `game/options_screen.gd`, `game/setup_screen.gd`,
+  `game/duel/original_dialog.gd` (`focus_first_button`) and
+  `game/duel/gauntlet_screen.gd`: the first button takes the focus ring.
+- `tests/ui/test_pad_controls.gd`, `test_handheld_defaults.gd`, `test_menu_focus.gd`;
+  `tools/test_handheld_launchers.py` reads the device word.
 
 ## Packs + SGManalink integration (2026-09-16)
 
@@ -1497,10 +1522,13 @@ base `SET_ORDER`. Saved decks remain name-based and record required pack ids.
 - `docs/release-builds.md`: repeatable cross-platform export and packaging.
 - `packaging/handhelds/steam-deck.sh`, `arkos.sh`, `shandalar.gptk`:
   native SteamOS launcher and experimental ArkOS/WestonPack launcher with
-  scoped controller-to-mouse mapping, portable saves and owned-mount cleanup.
+  scoped controller-to-mouse mapping, portable saves and owned-mount cleanup;
+  both export `SHANDALAR_HANDHELD` (2026-09-27) for the handheld defaults.
 - `tools/test_handheld_launchers.py`: offline launcher simulations for paths,
-  arguments, controller scope, runtime failure, cleanup and saved profiles.
-- `docs/handhelds.md`: handheld install, controls and hardware-validation limits.
+  arguments, controller scope, runtime failure, cleanup, saved profiles and
+  the device word.
+- `docs/handhelds.md`: handheld install, the handheld defaults, the power
+  saver, the controller pointer, controls and hardware-validation limits.
 
 The release soak's `HumanClicker._float_mana_for` skips the mana planner's
 null-source entries (mana already floating), as `_tick_paying` already did.
@@ -5380,7 +5408,8 @@ shandalar/
 │    moving the key off the other action with both rows saying so, one
 │    popup at a time, Cancel leaving the binding alone, Esc under the
 │    popup a key (bindable) and not a way out, and `Reset controls`
-│    the defaults again with the file forgetting;
+│    the defaults again with the file forgetting (the pad column reads
+│    RB for the one button since 2026-09-27);
 │    tests/ui/test_options_skin.gd — [QoL] the Skin rows (2026-09-08):
 │    one row per zip kind, each a status line ("Skin:" / "Card folder:")
 │    + Choose... button, the card row naming the card folder (which
@@ -5424,8 +5453,9 @@ shandalar/
 │    event a released copy from any device, the file holding only what
 │    differs and forgetting an action bound back, reset, apply over a
 │    stored file and over an old one that cannot lose the keyboard, the
-│    encode/decode round trip over eleven events, the player's words,
-│    and the Help line following a rebinding;
+│    encode/decode round trip over eleven events, the player's words
+│    (`Space or RB` since 2026-09-27 — the pad's A is the click, never a
+│    listed default), and the Help line following a rebinding;
 │    tests/ui/test_touch_controls.gd — THE TOUCH LAYER (TouchControls)
 │    driven through Input.parse_input_event, emulation and all: headless
 │    `auto` is off and processes nothing, a real mouse click is the same
@@ -5445,6 +5475,46 @@ shandalar/
 │    dragging one places it; the Options row is a view of the key and
 │    the layer follows it at once, the choice survives Settings.reload,
 │    and switching off mid-drag lets the button go;
+│    tests/ui/test_pad_controls.gd — THE PAD LAYER (PadControls,
+│    2026-09-27) driven through Input.parse_input_event on a stage above
+│    the runner's panel: `auto` follows the hardware, `off` processes
+│    nothing (and the engine's own ui_accept presses the focused button),
+│    RB/X/B/Start/Y/Back fall through to _unhandled_input while A never
+│    does, a trigger is not a stick; A is the left button at the focused
+│    button's centre (hovered first, ONE press — ui_accept never saw
+│    it, device 4097), LB the right, three quick As read false/true/
+│    false for double_click, the left stick moves the pointer (no frames
+│    at rest, no drift) and drags under a held A, the pointer is clamped
+│    to the window, the right stick spends wheel pairs that scroll a
+│    ScrollContainer, a D-pad hop lands on the nearest button ahead and
+│    hovers it, then the next, stays with nothing ahead (the runner's
+│    panel below is not "right"), takes the off-line one below, passes
+│    over a button under a Panel and over hidden/disabled ones; a real
+│    mouse motion sleeps the layer and takes the pointer, the OS pointer
+│    is untouched headless, `off` mid-hold releases both buttons and the
+│    pad's own later releases are nobody's; a PopupMenu takes the D-pad
+│    and A itself with the layer seeing none of it; the Options row is a
+│    view of the key, the choice survives Settings.reload, and
+│    joy_connection_changed re-reads `auto`;
+│    tests/ui/test_handheld_defaults.gd — THE HANDHELD'S DEFAULTS AND THE
+│    POWER SAVER (2026-09-27): without SHANDALAR_HANDHELD every default is
+│    the desktop's and nothing is written, both launchers export the
+│    word, with it the three unwritten keys read true (and only the
+│    three), any word counts and whitespace is none, a written false
+│    wins and clearing it brings the default back, the Options rows open
+│    on the defaults without writing; the Power saver row is off on a
+│    desk, applies OS.low_processor_usage_mode at once and is remembered
+│    on disk, apply_settings puts the stored (or handheld) saver on the
+│    engine headless too; the suite runs without the launcher's flag,
+│    and apply_settings reads that flag before the window and only for
+│    an unwritten key (source-pinned), ArkOS passing `--fullscreen`;
+│    tests/ui/test_menu_focus.gd — THE MENUS WALK WITH THE D-PAD
+│    (2026-09-27): the shell opens with `Magic Battle` under the focus
+│    ring, Options with its `Full screen` switch (in a scroller that
+│    follows the focus), the battle setup with its chosen mode button,
+│    the gauntlet's startup window with `Run the gauntlet` after
+│    `focus_first_button()` and nothing before it, and a dialog outside
+│    the tree asks for nothing;
 │    tests/ui/test_options_music.gd — the MUSIC SYSTEM and the PHASE CUE,
 │    both from the owner's 2026-09-03 playtest: the original has 27
 │    loopable beds and not one, a player file in user://music replaces an
@@ -6864,7 +6934,10 @@ shandalar/
 │   │                          the two screens is not the same tune
 │   │                          restarting. Respects the global music switch;
 │   │                          _exit_tree and _open both stop it, so the next
-│   │                          screen starts against silence
+│   │                          screen starts against silence. Since
+│   │                          2026-09-27 `Magic Battle` takes the FOCUS
+│   │                          RING at _ready — the shell walks with the
+│   │                          D-pad and the arrows, A/Enter pressing
 │   ├── manalink_globe.gd    class ManalinkGlobe — [QoL] the Manalink mark:
 │   │                          since 2026-09-17 the owner's own picture,
 │   │                          game/art/manalink_globe.png, drawn square and
@@ -6962,7 +7035,9 @@ shandalar/
 │   │                          DECK_PIP = the Builder's LOAD_PIP; the
 │   │                          random rows wear none. The chosen mode
 │   │                          button (Hotseat / Duel the AI / AI Demo)
-│   │                          wears UiChrome.gold_when_chosen's ring.
+│   │                          wears UiChrome.gold_when_chosen's ring and
+│   │                          the chosen one starts the focus ring
+│   │                          (2026-09-27, the pad walks from it).
 │   ├── deck_groups.gd       class DeckGroups — WHERE A DECK CAME FROM,
 │   │                          the heading it appears under in the deck
 │   │                          list. `User-created` is DERIVED from the
@@ -7056,7 +7131,15 @@ shandalar/
 │   │                          screen): the Display row's `Full screen`
 │   │                          switch (GameDisplay, 2026-09-07) and its
 │   │                          `Touch controls: Auto / On / Off` choice
-│   │                          (TouchControls, 2026-09-07), the CONTROLS
+│   │                          (TouchControls, 2026-09-07), the `Power
+│   │                          saver` switch and the `Pad pointer: Auto /
+│   │                          On / Off` choice (2026-09-27, the Steam
+│   │                          Deck release; every row opens on
+│   │                          Settings.default_for so a handheld's
+│   │                          defaults show without a write), the
+│   │                          `Full screen` switch taking the focus ring
+│   │                          at _ready inside a scroller that follows
+│   │                          it (`_focus_first`), the CONTROLS
 │   │                          section (Controls, 2026-09-18: a row per
 │   │                          duel action — its word, a key slot, a
 │   │                          pad slot — each slot a `Press a key`
@@ -7111,7 +7194,15 @@ shandalar/
 │   │                          failed saves remain dirty for a later retry
 │   │                          and do not increment the saved-write count;
 │   │                          `touch_controls()` reads auto/on/off and
-│   │                          answers `auto` to anything else
+│   │                          answers `auto` to anything else, and so
+│   │                          does `pad_pointer()` (2026-09-27). THE
+│   │                          HANDHELD'S DEFAULTS (2026-09-27): the
+│   │                          launchers export `SHANDALAR_HANDHELD`
+│   │                          (`handheld()`), and `default_for(key,
+│   │                          desktop)` answers `HANDHELD_DEFAULTS` —
+│   │                          fullscreen, fullscreen_cards, power_saver
+│   │                          all true — for a key never written; a
+│   │                          written value always wins
 │   ├── display.gd           class GameDisplay — THE WINDOW: the one
 │   │                          `fullscreen` key and the one place it is
 │   │                          put onto the OS window (borderless
@@ -7120,7 +7211,14 @@ shandalar/
 │   │                          1997 had `M&inimize` and a frameless-
 │   │                          window ini key (`NoFrame`) and no more.
 │   │                          The Options switch writes it, Lifecycle
-│   │                          applies it at boot
+│   │                          applies it at boot. Since 2026-09-27 the
+│   │                          boot leaves an UNWRITTEN key alone when
+│   │                          the launcher passed `--fullscreen`/`-f`
+│   │                          (`launcher_asked_fullscreen`), and
+│   │                          `apply_settings` also puts THE POWER
+│   │                          SAVER (`power_saver` key →
+│   │                          `OS.low_processor_usage_mode`) on the
+│   │                          engine; `set_power_saver` is the row's
 │   ├── lifecycle.gd         AUTOLOAD `Lifecycle` — enters the tree
 │   │                          first (applies GameDisplay and the
 │   │                          player's Controls at boot) and
@@ -7174,9 +7272,14 @@ shandalar/
 │   │   │                        `pad_text` / `text` / `hint` are the
 │   │   │                        player's words for the tooltips and the
 │   │   │                        Help line. Not here: the deck builder's
-│   │   │                        Ctrl accelerators (§6.1) and a pad
-│   │   │                        pointer (the trackpad or a finger is the
-│   │   │                        mouse; the face buttons are the keys)
+│   │   │                        Ctrl accelerators (§6.1) and the pad
+│   │   │                        pointer — that is pad_controls.gd
+│   │   │                        (2026-09-27), which takes A, LB, the
+│   │   │                        D-pad and the sticks for the mouse while
+│   │   │                        it is on, so `duel_space`'s pad default
+│   │   │                        is RB (the one button) and A is never a
+│   │   │                        listed default; the engine's ui_accept /
+│   │   │                        ui_cancel carry A and B for the menus
 │   │   ├── touch_gestures.gd  class TouchGestures — THE GESTURE
 │   │   │                        VOCABULARY, a pure RefCounted state
 │   │   │                        machine with the clock as an argument
@@ -7234,6 +7337,38 @@ shandalar/
 │   │                            the combat window's and the hand's title
 │   │                            bars — read the event in hand instead. No
 │   │                            class_name — an autoload is its name
+│   │   └── pad_controls.gd    AUTOLOAD `PadControls` — THE PAD LAYER
+│   │                            (2026-09-27, the Steam Deck release): the
+│   │                            one place a controller becomes the mouse,
+│   │                            the touch layer's twin. ACTIVE on `auto`
+│   │                            while a joypad is connected (re-read on
+│   │                            `joy_connection_changed`), on `on` always,
+│   │                            on `off` never (Settings `pad_pointer`,
+│   │                            the Options row a view of it). Active,
+│   │                            it takes A, LB, the D-pad and the four
+│   │                            stick axes at `_input` (handled — the
+│   │                            engine's ui_accept and focus walk never
+│   │                            see them), leaves every other button to
+│   │                            the duel's actions, and spends them at
+│   │                            `_process`: A the left button (held
+│   │                            while held — a drag; a second press in
+│   │                            300 ms a double-click), LB the right,
+│   │                            the left stick a pointer at 1100 px/s
+│   │                            over a squared curve, the right stick
+│   │                            the wheel at 12 notches/s, a D-pad
+│   │                            press a HOP to the nearest button or
+│   │                            slider ahead (along + 2×across, a
+│   │                            45° cone first, a 63° one second, each
+│   │                            candidate verified by what the viewport
+│   │                            says is hovered at its centre; embedded
+│   │                            windows are not walked — a PopupMenu
+│   │                            takes the pad itself). Active is not
+│   │                            awake: the first pad touch wakes it
+│   │                            (arrow on layer 900 at the focus owner,
+│   │                            else the mouse; OS pointer hidden), a
+│   │                            real mouse event sleeps it; `off`
+│   │                            releases what it held. Events carry
+│   │                            device 4097. No class_name
 │   ├── ui_chrome.gd         class UiChrome — the original sandstone panel
 │   │                          (Winbk_Options 9-patch) + era buttons/labels;
 │   │                          ONE place for the game's window look
@@ -9165,7 +9300,10 @@ shandalar/
 │       │                      title), with a **[QoL]** × that empties a
 │       │                      FINDER when asked for; gadget() is button()
 │       │                      at 20 px for a window's title bar (the
-│       │                      duel log's Copy / Save / ×). Wording comes from
+│       │                      duel log's Copy / Save / ×);
+│       │                      focus_first_button() (2026-09-27) starts
+│       │                      the focus ring on a window's first button
+│       │                      so a pad walks it. Wording comes from
 │       │                      docs/glossary-1997.md. Worn by: the
 │       │                      Situation Bar + Done, the modal-choice
 │       │                      dialog, the X question, the library picker,
@@ -9246,7 +9384,10 @@ shandalar/
 │       │                      and a refusal puts the options window back.
 │       │                      Your deck is NAMED (deck_names[0], from
 │       │                      GauntletOptions.deck_title) for the splash
-│       │                      and the sidebar, every round (2026-09-08)
+│       │                      and the sidebar, every round (2026-09-08).
+│       │                      The startup window's `Run the gauntlet`
+│       │                      takes the focus ring once it is on screen
+│       │                      (2026-09-27)
 │       └── fan_hand.gd      class FanHand — the 1997 fanned hand: arc,
 │                              tilt, overlap, hover-raise (plain Control —
 │                              containers reset child rotation). CARD_SIZE

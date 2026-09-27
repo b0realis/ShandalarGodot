@@ -17818,6 +17818,126 @@ three taken, Berserk kept.
 Gate: 538 scripts, **8,122/8,122 tests, 367,055 asserts**, exit 0 in
 276 s over 6 shards; Python 392, exit 0.
 
+## 2026-09-27 — The Steam Deck release (0.40.41)
+
+*"In the mean time we are building also a release specifically for
+steam deck. Can we optimize for steam deck in any way?"* — and, on the
+list that came back: *"Yes do 1-4 along with pad navigable duel along
+with one button dedicated to advance game stage. Do not do not worth
+doing things."* So: handheld defaults, a power saver, menus that walk
+with the D-pad, an honest `docs/handhelds.md`, a duel a controller can
+play, and one button that is the advance. Not the UI scale, not
+Steamworks, not a lighter renderer.
+
+**The 2026-09-18 ruling is retired.** That day's *"a pad has no
+pointer: … a stick-driven cursor over the 1997 table would be a worse
+mouse, not a controller"* stood while the Deck's trackpad was the
+answer; the owner asked for the pad to play the table, and it does.
+`game/input/pad_controls.gd` — autoload `PadControls`, the touch
+layer's twin — is the one place a controller becomes the mouse. On
+`auto` it is active while a joypad is connected (re-read on
+`Input.joy_connection_changed`), on `on` always, on `off` never; the
+Options row `Pad pointer` is a view of the `pad_pointer` key. Active,
+it takes A, LB, the D-pad and the four stick axes at `_input` and marks
+them handled, so the engine's `ui_accept` and its focus walk never see
+them — a focused button is pressed by the click at its centre, once,
+never twice. Everything else — X, B, Y, Start, Back, RB, the triggers
+— falls through to the duel's own actions untouched. What it spends
+at `_process`: the left stick is a pointer at 1100 px/s over a squared
+curve (a small tilt is a small move), clamped to the window; A is the
+left button, held while held (a drag), a second press inside 300 ms
+a double-click (the duel's auto-cast); LB is the right button (the
+mini-menus); the right stick Y is the wheel at twelve notches a
+second; a D-pad press is a HOP — the nearest button or slider ahead by
+`along + 2×across`, a 45° cone first and a 63° one when the cone is
+empty, each candidate verified by what the viewport says is hovered at
+its centre (`gui_get_hovered_control`), so a button under a panel and
+a hidden or disabled one are passed over; up to six candidates are
+tried. Embedded windows are not walked: a PopupMenu takes the pad
+itself — the engine forwards the pad to a sub-window before any
+`_input` sees it, and with `ui_accept`/`ui_cancel` carrying A and B a
+mini-menu walks, picks and closes by itself. Active is not awake: the
+first pad touch wakes the layer (the pointer at the focus owner, else
+where the mouse was; the OS pointer hidden), a real mouse event puts
+it to sleep and takes the pointer back, `off` mid-hold releases both
+buttons and a later pad release is nobody's. The synthetic events carry
+device 4097 so nothing downstream mistakes them for the mouse.
+
+**RB is the one button.** `duel_space` — the Situation Bar's only
+button, the advance — had A as its pad default since 2026-09-18; A is
+now the click, so the default moved to RB. A player who rebound it
+keeps their binding (`Settings.controls` holds only what differs); a
+player who never did gets RB by themselves. The Help line and the
+tooltips say *Space or RB*.
+
+**The menus walk with the D-pad.** Godot's `ui_accept` was Enter and
+Space, `ui_cancel` Escape — no controller in either. `project.godot`
+gives them the pad's A and B, and the shell (`Magic Battle`), Options
+(`Full screen`, in a scroller that follows the focus), the battle setup
+(the chosen mode button), the gauntlet's startup window (`Run the
+gauntlet`, through `OriginalDialog.focus_first_button()` once it is on
+screen) start the focus ring on their first button — the keyboard's
+arrows walk the same ring. The pad layer never grabs focus: while it
+is on, the ring is the keyboard's; while it is off, the D-pad walks it
+through the engine.
+
+**Handheld defaults.** `packaging/handhelds/steam-deck.sh` and
+`arkos.sh` export `SHANDALAR_HANDHELD` (`steam-deck`, `arkos`).
+`Settings.handheld()` reads it and `Settings.default_for(key, desktop)`
+answers `HANDHELD_DEFAULTS` for a key never written — `fullscreen`,
+`fullscreen_cards` and `power_saver` all true — while a written value
+always wins and nothing is written until the player chooses; a direct
+start of the binary is a desktop. The Options rows open on the same
+rule, so they show a handheld's defaults without a write. **The power
+saver** (`GameDisplay.POWER_KEY` → `OS.low_processor_usage_mode`,
+applied at boot and by the row at once) is the engine's own low-
+processor mode — redraw on change, rest between frames — off on a
+desktop. And a launcher's `--fullscreen` (ArkOS passes it) is no
+longer undone at boot by an unwritten window mode
+(`GameDisplay.launcher_asked_fullscreen`).
+
+**Honesty.** `docs/handhelds.md` says nothing here is verified on Deck
+hardware — the controller pointer is proven only by the suite's
+synthetic pad events. The Steam Deck steps now name both layouts: a
+keyboard-and-mouse layout where Steam Input is the mouse, and a gamepad
+layout where the pad pointer is.
+
+**How it is pinned.** `tests/ui/test_pad_controls.gd` (new, 22 tests)
+drives the layer through `Input.parse_input_event` on a stage above the
+runner's panel: auto follows the hardware, off processes nothing and
+the engine's ui_accept presses the focused button, RB/X/B/Start/Y/Back
+fall through and A never does, a trigger is not a stick; A clicks the
+focused button's centre once with device 4097, LB is the right button,
+three quick As read false/true/false, the stick moves and drags, the
+pointer is clamped, the wheel scrolls a ScrollContainer, hops land
+right, far, stay with nothing ahead, take the off-line one below, pass
+over a covered, a hidden and a disabled button, a real mouse motion
+sleeps the layer, `off` mid-hold releases, a PopupMenu takes the D-pad
+and A itself, the row and the key agree over `Settings.reload`, and a
+connection change re-reads auto. `tests/ui/test_handheld_defaults.gd`
+(new, 12): the desktop's defaults unwritten, both launchers export the
+word, the three keys true under it and only the three, any word
+counts and whitespace is none, a written false wins, the rows open on
+the defaults without a write, the saver row applies and is remembered,
+`apply_settings` puts the stored saver on the engine, the launcher's
+flag guard source-pinned between `apply_settings` and the window
+call. `tests/ui/test_menu_focus.gd` (new, 5): the four screens'
+first buttons under the ring, a dialog outside the tree asking for
+nothing. `tools/test_handheld_launchers.py` reads the device word from
+both launchers. `test_controls.gd` and `test_options_controls.gd` say
+RB.
+
+**A shard reshuffle caught a false premise.** Three new scripts move
+every later script one shard along, and
+`tests/ui/test_stack_hand.gd`'s wobble test — *"the headless pointer
+never leaves the origin"* — met a neighbour that pushes a mouse motion
+and leaves the viewport's pointer there. The press and the wobble are
+now spelled on the events themselves, 2 px apart; the bug it pins (the
+slop gating the flag but not the movement) still fails it.
+
+Gate: 541 scripts, **8,161/8,161 tests, 367,439 asserts**, exit 0 in
+269 s over 6 shards; Python 392, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

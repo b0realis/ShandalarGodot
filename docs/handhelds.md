@@ -7,13 +7,61 @@ variants are available. Card pictures remain separate: copy your own card
 packs into `skin/` beside the executable, or import them through Options.
 
 Neither target has been tested on physical hardware yet. This is not a claim
-of Steam Deck Verified status or membership of the PortMaster catalogue.
+of Steam Deck Verified status or membership of the PortMaster catalogue. The
+controller pointer described below is verified only by the test suite's
+synthetic pad events, not by a pad in a hand.
 
-For small screens, enable **Options → Display → Full-screen card on click**.
-Click or tap the large preview in a duel or Deck Builder to fit the card to
-the screen; click again, Escape or controller Cancel closes it. The setting
-is off by default and remembered. Local computer play waits while reading;
-a network opponent and host keep playing. The normal sidebar layout is unchanged.
+## Handheld defaults
+
+Both launchers export `SHANDALAR_HANDHELD` (`steam-deck` or `arkos`) before
+starting the game. Under that word, three settings that you have **never
+changed** open on a handheld's defaults instead of the desktop's: **Full
+screen** on, **Full-screen card on click** on, and **Power saver** on. A
+choice you make in Options is written and always wins — a handheld that you
+set to windowed stays windowed — and nothing is written until you choose.
+Starting the executable directly, without the launcher, gives the desktop's
+defaults.
+
+**Full-screen card on click**: click or tap the large preview in a duel or
+Deck Builder to fit the card to the screen; click again, Escape or controller
+Cancel closes it. Local computer play waits while reading; a network opponent
+and host keep playing. The normal sidebar layout is unchanged.
+
+**Power saver** (Options → Display) puts the engine into its low-processor
+mode: the screen is redrawn only when something changes and the process rests
+between frames. A card table is still most of the time, so this is the
+battery's biggest saving; it costs a still screen nothing and takes effect at
+once. Off by default on a desktop.
+
+## Controller pointer
+
+The game's own pad pointer (**Options → Display → Pad pointer**) turns a
+controller into the mouse the 1997 screens were written for. `Auto`, the
+default, is on whenever a controller is connected and off otherwise; a real
+mouse motion always takes the pointer back, so a trackpad and a stick can be
+used in turn without a switch.
+
+| Control | Action |
+| --- | --- |
+| Left stick | Pointer (fine near the centre, fast at full tilt) |
+| D-pad | Hop to the nearest card or button in that direction |
+| A | Left click; hold and move for a drag; two quick presses to auto-cast |
+| LB | Right click: the card, territory and life-box mini-menus |
+| Right stick | Scroll wheel |
+| RB | The one button: advances the duel (Space) |
+| X | Done (Enter) |
+| B | Cancel (Escape); closes a mini-menu |
+| Y | Show/hide hand |
+| Start | Pause menu |
+| Back | Duel log |
+
+While a mini-menu is open the D-pad walks its entries and A picks one. RB,
+X, B, Y, Start and Back can be rebound in Options → Controls; A, LB, the
+D-pad and the sticks belong to the pointer while it is on. With the pointer
+off, the D-pad and the left stick move the engine's focus ring over the
+menus' buttons and A presses the focused one; the shell, Options, the battle
+setup and the gauntlet's startup window each start the ring on their first
+button, for the keyboard too.
 
 ## Steam Deck
 
@@ -22,17 +70,26 @@ a network opponent and host keep playing. The normal sidebar layout is unchanged
    `Shandalar.pck` beside it. If permissions were lost, run
    `chmod +x run.sh Shandalar.x86_64` from that folder.
 3. Leave forced Proton compatibility off: this is a native Linux executable.
-4. Configure Steam Input as keyboard and mouse, then launch from Gaming Mode.
-   Right trackpad: mouse; R2: left click; L2: right click; A: Space;
-   X: Enter; B: Escape; Y: H; D-pad: arrow keys. Map a rear button to
-   Backspace for removing a selected card in Deck Builder. Use Steam's
-   on-screen keyboard for names/searches, or connect a keyboard.
+4. Choose a Steam Input layout, then launch from Gaming Mode. Either works;
+   do not mix the two on one button.
+   - **Gamepad layout** (a gamepad template, with or without the trackpad as
+     mouse): the game sees the controller and its pad pointer plays the table
+     with the buttons listed under *Controller pointer* above. The right
+     trackpad, if mapped as a mouse, takes the pointer back whenever it is
+     touched.
+   - **Keyboard and mouse layout**: the game sees no controller and Steam
+     Input is the pointer. Right trackpad: mouse; R2: left click; L2: right
+     click; A: Space; X: Enter; B: Escape; Y: H; D-pad: arrow keys. Map a
+     rear button to Backspace for removing a selected card in Deck Builder.
+     Drag with the trackpad while holding R2.
+
+   Use Steam's on-screen keyboard for names/searches, or connect a keyboard.
 
 Use only one keyboard/mouse binding per button, without an additional gamepad
-output on that same button, to avoid duplicate actions. Drag with the trackpad
-while holding R2. The launcher requests 1280x800 and caps rendering at 60 FPS.
-It does not overwrite your Options or controller bindings. Full screen can
-be selected in Options; Gaming Mode also controls the outer game window.
+output on that same button, to avoid duplicate actions. The launcher requests
+1280x800, caps rendering at 60 FPS and names the device (`SHANDALAR_HANDHELD`,
+see *Handheld defaults*). It does not overwrite your Options or controller
+bindings. Gaming Mode also controls the outer game window.
 
 Saves/settings use the normal Linux `~/.local/share/godot/app_userdata/Shandalar`
 location (or the `XDG_DATA_HOME` location if you deliberately set one). No
@@ -82,7 +139,11 @@ read comfortably; there is no dedicated small-screen reflow in this package.
 Use a USB keyboard for text entry. The mapping is editable in
 `shandalar/shandalar.gptk`; logical A/B positions depend on PortMaster's device
 mapping. Physical-pad actions are suppressed in the game process so a mapped
-mouse click cannot also pass the turn. Other applications are unaffected.
+mouse click cannot also pass the turn — the game sees no controller here, so
+its own pad pointer stays off and gptokeyb is the pointer. Other applications
+are unaffected. The launcher names the device (`SHANDALAR_HANDHELD=arkos`), so
+an unwritten settings file opens full screen with the card reader and the
+power saver on; its own `--fullscreen` is respected by the game's boot.
 
 If launch fails, keep `shandalar/portmaster.log` and
 `shandalar/portmaster.previous.log`. Report the exact device/board, ArkOS build,

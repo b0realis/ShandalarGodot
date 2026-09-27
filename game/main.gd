@@ -215,6 +215,15 @@ func _ready() -> void:
 	var exit_button := _menu_button("Exit")
 	exit_button.pressed.connect(func() -> void: get_tree().quit())
 	box.add_child(exit_button)
+	# THE KEYBOARD AND THE D-PAD START AT THE TOP (2026-09-27, the Steam
+	# Deck release). Every shell button has taken focus since the ring
+	# was drawn (`UiChrome.menu_button`), but nothing ever GAVE it, so
+	# the arrows and a pad's D-pad had nothing to move from and Enter
+	# nothing to press: the shell was a mouse-only room on a machine
+	# with no mouse. The first entry holds it now, as every console menu
+	# opens; the mouse is untouched, and a click moves the ring as it
+	# always did.
+	battle.grab_focus()
 
 
 	# A bottom-right stack keeps the globe immediately above the version,

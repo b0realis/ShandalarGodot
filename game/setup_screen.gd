@@ -242,6 +242,16 @@ func _ready() -> void:
 	# `ShellMusic` there was a compile error on the first pass (Godot
 	# retried and ran, but every Lab log opened with it).
 	_shell_music_call(&"play")
+	# THE KEYBOARD AND THE D-PAD START ON THE MODE ROW (2026-09-27, the
+	# Steam Deck release): the chosen mode holds the focus, so the first
+	# arrow moves from something and Enter presses something, as on the
+	# shell (`main.gd`). The scroller follows the focus down the list.
+	for button in _mode_buttons:
+		if button.button_pressed:
+			button.grab_focus()
+			return
+	if not _mode_buttons.is_empty():
+		_mode_buttons[0].grab_focus()
 
 
 

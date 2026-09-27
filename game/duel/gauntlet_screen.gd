@@ -224,6 +224,10 @@ func _show_options() -> void:
 	dialog.z_index = WINDOW_Z
 	_window = dialog
 	add_child(dialog)
+	# `Run the gauntlet` holds the keyboard and the D-pad from the start
+	# (2026-09-27, the Steam Deck release), as the shell's first button
+	# does.
+	dialog.focus_first_button()
 
 
 ## `&Create Deck...` — `@DIALOG_GAUNTLETSTARTUP` entry 13

@@ -39,10 +39,13 @@ extends RefCounted
 ## WHAT IS NOT HERE: the deck builder's Ctrl accelerators and its Q
 ## (`DeckBuilderScreen._unhandled_key_input`) are the 1997 menu's own
 ## letters (`@MENU_*`, §6.1) and stay where the original put them; the
-## help screen's Left/Right/Home/End are a reader's, not a player's. A
-## pad has no pointer here — the duel is played with the mouse or a
-## finger ([TouchControls]) and the buttons above answer beside it, which
-## is what a Steam Deck's trackpad plus its face buttons want.
+## help screen's Left/Right/Home/End are a reader's, not a player's. The
+## pad's POINTER is not here either: since 2026-09-27 the `PadControls`
+## autoload types the mouse for the left stick, the D-pad, A and LB
+## (`game/input/pad_controls.gd`), the way [TouchControls] types it for
+## a finger, and those four are not bindable duel actions while that
+## layer is on — the actions above answer on the other buttons beside
+## it, RB being the one button that advances the game.
 
 ## The stored key: `action -> [encoded events]`, absent when nothing is
 ## rebound.

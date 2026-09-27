@@ -736,6 +736,20 @@ func add_button(text: String) -> Button:
 	return btn
 
 
+## Give the keyboard — and a pad's D-pad, which walks the same focus —
+## to the first button on the bar, so a window that opens on its own
+## (the gauntlet's startup, `gauntlet_screen.gd`) has something for an
+## arrow to move from and for Enter to press. Nothing when the window
+## has no button yet or is not in the tree.
+func focus_first_button() -> void:
+	if not is_inside_tree():
+		return
+	for child in _buttons.get_children():
+		if child is BaseButton and (child as Control).focus_mode == Control.FOCUS_ALL:
+			(child as Control).grab_focus()
+			return
+
+
 ## Close and free, emitting [signal closed] once.
 func dismiss() -> void:
 	closed.emit()

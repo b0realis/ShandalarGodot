@@ -110,7 +110,7 @@ func test_every_listed_action_has_a_row_that_says_what_the_map_says() -> void:
 		assert_eq(key.text, Controls.key_text(action), "%s key slot" % action)
 		assert_eq(pad.text, Controls.pad_text(action), "%s pad slot" % action)
 	assert_eq(_slot("duel_space", "key").text, "Space")
-	assert_eq(_slot("duel_space", "pad").text, "A")
+	assert_eq(_slot("duel_space", "pad").text, "RB")
 	assert_eq(_slot("duel_id_tags", "key").text, "Ctrl+T")
 	assert_eq(_slot("duel_mute", "pad").text, Controls.UNBOUND, "nothing is a dash")
 	assert_null(_slot("duel_choice_1", "key"),
@@ -176,7 +176,7 @@ func test_the_key_slot_ignores_the_pad_and_the_pad_slot_the_keys() -> void:
 	listener._input(_pad(JOY_BUTTON_A))
 	await get_tree().process_frame
 	assert_not_null(_listener_veil(), "a pad button is not a key: still listening")
-	assert_eq(Controls.pad_text("duel_space"), "A", "and A stayed where it was")
+	assert_eq(Controls.pad_text("duel_space"), "RB", "and RB stayed where it was")
 	listener._input(_key(KEY_CTRL))
 	await get_tree().process_frame
 	assert_not_null(_listener_veil(), "a bare modifier is the start of a key, not one")
@@ -252,13 +252,13 @@ func test_reset_controls_is_the_defaults_again_and_the_rows_follow() -> void:
 	_listener()._input(_key(KEY_H))
 	await get_tree().process_frame
 	_slot("duel_space", "pad").pressed.emit()
-	_listener()._input(_pad(JOY_BUTTON_RIGHT_SHOULDER))
+	_listener()._input(_pad(JOY_BUTTON_RIGHT_STICK))
 	await get_tree().process_frame
 	assert_true(Settings.has_value(Controls.SETTINGS_KEY))
 	(_named("ResetControls") as Button).pressed.emit()
 	assert_eq(_slot("duel_mute", "key").text, "M")
 	assert_eq(_slot("duel_hand", "key").text, "H")
-	assert_eq(_slot("duel_space", "pad").text, "A")
+	assert_eq(_slot("duel_space", "pad").text, "RB")
 	assert_false(Settings.has_value(Controls.SETTINGS_KEY), "and the file forgets")
 	for action in Controls.names():
 		assert_true(Controls.is_default(action), "%s is back" % action)

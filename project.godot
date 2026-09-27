@@ -29,6 +29,12 @@ ShellMusic="*res://game/shell_music.gd"
 ; laptops. Inert wherever there is no touchscreen unless the player turns
 ; it on (Options > Touch controls); see game/input/touch_controls.gd.
 TouchControls="*res://game/input/touch_controls.gd"
+; The controller-as-mouse layer for a Steam Deck in its gamepad layout
+; and any pad on a desk: the left stick moves a pointer, the D-pad hops
+; it between cards and buttons, A clicks, LB is the right button. Inert
+; without a pad unless the player turns it on (Options > Pad pointer);
+; see game/input/pad_controls.gd.
+PadControls="*res://game/input/pad_controls.gd"
 
 [application]
 
@@ -38,7 +44,7 @@ config/name="Shandalar"
 ; Keep integration tests separate from concurrent base and pack checkouts.
 ; This feature is never selected by exported player builds.
 config/name.shandalar_test="Shandalar Integration Tests"
-config/version="0.40.40"
+config/version="0.40.41"
 config/description="Open-source remake of MicroProse's 1997 Magic: The Gathering (Shandalar), with a modular GDScript MTG rules engine."
 run/main_scene="res://game/main.tscn"
 ; THE PROJECT'S OWN MARK. Godot draws this in the editor, on the window
@@ -121,18 +127,42 @@ window/handheld/orientation=4
 ; THE DUEL'S KEYS AS ACTIONS (`game/input/controls.gd`, 2026-09-18). The
 ; 1997 game's keys were a `match` on keycodes in the duel screen; declaring
 ; them here is what makes rebinding (Options > Controls), a controller (the
-; second event of each action is a pad button: A is the one button, X is
-; Done, B is Cancel, Start the pause menu, Y the hand, Back the log) and
+; second event of each action is a pad button: RB is the one button, X is
+; Done, B is Cancel, Start the pause menu, Y the hand, Back the log — A
+; is the click and LB the right button of the pad pointer, 2026-09-27,
+; `game/input/pad_controls.gd`) and
 ; Steam Input possible. These are the DEFAULTS and the one place they are
 ; written; the player's own bindings lay over them from settings.cfg at
 ; boot (`Controls.apply`). Keys are keycodes, not physical positions, so
 ; the letters read the same on any layout. The deck builder's Ctrl
 ; accelerators are the 1997 menu's own and are not here (§6.1).
+;
+; THE ENGINE'S OWN ui_accept AND ui_cancel, given the pad's A and B
+; (2026-09-27). Godot's defaults are keyboard-only for these two, so a
+; D-pad could walk the focus ring over the shell's buttons and nothing on
+; the pad could press one. With the pad pointer on, A and B never reach
+; these (the layer eats A; B is duel_cancel); with it off, A presses the
+; focused button and B closes a mini-menu. The keys are the engine's own,
+; repeated because an override replaces the list.
 
+ui_accept={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194309,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194310,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":32,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":0,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+ui_cancel={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194305,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":1,"pressure":0.0,"pressed":false,"script":null)
+]
+}
 duel_space={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":32,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":0,"pressure":0.0,"pressed":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":10,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 duel_done={

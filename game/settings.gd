@@ -197,19 +197,78 @@ static func ai_pace() -> float:
 	return get_value("ai_pace", 0.35)
 
 
+# ------------------------------------------------- handheld defaults --
+
+## THE HANDHELD'S OWN DEFAULTS (2026-09-27, the Steam Deck release). A
+## launcher that knows the device it runs on — `packaging/handhelds/
+## steam-deck.sh`, `arkos.sh` — exports [constant HANDHELD_ENV] with the
+## device's name, and a setting the player has NEVER WRITTEN then reads
+## the handheld's default instead of the desk's: full screen on (a
+## handheld has no desktop to keep a window on), the click-to-enlarge
+## card reader on (a 7-inch screen is what that row was made for), and
+## the power saver on (a battery). Three things a Deck owner would
+## otherwise set by hand on first run, and nothing else. The file
+## always wins: once the player has written a key, the launcher's word
+## on it is never read again — so an Options choice made on the Deck is
+## as durable as one made on the desk. The desk, with the variable
+## unset, is exactly what it was.
+const HANDHELD_ENV := "SHANDALAR_HANDHELD"
+const HANDHELD_DEFAULTS := {
+	"fullscreen": true,
+	"fullscreen_cards": true,
+	"power_saver": true,
+}
+
+
+## The handheld the launcher named, or "" on a desk.
+static func handheld() -> String:
+	return OS.get_environment(HANDHELD_ENV).strip_edges()
+
+
+## The built-in default for [param key]: the handheld's where the
+## launcher named one and [constant HANDHELD_DEFAULTS] has a word,
+## [param desktop] everywhere else. A stored value is not consulted
+## here — [method get_value] reads the file over whatever this says.
+static func default_for(key: String, desktop: Variant) -> Variant:
+	if handheld() != "" and HANDHELD_DEFAULTS.has(key):
+		return HANDHELD_DEFAULTS[key]
+	return desktop
+
+
 ## [QoL] `Full screen` on the Options screen — see [GameDisplay] for what
 ## 1997 had instead (nothing but `M&inimize` and a frameless-window
 ## config key). Off by default: the shipped window is what the game has
 ## always opened into, and a default that changed under the owner would
-## be a surprise, not a setting.
+## be a surprise, not a setting. On by default under a handheld launcher
+## ([method default_for]).
 static func fullscreen() -> bool:
-	return get_value("fullscreen", false)
+	return get_value("fullscreen", default_for("fullscreen", false))
 
 
 ## [QoL] Optional click-to-enlarge for the duel and Deck Builder showcases.
 ## Reading the default never writes it to the player's settings file.
+## On by default under a handheld launcher ([method default_for]).
 static func fullscreen_cards() -> bool:
-	return get_value("fullscreen_cards", false)
+	return get_value("fullscreen_cards", default_for("fullscreen_cards", false))
+
+
+## [QoL] `Power saver` on the Options screen — [member OS.low_processor_usage_mode]:
+## redraw only when something on the screen changed and rest between
+## frames. Off by default on a desk, where a card game already costs
+## the GPU nothing worth saving; on by default under a handheld
+## launcher, where every idle frame is battery ([method default_for]).
+## Applied by [GameDisplay].
+static func power_saver() -> bool:
+	return get_value("power_saver", default_for("power_saver", false))
+
+
+## [QoL] `Pad pointer` on the Options screen — `auto`, `on` or `off`;
+## see the `PadControls` autoload for what each means. `auto` by
+## default: a desk with no controller never sees the layer, a Steam
+## Deck in its gamepad layout always does, and neither has to be told.
+static func pad_pointer() -> String:
+	var value: Variant = get_value("pad_pointer", "auto")
+	return value if value is String and value in ["auto", "on", "off"] else "auto"
 
 
 ## [QoL] `Touch controls` on the Options screen — `auto`, `on` or `off`;

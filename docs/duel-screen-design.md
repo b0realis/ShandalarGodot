@@ -30,7 +30,16 @@ Other platform-driven rules: base design resolution **1280×800** (16:10,
 covers Steam Deck exactly, letterboxes cleanly to 16:9 TVs), stretch mode
 `canvas_items` so the UI scales crisply at any size; every interaction
 reachable by D-pad focus navigation (Godot's built-in Control focus system)
-as well as pointer.
+as well as pointer. *Amended 2026-09-27 (the Steam Deck release):* on the
+duel table the pad drives a POINTER, not the focus ring — `PadControls`
+(`game/input/pad_controls.gd`) synthesizes the mouse from the left stick,
+a D-pad hop between cards and buttons, A/LB as the two buttons and the
+right stick as the wheel, so every mouse handler (menus, drag, hover,
+double-click) serves the pad unchanged and a focused card never eats the
+Spacebar rule. RB is the one button that advances (`duel_space`). The
+focus ring remains what the keyboard's arrows drive everywhere and what
+the pad drives with the pointer off; the shell, Options, the battle setup
+and the gauntlet's startup window start it on their first button.
 
 ## 2. Faithful graphics — strategy
 
@@ -3535,7 +3544,8 @@ Wishlist (ordered; each is a self-contained follow-up):
   "copy replay" button on the loss screen (mirrors s30's bug reporter).
   The running `duel_log.txt` is the first half of this.
 - **Keyboard/gamepad bindings**: Space=pass, A=attack-all, digits=targets;
-  D-pad focus ring for console/TV play.
+  D-pad focus ring for console/TV play — since 2026-09-27 a pad pointer on
+  the table (`PadControls`), the ring on the menus.
 - **Readability aids**: hover/long-press zoom on any card (oracle text +
   rulings from the card file's own doc header!), colorblind-safe
   highlight palette, UI scale slider.

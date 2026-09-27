@@ -821,12 +821,17 @@ func test_a_wobble_inside_the_slop_does_not_move_the_window() -> void:
 	hand.global_position = Vector2(120, 90)
 	var middle := Vector2(hand._title_bg.size.x / 2.0, 8)
 	_bar_press(hand, middle, true)
-	# The headless pointer never leaves the origin, so the PRESS is
-	# backdated 2px away from it — the wobble, inside the slop.
-	hand._drag_from = hand.get_global_mouse_position() + Vector2(2, 0)
+	# The press and the wobble are both SPELLED ON THE EVENTS, 2px apart
+	# — inside the slop. Not read from the viewport's pointer: this test
+	# once assumed the headless pointer never leaves the origin, and a
+	# script earlier in the same shard that pushes a mouse motion leaves
+	# it wherever that motion was (2026-09-27).
+	hand._drag_from = Vector2(300, 200)
 	hand._drag_offset = hand._drag_from - hand.global_position
 	var before := hand.global_position
-	hand._on_title_input(InputEventMouseMotion.new())
+	var wobble := InputEventMouseMotion.new()
+	wobble.global_position = hand._drag_from + Vector2(2, 0)
+	hand._on_title_input(wobble)
 	assert_false(hand._drag_moved, "2px is inside DRAG_SLOP: still a click")
 	assert_eq(hand.global_position, before,
 		"...so the window must not have moved either")

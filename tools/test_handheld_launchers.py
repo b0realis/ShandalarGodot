@@ -78,7 +78,8 @@ from pathlib import Path
 Path(os.environ['SG_TEST_ROOT'], 'game-call.json').write_text(json.dumps({
  'args': sys.argv[1:], 'cwd': os.getcwd(),
  'xdg': os.environ.get('XDG_DATA_HOME'),
- 'ignore': os.environ.get('SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT')}))
+ 'ignore': os.environ.get('SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT'),
+ 'handheld': os.environ.get('SHANDALAR_HANDHELD')}))
 sys.exit(int(os.environ['SG_TEST_EXIT']))
 ''')
         executable.chmod(0o755)
@@ -102,6 +103,7 @@ sys.exit(int(os.environ['SG_TEST_EXIT']))
         self.assertEqual(call['cwd'], str(self.game.resolve()))
         self.assertEqual(Path(call['xdg']).resolve(), (self.game / 'conf').resolve())
         self.assertEqual(call['ignore'], '0xffff/0xffff')
+        self.assertEqual(call['handheld'], 'arkos', 'the handheld defaults (game/settings.gd)')
         self.assertEqual(call['args'][-2:], ['--custom', 'one argument with spaces'])
         for flag, value in (('--display-driver', 'x11'), ('--resolution', '720x720'),
                             ('--max-fps', '30'), ('--rendering-driver', 'opengl3_es')):
@@ -155,13 +157,16 @@ sys.exit(int(os.environ['SG_TEST_EXIT']))
         self.assertEqual(profile.read_text(), 'player settings')
 
     def test_steam_launcher_location_and_argument_forwarding(self):
-        self.script(self.game / 'Shandalar.x86_64', 'printf "%s\\n" "$PWD" "$@"\n')
+        self.script(self.game / 'Shandalar.x86_64',
+                    'printf "%s\\n" "$PWD" "handheld=${SHANDALAR_HANDHELD:-unset}" "$@"\n')
         shutil.copyfile(ROOT / 'packaging/handhelds/steam-deck.sh', self.game / 'run.sh')
-        result = subprocess.run(['sh', str(self.game / 'run.sh'), 'one argument'],
+        env = {k: v for k, v in os.environ.items() if k != 'SHANDALAR_HANDHELD'}
+        result = subprocess.run(['sh', str(self.game / 'run.sh'), 'one argument'], env=env,
                                 cwd=self.root, capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = result.stdout.splitlines()
         self.assertEqual(Path(lines[0]).resolve(), self.game.resolve())
+        self.assertEqual(lines[1], 'handheld=steam-deck', 'the handheld defaults (game/settings.gd)')
         self.assertEqual(lines[-1], 'one argument')
         self.assertIn('1280x800', lines)
         self.assertIn('60', lines)
