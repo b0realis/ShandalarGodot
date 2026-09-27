@@ -16,7 +16,20 @@ extends Control
 ## handCollapsed "[+]"), the ▼ end expands it — and so does a click
 ## anywhere else on the header that does not become a drag, or the `H`
 ## key (§3.6). The window drags by the middle of its title bar; position
-## persists (Settings "hand_stack_pos").
+## persists (Settings [member settings_key] — "hand_stack_pos" for the
+## player's own window).
+##
+## THE OPPONENT'S HAND IS THIS SAME WINDOW. Manual p.114: *"Only the
+## title bar of your opponent's hand is visible; this is to keep you
+## aware of how many cards are in that hand."* So while their hand is
+## hidden the window stands at its EMPTY height — the top cap and the
+## foot, the count on the bar, nothing listed — and when it is revealed
+## (Glasses of Urza, an unfair opponent's open hand) the cards stack under
+## the bar exactly as the player's own do. It floats and drags like the
+## player's, with a corner of its own ("opp_hand_stack_pos"): *"the enemy
+## hand stack should be movable also (in player vs ai or ai vs ai) so it
+## does not occlude anything"* (the owner, 2026-09-27). It used to be a
+## static plate nailed into a row of the opponent's half.
 ##
 ## SIMPLIFIED: the ▲/▼ painted into the 1997 sheet are SCROLL arrows, not
 ## a fold. `Duel.hlp`, topic **Hands**: *"Each window has a maximum size.
@@ -73,6 +86,23 @@ const DECK_BORDERS := {
 ## pinned. The ▲/▼ ends of the bar still fold and unfold it; the middle,
 ## with nothing to drag, does nothing.
 var pinned := false
+
+## The word on the bar: `Your hand` for the player's own window,
+## `Opponent` for the other seat's — `@WINDOWTITLES` (UIStrings.txt:155)
+## gives that window the single word, s30's `Opp Hand` is s30's. The count
+## in brackets follows it on both, in the same form.
+var title_word := "Your hand"
+
+## Where the dragged corner persists (Settings). The player's own window
+## keeps the single-player preference; the opponent's keeps its own, so
+## dragging one never moves the other.
+var settings_key := "hand_stack_pos"
+
+## THE BAR IS ALL THERE IS while the hand is hidden — no list, no
+## face-down strips, the count on the bar being the whole point (manual
+## p.114). The opponent's window sets this; a hotseat seat looking away
+## keeps its strips.
+var bar_only_when_hidden := false
 
 ## The shared enlarged-card preview (owned by the DuelScreen, docked).
 var preview: CardPreview = null:
@@ -163,7 +193,7 @@ func set_deck_color(color_name: String) -> void:
 
 
 ## THE TEXT ON THE SPECKLED BAR, laid out once for both windows — the
-## player's own and the opponent's title plate. LIGHT GREY, as the
+## player's own and the opponent's. LIGHT GREY, as the
 ## original's bar reads (not the yellow an earlier pass used: that yellow
 ## belongs to CASTABLE CARD NAMES, and having both wear it made the title
 ## look like a card row), left-aligned just past the ▲ exactly as s30
@@ -186,79 +216,6 @@ static func bar_label(text: String) -> Label:
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
-
-
-## THE OPPONENT'S HAND — **THIS WINDOW WITH NO LIST UNDER IT**.
-##
-## Manual p.114: *"Only the title bar of your opponent's hand is visible;
-## this is to keep you aware of how many cards are in that hand."* So it is
-## not a chip, a bar or a badge: it is the SAME window as the player's own,
-## drawn at its empty height (the top cap plus the foot), from the SAME
-## `hand_panel_<colour>` nine-patch with the SAME patch margins, the SAME
-## tiled vertical axis and the SAME label placement. Anything else and the
-## two hands stop reading as one object.
-##
-## **WHAT THIS FIXES (the fortieth pass).** The duel screen used to build
-## the opponent's counter as a `Button` with the raw 145x51 sheet as a
-## plain `StyleBoxTexture` and `custom_minimum_size` of 150x22. A
-## `StyleBoxTexture` with no patch margins SCALES, so the whole window —
-## border, speckled bar, and the ▲ / ▼ **painted into the sheet at x 1..9
-## and x 125..132** — was squashed into a strip less than half its height
-## and its left arrow was crushed against the edge. That is the "opponent
-## hand stack is cropped at left end" the owner reported.
-##
-## **AND THE ARROWS ARE THE TEXTURE'S, NOT THE LABEL'S.** The old chip drew
-## `↑ Opponent (5) ↓` over a sheet that already paints both arrows, so each
-## one appeared twice. The sheet's pair is the original's own, so the sheet
-## keeps them and the text drops them — s30 does exactly this
-## (`drawHandPanel`: the label is `Opp Hand (%d)`, no arrows, over the same
-## untouched `handBg`).
-##
-## The WORDING is the original's: `@WINDOWTITLES` (`UIStrings.txt:155`)
-## gives this window the single word **`Opponent`** — s30's `Opp Hand` is
-## s30's, and `docs/duel-todo.md` §9.1 has had it listed as wrong since the
-## thirty-fourth pass. The count stays, in the bracket form the player's
-## own `Your hand (N)` already uses, because the count is the entire reason
-## the manual gives for showing this bar at all.
-static func title_plate(color_name: String, text: String) -> Control:
-	var plate := Control.new()
-	plate.custom_minimum_size = Vector2(WIDTH, TITLE_HEIGHT + FOOT)
-	# Never stretched by the row it sits in — the window has one size, the
-	# same rule the cards follow (MiniCard._init).
-	plate.size_flags_horizontal = Control.SIZE_SHRINK_END
-	plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tex := window_texture(color_name)
-	if tex != null:
-		var frame := NinePatchRect.new()
-		frame.texture = tex
-		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-		frame.patch_margin_left = int(BORDER)
-		frame.patch_margin_right = int(BORDER)
-		frame.patch_margin_top = int(TITLE_HEIGHT)
-		frame.patch_margin_bottom = int(FOOT)
-		frame.axis_stretch_vertical = NinePatchRect.AXIS_STRETCH_MODE_TILE
-		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		plate.add_child(frame)
-	else:
-		# No 1997 skin: the player's own flat frame, same proportions.
-		var fallback := Panel.new()
-		fallback.set_anchors_preset(Control.PRESET_FULL_RECT)
-		fallback.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var box := StyleBoxFlat.new()
-		box.bg_color = Color(0.12, 0.10, 0.08, 0.96)
-		box.border_color = DECK_BORDERS.get(color_name, Color(0.55, 0.45, 0.30))
-		box.set_border_width_all(int(BORDER * 0.5))
-		fallback.add_theme_stylebox_override("panel", box)
-		plate.add_child(fallback)
-	var bar := Control.new()
-	bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	bar.offset_top = BAR_TOP
-	bar.offset_bottom = BAR_TOP + BAR_HEIGHT
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(bar_label(text))
-	plate.add_child(bar)
-	return plate
 
 
 ## The original's Hand_<colour>.pic MADE WHOLE, ready to nine-patch.
@@ -300,11 +257,15 @@ func populate(hand: Array, hidden: bool, click_cb: Callable,
 	_hidden = hidden
 	_click_cb = click_cb
 	_highlight_cb = highlight_cb
-	var suffix := " [+]" if _pile.collapsed else ""   # s30's collapsed marker
-	_title.text = "Your hand (%d)%s" % [hand.size(), suffix]
-	_pile.populate(hand, hidden, click_cb, highlight_cb)
+	# The opponent's hidden hand lists nothing; the count still reads.
+	var withheld := hidden and bar_only_when_hidden
+	var listed: Array = [] if withheld else hand
+	# s30's collapsed marker — not on a bar that withholds its list anyway.
+	var suffix := " [+]" if _pile.collapsed and not withheld else ""
+	_title.text = "%s (%d)%s" % [title_word, hand.size(), suffix]
+	_pile.populate(listed, hidden, click_cb, highlight_cb)
 	custom_minimum_size = Vector2(WIDTH,
-		TITLE_HEIGHT + _pile.pile_height(hand.size(), hidden) + FOOT)
+		TITLE_HEIGHT + _pile.pile_height(listed.size(), hidden) + FOOT)
 	size = custom_minimum_size
 	_clamp_on_screen()
 
@@ -373,10 +334,10 @@ func _on_title_input(event: InputEvent) -> void:
 const DRAG_SLOP := 3.0
 
 
-## Floating variants can keep their own position without changing the
-## single-player hand's saved preference.
+## Each window writes its own key ([member settings_key]); the hotseat
+## seats override this and write nothing.
 func _remember_position() -> void:
-	Settings.set_value("hand_stack_pos", position)
+	Settings.set_value(settings_key, position)
 
 
 ## Is the card list hidden? (The header bar always stays.)

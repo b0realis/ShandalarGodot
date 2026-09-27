@@ -628,6 +628,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.37.md`: the opponent's hand window floats — the same
+  `StackHand` as the player's own, dragged by its bar, its corner in
+  `opp_hand_stack_pos`, bar-only while the hand is hidden; the plate and
+  its row are retired.
 - `docs/releases/0.40.36.md`: a card is opaque — no part of a `MiniCard`
   carries a `z_index`; the child list is the stack, `HOST_Z` is retired,
   and a card placed over another covers every pixel of it.
@@ -5233,6 +5237,18 @@ shandalar/
 │    host is the last child of its wrap and covers every pixel of the
 │    aura's subtree by that alone, and the right-hold lift puts it back
 │    at 0 (_lifted_rest_z);
+│    tests/ui/test_opponent_hand_window_2026_09_27.gd — THE OPPONENT'S
+│    HAND WINDOW FLOATS: the owner's "the enemy hand stack should be
+│    movable also (in player vs ai or ai vs ai) so it does not occlude
+│    anything" — it was a static plate (StackHand.title_plate) nailed
+│    into a row of the opponent's half; now it is the player's own
+│    StackHand (title_word "Opponent", settings_key opp_hand_stack_pos,
+│    bar_only_when_hidden) floating over the board: hidden it is the bar
+│    alone at an empty window's size, revealed it lists the cards with
+│    the preview wired, it starts where the row hung the plate, a drag
+│    moves it and keeps its own corner (never hand_stack_pos), a click
+│    folds nothing, the half spends no row on it, and a demo's two-seat
+│    windows drag as well;
 │    tests/ui/test_card_over_card_2026_09_27.gd — A CARD IS OPAQUE: the
 │    owner's card placed over another showed the one underneath's name
 │    and P/T through it, because a MiniCard's parts carried z 1 and 2 of
@@ -8459,11 +8475,17 @@ shandalar/
 │       │                      the one PLACED by its owner — the opening
 │       │                      window's — no drag, no clamp, never a word
 │       │                      to hand_stack_pos; the arrows still fold.
-│       │                      title_plate() is THE SAME WINDOW WITH NO
-│       │                      LIST — the opponent's hand, which manual
-│       │                      p.114 shows as its title bar alone; same
-│       │                      nine-patch, same margins, arrows left to
-│       │                      the texture (fortieth pass).
+│       │                      THE OPPONENT'S HAND IS THIS SAME WINDOW
+│       │                      (2026-09-27): title_word "Opponent",
+│       │                      settings_key "opp_hand_stack_pos",
+│       │                      bar_only_when_hidden — manual p.114's
+│       │                      title bar alone, the count on it, no
+│       │                      list and no [+] while the hand is hidden,
+│       │                      the cards stacked under the bar once it
+│       │                      is revealed; floats and drags like the
+│       │                      player's own (it was a static plate in a
+│       │                      row of the opponent's half, title_plate(),
+│       │                      the fortieth pass — retired).
 │       ├── fullscreen_card.gd class FullscreenCard — [QoL] off-by-default
 │       │                      full-screen reader attached only to the
 │       │                      duel/editor showcase. Reuses CardPreview,

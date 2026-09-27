@@ -5682,6 +5682,19 @@ func _toggle_hotseat_hand(pid: int) -> void:
 	_refresh()
 
 
+## The other seat's window in ordinary play (against the computer, or a
+## remote player): the player's own StackHand wearing the opponent's word
+## and colour, bar-only while the hand is hidden, at its own saved corner.
+func _make_opponent_hand() -> StackHand:
+	var hand := StackHand.new()
+	hand.title_word = OPPONENT_HAND_WORD
+	hand.settings_key = "opp_hand_stack_pos"
+	hand.bar_only_when_hidden = true
+	hand.position = Settings.opp_hand_stack_pos()
+	hand.set_deck_color(config.panel_colors[1])
+	return hand
+
+
 func _make_hotseat_hand(pid: int) -> HotseatHand:
 	var hand := HotseatHand.new()
 	hand.seat = pid
@@ -6961,8 +6974,8 @@ func _rebuild_placed(pid: int) -> void:
 ## `Your hand (N)` uses, and it is the whole reason manual p.114 gives for
 ## showing this bar: *"to keep you aware of how many cards are in that
 ## hand."* The ▲ / ▼ are NOT in the text — they are painted into the
-## `hand_panel_<colour>` sheet itself.
-const OPPONENT_HAND_TITLE := "Opponent (%d)"
+## `hand_panel_<colour>` sheet itself. StackHand adds the count.
+const OPPONENT_HAND_WORD := "Opponent"
 
 
 func _rebuild_hand(pid: int, container: Control) -> void:
@@ -6979,23 +6992,10 @@ func _rebuild_hand(pid: int, container: Control) -> void:
 			_on_card_clicked, _highlight_for)
 		_arm_hand_auto_cast(container)
 		return
+	# The fan: the player's own hand, never hidden — a hidden hand is
+	# always a StackHand above (the opponent's bar-only window, or a
+	# hotseat seat looking away).
 	_clear_children(container)
-	# Hidden opponent hand: the original shows THE HAND WINDOW'S TITLE BAR
-	# and nothing under it — manual p.114, *"Only the title bar of your
-	# opponent's hand is visible; this is to keep you aware of how many
-	# cards are in that hand."* Never a row of card backs.
-	#
-	# It is built by StackHand itself ([method StackHand.title_plate]) so it
-	# is the SAME window as the player's own — same nine-patch, same patch
-	# margins, same label placement. It used to be a disabled Button wearing
-	# the raw 145x51 sheet as an unpatched StyleBoxTexture at 150x22, which
-	# squashed the whole window into a strip and crushed the ▲ painted into
-	# its left edge (the owner's "cropped at left end"), and then wrote its
-	# own ↑ ↓ on top of the pair the sheet already paints.
-	if hidden:
-		container.add_child(StackHand.title_plate(config.panel_colors[pid],
-			OPPONENT_HAND_TITLE % game.players[pid].hand.size()))
-		return
 	for inst in _hand_order(pid):
 		container.add_child(_make_widget(inst))
 	if container is FanHand:
@@ -8440,26 +8440,27 @@ func _build_ui() -> void:
 	top_rows.squeezed = [_field_rows[1][Row.LANDS], _field_rows[1][Row.OTHER],
 		opp_creatures]
 
-	# The opponent's hand window — its TITLE BAR only (manual p.114), built
-	# by StackHand.title_plate so it is the same object as the player's.
-	# BOTTOM-RIGHT of the opponent's half, level with their creature row
-	# (the owner's screenshots), not at the top of the board.
-	var opp_hand_row := MarginContainer.new()
-	# Keep it clear of the right edge — the player's hand window lives there.
-	opp_hand_row.add_theme_constant_override("margin_right", 0 if config.private_hotseat() else 200)
+	# THE OPPONENT'S HAND WINDOW — the same StackHand as the player's own,
+	# FLOATING over the board and dragged by its bar exactly as the
+	# player's is, with a corner of its own in Settings
+	# ("opp_hand_stack_pos"). While their hand is hidden it is the window's
+	# TITLE BAR ONLY (manual p.114: *"Only the title bar of your opponent's
+	# hand is visible; this is to keep you aware of how many cards are in
+	# that hand."*); a revealed hand lists its cards under the bar the way
+	# the player's own does.
+	#
+	# It used to be a static plate hung in a row of the opponent's half —
+	# bottom-right, level with their creature row — and NAILED there:
+	# *"the enemy hand stack should be movable also (in player vs ai or ai
+	# vs ai) so it does not occlude anything"* (the owner, 2026-09-27). Its
+	# default corner is where that row put it, so nothing moves until it
+	# is dragged; and the half keeps the row's height for its cards. A
+	# hotseat or a demo builds the two-seat window instead, which floats
+	# and drags already.
 	var seat_stacks := config.private_hotseat() or _spectator_hands()
-	var opp_hand: Control = _make_hotseat_hand(1) if seat_stacks else HFlowContainer.new()
-	# Room for the whole plate: the window's top cap plus its foot. It read
-	# 24 while the old chip was a squashed 22px strip.
-	opp_hand.custom_minimum_size.y = StackHand.TITLE_HEIGHT + StackHand.FOOT
-	if opp_hand is HFlowContainer:
-		opp_hand.alignment = FlowContainer.ALIGNMENT_END
-	if seat_stacks:
-		add_child(opp_hand)
-		opp_hand_row.free()
-	else:
-		opp_hand_row.add_child(opp_hand)
-		top_rows.add_child(opp_hand_row)
+	var opp_hand: StackHand = _make_hotseat_hand(1) if seat_stacks \
+		else _make_opponent_hand()
+	add_child(opp_hand)   # child of the SCREEN, not the board: it floats
 	_hand_rows.append(opp_hand)
 
 	# NO message row in the board — the halves meet directly; the
@@ -8783,8 +8784,9 @@ func _build_ui() -> void:
 	# Local AI/automatic passing wait while reading. Online play inherits
 	# only the viewing/input guard; its remote referee keeps running.
 	_fullscreen_card.closed.connect(func() -> void: _refresh.call_deferred())
-	if _hand_rows[1] is StackHand:
-		_hand_rows[1].preview = _card_preview
+	for row in _hand_rows:
+		if row is StackHand:
+			row.preview = _card_preview
 	# `@MENU_HAND` (§6.12) on both hand windows. The 1997 table has one
 	# entry and it is `Help...`, so the whole menu is grey — it is here so
 	# the gesture answers rather than falling through to the territory

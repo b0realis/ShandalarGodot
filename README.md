@@ -118,8 +118,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([A card is opaque](docs/ROADMAP.md#2026-09-27--a-card-is-opaque-04036)):
-**8,079 GUT tests / 366,394 assertions**, plus **392 Python tests**
+Most recent full-suite verification ([The opponent's hand window floats](docs/ROADMAP.md#2026-09-27--the-opponents-hand-window-floats-04037)):
+**8,088 GUT tests / 366,250 assertions**, plus **392 Python tests**
 (the MCP server's five live tests play inside the GUT gate; one
 platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.

@@ -255,3 +255,12 @@ static func set_rule(key: String, value: bool, persist := true) -> void:
 ## BELOW the seam (the board's midpoint), growing downward.
 static func hand_stack_pos() -> Vector2:
 	return get_value("hand_stack_pos", Vector2(1062, 412))
+
+
+## Last dragged position of the OPPONENT's hand window (the same
+## StackHand, bar only while their hand is hidden). Default: where the
+## board's own row used to hang the plate — bottom-right of the
+## opponent's half, level with their creature row, clear of the player's
+## window on the right — so nothing moves until it is dragged.
+static func opp_hand_stack_pos() -> Vector2:
+	return get_value("opp_hand_stack_pos", Vector2(918, 351))

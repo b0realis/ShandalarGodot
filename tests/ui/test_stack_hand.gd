@@ -590,43 +590,41 @@ func test_card_art_is_inset_inside_its_frame() -> void:
 # pins exist because it was one: a disabled Button wearing the raw 145x51
 # `hand_panel_<colour>` sheet as an UNPATCHED `StyleBoxTexture` at 150x22,
 # which squashed the whole window into a strip and crushed the ▲ painted
-# into its left edge (the owner: "cropped at left end").
+# into its left edge (the owner: "cropped at left end"). Since 2026-09-27
+# it is literally a StackHand (`bar_only_when_hidden`), floating and
+# dragging like the player's own — tests/ui/test_opponent_hand_window_
+# 2026_09_27.gd pins the float; these pin the chrome.
 
-func _plate_label(plate: Control) -> Label:
-	for child in plate.get_children():
-		if child is Label:
-			return child
-		for grandchild in child.get_children():
-			if grandchild is Label:
-				return grandchild
-	return null
+func _opponent_window() -> StackHand:
+	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	screen.config = DuelConfig.vs_ai_default(AiProfile.wizard())
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	assert_true(screen.hidden_hands.has(1), "the AI's hand is face-down")
+	return screen._hand_rows[0] as StackHand   # [opponent, player]
 
 
-func test_the_opponents_plate_is_the_same_window_at_its_empty_height() -> void:
-	var plate := StackHand.title_plate("red", "Opponent (5)")
-	add_child_autofree(plate)
-	assert_eq(plate.custom_minimum_size,
+func test_the_opponents_window_is_the_same_window_at_its_empty_height() -> void:
+	var opp: StackHand = await _opponent_window()
+	assert_not_null(opp, "the opponent's window is a StackHand")
+	assert_eq(opp.size,
 		Vector2(StackHand.WIDTH, StackHand.TITLE_HEIGHT + StackHand.FOOT),
 		"the player's own window at zero rows — same width, same chrome")
 	var empty := StackHand.new()
 	add_child_autofree(empty)
-	assert_eq(plate.custom_minimum_size, empty.custom_minimum_size,
+	assert_eq(opp.size, empty.custom_minimum_size,
 		"and literally the size an empty StackHand takes")
 
 
-func test_the_opponents_plate_nine_patches_the_sheet_it_never_squashes_it() -> void:
+func test_the_opponents_window_nine_patches_the_sheet_it_never_squashes_it() -> void:
 	# The whole defect in one assertion: the sheet has a border, a title
 	# bar and two painted arrows, so it must be PATCHED, never scaled.
 	if not GameSkin.is_present():
 		pass_test("no 1997 skin imported; the flat fallback is exercised below")
 		return
-	var plate := StackHand.title_plate("red", "Opponent (5)")
-	add_child_autofree(plate)
-	var frame: NinePatchRect = null
-	for child in plate.get_children():
-		if child is NinePatchRect:
-			frame = child
-	assert_not_null(frame, "the plate is a nine-patch, not a stretched texture")
+	var opp: StackHand = await _opponent_window()
+	var frame: NinePatchRect = opp._frame
+	assert_true(frame.visible, "the window is a nine-patch, not a stretched texture")
 	assert_eq(frame.patch_margin_left, int(StackHand.BORDER))
 	assert_eq(frame.patch_margin_right, int(StackHand.BORDER))
 	assert_eq(frame.patch_margin_top, int(StackHand.TITLE_HEIGHT),
@@ -634,17 +632,16 @@ func test_the_opponents_plate_nine_patches_the_sheet_it_never_squashes_it() -> v
 	assert_eq(frame.patch_margin_bottom, int(StackHand.FOOT))
 	assert_eq(frame.axis_stretch_vertical,
 		NinePatchRect.AXIS_STRETCH_MODE_TILE)
-	assert_eq(frame.texture, StackHand.window_texture("red"),
-		"the same made-whole texture the player's own window wears")
+	var colour: String = (opp.get_parent() as DuelScreen).config.panel_colors[1]
+	assert_eq(frame.texture, StackHand.window_texture(colour),
+		"the same made-whole texture the player's own window wears, in the deck's colour")
 
 
-func test_the_opponents_plate_leaves_the_arrows_to_the_texture() -> void:
+func test_the_opponents_window_leaves_the_arrows_to_the_texture() -> void:
 	# The sheet paints ▲ at x 1..9 and ▼ at x 125..132. The old chip ALSO
 	# wrote them into its own text, so each appeared twice.
-	var plate := StackHand.title_plate("red", "Opponent (5)")
-	add_child_autofree(plate)
-	var label := _plate_label(plate)
-	assert_not_null(label, "the plate letters its title on the bar")
+	var opp: StackHand = await _opponent_window()
+	var label: Label = opp._title
 	assert_false(label.text.contains("↑"), "the ▲ belongs to the texture")
 	assert_false(label.text.contains("↓"), "and so does the ▼")
 	assert_eq(label.offset_left, StackHand.ARROW_ZONE + 2.0,
@@ -656,30 +653,21 @@ func test_the_opponents_hand_wears_the_1997_word() -> void:
 	# `Opponent`. s30's `Opp Hand` is s30's. The count in brackets is [QoL],
 	# in the same form our own `Your hand (N)` uses — and it is the reason
 	# manual p.114 gives for showing the bar at all.
-	assert_true(DuelScreen.OPPONENT_HAND_TITLE.begins_with("Opponent"),
+	assert_eq(DuelScreen.OPPONENT_HAND_WORD, "Opponent",
 		"the original's noun, not s30's abbreviation")
-	assert_eq(DuelScreen.OPPONENT_HAND_TITLE % 5, "Opponent (5)")
+	var opp: StackHand = await _opponent_window()
+	var count: int = (opp.get_parent() as DuelScreen).game.players[1].hand.size()
+	assert_eq(opp._title.text, "Opponent (%d)" % count, "the word, then the count")
 
 
-func test_the_duel_screen_hangs_that_plate_in_the_opponents_half() -> void:
-	# Seat 1 must be an AI for its hand to be HIDDEN — a hotseat or a demo
-	# shows both hands in full and there is no plate to find.
-	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
-	screen.config = DuelConfig.vs_ai_default(AiProfile.wizard())
-	add_child_autofree(screen)
-	await get_tree().process_frame
-	assert_true(screen.hidden_hands.has(1), "the AI's hand is face-down")
-	var row: Control = screen._hand_rows[0]   # [opponent, player]
-	assert_true(row is HFlowContainer, "the opponent's hand row exists")
-	assert_gte(row.custom_minimum_size.y,
-		StackHand.TITLE_HEIGHT + StackHand.FOOT,
-		"the row leaves the whole plate room")
-	assert_eq(row.get_child_count(), 1, "one plate, nothing else")
-	var label := _plate_label(row.get_child(0))
-	assert_not_null(label)
-	assert_eq(label.text,
-		DuelScreen.OPPONENT_HAND_TITLE % screen.game.players[1].hand.size(),
-		"and it counts the opponent's cards")
+func test_the_duel_screen_floats_that_window_over_the_opponents_half() -> void:
+	var opp: StackHand = await _opponent_window()
+	assert_eq(opp.get_parent().get_class(), "Control",
+		"a child of the screen, not of a board row")
+	assert_true(opp.get_parent() is DuelScreen)
+	assert_eq(opp._pile.get_child_count(), 0, "the bar alone, nothing else")
+	assert_eq(opp.position, Settings.opp_hand_stack_pos(),
+		"at its own saved corner")
 
 
 # --------------------------------- the ILLUSTRATOR CREDIT (Duel.hlp §6) --

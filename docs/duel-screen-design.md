@@ -122,7 +122,9 @@ show, feature by feature:
 - **Opponent hand**: the hand window's TITLE BAR ONLY, counting the cards
   ("Opponent (5)") — no card backs row. Manual p.114: *"Only the title bar
   of your opponent's hand is visible; this is to keep you aware of how many
-  cards are in that hand."* → `StackHand.title_plate`, the fortieth pass.
+  cards are in that hand."* → the fortieth pass; since 2026-09-27 the
+  opponent's window is literally the player's `StackHand`
+  (`bar_only_when_hidden`), floating and dragging like it.
 - **Prompt bar**: "Done | Fast Effects?...Discard Phase" — the phase
   question mark style; our prompt label should adopt this wording.
 - **Stack objects** render as small framed cards with an "Ability
@@ -1248,7 +1250,9 @@ already paints, so each arrow appeared twice.
 Manual p.114 settles what it should be: *"Only the title bar of your
 opponent's hand is visible; this is to keep you aware of how many cards are
 in that hand."* So it is not a chip at all — it is THIS WINDOW with no list
-under it, and `StackHand.title_plate` now builds it: the same made-whole
+under it, and `StackHand.title_plate` then built it (since 2026-09-27 the
+opponent's window is a `StackHand` itself, floating and dragging like the
+player's own — the plate and its row are retired): the same made-whole
 nine-patch, the same 11/36/11/7 patch margins, the same tiled vertical
 axis, the same label placement past the painted ▲. **The arrows are the
 texture's and the text has none** — s30 does exactly this
@@ -3139,7 +3143,10 @@ Sixth pass (measured against the owner's screenshots, 2026-08-31):
   the opponent's half (level with their creature row). *Superseded by the
   fortieth pass: it was a squashed copy of the whole window with the ▲ ▼
   written into its text as well as painted into its texture; it is now
-  `StackHand.title_plate` and says `Opponent (N)`.*
+  `StackHand.title_plate` and says `Opponent (N)`. Superseded again on
+  2026-09-27: the opponent's window is a `StackHand` of its own, floating
+  over the board and dragged by its bar — the owner: "the enemy hand
+  stack should be movable also ... so it does not occlude anything".*
 - Spell-chain items are a TAN caption box ("Ability Effect" / source
   name) over the real card scan, floating on the board — no panel.
   *Superseded by the forty-second pass: the caption keeps its tan box but

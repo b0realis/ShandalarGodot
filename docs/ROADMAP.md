@@ -17593,6 +17593,54 @@ the retired z's.
 Gate: 532 scripts, **8,079/8,079 tests, 366,394 asserts**, exit 0 in
 261 s over 6 shards; Python 392, exit 0.
 
+## 2026-09-27 — The opponent's hand window floats (0.40.37)
+
+The owner's playtest: *"the enemy hand stack should be movable also (in
+player vs ai or ai vs ai) so it does not occlude anything."* Against
+the computer, and across the wire, the opponent's hand was a PLATE —
+`StackHand.title_plate`, a `Control` carrying the window's nine-patch
+and its bar label and nothing else — hung in a `MarginContainer` row
+of the opponent's half, bottom-right, level with their creature row,
+with `mouse_filter = IGNORE`: no bar to drag, no corner of its own, and
+43px of the half spent on it whatever sat underneath. A hotseat's and
+a demo's two-seat windows (`HotseatHand`) floated and dragged already.
+
+**It is the player's own window now.** `DuelScreen._make_opponent_hand`
+builds a `StackHand` wearing the opponent's word and colour and adds
+it to the SCREEN, where the player's own stack lives: dragged by the
+middle of its bar, clamped to the viewport, its corner kept in Settings
+`opp_hand_stack_pos` (`Settings.opp_hand_stack_pos()`, default 918,351
+— where the row used to hang the plate, so nothing moves until it is
+dragged) and never in the player's `hand_stack_pos`. `StackHand` grew
+three knobs for it: `title_word` (`Your hand` / `Opponent`, the count
+following in the same bracket on both), `settings_key`, and
+`bar_only_when_hidden` — while the hand is hidden the window stands at
+its empty height with the count on the bar, manual p.114's *"only the
+title bar of your opponent's hand is visible"*, never a row of card
+backs and no `[+]` on a bar that withholds its list anyway; a revealed
+hand (Glasses of Urza, an unfair opponent) stacks its cards under the
+bar the way the player's own do, hovered into the shared preview. The
+static plate builder is retired, and so is the row: the opponent's
+creature row is the last thing in their half. The `H` key still folds
+the player's own window only.
+
+**How it is pinned.** `tests/ui/test_opponent_hand_window_2026_09_27.gd`
+(new, nine tests): against the computer the opponent's window is a
+floating, unpinned `StackHand` child of the screen at or above the free
+layer's z; hidden, it is the bar alone at exactly an empty `StackHand`'s
+size; revealed, it lists every card face up with the preview wired;
+it starts where the old row hung the plate, above the player's own
+window; a drag by the bar moves it, writes `opp_hand_stack_pos` and not
+`hand_stack_pos`, and the next duel opens it where it was left; a click
+on the bar folds nothing and writes nothing; the player's own window
+still writes its own key; the half spends no row on a plate; and a
+demo's two-seat windows drag as well, writing no preference. The five
+plate tests in `test_stack_hand.gd` now read the same chrome off the
+screen's opponent window.
+
+Gate: 533 scripts, **8,088/8,088 tests, 366,250 asserts**, exit 0 in
+263 s over 6 shards; Python 392, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
