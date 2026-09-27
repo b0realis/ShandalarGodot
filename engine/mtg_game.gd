@@ -9524,6 +9524,12 @@ func doom_at_next_end_step_if_it_did_not_attack(inst: CardInstance) -> void:
 	doom_at_next_end_step(inst, false, true)
 
 
+## Whether [param inst] is already on the end-step doom list (any of its
+## three shapes). The AI asks before it dooms a body a second time.
+func is_doomed_at_end_step(inst: CardInstance) -> bool:
+	return _end_step_doom.has(inst.id)
+
+
 ## Legend-rule helper: if 2+ battlefield permanents share [param legend_name],
 ## return the NEWEST (latest in timestamp order); else null.
 func _newest_duplicate_legend(legend_name: String) -> CardInstance:

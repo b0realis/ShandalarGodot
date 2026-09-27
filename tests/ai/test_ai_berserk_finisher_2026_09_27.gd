@@ -11,12 +11,13 @@ extends GameTest
 ##
 ## The effect now declares its shape ([member EffectBase.ai_role]
 ## `double_power_doomed`). [method AiPlayer._is_reactive] keeps it out of
-## every main phase, for every profile, and the one place it is offered
-## is the finisher in [method AiPlayer._offensive_combat_response]: once
-## the blocks are in, on an attacker of ours whose doubled power — or, if
+## every main phase, for every profile, and this suite's place for it is
+## the finisher in [method AiPlayer._offensive_combat_response]: once the
+## blocks are in, on an attacker of ours whose doubled power — or, if
 ## blocked, whose trample excess after lethal to each blocker (CR
 ## 702.19b) — ends the game on this attack. The creature dies at the end
-## step; the game is over first.
+## step; the game is over first. (Its other moment, the removal on THEIR
+## attacker, is test_ai_berserk_removal_2026_09_27.)
 ##
 ## Every test acts through AiPlayer.act / the public MtgGame API.
 
@@ -150,16 +151,18 @@ func test_holds_it_when_the_trample_excess_falls_short() -> void:
 	assert_eq(g.players[1].life, 5)
 
 
-func test_never_at_their_attacker_on_their_turn() -> void:
-	# Berserk on THEIR attacker would double what hits us and give it
-	# trample for the price of a creature they may not even lose (it is
-	# destroyed only at the end step); the AI has no reading for that
-	# trade and does not make it.
+func test_holds_it_at_their_attacker_when_the_life_is_dear() -> void:
+	# Berserk on THEIR attacker IS a removal — the doom falls at the end
+	# step on a body that attacked (the owner: *"beserk can be removal in
+	# certain cases!"*; test_ai_berserk_removal_2026_09_27 reads the
+	# cases) — but it doubles what hits us first. At eight life a Giant
+	# doubled would leave two: held, three taken.
 	var ai := _wizard()
 	put_battlefield(0, "Forest")
 	put_battlefield(0, "Forest")
 	var berserk := give_hand(0, "Berserk")
 	var theirs := put_battlefield(1, "Hill Giant")
+	g.players[0].life = 8
 	advance_to_next_turn()
 	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
 	assert_ok(g.declare_attackers(1, [theirs.id]))
@@ -176,4 +179,4 @@ func test_never_at_their_attacker_on_their_turn() -> void:
 		guard += 1
 	assert_eq(acts, [], "the AI passed through their whole combat")
 	assert_eq(berserk.zone, Mtg.Zone.HAND)
-	assert_eq(g.players[0].life, 17, "three from the Giant, not six")
+	assert_eq(g.players[0].life, 5, "three from the Giant, not six")

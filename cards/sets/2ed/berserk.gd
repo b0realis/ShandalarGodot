@@ -21,10 +21,14 @@ extends CardScript
 ## how the playtest found *"ai casts it sometimes in first turn"*: a
 ## Berserk thrown at the opponent's turn-one creature, which on the AI's
 ## own turn had not attacked and could never be doomed. The role keeps it
-## out of every main phase (AiPlayer._is_reactive) and offers it in one
-## place only — the finisher on an attacker of ours once the blocks are
-## in (AiPlayer._offensive_combat_response), where the end-step doom
-## costs nothing because the game is over.
+## out of every main phase (AiPlayer._is_reactive) and offers it in two
+## places, both with the blocks in: the finisher on an attacker of ours
+## (AiPlayer._offensive_combat_response), where the end-step doom costs
+## nothing because the game is over — and the REMOVAL on an attacker of
+## theirs (AiPlayer._berserk_their_attacker; the owner: *"beserk can be
+## removal in certain cases!"*), where the doom IS the point and the
+## doubled, trampling damage it lands first is the price, paid only
+## while our life is plentiful.
 
 
 func build() -> CardData:

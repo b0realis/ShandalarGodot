@@ -628,6 +628,13 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.40.md`: Berserk is removal on their attacker —
+  with their blocks in, `AiPlayer._berserk_their_attacker` prices the
+  end-step doom against what the doubled, trampling body lands on the
+  AI and on its blockers first (the engine's own damage division, run
+  at the power it has and at double with trample), and casts it when
+  the margin is worth the card; `MtgGame.is_doomed_at_end_step` keeps a
+  doomed body from being doomed twice. The finisher is unchanged.
 - `docs/releases/0.40.39.md`: the opponent chooser fires as the Vise
   enters — Black Vise, The Rack and Cursed Rack put "choose an opponent"
   to the caster's seat (`MtgGame.choose_opponent`) instead of deciding
@@ -2093,7 +2100,8 @@ shandalar/
 │   │                          (Whirling Dervish). Also: create_token,
 │   │                          schedule_end_step_token, flip_coin (all
 │   │                          RNG through game.rng), remove_from_combat,
-│   │                          gain_control_leashed, doom_at_next_end_step,
+│   │                          gain_control_leashed, doom_at_next_end_step
+│   │                          (and is_doomed_at_end_step, its reading),
 │   │                          shuffle_graveyard_into_library,
 │   │                          shuffle_library / reorder_top_of_library
 │   │                          (journaled; Natural Selection's DONE and
@@ -3629,6 +3637,18 @@ shandalar/
 │   │                          attacker of ours whose doubled power, or
 │   │                          trample excess over its blockers, is
 │   │                          lethal on this attack.
+│   │                          _berserk_their_attacker is the same card as
+│   │                          REMOVAL (2026-09-27, the owner: "beserk can
+│   │                          be removal in certain cases!"): with their
+│   │                          blocks in, each attacker of theirs priced
+│   │                          at its worth less the blockers of ours the
+│   │                          doubling newly kills less the extra damage
+│   │                          at the reaper's rate (default_damage_split
+│   │                          run at its power and at double with
+│   │                          trample), the best taken at a margin of
+│   │                          four; never under seven life after the
+│   │                          swing, never on a body that dies anyway,
+│   │                          regenerates, is already doomed or bands.
 │   │                          A REFUSAL THE PLANNER CAN WAIT OUT IS NOT A
 │   │                          REFUSAL (_wait_out, 2026-09-05): the taps
 │   │                          come before the announcement, so a
@@ -6719,8 +6739,19 @@ shandalar/
 │    creature or ours in either main phase, the effect's ai_role read by
 │    _is_reactive; with the blocks in, cast on an unblocked Hill Giant at
 │    6 life and held at 7, cast over a Bears block at 4 (trample excess
-│    exactly the game) and held at 5; and never at their attacker on
-│    their turn;
+│    exactly the game) and held at 5; and held at their attacker at
+│    eight life;
+│    tests/ai/test_ai_berserk_removal_2026_09_27.gd — BERSERK IS REMOVAL
+│    ON THEIR ATTACKER: a Hill Giant unblocked at twenty berserked (six
+│    taken, destroyed at their end step); the classic, the Giant held
+│    by a Wall of Stone, dead for {G} with nothing through; a Fire
+│    Elemental through a Bears chump priced by the engine's own trample
+│    division (eight taken); held at twelve (under the floor) and at
+│    thirteen (every point whole); never at a Bear; held when the
+│    doubling would kill our Wall of Wood, when the attacker dies in the
+│    combat anyway, when it wears a regeneration shield, and a second
+│    time on a body already doomed; the finisher still fires on our own
+│    attack;
 │    tests/ai/test_ai_w_hand_2026_09_10.gd — THE HAND'S WEIGHT, EXPOSED
 │    FOR A SWEEP: every preset ships Evaluator.W_HAND (the pin that keeps
 │    the constant and the field from drifting, since the evaluator reads

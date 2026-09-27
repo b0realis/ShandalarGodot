@@ -7952,6 +7952,14 @@ func _defensive_combat_response(game: MtgGame) -> String:
 					continue
 				if game.activate_ability(pid, inst, index, [TargetRef.card(victim)]) == "":
 					return "executed %s with %s" % [victim.data.card_name, inst.data.card_name]
+	# THE DOUBLING PUMP AS REMOVAL (2026-09-27, Berserk — the owner's ear:
+	# *"beserk can be removal in certain cases!"*): their attacker, blocks
+	# in, destroyed at the end step for the damage it lands doubled in
+	# the meantime. See [method _berserk_their_attacker].
+	if game.current_step() == Mtg.Step.DECLARE_BLOCKERS:
+		var doomed := _berserk_their_attacker(game)
+		if doomed != "":
+			return doomed
 	# Giant Growth to flip a losing block into a surviving one.
 	if game.current_step() == Mtg.Step.DECLARE_BLOCKERS:
 		var pump := _find_pump_instant(game)
@@ -8177,13 +8185,15 @@ func _offensive_combat_response(game: MtgGame) -> String:
 	# playtest's *"ai casts it sometimes in first turn"*, a card given
 	# away. The effect now declares its shape ([member EffectBase.ai_role]
 	# `double_power_doomed`), [method _is_reactive] keeps it out of every
-	# main phase, and it is offered HERE and nowhere else, like the +X/+0
-	# finisher above and for the same reason: the creature it doubles is
-	# destroyed at the end step, which costs a creature in every game but
-	# the one that ends on this attack. Unblocked, it adds the attacker's
-	# own power to what already lands; blocked, the trample it grants
-	# carries what is left after lethal to each blocker over to the player
-	# (CR 702.19b) — and a blocked attacker was adding nothing at all.
+	# main phase, and it is offered HERE, like the +X/+0 finisher above
+	# and for the same reason: the creature it doubles is destroyed at
+	# the end step, which costs a creature in every game but the one that
+	# ends on this attack. Unblocked, it adds the attacker's own power to
+	# what already lands; blocked, the trample it grants carries what is
+	# left after lethal to each blocker over to the player (CR 702.19b) —
+	# and a blocked attacker was adding nothing at all. Its other moment
+	# is THEIR attack — [method _berserk_their_attacker], where the same
+	# doom is the removal.
 	if not unblocked.is_empty() or not game.combat.blocks.is_empty():
 		var doubling := _find_doubling_pump(game)
 		if doubling != null and not game.combat_damage_prevented \
@@ -8606,7 +8616,9 @@ func _find_pump_instant(game: MtgGame) -> CardInstance:
 
 ## The doubling pump with a doom in hand (Berserk's shape, declared by the
 ## effect's [member EffectBase.ai_role]), affordable and castable now — or
-## null. Read by the finisher in [method _offensive_combat_response] only.
+## null. Read in two places: the finisher in [method
+## _offensive_combat_response] and the removal in [method
+## _berserk_their_attacker].
 func _find_doubling_pump(game: MtgGame) -> CardInstance:
 	for inst in game.players[pid].hand:
 		if not inst.is_type(Mtg.CardType.INSTANT) or inst.data.spell_effects.size() != 1 \
@@ -8618,6 +8630,107 @@ func _find_doubling_pump(game: MtgGame) -> CardInstance:
 				or game.players[pid].mana_pool.can_pay(inst.data.cost):
 			return inst
 	return null
+
+
+## THE DOUBLING PUMP AS REMOVAL (2026-09-27, Berserk — the other half of
+## the shape the finisher reads, and the owner's own ear: *"beserk can be
+## removal in certain cases!"*). Berserk on an attacker of THEIRS, blocks
+## in, is a destroy at the end step — *"destroy that creature if it
+## attacked this turn"*, and it has — paid for in what the doubling and
+## the trample it grants land on us and on our blockers in the meantime.
+## The classic is the Giant held by a Wall it cannot get through even
+## doubled, which then dies for one green mana; the honest one is six
+## from a Hill Giant instead of three at twenty life.
+##
+## Each attacker is priced the way the removal arm above prices its
+## victims: its worth, less the blockers of ours the doubling newly kills
+## (the engine's own division, [method MtgGame.default_damage_split],
+## run twice over the band — at the power it has and at double with
+## trample — so the reading and the damage step cannot disagree), less
+## the extra damage at the reaper's rate (a third of a life point while
+## we stay above ten, the whole point below). The best margin is taken
+## when it is worth the card — the removal arm's own bar, four here
+## because nothing is prevented, only bought. Never when the doubled
+## swing would leave us under seven; never on a body that dies in this
+## combat anyway, that they can regenerate (the doom is a destroy), that
+## is already doomed, that bands (the band divides its own damage), or
+## that Berserk cannot target. Returns the response string, or "".
+func _berserk_their_attacker(game: MtgGame) -> String:
+	if game.combat_damage_prevented:
+		return ""
+	var berserk := _find_doubling_pump(game)
+	if berserk == null:
+		return ""
+	var spec: TargetSpec = berserk.data.spell_effects[0].target_spec
+	if spec == null:
+		return ""
+	var me := game.players[pid]
+	var landing := _declared_damage(game)
+	var total := 0
+	for landed in landing.values():
+		total += int(landed)
+	var best: CardInstance = null
+	var best_worth := 0.0
+	for attacker_id in game.combat.attackers:
+		var attacker := game.find_instance(attacker_id)
+		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD \
+				or attacker.controller_id == pid or attacker.cur_power <= 0 \
+				or attacker.cur_indestructible or attacker.cur_assigns_no_combat_damage \
+				or game.is_doomed_at_end_step(attacker) or _shieldable(game, attacker):
+			continue
+		var band := game.combat.band_of(attacker_id)
+		if band.size() != 1:
+			continue
+		if not spec.is_legal(game, TargetRef.card(attacker), berserk):
+			continue
+		var blockers: Array[CardInstance] = []
+		var blocker_ids: Array = []
+		if game.combat.was_blocked(band) and not attacker.cur_damage_as_unblocked:
+			for blocker_id in game.combat.ordered_blockers_of_band(band):
+				var blocker := game.find_instance(int(blocker_id))
+				if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD:
+					blockers.append(blocker)
+					blocker_ids.append(blocker.id)
+		# A body that dies to its blockers needs no doom.
+		var punch := 0
+		var dies_anyway := false
+		for blocker in blockers:
+			punch += maxi(blocker.cur_power, 0)
+			if _dies_to(game, attacker, blocker):
+				dies_anyway = true
+		if dies_anyway or (blockers.size() > 1 and not attacker.cur_indestructible \
+				and punch >= attacker.cur_toughness - attacker.damage):
+			continue
+		# What it lands doubled and trampling, against what it lands now.
+		var doubled := attacker.cur_power * 2
+		var lands_after := doubled
+		var lost := 0.0
+		if not blockers.is_empty():
+			var before := game.default_damage_split(attacker, blocker_ids,
+				attacker.cur_power, attacker.has_keyword(Mtg.Keyword.TRAMPLE), {}, false)
+			var after := game.default_damage_split(attacker, blocker_ids, doubled,
+				true, {}, false)
+			lands_after = int(after.get(MtgGame.DAMAGE_TO_PLAYER, 0))
+			for blocker in blockers:
+				if blocker.cur_indestructible:
+					continue
+				var lethal := blocker.cur_toughness - blocker.damage
+				if int(after.get(blocker.id, 0)) >= lethal \
+						and int(before.get(blocker.id, 0)) < lethal:
+					lost += Evaluator.permanent_value(blocker, profile)
+		var extra := lands_after - int(landing.get(attacker.id, 0))
+		var left := me.life - total - extra
+		if left < 7:
+			continue
+		var rate := 1.0 if left <= 10 else 0.34
+		var worth := Evaluator.permanent_value(attacker, profile) - lost \
+			- float(maxi(extra, 0)) * rate
+		if worth >= 4.0 and worth > best_worth:
+			best = attacker
+			best_worth = worth
+	if best == null:
+		return ""
+	return _cast_response(game, berserk, [TargetRef.card(best)])
 
 
 ## THE TRICK'S OWN BOOKING (2026-09-10, [member AiProfile.holds_tricks];
@@ -11037,7 +11150,8 @@ func _is_reactive(data: CardData) -> bool:
 	# that, on OUR turn, has not attacked and cannot be doomed (the
 	# playtest: *"ai casts it sometimes in first turn"*). The effect
 	# declares its shape and the response framework alone may fire it:
-	# [method _offensive_combat_response], the finisher.
+	# [method _offensive_combat_response], the finisher, and [method
+	# _berserk_their_attacker], the removal on their attacker.
 	for effect in data.spell_effects:
 		if effect.ai_role == &"double_power_doomed": return true
 	return false

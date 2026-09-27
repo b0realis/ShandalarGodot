@@ -17736,9 +17736,9 @@ main phase for every profile, and it is offered in one place only:
 for the same reason — once the blocks are in, on an attacker of ours
 whose doubled power (unblocked) or whose trample excess after lethal to
 each blocker (CR 702.19b) ends the game on this attack. The creature
-dies at the end step; the game is over first. Their attacker on their
-turn is never berserked: doubling what hits us for a creature they may
-not even lose is a trade the AI has no reading for.
+dies at the end step; the game is over first. (Their attacker on their
+turn was left alone here — a trade the AI had no reading for. It has
+one since 0.40.40, the next section: the owner's ear.)
 
 No "fifth" report reached this log — the owner's numbering ran from the
 fourth to the sixth.
@@ -17762,11 +17762,61 @@ the playtest itself — their lone creature, Berserk and a Forest in
 hand, first main phase — is a pass; not our own creature in either
 main phase; the effect's role and `_is_reactive` reading it; with the
 blocks in, cast on an unblocked Hill Giant at 6 life and held at 7,
-cast over a Bears block at 4 and held at 5; never at their attacker on
-their turn.
+cast over a Bears block at 4 and held at 5; held at their attacker
+when the life is dear (retuned in 0.40.40).
 
 Gate: 537 scripts, **8,111/8,111 tests, 366,317 asserts**, exit 0 in
 265 s over 6 shards; Python 392, exit 0.
+
+## 2026-09-27 — Berserk is removal on their attacker (0.40.40)
+
+The owner, reading the finisher's *"never on the opponent's attacker"*:
+*"beserk can be removal in certain cases!"* It can — and the cases are
+readable. *"At the beginning of the next end step, destroy that
+creature if it attacked this turn"* is a destroy, and an attacker of
+theirs has attacked; what stands between the AI and that destroy is the
+damage the doubled, trampling body lands first, on the AI and on the
+blockers in its way.
+
+**The reading.** `AiPlayer._berserk_their_attacker`, run from
+`_defensive_combat_response` with their blocks in, prices every
+attacker of theirs the way the removal arm beside it prices its
+victims: the attacker's worth, less the blockers of ours the doubling
+newly kills, less the extra damage at the reaper's rate — a third of a
+life point while the AI stays above ten, the whole point below. The
+damage is the engine's own division (`MtgGame.default_damage_split`,
+run over the band at the power it has and at double with trample), so
+the reading and the damage step cannot disagree about what tramples
+over a chump. The best margin is taken when it is worth the card —
+four, the removal arm's own bar less the damage that arm prevents and
+this one buys. So: a Hill Giant held by a Wall of Stone dies for {G}
+and nothing comes through (the classic); an unblocked Giant at twenty
+is six damage for a six-point body; a Fire Elemental through a Bears
+chump is eight over the Bears for a nine-point body. Never when the
+doubled swing would leave the AI under seven; never at a Bear (a card
+for four points less two life is not the trade); never on a body that
+dies in the combat anyway, that they can regenerate (the doom is a
+destroy), that is already doomed (`MtgGame.is_doomed_at_end_step`, new
+— a second Berserk stays in hand), that bands, or that Berserk cannot
+target. The finisher on the AI's own attack is unchanged, and so is
+the main-phase fence: Berserk is still never a sorcery.
+
+**How it is pinned.** `tests/ai/test_ai_berserk_removal_2026_09_27.gd`
+(new, eleven tests): the Giant unblocked at twenty berserked, six
+taken, destroyed as their end step begins; the Giant into a Wall of
+Stone berserked, the Wall standing with six on it and nothing through;
+the Fire Elemental through the Bears priced by the engine's trample
+division, eight taken; held at twelve and at thirteen, never at a
+Bear, held when the doubling would kill our Wall of Wood, when the
+attacker dies to our own Hill Giant anyway, when it wears a
+regeneration shield, and a second time on a body already doomed; the
+finisher still the kill on our own attack.
+`test_ai_berserk_finisher_2026_09_27.gd`'s *"never at their attacker"*
+became *"held at their attacker when the life is dear"* — eight life,
+three taken, Berserk kept.
+
+Gate: 538 scripts, **8,122/8,122 tests, 367,055 asserts**, exit 0 in
+276 s over 6 shards; Python 392, exit 0.
 
 ## Standing quality gates
 
