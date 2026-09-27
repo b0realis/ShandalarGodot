@@ -53,6 +53,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import shandalar_mcp as mcp  # noqa: E402
@@ -735,6 +736,119 @@ class FakeDoorTest(unittest.TestCase):
         self.assertEqual(first["decision"]["n"], 0)
         self.client.payload("referee_stop", {"game": game})
         self.assertIn(["referee", "--join", "sglan1:abc", "--deck", "a.deck", "--wait", "77"], self.calls())
+
+
+class WindowsDoorTest(unittest.TestCase):
+    """Native release dispatch, without a shell or a Windows host dependency."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp native & space ")
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name).resolve()
+        self.door = self.home / "Shandalar.console.exe"
+        self.door.touch()
+        self.server = mcp.Server(self.door, self.home / "workspace")
+        self.addCleanup(self.server.shutdown)
+
+    def test_native_verbs_and_arguments_never_go_through_a_shell(self):
+        routes = {"lab": ["--deck-lab"], "autodeck": ["--auto-deck"],
+                  "referee": ["--referee"], "query": ["--lab-query"],
+                  **{v: ["--lab-query", v] for v in ("packs", "cards", "check")}}
+        args = ["a deck & other.deck", "Éowyn; $HOME", 'a"b']
+        for verb, flags in routes.items():
+            with self.subTest(verb=verb), mock.patch.object(mcp.subprocess, "run") as run:
+                self.server.run(verb, args, timeout=17)
+                self.assertEqual(run.call_args.args[0],
+                                 [str(self.door), "--headless", "--no-header", "--", *flags, *args])
+                self.assertFalse(run.call_args.kwargs.get("shell", False))
+                self.assertEqual(run.call_args.kwargs["cwd"], str(self.home))
+                self.assertEqual(run.call_args.kwargs["timeout"], 17)
+
+    def test_referee_uses_the_same_native_route(self):
+        with mock.patch.object(mcp, "Game") as game:
+            self.server.new_game(["--deck-a", "a & b.deck"], "brief")
+            self.assertEqual(game.call_args.args[1],
+                             [str(self.door), "--headless", "--no-header", "--",
+                              "--referee", "--deck-a", "a & b.deck"])
+
+    def test_release_version_is_metadata_not_the_godot_version(self):
+        with mock.patch.object(mcp.subprocess, "run") as run:
+            for value, expected in (("9.9.9\n", "9.9.9"), ("1.2.3-rc.1\n", "1.2.3-rc.1"),
+                                    ("4.7.2.stable\n", ""), ("garbage", "")):
+                (self.home / "VERSION.txt").write_text(value, encoding="utf-8")
+                self.assertEqual(mcp.Server(self.door, self.home).version(), expected)
+            (self.home / "VERSION.txt").unlink()
+            self.assertEqual(self.server.version(), "")
+            run.assert_not_called()
+
+    def test_discovery_finds_native_release_without_unix_door(self):
+        script = self.home / "tools" / "shandalar_mcp.py"
+        with mock.patch.object(mcp, "__file__", str(script)):
+            self.assertEqual(mcp.find_door(None), self.door)
+            self.assertEqual(mcp.find_door(str(self.door)), self.door)
+
+    def test_native_help_and_unsupported_converter_do_not_boot_the_gui(self):
+        with mock.patch.object(mcp.subprocess, "run") as run:
+            manual = self.server.tool_manual({"verb": "door"})
+            self.assertEqual(manual["exit"], 0)
+            self.assertIn("referee", manual["text"])
+            for verb in ("convert", "unexpected"):
+                with self.assertRaises(mcp.ToolError) as caught:
+                    self.server.run(verb, ["in.deck", "out.dck"])
+                self.assertEqual(caught.exception.envelope["exit"], 2)
+            run.assert_not_called()
+
+    def test_stdio_is_utf8_even_under_a_non_utf8_python_locale(self):
+        message = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+            "name": "write_deck", "arguments": {"file": "unicode.deck", "name": "Žarek 魔法",
+                                                   "cards": ["20 Mountain"], "check": False}}}
+        done = subprocess.run([sys.executable, str(SERVER), "--door", str(self.door)],
+                              input=json.dumps(message, ensure_ascii=False) + "\n",
+                              capture_output=True, text=True, encoding="utf-8", timeout=20,
+                              env={**os.environ, "PYTHONIOENCODING": "ascii"})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        answer = json.loads(done.stdout)["result"]
+        self.assertFalse(answer["isError"], answer)
+        self.assertEqual(answer["structuredContent"]["name"], "Žarek 魔法")
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable stand-in; native argument tests run everywhere")
+    def test_native_pipe_covers_tools_and_a_live_referee_session(self):
+        # Simulate the packaged PE's argument boundary, not a Windows runtime.
+        adapter = '''args = sys.argv[1:]
+assert args[:3] == ["--headless", "--no-header", "--"], args
+args = args[3:]
+flag = args.pop(0)
+verb = {"--deck-lab": "lab", "--auto-deck": "autodeck", "--referee": "referee"}.get(flag)
+if flag == "--lab-query":
+    verb = args.pop(0)
+assert verb is not None, flag
+args = [verb, *args]'''
+        self.door.write_text(FAKE_DOOR.replace("args = sys.argv[1:]", adapter), encoding="utf-8")
+        self.door.chmod(0o755)
+        (self.home / "VERSION.txt").write_text("9.9.9\n", encoding="utf-8")
+        client = Client(self.door, self.home / "workspace")
+        try:
+            self.assertEqual(client.ask("initialize")["result"]["serverInfo"]["version"], "9.9.9")
+            self.assertIn("packs", client.payload("packs"))
+            self.assertTrue(client.payload("cards", {"names": ["Lightning Bolt"]})["cards"][0]["known"])
+            written = client.payload("write_deck", {"file": "red & green.deck", "name": "Éowyn",
+                                                     "cards": ["4 Lightning Bolt", "20 Mountain"]})
+            self.assertTrue(written["playable"])
+            self.assertEqual(client.payload("read_deck", {"deck": "red & green.deck"})["name"], "Éowyn")
+            self.assertTrue(client.payload("check_deck", {"decks": ["red & green.deck"]})["playable"])
+            self.assertEqual(client.payload("lab", {"deck_a": "red & green.deck", "deck_b": "b.deck",
+                                                     "out": "workspace/run"})["exit"], 0)
+            self.assertEqual(client.payload("autodeck", {"out": "workspace/field", "count": 2})["count"], 2)
+            opened = client.payload("referee_start", {"deck_a": "red & green.deck", "deck_b": "b.deck"})
+            self.assertEqual(opened["decision"]["mode"], "opening")
+            ended = client.payload("referee_act", {"game": opened["game"], "action": {"op": "concede"}})
+            self.assertEqual(ended["result"]["reason"], "concede")
+        finally:
+            stderr = client.close()
+        self.assertEqual(stderr, "")
+        calls = [json.loads(line) for line in (self.home / "calls.log").read_text().splitlines()]
+        self.assertTrue(calls)
+        self.assertTrue(all(args[:3] == ["--headless", "--no-header", "--"] for args in calls))
 
 
 class ShutdownTest(unittest.TestCase):

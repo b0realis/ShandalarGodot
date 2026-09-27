@@ -88,6 +88,7 @@ class PackageReleaseTest(unittest.TestCase):
                         entries = archive.namelist()
                         self.assertIn(prefix + "agentic-playgude-mtg.md", entries)
                         self.assertEqual(archive.read(prefix + "agentic-playgude-mtg.md"), b"fixture")
+                        self.assertEqual(archive.read(prefix + "VERSION.txt"), b"1.2.3\n")
                         for name in names:
                             self.assertIn(prefix + name, entries)
                         for name in (*pack.BUILDER_DATA, pack.BASE_ASSIGNMENTS):
@@ -137,6 +138,7 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn("exec ./lab_query.sh ", archive.read(prefix + "shandalar.sh").decode())
                             self.assertIn("exec ./referee.sh ", archive.read(prefix + "shandalar.sh").decode())
                         if platform == "windows64":
+                            self.assertIn("Bash is not required", readme)
                             self.assertIn("-- --auto-deck %*", archive.read(prefix + "auto_deck.bat").decode())
                             self.assertIn("-- --lab-query %*", archive.read(prefix + "lab_query.bat").decode())
                             self.assertIn("-- --referee %*", archive.read(prefix + "referee.bat").decode())
@@ -156,6 +158,23 @@ class PackageReleaseTest(unittest.TestCase):
                             launcher = archive.read(prefix + "run.sh").decode()
                             self.assertIn("--resolution 1280x800", launcher)
                             self.assertIn("--max-fps 60", launcher)
+
+    def test_extracted_windows_mcp_discovers_the_console_and_game_version(self):
+        self.make_export("windows64")
+        output = self.build("windows64")[0]
+        extracted = Path(self.temp.name) / "extracted & space"
+        with zipfile.ZipFile(output) as archive:
+            archive.extractall(extracted)
+        script = extracted / "Shandalar-1.2.3-windows64/tools/shandalar_mcp.py"
+        catalogue = subprocess.run([sys.executable, str(script), "--catalogue"],
+                                   cwd=self.temp.name, capture_output=True, text=True, timeout=20)
+        self.assertEqual(catalogue.returncode, 0, catalogue.stderr)
+        self.assertIn("referee_start", [t["name"] for t in json.loads(catalogue.stdout)["tools"]])
+        version = subprocess.run([sys.executable, str(script), "--version"],
+                                 cwd=self.temp.name, capture_output=True, text=True,
+                                 encoding="utf-8", timeout=20)
+        self.assertEqual(version.returncode, 0, version.stderr)
+        self.assertIn("Shandalar 1.2.3", version.stdout)
 
     def test_architecture_specific_launch_instructions(self):
         self.assertIn("arm64", pack.START["macos-arm64"])

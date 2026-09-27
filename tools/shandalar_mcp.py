@@ -5,7 +5,8 @@ Context Protocol (2026-09-27).
 One process on stdio: JSON-RPC 2.0, one message a line, the protocol's
 `initialize`, `tools/list`, `tools/call`, `resources/list` and
 `resources/read`, and nothing else. Every tool is a thin wrapper over
-the one door, `./shandalar.sh` (AGENTS.md is the contract): the door's
+the one door, `./shandalar.sh` (or a Windows release's console executable;
+AGENTS.md is the contract): the door's
 verbs run as subprocesses, their JSON comes back as the tool's
 `structuredContent`, their refusal envelopes come back as `isError`
 results with the envelope intact, and the referee's pipe is kept open
@@ -80,6 +81,7 @@ SERVER_NAME = "shandalar"
 PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
 LATEST_PROTOCOL = PROTOCOL_VERSIONS[-1]
 DOOR_NAME = "shandalar.sh"
+WINDOWS_DOOR = "Shandalar.console.exe"
 CONTRACT = "AGENTS.md"
 PLAY_GUIDE = "agentic-playgude-mtg.md"
 WORKSPACE = "workspace"
@@ -548,6 +550,7 @@ class Server:
     def __init__(self, door: Path, workspace: Path):
         self.door = door.resolve()
         self.root = self.door.parent
+        self.native = self.door.name.lower() == WINDOWS_DOOR.lower()
         self.workspace = workspace if workspace.is_absolute() else (self.root / workspace)
         self.workspace = self.workspace.resolve()
         self.games: dict[str, Game] = {}
@@ -557,11 +560,25 @@ class Server:
 
     # ----- the door ---------------------------------------------------------
 
+    def command(self, verb: str, args: list[str]) -> list[str]:
+        """One route for batch tools AND the persistent referee. Launch the
+        Windows console executable directly: no Bash, cmd.exe or .bat quoting."""
+        if not self.native:
+            return [str(self.door), verb, *args]
+        routes = {"lab": ["--deck-lab"], "autodeck": ["--auto-deck"],
+                  "referee": ["--referee"], "query": ["--lab-query"],
+                  **{v: ["--lab-query", v] for v in ("packs", "cards", "check")}}
+        if verb not in routes:
+            message = ("Deck conversion requires the source checkout's deck converter."
+                       if verb == "convert" else f"No native release command '{verb}'.")
+            raise refusal("shandalar", "option", message, flag=verb)
+        return [str(self.door), "--headless", "--no-header", "--", *routes[verb], *args]
+
     def run(self, verb: str, args: list[str], timeout: float = DEFAULT_TIMEOUT) -> subprocess.CompletedProcess:
         env = dict(os.environ)
         env["SHANDALAR_NO_BANNER"] = "1"
         env["NO_COLOR"] = "1"
-        argv = [str(self.door), verb, *args]
+        argv = self.command(verb, args)
         try:
             return subprocess.run(argv, cwd=str(self.root), capture_output=True, text=True,
                                   encoding="utf-8", errors="replace", timeout=timeout,
@@ -596,6 +613,16 @@ class Server:
 
     def version(self) -> str:
         if self.version_cache is None:
+            if self.native:
+                # --version on the executable is GODOT's version, not the game.
+                # The packager generates this from project.godot, like the shell door.
+                try:
+                    value = (self.root / "VERSION.txt").read_text(encoding="utf-8").strip()
+                except (OSError, UnicodeError):
+                    value = ""
+                self.version_cache = value if re.fullmatch(
+                    r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", value) else ""
+                return self.version_cache
             try:
                 done = self.run("-V", [], timeout=60)
                 found = re.search(r"\d+\.\d+\.\d+\S*", done.stdout)
@@ -971,6 +998,11 @@ class Server:
         if verb not in MANUALS:
             raise refusal("shandalar", "option", f"no manual `{verb}`", flag="verb",
                           suggestions=difflib.get_close_matches(verb, MANUALS, n=3))
+        if self.native and verb == "door":
+            return {"verb": verb, "exit": 0,
+                    "text": "Windows release tools: lab, autodeck, check, packs, cards, query, referee.\n"
+                    "MCP launches Shandalar.console.exe directly; no shell is required.\n"
+                    "Request each tool's manual for its arguments. Deck conversion requires a source checkout.\n"}
         argv = ["--help"] if verb == "door" else [verb, "--help"]
         done = self.run(argv[0], argv[1:], timeout=120)
         text = done.stdout if done.stdout.strip() else done.stderr
@@ -1276,7 +1308,7 @@ class Server:
         ident = f"g{self.next_game}"
         self.next_game += 1
         stderr = self.workspace / "games" / f"{ident}.stderr"
-        game = Game(ident, [str(self.door), "referee", *argv], view, self.root, stderr)
+        game = Game(ident, self.command("referee", argv), view, self.root, stderr)
         self.games[ident] = game
         return game
 
@@ -1535,10 +1567,13 @@ def find_door(spoken: str | None) -> Path:
             sys.exit(2)
         return door
     here = Path(__file__).resolve().parent
+    names = (WINDOWS_DOOR, DOOR_NAME) if os.name == "nt" else (DOOR_NAME, WINDOWS_DOOR)
     for folder in (here.parent, here):
-        if (folder / DOOR_NAME).is_file():
-            return folder / DOOR_NAME
-    print(f"shandalar_mcp: no {DOOR_NAME} beside this script — give --door", file=sys.stderr)
+        for name in names:
+            if (folder / name).is_file():
+                return folder / name
+    print(f"shandalar_mcp: no {DOOR_NAME} or {WINDOWS_DOOR} beside this script — "
+          "extract the whole release folder or give --door", file=sys.stderr)
     sys.exit(2)
 
 
@@ -1546,13 +1581,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="shandalar_mcp.py",
         description="Shandalar's tools as an MCP server on stdio (JSON-RPC 2.0, one message a line).")
-    parser.add_argument("--door", help=f"the {DOOR_NAME} to drive (default: the one beside this script)")
+    parser.add_argument("--door", help=f"{DOOR_NAME} or {WINDOWS_DOOR} (default: beside this script)")
     parser.add_argument("--workspace", default=WORKSPACE,
                         help=f"where a client's decks and runs go (default: {WORKSPACE}/ beside the door)")
     parser.add_argument("--catalogue", action="store_true",
                         help="print the tool list as JSON and exit (no client needed)")
     parser.add_argument("-V", "--version", action="store_true", help="the version, and exit")
     args = parser.parse_args(argv)
+    # MCP stdio is UTF-8 even when a Windows installation's locale is not.
+    for stream in (sys.stdin, sys.stdout):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     server = Server(find_door(args.door), Path(args.workspace))
     if args.version:
         print(f"shandalar_mcp.py — Shandalar {server.version() or 'version unknown'}")

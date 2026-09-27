@@ -1,7 +1,7 @@
 # Cross-platform release packages
 
 Release packaging does not change the duel layout or rules. Godot 4.7.2
-can cross-export the six local test targets; verify the official template archive's
+can cross-export the seven local test targets; verify the official template archive's
 checksum and extract only the needed templates. Set local custom-template
 paths in the ignored `export_presets.cfg`, using the example as a guide.
 Separate Mac presets target Apple Silicon and Intel (the universal preset
@@ -46,6 +46,11 @@ package, copies the whole build directory, or builds a card pack. It streams
 the approved files into two ZIPs, checks their integrity, preserves launcher
 permissions and app signatures, and writes no UID/GID or extended metadata.
 All packages carry tools under `tools/`, a README and per-file SHA256SUMS.
+They also carry `VERSION.txt`, generated from `project.godot` for the Windows
+MCP server. Check the extracted Windows server with Python's `--catalogue`
+and `--version` before testing engine calls on a Windows machine; the server
+discovers `Shandalar.console.exe` without Bash. Those two metadata checks on
+another OS do not establish native Windows runtime compatibility.
 The seven numbered-pack builders and their Python dependencies are bundled,
 alongside explicitly allowlisted `cards/data/` and `packaging/card_packs/`
 metadata. Pack 1's base assignments are generated from the source registry
@@ -58,9 +63,10 @@ helper, so they also carry the full construction toolkit and README instructions
 Only `-with-skin` includes `skin/original_skin.zip`; no package carries card
 pictures. Validate the supplied skin with `tools/skin_catalogue.py --check`.
 
-The six-target local matrix consists of twelve game ZIPs, the same
+The seven-target local matrix consists of fourteen game ZIPs, the same
 `original_skin.zip` as a separate download, and `SHA256SUMS` covering those
-thirteen assets. Keep a local verification report separate from the game
+fifteen assets. Adding both handheld targets below brings this to eighteen game
+ZIPs plus the separate skin (nineteen ZIPs). Keep a local verification report separate from the game
 archives, describing native versus cross-export checks. The web game fetches
 the bundled skin ZIP from its server on first load; manual import also works.
 The Pi launcher selects OpenGL ES 3 and caps rendering at 60 FPS; this is not

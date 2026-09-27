@@ -2087,6 +2087,14 @@ pins them, the coverage pilot in the agent's seat.
 
 ## The MCP server — every tool for a program that speaks the protocol (2026-09-27)
 
+Windows releases work without Bash: install Python 3.10 or newer and run
+`python tools/shandalar_mcp.py` (or `py -3 tools/shandalar_mcp.py`). The
+server finds `Shandalar.console.exe` in the extracted release and calls it
+directly, including the persistent referee pipe. Keep `VERSION.txt` with
+the game; it records the game's version, not Godot's. Use a full script
+path in clients launched from elsewhere. The deck converter remains a
+source-checkout tool; the other desktop MCP tools are packaged.
+
 The door's verbs are still command lines: a program that wants to build
 a deck, measure it and play it has to spawn processes, parse stdout and
 keep the referee's pipe open itself. `tools/shandalar_mcp.py` does that

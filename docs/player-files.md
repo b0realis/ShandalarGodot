@@ -42,6 +42,11 @@ so give it the same treatment when it writes.
 
 ## What you can put there
 
+Release folders also contain `VERSION.txt`, generated from the game's
+version when packaged. Keep it beside the executable: the Windows MCP
+server reads it to identify Shandalar rather than the Godot engine. It is
+release metadata, not a player setting, and the game does not write it.
+
 | What | Where | Notes |
 |---|---|---|
 | **Your decks** | `user://decks/*.deck` | Everything the Deck Builder saves. Plain text, one `count name` per line; the format is `DeckLab/README.md`. Drop a `.deck` file in and it appears in the pickers under **User-created**. The Deck Builder writes **here and nowhere else** — the decks the game ships are never written over and never shadowed, so a deck of yours may not take one of their names (see below). |

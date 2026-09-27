@@ -424,8 +424,16 @@ the command; `tools/list` is the whole catalogue, each tool with the
 description and the schema a program reads before it calls, and
 `initialize` carries a short guide as its `instructions`. The same
 script ships in a release at `tools/shandalar_mcp.py`, so the same
-verb works in the checkout and in the release folder
-(`python3 tools/shandalar_mcp.py` where the door is not a shell).
+verb works in the checkout and in Unix release folders.
+On a **Windows release**, use `python tools/shandalar_mcp.py` with Python
+3.10 or newer (or `py -3 tools/shandalar_mcp.py`). Point the client's
+arguments at the full script path when launching from another directory.
+The server discovers `Shandalar.console.exe` beside the extracted game's
+files and runs it directly — no Bash or batch-file interpreter required.
+Both ordinary tools and persistent referee games use this route. Keep the
+whole release together, including `VERSION.txt` (generated from the game's
+version, not the engine's); `--door` can explicitly name the console executable.
+Deck conversion remains a source-checkout tool, not a packaged-release tool.
 
 ```
 ./shandalar.sh mcp                       the server, on the standard streams

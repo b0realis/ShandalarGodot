@@ -298,7 +298,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
         raise ValueError("Refusing to overwrite an existing package or partial file")
     out.mkdir(parents=True, exist_ok=True)
     for output, included in zip(outputs, (False, True)):
-        extra = {BASE_ASSIGNMENTS: base_assignments}
+        extra = {BASE_ASSIGNMENTS: base_assignments, "VERSION.txt": (version + "\n").encode()}
         readme = (f"SHANDALAR {version}\nGame source commit: {revision}\n\n{START[platform]}\n\n"
                   "Duels, Deck Builder, Booster Draft and LAN SGManalink are included.\n"
                   "Adventure and public Internet play are not included.\n"
@@ -335,6 +335,11 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                     'exec "./Shandalar.arm64" --rendering-method gl_compatibility '
                     '--rendering-driver opengl3_es --max-fps 60 "$@"\n').encode()
         elif platform == "windows64":
+            extra["README.txt"] += (
+                "\nAgent play (MCP): install Python 3.10 or newer, then point your MCP client at\n"
+                "python tools/shandalar_mcp.py (use the full script path from other folders).\n"
+                "The server finds Shandalar.console.exe automatically; Bash is not required.\n"
+                "Keep VERSION.txt and the whole extracted release together. See AGENTS.md.\n").encode()
             extra["deck_lab.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
                                      "Shandalar.console.exe --headless --no-header -- --deck-lab %*\r\n").encode()
             extra["auto_deck.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
