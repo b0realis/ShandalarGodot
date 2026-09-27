@@ -1181,6 +1181,32 @@ func player(pid: int) -> MtgPlayer:
 func opponent_of(pid: int) -> int:
 	return 1 - pid
 
+
+## "As this artifact enters, choose an opponent" — Black Vise, The Rack,
+## Cursed Rack. The question is put to [param controller]'s seat with the
+## other seats' names as its lines, and the chosen seat's id comes back.
+##
+## At this table there is exactly one opponent ([method opponent_of]), so
+## the answer is never in doubt — and THE CHOOSER IS PUT ANYWAY. The
+## playtest of 2026-09-27: *"Black Vise card does not work"*, then the
+## ruling — *"opponent chooser should fire and then effects upon upkeep"*.
+## A Vise that arrived without a word looked like a Vise that did nothing;
+## the printed line says a choice is made, and the player is shown making
+## it. A seat that answers for itself (HumanAgent) is held open on this as
+## on any other resolution question (docs/duel-todo.md §1.3), one line to
+## pick; a seat that does not want to be asked takes the hint and the duel
+## never pauses. Filed like every other ask, so the choice log carries it.
+func choose_opponent(controller: int, source: CardInstance) -> int:
+	var seats: Array[int] = []
+	var labels: Array[String] = []
+	for p in players:
+		if p.id != controller:
+			seats.append(p.id)
+			labels.append(p.player_name)
+	var picked: int = agents[controller].choose_option(self, controller, labels,
+		"Choose an opponent for %s" % source.data.card_name, 0)
+	return seats[clampi(picked, 0, seats.size() - 1)]
+
 ## The CardInstance with this id, or null. Ids are stable for the whole
 ## game and are how TargetRef, the UI and every delayed effect refer to
 ## objects — never by pointer, so a stale reference cannot resurrect one.

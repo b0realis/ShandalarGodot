@@ -628,6 +628,15 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.39.md`: the opponent chooser fires as the Vise
+  enters — Black Vise, The Rack and Cursed Rack put "choose an opponent"
+  to the caster's seat (`MtgGame.choose_opponent`) instead of deciding
+  it silently at a two-seat table, so the human is held on the choice
+  window with the opponent's name as its one line; and the AI keeps
+  Berserk for the kill — the effect declares its shape
+  (`ai_role` `double_power_doomed`), `_is_reactive` keeps it out of
+  every main phase, and `_offensive_combat_response` fires it only as
+  the finisher on an attacker of its own.
 - `docs/releases/0.40.38.md`: the End of Duel window folds its lines — a
   gauntlet opponent named after a seventy-character deck title, and a
   next draw called `The Tabernacle at Pendrell Vale`, no longer walk out
@@ -2184,6 +2193,15 @@ shandalar/
 │   │                          awaiting_choice and HOLDS the resolution,
 │   │                          like awaiting_attackers/discard/damage,
 │   │                          until answer_choice(value).
+│   │                          choose_opponent(controller, source)
+│   │                          (2026-09-27): "as this artifact enters,
+│   │                          choose an opponent" — Black Vise, The
+│   │                          Rack, Cursed Rack — put to the caster's
+│   │                          seat through choose_option with the other
+│   │                          seats' names as lines, so the human is
+│   │                          held on it and the AI takes the hint; a
+│   │                          two-seat table has one answer and asks
+│   │                          anyway (the owner's ruling).
 │   │                          Internals: stack resolution + fizzling
 │   │                          (CR 608.2b/c), APNAP trigger dispatch, SBAs
 │   │                          (CR 704, incl. the 1997 legend rule and the
@@ -3600,6 +3618,17 @@ shandalar/
 │   │                          callers all read a fixed power/toughness)
 │   │                          and offered only when the swing is lethal,
 │   │                          for X = the shortfall exactly.
+│   │                          _find_doubling_pump is the DOUBLING
+│   │                          FINISHER (Berserk, 2026-09-27): the effect
+│   │                          declares its shape (ai_role
+│   │                          double_power_doomed), _is_reactive keeps it
+│   │                          out of every main phase — it used to go at
+│   │                          the enemy's best creature on our own turn,
+│   │                          where the doom can never fall — and
+│   │                          _offensive_combat_response fires it on an
+│   │                          attacker of ours whose doubled power, or
+│   │                          trample excess over its blockers, is
+│   │                          lethal on this attack.
 │   │                          A REFUSAL THE PLANNER CAN WAIT OUT IS NOT A
 │   │                          REFUSAL (_wait_out, 2026-09-05): the taps
 │   │                          come before the announcement, so a
@@ -5243,6 +5272,15 @@ shandalar/
 │    host is the last child of its wrap and covers every pixel of the
 │    aura's subtree by that alone, and the right-hold lift puts it back
 │    at 0 (_lifted_rest_z);
+│    tests/ui/test_vise_chooser_2026_09_27.gd — THE OPPONENT CHOOSER,
+│    SEEN FROM THE DUEL SCREEN: the owner's "opponent chooser should fire
+│    and then effects upon upkeep" — the human's Black Vise against the
+│    Wizard is held on an OPTION question titled Black Vise, "Choose an
+│    opponent for Black Vise", one line "AI Wizard", the Vise still on
+│    the stack; _on_choice_option(0) lands it naming seat 1, filed once
+│    and answered by the player; the AI's next upkeep is squeezed 7 − 4;
+│    and the AI's own Vise never pauses the duel, still filed, naming
+│    the player by name;
 │    tests/ui/test_end_of_duel_window_2026_09_27.gd — THE END OF DUEL
 │    WINDOW FOLDS ITS LINES: the owner's "in the gauntlet with long
 │    named decks the text can overflow the you won window" — a gauntlet
@@ -6673,6 +6711,16 @@ shandalar/
 │    at two power, not on a trampler, not summoning sick, not after
 │    combat, not into two Craw Wurms; an enchanted Bears attacking into a
 │    Hill Giant whoever hung the aura, the bare Bears staying home
+│    tests/ai/test_ai_berserk_finisher_2026_09_27.gd — BERSERK IS A
+│    FINISHER, NEVER A MAIN-PHASE CAST: the owner's "ai casts it
+│    sometimes in first turn" reproduced (the reader called the
+│    card-local effect unknown, removal-shaped, and the planner threw it
+│    at the enemy's turn-one creature) and closed — not cast at their
+│    creature or ours in either main phase, the effect's ai_role read by
+│    _is_reactive; with the blocks in, cast on an unblocked Hill Giant at
+│    6 life and held at 7, cast over a Bears block at 4 (trample excess
+│    exactly the game) and held at 5; and never at their attacker on
+│    their turn;
 │    tests/ai/test_ai_w_hand_2026_09_10.gd — THE HAND'S WEIGHT, EXPOSED
 │    FOR A SWEEP: every preset ships Evaluator.W_HAND (the pin that keeps
 │    the constant and the field from drifting, since the evaluator reads
@@ -6717,6 +6765,16 @@ shandalar/
 │    a Prodigal Sorcerer can ping the 1/1 it should have made a 3/2, the
 │    Racks' and the Vise's choice out of an Aladdin's reach, and Psychic
 │    Allergy keeping its trigger as a ruling;
+│    tests/cards/test_choose_an_opponent_2026_09_27.gd — THE OPPONENT
+│    CHOOSER FIRES AS THE VISE ENTERS: casting Black Vise files one
+│    OPTION question to the caster — "Choose an opponent for Black Vise",
+│    the other seat's name as its one line, source Black Vise — and the
+│    seat behind the line is the victim; The Rack and Cursed Rack the
+│    same; a seat that answers by hint is never held; a HumanAgent seat
+│    with interactive_choices is held at resolution (the Vise still on
+│    the stack, no victim yet) until answer_choice(0), answered by the
+│    player; and the named seat is squeezed at its upkeep exactly as
+│    before, the caster never;
 │    tests/cards/test_lifetap_terrain_2026_09_09.gd — THE CONVERTED FOREST
 │    (the owner's *"I dont get life when opponent taps this 'converted
 │    forest'"*): the type is named AS the Aura enters, with nothing of its

@@ -37,7 +37,7 @@ Pins for every fix live in `tests/unit/test_audit_fixes.gd` (engine) and
 | Card / system | Note |
 |---|---|
 | Jump ({U}) | Flagged as "should be {1}{U} (1997 printing)" — REJECTED: the project's authority is the Scryfall oracle snapshot (`cards/data/2ed.json` says {U}, the M10 oracle cost), consistent with every other card in the pool (Ankh's "a land enters", Black Vise's "choose an opponent" are the same modern-oracle policy) |
-| Black Vise / The Rack | Implement the pre-errata "each opponent" wording instead of the modern "choose an opponent" ETB choice — identical in a two-player duel, which is all this engine plays. Header-documented; not ledger-worthy since no observable deviation exists in 2P |
+| Black Vise / The Rack | Implement the pre-errata "each opponent" wording instead of the modern "choose an opponent" ETB choice — identical in a two-player duel, which is all this engine plays. Header-documented; not ledger-worthy since no observable deviation exists in 2P. (Since 2026-09-27 the choice IS put to the caster — `MtgGame.choose_opponent` — because a Vise that entered without a word read as a Vise that did nothing; the answer is still the one opponent) |
 | Terror (and all protection/color checks) | Color filters read printed color (`data.color_mask()`), not a live color — no color-changing effect exists in the pool; becomes real work only if one is ever added (note also in ROADMAP) |
 | Timetwister / Wheel of Fortune | Resolve per player sequentially instead of all-discard-then-all-draw — interleaving unobservable in this pool |
 | Both players at 0 life simultaneously | First-found loses; the engine has no draw concept (engine-wide, ROADMAP) |

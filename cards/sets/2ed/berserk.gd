@@ -14,12 +14,23 @@ extends CardScript
 ##
 ## The printed casting restriction ("only before the combat damage step")
 ## is enforced through CardData.castable_only_when.
+##
+## THE AI (2026-09-27): the effect DECLARES ITS SHAPE (EffectBase.ai_role
+## `double_power_doomed`) because the reader cannot see inside it — and
+## an unread targeted instant is removal-shaped to the pilot, which is
+## how the playtest found *"ai casts it sometimes in first turn"*: a
+## Berserk thrown at the opponent's turn-one creature, which on the AI's
+## own turn had not attacked and could never be doomed. The role keeps it
+## out of every main phase (AiPlayer._is_reactive) and offers it in one
+## place only — the finisher on an attacker of ours once the blocks are
+## in (AiPlayer._offensive_combat_response), where the end-step doom
+## costs nothing because the game is over.
 
 
 func build() -> CardData:
 	return CardData.new("Berserk", "{G}", Mtg.CardType.INSTANT) \
 		.castable_only_when(_before_combat_damage) \
-		.spell(BerserkEffect.new()) \
+		.spell(BerserkEffect.new().with_ai_role(&"double_power_doomed")) \
 		.oracle("Cast this spell only before the combat damage step. Target creature "
 			+ "gains trample and gets +X/+0 until end of turn, where X is its power. "
 			+ "At the beginning of the next end step, destroy that creature if it "

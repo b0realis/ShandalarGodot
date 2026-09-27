@@ -6,8 +6,9 @@ extends CardScript
 ##         cards in their hand.
 ##
 ## Implementation: in a two-player duel "choose an opponent" has exactly
-## one legal choice, so the choice makes itself — but it is still a choice
-## LOCKED IN as the artifact enters, so a CR 614.1c REPLACEMENT
+## one legal choice, and the caster is shown making it all the same
+## (MtgGame.choose_opponent, 2026-09-27) — a choice LOCKED IN as the
+## artifact enters, so a CR 614.1c REPLACEMENT
 ## (CardData.as_it_enters) stamps it into the Rack's card-local memory
 ## (Cursed Rack's shape) and the upkeep trigger reads that instead of
 ## "whoever isn't my controller". A Rack that changes hands (Steal
@@ -30,9 +31,11 @@ func build() -> CardData:
 		.oracle("As this artifact enters, choose an opponent.\nAt the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is 3 minus the number of cards in their hand.")
 
 
-## THE CHOICE (CR 614.1c), made as the Rack arrives and never afterwards.
+## THE CHOICE (CR 614.1c), made as the Rack arrives and never afterwards —
+## asked of the caster's seat (MtgGame.choose_opponent, 2026-09-27), as
+## Black Vise's is.
 static func _choose(game: MtgGame, source: CardInstance, controller: int) -> void:
-	source.memory["victim"] = game.opponent_of(controller)
+	source.memory["victim"] = game.choose_opponent(controller, source)
 
 
 ## The chosen player's upkeep, falling back to the current opponent for a

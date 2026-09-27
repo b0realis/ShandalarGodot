@@ -4,8 +4,9 @@ extends CardScript
 ##         The chosen player's maximum hand size is four.
 ##
 ## Implementation: a CR 614.1c REPLACEMENT (CardData.as_it_enters)
-## remembering the chosen opponent in the Rack's card-local memory (in a
-## duel there is exactly one, so the choice makes itself) plus a static
+## remembering the chosen opponent in the Rack's card-local memory (asked
+## of the caster's seat — MtgGame.choose_opponent, 2026-09-27, with Black
+## Vise and The Rack) plus a static
 ## writing that player's MtgPlayer.max_hand_size, which the cleanup step
 ## enforces.
 ##
@@ -30,7 +31,7 @@ func build() -> CardData:
 ## MtgGame._put_on_battlefield recalculates straight afterwards, which is
 ## what publishes it to the static below.
 static func _choose(game: MtgGame, source: CardInstance, controller: int) -> void:
-	source.memory["victim"] = game.opponent_of(controller)
+	source.memory["victim"] = game.choose_opponent(controller, source)
 
 
 static func _apply(game: MtgGame, source: CardInstance) -> void:

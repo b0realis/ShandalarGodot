@@ -17692,6 +17692,82 @@ windows was read before the change was kept.
 Gate: 534 scripts, **8,094/8,094 tests, 366,280 asserts**, exit 0 in
 268 s over 6 shards; Python 392, exit 0.
 
+## 2026-09-27 — The opponent chooser fires as the Vise enters (0.40.39)
+
+The owner's playtest: *"Black Vise card does not work. Fix"* — and the
+Vise worked. Cast from the hand, double-clicked, cast by the Wizard
+from its own hand, aimed at the human and at the AI, under the modern
+and the 1997 rules: every upkeep of the seat it named took hand − 4,
+and the Wizard that minds the Vise played down to four cards over the
+turns it took. What the card did NOT do was say a word on the way in.
+*"As Black Vise enters, choose an opponent"* has one answer at a
+two-seat table, and `black_vise.gd` gave it silently
+(`MtgGame.opponent_of`), so a Vise that arrived without a prompt read
+as a Vise that did nothing. The ruling: *"opponent chooser should fire
+and then effects upon upkeep."*
+
+**The question is put to the caster, and asked anyway.**
+`MtgGame.choose_opponent(controller, source)` gathers the other seats'
+names and puts *"Choose an opponent for Black Vise"* to the caster's
+seat through `DecisionAgent.choose_option`, like every other
+resolution ask — so it is filed on the choice log, HELD for a seat that
+answers for itself (the pre-flight of §1.3: the Vise stays on the
+stack until the player picks the one line, `AI Wizard`), and taken on
+the hint by a seat that does not want to be asked, so the Wizard's own
+Vise never pauses the duel. Black Vise, The Rack and Cursed Rack all
+name their opponent this way; `_is_chosen_players_upkeep` and the
+squeeze are untouched. Jihad, which already asks its colour, is left
+alone.
+
+**Berserk is a finisher, never a main-phase cast.** The sixth report:
+*"inspect beserk play by ai - i noticed ai casts it sometimes in first
+turn. Just check it."* Reproduced on the first probe: Berserk's effect
+is card-local (its X is the target's power, read at resolution), so
+`EffectIntent` called it `unknown` — removal-shaped — and
+`_try_cast_best` aimed it across the table at the opponent's best
+creature in the AI's own main phase, where nothing of theirs has
+attacked and the end-step doom can never fall. On turn one that was
+the opponent's first creature, given +X/+0 and trample for {G}. The
+effect now declares its shape (`EffectBase.ai_role`
+`double_power_doomed` — the declarative channel the pool already uses,
+never the card's name), `AiPlayer._is_reactive` keeps it out of every
+main phase for every profile, and it is offered in one place only:
+`_offensive_combat_response`, beside the Howl from Beyond finisher and
+for the same reason — once the blocks are in, on an attacker of ours
+whose doubled power (unblocked) or whose trample excess after lethal to
+each blocker (CR 702.19b) ends the game on this attack. The creature
+dies at the end step; the game is over first. Their attacker on their
+turn is never berserked: doubling what hits us for a creature they may
+not even lose is a trade the AI has no reading for.
+
+No "fifth" report reached this log — the owner's numbering ran from the
+fourth to the sixth.
+
+**How it is pinned.** `tests/cards/test_choose_an_opponent_2026_09_27.gd`
+(new, six tests): casting the Vise files one OPTION question to the
+caster, the other seat's name as its one line, source `Black Vise`,
+and the seat behind the line is the victim; the Racks the same; a seat
+that answers by hint is never held; a `HumanAgent` seat under
+`interactive_choices` is held at resolution with the Vise still on the
+stack and no victim until `answer_choice(0)`, answered by the player;
+the named seat is squeezed at its upkeep as before and the caster
+never. `tests/ui/test_vise_chooser_2026_09_27.gd` (new, three tests):
+through the duel screen against the Wizard, the human's Vise is held on
+an OPTION question titled `Black Vise`, *"Choose an opponent for Black
+Vise"*, one line `AI Wizard`; `_on_choice_option(0)` lands it naming
+seat 1, filed once and answered by the player; the Wizard's next upkeep
+takes 7 − 4; and the Wizard's own Vise never pauses the duel.
+`tests/ai/test_ai_berserk_finisher_2026_09_27.gd` (new, eight tests):
+the playtest itself — their lone creature, Berserk and a Forest in
+hand, first main phase — is a pass; not our own creature in either
+main phase; the effect's role and `_is_reactive` reading it; with the
+blocks in, cast on an unblocked Hill Giant at 6 life and held at 7,
+cast over a Bears block at 4 and held at 5; never at their attacker on
+their turn.
+
+Gate: 537 scripts, **8,111/8,111 tests, 366,317 asserts**, exit 0 in
+265 s over 6 shards; Python 392, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

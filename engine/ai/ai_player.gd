@@ -8166,6 +8166,43 @@ func _offensive_combat_response(game: MtgGame) -> String:
 			var need: int = them.life - unblocked_total
 			return _cast_response(game, finisher["inst"],
 				[TargetRef.card(unblocked[0])], 0, "", need)
+	# THE DOUBLING FINISHER (2026-09-27, Berserk — ten deck files, three
+	# of them 1997 originals). *"Target creature gains trample and gets
+	# +X/+0 until end of turn, where X is its power. At the beginning of
+	# the next end step, destroy that creature if it attacked this turn."*
+	# Its X is read at resolution, so the effect is card-local and the
+	# reader called it `unknown` — removal-shaped — and the main-phase
+	# planner threw it at the enemy's best creature on our own turn, where
+	# nothing of theirs has attacked and the doom can never fall: the
+	# playtest's *"ai casts it sometimes in first turn"*, a card given
+	# away. The effect now declares its shape ([member EffectBase.ai_role]
+	# `double_power_doomed`), [method _is_reactive] keeps it out of every
+	# main phase, and it is offered HERE and nowhere else, like the +X/+0
+	# finisher above and for the same reason: the creature it doubles is
+	# destroyed at the end step, which costs a creature in every game but
+	# the one that ends on this attack. Unblocked, it adds the attacker's
+	# own power to what already lands; blocked, the trample it grants
+	# carries what is left after lethal to each blocker over to the player
+	# (CR 702.19b) — and a blocked attacker was adding nothing at all.
+	if not unblocked.is_empty() or not game.combat.blocks.is_empty():
+		var doubling := _find_doubling_pump(game)
+		if doubling != null and not game.combat_damage_prevented \
+				and unblocked_total < them.life:
+			for attacker_id in game.combat.attackers:
+				var attacker := game.find_instance(attacker_id)
+				if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD \
+						or attacker.controller_id != pid or attacker.cur_power <= 0:
+					continue
+				var through := attacker.cur_power
+				if not unblocked.has(attacker):
+					# Doubled, less lethal to every body in its way.
+					through = attacker.cur_power * 2
+					for blocker_id in game.combat.blockers_of(attacker_id):
+						var blocker := game.find_instance(blocker_id)
+						if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD:
+							through -= maxi(0, blocker.cur_toughness - blocker.damage)
+				if through > 0 and unblocked_total + through >= them.life:
+					return _cast_response(game, doubling, [TargetRef.card(attacker)])
 	# Removal on the blocker that would kill our attacker and live: the
 	# blocker dies, the attacker lives, and its damage lands (CR 509.1h —
 	# a creature stays "blocked", so no damage to the player; it is the
@@ -8564,6 +8601,22 @@ func _find_pump_instant(game: MtgGame) -> CardInstance:
 			if not _plan_taps(game, inst.data.cost, 0).is_empty() \
 					or game.players[pid].mana_pool.can_pay(inst.data.cost):
 				return inst
+	return null
+
+
+## The doubling pump with a doom in hand (Berserk's shape, declared by the
+## effect's [member EffectBase.ai_role]), affordable and castable now — or
+## null. Read by the finisher in [method _offensive_combat_response] only.
+func _find_doubling_pump(game: MtgGame) -> CardInstance:
+	for inst in game.players[pid].hand:
+		if not inst.is_type(Mtg.CardType.INSTANT) or inst.data.spell_effects.size() != 1 \
+				or inst.data.spell_effects[0].ai_role != &"double_power_doomed":
+			continue
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+			continue   # locked, banned, "cast only ...", or refused this step
+		if not _plan_taps(game, inst.data.cost, 0).is_empty() \
+				or game.players[pid].mana_pool.can_pay(inst.data.cost):
+			return inst
 	return null
 
 
@@ -10978,6 +11031,15 @@ func _is_reactive(data: CardData) -> bool:
 				return true
 	for effect in data.spell_effects:
 		if effect is PreventCombatDamageEffect: return true
+	# THE DOUBLING PUMP WITH A DOOM (2026-09-27, Berserk): a targeted
+	# instant the reader cannot see inside is removal-shaped, and the
+	# main-phase planner aimed this one across the table — at a creature
+	# that, on OUR turn, has not attacked and cannot be doomed (the
+	# playtest: *"ai casts it sometimes in first turn"*). The effect
+	# declares its shape and the response framework alone may fire it:
+	# [method _offensive_combat_response], the finisher.
+	for effect in data.spell_effects:
+		if effect.ai_role == &"double_power_doomed": return true
 	return false
 
 

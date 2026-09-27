@@ -6,10 +6,13 @@ extends CardScript
 ##         their hand minus 4.
 ##
 ## Implementation: a CR 614.1c REPLACEMENT (CardData.as_it_enters) stamps
-## the chosen opponent into the Vise's card-local memory (in a duel there
-## is exactly one, so the choice makes itself — the same shape as Cursed
-## Rack), and the upkeep trigger fires on THAT player rather than on
-## "whoever isn't my controller". The difference is visible the moment the
+## the chosen opponent into the Vise's card-local memory (the same shape
+## as Cursed Rack), and the upkeep trigger fires on THAT player rather than
+## on "whoever isn't my controller". THE CHOICE IS PUT TO THE CASTER
+## (MtgGame.choose_opponent, 2026-09-27) even though a duel has one
+## opponent to name: the owner's playtest read a Vise that arrived without
+## a word as a Vise that did nothing — *"opponent chooser should fire and
+## then effects upon upkeep"*. The difference is visible the moment the
 ## Vise changes hands (Steal Artifact, Aladdin): the choice was locked in
 ## as it entered, so a stolen Vise keeps squeezing the player it chose
 ## instead of turning on its caster.
@@ -36,9 +39,10 @@ func build() -> CardData:
 		.oracle("As this artifact enters, choose an opponent.\nAt the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.")
 
 
-## THE CHOICE (CR 614.1c), made as the Vise arrives and never afterwards.
+## THE CHOICE (CR 614.1c), made as the Vise arrives and never afterwards —
+## asked of the caster's seat, so the human sees the chooser.
 static func _choose(game: MtgGame, source: CardInstance, controller: int) -> void:
-	source.memory["victim"] = game.opponent_of(controller)
+	source.memory["victim"] = game.choose_opponent(controller, source)
 
 
 ## The chosen player's upkeep. A Vise that never made the choice (put onto
