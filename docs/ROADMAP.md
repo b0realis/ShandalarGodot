@@ -17433,6 +17433,61 @@ holds the doors and the pages. `test_shandalar_sh.py` and
 Gate: 529 scripts, **8,050/8,050 tests, 365,714 asserts**, exit 0 in
 267 s over 6 shards; Python 377, exit 0.
 
+## 2026-09-27 — The card reader, the play guide and the handhelds (0.40.34)
+
+The owner's 0.40.33, "Add card zoom and play guide", and the pages
+synced to it in 0.40.34.
+
+**The card reader.** Options → Display → *Full-screen card on click*,
+off by default and remembered (`Settings.fullscreen_cards`). With it
+on, a click or a tap on the large card in a duel or in the Deck Builder
+fits that card to the screen — the same renderer, the chosen printing,
+the sidebar untouched (`game/duel/fullscreen_card.gd`, `FullscreenCard`,
+watching the screen's `CardPreview`); a click, Escape or the
+controller's Cancel closes it. Only a card already shown is ever read:
+a hidden hand cannot stay visible in the reader. Local computer play
+waits while a person reads; a table on the network plays on.
+
+**The play guide.** `agentic-playgude-mtg.md`, 1,605 lines in sixteen
+chapters: the rules, fair-information play, the turn and its timing
+windows, priority and the stack, mana, combat as a tactical problem,
+the game's own rules and older cards, a strategic role and the turn's
+sequence, decisions under uncertainty, twelve worked decisions,
+review, a quick reference, references, deck building. It teaches the
+game, not the interface — the contract is AGENTS.md — and the MCP
+server serves it: the `play_guide` tool (the whole guide, or one
+`chapter` 1–16 to keep an observation small; a chapter out of range
+is refused with its flag) and the `shandalar://play-guide` resource;
+`initialize`'s instructions send a client to it. Reading it starts no
+engine and exposes no state. Twenty-two tools now.
+
+**The handhelds.** Two new package platforms beside the desktop ones:
+`steam-deck` (the Linux x86-64 build with `packaging/handhelds/steam-deck.sh`
+as its launcher) and `arkos-rk3326-experimental` (the arm64 build with
+`arkos.sh` and a `shandalar.gptk` controller map for PortMaster);
+`docs/handhelds.md` is their page. Neither is hardware-validated and
+no Steam Deck Verified claim is made. Every platform package now
+stages the play guide beside the command-line tools.
+
+**How it is pinned.** `tests/ui/test_fullscreen_card.gd` (aspect fit,
+the printing kept, modal input, no click-through, focus restored,
+concealed faces forgotten), `tests/ui/test_fullscreen_card_screens.gd`
+(the real Deck Builder and duel, click and touch, hotseat privacy, the
+local computer player paused and resumed, keyboard isolation),
+`tests/ui/test_sgmanalink_shared_duel.gd` (the reader over a projected
+table reads only what the projection shows and sends no action),
+`tests/ui/test_options_display.gd` (the switch off by default without
+a write, persisted and restored);
+`tools/test_handheld_launchers.py` (the two launchers simulated
+offline: paths, arguments, controller scope, a runtime failure,
+cleanup, saved profiles); `tools/test_shandalar_mcp.py` and
+`tests/tools/test_mcp_2026_09_27.gd` (the tool, the chapters, the
+resource, the catalogue of twenty-two). 0.40.34 brings the version
+sites, the script count and this page up to date.
+
+Gate: 531 scripts, **8,073/8,073 tests, 366,696 asserts**, exit 0 in
+272 s over 6 shards; Python 391, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

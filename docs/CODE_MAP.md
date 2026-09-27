@@ -620,6 +620,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.34.md`: the pages synced to 0.40.33 — the version
+  sites, the script count, the roadmap section for the card reader, the
+  play guide and the handhelds, the README's verification line.
 - `docs/releases/0.40.32.md`: the MCP server — `tools/shandalar_mcp.py`
   behind the door's `mcp` verb: every tool on one pipe for a program
   that speaks the Model Context Protocol, the referee's duel kept as a

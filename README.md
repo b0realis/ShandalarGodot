@@ -118,8 +118,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([The MCP server](docs/ROADMAP.md#2026-09-27--the-mcp-server-04032)):
-**8,050 GUT tests / 365,714 assertions**, plus **377 Python tests**
+Most recent full-suite verification ([The card reader, the play guide and the handhelds](docs/ROADMAP.md#2026-09-27--the-card-reader-the-play-guide-and-the-handhelds-04034)):
+**8,073 GUT tests / 366,696 assertions**, plus **391 Python tests**
 (the MCP server's five live tests play inside the GUT gate; one
 platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
