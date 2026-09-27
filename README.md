@@ -113,8 +113,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The trampler's spill](docs/ROADMAP.md#2026-09-26--the-tramplers-spill-04027)):
-**7,981 GUT tests / 361,335 assertions**, plus **323 Python tests**
+Latest local verification ([The tools, for a program](docs/ROADMAP.md#2026-09-27--the-tools-for-a-program-04028)):
+**7,999 GUT tests / 361,492 assertions**, plus **323 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 
@@ -197,6 +197,9 @@ every combination of the switches you give it, and plays no game; its
 60% different, and `--keep FILE --vary "Fireball, 2 Lightning Bolt"` holds a
 deck but for the named cards, for the Lab to find a better card for a slot.
 The [DeckLab manual](DeckLab/README.md) has examples and all options.
+Driving either tool from a script or an agent — the exit codes, the
+refusal as one line of JSON, `--dry-run`'s plan, every output file and
+its keys — is [AGENTS.md](AGENTS.md).
 
 ## Post-0.20.0 roadmap
 

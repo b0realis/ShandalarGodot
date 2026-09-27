@@ -17113,6 +17113,76 @@ the tests should own and reset those settings. Not in this commit.
 Gate: 524 scripts, **7,981/7,981 tests, 361,335 asserts**, exit 0
 in 245 s over 6 shards; Python 323, exit 0.
 
+## 2026-09-27 — The tools, for a program (0.40.28)
+
+The owner asked how the Deck Lab, the AutoDeck CLI and the game would
+sit closer to *"agentic AI use"* — a program driving them, not a person
+at a terminal. The answer, ordered by the owner, is four steps: this
+one (a contract page, `--dry-run`, refusals as data), then per-game
+records, a `run.json` in every output folder, a `deck check` and one
+dispatcher, then a headless referee a program can play a seat through,
+then a thin MCP server over the whole. This is the first.
+
+**The contract page.** `AGENTS.md` at the root — what each command is
+for, what it prints where, what its exit codes mean, what files it
+leaves and under which keys, and the house invariants a program keeps
+without being told (a sweep needs its control pair, `--no-elo` on a
+mined field, one run at a time, a `--keep` implies `--variety 50`). It
+says nothing the manuals do not, in a tenth of the room; the manuals
+keep the reasoning. `CONTRIBUTING.md` stays the contract for editing.
+
+**The refusal as data.** A program that gets exit 2 had, until now, to
+parse prose on stderr — `unknown option '--gmes' — did you mean
+--games?` — and the prose changes when a message is bettered. Every
+refusal before a game or a deck now also prints ONE line of JSON on
+stdout: `{"error":{"tool","exit","kind","message","flag","suggestions",
+...}}`. Stdout is the channel, because on a refusal it carries no
+report, so "stdout is the instrument" still holds; the prose on stderr
+is unchanged, and every test that pinned a message still passes. `kind`
+is the thing to branch on — `option`, `deck` (with `path`, the three
+places `tried`, `suggestions`), `packs`, `pool`, `out`; the AutoDeck's
+`sets`, `list`, `keep`, `vary` — and `flag` is the flag the message
+names, scanned from it (`LabConsole.flag_named`) unless the site says
+better: the `--out` refusal's message names `--force` as the remedy,
+and its `flag` is `--out`. A refusal *during* a run — a worker that
+stopped, a file that would not write — prints no envelope, because by
+then stdout is the report. `suggestions` names a flag once: `--gold`
+sits in both parser tables and the old line offered "--gold or --gold".
+
+**`--dry-run`.** Every check a run makes — the decks loaded, the packs
+enabled, the pairs built — and then the plan as pretty JSON instead of
+a game: the decks with their files and sizes (`DeckList` carries no
+source path; the Lab now remembers which file each came from), the
+matchups, `total` (games or matches; a sweep's arms × pairs × games),
+seed, jobs and processes, `packs` (the switch's own value, `null` when
+the game's setting decided, as results.json has always had it) beside
+`packs_on` (the packs actually enabled), the output folder and an
+`estimate` at a nominal 20 games/s that says it is a guess. Exit 0 and
+NO folder — the `mkdir` and the `.gdignore` are skipped, so a plan
+leaves no trace. The AutoDeck's plan comes BEFORE `_prepare_out_dir`,
+which clears a folder under `--force`: it reports `out_exists` and
+`out_holds` instead, so the `--force` question is answered without
+anything being cleared; it adds the wish combinations, `seed_rolled`
+(no `--seed`: the run would roll one), the files it would write and
+`disk_bytes` at the measured ~4.2 KB a deck, and the `next:` line as
+data.
+
+**How it is pinned.** A GUT test cannot read the tools' stdout, so each
+tool keeps its last refusal and its last plan (`last_error`,
+`last_plan`) — the very records it printed — and
+`tests/tools/test_lab_for_machines_2026_09_27.gd` reads them in-process:
+the envelope's shape, `flag_named`'s six cases, a `--gmes`, a missing
+deck, a sweep without its control, an `--out` that is a file; a duel, a
+tournament and a sweep plan with their totals and no folder; the
+AutoDeck's `--gld`, `--keep nowhere.deck`, `--list nowhere.txt`, `--sets
+ZZZ`, a plan with a held folder that is a plan and not a refusal, and
+both `--dry-run` toggles documented. From the shell, both tools were
+driven by hand: one JSON line on stdout on a refusal, the plan on a dry
+run, no folder either way.
+
+Gate: 525 scripts, **7,999/7,999 tests, 361,492 asserts**, exit 0
+in 252 s over 6 shards; Python 323, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

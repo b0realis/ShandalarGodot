@@ -253,6 +253,7 @@ const TOGGLE_HINTS := {
 	"--no-tournament": "--no-tournament: the same as --tournament off",
 	"--quiet": "--quiet: no banner and no progress bar — the report still prints",
 	"--no-banner": "--no-banner: keep the progress, drop the artwork",
+	"--dry-run": "--dry-run: print the plan as JSON on stdout and write nothing",
 }
 
 ## THE THREE FLAGS THAT ARE IN BOTH TABLES, and why that is not a
@@ -484,6 +485,10 @@ OTHER SWITCHES
   --quiet                       no banner, no progress; errors only
   --no-banner                   keep the progress, drop the artwork
   --force                       write into a folder that is not empty
+  --dry-run                     every check, then THE PLAN as JSON on
+                                stdout — count, wishes, pool, packs,
+                                seed, the files and the disk they take
+                                — and nothing written. Exit 0.
   -h, --help                    this help
 
 EXIT CODES
@@ -492,6 +497,10 @@ EXIT CODES
      --force, or a pool with nothing in it
   2  the command line was wrong
   3  no Godot to run (the wrapper's own)
+  A refusal before any deck is built (every 2, and the 1s above) also
+  prints ONE line of JSON on stdout — {"error": {"exit", "kind",
+  "message", "flag", "suggestions", ...}} — for a program driving the
+  tool to read instead of the prose (AGENTS.md).
 """
 
 
@@ -512,6 +521,10 @@ var _pool_cache: Dictionary = {}
 var _library_cache: Dictionary = {}
 ## The packs `--packs` put in force, for the run's header.
 var _packs_in_force: Variant = null
+## THE REFUSAL AND THE PLAN AS DATA (2026-09-27), kept for a test — the
+## Lab's own pair ([method _refuse], [method _plan]).
+var last_error: Dictionary = {}
+var last_plan: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -544,15 +557,24 @@ static func exit_code_of(main_result: Variant) -> int:
 ## "unknown option '--colours'" is true but unhelpful. The refusal names
 ## the nearest flags instead, the way the Lab's does.
 static func unknown_option(arg: String) -> String:
+	var near := flags_near(arg)
+	if near.is_empty():
+		return "unknown option '%s'" % arg
+	return "unknown option '%s' — did you mean %s?" % [arg, " or ".join(near)]
+
+
+## The flags [method unknown_option] would name — the refusal's
+## `suggestions` (2026-09-27).
+static func flags_near(arg: String) -> PackedStringArray:
 	var flags := PackedStringArray()
 	for flag in FLAG_HINTS:
 		flags.append(String(flag))
 	for flag in TOGGLE_HINTS:
-		flags.append(String(flag))
-	var near := LabConsole.closest(arg, flags, 2, 0.40, 0.05)
-	if near.is_empty():
-		return "unknown option '%s'" % arg
-	return "unknown option '%s' — did you mean %s?" % [arg, " or ".join(near)]
+		# A boolean axis is in both tables — "--gold or --gold" was the
+		# old line's answer.
+		if not flags.has(String(flag)):
+			flags.append(String(flag))
+	return LabConsole.closest(arg, flags, 2, 0.40, 0.05)
 
 
 ## The wishes as the window holds them, each axis an ARRAY of
@@ -573,6 +595,7 @@ static func default_options() -> Dictionary:
 		"free_lands": SealedPool.DEFAULT_FREE_LANDS,
 		"extras": SealedPool.DEFAULT_EXTRAS,
 		"quiet": false, "no_banner": false, "progress": "",
+		"dry_run": false,
 		# The axes. `sets` alone takes a LIST per alternative, because a
 		# pool is a set of sets; the rest take one value each.
 		"sets": [["4ed"]],
@@ -709,6 +732,8 @@ static func parse_args(argv: PackedStringArray) -> Dictionary:
 					opts.no_banner = true
 				"--no-banner":
 					opts.no_banner = true
+				"--dry-run":
+					opts.dry_run = true
 				"--no-tournament":
 					opts.tournament = [false]
 					spoken["tournament"] = true
@@ -720,7 +745,7 @@ static func parse_args(argv: PackedStringArray) -> Dictionary:
 			i += 1
 			continue
 		if not FLAG_HINTS.has(arg):
-			return {"error": unknown_option(arg)}
+			return {"error": unknown_option(arg), "suggestions": Array(flags_near(arg))}
 		i += 1
 		if i >= argv.size():
 			return {"error": "%s needs a value  (%s)" % [arg, FLAG_HINTS[arg]]}
@@ -1176,6 +1201,24 @@ static func sets_label(codes: Array) -> String:
 
 # ------------------------------------------------------------- the run --
 
+## The Lab's own pair (see `simulate.gd`): the reason in prose on
+## stderr unless the caller [param said] it, ONE line of JSON on stdout,
+## and [param exit] back so a site reads `return _refuse(2, ...)`.
+func _refuse(exit: int, message: String, detail: Dictionary = {}, said := false) -> int:
+	if not said:
+		printerr("auto_deck: %s" % message)
+	last_error = LabConsole.error_record("auto_deck", exit, message, detail)
+	print(JSON.stringify({"error": last_error}))
+	return exit
+
+
+func _plan(plan: Dictionary) -> int:
+	last_plan = plan
+	last_plan["dry_run"] = true
+	print(LabConsole.plan_line(plan))
+	return 0
+
+
 func _main(argv: PackedStringArray) -> int:
 	var opts := parse_args(argv)
 	_quiet = bool(opts.get("quiet", false))
@@ -1195,7 +1238,10 @@ func _main(argv: PackedStringArray) -> int:
 		# somebody who mistyped a flag wants the fix on the first line.
 		printerr("auto_deck: %s" % opts.error)
 		_usage_hint(argv.is_empty())
-		return 2
+		var detail := {"kind": "option"}
+		if not (opts.get("suggestions", []) as Array).is_empty():
+			detail["suggestions"] = opts.suggestions
+		return _refuse(2, opts.error, detail, true)
 	_banner()
 	# THE PACKS FIRST, since they decide which sets are in play: the Lab's
 	# own reading and refusals, in memory alone — the player's settings
@@ -1203,12 +1249,10 @@ func _main(argv: PackedStringArray) -> int:
 	if opts.packs != null:
 		var chosen: Dictionary = Lab.parse_packs(String(opts.packs), Lab.available_packs())
 		if chosen.has("error"):
-			printerr("auto_deck: %s" % chosen.error)
-			return 2
+			return _refuse(2, chosen.error, {"kind": "packs"})
 		var refusal: String = Lab.enable_packs(chosen.ids)
 		if refusal != "":
-			printerr("auto_deck: %s" % refusal)
-			return 1
+			return _refuse(1, refusal, {"kind": "packs"})
 		_packs_in_force = chosen.ids
 	CardRegistry.ensure_loaded()
 
@@ -1218,8 +1262,7 @@ func _main(argv: PackedStringArray) -> int:
 	# than after ten thousand builds from an empty pool.
 	var sets_error := unknown_sets_message(opts)
 	if sets_error != "":
-		printerr("auto_deck: %s" % sets_error)
-		return 2
+		return _refuse(2, sets_error, {"kind": "sets"})
 
 	var list_pool: Dictionary = {}
 	var list_label := ""
@@ -1228,18 +1271,19 @@ func _main(argv: PackedStringArray) -> int:
 		if not FileAccess.file_exists(list_path):
 			printerr("auto_deck: --list: no card list at '%s'" % opts.list)
 			_usage_hint(false)
-			return 2
+			return _refuse(2, "--list: no card list at '%s'" % opts.list,
+				{"kind": "list", "path": String(opts.list)}, true)
 		var text := FileAccess.get_file_as_string(list_path)
 		if text == "":
-			printerr("auto_deck: cannot read the card list '%s'" % opts.list)
-			return 1
+			return _refuse(1, "cannot read the card list '%s'" % opts.list,
+				{"kind": "list", "path": String(opts.list)})
 		var report: Array = []
 		list_pool = AutoDeck.pool_from_text(text, report)
 		for line in report:
 			printerr("auto_deck: %s" % String(line))
 		if list_pool.is_empty():
-			printerr("auto_deck: '%s' holds no card the game has" % opts.list)
-			return 1
+			return _refuse(1, "'%s' holds no card the game has" % opts.list,
+				{"kind": "list", "path": String(opts.list)})
 		list_label = String(opts.list).get_file()
 
 	var keep: DeckModel = null
@@ -1253,7 +1297,8 @@ func _main(argv: PackedStringArray) -> int:
 		if not FileAccess.file_exists(kept_path):
 			printerr("auto_deck: --keep: no deck file at '%s'" % opts.keep)
 			_usage_hint(false)
-			return 2
+			return _refuse(2, "--keep: no deck file at '%s'" % opts.keep,
+				{"kind": "keep", "path": String(opts.keep)}, true)
 		var kept := DeckList.load_file(kept_path)
 		if not kept.errors.is_empty():
 			# A PACK THE LINE DID NOT PUT ON is a switch, not a spelling
@@ -1261,19 +1306,22 @@ func _main(argv: PackedStringArray) -> int:
 			# `# requires-pack:` header names it, so name it back.
 			var wanted := missing_packs_message(kept.required_packs)
 			if wanted != "":
-				printerr("auto_deck: '%s' %s" % [opts.keep, wanted])
-				return 2
+				return _refuse(2, "'%s' %s" % [opts.keep, wanted],
+					{"kind": "keep", "path": String(opts.keep),
+					"packs_needed": Array(kept.required_packs)})
 			printerr("auto_deck: problems reading '%s':" % opts.keep)
 			for problem in kept.errors:
 				printerr("  " + String(problem))
-			return 1
+			return _refuse(1, "problems reading '%s': %s" % [opts.keep,
+				"; ".join(PackedStringArray(kept.errors))],
+				{"kind": "keep", "path": String(opts.keep), "problems": Array(kept.errors)}, true)
 		keep = DeckModel.from_deck_list(kept)
 		if not (opts.vary as Array).is_empty():
 			var read := varied_cards(keep, opts.vary, String(opts.keep).get_file())
 			if read.has("error"):
 				printerr("auto_deck: %s" % read["error"])
 				_usage_hint(false)
-				return 2
+				return _refuse(2, String(read["error"]), {"kind": "vary"}, true)
 			varied = read["cards"]
 			held = keep.duplicate_model()
 			for name in varied:
@@ -1281,10 +1329,11 @@ func _main(argv: PackedStringArray) -> int:
 					keep.remove(String(name))
 
 	var out_dir := String(opts.out)
+	if bool(opts.dry_run):
+		return _plan(_plan_of(opts, out_dir, list_label, keep, held, varied))
 	var prepared := _prepare_out_dir(out_dir, bool(opts.force))
 	if prepared != "":
-		printerr("auto_deck: %s" % prepared)
-		return 1
+		return _refuse(1, prepared, {"kind": "out", "path": out_dir, "flag": "--out"})
 
 	var base_seed := int(opts.seed)
 	if base_seed == 0:
@@ -1467,6 +1516,71 @@ func _main(argv: PackedStringArray) -> int:
 			MANIFEST_NAME, rebuilds])
 	print(next_step_line(out_dir, _packs_in_force, String(opts.keep) if held != null else ""))
 	return 0
+
+
+## The plan a `--dry-run` prints: every check above has passed, and
+## this is what the run would write and from what. The disk figure is
+## the measured ~4.2 KB a deck file takes; the seed is reported as
+## rolled when the line gave none, since the run would roll its own.
+func _plan_of(opts: Dictionary, out_dir: String, list_label: String,
+		keep: DeckModel, held: DeckModel, varied: Dictionary) -> Dictionary:
+	var count := int(opts.count)
+	var absolute := ProjectSettings.globalize_path(out_dir)
+	var held_files := 0
+	if DirAccess.dir_exists_absolute(absolute):
+		var dir := DirAccess.open(absolute)
+		if dir != null:
+			held_files = dir.get_files().size() + dir.get_directories().size()
+	var plan := {
+		"tool": "auto_deck", "count": count,
+		"combinations": combo_total(opts),
+		"seed": int(opts.seed), "seed_rolled": int(opts.seed) == 0,
+		"source": String(opts.source),
+		"sets": _plan_sets(opts),
+		"packs": _packs_in_force, "packs_on": Lab.packs_on(),
+		"wishes": _plan_wishes(opts),
+		"distinct": int(opts.distinct),
+		"out": out_dir, "out_exists": DirAccess.dir_exists_absolute(absolute),
+		"out_holds": held_files, "force": bool(opts.force),
+		"files": {"decks": count, "manifest": out_dir.path_join(MANIFEST_NAME),
+			"list": out_dir.path_join(DECKLIST_NAME)},
+		"disk_bytes": count * DECK_FILE_BYTES,
+		"next": next_step_line(out_dir, _packs_in_force,
+			String(opts.keep) if held != null else "").trim_prefix("next: "),
+	}
+	if list_label != "":
+		plan["list"] = String(opts.list)
+	if keep != null:
+		plan["keep"] = String(opts.keep)
+		plan["kept_cards"] = _non_lands(keep)
+	if held != null:
+		plan["vary"] = varied
+	return plan
+
+
+## A deck file on disk, measured: 10,000 decks were 42 MB (2026-09-25).
+const DECK_FILE_BYTES := 4200
+
+
+static func _plan_sets(opts: Dictionary) -> Array:
+	var out: Array = []
+	for alternative in (opts.sets as Array):
+		out.append(Array(alternative))
+	return out
+
+
+## The axes, each with the alternatives the line asked for — the
+## plan's `wishes`, keyed the way `decks.csv` is.
+static func _plan_wishes(opts: Dictionary) -> Dictionary:
+	var out := {}
+	for key in AXES:
+		if key == "sets":
+			continue
+		var values: Array = []
+		for value in (opts[key] as Array):
+			values.append(_wish_word(String(key), value))
+		out[key] = values
+	return out
 
 
 ## One deck's builder, set up from its wish, its seed and the run's

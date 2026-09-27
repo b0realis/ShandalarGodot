@@ -349,7 +349,45 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The tools, for a program (2026-09-27)
+
+- `AGENTS.md` (root): the contract for DRIVING the headless tools from a
+  script or an agent — the two channels, the exit codes of every tool,
+  the refusal envelope and its kinds, `--dry-run`'s plan keys, every
+  output file and its keys (`results.json`, `sweep.json`, `decks.csv`),
+  the house invariants (a sweep needs its control pair, `--no-elo` on a
+  mined field, one run at a time) and a session in order.
+  `CONTRIBUTING.md` stays the contract for EDITING.
+- `DeckLab/lab_console.gd`: `error_record` / `error_line` (the refusal as
+  ONE line of JSON — `tool`, `exit`, `kind`, `message`, `flag` scanned
+  from the message by `flag_named` unless given, `suggestions` and the
+  kind's particulars), `plan_line` (a plan as pretty JSON with
+  `dry_run: true`), `estimate` (a clock guess at a nominal 20 games/s,
+  labelled as a guess).
+- `DeckLab/simulate.gd`: `_refuse(exit, message, detail, said)` at every
+  refusal before a game (kinds `option`, `deck`, `packs`, `pool`, `out`),
+  `_plan` / `_plan_of` / `_deck_plan_row` and the sweep's own plan in
+  `_run_sweep`; `--dry-run` (every check, the plan, no folder, exit 0);
+  `flags_near` (the "did you mean" flags as data, each once);
+  `_deck_files` (deck → the file it was read from); `packs_on` (the packs
+  actually enabled, beside the switch's own `packs`); `last_error` /
+  `last_plan` for the tests.
+- `DeckLab/auto_deck_cli.gd`: the same pair with its own kinds (`option`,
+  `packs`, `sets`, `list`, `keep`, `vary`, `out`); `_plan_of` /
+  `_plan_sets` / `_plan_wishes` and `DECK_FILE_BYTES` (~4.2 KB a deck,
+  measured) — the plan comes BEFORE `_prepare_out_dir`, so a dry run
+  clears nothing and reports `out_exists` / `out_holds` instead.
+- `DeckLab/README.md`: `--dry-run` in both switch tables, *The refusal as
+  data* after the exit codes, the AutoDeck exit codes' envelope note.
+- Test: `tests/tools/test_lab_for_machines_2026_09_27.gd` (the envelope's
+  shape and kinds in both tools, the plans of a duel, a tournament, a
+  sweep and an AutoDeck run, no folder made, the toggles documented).
+
 ## Release package files
+
+- `docs/releases/0.40.28.md`: the tools for a program — `AGENTS.md`, the
+  refusal as one line of JSON, `--dry-run` in the Deck Lab and the
+  AutoDeck CLI.
 
 - `docs/releases/0.40.27.md`: the AI's post-block damage reading runs the
   engine's own division, so a blocked trampler's spill is counted by the

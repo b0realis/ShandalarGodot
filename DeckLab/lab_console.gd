@@ -281,3 +281,80 @@ static func closest(word: String, candidates: PackedStringArray,
 			break
 		out.append(String(row[1]))
 	return out
+
+
+# ------------------------------------------------- the refusal as data --
+
+## THE REFUSAL AS DATA (2026-09-27). A run that stops before it plays — a
+## mistyped flag, a deck that is not there, a pack this build lacks, an
+## output folder it cannot write — says why on stderr in prose, as it
+## always has, and prints ONE line of JSON on stdout:
+##
+##   {"error":{"tool":"deck_lab","exit":2,"kind":"option",
+##             "message":"unknown option '--gmes' — did you mean --games?",
+##             "flag":"--gmes","suggestions":["--games"]}}
+##
+## stdout is still the instrument: there is no report on a refusal, so
+## the line is the whole of what the run says, and a program driving the
+## tool reads the exit code and this line instead of the prose. `kind`
+## is the thing to branch on — `option` (the command line), `deck` (a
+## deck file: not found, unreadable, or refused by a format or a
+## proxy), `packs`, `pool` (a field or matrix with nothing in it),
+## `sweep`, `out` (the output folder), `list`, `keep`, `vary`, `sets`
+## (the AutoDeck CLI's own). `flag` is the switch the message names
+## when it names one; `suggestions` the "did you mean"; the rest of
+## [param detail] is carried as given (`path`, `tried`, `problems`).
+static func error_line(tool: String, exit: int, message: String,
+		detail: Dictionary = {}) -> String:
+	return JSON.stringify({"error": error_record(tool, exit, message, detail)})
+
+
+## The record behind [method error_line], for the tool to keep — a test
+## reads it back where a shell would read the line.
+static func error_record(tool: String, exit: int, message: String,
+		detail: Dictionary = {}) -> Dictionary:
+	var out := {"tool": tool, "exit": exit,
+		"kind": String(detail.get("kind", "option")), "message": message}
+	var flag := String(detail.get("flag", flag_named(message)))
+	if flag != "":
+		out["flag"] = flag
+	for key in detail:
+		if key != "kind" and key != "flag":
+			out[key] = detail[key]
+	return out
+
+
+## The first switch a refusal names — `--top` in "--top only means
+## something in tournament mode", `--gmes` in "unknown option '--gmes'
+## — did you mean --games?" (the one that was typed, not the one that
+## was meant; the suggestions carry that). "" when the message names
+## none ("unknown profile 'x'").
+static func flag_named(message: String) -> String:
+	var found := RegEx.create_from_string("(?:^|[^A-Za-z0-9-])(--?[a-z][a-z0-9-]*)").search(message)
+	return "" if found == null else found.get_string(1)
+
+
+## THE PLAN AS DATA (`--dry-run`): what the run would do, as one JSON
+## document on stdout, and no game played and no folder made. The keys a
+## driving program wants before it spends five hours — the mode, the
+## decks by name and file, how many matchups and games, the seed, the
+## threads and processes, the packs and pilots, where the files would go
+## — and an estimate of the clock, labelled as the guess it is.
+static func plan_line(plan: Dictionary) -> String:
+	var out := {"dry_run": true}
+	for key in plan:
+		out[key] = plan[key]
+	return JSON.stringify(out, "  ")
+
+
+## A nominal full-duel rate on a desk-class machine at the default
+## threads. THE RUN MEASURES ITS OWN over a 30-second window (see
+## `LabEta`); this one is for the plan, before anything has been
+## measured, and the plan says so beside the number.
+const NOMINAL_GAMES_PER_SECOND := 20.0
+
+
+static func estimate(games: int) -> Dictionary:
+	return {"games_per_second": int(NOMINAL_GAMES_PER_SECOND),
+		"seconds": int(ceil(float(games) / NOMINAL_GAMES_PER_SECOND)),
+		"note": "at a nominal rate; the run measures its own"}

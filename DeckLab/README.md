@@ -347,6 +347,7 @@ same tournament at `--procs 1` and `--procs 3`).
 | `--quiet` | no banner and no progress bar; the report still prints — exactly `--no-banner --progress off` | off |
 | `--no-banner` | keep the progress bar, drop the artwork (or export `DECK_LAB_NO_BANNER=1`) | off |
 | `--progress MODE` | which SHAPE the progress takes: `auto` (a redrawing bar on a terminal, one heartbeat line a minute in a log), `bar` (the bar whatever stderr is), `log` (the lines whatever stderr is — they accumulate, so a long sweep leaves a record of itself), `off` (none, and the banner stays). An explicit `--progress` wins over the `off` that `--quiet` implies | `auto` |
+| `--dry-run` | every check a run makes — the decks loaded, the packs enabled, the pairs built — and then THE PLAN as JSON on stdout instead of a game: the decks with their files and sizes, the matchups, the games (or matches) in total, seed, jobs and processes, packs, the output folder and a clock estimate labelled as the guess it is. Exit 0; no folder is made (2026-09-27, [AGENTS.md](../AGENTS.md)) | off |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
 | `--packs LIST` | the card packs in force for THIS RUN: `all` (every pack found), `none` (the base cards alone), or ids — `pack-3,pack-7`, or bare `3,7`. In memory only, workers included; the game's own setting is never written. Omitted, the run plays with whatever the game has enabled (see [the packs](#the-card-packs----packs-2026-09-25)) | — |
 | `-h`, `--help` | switch reference | — |
@@ -1339,6 +1340,27 @@ profile cannot read); 3 no Godot binary (`deck_lab.sh`; set
 but its control pair did not replay the null game for game — the report
 names the first game that moved.
 
+**The refusal as data** (2026-09-27): every refusal *before a game* — every
+2, and the two 1s a run can hit before it starts (`--out` names a file, the
+folder cannot be made) — also prints ONE line of JSON on stdout, the
+channel that on a refusal carries no report:
+
+```
+{"error":{"tool":"deck_lab","exit":2,"kind":"option",
+  "message":"unknown option '--gmes' — did you mean --games?",
+  "flag":"--gmes","suggestions":["--games"]}}
+```
+
+`kind` is the thing to branch on — `option` (a flag, a value, a `--sweep`
+without its control), `deck` (not found, proxied, illegal for the
+format; with `path`, `tried` and `suggestions`), `packs`, `pool` (a field
+or matrix with nothing in it), `out`. `flag` is the flag the message
+names, when it names one. The prose on stderr is unchanged; a program
+reads the line, a person reads the prose. A refusal *during* a run — a
+worker that stopped, a file that would not write — keeps its exit code and
+its stderr and prints no envelope, because by then stdout is the report.
+[AGENTS.md](../AGENTS.md) is the contract as a whole.
+
 A rated run whose Elo ledger cannot be saved exits **1** too. Its matchup
 reports are still written, with **Elo NOT SAVED** instead of apparent rating
 updates. Experimental runs should continue to use `--no-elo` or a scratch
@@ -1619,6 +1641,7 @@ and may be repeated; see *Alternatives and the cartesian walk* below.
 | `--force` | write into an output folder that already holds files — the previous run's `deck_*.deck`, `decks.csv` and `decklist.txt` go first, so the folder is the new run and nothing else (the Lab's `--field DIR` plays the folder); other files stay | off |
 | `--progress auto\|bar\|log\|off` | the shape of the progress, the Lab's own four | auto |
 | `--quiet` / `--no-banner` | the Lab's own two (`--quiet` is no banner and no progress bar; the report still prints) | off |
+| `--dry-run` | every check, then THE PLAN as JSON on stdout and nothing written: the count and the wish combinations, the seed (and whether the run would roll one), source, sets, packs, the kept deck and its varied cards, whether `--out` exists and how many files it holds (the `--force` question, answered before anything is cleared), the files the run would write and the disk they take (~4.2 KB a deck), and the `next:` line as data. Exit 0 (2026-09-27) | off |
 | `-h`, `--help` | switch reference | — |
 | `-V`, `--version` | the project's version, answered by the shell | — |
 
@@ -1626,7 +1649,11 @@ Exit codes: **0** every deck written, **1** the run broke (no output
 folder, a folder that is not empty and no `--force`, a pool with nothing
 in it), **2** the command line was wrong (a switch, a value, a `--keep`
 or `--list` file that is not there, a kept deck that needs a pack not in
-play), **3** no Godot to run.
+play), **3** no Godot to run. Every refusal before a deck is built — every
+2, and the 1s — also prints ONE line of JSON on stdout, the Lab's own
+envelope with `"tool":"auto_deck"` and its own kinds: `option`, `packs`,
+`sets`, `list`, `keep`, `vary`, `out` (see *The refusal as data* above and
+[AGENTS.md](../AGENTS.md)).
 
 ### Alternatives and the cartesian walk
 
@@ -1919,4 +1946,5 @@ live.
 | `tests/tools/test_deck_lab.gd` | component tests |
 | `tests/tools/test_deck_lab_sweep.gd` | the sweep: its flags, the three arms, the control verdict read from the games, a small run end to end (exit 0 and exit 4) |
 | `tests/tools/test_auto_deck_cli.gd` | the AutoDeck CLI: every switch and refusal, the cartesian walk, the seeds, and the promise that a row of `decks.csv` rebuilds its deck |
+| `tests/tools/test_lab_for_machines_2026_09_27.gd` | the two tools as a program drives them: the refusal envelope's shape and kinds, `--dry-run`'s plans (duel, tournament, sweep, AutoDeck) and that a dry run makes no folder |
 | `tools/test_auto_deck_cli_sh.py` | the AutoDeck CLI's shell wrapper: `-V` without an engine, exit 3 with no Godot, the exec line |

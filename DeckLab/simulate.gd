@@ -246,6 +246,12 @@ OPTIONS
                       terminal.)
   --no-banner         Keep the progress bar, drop the artwork. Or export
                       DECK_LAB_NO_BANNER=1 once and forget it.
+  --dry-run           Load the decks, run every check the run would, then
+                      print THE PLAN as JSON on stdout and stop: mode,
+                      decks, matchups, games, seed, threads, processes,
+                      packs, pilots, where the files would go, and a
+                      clock estimate labelled as the guess it is. No
+                      folder is made and no game played. Exit 0.
   --progress MODE     Where the progress goes, and in what shape:
                         auto  the default — a bar that redraws itself
                               when stderr is a terminal, one heartbeat
@@ -411,6 +417,10 @@ EXIT CODES
   3  no Godot binary (deck_lab.sh; set GODOT=/path/to/godot)
   4  a --sweep ran to the end, but its control pair did not replay the
      null game for game — the report says which game moved first
+  A refusal before any game (every 2, and the 1 of an --out that cannot
+  be written) also prints ONE line of JSON on stdout — {"error": {"exit",
+  "kind", "message", "flag", "suggestions", ...}} — so a program driving
+  the tool reads that and the exit code, not the prose (AGENTS.md).
 
 ENVIRONMENT
   GODOT               Which Godot to run (default ../tools/godot, then PATH).
@@ -543,6 +553,15 @@ var _eta := LabEta.new()
 ## (which write nothing but their own results slot, so this stays as
 ## lock-free as the rest of the run).
 var _duel_opts: Dictionary = {}
+## THE REFUSAL AND THE PLAN AS DATA (2026-09-27): what the one JSON line
+## on stdout said, kept for a test to read where a shell reads the line
+## — `last_error` after a run that stopped before it played, `last_plan`
+## after a `--dry-run` ([method _refuse], [method _plan]).
+var last_error: Dictionary = {}
+var last_plan: Dictionary = {}
+## Which file each loaded deck came from (a [DeckList] keeps its name,
+## not its path), for the plan's `file` column.
+var _deck_files: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -572,6 +591,29 @@ static func missing_records(results: Array) -> int:
 	return missing
 
 
+## A run that stops before it plays says why twice: in prose on stderr
+## (here, unless the caller [param said] it already, with more lines
+## than one) and as ONE line of JSON on stdout, so a program driving the
+## tool has the exit code and the reason without parsing the prose. See
+## [method LabConsole.error_line] for the line's keys. Returns
+## [param exit] so a site reads `return _refuse(2, ...)`.
+func _refuse(exit: int, message: String, detail: Dictionary = {}, said := false) -> int:
+	if not said:
+		printerr("deck_lab: %s" % message)
+	last_error = LabConsole.error_record("deck_lab", exit, message, detail)
+	print(JSON.stringify({"error": last_error}))
+	return exit
+
+
+## `--dry-run`: the plan on stdout as JSON and nothing played, nothing
+## made — see [method LabConsole.plan_line].
+func _plan(plan: Dictionary) -> int:
+	last_plan = plan
+	last_plan["dry_run"] = true
+	print(LabConsole.plan_line(plan))
+	return 0
+
+
 func _main(argv: PackedStringArray) -> int:
 	# THE WORKER ENTRY, first and silent. A fanned-out run re-invokes this
 	# same script once per slice; the child reads a task list, plays it,
@@ -598,8 +640,7 @@ func _main(argv: PackedStringArray) -> int:
 		if not chosen.has("error"):
 			var refusal := enable_packs(chosen.ids)
 			if refusal != "":
-				printerr("deck_lab: %s" % refusal)
-				return 2
+				return _refuse(2, refusal, {"kind": "packs"})
 			_packs_in_force = chosen.ids
 	var opts := _parse_args(argv)
 	_quiet = bool(opts.get("quiet", false))
@@ -617,7 +658,10 @@ func _main(argv: PackedStringArray) -> int:
 		# refusal and the way out of it, on the first line, not a logo.
 		printerr("deck_lab: %s" % opts.error)
 		_usage_hint(argv.is_empty())
-		return 2
+		var detail := {"kind": "option"}
+		if not (opts.get("suggestions", []) as Array).is_empty():
+			detail["suggestions"] = opts.suggestions
+		return _refuse(2, opts.error, detail, true)
 	_banner()
 
 	CardRegistry.ensure_loaded()
@@ -661,8 +705,8 @@ func _main(argv: PackedStringArray) -> int:
 				if field_paths[i].get_file() != opponent_paths[j].get_file():
 					pairs.append([i, contestants + j])
 		if pairs.is_empty():
-			printerr("deck_lab: the field and the gauntlet are the same deck(s); nothing to play")
-			return 2
+			return _refuse(2, "the field and the gauntlet are the same deck(s); nothing to play",
+				{"kind": "pool"})
 	elif opts.matrix_pool.is_empty():
 		var deck_a: DeckList = null
 		if is_random(opts.deck_a):
@@ -702,10 +746,9 @@ func _main(argv: PackedStringArray) -> int:
 			var paths := without_decks_under_test(
 				_expand_pool(source, ""), decks_under_test(opts))
 			if paths.is_empty():
-				printerr("deck_lab: no decks in the field '%s'%s%s" % [source,
+				return _refuse(2, "no decks in the field '%s'%s%s" % [source,
 					"" if _group_filter == "" else " for --group " + _group_filter,
-					_subfolders_note(source)])
-				return 2
+					_subfolders_note(source)], {"kind": "pool", "path": source})
 			for path in paths:
 				var deck := _load_deck(path, opts.format)
 				if deck == null:
@@ -719,8 +762,7 @@ func _main(argv: PackedStringArray) -> int:
 				return 2
 			decks.append(deck)
 		if decks.size() < 2:
-			printerr("deck_lab: matrix mode needs at least 2 decks")
-			return 2
+			return _refuse(2, "matrix mode needs at least 2 decks", {"kind": "pool"})
 		for i in decks.size():
 			for j in range(i + 1, decks.size()):
 				pairs.append([i, j])
@@ -767,16 +809,25 @@ func _main(argv: PackedStringArray) -> int:
 	if FileAccess.file_exists(out_absolute) and not DirAccess.dir_exists_absolute(out_absolute):
 		# `make_dir_recursive` on a path that is a FILE says OK, and the
 		# run's first write failed after the games (2026-09-26).
-		printerr("deck_lab: --out '%s' is a file, not a directory" % out_dir)
-		return 1
-	var made := DirAccess.make_dir_recursive_absolute(out_absolute)
-	if made != OK and not DirAccess.dir_exists_absolute(out_absolute):
-		printerr("deck_lab: cannot create the output directory '%s' (error %d)"
-			% [out_dir, made])
-		printerr("  --out takes a directory this user may write to.")
-		return 1
-	_keep_the_importer_out(out_dir)
+		return _refuse(1, "--out '%s' is a file, not a directory" % out_dir,
+			{"kind": "out", "path": out_dir})
 	var unit := "games" if opts.best_of == MatchState.FREE_PLAY else "matches"
+	# THE PLAN AND NOTHING ELSE (`--dry-run`, 2026-09-27): every deck
+	# loaded and every refusal above still refuses, the pairs counted,
+	# and then the plan on stdout — no folder made, no game played. A
+	# sweep's plan is its own ([method _run_sweep]).
+	if bool(opts.dry_run) and opts.sweep.is_empty():
+		return _plan(_plan_of(mode, opts, decks, pairs, contestants, field,
+			random_index, out_dir, jobs, unit))
+	if not bool(opts.dry_run):
+		var made := DirAccess.make_dir_recursive_absolute(out_absolute)
+		if made != OK and not DirAccess.dir_exists_absolute(out_absolute):
+			printerr("deck_lab: cannot create the output directory '%s' (error %d)"
+				% [out_dir, made])
+			printerr("  --out takes a directory this user may write to.")
+			return _refuse(1, "cannot create the output directory '%s' (error %d)"
+				% [out_dir, made], {"kind": "out", "path": out_dir, "flag": "--out"}, true)
+		_keep_the_importer_out(out_dir)
 	_duel_opts = _duel_options(opts)
 	# A SWEEP IS ITS OWN RUN FROM HERE: the same decks, loader, fan-out
 	# and per-game records, but three pairs and a verdict where a plain
@@ -1132,6 +1183,55 @@ func _main(argv: PackedStringArray) -> int:
 ## the worker threads (and shipped to the worker processes) through
 ## [member _duel_opts]; built here so a plain run and a sweep cannot
 ## drift apart on it.
+## The plan a `--dry-run` prints, from the same decks and pairs the run
+## would play. Games are counted the way the work list counts them —
+## pairs × --games — and the estimate is in games even for a best-of
+## match, at the fewest games a match can take.
+func _plan_of(mode: String, opts: Dictionary, decks: Array[DeckList], pairs: Array,
+		contestants: int, field: Array[DeckList], random_index: int,
+		out_dir: String, jobs: int, unit: String) -> Dictionary:
+	var deck_rows: Array = []
+	for deck in decks:
+		deck_rows.append(_deck_plan_row(deck))
+	var total: int = pairs.size() * int(opts.games)
+	var games_at_least := total
+	if unit == "matches":
+		games_at_least = total * int(ceil(float(opts.best_of) / 2.0))
+	var plan := {
+		"tool": "deck_lab", "mode": mode,
+		"decks": deck_rows, "matchups": pairs.size(),
+		"games_per_matchup": int(opts.games), "unit": unit, "total": total,
+		"seed": int(opts.seed), "jobs": jobs,
+		"procs": _process_count(opts, total),
+		"profile_a": opts.profile_a, "profile_b": opts.profile_b,
+		"packs": _packs_in_force, "packs_on": packs_on(),
+		"rated": not bool(opts.no_elo),
+		"format": opts.format, "rules": opts.rules,
+		"out": out_dir,
+		"estimate": LabConsole.estimate(games_at_least),
+	}
+	if mode == "tournament":
+		plan["field"] = deck_rows.slice(0, contestants)
+		plan["gauntlet"] = deck_rows.slice(contestants)
+		plan["top"] = int(opts.top)
+	if random_index >= 0:
+		var field_rows: Array = []
+		for deck in field:
+			field_rows.append(_deck_plan_row(deck))
+		plan["field"] = field_rows
+	if opts.best_of != MatchState.FREE_PLAY:
+		plan["best_of"] = opts.best_of
+		plan["sideboard"] = opts.sideboard
+	if _is_unfair_run(opts):
+		plan["challenge"] = "unfair-current-hand"
+	return plan
+
+
+func _deck_plan_row(deck: DeckList) -> Dictionary:
+	return {"name": deck.deck_name, "file": String(_deck_files.get(deck, "")),
+		"cards": deck.cards.size(), "sideboard": deck.sideboard.size()}
+
+
 func _duel_options(opts: Dictionary) -> Dictionary:
 	return {
 		"lives": opts.lives, "ante": opts.ante, "names": opts.names,
@@ -2047,6 +2147,14 @@ static func enable_packs(ids: Array) -> String:
 	return ""
 
 
+## The packs actually on for this process — `--packs` or the game's own
+## setting, whichever decided — for a plan to name (`packs` stays the
+## switch's own value, `null` when the settings decided, as results.json
+## has always had it).
+static func packs_on() -> Array:
+	return Array(Settings.enabled_card_packs())
+
+
 ## The path [method _load_deck] would read `path` from, spelled so that
 ## it reads the same from any folder: a library deck named bare or as
 ## `decks/NAME` becomes its `res://decks/NAME`; an absolute or scheme
@@ -2072,6 +2180,8 @@ func _load_deck(path: String, format := "") -> DeckList:
 				if proxied != "":
 					printerr("deck_lab: %s cannot be played:" % candidate)
 					printerr("  " + proxied)
+					_refuse(2, "%s cannot be played: %s" % [candidate, proxied],
+						{"kind": "deck", "path": candidate, "problems": [proxied]}, true)
 					return null
 			if deck.errors.is_empty():
 				if format != "":
@@ -2082,7 +2192,11 @@ func _load_deck(path: String, format := "") -> DeckList:
 					if refusal != "":
 						printerr("deck_lab: %s does not meet the format:" % candidate)
 						printerr("  " + refusal)
+						_refuse(2, "%s does not meet the format: %s" % [candidate, refusal],
+							{"kind": "deck", "path": candidate, "format": format,
+							"problems": [refusal]}, true)
 						return null
+				_deck_files[deck] = candidate
 				return deck
 			printerr("deck_lab: problems in '%s':" % candidate)
 			for problem in deck.errors:
@@ -2096,6 +2210,9 @@ func _load_deck(path: String, format := "") -> DeckList:
 			printerr("  everywhere else and still be refused here. ./deck_convert.sh")
 			printerr("  converts such a deck without complaint; editing the list is")
 			printerr("  the fix for a misspelling (names must be exact and printed).")
+			_refuse(2, "problems in '%s': %s" % [candidate, "; ".join(
+				PackedStringArray(deck.errors))],
+				{"kind": "deck", "path": candidate, "problems": deck.errors}, true)
 			return null
 	_deck_not_found(path, tries)
 	return null
@@ -2119,6 +2236,7 @@ func _deck_not_found(path: String, tried: Array) -> void:
 		printerr("  '%s' is a FOLDER: a folder is a pool, not a deck —" % path)
 		printerr("      --gauntlet %s   (deck A against each of them)" % path)
 		printerr("      --matrix %s     (every deck against every other)" % path)
+		_not_found_line(path, tried, near, true)
 		return
 	printerr("  deck arguments are PATHS to a deck file, not deck names:")
 	printerr("      --deck-a decks/big_green.deck      yes")
@@ -2130,6 +2248,18 @@ func _deck_not_found(path: String, tried: Array) -> void:
 	printerr("  `ls decks/` lists the %d decks in the folder itself; %d more are in"
 		% [shipped, pool.size() - shipped])
 	printerr("  its subfolders, reached with --group (see --help).")
+	_not_found_line(path, tried, near, false)
+
+
+## The JSON line behind [method _deck_not_found] — `kind` deck, the path
+## as typed, the paths tried, the nearest real files, and whether the
+## path is a folder (a pool, not a deck).
+func _not_found_line(path: String, tried: Array, near: PackedStringArray,
+		folder: bool) -> void:
+	var detail := {"kind": "deck", "path": path, "tried": tried, "folder": folder}
+	if not near.is_empty():
+		detail["suggestions"] = Array(near)
+	_refuse(2, "deck file not found: '%s'" % path, detail, true)
 
 
 ## THE "DID YOU MEAN" behind a bad deck path, as a pure function of what
@@ -2254,6 +2384,7 @@ const TOGGLE_HINTS := {
 	"--no-elo": "--no-elo: do not touch the Elo ledger (use it for reruns)",
 	"--quiet": "--quiet: no banner and no progress bar — the report still prints",
 	"--no-banner": "--no-banner: keep the progress bar, drop the artwork",
+	"--dry-run": "--dry-run: print the plan as JSON on stdout and play nothing",
 }
 
 
@@ -2274,10 +2405,22 @@ static func unknown_option(arg: String) -> String:
 	# nearest flag. So the floor sits at 0.40, and the 0.05 spread keeps
 	# the answer to the flags actually in contention (a tie like
 	# `--deck_a` between `--deck-a` and `--deck-b` shows both).
-	var near := LabConsole.closest(arg, flags, 2, 0.40, 0.05)
+	var near := flags_near(arg)
 	if near.is_empty():
 		return "unknown option '%s'" % arg
 	return "unknown option '%s' — did you mean %s?" % [arg, " or ".join(near)]
+
+
+## The flags [method unknown_option] would name, as a list — the
+## refusal's `suggestions` (2026-09-27).
+static func flags_near(arg: String) -> PackedStringArray:
+	var flags := PackedStringArray()
+	for flag in FLAG_HINTS:
+		flags.append(String(flag))
+	for flag in TOGGLE_HINTS:
+		if not flags.has(String(flag)):
+			flags.append(String(flag))
+	return LabConsole.closest(arg, flags, 2, 0.40, 0.05)
 
 
 ## The flags whose value must be a whole number. `String.to_int()` is
@@ -2305,6 +2448,8 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		# `progress` is "" for "nobody said", which is how an explicit
 		# --progress can win over the one --quiet implies.
 		"quiet": false, "no_banner": false, "progress": "",
+		# THE PLAN ALONE (2026-09-27): every check runs, no game does.
+		"dry_run": false,
 		# The duel settings. Every default here is what this script did
 		# before the flag existed — see the class doc.
 		"lives": [20, 20], "ante": 0, "names": ["SeatZero", "SeatOne"],
@@ -2352,10 +2497,12 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 					opts.no_banner = true
 				"--no-banner":
 					opts.no_banner = true
+				"--dry-run":
+					opts.dry_run = true
 			i += 1
 			continue
 		if not FLAG_HINTS.has(arg):
-			return {"error": unknown_option(arg)}
+			return {"error": unknown_option(arg), "suggestions": Array(flags_near(arg))}
 		i += 1
 		# A FLAG WITH NO VALUE SAYS WHAT THE VALUE WOULD HAVE BEEN. "--games
 		# needs a value" leaves the reader to go and look it up; the hint
@@ -3195,6 +3342,27 @@ func _run_sweep(opts: Dictionary, decks: Array[DeckList], pairs: Array,
 	for pair_index in control_pair:
 		pair_names.append("%s vs %s" % [decks[pairs[pair_index][0]].deck_name,
 			decks[pairs[pair_index][1]].deck_name])
+	if bool(opts.dry_run):
+		var arm_rows: Array = []
+		for arm in arms:
+			arm_rows.append({"label": arm_label(arm),
+				"profile_a": arm.profile_a, "profile_b": arm.profile_b})
+		var total: int = arms.size() * pairs.size() * int(opts.games)
+		return _plan({
+			"tool": "deck_lab", "mode": "sweep",
+			"knob": sweep.knob, "values": Array(sweep.values), "null": opts.sweep_null,
+			"arms": arm_rows, "pairs": Array(pair_names),
+			"control": "%s vs %s" % [control_a.deck_name, control_b.deck_name],
+			"decks": decks.map(_deck_plan_row),
+			"matchups": pairs.size(), "games_per_matchup": int(opts.games),
+			"unit": unit, "total": total,
+			"seed": int(opts.seed), "jobs": jobs, "procs": _process_count(opts, total),
+			"profile_a": opts.profile_a, "profile_b": opts.profile_b,
+			"packs": _packs_in_force, "packs_on": packs_on(),
+			"rated": false, "format": opts.format,
+			"rules": opts.rules, "out": out_dir,
+			"estimate": LabConsole.estimate(total),
+		})
 	print("Deck Lab (sweep): %s = %s   null: %s   pilots: %s vs %s" % [
 		sweep.knob, ", ".join(sweep.values), opts.sweep_null,
 		opts.profile_a, opts.profile_b])
