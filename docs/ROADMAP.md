@@ -17277,6 +17277,21 @@ eight files, comparing `run.json` on the fields a repeat shares.
 Gate: 526 scripts, **8,019/8,019 tests, 362,644 asserts**, exit 0
 in 276 s over 6 shards; Python 338, exit 0.
 
+## 2026-09-27 — The release door answers -V (0.40.30)
+
+The 0.40.29 play copy, asked `./shandalar.sh -V`, refused it as an
+unknown verb — the repo's door answers from `tools/banner.sh`, which a
+release does not carry, and AGENTS.md promises the flag. Both release
+writers know the version when they write the door, so the door
+answers it itself: `build_release.sh` stamps `@VERSION@` after its
+heredoc, `package_release.py` stamps `DISPATCHER` before it is packed,
+and the line reads as the wrappers' do, `shandalar.sh — Shandalar
+0.40.30`. `test_package_release.py` holds both writers to the line and
+the packed door to the stamped version.
+
+Gate: 526 scripts, **8,019/8,019 tests, 362,021 asserts**, exit 0
+in 256 s over 6 shards; Python 338, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

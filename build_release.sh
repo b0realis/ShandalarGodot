@@ -619,7 +619,7 @@ QUERY
 #   ./shandalar.sh cards NAME...      a card's record     (lab_query.sh)
 #   ./shandalar.sh play ARGS...       the game itself     (run.sh)
 #   ./shandalar.sh VERB --help        that tool's own manual
-#   ./shandalar.sh -h | --help        this list, on stdout
+#   ./shandalar.sh -h | --help        this list, on stdout;  -V the version
 #
 # Every tool keeps its own exit codes (0 done, 1 broke, 2 the line was
 # wrong, 4 the Lab's control moved) and its own stdout contract; a
@@ -630,6 +630,7 @@ cd "$(dirname "$0")"
 verb="${1:-}"
 case "$verb" in
 	"" | -h | --help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-V | --version) echo "shandalar.sh — Shandalar @VERSION@"; exit 0 ;;
 esac
 shift
 case "$verb" in
@@ -645,6 +646,7 @@ printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown
 echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2
 exit 2
 DOOR
+	sed -i "s/@VERSION@/$VERSION/" "$STAGE/shandalar.sh"
 	chmod +x "$STAGE/shandalar.sh"
 	cp -p AGENTS.md "$STAGE/AGENTS.md"
 	# tool_banner.py rides with them — see the web stage above.

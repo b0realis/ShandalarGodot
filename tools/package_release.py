@@ -40,8 +40,9 @@ case "$verb" in
 			'  packs     every card pack: found, on, why not' \\
 			'  cards     a card record' \\
 			'  play      the game itself (run.sh)' \\
-			'VERB --help is that tool manual; AGENTS.md is the contract page.'
+			'VERB --help is that tool manual; -V the version; AGENTS.md is the contract page.'
 		exit 0 ;;
+	-V | --version) echo "shandalar.sh — Shandalar @VERSION@"; exit 0 ;;
 esac
 shift
 case "$verb" in
@@ -292,7 +293,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
             extra["deck_lab.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --deck-lab "$@"\n').encode()
             extra["auto_deck.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --auto-deck "$@"\n').encode()
             extra["lab_query.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --lab-query "$@"\n').encode()
-            extra["shandalar.sh"] = (prefix + DISPATCHER).encode()
+            extra["shandalar.sh"] = (prefix + DISPATCHER.replace("@VERSION@", version)).encode()
             if platform == "raspberry-pi5-arm64":
                 extra["run.sh"] = (prefix +
                     'exec "./Shandalar.arm64" --rendering-method gl_compatibility '

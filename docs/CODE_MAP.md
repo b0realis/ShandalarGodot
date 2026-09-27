@@ -461,6 +461,9 @@ of the tools-for-a-program pass (0.40.29).
 
 ## Release package files
 
+- `docs/releases/0.40.30.md`: the release door answers `-V` — the
+  version stamped into `shandalar.sh` by `build_release.sh` and
+  `package_release.py` alike, since a release has no `tools/banner.sh`.
 - `docs/releases/0.40.29.md`: the tools for a program, second half —
   `--record`, `run.json` with `next`, the Lab Query (`check`, `packs`,
   `cards`), the one door `shandalar.sh`, the skin-pack lines on stderr.

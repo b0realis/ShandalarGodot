@@ -104,6 +104,8 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertEqual(archive.getinfo(prefix + "auto_deck.sh").external_attr >> 16 & 0o777, 0o755)
                             self.assertIn("-- --lab-query", archive.read(prefix + "lab_query.sh").decode())
                             door = archive.read(prefix + "shandalar.sh").decode()
+                            self.assertIn('-V | --version) echo "shandalar.sh — Shandalar 1.2.3"; exit 0 ;;', door)
+                            self.assertNotIn("@VERSION@", door)
                             self.assertTrue(door.startswith("#!/bin/sh\nset -eu\n"))
                             for target in ("./deck_lab.sh", "./auto_deck.sh", "./lab_query.sh", "./run.sh"):
                                 self.assertIn(f"exec {target} ", door)
@@ -219,6 +221,10 @@ class PackageReleaseTest(unittest.TestCase):
                                  ("play", "./run.sh")):
                 self.assertIn(f'{verb}) exec {target} "$@" ;;', script)
             self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', script)
+            # -V is answered by the door itself, from the version stamped
+            # at packaging time — a release has no tools/banner.sh.
+            self.assertIn('-V | --version) echo "shandalar.sh — Shandalar @VERSION@"; exit 0 ;;', script)
+        self.assertIn('sed -i "s/@VERSION@/$VERSION/" "$STAGE/shandalar.sh"', source)
         repo_door = (pack.ROOT / 'shandalar.sh').read_text(encoding='utf-8')
         for verb, target in (("lab", "DeckLab/deck_lab.sh"), ("autodeck", "DeckLab/auto_deck_cli.sh"),
                              ("check | packs | cards", 'DeckLab/lab_query.sh "$verb"'),
