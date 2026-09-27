@@ -17641,6 +17641,57 @@ screen's opponent window.
 Gate: 533 scripts, **8,088/8,088 tests, 366,250 asserts**, exit 0 in
 263 s over 6 shards; Python 392, exit 0.
 
+## 2026-09-27 — The End of Duel window folds its lines (0.40.38)
+
+The owner's playtest: *"in the gauntlet with long named decks the text
+can overflow the you won window!"* — and, on reflection, *"probably
+overflows with long card names not decks as no deck is displayed
+there."* Both were right. A gauntlet opponent is NAMED after its deck
+(`GauntletState.name_for_round` — the deck's `name:` line, or its file
+name), and `decks/` carries titles such as `Menendian — Eternal Weekend
+2016 Old School finalist (UR Aggro-Control)`, seventy-one characters.
+The End of Duel window is 272px wide — `Winbk_Endduel.pic`'s own width
+— and its lines were plain `OriginalDialog.label`s that could not fold:
+`%s won` as the title, `%s  %d life` and `%s next draw:  %s` in the
+body, all carrying that name, and the title alone WIDENED THE COLUMN
+past the ground and took every line under it along. And the next draw's
+own name runs to thirty-one characters (`The Tabernacle at Pendrell
+Vale`), which no 272px window holds beside `Your next draw:`.
+
+**Every line folds at the window's edge, and the window grows to hold
+the rows.** `OriginalDialog.wrapped` is `label` with
+`AUTOWRAP_WORD_SMART`; `create` gives every dialog's TITLE the same fold
+(the End of Duel window is only where it was seen), and the End of Duel
+body is built of it. `OriginalDialog.fit_height` is called once the
+window is in the tree and its last line is in: it hands each folding
+line the column's width and says so upward (`update_minimum_size` —
+sizing a line folds it afresh but leaves the containers' cached measure
+of it at one letter a row, which is how a first cut grew the window to
+1,799px), measures the column, and grows the window to hold it, never
+shrinks it, and re-centres it. The usual window keeps its measured
+272×300; the gauntlet opponent's grows to 361 with `OK` still on the
+stone. **The card is on its own row** under its caption —
+`next_draw_lines` returns `Your next draw:\nThe Tabernacle at Pendrell
+Vale`, one entry per seat as before — the way the original's two
+`@DIALOG_ENDDUEL` strings were captions over a picture of the card. The
+match and gauntlet windows (430 wide) folded their lines already.
+
+**How it is pinned.** `tests/ui/test_end_of_duel_window_2026_09_27.gd`
+(new, six tests): the usual window keeps 272×300 with one row per
+short line and two per next draw; the next draw names the card on its
+own row, `Your` for the player and the opponent's name for the Wizard;
+against an opponent named after that deck every line is a
+`AUTOWRAP_WORD_SMART` label exactly the column's width with no row
+clipped, the title, the life line and the next draw all folding; the
+window grows by exactly what the rows need, the column and `OK` stay on
+the stone, and the taller window is centred; `fit_height` never shrinks
+a window and measures the same twice; and a title wider than any
+window folds rather than widening the column. The Xvfb capture of both
+windows was read before the change was kept.
+
+Gate: 534 scripts, **8,094/8,094 tests, 366,280 asserts**, exit 0 in
+268 s over 6 shards; Python 392, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

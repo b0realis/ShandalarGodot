@@ -628,6 +628,12 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.38.md`: the End of Duel window folds its lines — a
+  gauntlet opponent named after a seventy-character deck title, and a
+  next draw called `The Tabernacle at Pendrell Vale`, no longer walk out
+  of the 272px window: every line wraps (`OriginalDialog.wrapped`, the
+  title too), the card sits on its own row, and the window grows to hold
+  the rows (`OriginalDialog.fit_height`).
 - `docs/releases/0.40.37.md`: the opponent's hand window floats — the same
   `StackHand` as the player's own, dragged by its bar, its corner in
   `opp_hand_stack_pos`, bar-only while the hand is hidden; the plate and
@@ -5237,6 +5243,19 @@ shandalar/
 │    host is the last child of its wrap and covers every pixel of the
 │    aura's subtree by that alone, and the right-hold lift puts it back
 │    at 0 (_lifted_rest_z);
+│    tests/ui/test_end_of_duel_window_2026_09_27.gd — THE END OF DUEL
+│    WINDOW FOLDS ITS LINES: the owner's "in the gauntlet with long
+│    named decks the text can overflow the you won window" — a gauntlet
+│    opponent is named after its deck and a deck title runs to seventy
+│    characters, and a next draw to thirty-one — now every line in the
+│    window is OriginalDialog.wrapped (the title too, in create), the
+│    card is on its own row under its caption, and
+│    OriginalDialog.fit_height grows the window to hold the rows and
+│    re-centres it: the usual window keeps 272x300, the long one folds
+│    every line at the column's width with no row clipped, grows by
+│    exactly what the rows need with OK on the stone, fit_height never
+│    shrinks and measures the same twice, and a wide title folds rather
+│    than widening the column;
 │    tests/ui/test_opponent_hand_window_2026_09_27.gd — THE OPPONENT'S
 │    HAND WINDOW FLOATS: the owner's "the enemy hand stack should be
 │    movable also (in player vs ai or ai vs ai) so it does not occlude
@@ -9046,7 +9065,11 @@ shandalar/
 │       │                      era's three-state art (Winbk_Startduel-
 │       │                      button*, a DOUBLE bevel rule) 9-patched;
 │       │                      label()/ink_label() are the era's two text
-│       │                      voices; choice_line() and field() its list
+│       │                      voices, wrapped() the label that folds at
+│       │                      the window's edge (every title folds since
+│       │                      2026-09-27) and fit_height() the window
+│       │                      growing to hold its folded rows, centred;
+│       │                      choice_line() and field() its list
 │       │                      lines and numeric boxes; text_field() the
 │       │                      sunken stone a place to type wears (the
 │       │                      type-ahead, the finders, the Deck Info

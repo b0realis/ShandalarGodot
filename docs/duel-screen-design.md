@@ -3487,6 +3487,12 @@ Shipped 2026-09-07 (the v0.18.0-dev playtest, all `[QoL]`):
   of `_on_game_over` is hardened at four joints (the tree's timer instead
   of a node-bound tween, OK added before the lines are written,
   `is_instance_valid` plus the `result_closed` signal, and the keys).
+- **The End of Duel window folds its lines** (2026-09-27) — a gauntlet
+  opponent named after a seventy-character deck title, and a next draw
+  called `The Tabernacle at Pendrell Vale`, used to walk out of the 272px
+  ground; every line wraps now (`OriginalDialog.wrapped`, every dialog's
+  title too), the card sits on its own row under `Your next draw:`, and
+  the window grows to hold the rows (`OriginalDialog.fit_height`).
 - **The duel log reads like a report** — the engine's every line now has
   a second column (`MtgGame.log_meta`: turn, step, seat, kind, card and
   colours), and one shape (`DuelLogText`) prints it for the window and

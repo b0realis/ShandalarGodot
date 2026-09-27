@@ -803,12 +803,19 @@ func _show_result_window(verdict: String) -> void:
 	# "OK" is one of the three buttons the 1997 game owns (@DIALOGBUTTONS).
 	_over_dialog.add_button("OK").pressed.connect(_on_game_over_dismissed)
 	add_child(_over_dialog)
-	_over_dialog.body().add_child(OriginalDialog.label(
+	# EVERY LINE FOLDS AT THE WINDOW'S EDGE and the window grows to hold
+	# the rows. A gauntlet opponent is named after its deck, and a deck
+	# title can run to seventy characters; the 2026-09-27 playtest: *"in
+	# the gauntlet with long named decks the text can overflow the you won
+	# window"* — the name, its life and its next draw all walked out of a
+	# 272px window that could not fold a line.
+	_over_dialog.body().add_child(OriginalDialog.wrapped(
 		"%s  %d life" % [game.players[0].player_name, game.players[0].life], 14))
-	_over_dialog.body().add_child(OriginalDialog.label(
+	_over_dialog.body().add_child(OriginalDialog.wrapped(
 		"%s  %d life" % [game.players[1].player_name, game.players[1].life], 14))
 	for line in next_draw_lines():
-		_over_dialog.body().add_child(OriginalDialog.label(line, 14))
+		_over_dialog.body().add_child(OriginalDialog.wrapped(line, 14))
+	_over_dialog.fit_height()
 
 
 ## How long the losing numeral takes to fall, and how long it is held at
@@ -897,6 +904,11 @@ func _set_counted_life(value: float, pid: int) -> void:
 ## `@DIALOG_VIEWANTES` and `@CUECARD_OTHER` use. A seat whose library is
 ## empty has no next draw and gets no line: it drew itself to death and
 ## the End of Duel window has just said so.
+##
+## One entry per seat, and THE CARD IS ON ITS OWN ROW under its caption:
+## the original's two strings are captions over a picture of the card,
+## and `Your next draw:  The Tabernacle at Pendrell Vale` is wider than
+## the window the picture sat in (2026-09-27).
 func next_draw_lines() -> PackedStringArray:
 	var lines := PackedStringArray()
 	if not DuelOptions.toggle("SeeNextDrawsAtEndOfDuel"):
@@ -907,7 +919,7 @@ func next_draw_lines() -> PackedStringArray:
 			continue
 		var head := "Your next draw:" if _is_human(pid) \
 			else "%s next draw:" % game.players[pid].player_name
-		lines.append("%s  %s" % [head, library[-1].data.card_name])
+		lines.append("%s\n%s" % [head, library[-1].data.card_name])
 	return lines
 
 

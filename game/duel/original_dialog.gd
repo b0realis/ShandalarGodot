@@ -86,6 +86,10 @@ const PANELS := {
 ## The button art's frame: 2px rule + 3px face + 2px rule = 7, plus one.
 const BUTTON_MARGIN := 8
 
+## What the column keeps from every edge of the ground ([method create]);
+## a line in the window is [member size].x less twice this wide.
+const MARGIN := 16
+
 signal closed
 
 
@@ -519,6 +523,18 @@ static func label(text: String, size := 14, bold := false) -> Label:
 	return lab
 
 
+## [method label] that WRAPS at the window's edge instead of walking
+## through it. A dialog line is as long as what it names — a gauntlet
+## opponent is called after its deck, and a deck in `decks/` is called
+## `Menendian — Eternal Weekend 2016 Old School finalist (UR Aggro-Control)`
+## — so a line that cannot fold cannot be trusted with a name. Word-smart:
+## a word longer than the line folds inside the word.
+static func wrapped(text: String, size := 14, bold := false) -> Label:
+	var lab := label(text, size, bold)
+	lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return lab
+
+
 ## DARK INK, for the LIGHT grounds — the sandstone Winbk_Options and the
 ## button face. The era uses exactly two voices and both are readable off
 ## the art: pale-with-a-dark-shadow on dark stone (the Situation Bar), and
@@ -653,12 +669,15 @@ static func create(title_text: String, size: Vector2,
 
 	var column := VBoxContainer.new()
 	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,
-		Control.PRESET_MODE_MINSIZE, 16)
+		Control.PRESET_MODE_MINSIZE, MARGIN)
 	column.add_theme_constant_override("separation", 10)
 	dialog.add_child(column)
 
 	if title_text != "":
-		var head := label(title_text, 18, true)
+		# THE TITLE FOLDS TOO. A title wider than the window used to widen
+		# the whole column past the ground — every line under it left
+		# with it (2026-09-27, `%s won` with a gauntlet opponent's name).
+		var head := wrapped(title_text, 18, true)
 		head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		column.add_child(head)
 
@@ -677,6 +696,36 @@ static func create(title_text: String, size: Vector2,
 ## Where callers put the dialog's content.
 func body() -> VBoxContainer:
 	return _body
+
+
+## GROW TO WHAT IS WRITTEN. [method create] sizes a window for the lines
+## it usually carries; a window whose lines FOLD ([method wrapped]) can
+## need more rows than that, and a column taller than its ground pushes
+## the buttons off the stone. Call this once the window is in the tree
+## and its last line is in — it measures the column at the window's own
+## width and grows the window to hold it, never shrinks it, and keeps it
+## centred. The 2026-09-27 playtest: *"in the gauntlet with long named
+## decks the text can overflow the you won window"*.
+func fit_height() -> void:
+	var column := _body.get_parent() as Control
+	if column == null:
+		return
+	# A folded line knows its height only once it knows its width, and the
+	# containers hand widths out on their next sort. Hand each line its
+	# width now so the measurement below is the one the sort will make —
+	# and say so upward: sizing a line folds it afresh but leaves the
+	# containers' cached measure of it as it was, at one letter a row.
+	var width := size.x - 2 * MARGIN
+	for line in column.get_children() + _body.get_children():
+		if line is Label and line.autowrap_mode != TextServer.AUTOWRAP_OFF:
+			line.size = Vector2(width, 0)
+			line.update_minimum_size()
+	var wanted := column.get_combined_minimum_size().y + 2 * MARGIN
+	if wanted <= size.y:
+		return
+	size.y = wanted
+	set_anchors_and_offsets_preset(Control.PRESET_CENTER,
+		Control.PRESET_MODE_KEEP_SIZE)
 
 
 ## Add a button to the dialog's foot. Use the 1997 labels — `@DIALOGBUTTONS`
