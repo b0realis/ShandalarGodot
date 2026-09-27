@@ -348,6 +348,8 @@ same tournament at `--procs 1` and `--procs 3`).
 | `--no-banner` | keep the progress bar, drop the artwork (or export `DECK_LAB_NO_BANNER=1`) | off |
 | `--progress MODE` | which SHAPE the progress takes: `auto` (a redrawing bar on a terminal, one heartbeat line a minute in a log), `bar` (the bar whatever stderr is), `log` (the lines whatever stderr is — they accumulate, so a long sweep leaves a record of itself), `off` (none, and the banner stays). An explicit `--progress` wins over the `off` that `--quiet` implies | `auto` |
 | `--dry-run` | every check a run makes — the decks loaded, the packs enabled, the pairs built — and then THE PLAN as JSON on stdout instead of a game: the decks with their files and sizes, the matchups, the games (or matches) in total, seed, jobs and processes, packs, the output folder and a clock estimate labelled as the guess it is. Exit 0; no folder is made (2026-09-27, [AGENTS.md](../AGENTS.md)) | off |
+| `--record FILTER` | write the engine log of every game the filter admits to `OUT/records/`: `losses` (every game deck A lost), `stalls` (every game that hit the turn limit), `all`. One file a game, `pairP_seedS[_armA][_duelD]_OUTCOME.log`, a `#` header first (`deck_a`, `deck_b`, `pair`, `seed`, `a_on_play`, `outcome`, `turns`, `lines`), then the log the engine kept — what a person reads to see WHY a deck lost, what a program feeds to the next question. The seed in the name replays the game (`--seed S --games 1`). `results.json` / `sweep.json` gain `records{filter,max,written,dir}` (2026-09-27, [what a run leaves](#the-records-and-runjson-2026-09-27)) | off |
+| `--record-max N` | at most N logs per run; `0` is no cap. Exact per process, "about N" across `--procs` workers, each of which counts the folder before it writes. A thousand logs is a gigabyte | 50 |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
 | `--packs LIST` | the card packs in force for THIS RUN: `all` (every pack found), `none` (the base cards alone), or ids — `pack-3,pack-7`, or bare `3,7`. In memory only, workers included; the game's own setting is never written. Omitted, the run plays with whatever the game has enabled (see [the packs](#the-card-packs----packs-2026-09-25)) | — |
 | `-h`, `--help` | switch reference | — |
@@ -1257,12 +1259,54 @@ Printed to stdout AND written to `--out`:
 - **winrates.svg** — win-rate bars with CI whiskers and a 50% reference
   line (opens in any browser; no plotting software involved anywhere).
 - **turns.svg** — game-length histograms per matchup on a shared axis.
+- **run.json** — the run about itself, written last whatever the exit
+  (below).
+- **records/** — with `--record`, one engine log per admitted game.
 
 `results.json`, `matchups.csv` and the SVGs are read by other tooling and
 their shape does not move; the reading paragraphs above are report.txt
 and stdout only. A `--sweep` writes its own set instead — `report.txt`,
-`sweep.json`, `sweep.csv`, `games.csv` — described under
+`sweep.json`, `sweep.csv`, `games.csv`, and `run.json` too — described under
 [the sweep](#the-sweep--one-knob-three-pairs-one-run-2026-09-06).
+
+### The records, and run.json (2026-09-27)
+
+Two things a program reads after a run that a person did not need
+written down, because a person was watching.
+
+**The records.** A report says a deck lost 14 of 20; it does not say
+how. `--record losses` keeps the engine's own log of each of those
+fourteen games under `OUT/records/`, one file a game, named so a folder
+listing is already an index — `pair0_seed17_a_lost.log` — with a `#`
+header that repeats the deck names, the pair and seed, who was on the
+play, the outcome, the turns and the count of lines that follow. The
+log itself is what `game.log_lines` held: every draw, cast, attack and
+block, turn by turn. `stalls` keeps the games that hit the turn limit
+(the ones worth a look when an AI knob is suspected of stalling),
+`all` keeps every game. The cap (`--record-max`, 50) is there because
+the switch is easy to leave on a thousand-game run and a game's log is
+about a megabyte; it is counted on disk, so with `--procs` the workers
+overshoot it by at most a slice each. The file name's seed replays that
+one game: `--seed S --games 1` on the same two decks, same settings.
+
+**run.json.** Written LAST, into `--out`, at every exit that made the
+folder — 0, 1, and the sweep's 4 — so a program that finds the folder
+finds the run's own account of itself first: `tool`, `version` and the
+checkout's `git` commit (empty in a release), the `argv` as typed,
+`mode`, `seed`, `packs` and `packs_on`, `out`, `started` (UTC) and
+`elapsed_seconds`, `exit`, the `files` written, a sweep's
+`control_pass`, and **`next`** — `{why, argv}`, the line that would
+settle what this run left open, or `null` when nothing is: a duel or
+gauntlet whose matchups still straddle 50% gets four times the games
+at `OUT_more`, unrated; a tournament gets its `top.txt` as the field at
+five times the games at `OUT_top` against the same gauntlet; a sweep
+whose candidate deltas are not clear gets four times the games; a
+sweep whose control moved gets `null`, because more of the same would
+not settle it. The argv is this run's own with the changing flags
+stripped and re-added, so `--packs`, `--profile-a`, `--rules`, `--seed`
+ride along unchanged. The AutoDeck CLI writes its own `run.json` with
+the same keys and the Lab line as `next.argv`. A loop that runs
+`next.argv` until `null` has run the study; cap the loop anyway.
 
 ## Two channels: the instrument and the human
 
@@ -1338,7 +1382,8 @@ was wrong (bad flag, missing or illegal deck, a `--sweep` knob or value the
 profile cannot read); 3 no Godot binary (`deck_lab.sh`; set
 `GODOT=/path/to/godot`); 4 a `--sweep` ran to the end and wrote its files,
 but its control pair did not replay the null game for game — the report
-names the first game that moved.
+names the first game that moved. Whatever the code, a run that made its
+`--out` folder leaves `run.json` there with the code in it.
 
 **The refusal as data** (2026-09-27): every refusal *before a game* — every
 2, and the two 1s a run can hit before it starts (`--out` names a file, the
@@ -1653,7 +1698,9 @@ play), **3** no Godot to run. Every refusal before a deck is built — every
 2, and the 1s — also prints ONE line of JSON on stdout, the Lab's own
 envelope with `"tool":"auto_deck"` and its own kinds: `option`, `packs`,
 `sets`, `list`, `keep`, `vary`, `out` (see *The refusal as data* above and
-[AGENTS.md](../AGENTS.md)).
+[AGENTS.md](../AGENTS.md)). A finished run leaves `run.json` in `--out`
+beside the decks — the argv, the seed and whether it was rolled, the
+count, the files, and the Lab line as `next.argv` (2026-09-27).
 
 ### Alternatives and the cartesian walk
 
@@ -1926,12 +1973,58 @@ the AutoDeck window (with the packs the row names in play); a `sealed` or
 `list` row rebuilds on this command line, which is where those pools
 live.
 
+## Lab Query — the questions before a run (2026-09-27)
+
+The Lab and the AutoDeck refuse a deck they cannot play, with reasons;
+a program wants the reasons *before* it spends the run, and wants them
+as data. `DeckLab/lab_query.sh` (in a release `lab_query.sh`, the game's
+`--lab-query`) answers three questions, each as ONE pretty-printed JSON
+document on stdout and nothing else there:
+
+```
+DeckLab/lab_query.sh check DECK [DECK...] [--packs LIST] [--format NAME]
+DeckLab/lab_query.sh packs
+DeckLab/lab_query.sh cards NAME [NAME...]
+```
+
+**`check`** is the Lab's own deck loader as a report rather than a
+refusal: for each deck, where it was found (`path`), its `name`, `cards`
+and `sideboard`, the `errors` (lines that are not `COUNT Card Name`),
+and `unknown` — every name the card pool does not know, with its
+`count`, `where` it sits (`main`, `sideboard`, `both`), the `pack` that
+would supply it, and for a name no pack supplies (unimplemented, or
+misspelled) the nearest real names as `near`. Then `packs_needed`,
+`packs_missing` (needed and not on), `format{name,ok,problem}` when a
+format was asked, and `playable` — no errors, no unknown names, the
+format met: exactly what the Lab would play. `--packs` is the Lab's own
+switch and holds for the one answer, so `check mine.deck --packs 3`
+says whether Ice Age would make the deck whole. A deck file that is not
+there is the `deck` refusal with `tried` and `suggestions`, exit 2; a
+deck that is there and cannot be played is an answer, exit 0.
+
+**`packs`** is every pack this build knows, found or not: `id`,
+`label`, `available`, `enabled`, `path`, `rejection` (why a found zip
+was not accepted), and for a found pack its `sets` and card count.
+**`cards`** is a card's record — cost, mana value, colours, types,
+power and toughness, keywords, text, the set and every printing in the
+pool as configured, rarity, the pack it comes in — or, for a name the
+pool does not know, the pack that would supply it and the nearest
+real names.
+
+`./shandalar.sh` at the project root is the one door to all of it:
+`lab`, `autodeck`, `check`, `packs`, `cards`, `convert`, each `exec`ing
+the tool with the rest of the line, `--help` the list; a verb it does
+not know is refused as one JSON line, exit 2, the way every tool
+refuses. [AGENTS.md](../AGENTS.md) is the contract.
+
 ## Files
 
 | File | Role |
 |---|---|
+| `../shandalar.sh` | the one door: `lab`, `autodeck`, `check`, `packs`, `cards`, `convert` |
 | `deck_lab.sh` | entry point (wraps the headless Godot invocation) |
 | `auto_deck_cli.sh` / `DeckLab/auto_deck_cli.gd` | the AutoDeck CLI: the deck builder's AutoDeck by the thousand, with a manifest — the field this Lab plays (see above) |
+| `lab_query.sh` / `DeckLab/lab_query.gd` | the Lab Query: `check`, `packs`, `cards` as one JSON document each (see above) |
 | `deck_convert.sh` / `tools/deck_convert.gd` | format converter (.deck/.dec ↔ .dck) |
 | `DeckLab/simulate.gd` | the tool: CLI parsing, thread fan-out, reporting |
 | `DeckLab/sim_stats.gd` | Wilson intervals, matchup summaries (unit-tested) |
@@ -1947,4 +2040,5 @@ live.
 | `tests/tools/test_deck_lab_sweep.gd` | the sweep: its flags, the three arms, the control verdict read from the games, a small run end to end (exit 0 and exit 4) |
 | `tests/tools/test_auto_deck_cli.gd` | the AutoDeck CLI: every switch and refusal, the cartesian walk, the seeds, and the promise that a row of `decks.csv` rebuilds its deck |
 | `tests/tools/test_lab_for_machines_2026_09_27.gd` | the two tools as a program drives them: the refusal envelope's shape and kinds, `--dry-run`'s plans (duel, tournament, sweep, AutoDeck) and that a dry run makes no folder |
+| `tests/tools/test_lab_records_and_queries_2026_09_27.gd` | `--record` and its cap, `run.json` and `next` for a duel, a tournament, a sweep and the AutoDeck, the Lab Query's three answers and its refusals, the one door |
 | `tools/test_auto_deck_cli_sh.py` | the AutoDeck CLI's shell wrapper: `-V` without an engine, exit 3 with no Godot, the exec line |

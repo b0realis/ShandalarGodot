@@ -1,13 +1,36 @@
 # Driving Shandalar's tools from a program
 
 This is the contract for **running** the headless tools — the Deck Lab,
-the AutoDeck CLI, the deck converter — from a script, a pipeline or an
-agent: what each command is for, what it prints where, what its exit
-codes mean, what files it leaves and under which keys. The house rules
-for **editing** the repository are in `CONTRIBUTING.md`; the manuals
-with the reasoning are `DeckLab/README.md` and `docs/`. Every claim
-below is pinned by `tests/tools/test_lab_for_machines_2026_09_27.gd`,
+the AutoDeck CLI, the Lab Query, the deck converter — from a script, a
+pipeline or an agent: what each command is for, what it prints where,
+what its exit codes mean, what files it leaves and under which keys.
+The house rules for **editing** the repository are in `CONTRIBUTING.md`;
+the manuals with the reasoning are `DeckLab/README.md` and `docs/`.
+Every claim below is pinned by
+`tests/tools/test_lab_for_machines_2026_09_27.gd`,
+`tests/tools/test_lab_records_and_queries_2026_09_27.gd`,
 `tests/tools/test_deck_lab.gd` and `tests/tools/test_auto_deck_cli.gd`.
+
+## The one door — `./shandalar.sh`
+
+```
+./shandalar.sh lab ARGS...        the Deck Lab        (DeckLab/deck_lab.sh)
+./shandalar.sh autodeck ARGS...   the AutoDeck CLI    (DeckLab/auto_deck_cli.sh)
+./shandalar.sh check DECK...      is this deck playable, and why not
+./shandalar.sh packs              every card pack: found, on, why not
+./shandalar.sh cards NAME...      a card's record     (DeckLab/lab_query.sh)
+./shandalar.sh convert IN OUT     .deck <-> .dck      (deck_convert.sh)
+./shandalar.sh VERB --help        that tool's own manual
+./shandalar.sh -h | --help        the list, on stdout;  -V | --version
+```
+
+Each verb `exec`s the tool, so the exit codes, the channels and the
+files below are the tool's own. A verb the door does not know is
+refused the way every tool refuses — one JSON line on stdout,
+`{"error":{"tool":"shandalar","exit":2,"kind":"option",...}}`, exit 2.
+A release folder carries the same `shandalar.sh` (`play` runs the game;
+`convert` stays in the checkout) beside `deck_lab.sh`, `auto_deck.sh`
+and `lab_query.sh`, each a one-liner into the game binary.
 
 ## The two channels
 
@@ -48,7 +71,7 @@ object, that is the reason.
 
 | Key | Always | Meaning |
 |---|---|---|
-| `tool` | yes | `deck_lab` or `auto_deck` |
+| `tool` | yes | `deck_lab`, `auto_deck`, `lab_query` or `shandalar` |
 | `exit` | yes | the code the process exits with |
 | `kind` | yes | **the thing to branch on** — below |
 | `message` | yes | the prose stderr got |
@@ -111,13 +134,15 @@ worker processes, `--packs 1,3|all|none`, `--profile-a/-b NAME[:knob=v]`,
 `--best-of 3 --sideboard on`, `--rules fifth|modern`, `--format
 unrestricted|wild|type1|type1.5|highlander`, `--group NAME` (one deck
 group of an expanded folder — `tournament` is the good decks), `--top N`,
-`--out DIR`. `--help` lists every switch; the tables it is read from are
-the parser's own, so the help is never behind the code.
+`--record losses|stalls|all` (`--record-max N`, default 50), `--out DIR`.
+`--help` lists every switch; the tables it is read from are the
+parser's own, so the help is never behind the code.
 
 Files in `--out` after exit 0: `report.txt` (= stdout), **`results.json`**,
-`matchups.csv`, `winrates.svg`, `turns.svg`; tournament adds
-`standings.csv` and `top.txt`; a sweep writes `report.txt`,
-**`sweep.json`**, `sweep.csv`, `games.csv` instead.
+`matchups.csv`, `winrates.svg`, `turns.svg`, **`run.json`**; tournament
+adds `standings.csv` and `top.txt`; a sweep writes `report.txt`,
+**`sweep.json`**, `sweep.csv`, `games.csv`, `run.json` instead; with
+`--record`, a `records/` folder of game logs.
 
 `results.json`: `mode`, `games_per_matchup`, `seed`, `profile_a`,
 `profile_b`, `lives`, `ante`, `mulligan`, `rules`, `rule_overrides`,
@@ -140,6 +165,62 @@ mined or experimental field (the ledger `decks/ratings.txt` is the
 project's own record); one `--seed` replays one run game for game;
 tournaments are never rated; `--out` must not be a file.
 
+### `--record` — the games themselves
+
+`--record losses` writes the engine log of every game deck A lost,
+`stalls` of every game that hit the turn limit, `all` of every game, to
+`OUT/records/`. One file a game, `pairP_seedS[_armA][_duelD]_OUTCOME.log`
+(`a_won`, `a_lost`, `drawn`, `stalled`), a `#` header a program reads
+before the log:
+
+```
+# deck_a: Big Green
+# deck_b: White Knights
+# pair: 0
+# seed: 5
+# a_on_play: true
+# outcome: a_lost
+# turns: 23
+# lines: 162
+Game set up: SeatZero (40 cards) vs SeatOne (40 cards)
+...
+```
+
+`--record-max N` caps the files per run (default 50, `0` = no cap; a
+thousand logs is a gigabyte) — exact per process, "about N" across
+`--procs` workers. `results.json` / `sweep.json` gain
+`records{filter,max,written,dir}` only when the switch was used. The
+seed in the name replays that game: `--seed S --games 1` on the same
+pair.
+
+## `run.json` — after every run
+
+Every run that made its `--out` folder ends by writing `run.json`
+there, whatever the exit — the one file to read first:
+
+| Key | Meaning |
+|---|---|
+| `tool` | `deck_lab` or `auto_deck` |
+| `version`, `git` | the project version and the checkout's commit (`""` in a release) |
+| `argv[]` | the line as typed, without the program name |
+| `mode`, `seed`, `packs`, `packs_on`, `out`, `started` (UTC, `...Z`), `elapsed_seconds` | the run's particulars |
+| `exit` | the code the process exits with — `0`, `1`, or the sweep's `4` |
+| `files[]` | what was written (the Lab); AutoDeck: `files{decks,manifest,list}` |
+| `control_pass` | a sweep: whether the control pair replayed game for game |
+| **`next`** | `{why, argv[]}` — the run that would settle what this one left open — or `null` |
+
+`next.argv` is a complete Deck Lab line built from this run's own argv
+with the changing flags stripped and re-added: a duel, gauntlet, matrix
+or random run whose matchups still straddle even (`winrate.low < 0.5 <
+winrate.high`) gets four times the games at `OUT_more`, unrated; a
+tournament gets its `top.txt` as the field at five times the games at
+`OUT_top`, same gauntlet; a sweep whose candidate deltas are not `clear`
+gets four times the games; AutoDeck's is the Lab line that plays the
+field. `null` means nothing is open — every matchup decided, every
+delta clear — or, on a sweep whose control moved, that more of the
+same would not settle it. A program that loops `run.json.next.argv`
+until `null` has run the study; it should still cap the loop.
+
 ## AutoDeck CLI — `DeckLab/auto_deck_cli.sh`
 
 Builds decks by the thousand from wishes — the field the Lab plays.
@@ -161,9 +242,49 @@ Files in `--out`: `deck_NNNNN_COLORS_sSEED.deck` per deck, **`decks.csv`**
 (one row per deck — `file`, `index`, `seed`, `source`, `sets`, `pool`,
 `packs`, the wish columns, `colors_built`, the cards; a row rebuilds its
 deck), `decklist.txt` (the paths in order, one a line — a `--gauntlet` or
-`--field` reads it). The last stderr line is `next: DeckLab/deck_lab.sh
---field DIR ...`, the Lab command that plays the field; `--dry-run` gives
-it as `next`.
+`--field` reads it), and `run.json` (above; `seed_rolled` says the seed
+was the run's own draw, `next.argv` the Lab line). The last stderr line
+is `next: DeckLab/deck_lab.sh --field DIR ...`, the same line as words;
+`--dry-run` gives it as `next`.
+
+## Asking before running — `DeckLab/lab_query.sh`
+
+Three questions, each answered as ONE pretty-printed JSON document on
+stdout and nothing else there. Exit 0 is an answer (a deck that cannot
+be played is an answer), 2 a line that could not be answered (the
+envelope above, `tool: "lab_query"`), 1 an answer that would not write.
+
+```
+DeckLab/lab_query.sh check DECK [DECK...] [--packs LIST] [--format NAME]
+DeckLab/lab_query.sh packs
+DeckLab/lab_query.sh cards NAME [NAME...]
+```
+
+**`check`** loads each deck the way the Lab would (as typed, then
+`decks/NAME`) and reports instead of refusing: `decks[]` each with
+`file`, `path` (where it was found), `name`, `cards`, `sideboard`,
+`errors[]` (lines that are not `COUNT Card Name`), `unknown[]` — every
+name the card pool does not know, with `count`, `where`
+(`main|sideboard|both`), `pack` (the pack that supplies it; `""` for
+none: unimplemented or misspelled) and, for those, `near[]` (the
+nearest real names) — `packs_needed[]`, `packs_missing[]` (needed and
+not on), `format{name,ok,problem}` with `--format`, and **`playable`**
+(no errors, no unknown names, the format met: what the Lab would play);
+top-level `playable` over every deck, `packs` (the switch), `packs_on`.
+A deck file that is not there is the `deck` refusal with `tried` and
+`suggestions`.
+
+**`packs`**: `known[]`, `available[]` (found), `enabled[]` (on) and
+`packs[]` — per pack `id`, `label`, `available`, `enabled`, `path`,
+`rejection` (why a found zip was not accepted), and for a found pack
+`sets[]` and `cards`.
+
+**`cards`**: `cards[]` — a known card's `name`, `cost` (`{3}{W}{W}`),
+`mana_value`, `colors[]`, `types[]`, `supertypes[]`, `subtypes[]`,
+`keywords[]`, `power`/`toughness` (creatures), `text`, `set`, `sets[]`
+(the printings in the pool as configured), `rarity`, `pack` (`""` for a
+base card); an unknown one `known: false`, `pack` (the pack that would
+supply it) and `near[]`.
 
 ## Deck convert — `./deck_convert.sh INPUT OUTPUT`
 
@@ -174,23 +295,29 @@ that would not write — the reason on stderr). No JSON envelope here yet.
 
 ## The game itself
 
-`godot --path .` (or the released binary) takes `--deck-lab` (opens the
-Lab window), `--auto-deck` (the builder's window), `--verify-pack-1..5`;
-the LAN protocol is 24 (`docs/sgmanalink-*.md`). Headless soaks and
-audits live under `tools/*.gd` (`./duel_soak.sh --help`).
-`./run_tests.sh` is the gate: trust its exit code, not the printed tally.
+`godot --path .` (or the released binary) takes `--deck-lab`,
+`--auto-deck` and `--lab-query`, each hosting that headless tool inside
+the game binary (what a release's `deck_lab.sh`, `auto_deck.sh` and
+`lab_query.sh` are), and `--verify-pack-1..5`; the LAN protocol is 24
+(`docs/sgmanalink-*.md`). Headless soaks and audits live under
+`tools/*.gd` (`./duel_soak.sh --help`). `./run_tests.sh` is the gate:
+trust its exit code, not the printed tally.
 
 ## A session, in order
 
 ```
-DeckLab/auto_deck_cli.sh --out mined --count 200 --colors random --dry-run   # plan
-DeckLab/auto_deck_cli.sh --out mined --count 200 --colors random             # build
-DeckLab/deck_lab.sh --field mined --gauntlet decks/ --group tournament \
-    --games 20 --no-elo --out mined_run --dry-run                            # plan
-DeckLab/deck_lab.sh --field mined --gauntlet decks/ --group tournament \
-    --games 20 --no-elo --out mined_run 2>/dev/null                          # play
+./shandalar.sh packs                                                         # what is on
+./shandalar.sh autodeck --out mined --count 200 --colors random --dry-run    # plan
+./shandalar.sh autodeck --out mined --count 200 --colors random              # build
+./shandalar.sh check mined/deck_00001_G_s11.deck                             # playable?
+./shandalar.sh lab --field mined --gauntlet decks/ --group tournament \
+    --games 20 --no-elo --record losses --out mined_run --dry-run            # plan
+./shandalar.sh lab --field mined --gauntlet decks/ --group tournament \
+    --games 20 --no-elo --record losses --out mined_run 2>/dev/null          # play
 jq '.standings[:10]' mined_run/results.json                                  # read
+jq -r '.next.argv // empty | @sh' mined_run/run.json                         # what next
 ```
 
 A non-zero exit: read stdout for `{"error":...}`, branch on `kind`, offer
-`suggestions`; never retry the same line.
+`suggestions`; never retry the same line. A zero exit: read `run.json`,
+and `next.argv` is the line that settles what this run left open.

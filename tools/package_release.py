@@ -25,6 +25,39 @@ MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
 LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64"}
 PACK_BUILDERS = ("pack_1_dotp_complete", "pack_2_fallen_empires", "pack_3_ice_age",
                  "pack_4_homelands", "pack_5_alliances", "pack_6_portal", "pack_7_fifth_edition")
+# THE ONE DOOR of a release (2026-09-27), after the launcher prefix: the
+# repo's shandalar.sh with the release's own targets. POSIX sh, like the
+# prefix it follows. A verb it does not know is refused the way every
+# tool refuses, one JSON line on stdout and exit 2.
+DISPATCHER = """verb="${1:-}"
+case "$verb" in
+	"" | -h | --help)
+		printf '%s\\n' \\
+			'shandalar.sh lab|autodeck|check|packs|cards|play ARGS...' \\
+			'  lab       the Deck Lab (deck_lab.sh)' \\
+			'  autodeck  the AutoDeck CLI (auto_deck.sh)' \\
+			'  check     is this deck playable, and why not (lab_query.sh)' \\
+			'  packs     every card pack: found, on, why not' \\
+			'  cards     a card record' \\
+			'  play      the game itself (run.sh)' \\
+			'VERB --help is that tool manual; AGENTS.md is the contract page.'
+		exit 0 ;;
+esac
+shift
+case "$verb" in
+	lab) exec ./deck_lab.sh "$@" ;;
+	autodeck) exec ./auto_deck.sh "$@" ;;
+	check | packs | cards) exec ./lab_query.sh "$verb" "$@" ;;
+	query) exec ./lab_query.sh "$@" ;;
+	play) exec ./run.sh "$@" ;;
+esac
+safe="$(printf '%s' "$verb" | tr -d '"\\\\\\n\\r\\t')"
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s - the verbs are lab, autodeck, check, packs, cards, play","verb":"%s"}}\\n' \\
+	"'$safe'" "$safe"
+echo "shandalar.sh: unknown verb '$verb' - try ./shandalar.sh --help" >&2
+exit 2
+"""
+
 TOOLS = ("mtg_assets.py", "import_original.py", "fetch_card_art.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
          *(name + ".py" for name in PACK_BUILDERS))
@@ -217,6 +250,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                   "skin/SKIN.txt": root / "docs" / "skin-catalogue.txt",
                   "RELEASE_NOTES.md": root / "docs" / "releases" / f"{version}.md",
                   "DECKLAB.md": root / "DeckLab" / "README.md",
+                  "AGENTS.md": root / "AGENTS.md",
                   "CARD-ART-AND-PACKS.md": asset_guide,
                   "icon.png": root / "game" / "icon.png"})
     if platform == "web":
@@ -257,6 +291,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
             extra["run.sh"] = (prefix + f'exec "{binary}" "$@"\n').encode()
             extra["deck_lab.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --deck-lab "$@"\n').encode()
             extra["auto_deck.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --auto-deck "$@"\n').encode()
+            extra["lab_query.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --lab-query "$@"\n').encode()
+            extra["shandalar.sh"] = (prefix + DISPATCHER).encode()
             if platform == "raspberry-pi5-arm64":
                 extra["run.sh"] = (prefix +
                     'exec "./Shandalar.arm64" --rendering-method gl_compatibility '
@@ -266,6 +302,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                                      "Shandalar.console.exe --headless --no-header -- --deck-lab %*\r\n").encode()
             extra["auto_deck.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
                                       "Shandalar.console.exe --headless --no-header -- --auto-deck %*\r\n").encode()
+            extra["lab_query.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
+                                      "Shandalar.console.exe --headless --no-header -- --lab-query %*\r\n").encode()
         selected = dict(files)
         if included:
             selected["skin/original_skin.zip"] = skin

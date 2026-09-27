@@ -587,6 +587,66 @@ cd "$(dirname "$0")"
 exec ./Shandalar.x86_64 --headless --no-header -- --auto-deck "$@"
 AUTO
 	chmod +x "$STAGE/auto_deck.sh"
+	# THE LAB QUERY beside them (2026-09-27), by the game's `--lab-query`:
+	# `check`, `packs`, `cards`, one JSON document each.
+	cat > "$STAGE/lab_query.sh" <<'QUERY'
+#!/usr/bin/env bash
+# Lab Query — the questions a program asks before it spends a run, run
+# by the game itself; one JSON document on stdout per answer.
+#
+#   ./lab_query.sh --help
+#   ./lab_query.sh check mine/deck_0001.deck --packs all
+#   ./lab_query.sh packs
+#   ./lab_query.sh cards "Serra Angel"
+#
+# DECKLAB.md is the manual, AGENTS.md the contract.
+set -euo pipefail
+cd "$(dirname "$0")"
+export DECK_LAB_TTY=0
+exec ./Shandalar.x86_64 --headless --no-header -- --lab-query "$@"
+QUERY
+	chmod +x "$STAGE/lab_query.sh"
+	# AND THE ONE DOOR (2026-09-27): the repo's shandalar.sh with the
+	# release's own targets — the launchers above and the game.
+	cat > "$STAGE/shandalar.sh" <<'DOOR'
+#!/usr/bin/env bash
+# Shandalar — one door to the command-line tools:
+#
+#   ./shandalar.sh lab ARGS...        the Deck Lab        (deck_lab.sh)
+#   ./shandalar.sh autodeck ARGS...   the AutoDeck CLI    (auto_deck.sh)
+#   ./shandalar.sh check DECK...      is this deck playable, and why not
+#   ./shandalar.sh packs              every card pack: found, on, why not
+#   ./shandalar.sh cards NAME...      a card's record     (lab_query.sh)
+#   ./shandalar.sh play ARGS...       the game itself     (run.sh)
+#   ./shandalar.sh VERB --help        that tool's own manual
+#   ./shandalar.sh -h | --help        this list, on stdout
+#
+# Every tool keeps its own exit codes (0 done, 1 broke, 2 the line was
+# wrong, 4 the Lab's control moved) and its own stdout contract; a
+# refusal is one JSON line on stdout, `{"error": {...}}`, and so is a
+# verb this door does not know, exit 2. AGENTS.md is the contract page.
+set -euo pipefail
+cd "$(dirname "$0")"
+verb="${1:-}"
+case "$verb" in
+	"" | -h | --help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+shift
+case "$verb" in
+	lab) exec ./deck_lab.sh "$@" ;;
+	autodeck) exec ./auto_deck.sh "$@" ;;
+	check | packs | cards) exec ./lab_query.sh "$verb" "$@" ;;
+	query) exec ./lab_query.sh "$@" ;;
+	play) exec ./run.sh "$@" ;;
+esac
+safe="$(printf '%s' "$verb" | tr -d '"\\\n\r\t')"
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, play","verb":"%s"}}\n' \
+	"'$safe'" "$safe"
+echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2
+exit 2
+DOOR
+	chmod +x "$STAGE/shandalar.sh"
+	cp -p AGENTS.md "$STAGE/AGENTS.md"
 	# tool_banner.py rides with them — see the web stage above.
 	cp -p tools/mtg_assets.py tools/import_original.py \
 	      tools/fetch_card_art.py tools/skin_catalogue.py \

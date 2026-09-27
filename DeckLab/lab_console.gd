@@ -119,6 +119,34 @@ static func version() -> String:
 	return found if found != "" else "version unknown"
 
 
+## The checkout's commit for `run.json` (2026-09-27), read from
+## `.git/HEAD` as a file — no `git` process is started — or "" outside
+## a checkout: a release carries no `.git`, and a worktree's `.git` is
+## a pointer file this does not follow. Every read checks the file is
+## there first; `get_file_as_string` on a path that is not is an engine
+## error.
+static func git_sha() -> String:
+	var head := _text_of("res://.git/HEAD")
+	if head == "":
+		return ""
+	if not head.begins_with("ref: "):
+		return head
+	var ref := head.trim_prefix("ref: ").strip_edges()
+	var direct := _text_of("res://.git/" + ref)
+	if direct != "":
+		return direct
+	for line in _text_of("res://.git/packed-refs").split("\n"):
+		if line.ends_with(" " + ref):
+			return line.get_slice(" ", 0)
+	return ""
+
+
+static func _text_of(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	return FileAccess.get_file_as_string(path).strip_edges()
+
+
 ## Whether stderr is a terminal, as deck_lab.sh found it. False when the
 ## Lab is run through Godot directly, which is the honest answer: that
 ## caller has no terminal we know of.

@@ -252,7 +252,7 @@ func _migrate() -> void:
 		if FileAccess.file_exists(old) and not FileAccess.file_exists(now):
 			DirAccess.make_dir_recursive_absolute(now.get_base_dir())
 			if DirAccess.rename_absolute(old, now) == OK:
-				print("skin pack: moved %s to %s" % [old, now])
+				printerr("skin pack: moved %s to %s" % [old, now])
 
 
 ## While a transfer is in flight: report how far it is, and for a
@@ -527,7 +527,10 @@ func mount(path: String, replace: bool) -> bool:
 		mounted.append(path)
 	_reports[path] = report
 	GameSkin.pack_mounted = true
-	print("skin pack: mounted %s (%s, %d files)" % [path, report["kind"], report["files"]])
+	# stderr, like the card packs' "found" line: a released binary mounts
+	# its skin zip before the Deck Lab prints, and the Lab's stdout is its
+	# report (found by the 0.40.28 play copy — the line sat ahead of the JSON).
+	printerr("skin pack: mounted %s (%s, %d files)" % [path, report["kind"], report["files"]])
 	return true
 
 

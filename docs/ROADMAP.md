@@ -17183,6 +17183,100 @@ run, no folder either way.
 Gate: 525 scripts, **7,999/7,999 tests, 361,492 asserts**, exit 0
 in 252 s over 6 shards; Python 323, exit 0.
 
+## 2026-09-27 — The tools, for a program: records, run.json, the query, the door (0.40.29)
+
+The second of the owner's four steps (the first is the section above):
+what a program reads AFTER a run and asks BEFORE one.
+
+**The records.** A report says a deck lost 14 of 20 and not how.
+`--record losses` keeps the engine's own log of each of those games
+under `OUT/records/` — `stalls` the games that hit the turn limit,
+`all` every game — one file a game, named so a listing is an index
+(`pair0_seed17_a_lost.log`; a sweep's arm and a match's duel number
+keep two logs of one seed apart), a `#` header a program reads (the
+decks, pair, seed, who was on the play, outcome, turns, line count)
+and then `game.log_lines`. The switch rides `_duel_opts` into every
+worker with the absolute folder, so processes record like threads; the
+cap (`--record-max`, 50 — a game's log is about a megabyte) is counted
+on disk under a mutex, exact per process and "about N" across workers,
+which the help says. `results.json` / `sweep.json` gain `records` only
+when the switch was used. The seed in the name replays the game:
+`--seed S --games 1` on the same pair.
+
+**run.json.** Every run that made its folder now ends by writing
+`run.json` there — at exit 0, at the exit 1s after the mkdir, at the
+sweep's 4 — so a program that finds the folder finds the run's own
+account first: `tool`, `version`, `git` (HEAD read from `.git/`, a ref
+or packed-refs; empty in a release), `argv` as typed, `packs` and
+`packs_on`, `started` in UTC, `elapsed_seconds`, `exit`, `files`, a
+sweep's `control_pass`, and **`next`**: `{why, argv}`, the line that
+would settle what this run left open, or `null`. A duel, gauntlet,
+matrix or random run counts the matchups whose interval still holds
+50% and, if any, asks for four times the games at `OUT_more`, unrated;
+a tournament asks for its `top.txt` as the field at five times the
+games at `OUT_top`, same gauntlet; a sweep counts the candidate deltas
+that are not `clear`; a sweep whose control moved gets `null`, because
+more of the same would not settle it. The argv is the run's own with
+the changing flags stripped and re-added (`argv_without`), so
+`--packs`, `--profile-a`, `--rules`, `--seed` ride along unchanged. The
+AutoDeck writes its own, with `seed_rolled` and the Lab line as
+`next.argv` — the same words `next:` prints, now built from one array.
+A program that loops `next.argv` until `null` has run the study.
+
+**The Lab Query.** The Lab refuses a deck it cannot play, with reasons;
+a program wants the reasons BEFORE it spends the run, as data.
+`DeckLab/lab_query.gd` answers three questions as one JSON document
+each: `check DECK... [--packs LIST] [--format NAME]` — the Lab's loader
+as a report, every unknown name with its count, where it sits, the
+pack that would supply it (`packs_required_by`) or, for a name no pack
+supplies, the nearest real names (`LabConsole.closest` over the
+registry — "Sera Angel" → "Serra Angel"), the packs needed and
+missing, the format's verdict, `playable`; `packs` — every pack the
+build knows, found or not, on or not, and why not; `cards NAME...` —
+cost, mana value, colours, types, keywords, text, the printings in the
+pool as configured, rarity, the pack. Exit 0 is an answer (a deck that
+cannot be played is an answer, `playable: false`), 2 a line that
+cannot be answered (the family envelope, `tool: lab_query`), 1 an
+answer that would not write. The game hosts it as `--lab-query`, so a
+release has `lab_query.sh` beside `deck_lab.sh`.
+
+**The one door.** `./shandalar.sh lab|autodeck|check|packs|cards|convert`
+— one name to learn, each verb `exec`ing its tool with the rest of the
+line, `--help` the list on stdout, `-V` the version, and an unknown
+verb refused the way every tool refuses: one JSON line, exit 2 (the
+verb stripped of the characters JSON would escape, so the line is
+always one document). A release carries the same door over its own
+launchers (`play` runs the game) and `AGENTS.md` beside it, written by
+`build_release.sh` and by `package_release.py`'s `DISPATCHER` alike;
+`test_package_release.py` holds the two to the same verbs.
+
+**And one thing the play copy found.** `skin pack: mounted ...` was a
+`print`, and the 0.40.28 play copy put it ahead of the JSON on stdout.
+It and the `moved` line are stderr now, pinned like the card-pack scan.
+
+**How it is pinned.** `tests/tools/test_lab_records_and_queries_2026_09_27.gd`:
+the switch and its two refusals, `record_admits` and `record_file_name`,
+a real two-game `--record all` run's files and headers (the line count
+against the file), the cap at 1 and the `losses` filter, no folder and
+no key without the switch; `run.json` for a duel (every key, the
+`next` at four times the games with `--no-elo` once), a tournament
+(`top.txt` as the field, ten games, the same gauntlet), a sweep (`exit`
+equals the code, `control_pass`, `null` on a moved control) and the
+AutoDeck (`next.argv` equals `next_step_argv`, the printed line is the
+same words); `argv_without`, `git_sha` a 40-digit hex in the checkout;
+the Query's `check` on a shipped deck and on a probe with a packed
+card, a misspelling and a bad line, its four refusals, `packs` against
+`CardPacks.known_ids()`, `cards` on Serra Angel, a typo and Island;
+the door and the launchers as text. `tools/test_shandalar_sh.py`
+drives the door and the query wrapper from the shell without an engine.
+The full gate caught what the neighbours did not: the worker audit
+builds a task with no `pair`, so the record header reads its keys with
+defaults; and the AutoDeck's two-identical-folders test now counts
+eight files, comparing `run.json` on the fields a repeat shares.
+
+Gate: 526 scripts, **8,019/8,019 tests, 362,644 asserts**, exit 0
+in 276 s over 6 shards; Python 338, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

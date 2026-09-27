@@ -1220,6 +1220,8 @@ func _plan(plan: Dictionary) -> int:
 
 
 func _main(argv: PackedStringArray) -> int:
+	_argv = argv
+	_run_started = int(Time.get_unix_time_from_system())
 	var opts := parse_args(argv)
 	_quiet = bool(opts.get("quiet", false))
 	_banner_wanted = not bool(opts.get("no_banner", false)) \
@@ -1514,8 +1516,33 @@ func _main(argv: PackedStringArray) -> int:
 		% [seed_low, seed_high, base_seed,
 			SEED_STRIDE, ", %d more for second attempts" % retries if retries > 0 else "",
 			MANIFEST_NAME, rebuilds])
-	print(next_step_line(out_dir, _packs_in_force, String(opts.keep) if held != null else ""))
+	var held_file := String(opts.keep) if held != null else ""
+	print(next_step_line(out_dir, _packs_in_force, held_file))
+	# THE RUN AS DATA (run.json, 2026-09-27) — the Lab's file, in the
+	# Lab's shape: the line as given, the version and commit, the seed
+	# actually used (rolled or not), what was written, and the next
+	# line as an argv array.
+	if not _write_text(out_dir.path_join(RUN_JSON), JSON.stringify({
+			"tool": "auto_deck", "version": LabConsole.version(),
+			"git": LabConsole.git_sha(), "argv": Array(_argv),
+			"seed": base_seed, "seed_rolled": int(opts.seed) == 0,
+			"count": count, "source": opts.source,
+			"packs": _packs_in_force, "packs_on": Lab.packs_on(),
+			"out": out_dir,
+			"started": Time.get_datetime_string_from_unix_time(_run_started) + "Z",
+			"elapsed_seconds": elapsed, "exit": 0,
+			"files": {"decks": count, "manifest": manifest_path, "list": decklist_path},
+			"next": {"why": "play the field against the tournament decks, unrated",
+				"argv": next_step_argv(out_dir, _packs_in_force, held_file)},
+		}, "  ") + "\n"):
+		return 1
 	return 0
+
+
+## `run.json`, the Lab's own name for it (Lab.RUN_JSON).
+const RUN_JSON := "run.json"
+var _argv := PackedStringArray()
+var _run_started := 0
 
 
 ## The plan a `--dry-run` prints: every check above has passed, and
@@ -1707,16 +1734,30 @@ class Field:
 ## played with the deck itself in it, as the control the field is
 ## measured against.
 static func next_step_line(out_dir: String, packs: Variant, held_file := "") -> String:
-	var packs_word := ""
+	var words := PackedStringArray()
+	for word in next_step_argv(out_dir, packs, held_file):
+		words.append(shell_word(String(word)))
+	return "next: DeckLab/deck_lab.sh " + " ".join(words)
+
+
+## The `next:` line as the argv a program hands the Lab (run.json's
+## `next.argv`, 2026-09-27): the field is the folder just written, the
+## gauntlet the tournament decks at twenty games, unrated; a held deck
+## joins the field as its own control; the packs this run built from
+## are passed on, since a deck of Ice Age cards is proxies without them.
+static func next_step_argv(out_dir: String, packs: Variant, held_file := "") -> Array:
+	var argv: Array = ["--field", out_dir]
+	if held_file != "":
+		argv.append_array(["--field", held_file])
+	argv.append_array(["--gauntlet", "decks/", "--group", "tournament", "--games", "20"])
 	if packs != null:
 		var ids: Array = packs
 		var numbers := PackedStringArray()
 		for id in ids:
 			numbers.append(String(id).trim_prefix("pack-"))
-		packs_word = " --packs %s" % ("none" if ids.is_empty() else ",".join(numbers))
-	var control := " --field %s" % shell_word(held_file) if held_file != "" else ""
-	return "next: DeckLab/deck_lab.sh --field %s%s --gauntlet decks/ --group tournament --games 20%s --no-elo" \
-		% [shell_word(out_dir), control, packs_word]
+		argv.append_array(["--packs", "none" if ids.is_empty() else ",".join(numbers)])
+	argv.append("--no-elo")
+	return argv
 
 
 ## The non-land cards of a `--keep` deck — what [member AutoDeck.keep]

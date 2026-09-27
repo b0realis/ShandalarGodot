@@ -693,9 +693,19 @@ func test_the_same_base_seed_and_options_build_identical_folders() -> void:
 	assert_eq(_run(["--out", first] + args), 0)
 	assert_eq(_run(["--out", again] + args), 0)
 	var names := DirAccess.open(first).get_files()
-	assert_eq(names.size(), 7, "five decks, a manifest and a deck list")
+	assert_eq(names.size(), 8, "five decks, a manifest, a deck list and run.json")
 	var identical := 0
 	for name in names:
+		# run.json is the run's own account — its clock, its folder, its
+		# elapsed time — and is compared on the fields a repeat shares.
+		if name == cli.RUN_JSON:
+			var one: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(first.path_join(name)))
+			var two: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(again.path_join(name)))
+			for key in ["tool", "version", "seed", "seed_rolled", "packs", "exit"]:
+				assert_eq(one.get(key), two.get(key), "run.json agrees on %s" % key)
+			assert_eq(int(one.files.decks), int(two.files.decks), "and on the deck count")
+			identical += 1
+			continue
 		# The deck list holds the folder's own path, so that one is
 		# compared with the folder taken out of it.
 		if FileAccess.get_file_as_string(first.path_join(name)).replace(first, "") \

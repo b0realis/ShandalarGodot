@@ -383,7 +383,87 @@ needed); card files have NO class_name (they register by name instead);
   shape and kinds in both tools, the plans of a duel, a tournament, a
   sweep and an AutoDeck run, no folder made, the toggles documented).
 
+## The records, the run file and the one door (2026-09-27)
+
+What a program reads AFTER a run and asks BEFORE one — the second half
+of the tools-for-a-program pass (0.40.29).
+
+- `DeckLab/simulate.gd`: `--record losses|stalls|all` and `--record-max
+  N` (`RECORD_FILTERS`, `RECORD_MAX_DEFAULT` 50) ride `_duel_opts` into
+  every worker with the absolute `record_dir`; `_record_context` (pair,
+  seed, seat, names, arm, duel) is passed to `_play_duel`, which after
+  the fingerprint calls `_record_game` — outcome from the result,
+  `record_admits(filter, outcome)`, `record_file_name` (`pairP_seedS
+  [_armA][_duelD]_OUTCOME.log`), the cap counted on disk by `records_in`
+  under `_record_lock`, a `#` header then `game.log_lines`. Tasks carry
+  `name_a`/`name_b`. `_records_json` adds `records{filter,max,written,
+  dir}` to results.json / sweep.json. `run.json` (`RUN_JSON`, `_run_json`)
+  is written LAST at every exit that made the folder — 0, 1 and the
+  sweep's 4 — with `tool`, `version`, `git`, `argv` (`_argv`), `packs`,
+  `packs_on`, `out`, `started` (`_run_started`, UTC), `mode`, `seed`,
+  `elapsed_seconds`, `exit`, `files`, a sweep's `control_pass`, and
+  `next` from `_next_step` (a tournament: `top.txt` at five times the
+  games at `OUT_top`; otherwise the matchups still straddling even at
+  four times the games at `OUT_more`, unrated; none → `null`) or
+  `_sweep_next_step` (deltas not clear → four times the games; a moved
+  control → `null`); `argv_without` strips the changing flags from the
+  run's own argv so the rest rides along.
+- `DeckLab/lab_console.gd`: `git_sha` (HEAD, a ref or packed-refs; `""`
+  outside a checkout) via `_text_of` (guarded — a missing file is not
+  an engine error).
+- `DeckLab/auto_deck_cli.gd`: `next_step_argv` (the Lab line as words:
+  `--field OUT [--field KEPT] --gauntlet decks/ --group tournament
+  --games 20 [--packs none|3,7] --no-elo`), `next_step_line` spelled from
+  it; `run.json` after the decks with `seed_rolled`, `count`, `source`,
+  `files{decks,manifest,list}` and `next{why,argv}`.
+- `DeckLab/lab_query.gd`, `DeckLab/lab_query.sh`: THE LAB QUERY — the
+  questions before a run, one JSON document each: `check DECK... [--packs]
+  [--format]` (`deck_report`: lenient `DeckList.load_file`, `unknown[]`
+  with `count`, `where`, `pack` via `pack_of_name` and `near` via
+  `LabConsole.closest` over the registry, `packs_needed`/`packs_missing`,
+  `format{name,ok,problem}`, `playable`), `packs` (`CardPacks.status`
+  per known id, sets and card count from `entry_records`), `cards NAME...`
+  (`card_report`: cost, mana value, colours, types, keywords, text,
+  printings, rarity, pack). Exit 0 for an answer (`playable: false` is
+  an answer), 2 for a line it cannot answer (the family envelope, `tool:
+  lab_query`, kinds `option`, `deck`, `packs`), 1 for an answer that
+  would not write; `last_answer` / `last_error` for the tests. The
+  wrapper answers `-V` without an engine, exit 3 without one, and draws
+  no banner. `game/main.gd`: `LAB_QUERY_FLAG` (`--lab-query`) hosts it
+  in a release through `_run_headless_tool`, like the Lab.
+- `shandalar.sh`: THE ONE DOOR — `lab`, `autodeck`, `check`, `packs`,
+  `cards`, `convert` `exec` their tool with the rest of the line;
+  `--help` the list on stdout, `-V` the version; an unknown verb is the
+  family refusal (`tool: shandalar`, exit 2), the verb stripped of the
+  characters JSON would escape so the line is always one document.
+- `build_release.sh`, `tools/package_release.py`: a release carries
+  `lab_query.sh` (`--lab-query`), `shandalar.sh` (`DISPATCHER`: the same
+  verbs over the release's launchers, `play` for the game) and
+  `AGENTS.md` beside `deck_lab.sh` and `auto_deck.sh`; windows64 gets
+  `lab_query.bat`. `tools/test_package_release.py` pins all three and
+  that the two doors dispatch the same verbs.
+- `game/skin_pack.gd`: the mount and move lines go to stderr — the
+  0.40.28 play copy found `skin pack: mounted ...` ahead of the JSON on
+  stdout.
+- `AGENTS.md`: the door, `--record`, `run.json` and `next`, the Lab
+  Query's three answers, a session that ends by reading `next.argv`.
+  `DeckLab/README.md`: the two switch rows, *The records, and run.json*,
+  *Lab Query*, the files table.
+- Tests: `tests/tools/test_lab_records_and_queries_2026_09_27.gd` (the
+  switch and its refusals, `record_admits` / `record_file_name`, a
+  recorded duel's logs and headers, the cap and the `losses` filter,
+  `run.json` and `next` for a duel, a tournament, a sweep and the
+  AutoDeck, `argv_without`, `git_sha`, the Query's `check` / `packs` /
+  `cards` and refusals, the door and the launchers as text);
+  `tools/test_shandalar_sh.py` (the door dispatches, refuses as JSON,
+  answers `--help` and `-V` without an engine; `lab_query.sh`'s shell
+  rules).
+
 ## Release package files
+
+- `docs/releases/0.40.29.md`: the tools for a program, second half —
+  `--record`, `run.json` with `next`, the Lab Query (`check`, `packs`,
+  `cards`), the one door `shandalar.sh`, the skin-pack lines on stderr.
 
 - `docs/releases/0.40.28.md`: the tools for a program — `AGENTS.md`, the
   refusal as one line of JSON, `--dry-run` in the Deck Lab and the
@@ -3424,6 +3504,12 @@ shandalar/
 │   │                          guard_private, pointed at the tree instead of
 │   │                          at a staged package), a private address or a
 │   │                          tool vendor. Skips outside a git checkout
+│   ├── test_shandalar_sh.py  unittest for ./shandalar.sh and
+│   │                          DeckLab/lab_query.sh (2026-09-27): the
+│   │                          door's verbs exec their tools, an unknown
+│   │                          verb is one JSON line and exit 2, --help
+│   │                          and -V without an engine; the query
+│   │                          wrapper's -V, exit 3, exec line, no banner
 │   ├── test_auto_deck_cli_sh.py  unittest for DeckLab/auto_deck_cli.sh
 │   │                          (2026-09-25): -V answered without an engine,
 │   │                          no artwork in stdout, exit 3 with no Godot,
@@ -3759,6 +3845,20 @@ shandalar/
 │   │                          from stderr, the import cache warmed only
 │   │                          when a script is newer than it, and exit 3
 │   │                          when there is no engine to run
+│   ├── lab_query.sh         Entry point for the Lab Query (2026-09-27):
+│   │                          -V answered by the shell, no banner ever
+│   │                          (stdout is one JSON document), exit 3 with
+│   │                          no engine
+│   ├── lab_query.gd         THE LAB QUERY (SceneTree script, 2026-09-27)
+│   │                          — the questions a program asks before it
+│   │                          spends a run: `check DECK...` (the Lab's
+│   │                          loader as a report: unknown names with
+│   │                          their pack or their neighbours, the packs
+│   │                          needed and missing, the format, playable),
+│   │                          `packs` (every pack known: found, on, why
+│   │                          not), `cards NAME...` (a card's record).
+│   │                          Exit 0 for an answer, 2 for a line it
+│   │                          cannot answer, the family envelope
 │   ├── auto_deck_cli.gd     THE AUTODECK CLI (SceneTree script,
 │   │                          2026-09-25) — the Deck Builder's AutoDeck by
 │   │                          the thousand, so the Lab has a FIELD to
@@ -3863,6 +3963,11 @@ shandalar/
 │                              in the safe Xvfb recipe and FAILS on any
 │                              ERROR/WARNING/STALL line; exit 2 stall, 3 bad
 │                              argument, 124 timeout (manual in the file)
+├── shandalar.sh             THE ONE DOOR (2026-09-27): lab | autodeck |
+│                              check | packs | cards | convert, each
+│                              exec'ing its tool with the rest of the
+│                              line; --help the list; an unknown verb one
+│                              JSON line on stdout, exit 2 (AGENTS.md)
 ├── deck_convert.sh          Deck-format converter entry point
 ├── build_release.sh         Release build: exports the "Linux 64" preset with
 │                              the pinned Godot — with the DEBUG template

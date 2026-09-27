@@ -264,6 +264,21 @@ OPTIONS
                         off   no progress at all; the banner stays
                       --quiet is exactly --no-banner --progress off, and
                       an explicit --progress wins over it.
+  --record FILTER     Keep THE ENGINE'S OWN LOG of some games, one text
+                      file each under OUT/records/: `losses` for every
+                      game deck A (the row deck) lost, `stalls` for every
+                      game nobody finished, `all` for every game. The
+                      file is named for the matchup, the seed and the
+                      outcome (pair0_seed7_a_lost.log) and opens with
+                      `#` lines naming the decks, who played first and
+                      how it ended; the rest is what the game did, turn
+                      by turn — the thing to read when a deck loses and
+                      the win rate cannot say why.
+  --record-max N      At most N such files per run (default 50; 0 = no
+                      cap). Which games land under the cap is whichever
+                      finished first — the seed in the name says which
+                      game each one was, so `--deck-a A --deck-b B --seed
+                      S --games 1` replays it.
   -h, --help          This text.
 
 DUEL SETTINGS (everything the battle-setup screen can choose)
@@ -634,6 +649,8 @@ func _main(argv: PackedStringArray) -> int:
 	# proxies until the pack is in the registry. A bad value is left for
 	# the parser to refuse, with its own wording; the last of two is the
 	# one the parser keeps, so it is the one that goes on.
+	_argv = argv
+	_run_started = int(Time.get_unix_time_from_system())
 	var packs_at := argv.rfind("--packs")
 	if packs_at >= 0 and packs_at + 1 < argv.size():
 		var chosen := parse_packs(argv[packs_at + 1], available_packs())
@@ -829,6 +846,8 @@ func _main(argv: PackedStringArray) -> int:
 				% [out_dir, made], {"kind": "out", "path": out_dir, "flag": "--out"}, true)
 		_keep_the_importer_out(out_dir)
 	_duel_opts = _duel_options(opts)
+	if String(opts.record) != "":
+		_duel_opts["record_dir"] = out_absolute.path_join(RECORDS_DIR)
 	# A SWEEP IS ITS OWN RUN FROM HERE: the same decks, loader, fan-out
 	# and per-game records, but three pairs and a verdict where a plain
 	# run has one report (THE SWEEP, towards the foot of this file).
@@ -896,12 +915,16 @@ func _main(argv: PackedStringArray) -> int:
 				"sb_b": col.sideboard,
 				"dealt": dealt,
 				"profile_a": opts.profile_a, "profile_b": opts.profile_b,
+				# BY NAME, for a game log's header (--record).
+				"name_a": row.deck_name, "name_b": col.deck_name,
 			})
 	_results.resize(_tasks.size())
 
 	# ---- run, in parallel ----
 	var elapsed := _play_tasks(opts, jobs, unit)
 	if elapsed < 0.0:
+		_run_json(out_dir, 1, {"mode": mode, "seed": int(opts.seed),
+			"elapsed_seconds": null, "files": [], "next": null})
 		return 1
 
 	# ---- aggregate ----
@@ -1120,6 +1143,10 @@ func _main(argv: PackedStringArray) -> int:
 		results_json["standings"] = tournament.standings_json
 		results_json["gauntlet"] = tournament.gauntlet_json
 		results_json["rated"] = false
+	# THE GAME LOGS, counted (--record): how many landed under the cap.
+	var records := _records_json(opts)
+	if not records.is_empty():
+		results_json["records"] = records
 	wrote_all = _write(out_dir + "/results.json",
 		JSON.stringify(results_json, "  ") + "\n") and wrote_all
 	wrote_all = _write(out_dir + "/matchups.csv", "\n".join(csv) + "\n") and wrote_all
@@ -1168,14 +1195,115 @@ func _main(argv: PackedStringArray) -> int:
 			wrote_all = _write(out_dir + "/turns.svg",
 				SvgCharts.turns_chart(decks[0].deck_name, histogram_rows)) and wrote_all
 			chart_names.append_array(["winrates.svg", "turns.svg"])
+	if int(records.get("written", 0)) > 0:
+		chart_names.append(RECORDS_DIR + "/")
+	# THE RUN AS DATA (run.json, 2026-09-27) — last, because it says how
+	# the run ended and what it wrote, and it names the next line.
+	var run := {"mode": mode, "seed": int(opts.seed), "elapsed_seconds": elapsed,
+		"files": Array(chart_names),
+		"next": _next_step(mode, opts, out_dir, per_pair_stats)}
 	if not wrote_all:
 		printerr("deck_lab: not every file of %s was written (see above); the run is not a result" % out_dir)
+		_run_json(out_dir, 1, run)
 		return 1
-	print("\nwrote %s/{%s}" % [out_dir, ", ".join(chart_names)])
 	if not elo_saved:
 		printerr("deck_lab: reports written, but Elo was not saved; the run is incomplete")
+		_run_json(out_dir, 1, run)
 		return 1
+	if not _run_json(out_dir, 0, run):
+		return 1
+	chart_names.append(RUN_JSON)
+	print("\nwrote %s/{%s}" % [out_dir, ", ".join(chart_names)])
 	return 0
+
+
+## THE RUN AS DATA (2026-09-27): `run.json` in every output folder,
+## written last — the command line as given, the tool's version and the
+## checkout's commit (or "" outside a checkout), the packs, when the run
+## started and how long it took, how it ended (`exit`, the process's
+## own code), the files it wrote, and `next`: the line a program would
+## run next, as an argv array, with the reason — or null when the run
+## suggests nothing. A driving program reads this file and not the
+## terminal; it is the one file that says whether the folder is a
+## result.
+const RUN_JSON := "run.json"
+var _argv := PackedStringArray()
+var _run_started := 0
+
+
+func _run_json(out_dir: String, exit: int, run: Dictionary) -> bool:
+	var record := {
+		"tool": "deck_lab", "version": LabConsole.version(),
+		"git": LabConsole.git_sha(),
+		"argv": Array(_argv),
+		"packs": _packs_in_force, "packs_on": packs_on(),
+		"out": out_dir,
+		"started": Time.get_datetime_string_from_unix_time(_run_started) + "Z",
+		"exit": exit,
+	}
+	for key in run:
+		record[key] = run[key]
+	return _write(out_dir + "/" + RUN_JSON, JSON.stringify(record, "  ") + "\n")
+
+
+## What --record left in OUT/records/ — `{}` when the switch was not
+## given, so results.json keeps its keys otherwise.
+func _records_json(opts: Dictionary) -> Dictionary:
+	if String(opts.record) == "":
+		return {}
+	return {"filter": opts.record, "max": int(opts.record_max),
+		"written": records_in(String(_duel_opts.get("record_dir", ""))),
+		"dir": RECORDS_DIR}
+
+
+## THE NEXT LINE, or null. A tournament's is its own best N at five
+## times the games (`--field OUT/top.txt`); a run with a matchup whose
+## interval still straddles even is the same run at four times the
+## games; a decided run suggests nothing. The argv is this run's own
+## line with the flags that change taken out and put back — so
+## every other switch (packs, pilots, rules, format) carries over
+## unchanged, which is the point of a next line a program can run.
+func _next_step(mode: String, opts: Dictionary, out_dir: String,
+		per_pair_stats: Array) -> Variant:
+	if mode == "tournament":
+		var again := argv_without(_argv, ["--field", "--games", "--out"], ["--dry-run"])
+		again.append_array(["--field", out_dir.path_join("top.txt"),
+			"--games", str(int(opts.games) * 5), "--out", out_dir + "_top"])
+		return {"why": "the field's best %d at five times the games, against the same gauntlet"
+			% int(opts.top), "argv": again}
+	var undecided := 0
+	for stats in per_pair_stats:
+		var winrate: Dictionary = stats.winrate
+		if float(winrate.low) < 0.5 and float(winrate.high) > 0.5:
+			undecided += 1
+	if undecided == 0:
+		return null
+	var again := argv_without(_argv, ["--games", "--out"], ["--dry-run", "--no-elo"])
+	again.append_array(["--games", str(int(opts.games) * 4),
+		"--out", out_dir + "_more", "--no-elo"])
+	return {"why": "%d of %d matchup(s) still straddle even at %d %s: four times the games, unrated"
+		% [undecided, per_pair_stats.size(), int(opts.games),
+			"matches" if opts.best_of != MatchState.FREE_PLAY else "games"],
+		"argv": again}
+
+
+## [param argv] without every `FLAG VALUE` pair whose flag is in
+## [param value_flags] and every bare flag in [param toggles].
+static func argv_without(argv: PackedStringArray, value_flags: Array,
+		toggles: Array) -> Array:
+	var kept: Array = []
+	var skip := false
+	for arg in argv:
+		if skip:
+			skip = false
+			continue
+		if value_flags.has(arg):
+			skip = true
+			continue
+		if toggles.has(arg):
+			continue
+		kept.append(arg)
+	return kept
 
 
 ## What every game of a run plays under, from the parsed flags — the
@@ -1241,6 +1369,10 @@ func _duel_options(opts: Dictionary) -> Dictionary:
 		# step has to keep a deck legal in the format the run required.
 		"best_of": opts.best_of, "sideboard": opts.sideboard,
 		"format": opts.format,
+		# THE GAME LOGS (--record): the filter and the cap ride along so a
+		# worker process records exactly as a thread would; `record_dir`
+		# is set by the caller once the output folder is known.
+		"record": opts.record, "record_max": opts.record_max,
 	}
 
 
@@ -1813,7 +1945,7 @@ func _play_task(task: Dictionary) -> Dictionary:
 	var seat_profiles := [task.profile_a, task.profile_b] if a_seat == 0 \
 		else [task.profile_b, task.profile_a]
 	var duel := _play_duel(seat_decks, seat_profiles, int(task.seed),
-		[null, null])
+		[null, null], _record_context(task, a_seat, 0))
 	# `drawn` IS NOT DERIVABLE FROM `a_won`. A draw (CR 104.4b — both
 	# duelists losing at once) leaves `winner` at -1, so before this key
 	# existed SimStats read the game as a win for deck B and the Elo
@@ -1841,7 +1973,7 @@ func _play_task(task: Dictionary) -> Dictionary:
 ## own [RandomNumberGenerator], which is what the sideboard step between
 ## two duels of a match rolls on (CONTRIBUTING.md rule 7: no other source).
 func _play_duel(seat_decks: Array, seat_profiles: Array, duel_seed: int,
-		watchers: Array) -> Dictionary:
+		watchers: Array, context: Dictionary = {}) -> Dictionary:
 	var game := MtgGame.new()
 	var names: Array = _duel_opts.get("names", ["SeatZero", "SeatOne"])
 	var lives: Array = _duel_opts.get("lives", [20, 20])
@@ -1902,7 +2034,116 @@ func _play_duel(seat_decks: Array, seat_profiles: Array, duel_seed: int,
 	# records keep the shape they have always had.
 	if bool(_duel_opts.get("fingerprint", false)):
 		out["fingerprint"] = "\n".join(game.log_lines).md5_text()
+	if String(_duel_opts.get("record", "")) != "" and not context.is_empty():
+		_record_game(game, out, context)
 	return out
+
+
+## What a game log's header needs to say which game it was: the pair,
+## the seed, which seat deck A sat in, both decks by name, the sweep's
+## arm when there is one, and the duel's number inside a match (0 for
+## a single duel).
+static func _record_context(task: Dictionary, a_seat: int, duel: int) -> Dictionary:
+	return {"pair": int(task.get("pair", 0)), "seed": int(task.get("seed", 0)),
+		"a_seat": a_seat,
+		"name_a": String(task.get("name_a", "deck A")),
+		"name_b": String(task.get("name_b", "deck B")),
+		"arm": int(task.get("arm", -1)), "duel": duel}
+
+
+## The folder under --out that game logs are written to.
+const RECORDS_DIR := "records"
+## A game log's extension.
+const RECORD_EXTENSION := ".log"
+var _record_lock := Mutex.new()
+
+
+## ONE GAME'S LOG ON DISK (`--record`, 2026-09-27), when the filter
+## admits its outcome and the cap has room: OUT/records/pair{P}_seed{S}
+## [_arm{A}][_duel{N}]_{a_won|a_lost|drawn|stalled}.log — `#` header
+## lines a program can read without parsing the game, then the engine's
+## own `log_lines`, the same lines a sweep's fingerprint hashes.
+##
+## THE CAP IS COUNTED ON DISK, under a lock: threads of one process
+## cannot pass it; two worker PROCESSES that look at the same instant
+## can each write one more, so the cap is "about N" across processes
+## and exact within one. Which games land under it is whichever
+## finished first — the name says which game each was.
+func _record_game(game: MtgGame, out: Dictionary, context: Dictionary) -> void:
+	var outcome := "stalled"
+	if bool(out["finished"]):
+		if bool(out["drawn"]):
+			outcome = "drawn"
+		elif int(out["winner"]) == int(context.a_seat):
+			outcome = "a_won"
+		else:
+			outcome = "a_lost"
+	if not record_admits(String(_duel_opts.get("record", "")), outcome):
+		return
+	var dir := String(_duel_opts.get("record_dir", ""))
+	if dir == "":
+		return
+	var file_name := record_file_name(context, outcome)
+	var header := PackedStringArray([
+		"# deck_a: %s" % context.name_a,
+		"# deck_b: %s" % context.name_b,
+		"# pair: %d" % int(context.pair),
+		"# seed: %d" % int(context.seed),
+		"# a_on_play: %s" % ("true" if int(context.a_seat) == 0 else "false"),
+		"# outcome: %s" % outcome,
+		"# turns: %d" % int(out["turns"]),
+	])
+	if int(context.arm) >= 0:
+		header.append("# arm: %d" % int(context.arm))
+	if int(context.duel) > 0:
+		header.append("# duel: %d" % int(context.duel))
+	header.append("# lines: %d" % game.log_lines.size())
+	_record_lock.lock()
+	var cap := int(_duel_opts.get("record_max", RECORD_MAX_DEFAULT))
+	if not DirAccess.dir_exists_absolute(dir):
+		DirAccess.make_dir_recursive_absolute(dir)
+	if cap > 0 and records_in(dir) >= cap:
+		_record_lock.unlock()
+		return
+	var file := FileAccess.open(dir.path_join(file_name), FileAccess.WRITE)
+	if file != null:
+		file.store_string("\n".join(header) + "\n" + "\n".join(game.log_lines) + "\n")
+		file.close()
+	_record_lock.unlock()
+
+
+## Whether [param filter] (`--record`) keeps a game that ended in
+## [param outcome] — `losses` keeps deck A's losses, `stalls` the
+## games nobody finished, `all` every game; "" keeps none.
+static func record_admits(filter: String, outcome: String) -> bool:
+	match filter:
+		"all": return true
+		"losses": return outcome == "a_lost"
+		"stalls": return outcome == "stalled"
+	return false
+
+
+## The file a recorded game is written as — see [method _record_game].
+static func record_file_name(context: Dictionary, outcome: String) -> String:
+	var name := "pair%d_seed%d" % [int(context.pair), int(context.seed)]
+	if int(context.get("arm", -1)) >= 0:
+		name += "_arm%d" % int(context.arm)
+	if int(context.get("duel", 0)) > 0:
+		name += "_duel%d" % int(context.duel)
+	return name + "_" + outcome + RECORD_EXTENSION
+
+
+## How many game logs [param dir] holds — the cap's own count, and the
+## report's.
+static func records_in(dir: String) -> int:
+	var found := DirAccess.open(dir)
+	if found == null:
+		return 0
+	var n := 0
+	for file_name in found.get_files():
+		if file_name.ends_with(RECORD_EXTENSION):
+			n += 1
+	return n
 
 
 ## ONE MATCH — the original's `&Best of:` (`Program/Text.res:2862`), which
@@ -1959,7 +2200,7 @@ func _run_one_match(task: Dictionary) -> Dictionary:
 		watchers[a_seat] = memories[0]
 		watchers[1 - a_seat] = memories[1]
 		var duel := _play_duel(seat_decks, seat_profiles, seeder.randi() | 1,
-			watchers)
+			watchers, _record_context(task, a_seat, duels + 1))
 		duels += 1
 		turns_total += int(duel["turns"])
 		if duel.has("fingerprint"):
@@ -2372,6 +2613,8 @@ const FLAG_HINTS := {
 	"--control-deck-a": "--control-deck-a PATH: the sweep's control pair, deck A — a deck the knob cannot fire on",
 	"--control-deck-b": "--control-deck-b PATH: the sweep's control pair, deck B",
 	"--progress": "--progress auto|bar|log|off: auto is a redrawing bar on a terminal and a heartbeat line a minute in a log; bar and log force one shape either way; off keeps the banner",
+	"--record": "--record losses|stalls|all: write the engine log of every game deck A lost, of every stalled game, or of every game, to OUT/records/ (see --record-max)",
+	"--record-max": "--record-max N: at most N game logs per run, default 50 (0 = no cap; a thousand logs is a gigabyte)",
 }
 
 ## The flags that take no value. Same contract as [constant FLAG_HINTS]:
@@ -2425,7 +2668,12 @@ static func flags_near(arg: String) -> PackedStringArray:
 
 ## The flags whose value must be a whole number. `String.to_int()` is
 ## silent about "abc" (it is 0), so `_parse_args` refuses these up front.
-const WHOLE_NUMBER_FLAGS := ["--games", "--seed", "--jobs", "--procs", "--ante", "--best-of", "--top"]
+const WHOLE_NUMBER_FLAGS := ["--games", "--seed", "--jobs", "--procs", "--ante", "--best-of", "--top", "--record-max"]
+
+## What `--record` may ask for: the games deck A (the row deck) lost,
+## the games nobody finished, or every game.
+const RECORD_FILTERS := ["losses", "stalls", "all"]
+const RECORD_MAX_DEFAULT := 50
 
 
 func _parse_args(argv: PackedStringArray) -> Dictionary:
@@ -2450,6 +2698,10 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		"quiet": false, "no_banner": false, "progress": "",
 		# THE PLAN ALONE (2026-09-27): every check runs, no game does.
 		"dry_run": false,
+		# THE GAME LOGS (2026-09-27): "" records nothing; a filter of
+		# RECORD_FILTERS writes the engine's own log of each game the
+		# filter admits, up to `record_max` files (0 = every one).
+		"record": "", "record_max": RECORD_MAX_DEFAULT,
 		# The duel settings. Every default here is what this script did
 		# before the flag existed — see the class doc.
 		"lives": [20, 20], "ante": 0, "names": ["SeatZero", "SeatOne"],
@@ -2619,6 +2871,15 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 					return {"error": "--progress takes one of %s, not '%s'"
 						% [", ".join(PROGRESS_MODES), value]}
 				opts.progress = value.to_lower()
+			"--record":
+				if not RECORD_FILTERS.has(value.to_lower()):
+					return {"error": "--record takes one of %s, not '%s'"
+						% [", ".join(RECORD_FILTERS), value]}
+				opts.record = value.to_lower()
+			"--record-max":
+				opts.record_max = value.to_int()
+				if opts.record_max < 0:
+					return {"error": "--record-max must be >= 0 (0 = no cap)"}
 			# [MatchState.LENGTHS] AND NOTHING ELSE — 1, 3
 			# or 5, for that class's own reasons:
 			# `@DIALOG_ENDEXP1DUEL_MATCHPROGRESS` ships exactly
@@ -3399,10 +3660,13 @@ func _run_sweep(opts: Dictionary, decks: Array[DeckList], pairs: Array,
 					"sb_a": row.sideboard, "sb_b": col.sideboard,
 					"dealt": "",
 					"profile_a": arm.profile_a, "profile_b": arm.profile_b,
+					"name_a": row.deck_name, "name_b": col.deck_name,
 				})
 	_results.resize(_tasks.size())
 	var elapsed := _play_tasks(opts, jobs, unit)
 	if elapsed < 0.0:
+		_run_json(out_dir, 1, {"mode": "sweep", "seed": int(opts.seed),
+			"elapsed_seconds": null, "files": [], "next": null})
 		return 1
 
 	# ---- aggregate: records and stats per [arm][pair] ----
@@ -3495,6 +3759,9 @@ func _run_sweep(opts: Dictionary, decks: Array[DeckList], pairs: Array,
 		"matchups": json_matchups, "control": json_control,
 		"control_pass": control_pass,
 	}
+	var sweep_records := _records_json(opts)
+	if not sweep_records.is_empty():
+		sweep_json["records"] = sweep_records
 	wrote_all = _write(out_dir + "/sweep.json",
 		JSON.stringify(sweep_json, "  ") + "\n") and wrote_all
 	wrote_all = _write(out_dir + "/sweep.csv", "\n".join(csv) + "\n") and wrote_all
@@ -3517,15 +3784,51 @@ func _run_sweep(opts: Dictionary, decks: Array[DeckList], pairs: Array,
 			record.stalled, record.get("drawn", false),
 			record.get("fingerprint", "")])
 	wrote_all = _write(out_dir + "/games.csv", "\n".join(games) + "\n") and wrote_all
+	var written := PackedStringArray(["report.txt", "sweep.json", "sweep.csv", "games.csv"])
+	if int(sweep_records.get("written", 0)) > 0:
+		written.append(RECORDS_DIR + "/")
+	var run := {"mode": "sweep", "seed": int(opts.seed), "elapsed_seconds": elapsed,
+		"control_pass": control_pass, "files": Array(written),
+		"next": _sweep_next_step(opts, out_dir, control_pass, arms, pairs,
+			control_pair, stats)}
 	if not wrote_all:
 		printerr("deck_lab: not every file of %s was written (see above); the run is not a result" % out_dir)
+		_run_json(out_dir, 1, run)
 		return 1
-	print("\nwrote %s/{report.txt, sweep.json, sweep.csv, games.csv}" % out_dir)
 	if not control_pass:
 		printerr("deck_lab: the control pair did not replay its null game for game (see the report); exit %d"
 			% EXIT_CONTROL_MOVED)
+		_run_json(out_dir, EXIT_CONTROL_MOVED, run)
 		return EXIT_CONTROL_MOVED
+	if not _run_json(out_dir, 0, run):
+		return 1
+	written.append(RUN_JSON)
+	print("\nwrote %s/{%s}" % [out_dir, ", ".join(written)])
 	return 0
+
+
+## A sweep's next line: nothing when the control moved (a rerun of the
+## same line moves it again — that is a tree to fix, not a run to
+## repeat), the same sweep at four times the games when a candidate's
+## delta on a test pair is still inside its margin, null when every
+## delta is clear.
+func _sweep_next_step(opts: Dictionary, out_dir: String, control_pass: bool,
+		arms: Array, pairs: Array, control_pair: int, stats: Array) -> Variant:
+	if not control_pass:
+		return null
+	var unclear := 0
+	for arm_index in range(1, arms.size()):
+		for pair_index in pairs.size():
+			if pair_index == control_pair:
+				continue
+			if not bool(delta_of(stats[arm_index][pair_index], stats[0][pair_index]).clear):
+				unclear += 1
+	if unclear == 0:
+		return null
+	var again := argv_without(_argv, ["--games", "--out"], ["--dry-run"])
+	again.append_array(["--games", str(int(opts.games) * 4), "--out", out_dir + "_more"])
+	return {"why": "%d candidate delta(s) still inside the margin at %d games: four times the games"
+		% [unclear, int(opts.games)], "argv": again}
 
 
 ## The sweep's report.txt — and, byte for byte, its stdout. One table per

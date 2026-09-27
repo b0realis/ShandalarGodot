@@ -26,7 +26,7 @@ class PackageReleaseTest(unittest.TestCase):
             archive.writestr("skin/frame.png", b"frame")
         for name in (*("tools/" + n for n in pack.TOOLS), "LICENSE",
                      "docs/setup.txt", "docs/skin-catalogue.txt",
-                     "docs/releases/1.2.3.md", "DeckLab/README.md", "game/icon.png",
+                     "docs/releases/1.2.3.md", "DeckLab/README.md", "AGENTS.md", "game/icon.png",
                      "docs/setup-web.txt", "docs/card-art-and-packs.md"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -102,8 +102,19 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn(binary, archive.read(prefix + "deck_lab.sh").decode())
                             self.assertIn("-- --auto-deck", archive.read(prefix + "auto_deck.sh").decode())
                             self.assertEqual(archive.getinfo(prefix + "auto_deck.sh").external_attr >> 16 & 0o777, 0o755)
+                            self.assertIn("-- --lab-query", archive.read(prefix + "lab_query.sh").decode())
+                            door = archive.read(prefix + "shandalar.sh").decode()
+                            self.assertTrue(door.startswith("#!/bin/sh\nset -eu\n"))
+                            for target in ("./deck_lab.sh", "./auto_deck.sh", "./lab_query.sh", "./run.sh"):
+                                self.assertIn(f"exec {target} ", door)
+                            self.assertEqual(archive.getinfo(prefix + "shandalar.sh").external_attr >> 16 & 0o777, 0o755)
+                            self.assertIn(prefix + "AGENTS.md", entries)
+                        if platform in pack.MAC_PLATFORMS:
+                            self.assertIn("-- --lab-query", archive.read(prefix + "lab_query.sh").decode())
+                            self.assertIn("exec ./lab_query.sh ", archive.read(prefix + "shandalar.sh").decode())
                         if platform == "windows64":
                             self.assertIn("-- --auto-deck %*", archive.read(prefix + "auto_deck.bat").decode())
+                            self.assertIn("-- --lab-query %*", archive.read(prefix + "lab_query.bat").decode())
                         if platform in pack.MAC_PLATFORMS:
                             entry = archive.getinfo(prefix + "Shandalar.app/Contents/MacOS/Shandalar")
                             self.assertEqual(entry.external_attr >> 16 & 0o777, 0o755)
@@ -187,11 +198,33 @@ class PackageReleaseTest(unittest.TestCase):
         # build_release.sh writes the Linux launchers by hand (the CI path
         # is build_release() above); the two doors must match.
         source = (pack.ROOT / 'build_release.sh').read_text(encoding='utf-8')
-        for launcher, flag in (("deck_lab.sh", "--deck-lab"), ("auto_deck.sh", "--auto-deck")):
+        for launcher, flag in (("deck_lab.sh", "--deck-lab"), ("auto_deck.sh", "--auto-deck"),
+                               ("lab_query.sh", "--lab-query")):
             with self.subTest(launcher=launcher):
                 self.assertIn(f'cat > "$STAGE/{launcher}"', source)
                 self.assertIn(f'exec ./Shandalar.x86_64 --headless --no-header -- {flag} "$@"', source)
                 self.assertIn(f'chmod +x "$STAGE/{launcher}"', source)
+
+    def test_the_one_door_dispatches_the_same_verbs_in_both_builds(self):
+        # The local build writes shandalar.sh by hand, the CI package from
+        # DISPATCHER; both must know the same verbs and refuse an unknown
+        # one as one JSON line, exit 2 — the contract AGENTS.md promises.
+        source = (pack.ROOT / 'build_release.sh').read_text(encoding='utf-8')
+        self.assertIn('cat > "$STAGE/shandalar.sh"', source)
+        self.assertIn('chmod +x "$STAGE/shandalar.sh"', source)
+        self.assertIn('cp -p AGENTS.md "$STAGE/AGENTS.md"', source)
+        for script in (source, pack.DISPATCHER):
+            for verb, target in (("lab", "./deck_lab.sh"), ("autodeck", "./auto_deck.sh"),
+                                 ("check | packs | cards", './lab_query.sh "$verb"'),
+                                 ("play", "./run.sh")):
+                self.assertIn(f'{verb}) exec {target} "$@" ;;', script)
+            self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', script)
+        repo_door = (pack.ROOT / 'shandalar.sh').read_text(encoding='utf-8')
+        for verb, target in (("lab", "DeckLab/deck_lab.sh"), ("autodeck", "DeckLab/auto_deck_cli.sh"),
+                             ("check | packs | cards", 'DeckLab/lab_query.sh "$verb"'),
+                             ("convert", "./deck_convert.sh")):
+            self.assertIn(f'{verb}) exec {target} "$@" ;;', repo_door)
+        self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', repo_door)
 
     def test_card_pack_and_traversal_are_refused(self):
         for name in ("skin/cardart/island.jpg", "skin/../secret", "/skin/frame.png", "skin\\frame.png"):

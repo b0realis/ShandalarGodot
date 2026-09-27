@@ -40,6 +40,10 @@ const DECK_LAB_FLAG := "--deck-lab"
 ## release is `--auto-deck`, and DeckLab/auto_deck_cli.gd builds the
 ## field the Lab then plays.
 const AUTO_DECK_FLAG := "--auto-deck"
+## The questions a program asks before it spends a run (2026-09-27):
+## `lab_query.sh` in a release is `--lab-query`, and
+## DeckLab/lab_query.gd answers `check`, `packs` and `cards` as JSON.
+const LAB_QUERY_FLAG := "--lab-query"
 ## Release-only integration probe: validates a real external ZIP, activates
 ## its dormant trusted scripts, checks every set-specific art pair, then exits.
 const VERIFY_PACK_1_FLAG := "--verify-pack-1"
@@ -65,6 +69,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has(AUTO_DECK_FLAG):
 		_run_headless_tool(AUTO_DECK_FLAG, "res://DeckLab/auto_deck_cli.gd")
+		return
+	if OS.get_cmdline_user_args().has(LAB_QUERY_FLAG):
+		_run_headless_tool(LAB_QUERY_FLAG, "res://DeckLab/lab_query.gd")
 		return
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_1_FLAG):
 		_verify_exported_pack_1()
