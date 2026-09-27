@@ -7,6 +7,8 @@
 #   ./shandalar.sh check DECK...      is this deck playable, and why not
 #   ./shandalar.sh packs              every card pack: found, on, why not
 #   ./shandalar.sh cards NAME...      a card's record     (DeckLab/lab_query.sh)
+#   ./shandalar.sh referee ARGS...    one duel through a pipe, a program
+#                                     in a seat            (DeckLab/referee.sh)
 #   ./shandalar.sh convert IN OUT     .deck <-> .dck      (deck_convert.sh)
 #   ./shandalar.sh VERB --help        that tool's own manual
 #   ./shandalar.sh -h | --help        this list, on stdout
@@ -21,7 +23,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 usage() {
-	sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 verb="${1:-}"
@@ -35,12 +37,13 @@ case "$verb" in
 	autodeck) exec DeckLab/auto_deck_cli.sh "$@" ;;
 	check | packs | cards) exec DeckLab/lab_query.sh "$verb" "$@" ;;
 	query) exec DeckLab/lab_query.sh "$@" ;;
+	referee) exec DeckLab/referee.sh "$@" ;;
 	convert) exec ./deck_convert.sh "$@" ;;
 esac
 # The verb goes into the line with the characters JSON would need
 # escaped removed, so the line is always one valid document.
 safe="$(printf '%s' "$verb" | tr -d '"\\\n\r\t')"
-printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, convert","verb":"%s"}}\n' \
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, convert","verb":"%s"}}\n' \
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2
 exit 2

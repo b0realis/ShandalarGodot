@@ -459,8 +459,90 @@ of the tools-for-a-program pass (0.40.29).
   answers `--help` and `-V` without an engine; `lab_query.sh`'s shell
   rules).
 
+## The resume and the referee (2026-09-27)
+
+Phase C of the tools-for-a-program pass (0.40.31): an interrupted Lab
+run finishes from its checkpoint, and a program sits in a seat.
+
+- `DeckLab/simulate.gd`: `--resume OUT` — the whole line read back from
+  OUT's `run.json` (`exit: null` marks an interrupted run), the games
+  in `checkpoint.jsonl` kept, the rest played, the report written as if
+  nothing had happened; `run.json` gains `resumed{from, reused,
+  played}`; anything typed beside `--resume` is refused (kind `option`).
+- `DeckLab/referee.gd`, `DeckLab/referee.sh`: THE REFEREE — one duel
+  played through a pipe, a program in a seat. `extends SceneTree`,
+  hosted ONLY by `game/main.gd`'s `REFEREE_FLAG` (`--referee`) through
+  `_run_headless_tool` — the lobby classes it drives (`SgPracticeMatch`,
+  `SgBotPlayer`, `SgLocalClient`) name the autoloads, which a
+  `--script` main loop compiles before they exist; `referee.sh` is
+  therefore the main scene with `-- --referee`, checkout and release
+  alike. `SEATS` (`agent`, `apprentice`…`wizard`, `unfair` →
+  `_bot_options` at `BOT_PACE_MS`), `DUEL_OPS` (the twenty wire ops a
+  seat may answer with), `FLAG_HINTS` (every valued switch, pinned
+  against `HELP`). `_parse_args` (unknown option / seat → `closest`
+  suggestions), `_load_deck` (as typed, `decks/`, `res://decks/`; a deck
+  the pool cannot play is refused with `lab_query.gd`'s `deck_report`
+  attached), `_main` (help, `-V`, `--packs` via the Lab, `--join` →
+  `_join`, `--dry-run` → `last_plan` as one line, else
+  `SgPracticeMatch` + `set_bot` → `_hello` → `_referee_local` → `--log`
+  → `_result`). The pipe: `reader`/`writer` Callables (stdin/stdout by
+  default — `OS.read_string_from_stdin` says `""` for an empty line AND
+  for EOF, so `EMPTY_READS` consecutive empties close the pipe), `_emit`,
+  `_refuse` (the family envelope, `tool: referee`, kept in
+  `last_error`), `_next_line` (direct, or through the pump). `_ask`
+  numbers a decision, emits it (`_decision`: `options_for` + the view
+  with only the journal entries not yet sent, `_journal_sent`), reads
+  lines (`_parse_action`: JSON object, optional `seat` = this seat, op
+  in `DUEL_OPS`, `SgProtocol.exact` keys, `SgProtocol.valid` envelope),
+  applies them, and after every refusal (`refused{n, seat, reason,
+  action, left}`) asks THE SAME decision again from a fresh view —
+  `MAX_REFUSALS` (20) in a row, EOF, `MAX_DECISIONS` (20,000) or the
+  turn limit end the duel with their `reason`; `_referee_local` steps
+  the computer seats between decisions (`_mark` before/after,
+  `IDLE_BOT_STEPS` → `stalled`). `options_for(view, seat)` is static:
+  per mode the ops the seat may answer and what each takes, every card
+  named beside its handle, `waiting: true` when it is not this seat's
+  decision. `_join` / `_referee_table(client, deck, opts, packs)` seat
+  the same pipe at a table the game hosts through anything with
+  `SgLocalClient`'s face (`poll`, `online`, `busy`, `command`,
+  `command_error`, `state`, the `refused` signal): wait for the socket,
+  the first open room, `join`, `deck` when the table plays own decks,
+  `ready`, the game; then `_ask` whenever the view's `actor` is this
+  seat and the room's `revision` moved — while the program thinks the
+  socket is polled from the `tick`, so the stdin read runs on a pump
+  thread (`_pump_start` / `_pump_run` / `_pump_finish`, one read per
+  request over a semaphore); `left`/`offline` when the table goes away;
+  `leave` at the end. `hello` there carries `table{id, name, seat}`
+  and `seed: -1`.
+- `game/main.gd`: `REFEREE_FLAG` and its route, after the Lab Query's.
+- `shandalar.sh` (verb `referee`), `build_release.sh` (a `referee.sh`
+  heredoc: `-- --referee "$@"`, and the release door's verb),
+  `tools/package_release.py` (`referee.sh`/`referee.bat` launchers,
+  `DISPATCHER`'s verb); `tools/test_package_release.py` and
+  `tools/test_shandalar_sh.py` pin them.
+- `AGENTS.md`: *The referee* — the lines, the answers, the seats, a
+  table, the exit codes; the session ends by playing the deck it
+  built. `DeckLab/README.md`: *The resume*, *The referee*, the files
+  table.
+- Tests: `tests/tools/test_lab_resume_2026_09_27.gd` (the checkpoint,
+  the line read back, the games kept and played, the refusals beside
+  `--resume`); `tests/tools/test_referee_2026_09_27.gd` (the pipe as
+  two Callables — the coverage pilot `tests/support/sg_network_pilot.gd`
+  answers from `last_decision.view`, the very view a program reads:
+  hello/decision/refused/result shapes, the options per mode, a refused
+  answer asked again, EOF, twenty refusals, the turn limit and the
+  decision cap, self-play, the journal sent once, `_parse_action`, a
+  joined table through a `FakeClient` with the lobby client's face
+  played to a result and conceded at EOF, a table that never opens, the
+  doors and the docs as text).
+
 ## Release package files
 
+- `docs/releases/0.40.31.md`: the resume and the referee — `--resume
+  OUT` for an interrupted Lab run; `DeckLab/referee.gd` behind the
+  game's `--referee`, `referee.sh` in a release, the door's `referee`
+  verb: one duel through a pipe, a program in a seat, JSON lines both
+  ways, a table joined with `--join`.
 - `docs/releases/0.40.30.md`: the release door answers `-V` — the
   version stamped into `shandalar.sh` by `build_release.sh` and
   `package_release.py` alike, since a release has no `tools/banner.sh`.
@@ -3852,6 +3934,20 @@ shandalar/
 │   │                          -V answered by the shell, no banner ever
 │   │                          (stdout is one JSON document), exit 3 with
 │   │                          no engine
+│   ├── referee.sh           Entry point for the referee (2026-09-27): the
+│   │                          MAIN SCENE with `-- --referee` (never
+│   │                          --script: the lobby classes name autoloads),
+│   │                          -V by the shell, no banner, exit 3 with no
+│   │                          engine
+│   ├── referee.gd           THE REFEREE (SceneTree script hosted by
+│   │                          main.gd's --referee, 2026-09-27): one duel
+│   │                          through a pipe, a program in a seat —
+│   │                          decision lines out (mode, legal options,
+│   │                          the seat's LAN view), wire actions in,
+│   │                          refused lines re-ask the same decision,
+│   │                          one result; computer seats between the
+│   │                          decisions; --join seats the pipe at a
+│   │                          hosted table through the lobby client
 │   ├── lab_query.gd         THE LAB QUERY (SceneTree script, 2026-09-27)
 │   │                          — the questions a program asks before it
 │   │                          spends a run: `check DECK...` (the Lab's

@@ -114,6 +114,7 @@ USAGE
                                                         [options]  (tournament)
   DeckLab/deck_lab.sh --deck-a DECK --deck-b DECK --sweep KNOB=V1,V2
                       --control-deck-a DECK --control-deck-b DECK  (sweep)
+  DeckLab/deck_lab.sh --resume OUT                                (resume)
   DeckLab/deck_lab.sh -h | --help
 
 QUICK START — copy one of these
@@ -279,6 +280,13 @@ OPTIONS
                       finished first — the seed in the name says which
                       game each one was, so `--deck-a A --deck-b B --seed
                       S --games 1` replays it.
+  --resume OUT        Finish a run that was interrupted. OUT is the
+                      folder of a run whose run.json says `exit: null`
+                      (a run writes it before its first game); the line
+                      that started the run is read back from there, the
+                      games its checkpoint.jsonl already holds are kept,
+                      the rest are played, and the report is written as
+                      if nothing had happened. Takes no other switch.
   -h, --help          This text.
 
 DUEL SETTINGS (everything the battle-setup screen can choose)
@@ -643,6 +651,19 @@ func _main(argv: PackedStringArray) -> int:
 		# starts a worker that plays its slice and says nothing.
 		return _run_worker(argv[1], argv[2],
 			argv[3] if argv.size() >= 4 else "")
+	# THE RESUME (2026-09-27), before anything else is read: the folder's
+	# own run.json holds the line that started the run, so `--resume OUT`
+	# is the whole command — anything typed beside it would be a second
+	# opinion on that line, which is refused rather than merged.
+	var resume_at := argv.find("--resume")
+	if resume_at >= 0:
+		if argv.size() == 1:
+			return _refuse(2, "--resume needs a value  (%s)" % FLAG_HINTS["--resume"],
+				{"kind": "option", "flag": "--resume"})
+		if argv.size() != 2 or resume_at != 0:
+			return _refuse(2, "--resume takes only the run's folder — the line that started it is in its %s" % RUN_JSON,
+				{"kind": "option", "flag": "--resume"})
+		return _resume(argv[1])
 	# THE CARD PACKS GO ON BEFORE THE PARSER RUNS (2026-09-25), the way
 	# `--group` is read first: a folder given to --gauntlet or --matrix is
 	# expanded as it is parsed, and a deck of Ice Age cards is a deck of
@@ -819,6 +840,10 @@ func _main(argv: PackedStringArray) -> int:
 	if out_dir == "":
 		out_dir = "DeckLab/results/%s_%d" % ["unfair" if _is_unfair_run(opts) else "run",
 			int(Time.get_unix_time_from_system())]
+	# A resumed run IS its folder, whatever its line said or did not
+	# say about --out.
+	if _resume_dir != "":
+		out_dir = _resume_dir
 	if _is_unfair_run(opts):
 		opts.no_elo = true
 		print("UNFAIR CHALLENGE: sees the current opposing hand. Unrated; not a fair benchmark.")
@@ -845,6 +870,15 @@ func _main(argv: PackedStringArray) -> int:
 			return _refuse(1, "cannot create the output directory '%s' (error %d)"
 				% [out_dir, made], {"kind": "out", "path": out_dir, "flag": "--out"}, true)
 		_keep_the_importer_out(out_dir)
+		_out_absolute = out_absolute
+		# THE RUN'S FIRST WORD (--resume, 2026-09-27): run.json with
+		# `exit: null` before a game is played, so a run that is killed
+		# still names the line that started it and `--resume OUT` can
+		# read it back. The last write, after the report, replaces it.
+		if not _run_json(out_dir, null, {"mode": "sweep" if not opts.sweep.is_empty() else mode,
+				"seed": int(opts.seed), "elapsed_seconds": null, "files": [], "next": null}):
+			return _refuse(1, "cannot write %s in '%s'" % [RUN_JSON, out_dir],
+				{"kind": "out", "path": out_dir, "flag": "--out"}, true)
 	_duel_opts = _duel_options(opts)
 	if String(opts.record) != "":
 		_duel_opts["record_dir"] = out_absolute.path_join(RECORDS_DIR)
@@ -1231,7 +1265,7 @@ var _argv := PackedStringArray()
 var _run_started := 0
 
 
-func _run_json(out_dir: String, exit: int, run: Dictionary) -> bool:
+func _run_json(out_dir: String, exit: Variant, run: Dictionary) -> bool:
 	var record := {
 		"tool": "deck_lab", "version": LabConsole.version(),
 		"git": LabConsole.git_sha(),
@@ -1241,9 +1275,153 @@ func _run_json(out_dir: String, exit: int, run: Dictionary) -> bool:
 		"started": Time.get_datetime_string_from_unix_time(_run_started) + "Z",
 		"exit": exit,
 	}
+	if _resume_dir != "":
+		record["resumed"] = {"from": _resume_dir}.merged(_resumed)
 	for key in run:
 		record[key] = run[key]
-	return _write(out_dir + "/" + RUN_JSON, JSON.stringify(record, "  ") + "\n")
+	var written := _write(out_dir + "/" + RUN_JSON, JSON.stringify(record, "  ") + "\n")
+	# A finished run has its answer in the report; the checkpoint was
+	# for the run that did not get there.
+	if exit is int and int(exit) in [0, EXIT_CONTROL_MOVED]:
+		var checkpoint := ProjectSettings.globalize_path(out_dir).path_join(CHECKPOINT)
+		if FileAccess.file_exists(checkpoint):
+			DirAccess.remove_absolute(checkpoint)
+	return written
+
+
+# ---------------------------------------------------------- the resume --
+
+## THE CHECKPOINT (--resume, 2026-09-27). A thousand-deck tournament is
+## three hours; a machine that goes down in the third loses them, and
+## before this the only answer was to start again. Now every record
+## lands in OUT/checkpoint.jsonl as its game is played — one JSON line,
+## the task's identity (arm, pair, seed) and its record — from the
+## worker thread that made it or from the parent as a fanned-out slice
+## lands, under a lock and flushed, so a kill leaves whole lines and at
+## most one torn one. A run that finishes removes the file: a
+## checkpoint beside a run.json whose `exit` is null is what an
+## interrupted run looks like.
+const CHECKPOINT := "checkpoint.jsonl"
+var _checkpoint: FileAccess = null
+var _checkpoint_lock := Mutex.new()
+## The output folder, absolute, once it exists — where the checkpoint is.
+var _out_absolute := ""
+## `--resume OUT`: the folder being finished, "" for a run of its own;
+## the records its checkpoint held, by [method task_key]; and what the
+## resumed run reused and played, for run.json.
+var _resume_dir := ""
+var _reused: Dictionary = {}
+var _resumed: Dictionary = {}
+
+
+## `--resume OUT`: the run's own line, read back from its run.json, and
+## the games its checkpoint holds taken as played. Refused when there is
+## no run there, or the run there finished — a finished run has nothing
+## to resume, and running its line again would be a second run.
+func _resume(dir: String) -> int:
+	var absolute := ProjectSettings.globalize_path(dir)
+	var run_path := absolute.path_join(RUN_JSON)
+	if not FileAccess.file_exists(run_path):
+		return _refuse(2, "nothing to resume: no %s in '%s'" % [RUN_JSON, dir],
+			{"kind": "resume", "path": dir, "flag": "--resume"})
+	var run: Variant = JSON.parse_string(FileAccess.get_file_as_string(run_path))
+	if not (run is Dictionary) or not ((run as Dictionary).get("argv") is Array) \
+			or String((run as Dictionary).get("tool", "")) != "deck_lab":
+		return _refuse(2, "'%s' is not a %s the Deck Lab wrote" % [run_path, RUN_JSON],
+			{"kind": "resume", "path": dir, "flag": "--resume"})
+	if run.get("exit") != null:
+		return _refuse(2, "the run in '%s' finished (exit %d) — nothing to resume; its line is in %s"
+			% [dir, int(run.exit), RUN_JSON],
+			{"kind": "resume", "path": dir, "flag": "--resume", "run_exit": int(run.exit)})
+	var argv := PackedStringArray()
+	for word in run.argv:
+		argv.append(String(word))
+	if argv.has("--resume"):
+		return _refuse(2, "the run in '%s' was itself a --resume line; nothing to read back" % dir,
+			{"kind": "resume", "path": dir, "flag": "--resume"})
+	_resume_dir = dir
+	_reused = checkpoint_records(absolute.path_join(CHECKPOINT))
+	return _main(argv)
+
+
+## What names a task across two runs of one line: its arm (-1 outside a
+## sweep), its pair and its seed. Seeds are unique within a pair, and a
+## sweep's control pair shares pair 0's seeds under its own pair number.
+static func task_key(task: Dictionary) -> String:
+	return "%d/%d/%d" % [int(task.get("arm", -1)), int(task.get("pair", 0)), int(task.get("seed", 0))]
+
+
+## A checkpoint's records by [method task_key]. A line that does not
+## parse, or is not a record, is skipped — the torn last line of a kill,
+## which is exactly what the file is for.
+static func checkpoint_records(path: String) -> Dictionary:
+	var out := {}
+	if not FileAccess.file_exists(path):
+		return out
+	var parser := JSON.new()
+	for line in FileAccess.get_file_as_string(path).split("\n", false):
+		if parser.parse(line) != OK or not (parser.data is Dictionary):
+			continue
+		var entry: Dictionary = parser.data
+		if not (entry.get("record") is Dictionary) or not entry.has("seed"):
+			continue
+		out[task_key(entry)] = entry.record
+	return out
+
+
+## The tasks a resume still has to play, in order; the others take their
+## record from the checkpoint. Every task on a run of its own.
+func _pending() -> PackedInt32Array:
+	var pending := PackedInt32Array()
+	for i in _tasks.size():
+		var key := task_key(_tasks[i])
+		if _reused.has(key):
+			_results[i] = _reused[key]
+		else:
+			pending.append(i)
+	return pending
+
+
+func _checkpoint_open() -> void:
+	if _out_absolute == "":
+		return
+	var path := _out_absolute.path_join(CHECKPOINT)
+	if FileAccess.file_exists(path):
+		_checkpoint = FileAccess.open(path, FileAccess.READ_WRITE)
+		if _checkpoint != null:
+			# A kill mid-line left a torn line; start the next one clean.
+			var length := _checkpoint.get_length()
+			if length > 0:
+				_checkpoint.seek(length - 1)
+				var last := _checkpoint.get_buffer(1)
+				_checkpoint.seek_end()
+				if last.size() == 1 and last[0] != 10:
+					_checkpoint.store_string("\n")
+			else:
+				_checkpoint.seek_end()
+	else:
+		_checkpoint = FileAccess.open(path, FileAccess.WRITE)
+	if _checkpoint == null:
+		printerr("deck_lab: cannot write %s — an interrupted run could not be resumed" % path)
+
+
+func _checkpoint_close() -> void:
+	if _checkpoint != null:
+		_checkpoint.close()
+		_checkpoint = null
+
+
+## One record into the checkpoint, from whichever thread made it.
+func _checkpoint_record(index: int) -> void:
+	if _checkpoint == null:
+		return
+	var task: Dictionary = _tasks[index]
+	var line := JSON.stringify({"arm": int(task.get("arm", -1)), "pair": int(task.get("pair", 0)),
+		"seed": int(task.get("seed", 0)), "record": _results[index]})
+	_checkpoint_lock.lock()
+	_checkpoint.store_line(line)
+	_checkpoint.flush()
+	_checkpoint_lock.unlock()
 
 
 ## What --record left in OUT/records/ — `{}` when the switch was not
@@ -1416,6 +1594,39 @@ func _records_by_pair(pair_count: int) -> Array:
 ## once it is running is replaced by another for the same slice (see
 ## THE RETRY under [method _gather]), never by the pool.
 func _play_tasks(opts: Dictionary, jobs: int, unit: String) -> float:
+	# THE CHECKPOINT AND THE RESUME (2026-09-27) wrap the play: a record
+	# the checkpoint already holds is taken as played, the rest are the
+	# run, and every record lands in the checkpoint as it is made. The
+	# pool and the fan-out see only the tasks left to play, so a resumed
+	# run's progress counts what it has to do.
+	var all_tasks := _tasks
+	var all_results := _results
+	var pending := _pending()
+	var reused := all_tasks.size() - pending.size()
+	_resumed = {"reused": reused, "played": pending.size()}
+	if reused > 0:
+		print("resuming %s: %s of %s %s already played, %s to go"
+			% [_resume_dir, LabConsole.commas(reused), LabConsole.commas(all_tasks.size()),
+				unit, LabConsole.commas(pending.size())])
+		_tasks = []
+		for i in pending:
+			_tasks.append(all_tasks[i])
+		_results = []
+		_results.resize(_tasks.size())
+	var elapsed := 0.0
+	if not _tasks.is_empty():
+		_checkpoint_open()
+		elapsed = _play_pending(opts, jobs, unit)
+		_checkpoint_close()
+	if reused > 0:
+		for k in pending.size():
+			all_results[pending[k]] = _results[k]
+		_tasks = all_tasks
+		_results = all_results
+	return elapsed
+
+
+func _play_pending(opts: Dictionary, jobs: int, unit: String) -> float:
 	var started_at := Time.get_ticks_msec()
 	var procs := _process_count(opts, _tasks.size())
 	var fanned := procs > 1 and _fan_out(procs, unit, started_at)
@@ -1446,6 +1657,7 @@ func _play_tasks(opts: Dictionary, jobs: int, unit: String) -> float:
 ## record is then a match figure.
 func _run_one_game(index: int) -> void:
 	_results[index] = _play_task(_tasks[index])
+	_checkpoint_record(index)
 	# THE ONLY LOCK IN THE RUN, held for one increment per game — and a
 	# game is a tenth of a second of work, so the contention is nil. It
 	# exists so the main thread can draw a progress bar; it touches
@@ -1690,6 +1902,7 @@ func _take_slice(slice: Dictionary) -> bool:
 		return false
 	for i in (records as Array).size():
 		_results[lo + i] = (records as Array)[i]
+		_checkpoint_record(lo + i)
 	slice["landed"] = true
 	return true
 
@@ -2615,6 +2828,7 @@ const FLAG_HINTS := {
 	"--progress": "--progress auto|bar|log|off: auto is a redrawing bar on a terminal and a heartbeat line a minute in a log; bar and log force one shape either way; off keeps the banner",
 	"--record": "--record losses|stalls|all: write the engine log of every game deck A lost, of every stalled game, or of every game, to OUT/records/ (see --record-max)",
 	"--record-max": "--record-max N: at most N game logs per run, default 50 (0 = no cap; a thousand logs is a gigabyte)",
+	"--resume": "--resume OUT: finish the interrupted run in OUT from its run.json and checkpoint.jsonl; takes no other switch",
 }
 
 ## The flags that take no value. Same contract as [constant FLAG_HINTS]:
@@ -2702,6 +2916,9 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 		# RECORD_FILTERS writes the engine's own log of each game the
 		# filter admits, up to `record_max` files (0 = every one).
 		"record": "", "record_max": RECORD_MAX_DEFAULT,
+		# THE RESUME (2026-09-27): the folder of an interrupted run, ""
+		# for a run of its own. `_main` acts on it before parsing.
+		"resume": "",
 		# The duel settings. Every default here is what this script did
 		# before the flag existed — see the class doc.
 		"lives": [20, 20], "ante": 0, "names": ["SeatZero", "SeatOne"],
@@ -2880,6 +3097,9 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				opts.record_max = value.to_int()
 				if opts.record_max < 0:
 					return {"error": "--record-max must be >= 0 (0 = no cap)"}
+			# Read by `_main` before this parser runs (THE RESUME); it is
+			# in the table so that the parser is total over it.
+			"--resume": opts.resume = value
 			# [MatchState.LENGTHS] AND NOTHING ELSE — 1, 3
 			# or 5, for that class's own reasons:
 			# `@DIALOG_ENDEXP1DUEL_MATCHPROGRESS` ships exactly

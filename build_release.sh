@@ -606,6 +606,24 @@ export DECK_LAB_TTY=0
 exec ./Shandalar.x86_64 --headless --no-header -- --lab-query "$@"
 QUERY
 	chmod +x "$STAGE/lab_query.sh"
+	# THE REFEREE (2026-09-27), by the game's `--referee`: one duel played
+	# through a pipe, a program in a seat, JSON lines both ways.
+	cat > "$STAGE/referee.sh" <<'REFEREE'
+#!/usr/bin/env bash
+# Referee — one duel through a pipe, a program in a seat, run by the
+# game itself; decisions as JSON lines on stdout, answers on stdin.
+#
+#   ./referee.sh --help
+#   ./referee.sh --deck-a decks/big_green.deck --deck-b decks/white_knights.deck --seat-b wizard
+#   ./referee.sh --join sglan1:... --deck decks/big_green.deck --name Pilot
+#
+# DECKLAB.md is the manual, AGENTS.md the contract.
+set -euo pipefail
+cd "$(dirname "$0")"
+export DECK_LAB_TTY=0
+exec ./Shandalar.x86_64 --headless --no-header -- --referee "$@"
+REFEREE
+	chmod +x "$STAGE/referee.sh"
 	# AND THE ONE DOOR (2026-09-27): the repo's shandalar.sh with the
 	# release's own targets — the launchers above and the game.
 	cat > "$STAGE/shandalar.sh" <<'DOOR'
@@ -617,6 +635,8 @@ QUERY
 #   ./shandalar.sh check DECK...      is this deck playable, and why not
 #   ./shandalar.sh packs              every card pack: found, on, why not
 #   ./shandalar.sh cards NAME...      a card's record     (lab_query.sh)
+#   ./shandalar.sh referee ARGS...    one duel through a pipe, a program
+#                                     in a seat            (referee.sh)
 #   ./shandalar.sh play ARGS...       the game itself     (run.sh)
 #   ./shandalar.sh VERB --help        that tool's own manual
 #   ./shandalar.sh -h | --help        this list, on stdout;  -V the version
@@ -629,7 +649,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 verb="${1:-}"
 case "$verb" in
-	"" | -h | --help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	"" | -h | --help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-V | --version) echo "shandalar.sh — Shandalar @VERSION@"; exit 0 ;;
 esac
 shift
@@ -638,10 +658,11 @@ case "$verb" in
 	autodeck) exec ./auto_deck.sh "$@" ;;
 	check | packs | cards) exec ./lab_query.sh "$verb" "$@" ;;
 	query) exec ./lab_query.sh "$@" ;;
+	referee) exec ./referee.sh "$@" ;;
 	play) exec ./run.sh "$@" ;;
 esac
 safe="$(printf '%s' "$verb" | tr -d '"\\\n\r\t')"
-printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, play","verb":"%s"}}\n' \
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, play","verb":"%s"}}\n' \
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2
 exit 2

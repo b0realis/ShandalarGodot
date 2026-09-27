@@ -44,6 +44,13 @@ const AUTO_DECK_FLAG := "--auto-deck"
 ## `lab_query.sh` in a release is `--lab-query`, and
 ## DeckLab/lab_query.gd answers `check`, `packs` and `cards` as JSON.
 const LAB_QUERY_FLAG := "--lab-query"
+## A program in a seat (2026-09-27): `referee.sh` in a release is
+## `--referee`, and DeckLab/referee.gd plays one duel through a pipe —
+## the seat's legal options and view out as JSON, its action back in.
+## This is the referee's ONLY door, checkout included: the lobby
+## classes it names read the CardPacks autoload at compile time, which
+## a `--script` main loop is compiled before.
+const REFEREE_FLAG := "--referee"
 ## Release-only integration probe: validates a real external ZIP, activates
 ## its dormant trusted scripts, checks every set-specific art pair, then exits.
 const VERIFY_PACK_1_FLAG := "--verify-pack-1"
@@ -72,6 +79,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has(LAB_QUERY_FLAG):
 		_run_headless_tool(LAB_QUERY_FLAG, "res://DeckLab/lab_query.gd")
+		return
+	if OS.get_cmdline_user_args().has(REFEREE_FLAG):
+		_run_headless_tool(REFEREE_FLAG, "res://DeckLab/referee.gd")
 		return
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_1_FLAG):
 		_verify_exported_pack_1()

@@ -113,8 +113,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Latest local verification ([The release door answers -V](docs/ROADMAP.md#2026-09-27--the-release-door-answers--v-04030)):
-**8,019 GUT tests / 362,021 assertions**, plus **338 Python tests**
+Latest local verification ([The resume and the referee](docs/ROADMAP.md#2026-09-27--the-resume-and-the-referee-04031)):
+**8,047 GUT tests / 364,778 assertions**, plus **338 Python tests**
 (one platform-specific skip). The same gate runs on GitHub Actions for
 every push and pull request.
 

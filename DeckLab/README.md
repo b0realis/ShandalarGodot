@@ -350,6 +350,7 @@ same tournament at `--procs 1` and `--procs 3`).
 | `--dry-run` | every check a run makes — the decks loaded, the packs enabled, the pairs built — and then THE PLAN as JSON on stdout instead of a game: the decks with their files and sizes, the matchups, the games (or matches) in total, seed, jobs and processes, packs, the output folder and a clock estimate labelled as the guess it is. Exit 0; no folder is made (2026-09-27, [AGENTS.md](../AGENTS.md)) | off |
 | `--record FILTER` | write the engine log of every game the filter admits to `OUT/records/`: `losses` (every game deck A lost), `stalls` (every game that hit the turn limit), `all`. One file a game, `pairP_seedS[_armA][_duelD]_OUTCOME.log`, a `#` header first (`deck_a`, `deck_b`, `pair`, `seed`, `a_on_play`, `outcome`, `turns`, `lines`), then the log the engine kept — what a person reads to see WHY a deck lost, what a program feeds to the next question. The seed in the name replays the game (`--seed S --games 1`). `results.json` / `sweep.json` gain `records{filter,max,written,dir}` (2026-09-27, [what a run leaves](#the-records-and-runjson-2026-09-27)) | off |
 | `--record-max N` | at most N logs per run; `0` is no cap. Exact per process, "about N" across `--procs` workers, each of which counts the folder before it writes. A thousand logs is a gigabyte | 50 |
+| `--resume OUT` | finish the run in OUT that was interrupted: its `run.json` says `exit: null` and its `checkpoint.jsonl` holds the games that landed. The line that started it is read back from `run.json`, those games are kept, the rest are played, and the report is written as if nothing had happened. The whole command — anything typed beside it is refused (2026-09-27, [the resume](#the-resume-2026-09-27)) | — |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
 | `--packs LIST` | the card packs in force for THIS RUN: `all` (every pack found), `none` (the base cards alone), or ids — `pack-3,pack-7`, or bare `3,7`. In memory only, workers included; the game's own setting is never written. Omitted, the run plays with whatever the game has enabled (see [the packs](#the-card-packs----packs-2026-09-25)) | — |
 | `-h`, `--help` | switch reference | — |
@@ -1259,9 +1260,11 @@ Printed to stdout AND written to `--out`:
 - **winrates.svg** — win-rate bars with CI whiskers and a 50% reference
   line (opens in any browser; no plotting software involved anywhere).
 - **turns.svg** — game-length histograms per matchup on a shared axis.
-- **run.json** — the run about itself, written last whatever the exit
-  (below).
+- **run.json** — the run about itself, written first with `exit: null`
+  and last with the exit (below).
 - **records/** — with `--record`, one engine log per admitted game.
+- **checkpoint.jsonl** — only while the run is running, or after it was
+  killed: one line per game that landed, for `--resume` (below).
 
 `results.json`, `matchups.csv` and the SVGs are read by other tooling and
 their shape does not move; the reading paragraphs above are report.txt
@@ -1307,6 +1310,39 @@ stripped and re-added, so `--packs`, `--profile-a`, `--rules`, `--seed`
 ride along unchanged. The AutoDeck CLI writes its own `run.json` with
 the same keys and the Lab line as `next.argv`. A loop that runs
 `next.argv` until `null` has run the study; cap the loop anyway.
+
+### The resume (2026-09-27)
+
+A thousand-deck tournament is three hours; a machine that goes down in
+the third hour used to lose them all, and the only answer was to start
+again. Now a run writes `run.json` **first**, with `exit: null`, before
+a game is played — so a killed run still names the line that started
+it — and appends one JSON line to `OUT/checkpoint.jsonl` as each game
+lands: `{arm, pair, seed, record}`, from the thread that played it or
+from the parent as a `--procs` slice comes back, under a lock and
+flushed, so a kill leaves whole lines and at most one torn one. A run
+that finishes removes the checkpoint; a run that did not leaves it
+beside a `run.json` whose `exit` is null, and that is what an
+interrupted run looks like.
+
+    DeckLab/deck_lab.sh --resume OUT
+
+is the whole command. The switches come back from `run.json` (its
+`argv`), the games the checkpoint holds are taken as played — a task is
+named by its arm (none outside a sweep), pair and seed, which is unique
+across a run — the rest are played, and the report is written exactly
+as the unbroken run would have written it: same `results.json`, same
+`report.txt`, and a `run.json` with `exit: 0`, the **original** `argv`,
+and `resumed {from, reused, played}`. It says `resuming OUT: 640 of
+1,000 games already played, 360 to go` on the way in. Anything typed
+beside `--resume` is refused rather than merged into the line — the
+line is in the folder, and a second opinion on it would be a second
+run; a folder without `run.json`, one another tool wrote, or a run that
+finished are refused too (`kind: "resume"`), because a finished run has
+nothing to resume and running its line again is `deck_lab.sh` with that
+line. Every mode resumes, the tournament included: its field × gauntlet
+is one flat game list, so nothing depends on a result that is not there
+yet.
 
 ## Two channels: the instrument and the human
 
@@ -2012,19 +2048,52 @@ pool does not know, the pack that would supply it and the nearest
 real names.
 
 `./shandalar.sh` at the project root is the one door to all of it:
-`lab`, `autodeck`, `check`, `packs`, `cards`, `convert`, each `exec`ing
-the tool with the rest of the line, `--help` the list; a verb it does
+`lab`, `autodeck`, `check`, `packs`, `cards`, `referee`, `convert`,
+each `exec`ing the tool with the rest of the line, `--help` the list; a verb it does
 not know is refused as one JSON line, exit 2, the way every tool
 refuses. [AGENTS.md](../AGENTS.md) is the contract.
+
+## The referee — a program in a seat (2026-09-27)
+
+The Lab plays computer seats against each other by the thousand; the
+referee plays ONE duel with a program in a seat. `DeckLab/referee.sh`
+(in a release `referee.sh`, the game's `--referee`, the door's
+`referee` verb) writes every decision to stdout as one JSON line —
+the seat, its `mode`, its legal `options` and its whole LAN `view` —
+and reads the answer from stdin as one JSON line, the wire's own
+actions (`{"op": "pass"}`, `{"op": "attack", "cards": ["c7"]}`). A
+`refused` line says why an answer could not be applied and the same
+decision follows again; twenty in a row concede the seat, as does a
+closed pipe; a `result` line ends the duel with its `reason`.
+
+```
+DeckLab/referee.sh --deck-a big_green.deck --deck-b white_knights.deck --seat-b wizard --seed 7
+DeckLab/referee.sh --deck-a big_green.deck --deck-b big_green.deck --seat-b agent      # self-play
+DeckLab/referee.sh --join sglan1:... --deck big_green.deck --name Pilot                # a table
+DeckLab/referee.sh --deck-a ... --deck-b ... --dry-run                                 # the plan
+```
+
+The seats are `agent` (the pipe — both, and it plays itself),
+`apprentice`, `magician`, `sorcerer`, `wizard` and `unfair`, the
+game's own players at the Lab's own settings; `--turns` (200) calls a
+draw, `--log FILE` keeps the engine's log, `--packs` is the Lab's
+switch. `--join` seats the same pipe at a table the game hosts — a LAN
+invitation or the same-computer access code — so a program plays a
+person, or another program at another table. It is not a `--script`
+tool: the lobby classes it drives name the autoloads, so it runs only
+through the game's door (`referee.sh` is that line). [AGENTS.md](../AGENTS.md)
+has every line and every answer; `tests/tools/test_referee_2026_09_27.gd`
+pins them, the coverage pilot in the agent's seat.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `../shandalar.sh` | the one door: `lab`, `autodeck`, `check`, `packs`, `cards`, `convert` |
+| `../shandalar.sh` | the one door: `lab`, `autodeck`, `check`, `packs`, `cards`, `referee`, `convert` |
 | `deck_lab.sh` | entry point (wraps the headless Godot invocation) |
 | `auto_deck_cli.sh` / `DeckLab/auto_deck_cli.gd` | the AutoDeck CLI: the deck builder's AutoDeck by the thousand, with a manifest — the field this Lab plays (see above) |
 | `lab_query.sh` / `DeckLab/lab_query.gd` | the Lab Query: `check`, `packs`, `cards` as one JSON document each (see above) |
+| `referee.sh` / `DeckLab/referee.gd` | the referee: one duel through a pipe, a program in a seat, JSON lines both ways (see above) |
 | `deck_convert.sh` / `tools/deck_convert.gd` | format converter (.deck/.dec ↔ .dck) |
 | `DeckLab/simulate.gd` | the tool: CLI parsing, thread fan-out, reporting |
 | `DeckLab/sim_stats.gd` | Wilson intervals, matchup summaries (unit-tested) |
@@ -2041,4 +2110,6 @@ refuses. [AGENTS.md](../AGENTS.md) is the contract.
 | `tests/tools/test_auto_deck_cli.gd` | the AutoDeck CLI: every switch and refusal, the cartesian walk, the seeds, and the promise that a row of `decks.csv` rebuilds its deck |
 | `tests/tools/test_lab_for_machines_2026_09_27.gd` | the two tools as a program drives them: the refusal envelope's shape and kinds, `--dry-run`'s plans (duel, tournament, sweep, AutoDeck) and that a dry run makes no folder |
 | `tests/tools/test_lab_records_and_queries_2026_09_27.gd` | `--record` and its cap, `run.json` and `next` for a duel, a tournament, a sweep and the AutoDeck, the Lab Query's three answers and its refusals, the one door |
+| `tests/tools/test_lab_resume_2026_09_27.gd` | `--resume`: the checkpoint, the line read back from `run.json`, the games kept and the games played, what is refused beside it |
+| `tests/tools/test_referee_2026_09_27.gd` | the referee: hello, decision, refused and result lines, the options per mode, a refused answer asked again, the pipe's ends (EOF, twenty refusals, the turn limit, the decision cap), self-play, a joined table through the client's face, the doors |
 | `tools/test_auto_deck_cli_sh.py` | the AutoDeck CLI's shell wrapper: `-V` without an engine, exit 3 with no Godot, the exec line |

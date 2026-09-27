@@ -17292,6 +17292,69 @@ the packed door to the stamped version.
 Gate: 526 scripts, **8,019/8,019 tests, 362,021 asserts**, exit 0
 in 256 s over 6 shards; Python 338, exit 0.
 
+## 2026-09-27 — The resume and the referee (0.40.31)
+
+Phase C of the pass that makes the tools usable by a program: the two
+things a program could not yet do — finish a run it lost, and play.
+
+**The resume.** A Lab run that was killed leaves `run.json` with `exit:
+null` and `checkpoint.jsonl` with every game that landed. `deck_lab.sh
+--resume OUT` reads the line back from `run.json`, keeps those games,
+plays the rest and writes the report as if nothing had happened;
+`run.json` then says `resumed {from, reused, played}`. Anything typed
+beside `--resume` is refused rather than merged — the run is the line
+that started it.
+
+**The referee.** `DeckLab/referee.sh` — in a release `referee.sh`, in
+the game `--referee`, at the door `./shandalar.sh referee` — plays one
+duel with a program in a seat. Every decision goes out on stdout as
+one JSON line: the seat, its mode, its legal `options` read from its
+own view (each card named beside its handle, each spell with its
+budget), and the whole LAN view a guest at a table would receive, the
+journal trimmed to what was not yet sent. The answer comes back on
+stdin as one JSON line, the wire's own actions — `pass`, `play`,
+`prepare`/`autopay`/`submit`, `attack`, `block`, `damage`, `discard`,
+`choice`, `concede`. A refused answer — not JSON, a foreign op, wrong
+keys, the wrong seat, or the engine's own "not now" — is explained as a
+`refused` line and **the same decision is asked again** from the live
+view, so a program acts on decision lines alone; twenty refusals in a
+row, a closed pipe, the turn limit and a cap of twenty thousand
+decisions each end the duel with their reason on the one `result`
+line. The other seat is any shipped computer player, the `unfair`
+wizard included — or the program again, and it plays itself. `--join`
+seats the same pipe at a table the game hosts, by the LAN invitation
+or the same-computer access code: the host sees an ordinary guest, and
+the guest can be a person's opponent or another program's. `--dry-run`
+prints the plan. Exit 0 whenever a result was written, 2 for a line
+that could not be run (the family envelope, `tool: referee`), 1 for a
+file that would not write.
+
+**Why it is the game's door and not a script.** The referee drives the
+lobby's own classes — the practice match, the bots, the LAN client —
+and those name the autoloads, which a `--script` main loop compiles
+before they exist. So the referee is hosted only by `main.gd`'s
+`--referee`, checkout and release alike, and `referee.sh` is the main
+scene with that flag; the tests load it in-process, where the
+autoloads are there.
+
+**How it is pinned.** `tests/tools/test_referee_2026_09_27.gd` replaces
+the pipe with two Callables and seats the coverage pilot
+(`tests/support/sg_network_pilot.gd`) at the decisions it emits —
+reading `last_decision.view`, the very view a program reads — to a
+result against the wizard and against itself without one refusal;
+scripts the pipe's ends (EOF, twenty refusals, a blank line, a named
+seat, the turn limit, the decision cap); checks the same `n` follows a
+refusal; holds every option shape per mode, the journal sent once,
+`_parse_action`'s refusals; joins a table held in the process through a
+`FakeClient` with the lobby client's face, plays it to a result and
+concedes it at EOF, and reports a table that never opens; and reads the
+three doors and the docs as text. `tests/tools/test_lab_resume_2026_09_27.gd`
+holds the resume. `test_package_release.py` and `test_shandalar_sh.py`
+hold the launchers and the verbs.
+
+Gate: 528 scripts, **8,047/8,047 tests, 364,778 asserts**, exit 0 in
+253 s over 6 shards; Python 338, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

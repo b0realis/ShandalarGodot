@@ -41,7 +41,8 @@ DOOR = "shandalar.sh"
 QUERY = "DeckLab/lab_query.sh"
 VERBS = {"lab": "DeckLab/deck_lab.sh", "autodeck": "DeckLab/auto_deck_cli.sh",
          "check | packs | cards": 'DeckLab/lab_query.sh "$verb"',
-         "query": "DeckLab/lab_query.sh", "convert": "./deck_convert.sh"}
+         "query": "DeckLab/lab_query.sh", "referee": "DeckLab/referee.sh",
+         "convert": "./deck_convert.sh"}
 
 
 def run(argv, **extra_env):
@@ -79,7 +80,7 @@ class DoorTest(unittest.TestCase):
             with self.subTest(argv=argv):
                 done = run(argv, GODOT="/nonexistent/godot")
                 self.assertEqual(done.returncode, 0, done.stderr)
-                for verb in ("lab", "autodeck", "check", "packs", "cards", "convert"):
+                for verb in ("lab", "autodeck", "check", "packs", "cards", "referee", "convert"):
                     self.assertRegex(done.stdout, r"shandalar\.sh %s\b" % verb)
                 self.assertIn("AGENTS.md", done.stdout)
                 self.assertNotIn("set -euo", done.stdout, "the list, not the script")
@@ -101,7 +102,7 @@ class DoorTest(unittest.TestCase):
                 self.assertEqual(error["tool"], "shandalar")
                 self.assertEqual(error["exit"], 2)
                 self.assertEqual(error["kind"], "option")
-                self.assertIn("the verbs are lab, autodeck, check, packs, cards, convert",
+                self.assertIn("the verbs are lab, autodeck, check, packs, cards, referee, convert",
                               error["message"])
                 self.assertIn("unknown verb", done.stderr)
 

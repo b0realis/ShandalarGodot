@@ -9,6 +9,8 @@ the manuals with the reasoning are `DeckLab/README.md` and `docs/`.
 Every claim below is pinned by
 `tests/tools/test_lab_for_machines_2026_09_27.gd`,
 `tests/tools/test_lab_records_and_queries_2026_09_27.gd`,
+`tests/tools/test_lab_resume_2026_09_27.gd`,
+`tests/tools/test_referee_2026_09_27.gd`,
 `tests/tools/test_deck_lab.gd` and `tests/tools/test_auto_deck_cli.gd`.
 
 ## The one door — `./shandalar.sh`
@@ -19,6 +21,8 @@ Every claim below is pinned by
 ./shandalar.sh check DECK...      is this deck playable, and why not
 ./shandalar.sh packs              every card pack: found, on, why not
 ./shandalar.sh cards NAME...      a card's record     (DeckLab/lab_query.sh)
+./shandalar.sh referee ARGS...    one duel through a pipe, a program
+                                  in a seat            (DeckLab/referee.sh)
 ./shandalar.sh convert IN OUT     .deck <-> .dck      (deck_convert.sh)
 ./shandalar.sh VERB --help        that tool's own manual
 ./shandalar.sh -h | --help        the list, on stdout;  -V | --version
@@ -29,8 +33,8 @@ files below are the tool's own. A verb the door does not know is
 refused the way every tool refuses — one JSON line on stdout,
 `{"error":{"tool":"shandalar","exit":2,"kind":"option",...}}`, exit 2.
 A release folder carries the same `shandalar.sh` (`play` runs the game;
-`convert` stays in the checkout) beside `deck_lab.sh`, `auto_deck.sh`
-and `lab_query.sh`, each a one-liner into the game binary.
+`convert` stays in the checkout) beside `deck_lab.sh`, `auto_deck.sh`,
+`lab_query.sh` and `referee.sh`, each a one-liner into the game binary.
 
 ## The two channels
 
@@ -134,8 +138,8 @@ worker processes, `--packs 1,3|all|none`, `--profile-a/-b NAME[:knob=v]`,
 `--best-of 3 --sideboard on`, `--rules fifth|modern`, `--format
 unrestricted|wild|type1|type1.5|highlander`, `--group NAME` (one deck
 group of an expanded folder — `tournament` is the good decks), `--top N`,
-`--record losses|stalls|all` (`--record-max N`, default 50), `--out DIR`.
-`--help` lists every switch; the tables it is read from are the
+`--record losses|stalls|all` (`--record-max N`, default 50), `--out DIR`,
+`--resume OUT` (below). `--help` lists every switch; the tables it is read from are the
 parser's own, so the help is never behind the code.
 
 Files in `--out` after exit 0: `report.txt` (= stdout), **`results.json`**,
@@ -193,10 +197,36 @@ thousand logs is a gigabyte) — exact per process, "about N" across
 seed in the name replays that game: `--seed S --games 1` on the same
 pair.
 
+### `--resume OUT` — finishing an interrupted run
+
+A run writes `run.json` with `exit: null` before its first game and,
+as each game lands, one JSON line to `OUT/checkpoint.jsonl` —
+`{arm, pair, seed, record}`. A run that finishes removes the
+checkpoint; a run that was killed leaves both behind, and that is what
+an interrupted run looks like: `run.json` with `exit: null` beside a
+`checkpoint.jsonl`.
+
+```
+DeckLab/deck_lab.sh --resume OUT
+```
+
+is the whole line: the switches are read back from `OUT/run.json`
+(`argv`), the games in the checkpoint are kept as played, the rest are
+played, and the report is written as if nothing had happened —
+`run.json` then has `exit: 0`, the original `argv`, and
+`resumed {from, reused, played}`. Anything typed beside `--resume` is
+refused (exit 2, `kind: "option"`) rather than merged into the line;
+a folder without `run.json`, a `run.json` another tool wrote, or a run
+that finished (`exit` not null) is refused with `kind: "resume"` and
+`path` (and `run_exit` for the finished one). Works for every mode —
+a tournament's field × gauntlet is one flat game list, so a three-hour
+run that died in its third hour loses only the game it was on.
+
 ## `run.json` — after every run
 
-Every run that made its `--out` folder ends by writing `run.json`
-there, whatever the exit — the one file to read first:
+Every run that made its `--out` folder writes `run.json` there before
+the first game (`exit: null`) and again at the end, whatever the exit —
+the one file to read first:
 
 | Key | Meaning |
 |---|---|
@@ -204,9 +234,10 @@ there, whatever the exit — the one file to read first:
 | `version`, `git` | the project version and the checkout's commit (`""` in a release) |
 | `argv[]` | the line as typed, without the program name |
 | `mode`, `seed`, `packs`, `packs_on`, `out`, `started` (UTC, `...Z`), `elapsed_seconds` | the run's particulars |
-| `exit` | the code the process exits with — `0`, `1`, or the sweep's `4` |
+| `exit` | the code the process exits with — `0`, `1`, or the sweep's `4`; `null` while the run is unfinished (see `--resume`) |
 | `files[]` | what was written (the Lab); AutoDeck: `files{decks,manifest,list}` |
 | `control_pass` | a sweep: whether the control pair replayed game for game |
+| `resumed` | `{from, reused, played}` — only on a run finished by `--resume` |
 | **`next`** | `{why, argv[]}` — the run that would settle what this one left open — or `null` |
 
 `next.argv` is a complete Deck Lab line built from this run's own argv
@@ -286,6 +317,96 @@ A deck file that is not there is the `deck` refusal with `tried` and
 base card); an unknown one `known: false`, `pack` (the pack that would
 supply it) and `near[]`.
 
+## The referee — `DeckLab/referee.sh`
+
+One duel played **through a pipe, a program in a seat**: the game's
+engine, the shipped computer players, the LAN wire's own actions.
+Every decision goes out on stdout as one JSON line; the answer comes
+back on stdin as one JSON line; nothing but JSON is ever written to
+stdout (the release's `referee.sh`, the game's `--referee`; the door's
+`referee` verb).
+
+```
+DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a SEAT] [--seat-b SEAT]
+    [--seed N] [--turns N] [--packs LIST] [--log FILE] [--dry-run]
+DeckLab/referee.sh --join INVITATION|CODE --deck DECK [--port N] [--name NICK]
+    [--wait SECONDS] [--turns N] [--packs LIST]
+```
+
+**Seats** (`--seat-a`, `--seat-b`; default `agent` vs `wizard`, at
+least one `agent`): `agent` is the program on the pipe — both seats,
+and it plays itself; `apprentice`, `magician`, `sorcerer`, `wizard` are
+the shipped computer players; `unfair` the wizard that reads hidden
+cards. A deck is tried as typed, then under `decks/`. `--seed` unset
+draws one and reports it. `--turns` (200) calls the duel a draw past
+that turn. `--log FILE` writes the engine's own log at the end.
+`--dry-run` prints the plan (`seats`, `seed`, `turns`, `packs`, `ops`)
+as one JSON line and plays nothing.
+
+**The lines** (stdout, one JSON object each, `"type"` first):
+
+- `hello` — once, before play: `tool`, `protocol` (1), `version`,
+  `git`, `seed`, `seats[]` (`seat`, `player`, `name`, `deck`, `file`),
+  `toss` (the seat that won it), `turns`, `ops[]` (every op the
+  referee accepts), `limits{decisions, refusals}`.
+- `decision` — `n` (counts up), `seat`, `mode`
+  (`opening|priority|attack|block|discard|damage|choice`), `turn`,
+  `step`, `options` and `view`. **`options` is the seat's legal answers
+  read from its view**: per mode the ops it takes and what each takes
+  — `play{lands[{card,name}]}`, `prepare{casts[],abilities[]}` (each
+  with its `budget`), `attack{attackable[]}`, `block{blockable[]}`,
+  `choice{prompt,options,count}`, `discard{count,hand}`,
+  `damage{request}` — and `concede: true` always. `view` is the seat's
+  whole LAN view (`docs/sgmanalink-local-playtest.md`: `hand`,
+  `players`, `stack`, `presentation.cards` with `castable` per card,
+  `announcement`, `journal`); the `journal` carries only entries not
+  sent before.
+- `refused` — `n`, `seat`, `reason`, `action`, `left`: the answer could
+  not be applied (not JSON, an op that is not a duel op, wrong keys, a
+  value the wire would not carry, the wrong seat, or the engine's own
+  refusal — "not castable now"). **The same decision follows again**,
+  same `n`, from the live view: act on `decision` lines alone. Twenty
+  refusals in a row concede the seat.
+- `result` — `winner` (`-1` for no winner), `draw`, `turns`, `reason`
+  (`concluded`, `conceded`, `eof` — the pipe closed —, `refusals`,
+  `limit`, `decisions` — 20,000 in one duel —, `stalled` — a computer
+  seat could not move —, `left`/`offline` — a table went away),
+  `decisions`, `refusals`, `seed`, `life[]`, `names[]`, `log`.
+- `{"error": {...}}` — the envelope above, `tool: "referee"`: nothing
+  was played, exit 2.
+
+**The answers** (stdin, one JSON object a line, the wire's own actions
+— `hello.ops` lists them; a line may carry `"seat"`, which must be the
+decision's): opening `{"op":"order","play":true}` (the toss winner,
+once), `{"op":"keep"}`, `{"op":"mulligan"}`; priority `{"op":"pass"}`,
+`{"op":"play","card":ID}`, `{"op":"prepare","card":ID,"kind":"spell",
+"index":I,"x":X,"mode":M}` then `{"op":"autopay","excluded":[],
+"count":1}` then `{"op":"submit","targets":[[TOKEN,AMOUNT]...]}` (or
+`{"op":"cancel"}`), `{"op":"autoprepare",...}` for the three in one,
+`{"op":"mana","card":ID,"index":I}`, `{"op":"tap","card":ID}`,
+`{"op":"special","index":I}`; attack `{"op":"attack","cards":[ID...]}`;
+block `{"op":"block","pairs":[[BLOCKER,ATTACKER]...]}`; discard
+`{"op":"discard","cards":[ID...]}`; damage
+`{"op":"damage","points":[[ID|"player",N]...]}`; choice
+`{"op":"choice","picks":[I...]}`; any time `{"op":"concede"}`. A blank
+line is skipped. Card IDs are the view's handles (`c7`), and every
+`options` row names the card beside its handle.
+
+**A table** (`--join`): the same pipe at a table the game hosts — a
+person, or another program. `--join` takes the LAN invitation
+(`sglan1:...`) the host's screen shows, or the same-computer access
+code with `--port`; `--deck` is the deck this seat brings, `--name` its
+nickname (`Agent`), `--wait` (300 s) how long to wait for an open
+table. The referee joins the first open room, sends the deck when the
+table plays own decks, readies, and then asks the pipe whenever the
+table's view says it is this seat's decision; `hello` carries
+`table{id, name, seat}` and `seed: -1` (the host shuffles). The host
+sees an ordinary guest.
+
+**Exit codes**: 0 a result line was written, whatever the reason; 2 the
+line could not be run (a deck, a seat, a switch, a table) — the
+envelope on stdout; 1 a file would not write.
+
 ## Deck convert — `./deck_convert.sh INPUT OUTPUT`
 
 Formats come from the extensions (`.deck`/`.dec` ↔ `.dck`). Exit 0 with
@@ -296,9 +417,10 @@ that would not write — the reason on stderr). No JSON envelope here yet.
 ## The game itself
 
 `godot --path .` (or the released binary) takes `--deck-lab`,
-`--auto-deck` and `--lab-query`, each hosting that headless tool inside
-the game binary (what a release's `deck_lab.sh`, `auto_deck.sh` and
-`lab_query.sh` are), and `--verify-pack-1..5`; the LAN protocol is 24
+`--auto-deck`, `--lab-query` and `--referee`, each hosting that headless
+tool inside the game binary (what a release's `deck_lab.sh`,
+`auto_deck.sh`, `lab_query.sh` and `referee.sh` are), and
+`--verify-pack-1..5`; the LAN protocol is 24
 (`docs/sgmanalink-*.md`). Headless soaks and audits live under
 `tools/*.gd` (`./duel_soak.sh --help`). `./run_tests.sh` is the gate:
 trust its exit code, not the printed tally.
@@ -316,7 +438,13 @@ trust its exit code, not the printed tally.
     --games 20 --no-elo --record losses --out mined_run 2>/dev/null          # play
 jq '.standings[:10]' mined_run/results.json                                  # read
 jq -r '.next.argv // empty | @sh' mined_run/run.json                         # what next
+./shandalar.sh referee --deck-a mined/deck_00001_G_s11.deck \
+    --deck-b decks/white_knights.deck --seat-b wizard --seed 7 2>/dev/null   # play it
 ```
+
+The referee's stdout is `hello`, then `decision` lines each answered on
+its stdin (`{"op": ...}`), then one `result`; a `refused` line means the
+same decision follows again.
 
 A non-zero exit: read stdout for `{"error":...}`, branch on `kind`, offer
 `suggestions`; never retry the same line. A zero exit: read `run.json`,

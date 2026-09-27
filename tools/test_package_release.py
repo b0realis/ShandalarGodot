@@ -103,20 +103,25 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn("-- --auto-deck", archive.read(prefix + "auto_deck.sh").decode())
                             self.assertEqual(archive.getinfo(prefix + "auto_deck.sh").external_attr >> 16 & 0o777, 0o755)
                             self.assertIn("-- --lab-query", archive.read(prefix + "lab_query.sh").decode())
+                            self.assertIn("-- --referee", archive.read(prefix + "referee.sh").decode())
+                            self.assertEqual(archive.getinfo(prefix + "referee.sh").external_attr >> 16 & 0o777, 0o755)
                             door = archive.read(prefix + "shandalar.sh").decode()
                             self.assertIn('-V | --version) echo "shandalar.sh — Shandalar 1.2.3"; exit 0 ;;', door)
                             self.assertNotIn("@VERSION@", door)
                             self.assertTrue(door.startswith("#!/bin/sh\nset -eu\n"))
-                            for target in ("./deck_lab.sh", "./auto_deck.sh", "./lab_query.sh", "./run.sh"):
+                            for target in ("./deck_lab.sh", "./auto_deck.sh", "./lab_query.sh", "./referee.sh", "./run.sh"):
                                 self.assertIn(f"exec {target} ", door)
                             self.assertEqual(archive.getinfo(prefix + "shandalar.sh").external_attr >> 16 & 0o777, 0o755)
                             self.assertIn(prefix + "AGENTS.md", entries)
                         if platform in pack.MAC_PLATFORMS:
                             self.assertIn("-- --lab-query", archive.read(prefix + "lab_query.sh").decode())
+                            self.assertIn("-- --referee", archive.read(prefix + "referee.sh").decode())
                             self.assertIn("exec ./lab_query.sh ", archive.read(prefix + "shandalar.sh").decode())
+                            self.assertIn("exec ./referee.sh ", archive.read(prefix + "shandalar.sh").decode())
                         if platform == "windows64":
                             self.assertIn("-- --auto-deck %*", archive.read(prefix + "auto_deck.bat").decode())
                             self.assertIn("-- --lab-query %*", archive.read(prefix + "lab_query.bat").decode())
+                            self.assertIn("-- --referee %*", archive.read(prefix + "referee.bat").decode())
                         if platform in pack.MAC_PLATFORMS:
                             entry = archive.getinfo(prefix + "Shandalar.app/Contents/MacOS/Shandalar")
                             self.assertEqual(entry.external_attr >> 16 & 0o777, 0o755)
@@ -201,7 +206,7 @@ class PackageReleaseTest(unittest.TestCase):
         # is build_release() above); the two doors must match.
         source = (pack.ROOT / 'build_release.sh').read_text(encoding='utf-8')
         for launcher, flag in (("deck_lab.sh", "--deck-lab"), ("auto_deck.sh", "--auto-deck"),
-                               ("lab_query.sh", "--lab-query")):
+                               ("lab_query.sh", "--lab-query"), ("referee.sh", "--referee")):
             with self.subTest(launcher=launcher):
                 self.assertIn(f'cat > "$STAGE/{launcher}"', source)
                 self.assertIn(f'exec ./Shandalar.x86_64 --headless --no-header -- {flag} "$@"', source)
@@ -218,7 +223,7 @@ class PackageReleaseTest(unittest.TestCase):
         for script in (source, pack.DISPATCHER):
             for verb, target in (("lab", "./deck_lab.sh"), ("autodeck", "./auto_deck.sh"),
                                  ("check | packs | cards", './lab_query.sh "$verb"'),
-                                 ("play", "./run.sh")):
+                                 ("referee", "./referee.sh"), ("play", "./run.sh")):
                 self.assertIn(f'{verb}) exec {target} "$@" ;;', script)
             self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', script)
             # -V is answered by the door itself, from the version stamped
@@ -228,7 +233,7 @@ class PackageReleaseTest(unittest.TestCase):
         repo_door = (pack.ROOT / 'shandalar.sh').read_text(encoding='utf-8')
         for verb, target in (("lab", "DeckLab/deck_lab.sh"), ("autodeck", "DeckLab/auto_deck_cli.sh"),
                              ("check | packs | cards", 'DeckLab/lab_query.sh "$verb"'),
-                             ("convert", "./deck_convert.sh")):
+                             ("referee", "DeckLab/referee.sh"), ("convert", "./deck_convert.sh")):
             self.assertIn(f'{verb}) exec {target} "$@" ;;', repo_door)
         self.assertIn('{"error":{"tool":"shandalar","exit":2,"kind":"option"', repo_door)
 

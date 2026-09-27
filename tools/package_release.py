@@ -33,12 +33,13 @@ DISPATCHER = """verb="${1:-}"
 case "$verb" in
 	"" | -h | --help)
 		printf '%s\\n' \\
-			'shandalar.sh lab|autodeck|check|packs|cards|play ARGS...' \\
+			'shandalar.sh lab|autodeck|check|packs|cards|referee|play ARGS...' \\
 			'  lab       the Deck Lab (deck_lab.sh)' \\
 			'  autodeck  the AutoDeck CLI (auto_deck.sh)' \\
 			'  check     is this deck playable, and why not (lab_query.sh)' \\
 			'  packs     every card pack: found, on, why not' \\
 			'  cards     a card record' \\
+			'  referee   one duel through a pipe, a program in a seat (referee.sh)' \\
 			'  play      the game itself (run.sh)' \\
 			'VERB --help is that tool manual; -V the version; AGENTS.md is the contract page.'
 		exit 0 ;;
@@ -50,10 +51,11 @@ case "$verb" in
 	autodeck) exec ./auto_deck.sh "$@" ;;
 	check | packs | cards) exec ./lab_query.sh "$verb" "$@" ;;
 	query) exec ./lab_query.sh "$@" ;;
+	referee) exec ./referee.sh "$@" ;;
 	play) exec ./run.sh "$@" ;;
 esac
 safe="$(printf '%s' "$verb" | tr -d '"\\\\\\n\\r\\t')"
-printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s - the verbs are lab, autodeck, check, packs, cards, play","verb":"%s"}}\\n' \\
+printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s - the verbs are lab, autodeck, check, packs, cards, referee, play","verb":"%s"}}\\n' \\
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' - try ./shandalar.sh --help" >&2
 exit 2
@@ -293,6 +295,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
             extra["deck_lab.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --deck-lab "$@"\n').encode()
             extra["auto_deck.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --auto-deck "$@"\n').encode()
             extra["lab_query.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --lab-query "$@"\n').encode()
+            extra["referee.sh"] = (prefix + f'exec "{binary}" --headless --no-header -- --referee "$@"\n').encode()
             extra["shandalar.sh"] = (prefix + DISPATCHER.replace("@VERSION@", version)).encode()
             if platform == "raspberry-pi5-arm64":
                 extra["run.sh"] = (prefix +
@@ -305,6 +308,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                                       "Shandalar.console.exe --headless --no-header -- --auto-deck %*\r\n").encode()
             extra["lab_query.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
                                       "Shandalar.console.exe --headless --no-header -- --lab-query %*\r\n").encode()
+            extra["referee.bat"] = ("@echo off\r\ncd /d \"%~dp0\"\r\n"
+                                    "Shandalar.console.exe --headless --no-header -- --referee %*\r\n").encode()
         selected = dict(files)
         if included:
             selected["skin/original_skin.zip"] = skin
