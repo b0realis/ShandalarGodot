@@ -2111,7 +2111,11 @@ client can skip to the part it cares about and still reach a
 `result`), the deck file written from rows and checked by the engine
 as it is written, and the path rule (whatever a tool writes lies under
 the checkout or the workspace, `workspace/` beside the door by
-default). [AGENTS.md](../AGENTS.md) has the tool list and the session;
+default — and a deck in the workspace is named to every tool by its
+bare file name, `write_deck {file: "mine.deck"}` then `lab {deck_a:
+"mine.deck"}`, the server handing the door the absolute path the door
+would not find on its own; since 0.40.35).
+[AGENTS.md](../AGENTS.md) has the tool list and the session;
 `tools/test_shandalar_mcp.py` pins it against a fake door (no engine)
 and, behind `SHANDALAR_MCP_LIVE=1`, against the real one —
 `tests/tools/test_mcp_2026_09_27.gd` runs that live half inside the

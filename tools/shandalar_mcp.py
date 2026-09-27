@@ -30,6 +30,13 @@ THE RULES IT KEEPS:
     the referee's `--log`. A client cannot be pointed at /etc. The
     workspace (`--workspace`, default `workspace/` beside the door) is
     where a client's own decks and runs go by default.
+  * A DECK IS NAMED THE WAY THE DOOR NAMES IT, PLUS THE WORKSPACE. A
+    deck argument (`check_deck`, `lab`, `autodeck`'s `keep`, the
+    referee's seats) passes as typed when the door will find it — an
+    absolute path, a path under the checkout or under `decks/`; a bare
+    name that is a file or folder in the workspace (a deck `write_deck`
+    wrote, an AutoDeck field) is handed over as its absolute path; any
+    other word (`random`) passes through untouched.
   * A TOOL NEVER INVENTS A RESULT. A door that exits 0 is quoted; a
     door that refuses is quoted, `isError: true` with the envelope as
     the structured content; a door without its engine is quoted (exit
@@ -619,6 +626,28 @@ class Server:
         except ValueError:
             return str(path)
 
+    def deck_arg(self, text) -> str:
+        """A deck a tool names for the door. As typed when the door will find it
+        itself (an absolute path, a path under the checkout or under `decks/`);
+        a file or folder in the workspace — where `write_deck` and the AutoDeck
+        put theirs — by its bare name, handed over as an absolute path; anything
+        else as typed, so `random` and the door's own words pass through and the
+        door's refusal (with what it tried) is the answer."""
+        text = str(text)
+        if not text.strip() or Path(text).is_absolute():
+            return text
+        for candidate in (self.root / text, self.root / "decks" / text):
+            if candidate.exists():
+                return text
+        mine = self.workspace / text
+        if mine.exists():
+            return str(mine.resolve())
+        return text
+
+    def deck_list(self, text) -> str:
+        """A comma list of decks (or one folder), each item resolved like `deck_arg`."""
+        return ",".join(self.deck_arg(item.strip()) for item in str(text).split(","))
+
     # ----- the catalogue ----------------------------------------------------
 
     def _catalogue(self) -> list[dict]:
@@ -673,7 +702,7 @@ class Server:
             self._tool("read_deck", "One deck file: its name, main deck and sideboard rows, the "
                        "counts, and the raw text. `.dck` (the original's format) is returned raw "
                        "— `convert_deck` turns it into `.deck`.",
-                       {"deck": prop("string", "the deck path, as typed or under `decks/`")},
+                       {"deck": prop("string", "the deck path, as typed, under `decks/` or in the workspace")},
                        self.tool_read_deck, required=["deck"]),
             self._tool("write_deck", "Write a deck file from rows ('4 Lightning Bolt' or "
                        "{count, name}) and check it with the engine: the answer is `check_deck`'s "
@@ -697,7 +726,7 @@ class Server:
                        "counts, line errors, `unknown` names (with `pack` — the pack that supplies "
                        "it — and `near`), `packs_needed`, `packs_missing`, the format verdict and "
                        "`playable`. Exit 0 is an answer even for a deck that cannot be played.",
-                       {"decks": prop("array", "deck paths, as typed or under `decks/`",
+                       {"decks": prop("array", "deck paths, as typed, under `decks/` or in the workspace",
                                       items={"type": "string"}, minItems=1),
                         "packs": packs,
                         "format": prop("string", "require a format: unrestricted|wild|type1|type1.5|highlander")},
@@ -746,7 +775,8 @@ class Server:
                        "open) and `results.json`/`sweep.json` (matchups trimmed to `limit`). "
                        "`dry_run` answers with the plan and plays nothing. Runs are not rated "
                        "unless `rated` is true.",
-                       {"deck_a": prop("string", "the deck under test"),
+                       {"deck_a": prop("string", "the deck under test, as typed, under `decks/` "
+                                       "or in the workspace (a deck `write_deck` wrote, by its file name)"),
                         "deck_b": prop("string", "the opponent, or `random`"),
                         "gauntlet": prop("string", "the opponent pool: a comma list of decks or a folder"),
                         "matrix": prop("string", "a round-robin pool: a comma list or a folder"),
@@ -814,7 +844,7 @@ class Server:
                        "pending `decision`: its `seat`, `mode`, `options` (the legal answers, each "
                        "with the op it takes) and the board. Answer with `referee_act`; the game "
                        "waits between calls.",
-                       {"deck_a": prop("string", "seat 0's deck, as typed or under `decks/`"),
+                       {"deck_a": prop("string", "seat 0's deck, as typed, under `decks/` or in the workspace"),
                         "deck_b": prop("string", "seat 1's deck"),
                         "seat_a": seat, "seat_b": seat,
                         "seed": prop("integer", "the shuffle (unset: drawn and reported in `hello`)"),
@@ -829,7 +859,7 @@ class Server:
                        "answer arrives when the table starts; until then `pending` is true and "
                        "`referee_wait` reads on. The host sees an ordinary guest.",
                        {"invitation": prop("string", "the invitation or access code"),
-                        "deck": prop("string", "the deck this seat brings"),
+                        "deck": prop("string", "the deck this seat brings, as typed, under `decks/` or in the workspace"),
                         "port": prop("integer", "the host's port for an access code (default 17897)"),
                         "name": prop("string", "this seat's nickname at the table"),
                         "wait": prop("integer", "seconds to wait for an open table (default 300)"),
@@ -962,7 +992,7 @@ class Server:
         return [v.strip() for v in value]
 
     def check_args(self, args: dict, decks: list[str]) -> list[str]:
-        argv = list(decks)
+        argv = [self.deck_arg(deck) for deck in decks]
         if args.get("packs"):
             argv += ["--packs", str(args["packs"])]
         if args.get("format"):
@@ -1090,6 +1120,7 @@ class Server:
         tool = "autodeck"
         out = self.inside(args["out"], tool, "out")
         argv = ["--out", str(out)]
+        args = {**args, "keep": self.deck_arg(args["keep"])} if args.get("keep") else args
         for key in ("count", "seed", "colors", "max_colors", "sets", "source", "packs", "size",
                     "lean", "speed", "gold", "rarity", "variety", "distinct", "keep", "vary"):
             self.flag(argv, args, key, "--" + key.replace("_", "-"))
@@ -1119,6 +1150,8 @@ class Server:
                  "seed", "jobs", "procs", "packs", "profile_a", "profile_b", "top", "best_of",
                  "sideboard", "rules", "format", "lives", "mulligan", "sweep", "null",
                  "control_deck_a", "control_deck_b", "record", "record_max")
+    LAB_DECKS = ("deck_a", "deck_b", "deck_pool", "control_deck_a", "control_deck_b")
+    LAB_DECK_LISTS = ("gauntlet", "matrix", "field")
 
     def lab_argv(self, args: dict) -> tuple[list[str], Path | None]:
         tool = "lab"
@@ -1129,6 +1162,13 @@ class Server:
                 out = self.inside(argv[argv.index("--out") + 1], tool, "out")
             return argv + ["--quiet"], out
         argv: list[str] = []
+        args = dict(args)
+        for key in self.LAB_DECKS:
+            if args.get(key):
+                args[key] = self.deck_arg(args[key])
+        for key in self.LAB_DECK_LISTS:
+            if args.get(key):
+                args[key] = self.deck_list(args[key])
         for key in self.LAB_FLAGS:
             self.flag(argv, args, key, "--" + key.replace("_", "-"))
         out = None
@@ -1262,7 +1302,7 @@ class Server:
 
     def tool_referee_start(self, args: dict) -> dict:
         tool = "referee"
-        argv = ["--deck-a", str(args["deck_a"]), "--deck-b", str(args["deck_b"])]
+        argv = ["--deck-a", self.deck_arg(args["deck_a"]), "--deck-b", self.deck_arg(args["deck_b"])]
         for key in ("seat_a", "seat_b"):
             if args.get(key):
                 if args[key] not in SEATS:
@@ -1276,7 +1316,7 @@ class Server:
         return self.open_game(argv, self.view_of(args), float(args.get("timeout") or DECISION_TIMEOUT))
 
     def tool_referee_join(self, args: dict) -> dict:
-        argv = ["--join", str(args["invitation"]), "--deck", str(args["deck"])]
+        argv = ["--join", str(args["invitation"]), "--deck", self.deck_arg(args["deck"])]
         for key in ("port", "name", "wait", "turns", "packs"):
             self.flag(argv, args, key, "--" + key)
         return self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15))

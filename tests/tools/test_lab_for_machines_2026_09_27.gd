@@ -78,6 +78,9 @@ func test_the_flag_a_message_names() -> void:
 	assert_eq(LabConsole.flag_named("deck file not found: 'x.deck'"), "", "no flag, no key")
 	assert_eq(LabConsole.flag_named("a-b--c"), "", "a hyphen inside a word is not a flag")
 	assert_eq(LabConsole.flag_named("-h is the help"), "-h")
+	assert_eq(LabConsole.flag_named("/tmp/-scratch/x.deck cannot be played: proxies"), "",
+		"a path segment that begins with a hyphen is a path, not a flag")
+	assert_eq(LabConsole.flag_named("/tmp/-scratch/x.deck: --packs needs a value"), "--packs")
 
 
 func test_the_record_and_the_line() -> void:

@@ -17488,6 +17488,61 @@ sites, the script count and this page up to date.
 Gate: 531 scripts, **8,073/8,073 tests, 366,696 asserts**, exit 0 in
 272 s over 6 shards; Python 391, exit 0.
 
+## 2026-09-27 — A deck the server wrote is named by its file name (0.40.35)
+
+A program that builds a deck through the MCP server writes it with
+`write_deck {file: "mine.deck"}` — into the workspace, `workspace/`
+beside the door — and the answer is the engine's check of the file as
+written. The next thing it wants is to measure or play that deck, and
+`lab {deck_a: "mine.deck"}` was refused: the door looks for a deck as
+typed, under the checkout and under `decks/`, and never in the
+workspace, which is the server's folder and not the door's. Only
+`read_deck` knew where to look. The demo that found it: a Sligh list
+written and checked in one call (sixty cards, Incinerate needing
+pack-3 — the check said so), and the Lab refusing the same name a
+moment later.
+
+**The deck rule.** `Server.deck_arg` names a deck for the door: as
+typed when the door will find it itself — an absolute path, a path
+under the checkout or under `decks/` — and a bare name that is a file
+or folder in the workspace (the deck `write_deck` wrote, the AutoDeck's
+field) as its absolute path. Any other word passes through untouched,
+so `deck_b: "random"` and the door's own spellings reach the door as
+they are and a name found nowhere is still the door's refusal, with
+what it tried. `deck_list` splits a comma list first (`gauntlet`,
+`matrix`, `field`) and resolves each item. Applied everywhere a deck is
+named: `check_deck`'s decks, the Lab's `deck_a`/`deck_b`/`deck_pool`/
+`control_deck_a`/`control_deck_b` and the three lists, `autodeck`'s
+`keep`, `referee_start`'s two seats, `referee_join`'s one. The rule is
+the third in the server's header, the schemas say it where a deck is
+typed, and AGENTS.md's MCP section says it in one sentence.
+
+**A path is not a flag.** `LabConsole.flag_named` reads the first
+switch a refusal names into the envelope's `flag`; an absolute path
+with a segment that begins with a hyphen (`/tmp/-scratch/x.deck cannot
+be played`) read as `-scratch`. A hyphen after `/` is a path now.
+
+**How it is pinned.** `tools/test_shandalar_mcp.py` — `write_deck` of
+`own.deck` into the fake door's workspace, then the bare name to
+`check_deck` (the door's argv carries the absolute path beside an
+untouched `decks/tournament/burn.deck`), to `lab` (`--deck-a` absolute,
+`--deck-b random` as typed, `--deck-pool` a workspace folder, the
+comma lists item by item, `--control-deck-a`), to `autodeck`'s `keep`,
+to `referee_start` and `referee_join` (the fake referee's `calls.log`),
+and a name found nowhere still the door's refusal with `path`; the live
+half (`SHANDALAR_MCP_LIVE=1`, inside the gate through
+`tests/tools/test_mcp_2026_09_27.gd`) unchanged and green.
+`tests/tools/test_lab_for_machines_2026_09_27.gd` — the hyphenated
+path segment is no flag, a flag after such a path still is. Verified
+by hand against the real door: the Sligh list written, checked with
+`packs: pack-3` (`playable: true`), planned by the Lab on its bare
+name, and played by `referee_start {deck_a: "sligh.deck", packs:
+"pack-3"}` through `referee_autoplay` to a `result` (157 decisions,
+eleven turns).
+
+Gate: 531 scripts, **8,073/8,073 tests, 366,268 asserts**, exit 0 in
+262 s over 6 shards; Python 392, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

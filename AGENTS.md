@@ -490,10 +490,18 @@ reads on. A `result` closes the game; `referee_stop` closes the pipe
 stderr goes to `workspace/games/GAME.stderr`); a path a tool writes —
 `out`, `log`, `file`, a conversion's output — lies under the checkout
 or the workspace (`--workspace`, default `workspace/` beside the door,
-ignored by git), or the tool refuses with `kind: "path"`; a tool never
-invents a result. Pinned by `tools/test_shandalar_mcp.py` (a fake door,
-no engine) and `tests/tools/test_mcp_2026_09_27.gd` (the real one: a
-deck written and checked, a duel played to its end through the pilot).
+ignored by git), or the tool refuses with `kind: "path"`; a deck a tool
+names (`check_deck`, `lab`, `autodeck`'s `keep`, the referee's seats)
+passes as typed when the door will find it — an absolute path, a path
+under the checkout or under `decks/` — and a bare name that is a file or
+folder in the workspace (the deck `write_deck` wrote, the AutoDeck's
+field) is handed over as its absolute path, so `write_deck {file:
+"mine.deck"}` then `lab {deck_a: "mine.deck", ...}` is the whole
+building-and-measuring loop (since 0.40.35; any other word, `random`,
+passes through untouched); a tool never invents a result. Pinned by
+`tools/test_shandalar_mcp.py` (a fake door, no engine) and
+`tests/tools/test_mcp_2026_09_27.gd` (the real one: a deck written and
+checked, a duel played to its end through the pilot).
 
 ## Deck convert — `./deck_convert.sh INPUT OUTPUT`
 

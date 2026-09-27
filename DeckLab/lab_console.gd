@@ -356,9 +356,10 @@ static func error_record(tool: String, exit: int, message: String,
 ## something in tournament mode", `--gmes` in "unknown option '--gmes'
 ## — did you mean --games?" (the one that was typed, not the one that
 ## was meant; the suggestions carry that). "" when the message names
-## none ("unknown profile 'x'").
+## none ("unknown profile 'x'"). A path segment that begins with a hyphen
+## (`/tmp/-scratch/x.deck cannot be played`) is a path, not a flag.
 static func flag_named(message: String) -> String:
-	var found := RegEx.create_from_string("(?:^|[^A-Za-z0-9-])(--?[a-z][a-z0-9-]*)").search(message)
+	var found := RegEx.create_from_string("(?:^|[^A-Za-z0-9/-])(--?[a-z][a-z0-9-]*)").search(message)
 	return "" if found == null else found.get_string(1)
 
 

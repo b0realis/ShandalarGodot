@@ -567,7 +567,15 @@ pipe, for a program that speaks the Model Context Protocol.
   the checkout, stdin closed), `quote` (the door's own envelope raised
   as `ToolError`, or one synthesized with `kind` `godot`/`run` and the
   stderr tail), `inside` (THE PATH RULE — a path a tool writes lies
-  under the checkout or the workspace, else `kind: path`),
+  under the checkout or the workspace, else `kind: path`), `deck_arg`
+  / `deck_list` (THE DECK RULE, 0.40.35 — a deck a tool names passes as
+  typed when the door will find it, an absolute path or a path under
+  the checkout or `decks/`; a bare name that is a file or folder in the
+  workspace, where `write_deck` and the AutoDeck put theirs, is handed
+  over as its absolute path; any other word, `random`, passes through
+  — applied by `check_args`, `lab_argv`'s `LAB_DECKS` and comma-split
+  `LAB_DECK_LISTS`, `autodeck`'s `keep`, `referee_start`,
+  `referee_join`),
   `_catalogue` (the twenty-one tools, each `{name, description,
   inputSchema}` with every property typed and described,
   `additionalProperties: false`, `required`), `call` (an argument the
@@ -620,6 +628,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.35.md`: a deck the MCP server wrote is named by
+  its file name — `write_deck` then `lab`/`check_deck`/`referee_start`
+  on the bare name, the server handing the door the workspace's
+  absolute path; a hyphenated path segment is no longer read as the
+  flag a refusal names.
 - `docs/releases/0.40.34.md`: the pages synced to 0.40.33 — the version
   sites, the script count, the roadmap section for the card reader, the
   play guide and the handhelds, the README's verification line.

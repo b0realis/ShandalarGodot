@@ -547,6 +547,40 @@ class FakeDoorTest(unittest.TestCase):
         self.assertTrue((self.workspace / "old.deck").is_file())
         self.assertIn("converted", out["report"])
 
+    def test_a_deck_the_server_wrote_is_named_by_its_file_name(self):
+        """`write_deck` puts a deck in the workspace; the door never looks
+        there, so every tool that names a deck hands a workspace file (or
+        folder) over as its absolute path — and leaves the door's own
+        spellings alone."""
+        self.client.payload("write_deck", {"file": "own.deck", "name": "Own", "cards": ["4 Lightning Bolt", "20 Mountain"]})
+        own = str((self.workspace / "own.deck").resolve())
+        (self.workspace / "pool").mkdir(exist_ok=True)
+        pool = str((self.workspace / "pool").resolve())
+        checked = self.client.payload("check_deck", {"decks": ["own.deck", "decks/tournament/burn.deck"]})
+        self.assertEqual([d["cards"] for d in checked["decks"]], [24, 24])
+        self.assertEqual(self.calls()[-1][:3], ["check", own, "decks/tournament/burn.deck"])
+        plan = self.client.payload("lab", {"deck_a": "own.deck", "deck_b": "random", "deck_pool": "pool",
+                                           "gauntlet": "own.deck, decks/tournament", "field": "pool,tournament/burn.deck",
+                                           "control_deck_a": "own.deck", "dry_run": True})
+        argv = plan["argv"]
+        self.assertEqual(argv[argv.index("--deck-a") + 1], own)
+        self.assertEqual(argv[argv.index("--deck-b") + 1], "random")
+        self.assertEqual(argv[argv.index("--deck-pool") + 1], pool)
+        self.assertEqual(argv[argv.index("--gauntlet") + 1], own + ",decks/tournament")
+        self.assertEqual(argv[argv.index("--field") + 1], pool + ",tournament/burn.deck")
+        self.assertEqual(argv[argv.index("--control-deck-a") + 1], own)
+        kept = self.client.payload("autodeck", {"out": "ws/around", "keep": "own.deck", "dry_run": True})
+        self.assertEqual(kept["argv"][kept["argv"].index("--keep") + 1], own)
+        opened = self.client.payload("referee_start", {"deck_a": "own.deck", "deck_b": "tournament/burn.deck"})
+        self.assertEqual(self.calls()[-1][:5], ["referee", "--deck-a", own, "--deck-b", "tournament/burn.deck"])
+        self.client.payload("referee_stop", {"game": opened["game"]})
+        joined = self.client.payload("referee_join", {"invitation": "sglan1:x", "deck": "own.deck"})
+        self.assertEqual(self.calls()[-1][:5], ["referee", "--join", "sglan1:x", "--deck", own])
+        self.client.payload("referee_stop", {"game": joined["game"]})
+        typo = self.client.call("lab", {"deck_a": "missing.deck", "deck_b": "own.deck"})
+        self.assertTrue(typo["isError"], "a name nowhere is still the door's refusal")
+        self.assertEqual(typo["structuredContent"]["error"]["path"], "missing.deck")
+
     # --- the Lab and the AutoDeck -----------------------------------------
 
     def test_lab_builds_the_line(self):
