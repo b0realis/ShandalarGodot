@@ -231,6 +231,21 @@ var minds_pain := true
 ## Lab can run the null.
 var fits_auras := true
 
+## THE REPEAT (2026-09-28): does this profile refuse the same card twice
+## where the second copy adds nothing — an aura on a host already
+## wearing one of that name, a static permanent (a Kismet, a Winter Orb)
+## already on its own side? What a second copy ADDS is read off the
+## card's printed line ([method EffectIntent.stacks]): a quantity — a
+## pump, a damage, a counter, a mana, a life, a {T} — is twice as much
+## twice, and stays free; a keyword, an ability, a "can't" is had once.
+## The owner's playtest (2026-09-28): *"it played the same aura card
+## ("regeneration") on the card with already the same aura on it! Repair
+## AI so it does not cast same cards allready present!"* On for EVERY
+## profile, like [member fits_auras]: the second Regeneration on the
+## same creature is not a weak play, it is no play. A knob only so the
+## Deck Lab can run the null.
+var holds_repeats := true
+
 ## THE OPENING HAND: does this profile judge its own opening hand, or
 ## throw back only the hand with no land or nothing but land? On, the
 ## judgment is [AiMulligan]'s — lands against a keep range that narrows

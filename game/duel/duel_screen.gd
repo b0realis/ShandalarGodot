@@ -145,6 +145,10 @@ var _damage_picks: Dictionary = {}
 
 # --- UI nodes (built in _build_ui) ---
 var _prompt_label: Label
+## The Situation Bar itself (the "main message window" of the owner's
+## playtests): the one panel the graveyard view is kept UNDER — drawn
+## under it by z, picked after it by tree order ([method _open_graveyard]).
+var _situation_bar: PanelContainer = null
 var _life_buttons: Array[Button] = []
 var _poison_labels: Array[Label] = []   # venom-green clock on the life panel
 var _pass_button: Button
@@ -1824,6 +1828,18 @@ func _open_graveyard(pid: int) -> void:
 	_grave_open_pile = pid
 	_grave_view.visible = true
 	_grave_view.opened()
+	# OVER EVERY WINDOW, UNDER THE SITUATION BAR (the third Steam Deck
+	# playtest, 2026-09-28: *"visible and stays on top, but below main
+	# message window"*). The view's z ([constant GraveyardView.Z]) settles
+	# the DRAWING; a click goes to the LAST sibling under the pointer,
+	# whatever its z, so the tree order is settled here every time the
+	# view opens: the view after everything that came before (the log
+	# window is made on demand and would otherwise be picked through the
+	# dim), and the bar after the view, so its Cancel and Done are
+	# clicked over the dim exactly as they are seen over it.
+	move_child(_grave_view, -1)
+	if _situation_bar != null:
+		move_child(_situation_bar, -1)
 	# The docked big card rests under every window (2026-09-28) — under
 	# the view's dim too, which would darken the very card the pile
 	# fills. Over the dim while the view is up, back when it goes.
@@ -8774,6 +8790,7 @@ func _build_ui() -> void:
 	_prompt_label.custom_minimum_size.x = 340
 	msg_row.add_child(_prompt_label)
 	add_child(msg_panel)
+	_situation_bar = msg_panel
 	# A refusal is red and TEMPORARY (§3.10): this one-shot puts the bar
 	# back in its own voice when the flash runs out, so the red line is not
 	# left standing by a duel in which nothing else happens to move.

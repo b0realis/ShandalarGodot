@@ -12,11 +12,19 @@ extends GutTest
 
 
 var screen: DuelScreen
+## The screen sits on its own layer ABOVE THE RUNNER'S PANEL: GUT's GutLayer
+## is CanvasLayer 128 and its output box covers the top of the window, so
+## a real click there (see the real clicks below) reached the runner's
+## text box, never the card. test_pad_controls.gd stages the same way.
+var _stage: CanvasLayer
 
 
 func before_each() -> void:
+	_stage = CanvasLayer.new()
+	_stage.layer = 200
+	add_child_autofree(_stage)
 	screen = load("res://game/duel/duel_screen.tscn").instantiate()
-	add_child_autofree(screen)
+	_stage.add_child(screen)
 	await get_tree().process_frame
 
 
@@ -281,22 +289,99 @@ func _wait_ms(ms: int) -> void:
 		await get_tree().process_frame
 
 
+func _dim_click(pressed: bool, double := false) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = pressed
+	event.double_click = double
+	screen._grave_view._gui_input(event)
+
+
 func test_a_press_on_the_dim_right_after_opening_closes_nothing() -> void:
 	_open_pile(3)
 	assert_true(screen.graveyard_is_open())
-	var press := InputEventMouseButton.new()
-	press.button_index = MOUSE_BUTTON_LEFT
-	press.pressed = true
-	screen._grave_view._gui_input(press)
+	_dim_click(true)
+	_dim_click(false)
 	assert_true(screen.graveyard_is_open(), "the copy of the opening press: still open")
 	await _wait_ms(GraveyardView.SETTLE_MS + 20)
-	screen._grave_view._gui_input(press)
-	assert_false(screen.graveyard_is_open(), "a press on the dim after the settle closes it")
+	_dim_click(true)
+	assert_true(screen.graveyard_is_open(), "a press alone decides nothing")
+	_dim_click(false)
+	assert_false(screen.graveyard_is_open(), "its release, after the settle, closes it")
 	# And the exile plate opens the same view, settled the same way.
 	screen._on_grave_pile_clicked(0)
 	assert_true(screen.graveyard_is_open())
-	screen._grave_view._gui_input(press)
+	_dim_click(true)
+	_dim_click(false)
 	assert_true(screen.graveyard_is_open(), "reopened: settled again")
+
+
+## THE THIRD PLAYTEST (2026-09-28). The plate is double-clicked — the
+## desktop's habit, a trackpad tap beside a click — and the second press,
+## flagged `double_click`, lands on the dim past the settle: it is the
+## opening click arriving again and closes nothing. A release with no
+## armed press behind it closes nothing either.
+func test_a_double_clicks_second_press_and_a_lone_release_close_nothing() -> void:
+	_open_pile(3)
+	await _wait_ms(GraveyardView.SETTLE_MS + 20)
+	_dim_click(true, true)
+	_dim_click(false)
+	assert_true(screen.graveyard_is_open(), "the second half of a double click")
+	_dim_click(false)
+	assert_true(screen.graveyard_is_open(), "a release nobody pressed for")
+	_dim_click(true)
+	_dim_click(false)
+	assert_false(screen.graveyard_is_open(), "a whole click after the settle: closed")
+
+
+## `@BUTTONLABELS` is "Cancel / Done": the view carries a Done of its own,
+## fixed bottom-centre under the shelves and outside the scroll, so the
+## pad and the touchscreen have a way out that is not empty dim.
+func test_the_done_button_closes_the_view() -> void:
+	var view := _open_pile(12)
+	var done := view.done_button()
+	assert_not_null(done)
+	assert_true(done.is_visible_in_tree())
+	assert_eq(done.text, "Done")
+	assert_eq(done.focus_mode, Control.FOCUS_NONE, "the pad hops to it; nothing tabs to it")
+	var scroll: ScrollContainer = view._scroll
+	assert_gte(done.global_position.y, scroll.global_position.y + scroll.size.y,
+		"under the shelves, never over them")
+	var content: Rect2 = view._content_rect()
+	assert_almost_eq(done.global_position.x + done.size.x / 2.0,
+		content.position.x + content.size.x / 2.0, 1.0, "centred on the board")
+	assert_almost_eq(done.global_position.y + done.size.y, content.end.y, 1.0,
+		"on the board's bottom edge")
+	done.pressed.emit()
+	await get_tree().process_frame
+	assert_false(screen.graveyard_is_open(), "Done closes it")
+
+
+## *"Really check this graveyard window so it is visible and stays on top,
+## but below main message window."* Drawn over every window of the duel
+## and under the Situation Bar; and since a click goes to the LAST sibling
+## under the pointer whatever its z, the tree agrees with the z: the view
+## after everything, the bar after the view.
+func test_the_view_sits_over_the_windows_and_under_the_bar() -> void:
+	# The log window is made on demand, after the bar: the case the tree
+	# order is settled for.
+	screen._open_duel_log()
+	var view := _open_pile(3)
+	assert_eq(view.z_index, GraveyardView.Z)
+	assert_lt(view.z_index, screen._situation_bar.z_index, "under the Situation Bar")
+	assert_lt(view.z_index, 200, "under the dialogs")
+	for window in [screen._combat_window, screen._hand_rows[1], screen._flight,
+			screen._chain_box, screen._duel_log]:
+		if window == null:
+			continue
+		assert_gt(view.z_index, window.z_index, "over %s" % window.name)
+		assert_lt(window.get_index(), view.get_index(), "%s before the view" % window.name)
+	assert_eq(screen._situation_bar.get_index(), screen.get_child_count() - 1,
+		"the bar is the last sibling: picked first")
+	assert_eq(view.get_index(), screen.get_child_count() - 2, "the view right before it")
+	assert_gt(screen._card_preview.z_index, view.z_index, "the big card over the dim")
+	assert_lt(screen._card_preview.z_index, screen._situation_bar.z_index,
+		"and still under the bar")
 
 
 ## *"8. Big card is on top of windows, for example battle window in the
@@ -323,3 +408,124 @@ func test_the_docked_big_card_rests_under_the_windows() -> void:
 	popup.docked = false
 	assert_eq(popup.z_index, CardPreview.POPUP_Z)
 	popup.free()
+
+
+# --------------------------------------- the real clicks of the playtest --
+#
+# *"if you use cards that target graveyard cards ("Raise dead") you should
+# be able to click with a target cursor graveyard, the graveyard should
+# open and you should be able to target a card in graveyard."* Everything
+# above drives the screen's methods; these drive the SCREEN, with the same
+# mouse events the engine makes from a real click — the plate, the mini
+# card in the open view, the Situation Bar's Cancel over the dim, and the
+# double click that used to shut the view on the Deck. The plates are
+# skin art, so without the skin there is nothing to click and the tests
+# pass as read.
+
+var _xform: Transform2D
+
+
+func _real(button: int, pressed: bool, at: Vector2, double := false) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = button
+	event.pressed = pressed
+	event.double_click = double
+	event.position = _xform * at
+	event.global_position = event.position
+	Input.parse_input_event(event)
+
+
+func _move(at: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = _xform * at
+	event.global_position = event.position
+	Input.parse_input_event(event)
+
+
+func _click(at: Vector2, double := false) -> void:
+	_move(at)
+	await get_tree().process_frame
+	_real(MOUSE_BUTTON_LEFT, true, at, double)
+	await get_tree().process_frame
+	_real(MOUSE_BUTTON_LEFT, false, at)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _plate_centre(pid: int) -> Vector2:
+	return screen._grave_icons[pid].get_global_rect().get_center()
+
+
+func _has_plates() -> bool:
+	_xform = get_tree().root.get_final_transform()
+	return screen._grave_icons.size() == 2 and screen._grave_icons[0] != null
+
+
+func _stage_raise_dead() -> Array:
+	var game: MtgGame = screen.game
+	var bear := _bury(0, "Grizzly Bears")
+	var raise := _hand(0, "Raise Dead")
+	game.active_player = 0
+	game.priority_player = 0
+	game._step_index = Mtg.STEP_ORDER.find(Mtg.Step.MAIN1)
+	game.players[0].mana_pool.add(Mtg.ManaColor.B, 1)
+	screen._refresh()
+	return [bear, raise]
+
+
+func test_raise_dead_is_cast_with_real_clicks_on_the_plate_and_the_card() -> void:
+	if not _has_plates():
+		pass_test("no skin imported — there is no plate to click")
+		return
+	var staged := _stage_raise_dead()
+	var bear: CardInstance = staged[0]
+	screen._click_hand_card(staged[1])
+	assert_eq(screen.mode, DuelScreen.Mode.TARGETING)
+	assert_true(screen._grave_rings[0].visible, "the plate wears the target ring")
+	await _click(_plate_centre(0))
+	assert_true(screen.graveyard_is_open(), "a real click on the plate opens the pile")
+	var widgets: Array = screen._grave_view.widgets(Mtg.Zone.GRAVEYARD, 0)
+	assert_eq(widgets.size(), 1)
+	var card: MiniCard = widgets[0]
+	assert_eq(card._highlight, MiniCard.Highlight.TARGET, "the bear is ringed")
+	await _wait_ms(GraveyardView.SETTLE_MS + 20)
+	await _click(card.get_global_rect().get_center())
+	assert_eq(screen.mode, DuelScreen.Mode.NORMAL, "a real click on the card took the target")
+	assert_false(screen.graveyard_is_open(), "and the view got out of the way")
+	assert_eq(screen.game.stack.size(), 1, "Raise Dead is on the chain")
+	while not screen.game.stack.is_empty():
+		screen.game.pass_priority(screen.game.priority_player)
+	assert_eq(bear.zone, Mtg.Zone.HAND, "and the bear came back")
+
+
+func test_a_real_double_click_on_the_plate_leaves_the_view_open() -> void:
+	if not _has_plates():
+		pass_test("no skin imported — there is no plate to click")
+		return
+	_bury(0, "Grizzly Bears")
+	screen._refresh()
+	var at := _plate_centre(0)
+	await _click(at)
+	assert_true(screen.graveyard_is_open())
+	await _wait_ms(GraveyardView.SETTLE_MS + 70)
+	await _click(at, true)
+	assert_true(screen.graveyard_is_open(), "the double click's second half: still open")
+	await _wait_ms(GraveyardView.SETTLE_MS + 20)
+	await _click(at)
+	assert_false(screen.graveyard_is_open(), "a plain click on the dim, later: closed")
+
+
+func test_the_bars_cancel_is_clicked_over_the_open_view() -> void:
+	if not _has_plates():
+		pass_test("no skin imported — there is no plate to click")
+		return
+	var staged := _stage_raise_dead()
+	screen._click_hand_card(staged[1])
+	await _click(_plate_centre(0))
+	assert_true(screen.graveyard_is_open())
+	var cancel: Button = screen._cancel_button
+	assert_true(cancel.is_visible_in_tree(), "Cancel is up while a cast waits")
+	await _wait_ms(GraveyardView.SETTLE_MS + 20)
+	await _click(cancel.get_global_rect().get_center())
+	assert_false(screen.graveyard_is_open(), "the bar's Cancel, over the dim, peels the view")
+	assert_eq(screen.mode, DuelScreen.Mode.TARGETING, "the cast still waits — Escape's own ladder")

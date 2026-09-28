@@ -108,10 +108,38 @@ const COUNTER_SIZE := Vector2(48, 16)
 ## click on the graveyard it just flashes and i cannot see it!"*). No
 ## one reads a pile and closes it in a quarter of a second.
 const SETTLE_MS := 250
+## THE THIRD PLAYTEST (2026-09-28): *"Really check this graveyard window
+## so it is visible and stays on top, but below main message window."*
+## Measured on the real screen: a DOUBLE click on the plate — the habit
+## of a lifetime of desktops, a trackpad tap beside a physical click —
+## sends its second press with `double_click` set, past the settle, and
+## that press closed the view. It is the click that opened it, arriving
+## again, and closes nothing now (see [method _gui_input]). And a view
+## closes on the RELEASE of a press it took, the way every button does:
+## a press whose release never comes is nobody's decision.
+##
+## THE DONE BUTTON is the visible way out — `@BUTTONLABELS`
+## (Program/UIStrings.txt) has exactly "Cancel / Done", and the manual's
+## every list window closes on one — in the same 1997 art as the
+## arrows, fixed bottom-centre under the shelves so the pile can be shut
+## from the pad and the touchscreen without hunting for empty dim.
+const DONE_SIZE := Vector2(64, 26)
+const DONE_GAP := 10.0
+## Over every window of the duel — the chain box (80), a card in flight
+## (70), the hand window (60), the log (50), the combat window (30) —
+## and UNDER the Situation Bar (90): its Cancel is the way out of a cast
+## the pile was opened for, and its sentence says what the pile is being
+## asked for. The dialogs (200) and the choice scrim (190) stay modal
+## over it. Drawing is z-sorted but PICKING is tree order, so the
+## DuelScreen also parks the view directly before the bar in its tree
+## ([method DuelScreen._open_graveyard]) — the bar is drawn over the dim
+## and clicked through it alike.
+const Z := 85
 
 ## A card in one of the piles was clicked.
 signal card_picked(inst: CardInstance)
-## The overlay wants to close (a click on the dim, or Escape).
+## The overlay wants to close (a click on the dim, the Done button, or
+## Escape).
 signal dismissed
 
 ## The shared enlarged-card preview (owned by the DuelScreen, docked) —
@@ -129,6 +157,9 @@ var board_area := Rect2()
 var _backdrop: ColorRect = null
 var _scroll: ScrollContainer = null
 var _column: VBoxContainer = null
+var _done: Button = null
+## A press the dim took after the settle: its release closes the view.
+var _armed := false
 # Last populate() arguments, replayed when an arrow pages a shelf.
 var _game: MtgGame = null
 var _human := 0
@@ -148,7 +179,7 @@ var _shelves: Dictionary = {}
 func _init() -> void:
 	name = "GraveyardView"
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	z_index = 190          # over the board, under OriginalDialog's 200
+	z_index = Z
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var dim := ColorRect.new()
@@ -180,23 +211,41 @@ func _init() -> void:
 	_column.mouse_filter = Control.MOUSE_FILTER_PASS
 	_scroll.add_child(_column)
 
+	_done = OriginalDialog.button("Done", DONE_SIZE)
+	_done.name = "Done"
+	_done.focus_mode = Control.FOCUS_NONE
+	_done.pressed.connect(func() -> void: dismissed.emit(), CONNECT_DEFERRED)
+	add_child(_done)
+
 
 ## Anywhere outside a card closes the view — s30's "click anywhere outside
-## to close" (`duel.go:3715-3733`) — unless the view opened within
-## [constant SETTLE_MS]: that press is the one that opened it, arriving
-## again.
+## to close" (`duel.go:3715-3733`) — on the RELEASE of a press the dim
+## took, unless that press is the one that opened the view arriving
+## again: within [constant SETTLE_MS] of opening, or flagged as the
+## second half of a double click.
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		accept_event()
-		if Time.get_ticks_msec() - _opened_ms > SETTLE_MS:
-			dismissed.emit()
+	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	accept_event()
+	if event.pressed:
+		_armed = not event.double_click \
+			and Time.get_ticks_msec() - _opened_ms > SETTLE_MS
+		return
+	if _armed:
+		_armed = false
+		dismissed.emit()
 
 
 ## The DuelScreen has just shown the view on a press: the clock behind
-## [constant SETTLE_MS] starts.
+## [constant SETTLE_MS] starts, and no earlier press is still armed.
 func opened() -> void:
 	_opened_ms = Time.get_ticks_msec()
+	_armed = false
+
+
+## The Done button, for the pad, the tests and the screenshot tour.
+func done_button() -> Button:
+	return _done
 
 
 ## Forget every shelf's page. The DuelScreen calls this when the overlay is
@@ -320,16 +369,27 @@ func page_size() -> int:
 	return cards_across(_content_rect().size.x)
 
 
-## Park the scroll over the board region. Called on every populate, so a
-## board that has only just been laid out is picked up.
+## Park the scroll over the board region, with the Done button on a row
+## of its own under it — outside the scroll, so it never scrolls away.
+## Called on every populate, so a board that has only just been laid out
+## is picked up.
 func _place_scroll() -> void:
 	var rect := _content_rect()
+	# The dialog button's style is taller than DONE_SIZE names (the skin's
+	# plate carries its own minimum), so the row and the seat are cut from
+	# the height the button REALLY takes — or its foot hangs past the board.
+	var done := Vector2(DONE_SIZE.x, maxf(DONE_SIZE.y, _done.get_combined_minimum_size().y))
+	var row := done.y + DONE_GAP
 	_scroll.set_anchors_preset(Control.PRESET_TOP_LEFT, true)
 	_scroll.position = rect.position - global_position
-	_scroll.size = rect.size
+	_scroll.size = Vector2(rect.size.x, maxf(rect.size.y - row, 0.0))
+	_done.set_anchors_preset(Control.PRESET_TOP_LEFT, true)
+	_done.size = done
+	_done.position = Vector2(rect.position.x + (rect.size.x - done.x) / 2.0,
+		rect.end.y - done.y) - global_position
 	_backdrop.set_anchors_preset(Control.PRESET_TOP_LEFT, true)
 	_backdrop.position = _scroll.position - Vector2.ONE * BACKDROP_BLEED
-	_backdrop.size = _scroll.size + 2.0 * Vector2.ONE * BACKDROP_BLEED
+	_backdrop.size = rect.size + 2.0 * Vector2.ONE * BACKDROP_BLEED
 
 
 ## Where this shelf's window starts. Clamped so the LAST page is always a

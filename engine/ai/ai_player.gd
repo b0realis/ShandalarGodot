@@ -608,6 +608,8 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue   # locked, banned, or "Cast this spell only ..." — not now
 		if _arrival_wasted(game, inst.data):
 			continue   # a second legend, a second world: a card thrown away
+		if profile.holds_repeats and EffectIntent.permanent_repeats(inst.data, game, pid):
+			continue   # a second Kismet, a second Winter Orb: the same card thrown away
 		if not _sacrifice_fodder_ok(game, inst):
 			continue   # "As an additional cost, sacrifice ..." with nothing worth giving
 		# Cost modifiers (Gloom) are part of the real price — plan them in,
@@ -11488,6 +11490,14 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# a Wall of Swords (2026-09-08). See EffectIntent.aura_fits.
 			if not harmful and profile.fits_auras and source.data.is_aura() \
 					and not EffectIntent.aura_fits(source.data, inst):
+				continue
+			# ...and never the SAME aura twice on one host, ours or theirs:
+			# the owner's second Regeneration on a creature already
+			# wearing one (2026-09-28). A pump is a quantity and two are
+			# twice as much; an ability, a keyword, a "can't" the host has
+			# once it has it. See EffectIntent.aura_repeats.
+			if profile.holds_repeats and source.data.is_aura() \
+					and EffectIntent.aura_repeats(source.data, inst, game):
 				continue
 			# Their permanents by what taking them costs THEM (a Stone
 			# Rain on the only Swamp, not the fourth Mountain); ours by

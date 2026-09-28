@@ -79,7 +79,10 @@ each card's band, and left and right leave the stack for whatever stands
 beside it — a card on the table, a button in the Situation Bar, the
 graveyard and exile plates, which are hop targets like any button. A hop
 never lands on what is already under the pointer, so pressing the same
-direction again always moves on.
+direction again always moves on. An open graveyard or exile view stays
+over every duel window and under the Situation Bar, whose Cancel still
+works over it; its cards are hop targets, a **Done** button under the
+shelves closes it, and a double click on the plate leaves it open.
 
 ## Steam Deck
 

@@ -360,6 +360,36 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The third Steam Deck playtest (2026-09-28)
+
+- `game/duel/graveyard_view.gd`: `Z` 85 — over the chain box (80), a card
+  in flight (70), the hand window (60), the log (50) and the combat
+  window (30), under the Situation Bar (90), the choice scrim (190) and
+  the dialogs (200); `_gui_input` arms on a LEFT press past `SETTLE_MS`
+  that is not a double click's second and dismisses on the release;
+  `opened()` resets the arm; the Done button (`DONE_SIZE`, `DONE_GAP`,
+  `done_button()`) bottom-centre of the content rect under a shelf
+  column shortened by its real height.
+- `game/duel/duel_screen.gd`: `_situation_bar` (the `msg_panel`);
+  `_open_graveyard` moves the view to the end of the tree and the bar
+  after it — GUI picking is tree order, so the bar is clicked through
+  the dim as it is drawn over it.
+- `engine/ai/effect_intent.gd`: `stacks(data)` — a QUANTITY in the
+  oracle text (`SCALING_PHRASES`: a pump, damage, counters, mana, life,
+  cards drawn, a cost change, a tap ability) or a copy clause means a
+  second one does more; `aura_repeats(data, host, game)` — a
+  non-stacking aura already among the host's attachments by name;
+  `permanent_repeats(data, game, pid)` — a non-creature, non-land,
+  non-aura permanent with no abilities, non-stacking, already on our
+  battlefield by name. `engine/ai/ai_profile.gd`: `holds_repeats` (on
+  everywhere, off in the exact old null). `engine/ai/ai_player.gd`:
+  `_try_cast_best` skips the repeat permanent, the target picker skips
+  the wearer of the same aura.
+- Tests: `tests/ai/test_ai_repeats_2026_09_28.gd`;
+  `tests/ui/test_graveyard_view.gd` (the z and tree order, the double
+  click, the release, the Done button, and the real clicks on the
+  plate, the card and the bar's Cancel, on a stage above GUT's layer).
+
 ## The tools, for a program (2026-09-27)
 
 - `AGENTS.md` (root): the contract for DRIVING the headless tools from a
@@ -657,6 +687,16 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.47.md`: the third Deck playtest answered —
+  `GraveyardView.Z` 85 (`game/duel/graveyard_view.gd`) over every duel
+  window and under the Situation Bar's 90, the DuelScreen parking the
+  view before the bar in its tree on open (picking is tree order); a
+  double click's second press closes nothing, the dim closes on the
+  release of a press it took, and a Done button (`DONE_SIZE`) stands
+  under the shelves; `EffectIntent.stacks` / `aura_repeats` /
+  `permanent_repeats` (`engine/ai/effect_intent.gd`) and
+  `AiProfile.holds_repeats` hold a second Regeneration on the wearer and
+  a second Kismet in hand.
 - `docs/releases/0.40.46.md`: the second Deck playtest answered —
   `PadControls._aim` (`game/input/pad_controls.gd`) lands a hop on the
   seen part of a card so the hand stack is walked band by band, the
@@ -4751,7 +4791,13 @@ shandalar/
 │    2026-09-28: a press on the dim within SETTLE_MS of opening closes
 │    nothing and one after it does, and the docked big card rests at
 │    z 0 under the combat and hand windows, over the dim while a pile
-│    is open, at POPUP_Z undocked
+│    is open, at POPUP_Z undocked; the view at Z 85 over every window
+│    and under the Situation Bar, parked before the bar in the tree, a
+│    double click's second press and a lone release close nothing, the
+│    Done button closes it from the board's bottom edge, and the real
+│    mouse events of a click on the ringed plate, the ringed card and
+│    the bar's Cancel over the dim cast Raise Dead end to end (skin
+│    plates needed; passes as read without them)
 │    tests/ui/test_exile_pile.gd — the pile right of the graveyard: it
 │    shows its top card or its plate, opens the same viewer, and its
 │    DERIVED plate borrows the 1997 grave plate's size, border and palette
@@ -6892,6 +6938,15 @@ shandalar/
 │    combat anyway, when it wears a regeneration shield, and a second
 │    time on a body already doomed; the finisher still fires on our own
 │    attack;
+│    tests/ai/test_ai_repeats_2026_09_28.gd — NEVER THE SAME CARD TWICE
+│    (EffectIntent.stacks / aura_repeats / permanent_repeats,
+│    AiProfile.holds_repeats): the owner's third playtest — a second
+│    Regeneration goes on the bare creature, not the wearer, and with
+│    one wearer only it stays in hand; a second Giant Strength stacks
+│    and is cast; the knob off restores the old repeat; a second Kismet
+│    and a second Winter Orb are held, the first is cast, a second
+│    Howling Mine (a trigger) is cast, and THEIR Kismet never holds
+│    ours; the readers on the cards themselves;
 │    tests/ai/test_ai_w_hand_2026_09_10.gd — THE HAND'S WEIGHT, EXPOSED
 │    FOR A SWEEP: every preset ships Evaluator.W_HAND (the pin that keeps
 │    the constant and the field from drifting, since the evaluator reads

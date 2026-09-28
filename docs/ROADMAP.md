@@ -18179,6 +18179,73 @@ waits read the wall clock (`Time.get_ticks_msec`) — the runner's
 Gate: 542 scripts, **8,177/8,177 tests, 367,385 asserts**, exit 0 in
 268 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-28 — The third Steam Deck playtest (0.40.47)
+
+The owner's third report from the Deck and the Linux box: *"1. Really
+check this graveyard window so it is visible and stays on top, but below
+main message window. and also if you use cards that target graveyard
+cards ("Raise dead") you should be able to click with a target cursor
+graveyard, the graveyard should open and you should be able to target a
+card in graveyard. 2. Check AI as i noticed it played the same aura card
+("regeneration") on the card with already the same aura on it! Repair AI
+so it does not cast same cards already present!"*
+
+**The view, on top and under the bar.** `GraveyardView.Z` is 85 — over
+the chain box (80), a card in flight (70), the hand window (60), the
+log (50) and the combat window (30), under the Situation Bar (90) whose
+Cancel is the way out of the cast the pile was opened for, and under the
+choice scrim (190) and the dialogs (200). Drawing is z-sorted but GUI
+PICKING IS TREE ORDER, so `DuelScreen._open_graveyard` also moves the
+view to the end of its tree and the bar (`_situation_bar`, the
+`msg_panel`) after it: the bar is drawn over the dim and clicked through
+it alike. Measured on the real screen, the flash was a DOUBLE click — a
+trackpad tap beside a physical click, the desktop habit — whose second
+press arrived with `double_click` set, past the settle, and closed the
+view; `_gui_input` now arms only on a LEFT press that is not a double
+click's second and past `SETTLE_MS`, and dismisses on the RELEASE, the
+way every button decides. A **Done** button in the 1997 button art
+(`@BUTTONLABELS` has exactly "Cancel / Done") stands bottom-centre under
+the shelves, cut from the height the styled button really takes
+(`DONE_SIZE` names 26, the plate's minimum is 32 — the first draft hung
+six pixels past the board).
+
+**Raise Dead through the view.** Already there since §1.2 by method
+calls; now driven with the engine's own mouse events — a move, a press
+and a release through `Input.parse_input_event` in window coordinates
+(`root.get_final_transform()`): the ringed plate opens the pile on the
+page with the bear, the bear wears the target ring, the click on it
+takes the target, closes the view and puts Raise Dead on the chain; the
+real double click leaves the view open; the bar's Cancel clicks over the
+dim. The first real click on the card reached GUT's own output box:
+`GutLayer` is CanvasLayer 128 and its panel covers the top of the
+window, so the suite stages the screen on a CanvasLayer 200 as
+`test_pad_controls.gd` does. Without the skin there is no plate to click
+and the three real-click tests pass as read.
+
+**Never the same card twice.** `EffectIntent.stacks(data)` reads the
+oracle text for a QUANTITY (`SCALING_PHRASES`: `+N/+N`, `deals N`,
+`counters on`, `adds {`, `gains … life`, `draws`, `{N} more/less`, `{T}`)
+or a copy clause (`enters_as_copy`) — a second one of those does more;
+without one, `aura_repeats` holds an aura whose name is already among
+the host's attachments and `permanent_repeats` holds a non-creature,
+non-land, non-aura permanent with no abilities whose name is already on
+our battlefield. Validated over every aura in the data and every
+static-only permanent in the registry: held are Arboria, Blood Moon,
+Caverns of Despair, Concordant Crossroads, Crevasse, Cursed Rack, Damping
+Field, Deadfall, Energy Flux, Field of Dreams, Gravity Sphere, Great
+Wall, Hidden Path, Kismet, Kormus Bell, Library of Leng, Living Lands,
+Living Plane, Meekstone, Moat, Quagmire, Revelation, Smoke, Sunglasses
+of Urza, Titania's Song, Undertow, Winter Orb; Gloom (`{3} more`) and
+Copy Artifact (a copy) are rightly not. `AiProfile.holds_repeats` is on
+for every difficulty and off in the exact old null; `_try_cast_best`
+skips the repeat permanent after `_arrival_wasted`, the target picker
+skips the wearer of the same aura after the `aura_fits` gate (harmful
+auras too — a second Paralyze on the same creature is the same waste).
+Their Kismet never holds ours. `tests/ai/test_ai_repeats_2026_09_28.gd`.
+
+Gate: 543 scripts, **8,194/8,194 tests, 367,785 asserts**, exit 0 in
+268 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -1169,6 +1169,109 @@ static func aura_fits(data: CardData, host: CardInstance) -> bool:
 	return false
 
 
+# ------------------------------------------------------------ the repeat --
+#
+# THE SAME CARD TWICE (2026-09-28). The owner, from the third handheld
+# playtest: *"i noticed it played the same aura card ("regeneration") on
+# the card with already the same aura on it! Repair AI so it does not
+# cast same cards allready present!"* Regeneration grants an ABILITY,
+# not a keyword, so [method aura_gifts] reads nothing off it, [method
+# aura_fits] says any creature fits, and the picker took the best body
+# — the one already wearing the first copy. The question a second copy
+# asks is whether the card is a QUANTITY: two pumps are twice the pump,
+# two Wanderlusts are two damage a turn, two Wild Growths two extra
+# mana — and two Regenerations, two Flights, two Kismets, two Winter
+# Orbs are one. Read off the oracle text, for the reason [method
+# aura_gifts] reads it: what a card-local effect does lives in a
+# Callable this code cannot look inside, and a number in the printed
+# line is the one thing every scaling card has in common.
+
+## The phrases that make a card a quantity: a pump or a shrink
+## ("+2/+2", "+X/+Y", "-0/-2 counter"), a damage ("deals 1 damage",
+## "deals that much"), a counter placed, mana added, life gained, a
+## card drawn, a cost moved ("{3} more", "{2} less") and a {T} — an
+## ability that taps is one activation per copy, so an Icy Manipulator
+## is two.
+const SCALING_PHRASES := [
+	"[+-](\\d+|x)/[+-](\\d+|y)",
+	"deals? (\\d+|x |that much|damage equal)",
+	"counters? on",
+	"adds? (an additional )?\\{",
+	"gains? [^.]*life",
+	"draws? ",
+	"\\{\\d+\\} (more|less)",
+	"\\{t\\}",
+]
+
+static var _scaling: Array = []
+static var _stacks_cache: Dictionary = {}
+
+
+## Would a SECOND copy of [param data] add to the first? True for a
+## card whose printed line carries a quantity ([constant
+## SCALING_PHRASES]) or a copy clause; false for the keyword, the
+## ability, the "can't" and the shield a permanent has once it has it.
+## Cached by name: the text is read once.
+static func stacks(data: CardData) -> bool:
+	if data == null:
+		return true
+	if _stacks_cache.has(data.card_name):
+		return _stacks_cache[data.card_name]
+	if _scaling.is_empty():
+		for phrase in SCALING_PHRASES:
+			var regex := RegEx.new()
+			regex.compile(phrase)
+			_scaling.append(regex)
+	var out := not data.enters_as_copy.is_empty()
+	var text := data.oracle_text.to_lower()
+	for regex in _scaling:
+		if out:
+			break
+		out = regex.search(text) != null
+	_stacks_cache[data.card_name] = out
+	return out
+
+
+## Does [param host] already wear an aura named like [param data] that a
+## second copy would add nothing to? The owner's second Regeneration.
+## Both sides of the table read alike: a Paralyze on a creature already
+## under one is the same card thrown away.
+static func aura_repeats(data: CardData, host: CardInstance, game: MtgGame) -> bool:
+	if data == null or host == null or game == null or not data.is_aura():
+		return false
+	if stacks(data):
+		return false
+	for id in host.attachments:
+		var worn := game.find_instance(id)
+		if worn != null and worn.data.card_name == data.card_name:
+			return true
+	return false
+
+
+## Is a permanent named like [param data] — no creature, no land, no
+## aura; a Kismet, a Winter Orb, a Moat — already on [param pid]'s
+## battlefield, with nothing a second copy could add? Only a permanent
+## that DOES one static thing is read so: an activated or a triggered
+## ability is one more activation, one more trigger, and stays free
+## (a second Circle of Protection, a second Icy Manipulator), and so
+## does every quantity ([method stacks]). Our own side only: a Kismet
+## of theirs taps OUR permanents, ours taps theirs.
+static func permanent_repeats(data: CardData, game: MtgGame, pid: int) -> bool:
+	if data == null or game == null or not data.is_permanent_type():
+		return false
+	if data.is_creature() or data.is_land() or data.is_aura():
+		return false
+	if not data.activated_abilities.is_empty() or not data.triggered_abilities.is_empty() \
+			or not data.mana_abilities.is_empty():
+		return false
+	if stacks(data):
+		return false
+	for perm in game.players[pid].battlefield:
+		if perm.data.card_name == data.card_name:
+			return true
+	return false
+
+
 # ------------------------------------------------------- the liability --
 #
 # THE TOLL AND THE RECKONING (2026-09-09, [member AiProfile.prices_liabilities]).
