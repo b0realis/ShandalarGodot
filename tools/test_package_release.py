@@ -32,6 +32,11 @@ class PackageReleaseTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"fixture")
         (self.root / "project.godot").write_text('config/version="1.2.3"\n')
+        (self.root / "packaging").mkdir(exist_ok=True)
+        (self.root / pack.DECK_MANIFEST).write_text("decks/test.deck\n", encoding="utf-8")
+        (self.root / "decks").mkdir()
+        (self.root / "decks/test.deck").write_text("name: Bundled Test\n40 Island\n", encoding="utf-8")
+        (self.root / "decks/private.deck").write_text("not for release\n", encoding="utf-8")
         for name in (*("tools/" + n for n in pack.TOOLS), *pack.BUILDER_DATA):
             dest = self.root / name
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +94,8 @@ class PackageReleaseTest(unittest.TestCase):
                         self.assertIn(prefix + "agentic-playgude-mtg.md", entries)
                         self.assertEqual(archive.read(prefix + "agentic-playgude-mtg.md"), b"fixture")
                         self.assertEqual(archive.read(prefix + "VERSION.txt"), b"1.2.3\n")
+                        self.assertEqual(archive.read(prefix + "decks/test.deck"), b"name: Bundled Test\n40 Island\n")
+                        self.assertNotIn(prefix + "decks/private.deck", entries)
                         for name in names:
                             self.assertIn(prefix + name, entries)
                         for name in (*pack.BUILDER_DATA, pack.BASE_ASSIGNMENTS):
@@ -175,6 +182,45 @@ class PackageReleaseTest(unittest.TestCase):
                                  encoding="utf-8", timeout=20)
         self.assertEqual(version.returncode, 0, version.stderr)
         self.assertIn("Shandalar 1.2.3", version.stdout)
+        requests = [
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_decks", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "read_deck", "arguments": {"deck": "decks/test.deck"}}},
+        ]
+        browse = subprocess.run([sys.executable, str(script)], cwd=self.temp.name,
+                                input="".join(json.dumps(r) + "\n" for r in requests),
+                                capture_output=True, text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(browse.returncode, 0, browse.stderr)
+        listed, read = [json.loads(line)["result"]["structuredContent"] for line in browse.stdout.splitlines()]
+        self.assertEqual(listed["count"], 1)
+        self.assertEqual(listed["decks"][0]["file"], "decks/test.deck")
+        self.assertEqual(read["cards"], 40)
+
+    def test_bundled_deck_allowlist_is_the_tracked_public_library(self):
+        tracked = subprocess.run(["git", "ls-files", "decks"], cwd=pack.ROOT,
+                                 capture_output=True, text=True, timeout=20)
+        if tracked.returncode:
+            self.skipTest("not a source checkout")
+        expected = {name for name in tracked.stdout.splitlines() if name.endswith((".deck", ".dec", ".dck"))}
+        self.assertEqual(set(pack.bundled_deck_files(pack.ROOT)), expected)
+
+    def test_deck_allowlist_rejects_unsafe_or_missing_paths(self):
+        for name in ("../private.deck", "/tmp/private.deck", "decks/../private.deck",
+                     "decks/.hidden.deck", "decks/ratings.txt", "decks/missing.deck",
+                     "decks\\private.deck", "decks/test.deck\ndecks/test.deck"):
+            with self.subTest(name=name):
+                (self.root / pack.DECK_MANIFEST).write_text(name + "\n", encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    pack.bundled_deck_files(self.root)
+
+    def test_deck_allowlist_rejects_symlinks(self):
+        link = self.root / "decks/link.deck"
+        try:
+            link.symlink_to(self.root / "decks/private.deck")
+        except OSError:
+            self.skipTest("symlinks unavailable")
+        (self.root / pack.DECK_MANIFEST).write_text("decks/link.deck\n", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            pack.bundled_deck_files(self.root)
 
     def test_architecture_specific_launch_instructions(self):
         self.assertIn("arm64", pack.START["macos-arm64"])

@@ -549,6 +549,22 @@ run finishes from its checkpoint, and a program sits in a seat.
 
 ## The MCP server (2026-09-27)
 
+- `docs/releases/0.40.43.md`: bundled-deck browsing and MCP robustness fixes.
+- `packaging/bundled_decks.txt`: explicit public-deck allowlist consumed by
+  `tools/package_release.py`'s `bundled_deck_files`, shared by both packaging
+  routes. Mirrors the PCK library without ratings or local user decks.
+- `tools/test_mcp_robustness.py`: slow replies and duplicate-action prevention,
+  referee EOF/spawn/handle cleanup, input schema and deck-row validation,
+  search/pagination, overlapping roots, raw write-path checks and malformed
+  query/protocol replies. `tools/test_package_release.py` checks the allowlist
+  against tracked decks and browses/reads an extracted Windows package without
+  an engine. The five existing MCP live cases now include bundled browsing.
+- `tools/shandalar_mcp.py`: `validate_argument` checks advertised types/bounds;
+  `output_args` applies path checks to raw/extra destinations. `list_decks`
+  deduplicates roots and supports search/paging. `Game.send` consumes the old
+  decision while `last_decision_n` preserves refusal counts; EOF cleanup is
+  bounded and shutdown closes finished games' handles too.
+
 - `docs/releases/0.40.42.md`: Windows-native MCP launch, UTF-8 and generated
   game-version metadata, with setup and verification scope.
 - Windows releases: `tools/shandalar_mcp.py` discovers

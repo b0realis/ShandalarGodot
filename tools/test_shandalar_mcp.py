@@ -598,7 +598,7 @@ class FakeDoorTest(unittest.TestCase):
         self.assertNotIn("--no-elo", rated["argv"])
         self.assertIn("--gauntlet", rated["argv"])
         raw = self.client.payload("lab", {"argv": ["--matrix", "decks/tournament", "--games", "5", "--dry-run"]})
-        self.assertEqual(raw["argv"], ["--matrix", "decks/tournament", "--games", "5", "--dry-run", "--quiet"])
+        self.assertEqual(raw["argv"], ["--matrix", "decks/tournament", "--games", "5", "--dry-run", "--no-elo", "--quiet"])
 
     def test_lab_run_and_results(self):
         out = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "games": 20, "out": "ws/run1", "limit": 2})
@@ -1011,12 +1011,20 @@ class LiveTest(unittest.TestCase):
         self.assertIn("Deck-building strategy", page)
 
     def test_packs_cards_check(self):
+        listed = self.client.payload("list_decks", {"folder": "decks"})
+        self.assertGreaterEqual(listed["count"], 330)
+        page = self.client.payload("list_decks", {"folder": "decks/tournament", "search": "ec2015_beckert", "limit": 1})
+        self.assertEqual(page["count"], 1)
+        chosen = page["decks"][0]["file"]
+        deck = self.client.payload("read_deck", {"deck": chosen})
+        self.assertEqual(deck["cards"], 60)
+        self.assertEqual(deck["errors"], [])
         packs = self.client.payload("packs", timeout=180)
         self.assertIn("pack-1", packs["known"])
         cards = self.client.payload("cards", {"names": ["Lightning Bolt", "Lightnin Bolt"]}, timeout=180)
         self.assertTrue(cards["cards"][0]["known"])
         self.assertEqual(cards["cards"][1]["near"], ["Lightning Bolt"])
-        check = self.client.payload("check_deck", {"decks": ["decks/tournament/ec2015_beckert.deck"]}, timeout=180)
+        check = self.client.payload("check_deck", {"decks": [chosen]}, timeout=180)
         self.assertTrue(check["playable"])
         self.assertEqual(check["decks"][0]["cards"], 60)
         refused = self.client.call("check_deck", {"decks": ["missing.deck"]}, timeout=180)

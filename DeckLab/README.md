@@ -2095,6 +2095,15 @@ the game; it records the game's version, not Godot's. Use a full script
 path in clients launched from elsewhere. The deck converter remains a
 source-checkout tool; the other desktop MCP tools are packaged.
 
+The extracted release includes the public `decks/` library for MCP browsing,
+not just the copy inside the game's PCK. `list_decks` accepts `folder`,
+case-insensitive `search`, and optional `offset`/`limit` paging; use its
+`next_offset` until null. A returned `file` can be read, checked and played
+unchanged. Check historical lists for missing cards or required packs before
+starting a duel. New decks belong in the workspace, not over the originals.
+After a slow referee answer returns `pending: true`, use `referee_wait`;
+the answer has already been sent and must not be repeated.
+
 The door's verbs are still command lines: a program that wants to build
 a deck, measure it and play it has to spawn processes, parse stdout and
 keep the referee's pipe open itself. `tools/shandalar_mcp.py` does that

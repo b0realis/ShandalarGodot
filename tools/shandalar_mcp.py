@@ -68,6 +68,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import math
 import os
 import queue
 import re
@@ -178,11 +179,10 @@ def deck_rows(cards, tool: str, what: str) -> list[dict]:
     rows = []
     for row in cards:
         if isinstance(row, dict) and "name" in row:
-            try:
-                count = int(row.get("count", 1))
-            except (TypeError, ValueError):
+            count = row.get("count", 1)
+            if not isinstance(count, int) or isinstance(count, bool):
                 raise refusal(tool, "option", f"`{what}`: a count is a whole number", flag=what)
-            name = str(row["name"]).strip()
+            name = row["name"].strip() if isinstance(row["name"], str) else ""
         elif isinstance(row, str):
             found = DECK_LINE.match(row.strip())
             if not found:
@@ -192,7 +192,7 @@ def deck_rows(cards, tool: str, what: str) -> list[dict]:
         else:
             raise refusal(tool, "option", f"`{what}`: a row is 'COUNT Card Name' or {{count, name}}",
                           flag=what)
-        if count < 1 or not name:
+        if count < 1 or not name or len(name.splitlines()) != 1 or "\0" in name:
             raise refusal(tool, "option", f"`{what}`: '{row}' needs a count and a name", flag=what)
         rows.append({"count": count, "name": name})
     return rows
@@ -385,6 +385,7 @@ class Game:
         self.result: dict | None = None
         self.error: dict | None = None
         self.decisions = 0
+        self.last_decision_n: int | None = None
         self.refusals = 0
         self.memory: dict = {}
         self.lines: queue.Queue = queue.Queue()
@@ -394,9 +395,13 @@ class Game:
         env = dict(os.environ)
         env["SHANDALAR_NO_BANNER"] = "1"
         env["NO_COLOR"] = "1"
-        self.proc = subprocess.Popen(argv, cwd=str(cwd), stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE, stderr=self.stderr_file,
-                                     text=True, bufsize=1, encoding="utf-8", env=env)
+        try:
+            self.proc = subprocess.Popen(argv, cwd=str(cwd), stdin=subprocess.PIPE,
+                                         stdout=subprocess.PIPE, stderr=self.stderr_file,
+                                         text=True, bufsize=1, encoding="utf-8", errors="replace", env=env)
+        except OSError as exc:
+            self.stderr_file.close()
+            raise refusal("referee", "run", f"the referee would not start: {exc}", exit_code=3)
         self.pump = threading.Thread(target=self._pump, daemon=True)
         self.pump.start()
 
@@ -417,6 +422,9 @@ class Game:
         try:
             self.proc.stdin.write(json.dumps(action, ensure_ascii=False) + "\n")
             self.proc.stdin.flush()
+            # An answer is in flight now. A timeout must not expose the old
+            # decision to wait/autoplay or let the client submit it twice.
+            self.pending = None
         except (BrokenPipeError, OSError, ValueError) as exc:
             raise refusal("referee", "game", f"game {self.ident}: the pipe closed ({exc})",
                           game=self.ident)
@@ -426,9 +434,9 @@ class Game:
         refusals on the way are collected. `pending: true` says nothing
         arrived in `timeout` seconds — call `referee_wait` again."""
         refused: list[dict] = []
-        deadline = time.time() + max(0.0, timeout)
+        deadline = time.monotonic() + max(0.0, timeout)
         while True:
-            left = deadline - time.time()
+            left = deadline - time.monotonic()
             if left <= 0:
                 return self._state(refused, pending=True)
             try:
@@ -436,9 +444,9 @@ class Game:
             except queue.Empty:
                 continue
             if line is None:
-                self.closed = True
+                self.close(grace=0.1)
                 if self.result is None and self.error is None:
-                    self.error = {"tool": "referee", "exit": self.proc.wait(), "kind": "run",
+                    self.error = {"tool": "referee", "exit": self.proc.returncode, "kind": "run",
                                   "message": f"game {self.ident}: the referee ended without a result",
                                   "stderr": self.stderr_tail()}
                 self.pending = None
@@ -464,8 +472,10 @@ class Game:
                 strikes = self.memory.setdefault("strikes", {})
                 strikes[int(record.get("n", -1))] = strikes.get(int(record.get("n", -1)), 0) + 1
             elif kind == "decision":
-                if self.pending is None or int(record.get("n", 0)) != int(self.pending.get("n", -1)):
+                number = int(record.get("n", 0))
+                if number != self.last_decision_n:
                     self.decisions += 1
+                self.last_decision_n = number
                 self.pending = record
                 return self._state(refused)
             elif kind == "result":
@@ -490,7 +500,8 @@ class Game:
 
     def stderr_tail(self, lines: int = 12) -> list[str]:
         try:
-            self.stderr_file.flush()
+            if not self.stderr_file.closed:
+                self.stderr_file.flush()
             text = Path(self.stderr_file.name).read_text(encoding="utf-8", errors="replace")
         except OSError:
             return []
@@ -500,7 +511,7 @@ class Game:
         if self.proc.stdin is not None:
             try:
                 self.proc.stdin.close()
-            except OSError:
+            except (OSError, ValueError):
                 pass
         try:
             self.proc.wait(timeout=grace)
@@ -512,6 +523,9 @@ class Game:
                 self.proc.kill()
                 self.proc.wait()
         self.closed = True
+        self.pump.join(timeout=1)
+        if not self.pump.is_alive() and self.proc.stdout is not None:
+            self.proc.stdout.close()
         try:
             self.stderr_file.close()
         except OSError:
@@ -541,6 +555,37 @@ def prop(kind: str, description: str, **more) -> dict:
     out = {"type": kind, "description": description}
     out.update(more)
     return out
+
+
+def validate_argument(value, schema: dict, tool: str, flag: str) -> None:
+    """Enforce the types/bounds we advertise before invoking a tool.
+
+    bool is an int in Python, but not in JSON Schema; NaN/Infinity are not
+    portable JSON numbers and cannot be process timeouts.
+    """
+    types = schema.get("type", [])
+    types = [types] if isinstance(types, str) else types
+    checks = {"string": isinstance(value, str), "object": isinstance(value, dict),
+              "array": isinstance(value, list), "boolean": isinstance(value, bool),
+              "integer": isinstance(value, int) and not isinstance(value, bool),
+              "number": isinstance(value, (int, float)) and not isinstance(value, bool)}
+    if types and not any(checks.get(kind, False) for kind in types):
+        raise refusal(tool, "option", f"`{flag}` must be {' or '.join(types)}", flag=flag)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if (isinstance(value, float) and not math.isfinite(value)
+                or "minimum" in schema and value < schema["minimum"]
+                or "maximum" in schema and value > schema["maximum"]
+                or "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]):
+            raise refusal(tool, "option", f"`{flag}` is outside its allowed range", flag=flag)
+    if "enum" in schema and value not in schema["enum"]:
+        near = difflib.get_close_matches(value, schema["enum"], n=3) if isinstance(value, str) else []
+        raise refusal(tool, "option", f"`{flag}` must be one of {schema['enum']}", flag=flag,
+                      suggestions=near)
+    if isinstance(value, list):
+        if len(value) < schema.get("minItems", 0):
+            raise refusal(tool, "option", f"`{flag}` needs at least {schema['minItems']} items", flag=flag)
+        for item in value:
+            validate_argument(item, schema.get("items", {}), tool, flag)
 
 
 STRING_LIST = {"type": "array", "items": {"type": "string"}}
@@ -599,7 +644,7 @@ class Server:
         except ValueError:
             return None
 
-    def quote(self, verb: str, done: subprocess.CompletedProcess, ok=(0,)):
+    def quote(self, verb: str, done: subprocess.CompletedProcess, ok=(0,), require_json=False):
         """The door's JSON, or its refusal raised as one."""
         parsed = self.parse_stdout(done)
         if done.returncode not in ok:
@@ -609,6 +654,9 @@ class Server:
             kind = "godot" if done.returncode == 3 else "run"
             message = tail[-1] if tail else f"{verb} exited {done.returncode}"
             raise refusal(verb, kind, message, exit_code=done.returncode, stderr=tail)
+        if require_json and not isinstance(parsed, dict):
+            raise refusal(verb, "run", f"{verb} did not return the expected JSON object", exit_code=1,
+                          stderr=done.stderr.splitlines()[-8:])
         return parsed
 
     def version(self) -> str:
@@ -722,9 +770,13 @@ class Server:
                        self.tool_cards, required=["names"]),
             self._tool("list_decks", "The deck files: the shipped `decks/` folder (its groups are "
                        "the subfolders — `tournament` is the good decks) and the workspace, each "
-                       "with its name and card counts read from the file.",
+                       "with its name and card counts read from the file. Search by name/path "
+                       "and page with offset/limit; count is the total matching decks.",
                        {"folder": prop("string", "one folder instead (under the checkout or the "
-                                       "workspace), searched recursively")},
+                                       "workspace), searched recursively"),
+                        "search": prop("string", "case-insensitive part of a deck name or path"),
+                        "offset": prop("integer", "skip this many matching decks (default 0)", minimum=0),
+                        "limit": prop("integer", "maximum decks to return (unset: all)", minimum=1)},
                        self.tool_list_decks),
             self._tool("read_deck", "One deck file: its name, main deck and sideboard rows, the "
                        "counts, and the raw text. `.dck` (the original's format) is returned raw "
@@ -900,7 +952,7 @@ class Server:
                        "wire takes it — `{\"op\":\"pass\"}`, `{\"op\":\"play\",\"card\":\"c3\"}`, "
                        "`{\"op\":\"attack\",\"cards\":[...]}` — or the string `default` for the "
                        "built-in pilot's answer. A `refused` entry means the answer could not be "
-                       "applied and the same decision is back; twenty refusals in a row concede.",
+                       "applied and the same decision is back; the pilot concedes after three refusals.",
                        {"game": game,
                         "action": {"description": "the answer: an object with `op` (the seat is "
                                    "filled in), or `default`", "type": ["object", "string"]},
@@ -928,6 +980,11 @@ class Server:
 
     @staticmethod
     def _tool(name: str, description: str, properties: dict, handler, required: list[str] | None = None) -> dict:
+        if "timeout" in properties:
+            properties["timeout"] = {**properties["timeout"], "exclusiveMinimum": 0}
+        for key in ("limit", "decisions"):
+            if key in properties:
+                properties[key] = {**properties[key], "minimum": 1}
         schema: dict = {"type": "object", "properties": properties, "additionalProperties": False}
         if required:
             schema["required"] = list(required)
@@ -955,6 +1012,8 @@ class Server:
         for key in schema.get("required", []):
             if key not in arguments or arguments[key] is None:
                 raise refusal(name, "option", f"{name} needs `{key}`", flag=key)
+        for key, value in arguments.items():
+            validate_argument(value, known[key], name, key)
         return tool["handler"](arguments)
 
     # ----- the small tools ------------------------------------------------
@@ -1009,11 +1068,11 @@ class Server:
         return {"verb": verb, "exit": done.returncode, "text": text}
 
     def tool_packs(self, args: dict) -> dict:
-        return self.quote("packs", self.run("packs", []))
+        return self.quote("packs", self.run("packs", []), require_json=True)
 
     def tool_cards(self, args: dict) -> dict:
         names = self.strings(args["names"], "cards", "names")
-        return self.quote("cards", self.run("cards", names))
+        return self.quote("cards", self.run("cards", names), require_json=True)
 
     @staticmethod
     def strings(value, tool: str, flag: str) -> list[str]:
@@ -1033,10 +1092,10 @@ class Server:
 
     def tool_check_deck(self, args: dict) -> dict:
         decks = self.strings(args["decks"], "check_deck", "decks")
-        return self.quote("check", self.run("check", self.check_args(args, decks)))
+        return self.quote("check", self.run("check", self.check_args(args, decks)), require_json=True)
 
     def tool_convert_deck(self, args: dict) -> dict:
-        source = str(args["input"])
+        source = self.deck_arg(args["input"])
         target = self.inside(args["output"], "convert", "output")
         done = self.run("convert", [source, str(target)], timeout=300)
         if done.returncode != 0:
@@ -1061,10 +1120,16 @@ class Server:
 
     def tool_list_decks(self, args: dict) -> dict:
         decks = []
+        seen = set()
+        search = args.get("search", "").casefold()
         for folder, label in self.deck_folders(args):
             for path in sorted(folder.rglob("*")):
                 if not path.is_file() or path.suffix.lower() not in (".deck", ".dec", ".dck"):
                     continue
+                resolved = path.resolve()
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
                 relative = path.relative_to(folder)
                 group = relative.parts[0] if len(relative.parts) > 1 else ""
                 row: dict = {"file": self.spoken(path), "folder": label, "group": group}
@@ -1080,8 +1145,14 @@ class Server:
                     row["sideboard"] = parsed["sideboard_cards"]
                     if parsed["errors"]:
                         row["errors"] = len(parsed["errors"])
-                decks.append(row)
-        return {"decks": decks, "count": len(decks)}
+                if not search or search in (row.get("name", "") + " " + row["file"]).casefold():
+                    decks.append(row)
+        offset = args.get("offset", 0)
+        count = len(decks)
+        page = decks[offset:offset + args.get("limit", count)]
+        next_offset = offset + len(page)
+        return {"decks": page, "count": count, "returned": len(page), "offset": offset,
+                "next_offset": next_offset if next_offset < count else None}
 
     def find_deck(self, text: str, tool: str) -> Path:
         candidates = [Path(text)]
@@ -1125,18 +1196,56 @@ class Server:
         if not main:
             raise refusal(tool, "option", "`cards` holds no rows", flag="cards")
         name = str(args.get("name") or target.stem)
+        if len(name.splitlines()) != 1 or "\0" in name:
+            raise refusal(tool, "option", "`name` must be a single line", flag="name")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(deck_text(name, main, side), encoding="utf-8")
+        # Exclusive creation keeps force=false true even if another writer
+        # creates the file between the existence check and this open.
+        try:
+            with target.open("w" if args.get("force") else "x", encoding="utf-8") as stream:
+                stream.write(deck_text(name, main, side))
+        except OSError as exc:
+            raise refusal(tool, "out", f"could not write deck: {exc}", exit_code=1, path=self.spoken(target))
         out: dict = {"file": self.spoken(target), "name": name,
                      "cards": sum(r["count"] for r in main), "sideboard": sum(r["count"] for r in side)}
         if args.get("check", True):
-            check = self.quote("check", self.run("check", self.check_args(args, [str(target)])))
+            check = self.quote("check", self.run("check", self.check_args(args, [str(target)])), require_json=True)
             out["check"] = check
             if isinstance(check, dict):
                 out["playable"] = check.get("playable")
         return out
 
     # ----- the AutoDeck and the Lab ---------------------------------------
+
+    def output_args(self, argv: list[str], tool: str) -> tuple[list[str], Path | None]:
+        """Check EVERY write destination, including repeated/raw/extra flags.
+
+        Normalise --flag=value to the CLI's two-argument spelling. The last
+        --out is the actual destination, not the first or a structured default.
+        """
+        checked = []
+        out = None
+        index = 0
+        while index < len(argv):
+            arg = argv[index]
+            flag, equal, inline = arg.partition("=")
+            if flag not in ("--out", "--resume", "--elo-file"):
+                checked.append(arg)
+                index += 1
+                continue
+            if equal:
+                value = inline
+            else:
+                index += 1
+                if index >= len(argv) or argv[index].startswith("--"):
+                    raise refusal(tool, "option", f"{flag} needs a path", flag=flag)
+                value = argv[index]
+            path = self.inside(value, tool, flag)
+            checked.extend([flag, str(path)])
+            if flag in ("--out", "--resume"):
+                out = path
+            index += 1
+        return checked, out
 
     @staticmethod
     def flag(argv: list[str], args: dict, key: str, flag: str) -> None:
@@ -1160,10 +1269,11 @@ class Server:
         self.flag(argv, args, "dry_run", "--dry-run")
         argv += self.strings(args["extra_args"], tool, "extra_args") if args.get("extra_args") else []
         argv.append("--quiet")
+        argv, out = self.output_args(argv, tool)
         timeout = float(args.get("timeout") or DEFAULT_TIMEOUT)
         done = self.run("autodeck", argv, timeout=timeout)
-        parsed = self.quote("autodeck", done)
-        if args.get("dry_run"):
+        parsed = self.quote("autodeck", done, require_json="--dry-run" in argv)
+        if "--dry-run" in argv:
             return {"plan": parsed, "argv": argv}
         result: dict = {"exit": done.returncode, "out": self.spoken(out), "argv": argv}
         run_file = out / "run.json"
@@ -1189,9 +1299,11 @@ class Server:
         tool = "lab"
         if args.get("argv"):
             argv = self.strings(args["argv"], tool, "argv")
-            out = None
-            if "--out" in argv:
-                out = self.inside(argv[argv.index("--out") + 1], tool, "out")
+            argv, out = self.output_args(argv, tool)
+            if "--resume" not in argv and not args.get("rated") and "--no-elo" not in argv:
+                argv.append("--no-elo")
+            if args.get("dry_run") and "--dry-run" not in argv:
+                argv.append("--dry-run")
             return argv + ["--quiet"], out
         argv: list[str] = []
         args = dict(args)
@@ -1213,13 +1325,15 @@ class Server:
         if args.get("extra_args"):
             argv += self.strings(args["extra_args"], tool, "extra_args")
         argv.append("--quiet")
+        argv, actual_out = self.output_args(argv, tool)
+        out = actual_out or out
         return argv, out
 
     def run_lab(self, argv: list[str], out: Path | None, args: dict) -> dict:
         timeout = float(args.get("timeout") or DEFAULT_TIMEOUT)
         done = self.run("lab", argv, timeout=timeout)
         if "--dry-run" in argv:
-            return {"plan": self.quote("lab", done), "argv": argv}
+            return {"plan": self.quote("lab", done, require_json=True), "argv": argv}
         parsed = self.quote("lab", done, ok=(0, 4))
         result: dict = {"exit": done.returncode, "argv": argv, "report": done.stdout}
         if done.returncode == 4:
@@ -1293,10 +1407,7 @@ class Server:
         if not isinstance(nxt, dict) or not nxt.get("argv"):
             return {"out": self.spoken(out), "next": None,
                     "why": "nothing is open — every matchup decided, every delta clear"}
-        argv = [str(a) for a in nxt["argv"]]
-        target = None
-        if "--out" in argv:
-            target = self.inside(argv[argv.index("--out") + 1], "lab_next", "out")
+        argv, target = self.output_args(self.strings(nxt["argv"], "lab_next", "argv"), "lab_next")
         result = self.run_lab(argv + ["--quiet"], target, args)
         result["why"] = nxt.get("why")
         result["from"] = self.spoken(out)
@@ -1320,7 +1431,7 @@ class Server:
             del self.games[game.ident]
             raise ToolError(game.error)
         state["hello"] = game.hello
-        if game.result is not None:
+        if game.result is not None or game.error is not None:
             game.close(grace=5)
         return state
 
@@ -1392,7 +1503,7 @@ class Server:
         timeout = float(args.get("timeout") or DECISION_TIMEOUT)
         played = 0
         refused: list[dict] = []
-        state = game._state([])
+        state = game._state([], pending=game.pending is None and game.result is None and game.error is None)
         while game.pending is not None and game.result is None and game.error is None:
             if limit is not None and played >= limit:
                 break
@@ -1435,8 +1546,7 @@ class Server:
 
     def shutdown(self) -> None:
         for game in list(self.games.values()):
-            if game.running:
-                game.close(grace=5)
+            game.close(grace=5)
 
     # ----- the protocol -----------------------------------------------------
 
@@ -1463,8 +1573,12 @@ class Server:
         raise KeyError(uri)
 
     def handle(self, message) -> dict | None:
-        if not isinstance(message, dict) or message.get("jsonrpc") != "2.0" or "method" not in message:
+        if (not isinstance(message, dict) or message.get("jsonrpc") != "2.0"
+                or not isinstance(message.get("method"), str)
+                or isinstance(message.get("id"), (bool, dict, list))):
             ident = message.get("id") if isinstance(message, dict) else None
+            if isinstance(ident, (bool, dict, list)):
+                ident = None
             return error_response(ident, -32600, "Invalid Request")
         method = message["method"]
         ident = message.get("id")
@@ -1530,6 +1644,9 @@ class Server:
                     emit(sink, error_response(None, -32700, "Parse error"))
                     continue
                 if isinstance(message, list):
+                    if not message:
+                        emit(sink, error_response(None, -32600, "Invalid Request"))
+                        continue
                     answers = [a for a in (self.handle(m) for m in message) if a is not None]
                     if answers:
                         emit(sink, answers)

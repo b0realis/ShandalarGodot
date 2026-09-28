@@ -89,6 +89,7 @@ PACK_DATA["pack_7_fifth_edition"] += ("shared_names.json",)
 BUILDER_DATA = tuple(f"cards/data/{code}.json" for code in pack_one.SET_ORDER) + tuple(
     f"packaging/card_packs/{pack}/{name}" for pack, names in PACK_DATA.items() for name in names)
 BASE_ASSIGNMENTS = "packaging/card_packs/pack_1_dotp_complete/base_assignments.json"
+DECK_MANIFEST = "packaging/bundled_decks.txt"
 LOCAL_PACK = "Pack-1-DotP-complete.zip"
 WORDMARK = ("┌─┐┌─┐┌─┐┬┌─", "├─┘├─┤│  ├┴┐", "┴  ┴ ┴└─┘┴ ┴")
 START = {
@@ -232,11 +233,39 @@ def member(archive: zipfile.ZipFile, name: str, content: Path | bytes, executabl
                 shutil.copyfileobj(source, target, 1024 * 1024)
 
 
+def bundled_deck_files(root: Path = ROOT) -> dict[str, Path]:
+    """Public, reviewable allowlist; no workspace decks, ratings or directory crawl.
+
+    Mirror the PCK's deck text for engine-free MCP browsing in extracted releases.
+    A tracked manifest also works from git-archive source trees without .git.
+    """
+    files = {}
+    for line in (root / DECK_MANIFEST).read_text(encoding="utf-8").splitlines():
+        name = line.strip()
+        if not name or name.startswith("#"):
+            continue
+        path = PurePosixPath(name)
+        if (path.is_absolute() or len(path.parts) < 2 or path.parts[0] != "decks"
+                or any(p.startswith(".") for p in path.parts) or "\\" in name
+                or path.as_posix() != name or path.suffix.lower() not in (".deck", ".dec", ".dck")
+                or name in files):
+            raise ValueError(f"Invalid bundled deck entry: {name}")
+        source = root / name
+        if (not source.is_file() or source.is_symlink()
+                or any(p.is_symlink() for p in source.parents if p != root and root in p.parents)):
+            raise ValueError(f"Missing or linked bundled deck: {name}")
+        files[name] = source
+    if not files:
+        raise ValueError("The bundled deck allowlist is empty")
+    return files
+
+
 def player_tool_files(root: Path = ROOT) -> dict[str, Path]:
     files = {"tools/" + name: root / "tools" / name for name in TOOLS}
     files.update({name: root / name for name in BUILDER_DATA})
     files["CARD-ART-AND-PACKS.md"] = root / "docs/card-art-and-packs.md"
     files["agentic-playgude-mtg.md"] = root / "agentic-playgude-mtg.md"
+    files.update(bundled_deck_files(root))
     return files
 
 

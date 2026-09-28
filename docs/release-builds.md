@@ -51,6 +51,13 @@ MCP server. Check the extracted Windows server with Python's `--catalogue`
 and `--version` before testing engine calls on a Windows machine; the server
 discovers `Shandalar.console.exe` without Bash. Those two metadata checks on
 another OS do not establish native Windows runtime compatibility.
+`packaging/bundled_decks.txt` explicitly lists the public deck files mirrored
+under `decks/` for engine-free MCP listing/reading. Update it when adding or
+removing a shipped deck; tests compare it with the tracked library. Never
+replace this allowlist with a recursive copy of a local decks directory.
+The packager rejects missing, duplicate, hidden, traversing or linked entries.
+Verify listing and reading in the extracted package, then check and play a
+returned deck path with the packaged engine.
 The seven numbered-pack builders and their Python dependencies are bundled,
 alongside explicitly allowlisted `cards/data/` and `packaging/card_packs/`
 metadata. Pack 1's base assignments are generated from the source registry

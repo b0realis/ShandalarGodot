@@ -467,6 +467,20 @@ separately to keep an observation small. Reading the guide starts no engine,
 changes no settings and exposes no game state. The same file ships beside
 the release's command-line tools.
 
+**Browsing bundled decks.** Releases include the public `decks/` tree beside
+the binary as well as inside its game archive. Keep the whole extraction
+together. `list_decks {}` lists this library and the workspace; `folder`
+limits it to a subtree, such as `decks/tournament`. `search` matches part of
+a name or path, case-insensitively. Optional `offset` (default 0) and `limit`
+page the results: `count` is the total matching decks, `returned` the page
+size, and `next_offset` is null on the last page. Without `limit`, all matches
+are returned. Pass a returned `file` unchanged to `read_deck`, `check_deck`,
+`lab` or `referee_start`. Browsing does not validate card availability:
+use `check_deck` before playing; some historical lists need optional packs or
+contain cards outside the implemented pool. To edit a bundled deck, write a
+copy in the workspace. The packager's public allowlist excludes local decks
+and the mutable ratings ledger.
+
 **Playing is a session.** `referee_start {deck_a, deck_b, seat_a,
 seat_b, seed, turns, packs, log, view}` opens the referee's pipe and
 answers `{game: "g1", hello, decision}`; `referee_act {game, action}`
@@ -493,6 +507,10 @@ sits at a table a person hosts in the game — a human opponent; the
 answer is `pending: true` until the table starts and `referee_wait`
 reads on. A `result` closes the game; `referee_stop` closes the pipe
 (`reason: eof`); the server's own end closes every game it opened.
+After an action has been sent, a timeout also returns `pending: true`:
+the previous decision is consumed, not offered again. Call `referee_wait`
+until the next decision or result arrives; do not resend the action.
+Timeouts must be finite and greater than zero.
 
 **The rules the server keeps**: stdout is the protocol's (each game's
 stderr goes to `workspace/games/GAME.stderr`); a path a tool writes —
@@ -510,6 +528,12 @@ passes through untouched); a tool never invents a result. Pinned by
 `tools/test_shandalar_mcp.py` (a fake door, no engine) and
 `tests/tools/test_mcp_2026_09_27.gd` (the real one: a deck written and
 checked, a duel played to its end through the pilot).
+Advertised types and bounds are enforced before tools run. Raw `argv`,
+`extra_args` and recorded `next.argv` also check every `--out`, `--resume`
+and `--elo-file` destination. A raw Lab line defaults to `--no-elo` unless
+`rated: true`; resume and next-run operations retain the recorded settings.
+These checks prevent accidental writes outside the chosen folders; the
+local server is trusted tooling, not a security sandbox for hostile clients.
 
 ## Deck convert — `./deck_convert.sh INPUT OUTPUT`
 
