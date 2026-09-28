@@ -657,6 +657,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.44.md`: bookkeeping — the SGManalink docs name the
+  current build again (0.40.42/0.40.43 bumped `project.godot` alone), the
+  README's verification line reads a full gate of this tree, and the ROADMAP
+  ledger carries the two MCP releases.
 - `docs/releases/0.40.41.md`: the Steam Deck release — `PadControls`
   (`game/input/pad_controls.gd`, autoload) types the mouse for a
   controller (left stick pointer, D-pad hop, A/LB the two buttons,

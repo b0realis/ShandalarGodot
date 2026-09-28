@@ -118,10 +118,10 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Release baseline: **8,161 passing GUT tests**. The Windows MCP update adds
-focused integration checks and a **400-test Python suite** (394 passed;
-five live MCP cases run separately in the Godot gate, one platform-specific
-skip). The same gate runs on GitHub Actions for
+Most recent full-suite verification ([Bookkeeping after the MCP releases](docs/ROADMAP.md#2026-09-28--bookkeeping-after-the-mcp-releases-04044)):
+**8,161 GUT tests / 366,951 assertions**, plus **415 Python tests**
+(the MCP server's five live tests play inside the GUT gate and are
+skipped outside it). The same gate runs on GitHub Actions for
 every push and pull request.
 
 ## Art and skins

@@ -17938,6 +17938,43 @@ slop gating the flag but not the movement) still fails it.
 Gate: 541 scripts, **8,161/8,161 tests, 367,439 asserts**, exit 0 in
 269 s over 6 shards; Python 392, exit 0.
 
+## 2026-09-28 — Bookkeeping after the MCP releases (0.40.44)
+
+Two releases arrived on `main` between the Steam Deck build and this
+one, each with its own notes under `docs/releases/` and its rows at the
+top of `docs/CODE_MAP.md`; the ledger here carries them so the plan of
+record is not shorter than the release notes.
+
+**0.40.42 — Windows MCP launch.** The packaged MCP server discovers
+`Shandalar.console.exe` and launches card queries, deck checks, the
+Lab, AutoDeck and referee games without Bash; arguments stay separate
+argv entries (no cmd.exe or batch quoting); MCP stdio is UTF-8 on any
+locale; packages carry `VERSION.txt`, generated from `project.godot`,
+because the executable's own `--version` is Godot's. Linux and macOS
+keep the shell door (`shandalar.sh -V`).
+
+**0.40.43 — bundled decks and referee sessions.** Releases carry the
+330 public deck files named in `packaging/bundled_decks.txt` — a
+reviewed allowlist the packager checks entry by entry (missing,
+duplicate, hidden, traversing and linked entries are refused) and the
+tests compare with the tracked library — so `list_decks` and
+`read_deck` answer without an engine process; `list_decks` searches,
+filters by folder and pages with `offset`/`limit`. A slow referee
+answer can no longer be answered twice (`referee_wait` after
+`pending: true`), input types and bounds are checked before anything
+runs, and raw Lab arguments pass the same output-path checks as the
+structured ones, unrated unless `rated: true`.
+
+**What this one fixes.** Those two bumped `project.godot` alone;
+`docs/sgmanalink-local-playtest.md` and `docs/sgmanalink-tournaments.md`
+still told players to match 0.40.41 builds — they name 0.40.44. The
+README's verification line reads a full gate of this tree again. The
+Python suite is 415 (the five live MCP cases skip outside the GUT
+gate, where they play). No code changed.
+
+Gate: 541 scripts, **8,161/8,161 tests, 366,951 asserts**, exit 0 in
+262 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
