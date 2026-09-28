@@ -290,8 +290,30 @@ const RULES_STEPS := [0, -2, -4, -6, -7, -8]
 
 ## Docked mode (the sidebar slot, like the original): position is fixed by
 ## the parent dock, place_beside() is a no-op, and the card persists after
-## the pointer leaves — the "last examined card" behavior.
-var docked := false
+## the pointer leaves — the "last examined card" behavior. A docked card
+## is a PANEL OF ITS SCREEN, drawn at that screen's own level, under every
+## window over the table — the combat window dragged across the sidebar,
+## the hand window, a card in flight; the undocked card is the original's
+## examine popup, a tooltip, and draws over everything at [constant POPUP_Z]
+## (the second Steam Deck playtest, 2026-09-28: *"Big card is on top of
+## windows, for example battle window in the duel. It should be behind
+## active windows!"* — it was, docked or not, at the popup's height).
+var docked := false:
+	set(value):
+		docked = value
+		z_index = rest_z()
+
+## The undocked card's height over the screen: over the duel's windows
+## (CombatWindow 30, StackHand 60), the choice scrim and the graveyard
+## view (190), level with an [OriginalDialog].
+const POPUP_Z := 200
+
+
+## The height this card rests at — a screen that lifts it for a while
+## (the duel, over the graveyard view's dim the pile's cards fill) puts
+## it back here.
+func rest_z() -> int:
+	return 0 if docked else POPUP_Z
 
 var _frame_bg: Panel
 var _name_label: Label
@@ -503,7 +525,7 @@ func _init() -> void:
 	custom_minimum_size = SIZE
 	size = SIZE
 	mouse_filter = Control.MOUSE_FILTER_IGNORE   # a tooltip never eats clicks
-	z_index = 200
+	z_index = POPUP_Z
 	visible = false
 
 	# THE FACES, and every size on the card resolved against them. The

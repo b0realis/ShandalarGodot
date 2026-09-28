@@ -44,7 +44,7 @@ used in turn without a switch.
 | Control | Action |
 | --- | --- |
 | Left stick | Pointer (fine near the centre, fast at full tilt) |
-| D-pad | Hop to the nearest card or button in that direction |
+| D-pad | Hop to the nearest card, button or pile in that direction |
 | A | Left click; hold and move for a drag; two quick presses to auto-cast |
 | LB | Right click: the card, territory and life-box mini-menus |
 | RT | Left click too, pulled past half way — for a trackpad under the same hand |
@@ -71,6 +71,15 @@ pointer — so on a Deck the right trackpad can point and RT click, like a
 mouse with its button under the other finger. A window taller than the
 screen (a pool with many sets in AutoDeck) keeps its buttons on the screen
 and scrolls its body: the right stick, or a hop, reaches every line.
+
+A hop lands on the part of a card that is actually showing. In the hand
+window the cards stand in a stack, each showing a band of its top edge
+under the next: up and down walk the stack one card at a time, landing on
+each card's band, and left and right leave the stack for whatever stands
+beside it — a card on the table, a button in the Situation Bar, the
+graveyard and exile plates, which are hop targets like any button. A hop
+never lands on what is already under the pointer, so pressing the same
+direction again always moves on.
 
 ## Steam Deck
 
@@ -100,9 +109,14 @@ and scrolls its body: the right stick, or a hop, reaches every line.
 Use only one keyboard/mouse binding per button, without an additional gamepad
 output on that same button, to avoid duplicate actions: a button that sends
 both the pad's B and an Escape key would open the Pause menu and close it
-again in the same instant — the duel drops the second of two identical
-actions from different devices within a tenth of a second, but a layout
-should not rely on that. The launcher requests
+again in the same instant, and one that sends both the pad's A and a mouse
+click would open a graveyard with one and close it with the other. The game
+guards against both — the duel drops the second of two identical actions
+from different devices within a tenth of a second, the pad pointer treats a
+mouse click within that of its own click (either order) as the same press,
+a second controller reporting a button already down is not a second press,
+and a graveyard or exile view ignores a click on its dim for a quarter of a
+second after opening — but a layout should not rely on that. The launcher requests
 1280x800, caps rendering at 60 FPS and names the device (`SHANDALAR_HANDHELD`,
 see *Handheld defaults*). It does not overwrite your Options or controller
 bindings. Gaming Mode also controls the outer game window.

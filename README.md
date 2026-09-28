@@ -118,8 +118,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([The first Steam Deck playtest](docs/ROADMAP.md#2026-09-28--the-first-steam-deck-playtest-04045)):
-**8,171 GUT tests / 367,194 assertions**, plus **415 Python tests**
+Most recent full-suite verification ([The second Steam Deck playtest](docs/ROADMAP.md#2026-09-28--the-second-steam-deck-playtest-04046)):
+**8,177 GUT tests / 367,385 assertions**, plus **415 Python tests**
 (the MCP server's five live tests play inside the GUT gate and are
 skipped outside it). The same gate runs on GitHub Actions for
 every push and pull request.

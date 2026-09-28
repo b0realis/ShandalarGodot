@@ -1823,6 +1823,12 @@ func _open_graveyard(pid: int) -> void:
 	_grave_view.reset_paging()
 	_grave_open_pile = pid
 	_grave_view.visible = true
+	_grave_view.opened()
+	# The docked big card rests under every window (2026-09-28) — under
+	# the view's dim too, which would darken the very card the pile
+	# fills. Over the dim while the view is up, back when it goes.
+	if _card_preview != null:
+		_card_preview.z_index = _grave_view.z_index + 1
 	_repopulate_graveyard()
 
 
@@ -1830,6 +1836,8 @@ func _close_graveyard() -> void:
 	_grave_open_pile = -1
 	if _grave_view != null:
 		_grave_view.visible = false
+	if _card_preview != null:
+		_card_preview.z_index = _card_preview.rest_z()
 
 
 ## Is the graveyard overlay showing? (Escape peels it first, and the
@@ -9059,6 +9067,11 @@ func _player_panel(pid: int, life_first := true) -> Control:
 		# clickable to point at. s30's handleGraveyardClick: a non-empty
 		# pile opens the view, the same pile again closes it.
 		grave_icon.mouse_filter = Control.MOUSE_FILTER_STOP
+		# A hop target for the pad's D-pad (`PadControls.TARGET_META`, by
+		# its literal: the tools parse this screen before the autoloads
+		# are named) — a TextureRect is no button, and the second Steam
+		# Deck playtest reached the piles only with the trackpad.
+		grave_icon.set_meta("pad_target", true)
 		grave_icon.tooltip_text = "Your graveyard" if pid == _human_seat() and not config.private_hotseat() \
 			else "%s graveyard" % config.seat_name(pid)
 		grave_icon.gui_input.connect(func(event: InputEvent) -> void:
@@ -9098,6 +9111,7 @@ func _player_panel(pid: int, life_first := true) -> Control:
 		exile_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		exile_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 		exile_icon.mouse_filter = Control.MOUSE_FILTER_STOP
+		exile_icon.set_meta("pad_target", true)
 		exile_icon.tooltip_text = "Exiled cards (out of play)"
 		# `@MENU_GRAVEYARD`'s three views live in ONE overlay, so this plate
 		# opens the very viewer the graveyard does — the exile section is

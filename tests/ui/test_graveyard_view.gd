@@ -263,3 +263,63 @@ func test_a_reopened_pile_starts_at_the_front() -> void:
 	screen._on_grave_pile_clicked(0)          # closes
 	screen._on_grave_pile_clicked(0)          # and opens afresh
 	assert_eq(view.page_start(Mtg.Zone.GRAVEYARD, 0), 0)
+
+
+# ================================ the second Steam Deck playtest, 2026-09-28 ==
+
+## *"7. Ok when i click on the graveyard it just flashes and i cannot see
+## it!"* / *"10. I ment graveyard and exile stacks both!"* — Steam Input
+## can hand a game two copies of one press (the first playtest's layout
+## sent Escape beside pad B): one copy opened the pile, the other landed
+## on the dim and closed it. A press on the dim within SETTLE_MS of the
+## view opening closes nothing; after it, the click-anywhere rule holds.
+## Wall-clock ms, which is what the view reads — the runner's own timers
+## run on a scaled clock.
+func _wait_ms(ms: int) -> void:
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 <= ms:
+		await get_tree().process_frame
+
+
+func test_a_press_on_the_dim_right_after_opening_closes_nothing() -> void:
+	_open_pile(3)
+	assert_true(screen.graveyard_is_open())
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	screen._grave_view._gui_input(press)
+	assert_true(screen.graveyard_is_open(), "the copy of the opening press: still open")
+	await _wait_ms(GraveyardView.SETTLE_MS + 20)
+	screen._grave_view._gui_input(press)
+	assert_false(screen.graveyard_is_open(), "a press on the dim after the settle closes it")
+	# And the exile plate opens the same view, settled the same way.
+	screen._on_grave_pile_clicked(0)
+	assert_true(screen.graveyard_is_open())
+	screen._grave_view._gui_input(press)
+	assert_true(screen.graveyard_is_open(), "reopened: settled again")
+
+
+## *"8. Big card is on top of windows, for example battle window in the
+## duel. It should be behind active windows!"* — the docked big card
+## rested at the examine popup's 200, over the combat window (30), the
+## hand window (60) and a card in flight (70). Docked, it is a panel of
+## its screen at 0; undocked it stays the popup. While a pile is open the
+## duel lifts it over the view's dim — the dim would darken the very
+## card the pile fills — and rests it again when the view goes.
+func test_the_docked_big_card_rests_under_the_windows() -> void:
+	var big: CardPreview = screen._card_preview
+	assert_true(big.docked)
+	assert_eq(big.z_index, 0, "a panel of the screen")
+	assert_lt(big.z_index, screen._combat_window.z_index, "under the combat window")
+	assert_lt(big.z_index, screen._hand_rows[1].z_index, "under the hand window")
+	_open_pile(3)
+	assert_gt(big.z_index, screen._grave_view.z_index, "over the dim while the pile is open")
+	screen._on_grave_pile_clicked(0)
+	assert_eq(big.z_index, 0, "and resting again when it closes")
+	var popup := CardPreview.new()
+	assert_eq(popup.z_index, CardPreview.POPUP_Z, "undocked: the examine popup, over everything")
+	popup.docked = true
+	assert_eq(popup.z_index, 0)
+	popup.docked = false
+	assert_eq(popup.z_index, CardPreview.POPUP_Z)
+	popup.free()

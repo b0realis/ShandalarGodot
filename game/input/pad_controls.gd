@@ -22,7 +22,13 @@ extends Node
 ##     hidden meanwhile so there is one arrow on the screen, not two;
 ##   - the D-PAD hops the pointer to the nearest card or button in
 ##     that direction ([method _hop]) — the way a console menu walks,
-##     but over the whole table, the hand and the Situation Bar alike;
+##     but over the whole table, the hand and the Situation Bar alike.
+##     It lands on the part of the target that is SEEN ([method _aim],
+##     2026-09-28): a hand card under the next in the stack shows only
+##     its band, and the band is where the pointer goes — so UP and
+##     DOWN walk the stack one card at a time and LEFT and RIGHT leave
+##     it, the piles in the Situation Bar are targets too, and *"left
+##     does not work"* is no longer a thing the second playtest sees;
 ##   - [constant CLICK_BUTTON] (A) is the left mouse button — pressed
 ##     while it is held, so a stick under a held A is a drag, and a
 ##     second press within [constant DOUBLE_CLICK_MS] is the double-click
@@ -45,6 +51,17 @@ extends Node
 ## engine forwards the pad to it before this layer sees anything: its
 ## D-pad walks the entries and A picks one, the way every console menu
 ## does; the pointer waits.
+##
+## ONE PRESS IS ONE PRESS (2026-09-28, the second Steam Deck playtest:
+## *"when i click on the graveyard it just flashes"*). Steam Input can
+## send a game two copies of one gesture — the first playtest's layout
+## sent Escape beside pad B, and a layout that sends a mouse click
+## beside A, or a second pad beside the first, opens a pile with one
+## copy and closes it with the other. So a real mouse press of a button
+## within [constant DOUBLED_MS] of this layer's own press of it is eaten
+## (and its release with it), this layer's press within that of a real
+## one is skipped, and a pad button already down is not pressed again
+## by another device ([member _pad_down]).
 ##
 ## Every other button passes through untouched to the duel's own
 ## actions: B cancels, X is Done, Y the hand, Start the pause menu, Back
@@ -131,6 +148,13 @@ const WHEEL_RATE := 12.0
 ## A second A within this many milliseconds and pixels is a double-click.
 const DOUBLE_CLICK_MS := 300
 const DOUBLE_CLICK_SLOP := 12.0
+## A real mouse press of a button this close to this layer's own press
+## of it is Steam's copy of the same gesture (the duel's own rule for
+## its actions, [constant DuelScreen.DOUBLED_MS]).
+const DOUBLED_MS := 100
+## A control that is a hop target whatever it is — the graveyard and
+## exile plates, [TextureRect]s with a click of their own.
+const TARGET_META := "pad_target"
 ## A D-pad hop: how far sideways a target may sit before the cone
 ## widens with distance, and how many candidates are tried before the
 ## pointer stays put.
@@ -162,6 +186,15 @@ var _left_held := false
 var _right_held := false
 ## Which triggers are pulled, by axis.
 var _trigger_down := {JOY_AXIS_TRIGGER_RIGHT: false, JOY_AXIS_TRIGGER_LEFT: false}
+## The pad buttons of ours that are down, by button index — over every
+## device, so a second pad reporting the same press is not a second press.
+var _pad_down := {}
+## When this layer last pressed each mouse button, and when a real mouse
+## last did; and whether the real release of a button is owed to an
+## eaten real press.
+var _synth_ms := {MOUSE_BUTTON_LEFT: -1000000, MOUSE_BUTTON_RIGHT: -1000000}
+var _real_ms := {MOUSE_BUTTON_LEFT: -1000000, MOUSE_BUTTON_RIGHT: -1000000}
+var _eat_release := {MOUSE_BUTTON_LEFT: false, MOUSE_BUTTON_RIGHT: false}
 ## The mouse moved since the pad last had the pointer: the next wake
 ## is where the mouse is, not where the focus is.
 var _mouse_fresh := false
@@ -243,6 +276,11 @@ func set_active(on: bool) -> void:
 		_wheel_accum = 0.0
 		for axis in _trigger_down:
 			_trigger_down[axis] = false
+		_pad_down.clear()
+	for button in _eat_release:
+		_eat_release[button] = false
+		_synth_ms[button] = -1000000
+		_real_ms[button] = -1000000
 	_mouse_fresh = false
 	_active = on
 	set_process_input(on)
@@ -254,6 +292,7 @@ func _on_pads_changed(device: int, connected: bool) -> void:
 	# shows the game says which of its layouts is in force.
 	print("pad %d %s: %s" % [device, "connected" if connected else "gone",
 		Input.get_joy_name(device) if connected else "-"])
+	_pad_down.clear()           # a pad gone mid-press owes no release
 	apply_settings()
 
 
@@ -261,24 +300,33 @@ func _on_pads_changed(device: int, connected: bool) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouse:
-		if event.device != SYNTH_DEVICE:
-			# A real pointer moved or clicked: it is the pointer now, and
-			# the next wake starts where it left it.
-			_pointer = event.position
-			_mouse_fresh = true
-			_sleep()
+		if event.device == SYNTH_DEVICE:
+			return
+		if event is InputEventMouseButton and _doubled_real(event as InputEventMouseButton):
+			get_viewport().set_input_as_handled()
+			return
+		# A real pointer moved or clicked: it is the pointer now, and
+		# the next wake starts where it left it.
+		_pointer = event.position
+		_mouse_fresh = true
+		_sleep()
 		return
 	if event is InputEventJoypadButton:
 		var jb := event as InputEventJoypadButton
+		var ours := jb.button_index == CLICK_BUTTON or jb.button_index == MENU_BUTTON \
+			or HOPS.has(jb.button_index)
+		if not ours:
+			return              # the duel's own buttons: not ours to touch
+		if jb.pressed == _pad_down.get(jb.button_index, false):
+			_take()             # a second pad's copy of a press, or a release owed nothing
+			return
+		_pad_down[jb.button_index] = jb.pressed
 		if jb.button_index == CLICK_BUTTON:
 			_queue.append({"kind": "click", "button": MOUSE_BUTTON_LEFT, "pressed": jb.pressed})
 		elif jb.button_index == MENU_BUTTON:
 			_queue.append({"kind": "click", "button": MOUSE_BUTTON_RIGHT, "pressed": jb.pressed})
-		elif HOPS.has(jb.button_index):
-			if jb.pressed:
-				_queue.append({"kind": "hop", "dir": HOPS[jb.button_index]})
-		else:
-			return              # the duel's own buttons: not ours to touch
+		elif jb.pressed:
+			_queue.append({"kind": "hop", "dir": HOPS[jb.button_index]})
 		_take()
 	elif event is InputEventJoypadMotion:
 		var jm := event as InputEventJoypadMotion
@@ -300,6 +348,26 @@ func _trigger(axis: int, value: float) -> void:
 	_trigger_down[axis] = now
 	_queue.append({"kind": "click", "button": TRIGGERS[axis], "pressed": now})
 	_take()
+
+
+## A real mouse button: Steam's copy of a press this layer made within
+## [constant DOUBLED_MS] — eaten, and the release that answers it owed
+## the same; else a real press of its own, remembered so this layer's
+## copy of THAT can be skipped ([method _spend]).
+func _doubled_real(mb: InputEventMouseButton) -> bool:
+	if not _eat_release.has(mb.button_index):
+		return false
+	if mb.pressed:
+		if Time.get_ticks_msec() - _synth_ms[mb.button_index] <= DOUBLED_MS:
+			_synth_ms[mb.button_index] = -1000000     # one copy per press
+			_eat_release[mb.button_index] = true
+			return true
+		_real_ms[mb.button_index] = Time.get_ticks_msec()
+		return false
+	if _eat_release[mb.button_index]:
+		_eat_release[mb.button_index] = false
+		return true
+	return false
 
 
 ## Ours now: handled, and spent next frame.
@@ -334,10 +402,14 @@ func _spend(intent: Dictionary) -> void:
 			var button: int = intent["button"]
 			var pressed: bool = intent["pressed"]
 			if pressed:
+				var now := Time.get_ticks_msec()
+				if now - _real_ms[button] <= DOUBLED_MS:
+					_real_ms[button] = -1000000        # one copy per press
+					return      # the mouse's copy of this press clicked already
+				_synth_ms[button] = now
 				_wake()
 				var double := false
 				if button == MOUSE_BUTTON_LEFT:
-					var now := Time.get_ticks_msec()
 					double = now - _last_click_ms <= DOUBLE_CLICK_MS \
 						and _pointer.distance_to(_last_click_pos) <= DOUBLE_CLICK_SLOP
 					# A third press is a fresh first, not another double.
@@ -444,20 +516,25 @@ func _let_go() -> void:
 
 ## A D-pad press: the pointer moves to the nearest card or button in
 ## [param dir]. Nearest is measured from the pointer to the target's
-## centre — how far along the direction, weighted by how far across it
-## — inside a cone that starts [constant SNAP_CONE] wide and opens at
-## 45 degrees; with nothing in it, a cone twice as wide, so the hand's
-## far corner is still "down" from the Situation Bar but what sits
-## beside the pointer is never "ahead". Each candidate is tried in turn and kept only if it is what is really
-## drawn at its centre (a window over the table, a card under another),
-## read from the viewport's own answer to "what is hovered" — the touch
-## layer's rule. With nothing reachable the pointer stays where it was.
+## aim — the centre of what is seen of it, [method _aim] — how far along
+## the direction, weighted by how far across it — inside a cone that
+## starts [constant SNAP_CONE] wide and opens at 45 degrees; with
+## nothing in it, a cone twice as wide, so the hand's far corner is
+## still "down" from the Situation Bar but what sits beside the pointer
+## is never "ahead". What is under the pointer already is no target: a
+## hop moves. Each candidate is tried in turn and kept only if it is
+## what is really drawn at its aim (a window over the table), read from
+## the viewport's own answer to "what is hovered" — the touch layer's
+## rule. With nothing reachable the pointer stays where it was.
 func _hop(dir: Vector2) -> void:
 	var from := _pointer
+	var here: Control = get_tree().root.gui_get_hovered_control()
 	var in_cone: Array = []
 	var ahead: Array = []
 	for target in _targets(get_tree().root, get_viewport().get_visible_rect()):
-		var centre := _on_screen(target).get_center()
+		if target == here or (here != null and target.is_ancestor_of(here)):
+			continue
+		var centre := _aim(target)
 		var offset := centre - from
 		var along := offset.dot(dir)
 		if along < 1.0:
@@ -479,7 +556,8 @@ func _hop(dir: Vector2) -> void:
 
 
 ## Every control a hop could land on: a visible, enabled button, slider
-## or spin box that listens, inside [param clip] — the window, cut down
+## or spin box that listens, or a control marked [constant TARGET_META]
+## (the graveyard and exile plates), inside [param clip] — the window, cut down
 ## by every clipping ancestor on the way, so a line scrolled out of a
 ## [ScrollContainer] is no target (a window cut to the Deck's screen
 ## scrolls its body, [method OriginalDialog.keep_on_screen]). An
@@ -508,6 +586,8 @@ func _targets(node: Node, clip: Rect2) -> Array[Control]:
 
 
 static func _listens(control: Control) -> bool:
+	if control.has_meta(TARGET_META):
+		return true
 	if control is BaseButton:
 		return not (control as BaseButton).disabled
 	if control is Slider:
@@ -522,6 +602,68 @@ static func _listens(control: Control) -> bool:
 ## leaves out (the test runner's scaled panel is where that shows).
 static func _on_screen(control: Control) -> Rect2:
 	return control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, control.size)
+
+
+## Where a hop lands on [param target]: the centre of what is SEEN of it
+## — its rect on screen, cut to its clipping ancestors, then cut by every
+## sibling drawn over it (a higher `z_index`, or the same and later in
+## the tree) that takes the mouse. A hand card under the next in the
+## stack ([CardPile], 17 px steps) shows only its top band, and its
+## centre is under the next card: aimed there the hop is told "the next
+## card" and fails, which is what the second playtest reported as *"left
+## does not work"*. Of the four strips an overlapping sibling leaves the
+## largest is kept; a target covered whole keeps its plain centre and is
+## refused at [method _is_under] as before.
+func _aim(target: Control) -> Vector2:
+	var whole := _on_screen(target)
+	var seen := whole.intersection(_clip_of(target))
+	var parent := target.get_parent()
+	if parent != null:
+		var index := target.get_index()
+		for sibling in parent.get_children():
+			if sibling == target or not (sibling is Control):
+				continue
+			var over := sibling as Control
+			if not over.is_visible_in_tree() or over.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+				continue
+			if over.z_index < target.z_index \
+					or (over.z_index == target.z_index and over.get_index() < index):
+				continue
+			seen = _uncovered(seen, _on_screen(over))
+			if not seen.has_area():
+				break
+	return seen.get_center() if seen.has_area() else whole.get_center()
+
+
+## The window, cut down by every clipping ancestor of [param control] —
+## what [method _targets] computes on its way down, for one control.
+static func _clip_of(control: Control) -> Rect2:
+	var clip := control.get_viewport().get_visible_rect()
+	var node := control.get_parent()
+	while node != null and not (node is Window):
+		if node is Control and (node as Control).clip_contents:
+			clip = clip.intersection(_on_screen(node as Control))
+		node = node.get_parent()
+	return clip
+
+
+## What [param rect] still shows beside [param cover]: the largest of the
+## strips above, below, left and right of the cover; an empty rect when
+## the cover takes everything.
+static func _uncovered(rect: Rect2, cover: Rect2) -> Rect2:
+	if not rect.intersects(cover):
+		return rect
+	var strips := [
+		Rect2(rect.position, Vector2(rect.size.x, cover.position.y - rect.position.y)),
+		Rect2(Vector2(rect.position.x, cover.end.y), Vector2(rect.size.x, rect.end.y - cover.end.y)),
+		Rect2(rect.position, Vector2(cover.position.x - rect.position.x, rect.size.y)),
+		Rect2(Vector2(cover.end.x, rect.position.y), Vector2(rect.end.x - cover.end.x, rect.size.y)),
+	]
+	var best := Rect2()
+	for strip in strips:
+		if strip.size.x > 0.0 and strip.size.y > 0.0 and strip.get_area() > best.get_area():
+			best = strip
+	return best
 
 
 ## Whether [param target] is what the viewport says is under the pointer

@@ -19,7 +19,10 @@ extends GutTest
 ##      left stick the pointer (and a drag under a held A), the right
 ##      stick the wheel, the D-pad a hop to the nearest button ahead —
 ##      over what is really drawn there, past what is covered, past what
-##      a scroll has scrolled away, and staying put with nothing ahead.
+##      a scroll has scrolled away, and staying put with nothing ahead;
+##      and (2026-09-28, the second Steam Deck playtest) a hop lands on
+##      the SEEN part of a card, so a stepped pile is walked band by
+##      band, and a plate marked `pad_target` is a target like a button.
 ##   3. Awake and asleep: the first pad touch wakes the arrow where the
 ##      focus is — or where the mouse went since, a Deck's trackpad
 ##      having put it on a card for the trigger to click; a real mouse
@@ -28,6 +31,10 @@ extends GutTest
 ##      is open — the engine's rule, pinned here so the layer never
 ##      fights it.
 ##   5. The switch: the Options row is a view of the key.
+##   6. One press is one press (2026-09-28): a real mouse press that
+##      doubles the pad's own within DOUBLED_MS — Steam's copy of the
+##      gesture, either order — is one press, and a second pad reporting
+##      the same button is not a second press.
 
 var _xform: Transform2D
 var _stage: CanvasLayer
@@ -103,9 +110,9 @@ func _build_table() -> void:
 	_button.grab_focus()
 
 
-func _pad(button: int, pressed: bool) -> void:
+func _pad(button: int, pressed: bool, device := 0) -> void:
 	var jb := InputEventJoypadButton.new()
-	jb.device = 0
+	jb.device = device
 	jb.button_index = button
 	jb.pressed = pressed
 	Input.parse_input_event(jb)
@@ -125,6 +132,18 @@ func _mouse_move(at: Vector2) -> void:
 	mm.global_position = mm.position
 	mm.device = 0           # a real pointer
 	Input.parse_input_event(mm)
+
+
+## A real mouse button — a trackpad's click, or Steam's copy of a pad
+## button — at [param at], the stage's own coordinates.
+func _mouse_button(button: int, pressed: bool, at: Vector2) -> void:
+	var mb := InputEventMouseButton.new()
+	mb.button_index = button
+	mb.pressed = pressed
+	mb.position = _xform * at
+	mb.global_position = mb.position
+	mb.device = 0           # a real pointer
+	Input.parse_input_event(mb)
 
 
 ## The engine delivers parsed events next frame; the layer spends them
@@ -517,6 +536,85 @@ func test_a_hidden_or_disabled_button_is_no_target() -> void:
 	assert_eq(get_tree().root.gui_get_hovered_control(), far)
 
 
+## The hand stack the way [CardPile] lays one out: holders stepped 17 px
+## down the title edge, each drawn over the one before, so every card
+## but the last shows only its top band. The 2026-09-28 report: *"up/down
+## on your handheld stack should select various cards you are holding in
+## the stack one after another. Left right again move away from the
+## stack"* — and before this, UP from the last card found every band's
+## centre under the next card and stayed put.
+func test_a_hop_walks_a_stepped_pile_band_by_band() -> void:
+	layer.choose(PadControls.ON)
+	_build_stage()
+	var rows: Array[Button] = []
+	for i in 5:
+		var row := _add_button("card %d" % (i + 1), Vector2(1000, 300 + 17 * i), Vector2(120, 100))
+		row.z_index = i
+		rows.append(row)
+	var beside := _add_button("beside", Vector2(700, 380))
+	_table.grab_focus()
+	await _settle()
+	# From the table's centre: RIGHT is the button beside the pile, RIGHT
+	# again the pile — its last card, the one shown whole.
+	_pad(JOY_BUTTON_DPAD_RIGHT, true)
+	_pad(JOY_BUTTON_DPAD_RIGHT, false)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), beside)
+	_pad(JOY_BUTTON_DPAD_RIGHT, true)
+	_pad(JOY_BUTTON_DPAD_RIGHT, false)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), rows[4], "the whole card")
+	_near(layer.pointer(), Vector2(1060, 418), "at its centre")
+	# UP walks the bands one card at a time, landing on each band's middle.
+	for i in [3, 2, 1, 0]:
+		_pad(JOY_BUTTON_DPAD_UP, true)
+		_pad(JOY_BUTTON_DPAD_UP, false)
+		await _settle()
+		assert_eq(get_tree().root.gui_get_hovered_control(), rows[i], "UP: card %d" % (i + 1))
+		_near(layer.pointer(), Vector2(1060, 300 + 17 * i + 8.5), "on the band of card %d" % (i + 1))
+	_pad(JOY_BUTTON_DPAD_UP, true)
+	_pad(JOY_BUTTON_DPAD_UP, false)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), rows[0], "nothing above the first: stays")
+	# DOWN walks back, and LEFT leaves the pile: the bands stand straight
+	# above and below, never "left".
+	_pad(JOY_BUTTON_DPAD_DOWN, true)
+	_pad(JOY_BUTTON_DPAD_DOWN, false)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), rows[1], "DOWN: card 2")
+	_pad(JOY_BUTTON_DPAD_LEFT, true)
+	_pad(JOY_BUTTON_DPAD_LEFT, false)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), beside, "LEFT: off the pile")
+	assert_eq(_made_buttons(), [], "a hop clicks nothing")
+
+
+## The graveyard and exile plates are TextureRects with a click of their
+## own, marked `pad_target` in the duel; the mark is what makes them a
+## hop's business.
+func test_a_control_marked_pad_target_is_a_hop_target() -> void:
+	layer.choose(PadControls.ON)
+	_build_stage()
+	var plate := TextureRect.new()
+	plate.position = Vector2(1000, 380)
+	plate.size = Vector2(40, 60)
+	plate.mouse_filter = Control.MOUSE_FILTER_STOP
+	_table.add_child(plate)
+	var far := _add_button("far right", Vector2(1140, 380))
+	_table.grab_focus()
+	await _settle()
+	_pad(JOY_BUTTON_DPAD_RIGHT, true)
+	_pad(JOY_BUTTON_DPAD_RIGHT, false)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), far, "unmarked, the plate is passed over")
+	plate.set_meta(PadControls.TARGET_META, true)
+	_pad(JOY_BUTTON_DPAD_LEFT, true)
+	_pad(JOY_BUTTON_DPAD_LEFT, false)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), plate, "marked, it is the target")
+	_near(layer.pointer(), Vector2(1020, 410))
+
+
 # ===================================================== awake and asleep (3) ==
 
 func test_a_real_mouse_puts_the_layer_to_sleep_and_takes_the_pointer() -> void:
@@ -616,6 +714,83 @@ func test_a_release_with_nothing_held_sends_nothing() -> void:
 	_pad(JOY_BUTTON_A, false)
 	await _settle()
 	assert_eq(_made_buttons(), [], "a stray release — the press was the engine's, before the switch")
+
+
+# ================================================ one press is one press (6) ==
+
+## Steam Input sending a mouse click beside pad A — the way the first
+## playtest's layout sent Escape beside B — opened a pile with one copy
+## and closed it with the other: *"when i click on the graveyard it just
+## flashes"*. Either order, the two are one press on the button.
+func test_a_mouse_press_doubling_the_pads_own_is_one_press() -> void:
+	layer.choose(PadControls.ON)
+	_build_table()
+	await _settle()
+	# The pad first: its press lands; the real one within DOUBLED_MS is
+	# eaten, and the real release that answers it too.
+	_pad(JOY_BUTTON_A, true)
+	await _settle()
+	_mouse_button(MOUSE_BUTTON_LEFT, true, Vector2(640, 400))
+	await _settle()
+	assert_eq(_seen_devices(), [PadControls.SYNTH_DEVICE], "one press reached the button: the pad's")
+	assert_true(layer.is_awake(), "and the eaten click did not wake the mouse")
+	_mouse_button(MOUSE_BUTTON_LEFT, false, Vector2(640, 400))
+	_pad(JOY_BUTTON_A, false)
+	await _settle()
+	assert_eq(_seen_devices(), [PadControls.SYNTH_DEVICE, PadControls.SYNTH_DEVICE],
+		"the pad's release, not the mouse's")
+	assert_eq(_presses, 1)
+	# The mouse first: the real press lands and takes the pointer; the
+	# pad's own, a frame later, is skipped — and so is its release.
+	_seen.clear()
+	_mouse_button(MOUSE_BUTTON_LEFT, true, Vector2(640, 400))
+	_pad(JOY_BUTTON_A, true)
+	await _settle()
+	assert_eq(_seen_devices(), [0], "one press reached the button: the mouse's")
+	assert_false(layer.is_awake(), "the mouse has the pointer")
+	_mouse_button(MOUSE_BUTTON_LEFT, false, Vector2(640, 400))
+	_pad(JOY_BUTTON_A, false)
+	await _settle()
+	assert_eq(_seen_devices(), [0, 0])
+	assert_eq(_presses, 2)
+	# Apart by more than DOUBLED_MS they are two presses, as they should be.
+	_seen.clear()
+	_pad(JOY_BUTTON_A, true)
+	_pad(JOY_BUTTON_A, false)
+	await _settle()
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 <= PadControls.DOUBLED_MS + 20:
+		await get_tree().process_frame      # wall-clock ms, the layer's own clock
+	_mouse_button(MOUSE_BUTTON_LEFT, true, Vector2(640, 400))
+	_mouse_button(MOUSE_BUTTON_LEFT, false, Vector2(640, 400))
+	await _settle()
+	assert_eq(_seen_devices(), [PadControls.SYNTH_DEVICE, PadControls.SYNTH_DEVICE, 0, 0])
+	assert_eq(_presses, 4)
+
+
+## Two pads reporting one press — Steam's virtual pad beside the Deck's
+## own — is one press, and one hop.
+func test_a_second_pad_reporting_the_same_button_is_not_a_second_press() -> void:
+	layer.choose(PadControls.ON)
+	_build_table()
+	var right := _add_button("right", Vector2(1000, 380))
+	_add_button("far right", Vector2(1140, 380))
+	await _settle()
+	_pad(JOY_BUTTON_A, true)
+	_pad(JOY_BUTTON_A, true, 1)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]], "one press")
+	_pad(JOY_BUTTON_A, false)
+	_pad(JOY_BUTTON_A, false, 1)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true], [MOUSE_BUTTON_LEFT, false]], "one release")
+	assert_eq(_presses, 1)
+	_pad(JOY_BUTTON_DPAD_RIGHT, true)
+	_pad(JOY_BUTTON_DPAD_RIGHT, true, 1)
+	_pad(JOY_BUTTON_DPAD_RIGHT, false)
+	_pad(JOY_BUTTON_DPAD_RIGHT, false, 1)
+	await _settle()
+	assert_eq(get_tree().root.gui_get_hovered_control(), right, "one hop, not two")
 
 
 # ======================================================= the mini-menu (4) ==

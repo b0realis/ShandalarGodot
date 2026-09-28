@@ -657,6 +657,15 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.46.md`: the second Deck playtest answered —
+  `PadControls._aim` (`game/input/pad_controls.gd`) lands a hop on the
+  seen part of a card so the hand stack is walked band by band, the
+  graveyard and exile plates carry the `pad_target` meta, and a mouse
+  press doubling the pad's own within `DOUBLED_MS` is one press;
+  `GraveyardView.SETTLE_MS` (`game/duel/graveyard_view.gd`) ignores a
+  click on the dim right after opening; `CardPreview.docked`
+  (`game/duel/card_preview.gd`) rests a docked big card at z 0 under the
+  duel's windows and keeps the undocked popup at `POPUP_Z`.
 - `docs/releases/0.40.45.md`: the first Deck playtest answered —
   `OriginalDialog.keep_on_screen` (`game/duel/original_dialog.gd`) cuts a
   window to the screen less 24 px and scrolls its body; the AutoDeck window
@@ -4738,7 +4747,11 @@ shandalar/
 │    cards cost (784 for five, 504 for three), every card renders at
 │    MiniCard.SIZE unscaled, the centre card carries "N / total", the
 │    arrows page a whole shelf and clamp at both ends, and a pile opened
-│    while targeting lands on the page holding the first legal card
+│    while targeting lands on the page holding the first legal card;
+│    2026-09-28: a press on the dim within SETTLE_MS of opening closes
+│    nothing and one after it does, and the docked big card rests at
+│    z 0 under the combat and hand windows, over the dim while a pile
+│    is open, at POPUP_Z undocked
 │    tests/ui/test_exile_pile.gd — the pile right of the graveyard: it
 │    shows its top card or its plate, opens the same viewer, and its
 │    DERIVED plate borrows the 1997 grave plate's size, border and palette
@@ -5540,10 +5553,16 @@ shandalar/
 │    ScrollContainer, a D-pad hop lands on the nearest button ahead and
 │    hovers it, then the next, stays with nothing ahead (the runner's
 │    panel below is not "right"), takes the off-line one below, passes
-│    over a button under a Panel and over hidden/disabled ones; a real
+│    over a button under a Panel and over hidden/disabled ones, walks a
+│    stepped pile of five band by band (UP lands on each band's middle,
+│    DOWN back, LEFT off the pile) and takes a TextureRect only once it
+│    carries the `pad_target` meta (2026-09-28); a real
 │    mouse motion sleeps the layer and takes the pointer, the OS pointer
 │    is untouched headless, `off` mid-hold releases both buttons and the
-│    pad's own later releases are nobody's; a PopupMenu takes the D-pad
+│    pad's own later releases are nobody's; a real mouse press doubling
+│    the pad's own within DOUBLED_MS is one press in either order and
+│    two after it, a second pad reporting A or a D-pad button is not a
+│    second press or hop (2026-09-28); a PopupMenu takes the D-pad
 │    and A itself with the layer seeing none of it; the Options row is a
 │    view of the key, the choice survives Settings.reload, and
 │    joy_connection_changed re-reads `auto`;

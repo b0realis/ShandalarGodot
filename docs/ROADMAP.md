@@ -18080,6 +18080,105 @@ closes it; Q then Q closes; Start then Escape is two presses.
 Gate: 542 scripts, **8,171/8,171 tests, 367,194 asserts**, exit 0 in
 261 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-28 — The second Steam Deck playtest (0.40.46)
+
+The owner played 0.40.45 on the Deck and sent four more points: *"7.
+Ok when i click on the graveyard it just flashes and i cannot see it!
+8. Big card is on top of windows, for example battle window in the
+duel. It should be behind active windows! 9. Sometimes the D-pad is
+not consistent. for example: I go left to select card and go right
+back and left again, left does not work. It should work like this:
+left and right should select various cards, your stack, … up down
+should move through the options - for example up/down on your handheld
+stack should select various cards you are holding in the stack one
+after another. Left right again move away from the stack for example.
+Fix it."* and *"10. I ment graveyard and exile stacks both!"*
+
+**9 — the hop aims at what is seen.** Reproduced on the first probe:
+the hand window's `CardPile` stands its holders 17 px apart down the
+title edge, each drawn over the one before (`z_index` 0, 1, 2…), so
+every card but the last shows only the band of its top edge — and
+`PadControls._hop` aimed at each candidate's CENTRE, asked the viewport
+what was hovered there, was told "the next card", and after six such
+tries (`SNAP_TRIES`) put the pointer back where it was. On a six-card
+hand UP, UP, LEFT, RIGHT and LEFT all left the pointer on the last
+card. `_aim` now takes a target's rect on screen, cuts it to its
+clipping ancestors (`_clip_of`) and then by every sibling drawn over it
+that takes the mouse (a higher `z_index`, or the same and later in the
+tree), keeping the largest of the four strips an overlap leaves
+(`_uncovered`); the hop ranks and hovers by that aim, and a target
+covered whole keeps its plain centre and is refused at `_is_under` as
+before. The owner's semantics fall out of the geometry: from the last
+card UP finds the band above (`along` 61, `across` 0) and from a band
+the next band (`along` 17), LEFT and RIGHT find the bands at `along`
+0 and skip them, so they leave the stack. What is under the pointer
+already is no target — a hop moves. The same probe on the real
+`StackHand` now reads 5 → 4 → 3 for UP, UP; LEFT to a table button;
+RIGHT back to the nearest band. The graveyard and exile plates are
+`TextureRect`s with a click of their own and were no target at all;
+they carry the `pad_target` meta (`PadControls.TARGET_META`, by its
+literal in the duel: the tools parse that screen before the autoloads
+are named) and `_listens` takes the meta first.
+
+**7 and 10 — the flashing pile.** Not reproduced headless: a real
+click, an RT pull and a pad A on the plate all open the view and it
+stays. Both plates open the one view on a left PRESS and the view's
+dim dismisses on a left PRESS, so the shape is the Pause window's of
+the first playtest — one press arriving twice. The first playtest
+proved the owner's layout doubles pad B with an Escape key; a layout
+that doubles A with a mouse click (or two pads reporting one press:
+Steam's virtual pad beside the Deck's own) opens the pile with one
+copy and closes it with the other a frame later, and the same doubling
+on a hand card or a button is two single clicks, which is why nothing
+else was reported. Three guards, each cheap and each pinned:
+`PadControls` eats a real mouse press within `DOUBLED_MS` (100) of its
+own press of that button and the release that answers it, skips its
+own press within that of a real one (either order, one copy per press,
+the clocks reset when the layer switches), and drops a pad button
+already down from any device (`_pad_down`, cleared when a pad comes or
+goes); and `GraveyardView` ignores a press on its dim within
+`SETTLE_MS` (250) of the duel calling `opened()` — no one reads a pile
+and closes it in a quarter of a second, and this one holds whatever
+the source of the second press. If the flash recurs, the Deck's
+`godot.log` pad names and the Steam layout are the next thing to read.
+
+**8 — the big card under the windows.** `CardPreview._init` set
+`z_index = 200` — the examine popup's height, over an `OriginalDialog`
+— on every instance, the docked sidebar card included, so the combat
+window (30) dragged across the sidebar, the hand window (60) and a card
+in flight (70) all drew UNDER it. `docked` is a setter now: docked
+rests at 0, a panel of its screen; undocked stays `POPUP_Z` 200. The
+graveyard view's dim (190) would then darken the very card the pile
+fills, so `_open_graveyard` lifts the docked card to the view's z + 1
+and `_close_graveyard` rests it (`rest_z`). The deck builder's
+showcase, the variant dialog's and the opening window's docked cards
+follow the same rule; the opening window's `_examine` keeps its own
+270.
+
+**How it is pinned.** `tests/ui/test_pad_controls.gd`: a pile of five
+120x100 buttons stepped 17 px with `z_index` 0..4 beside a button —
+RIGHT, RIGHT lands on the whole last card at its centre, UP four times
+lands on cards 4, 3, 2, 1 at each band's middle (y 359.5, 342.5,
+325.5, 308.5), UP again stays, DOWN is card 2, LEFT is the button
+beside (the bite check: the centre aim fails every UP and the DOWN
+lands on the runner's own CheckButton); a `TextureRect` is passed over
+until it carries `pad_target`; a real left press while the pad's A is
+held reaches the button once (device 4097) and its release too, the
+mouse first reaches it once (device 0) and puts the layer to sleep,
+and 120 ms apart they are two presses; two devices pressing A are one
+press and one release, two pressing D-pad RIGHT one hop.
+`test_graveyard_view.gd`: a press on the dim right after opening
+closes nothing, one after `SETTLE_MS` does, reopened it is settled
+again; the docked big card is at 0 under the combat window's 30 and
+the hand's 60, above the view's 190 while a pile is open, 0 again
+after, and a fresh `CardPreview` is at `POPUP_Z` until docked. The
+waits read the wall clock (`Time.get_ticks_msec`) — the runner's
+`create_timer` runs on a scaled clock and a 300 ms timer came back in
+153.
+
+Gate: 542 scripts, **8,177/8,177 tests, 367,385 asserts**, exit 0 in
+268 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

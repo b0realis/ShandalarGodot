@@ -101,6 +101,14 @@ const CANVAS := Vector2(1280, 800)
 ## x -40..-6, i.e. the last 34px) and of the badge row at bottom-left.
 const COUNTER_SIZE := Vector2(48, 16)
 
+## A press on the dim this soon after the view OPENED is a second copy of
+## the press that opened it — Steam Input on the Deck sending a mouse
+## click beside the pad button, a finger's tap arriving twice — and
+## closes nothing (the second Steam Deck playtest, 2026-09-28: *"when i
+## click on the graveyard it just flashes and i cannot see it!"*). No
+## one reads a pile and closes it in a quarter of a second.
+const SETTLE_MS := 250
+
 ## A card in one of the piles was clicked.
 signal card_picked(inst: CardInstance)
 ## The overlay wants to close (a click on the dim, or Escape).
@@ -124,6 +132,8 @@ var _column: VBoxContainer = null
 # Last populate() arguments, replayed when an arrow pages a shelf.
 var _game: MtgGame = null
 var _human := 0
+## When the DuelScreen last opened the view ([method opened]).
+var _opened_ms := -1000000
 var _legal := Callable()
 ## Window start index per "zone:pid" shelf, kept across repopulates (a
 ## taken target rebuilds the view and must not throw the player back to
@@ -172,12 +182,21 @@ func _init() -> void:
 
 
 ## Anywhere outside a card closes the view — s30's "click anywhere outside
-## to close" (`duel.go:3715-3733`).
+## to close" (`duel.go:3715-3733`) — unless the view opened within
+## [constant SETTLE_MS]: that press is the one that opened it, arriving
+## again.
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed \
 			and event.button_index == MOUSE_BUTTON_LEFT:
-		dismissed.emit()
 		accept_event()
+		if Time.get_ticks_msec() - _opened_ms > SETTLE_MS:
+			dismissed.emit()
+
+
+## The DuelScreen has just shown the view on a press: the clock behind
+## [constant SETTLE_MS] starts.
+func opened() -> void:
+	_opened_ms = Time.get_ticks_msec()
 
 
 ## Forget every shelf's page. The DuelScreen calls this when the overlay is
