@@ -176,6 +176,33 @@ func test_start_on_the_pad_opens_it_and_b_closes_it() -> void:
 		"the pad handler leaves keys to the key handler — one press, one road")
 
 
+func test_a_b_doubled_by_an_escape_is_one_press_and_the_window_stays() -> void:
+	# The 2026-09-28 Deck report: *"the menu sometimes flashes quickly
+	# on and off upon B button press."* A Steam Input button with two
+	# outputs — the pad's B and an Escape key — reaches the table twice
+	# a frame apart; the second within DOUBLED_MS is the same press.
+	assert_false(screen.is_paused())
+	_send_pad(JOY_BUTTON_B)
+	assert_true(screen.is_paused(), "B with nothing to cancel opens the Pause window")
+	_send_key(KEY_ESCAPE)
+	assert_true(screen.is_paused(), "the Escape riding on the same button, the same instant: dropped")
+	# The player's own next press comes later than DOUBLED_MS.
+	screen._last_stroke["ms"] -= DuelScreen.DOUBLED_MS + 1
+	_send_key(KEY_ESCAPE)
+	assert_false(screen.is_paused(), "an Escape on its own closes it, as before")
+	# The same key twice in one instant is the player's double tap.
+	_send_key(KEY_Q)
+	assert_true(screen.is_paused())
+	_send_key(KEY_Q)
+	assert_false(screen.is_paused(), "Q then Q: the second stands")
+	# And two actions in one instant are two presses, whatever sent them.
+	screen._last_stroke["ms"] -= DuelScreen.DOUBLED_MS + 1
+	_send_pad(JOY_BUTTON_START)
+	assert_true(screen.is_paused())
+	_send_key(KEY_ESCAPE)
+	assert_false(screen.is_paused(), "Start then Escape: Pause, then Cancel")
+
+
 func test_a_rebound_key_is_the_one_the_duel_listens_for() -> void:
 	# The handler reads the map, not the letter: move Pause to P and Q
 	# is nothing, P is the window.

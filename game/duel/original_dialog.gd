@@ -90,11 +90,20 @@ const BUTTON_MARGIN := 8
 ## a line in the window is [member size].x less twice this wide.
 const MARGIN := 16
 
+## What the window keeps from every edge of the SCREEN
+## ([method keep_on_screen]).
+const SCREEN_MARGIN := 24
+
 signal closed
 
 
+var _column: VBoxContainer = null
 var _body: VBoxContainer = null
 var _buttons: HBoxContainer = null
+## The vertical scroll the body sits in once the screen has cut the
+## window shorter than it was made ([method _scroll_body]); null while
+## the window is whole.
+var _scroll: ScrollContainer = null
 
 
 # ------------------------------------------------------------- the frame --
@@ -672,6 +681,7 @@ static func create(title_text: String, size: Vector2,
 		Control.PRESET_MODE_MINSIZE, MARGIN)
 	column.add_theme_constant_override("separation", 10)
 	dialog.add_child(column)
+	dialog._column = column
 
 	if title_text != "":
 		# THE TITLE FOLDS TOO. A title wider than the window used to widen
@@ -693,9 +703,60 @@ static func create(title_text: String, size: Vector2,
 	return dialog
 
 
+func _ready() -> void:
+	keep_on_screen()
+
+
 ## Where callers put the dialog's content.
 func body() -> VBoxContainer:
 	return _body
+
+
+## NEVER PAST THE SCREEN. [method create] sizes a window for the 1280x800
+## the game lays out on, and the Steam Deck's 16:10 screen and a 16:9
+## monitor both land on 800 logical rows — a window made 800 tall fills
+## them edge to edge, and a window that grew for its lines hangs off
+## them. The 2026-09-28 Deck playtest: *"Some windows overflow the screen
+## like AutoDeck window in the deck builder is too large."* This cuts the
+## window to the screen less [constant SCREEN_MARGIN] on every side and
+## recentres it; a cut that takes ROWS puts the body behind a scroll
+## ([method _scroll_body]) so the foot buttons stay on the stone and the
+## wheel — a pad's right stick — reaches every line. Runs on entering the
+## tree and again after [method fit_height] grows the window; nothing to
+## do for a window that fits, which is every window on a desktop.
+func keep_on_screen() -> void:
+	if not is_inside_tree():
+		return
+	var room := get_viewport().get_visible_rect().size \
+		- Vector2.ONE * (2 * SCREEN_MARGIN)
+	if size.x <= room.x and size.y <= room.y:
+		return
+	if size.y > room.y:
+		_scroll_body()
+	size = size.min(room)
+	set_anchors_and_offsets_preset(Control.PRESET_CENTER,
+		Control.PRESET_MODE_KEEP_SIZE)
+
+
+## Put the body behind a vertical scroll, once: the scroll takes the
+## body's place in the column and its EXPAND, so the title and the
+## buttons keep their rows; `follow_focus` brings a line the D-pad hops
+## to into view.
+func _scroll_body() -> void:
+	if _scroll != null or _column == null:
+		return
+	_scroll = ScrollContainer.new()
+	_scroll.name = "BodyScroll"
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_scroll.follow_focus = true
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var at := _body.get_index()
+	_column.remove_child(_body)
+	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_body)
+	_column.add_child(_scroll)
+	_column.move_child(_scroll, at)
 
 
 ## GROW TO WHAT IS WRITTEN. [method create] sizes a window for the lines
@@ -707,8 +768,7 @@ func body() -> VBoxContainer:
 ## centred. The 2026-09-27 playtest: *"in the gauntlet with long named
 ## decks the text can overflow the you won window"*.
 func fit_height() -> void:
-	var column := _body.get_parent() as Control
-	if column == null:
+	if _column == null:
 		return
 	# A folded line knows its height only once it knows its width, and the
 	# containers hand widths out on their next sort. Hand each line its
@@ -716,16 +776,21 @@ func fit_height() -> void:
 	# and say so upward: sizing a line folds it afresh but leaves the
 	# containers' cached measure of it as it was, at one letter a row.
 	var width := size.x - 2 * MARGIN
-	for line in column.get_children() + _body.get_children():
+	for line in _column.get_children() + _body.get_children():
 		if line is Label and line.autowrap_mode != TextServer.AUTOWRAP_OFF:
 			line.size = Vector2(width, 0)
 			line.update_minimum_size()
-	var wanted := column.get_combined_minimum_size().y + 2 * MARGIN
+	var wanted := _column.get_combined_minimum_size().y + 2 * MARGIN
+	if _scroll != null:
+		# A scroll asks the column for nothing on behalf of what it
+		# scrolls; the body's own wish is what the window would need.
+		wanted += _body.get_combined_minimum_size().y
 	if wanted <= size.y:
 		return
 	size.y = wanted
 	set_anchors_and_offsets_preset(Control.PRESET_CENTER,
 		Control.PRESET_MODE_KEEP_SIZE)
+	keep_on_screen()
 
 
 ## Add a button to the dialog's foot. Use the 1997 labels — `@DIALOGBUTTONS`

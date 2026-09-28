@@ -959,7 +959,7 @@ static func _style_emerald_done(button: Button) -> void:
 func _open_extra_sets() -> void:
 	if _dialog_busy():
 		return
-	var dialog := OriginalDialog.create("Extras", Vector2(460, 720).min(get_viewport_rect().size - Vector2(24, 24)))
+	var dialog := OriginalDialog.create("Extras", Vector2(460, 720))
 	dialog.name = "ExtraSetsDialog"
 	dialog.set_meta("extra_sets", true)
 	var scroll := ScrollContainer.new()

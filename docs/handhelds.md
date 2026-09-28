@@ -47,21 +47,30 @@ used in turn without a switch.
 | D-pad | Hop to the nearest card or button in that direction |
 | A | Left click; hold and move for a drag; two quick presses to auto-cast |
 | LB | Right click: the card, territory and life-box mini-menus |
+| RT | Left click too, pulled past half way — for a trackpad under the same hand |
+| LT | Right click too, the same way |
 | Right stick | Scroll wheel |
 | RB | The one button: advances the duel (Space) |
 | X | Done (Enter) |
 | B | Cancel (Escape); closes a mini-menu |
-| Y | Show/hide hand |
+| Y | Fold the hand to name bands and unfold it (the hand's title shows `[+]` while folded) |
 | Start | Pause menu |
 | Back | Duel log |
 
 While a mini-menu is open the D-pad walks its entries and A picks one. RB,
 X, B, Y, Start and Back can be rebound in Options → Controls; A, LB, the
-D-pad and the sticks belong to the pointer while it is on. With the pointer
-off, the D-pad and the left stick move the engine's focus ring over the
-menus' buttons and A presses the focused one; the shell, Options, the battle
-setup and the gauntlet's startup window each start the ring on their first
-button, for the keyboard too.
+triggers, the D-pad and the sticks belong to the pointer while it is on.
+With the pointer off, the D-pad and the left stick move the engine's focus
+ring over the menus' buttons and A presses the focused one; the shell,
+Options, the battle setup and the gauntlet's startup window each start the
+ring on their first button, for the keyboard too.
+
+A pad click lands where the pointer is: on the button that has the focus
+when the pad alone is in use, or wherever a mouse or trackpad last put the
+pointer — so on a Deck the right trackpad can point and RT click, like a
+mouse with its button under the other finger. A window taller than the
+screen (a pool with many sets in AutoDeck) keeps its buttons on the screen
+and scrolls its body: the right stick, or a hop, reaches every line.
 
 ## Steam Deck
 
@@ -72,11 +81,14 @@ button, for the keyboard too.
 3. Leave forced Proton compatibility off: this is a native Linux executable.
 4. Choose a Steam Input layout, then launch from Gaming Mode. Either works;
    do not mix the two on one button.
-   - **Gamepad layout** (a gamepad template, with or without the trackpad as
-     mouse): the game sees the controller and its pad pointer plays the table
-     with the buttons listed under *Controller pointer* above. The right
-     trackpad, if mapped as a mouse, takes the pointer back whenever it is
-     touched.
+   - **Gamepad layout** — the recommended template is **Gamepad with Mouse
+     Trackpad**: the game sees the controller and its pad pointer plays the
+     table with the buttons listed under *Controller pointer* above, the
+     right trackpad is the mouse and takes the pointer whenever it is
+     touched, and RT and LT click where it points. Leave the triggers as
+     the gamepad's own triggers in the layout; the game makes them the
+     mouse buttons itself. (The plain *Gamepad* template works too, with
+     the left stick as the pointer and no trackpad.)
    - **Keyboard and mouse layout**: the game sees no controller and Steam
      Input is the pointer. Right trackpad: mouse; R2: left click; L2: right
      click; A: Space; X: Enter; B: Escape; Y: H; D-pad: arrow keys. Map a
@@ -86,7 +98,11 @@ button, for the keyboard too.
    Use Steam's on-screen keyboard for names/searches, or connect a keyboard.
 
 Use only one keyboard/mouse binding per button, without an additional gamepad
-output on that same button, to avoid duplicate actions. The launcher requests
+output on that same button, to avoid duplicate actions: a button that sends
+both the pad's B and an Escape key would open the Pause menu and close it
+again in the same instant — the duel drops the second of two identical
+actions from different devices within a tenth of a second, but a layout
+should not rely on that. The launcher requests
 1280x800, caps rendering at 60 FPS and names the device (`SHANDALAR_HANDHELD`,
 see *Handheld defaults*). It does not overwrite your Options or controller
 bindings. Gaming Mode also controls the outer game window.
@@ -128,7 +144,7 @@ read comfortably; there is no dedicated small-screen reflow in this package.
 | A / B | Left / right mouse click |
 | X | Enter: Done in duel; add selected card in Deck Builder |
 | R1 | Space: situation-bar action |
-| Y | Show/hide hand in duel |
+| Y | Fold/unfold the hand in duel |
 | D-pad | Arrow keys; left/right browse cards in Deck Builder |
 | L2 / R2 | Page Up / Page Down where supported |
 | L3 | Backspace: remove selected card in Deck Builder |

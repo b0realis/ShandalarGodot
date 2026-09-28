@@ -657,6 +657,15 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.45.md`: the first Deck playtest answered —
+  `OriginalDialog.keep_on_screen` (`game/duel/original_dialog.gd`) cuts a
+  window to the screen less 24 px and scrolls its body; the AutoDeck window
+  (`game/deck_builder/auto_deck_window.gd`) is 720 tall with paired rows and
+  grows for more sets; `PadControls` (`game/input/pad_controls.gd`) makes
+  RT/LT the mouse buttons, wakes where a trackpad left the pointer and skips
+  scrolled-away hop targets; `DuelScreen._is_doubled`
+  (`game/duel/duel_screen.gd`) drops the second of a doubled keystroke;
+  `docs/handhelds.md` recommends the Gamepad with Mouse Trackpad layout.
 - `docs/releases/0.40.44.md`: bookkeeping — the SGManalink docs name the
   current build again (0.40.42/0.40.43 bumped `project.godot` alone), the
   README's verification line reads a full gate of this tree, and the ROADMAP
@@ -5362,6 +5371,15 @@ shandalar/
 │    and answered by the player; the AI's next upkeep is squeezed 7 − 4;
 │    and the AI's own Vise never pauses the duel, still filed, naming
 │    the player by name;
+│    tests/ui/test_dialog_keeps_on_screen_2026_09_28.gd — THE SCREEN HAS
+│    THE LAST WORD (OriginalDialog.keep_on_screen): in a 1280x800
+│    SubViewport a 680x720 window is left as made; a 680x900 one is cut
+│    to 752 and recentred, its body behind a "BodyScroll" (follow_focus,
+│    no horizontal scroll), the OK button on the stone and line 40 below
+│    the edge until the scroll brings it up; a 1400-wide one is cut in
+│    width with no scroll; fit_height grows a 600x300 window with forty
+│    lines to 752 and no further; on the runner's own 1280x1280 viewport
+│    a 900-tall window is untouched;
 │    tests/ui/test_end_of_duel_window_2026_09_27.gd — THE END OF DUEL
 │    WINDOW FOLDS ITS LINES: the owner's "in the gauntlet with long
 │    named decks the text can overflow the you won window" — a gauntlet

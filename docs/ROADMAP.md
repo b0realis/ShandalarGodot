@@ -17975,6 +17975,111 @@ gate, where they play). No code changed.
 Gate: 541 scripts, **8,161/8,161 tests, 366,951 asserts**, exit 0 in
 262 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-28 — The first Steam Deck playtest (0.40.45)
+
+The owner played 0.40.41 on the Deck and sent five points: *"1.
+sometimes the bottom (or top depending in perspective) card in the
+player hand stack- the one with the art - is shown only by name and
+its art dissapears? 2. The B button triggers an exit/pause menu in the
+duel. The menu sometimes flashes quickly on and off upon B button press
+(in between some gameplay). 3. When run from steam all controls are ok
+except the right trackpad should be set to mouse by default and right
+trigger to left mouse click by default."*, *"4. Some windows overflow
+the screen like AutoDeck window in the deck builder is too large. Fix
+elegantly."* and *"5: maybe it would be useful to also define mouse
+rightclick on left trigger."*
+
+**4 — no window past the screen.** The cause was measured before it
+was fixed: the game lays out on 1280x800 with `canvas_items` stretch
+and `expand`, so the Deck's 16:10 and a 16:9 monitor both land on
+exactly 800 logical rows, and the AutoDeck window was made 800 tall —
+edge to edge with nothing to spare — while the owner's seven-pack copy
+has fifteen sets where the base pool has eight, two more rows of the
+set grid, and the column ran past the stone. The elegant fix is one
+rule in one place: `OriginalDialog.keep_on_screen`, run when a window
+enters the tree and again after `fit_height` grows it, cuts the window
+to the screen less 24 px on every side and recentres it; a cut that
+takes rows moves the body into a vertical `ScrollContainer`
+(`follow_focus`, no horizontal scroll) at the body's place in the
+column, so the title and the foot buttons keep their rows and the
+wheel — the pad's right stick — reaches every line. Nothing is measured
+at `_ready`, because a folding label's minimum on frame 0 is a word a
+row (the probe read 4,766 for a column that is 756 from frame 1 on);
+"cut ⇒ scroll" needs no measurement. The six ad hoc
+`.min(get_viewport_rect().size - Vector2(24, 24))` clamps in the deck
+builder's Extras and the draft windows are gone. AutoDeck itself is
+made 720 tall with Cards and Lands on one row and Variety and Seed on
+another, its switch lines and its list line no longer fold (so the
+frame-0 measure is honest — the probe now reads the same 665 on frame
+0 and frame 1), and it calls `fit_height` after `_refresh`, so eight
+sets are 697 rows of 720, fifteen grow it to 741 under the 752 the
+screen allows, and more than that scroll.
+
+**3 and 5 — the triggers, and where a click lands.** The Deck's default
+layout for a non-Steam game is Steam's to set, not the game's; what the
+game can do is make a gamepad layout right on its own. `PadControls`
+now takes RT as the left mouse button and LT as the right, pulled past
+0.5 and let go under 0.3 — a band, so a finger resting on the edge
+never clicks twice; the rest of the travel is nobody's. And the wake
+rule changed: a real mouse event marks the pointer fresh, and the next
+pad wake starts where the mouse left it, else on the focused button,
+else where the mouse last was — so with the *Gamepad with Mouse
+Trackpad* template the right trackpad points and RT clicks that card,
+while a pad alone still clicks the button that has the focus.
+`docs/handhelds.md` and the package README recommend that template and
+say to leave the triggers as triggers in it. A hop's targets are now
+clipped by every `clip_contents` ancestor, so a line a scroll has
+scrolled away is no target (the bite check: without the clip, six
+scrolled-away lines dead ahead exhaust `SNAP_TRIES` and the pointer
+stays put). The layer prints each pad's name to Godot's log as it
+arrives, for the next report.
+
+**2 — the flashing Pause menu.** Not reproduced headless: a routed B
+press opens the window and the code has only two closers, a B/Start
+keystroke through `_on_control` and the Return button. The likeliest
+cause on a Deck is a doubled keystroke — a Steam Input button with two
+outputs, the pad's B and an Escape key, which the guide already warns
+against — reaching the table a frame apart, the first opening the
+window and the second closing it. `DuelScreen._is_doubled` drops the
+same action again within 100 ms from a different kind of device (key
+after pad, or another pad); the same key twice within that is the
+player's own double tap and stands, and two different actions in one
+instant are two presses, whatever sent them. If the flash recurs the
+next thing to read is the Deck's `godot.log` — the pad names the layer
+prints say which layout Steam Input is running.
+
+**1 — the hand card shown only by name.** Art lookup is synchronous and
+cached (`CardPrintings.texture` → `GameSkin.card_art`), so the art does
+not race; what shows every hand card as a name band is the hand's FOLD
+— Y (`duel_hand`) toggles it, and Y sits beside X (Done) on the Deck —
+or a title-bar click that never became a drag. The fold shows `[+]`
+in the hand's title. No code change; the guide now says what Y does.
+If it recurs with no `[+]` in the title, a screenshot decides it.
+
+**How it is pinned.** `tests/ui/test_dialog_keeps_on_screen_2026_09_28.gd`
+opens windows in a 1280x800 SubViewport (the runner's own viewport is
+1280x1280): a 680x720 window is left as made; a 680x900 one is cut to
+752 and recentred, its body behind `BodyScroll`, the OK button on the
+stone and line 40 below the edge until the scroll brings it up; a
+1400-wide one is cut in width with no scroll; `fit_height` grows a
+600x300 window with forty lines to 752 and no further; a 900-tall
+window on the runner's own viewport is untouched.
+`test_auto_deck_window.gd` now asks the window to fit 752, not 800 —
+with the skin; the skinless default type the gate runs in is taller
+(the window grows to 826 there), so skinless it asks only for the
+runner's own room and leaves the cut to `keep_on_screen`.
+`test_pad_controls.gd` replaces "a trigger is not the layer's" with the
+pull band (0.4 nothing, 0.6 a held left button at the focus, 1.0 then
+0.4 nothing, 0.2 the release and one press), LT as the right button,
+off letting a pulled trigger go, a trigger clicking where the trackpad
+put the pointer with the focus elsewhere, and the scrolled-away lines
+that are no hop target. `test_duel_pause.gd` presses pad B then key
+Escape in one instant and the window stays; an Escape 101 ms later
+closes it; Q then Q closes; Start then Escape is two presses.
+
+Gate: 542 scripts, **8,171/8,171 tests, 367,194 asserts**, exit 0 in
+261 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

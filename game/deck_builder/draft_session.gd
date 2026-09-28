@@ -53,7 +53,7 @@ func _ready() -> void:
 	ground.color = Color("10171d")
 	ground.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(ground)
-	_opening = OriginalDialog.create("A new pool. A new possibility.", Vector2(600, 440).min(get_viewport_rect().size - Vector2(24, 24)))
+	_opening = OriginalDialog.create("A new pool. A new possibility.", Vector2(600, 440))
 	add_child(_opening)
 	_opening_art = PackArt.new()
 	_opening_art.custom_minimum_size.y = 180
@@ -195,7 +195,7 @@ func finish(why: String) -> void:
 func _show_result() -> void:
 	if _result != null: _result.queue_free()
 	var heading := "Save needs attention" if _save_warning != "" else ("Time's up" if reason == "time up" else "Draft complete")
-	_result = OriginalDialog.create(heading, Vector2(650, 430).min(get_viewport_rect().size - Vector2(24, 24)))
+	_result = OriginalDialog.create(heading, Vector2(650, 430))
 	_result.z_index = 1500
 	add_child(_result)
 	var advice := "Your deck is held in memory. Retry the save or choose the default folder below."

@@ -16,7 +16,7 @@ var window: OriginalDialog
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	z_index = 400
-	window = OriginalDialog.create("Draft card pool", Vector2(680, 570).min(get_viewport_rect().size - Vector2(32, 32)))
+	window = OriginalDialog.create("Draft card pool", Vector2(680, 570))
 	add_child(window)
 	CardRegistry.ensure_loaded()
 	var saved := DraftPoolConfig.selected()

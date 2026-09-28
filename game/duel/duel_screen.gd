@@ -9483,12 +9483,47 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_on_control(event)
 
 
+## Whether [param event] is the second half of a doubled keystroke
+## ([constant DOUBLED_MS]); records it as the last one when it is not.
+func _is_doubled(event: InputEvent) -> bool:
+	var action := ""
+	for row in Controls.ACTIONS:
+		if Controls.pressed(event, String(row["name"])):
+			action = String(row["name"])
+			break
+	if action == "":
+		return false
+	var now := Time.get_ticks_msec()
+	var key := event is InputEventKey
+	if action == String(_last_stroke["action"]) \
+			and (key != bool(_last_stroke["key"]) or event.device != int(_last_stroke["device"])) \
+			and now - int(_last_stroke["ms"]) <= DOUBLED_MS:
+		return true
+	_last_stroke = {"action": action, "key": key, "device": event.device, "ms": now}
+	return false
+
+
 ## THE CONTROLLER reaches the same table as the keyboard: a pad button
 ## is not a key, so it comes by `_unhandled_input`, and only a press of
 ## one is a keystroke — the mouse, the motion and the releases pass.
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and event.pressed:
 		_on_control(event)
+
+
+## A DOUBLED KEYSTROKE IS ONE. A Steam Input button with two outputs —
+## a pad B AND an Escape key on the one button, which docs/handhelds.md
+## warns against — reaches the table twice, a frame apart, and the
+## Pause window the first press opens the second press closes: the
+## 2026-09-28 Deck report, *"the menu sometimes flashes quickly on and
+## off upon B button press"*. So the same action again within this
+## many milliseconds, from a DIFFERENT source — a key after a pad
+## button, another pad — is the same press and is dropped; the same
+## key twice is the player's own double tap and stands.
+const DOUBLED_MS := 100
+## The last keystroke that reached the table: its action, whether it
+## was a key, its device, and when.
+var _last_stroke := {"action": "", "key": false, "device": 0, "ms": -1000000}
 
 
 ## ONE KEYSTROKE — a key or a pad button — against the duel's ACTIONS
@@ -9499,6 +9534,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## the action's modifiers and no others — so `Show ID tags` on Ctrl+T
 ## leaves a bare T free, as the 1997 accelerator did (§6.3a).
 func _on_control(event: InputEvent) -> void:
+	if _is_doubled(event):
+		return
 	if _fullscreen_card_open():
 		_fullscreen_card._input(event)
 		return

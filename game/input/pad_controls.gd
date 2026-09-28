@@ -29,6 +29,14 @@ extends Node
 ##     that auto-casts a hand card;
 ##   - [constant MENU_BUTTON] (LB) is the right mouse button — the
 ##     1997 mini-menus on a card, the territory, the life box;
+##   - the TRIGGERS are the two mouse buttons again, RT the left and LT
+##     the right ([constant TRIGGERS], 2026-09-28) — a trigger pulled
+##     past [constant TRIGGER_PULL] is the button down, let out under
+##     [constant TRIGGER_LET] it is up, and the band between the two
+##     keeps a finger resting on the edge from clicking twice. For the
+##     Steam Deck whose right trackpad is the mouse: the trackpad puts
+##     the pointer on a card and the trigger under the same hand clicks
+##     it, the way the Deck's own desktop works;
 ##   - the RIGHT STICK is the wheel, [constant WHEEL_RATE] notches a
 ##     second at full tilt, for the Options panel, the log and the deck
 ##     builder's grid.
@@ -71,13 +79,15 @@ extends Node
 ##     and its D-pad the engine's focus walk.
 ##
 ## ACTIVE IS NOT AWAKE. An active layer draws nothing and hides nothing
-## until the pad is touched: the first stick, D-pad, A or LB wakes it,
-## the arrow appears where the focus is (the shell's first button) or
-## where the mouse last was, and the OS pointer goes. A real mouse
-## motion puts it back to sleep at once — the arrow goes, the OS pointer
-## returns — so a desk with an idle pad beside the mouse sees nothing of
-## this layer, and a Deck that swaps between trackpad and stick has one
-## pointer at a time.
+## until the pad is touched: the first stick, D-pad, trigger, A or LB
+## wakes it, the arrow appears where the mouse was if the mouse moved
+## since the pad last had the pointer — a Deck's trackpad put it on a
+## card, and the trigger must click THAT card — or else where the focus
+## is (the shell's first button), or else where the mouse last was; and
+## the OS pointer goes. A real mouse motion puts it back to sleep at
+## once — the arrow goes, the OS pointer returns — so a desk with an idle
+## pad beside the mouse sees nothing of this layer, and a Deck that
+## swaps between trackpad and stick has one pointer at a time.
 ##
 ## INERT MEANS INERT. Not active: no input processed, no frame, no
 ## state. Mouse and keyboard play is the stream it was before this file
@@ -104,6 +114,13 @@ const SYNTH_DEVICE := 4097
 ## The left mouse button on the pad, and the right.
 const CLICK_BUTTON := JOY_BUTTON_A
 const MENU_BUTTON := JOY_BUTTON_LEFT_SHOULDER
+## The triggers as the same two buttons: RT the left, LT the right.
+const TRIGGERS := {
+	JOY_AXIS_TRIGGER_RIGHT: MOUSE_BUTTON_LEFT, JOY_AXIS_TRIGGER_LEFT: MOUSE_BUTTON_RIGHT,
+}
+## A trigger is down once pulled this far, and up again only under this.
+const TRIGGER_PULL := 0.5
+const TRIGGER_LET := 0.3
 ## A stick this far from centre is resting.
 const DEADZONE := 0.25
 ## Pointer speed at full tilt, pixels a second, over a squared curve so
@@ -143,6 +160,11 @@ var _queue: Array[Dictionary] = []
 ## A synthesized press is outstanding.
 var _left_held := false
 var _right_held := false
+## Which triggers are pulled, by axis.
+var _trigger_down := {JOY_AXIS_TRIGGER_RIGHT: false, JOY_AXIS_TRIGGER_LEFT: false}
+## The mouse moved since the pad last had the pointer: the next wake
+## is where the mouse is, not where the focus is.
+var _mouse_fresh := false
 var _last_click_ms := -1000000
 var _last_click_pos := Vector2.ZERO
 ## Fraction of a wheel notch the right stick has earned.
@@ -219,12 +241,19 @@ func set_active(on: bool) -> void:
 		_queue.clear()
 		_axes = [0.0, 0.0, 0.0, 0.0]
 		_wheel_accum = 0.0
+		for axis in _trigger_down:
+			_trigger_down[axis] = false
+	_mouse_fresh = false
 	_active = on
 	set_process_input(on)
 	set_process(false)          # on demand: `_take` starts it
 
 
-func _on_pads_changed(_device: int, _connected: bool) -> void:
+func _on_pads_changed(device: int, connected: bool) -> void:
+	# Named in the log, for a playtest report: which pad Steam Input
+	# shows the game says which of its layouts is in force.
+	print("pad %d %s: %s" % [device, "connected" if connected else "gone",
+		Input.get_joy_name(device) if connected else "-"])
 	apply_settings()
 
 
@@ -233,9 +262,10 @@ func _on_pads_changed(_device: int, _connected: bool) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouse:
 		if event.device != SYNTH_DEVICE:
-			# A real pointer moved or clicked: it is the pointer now.
-			if event is InputEventMouseMotion:
-				_pointer = event.position
+			# A real pointer moved or clicked: it is the pointer now, and
+			# the next wake starts where it left it.
+			_pointer = event.position
+			_mouse_fresh = true
 			_sleep()
 		return
 	if event is InputEventJoypadButton:
@@ -252,10 +282,24 @@ func _input(event: InputEvent) -> void:
 		_take()
 	elif event is InputEventJoypadMotion:
 		var jm := event as InputEventJoypadMotion
-		if jm.axis < JOY_AXIS_LEFT_X or jm.axis > JOY_AXIS_RIGHT_Y:
-			return              # a trigger: not ours
-		_axes[jm.axis] = jm.axis_value
-		_take()
+		if TRIGGERS.has(jm.axis):
+			_trigger(jm.axis, jm.axis_value)
+		elif jm.axis >= JOY_AXIS_LEFT_X and jm.axis <= JOY_AXIS_RIGHT_Y:
+			_axes[jm.axis] = jm.axis_value
+			_take()
+
+
+## A trigger crossing [constant TRIGGER_PULL] on the way in is a mouse
+## button going down, crossing [constant TRIGGER_LET] on the way out is
+## it coming up; the rest of its travel is nothing, and stays nobody's.
+func _trigger(axis: int, value: float) -> void:
+	var was: bool = _trigger_down[axis]
+	var now := value > TRIGGER_LET if was else value >= TRIGGER_PULL
+	if now == was:
+		return
+	_trigger_down[axis] = now
+	_queue.append({"kind": "click", "button": TRIGGERS[axis], "pressed": now})
+	_take()
 
 
 ## Ours now: handled, and spent next frame.
@@ -351,19 +395,23 @@ func _sticks_rest() -> bool:
 
 # ------------------------------------------------------- awake / asleep --
 
-## The pad has the pointer: the arrow goes where the focus is, or where
-## the mouse last was, and the OS pointer is hidden.
+## The pad has the pointer: the arrow goes where the mouse left it if
+## the mouse moved since the pad last had it, else where the focus is,
+## else where the mouse last was; and the OS pointer is hidden.
 func _wake() -> void:
 	if _awake:
 		return
 	_awake = true
 	var view := get_viewport().get_visible_rect()
 	var owner := get_viewport().gui_get_focus_owner()
-	if owner != null and owner.is_visible_in_tree():
+	if _mouse_fresh and view.has_point(_pointer):
+		pass                    # `_input` kept it where the mouse went
+	elif owner != null and owner.is_visible_in_tree():
 		_pointer = _on_screen(owner).get_center()
 	else:
 		var mouse := get_viewport().get_mouse_position()
 		_pointer = mouse if view.has_point(mouse) else view.get_center()
+	_mouse_fresh = false
 	_pointer = _pointer.clamp(view.position, view.end)
 	_arrow.visible = true
 	_arrow.tip = _pointer
@@ -408,7 +456,7 @@ func _hop(dir: Vector2) -> void:
 	var from := _pointer
 	var in_cone: Array = []
 	var ahead: Array = []
-	for target in _targets(get_tree().root):
+	for target in _targets(get_tree().root, get_viewport().get_visible_rect()):
 		var centre := _on_screen(target).get_center()
 		var offset := centre - from
 		var along := offset.dot(dir)
@@ -431,12 +479,15 @@ func _hop(dir: Vector2) -> void:
 
 
 ## Every control a hop could land on: a visible, enabled button, slider
-## or spin box that listens, inside the window. An embedded [Window] — a
-## mini-menu, a file picker — is not walked: while one is open and
-## focused the engine hands it the pad's D-pad and A before this layer
-## sees them (`ui_up`, `ui_accept` — the menu walks itself), and its
-## controls sit in its own coordinates, not the table's.
-func _targets(node: Node) -> Array[Control]:
+## or spin box that listens, inside [param clip] — the window, cut down
+## by every clipping ancestor on the way, so a line scrolled out of a
+## [ScrollContainer] is no target (a window cut to the Deck's screen
+## scrolls its body, [method OriginalDialog.keep_on_screen]). An
+## embedded [Window] — a mini-menu, a file picker — is not walked: while
+## one is open and focused the engine hands it the pad's D-pad and A
+## before this layer sees them (`ui_up`, `ui_accept` — the menu walks
+## itself), and its controls sit in its own coordinates, not the table's.
+func _targets(node: Node, clip: Rect2) -> Array[Control]:
 	var out: Array[Control] = []
 	if node is CanvasItem and not (node as CanvasItem).visible:
 		return out
@@ -444,12 +495,15 @@ func _targets(node: Node) -> Array[Control]:
 		return out
 	if node is Control:
 		var control := node as Control
+		if control.clip_contents:
+			clip = clip.intersection(_on_screen(control))
+			if not clip.has_area():
+				return out
 		if _listens(control) and control.mouse_filter != Control.MOUSE_FILTER_IGNORE \
-				and control.is_visible_in_tree() \
-				and get_viewport().get_visible_rect().intersects(_on_screen(control)):
+				and control.is_visible_in_tree() and clip.intersects(_on_screen(control)):
 			out.append(control)
 	for child in node.get_children():
-		out.append_array(_targets(child))
+		out.append_array(_targets(child, clip))
 	return out
 
 

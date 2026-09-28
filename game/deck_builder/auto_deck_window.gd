@@ -35,7 +35,11 @@ extends RefCounted
 ## the same deck.
 
 const TITLE := "AutoDeck"
-const WINDOW_SIZE := Vector2(680, 800)
+## Under the 800 rows of the game's viewport by the Deck's margins
+## ([constant OriginalDialog.SCREEN_MARGIN]); the eight sets of the
+## base pool fit it, more sets grow it ([method OriginalDialog.fit_height])
+## and the screen cuts what it cannot show ([method OriginalDialog.keep_on_screen]).
+const WINDOW_SIZE := Vector2(680, 720)
 ## The `[Settings]` key the wishes are kept under.
 const OPTIONS_SETTING := "auto_deck_options"
 ## The three pools.
@@ -123,7 +127,7 @@ func _build() -> void:
 	# The dialog carries its window, so a test can reach the wishes.
 	dialog.set_meta("auto_deck_window", self)
 	var body := dialog.body()
-	body.add_theme_constant_override("separation", 4)
+	body.add_theme_constant_override("separation", 3)
 	var brief := OriginalDialog.label(BRIEF, 13)
 	brief.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(brief)
@@ -175,7 +179,9 @@ func _build() -> void:
 	_list_line.name = "ListLine"
 	_list_line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list_line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_list_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# One row, trimmed: a folding line measures a word a row before the
+	# containers hand out widths, and the window is sized from that.
+	_list_line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	list_row.add_child(_list_line)
 	body.add_child(list_row)
 
@@ -213,8 +219,12 @@ func _build() -> void:
 
 	# --- the deck ---
 	body.add_child(_head("Deck"))
-	_choice_row(body, "Cards", "size", [[40, "40", "A 40-card deck — the 1997 floor; up to three copies of a card."],
+	var size_and_lands := _pair(body)
+	_choice_row(size_and_lands, "Cards", "size", [[40, "40", "A 40-card deck — the 1997 floor; up to three copies of a card."],
 		[60, "60", "A 60-card deck — the tournament norm; up to four copies of a card."]])
+	_choice_row(size_and_lands, "Lands", "lands", [
+		[AutoDeck.LANDS_CLASSIC, "Classic", "Basic lands only — Plains, Island, Swamp, Mountain and Forest in the proportion of the pips."],
+		[AutoDeck.LANDS_NONCLASSIC, "Non-classic", "Dual lands, City of Brass and lands with abilities from the pool first, up to half the lands; the basics fill the rest."]])
 	_choice_row(body, "Lean", "lean", [
 		[AutoDeck.LEAN_CREATURES, "More creatures", "About seven spells in ten are creatures."],
 		[AutoDeck.LEAN_BALANCED, "Balanced", "A little over half creatures."],
@@ -229,9 +239,6 @@ func _build() -> void:
 		[AutoDeck.RARITY_NO_RARES, RARITY_LABELS[AutoDeck.RARITY_NO_RARES], "Commons and uncommons — no rares, no legends."],
 		[AutoDeck.RARITY_UNCOMMON_UP, RARITY_LABELS[AutoDeck.RARITY_UNCOMMON_UP], "Uncommons, rares and legends — no commons."],
 		[AutoDeck.RARITY_RARES, RARITY_LABELS[AutoDeck.RARITY_RARES], "Rares and legends only."]])
-	_choice_row(body, "Lands", "lands", [
-		[AutoDeck.LANDS_CLASSIC, "Classic", "Basic lands only — Plains, Island, Swamp, Mountain and Forest in the proportion of the pips."],
-		[AutoDeck.LANDS_NONCLASSIC, "Non-classic", "Dual lands, City of Brass and lands with abilities from the pool first, up to half the lands; the basics fill the rest."]])
 	_tournament_line = _tick_line("Tournament rules — no banned cards, restricted cards once", "TournamentLine",
 		func() -> void:
 			options["tournament"] = not bool(options["tournament"])
@@ -246,12 +253,13 @@ func _build() -> void:
 		options["keep"] = not bool(options["keep"])
 		_refresh())
 	body.add_child(_keep_line)
-	_choice_row(body, "Variety", "variety", [
+	var variety_and_seed := _pair(body)
+	_choice_row(variety_and_seed, "Variety", "variety", [
 		[AutoDeck.VARIETY_LEVELS[0], "Best", "The best card wins every slot; the seed decides only among cards worth the same."],
 		[AutoDeck.VARIETY_LEVELS[1], "A little", "The seed's taste moves a card's worth by up to %.3f points — a card or two changes hands between seeds." % (AutoDeck.TASTE_SPAN * AutoDeck.VARIETY_LEVELS[1] / 100.0)],
 		[AutoDeck.VARIETY_LEVELS[2], "Some", "Up to %.2f points — two seeds build decks about half alike." % (AutoDeck.TASTE_SPAN * AutoDeck.VARIETY_LEVELS[2] / 100.0)],
 		[AutoDeck.VARIETY_LEVELS[3], "Wild", "Up to %.1f points, a whole mana step — two seeds share a third of their cards." % (AutoDeck.TASTE_SPAN * AutoDeck.VARIETY_LEVELS[3] / 100.0)]])
-	_seed_row(body)
+	_seed_row(variety_and_seed)
 
 	# --- the summary and the foot ---
 	var spacer := Control.new()
@@ -268,6 +276,10 @@ func _build() -> void:
 	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
 	screen._show_dialog(dialog)
 	_refresh()
+	# A pool of more sets than the base eight has more grid rows than the
+	# window was made for: grow for them, and let the screen have the
+	# last word.
+	dialog.fit_height()
 	_build_button.grab_focus()
 
 
@@ -278,10 +290,22 @@ func _head(text: String) -> Label:
 	return head
 
 
-## A `[x] text` line, the Sealed Deck window's own switch idiom.
+## Two short rows side by side: the window's rows sit one under the
+## other, and a screen 800 rows tall has room for only so many.
+func _pair(body: VBoxContainer) -> HBoxContainer:
+	var pair := HBoxContainer.new()
+	pair.add_theme_constant_override("separation", 24)
+	body.add_child(pair)
+	return pair
+
+
+## A `[x] text` line, the Sealed Deck window's own switch idiom. One
+## row, whatever its width: a folding line measures a word a row until
+## the containers hand out widths, and the window is sized from that.
 func _tick_line(text: String, node_name: String, on_press: Callable) -> Button:
 	var line := OriginalDialog.choice_line(text)
 	line.name = node_name
+	line.autowrap_mode = TextServer.AUTOWRAP_OFF
 	line.custom_minimum_size = Vector2(0, 24)
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.pressed.connect(on_press)
@@ -294,7 +318,7 @@ static func _tick_text(on: bool, text: String) -> String:
 
 ## The seed row: a field for a number, blank for a fresh roll, and a
 ## button that puts the last build's seed back in it.
-func _seed_row(body: VBoxContainer) -> void:
+func _seed_row(body: Container) -> void:
 	var row := HBoxContainer.new()
 	row.name = "Row_seed"
 	row.add_theme_constant_override("separation", 6)
@@ -347,7 +371,7 @@ func set_seed(value: int) -> void:
 ## A titled row of toggles, one of which is lit ([method
 ## UiChrome.gold_when_chosen]) — the wish [param key] takes the value of
 ## the lit one.
-func _choice_row(body: VBoxContainer, title: String, key: String, choices: Array) -> void:
+func _choice_row(body: Container, title: String, key: String, choices: Array) -> void:
 	var row := HBoxContainer.new()
 	row.name = "Row_" + key
 	row.add_theme_constant_override("separation", 6)

@@ -48,7 +48,7 @@ func _ready() -> void:
 	ground.color = Color("171c21")
 	ground.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(ground)
-	window = OriginalDialog.create("Booster Draft", Vector2(700, 650).min(get_viewport_rect().size - Vector2(24, 24)))
+	window = OriginalDialog.create("Booster Draft", Vector2(700, 650))
 	add_child(window)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL

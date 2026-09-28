@@ -125,8 +125,9 @@ START["raspberry-pi5-arm64"] = (
 START["steam-deck"] = (
     "Steam Deck / SteamOS: native Linux x86-64, no Proton required.\n"
     "Extract the whole folder in Desktop Mode and add run.sh as a Non-Steam Game.\n"
-    "A gamepad layout plays with the game's own pad pointer; a keyboard/mouse\n"
-    "layout works too. See HANDHELD.md for the bindings.\n"
+    "Choose the Gamepad with Mouse Trackpad layout: the game's own pad pointer\n"
+    "plays the table, the right trackpad is the mouse and RT/LT click where it\n"
+    "points. A keyboard/mouse layout works too. See HANDHELD.md for the bindings.\n"
     "Local test package, not hardware-validated or Steam Deck Verified.")
 START["arkos-rk3326-experimental"] = (
     "EXPERIMENTAL: RK3326 / R36 Ultra with 64-bit ArkOS and current PortMaster.\n"

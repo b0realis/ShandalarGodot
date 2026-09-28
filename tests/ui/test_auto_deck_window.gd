@@ -156,7 +156,14 @@ func test_the_window_shows_the_pool_and_the_wishes_with_their_defaults() -> void
 	gut.p("AutoDeck window: body needs %.0f of %.0f; window %.0f tall" % [
 		body.get_combined_minimum_size().y, body.size.y, _window().size.y])
 	assert_lte(body.get_combined_minimum_size().y, body.size.y, "the wishes fit the window")
-	assert_lte(_window().size.y, 800.0, "the window fits the viewport")
+	# The window is sized for the skinned game; the skinless default type is
+	# taller, and there a real 800-tall screen cuts and scrolls it through
+	# OriginalDialog.keep_on_screen (test_dialog_keeps_on_screen_2026_09_28).
+	var room_y := 800.0 - 2 * OriginalDialog.SCREEN_MARGIN
+	if GameSkin.texture("button_normal") == null:
+		room_y = get_viewport().get_visible_rect().size.y - 2 * OriginalDialog.SCREEN_MARGIN
+	assert_lte(_window().size.y, room_y,
+		"the window fits the Deck's screen with its margins (2026-09-28)")
 	assert_true((_in("Size_60") as Button).button_pressed, "sixty")
 	assert_true((_in("Lean_balanced") as Button).button_pressed)
 	assert_true((_in("Speed_medium") as Button).button_pressed)

@@ -12,7 +12,7 @@ var fingerprint: LineEdit
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	window = OriginalDialog.create("Verify draft deck", Vector2(700, 520).min(get_viewport_rect().size - Vector2(24, 24)))
+	window = OriginalDialog.create("Verify draft deck", Vector2(700, 520))
 	add_child(window)
 	var intro := OriginalDialog.label("Compare with the original pool, or reconstruct from the recipe saved in the deck. Main deck and sideboard count together.", 17, true)
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

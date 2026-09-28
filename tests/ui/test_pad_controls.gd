@@ -14,14 +14,16 @@ extends GutTest
 ##      the layer untouched even while it is on.
 ##   2. The map: A is the left button (a focused button is NOT pressed a
 ##      second time by the engine's `ui_accept` — the event is eaten),
-##      LB the right, two quick As a double-click, the left stick the
-##      pointer (and a drag under a held A), the right stick the wheel,
-##      the D-pad a hop to the nearest button ahead — over what is
-##      really drawn there, past what is covered, and staying put with
-##      nothing ahead.
+##      LB the right, RT and LT the same two again past a threshold with
+##      a band under it (2026-09-28), two quick As a double-click, the
+##      left stick the pointer (and a drag under a held A), the right
+##      stick the wheel, the D-pad a hop to the nearest button ahead —
+##      over what is really drawn there, past what is covered, past what
+##      a scroll has scrolled away, and staying put with nothing ahead.
 ##   3. Awake and asleep: the first pad touch wakes the arrow where the
-##      focus is; a real mouse puts it to sleep; turning the layer off
-##      releases what it held.
+##      focus is — or where the mouse went since, a Deck's trackpad
+##      having put it on a card for the trigger to click; a real mouse
+##      puts it to sleep; turning the layer off releases what it held.
 ##   4. A mini-menu (an embedded window) takes the pad itself while it
 ##      is open — the engine's rule, pinned here so the layer never
 ##      fights it.
@@ -222,16 +224,59 @@ func test_the_duels_own_buttons_pass_through_the_layer() -> void:
 		"and RB, not A, is the one button that advances the duel")
 
 
-func test_a_trigger_is_not_the_layers() -> void:
+func test_a_pull_of_rt_is_the_left_button_with_a_band_under_it() -> void:
+	layer.choose(PadControls.ON)
+	_build_table()
+	await _settle()
+	_tilt(JOY_AXIS_TRIGGER_RIGHT, 0.4)
+	await _settle()
+	assert_false(layer.is_awake(), "a trigger short of TRIGGER_PULL is nothing")
+	assert_eq(_made.size(), 0)
+	_tilt(JOY_AXIS_TRIGGER_RIGHT, 0.6)
+	await _settle()
+	assert_true(layer.is_awake(), "pulled past it, the trigger wakes the layer")
+	_near(layer.pointer(), Vector2(640, 400), "at the centre of the focused button")
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]], "and is the left button, held")
+	_tilt(JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	_tilt(JOY_AXIS_TRIGGER_RIGHT, 0.4)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]],
+		"the rest of the travel, and a slip back above TRIGGER_LET, is nothing")
+	assert_eq(_presses, 0)
+	_tilt(JOY_AXIS_TRIGGER_RIGHT, 0.2)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true], [MOUSE_BUTTON_LEFT, false]],
+		"let out under TRIGGER_LET: released")
+	assert_eq(_presses, 1, "one press of the button, ours")
+	assert_eq(_seen_devices(), [PadControls.SYNTH_DEVICE, PadControls.SYNTH_DEVICE])
+
+
+func test_lt_is_the_right_button() -> void:
+	layer.choose(PadControls.ON)
+	_build_table()
+	await _settle()
+	_tilt(JOY_AXIS_TRIGGER_LEFT, 1.0)
+	_tilt(JOY_AXIS_TRIGGER_LEFT, 0.0)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_RIGHT, true], [MOUSE_BUTTON_RIGHT, false]])
+	assert_eq(_presses, 0, "a right click is not a press of the button")
+	assert_eq(_seen_devices(), [PadControls.SYNTH_DEVICE, PadControls.SYNTH_DEVICE])
+
+
+func test_turning_the_layer_off_lets_a_pulled_trigger_go() -> void:
 	layer.choose(PadControls.ON)
 	_build_table()
 	await _settle()
 	_tilt(JOY_AXIS_TRIGGER_RIGHT, 1.0)
 	await _settle()
-	assert_false(layer.is_awake(), "a trigger is not a stick")
-	assert_eq(_made.size(), 0)
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]])
+	layer.choose(PadControls.OFF)
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true], [MOUSE_BUTTON_LEFT, false]],
+		"off: the held button is released at once")
+	layer.choose(PadControls.ON)
 	_tilt(JOY_AXIS_TRIGGER_RIGHT, 0.0)
 	await _settle()
+	assert_eq(_made_buttons().size(), 2, "and letting the trigger out later sends nothing")
 
 
 # ============================================================== the map (2) ==
@@ -417,6 +462,45 @@ func test_a_hop_passes_over_what_is_covered() -> void:
 	assert_eq(get_tree().root.gui_get_hovered_control(), far)
 
 
+func test_a_line_scrolled_out_of_view_is_no_target() -> void:
+	layer.choose(PadControls.ON)
+	_build_stage()
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(900, 100)
+	scroll.size = Vector2(200, 100)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_table.add_child(scroll)
+	var column := VBoxContainer.new()
+	scroll.add_child(column)
+	var lines: Array[Button] = []
+	for i in 16:
+		var line := Button.new()
+		line.text = "line %d" % (i + 1)
+		line.custom_minimum_size = Vector2(180, 30)
+		line.gui_input.connect(func(ev: InputEvent) -> void: _seen.append(ev))
+		column.add_child(line)
+		lines.append(line)
+	var far := _add_button("far right", Vector2(1140, 380))
+	_table.grab_focus()
+	await _settle()
+	# From the table's centre (640, 400), RIGHT: the scroll shows lines 1
+	# to 3 up at y 100; lines 8 to 13 would sit dead ahead around y 400
+	# — the six nearest of all, SNAP_TRIES of them — but the scroll has
+	# them out of view. Without the clip the hop would try those six,
+	# every one not drawn, and stay put; with it the far button is what
+	# is ahead.
+	_pad(JOY_BUTTON_DPAD_RIGHT, true)
+	_pad(JOY_BUTTON_DPAD_RIGHT, false)
+	await _settle()
+	_near(layer.pointer(), Vector2(1200, 400), "the far button, past the scrolled-away lines")
+	assert_eq(get_tree().root.gui_get_hovered_control(), far)
+	scroll.scroll_vertical = 100000
+	await _settle()
+	var targets: Array = layer._targets(get_tree().root, get_viewport().get_visible_rect())
+	assert_true(targets.has(lines[15]), "scrolled to the foot, line 16 is a target")
+	assert_false(targets.has(lines[0]), "and line 1 is not")
+
+
 func test_a_hidden_or_disabled_button_is_no_target() -> void:
 	layer.choose(PadControls.ON)
 	_build_stage()
@@ -456,6 +540,37 @@ func test_a_real_mouse_puts_the_layer_to_sleep_and_takes_the_pointer() -> void:
 	assert_true(layer.is_awake(), "the pad again: awake again")
 	_near(layer.pointer(), Vector2(300, 300), "where the mouse last was, with nothing focused")
 	assert_eq(_presses, 0, "the click landed there, off the button")
+
+
+func test_a_trigger_clicks_where_the_trackpad_put_the_pointer() -> void:
+	# The Deck: the right trackpad is the OS mouse and moves it onto a
+	# card; RT under the same hand clicks THAT card, focus or no focus.
+	layer.choose(PadControls.ON)
+	_build_table()
+	var other := _add_button("other", Vector2(240, 280))
+	await _settle()
+	assert_eq(get_viewport().gui_get_focus_owner(), _button, "the focus sits on the first button")
+	_mouse_move(Vector2(300, 300))
+	await _settle()
+	_tilt(JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	_tilt(JOY_AXIS_TRIGGER_RIGHT, 0.0)
+	await _settle()
+	assert_true(layer.is_awake())
+	_near(layer.pointer(), Vector2(300, 300), "where the trackpad left the mouse, not the focus")
+	assert_eq(_presses, 1, "the click landed on the button under the mouse")
+	assert_eq(get_tree().root.gui_get_hovered_control(), other)
+	# The pad has the pointer now: the next wake after a sleep with no
+	# mouse motion between goes back to the focus.
+	_mouse_move(Vector2(300, 300))
+	await _settle()
+	assert_false(layer.is_awake())
+	get_viewport().gui_release_focus()
+	_button.grab_focus()
+	layer._mouse_fresh = false
+	_pad(JOY_BUTTON_A, true)
+	_pad(JOY_BUTTON_A, false)
+	await _settle()
+	_near(layer.pointer(), Vector2(640, 400), "no fresh mouse: the focus, as before")
 
 
 func test_the_wake_never_touches_the_os_pointer_headless() -> void:
