@@ -58,6 +58,7 @@ class PackageReleaseTest(unittest.TestCase):
         family = {"steam-deck": "linux64", "arkos-rk3326-experimental":
                   "raspberry-pi5-arm64"}.get(family, family)
         names = {
+            "meta-quest": ("Shandalar.apk",),
             "linux64": ("Shandalar.x86_64", "Shandalar.pck"),
             "raspberry-pi5-arm64": ("Shandalar.arm64", "Shandalar.pck"),
             "windows64": ("Shandalar.exe", "Shandalar.console.exe", "Shandalar.pck"),
@@ -165,6 +166,17 @@ class PackageReleaseTest(unittest.TestCase):
                             launcher = archive.read(prefix + "run.sh").decode()
                             self.assertIn("--resolution 1280x800", launcher)
                             self.assertIn("--max-fps 60", launcher)
+                        if platform == "meta-quest":
+                            # A headset installs one signed APK over adb and
+                            # nothing runs beside it: no launcher, no headless
+                            # doors, and the files folder the README names is
+                            # the app's own shared-storage corner.
+                            self.assertIn("adb install -r Shandalar.apk", readme)
+                            self.assertIn(pack.QUEST_FILES + "/skin/", readme)
+                            self.assertIn(pack.QUEST_FILES + "/cardpacks/", readme)
+                            self.assertIn("Unknown Sources", readme)
+                            for door in ("run.sh", "shandalar.sh", "deck_lab.sh", "referee.sh"):
+                                self.assertNotIn(prefix + door, entries)
 
     def test_extracted_windows_mcp_discovers_the_console_and_game_version(self):
         self.make_export("windows64")

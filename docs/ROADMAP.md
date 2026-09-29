@@ -18246,6 +18246,82 @@ Their Kismet never holds ours. `tests/ai/test_ai_repeats_2026_09_28.gd`.
 Gate: 543 scripts, **8,194/8,194 tests, 367,785 asserts**, exit 0 in
 268 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-29 — The Meta Quest package (0.40.48)
+
+The owner: *"Pull the latest and tell me how to publish this for occulus
+quest 3?"* — and, to the plan, *"Yes do it."* The answer is a flat 2D
+panel app, the way a browser or a store's 2D app opens in the headset:
+a card game gains nothing from a VR scene, and the Horizon Store, with
+its review of a 1997 game's remake, is not the road — the package is
+sideloaded over adb under Library > Unknown Sources.
+
+**The APK.** A new `Android Quest` export preset (local, gitignored
+like the others): one arm64 APK on the prebuilt 4.7.stable template,
+no gradle build, no plugins, no XR mode, `package/unique_name`
+`com.b0realis.shandalar`, immersive screen, `version/name` empty so the
+APK carries `config/version`. `./build_release.sh --quest` exports it
+with `--export-release` and signs it with a key generated for the
+purpose (`CN=b0realis, OU=Shandalar, O=b0realis`) that lives in
+`../shandalar-build/keys/` with its password in a `release.env` of the
+three `GODOT_ANDROID_KEYSTORE_RELEASE_*` variables — never in the
+repository, never in a package; the script refuses without it, names a
+JDK from the editor's `export/android/java_sdk_path` when `JAVA_HOME`
+is unset, and after the export asks apksigner for the signer and checks
+the CN. The toolchain on the build machine is a JDK 17 and an Android
+SDK (platform-tools, build-tools 35, platform 35) under `~/.local/opt`,
+named in the editor settings. The first APK: 38 MB, sdk 24, arm64,
+4,896 asset entries and none from tests/, tools/, docs/, addons/ or
+assets/. `tools/package_release.py --platform meta-quest` wraps it: the
+APK alone as the payload, the common documents, `HANDHELD.md`, and in
+the `-with-skin` ZIP `skin/original_skin.zip` — no launcher, no
+headless doors, since a headset runs nothing beside the app.
+
+**Where the player's files go.** On Android `user://` is the app's
+PRIVATE folder (`Context.getFilesDir()`, read off the template's own
+`GodotIO` class): nothing outside the app can write into it, so the
+desktop's "drop a zip in the card folder" could never happen there. The
+app's own corner of the shared storage,
+`/sdcard/Android/data/com.b0realis.shandalar/files/`
+(`Context.getExternalFilesDir(null)`, which Godot exposes as
+`OS.get_system_dir(SYSTEM_DIR_DESKTOP, false)` — index 0 maps to a null
+type, verified in the class's bytecode), is written by `adb push` and
+read by the app with no permission at all. So `GamePaths.android_files_dir`
+names that corner on Android and "" elsewhere, the pure
+`player_place(user_path, files_dir)` puts a `user://` place under it,
+and the `cardpacks_folder`, `portraits_folder` and `music_folder`
+defaults go through the mapping; `GameSkin.portable_dir_for` puts
+`skin/` beside them — the desktop play copy's layout one level down, so
+the owner's three adb lines are `install -r Shandalar.apk`, `push
+skin/original_skin.zip …/files/skin/`, `push cardart.zip
+…/files/cardpacks/`. `CardPacks.candidate_paths` takes the corner as
+"beside the game" (the executable on Android is `/system/bin/
+app_process64`, whose folder is nobody's). The settings file, the decks
+and the tournament checkpoints stay in `user://`: the game writes
+those, not the player, and a private folder is the right place for
+them; a written key still moves any of the three. "Forget my zips"
+stays `user://`-only and so is inert there — what was pushed is the
+player's to remove. On a desk `android_files_dir` is "" and every
+default is byte-for-byte what it was.
+
+**The handheld word and the back gesture.** No launcher can export
+`SHANDALAR_HANDHELD` on Android, and an Android build IS the handheld:
+`Settings.handheld` says `android` under `OS.has_feature("android")`
+when the variable is silent, so the Deck's three defaults apply. The
+Android back gesture, answered by Godot's default with a QUIT
+(`quit_on_go_back`), is now one Escape press and release through
+`Input.parse_input_event` (`Lifecycle._notification`): the pause menu,
+a closed view, a cancelled cast — what every screen already answers.
+
+**Left as it is.** The controller's laser is the mouse in a 2D panel
+and the touch layer made for the Deck's screen works on it; the
+on-screen keyboard is Android's own. Not on hardware yet: the owner
+tests the first APK. `tests/unit/test_android_places_2026_09_29.gd`;
+`tools/test_package_release.py` (the meta-quest subtest);
+`docs/handhelds.md` has the Quest section.
+
+Gate: 544 scripts, **8,200/8,200 tests, 367,489 asserts**, exit 0 in
+265 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

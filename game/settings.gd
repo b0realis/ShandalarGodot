@@ -211,8 +211,11 @@ static func ai_pace() -> float:
 ## always wins: once the player has written a key, the launcher's word
 ## on it is never read again — so an Options choice made on the Deck is
 ## as durable as one made on the desk. The desk, with the variable
-## unset, is exactly what it was.
+## unset, is exactly what it was. An Android build (the Meta Quest
+## panel, 2026-09-29) has no launcher to name it and IS the handheld:
+## the word there is `android` unless the variable says otherwise.
 const HANDHELD_ENV := "SHANDALAR_HANDHELD"
+const ANDROID_HANDHELD := "android"
 const HANDHELD_DEFAULTS := {
 	"fullscreen": true,
 	"fullscreen_cards": true,
@@ -220,9 +223,13 @@ const HANDHELD_DEFAULTS := {
 }
 
 
-## The handheld the launcher named, or "" on a desk.
+## The handheld the launcher named, `android` on an Android build the
+## variable does not name, or "" on a desk.
 static func handheld() -> String:
-	return OS.get_environment(HANDHELD_ENV).strip_edges()
+	var named := OS.get_environment(HANDHELD_ENV).strip_edges()
+	if named == "" and OS.has_feature("android"):
+		return ANDROID_HANDHELD
+	return named
 
 
 ## The built-in default for [param key]: the handheld's where the

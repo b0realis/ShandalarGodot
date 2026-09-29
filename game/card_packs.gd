@@ -137,8 +137,12 @@ static func candidate_paths(id := ID) -> Array[String]:
 	var card_folder := GamePaths.cardpacks_folder().path_join(file_name)
 	if not out.has(card_folder):
 		out.append(card_folder)
-	var beside := GamePaths.executable_dir(OS.get_executable_path(),
-		OS.has_feature("macos"))
+	# On Android the executable is the system's; the app's shared-storage
+	# corner is what "beside the game" means there (GamePaths).
+	var beside := GamePaths.android_files_dir()
+	if beside == "":
+		beside = GamePaths.executable_dir(OS.get_executable_path(),
+			OS.has_feature("macos"))
 	for path in [beside.path_join(file_name),
 			beside.path_join("cardpacks").path_join(file_name)]:
 		if not out.has(path):

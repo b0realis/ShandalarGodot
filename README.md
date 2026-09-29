@@ -44,6 +44,8 @@ engine, and the freedom to keep the game alive.
 
 Download the **[latest Shandalar release](https://github.com/b0realis/ShandalarGodot/releases/latest)**
 for **Windows, Linux, Apple Silicon/Intel Mac, Raspberry Pi 5 ARM64 and web**.
+Handheld test packages — Steam Deck, ArkOS, and the Meta Quest as a
+sideloaded flat panel app — are built locally; see [docs/handhelds.md](docs/handhelds.md).
 Choose a standalone or original-skin package; the release includes launch
 instructions, a separate skin download and SHA-256 checksums. You can also
 run the source with Godot 4.7 (below).
@@ -118,8 +120,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([The third Steam Deck playtest](docs/ROADMAP.md#2026-09-28--the-third-steam-deck-playtest-04047)):
-**8,194 GUT tests / 367,785 assertions**, plus **415 Python tests**
+Most recent full-suite verification ([The Meta Quest package](docs/ROADMAP.md#2026-09-29--the-meta-quest-package-04048)):
+**8,200 GUT tests / 367,489 assertions**, plus **415 Python tests**
 (the MCP server's five live tests play inside the GUT gate and are
 skipped outside it). The same gate runs on GitHub Actions for
 every push and pull request.

@@ -20,7 +20,8 @@ import pack_1_dotp_complete as pack_one
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel",
-             "raspberry-pi5-arm64", "steam-deck", "arkos-rk3326-experimental", "web")
+             "raspberry-pi5-arm64", "steam-deck", "arkos-rk3326-experimental", "web",
+             "meta-quest")
 MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
 LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64",
                   "steam-deck": "Shandalar.x86_64",
@@ -31,7 +32,10 @@ HANDHELD_FILES = {
     "arkos-rk3326-experimental": {
         "shandalar.gptk": "packaging/handhelds/shandalar.gptk",
         "HANDHELD.md": "docs/handhelds.md"},
+    # One signed APK and the instructions; no launcher can run there.
+    "meta-quest": {"HANDHELD.md": "docs/handhelds.md"},
 }
+QUEST_FILES = "/sdcard/Android/data/com.b0realis.shandalar/files"
 ARKOS_LAUNCHER = "packaging/handhelds/arkos.sh"
 PACK_BUILDERS = ("pack_1_dotp_complete", "pack_2_fallen_empires", "pack_3_ice_age",
                  "pack_4_homelands", "pack_5_alliances", "pack_6_portal", "pack_7_fifth_edition")
@@ -135,6 +139,17 @@ START["arkos-rk3326-experimental"] = (
     "Launch Shandalar from Ports. WestonPack 0.2.6+ is required.\n"
     "See HANDHELD.md for controls, setup, saves and troubleshooting.\n"
     "Not hardware-validated; performance and small-screen readability are unproven.")
+START["meta-quest"] = (
+    "Meta Quest 3 (also Quest 2 / Pro): a flat panel app for the headset, installed\n"
+    "over USB. Turn on Developer Mode in the Meta Horizon phone app, connect the\n"
+    "headset, allow USB debugging on it, then from this folder:\n"
+    "  adb install -r Shandalar.apk\n"
+    f"  adb push skin/original_skin.zip {QUEST_FILES}/skin/\n"
+    f"  adb push cardart.zip {QUEST_FILES}/cardpacks/\n"
+    "The game is under Library > Unknown Sources. Card packs and your own\n"
+    "portraits/ and music/ go under that same files folder; the game reads it at\n"
+    "the next start. The controller's pointer is the mouse and the trigger clicks.\n"
+    "See HANDHELD.md. Local test package, not hardware-validated or store-reviewed.")
 
 
 def digest(path: Path) -> str:
@@ -167,6 +182,7 @@ def payload(folder: Path, platform: str) -> dict[str, Path]:
     elif platform == "arkos-rk3326-experimental":
         family = "raspberry-pi5-arm64"
     required = {
+        "meta-quest": ("Shandalar.apk",),
         "linux64": ("Shandalar.x86_64", "Shandalar.pck"),
         "raspberry-pi5-arm64": ("Shandalar.arm64", "Shandalar.pck"),
         "windows64": ("Shandalar.exe", "Shandalar.console.exe", "Shandalar.pck"),

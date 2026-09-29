@@ -51,9 +51,20 @@ const SEARCH_DIRS := ["user://original_skin", "res://assets/original"]
 ##
 ## Empty in the editor, where `OS.get_executable_path()` is Godot itself,
 ## and in a browser, where there is no executable and no folder beside it.
+## On Android the executable is the system's, so the `skin/` folder sits
+## in the app's shared-storage corner instead, beside the card folder
+## ([method GamePaths.android_files_dir]) — the play copy's layout.
 static func portable_dir() -> String:
 	if OS.has_feature("editor") or OS.has_feature("web"):
 		return ""
+	return portable_dir_for(GamePaths.android_files_dir())
+
+
+## [method portable_dir] with the Android corner given: `skin/` under
+## [param files_dir] when there is one, beside the executable otherwise.
+static func portable_dir_for(files_dir: String) -> String:
+	if files_dir != "":
+		return files_dir.trim_suffix("/").path_join("skin")
 	return GamePaths.executable_dir(OS.get_executable_path(),
 		OS.has_feature("macos")).path_join("skin")
 

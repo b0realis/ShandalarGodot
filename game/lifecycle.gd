@@ -38,3 +38,21 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	CardRegistry.unload()
+
+
+## THE ANDROID BACK GESTURE IS ESCAPE (2026-09-29, the Meta Quest
+## panel). Godot's default answers it by quitting the game
+## (`application/config/quit_on_go_back`, off in project.godot): a
+## thumb on the back of a duel would end the process. Escape is what
+## every screen already answers — the pause menu, a closed view, a
+## cancelled cast — so the request becomes one press and release of
+## that key, through the same door a keyboard's goes. Public, so a test
+## can send the notification itself.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		for pressed in [true, false]:
+			var key := InputEventKey.new()
+			key.keycode = KEY_ESCAPE
+			key.physical_keycode = KEY_ESCAPE
+			key.pressed = pressed
+			Input.parse_input_event(key)

@@ -5,6 +5,13 @@
 #
 #   ./build_release.sh              # -> ../shandalar-build/linux64/
 #   ./build_release.sh --macos      # native Shandalar.app -> ../shandalar-build/macos/
+#   ./build_release.sh --quest      # the "Android Quest" preset: one signed
+#                                   #    arm64 APK for a Meta Quest headset
+#                                   #    -> ../shandalar-build/quest/Shandalar.apk
+#                                   #    (the release key comes from
+#                                   #    ../shandalar-build/keys/release.env,
+#                                   #    never from the repo; see
+#                                   #    docs/handhelds.md)
 #   ./build_release.sh --out DIR    # somewhere else
 #   ./build_release.sh --skin       # also (re)link the original graphics
 #                                   #    into user://original_skin, so the
@@ -150,6 +157,7 @@ LINK_SKIN=0
 PACKAGE=0
 WEB=0
 MACOS=0
+QUEST=0
 CARDART=0
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -160,6 +168,7 @@ while [ $# -gt 0 ]; do
 		--cardart) CARDART=1; shift ;;
 		--web) WEB=1; PRESET="Web"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/web"; shift ;;
 		--macos) MACOS=1; PRESET="macOS"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/macos"; shift ;;
+		--quest) QUEST=1; PRESET="Android Quest"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/quest"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		-V|--version) shandalar_version_line "build_release.sh" .; exit 0 ;;
 		*) echo "build_release: unknown argument '$1'" >&2; exit 3 ;;
@@ -167,6 +176,10 @@ while [ $# -gt 0 ]; do
 done
 if [ "$MACOS" = 1 ] && { [ "$WEB" = 1 ] || [ "$PACKAGE" = 1 ] || [ "$LINK_SKIN" = 1 ]; }; then
 	echo "build_release: --macos builds the local app; --web, --package and --skin are separate workflows. Import local art through Options > Skin." >&2
+	exit 3
+fi
+if [ "$QUEST" = 1 ] && { [ "$WEB" = 1 ] || [ "$MACOS" = 1 ] || [ "$PACKAGE" = 1 ] || [ "$LINK_SKIN" = 1 ]; }; then
+	echo "build_release: --quest exports the APK alone; package it with tools/package_release.py --platform meta-quest" >&2
 	exit 3
 fi
 if [ "$CARDART" = 1 ] && { [ "$WEB" != 1 ] || [ "$LINK_SKIN" != 1 ]; }; then
@@ -184,6 +197,7 @@ OUT="$(cd "$OUT" && pwd)"
 BIN="$OUT/Shandalar.x86_64"
 [ "$WEB" = 1 ] && BIN="$OUT/index.html"
 [ "$MACOS" = 1 ] && BIN="$OUT/Shandalar.app"
+[ "$QUEST" = 1 ] && BIN="$OUT/Shandalar.apk"
 VERSION="$(sed -n 's/^config\/version="\(.*\)"/\1/p' project.godot)"
 LOG="${TMPDIR:-/tmp}/shandalar-export.log"
 
@@ -361,6 +375,23 @@ esac
 MODE="--export-$LINUX_TEMPLATE"
 [ "$WEB" = 1 ] && MODE=--export-release
 [ "$MACOS" = 1 ] && MODE=--export-debug
+# THE QUEST APK IS SIGNED WITH A KEY THAT IS NOT IN THE REPO. The preset
+# leaves keystore/release empty and Godot reads the three
+# GODOT_ANDROID_KEYSTORE_RELEASE_* variables instead; they live in an
+# env file beside the build tree (chmod 600). apksigner wants a JDK: the
+# editor setting that names one becomes JAVA_HOME when nothing set it.
+if [ "$QUEST" = 1 ]; then
+	MODE=--export-release
+	QUEST_KEY_ENV="${QUEST_KEY_ENV:-../shandalar-build/keys/release.env}"
+	if [ -z "${GODOT_ANDROID_KEYSTORE_RELEASE_PATH:-}" ]; then
+		[ -r "$QUEST_KEY_ENV" ] || { echo "build_release: no release key — put GODOT_ANDROID_KEYSTORE_RELEASE_PATH/_USER/_PASSWORD in $QUEST_KEY_ENV (see docs/handhelds.md)" >&2; exit 3; }
+		set -a; . "$QUEST_KEY_ENV"; set +a
+	fi
+	if [ -z "${JAVA_HOME:-}" ]; then
+		JAVA_FROM_EDITOR="$(sed -n 's/^export\/android\/java_sdk_path = "\(.*\)"$/\1/p' "$HOME/.config/godot/editor_settings-4.7.tres" 2>/dev/null | head -1)"
+		[ -n "$JAVA_FROM_EDITOR" ] && export JAVA_HOME="$JAVA_FROM_EDITOR"
+	fi
+fi
 echo "exporting '$PRESET' ($MODE) -> $BIN"
 if ! "$SHANDALAR_TIMEOUT" -k 5 1200 "$GODOT" --headless --path . \
 		"$MODE" "$PRESET" "$BIN" > "$LOG" 2>&1 </dev/null; then
@@ -427,6 +458,23 @@ if [ "$WEB" = 1 ]; then
 		zip_stage "$STAGE" "Shandalar-$VERSION-web"
 		echo "release files: $PKG_DIR/Shandalar-$VERSION-web.zip + $PKG_DIR/Shandalar-$VERSION-web-with-skin.zip"
 	fi
+	exit 0
+fi
+# THE QUEST BUILD ENDS HERE: an APK cannot boot on this desk. The checks
+# are that a signed package came out — apksigner's word on the
+# signature and the package name where the SDK is at hand, its size
+# otherwise — and the adb lines a headset needs are printed.
+if [ "$QUEST" = 1 ]; then
+	[ -s "$BIN" ] || { echo "BUILD FAILED: no APK at $BIN" >&2; exit 1; }
+	APKSIGNER="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
+	if [ -n "$APKSIGNER" ]; then
+		"$APKSIGNER" verify --print-certs "$BIN" > "$OUT/apksigner.log" 2>&1 || { echo "BUILD FAILED: the APK is not signed (log: $OUT/apksigner.log)" >&2; exit 1; }
+		grep -q "CN=b0realis" "$OUT/apksigner.log" || { echo "BUILD FAILED: the APK is signed with the wrong key (log: $OUT/apksigner.log)" >&2; exit 1; }
+	fi
+	echo "ok: $(du -sh "$BIN" | cut -f1) Meta Quest APK (release template, arm64, signed)"
+	echo "install it with: adb install -r \"$BIN\""
+	echo "then the skin:   adb push skin/original_skin.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/"
+	echo "and the cards:   adb push cardart.zip /sdcard/Android/data/com.b0realis.shandalar/files/cardpacks/"
 	exit 0
 fi
 if [ "$MACOS" = 1 ]; then

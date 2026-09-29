@@ -31,6 +31,10 @@ extends RefCounted
 ##   music_folder      the player's own tunes, played among the 1997
 ##                     ones;                         user://music
 ##
+## On Android those three defaults sit in the app's shared-storage
+## corner instead ([method android_files_dir]): `user://` is private
+## there and a player could never put a zip in it.
+##
 ## A value is `user://…`, `res://…` or an absolute path; a leading `~`
 ## is the home folder. Each is read where it is used — [SkinPack] at
 ## boot, [method GameSkin.search_dirs], [member PortraitLibrary.dirs],
@@ -58,6 +62,32 @@ const DEFAULT_DRAFTS := "user://decks"
 ## names them.
 const PLACE_KEYS: Array[String] = [KEY_SKIN_ZIP, KEY_SKIN_FOLDER,
 	KEY_CARDPACKS, KEY_PORTRAITS, KEY_MUSIC]
+
+
+## THE PLAYER'S PLACES ON ANDROID (2026-09-29, the Meta Quest build).
+## There `user://` is the app's PRIVATE folder — nothing outside the
+## app can write into it, so a zip could never be put in the card
+## folder — while the app's own corner of the shared storage,
+## `/sdcard/Android/data/com.b0realis.shandalar/files`, is written by
+## `adb push` and read by the app without any permission. The three
+## folders the player fills live there, under the same names, with
+## `skin/` beside them ([method GameSkin.portable_dir]): the desktop
+## play copy's layout, one level down. The settings file, the decks
+## and the tournament checkpoints stay in `user://` — the game writes
+## those, not the player, and a private folder is the right place for
+## them. Everywhere else this is "" and nothing moves.
+static func android_files_dir() -> String:
+	if not OS.has_feature("android"):
+		return ""
+	return OS.get_system_dir(OS.SYSTEM_DIR_DESKTOP, false)
+
+
+## [param user_path] as the player fills it: under [param files_dir]
+## where there is one (Android), the `user://` place itself otherwise.
+static func player_place(user_path: String, files_dir: String) -> String:
+	if files_dir == "" or not user_path.begins_with("user://"):
+		return user_path
+	return files_dir.trim_suffix("/").path_join(user_path.trim_prefix("user://"))
 
 
 ## The skin zip the `skin_zip` key names, or "" for the game's own pick.
@@ -90,17 +120,17 @@ static func skin_folder() -> String:
 
 ## The card packs: every zip here is mounted at boot ([SkinPack]).
 static func cardpacks_folder() -> String:
-	return _place(KEY_CARDPACKS, DEFAULT_CARDPACKS)
+	return _place(KEY_CARDPACKS, player_place(DEFAULT_CARDPACKS, android_files_dir()))
 
 
 ## The player's own portraits ([PortraitLibrary]).
 static func portraits_folder() -> String:
-	return _place(KEY_PORTRAITS, DEFAULT_PORTRAITS)
+	return _place(KEY_PORTRAITS, player_place(DEFAULT_PORTRAITS, android_files_dir()))
 
 
 ## The player's own music ([MusicLibrary]).
 static func music_folder() -> String:
-	return _place(KEY_MUSIC, DEFAULT_MUSIC)
+	return _place(KEY_MUSIC, player_place(DEFAULT_MUSIC, android_files_dir()))
 
 
 ## Private LAN organiser checkpoints; no transport keys or live hidden zones.

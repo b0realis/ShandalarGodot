@@ -360,6 +360,43 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The Meta Quest package (2026-09-29)
+
+- `game/paths.gd`: `android_files_dir()` — the app's shared-storage
+  corner on Android (`OS.get_system_dir(SYSTEM_DIR_DESKTOP, false)`,
+  `Context.getExternalFilesDir(null)`), "" everywhere else;
+  `player_place(user_path, files_dir)` — the pure mapping of a `user://`
+  place under that corner; the `cardpacks_folder`, `portraits_folder`
+  and `music_folder` defaults go through it, the skin folder, the decks
+  and the tournaments stay `user://`.
+- `game/skin.gd`: `portable_dir_for(files_dir)` — `skin/` under the
+  corner where there is one, beside the executable otherwise;
+  `portable_dir()` calls it. `game/card_packs.gd`: `candidate_paths`
+  takes the corner as "beside the game" on Android.
+- `game/settings.gd`: `ANDROID_HANDHELD`; `handheld()` is the launcher's
+  word, else `android` under `OS.has_feature("android")`.
+- `game/lifecycle.gd`: `_notification(NOTIFICATION_WM_GO_BACK_REQUEST)`
+  — an Escape press and release through `Input.parse_input_event`;
+  `project.godot` `application/config/quit_on_go_back=false`.
+- `build_release.sh`: `--quest` — the `Android Quest` preset with
+  `--export-release`, the three `GODOT_ANDROID_KEYSTORE_RELEASE_*`
+  variables sourced from `../shandalar-build/keys/release.env`
+  (`QUEST_KEY_ENV`), `JAVA_HOME` from the editor's
+  `export/android/java_sdk_path` when unset, apksigner's verdict and
+  the signer's CN checked, the adb lines printed. The preset itself is
+  in the local `export_presets.cfg` (gitignored): prebuilt 4.7.stable
+  template APKs by path, arm64 only, `package/unique_name`
+  `com.b0realis.shandalar`, `screen/immersive_mode`, `version/name`
+  empty so the APK carries `config/version`.
+- `tools/package_release.py`: platform `meta-quest` — payload
+  `Shandalar.apk` alone, `HANDHELD_FILES` gives it `HANDHELD.md`,
+  `QUEST_FILES` names the files folder in `START["meta-quest"]`; no
+  launcher, no `.sh` doors.
+- Tests: `tests/unit/test_android_places_2026_09_29.gd` (no corner on a
+  desk, the pure mapping, the skin corner, a written key wins, the
+  handheld word, the back gesture); `tools/test_package_release.py`
+  (the meta-quest subtest: the adb lines, no doors).
+
 ## The third Steam Deck playtest (2026-09-28)
 
 - `game/duel/graveyard_view.gd`: `Z` 85 — over the chain box (80), a card
@@ -687,6 +724,14 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.48.md`: the Meta Quest package — `./build_release.sh
+  --quest` exports and signs the `Android Quest` APK (key outside the
+  repo), `package_release.py --platform meta-quest` wraps it;
+  `GamePaths.android_files_dir` / `player_place` put the card, portrait
+  and music folders in the app's shared-storage corner and
+  `GameSkin.portable_dir_for` the `skin/` beside them;
+  `Settings.handheld` says `android`; the back gesture is Escape
+  (`Lifecycle`).
 - `docs/releases/0.40.47.md`: the third Deck playtest answered —
   `GraveyardView.Z` 85 (`game/duel/graveyard_view.gd`) over every duel
   window and under the Situation Bar's 90, the DuelScreen parking the

@@ -6,21 +6,24 @@ the card pool or the existing desktop layout. Both plain and original-skin
 variants are available. Card pictures remain separate: copy your own card
 packs into `skin/` beside the executable, or import them through Options.
 
-Neither target has been tested on physical hardware yet. This is not a claim
-of Steam Deck Verified status or membership of the PortMaster catalogue. The
-controller pointer described below is verified only by the test suite's
-synthetic pad events, not by a pad in a hand.
+The Steam Deck package has been through three owner playtests; the ArkOS
+package has not been on physical hardware, and the Meta Quest APK below is
+new. This is not a claim of Steam Deck Verified status, membership of the
+PortMaster catalogue or a Horizon Store review. The controller pointer
+described below is verified by the test suite's synthetic pad events and,
+on the Deck, by a pad in a hand.
 
 ## Handheld defaults
 
 Both launchers export `SHANDALAR_HANDHELD` (`steam-deck` or `arkos`) before
-starting the game. Under that word, three settings that you have **never
-changed** open on a handheld's defaults instead of the desktop's: **Full
-screen** on, **Full-screen card on click** on, and **Power saver** on. A
-choice you make in Options is written and always wins — a handheld that you
-set to windowed stays windowed — and nothing is written until you choose.
-Starting the executable directly, without the launcher, gives the desktop's
-defaults.
+starting the game; an Android build has no launcher and is the handheld
+itself, so its word is `android` unless the variable says otherwise. Under
+that word, three settings that you have **never changed** open on a
+handheld's defaults instead of the desktop's: **Full screen** on,
+**Full-screen card on click** on, and **Power saver** on. A choice you make
+in Options is written and always wins — a handheld that you set to windowed
+stays windowed — and nothing is written until you choose. Starting the
+executable directly, without the launcher, gives the desktop's defaults.
 
 **Full-screen card on click**: click or tap the large preview in a duel or
 Deck Builder to fit the card to the screen; click again, Escape or controller
@@ -184,14 +187,74 @@ PortMaster version and screen size. A launch test must check pointer movement,
 dragging, no double actions, text readability, a complete duel, save/restart
 and returning to Ports. Until those pass, treat this as a porting test build.
 
+## Meta Quest 3
+
+The Quest package is one Android APK: the same game as a **flat 2D panel**
+in the headset's home, the way a browser or a 2D store app opens — not a
+VR scene, no XR mode, no hand tracking. The headset's controller casts a
+laser that the game sees as the mouse: point to hover, pull the trigger
+to click, hold it to drag. The touch controls made for the Deck's screen
+work the same on the panel. Quest 2 and Quest Pro run the same APK.
+
+It is **sideloaded**, never installed from the Horizon Store:
+
+1. Turn on **Developer Mode** for the headset in the Meta Horizon phone
+   app (this needs a developer account, which Meta grants on request).
+2. Connect the headset over USB, put it on and **Allow USB debugging**
+   when it asks. `adb devices` on the computer then lists it. `adb` is
+   in the Android SDK's platform-tools, or in the Meta Quest Developer
+   Hub, which can also install the APK with a drag.
+3. From the extracted package:
+
+   ```sh
+   adb install -r Shandalar.apk
+   adb push skin/original_skin.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/
+   adb push cardart.zip /sdcard/Android/data/com.b0realis.shandalar/files/cardpacks/
+   ```
+
+   The first line is the game; the second the original look, from the
+   `-with-skin` package; the third your own card pictures, which no
+   package carries ([card-art-and-packs.md](card-art-and-packs.md)).
+   Card packs (`Pack-1-DotP-complete.zip` and the others) go in that same
+   `cardpacks/` folder, your own faces in `portraits/` and your own tunes
+   in `music/` beside it. The game reads the folder at its next start.
+4. In the headset, the game is under **Library > Unknown Sources**.
+
+**Where the files live.** On Android the game's private `user://` folder
+(`/data/data/com.b0realis.shandalar/files`) holds `settings.cfg`, the
+decks and the tournament checkpoints — the files the game writes — and
+nothing outside the app can write into it. The three folders **you** fill
+therefore sit in the app's own corner of the shared storage,
+`/sdcard/Android/data/com.b0realis.shandalar/files/`, where `adb push`
+writes and the app reads without any permission: `cardpacks/`,
+`portraits/`, `music/` and `skin/` under it, the desktop play copy's
+layout one level down. The `cardpacks_folder`, `portraits_folder` and
+`music_folder` keys in `settings.cfg` still move them (`GamePaths`).
+"Forget my zips" in Options empties only the game's private folder and so
+does nothing there: what you pushed is yours to remove with `adb shell rm`.
+Uninstalling the app removes both folders.
+
+The on-screen keyboard opens for a name or a search field. The headset's
+Android back gesture is Escape. The three handheld defaults above apply
+(the word is `android`). Not hardware-validated: this is a local test
+package, built and signed on the developer's machine (the signing key is
+never in the repository) and not reviewed by any store.
+
 ## Build and validation
 
-Package verified Linux x86-64 exports with `--platform steam-deck`, and Linux
-ARM64 exports with `--platform arkos-rk3326-experimental`, using
+Package verified Linux x86-64 exports with `--platform steam-deck`, Linux
+ARM64 exports with `--platform arkos-rk3326-experimental`, and the signed
+APK of `./build_release.sh --quest` with `--platform meta-quest`, using
 `tools/package_release.py` as described in [release-builds.md](release-builds.md).
-The existing Linux and Raspberry Pi export presets supply those payloads;
-no different engine version or separate game fork is needed. Run the package
-and handheld-launcher tests before distributing them. Verify ZIP checksums,
+The existing Linux and Raspberry Pi export presets supply the first two
+payloads; the `Android Quest` preset (one arm64 APK on the prebuilt
+template, no gradle build, `package/unique_name` `com.b0realis.shandalar`)
+the third — the release keystore and its password live in
+`../shandalar-build/keys/release.env` as `GODOT_ANDROID_KEYSTORE_RELEASE_PATH`,
+`_USER` and `_PASSWORD`, outside the repository, and the editor settings
+name a JDK 17 and an Android SDK with build-tools. No different engine
+version or separate game fork is needed. Run the package and
+handheld-launcher tests before distributing them. Verify ZIP checksums,
 then from the extracted versioned directory run `sha256sum -c SHA256SUMS`.
 Launcher simulation tests are not substitutes for target-hardware testing.
 
