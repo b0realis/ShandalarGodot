@@ -49,6 +49,23 @@ extends Node
 ## reads a wheel — the deck builder's card grid, a log, a list — takes
 ## two fingers.
 ##
+## A PRESS THAT OPENS A WINDOW KEEPS ITS RELEASE (2026-09-29, the third
+## headset report: *"the menu does not appear"*). An [OptionButton]
+## opens its menu on the PRESS, and the deck list of the Magic Battle
+## screen — 354 decks — is taller than the panel, so Godot fits the
+## menu over the button itself. The tap's own release, pushed next,
+## went to the freshly focused popup, where [PopupMenu] activated the
+## row under it (measured on the desk: row 13, a deck the player never
+## chose) and closed the menu in the same frame. A mouse survives this
+## only because its press sets [Input]'s button mask, which makes the
+## popup ignore a release inside 400 ms; an event pushed through the
+## root never touches that mask. So a tap whose press opened a focused
+## embedded window — a menu, a dialog — sends no release
+## ([method _window_took_press]): the window has the finger's next tap,
+## the way a context menu has it (see [TouchGestures]). Nothing is left
+## pressed: the root viewport let the button go the moment the window
+## took the focus (its `_drop_mouse_focus`), as it does under a mouse.
+##
 ## WHEN IT IS ACTIVE — one stored value, `touch_controls`, three states,
 ## on the Options screen's `Display:` rows and in [Settings]:
 ##
@@ -259,8 +276,10 @@ func _spend(intents: Array[Dictionary]) -> void:
 		match intent.kind:
 			"tap":
 				var at: Vector2 = _snap(intent.pos)
+				var open := _open_windows()
 				_button(MOUSE_BUTTON_LEFT, true, at, intent.double)
-				_button(MOUSE_BUTTON_LEFT, false, at, false)
+				if not _window_took_press(open):
+					_button(MOUSE_BUTTON_LEFT, false, at, false)
 			"context":
 				_button(MOUSE_BUTTON_RIGHT, true, intent.pos, false)
 				_button(MOUSE_BUTTON_RIGHT, false, intent.pos, false)
@@ -296,6 +315,23 @@ func _push(event: InputEvent) -> void:
 	event.device = SYNTH_DEVICE
 	get_tree().root.push_input(event, true)
 	synthesized.emit(event)
+
+
+## The embedded windows open right now — menus, dialogs, floating panels.
+func _open_windows() -> Array:
+	return get_tree().root.get_embedded_subwindows()
+
+
+## Whether the press just pushed opened an embedded window that holds
+## the focus now — the engine would forward the release into it (see
+## the class doc, A PRESS THAT OPENS A WINDOW). [param open_before] is
+## [method _open_windows] read before the press: a window that was
+## already open, a tap on a menu's row, takes its release as ever.
+func _window_took_press(open_before: Array) -> bool:
+	for window in get_tree().root.get_embedded_subwindows():
+		if window.has_focus() and not open_before.has(window):
+			return true
+	return false
 
 
 ## Where the pointer "is": a plain motion, which is what docks the card

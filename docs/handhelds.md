@@ -199,7 +199,11 @@ work the same on the panel. Quest 2 and Quest Pro run the same APK.
 It is **sideloaded**, never installed from the Horizon Store. Tested on
 a Quest 3 (2026-09-29): the panel, the skin, the card packs, the music
 and the laser's hover all work once the files are in the right folders,
-and the folders are the whole story (below).
+and the folders are the whole story (below). The third report — the
+Magic Battle deck list's menu opening and closing under one click — was
+the touch layer's own release landing in a menu taller than the panel,
+fixed in 0.40.51 inside the layer (`TouchControls`), nothing on the
+headset's side.
 
 **adb on a Linux machine.** `adb` is the Android debug bridge, one small
 program; the Meta Quest Developer Hub that wraps it is Windows/macOS

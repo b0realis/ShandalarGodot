@@ -29,7 +29,9 @@ extends GutTest
 ##      puts it to sleep; turning the layer off releases what it held.
 ##   4. A mini-menu (an embedded window) takes the pad itself while it
 ##      is open — the engine's rule, pinned here so the layer never
-##      fights it.
+##      fights it; and when the A that opened a menu is the one the menu
+##      takes (2026-09-29), the layer lets that A go itself, so the next
+##      A is a press and not a dropped copy.
 ##   5. The switch: the Options row is a view of the key.
 ##   6. One press is one press (2026-09-28): a real mouse press that
 ##      doubles the pad's own within DOUBLED_MS — Steam's copy of the
@@ -818,6 +820,54 @@ func test_a_mini_menu_takes_the_pad_itself_while_it_is_open() -> void:
 	assert_eq(_made.size(), 0, "the layer saw none of it")
 	assert_false(layer.is_awake())
 	assert_false(menu.visible, "and the menu closed on the choice")
+
+
+## 2026-09-29: an [OptionButton] opens its menu on the PRESS, so the A
+## that opens the Magic Battle deck list hands the menu the pad while A
+## is still down — the A up goes to the menu and never reaches the
+## layer. Left unnoticed, the layer held A down for good: the next A
+## read as a second copy of a press still down, and was dropped.
+func test_the_a_that_opens_a_menu_is_let_go_when_the_menu_takes_it() -> void:
+	layer.choose(PadControls.ON)
+	_build_stage()
+	var option := OptionButton.new()
+	for i in 60:
+		option.add_item("Deck %d" % i)
+	option.select(2)
+	option.position = Vector2(580, 380)
+	option.size = Vector2(120, 40)
+	var chosen := []
+	option.item_selected.connect(func(i: int) -> void: chosen.append(i))
+	_table.add_child(option)
+	option.grab_focus()
+	await _settle()
+	var popup := option.get_popup()
+	_pad(JOY_BUTTON_A, true)
+	await _settle()
+	assert_true(popup.visible, "A on the button opened its menu")
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]])
+	_pad(JOY_BUTTON_A, false)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]],
+		"the A up went to the menu — the layer never saw it and pushed nothing")
+	assert_true(popup.visible, "the menu is still open")
+	assert_eq(chosen, [], "and no row was chosen")
+	_pad(JOY_BUTTON_DPAD_DOWN, true)
+	_pad(JOY_BUTTON_DPAD_DOWN, false)
+	await _settle()
+	_pad(JOY_BUTTON_A, true)
+	_pad(JOY_BUTTON_A, false)
+	await _settle()
+	assert_eq(chosen, [0], "the D-pad walked the menu and A chose — the engine's own way")
+	assert_false(popup.visible)
+	_pad(JOY_BUTTON_A, true)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true], [MOUSE_BUTTON_LEFT, true]],
+		"the next A is a press again, not a copy of one still down")
+	assert_true(popup.visible, "which opens the menu again")
+	_pad(JOY_BUTTON_A, false)
+	await _settle()
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true], [MOUSE_BUTTON_LEFT, true]])
 
 
 # ============================================================ the switch (5) ==

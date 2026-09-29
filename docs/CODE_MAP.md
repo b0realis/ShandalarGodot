@@ -360,6 +360,26 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The third headset report (2026-09-29)
+
+- `game/input/touch_controls.gd`: a tap whose press opened a focused
+  embedded window sends no release — `_open_windows()` (the root's
+  `get_embedded_subwindows`) read before the press, `_window_took_press
+  (open_before)` after it (a window not in the list before that
+  `has_focus()` now); the class doc, A PRESS THAT OPENS A WINDOW KEEPS
+  ITS RELEASE, carries the measurement (the 354-deck list fitted over
+  its button, `PopupMenu`'s 400 ms guard reading `Input`'s mask, which
+  a pushed event never sets).
+- `game/input/pad_controls.gd`: the same two readers; a click intent
+  whose press opened a window calls `_hand_over(button)` — the held
+  flag and `_pad_down` for that button cleared, since the engine hands
+  the window the pad's release and the layer would otherwise hold the
+  button for good and drop the next press as a copy.
+- `tests/ui/test_touch_controls.gd` (+1: the tall menu left open, the
+  next tap the menu's own), `tests/ui/test_pad_controls.gd` (+1: the A
+  that opened a menu let go, the next A a press again).
+  `docs/handhelds.md`: the Quest paragraph names the report.
+
 ## The second headset report (2026-09-29)
 
 - `game/android_corner.gd`: `AndroidCorner` writes its report —
@@ -794,6 +814,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.51.md`: the third headset report — the Magic
+  Battle deck list opened and closed under one tap on the Quest (the
+  tap's own release landing in a menu fitted over its button); a tap
+  whose press opened a window sends no release, and the pad's A that
+  opened one is let go.
 - `docs/releases/0.40.50.md`: the second headset report — the game
   writes `start_report.txt` into its Android corner as the start goes
   (`adb logcat -d` had lost the start), the pack lines carry their

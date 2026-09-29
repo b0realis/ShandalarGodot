@@ -19,7 +19,10 @@ extends GutTest
 ##      long-press and lift right-clicks; a drag presses at the origin,
 ##      moves and releases; two fingers right-click; a one-finger drag on
 ##      something that scrolls, where nothing scrolls natively, spends
-##      wheel notches; a fat tap beside a small button reaches it.
+##      wheel notches; a fat tap beside a small button reaches it; a
+##      tap that opens a menu taller than the screen leaves it open
+##      (2026-09-29, the third headset report) and the next tap on a
+##      row chooses.
 ##   3. The map, on the duel table: touching a card docks its preview,
 ##      holding one opens its menu, dragging one places it.
 ##   4. The switch: the Options row is a view of the key, and turning the
@@ -419,6 +422,64 @@ func test_a_fat_tap_beside_a_small_button_reaches_it() -> void:
 	assert_eq(hit[0], 1, "a tap well away from it stays where it fell")
 	await _tap(Vector2(260, 220))
 	assert_eq(_presses, 1, "a tap ON something that listens is never moved")
+
+
+## 2026-09-29, the third headset report: *"When i want to select a deck
+## from the dropdown menu in magic battle the menu does not appear."* An
+## [OptionButton] opens its menu on the PRESS; the Magic Battle deck
+## list (354 rows) is taller than the panel, so Godot fits the menu over
+## the button itself — and the tap's own release, pushed next, landed in
+## the menu: a row chosen at random, the menu gone in the same frame.
+## Sixty rows are taller than the runner's window too.
+func test_a_tap_that_opens_a_tall_menu_leaves_it_open() -> void:
+	layer.choose(TouchControls.ON)
+	_build_stage()
+	var option := OptionButton.new()
+	for i in 60:
+		option.add_item("Deck %d" % i)
+	option.select(2)
+	option.position = Vector2(400, 380)
+	option.size = Vector2(300, 40)
+	var chosen := []
+	option.item_selected.connect(func(i: int) -> void: chosen.append(i))
+	_table.add_child(option)
+	await _settle()
+	var popup := option.get_popup()
+	var at := Vector2(450, 400)         # on the button, under the menu's column
+	await _tap(at)
+	assert_true(popup.visible, "the menu is open after the tap")
+	assert_true(Rect2(popup.position, popup.size).has_point(at),
+		"the fitted menu covers the button — the shape that swallowed the release")
+	assert_eq(chosen, [], "no row was chosen by the tap's own release")
+	assert_eq(option.selected, 2)
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]],
+		"the press alone went out: the menu has the finger's next tap")
+	await _tap(_row_point(popup, 5))
+	assert_eq(chosen, [5], "and the next tap, on a row, chooses it")
+	assert_false(popup.visible, "which closes the menu")
+	assert_eq(_made_buttons(), [[MOUSE_BUTTON_LEFT, true]],
+		"that tap was the menu's own: the engine hands a focused window the finger " +
+		"before this layer sees it, and its emulated click chose the row")
+
+
+## The middle of row [param i] of an open [PopupMenu], in the stage's
+## coordinates: the menu lays its rows out at one height each in an
+## internal scroll container, read here the way the engine keeps it.
+func _row_point(popup: PopupMenu, i: int) -> Vector2:
+	var scroll := _internal(popup, "ScrollContainer") as ScrollContainer
+	var rows: Control = scroll.get_child(0, true)
+	var row_h := rows.size.y / popup.item_count
+	return Vector2(popup.position) + rows.global_position + Vector2(20, (i + 0.5) * row_h)
+
+
+func _internal(node: Node, type: String) -> Node:
+	for child in node.get_children(true):
+		if child.is_class(type):
+			return child
+		var found := _internal(child, type)
+		if found != null:
+			return found
+	return null
 
 
 # ================================================== the map, on the table (3) ==

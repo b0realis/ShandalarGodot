@@ -18444,6 +18444,81 @@ starts, and a hover before the first click. `test_android_corner_2026_09_29.gd`
 Gate: 546 scripts, **8,224/8,224 tests, 367,654 asserts**, exit 0 in
 264 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-29 — The third headset report (0.40.51)
+
+*"A little bit more testing on 0.40.49. When i want to select a deck
+from the dropdown menu in magic battle the menu does not appear."*
+
+**Reproduced on the desk** before anything was tuned: the real Magic
+Battle screen on a stage under `TouchControls` on, one tap on the
+first deck row's `OptionButton` (354 decks), the popup's signals
+logged — `about_to_popup`, root focus out, `visible=true`, root focus
+in, `popup_hide`, `visible=false`, `item_selected 13`. The menu opened
+and closed inside one flush, and a deck the player never chose was
+selected. The engine's own source says why, line by line:
+
+- an `OptionButton` acts on the PRESS (`ACTION_MODE_BUTTON_PRESS`) and
+  `Window::popup` fits an embedded popup into its parent — a 354-row
+  list is taller than any screen, so it is clamped to the screen's
+  height and set at y = 0, OVER the button that opened it;
+- the touch layer's tap is a synthesized press and release in one
+  `_spend`; the press opened the menu and gave it the focus, and the
+  engine forwards every later event to a focused embedded window
+  before anything else sees it — the release landed on a row;
+- `PopupMenu` ignores a release within 400 ms of opening only when
+  `during_grabbed_click` is set, and that reads `Input`'s mouse button
+  mask at the moment of opening. A real mouse press sets the mask
+  (that is why the desk never showed it); a touch the engine emulates
+  into a mouse sets it too (that is why the layer OFF never showed
+  it); an event pushed through `root.push_input` — both pointer
+  layers' way — never does. So the release chose row 13 and hid the
+  menu.
+
+Short menus (difficulty, format, best-of) sit below their button, the
+release falls outside them and is ignored — which is why only the deck
+list failed. A bare five-row menu in a first probe stayed open for the
+same reason; the real screen, with its list, was the reproduction.
+
+**The fix, in the layers and nowhere by name.** `TouchControls` reads
+the root's embedded windows before a tap's press and again after it
+(`_open_windows`, `_window_took_press`): a window that was not open
+before and holds the focus now has the finger, and the release is not
+pushed — the menu takes the next tap itself, the way a context menu
+always has (`TouchGestures`' doc). Nothing is left pressed: the root
+viewport had already let the button go when the window took the focus
+(its `_drop_mouse_focus`, the same as under a mouse). `PadControls`
+had the same press with a different tail: the engine hands the menu
+the pad while A is still down, the A up never reaches the layer, and
+the layer kept A held — its next A read as a second pad's copy of a
+press still down and was dropped, and that A's release went out as a
+stray release. Now the A whose press opened a focused window is let go
+by the layer itself (`_hand_over`): held flag and `_pad_down` cleared,
+the next A a fresh first press.
+
+**What the tests say.** `test_touch_controls.gd`: a sixty-row
+`OptionButton` (taller than the runner's window, fitted over the
+button), a tap on it — open afterwards, the tap's point inside the
+menu's rect, no row chosen, one press synthesized and no release; a
+tap on row 5 chooses it and closes the menu, and the layer synthesized
+nothing for that tap: the focused menu took the raw touch and the
+engine's own emulated click chose the row, as it always did for an
+open menu. `test_pad_controls.gd`: A on the same button opens the
+menu, the A up goes to the menu (nothing synthesized), the D-pad and A
+choose row 0, and the next A is a press again that opens the menu
+again. Both bit before the fix (row 14 chosen; the next A dropped, its
+release pushed).
+
+**Noted, not tuned.** Android's own `GestureDetector` runs ahead of
+the engine's touch stream: a finger (or a laser's trigger) held past
+Android's long-press time (~400 ms) is cancelled as a touch and
+delivered as a real RIGHT mouse press, device 0, released on the lift.
+Our 450 ms long-press therefore never fires on Android; a held trigger
+is a right click by Android's clock, through the mouse path, and that
+is the context menu either way. Left as it is until a report names it.
+
+Gate: 546 scripts, **8,226/8,226 tests, 368,128 asserts**, exit 0 in
+267 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

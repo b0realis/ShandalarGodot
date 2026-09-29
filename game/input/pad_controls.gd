@@ -50,7 +50,13 @@ extends Node
 ## While a mini-menu (a [PopupMenu] — an embedded window) is open, the
 ## engine forwards the pad to it before this layer sees anything: its
 ## D-pad walks the entries and A picks one, the way every console menu
-## does; the pointer waits.
+## does; the pointer waits. That includes the RELEASE of the very press
+## that opened it (2026-09-29): an [OptionButton] opens its menu on the
+## press, so an A on the Magic Battle deck list hands the menu the pad
+## while A is still down, and the A up never reaches this layer. The
+## layer lets that button go itself when its press opened a focused
+## window ([method _window_took_press]) — otherwise the next A would be
+## read as a second pad's copy of a press still down and be dropped.
 ##
 ## ONE PRESS IS ONE PRESS (2026-09-28, the second Steam Deck playtest:
 ## *"when i click on the graveyard it just flashes"*). Steam Input can
@@ -418,7 +424,10 @@ func _spend(intent: Dictionary) -> void:
 					_left_held = true
 				else:
 					_right_held = true
+				var open := _open_windows()
 				_button(button, true, _pointer, double)
+				if _window_took_press(open):
+					_hand_over(button)
 			elif button == MOUSE_BUTTON_LEFT and _left_held:
 				_left_held = false
 				_button(button, false, _pointer, false)
@@ -679,6 +688,34 @@ func _push(event: InputEvent) -> void:
 	event.device = SYNTH_DEVICE
 	get_tree().root.push_input(event, true)
 	synthesized.emit(event)
+
+
+## The embedded windows open right now — menus, dialogs, floating panels.
+func _open_windows() -> Array:
+	return get_tree().root.get_embedded_subwindows()
+
+
+## Whether the press just pushed opened an embedded window that holds
+## the focus now: the engine hands it the pad, release and all (see the
+## class doc). [param open_before] is [method _open_windows] read before
+## the press. The same reading as [TouchControls]' for the same reason.
+func _window_took_press(open_before: Array) -> bool:
+	for window in get_tree().root.get_embedded_subwindows():
+		if window.has_focus() and not open_before.has(window):
+			return true
+	return false
+
+
+## A mouse button whose press opened a window that took the pad: the
+## pad's own release will go there too, so the button is up as far as
+## this layer is concerned — its next press is a fresh first, not a copy.
+func _hand_over(button: int) -> void:
+	if button == MOUSE_BUTTON_LEFT:
+		_left_held = false
+		_pad_down[CLICK_BUTTON] = false
+	else:
+		_right_held = false
+		_pad_down[MENU_BUTTON] = false
 
 
 ## Where the pointer "is": a plain motion, which is what docks the card
