@@ -332,7 +332,8 @@ func test_the_pack_scan_talks_on_stderr() -> void:
 	# The Lab's stdout is its report and nothing else (the manual's
 	# promise); the CardPacks autoload's "found" line went there first.
 	var source := FileAccess.get_file_as_string("res://game/card_packs.gd")
-	assert_true(source.contains('printerr("card pack: found %s (%s)" % [path,'))
+	assert_true(source.contains('var line := "card pack: found %s (%s, %d ms)" % [path,'))
+	assert_true(source.contains("\n\t\t\tprinterr(line)\n"))
 	assert_false(source.contains('print("card pack: found'))
 
 

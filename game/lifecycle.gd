@@ -38,14 +38,18 @@ func _ready() -> void:
 	UiChrome.watch_tooltips(get_tree())
 	# On Android the corner the player pushes into is made here, before
 	# SkinPack and CardPacks read it, and what is there goes to the log
-	# ([AndroidCorner]); the tracer joins the tree last of all, after
-	# the first scene, so it sees an event before any layer eats it.
+	# and to the start report in the corner ([AndroidCorner]); the tracer
+	# joins the tree last of all, after the first scene, so it sees an
+	# event before any layer eats it.
 	if OS.has_feature("android"):
 		var corner := GamePaths.android_files_dir()
 		AndroidCorner.prepare(corner)
+		var tracer := AndroidCorner.new()
+		tracer.corner = corner
+		tracer.say(AndroidCorner.version_line())
 		for line in AndroidCorner.report(corner):
-			printerr(line)
-		get_tree().root.add_child.call_deferred(AndroidCorner.new())
+			tracer.say(line)
+		get_tree().root.add_child.call_deferred(tracer)
 
 
 func _exit_tree() -> void:

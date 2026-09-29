@@ -213,22 +213,50 @@ func test_describe_names_the_event_and_its_device() -> void:
 
 # 6. The tracer.
 
-func test_the_tracer_says_the_device_line_then_each_class_once() -> void:
+func test_the_start_lines() -> void:
+	var version := String(ProjectSettings.get_setting("application/config/version"))
+	var line := AndroidCorner.version_line()
+	assert_true(line.begins_with("android: Shandalar %s, started " % version), line)
+	var when := RegEx.create_from_string("started \\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d$")
+	assert_not_null(when.search(line), "the moment, so a report is placed: " + line)
+	line = AndroidCorner.ready_line()
+	assert_true(line.begins_with("android: tree ready after "), line)
+	assert_true(line.ends_with(" ms"), line)
+	assert_gt(int(line.trim_prefix("android: tree ready after ").trim_suffix(" ms")), 0)
+
+
+## What the tracer notes after its own two lines: the skin's and the
+## card packs' lines, as the autoloads hold them at this moment.
+func _autoload_notes() -> Array[String]:
+	var out: Array[String] = []
+	if SkinPack.mounted.is_empty():
+		out.append("skin pack: nothing mounted")
+	out.append_array(SkinPack.report_lines)
+	out.append_array(CardPacks.report_lines)
+	return out
+
+
+func test_the_tracer_says_the_start_then_each_class_once() -> void:
 	var tracer := AndroidCorner.new()
 	add_child_autofree(tracer)
-	assert_eq(tracer.traced.size(), 1)
-	assert_eq(tracer.traced[0], AndroidCorner.device_line())
+	var notes := _autoload_notes()
+	var head := 2 + notes.size()
+	assert_eq(tracer.traced.size(), head)
+	assert_true(tracer.traced[0].begins_with("android: tree ready after "), tracer.traced[0])
+	assert_eq(tracer.traced[1], AndroidCorner.device_line())
+	assert_eq(tracer.traced.slice(2), notes, "the autoloads' own lines, for the report")
+	assert_true(notes.size() > 0, "the wrapper's packs are found, or nothing is mounted")
 	var motion := InputEventMouseMotion.new()
 	motion.position = Vector2(1, 1)
 	tracer._input(motion)
-	assert_eq(tracer.traced.size(), 2)
-	assert_eq(tracer.traced[1], AndroidCorner.describe(motion))
+	assert_eq(tracer.traced.size(), head + 1)
+	assert_eq(tracer.traced[head], AndroidCorner.describe(motion))
 	var again := InputEventMouseMotion.new()
 	again.position = Vector2(2, 2)
 	tracer._input(again)
-	assert_eq(tracer.traced.size(), 2, "a class is reported once")
+	assert_eq(tracer.traced.size(), head + 1, "a class is reported once")
 	tracer._input(InputEventMouseButton.new())
-	assert_eq(tracer.traced.size(), 3)
+	assert_eq(tracer.traced.size(), head + 2)
 	assert_false(get_viewport().is_input_handled(), "nothing consumed")
 	# Up to TRACED_CLASSES classes, then quiet.
 	var classes: Array = [InputEventScreenTouch, InputEventScreenDrag,
@@ -237,7 +265,36 @@ func test_the_tracer_says_the_device_line_then_each_class_once() -> void:
 		InputEventMIDI, InputEventShortcut]
 	for cls in classes:
 		tracer._input(cls.new())
-	assert_eq(tracer.traced.size(), 1 + AndroidCorner.TRACED_CLASSES)
+	assert_eq(tracer.traced.size(), head + AndroidCorner.TRACED_CLASSES)
+
+
+func test_the_report_file_follows_every_line() -> void:
+	# The second headset report (2026-09-29): `adb logcat -d` after the
+	# fact had lost the whole start — Android's main log buffer is a ring
+	# the headset shell fills in minutes. So every line goes to a file
+	# in the corner as it is said, and the file is the last start.
+	var path := _corner.path_join(AndroidCorner.REPORT_NAME)
+	var tracer := AndroidCorner.new()
+	tracer.say("android: one")
+	assert_false(FileAccess.file_exists(path), "no corner, no file")
+	tracer.corner = _corner
+	tracer.say("android: two")
+	assert_eq(FileAccess.get_file_as_string(path), "android: one\nandroid: two\n")
+	add_child_autofree(tracer)
+	assert_eq(FileAccess.get_file_as_string(path), "\n".join(tracer.traced) + "\n",
+		"the start lines follow")
+	var motion := InputEventMouseMotion.new()
+	tracer._input(motion)
+	assert_true(FileAccess.get_file_as_string(path).ends_with(AndroidCorner.describe(motion) + "\n"),
+		"and each first event, as it comes")
+	assert_eq(tracer.traced[0], "android: one", "the log line and the file line are one")
+	# The next start's file replaces this one.
+	var lines: Array[String] = ["android: next start"]
+	assert_true(AndroidCorner.write_report(_corner, lines))
+	assert_eq(FileAccess.get_file_as_string(path), "android: next start\n")
+	assert_false(AndroidCorner.write_report("", lines), "a desk has no corner")
+	assert_false(AndroidCorner.write_report(_corner.path_join("nowhere"), lines),
+		"a corner that is not there takes nothing")
 
 
 func test_lifecycle_makes_the_corner_before_the_autoloads_read_it() -> void:
@@ -245,7 +302,11 @@ func test_lifecycle_makes_the_corner_before_the_autoloads_read_it() -> void:
 	assert_true(source.contains('if OS.has_feature("android"):'))
 	assert_true(source.contains("AndroidCorner.prepare(corner)"))
 	assert_true(source.contains("AndroidCorner.report(corner)"))
-	assert_true(source.contains("add_child.call_deferred(AndroidCorner.new())"))
+	assert_true(source.contains("tracer.corner = corner"), "the report goes to the corner")
+	assert_true(source.contains("tracer.say(AndroidCorner.version_line())"), "headed by the version")
+	assert_lt(source.find("tracer.say(AndroidCorner.version_line())"),
+		source.find("AndroidCorner.report(corner)"), "before the corner's lines")
+	assert_true(source.contains("add_child.call_deferred(tracer)"))
 	var order := FileAccess.get_file_as_string("res://project.godot")
 	assert_lt(order.find("Lifecycle="), order.find("SkinPack="), "Lifecycle boots first")
 	assert_lt(order.find("SkinPack="), order.find("CardPacks="))

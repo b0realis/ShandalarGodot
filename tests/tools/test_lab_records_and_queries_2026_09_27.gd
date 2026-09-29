@@ -105,7 +105,8 @@ const CONTROL := ["--control-deck-a", "big_green.deck", "--control-deck-b", "whi
 
 func test_the_skin_pack_scan_talks_on_stderr() -> void:
 	var source := FileAccess.get_file_as_string("res://game/skin_pack.gd")
-	assert_true(source.contains('printerr("skin pack: mounted %s'), "the mount line is stderr")
+	assert_true(source.contains('report_lines.append("skin pack: mounted %s'), "the mount line is said")
+	assert_true(source.contains('\tprinterr(report_lines.back())\n\treturn true'), "on stderr")
 	assert_true(source.contains('printerr("skin pack: moved %s'), "and the moved line")
 	assert_false(source.contains('print("skin pack:'), "nothing of the scan on stdout")
 

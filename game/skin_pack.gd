@@ -189,6 +189,9 @@ const PICK_JS := """
 var mounted: Array[String] = []
 ## What [method inspect] said of each mounted zip, by path.
 var _reports: Dictionary = {}
+## What [method mount] said, zip by zip — the Android start report
+## copies it ([AndroidCorner]).
+var report_lines: Array[String] = []
 ## Whether a browser download is in flight, and of which kind.
 var fetching := false
 var fetching_kind := ""
@@ -513,10 +516,12 @@ static func _refusal(why: String) -> Dictionary:
 func mount(path: String, replace: bool) -> bool:
 	var report := inspect(path)
 	if not report["ok"]:
-		push_warning("skin pack: %s refused — %s" % [path, report["why"]])
+		report_lines.append("skin pack: %s refused — %s" % [path, report["why"]])
+		push_warning(report_lines.back())
 		return false
 	if not ProjectSettings.load_resource_pack(path, replace):
-		push_warning("skin pack: %s could not be mounted" % path)
+		report_lines.append("skin pack: %s could not be mounted" % path)
+		push_warning(report_lines.back())
 		return false
 	mounted.erase(path)
 	if replace:
@@ -528,7 +533,8 @@ func mount(path: String, replace: bool) -> bool:
 	# stderr, like the card packs' "found" line: a released binary mounts
 	# its skin zip before the Deck Lab prints, and the Lab's stdout is its
 	# report (found by the 0.40.28 play copy — the line sat ahead of the JSON).
-	printerr("skin pack: mounted %s (%s, %d files)" % [path, report["kind"], report["files"]])
+	report_lines.append("skin pack: mounted %s (%s, %d files)" % [path, report["kind"], report["files"]])
+	printerr(report_lines.back())
 	return true
 
 

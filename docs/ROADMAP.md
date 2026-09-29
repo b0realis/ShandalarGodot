@@ -18396,6 +18396,54 @@ udev rule, the by-hand order and the log lines.
 Gate: 546 scripts, **8,222/8,222 tests, 367,944 asserts**, exit 0 in
 266 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-29 — The second headset report (0.40.50)
+
+The 0.40.49 APK on the Quest 3, `adb logcat -d | grep -iE
+"godot|shandalar"` after a start, a click and a quit. Two of the
+game's lines survived, and they answer the pointer question:
+
+```
+android: first InputEventMouseButton: device -1 (mouse emulated from a touch), button 1 down at 907,456
+android: first InputEventScreenTouch: device 0, finger 1 down at 907,456
+```
+
+**The laser is a touch.** The headset delivers the controller's (or the
+hand's) click to a panel app as an Android touch, and Godot's
+`emulate_mouse_from_touch` makes the mouse button from it. So the
+touch layer is the Quest's, the pad pointer is idle (the shell's
+heartbeat in the same log: `gamepadButtonDestinations: {}`), and the
+panel is 1280×800 (the window manager's rects). Whether a hover
+without a press reaches the game at all — the engine's Android side
+makes mouse motion from a mouse source, and a hover-move from a touch
+source may go nowhere — the log could not say: any `first
+InputEventMouseMotion` line of that start was gone.
+
+**The start was gone.** Every line of it: the corner report, the
+device line, the `card pack: found` lines, the engine's own banner.
+Android's main log buffer is a ring; the headset's shell writes its
+panel state into it as multi-kilobyte JSON several times a minute,
+and the oldest surviving main-buffer line was three minutes after the
+process started (the system buffer, another ring, still had the
+activity manager's side). So `adb logcat -d` after the fact is the
+wrong instrument for a start. The lesson is code: the game writes
+`start_report.txt` into its corner as the start goes — the version
+and the moment first, then the corner's lines, and at the tracer's
+`_ready` the start's length, the display, what the skin and the packs
+said, then each first event as it comes — rewritten whole at every
+line, so a crash mid-start leaves what was said before it. `adb pull`
+gets it whenever. The pack lines now carry their milliseconds
+(`sealed, 40 ms` against `hashed, 8210 ms` is the answer to the
+load-time question, on the headset's own clock).
+
+**Left as it is.** The pointer layers stay untouched until a report
+says the hover: the next headset report is the pulled file from two
+starts, and a hover before the first click. `test_android_corner_2026_09_29.gd`
+(the report file following every line), `test_pack_seal_2026_09_29.gd`
+(the timed lines, hashed then sealed), `tools/test_package_release.py`.
+
+Gate: 546 scripts, **8,224/8,224 tests, 367,654 asserts**, exit 0 in
+264 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

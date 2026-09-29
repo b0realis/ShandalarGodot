@@ -176,6 +176,9 @@ class PackageReleaseTest(unittest.TestCase):
                             self.assertIn(pack.QUEST_FILES + "/cardpacks/", readme)
                             self.assertIn("Never make those folders with adb shell mkdir", readme)
                             self.assertIn("Unknown Sources", readme)
+                            self.assertIn(
+                                "  adb pull /sdcard/Android/data/com.b0realis.shandalar"
+                                "/files/start_report.txt\n", readme)
                             for door in ("run.sh", "shandalar.sh", "deck_lab.sh", "referee.sh"):
                                 self.assertNotIn(prefix + door, entries)
                             # The push script: install, start once so the

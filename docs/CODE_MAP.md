@@ -360,6 +360,32 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The second headset report (2026-09-29)
+
+- `game/android_corner.gd`: `AndroidCorner` writes its report —
+  `REPORT_NAME` `start_report.txt` in the corner (`corner`, "" on a
+  desk) — as it goes: `say(line)` to the log and the report, `note(line)`
+  to the report only, both through `write_report(files_dir, lines)`
+  (the whole `traced` each time; false with no corner or no writing).
+  `version_line()` (the version and the moment), `ready_line()`
+  (`Time.get_ticks_msec()` at the tracer's `_ready`); `_ready` says
+  those two, then notes `skin pack: nothing mounted` or
+  `SkinPack.report_lines`, then `CardPacks.report_lines`.
+  `game/lifecycle.gd`: the tracer is made first, given the corner, says
+  the version line and the corner's lines, and joins the tree deferred.
+- `game/card_packs.gd` `report_lines` (cleared by `discover`): the
+  found line, now `card pack: found … (sealed|hashed, N ms)` timed from
+  the fingerprint, and the refusals; `game/skin_pack.gd` `report_lines`:
+  `mount`'s mounted, refused and could-not-be-mounted lines.
+- `tools/package_release.py` `START["meta-quest"]`: the `adb pull` of
+  the report. `build_release.sh --quest`: ends by naming the package's
+  `push_to_quest.sh`. `docs/handhelds.md` "What the game says": the
+  report, its lines, the live logcat capture and why not `-d`.
+- `tests/unit/test_android_corner_2026_09_29.gd` (+2: the start lines,
+  the report file following every line, the tracer's head of lines);
+  `tests/unit/test_pack_seal_2026_09_29.gd` (discovery's `report_lines`
+  timed, hashed then sealed); `tools/test_package_release.py`.
+
 ## The first headset report (2026-09-29)
 
 - `game/android_corner.gd`: `AndroidCorner` — the shared-storage corner
@@ -768,6 +794,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.50.md`: the second headset report — the game
+  writes `start_report.txt` into its Android corner as the start goes
+  (`adb logcat -d` had lost the start), the pack lines carry their
+  milliseconds, the Quest's laser click is a touch, `build_release.sh`
+  names `push_to_quest.sh`.
 - `docs/releases/0.40.49.md`: the first headset report — `AndroidCorner`
   makes the game's four folders in the shared-storage corner at every
   Android start (a shell-made one is `rwxrws--- shell` and unenterable),

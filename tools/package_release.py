@@ -154,8 +154,10 @@ START["meta-quest"] = (
     "Never make those folders with adb shell mkdir: a folder made from the shell\n"
     "is the shell's and the game cannot enter it. The game is under Library >\n"
     "Unknown Sources; it reads the corner at every start (the first start after a\n"
-    "push checks every card picture once, later starts are quick). The\n"
-    "controller's pointer is the mouse and the trigger clicks. See HANDHELD.md.\n"
+    "push checks every card picture once, later starts are quick) and writes what\n"
+    "it saw, the start's length and how the laser reaches it into the corner:\n"
+    f"  adb pull {QUEST_FILES}/start_report.txt\n"
+    "The controller's pointer is the mouse and the trigger clicks. See HANDHELD.md.\n"
     "Local test package, not hardware-validated or store-reviewed.")
 
 # The headset's install-and-push script, shipped in the meta-quest package

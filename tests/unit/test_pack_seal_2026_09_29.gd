@@ -221,6 +221,23 @@ func test_discovery_seals_every_pack_it_accepts() -> void:
 		assert_true(PackSeal.sealed(PackSeal.fingerprint(path)), path)
 	assert_true(FileAccess.get_file_as_string("res://game/card_packs.gd").contains(
 		'"sealed" if was_sealed else "hashed"'), "and says which in the log")
+	# The lines it said, for the Android start report: one per pack,
+	# hashed at this scan (the seals were cleared), with its cost.
+	var said := RegEx.create_from_string("^card pack: found (.*) \\((sealed|hashed), (\\d+) ms\\)$")
+	var found: Array[String] = []
+	for line in CardPacks.report_lines:
+		var hit := said.search(line)
+		assert_not_null(hit, line)
+		if hit == null:
+			continue
+		found.append(hit.get_string(1))
+		assert_eq(hit.get_string(2), "hashed", line)
+	for path in paths:
+		assert_has(found, path)
+	CardPacks.rescan()
+	assert_eq(CardPacks.report_lines.size(), found.size(), "a rescan starts the list over")
+	for line in CardPacks.report_lines:
+		assert_eq(said.search(line).get_string(2), "sealed", line)
 
 
 # Helpers.

@@ -473,8 +473,9 @@ if [ "$QUEST" = 1 ]; then
 	fi
 	echo "ok: $(du -sh "$BIN" | cut -f1) Meta Quest APK (release template, arm64, signed)"
 	echo "install it with: adb install -r \"$BIN\""
-	echo "then the skin:   adb push skin/original_skin.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/"
-	echo "and the cards:   adb push cardart.zip /sdcard/Android/data/com.b0realis.shandalar/files/cardpacks/"
+	echo "or package it (tools/package_release.py --platform meta-quest) and run the"
+	echo "package's ./push_to_quest.sh: it installs, starts the game once so the game"
+	echo "makes its own folders, and pushes the zips into them (docs/handhelds.md)"
 	exit 0
 fi
 if [ "$MACOS" = 1 ]; then

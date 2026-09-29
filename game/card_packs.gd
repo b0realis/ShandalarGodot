@@ -48,6 +48,9 @@ var _available: Dictionary = {}
 var _rejections: Array[Dictionary] = []
 var _art_cache: Dictionary = {}
 var _printing_cache: Dictionary = {}
+## What the last [method discover] said, pack by pack — the Android
+## start report copies it ([AndroidCorner]).
+var report_lines: Array[String] = []
 var _printing_cache_ready := false
 var _current_deck_names: Array[String] = []
 var _catalogue_users: Dictionary = {}
@@ -84,6 +87,7 @@ func discover() -> void:
 	_available.clear()
 	_rejections.clear()
 	_art_cache.clear()
+	report_lines.clear()
 	for path in candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) + candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID) + candidate_paths(FifthEditionPack.ID):
 		if not FileAccess.file_exists(path):
 			continue
@@ -100,6 +104,7 @@ func discover() -> void:
 			id = FifthEditionPack.ID
 		if _available.has(id):
 			continue
+		var started := Time.get_ticks_msec()
 		var seal := PackSeal.fingerprint(path)
 		var was_sealed := PackSeal.sealed(seal)
 		var report := inspect(path, was_sealed)
@@ -108,7 +113,8 @@ func discover() -> void:
 					and not ProjectSettings.load_resource_pack(path, false):
 				var why := "its metadata is valid but its artwork could not be mounted"
 				_rejections.append({"id": id, "path": path, "why": why})
-				push_warning("card pack: %s refused — %s" % [path, why])
+				report_lines.append("card pack: %s refused — %s" % [path, why])
+				push_warning(report_lines.back())
 				continue
 			_available[id] = report
 			if not was_sealed:
@@ -116,12 +122,16 @@ func discover() -> void:
 			# stderr, because the Deck Lab's stdout is its report and a
 			# tool reading it saw this line first (2026-09-26). Sealed:
 			# its pictures passed at an earlier start and were not read
-			# again ([PackSeal]); hashed: they were read now.
-			printerr("card pack: found %s (%s)" % [path,
-				"sealed" if was_sealed else "hashed"])
+			# again ([PackSeal]); hashed: they were read now — and the
+			# milliseconds say what either cost on this machine.
+			var line := "card pack: found %s (%s, %d ms)" % [path,
+				"sealed" if was_sealed else "hashed", Time.get_ticks_msec() - started]
+			report_lines.append(line)
+			printerr(line)
 			continue
 		_rejections.append({"id": id, "path": path, "why": report.get("why", "invalid")})
-		push_warning("card pack: %s refused — %s" % [path, report.get("why", "invalid")])
+		report_lines.append("card pack: %s refused — %s" % [path, report.get("why", "invalid")])
+		push_warning(report_lines.back())
 
 
 ## Re-read the configured folder immediately. An enabled id remains in

@@ -282,26 +282,46 @@ before pushing. If you made a folder from the shell, either open it up
 <folder>`), start the game once, and push again. Never `adb shell
 mkdir` in the corner.
 
-**What the game says.** `adb logcat | grep -iE "godot|shandalar"` shows
-its log (not `adb logcat -s godot`: the Java side of the engine logs
-under other tags). At every start:
+**What the game says.** At every start the game writes its report of
+the start into its corner, line by line as it goes, and the file is
+the last start's:
+
+```sh
+adb pull /sdcard/Android/data/com.b0realis.shandalar/files/start_report.txt
+```
 
 ```
+android: Shandalar 0.40.50, started 2026-09-29 18:10:52
 android: corner /storage/emulated/0/Android/data/com.b0realis.shandalar/files
 android: skin /storage/.../files/skin: ok, 3 entries (README.txt, cardart.zip, original_skin.zip)
 android: cardpacks /storage/.../files/cardpacks: ok, 8 entries (...)
 android: portraits /storage/.../files/portraits: ok, 1 entries (README.txt)
 android: music /storage/.../files/music: ok, 1 entries (README.txt)
-android: window <w>x<h>, touchscreen yes, handheld android, pads [0:<the controller>]
-card pack: found /storage/.../cardpacks/Pack-1-DotP-complete.zip (sealed)
-android: first InputEventMouseMotion: device -1 (mouse emulated from a touch), at 512,300, buttons 0
+android: tree ready after 4210 ms
+android: window <w>x<h>, touchscreen yes, handheld android, pads []
+skin pack: mounted /storage/.../files/skin/original_skin.zip (skin, 312 files)
+card pack: found /storage/.../cardpacks/Pack-1-DotP-complete.zip (sealed, 40 ms)
+android: first InputEventScreenTouch: device 0, finger 1 down at 907,456
+android: first InputEventMouseButton: device -1 (mouse emulated from a touch), button 1 down at 907,456
 ```
 
 `missing` and `NOT LISTABLE` on a folder line name the cure; `sealed`
 after a pack is a start that did not read its pictures, `hashed` one
-that did. The `first <event class>` lines say, once per class, how the
-headset's laser reaches the game — a touch, a mouse, a pad — which is
-what the pointer work turns on; they stop after ten classes.
+that did, and the milliseconds are what it cost. The `first <event
+class>` lines say, once per class, how the headset's laser reaches the
+game — a touch, a mouse, a pad — which is what the pointer work turns
+on; they stop after ten classes. (On the Quest 3 the laser's click is a
+touch: `InputEventScreenTouch` from device 0, and the engine's mouse
+button emulated from it.)
+
+The same lines go to Android's log, but read that live: `adb logcat -c`,
+then `adb logcat -v time -s godot Godot > quest.log` *before* the game
+starts, and stop it after. `adb logcat -d` after the fact shows only
+what is still in the main log buffer, a ring the headset's shell fills
+in minutes — the second headset report lost the whole start that way
+and kept the first click. `adb logcat | grep -iE "godot|shandalar"`
+shows the shell's side of the app too (the panel, the window's size,
+the focus), which the file does not.
 
 **Where the files live.** On Android the game's private `user://` folder
 (`/data/data/com.b0realis.shandalar/files`) holds `settings.cfg`, the
