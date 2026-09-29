@@ -209,9 +209,8 @@ static func ensure_folder() -> String:
 static func _files_in(dir_path: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	var dir := DirAccess.open(dir_path)
-	if dir == null:
+	if dir == null or dir.list_dir_begin() != OK:
 		return out
-	dir.list_dir_begin()
 	var file := dir.get_next()
 	while file != "":
 		if not dir.current_is_dir() and _is_image(file):

@@ -100,7 +100,9 @@ func discover() -> void:
 			id = FifthEditionPack.ID
 		if _available.has(id):
 			continue
-		var report := inspect(path)
+		var seal := PackSeal.fingerprint(path)
+		var was_sealed := PackSeal.sealed(seal)
+		var report := inspect(path, was_sealed)
 		if bool(report.get("ok", false)):
 			if bool(report.get("has_art", false)) \
 					and not ProjectSettings.load_resource_pack(path, false):
@@ -109,9 +111,14 @@ func discover() -> void:
 				push_warning("card pack: %s refused — %s" % [path, why])
 				continue
 			_available[id] = report
+			if not was_sealed:
+				PackSeal.seal(seal)
 			# stderr, because the Deck Lab's stdout is its report and a
-			# tool reading it saw this line first (2026-09-26).
-			printerr("card pack: found %s" % path)
+			# tool reading it saw this line first (2026-09-26). Sealed:
+			# its pictures passed at an earlier start and were not read
+			# again ([PackSeal]); hashed: they were read now.
+			printerr("card pack: found %s (%s)" % [path,
+				"sealed" if was_sealed else "hashed"])
 			continue
 		_rejections.append({"id": id, "path": path, "why": report.get("why", "invalid")})
 		push_warning("card pack: %s refused — %s" % [path, report.get("why", "invalid")])
@@ -159,19 +166,21 @@ static func candidate_paths(id := ID) -> Array[String]:
 ## Validate the exact Pack 1 contract before trusting any catalog data. A
 ## metadata-only build is accepted only by the isolated test profile; a pack a
 ## player can enable carries the exact 754 expected image paths and still no code.
-static func inspect(path: String) -> Dictionary:
+## With [param art_trusted] — a sealed pack, [PackSeal] — the manifest's word
+## for the artwork digest stands and no picture is read; everything else runs.
+static func inspect(path: String, art_trusted := false) -> Dictionary:
 	if path.get_file() == FifthEditionPack.FILE_NAME:
-		return FifthEditionPack.inspect(path)
+		return FifthEditionPack.inspect(path, art_trusted)
 	if path.get_file() == PortalPack.FILE_NAME:
-		return PortalPack.inspect(path)
+		return PortalPack.inspect(path, art_trusted)
 	if path.get_file() == HomelandsPack.FILE_NAME:
-		return HomelandsPack.inspect(path)
+		return HomelandsPack.inspect(path, art_trusted)
 	if path.get_file() == AlliancesPack.FILE_NAME:
-		return AlliancesPack.inspect(path)
+		return AlliancesPack.inspect(path, art_trusted)
 	if path.get_file() == IceAgePack.FILE_NAME:
-		return IceAgePack.inspect(path)
+		return IceAgePack.inspect(path, art_trusted)
 	if path.get_file() == FallenEmpiresPack.FILE_NAME:
-		return FallenEmpiresPack.inspect(path)
+		return FallenEmpiresPack.inspect(path, art_trusted)
 	if path.get_file() != FILE_NAME:
 		return _refusal("must be named exactly " + FILE_NAME)
 	var reader := ZIPReader.new()
@@ -228,7 +237,8 @@ static func inspect(path: String) -> Dictionary:
 			art_names.append(name)
 	if not (artwork is Dictionary) \
 			or int(artwork.get("files", -1)) != art_names.size() \
-			or String(artwork.get("sha256", "")) != _artwork_sha256(reader, art_names):
+			or String(artwork.get("sha256", "")) != PackSeal.artwork_sha256(reader,
+				art_names, PackSeal.claimed_artwork(manifest) if art_trusted else ""):
 		reader.close()
 		return _refusal("its artwork checksum does not match")
 	var version := String(manifest.get("version", ""))
@@ -318,21 +328,6 @@ static func _sha256(payload: PackedByteArray) -> String:
 	var hashing := HashingContext.new()
 	hashing.start(HashingContext.HASH_SHA256)
 	hashing.update(payload)
-	return hashing.finish().hex_encode()
-
-
-## Same deterministic path + per-file-digest stream as the Python builder.
-static func _artwork_sha256(reader: ZIPReader, names: Array) -> String:
-	var ordered := names.duplicate()
-	ordered.sort()
-	var hashing := HashingContext.new()
-	hashing.start(HashingContext.HASH_SHA256)
-	for value in ordered:
-		var name := String(value)
-		hashing.update(name.to_utf8_buffer())
-		hashing.update(PackedByteArray([0]))
-		hashing.update(_sha256(reader.read_file(name)).to_utf8_buffer())
-		hashing.update("\n".to_utf8_buffer())
 	return hashing.finish().hex_encode()
 
 

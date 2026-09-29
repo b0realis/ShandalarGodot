@@ -53,18 +53,18 @@ static func snake(value: String) -> String:
 		out = out.replace("__", "_")
 	return out.trim_prefix("_").trim_suffix("_")
 
-static func inspect(path: String) -> Dictionary:
+static func inspect(path: String, art_trusted := false) -> Dictionary:
 	if path.get_file() != FILE_NAME:
 		return {"ok": false, "why": "must be named exactly " + FILE_NAME}
 	var reader := ZIPReader.new()
 	if reader.open(path) != OK:
 		return {"ok": false, "why": "not a ZIP file"}
-	var report := _inspect(reader)
+	var report := _inspect(reader, art_trusted)
 	reader.close()
 	report["path"] = path
 	return report
 
-static func _inspect(reader: ZIPReader) -> Dictionary:
+static func _inspect(reader: ZIPReader, art_trusted := false) -> Dictionary:
 	var core := [PREFIX + "manifest.json", PREFIX + "catalog.json",
 		PREFIX + "cards.json", PREFIX + "README.txt"]
 	var artwork: Array = []
@@ -101,18 +101,13 @@ static func _inspect(reader: ZIPReader) -> Dictionary:
 	var sums := {}
 	for name in ["catalog.json", "cards.json", "README.txt"]:
 		sums[name] = _sha(reader.read_file(PREFIX + name))
-	var hashing := HashingContext.new()
-	hashing.start(HashingContext.HASH_SHA256)
 	artwork.sort()
-	if has_art:
-		for name in artwork:
-			hashing.update(String(name).to_utf8_buffer())
-			hashing.update(PackedByteArray([0]))
-			hashing.update(_sha(reader.read_file(name)).to_utf8_buffer())
-			hashing.update("\n".to_utf8_buffer())
+	# The pictures' digest, or the manifest's word for it on a sealed
+	# pack whose pictures passed at an earlier start ([PackSeal]).
+	var art_sum := PackSeal.artwork_sha256(reader, artwork if has_art else [],
+		PackSeal.claimed_artwork(manifest) if art_trusted and has_art else "")
 	var expected := {"algorithm": "sha256", "metadata": sums,
-		"artwork": {"files": artwork.size() if has_art else 0,
-			"sha256": hashing.finish().hex_encode()}}
+		"artwork": {"files": artwork.size() if has_art else 0, "sha256": art_sum}}
 	if not _same(manifest.get("checksums"), expected):
 		return {"ok": false, "why": "Pack 2 metadata or artwork checksum does not match"}
 	return {"ok": true, "why": "", "manifest": manifest, "catalog": catalog,

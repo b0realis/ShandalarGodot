@@ -120,8 +120,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([The Meta Quest package](docs/ROADMAP.md#2026-09-29--the-meta-quest-package-04048)):
-**8,200 GUT tests / 367,489 assertions**, plus **415 Python tests**
+Most recent full-suite verification ([The first headset report](docs/ROADMAP.md#2026-09-29--the-first-headset-report-04049)):
+**8,222 GUT tests / 367,944 assertions**, plus **415 Python tests**
 (the MCP server's five live tests play inside the GUT gate and are
 skipped outside it). The same gate runs on GitHub Actions for
 every push and pull request.

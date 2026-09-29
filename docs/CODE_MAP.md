@@ -360,6 +360,50 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The first headset report (2026-09-29)
+
+- `game/android_corner.gd`: `AndroidCorner` — the shared-storage corner
+  on Android is the game's to make: `folders(files_dir)` the four places
+  by their word (`skin`, `cardpacks`, `portraits`, `music`, through
+  `GamePaths.player_place` / `GameSkin.portable_dir_for`);
+  `prepare(files_dir)` makes them with a README each, once; `listing`
+  (`ok` / `missing` / `unlistable` — a folder that opens and will not
+  list is the shell's, `rwxrws--- shell`); `line_for` / `report` the
+  log lines with the cure; `device_line` the display's side; `describe`
+  one event with its device (`-1` the mouse emulated from a touch); on
+  the tree, `_input` prints the first event of each class once up to
+  `TRACED_CLASSES`, consuming nothing. `game/lifecycle.gd` `_ready`:
+  under `OS.has_feature("android")` prepares and reports the corner
+  before the autoloads that read it and adds the tracer deferred.
+- `game/skin_pack.gd` `_zips_in` / `files_at`, `game/portrait_library.gd`
+  and `game/music_library.gd` `_files_in`: a `list_dir_begin()` that is
+  not `OK` is an empty listing, not an engine error.
+- `game/pack_seal.gd`: `PackSeal` — `fingerprint(path)` the SHA-256 of
+  the file size and the zip's central directory (found from the EOCD at
+  the tail; "" for no file, no zip or zip64 — never sealed); `sealed` /
+  `seal` / `clear` over `user://pack_seals.json` (`{"seals": [...]}`,
+  newest last, `KEPT` 64); `claimed_artwork(manifest)` the manifest's
+  `checksums.artwork.sha256`; `artwork_sha256(reader, names, trusted)`
+  the builder's stream (sorted names, name, zero byte, hex digest,
+  newline into one SHA-256; `pictures_hashed` counts) or the trusted
+  value without a read. `game/card_packs.gd` `discover`: fingerprint,
+  `inspect(path, was_sealed)`, seal on acceptance, `found … (sealed|
+  hashed)` on stderr; `inspect(path, art_trusted)` and the six pack
+  classes' `inspect` / `_inspect` take the flag through to
+  `PackSeal.artwork_sha256`; `_artwork_sha256` is gone.
+- `tools/package_release.py`: `QUEST_PACKAGE`, `QUEST_PUSH` — the
+  `push_to_quest.sh` of the meta-quest package (install, start once so
+  the game makes its folders, `chmod 775` a shell-made one, push
+  `skin/*.zip` and `cardpacks/`), `START["meta-quest"]` names it and the
+  folder rule.
+- Tests: `tests/unit/test_pack_seal_2026_09_29.gd` (the fingerprint, the
+  list, the stream, a Pack 2 built with pictures by Python's zipfile —
+  hashed passes and counts 408, one changed picture is refused hashed
+  and passes trusted with no read and has another fingerprint, discovery
+  seals), `tests/unit/test_android_corner_2026_09_29.gd` (the folders,
+  prepare once, the three listing states with a mode-311 folder as the
+  shell's likeness, the lines, the tracer once per class).
+
 ## The Meta Quest package (2026-09-29)
 
 - `game/paths.gd`: `android_files_dir()` — the app's shared-storage
@@ -724,6 +768,14 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.49.md`: the first headset report — `AndroidCorner`
+  makes the game's four folders in the shared-storage corner at every
+  Android start (a shell-made one is `rwxrws--- shell` and unenterable),
+  reports them and traces the first input event of each class;
+  `PackSeal` seals a pack whose pictures passed by its size and zip table
+  so later starts take the manifest's artwork digest without a picture
+  read; `push_to_quest.sh` in the meta-quest package; the listings that
+  no longer error.
 - `docs/releases/0.40.48.md`: the Meta Quest package — `./build_release.sh
   --quest` exports and signs the `Android Quest` APK (key outside the
   repo), `package_release.py --platform meta-quest` wraps it;

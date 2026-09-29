@@ -35,7 +35,8 @@ HANDHELD_FILES = {
     # One signed APK and the instructions; no launcher can run there.
     "meta-quest": {"HANDHELD.md": "docs/handhelds.md"},
 }
-QUEST_FILES = "/sdcard/Android/data/com.b0realis.shandalar/files"
+QUEST_PACKAGE = "com.b0realis.shandalar"
+QUEST_FILES = f"/sdcard/Android/data/{QUEST_PACKAGE}/files"
 ARKOS_LAUNCHER = "packaging/handhelds/arkos.sh"
 PACK_BUILDERS = ("pack_1_dotp_complete", "pack_2_fallen_empires", "pack_3_ice_age",
                  "pack_4_homelands", "pack_5_alliances", "pack_6_portal", "pack_7_fifth_edition")
@@ -141,15 +142,54 @@ START["arkos-rk3326-experimental"] = (
     "Not hardware-validated; performance and small-screen readability are unproven.")
 START["meta-quest"] = (
     "Meta Quest 3 (also Quest 2 / Pro): a flat panel app for the headset, installed\n"
-    "over USB. Turn on Developer Mode in the Meta Horizon phone app, connect the\n"
-    "headset, allow USB debugging on it, then from this folder:\n"
-    "  adb install -r Shandalar.apk\n"
-    f"  adb push skin/original_skin.zip {QUEST_FILES}/skin/\n"
-    f"  adb push cardart.zip {QUEST_FILES}/cardpacks/\n"
-    "The game is under Library > Unknown Sources. Card packs and your own\n"
-    "portraits/ and music/ go under that same files folder; the game reads it at\n"
-    "the next start. The controller's pointer is the mouse and the trigger clicks.\n"
-    "See HANDHELD.md. Local test package, not hardware-validated or store-reviewed.")
+    "over USB with adb (Linux: apt install adb, or the android-tools package; see\n"
+    "HANDHELD.md for the udev rule). Turn on Developer Mode in the Meta Horizon\n"
+    "phone app, connect the headset, allow USB debugging on it, put your own\n"
+    "cardart.zip in this folder's skin/ (no package carries one), then:\n"
+    "  ./push_to_quest.sh\n"
+    "It installs the APK, starts the game once so the game makes its own folders\n"
+    "in its files corner, and pushes skin/*.zip and cardpacks/ into them:\n"
+    f"  {QUEST_FILES}/skin/       original_skin.zip, cardart.zip\n"
+    f"  {QUEST_FILES}/cardpacks/  Pack-N zips; portraits/ and music/ beside it\n"
+    "Never make those folders with adb shell mkdir: a folder made from the shell\n"
+    "is the shell's and the game cannot enter it. The game is under Library >\n"
+    "Unknown Sources; it reads the corner at every start (the first start after a\n"
+    "push checks every card picture once, later starts are quick). The\n"
+    "controller's pointer is the mouse and the trigger clicks. See HANDHELD.md.\n"
+    "Local test package, not hardware-validated or store-reviewed.")
+
+# The headset's install-and-push script, shipped in the meta-quest package
+# (docs/handhelds.md, "Meta Quest 3"). The order is the whole point: the
+# game's folders in its shared-storage corner must be the GAME'S — a folder
+# made with `adb shell mkdir` is the shell's (`rwxrws--- shell`) and the
+# game, another user, cannot enter it — so the APK is installed, the game is
+# started once to make them, and only then are the zips pushed into them.
+QUEST_PUSH = f"""#!/bin/sh
+# Shandalar on a Meta Quest: install the APK over adb and push the zips into
+# the game's shared-storage corner. The game makes its folders there at its
+# first start, and they must be ITS folders: one made from the shell
+# (adb shell mkdir) is the shell's, and the game may not enter it.
+set -eu
+cd -- "$(dirname -- "$0")"
+P={QUEST_PACKAGE}
+F={QUEST_FILES}
+adb install -r Shandalar.apk
+if ! adb shell test -d "$F/skin"; then
+  echo "starting the game once so it makes its folders..."
+  adb shell monkey -p "$P" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1 || true
+  n=0
+  while [ "$n" -lt 30 ] && ! adb shell test -d "$F/cardpacks"; do sleep 1; n=$((n + 1)); done
+  adb shell am force-stop "$P"
+fi
+# A folder made from the shell before this script existed: open it up.
+adb shell chmod 775 "$F/skin" "$F/cardpacks" "$F/portraits" "$F/music" 2> /dev/null || true
+for zip in skin/original_skin.zip skin/cardart.zip; do
+  if [ -f "$zip" ]; then adb push "$zip" "$F/skin/"; fi
+done
+if [ -d cardpacks ]; then adb push cardpacks/. "$F/cardpacks/"; fi
+adb shell ls -ld "$F/skin" "$F/cardpacks"
+echo "done: start Shandalar from Library > Unknown Sources"
+"""
 
 
 def digest(path: Path) -> str:
@@ -397,6 +437,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
         if platform == "steam-deck":
             # Use the reviewed launcher rather than the generic Linux one.
             extra.pop("run.sh")
+        elif platform == "meta-quest":
+            extra["push_to_quest.sh"] = QUEST_PUSH.encode()
         elif platform == "arkos-rk3326-experimental":
             extra["run.sh"] = (prefix + 'exec bash ../Shandalar.sh "$@"\n').encode()
         selected = dict(files)

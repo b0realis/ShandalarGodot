@@ -196,29 +196,112 @@ laser that the game sees as the mouse: point to hover, pull the trigger
 to click, hold it to drag. The touch controls made for the Deck's screen
 work the same on the panel. Quest 2 and Quest Pro run the same APK.
 
-It is **sideloaded**, never installed from the Horizon Store:
+It is **sideloaded**, never installed from the Horizon Store. Tested on
+a Quest 3 (2026-09-29): the panel, the skin, the card packs, the music
+and the laser's hover all work once the files are in the right folders,
+and the folders are the whole story (below).
+
+**adb on a Linux machine.** `adb` is the Android debug bridge, one small
+program; the Meta Quest Developer Hub that wraps it is Windows/macOS
+only, and it is not needed.
+
+```sh
+sudo apt install adb                 # Debian, Ubuntu, Mint
+sudo dnf install android-tools       # Fedora
+sudo pacman -S android-tools         # Arch
+```
+
+The headset must be allowed to talk to a non-root user. Most
+distributions' `android-tools` packages ship the udev rule; if
+`adb devices` prints the headset as `no permissions`, write one:
+
+```sh
+printf 'SUBSYSTEM=="usb", ATTR{idVendor}=="2833", MODE="0660", GROUP="plugdev", TAG+="uaccess"\n' \
+  | sudo tee /etc/udev/rules.d/51-oculus.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo usermod -aG plugdev "$USER"     # then log out and in once
+adb kill-server
+```
+
+(`2833` is the Oculus/Meta USB vendor id.) `unauthorized` is another thing: the headset has not yet been
+told to trust this computer — put it on and answer the prompt.
+
+**Install and push.**
 
 1. Turn on **Developer Mode** for the headset in the Meta Horizon phone
    app (this needs a developer account, which Meta grants on request).
 2. Connect the headset over USB, put it on and **Allow USB debugging**
-   when it asks. `adb devices` on the computer then lists it. `adb` is
-   in the Android SDK's platform-tools, or in the Meta Quest Developer
-   Hub, which can also install the APK with a drag.
-3. From the extracted package:
+   when it asks. `adb devices` on the computer then lists it as
+   `device`.
+3. Put your own `cardart.zip` — the card pictures, which no package
+   carries ([card-art-and-packs.md](card-art-and-packs.md)) — in the
+   extracted package's `skin/` beside `original_skin.zip`, and the card
+   packs (`Pack-1-DotP-complete.zip` and the others) in a `cardpacks/`
+   folder beside it. Then, from the extracted package:
 
    ```sh
-   adb install -r Shandalar.apk
-   adb push skin/original_skin.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/
-   adb push cardart.zip /sdcard/Android/data/com.b0realis.shandalar/files/cardpacks/
+   ./push_to_quest.sh
    ```
 
-   The first line is the game; the second the original look, from the
-   `-with-skin` package; the third your own card pictures, which no
-   package carries ([card-art-and-packs.md](card-art-and-packs.md)).
-   Card packs (`Pack-1-DotP-complete.zip` and the others) go in that same
-   `cardpacks/` folder, your own faces in `portraits/` and your own tunes
-   in `music/` beside it. The game reads the folder at its next start.
-4. In the headset, the game is under **Library > Unknown Sources**.
+   It installs the APK, starts the game once when its folders are not
+   there yet so that **the game makes them**, then pushes `skin/*.zip`
+   and `cardpacks/` into them and lists the two folders. Your own faces
+   go in `portraits/` and your own tunes in `music/` the same way
+   (`adb push my_face.png /sdcard/Android/data/com.b0realis.shandalar/files/portraits/`).
+4. In the headset, the game is under **Library > Unknown Sources**. The
+   first start after a push checks every card picture once (a minute on
+   the headset for seven packs); every later start is quick — the packs
+   are sealed by their zip table and the pictures are not read again
+   until the file changes (`PackSeal`).
+
+By hand, the same three steps in the same order — install, start the
+game once, push into the folders it made:
+
+```sh
+adb install -r Shandalar.apk
+adb shell monkey -p com.b0realis.shandalar -c android.intent.category.LAUNCHER 1
+adb shell am force-stop com.b0realis.shandalar
+adb push skin/original_skin.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/
+adb push skin/cardart.zip /sdcard/Android/data/com.b0realis.shandalar/files/skin/
+adb push cardpacks/. /sdcard/Android/data/com.b0realis.shandalar/files/cardpacks/
+```
+
+**The folders must be the game's own.** This is what the first headset
+test found: `adb push` into a folder that does not exist makes it, and
+`adb shell mkdir` makes one too — as the **shell's** folder,
+`drwxrws--- shell ext_data_rw`, and the game (its own Android user,
+not of that group) may not enter it. The game then sees an empty corner
+— no skin, no cards, no music — and logs one engine error from the
+listing that would not open, while the files inside are readable all
+along. A folder the game made is `drwxrws--- u0_a21 ext_data_rw` (the
+user number varies) and works. So the game makes its four folders at
+every start (`AndroidCorner`, from `Lifecycle`, before the autoloads
+that read them), with a README in each, and the script starts it once
+before pushing. If you made a folder from the shell, either open it up
+(`adb shell chmod 775 <folder>`) or delete it (`adb shell rm -rf
+<folder>`), start the game once, and push again. Never `adb shell
+mkdir` in the corner.
+
+**What the game says.** `adb logcat | grep -iE "godot|shandalar"` shows
+its log (not `adb logcat -s godot`: the Java side of the engine logs
+under other tags). At every start:
+
+```
+android: corner /storage/emulated/0/Android/data/com.b0realis.shandalar/files
+android: skin /storage/.../files/skin: ok, 3 entries (README.txt, cardart.zip, original_skin.zip)
+android: cardpacks /storage/.../files/cardpacks: ok, 8 entries (...)
+android: portraits /storage/.../files/portraits: ok, 1 entries (README.txt)
+android: music /storage/.../files/music: ok, 1 entries (README.txt)
+android: window <w>x<h>, touchscreen yes, handheld android, pads [0:<the controller>]
+card pack: found /storage/.../cardpacks/Pack-1-DotP-complete.zip (sealed)
+android: first InputEventMouseMotion: device -1 (mouse emulated from a touch), at 512,300, buttons 0
+```
+
+`missing` and `NOT LISTABLE` on a folder line name the cure; `sealed`
+after a pack is a start that did not read its pictures, `hashed` one
+that did. The `first <event class>` lines say, once per class, how the
+headset's laser reaches the game — a touch, a mouse, a pad — which is
+what the pointer work turns on; they stop after ten classes.
 
 **Where the files live.** On Android the game's private `user://` folder
 (`/data/data/com.b0realis.shandalar/files`) holds `settings.cfg`, the

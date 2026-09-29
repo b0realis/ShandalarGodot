@@ -18322,6 +18322,80 @@ tests the first APK. `tests/unit/test_android_places_2026_09_29.gd`;
 Gate: 544 scripts, **8,200/8,200 tests, 367,489 asserts**, exit 0 in
 265 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-29 — The first headset report (0.40.49)
+
+The 0.40.48 APK on the Quest 3: *"app starts, no cards, no skin, no
+music visible. Laser visible, buttons do not highlight upon laser
+hover."* Then, after one adb line: *"Omg, it works flawlessly now.
+Skin and cards are up along with all assets. Laser also highlights the
+buttons."* And the one thing left: *"very long load time — time is
+spent on godot card pack found. Could we maybe make this faster?"*
+
+**The folders were the shell's.** `adb shell ls -lR` on the corner
+showed it: `skin/` and `cardpacks/`, made by the first push, were
+`drwxrws--- shell ext_data_rw`; `portraits/`, which the game had made
+itself, was `drwxrws--- u0_a21 ext_data_rw` and held the README the
+game wrote. The game runs as its own Android user, not of the shell's
+group, and may not enter a folder the shell made: `DirAccess.open`
+succeeds on it (it stats), `list_dir_begin` fails (Java's
+`canRead()` is false), which was the one engine error in the first
+log (`dir_access_jandroid.cpp:67`), and `FileAccess.file_exists`
+inside it is silently false — so the skin, the packs and the music
+were "not found" while every file was readable all along. `chmod 775`
+on the two folders cured it on the spot. The lesson is now code:
+`AndroidCorner.prepare` makes the four folders with a README each at
+every Android start, from `Lifecycle` before the autoloads that read
+them, so a push always lands in the game's own folder; the package's
+`push_to_quest.sh` installs the APK, starts the game once when the
+folders are not there yet, and pushes into them; the docs say never
+`adb shell mkdir` in the corner, and give the `ls -ld` signature and
+the cure. The three libraries' listings treat a `list_dir_begin` that
+is not `OK` as empty rather than as an engine error.
+
+**The game says what it sees.** The first report had to be diagnosed
+from one engine line and a directory listing. Now every Android start
+logs the corner and each folder (`ok` with its entries, `missing`, or
+`NOT LISTABLE` with the cure), the display's side (window,
+touchscreen, handheld word, pads), and — on the tree, once per class
+up to ten — the first input event with its device: whether the laser
+comes as a touch, an emulated mouse (`device -1`) or a pad, which is
+what any pointer tuning turns on. Nothing is consumed. The owner's
+ruling stands: *"No no we will not do any real VR!"* — the panel is
+the product, and the tracer is how the next report reads.
+
+**Sealed packs.** Every start read every picture of every pack out of
+the zip and hashed it against the manifest: 7,535 ms for seven packs
+on the desk (Portal 1,865 ms, Fifth Edition 1,569 ms), the better part
+of a minute on a headset reading its storage through Java. The
+pictures do not change between starts and neither does the file, so
+`PackSeal` fingerprints a pack by its size and its zip central
+directory (the table of every entry's name, sizes and CRC-32, read
+from the EOCD at the tail — no zip64, and "" is never sealed), keeps
+the fingerprints of packs whose pictures passed in
+`user://pack_seals.json` (newest last, 64 kept), and at the next start
+takes the manifest's artwork digest without a picture read. The file
+list, the no-scripts rule, the metadata digests, the counts and the
+checklists still run every start, in milliseconds. A pack rebuilt,
+repaired, re-zipped or replaced has another table and is hashed in
+full again; a picture changed under an unchanged manifest is refused
+when hashed and, with another CRC, never inherits the good file's seal
+— `test_pack_seal_2026_09_29.gd` builds that pair on Pack 2 with
+Python's `zipfile` (ZIPPacker adds folder entries, which a pack's
+exact file list refuses). The discovery line says which happened:
+`card pack: found … (sealed)` or `(hashed)`.
+
+**Left as it is.** The pointer layers (`TouchControls`, `PadControls`)
+are untouched: the laser highlights and clicks; the trace tells what
+it is before anything is tuned. Which of the two fixes the owner
+applied — `chmod 775` or delete-and-start-once — is unknown; both
+cure it and the script does both. `tests/unit/test_android_corner_2026_09_29.gd`,
+`tests/unit/test_pack_seal_2026_09_29.gd`; `tools/test_package_release.py`
+(the push script); `docs/handhelds.md` has the Linux adb install, the
+udev rule, the by-hand order and the log lines.
+
+Gate: 546 scripts, **8,222/8,222 tests, 367,944 asserts**, exit 0 in
+266 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

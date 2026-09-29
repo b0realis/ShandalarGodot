@@ -171,12 +171,34 @@ class PackageReleaseTest(unittest.TestCase):
                             # nothing runs beside it: no launcher, no headless
                             # doors, and the files folder the README names is
                             # the app's own shared-storage corner.
-                            self.assertIn("adb install -r Shandalar.apk", readme)
+                            self.assertIn("./push_to_quest.sh", readme)
                             self.assertIn(pack.QUEST_FILES + "/skin/", readme)
                             self.assertIn(pack.QUEST_FILES + "/cardpacks/", readme)
+                            self.assertIn("Never make those folders with adb shell mkdir", readme)
                             self.assertIn("Unknown Sources", readme)
                             for door in ("run.sh", "shandalar.sh", "deck_lab.sh", "referee.sh"):
                                 self.assertNotIn(prefix + door, entries)
+                            # The push script: install, start once so the
+                            # game makes its own folders (a folder made
+                            # from the shell is the shell's), then push
+                            # into them — and it is executable.
+                            script = archive.read(prefix + "push_to_quest.sh").decode()
+                            self.assertTrue(script.startswith("#!/bin/sh\n"))
+                            self.assertIn("adb install -r Shandalar.apk", script)
+                            self.assertIn("monkey -p \"$P\" -c android.intent.category.LAUNCHER 1", script)
+                            self.assertIn("am force-stop", script)
+                            self.assertIn("chmod 775", script)
+                            self.assertIn('adb push "$zip" "$F/skin/"', script)
+                            self.assertIn('adb push cardpacks/. "$F/cardpacks/"', script)
+                            self.assertNotIn("mkdir", script.split("set -eu")[1])
+                            self.assertIn("P=" + pack.QUEST_PACKAGE + "\n", script)
+                            self.assertIn("F=" + pack.QUEST_FILES + "\n", script)
+                            self.assertLess(script.index("adb install"), script.index("monkey"))
+                            self.assertLess(script.index("monkey"), script.index("adb push"))
+                            mode = archive.getinfo(prefix + "push_to_quest.sh").external_attr >> 16
+                            self.assertTrue(mode & 0o111, "executable")
+                            self.assertIn("  push_to_quest.sh\n",
+                                          archive.read(outer + "SHA256SUMS").decode())
 
     def test_extracted_windows_mcp_discovers_the_console_and_game_version(self):
         self.make_export("windows64")

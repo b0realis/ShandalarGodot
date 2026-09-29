@@ -398,9 +398,8 @@ static func ensure_card_folder() -> String:
 static func _zips_in(folder: String) -> Array[String]:
 	var out: Array[String] = []
 	var dir := DirAccess.open(folder)
-	if dir == null:
+	if dir == null or dir.list_dir_begin() != OK:
 		return out
-	dir.list_dir_begin()
 	var file := dir.get_next()
 	while file != "":
 		if not dir.current_is_dir() and file.get_extension().to_lower() == "zip" \
@@ -417,10 +416,9 @@ static func _zips_in(folder: String) -> Array[String]:
 ## `cardart/` and `portraits/` are folders beside them).
 static func files_at(folder: String) -> int:
 	var dir := DirAccess.open(folder)
-	if dir == null:
+	if dir == null or dir.list_dir_begin() != OK:
 		return 0
 	var count := 0
-	dir.list_dir_begin()
 	var file := dir.get_next()
 	while file != "":
 		if not dir.current_is_dir():

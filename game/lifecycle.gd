@@ -25,7 +25,9 @@ extends Node
 ## the scenes has to remember to do it, which is the property the exit
 ## hook was built for. The tooltip shaper ([method UiChrome.watch_tooltips],
 ## 2026-09-18) hangs on the tree here for the same reason: one process,
-## one hook, every hover text wrapped to the window.
+## one hook, every hover text wrapped to the window. And the Android
+## corner ([AndroidCorner], 2026-09-29) is made here for the same reason
+## again: before the autoloads that read it.
 
 
 func _ready() -> void:
@@ -34,6 +36,16 @@ func _ready() -> void:
 	# before any screen reads the map.
 	Controls.apply()
 	UiChrome.watch_tooltips(get_tree())
+	# On Android the corner the player pushes into is made here, before
+	# SkinPack and CardPacks read it, and what is there goes to the log
+	# ([AndroidCorner]); the tracer joins the tree last of all, after
+	# the first scene, so it sees an event before any layer eats it.
+	if OS.has_feature("android"):
+		var corner := GamePaths.android_files_dir()
+		AndroidCorner.prepare(corner)
+		for line in AndroidCorner.report(corner):
+			printerr(line)
+		get_tree().root.add_child.call_deferred(AndroidCorner.new())
 
 
 func _exit_tree() -> void:
