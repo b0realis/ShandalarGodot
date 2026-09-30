@@ -7,6 +7,8 @@ extends CardScript
 ## the ability lives on the AURA (its controller pays and pumps), exactly
 ## as printed; mage-go grants it to the creature instead, which we
 ## deliberately do not copy (wrong activator on stolen/enemy hosts).
+## The effect declares its shape to the AI (`pump_host`, 2026-09-30, see
+## firebreathing.gd).
 
 
 func build() -> CardData:
@@ -14,7 +16,7 @@ func build() -> CardData:
 		.enchants(TargetSpec.creature()) \
 		.activated(ActivatedAbility.new(
 			"{W}", false,
-			[PumpHostEffect.new()],
+			[PumpHostEffect.new().with_ai_role(&"pump_host", {"power": 1, "toughness": 1})],
 			"{W}: Enchanted creature gets +1/+1 until end of turn.")) \
 		.oracle("Enchant creature\n{W}: Enchanted creature gets +1/+1 until end of turn.")
 

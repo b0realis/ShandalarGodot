@@ -154,6 +154,20 @@ var pump_self: bool = false
 var pumps: bool = false
 var pump_uses_x: bool = false
 
+## THE BREATH A BODY WEARS (2026-09-30): the pump lives on an AURA and
+## lands on the creature it enchants — Firebreathing's `{R}: Enchanted
+## creature gets +1/+0`, Blessing's `{W}: +1/+1`, Holy Armor's `{W}:
+## +0/+1`. Each is a card-local effect that routes through
+## [member CardInstance.attached_to], so the reader called all three
+## `unknown` and no pump path in [AiPlayer] had ever activated one: a
+## Hill Giant wearing Firebreathing swung unblocked into four open
+## Mountains for exactly three. Declared by the card through
+## [member EffectBase.ai_role] `pump_host` with `{"power", "toughness"}`
+## in its parameters, the way the conscriptions and the prison readings
+## are; [member pump_power] and [member pump_toughness] carry the size,
+## and [method AiPlayer._worn_breaths] finds the aura from the body.
+var pump_host: bool = false
+
 ## Every keyword the pumps grant (Teleport's UNBLOCKABLE, Jump's FLYING),
 ## summed the way the stat bonuses are. A pump that grants a keyword and
 ## no stats is invisible to every reading of [member pump_power] and
@@ -698,6 +712,12 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 				or e is ReturnFromGraveyardEffect or e is PreventDamageEffect \
 				or e is PreventDamageShieldEffect:
 			pass   # priced elsewhere (card_value); nothing here to sum
+		elif e.ai_role == &"pump_host":
+			# THE BREATH A BODY WEARS (2026-09-30): see [member pump_host].
+			intent.pumps = true
+			intent.pump_host = true
+			intent.pump_power += int(e.ai_parameters.get("power", 0))
+			intent.pump_toughness += int(e.ai_parameters.get("toughness", 0))
 		elif e.ai_role == &"swap_life":
 			intent.swaps_life = true   # THE PRISON READINGS: [member swaps_life]
 		elif e.ai_role == &"fog_attacker":
@@ -1192,6 +1212,22 @@ static func aura_fits(data: CardData, host: CardInstance) -> bool:
 ## card drawn, a cost moved ("{3} more", "{2} less") and a {T} — an
 ## ability that taps is one activation per copy, so an Icy Manipulator
 ## is two.
+##
+## AND NOT THE LINE A COPY CAN ALREADY REPEAT (2026-09-30, the owner's
+## follow-up: *"duplicate Firebreathing can escape the new text-based
+## detector"*). Firebreathing's `{R}: Enchanted creature gets +1/+0`
+## carries a pump, and the phrase above read it as a quantity — but the
+## quantity is bought with MANA, as often as the mana lasts, and a
+## second Firebreathing on the same creature sells nothing the first did
+## not: the wearer already breathes for every open Mountain. So [method
+## _repeatable_text] takes every activated line that is uncapped —
+## no {T}, no sacrifice, no exile, no counter paid, no "only N times
+## each turn" — out of the text before the phrases are asked, and what
+## is left is what a copy would ADD: Holy Armor keeps its static
+## `+0/+2` and stacks; Firebreathing and Blessing keep only "Enchant
+## creature" and are had once. A {T} line stays (one activation per
+## copy), a capped line stays (its cap is per copy), and an ability
+## whose line is not in the oracle text stays too — the reading it had.
 const SCALING_PHRASES := [
 	"[+-](\\d+|x)/[+-](\\d+|y)",
 	"deals? (\\d+|x |that much|damage equal)",
@@ -1223,13 +1259,29 @@ static func stacks(data: CardData) -> bool:
 			regex.compile(phrase)
 			_scaling.append(regex)
 	var out := not data.enters_as_copy.is_empty()
-	var text := data.oracle_text.to_lower()
+	var text := _repeatable_text(data)
 	for regex in _scaling:
 		if out:
 			break
 		out = regex.search(text) != null
 	_stacks_cache[data.card_name] = out
 	return out
+
+
+## [param data]'s lower-cased oracle text with every activated line a
+## single copy can already repeat as often as its mana lasts taken out —
+## the text a SECOND copy is judged on (see [constant SCALING_PHRASES]).
+static func _repeatable_text(data: CardData) -> String:
+	var text := data.oracle_text.to_lower()
+	for ability in data.activated_abilities:
+		if ability.text == "" or ability.tap_cost or ability.max_per_turn > 0 \
+				or ability.sacrifice_cost or ability.sacrifice_filter.is_valid() \
+				or ability.exile_cost or ability.exile_filter.is_valid() \
+				or ability.counter_cost_kind != "" or ability.library_exile_cost > 0 \
+				or not ability.object_costs.is_empty():
+			continue
+		text = text.replace(ability.text.to_lower(), "")
+	return text
 
 
 ## Does [param host] already wear an aura named like [param data] that a

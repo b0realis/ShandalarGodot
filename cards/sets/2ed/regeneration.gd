@@ -6,6 +6,13 @@ extends CardScript
 ## card-local effect that puts the regeneration shield on the HOST (the
 ## engine's shields + destroy logic do the rest). Gives any creature the
 ## skeleton treatment.
+##
+## The effect says what it is to the AI (2026-09-30): [member
+## EffectBase.is_regeneration] and the `regenerate_host` role, the pair
+## Thrull Retainer and Carapace already declare, so [method
+## AiPlayer._effects_regenerate] reads the shield off the aura for the
+## creature it enchants. Without them the AI cast the aura (and, before
+## 2026-09-28, cast it twice on one creature) and never once paid {G}.
 
 
 func build() -> CardData:
@@ -13,12 +20,15 @@ func build() -> CardData:
 		.enchants(TargetSpec.creature()) \
 		.activated(ActivatedAbility.new(
 			"{G}", false,
-			[RegenerateHostEffect.new()],
+			[RegenerateHostEffect.new().with_ai_role(&"regenerate_host")],
 			"{G}: Regenerate enchanted creature.")) \
 		.oracle("Enchant creature. {G}: Regenerate enchanted creature.")
 
 
 class RegenerateHostEffect extends EffectBase:
+	func _init() -> void:
+		is_regeneration = true
+
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
 		if source.attached_to == -1:

@@ -5,7 +5,8 @@ extends CardScript
 ##
 ## Implementation: static +0/+2 plus the Firebreathing pump-the-host
 ## pattern in white toughness flavor (see firebreathing.gd for the
-## aura-with-activated notes).
+## aura-with-activated notes, and for the `pump_host` role the effect
+## declares to the AI, 2026-09-30).
 
 
 func build() -> CardData:
@@ -14,7 +15,7 @@ func build() -> CardData:
 		.static_ability(StaticAbility.new(_apply, "Enchanted creature gets +0/+2.")) \
 		.activated(ActivatedAbility.new(
 			"{W}", false,
-			[PumpHostEffect.new()],
+			[PumpHostEffect.new().with_ai_role(&"pump_host", {"power": 0, "toughness": 1})],
 			"{W}: Enchanted creature gets +0/+1 until end of turn.")) \
 		.oracle("Enchant creature. Enchanted creature gets +0/+2.\n{W}: Enchanted creature gets +0/+1 until end of turn.")
 

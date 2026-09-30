@@ -360,6 +360,32 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The breath a body wears (2026-09-30)
+
+- `engine/ai/effect_intent.gd`: `pump_host` (an aura's `pump_host`
+  role — Firebreathing, Blessing, Holy Armor — read as `pumps` with its
+  power/toughness, no longer `unknown`); `stacks()` reads
+  `_repeatable_text(data)` — the oracle text with every uncapped,
+  untapped, cost-free activated line removed, so `{R}: +1/+0` is not a
+  quantity a second copy adds while a `{T}`, a per-turn cap or a
+  sacrifice line keeps its.
+- `engine/ai/ai_player.gd`: `_breath_sources(game, inst)` → the
+  `[source, index]` pairs a body can breathe with (its own lines; under
+  `pumps_to_attack` the worn auras' pump lines, `_worn_breaths`);
+  `_self_pump_once`, the unblocked firebreathing loop, `_self_pump_of`
+  (+`"source"`), `_pump_out_of_reach`, `_pump_shares`, `_pump_reach`,
+  `_cheapest_pump_of` and `_pump_claimants` read the ability from the
+  pair's source; `_pending_pumps` counts an attached aura's activation
+  for its host; `_pumps_are_lethal`'s doc names `attacker` as where the
+  ability lives.
+- `cards/sets/2ed/firebreathing.gd`, `blessing.gd`, `holy_armor.gd`:
+  `.with_ai_role(&"pump_host", {"power", "toughness"})`.
+  `cards/sets/2ed/regeneration.gd`: `RegenerateHostEffect` says
+  `is_regeneration` and `regenerate_host`.
+- `tests/ai/test_ai_worn_breath_2026_09_30.gd` (14 tests).
+  `docs/ai-difficulty.md`: the `holds_repeats`, `pumps_to_attack` and
+  `reads_pumps` rows name the worn breath and the uncapped line.
+
 ## The third headset report (2026-09-29)
 
 - `game/input/touch_controls.gd`: a tap whose press opened a focused
@@ -814,6 +840,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.52.md`: the breath a body wears — a second
+  Firebreathing no longer read as a quantity (the uncapped line taken
+  out of the text before the detector reads it), the worn pump aura
+  breathed with in every pump path, the Regeneration aura a shield.
 - `docs/releases/0.40.51.md`: the third headset report — the Magic
   Battle deck list opened and closed under one tap on the Quest (the
   tap's own release landing in a menu fitted over its button); a tap

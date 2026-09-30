@@ -6246,19 +6246,20 @@ func _pump_out_of_reach(game: MtgGame, victim: CardInstance,
 	var index := int(pump["index"])
 	var ability: ActivatedAbility = pump["ability"]
 	var bonus: Vector2i = pump["bonus"]
+	var source: CardInstance = pump["source"]   # the body, or the aura it wears
 	var live := maxi(victim.cur_toughness - victim.damage, 0)
 	var pending := _pending_pumps(game, victim)
 	if live + bonus.y * pending > damage:
 		return ""   # what is already on the stack saves it
 	var sources := _mana_sources(game)
-	var reach := _pumps_in_reach(game, victim, ability, sources,
-		_pump_reserve(game, sources), _activations_left(game, victim, index)) \
+	var reach := _pumps_in_reach(game, source, ability, sources,
+		_pump_reserve(game, sources), _activations_left(game, source, index)) \
 		+ pending
 	if live + bonus.y * reach <= damage:
 		return ""   # every breath it can reach still leaves it dead
-	if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, victim)):
+	if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source)):
 		return ""
-	if game.activate_ability(pid, victim, index, []) != "":
+	if game.activate_ability(pid, source, index, []) != "":
 		return ""
 	return "pumps %s out of the burn" % victim.data.card_name
 
@@ -6431,13 +6432,21 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 			opposite = game.combat.attackers_blocked_by(inst.id)
 		if opposite.is_empty():
 			continue
-		for index in inst.cur_activated_abilities.size():
-			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+		# The body's own breaths and — since 2026-09-30, under the same
+		# knob — the ones the auras it wears sell ([method
+		# _breath_sources]): `source` is where the ability lives and is
+		# what gets activated; `inst` is the body it grows.
+		for pair in _breath_sources(game, inst):
+			var source: CardInstance = pair[0]
+			var index: int = pair[1]
+			var ability: ActivatedAbility = source.cur_activated_abilities[index]
 			if ability.tap_cost or ability.cost == null:
 				continue
-			var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+			var intent := EffectIntent.read(ability.effects, source.data.card_name)
 			var bonus := Vector2i(intent.pump_power, intent.pump_toughness)
-			if not intent.pump_self:
+			if source != inst:
+				pass   # a worn breath: [method _worn_breaths] read it whole
+			elif not intent.pump_self:
 				# The card-local breath the reader cannot see (2026-09-09,
 				# gated by [member AiProfile.pumps_to_attack]): Dragon
 				# Whelp and Nalathni Dragon pump through an EffectBase of
@@ -6446,13 +6455,13 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 				if breath.is_empty():
 					continue
 				bonus = Vector2i(int(breath["power"]), int(breath["toughness"]))
-			if not _ability_available(game, inst, index):
+			if not _ability_available(game, source, index):
 				continue
 			var pending := _pending_pumps(game, inst)
 			# The allotment this body was declared on, spent down as the
 			# breaths are bought. -1 is "no cap of its own" — the leftover
 			# pass, and every rung below Sorcerer.
-			var cap := _activations_left(game, inst, index)
+			var cap := _activations_left(game, source, index)
 			if honour_plan:
 				var allotted := _pump_plan_for(game, inst)
 				if allotted <= 0:
@@ -6462,7 +6471,7 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 			# cost, colour included (as _pumps_are_lethal counts them) — a
 			# Frozen Shade with one Swamp and three Forests open has one
 			# {B} in reach, not four, and the count used to say four.
-			var reach: int = _pumps_in_reach(game, inst, ability, sources, null,
+			var reach: int = _pumps_in_reach(game, source, ability, sources, null,
 				cap) + pending
 			if reach <= pending:
 				continue
@@ -6504,9 +6513,9 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 						break
 			if not worth:
 				continue
-			if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, inst)):
+			if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source)):
 				continue
-			if game.activate_ability(pid, inst, index, []) == "":
+			if game.activate_ability(pid, source, index, []) == "":
 				if _pump_plan.has(inst.id):
 					_pump_plan[inst.id] = maxi(int(_pump_plan[inst.id]) - 1, 0)
 				return "pumps %s" % inst.data.card_name
@@ -6568,9 +6577,68 @@ func _incoming_combat_damage(game: MtgGame, inst: CardInstance, opposite: Array[
 func _pending_pumps(game: MtgGame, inst: CardInstance) -> int:
 	var n := 0
 	for item in game.stack:
-		if item.kind == Mtg.StackKind.ABILITY and item.card == inst:
+		if item.kind != Mtg.StackKind.ABILITY:
+			continue
+		if item.card == inst:
 			n += 1
+		elif item.card != null and item.card.attached_to == inst.id \
+				and EffectIntent.read(item.effects, item.card.data.card_name).pump_host:
+			n += 1   # THE BREATH A BODY WEARS (2026-09-30): the aura's, for the body
 	return n
+
+
+## THE BREATH A BODY WEARS (2026-09-30). Every pump path in this file
+## walked [param inst]'s OWN activated abilities and nothing else, so an
+## aura whose ability pumps the creature it enchants — Firebreathing,
+## Blessing, Holy Armor: the ability lives on the aura, its controller
+## pays, the pump lands on the host — was invisible to all of them. A
+## Hill Giant wearing Firebreathing attacked unblocked into four open
+## Mountains and hit for three; blocked by a Giant Spider it traded
+## nothing and took two, when one {R} would have killed the Spider; and
+## the declaration sent it at 3/3 whatever the Mountains said. The
+## aura's effect declares its shape ([member EffectIntent.pump_host], by
+## role and never by name), and this is where the body finds it.
+##
+## The pairs `[source, ability index]` a pump path should walk for
+## [param inst]: its own abilities first, in their order, then the
+## host-pumping abilities of every aura on it that its controller also
+## controls (the aura's controller is who pays; an enemy's Firebreathing
+## on our body is theirs to breathe with, not ours). Gated by [member
+## AiProfile.pumps_to_attack] for OUR bodies, the way the card-local
+## firebreathers are ([method _card_local_breath]): an ungated reading
+## would have moved the null the Deck Lab measures the knob against, and
+## it is the same story — a breath the reader could not see. THEIR
+## bodies are read by [member AiProfile.reads_pumps] through [method
+## _cheapest_pump_of], which gates itself.
+func _breath_sources(game: MtgGame, inst: CardInstance) -> Array:
+	var out: Array = []
+	for index in inst.cur_activated_abilities.size():
+		out.append([inst, index])
+	if inst.controller_id == pid and not profile.pumps_to_attack:
+		return out
+	out.append_array(_worn_breaths(game, inst))
+	return out
+
+
+## The host-pumping abilities of the auras [param inst] wears, as
+## `[aura, ability index]` pairs — only auras its own controller controls,
+## only abilities the reader prices whole (a `pump_host` effect and
+## nothing unknown beside it), never a {T}.
+func _worn_breaths(game: MtgGame, inst: CardInstance) -> Array:
+	var out: Array = []
+	for id in inst.attachments:
+		var aura := game.find_instance(id)
+		if aura == null or aura.zone != Mtg.Zone.BATTLEFIELD \
+				or aura.controller_id != inst.controller_id or not aura.data.is_aura():
+			continue
+		for index in aura.cur_activated_abilities.size():
+			var ability: ActivatedAbility = aura.cur_activated_abilities[index]
+			if ability.tap_cost or ability.cost == null:
+				continue
+			var intent := EffectIntent.read(ability.effects, aura.data.card_name)
+			if intent.pump_host and not intent.unknown:
+				out.append([aura, index])
+	return out
 
 
 ## Pre-emptive shields for our creatures that the declared combat would
@@ -6934,7 +7002,7 @@ func _pump_reach(game: MtgGame, inst: CardInstance) -> Vector2i:
 	# per pair and the crack-back matrix asks it n x m times.
 	if not profile.reads_pumps:
 		return Vector2i.ZERO
-	if inst == null or inst.cur_activated_abilities.is_empty():
+	if inst == null or (inst.cur_activated_abilities.is_empty() and inst.attachments.is_empty()):
 		return Vector2i.ZERO
 	if inst.controller_id == pid:
 		return Vector2i.ZERO   # ours is [member AiProfile.pumps_to_attack]'s question
@@ -6946,7 +7014,8 @@ func _pump_reach(game: MtgGame, inst: CardInstance) -> Vector2i:
 		return Vector2i.ZERO
 	var bonus: Vector2i = best["bonus"]
 	var index := int(best["index"])
-	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var source: CardInstance = best["source"]   # the body, or the aura it wears
+	var ability: ActivatedAbility = source.cur_activated_abilities[index]
 	var open := 0
 	for p in game.players[who].battlefield:
 		if not p.tapped and not p.cur_mana_abilities.is_empty() \
@@ -6965,7 +7034,7 @@ func _pump_reach(game: MtgGame, inst: CardInstance) -> Vector2i:
 	var times := open / (int(best["price"]) * _pump_claimants(game, inst))
 	if ability.max_per_turn > 0:
 		times = mini(times,
-			maxi(ability.max_per_turn - int(inst.ability_uses.get(index, 0)), 0))
+			maxi(ability.max_per_turn - int(source.ability_uses.get(index, 0)), 0))
 	times = mini(times, _pump_cap(game, inst, bonus))
 	return bonus * maxi(times, 0)
 
@@ -6985,13 +7054,18 @@ func _pump_reach(game: MtgGame, inst: CardInstance) -> Vector2i:
 func _cheapest_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 	var who := inst.controller_id
 	var best: Dictionary = {}
-	for index in inst.cur_activated_abilities.size():
-		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	# Their body's own breaths and the ones the auras it wears sell
+	# (2026-09-30, [method _worn_breaths]): a Grizzly Bears of theirs in
+	# Firebreathing behind two Mountains is a 4/2 to the block ladder.
+	for pair in _breath_sources(game, inst):
+		var source: CardInstance = pair[0]
+		var index: int = pair[1]
+		var ability: ActivatedAbility = source.cur_activated_abilities[index]
 		if ability.tap_cost or ability.cost == null:
 			continue
-		if not _animation_timing_open(game, inst, ability, who):
+		if not _animation_timing_open(game, source, ability, who):
 			continue   # the printed timing riders, read for THEIR seat
-		if ability.only_owner_may_activate and inst.owner_id != who:
+		if ability.only_owner_may_activate and source.owner_id != who:
 			continue   # a stolen Personal Incarnation answers to its owner
 		if ability.cost.has_x or ability.sacrifice_cost \
 				or ability.sacrifice_filter.is_valid() or ability.exile_cost \
@@ -6999,8 +7073,9 @@ func _cheapest_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 				or ability.random_discard_cost > 0 or ability.life_cost > 0 \
 				or ability.counter_cost_kind != "":
 			continue
-		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
-		if not intent.pump_self or intent.unknown:
+		var intent := EffectIntent.read(ability.effects, source.data.card_name)
+		if not (intent.pump_self or (source != inst and intent.pump_host)) \
+				or intent.unknown:
 			continue
 		var bonus := Vector2i(intent.pump_power, intent.pump_toughness)
 		if bonus.x < 0 or bonus.y < 0 or (bonus.x <= 0 and bonus.y <= 0):
@@ -7009,7 +7084,7 @@ func _cheapest_pump_of(game: MtgGame, inst: CardInstance) -> Dictionary:
 		if price <= 0:
 			continue   # a free pump has no mana to read; this pool prints none
 		if best.is_empty() or price < int(best["price"]):
-			best = {"price": price, "bonus": bonus, "index": index}
+			best = {"price": price, "bonus": bonus, "index": index, "source": source}
 	return best
 
 
@@ -7036,7 +7111,8 @@ func _pump_claimants(game: MtgGame, inst: CardInstance) -> int:
 	var they_attack := game.active_player == who and not game.combat.attackers.is_empty()
 	var claimants := 0
 	for other in game.players[who].battlefield:
-		if not other.is_creature() or other.cur_activated_abilities.is_empty():
+		if not other.is_creature() \
+				or (other.cur_activated_abilities.is_empty() and other.attachments.is_empty()):
 			continue
 		if other != inst:
 			if they_attack:
@@ -8270,8 +8346,14 @@ func _offensive_combat_response(game: MtgGame) -> String:
 		if not main2.is_empty():
 			kept = main2["cost"]
 	for attacker in unblocked:
-		for index in attacker.cur_activated_abilities.size():
-			var ability: ActivatedAbility = attacker.cur_activated_abilities[index]
+		# The attacker's own breaths and — since 2026-09-30, under
+		# [member AiProfile.pumps_to_attack] — the ones the auras it wears
+		# sell ([method _breath_sources]): the Firebreathing this loop is
+		# named for lives on the aura, and until then it never bought one.
+		for pair in _breath_sources(game, attacker):
+			var source: CardInstance = pair[0]
+			var index: int = pair[1]
+			var ability: ActivatedAbility = source.cur_activated_abilities[index]
 			if ability.tap_cost or ability.effects.size() != 1:
 				continue
 			# What ONE activation adds to the power: the PumpEffect the
@@ -8282,7 +8364,9 @@ func _offensive_combat_response(game: MtgGame) -> String:
 			# Mountain untapped, because this loop tested `is PumpEffect`
 			# and its breath is a class inside its own card file.
 			var per_pump := 0
-			if ability.effects[0] is PumpEffect and ability.effects[0].self_mode:
+			if source != attacker:
+				per_pump = EffectIntent.read(ability.effects, source.data.card_name).pump_power
+			elif ability.effects[0] is PumpEffect and ability.effects[0].self_mode:
 				per_pump = int(ability.effects[0].power)
 			else:
 				per_pump = int(_card_local_breath(attacker, index,
@@ -8293,7 +8377,7 @@ func _offensive_combat_response(game: MtgGame) -> String:
 			# The same gate every other activation passes: a pump whose
 			# price is a BODY (Fallen Angel, Atog) is not firebreathing,
 			# and used to eat the board one Serra at a time.
-			if not _ability_available(game, attacker, index):
+			if not _ability_available(game, source, index):
 				continue
 			# THE FUSE, and the one place it may be lit. Dragon Whelp's
 			# fourth breath sacrifices the dragon at the next end step
@@ -8306,21 +8390,21 @@ func _offensive_combat_response(game: MtgGame) -> String:
 			# bought), so a Whelp that has reached exactly lethal at
 			# three stops there and keeps itself. Buying past lethal is
 			# free for every other firebreather and costs a dragon here.
-			if _activations_left(game, attacker, index) == 0 \
+			if _activations_left(game, source, index) == 0 \
 					and not (unblocked_total < them.life
-						and _pumps_are_lethal(game, attacker, ability, sources,
+						and _pumps_are_lethal(game, source, ability, sources,
 							unblocked_total, per_pump)):
 				continue
-			var surcharge := game.ability_surcharge(pid, attacker)
+			var surcharge := game.ability_surcharge(pid, source)
 			if kept != null \
 					and _plan_taps_from(sources,
 						_combined_cost(ability.cost, kept), surcharge).is_empty() \
-					and not _pumps_are_lethal(game, attacker, ability, sources,
+					and not _pumps_are_lethal(game, source, ability, sources,
 						unblocked_total, per_pump):
 				continue
 			if not _plan_and_pay(game, ability.cost, surcharge):
 				continue
-			if game.activate_ability(pid, attacker, index, []) == "":
+			if game.activate_ability(pid, source, index, []) == "":
 				return "firebreathing on %s" % attacker.data.card_name
 	return ""
 
@@ -8360,6 +8444,11 @@ func _main2_reserve(game: MtgGame, sources: Array) -> Dictionary:
 ## it off the effect" — the card-local breaths (2026-09-09) have no
 ## [PumpEffect] to read it from, and asking `effects[0].power` of a
 ## [WhelpBreathEffect] is a script error, not a zero.
+##
+## [param attacker] is where [param ability] LIVES — the attacking body,
+## or since 2026-09-30 the aura on it whose breath this is ([method
+## _breath_sources]); the surcharge, the index and the cap are all read
+## off that instance.
 func _pumps_are_lethal(game: MtgGame, attacker: CardInstance,
 		ability: ActivatedAbility, sources: Array, unblocked_total: int,
 		per_pump := 0) -> bool:
@@ -9032,17 +9121,18 @@ func _pump_shares(game: MtgGame, candidates: Array[CardInstance]) -> Dictionary:
 	for pump in breathers:
 		var inst: CardInstance = pump["inst"]
 		var ability: ActivatedAbility = pump["ability"]
-		var reach := _pumps_in_reach(game, inst, ability, sources, kept,
-			_activations_left(game, inst, int(pump["index"])))
+		var source: CardInstance = pump["source"]   # the body, or the aura it wears
+		var reach := _pumps_in_reach(game, source, ability, sources, kept,
+			_activations_left(game, source, int(pump["index"])))
 		if reach <= 0:
 			continue
 		out[inst.id] = {"index": int(pump["index"]), "ability": ability,
-			"bonus": Vector2i(pump["bonus"]), "count": reach}
+			"bonus": Vector2i(pump["bonus"]), "count": reach, "source": source}
 		var cost: ManaCost = ability.cost
 		for _i in reach - 1:
 			cost = _combined_cost(cost, ability.cost)
 		sources = _sources_after(sources, _plan_taps_from(sources, cost,
-			game.ability_surcharge(pid, inst) * reach))
+			game.ability_surcharge(pid, source) * reach))
 	return out
 
 
@@ -9096,15 +9186,24 @@ func _pump_plan_for(game: MtgGame, inst: CardInstance) -> int:
 ## the Granite Gargoyle's `{R}: +0/+1` this function exists to refuse, and
 ## does not care whether the breath grants power at all. Every other gate
 ## is the same one, and the default is the reading this had before.
+##
+## AND THE BREATH MAY BE WORN (2026-09-30): the pairs come from [method
+## _breath_sources], so the answer names its `source` — the body itself,
+## or the aura on it whose ability is the breath — and every caller
+## activates, prices and caps the ability on THAT instance.
 func _self_pump_of(game: MtgGame, inst: CardInstance,
 		for_toughness := false) -> Dictionary:
-	for index in inst.cur_activated_abilities.size():
-		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	for pair in _breath_sources(game, inst):
+		var source: CardInstance = pair[0]
+		var index: int = pair[1]
+		var ability: ActivatedAbility = source.cur_activated_abilities[index]
 		if ability.tap_cost or ability.cost == null:
 			continue
-		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
+		var intent := EffectIntent.read(ability.effects, source.data.card_name)
 		var bonus := Vector2i(intent.pump_power, intent.pump_toughness)
-		if not intent.pump_self or intent.unknown:
+		if source != inst:
+			pass   # a worn breath: [method _worn_breaths] read it whole
+		elif not intent.pump_self or intent.unknown:
 			# ...or a breath the shared vocabulary cannot express and the
 			# table names instead (2026-09-09: Dragon Whelp, Nalathni
 			# Dragon). Same gates, same price, same cap.
@@ -9116,9 +9215,9 @@ func _self_pump_of(game: MtgGame, inst: CardInstance,
 			continue
 		if (bonus.y <= 0) if for_toughness else (bonus.x <= 0):
 			continue
-		if not _ability_available(game, inst, index):
+		if not _ability_available(game, source, index):
 			continue
-		return {"index": index, "ability": ability, "bonus": bonus}
+		return {"index": index, "ability": ability, "bonus": bonus, "source": source}
 	return {}
 
 

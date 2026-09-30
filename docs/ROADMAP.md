@@ -18519,6 +18519,86 @@ is the context menu either way. Left as it is until a report names it.
 Gate: 546 scripts, **8,226/8,226 tests, 368,128 asserts**, exit 0 in
 267 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-30 — The breath a body wears (0.40.52)
+
+*"Ok one immediate AI play gripe: Firebreathing card AI play examine —
+One AI follow-up remains: duplicate Firebreathing can escape the new
+text-based detector. Please fix."*
+
+**Examined on the desk** before anything was tuned. A Wizard with a
+Hill Giant wearing Firebreathing and a Grizzly Bears beside it, a
+second Firebreathing in hand and Mountains open: the second aura went
+onto the Giant. The same Giant attacking unblocked with four Mountains
+open dealt its printed three; blocked by a Giant Spider it traded. Two
+readers were at fault and a third card had never spoken.
+
+**The duplicate.** `EffectIntent.stacks` (0.40.47) reads the printed
+text for a quantity a second copy would add, and `{R}: +1/+0` matched
+its own "+1/+0". But a line that can be activated any number of times
+for a mana is not a quantity the second copy adds — the first copy
+already repeats it for every Mountain; only a capped line (a `{T}`, a
+"once each turn", a sacrifice) is had once per copy. `_repeatable_text`
+takes every uncapped, untapped, cost-free activated line out of the
+text before the phrases are matched: Firebreathing and Blessing read
+false, Holy Armor (its static `+0/+2` beside the `{W}: +0/+1`) still
+true, and the twenty other readings that changed are all creatures
+and abilitied permanents `stacks` is never asked about (`aura_repeats`
+and `permanent_repeats` are its only callers). The second Firebreathing
+goes on the Bears now; with one host already wearing one it stays in
+hand rather than be cast for nothing; with `holds_repeats` off the
+Giant wears two, as before.
+
+**The worn breath.** Every pump path — `_self_pump_once` at the block,
+the unblocked firebreathing loop, `_self_pump_of` for the
+declaration and the burn reader, `_cheapest_pump_of` for their side's
+reach — walked `inst.cur_activated_abilities` alone, and the aura's
+`PumpHostEffect` was a card-local effect with no `ai_role`, which the
+reader calls `unknown`. Firebreathing, Blessing and Holy Armor now
+declare `pump_host` with their power and toughness, and
+`AiPlayer._breath_sources(game, inst)` returns the pairs
+`[source, index]` a body can breathe with: its own lines always, and
+under `pumps_to_attack` the pump lines of the auras it wears
+(`_worn_breaths`: on the battlefield, our controller, no `{T}`, intent
+`pump_host` and not unknown). The consumers read the ability from the
+pair's source — availability, activations left, surcharge, the lethal
+reading (`_pumps_are_lethal`'s `attacker` is where the ability LIVES)
+and the activation itself — and still report the body
+(`"firebreathing on Hill Giant"`, `"pumps Hill Giant"`). `_pending_pumps`
+counts an aura's activation on the stack for the body it is attached
+to. Their side is the mirror under `reads_pumps`: `_pump_reach` and
+`_pump_claimants` no longer return early on a body without lines of
+its own when it wears an aura, and `_cheapest_pump_of` accepts a worn
+`pump_host` — a Grizzly Bears of theirs in Firebreathing behind two
+Mountains is a 4/2 to the block ladder. An enemy's aura on our body is
+not ours to breathe with (controller read, not attachment).
+
+**The shield.** The 2ed Regeneration aura's `RegenerateHostEffect`
+never said `is_regeneration` nor `regenerate_host`, though
+`_effects_regenerate` has read that role on a source attached to the
+victim since the Thrull Retainer/Carapace pass. It does now: a blocked
+wearer is shielded before the damage, the blocker dies, the wearer
+lives.
+
+**What the tests say.** `tests/ai/test_ai_worn_breath_2026_09_30.gd`
+(14 tests, 185 asserts): the second Firebreathing on the bare Bears;
+kept in hand with one host already wearing it; two on the Giant with
+`holds_repeats` off; the uncapped line no quantity (Firebreathing,
+Blessing false; Holy Armor, Giant Strength, Icy Manipulator, Wild
+Growth, Howling Mine, Wanderlust, Psychic Venom true; Regeneration,
+Flight, Kismet, Winter Orb false) and a tapped, a capped and an
+unprinted line keeping theirs (hand-built `CardData`); four breaths
+unblocked (20 → 13, no Mountain left); one breath blocked by a Giant
+Spider (the Spider dead, the Giant alive, three Mountains kept); the
+printed three with `pumps_to_attack` off; the enemy's aura not ours;
+the reader naming the aura as the source (Blessing (1,1); Holy Armor
+nothing for power, (0,1) for toughness); their wearer read ZERO
+without Mountains, (1,0) behind two, ZERO with them tapped, the
+printed 2/2 with `reads_pumps` off; the Regeneration shield and the
+aura's role. Eight bit before the fix.
+
+Gate: 547 scripts, **8,240/8,240 tests, 367,982 asserts**, exit 0 in
+263 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

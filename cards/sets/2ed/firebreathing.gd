@@ -8,6 +8,10 @@ extends CardScript
 ## per the rules), and the card-local effect routes the pump through the
 ## live attachment. The aura-with-activated pattern; cf. wild_growth.gd
 ## (aura-with-mana-trigger) and warp_artifact.gd (aura-with-trigger).
+##
+## The effect declares its shape to the AI (`pump_host`, 2026-09-30):
+## the reader cannot look inside a card-local effect, and without the
+## role no pump path ever breathed through the aura.
 
 
 func build() -> CardData:
@@ -15,7 +19,7 @@ func build() -> CardData:
 		.enchants(TargetSpec.creature()) \
 		.activated(ActivatedAbility.new(
 			"{R}", false,
-			[PumpHostEffect.new()],
+			[PumpHostEffect.new().with_ai_role(&"pump_host", {"power": 1, "toughness": 0})],
 			"{R}: Enchanted creature gets +1/+0 until end of turn.")) \
 		.oracle("Enchant creature.\n{R}: Enchanted creature gets +1/+0 until end of turn.")
 
