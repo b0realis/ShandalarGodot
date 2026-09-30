@@ -245,6 +245,22 @@ func _ready() -> void:
 		note(line)
 	for line in CardPacks.report_lines:
 		note(line)
+	# The card pool compiles on its own thread while this runs
+	# (2026-09-30); its line comes when it is done, so the report can say
+	# how long the title waited for nothing and the pool took.
+	set_process(CardRegistry.pool_report().is_empty())
+	if not is_processing():
+		note(CardRegistry.pool_report())
+
+
+## The pool's line, the frame the thread is done — noted, not said: the
+## loader printed it itself, with the log's own timestamp.
+func _process(_delta: float) -> void:
+	var line := CardRegistry.pool_report()
+	if line.is_empty():
+		return
+	note(line)
+	set_process(false)
 
 
 ## The first event of each class, once, until [constant TRACED_CLASSES]

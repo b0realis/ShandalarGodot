@@ -18599,6 +18599,90 @@ aura's role. Eight bit before the fix.
 Gate: 547 scripts, **8,240/8,240 tests, 367,982 asserts**, exit 0 in
 263 s over 6 shards; Python 415, exit 0.
 
+## 2026-09-30 — The title before the pool (0.40.53)
+
+*"Can we then speed load-times (and card-pack discovery) for other
+platforms as well?"* — and, from a reader of the fullscreen card:
+*"Some say the text is a bit blurred? What elegant solutions do you
+suggest?"*
+
+**The start, read off the clock.** The 0.40.52 Meta Quest report:
+`tree ready after 9071 ms`. Against logcat's timestamps: engine boot
+3.2 s before our first line, the skin mount 0.2 s, seven pack seals
+1.0 s (`sealed, 67..226 ms` each — the engine's zip reader), then
+4.6 s of silence to the title. Two compiles filled it, neither needed
+by the title: `CardRegistry.ensure_loaded()` on `main.gd`'s `_ready`
+(every card script; 926 ms headless on the desk) and the SGManalink
+script cluster, which `main.gd` named at compile time through
+`SgLobby.new()` — `SgProtocol → SgTournament → SgTournamentProtocol →
+SgTournamentHost → SgTournamentStore → SgProtocol` is a cycle the
+compiler resolves as one unit, 949–974 ms for `tournament_store.gd`
+alone, and `load("res://game/main.gd")` measured 1,184 ms at frame 2
+against 181 ms with the name replaced by a path. (Headless `_init`-time
+probes that said 33 ms were failed compiles — "Identifier not found:
+SkinPack", a `-s` script's `_init` runs before the autoloads are
+nameable — and were thrown away.) Pack discovery: 0.1 s on the desk,
+1.0 s of 9.1 on the headset, engine-level; not worth a change, and
+said so with the numbers.
+
+**The pool on a thread.** `CardRegistry` (`engine/card_registry.gd`)
+gains `load_in_background()` (a `Thread`; refused if built, building
+or claimed), `is_loading()`, `poll()` (joins a finished thread without
+waiting), `pool_report()` (the loader's line, only once `_loaded`) and
+`_settle()`; `_loader_id` names the thread that builds (written under
+`_mutex` by the starter and by the worker's first act), `_loaded`
+flips true LAST, and `ensure_loaded()` loops settle → lock → build or
+return, so the first ask on any thread waits for a build in flight
+rather than running beside it; `unload()` and both `configure_*` settle
+first; `_ensure_printings` waits for another thread's build. The
+`CardPacks` autoload starts the thread after `discover()` and
+`_configure_registry()`; `main.gd` no longer calls `ensure_loaded()`
+(its comment says why), `_refresh_version` writes `loading cards…` and
+polls each frame until the count can be read, the Android corner's
+tracer notes `card pool: N cards in M ms (background)` once the
+thread is done. Card scripts stay cached by the resource loader: a
+rebuild after `unload()` is ~45 ms.
+
+**The title's script names no lobby.** `_open_manalink_notice` loads
+`res://game/sgmanalink/lobby.gd` by path. And the three screens whose
+first load is a dead click — the setup screen 734 ms cold (it names
+`DuelScreen`), the deck builder 276 ms, the lobby 1,032 ms — go to the
+engine's loader threads once the menu stands: `ScreenWarmup`
+(`game/screen_warmup.gd`, `request(paths)` / `pending()` /
+`settle()`), asked by `main.gd` (`WARM_SCREENS`) and settled by
+`Lifecycle._exit_tree` before the registry is dropped — a threaded
+load never taken leaves its token behind (three "leaked instance"
+lines at exit, which `run_tests.sh` reads as red), and a loader thread
+compiling while static state tears down is worse. A click that comes
+first joins the load in flight (`change_scene_to_file` loads by path).
+Measured under Xvfb: the title's `_ready` ran 0.8 s after the process
+started (frame 3, `loading cards…`), the pool's thread reported
+3,370–3,469 ms beside the rendering title and the warm-up, the setup
+screen and the lobby loaded in 0 ms after.
+
+**The sharp reader.** `FullscreenCard` scales the 300-px `CardPreview`
+by a node `scale` (~3×) and Godot's automatic font oversampling
+follows the window stretch, not node scale: a 13 px label at 3×
+measured 21.4 % intermediate edge pixels, a native 39 px label 4.8 %,
+and `oversampling_override = auto × factor` with the scale 6.2 %.
+`_sharpen(factor)` sets the viewport's override while the reader is
+open (setting it emits `size_changed` → `_fit` → a `_sharpening`
+guard, and only when the value differs), `dismiss()` restores 0.0.
+
+**What the tests say.** `tests/unit/test_card_registry_background_2026_09_30.gd`
+(8 tests, 73 asserts): joined by the first ask, watched by a poller,
+unloaded under the build, reconfigured under it, the main thread
+loading the worker's scripts meanwhile (`artist_of("Terror") == "Ron
+Spencer"`, one registration per card), the title's corner, the
+warm-up asked once per path and settled empty, the warm-up beside the
+pool thread. `test_android_corner_2026_09_29.gd`: the tracer's pool
+line, once, last, `(background)`. `tests/ui/test_fullscreen_card.gd`:
+the override ≈ the card's scale on open, refitted on resize, 0.0 on
+dismiss, untouched closed.
+
+Gate: 548 scripts, **8,250/8,250 tests, 367,679 asserts**, exit 0 in
+261 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

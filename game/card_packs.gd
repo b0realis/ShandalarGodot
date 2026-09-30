@@ -77,6 +77,12 @@ func change_refusal() -> String:
 func _ready() -> void:
 	discover()
 	_configure_registry()
+	# The pool compiles on a thread from here (2026-09-30): the title
+	# draws while it runs, and the first screen that asks for a card
+	# waits for it ([method CardRegistry.load_in_background]). Only the
+	# start: a toggle or a rescan below rebuilds in the foreground, on
+	# the spot, as it always did.
+	CardRegistry.load_in_background()
 
 
 ## Search the explicit test/developer path first, then the player's card

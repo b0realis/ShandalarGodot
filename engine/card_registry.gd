@@ -15,6 +15,20 @@ extends RefCounted
 ## [method ensure_loaded] so tests and tools never need explicit init.
 ## Everything here is static — the registry is process-global, like
 ## mage-go's card registry.
+##
+## AND, SINCE 2026-09-30, THE GAME BUILDS IT OFF THE MAIN THREAD. The
+## Meta Quest start report (0.40.52) put 4.6 of its 9.1 seconds in one
+## silence: `main.gd` compiling the whole pool — 1,945 card scripts with
+## the seven packs — before it drew the title. Nothing on the title reads
+## a card, so the `CardPacks` autoload now starts the build on a
+## [Thread] ([method load_in_background]) as soon as the packs are
+## configured, the title appears while it runs, and the first screen
+## that asks for a card ([method ensure_loaded], through every public
+## reader) simply WAITS for the thread — joins it — instead of building.
+## Every caller sees exactly what it saw before: a complete pool. What
+## changed is where the seconds go: the loader's `card pool: N cards in
+## M ms (background)` line lands in the log (and the Android start
+## report) while the title is already up.
 
 ## name -> CardData
 static var _cards: Dictionary = {}
@@ -39,6 +53,22 @@ static var _pack_rarities: Dictionary = {}
 ## Root folder scanned for set subfolders.
 const SETS_ROOT := "res://cards/sets"
 
+## THE BACKGROUND BUILD ([method load_in_background]). `_thread` is the
+## worker until someone joins it (a join is the first ask for a card, or
+## [method unload], or [method poll]); `_loader_id` is the id of
+## whichever thread is building right now — background or the caller of
+## a foreground [method ensure_loaded] — and -1 when none is. Both are
+## written under `_mutex`; `_loaded` is read bare on the fast path and
+## flips true LAST, after the pool is complete, so a bare true always
+## means a pool that is safe to read. The rule the printing index
+## learnt the hard way (see [method _ensure_printings]) applied again.
+static var _thread: Thread = null
+static var _mutex := Mutex.new()
+static var _loader_id: int = -1
+## What the last build said, once it is done — `card pool: 897 cards in
+## 906 ms (background)` — for the version corner and the start report.
+static var _report := ""
+
 
 ## Load every set once per process. Safe to call repeatedly.
 ##
@@ -50,7 +80,101 @@ const SETS_ROOT := "res://cards/sets"
 static func ensure_loaded() -> void:
 	if _loaded:
 		return
-	_loaded = true
+	var me := OS.get_thread_caller_id()
+	# A card that reads another card while BUILDING (the loader itself
+	# asking) gets the pool so far, as it always did — never a wait on
+	# its own thread.
+	if _loader_id == me:
+		return
+	while true:
+		_settle()
+		_mutex.lock()
+		if _loaded:
+			_mutex.unlock()
+			return
+		if _thread == null and _loader_id == -1:
+			_loader_id = me
+			_mutex.unlock()
+			_load_all()
+			return
+		# A build started on another thread between the settle and the
+		# lock: settle again.
+		_mutex.unlock()
+
+
+## Build the pool on a [Thread] so the caller can go on — the game's
+## start, from `CardPacks._ready`. Idempotent: a pool already built or
+## building is left alone (false). The first [method ensure_loaded] on
+## any thread waits for the build; [method poll] says when it is done
+## without waiting. Nothing else starts a thread — a pack toggle or a
+## rescan rebuilds in the foreground as before, on the next ask.
+static func load_in_background() -> bool:
+	_mutex.lock()
+	if _loaded or _thread != null or _loader_id != -1:
+		_mutex.unlock()
+		return false
+	var thread := Thread.new()
+	if thread.start(_load_in_thread) != OK:
+		_mutex.unlock()
+		return false
+	_thread = thread
+	# The worker's own first act is to write the same id (under the same
+	# lock, so it lands after this one): a card building on the worker
+	# before this line ran would otherwise read -1 and wait on itself.
+	_loader_id = int(thread.get_id())
+	_mutex.unlock()
+	return true
+
+
+## True while a build is in flight and not yet complete.
+static func is_loading() -> bool:
+	return not _loaded and (_thread != null or _loader_id != -1)
+
+
+## True once the pool is complete — joining a finished background thread
+## on the way, which costs no wait. False while it is still building; a
+## poller (the title's version corner, the Android tracer) asks each
+## frame and never blocks.
+static func poll() -> bool:
+	if not _loaded:
+		return false
+	_settle()
+	return true
+
+
+## The loader's word once it is done, "" until then.
+static func pool_report() -> String:
+	return _report if _loaded else ""
+
+
+static func _load_in_thread() -> void:
+	_mutex.lock()
+	_loader_id = OS.get_thread_caller_id()
+	_mutex.unlock()
+	_load_all(" (background)")
+	printerr(_report)
+
+
+## Wait for a build in flight on another thread: join the background
+## thread if there is one, and wait out a foreground build another
+## thread is running. Returns at once when nothing is building.
+static func _settle() -> void:
+	_mutex.lock()
+	var pending := _thread
+	_thread = null
+	_mutex.unlock()
+	if pending != null:
+		pending.wait_to_finish()
+	var me := OS.get_thread_caller_id()
+	while _loader_id != -1 and _loader_id != me:
+		OS.delay_msec(1)
+
+
+## The build itself, on whichever thread owns `_loader_id`. `_loaded`
+## flips true LAST and `_loader_id` clears after it: a waiter spinning on
+## either sees a complete pool, and a report that is already written.
+static func _load_all(how := "") -> void:
+	var started := Time.get_ticks_msec()
 	_ensure_printings()
 	# The eight known folders, not every directory someone happens to add
 	# under cards/sets. Numbered packs are configured explicitly below.
@@ -61,6 +185,10 @@ static func ensure_loaded() -> void:
 			_load_optional_script(spec)
 	for spec in _expansion_scripts:
 		_load_optional_script(spec)
+	_report = "card pool: %d cards in %d ms%s" % [
+		_cards.size(), Time.get_ticks_msec() - started, how]
+	_loaded = true
+	_loader_id = -1
 
 
 ## DROP EVERY CARD BEFORE THE PROCESS ENDS — and the reason is a crash.
@@ -91,7 +219,11 @@ static func ensure_loaded() -> void:
 ## run that had opened the Deck Builder was still exiting 134 for it.
 ## Key such a cache by name or instance id, or clear it from `Lifecycle`.
 static func unload() -> void:
+	# A build in flight finishes first: it must not write into a pool
+	# that is being cleared, and a [Thread] must be joined before it goes.
+	_settle()
 	revision += 1
+	_report = ""
 	_cards.clear()
 	_original_set.clear()
 	_artists.clear()
@@ -252,7 +384,7 @@ static func size() -> int:
 ## the registry continues to own and clear every constructed CardData.
 static func configure_optional_pack(enabled: bool, sets: Dictionary,
 		scripts: Array, records: Array, counts: Dictionary) -> void:
-	if _loaded:
+	if _loaded or is_loading():
 		unload()
 	_optional_enabled = enabled
 	_optional_sets = sets.duplicate(true) if enabled else {}
@@ -281,7 +413,7 @@ static func optional_pack_enabled() -> bool:
 ## All paths come from trusted game code, never from a user-supplied ZIP.
 static func configure_expansion_packs(sets: Dictionary, scripts: Array,
 		records: Array) -> void:
-	if _loaded:
+	if _loaded or is_loading():
 		unload()
 	_expansion_sets = sets.duplicate(true)
 	_expansion_scripts = scripts.duplicate(true)
@@ -473,6 +605,12 @@ static var _printings_loaded: bool = false
 static func _ensure_printings() -> void:
 	if _printings_loaded:
 		return
+	# The pool building on another thread builds this index first: wait
+	# for it rather than write the same tables from two threads.
+	if _loader_id != OS.get_thread_caller_id() and is_loading():
+		ensure_loaded()
+		if _printings_loaded:
+			return
 	var artists := {}
 	var original := {}
 	var pack_rarities := {}

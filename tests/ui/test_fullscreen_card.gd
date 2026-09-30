@@ -175,6 +175,28 @@ func test_resize_fits_square_wide_and_portrait_screens_without_distortion() -> v
 			"the close hint must not acquire an offscreen wrapped minimum height")
 
 
+## "Some say the text is a bit blurred" (2026-09-30): the reader is the
+## 300-px preview under a node scale, which automatic font oversampling
+## does not follow. While it is open the viewport oversamples by the
+## reader's factor; the moment it closes, the automatic value is back.
+func test_open_reader_sharpens_the_fonts_and_closing_restores_automatic() -> void:
+	assert_eq(viewport.oversampling_override, 0.0, "automatic before")
+	assert_true(viewer.open_card())
+	var factor := viewer._card.scale.x
+	assert_gt(factor, 1.5, "a reader on 1280x800 is well over the sidebar's size")
+	assert_almost_eq(viewport.oversampling_override, factor, 0.001,
+		"the automatic value (1 on an unstretched viewport) times the reader's factor")
+	viewport.size = Vector2i(720, 720)
+	await get_tree().process_frame
+	assert_almost_eq(viewport.oversampling_override, viewer._card.scale.x, 0.001,
+		"a resize while open refits the sharpening with the card")
+	viewer.dismiss()
+	assert_eq(viewport.oversampling_override, 0.0, "automatic again")
+	viewport.size = Vector2i(1280, 800)
+	await get_tree().process_frame
+	assert_eq(viewport.oversampling_override, 0.0, "a resize while closed sets nothing")
+
+
 func test_touch_emulation_is_not_double_consumed() -> void:
 	TouchControls.set_active(true)
 	assert_true(viewer.open_card())

@@ -83,7 +83,11 @@ or their own named project; changing XDG alone does not protect player data.
   (`game/lifecycle.gd`) now drops it first. The rule that follows: NO
   `static var` may hold a `CardData`/`CardInstance` (a second such cache,
   `DeckFilter._facts`, aborted every run that had opened the Deck Builder
-  until 2026-09-02) — key caches by name or instance id instead.
+  until 2026-09-02) — key caches by name or instance id instead. Since
+  2026-09-30 the same hook first settles the title's background screen
+  loads (`ScreenWarmup`): a threaded load never taken is the exit-time
+  leak line, and the card pool itself builds on a thread the first ask
+  joins (`CardRegistry.ensure_loaded` waits for a build in flight).
   Both this script and the soak run with `XDG_DATA_HOME` pointed at
   `$TMPDIR/shandalar-test-data` (override: `SHANDALAR_TEST_DATA_HOME`), so
   `user://` is NOT the player's real profile — which it was until

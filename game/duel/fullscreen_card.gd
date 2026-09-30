@@ -3,6 +3,19 @@ extends CanvasLayer
 ## [QoL] Read-only, click-to-enlarge for a screen's main CardPreview.
 ## Uses the same renderer and chosen printing, without resizing the sidebar.
 ## Only the already-visible card is read; never a library or hidden hand.
+##
+## AND ITS TEXT IS SHARP (2026-09-30, "some say the text is a bit
+## blurred"). The reader is the sidebar's 300-px [CardPreview] under a
+## node `scale` of two to three — the one way to keep the two layouts
+## identical — and Godot's automatic font oversampling follows the
+## WINDOW's stretch, not a node's scale: the rules text was rasterised
+## at 13 px and stretched. Measured under Xvfb on a 13 px label at ×3:
+## 21% of its pixels were intermediate edge shades; the same label set
+## at 39 px, 5%. So while the reader is open the viewport's
+## `oversampling_override` is the automatic value times the reader's
+## factor (6% — as crisp as native), and 0 (automatic) again the moment
+## it closes. Nothing else changes: the frame and the art are bitmaps
+## either way, the layout is the sidebar's to the pixel.
 
 signal closed
 
@@ -15,6 +28,7 @@ var _shade: ColorRect
 var _card: CardPreview
 var _hint: Label
 var _previous_focus: WeakRef
+var _sharpening := false
 
 
 func _init() -> void:
@@ -71,8 +85,8 @@ func open_card() -> bool:
 	var focus := get_viewport().gui_get_focus_owner()
 	_previous_focus = weakref(focus) if focus != null else null
 	_card.show_card(_source._shown, _source._shown_printing_set)
-	_fit()
 	_shade.show()
+	_fit()
 	_shade.grab_focus()
 	set_process_input(true)
 	return true
@@ -87,6 +101,7 @@ func dismiss() -> void:
 	var live := _shade.is_inside_tree()
 	_shade.hide()
 	if live: _shade.release_focus()
+	if live: get_viewport().oversampling_override = 0.0
 	set_process_input(false)
 	# Do not retain a formerly visible hand card behind a closed overlay.
 	_card.show_back()
@@ -125,10 +140,30 @@ func _fit() -> void:
 	var available := (area - Vector2(MARGIN * 2, MARGIN * 2 + HINT_HEIGHT)).max(Vector2.ONE)
 	var factor := minf(available.x / CardPreview.SIZE.x, available.y / CardPreview.SIZE.y)
 	_card.scale = Vector2.ONE * factor
+	if is_open():
+		_sharpen(factor)
 	_card.position = Vector2((area.x - CardPreview.SIZE.x * factor) * 0.5,
 		MARGIN + (available.y - CardPreview.SIZE.y * factor) * 0.5)
 	_hint.position = Vector2(MARGIN, area.y - MARGIN - HINT_HEIGHT)
 	_hint.size = Vector2(maxf(1.0, area.x - MARGIN * 2), HINT_HEIGHT)
+
+
+## Fonts rasterised for the reader's scale, not the window's (see the
+## top of the file): the automatic value is read with the override off,
+## then multiplied. A resize while open comes back through [method _fit];
+## so does EACH CHANGE OF THE OVERRIDE — the viewport says `size_changed`
+## for it, which is what the flag is for (the first run without it was a
+## stack overflow).
+func _sharpen(factor: float) -> void:
+	var viewport := get_viewport()
+	if viewport == null or _sharpening:
+		return
+	_sharpening = true
+	viewport.oversampling_override = 0.0
+	var wanted := viewport.get_oversampling() * factor
+	if not is_equal_approx(viewport.oversampling_override, wanted):
+		viewport.oversampling_override = wanted
+	_sharpening = false
 
 
 func _input(event: InputEvent) -> void:

@@ -311,7 +311,12 @@ android: first InputEventMouseButton: device -1 (mouse emulated from a touch), b
 
 `missing` and `NOT LISTABLE` on a folder line name the cure; `sealed`
 after a pack is a start that did not read its pictures, `hashed` one
-that did, and the milliseconds are what it cost. The `first <event
+that did, and the milliseconds are what it cost. `card pool: N cards
+in M ms (background)` (0.40.53) is the thread that compiled every card
+script while the title stood — the title no longer waits for it, nor
+for the SGManalink scripts its own script used to pull in; the 0.40.52
+report's 9,071 ms to the tree were 3.2 s of engine boot, 1.2 s of
+folders and seals and 4.6 s of those two compiles. The `first <event
 class>` lines say, once per class, how the headset's laser reaches the
 game — a touch, a mouse, a pad — which is what the pointer work turns
 on; they stop after ten classes. (On the Quest 3 the laser's click is a

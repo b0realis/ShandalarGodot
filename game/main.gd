@@ -98,7 +98,13 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_5_FLAG):
 		_verify_exported_pack_5()
 		return
-	CardRegistry.ensure_loaded()
+	# NO `CardRegistry.ensure_loaded()` HERE ANY MORE (2026-09-30). It
+	# stood on this line for a year and cost the Meta Quest 4.6 of its
+	# 9.1 seconds to the title: nothing on this screen reads a card. The
+	# pool builds on a thread the `CardPacks` autoload started, the
+	# version corner says so until it is done ([method _refresh_version],
+	# [method _process]), and the first screen that asks for a card waits
+	# for the thread.
 	var title_bg := GameSkin.texture("title_background")
 	if title_bg != null:
 		var bg := TextureRect.new()
@@ -350,6 +356,24 @@ func _ready() -> void:
 	# with a bed of their own stop it when they start theirs, so this
 	# screen has nothing to do on the way out.
 	ShellMusic.play()
+	_warm_screens()
+
+
+## THE SCREENS THE BUTTONS OPEN COMPILE IN THE BACKGROUND TOO (2026-09-30):
+## once the menu stands, the title hands the engine's loader threads the
+## three that cost a dead click cold — the setup screen, the deck builder
+## and the SGManalink lobby. [ScreenWarmup] says why and what it costs;
+## nothing here waits for them, and a click that comes first joins the
+## load in flight.
+const WARM_SCREENS: Array[String] = [
+	"res://game/setup_screen.tscn",
+	"res://game/deck_builder/deck_builder_screen.tscn",
+	"res://game/sgmanalink/lobby.gd",
+]
+
+
+func _warm_screens() -> void:
+	ScreenWarmup.request(WARM_SCREENS)
 
 
 ## The fetch line follows the pack's own flag, not the signal alone: a
@@ -364,11 +388,26 @@ func _refresh_version() -> void:
 		return
 	var version := String(ProjectSettings.get_setting(
 		"application/config/version", "dev"))
+	# The pool is still compiling on its thread: say so, and ask again
+	# each frame until it is done — a count here would WAIT for it, which
+	# is the wait this screen no longer pays.
+	if CardRegistry.is_loading():
+		_version_label.text = "v%s · loading cards…" % version
+		set_process(true)
+		return
+	set_process(false)
 	if CardRegistry.optional_pack_enabled() or not CardRegistry.extra_set_order().is_empty():
 		_version_label.text = "v%s · %s set entries · %s unique cards" % [version,
 			_grouped(CardRegistry.named_set_entry_count()), _grouped(CardRegistry.size())]
 	else:
 		_version_label.text = "v%s · %d cards" % [version, CardRegistry.size()]
+
+
+## Only while the version corner waits for the pool ([method
+## _refresh_version]): the count fills in the frame the thread is done.
+func _process(_delta: float) -> void:
+	if CardRegistry.poll():
+		_refresh_version()
 
 
 static func _grouped(value: int) -> String:
@@ -440,10 +479,16 @@ func _request_disable_pack(id: String) -> void:
 
 
 ## Opening the lobby does not start a listener or connect automatically.
+## The lobby script is loaded by path, not named: naming SgLobby here
+## pulled the whole SGManalink script cluster (protocol, tournament,
+## store — a cycle the compiler resolves in one go) into this screen's
+## compile, before the title could show: this script loaded in 1,184 ms
+## on the desk (2026-09-30) and in 181 ms without the name. [ScreenWarmup]
+## compiles the lobby in the background instead, for the click.
 func _open_manalink_notice() -> void:
 	if is_instance_valid(_manalink_notice):
 		return
-	_manalink_notice = SgLobby.new()
+	_manalink_notice = load("res://game/sgmanalink/lobby.gd").new()
 	add_child(_manalink_notice)
 
 

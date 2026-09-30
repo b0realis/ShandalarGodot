@@ -53,6 +53,10 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	# The title's background screen loads first ([ScreenWarmup]): a loader
+	# thread must not be compiling while static state tears down, and a
+	# threaded load never taken is a leaked token the gate reads as red.
+	ScreenWarmup.settle()
 	CardRegistry.unload()
 
 

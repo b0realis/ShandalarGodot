@@ -360,6 +360,36 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The title before the pool (2026-09-30)
+
+- `engine/card_registry.gd`: `load_in_background()`, `is_loading()`,
+  `poll()`, `pool_report()`, `_load_in_thread()`, `_settle()`,
+  `_load_all(how)`; statics `_thread`, `_mutex`, `_loader_id`,
+  `_report`; `ensure_loaded()` waits for a build in flight on another
+  thread (loop settle → lock → build or return); `unload()` and the
+  `configure_*` calls settle first; `_ensure_printings` waits for
+  another thread's build. The class doc's "SINCE 2026-09-30" paragraph
+  carries the contract.
+- `game/card_packs.gd`: `_ready()` starts the background build after
+  `discover()` and `_configure_registry()`.
+- `game/main.gd`: no `ensure_loaded()` before the title; `_refresh_version`
+  says `loading cards…` and polls (`_process`) until the count can be
+  read; `_open_manalink_notice` loads the lobby by path (the SGManalink
+  cluster out of this script's compile); `WARM_SCREENS` /
+  `_warm_screens()` → `ScreenWarmup.request`.
+- `game/screen_warmup.gd` (new): `ScreenWarmup.request(paths)` /
+  `pending()` / `settle()` over `ResourceLoader.load_threaded_request`.
+  `game/lifecycle.gd`: `_exit_tree` settles it before `CardRegistry.unload()`.
+- `game/android_corner.gd`: the tracer notes `CardRegistry.pool_report()`
+  once the thread is done (`_process` until then).
+- `game/duel/fullscreen_card.gd`: `_sharpen(factor)` — the viewport's
+  `oversampling_override` = automatic × the card's scale while open,
+  `_sharpening` re-entrancy guard; `dismiss()` restores 0.0.
+- `tests/unit/test_card_registry_background_2026_09_30.gd` (8 tests);
+  `tests/unit/test_android_corner_2026_09_29.gd` (+1);
+  `tests/ui/test_fullscreen_card.gd` (+1). `docs/handhelds.md`: the
+  start report's `card pool:` line.
+
 ## The breath a body wears (2026-09-30)
 
 - `engine/ai/effect_intent.gd`: `pump_host` (an aura's `pump_host`
@@ -840,6 +870,12 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.53.md`: the title before the pool — the card
+  pool compiled on a thread while the title stands, the title's script
+  no longer naming the SGManalink cluster, the three heavy screens
+  warmed by the loader threads, the fullscreen reader's fonts sharp
+  (oversampling follows the card's scale); pack discovery measured and
+  left alone.
 - `docs/releases/0.40.52.md`: the breath a body wears — a second
   Firebreathing no longer read as a quantity (the uncapped line taken
   out of the text before the detector reads it), the worn pump aura

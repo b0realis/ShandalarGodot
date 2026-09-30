@@ -226,20 +226,26 @@ func test_the_start_lines() -> void:
 
 
 ## What the tracer notes after its own two lines: the skin's and the
-## card packs' lines, as the autoloads hold them at this moment.
+## card packs' lines, as the autoloads hold them at this moment — and
+## the card pool's, when its build is done by then.
 func _autoload_notes() -> Array[String]:
 	var out: Array[String] = []
 	if SkinPack.mounted.is_empty():
 		out.append("skin pack: nothing mounted")
 	out.append_array(SkinPack.report_lines)
 	out.append_array(CardPacks.report_lines)
+	if not CardRegistry.pool_report().is_empty():
+		out.append(CardRegistry.pool_report())
 	return out
 
 
 func test_the_tracer_says_the_start_then_each_class_once() -> void:
+	CardRegistry.ensure_loaded()
 	var tracer := AndroidCorner.new()
 	add_child_autofree(tracer)
 	var notes := _autoload_notes()
+	assert_true(notes.back().begins_with("card pool: "), "the pool's line is the last note at ready")
+	assert_false(tracer.is_processing(), "nothing left to wait for")
 	var head := 2 + notes.size()
 	assert_eq(tracer.traced.size(), head)
 	assert_true(tracer.traced[0].begins_with("android: tree ready after "), tracer.traced[0])
@@ -266,6 +272,32 @@ func test_the_tracer_says_the_start_then_each_class_once() -> void:
 	for cls in classes:
 		tracer._input(cls.new())
 	assert_eq(tracer.traced.size(), head + AndroidCorner.TRACED_CLASSES)
+
+
+## The pool builds on a thread while the tracer comes up (2026-09-30):
+## its line is noted the frame the thread is done — noted, not said,
+## since the loader printed it with the log's own timestamp.
+func test_the_tracer_notes_the_pool_when_its_thread_is_done() -> void:
+	CardRegistry.unload()
+	assert_true(CardRegistry.load_in_background())
+	var tracer := AndroidCorner.new()
+	add_child_autofree(tracer)
+	var head := tracer.traced.size()
+	if CardRegistry.is_loading():
+		assert_true(tracer.is_processing(), "waiting for the thread")
+		for line in tracer.traced:
+			assert_false(line.begins_with("card pool: "), line)
+	var started := Time.get_ticks_msec()
+	while tracer.is_processing() and Time.get_ticks_msec() - started < 30000:
+		await get_tree().process_frame
+	assert_false(tracer.is_processing(), "the thread finished within the limit")
+	var pool_lines := tracer.traced.filter(func(line: String) -> bool:
+		return line.begins_with("card pool: "))
+	assert_eq(pool_lines.size(), 1, "one line, once")
+	assert_lte(tracer.traced.size(), head + 1)
+	assert_true(tracer.traced.back().begins_with("card pool: "), tracer.traced.back())
+	assert_true(tracer.traced.back().ends_with(" (background)"), tracer.traced.back())
+	assert_eq(CardRegistry.size(), CardRegistry._cards.size())
 
 
 func test_the_report_file_follows_every_line() -> void:
