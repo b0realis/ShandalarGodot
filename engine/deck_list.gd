@@ -61,16 +61,26 @@ const REQUIRED_PACK_PREFIX := "# requires-pack:"
 ## handles historic decks full of not-yet-implemented cards, and the Deck
 ## Builder's IMPORT reads those same names as [member proxies].
 static func load_file(path: String, strict := true) -> DeckList:
-	var deck := DeckList.new()
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
+		var deck := DeckList.new()
 		deck.errors.append("cannot open '%s'" % path)
 		return deck
+	return from_text(file.get_as_text(), path, strict)
+
+
+## [method load_file] for text already in hand: the format is still the
+## file's, read off [param path]'s extension, and the name falls back to
+## its stem. For a caller that has the file open for another reason — the
+## battle setup screen reads each deck once for its heading AND its cards
+## (2026-10-01) — so one read serves both.
+static func from_text(text: String, path: String, strict := true) -> DeckList:
+	var deck := DeckList.new()
 	var base := path.get_file().get_basename()
 	if path.get_extension().to_lower() == "dck":
-		deck.parse_dck(file.get_as_text(), base, strict)
+		deck.parse_dck(text, base, strict)
 	else:
-		deck.parse(file.get_as_text(), base, strict, path.get_extension().to_lower() == "txt")
+		deck.parse(text, base, strict, path.get_extension().to_lower() == "txt")
 	return deck
 
 

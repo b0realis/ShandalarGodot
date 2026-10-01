@@ -119,7 +119,16 @@ const PREFIX := "# group:"
 static func of(path: String) -> String:
 	if DeckStore.is_user_deck(path):
 		return USER
-	var declared := declared_in(read_text(path))
+	return of_text(path, read_text(path))
+
+
+## [method of] for a file whose text is already in hand — the same
+## answer, without the read. The path still decides [constant USER]
+## (class doc: derived, never declared), the text the rest.
+static func of_text(path: String, text: String) -> String:
+	if DeckStore.is_user_deck(path):
+		return USER
+	var declared := declared_in(text)
 	return declared if declared != "" else STARTER
 
 
@@ -172,10 +181,15 @@ static func raw_in(text: String) -> String:
 ## group heading -> its deck paths, in the given order, listing ONLY the
 ## groups that actually have decks. An empty heading over an empty list is
 ## the one thing a grouped picker must not show.
-static func grouped(paths: Array[String]) -> Dictionary:
+##
+## [param known] is path -> group for the paths the caller has already
+## answered ([method of_text]); those are not read again. The battle
+## setup screen hands it every deck it just parsed, and the 1997 decks
+## are read once for the whole screen rather than once per list.
+static func grouped(paths: Array[String], known: Dictionary = {}) -> Dictionary:
 	var out := {}
 	for path in paths:
-		var group := of(path)
+		var group: String = String(known[path]) if known.has(path) else of(path)
 		if not out.has(group):
 			out[group] = [] as Array[String]
 		out[group].append(path)

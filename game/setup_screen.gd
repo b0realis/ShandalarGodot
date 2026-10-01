@@ -113,6 +113,18 @@ var _pack_paths: Dictionary = {}
 ## than `Kzzy N The Dragon Lord`. A file with no title is labelled by its
 ## file name, as before.
 var _deck_titles: Dictionary = {}
+## THE TWO LISTS GROUPED UNDER THEIR HEADINGS ([method DeckGroups.grouped]),
+## worked out ONCE in [method _scan_decks] and walked by both pickers.
+## [method DeckGroups.of] opens the deck file to read its `# group:`
+## line, and the picker used to ask it per heading: for every heading,
+## every playable deck, for each of two seats — some seven thousand
+## reads of three hundred files, 230 of the 400 ms between the press on
+## Magic Battle and the screen on the desk (2026-10-01, "a bit
+## sluggish"), and the better part of a second on a handheld, where a
+## read out of the package is dearer. Grouped here from the one read
+## [method _scan_decks] makes of each file, and the seats share the answer.
+var _grouped_paths: Dictionary = {}
+var _grouped_playable: Dictionary = {}
 ## `Go!` has been pressed and the duel built. `queue_free()` defers, so a
 ## second press in the same frame (a double-click, a held Return) used to
 ## build a second duel under `root` and orphan the first, still running
@@ -308,14 +320,32 @@ func _pack_label(id: String) -> String:
 ##    thing they need is the NAMES of the cards to replace.
 ##
 ## A file that will not parse at all is in neither list, as before.
+##
+## ONE READ PER DECK, ONE PARSE, A SECOND PARSE ONLY WHERE IT DIFFERS
+## (2026-10-01, "a bit sluggish"). The file is read once and serves its
+## cards ([method DeckList.from_text]) and its heading ([method
+## DeckGroups.of_text]) both; it used to be opened for the strict load,
+## for the lenient load, and for its heading again and again. A strict
+## and a lenient parse walk the same lines and part only at a name the
+## registry does not know — strict records an error and drops the card,
+## lenient keeps it and notes a proxy — so a deck whose lenient parse
+## noted NO proxy would parse identically under strict, and the lenient
+## result stands in for both; only a deck with a proxy is parsed twice.
 func _scan_decks() -> void:
+	# The pool is in before the first parse, as the strict load that
+	# used to come first saw to; the lenient parse asks the registry too.
+	CardRegistry.ensure_loaded()
+	var groups := {}
 	for path in DeckStore.all_deck_paths():
-		var deck := DeckList.load_file(path, true)
+		var text := DeckStore.read_text(path)
+		groups[path] = DeckGroups.of_text(path, text)
 		# THE DECLARED PACK COMES FIRST. With its pack off such a deck may
 		# still load strictly (the pack only reprints its cards) or only
 		# leniently (the pack is where its cards live); either way the
 		# remedy is the pack, so the row says so and nothing else.
-		var lenient := DeckList.load_file(path, false)
+		var lenient := DeckList.from_text(text, path, false)
+		var deck := lenient if lenient.proxies.is_empty() \
+			else DeckList.from_text(text, path, true)
 		# [QoL] THE PIPS ARE THE LENIENT LOAD'S: a card that is not in the
 		# registry has no colour to count either way, so the three rows
 		# below agree, and a deck listed for its proxies still shows the
@@ -340,6 +370,8 @@ func _scan_decks() -> void:
 			_deck_titles[path] = lenient.deck_name
 	_deck_paths.sort()
 	_playable_paths.sort()
+	_grouped_paths = DeckGroups.grouped(_deck_paths, groups)
+	_grouped_playable = DeckGroups.grouped(_playable_paths, groups)
 
 
 func _build_ui() -> void:
@@ -1016,7 +1048,7 @@ func _fill_deck_options(option: OptionButton) -> void:
 	# heading, and headings with no decks are simply absent. `<random
 	# deck>` stays ABOVE every heading, because it is not a deck and
 	# belongs to no group — it is the choice not to choose.
-	var by_group := DeckGroups.grouped(_deck_paths)
+	var by_group := _grouped_paths
 	for group in by_group:
 		option.add_separator(group)
 		# ONE POOLED RANDOM PER HEADING — but only where it is a real
@@ -1025,7 +1057,7 @@ func _fill_deck_options(option: OptionButton) -> void:
 		# draw at all, and `_deck_path_for` would fall back to the whole
 		# pool, quietly handing the player the opposite of what the row
 		# promised. Two is the smallest number that makes the row honest.
-		var drawable := paths_in_group(_playable_paths, String(group))
+		var drawable: Array = _grouped_playable.get(group, [])
 		if drawable.size() >= 2:
 			option.add_item("<random from %s>" % group)
 			option.set_item_metadata(option.item_count - 1,

@@ -360,6 +360,29 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The press that read every deck a dozen times (2026-10-01)
+
+- `game/setup_screen.gd`: `_scan_decks` reads each deck file ONCE
+  (`DeckStore.read_text`) and parses it once — `DeckList.from_text`
+  lenient, strict again only when the lenient parse noted a proxy —
+  and files it under its heading from the same text
+  (`DeckGroups.of_text`); the two groupings both pickers walk,
+  `_grouped_paths` and `_grouped_playable`, are built there with
+  `DeckGroups.grouped(paths, known)`. `_fill_deck_options` looks a
+  heading's playable decks up in `_grouped_playable` instead of
+  scanning every playable deck per heading (`paths_in_group`, which
+  read every file, stays for the pooled draw on `Go!`). 6,216 file
+  reads on a press became 330; 402 ms to the first frame became 148.
+- `engine/deck_list.gd`: `from_text(text, path, strict)` — the parse
+  half of `load_file`, which is now the read and a call to it.
+- `game/deck_groups.gd`: `of_text(path, text)` — `of` without the read
+  (`of` reads and calls it); `grouped(paths, known := {})` takes
+  path → group answers the caller already has.
+- `game/deck_builder/deck_store.gd`: `static var reads`, counted in
+  `read_text` — for the test that tells one read per deck from twenty.
+- `tests/ui/test_setup_screen.gd`: the read count and the one-parse
+  rule.
+
 ## Sixteen faces of our own (2026-10-01)
 
 - `game/art/portraits/*.png`: the sixteen portraits the game ships —
@@ -922,6 +945,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.57.md`: the press that read every deck a dozen
+  times — the Magic Battle setup screen reads each deck file once and
+  parses it once where it used to open three hundred files some six
+  thousand times per press; 402 ms to the first frame on the desk
+  became 148.
 - `docs/releases/0.40.56.md`: sixteen faces of our own — the owner's
   sixteen portraits in `game/art/portraits/`, the chooser's fourth
   (last) place, read through the import pipeline because an exported

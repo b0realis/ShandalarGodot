@@ -120,8 +120,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([Sixteen faces of our own](docs/ROADMAP.md#2026-10-01--sixteen-faces-of-our-own-04056)):
-**8,260 GUT tests / 369,180 assertions**, plus **415 Python tests**
+Most recent full-suite verification ([The press that read every deck a dozen times](docs/ROADMAP.md#2026-10-01--the-press-that-read-every-deck-a-dozen-times-04057)):
+**8,262 GUT tests / 370,341 assertions**, plus **415 Python tests**
 (the MCP server's five live tests play inside the GUT gate and are
 skipped outside it). The same gate runs on GitHub Actions for
 every push and pull request.

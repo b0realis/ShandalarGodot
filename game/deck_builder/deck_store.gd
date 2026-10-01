@@ -590,12 +590,22 @@ static func looks_like_dck(text: String) -> bool:
 ## ONE read of the file for both: [method load_deck] used to open the file
 ## a second time just for the notes.
 static func read_text(path: String) -> String:
+	reads += 1
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return ""
 	var text := file.get_as_text()
 	file.close()
 	return text
+
+
+## HOW MANY TIMES [method read_text] HAS OPENED A FILE this process — a
+## counter and nothing more, for the test that holds the battle setup
+## screen to one read per deck (`tests/ui/test_setup_screen.gd`): the
+## picker once read every deck's heading once per heading per seat, and
+## nothing but a count can tell that apart from a screen that reads each
+## file once, because both show the same rows.
+static var reads := 0
 
 
 # --------------------------------------------------------- [QoL] export --

@@ -18749,6 +18749,68 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-01 — The press that read every deck a dozen times (0.40.57)
+
+*"Just click on magic battle in main menu seems a bit sluggish? (There
+is some delay between click and the magic battle gui…)"* — the owner,
+on the 0.40.56 build. Measured on the desk under Xvfb with the seven
+packs on: 402 ms from the press to the screen's first frame, 367 of
+them in the setup screen's `_ready`, 283 of those in `_build_ui`, 234
+of those in the two deck pickers — and of each picker's 117 ms, 105
+in `paths_in_group`.
+
+### What it was
+
+`DeckGroups.of(path)` opens the deck file to read its `# group:` line.
+The picker asked it, for every heading, for every playable deck, and
+built two pickers: eleven headings × 218 playable decks × two seats,
+plus the grouping itself and the two parses of each of the 330 files
+in `_scan_decks` — 6,216 reads of three hundred small files
+(`DeckStore.reads`, the new counter, under the old code) on every
+press. On the desk that is 230 ms out of a page cache; on a handheld,
+where a `res://` read comes out of the package, it is the better part
+of a second. The rows looked right the whole time, which is why no
+test saw it: a screen that reads each file once and one that reads it
+twenty times show the same list.
+
+### What it is now
+
+- **One read per deck.** `_scan_decks` reads each file once
+  (`DeckStore.read_text`) and hands the text to both readers:
+  `DeckList.from_text` for the cards — `load_file` is now the read and
+  that — and `DeckGroups.of_text` for the heading, which `of` itself
+  calls after its read. The groupings both pickers walk
+  (`_grouped_paths`, `_grouped_playable`) are built there, once, with
+  `DeckGroups.grouped(paths, known)` taking the answers it already has
+  instead of reading again; `_fill_deck_options` looks a heading's
+  playable decks up instead of scanning the list per heading.
+  `paths_in_group` stays for the pooled draw on `Go!`, which asks for
+  one group once.
+- **One parse per deck, two only where they differ.** A strict and a
+  lenient parse walk the same lines and part only at a name the
+  registry does not know (strict: an error, card dropped; lenient: the
+  card kept, a proxy noted), so a deck whose lenient parse noted no
+  proxy would parse identically under strict and the one result stands
+  for both. The 112 of 330 that hold a proxy or need a pack are parsed
+  twice as before. `CardRegistry.ensure_loaded()` is called once at the
+  top, as the strict load that used to come first saw to.
+- **Measured after:** 148 ms press to first frame (118 in `_ready`:
+  ~45 parsing, ~50 building the widgets, 30 the first draw); the second
+  open 107. 330 reads where there were 6,216.
+
+### What holds it
+
+`tests/ui/test_setup_screen.gd`: the read count — `DeckStore.reads`
+before and after a fresh screen is at most one per deck file (bites at
+6,216 under the old picker), the stored groupings equal the reader's
+own, a heading per group with a deck under it; and the one-parse rule —
+every playable deck's strict load is clean and agrees with its lenient
+load card for card, every listed-but-unplayable deck without a pack
+line holds proxies and the screen's proxy list is the lenient parse's.
+
+Gate: 548 scripts, **8,262/8,262 tests, 370,341 asserts**, exit 0 in
+269 s over 6 shards; Python 415, exit 0 (5 skipped).
+
 ## 2026-10-01 — Sixteen faces of our own (0.40.56)
 
 *"Ok i would like to supply a couple of new portraits with our

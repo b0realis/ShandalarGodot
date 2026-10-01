@@ -523,6 +523,58 @@ func test_headings_appear_in_the_declared_order() -> void:
 	assert_eq(seen, sorted_copy, "1997 first, the player's own last")
 
 
+## THE HEADINGS ARE READ ONCE PER DECK (2026-10-01, "a bit sluggish"):
+## `DeckGroups.of` opens the file for its `# group:` line, and the picker
+## used to ask it for every playable deck under every heading, for both
+## seats — thousands of reads of three hundred files on each press of
+## Magic Battle. The rows look the same either way, so only the count
+## can tell the two apart: one read per deck file, for its cards and its
+## heading both, and nothing per heading, per list or per seat.
+func test_the_pickers_read_each_deck_s_heading_once_not_once_per_heading() -> void:
+	var before := DeckStore.reads
+	var fresh: SetupScreen = load("res://game/setup_screen.tscn").instantiate()
+	add_child_autofree(fresh)
+	var reads := DeckStore.reads - before
+	var files := DeckStore.all_deck_paths().size()
+	assert_gt(fresh._deck_paths.size(), 0, "the screen lists decks")
+	assert_true(reads <= files,
+		"%d reads for %d deck files: each is read once, not once per heading per seat"
+		% [reads, files])
+	# The one grouping both pickers walk is the reader's own grouping.
+	assert_eq(fresh._grouped_paths, DeckGroups.grouped(fresh._deck_paths))
+	assert_eq(fresh._grouped_playable, DeckGroups.grouped(fresh._playable_paths))
+	for picker in fresh._deck_options:
+		var headings := 0
+		for i in picker.item_count:
+			if picker.is_item_separator(i):
+				headings += 1
+		assert_eq(headings, fresh._grouped_paths.size(),
+			"a heading per group with a deck under it")
+
+
+## ONE PARSE PER DECK (2026-10-01): a deck whose lenient load notes no
+## proxy parses identically under strict, so the screen parses it once.
+## What the screen concludes about each deck must not change: the
+## playable list is the strict-clean list, and a deck with a card the
+## registry does not know is still listed with its proxies and kept out
+## of `<random deck>`.
+func test_one_parse_per_deck_reaches_the_same_lists_as_two_did() -> void:
+	for path in screen._deck_paths:
+		var strict := DeckList.load_file(path, true)
+		var lenient := DeckList.load_file(path, false)
+		if screen._pack_paths.has(path):
+			continue
+		if screen._playable_paths.has(path):
+			assert_true(strict.errors.is_empty(),
+				"%s is playable only because its strict load is clean" % path.get_file())
+			assert_eq(strict.cards, lenient.cards,
+				"and with no proxy the two loads agree on every card")
+		else:
+			assert_false(lenient.proxies.is_empty(),
+				"%s is listed but not playable, so it holds proxies" % path.get_file())
+			assert_eq(screen._proxy_paths.get(path), lenient.proxies)
+
+
 func test_the_shipped_decks_declare_their_group() -> void:
 	for path in DeckStore.deck_paths_in(DeckStore.SHIPPED_DIR):
 		assert_eq(DeckGroups.of(path), DeckGroups.STARTER,
