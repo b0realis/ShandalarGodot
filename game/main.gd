@@ -62,6 +62,11 @@ const VERIFY_PACK_5_FLAG := "--verify-pack-5"
 ## The corner line that reports a skin zip on its way (web builds).
 var _fetching: Label
 var _manalink_notice: Control
+## The screen a press is waiting to open until the pool is in, the
+## button that was pressed and the label it will get back ([method _open]).
+var _pending_open := ""
+var _waiting_button: Button = null
+var _waiting_text := ""
 var _pack_notice: Control
 var _pack_warning: Control
 var _version_label: Label
@@ -153,7 +158,7 @@ func _ready() -> void:
 	add_child(box)
 
 	var battle := _menu_button("Magic Battle")
-	battle.pressed.connect(_open.bind("res://game/setup_screen.tscn"))
+	battle.pressed.connect(_open.bind("res://game/setup_screen.tscn", battle))
 	box.add_child(battle)
 
 	# THE GAUNTLET — the fourth 1997 duel mode, and until now the only one
@@ -167,7 +172,7 @@ func _ready() -> void:
 	var gauntlet := _menu_button("Gauntlet")
 	gauntlet.tooltip_text = "Defeat as many opponents in a row as possible."
 	gauntlet.pressed.connect(
-		_open.bind("res://game/duel/gauntlet_screen.tscn"))
+		_open.bind("res://game/duel/gauntlet_screen.tscn", gauntlet))
 	box.add_child(gauntlet)
 
 	# THE TWO THAT ARE NOT BUILT YET, in the order the 1997 shell would
@@ -202,7 +207,7 @@ func _ready() -> void:
 	var deck_builder := _menu_button("Deck Builder")
 	deck_builder.tooltip_text = "Build or Modify decks."
 	deck_builder.pressed.connect(
-		_open.bind("res://game/deck_builder/deck_builder_screen.tscn"))
+		_open.bind("res://game/deck_builder/deck_builder_screen.tscn", deck_builder))
 	box.add_child(deck_builder)
 
 	var options := _menu_button("Options")
@@ -404,10 +409,20 @@ func _refresh_version() -> void:
 
 
 ## Only while the version corner waits for the pool ([method
-## _refresh_version]): the count fills in the frame the thread is done.
+## _refresh_version]) or a press does ([method _open]): the count fills
+## in the frame the thread is done, and the held screen opens. A pool
+## that was dropped meanwhile (a pack rescan under the wait) is neither
+## loading nor loaded: the press goes through and the screen builds it
+## in the foreground, as a toggle always has.
 func _process(_delta: float) -> void:
-	if CardRegistry.poll():
-		_refresh_version()
+	if not CardRegistry.poll() and CardRegistry.is_loading():
+		return
+	_refresh_version()
+	if _pending_open.is_empty():
+		return
+	var path := _pending_open
+	_let_go()
+	get_tree().change_scene_to_file(path)
 
 
 static func _grouped(value: int) -> String:
@@ -775,5 +790,47 @@ static func _corner_label(label: Label, size: int) -> void:
 	label.add_theme_constant_override("shadow_offset_y", 1)
 
 
-func _open(scene_path: String) -> void:
+## THE PRESS THAT COMES BEFORE THE POOL IS IN WAITS HERE, NOT IN THE
+## NEXT SCREEN'S `_ready` (2026-10-01). With the pool on its thread the
+## title stands seconds before the cards do — 0.8 s against ~4 s on the
+## desk under Xvfb, longer on a handheld — and a press on Magic Battle
+## inside that gap used to reach `CardRegistry.ensure_loaded()` from the
+## setup screen's `_ready`, which joins the thread: the title froze on
+## the press for the rest of the build, the dead click moved rather
+## than removed. So the three screens that read a card ([constant
+## POOL_SCREENS]) are opened from [method _process] the frame the pool
+## is in; until then the pressed button says so in place of its label
+## (the version corner already does), and a second card screen pressed
+## meanwhile takes the wait over. Options and Help read no card and open
+## at once; Exit quits at once. [param button] is the one to hold.
+const POOL_SCREENS: Array[String] = [
+	"res://game/setup_screen.tscn",
+	"res://game/duel/gauntlet_screen.tscn",
+	"res://game/deck_builder/deck_builder_screen.tscn",
+]
+const WAITING_TEXT := "Loading cards…"
+
+
+func _open(scene_path: String, button: Button = null) -> void:
+	if scene_path in POOL_SCREENS and CardRegistry.is_loading():
+		_hold(scene_path, button)
+		return
 	get_tree().change_scene_to_file(scene_path)
+
+
+func _hold(scene_path: String, button: Button) -> void:
+	_let_go()
+	_pending_open = scene_path
+	if button != null:
+		_waiting_button = button
+		_waiting_text = button.text
+		button.text = WAITING_TEXT
+	set_process(true)
+
+
+func _let_go() -> void:
+	if is_instance_valid(_waiting_button):
+		_waiting_button.text = _waiting_text
+	_waiting_button = null
+	_waiting_text = ""
+	_pending_open = ""

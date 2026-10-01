@@ -26,6 +26,11 @@ extends GutTest
 ##      buttons open ([ScreenWarmup]), beside the pool thread; every
 ##      request is taken once, and a settled warm-up leaves nothing
 ##      pending — the process-end hook relies on that.
+##   7. A press on a screen that reads a card, made while the thread
+##      runs, holds the button ("Loading cards…") instead of freezing
+##      the title in that screen's `_ready`, and opens it the frame the
+##      pool is in; a second such press takes the wait over; a screen
+##      that reads no card opens at once.
 
 var _expected := 0
 
@@ -188,3 +193,73 @@ func test_the_warm_up_runs_beside_the_pool_thread() -> void:
 	for path in MainScreen.WARM_SCREENS:
 		assert_not_null(load(path), path)
 	assert_not_null(CardRegistry.get_card("Grizzly Bears"))
+
+
+func _menu_entry(title: Control, text: String) -> Button:
+	for child in title.find_child("MenuColumn", true, false).get_children():
+		if child is Button and child.text == text:
+			return child
+	return null
+
+
+func test_a_press_before_the_pool_holds_the_button_then_opens() -> void:
+	assert_null(get_tree().current_scene, "the runner has no current scene to replace")
+	CardRegistry.unload()
+	assert_true(CardRegistry.load_in_background())
+	var title: Control = load("res://game/main.tscn").instantiate()
+	add_child_autofree(title)
+	var builder := _menu_entry(title, "Deck Builder")
+	var battle := _menu_entry(title, "Magic Battle")
+	assert_not_null(builder)
+	assert_not_null(battle)
+	if not CardRegistry.is_loading():
+		# A machine that built the pool before the title stood has
+		# nothing to hold: the press opens at once, as before.
+		assert_eq(title._pending_open, "")
+		return
+	var pressed_at := Time.get_ticks_msec()
+	builder.pressed.emit()
+	assert_lt(Time.get_ticks_msec() - pressed_at, 100, "the press did not wait for the thread")
+	assert_eq(title._pending_open, "res://game/deck_builder/deck_builder_screen.tscn")
+	assert_eq(builder.text, MainScreen.WAITING_TEXT, "the button says why")
+	assert_true(title.is_processing(), "asking each frame")
+	await get_tree().process_frame
+	assert_null(get_tree().current_scene, "not opened yet")
+	# A second card screen pressed meanwhile takes the wait over.
+	battle.pressed.emit()
+	assert_eq(builder.text, "Deck Builder", "let go")
+	assert_eq(battle.text, MainScreen.WAITING_TEXT)
+	assert_eq(title._pending_open, "res://game/setup_screen.tscn")
+	assert_true(await _await_pool(), "the thread finished within the limit")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(battle.text, "Magic Battle", "let go on the way out")
+	assert_eq(title._pending_open, "")
+	var opened := get_tree().current_scene
+	assert_not_null(opened, "opened the frame the pool was in")
+	if opened != null:
+		assert_eq(opened.scene_file_path, "res://game/setup_screen.tscn")
+		opened.free()
+		get_tree().current_scene = null
+
+
+func test_a_screen_that_reads_no_card_opens_at_once_under_the_build() -> void:
+	assert_null(get_tree().current_scene, "the runner has no current scene to replace")
+	CardRegistry.unload()
+	assert_true(CardRegistry.load_in_background())
+	var title: Control = load("res://game/main.tscn").instantiate()
+	add_child_autofree(title)
+	var help := _menu_entry(title, "Help")
+	assert_not_null(help)
+	help.pressed.emit()
+	assert_eq(title._pending_open, "", "nothing held")
+	assert_eq(help.text, "Help")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var opened := get_tree().current_scene
+	assert_not_null(opened, "opened without the pool")
+	if opened != null:
+		assert_eq(opened.scene_file_path, "res://game/help/help_screen.tscn")
+		opened.free()
+		get_tree().current_scene = null
+	assert_true(await _await_pool())

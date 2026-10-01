@@ -360,6 +360,23 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The press that waits (2026-10-01)
+
+- `game/main.gd`: `POOL_SCREENS` (the three scenes that read a card),
+  `WAITING_TEXT`; `_open(scene_path, button)` holds under
+  `CardRegistry.is_loading()` → `_hold(scene_path, button)` (path kept
+  in `_pending_open`, the button's label swapped for `WAITING_TEXT`,
+  `_waiting_button` / `_waiting_text`, `set_process`), `_let_go()`
+  restores it; `_process` opens the held path the frame `poll()` says
+  the pool is in. The menu binds pass the button for Magic Battle,
+  Gauntlet and Deck Builder; Options and Help do not. The `_open` doc
+  paragraph "THE PRESS THAT COMES BEFORE THE POOL IS IN WAITS HERE"
+  carries the why.
+- `tests/unit/test_card_registry_background_2026_09_30.gd` (+2, 10
+  tests): `_menu_entry(title, text)`; the held press, the hand-over,
+  the opened scene; Help at once. `docs/handhelds.md`: the press under
+  the build; Power saver named in `docs/releases/0.40.54.md`.
+
 ## The title before the pool (2026-09-30)
 
 - `engine/card_registry.gd`: `load_in_background()`, `is_loading()`,
@@ -870,6 +887,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.54.md`: the press that waits — a Magic Battle,
+  Gauntlet or Deck Builder press made while the pool thread runs is
+  held on the title (the button says `Loading cards…`) and opens the
+  frame the pool is in; Power saver named (Options → Display, on by
+  default on handhelds).
 - `docs/releases/0.40.53.md`: the title before the pool — the card
   pool compiled on a thread while the title stands, the title's script
   no longer naming the SGManalink cluster, the three heavy screens

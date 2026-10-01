@@ -18683,6 +18683,72 @@ dismiss, untouched closed.
 Gate: 548 scripts, **8,250/8,250 tests, 367,679 asserts**, exit 0 in
 261 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-01 — The press that waits (0.40.54)
+
+*"Do you suggest any other low hanging fruit vr optimizations we can
+do?"* — five ranked, *"Yes"* to the first; and mid-way: *"Low
+processor mode should also be toggable in options"*.
+
+**The hole 0.40.53 opened.** The title stands 0.8 s after the process
+starts and the pool thread reports ~3.5 s later (desk, Xvfb). A press
+on Magic Battle, Gauntlet or Deck Builder in that gap opened the
+screen at once, and its `_ready` asked the registry — `ensure_loaded()`
+joins the thread — so the title froze on the press for the rest of
+the build: the dead click moved from the start into the gap. Fixed in
+the layer the press lives in, `game/main.gd`: `POOL_SCREENS` names
+the three scenes that read a card; `_open(scene_path, button)` under
+`CardRegistry.is_loading()` calls `_hold` (remember the path, swap the
+button's label for `WAITING_TEXT` = `Loading cards…`, `set_process`)
+instead of changing scene; `_process` — already polling for the
+version corner — opens the held path the frame `poll()` says the pool
+is in, after `_let_go()` restores the label; a second card screen
+pressed meanwhile takes the wait over (`_hold` lets the first go). A
+pool dropped under the wait (a rescan) is neither loading nor loaded:
+the press goes through and the screen builds it in the foreground, as
+a toggle always has. Options and Help take no button and open at once.
+
+**Measured.** The real-start probe (a `-s` SceneTree under Xvfb,
+`XDG_DATA_HOME` redirected) pressed Magic Battle at frame 30 (897 ms):
+returned in 0 ms, the button said `Loading cards…`, the title rendered
+on (`still rendering` every 100 frames, frame 900 at 3.8 s), the pool
+reported `897 cards in 3422 ms (background)`, and the setup screen was
+the current scene 317 ms after the report — its own instantiate and
+`_ready`, the same cost as a press made after the pool. The warm
+setup/lobby loads took 0 ms. The probe's first version sat silent
+after the change and read as a hang for two runs: `change_scene_to_file`
+frees the title, and in Godot 4 **a freed object compares equal to
+null** (`Variant` OBJECT == NIL reads the validated pointer), so its
+`_title != null` guard went false; `/proc/<pid>/task/*/stat` showed
+the main thread and every llvmpipe thread burning CPU — the game was
+drawing the setup screen all along. Compare instance ids across a
+scene change, never the reference.
+
+**Power saver.** Already in since the handheld pass: `Settings.power_saver()`
+→ `OS.low_processor_usage_mode` through `GameDisplay.apply_power_saver()`
+at boot, `HANDHELD_DEFAULTS["power_saver"] = true` (Android is a
+handheld), the `Power saver` toggle under Options → Display
+(`options_screen.gd`, `GameDisplay.set_power_saver`), `docs/handhelds.md`.
+Nothing changed; the release note names it.
+
+**Left for the report.** Pack discovery onto the thread (1.0 s of the
+headset's 9.1) and the pool compile's own cost are settled on the
+0.40.53/0.40.54 `card pool:` line from the Quest, not on the desk's
+3.4 s. Not taken: `boot_splash/minimum_display_time` (its check lands
+3.2 s in on the Quest, elapsed-aware), a second-start cache.
+
+**What the tests say.** `tests/unit/test_card_registry_background_2026_09_30.gd`
+(+2, 10 tests): the runner's `current_scene` is null; a press under the
+build returns in < 100 ms with `_pending_open` set, the button reading
+`MainScreen.WAITING_TEXT` and the title processing; nothing opens for
+a frame; a second card screen takes the wait over and restores the
+first label; after `_await_pool()` and two frames the current scene's
+`scene_file_path` is the setup screen (freed, `current_scene` reset);
+Help opens at once under the same build. A machine whose pool is in
+before the title stands asserts the no-hold path and returns.
+
+Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
+259 s over 6 shards; Python 415, exit 0.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

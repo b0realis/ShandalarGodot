@@ -316,7 +316,11 @@ in M ms (background)` (0.40.53) is the thread that compiled every card
 script while the title stood — the title no longer waits for it, nor
 for the SGManalink scripts its own script used to pull in; the 0.40.52
 report's 9,071 ms to the tree were 3.2 s of engine boot, 1.2 s of
-folders and seals and 4.6 s of those two compiles. The `first <event
+folders and seals and 4.6 s of those two compiles. A press on Magic
+Battle, Gauntlet or the Deck Builder made before that line waits on
+the title (0.40.54): the button reads `Loading cards…` until the pool
+is in and the screen opens that frame — the title keeps drawing, the
+press never freezes it. Options and Help open at once. The `first <event
 class>` lines say, once per class, how the headset's laser reaches the
 game — a touch, a mouse, a pad — which is what the pointer work turns
 on; they stop after ten classes. (On the Quest 3 the laser's click is a
