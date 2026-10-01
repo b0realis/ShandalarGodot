@@ -18749,6 +18749,53 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-01 — Development version 0.50.0
+
+*"All the work benefits also other platforms? Superb, bump major version
+to 0.50.0 and we will go 0.50.1 and on."* — the owner, on the 0.40.57
+build. Yes: the setup screen's one read per deck is GDScript in the
+shared game code, and every platform export — Linux, Steam Deck, the
+Quest APK, the web page, the Macs, the Pi — carries it.
+
+### What it is
+
+The 0.50 line opens on the game 0.40.57 is. The single version source,
+`project.godot`, and the two SGManalink documents that name the build
+to match (`docs/sgmanalink-local-playtest.md`,
+`docs/sgmanalink-tournaments.md`) read **0.50.0**; menu labels, tool
+banners, draft receipts, the release door's `-V` and the package names
+read it from there. SGManalink's compatibility stamp includes the
+value, so LAN peers must run matching builds as before; the wire
+protocol stays **24**. No code change; the next commit is **0.50.1**.
+
+### What the 0.40 line carried
+
+0.40.3 was the last GitHub release; the fifty-four versions after it
+on `main` brought Pack 6 (Portal, Portal Second Age) and Pack 7
+(Fifth Edition) with their emblems and printings; the rules presets as
+data; the AutoDeck builder, its mana-analysis page and its command
+line; the Deck Lab's tournament mode, the workers that write a slice
+whole or not at all, the one-pass aggregate and `--resume`; the tools
+for a program (`AGENTS.md`, `--dry-run`, `--record` and `run.json`,
+the Lab Query, the referee, the one door `shandalar.sh`, the MCP
+server); the controls layer (every duel key an action with a pad
+slot, `PadControls` typing the mouse, the Steam Deck release and its
+three playtests); the Meta Quest package with its signed APK, the
+Android corner and the three headset reports; the card pool compiled
+on a thread behind the title, the screens warmed by the loader, the
+presses that wait for the pool; the AI's reading of Berserk,
+Aggression, the conscriptions and the prison; the owner's sixteen
+portraits; and the Magic Battle press that reads each deck once.
+
+### Local builds
+
+The Linux, Steam Deck and Meta Quest packages of this commit are
+built locally for the owner's play copies; no tag or GitHub release
+is created (the published release stays v0.40.3).
+
+Gate: 548 scripts, **8,262/8,262 tests, 369,757 asserts**,
+exit 0 in 254 s over 6 shards; Python 415, exit 0 (5 skipped).
+
 ## 2026-10-01 — The press that read every deck a dozen times (0.40.57)
 
 *"Just click on magic battle in main menu seems a bit sluggish? (There

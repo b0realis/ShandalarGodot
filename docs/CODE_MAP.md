@@ -945,6 +945,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.0.md`: development version 0.50.0 — the 0.50 line
+  opens on the game 0.40.57 is; the version sites name it, the wire
+  protocol stays 24, the next commit is 0.50.1; what the 0.40 line
+  carried, in one paragraph.
 - `docs/releases/0.40.57.md`: the press that read every deck a dozen
   times — the Magic Battle setup screen reads each deck file once and
   parses it once where it used to open three hundred files some six
