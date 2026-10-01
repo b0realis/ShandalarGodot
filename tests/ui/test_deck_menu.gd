@@ -400,6 +400,20 @@ func test_an_untouched_deck_leaves_without_a_word() -> void:
 	assert_true(_press("Return to main menu"))
 	assert_eq(screen.open_dialogs().size(), 0,
 		"nothing to save, nothing to ask")
+	# The leave is a real `change_scene_to_file`: at the end of the frame
+	# the title stands as the runner's current scene. Read it — this IS
+	# the way out — and take it down, or it outlives this script and the
+	# next one to read `get_tree().current_scene` finds a title it never
+	# opened (2026-10-01: the C-locale deal put the title-under-the-pool
+	# tests behind this one for the first time, and they failed on it).
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var title := get_tree().current_scene
+	assert_not_null(title, "…and the title is the scene")
+	if title != null:
+		assert_eq(title.scene_file_path, "res://game/main.tscn", "the way out")
+		title.free()
+		get_tree().current_scene = null
 
 
 func test_save_current_deck_runs_the_save() -> void:

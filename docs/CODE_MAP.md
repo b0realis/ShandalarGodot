@@ -360,6 +360,23 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The gate's clock and the deal's locale (2026-10-01)
+
+- `.github/workflows/gate.yml`: the `Shard n of 4` step has its own
+  `timeout-minutes: 40` under the job's 45 — a step that runs out
+  fails and the `if: always()` upload still runs (a job-level cancel
+  skips it: shard 2 of run 36869119748, no log, no artifact). The
+  comment above the step says why.
+- `run_tests.sh`: `all_scripts` and the skin-marked list are
+  `LC_ALL=C sort`ed — the deal no longer follows the shell's collation
+  (`en_US` and `C.UTF-8` ordered 38 of 548 scripts differently, so a
+  desk's `SHARDS=4 SHARD=2` was not the runner's).
+- `tests/ui/test_deck_menu.gd`: `test_an_untouched_deck_leaves_without_a_word`
+  awaits the scene change its press made, asserts the title is the
+  current scene, frees it and resets `current_scene` — it used to leave
+  the title standing for every script after it in the shard.
+- `docs/releases/0.40.55.md`; the game is unchanged.
+
 ## The press that waits (2026-10-01)
 
 - `game/main.gd`: `POOL_SCREENS` (the three scenes that read a card),
@@ -887,6 +904,12 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.55.md`: the gate's clock and the deal's locale —
+  the shard step's own 40-minute clock under the job's 45 so a hung
+  shard still uploads its engine log, the test deal sorted in the C
+  locale so a desk's shard is the runner's, and the deck-menu test
+  that left the title standing as the runner's scene for the rest of
+  its shard; the game unchanged.
 - `docs/releases/0.40.54.md`: the press that waits — a Magic Battle,
   Gauntlet or Deck Builder press made while the pool thread runs is
   held on the title (the button says `Loading cards…`) and opens the
@@ -1938,7 +1961,9 @@ shandalar/
 │                              JUnit file), gates every log and then the sum
 │                              against the count of scripts on disk;
 │                              SHARD=i runs one deal (one CI job each);
-│                              tools/deal_tests.py deals
+│                              tools/deal_tests.py deals; the script list
+│                              is `LC_ALL=C sort`ed (2026-10-01) so the
+│                              deal is the runner's on every desk
 ├── .github/workflows/
 │   └── gate.yml             The gate on GitHub's runners (2026-09-17): on
 │                              every push to main and every pull request, the
@@ -1947,7 +1972,10 @@ shandalar/
 │                              GUT jobs plus one job for the Python tests
 │                              and the boot smoke. Uploads each shard's
 │                              engine log and JUnit file for fourteen days
-│                              and nothing else — no build, no art
+│                              and nothing else — no build, no art; the
+│                              shard step has its own 40-minute clock
+│                              under the job's 45 (2026-10-01), so a hung
+│                              shard fails the step and still uploads
 ├── .gitignore               Ignores .godot/ cache, *.import, assets/cardart/,
 │                              packs/ (build_card_packs.py --out packs)
 │

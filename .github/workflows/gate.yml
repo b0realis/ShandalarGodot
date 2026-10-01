@@ -68,7 +68,16 @@ jobs:
           chmod +x ../tools/godot
           ../tools/godot --version
 
+      # The step has its own clock, shorter than the job's: when the job's
+      # 45 minutes cancel a job, GitHub skips every later step, `if:
+      # always()` included, and the engine log is lost with it (shard 2 of
+      # run 36869119748, 2026-10-01: cancelled at 45 min, no log, no
+      # artifact, nothing to read). A step that times out instead FAILS,
+      # and the upload below still runs. run_tests.sh's own guards (import
+      # 10 min, suite 30 min) add up to under 42 minutes, so a healthy
+      # shard never reaches this clock; a stalled runner does.
       - name: Shard ${{ matrix.shard }} of 4
+        timeout-minutes: 40
         env:
           SHARDS: 4
           SHARD: ${{ matrix.shard }}

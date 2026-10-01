@@ -18749,6 +18749,90 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-01 — The gate's clock and the deal's locale (0.40.55)
+
+*"But i think it loads fast enough now. Just check for any problems,
+fix bugs, otherwise it is ok."* — the owner, with the 0.40.54 start
+report from the Quest. The game is unchanged; the problems were in the
+gate and in one test.
+
+**The report.** 0.40.54 on the headset: `tree ready after 3043 ms`
+(9,071 on 0.40.52 — the 4.6 s of silence was the pool, now on its
+thread), seven packs sealed in 1,103 ms, `card pool: 1898 cards in
+7417 ms (background)` — all seven packs, nothing refused. The two
+steps left for this line (pack discovery onto the thread, the pool
+compile) are closed: the desk measured the GDScript compiler
+serializing across threads (897 scripts: 796 / 890 / 826 / 888 ms over
+1 / 2 / 4 / 8 threads — the loader's share is structural), so the
+compile cannot be split, and nothing on the title waits on either
+any more.
+
+**The problem.** Run 36869119748 for 69dfcc7: shards 1, 3, 4 and the
+Python job green in 4–8 minutes; `GUT shard 2 of 4` cancelled —
+*"The job has exceeded the maximum execution time of 45m0s"* — the
+step started 13:30:17Z, the job closed 14:25:09Z, and the `if:
+always()` upload never ran: a job-level cancel skips every later
+step, so no `gut-engine.log`, no JUnit, the step log itself 404. The
+in-script guards (import ≤ 600 s, reset ≤ 60 s, suite ≤ 1,800 + 5 s)
+sum to under 42 minutes and each prints `TIMED OUT`, so an in-process
+hang alone cannot overrun the job's clock. Reproduced at the desk on
+the runner's own terms — `git archive HEAD` into a clean tree (no
+skin, no `.godot`), the same binary, `LC_ALL=C.UTF-8 SHARDS=4 SHARD=2`,
+`taskset -c 0-3`: "133 of 531 scripts", 2,115/2,115, 74,925 asserts,
+eight minutes; the new background test file ten runs on four cores,
+10/10 at 14 s each. The runner's rerun of the cancelled job: green in
+5 min 43 s, 2,115/2,115, 74,924 asserts, the same 133 scripts in the
+same order, the cold pool compile 5,957 ms. A stalled runner. Not a
+test, not the thread.
+
+**What changed so the next one speaks.** `.github/workflows/gate.yml`:
+the `Shard n of 4` step carries `timeout-minutes: 40` under the job's
+45 — a step that runs out *fails* and the upload step still runs, so a
+hung shard leaves its engine log. `run_tests.sh`: the script list is
+`LC_ALL=C sort`ed (both lists). The deal depended on the shell's
+collation: `en_US` reads past the underscores and orders
+`test_ai_times_sweeps` before `test_ai_time_walk`, `C.UTF-8` the other
+way, and 38 of 548 lines moved with them — the first desk
+reproduction ran a shard 2 that was not the runner's, caught by
+diffing its script set against the 0.40.53 shard-2 JUnit. Now the deal
+is the same on every machine, as its comment always claimed.
+
+**The leak the new deal found.** The first gate on the C-locale deal:
+8,251/8,252 — `test_a_press_before_the_pool_holds_the_button_then_opens`
+found `[Main]` where it asserted a null `current_scene`. Not the
+pool: bisected with a `test_zz_probe_NN.gd` printing
+`get_tree().current_scene` between every eighth script of the shard's
+earlier 75 (one GUT process over an explicit `-gtest=` list, through
+`tools/runtime.sh`'s profile — `run_tests.sh` with an extra `-gtest=`
+in the skinned tree runs the whole directory plus the list), then
+between every one of the eight: `tests/ui/test_deck_menu.gd`,
+`test_an_untouched_deck_leaves_without_a_word`. `Return to main menu`
+on a clean deck is `DeckBuilderScreen._exit` → a real
+`change_scene_to_file("res://game/main.tscn")`, and the title it
+instantiated stood as the runner's current scene — polling the
+registry every frame, the one `Main` orphan the gate log had carried
+since the test was written — for every script dealt after it in the
+same process. The test now awaits the two frames, asserts the current
+scene IS the title (that is the way out), frees it and resets
+`current_scene`, the way the background tests already did. The two
+scripts in the failing order: 43/43.
+
+**Lessons.** A job-level `timeout-minutes` skips `if: always()`
+steps — put the clock on the step. `find | sort` is locale-bound —
+`LC_ALL=C` for anything a runner must agree with. In a skinless tree
+an extra `-gtest=` argument to `run_tests.sh` runs the whole deal plus
+the list (its own `-gtest=$(deal 1 1)` comes first) — reproduce a
+shard through `SHARDS`/`SHARD`, never by pasting its list. `pkill -f`
+(or `pgrep -f`) with a pattern the running shell command matches kills
+the shell (exit 144, twice this day) — read `/proc/<pid>/cmdline` and
+kill the pid. A GUT orphan report that names a scene root (`[Main]`)
+is a `change_scene_to_file` a test let run: the scene outlives the
+script.
+
+Gate: 548 scripts, **8,252/8,252 tests, 367,758 asserts**, exit 0 in
+259 s over 6 shards; Python 415, exit 0. CI for 69dfcc7: shard 2 rerun
+green in 5 min 43 s (2,115/2,115, 74,924 asserts).
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

@@ -263,8 +263,12 @@ fi
 
 # Every test script GUT would find: its prefix, its suffix, its
 # directory, its subdirectories (`-gdir=res://tests -ginclude_subdirs`),
-# sorted so a deal is the same on every machine.
-all_scripts="$(find tests -type f -name 'test_*.gd' | sort)"
+# sorted so a deal is the same on every machine — in the C locale, by
+# byte: a desk's own collation (en_US reads past the underscores) puts
+# test_ai_times_sweeps before test_ai_time_walk, a runner's C.UTF-8 the
+# other way round, and 38 of 548 lines move with them — so a shard
+# reproduced at a desk was not the shard the runner ran (2026-10-01).
+all_scripts="$(find tests -type f -name 'test_*.gd' | LC_ALL=C sort)"
 
 # THE SKIN. Some scripts pin the 1997 look itself — the card frames, the
 # grave plates, the button faces, the numerals — and can only be read
@@ -281,7 +285,7 @@ skin_left_out=0
 if [ -d assets/original ]; then
 	scripts_on_disk="$all_scripts"
 else
-	skin_scripts="$(printf '%s\n' "$all_scripts" | xargs grep -l "$SKIN_MARKER" | sort || true)"
+	skin_scripts="$(printf '%s\n' "$all_scripts" | xargs grep -l "$SKIN_MARKER" | LC_ALL=C sort || true)"
 	skin_left_out="$(printf '%s\n' "$skin_scripts" | grep -c . || true)"
 	scripts_on_disk="$(printf '%s\n' "$all_scripts" | grep -vxF -f <(printf '%s\n' "$skin_scripts") || true)"
 	echo "The imported 1997 skin is not here (assets/original): $skin_left_out of $(printf '%s\n' "$all_scripts" | grep -c .) test scripts pin it and are left out:"
