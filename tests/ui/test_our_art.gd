@@ -1,7 +1,9 @@
 extends GutTest
 ## THE LOOK THIS PROJECT SHIPS AS ITS OWN — `game/art/`: the pictures
-## `tools/draw_our_art.gd` draws, and since 2026-09-09 the BODY FACE in
-## `game/art/fonts/`. Both are listed with their hashes in
+## `tools/draw_our_art.gd` draws, since 2026-09-09 the BODY FACE in
+## `game/art/fonts/`, and since 2026-10-01 the PORTRAITS in
+## `game/art/portraits/` — the owner's own pictures, the fourth place
+## [PortraitLibrary] looks. All are listed with their hashes in
 ## `game/art/README.md` and promised by name in `README.md` § Legal.
 ##
 ## The face is ours in a different way from the pictures and the tests
@@ -506,3 +508,66 @@ func test_the_sound_is_named_where_the_game_looks_for_it() -> void:
 	assert_eq(DeckAudio.GRIND, "res://%s" % OUR_SOUND,
 		"the row in game/art/README.md and DeckAudio.GRIND are the same "
 		+ "file, or one of them is documenting something that is not there")
+
+
+# -------------------------------------------------- 6. the faces we ship --
+
+## `game/art/portraits/` — the faces [PortraitLibrary] ships as its
+## fourth place (2026-10-01). The same promise as the fonts, one folder
+## over: nothing lives there that the README does not name, and every
+## row names a PNG the chooser can reach through `GameSkin.our_art`.
+const PORTRAIT_DIR := PortraitLibrary.SHIPPED_DIR
+
+
+func _portraits_on_disk() -> Array:
+	var out: Array = []
+	var dir := DirAccess.open(PORTRAIT_DIR)
+	if dir == null:
+		return out
+	for name in dir.get_files():
+		var file := String(name)
+		if file.ends_with(".import"):
+			continue      # Godot's own sidecar, gitignored, regenerated
+		out.append(file)
+	out.sort()
+	return out
+
+
+func test_the_shipped_faces_live_inside_the_art_folder() -> void:
+	assert_eq(PORTRAIT_DIR, ART_DIR + "/portraits",
+		"one inventory, one export rule, one sweep")
+
+
+func test_nothing_lives_in_portraits_that_the_readme_does_not_name() -> void:
+	var on_disk := _portraits_on_disk()
+	if on_disk.is_empty():
+		pass_test("no shipped faces, or the folder is not readable from here")
+		return
+	var named := _named_files()
+	for name in on_disk:
+		assert_true(named.has("portraits/%s" % name),
+			"%s is in game/art/portraits/ but nothing in the README says "
+			% name + "what it is or where it came from")
+		assert_true(String(name).ends_with(".png"),
+			"%s: a shipped face is a PNG — that is what the accessor loads"
+			% name)
+
+
+func test_every_named_face_is_what_the_chooser_finds() -> void:
+	# The inventory and the chooser agree, both ways: a row is a face in
+	# the list, a face in the list has a row.
+	var rows: Array[String] = []
+	for name in _named_pictures():
+		if String(name).begins_with("portraits/"):
+			rows.append(String(name).trim_prefix("portraits/").trim_suffix(".png"))
+	rows.sort()
+	var was := PortraitLibrary.dirs
+	PortraitLibrary.dirs = [PORTRAIT_DIR]
+	PortraitLibrary.refresh()
+	var found: Array[String] = []
+	for entry in PortraitLibrary.all():
+		found.append(String(entry["id"]))
+	found.sort()
+	PortraitLibrary.dirs = was
+	PortraitLibrary.refresh()
+	assert_eq(found, rows)

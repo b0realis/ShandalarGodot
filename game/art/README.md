@@ -2,7 +2,9 @@
 
 Everything in this folder travels inside the game's own pack, and it is
 ours in one of exactly two ways. The **pictures** were *drawn by this
-project* and carry its GPL-3.0. The **body face**, in `fonts/`, was drawn
+project* — by its generator, or by the owner's own hand (the Manalink
+globe, and since 2026-10-01 the sixteen **portraits** in `portraits/`)
+— and carry its GPL-3.0. The **body face**, in `fonts/`, was drawn
 by somebody else and *given away under the SIL Open Font Licence*, which
 is a licence to redistribute it — its `OFL.txt` sits beside it. Nothing
 here came out of the 1997 game, out of a later reimplementation of it, or
@@ -137,8 +139,9 @@ with the same gold card emblem and bevelled stone on/off tiles as the other pack
 | `damage_marker.png` | the dagger on a wounded creature, 64x40 | `tools/draw_our_art.gd` (`_dagger_blade`, `_dagger_hilt`) | GPL-3.0 | `771a24e7139e7df3757728350e0acf5e2fffb553e1a78bc48e1b04c20c52d489` |
 | `manalink_globe.png` | the Manalink button's mark — a green wire globe and a starred violet sky sharing one disc under a rainbow rim, 256x256 | the owner's own picture, supplied 2026-09-17; cropped to its outline and reduced to 256 px, NOT drawn by `tools/draw_our_art.gd` | GPL-3.0, with the rest of this project | `08ba71afe94739d45fe55210cac43442150a399b5d909a62bc6a1eadebbd765d` |
 
-`manalink_globe.png` is the one picture here that no code drew. It is
-the owner's own, handed over on 2026-09-17 as a 1254 px master with a
+`manalink_globe.png` was, until the portraits arrived, the one picture
+here that no code drew. It is the owner's own, handed over on 2026-09-17
+as a 1254 px master with a
 transparent ground, cropped to its outline and reduced to 256 px with a
 Lanczos filter for the pack — the button draws it at 52 px and the lobby
 heading at 56, and `ManalinkGlobe` builds its own mipmaps for that
@@ -239,6 +242,61 @@ somewhere the export cannot silently drop.
 *Where a name is a skin key* (`set_icon_<code>`, `damage_marker`), it is
 deliberately the SAME key `tools/skin_catalogue.py` publishes, so a skin
 that supplies its own simply replaces ours, one file at a time.
+
+## The portraits
+
+`portraits/` holds the faces the game offers before anybody adds one.
+The chooser on the Magic Battle screen (`PortraitLibrary`) looks in four
+places — the player's own folder, the `portraits/` their 1997 import
+cut, a dev checkout's `assets/`, and this folder, **in that order**: a
+face of the player's own wins over ours on a name clash, and the 1997
+faces, when they are there, sit in the same list. Ours is the floor.
+
+They are the owner's own pictures, handed over on 2026-10-01 and ours
+under the GPL-3.0 with the rest of the project; nothing here is cut from
+the 1997 game. The name under each in the chooser is the file name,
+tidied — `grey_wizard.png` reads *Grey Wizard* — the same rule the
+player's folder follows.
+
+THESE ARE READ THROUGH `load`, NOT OFF THE FILESYSTEM. A player's
+portrait is a file the game opens as bytes (it arrived after the game
+shipped and has no `.import`); these travel inside the pack, where an
+exported build lists `x.png.import` and the picture is reachable only
+through the import pipeline — `GameSkin.our_art("portraits/<name>")`,
+the accessor every other picture on this page goes through.
+`PortraitLibrary._files_in` folds the sidecar name back to the file so
+the listing is the same in a checkout and in a pack; that fold is what
+`tests/ui/test_portrait_library.gd` stages.
+
+| file | what it is | source | licence | SHA-256 |
+|---|---|---|---|---|
+| `portraits/assassin.png` | a hooded figure in red and white, a curved dagger in hand and a finger to the lips, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `d6a869110a50253b939fa34c55b8c05366cfa4d892758fbe7b85dd5164036221` |
+| `portraits/blue_mage.png` | a grey-bearded wizard in a starred blue hat and robe, a blue orb on his staff, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `6a866f4c6b53204beeaca18b6f0a621fe21a5faaffbcd11a1a2b6e3ef2dac9f1` |
+| `portraits/druid.png` | a woman crowned with antlers and leaves, a bird on her shoulder, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `5d9cce86fb6f755987bea95ab64f9b59adfa3bffb63e0c14e376ccc0da92f2c7` |
+| `portraits/dwarf.png` | a red-bearded dwarf in a horned helm with a battle axe, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `52d3437d85940ee11fec5513ebcfb15f75edd99f2c9376ae7b4d96d8f7827522` |
+| `portraits/eleian.png` | a dark-haired woman in a blue hood and gown, a blue orb floating above her hand, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `5596dada571de171e9f0f52eb65623dbbd9e68b73fc6c20819fec13559b7d9d6` |
+| `portraits/elf_archer.png` | a blonde elf in green with a bow and a quiver of arrows, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `a5f0692819a009cec5687895bfb5dd7139c14a607c0e3d3a4aa82a3559b2f985` |
+| `portraits/elf_mage.png` | a fair-haired elf in gold and white with a crystal-topped staff, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `55768dac72dfb2ffa0212c26682242d7c8bff229f512b2e547f34e6adf33c840` |
+| `portraits/GPU.png` | a graphics card standing on end — a joke, and a face, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `b4eebfb4732b25cb4e45f7b1c65e5b9d7ca123ccfe0dcb7dca1dfd46cf197f1f` |
+| `portraits/HAL.png` | a computer's panel with a blue lens and a rainbow stripe — the other joke, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `8ff5109b2ea657b49510fd64e69ceb3dfffba2d5c388e1924f55f7a71516f6a0` |
+| `portraits/necromancer.png` | a pale, dark-haired figure in purple and gold, skulls at the shoulders, a violet flame in hand, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `6b7a93f8621e6359240e65b45e59f62967639f676e2cb088dea891515cd07515` |
+| `portraits/necromancer_ghoul.png` | the necromancer dead and green, the flame gone green with him, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `cd0982b7dc2c085d62e8ab9316082bb1aafafe24f0f17a262d4114f3eec68c86` |
+| `portraits/red_mage.png` | a red-haired witch in a wide purple hat, a flame in her palm, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `377dd6c3ca08b74dd415238664b7b37e2c37a0bdf1981453665f15770a9d71fc` |
+| `portraits/skeleton_mage.png` | a skeleton in a wide purple hat with a skull-topped staff, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `519798f19231bdaeeac94fc8cd0f3f87cfb70cda515a1310d82d5a16acf86dfa` |
+| `portraits/torte.png` | a grinning skull with wide, round eyes, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `18a26b607217af1e04c6464cac967db13d6075bff5c24967c3d4a78c81957836` |
+| `portraits/warchief.png` | a red-haired woman in gold armour, a great axe over her shoulder, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `8d4e2ff7e4a6e24ec997f73236cce18febf8b0f508de34692925168f6055110d` |
+| `portraits/white_mage.png` | a white-haired woman in a starred blue robe, a staff in one hand and a blue flame in the other, 138x170 | the owner's own picture, supplied 2026-10-01; renamed for the chooser, bytes untouched | GPL-3.0 | `d52869248b27bb5c3de21b9c6c7b359e5dacf7a5fc8bd86994b24efcf85d0bbb` |
+
+Sixteen, all 138x170 on a transparent ground, handed over as one zip
+with a trailing underscore on every name (`bluemage_.png`); the names
+here are the chooser's — `blue_mage.png` reads *Blue Mage* — and the
+two initialisms keep their capitals because the tidy-up only capitalises
+a word's first letter (`gpu.png` would read *Gpu*). The pixels are as
+they arrived; the hashes are of those bytes.
+
+`tests/ui/test_our_art.gd` sweeps this folder as it sweeps the rest:
+nothing may live in it that this table does not name, every row is a
+PNG, and the chooser's list of shipped faces must be exactly the rows.
 
 ## Shipped outside this folder
 

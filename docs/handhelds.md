@@ -251,7 +251,9 @@ told to trust this computer — put it on and answer the prompt.
    there yet so that **the game makes them**, then pushes `skin/*.zip`
    and `cardpacks/` into them and lists the two folders. Your own faces
    go in `portraits/` and your own tunes in `music/` the same way
-   (`adb push my_face.png /sdcard/Android/data/com.b0realis.shandalar/files/portraits/`).
+   (`adb push my_face.png /sdcard/Android/data/com.b0realis.shandalar/files/portraits/`);
+   the sixteen faces the game ships are in the APK already and need no
+   push.
 4. In the headset, the game is under **Library > Unknown Sources**. The
    first start after a push checks every card picture once (a minute on
    the headset for seven packs); every later start is quick — the packs

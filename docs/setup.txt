@@ -112,10 +112,11 @@ ART IS SEARCHED IN FOUR PLACES, FIRST MATCH WINS:
 So anything you put in (1) or (2) overrides what shipped in (3). Portraits
 and music are searched slightly differently, because your own come first
 AND ARE ADDED TO THE 1997 ONES, not put in their place: a face you drop
-in portraits/ appears in the portrait chooser beside the sixty-odd
-originals, a tune in music/ plays among the original scores.
+in portraits/ appears in the portrait chooser beside the sixteen the game
+ships and the sixty-odd originals, a tune in music/ plays among the
+original scores.
 
-    portraits:  portraits/ -> original_skin/portraits/ -> skin/portraits/ -> the zips'
+    portraits:  portraits/ -> original_skin/portraits/ -> skin/portraits/ -> the zips' -> the game's own sixteen
     music:      music/     -> original_skin/           -> skin/           -> the zips'
 
 THE ZIPS are read where they lie; nothing is unpacked, ever. To wear a

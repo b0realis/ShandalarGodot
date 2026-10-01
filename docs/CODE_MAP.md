@@ -360,6 +360,24 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## Sixteen faces of our own (2026-10-01)
+
+- `game/art/portraits/*.png`: the sixteen portraits the game ships —
+  the owner's own pictures, 138x170 RGBA, transparent ground; named
+  for the chooser (`blue_mage.png` → *Blue Mage*; `GPU.png`, `HAL.png`
+  keep their capitals). Hashed in `game/art/README.md` § The portraits,
+  registered in `Provenance.md`.
+- `game/portrait_library.gd`: `SHIPPED_DIR = res://game/art/portraits`,
+  the fourth and LAST entry of `DEFAULT_DIRS` / `default_dirs()`;
+  `_files_in` folds `.import`/`.remap` sidecar names back to the file
+  and counts once (an exported pack lists only the sidecar);
+  `is_shipped(path)`; `texture()` reads a shipped face through
+  `GameSkin.our_art("portraits/<id>")`; `shipped_count()`; the
+  player's README says a file of theirs beats a shipped face too.
+- `tests/ui/test_our_art.gd` § 6 (the folder sweep and inventory ⇔
+  chooser), `tests/ui/test_portrait_library.gd` (four places, the
+  fold, the `load`, the player's file winning).
+
 ## The gate's clock and the deal's locale (2026-10-01)
 
 - `.github/workflows/gate.yml`: the `Shard n of 4` step has its own
@@ -904,6 +922,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.40.56.md`: sixteen faces of our own — the owner's
+  sixteen portraits in `game/art/portraits/`, the chooser's fourth
+  (last) place, read through the import pipeline because an exported
+  pack lists only `x.png.import`; the inventory and the chooser held
+  to each other.
 - `docs/releases/0.40.55.md`: the gate's clock and the deal's locale —
   the shard step's own 40-minute clock under the job's 45 so a hung
   shard still uploads its engine log, the test deal sorted in the C
@@ -7805,19 +7828,31 @@ shandalar/
 │   │                          the player's portraits folder (GamePaths,
 │   │                          user://portraits), then the skin folder's
 │   │                          portraits/, then res://assets/original/
-│   │                          portraits/ — first wins, so a player's own
-│   │                          file replaces an imported one and a new
-│   │                          name JOINS the 1997 faces (default_dirs()
+│   │                          portraits/, then SHIPPED_DIR =
+│   │                          res://game/art/portraits/ (the sixteen
+│   │                          faces this project ships, 2026-10-01) —
+│   │                          first wins, so a player's own file
+│   │                          replaces an imported one and a new name
+│   │                          JOINS the 1997 faces, and ours is the
+│   │                          floor under all of it (default_dirs()
 │   │                          reads the keys; own_count() is the Options
-│   │                          row's number). Reads bytes
-│   │                          (Image.load_from_file, through
+│   │                          row's number, shipped_count() the floor).
+│   │                          Reads bytes (Image.load_from_file, through
 │   │                          GameSkin.locate so a portrait inside the
 │   │                          mounted skin pack keeps its res://skin
 │   │                          name — 2026-09-08), so art dropped in
-│   │                          after shipping works in an export; writes
-│   │                          the README that documents the format.
-│   │                          Chosen per seat in setup_screen, stored BY
-│   │                          ID; nothing in a duel reads it yet (M5)
+│   │                          after shipping works in an export — EXCEPT
+│   │                          the shipped faces, which travel inside the
+│   │                          pack where an export lists x.png.import
+│   │                          and no x.png: _files_in folds the sidecar
+│   │                          name back to the file, is_shipped(path)
+│   │                          routes texture() through
+│   │                          GameSkin.our_art("portraits/<id>") — the
+│   │                          import pipeline, like every other picture
+│   │                          in game/art/. Writes the README that
+│   │                          documents the format. Chosen per seat in
+│   │                          setup_screen, stored BY ID; nothing in a
+│   │                          duel reads it yet (M5)
 │   ├── duel/versus_panel.gd class VersusPanel — THE MARBLE VERSUS BOARD,
 │   │                          and the one copy of it: Winbk_Versus
 │   │                          (500x400, wells 162x192 at (50,59)/(281,59)
@@ -8141,7 +8176,15 @@ shandalar/
 │   │                          and filter medallions 48x48, damage_marker
 │   │                          64x40, real alpha, no mask half) plus
 │   │                          manalink_globe.png 256x256, the owner's own
-│   │                          picture (2026-09-17), all reached through
+│   │                          picture (2026-09-17), and portraits/ — the
+│   │                          SIXTEEN FACES the chooser ships with
+│   │                          (2026-10-01; assassin, blue_mage, druid,
+│   │                          dwarf, eleian, elf_archer, elf_mage, GPU,
+│   │                          HAL, necromancer, necromancer_ghoul,
+│   │                          red_mage, skeleton_mage, torte, warchief,
+│   │                          white_mage; 138x170, the owner's own
+│   │                          pictures, PortraitLibrary.SHIPPED_DIR) —
+│   │                          all reached through
 │   │                          GameSkin.our_art, and fonts/ carrying
 │   │                          Spectral-Regular.ttf with its OFL.txt
 │   │                          beside it, reached through

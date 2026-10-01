@@ -1,13 +1,22 @@
 extends GutTest
 ## THE PLAYER'S OWN FACE — where it is looked for and what it is called.
 ##
-## [PortraitLibrary] is the one place that knows the three folders a
+## [PortraitLibrary] is the one place that knows the four folders a
 ## portrait can live in and the order they beat each other in. These pin
 ## that order, the naming rule the README promises, and the two states
 ## that are easy to get wrong: no folder at all, and a folder holding
 ## things that are not portraits.
+##
+## THE FOURTH FOLDER IS OURS (2026-10-01): `game/art/portraits/`, the
+## faces this project ships, read through the import pipeline because an
+## exported pack has no file to open. The tests at the foot hold it to
+## the inventory `game/art/README.md` keeps — zero rows, zero faces; a
+## row each, a face each — so they say the same thing on the day the
+## folder is empty and on the day it is not.
 
 const PLAYER_DIR := "user://portraits"
+const SHIPPED_DIR := PortraitLibrary.SHIPPED_DIR
+const ART_README := "res://game/art/README.md"
 
 var _made: Array[String] = []
 
@@ -106,8 +115,8 @@ func test_the_players_own_folder_outranks_an_imported_face() -> void:
 	# what makes "drop in your own version" work.
 	assert_eq(PortraitLibrary.DEFAULT_DIRS[0], PLAYER_DIR,
 		"the player's folder is searched first")
-	assert_eq(PortraitLibrary.DEFAULT_DIRS.size(), 3,
-		"player, imported skin, dev checkout")
+	assert_eq(PortraitLibrary.DEFAULT_DIRS.size(), 4,
+		"player, imported skin, dev checkout, shipped")
 	# The player's settings move the first two (Options > Skin names the
 	# keys); with none written the search is the built-in one.
 	if not Settings.has_value(GamePaths.KEY_PORTRAITS) \
@@ -126,3 +135,114 @@ func test_a_portable_build_looks_beside_its_own_executable() -> void:
 	# The order is the contract: the player's own folder still wins.
 	assert_eq(GameSkin.search_dirs()[0], GamePaths.skin_folder())
 	assert_eq(GameSkin.SEARCH_DIRS.size(), 2, "and res:// is still last")
+
+
+# ------------------------------------------------------ the shipped faces --
+
+## The `portraits/x.png` rows of `game/art/README.md`, as ids — the
+## inventory the art test holds the folder to, read here so the chooser
+## is held to the same list.
+func _inventoried_ids() -> Array[String]:
+	var out: Array[String] = []
+	for line in FileAccess.get_file_as_string(ART_README).split("\n"):
+		if not line.begins_with("| `portraits/"):
+			continue
+		var name := String(line.split("|")[1]).strip_edges() \
+			.trim_prefix("`").trim_suffix("`")
+		if name.ends_with(".png"):
+			out.append(name.trim_prefix("portraits/").trim_suffix(".png"))
+	out.sort()
+	return out
+
+
+func test_the_shipped_faces_are_searched_last_so_anything_the_player_has_wins() -> void:
+	# Ours is a floor, not a ceiling: the same id in the player's folder,
+	# in their 1997 import or in a checkout beats the one we ship.
+	assert_eq(PortraitLibrary.DEFAULT_DIRS[3], SHIPPED_DIR, "the built-in order")
+	assert_eq(PortraitLibrary.default_dirs()[3], SHIPPED_DIR,
+		"…and the one the player's keys cannot move")
+	assert_true(SHIPPED_DIR.begins_with(GameSkin.OUR_ART_DIR + "/"),
+		"inside the folder the art inventory sweeps")
+	assert_true(PortraitLibrary.is_shipped(SHIPPED_DIR.path_join("x.png")))
+	assert_false(PortraitLibrary.is_shipped(PLAYER_DIR.path_join("x.png")))
+
+
+func test_the_shipped_faces_are_exactly_the_ones_the_inventory_names() -> void:
+	PortraitLibrary.dirs = [SHIPPED_DIR]
+	PortraitLibrary.refresh()
+	var ids: Array[String] = []
+	for entry in PortraitLibrary.all():
+		ids.append(String(entry["id"]))
+		assert_true(PortraitLibrary.is_shipped(String(entry["path"])),
+			"%s is found at its shipped path" % entry["id"])
+	ids.sort()
+	assert_eq(ids, _inventoried_ids(),
+		"game/art/README.md names every shipped face and nothing else")
+	assert_eq(PortraitLibrary.shipped_count(), ids.size())
+
+
+func test_a_shipped_face_loads_through_the_import_pipeline() -> void:
+	# `load`, not `Image.load_from_file` — in an exported pack the bytes
+	# are not at the path, only the imported texture is. In a checkout
+	# both ways work, so the assertion that matters is the accessor:
+	# the texture IS the one `GameSkin.our_art` hands out.
+	PortraitLibrary.dirs = [SHIPPED_DIR]
+	PortraitLibrary.refresh()
+	var ids := _inventoried_ids()
+	if ids.is_empty():
+		pass_test("no shipped faces yet — nothing to load")
+		return
+	for id in ids:
+		var art := PortraitLibrary.texture(id)
+		assert_not_null(art, "%s loads" % id)
+		assert_eq(art, GameSkin.our_art("portraits/%s" % id),
+			"%s: the same texture the rest of the shipped art is" % id)
+		if art != null:
+			assert_gt(art.get_width(), 0, "%s is a picture" % id)
+
+
+func test_the_players_own_file_outranks_a_shipped_face() -> void:
+	var ids := _inventoried_ids()
+	if ids.is_empty():
+		pass_test("no shipped faces yet — nothing to outrank")
+		return
+	PortraitLibrary.dirs = [PLAYER_DIR, SHIPPED_DIR]
+	_write("%s.png" % ids[0])
+	var seen := 0
+	for entry in PortraitLibrary.all():
+		if entry["id"] != ids[0]:
+			continue
+		seen += 1
+		assert_true(String(entry["path"]).begins_with(PLAYER_DIR),
+			"the player's %s wins over the shipped one" % ids[0])
+	assert_eq(seen, 1, "and it is listed once")
+	# Read as bytes, then: the player's file, not our texture.
+	var art := PortraitLibrary.texture(ids[0])
+	assert_not_null(art)
+	if art != null:
+		assert_eq(art.get_width(), 8, "the 8x8 the test wrote, not ours")
+
+
+func test_an_exported_pack_lists_the_sidecar_and_the_fold_names_the_file() -> void:
+	# What an exported build sees in the shipped folder: `x.png.import`
+	# and no `x.png`. The listing folds the sidecar back to the file and
+	# counts a file that has both once. Staged in the player's folder,
+	# where the test may write; the rule is the same for every folder.
+	_write("face.png")
+	var sidecar := PLAYER_DIR.path_join("face.png.import")
+	var file := FileAccess.open(sidecar, FileAccess.WRITE)
+	file.store_string("[remap]\n")
+	file.close()
+	_made.append(sidecar)
+	var alone := PLAYER_DIR.path_join("ghost.png.import")
+	file = FileAccess.open(alone, FileAccess.WRITE)
+	file.store_string("[remap]\n")
+	file.close()
+	_made.append(alone)
+	PortraitLibrary.refresh()
+	var ids: Array[String] = []
+	for entry in PortraitLibrary.all():
+		ids.append(String(entry["id"]))
+	assert_eq(ids, ["face", "ghost"] as Array[String],
+		"the sidecar stands for its file; the pair is one face")
+	assert_eq(PortraitLibrary.own_count(), 2)

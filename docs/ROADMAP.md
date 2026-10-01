@@ -18749,6 +18749,105 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-01 — Sixteen faces of our own (0.40.56)
+
+*"Ok i would like to supply a couple of new portraits with our
+release."* — the owner; a zip of sixteen followed. The first art the
+game ships for the chooser, and the first time a skinless install has
+a face to wear.
+
+### What arrived
+
+Sixteen PNGs, every one 138×170 RGBA on a transparent ground (the
+figure at alpha ≈ 252 — opaque on the frame's stone, the ground clear
+so the stone shows): assassin, blue mage, druid, dwarf, eleian, elf
+archer, elf mage, necromancer and his ghoul, red mage, skeleton mage,
+torte (a skull), warchief, white mage — and two jokes, a graphics card
+and a computer's lens. The owner's own pictures, GPL-3.0 with the rest
+of the project. They arrived with a trailing underscore on every name
+(`bluemage_.png`); the files were renamed to the chooser's own rule —
+`blue_mage.png` reads *Blue Mage* — and the two initialisms keep their
+capitals (`GPU.png`, `HAL.png`) because `title_of` capitalises a word's
+first letter and `gpu.png` would read *Gpu*. The pixels are as they
+came; the hashes in `game/art/README.md` are of those bytes. None of
+the sixteen ids collides with the seventy the 1997 import cuts (those
+are `rogue_*` and named duelists).
+
+### Where they live, and why there
+
+`game/art/portraits/` — a subfolder of the one folder that ships art,
+beside `fonts/`, so one inventory (`game/art/README.md`), one export
+rule (no preset excludes `game/art/`) and one sweep
+(`tests/ui/test_our_art.gd`) cover them. `Provenance.md` § What ships
+has the row; the Manalink globe is no longer "the one file in
+`game/art/` no generator draws".
+
+### The fourth place
+
+`PortraitLibrary` looked in three places — the player's `portraits/`,
+the skin's `portraits/`, a dev checkout's `assets/original/portraits/`
+— and now in a fourth, `SHIPPED_DIR = res://game/art/portraits/`, LAST.
+The order is the contract the player's README already made: a file of
+their own wins over an imported face of the same name, and now over a
+shipped one; a new name joins the list. Both `DEFAULT_DIRS` and
+`default_dirs()` carry it, so the tests' `dirs` seam — point it at a
+scratch folder, put it back — excludes the shipped faces exactly as it
+excludes the 1997 ones; `test_setup_screen.gd`'s *no portraits at all*
+state still exists to test.
+
+### The pack has no file to open
+
+Everything else the library reads is a FILE: `Image.load_from_file`
+through `GameSkin.locate`, because a portrait dropped in after the game
+shipped has no `.import` and never will. The shipped faces are the
+opposite case, and the 0.40.54 APK was read to be sure of its shape:
+`assets/game/art/*.png.import`, forty-two sidecars and not one `.png` —
+the picture is in the pack under the import pipeline's name and only
+`load` reaches it. Two changes, both the shape `GameSkin.our_art` and
+`CardRegistry.card_files_in` already have:
+
+- `_files_in` folds `x.png.import` / `x.png.remap` back to `x.png` and
+  counts a name once, so the listing is the same in a checkout (where
+  both `x.png` and its sidecar stand) and in a pack (sidecar only). A
+  player's folder has nothing wearing those suffixes, so nothing
+  changes there.
+- `texture()` asks `is_shipped(path)` and, for a shipped face, returns
+  `GameSkin.our_art("portraits/<id>")` — cached with the rest of the
+  shipped art, never cleared by a skin arriving.
+
+Proven both ways before the pictures existed: the suites green on an
+empty `portraits/`, then on a staged 120×150 probe face with a README
+row (the fold, the `load`, the player's 8×8 winning), the probe and its
+row removed again; then on the sixteen. A windowed probe of the setup
+screen wearing `warchief` and `HAL` showed both on the stone, the
+ground transparent — and the second seat's default AI name is *HAL
+9000*, which the owner may have had in mind.
+
+### What holds it
+
+- `tests/ui/test_our_art.gd` § 6: `portraits/` is inside `game/art/`;
+  nothing lives there the README does not name, every row a PNG; the
+  chooser's shipped list equals the README's `portraits/` rows.
+- `tests/ui/test_portrait_library.gd`: four places, ours last and not
+  movable by the player's keys; the shipped list is the inventory and
+  `shipped_count()` agrees; a shipped face loads and IS the texture
+  `GameSkin.our_art` hands out; the player's same-id file outranks it
+  and is listed once; the staged export listing (`face.png` +
+  `face.png.import`, `ghost.png.import` alone) lists two faces.
+  Written to pass with zero rows and zero faces as well as sixteen and
+  sixteen.
+
+### Docs
+
+`game/art/README.md` § The portraits (the sixteen rows, the fold, the
+`load`); `Provenance.md`; the player's folder README (*"REPLACING A
+FACE … and over one the game ships"*); `docs/player-files.md` search
+order; `docs/setup.txt` (*"the game's own sixteen"* at the end of the
+portraits line); `docs/handhelds.md` (the sixteen are in the APK, no
+push needed); `docs/CODE_MAP.md`.
+
+Gate: 548 scripts, **8,260/8,260 tests, 369,180 asserts**, exit 0 in 260 s over 6 shards; Python 415, exit 0 (5 skipped).
+
 ## 2026-10-01 — The gate's clock and the deal's locale (0.40.55)
 
 *"But i think it loads fast enough now. Just check for any problems,

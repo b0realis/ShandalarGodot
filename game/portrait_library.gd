@@ -10,12 +10,13 @@ extends RefCounted
 ## will need, and the battle-setup screen offers it now so the choice
 ## exists and is remembered.
 ##
-## THREE PLACES, IN THIS ORDER, first one wins on a name clash:
+## FOUR PLACES, IN THIS ORDER, first one wins on a name clash:
 ##
 ##   1. `user://portraits/`              the player's own art
 ##   2. `user://original_skin/portraits/` what tools/import_original.py cut
 ##                                        from their copy of the 1997 game
 ##   3. `res://assets/original/portraits/` the same, in a dev checkout
+##   4. `res://game/art/portraits/`       the faces THIS PROJECT ships
 ##
 ## The player's folder comes first ON PURPOSE: someone who drops in a face
 ## named like an imported one means to replace it. The first two are
@@ -32,9 +33,31 @@ extends RefCounted
 ## resource. That is what makes "drop a PNG in and restart" work in an
 ## exported build.
 ##
-## NO ART IS SHIPPED. `Provenance.md`: the original's files are the
-## player's own copy, never this repository's, so an unskinned install
-## finds nothing here and the chooser says where to put some.
+## THE SHIPPED FACES ARE THE ONE EXCEPTION, and they are the exception the
+## same way [method GameSkin.our_art] is: they travel INSIDE the exported
+## pack, where there is no file to open — an exported build lists
+## `x.png.import` where the checkout has `x.png`, and only the import
+## pipeline reaches the picture. So the fourth place is listed with its
+## sidecar names folded back to the files they stand for, and read
+## through `load` ([method GameSkin.our_art]). It is searched LAST so a
+## face of the player's own, or one cut from their 1997 copy, wins over
+## ours on a name clash — the shipped set is a floor, not a ceiling.
+##
+## WHAT SHIPS IS OURS AND ONLY OURS. `Provenance.md`: the original's
+## files are the player's own copy, never this repository's; the faces in
+## `game/art/portraits/` are the owner's own pictures, GPL-3.0 with the
+## rest of the project, each with its row in `game/art/README.md`
+## (2026-10-01, the owner: *"i would like to supply a couple of new
+## portraits with our release"*). An unskinned install therefore opens
+## the chooser on those, and the README in the player's folder still says
+## where to put more.
+
+## WHERE THE FACES THIS PROJECT SHIPS LIVE — a subfolder of
+## [constant GameSkin.OUR_ART_DIR], inventoried in `game/art/README.md`
+## like everything else there (`tests/ui/test_our_art.gd` sweeps it). PNG
+## only: [method GameSkin.our_art] is how they are reached, and that is
+## what it loads.
+const SHIPPED_DIR := "res://game/art/portraits"
 
 ## Searched in order; see the class doc. The built-in places —
 ## [method default_dirs] is the same list with the player's keys read.
@@ -42,14 +65,16 @@ const DEFAULT_DIRS: Array[String] = [
 	"user://portraits",
 	"user://original_skin/portraits",
 	"res://assets/original/portraits",
+	SHIPPED_DIR,
 ]
 
 
 ## [constant DEFAULT_DIRS] as the player's settings have them: their
-## own folder, the skin folder's `portraits/`, the checkout.
+## own folder, the skin folder's `portraits/`, the checkout, ours.
 static func default_dirs() -> Array[String]:
 	return [GamePaths.portraits_folder(),
-		GamePaths.skin_folder().path_join("portraits"), DEFAULT_DIRS[2]]
+		GamePaths.skin_folder().path_join("portraits"), DEFAULT_DIRS[2],
+		SHIPPED_DIR]
 
 ## The portable copy, beside the executable — the same idea, and the same
 ## reason, as [method GameSkin.portable_dir]: art that travels with the
@@ -106,8 +131,9 @@ THE NAME UNDER THE PORTRAIT is the file name, tidied up:
 THE ORDER is alphabetical by that name, and it is stable — a portrait
   keeps its place in the list when you add another.
 
-REPLACING AN IMPORTED FACE: a file here wins over one that came from
-  your copy of the 1997 game. Same file name, your version.
+REPLACING A FACE: a file here wins over one that came from your copy
+  of the 1997 game, and over one the game ships. Same file name, your
+  version.
 
 The game reads this folder when it starts. Add files, then restart.
 """
@@ -162,14 +188,34 @@ static func texture(id: String) -> Texture2D:
 	for entry in all():
 		if entry["id"] != id:
 			continue
+		var path := String(entry["path"])
+		if is_shipped(path):
+			# Ours, inside the pack: the import pipeline, through the
+			# accessor every other shipped picture goes through.
+			result = GameSkin.our_art(
+				path.trim_prefix(GameSkin.OUR_ART_DIR + "/").get_basename())
+			break
 		# `GameSkin.locate`, not a bare globalize: a portrait inside the
 		# mounted skin pack is read at its `res://skin/` name.
-		var image := Image.load_from_file(GameSkin.locate(String(entry["path"])))
+		var image := Image.load_from_file(GameSkin.locate(path))
 		if image != null:
 			result = ImageTexture.create_from_image(image)
 		break
 	_textures[id] = result
 	return result
+
+
+## Whether a found portrait's path is one of the faces this project ships
+## — the one kind that is read through `load` (see the class doc).
+static func is_shipped(path: String) -> bool:
+	return path.begins_with(SHIPPED_DIR + "/")
+
+
+## How many faces ship with the game — what the chooser has before
+## anybody adds one. Counted the way [method all] finds them, sidecar
+## fold included, so it is the same number in a checkout and in a pack.
+static func shipped_count() -> int:
+	return _files_in(SHIPPED_DIR).size()
 
 
 ## `grey_wizard` -> `Grey Wizard`. Underscores and dashes are spaces; see
@@ -206,6 +252,15 @@ static func ensure_folder() -> String:
 ## The image files in one directory, ignoring the README, sub-folders and
 ## anything that is not an image. Sorted, so the search order below is the
 ## only thing that decides precedence.
+##
+## A SIDECAR NAMES ITS FILE: an exported build lists `x.png.import` (and
+## a remapped resource `x.png.remap`) where the checkout had `x.png`, and
+## the picture itself is in the pack under the import pipeline's name.
+## Those are folded back to `x.png` and counted once — the way
+## `CardRegistry.card_files_in` reads a pack's scripts. In a player's
+## folder nothing wears those suffixes, so the fold changes nothing
+## there; in [constant SHIPPED_DIR] it is what makes the faces appear in
+## an exported build at all (2026-10-01).
 static func _files_in(dir_path: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	var dir := DirAccess.open(dir_path)
@@ -213,8 +268,10 @@ static func _files_in(dir_path: String) -> PackedStringArray:
 		return out
 	var file := dir.get_next()
 	while file != "":
-		if not dir.current_is_dir() and _is_image(file):
-			out.append(file)
+		if not dir.current_is_dir():
+			var named := file.trim_suffix(".import").trim_suffix(".remap")
+			if _is_image(named) and not out.has(named):
+				out.append(named)
 		file = dir.get_next()
 	dir.list_dir_end()
 	out.sort()
@@ -222,7 +279,7 @@ static func _files_in(dir_path: String) -> PackedStringArray:
 
 
 static func _is_image(file: String) -> bool:
-	# An exported build lists `x.png.import`/`.remap` beside nothing at
-	# all; only a real extension counts (see CardRegistry.card_files_in
-	# for the same trap, found the same day).
+	# Only a real extension counts — the sidecar fold in [method _files_in]
+	# has already turned `x.png.import` into `x.png`; a `README.txt` or a
+	# stray `.remap` of something that is not a picture stays out.
 	return EXTENSIONS.has(file.get_extension().to_lower())
