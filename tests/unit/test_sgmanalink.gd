@@ -49,10 +49,18 @@ func test_lan_discovery_rejects_spoofed_stale_or_oversized_listings() -> void:
 	assert_false(scanner.accept_reply(response, "192.168.0.5", 100))
 	response.host.tables = [{"name": "Friendly duel", "decks": "fixed", "deck": "Knights", "open": true}]
 	assert_true(scanner.accept_reply(response, "192.168.0.5", 100))
+	# One address lists a few hosts, never the whole table (2026-10-02): a
+	# reply names its own port, so one peer answering from sixty-four ports
+	# used to fill the table and hide every real host from the browser.
 	for i in SgLanDiscovery.MAX_HOSTS + 10:
 		response.host.port = 18000 + i
 		scanner.accept_reply(response, "192.168.0.5", 100)
-	assert_eq(scanner.hosts.size(), SgLanDiscovery.MAX_HOSTS)
+	assert_eq(scanner.hosts.size(), SgLanDiscovery.MAX_HOSTS_PER_ADDRESS, "one address fills its own few slots")
+	for i in SgLanDiscovery.MAX_HOSTS + 10:
+		response.host.address = "192.168.1.%d" % (i + 1)
+		response.host.port = 17897
+		scanner.accept_reply(response, response.host.address, 100)
+	assert_eq(scanner.hosts.size(), SgLanDiscovery.MAX_HOSTS, "the other addresses fill the table")
 	scanner.expire(100 + SgLanDiscovery.EXPIRES_MS)
 	assert_true(scanner.hosts.is_empty())
 	scanner.stop()
@@ -239,6 +247,24 @@ func test_compatibility_stamp_is_bounded_and_names_the_first_difference() -> voi
 	# The reply nests root > host > stamp > packs: the discovery decoder must allow that depth.
 	assert_true(scanner.accept_reply(SgProtocol.decode_payload(reply, 4), "192.168.0.5", 0), "a full reply round-trips the discovery decoder")
 	scanner.free()
+	# On the wire a character past ASCII is six bytes: twenty tables whose
+	# deck names are long non-Latin text (a table's own name is ASCII) are
+	# a 17 KB reply every receiver discards unread. The advertiser drops
+	# its last rows instead (2026-10-02) — the host stays in the browser
+	# with the tables that fit.
+	var wide: Array = []
+	for i in SgLocalServer.MAX_ROOMS:
+		wide.append({"name": "T".repeat(32), "decks": "fixed", "deck": "Æ".repeat(128), "open": true,
+			"rules": SgTableRules.brief(SgTableRules.standard())})
+	var host := SgLanDiscovery.new()
+	host._advert = advert.duplicate(true)
+	host.advertising = true
+	host.update_tables(wide)
+	assert_true(host.reply_size() <= SgLanDiscovery.MAX_PACKET, "the advert fits the packet: %d" % host.reply_size())
+	assert_gt(host._advert.tables.size(), 0, "the tables that fit stay")
+	assert_lt(host._advert.tables.size(), SgLocalServer.MAX_ROOMS, "the last rows went")
+	assert_eq(host._advert.tables[0].deck, "Æ".repeat(128), "the first rows are whole")
+	host.free()
 
 
 func test_protocol_refuses_unknown_fields_methods_types_and_unbounded_payloads() -> void:

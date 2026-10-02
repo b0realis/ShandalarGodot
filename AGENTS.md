@@ -470,7 +470,9 @@ the release's command-line tools.
 **Browsing bundled decks.** Releases include the public `decks/` tree beside
 the binary as well as inside its game archive. Keep the whole extraction
 together. `list_decks {}` lists this library and the workspace; `folder`
-limits it to a subtree, such as `decks/tournament`. `search` matches part of
+limits it to a subtree, such as `decks/tournament` — a relative folder is
+looked for under the checkout, then under the workspace, and the word
+`workspace` is the workspace itself wherever `--workspace` put it. `search` matches part of
 a name or path, case-insensitively. Optional `offset` (default 0) and `limit`
 page the results: `count` is the total matching decks, `returned` the page
 size, and `next_offset` is null on the last page. Without `limit`, all matches

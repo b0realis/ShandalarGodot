@@ -97,8 +97,9 @@ func test_an_advertised_table_names_the_duel_and_its_deck_rule() -> void:
 	await _until(func() -> bool: return int(scanner.hosts.values()[0].host.rooms) == 1)
 	var listed: Dictionary = scanner.hosts.values()[0].host
 	assert_eq(int(listed.rooms), 1, "an open table raises the advertised count")
-	assert_eq(listed.tables, [{"name": "Kitchen table", "decks": "own", "deck": "", "open": true}],
-		"a listing names the duel and its deck rule: that is what a player looks for")
+	assert_eq(listed.tables, [{"name": "Kitchen table", "decks": "own", "deck": "", "open": true,
+		"rules": SgTableRules.brief(SgTableRules.standard())}],
+		"a listing names the duel, its deck rule and its table rules: that is what a player looks for")
 	assert_false(JSON.stringify(scanner.hosts).contains(client._resume),
 		"a listing never carries a seat's resume capability")
 	assert_false(JSON.stringify(scanner.hosts).contains(server.access_code))

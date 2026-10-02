@@ -360,6 +360,127 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## Forty at the table, and the table's own rules (2026-10-02)
+
+The owner's order: *"go over network code, expand the max player count
+on the tournament to 40 and establish a togglable, modifiable basic
+table rules when you host the game. Then try to play a game via MCP
+with AI and go over MCP code for bugfix and improvement run!"*
+
+- `game/sgmanalink/table_rules.gd` (`SgTableRules`): THE TABLE RULES — the
+  starting life (`MIN_LIFE` 1 … `MAX_LIFE` 400, `DEFAULT_LIFE` 20) and the
+  seven implemented RulesOptions forks (`FORKS` = `RulesOptions.IMPLEMENTED`)
+  as one wire dictionary `{"life", "forks": {key: bool}}`; `standard()`
+  (20 life under the player default preset — modern rules, mana burn on),
+  `from_options`, `valid` (exact fields, an integral life in range, exactly
+  the implemented forks each a bool), `normalize` (a private copy, the
+  standard table for anything invalid or absent — an older checkpoint
+  restores unchanged), `life`, `options` (a RulesOptions with the table's
+  forks), `apply` (a game's forks; life goes through `MtgGame.setup`),
+  `preset_label`, `brief` ("Modern rules, mana burn on  ·  20 life", a
+  browser row's line), `detail` (every fork on/off, the Custom tooltip),
+  `summary` (the waiting room's column).
+- `game/sgmanalink/table_rules_setup.gd` (`SgTableRulesSetup`): the editor
+  — a life SpinBox, the Options screen's preset list, one CheckButton per
+  fork with both editions in its tooltip, a readout, "Standard table";
+  `value()`, `set_rules`, signal `changed(rules)`; `remembered()` /
+  `remember()` keep the host's last table in Settings under `KEY`
+  (`sgmanalink_table_rules`; the standard table clears the key).
+- `game/sgmanalink/lobby.gd`: the Host Game page's RULES readout
+  (`HostRulesReadout`) and `Table rules…` (`HostRulesChange`) opening the
+  "Table rules" window with the editor (`HostRules`); `_host_action` sends
+  `rules`; the waiting room shows `SgTableRules.summary` of the room's; the
+  browser's DECKS cell adds the row's rules line (`_table_rules_cell`); the
+  home blurb says forty; a reclaim of the organiser's chair no longer needs
+  a running event.
+- `game/sgmanalink/tournament_panel.gd`: the setup page's TABLE RULES
+  readout (`TournamentRulesSummary`), `Table rules…`
+  (`TournamentRulesChange`) and editor (`TournamentRules`); the config
+  carries `rules`; the hall header's `TournamentHallRules` line (brief,
+  detail in the tooltip); the header counts `SgTournament.MAX_PLAYERS`.
+- `game/sgmanalink/protocol.gd`: `VERSION` 25, `SUBPROTOCOL`
+  `sgmanalink-local-v25`; the `host` command's optional `rules`
+  (`SgTableRules.valid`).
+- `game/sgmanalink/view_protocol.gd`: a room view's optional `rules`
+  (whole, validated) and a listing row's optional `rules` (text ≤ 64).
+- `game/sgmanalink/local_server.gd`: a hosted room keeps
+  `SgTableRules.normalize(action.rules)`; `_table_rules(room)`,
+  `_table_brief(room)` (the brief written on the room once — the advert and
+  every session's listing asked for it per room per frame);
+  `_create_match(decks, names, rules)` (the four overrides follow);
+  `_state` sends the own room's rules whole and each listing's brief;
+  `MAX_CONNECTIONS` = `MAX_PLAYERS * 2 + 8` = 88, like `MAX_SESSIONS`,
+  `MAX_ROOMS` 20 — a reconnecting field's half-open sockets held slots a +4
+  headroom could not cover; `reclaim_tournament` takes the chair of a
+  complete or cancelled event back too.
+- `game/sgmanalink/practice_match.gd`: `_init(seed, decks, names, rules)`
+  — life from the table, `SgTableRules.apply` for the forks; the standard
+  table is what every match was (20, mana burn on, free assignment).
+- `game/sgmanalink/duel_view.gd`, `duel_opening.gd`: the opening card
+  names the table's starting life.
+- `game/sgmanalink/tournament.gd`: `MAX_PLAYERS` 40, `MAX_ROUNDS` 6,
+  `MAX_PAIRINGS` 32 (a forty-entrant first draw is eight pairings and
+  twenty-four byes); `valid_config` takes optional `rules`; the refusal
+  reads "2–40 players … valid table rules".
+- `game/sgmanalink/tournament_host.gd`: `launch_ready_games` opens every
+  table under the event's rules; `vacated_by_organiser` in every phase (a
+  chair left on a complete or cancelled event wedged the host out of
+  ordinary duels); `view(sid)` returns the event's config, rounds and the
+  entrant's deck UNCOPIED — it is the wire body `_state` encodes on the
+  spot, and forty deep copies of sixteen approved decks per command were
+  the fan-out's cost; never keep or change a view.
+- `game/sgmanalink/tournament_protocol.gd`: `valid_view_config` — a client
+  walks a state message's config (sixteen decks and all) once and remembers
+  a copy in `_valid_config`; an equal config passes, a different one is
+  walked and refused. Every config it meets came off the wire (decoded
+  numbers are floats, and a float is not an int to a dictionary comparison).
+- `game/sgmanalink/tournament_store.gd`: `save` refuses a checkpoint past
+  `SgProtocol.MAX_BYTES` (`ERR_OUT_OF_MEMORY`) and keeps `_written` (path →
+  sha256 of the text it last wrote): a primary whose digest still matches
+  is backed up without the read-back parse; a changed or unknown one is
+  read first as before.
+- `game/sgmanalink/lan_discovery.gd`: a table row's optional `rules`
+  brief; `update_tables` drops the last rows while `reply_size()` (the
+  advert's reply as `poll` sends it) is past `MAX_PACKET` — twenty tables
+  with long non-Latin deck names were a 20 KB advert no browser showed;
+  `MAX_HOSTS_PER_ADDRESS` 4 in `accept_reply` — one peer answering with
+  sixty-four ports hid every real host; the query and the reply go through
+  `SgProtocol.encode`, not a bare stringify (`to_ascii_buffer` turned the
+  brief's "·" into a space with an engine error each).
+- `DeckLab/referee.gd`: `_every_card` works on a COPY of the hand
+  (`Array(array)` is the same array — the options walk appended the
+  battlefield into the player's hand) and `_load_deck` reports its unknowns
+  in a copy of the report's errors. `tests/tools/test_referee_2026_09_27.gd`
+  pins both: every hand card is the seat's and on no table, and the report's
+  own errors stay empty.
+- `tools/shandalar_mcp.py`: `castable_now(view, card)` (the presentation
+  row's `castable`); the pilot's announcement step cancels a payment whose
+  tap put a trigger on the stack (City of Brass, Manabarbs) and the sorcery
+  can no longer be cast over it, forgets the payment and the attempt, and
+  casts it again from the floating pool once the trigger resolved — the
+  first play-through lost a Balance this way; `list_decks` reads `folder`
+  `workspace` as the workspace wherever `--workspace` put it and a relative
+  folder under the checkout, then the workspace. `tools/test_shandalar_mcp.py`:
+  the trigger wait-out and the instant over a trigger in `test_pilot`; the
+  workspace folder, a workspace subfolder and a missing one in the live
+  deck test.
+- `tools/lan_smoke.gd`: `MeteredServer._create_match` takes the rules.
+- Tests: `tests/ui/test_sgmanalink_table_rules_2026_10_02.gd` (the standard
+  table is the table every host opened; a hosted table plays under its rules
+  and the wire carries them — the advert's brief, the browser cell, the room
+  view, the referee's life and forks; the editor builds a table and
+  remembers it; the host page and the tournament setup carry the editor into
+  their commands; a tournament opens every table under its rules and a
+  checkpoint keeps them); `tests/unit/test_sgmanalink_tournament.gd`
+  (`test_forty_entrants_fit_and_forty_one_is_refused`, the config memo,
+  `MAX_CONNECTIONS ≥ (MAX_PLAYERS + 1) * 2`); `tests/unit/test_sgmanalink.gd`
+  (the per-address host cap, the non-ASCII advert trim);
+  `tests/ui/test_sgmanalink_tournament_network.gd` (the abandoned chair on
+  a cancelled event taken back to close it, the store's digest before and
+  after damage); the lobby, panel, open-table, lan-pair, lettering,
+  interface, campaign, bot and bots tests follow the new window, wording
+  and `_create_match` signature. Script count 549.
+
 ## The press that read every deck a dozen times (2026-10-01)
 
 - `game/setup_screen.gd`: `_scan_decks` reads each deck file ONCE
@@ -945,6 +1066,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.1.md`: forty at the table and the table's own rules —
+  the tournament cap 40 (six rounds, 32 first-draw rows), the host's
+  starting life and rules forks on the wire (protocol 25), the nine
+  network review fixes, two referee hand/report copies, the MCP pilot's
+  trigger wait-out and `list_decks` folders.
 - `docs/releases/0.50.0.md`: development version 0.50.0 — the 0.50 line
   opens on the game 0.40.57 is; the version sites name it, the wire
   protocol stays 24, the next commit is 0.50.1; what the 0.40 line
@@ -1407,7 +1533,13 @@ The same tests keep set/rarity text out of the original illustrator/P/T footer.
 - `game/sgmanalink/tournament_protocol.gd` (`SgTournamentProtocol`): exact public
   context/view and private checkpoint schemas, pair/roster/lifecycle invariants.
 - `game/sgmanalink/tournament_store.gd` (`SgTournamentStore`): private local JSON
-  checkpoint replacement, last-good fallback and compatible saved-event discovery.
+  checkpoint replacement, last-good fallback and compatible saved-event discovery;
+  a digest of the last write spares the read-back, an oversized checkpoint is refused.
+- `game/sgmanalink/table_rules.gd` (`SgTableRules`): the table's starting life and
+  implemented rules forks as one validated wire dictionary; the standard table,
+  the brief/detail/summary readouts, `apply` to a game.
+- `game/sgmanalink/table_rules_setup.gd` (`SgTableRulesSetup`): the host's table
+  rules editor (life, preset, one switch per fork), remembered on this device.
 - `game/sgmanalink/tournament_panel.gd` (`SgTournamentPanel`): styled configuration
   (name, entrant limit, wins, the deck-policy summary, the Invitation only
   switch with Copy invitation beside it; welcome message, save folder, saved
@@ -1425,6 +1557,10 @@ The same tests keep set/rarity text out of the original illustrator/P/T footer.
   byes/forfeits/draws, no premature final ranks and restored advancement graphs.
 - `tests/unit/test_sgmanalink_tournament.gd`: roster sizes/seeds, byes, series/draws,
   duplicate-result rejection, policies, locked lists and checkpoint round trips.
+- `tests/ui/test_sgmanalink_table_rules_2026_10_02.gd`: the standard table, a
+  hosted table's rules across the advert, browser, room view and referee, the
+  editor and its memory, both host pages' commands, a tournament's tables and
+  checkpoint.
 - `tests/ui/test_sgmanalink_tournament_network.gd`: twenty-one TLS clients, complete
   knockout/series flows, privacy, authority, restart/capability recovery, save
   failure, organiser participation, concurrent readiness and multi-table full-game
@@ -1509,8 +1645,10 @@ The same tests keep set/rarity text out of the original illustrator/P/T footer.
 - `game/sgmanalink/lan_discovery.gd` (`SgLanDiscovery`): opt-in UDP LAN search,
   bounded untrusted host listings, unicast replies and expiry; the advert
   carries the build stamp, the tournament name, the `access` mode and up to
-  `MAX_ROOMS` table rows (name, deck rule, assigned deck, open) inside
-  `MAX_PACKET` (16384) bytes, decoded four levels deep, no more. An open
+  `MAX_ROOMS` table rows (name, deck rule, assigned deck, open, the rules
+  brief) inside `MAX_PACKET` (16384) bytes — the last rows go when the reply
+  would not fit — decoded four levels deep, no more; `MAX_HOSTS_PER_ADDRESS`
+  listings from one address. An open
   host publishes its invitation in the advert (the browser joins with a
   click); an invitation-only host never broadcasts the secret or the
   certificate (`open_host`, `valid_table`, `update_tables`).

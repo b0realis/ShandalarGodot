@@ -10,9 +10,9 @@ var journal: FileAccess
 class SeededServer extends SgLocalServer:
 	var duel_seed := 4242
 	var fixture: SgPracticeMatch
-	func _create_match(decks: Array, names: Array) -> SgPracticeMatch:
+	func _create_match(decks: Array, names: Array, rules: Dictionary = {}) -> SgPracticeMatch:
 		if fixture != null: return fixture
-		return SgPracticeMatch.new(duel_seed, decks, names)
+		return SgPracticeMatch.new(duel_seed, decks, names, rules)
 
 
 func after_each() -> void:

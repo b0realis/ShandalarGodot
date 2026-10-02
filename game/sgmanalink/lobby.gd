@@ -1,10 +1,9 @@
 class_name SgLobby
 extends Control
 ## [QoL] Separate classic-styled identity, host, browser and waiting-room windows.
-## Opening a menu starts no network operation. Only a saved display name persists.
+## Opening a menu starts no network operation. Only a saved display name and
+## the host's table rules (SgTableRulesSetup) persist.
 
-## The referee's fixed table rules (SgPracticeMatch); shown before and inside a room.
-const TABLE_RULES := "Full implemented card pool  ·  40–250 cards  ·  20 life\nMana burn on  ·  Free combat damage assignment  ·  Single duel"
 var client := SgLocalClient.new()
 var service: SgLocalServer
 var _port: SpinBox
@@ -75,6 +74,9 @@ var _host_deck_window: VBoxContainer
 var _invite_only: CheckButton
 var _access_hint: Label
 var _rules_window: VBoxContainer
+## THE TABLE RULES (2026-10-02): the host page's editor and its readout.
+var _rules_setup: SgTableRulesSetup
+var _rules_label: Label
 var _network_window: VBoxContainer
 var _network_button_open: Button
 var _invite_window: VBoxContainer
@@ -207,7 +209,7 @@ func _build_home(page: VBoxContainer) -> void:
 	for entry in [["IDENTITY", "Pick a temporary name, or play as a guest. Names are unrated; the host adds a guest number when two match."],
 		["HOST", "Host Game opens a table on this computer, open to your LAN unless you tick Invitation only. Keep the game open: your computer runs the referee."],
 		["JOIN", "Game Browser lists the tables on your network; one click joins an open one. An invitation-only host needs the invitation they send you. Join only hosts you trust."],
-		["TOURNAMENT", "The Tournament hall runs a knockout for up to 20 players on one host, with brackets, live results and standings."]]:
+		["TOURNAMENT", "The Tournament hall runs a knockout for up to 40 players on one host, with brackets, live results and standings."]]:
 		var caption := _label(entry[0], 13)
 		caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		caption.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
@@ -282,6 +284,18 @@ func _build_host(page: VBoxContainer) -> void:
 		_host_deck = deck
 		SgLobbyStyle.close_window(_host_deck_window)
 		_refresh())
+	# The table rules: the readout on the page, the switches in a window
+	# (owner's word, 2026-10-02: togglable, modifiable; remembered).
+	body.add_child(_label("RULES", 13))
+	var rules_row := SgLobbyStyle.row(body)
+	_rules_label = _label("", 16)
+	_rules_label.name = "HostRulesReadout"
+	_rules_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rules_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rules_row.add_child(_rules_label)
+	var rules_change := _button("Table rules…", func() -> void: SgLobbyStyle.open_window(_rules_window), Vector2(150, 38))
+	rules_change.name = "HostRulesChange"
+	rules_row.add_child(rules_change)
 	# Access: open by default. Copy invitation sits right beside the switch,
 	# so nobody searches for it (owner's word, 2026-09-18).
 	body.add_child(_label("ACCESS", 13))
@@ -305,11 +319,16 @@ func _build_host(page: VBoxContainer) -> void:
 	actions.add_child(_button("Back", _show_page.bind("home")))
 	# Everything else opens in a sub-window.
 	var more := SgLobbyStyle.row(page)
-	more.add_child(_button("Table rules…", func() -> void: SgLobbyStyle.open_window(_rules_window)))
 	_network_button_open = _button("Network settings…", func() -> void: SgLobbyStyle.open_window(_network_window))
 	more.add_child(_network_button_open)
-	_rules_window = SgLobbyStyle.window(page, "At this table", "TableRulesWindow")
-	_rules_window.add_child(_label(TABLE_RULES, 16))
+	_rules_window = SgLobbyStyle.window(page, "Table rules", "TableRulesWindow")
+	_rules_setup = SgTableRulesSetup.new()
+	_rules_setup.name = "HostRules"
+	_rules_setup.changed.connect(func(rules: Dictionary) -> void: _rules_label.text = SgTableRules.brief(rules))
+	_rules_window.add_child(_rules_setup)
+	_rules_setup.build()
+	_rules_label.text = SgTableRules.brief(_rules_setup.value())
+	_rules_window.add_child(_label("Full implemented card pool  ·  40–250 cards  ·  Single duel", 15))
 	_rules_window.add_child(_label("Both players confirm Ready before play begins. Your guest needs the same game version and enabled packs: " + SgCompatibility.summary() + ".", 15))
 	_network_window = SgLobbyStyle.window(page, "Network settings", "NetworkWindow")
 	_host_controls = VBoxContainer.new()
@@ -593,7 +612,8 @@ func _host_game() -> void:
 func _host_action() -> Dictionary:
 	var fixed := _host_decks.selected == 1
 	return {"op": "host", "name": _room_draft.strip_edges(),
-		"decks": "fixed" if fixed else "own", "deck": _host_deck.duplicate(true) if fixed else {}}
+		"decks": "fixed" if fixed else "own", "deck": _host_deck.duplicate(true) if fixed else {},
+		"rules": _rules_setup.value()}
 
 
 func _host_tournament(options: Dictionary, restore_path: String) -> void:
@@ -820,7 +840,7 @@ func _refresh() -> void:
 	# whose chair is empty — the earlier session abandoned with its resume
 	# code — is taken back with the session this lobby holds now.
 	if service != null and client.online and not client.busy() and not event.is_empty() \
-			and not bool(event.get("organiser", false)) and String(event.get("phase", "")) in ["registration", "running"]:
+			and not bool(event.get("organiser", false)):
 		if service.reclaim_tournament(client._resume).is_empty():
 			_notice.text = "Tournament controls recovered for this seat."
 	if String(event.get("id", "")) != _tournament_id:
@@ -1007,7 +1027,7 @@ func _waiting_room(room: Dictionary) -> void:
 		if room.names[seat] == "Empty seat": deck_line = "Deck: —"
 		column.add_child(_label(deck_line, 17))
 	var rules := SgLobbyStyle.column(_body, "Duel rules")
-	rules.add_child(_label(TABLE_RULES, 16))
+	rules.add_child(_label(SgTableRules.summary(SgTableRules.normalize(room.get("rules", {}))), 16))
 	var actions := SgLobbyStyle.row(rules)
 	actions.add_child(_network_button("Review assigned deck" if fixed else "Choose / review deck", _open_decks))
 	actions.add_child(_network_button("Not ready" if room.ready[int(room.seat)] else "Ready", func() -> void:
@@ -1182,7 +1202,7 @@ func _browser() -> void:
 				rows.append({"name": "Tournament · " + String(advert.tournament), "decks": "", "open": true, "table": ""})
 			for entry: Dictionary in advert.get("tables", []):
 				rows.append({"name": String(entry.name), "table": String(entry.name), "open": bool(entry.open),
-					"decks": "Assigned: " + String(entry.deck) if entry.decks == "fixed" else "Bring your own"})
+					"decks": _table_rules_cell(entry)})
 			if rows.is_empty():
 				rows.append({"name": "No table yet", "decks": "", "open": true, "table": ""})
 			for entry: Dictionary in rows:
@@ -1212,10 +1232,18 @@ func _browser() -> void:
 	for room: Dictionary in client.state.rooms:
 		_cell(table, String(room.name), true)
 		_cell(table, String(room.host))
-		_cell(table, "Assigned: " + String(room.deck) if room.get("decks", "own") == "fixed" else "Bring your own")
+		_cell(table, _table_rules_cell(room))
 		_cell(table, "Open" if room.open else "Taken")
 		table.add_child(_network_button("Join" if room.open else "In use", func() -> void:
 			_send({"op":"join", "room":room.id}), room.open))
+
+
+## A browser row's DECKS cell: the deck rule, then the table's rules
+## readout under it when the row carries one.
+func _table_rules_cell(row: Dictionary) -> String:
+	var text := "Assigned: " + String(row.deck) if row.get("decks", "own") == "fixed" else "Bring your own"
+	var rules := String(row.get("rules", ""))
+	return text if rules.is_empty() else text + "\n" + rules
 
 
 ## A table of discovered games: a caption row, then one row per game.

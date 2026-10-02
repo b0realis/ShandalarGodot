@@ -71,7 +71,7 @@ func build_match(config: DuelConfig, rules: RulesOptions, tournament: Dictionary
 	column.add_child(_wrapped("Unrated friendly duel · No ante" if tournament.is_empty() else
 		"Round %d · Game %d · Series %d–%d · First to %d" % [int(tournament.round), int(tournament.game),
 		int(tournament.wins[0]), int(tournament.wins[1]), int(tournament.target)], 17, 2))
-	column.add_child(_wrapped("Unrestricted decks · 20 starting life", 16, 1))
+	column.add_child(_wrapped("Unrestricted decks · %d starting life" % config.lives[0], 16, 1))
 	var details := GridContainer.new()
 	details.columns = 2
 	details.add_theme_constant_override("h_separation", 16)

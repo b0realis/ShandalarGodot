@@ -13,10 +13,16 @@ extends Node
 signal changed
 const PORT := 17898
 ## An open advert carries the invitation (up to SgLanInvite.MAX_LENGTH) and
-## ten table rows; well inside one UDP datagram, fragmented or not on a LAN.
+## up to twenty table rows; well inside one UDP datagram, fragmented or not
+## on a LAN. [method update_tables] drops the last rows of an advert that
+## would not fit — a receiver discards a bigger packet unread.
 const MAX_PACKET := 16384
 const ACCESS := ["open", "invitation"]
 const MAX_HOSTS := 64
+## One address can list a few hosts (a development machine runs two), never
+## the whole table: a reply names its own port, so one LAN peer answering
+## with sixty-four ports would otherwise hide every real host (2026-10-02).
+const MAX_HOSTS_PER_ADDRESS := 4
 const EXPIRES_MS := 7000
 var hosts: Dictionary = {}
 var scanning := false
@@ -64,8 +70,9 @@ func update_rooms(count: int) -> void:
 
 
 ## The tables of the host as the browser lists them: `name`, `decks` ("own"
-## or "fixed"), `deck` (the assigned deck's name, "" for bring-your-own) and
-## `open` (a seat is free). Rows that fail the advert check are dropped.
+## or "fixed"), `deck` (the assigned deck's name, "" for bring-your-own),
+## `open` (a seat is free) and `rules` (the table's one-line rules readout,
+## SgTableRules.brief). Rows that fail the advert check are dropped.
 func update_tables(tables: Array) -> void:
 	if not advertising: return
 	var rows: Array = []
@@ -73,10 +80,28 @@ func update_tables(tables: Array) -> void:
 		if rows.size() >= SgLocalServer.MAX_ROOMS: break
 		if valid_table(row): rows.append(row.duplicate(true))
 	_advert.tables = rows
+	# The reply must fit MAX_PACKET on the wire, where every character past
+	# ASCII is six bytes: twenty tables with long non-Latin deck names were
+	# a 20 KB advert no browser ever showed (2026-10-02). The last rows go.
+	while not rows.is_empty() and reply_size() > MAX_PACKET:
+		rows.pop_back()
+
+
+## The byte count of this advert's reply to a query, as [method poll] sends it.
+func reply_size() -> int:
+	return SgProtocol.encode({"v": SgProtocol.VERSION, "type": "sg-lan-host",
+		"nonce": "0".repeat(64), "host": _advert}).length()
 
 
 static func valid_table(row: Variant) -> bool:
-	return row is Dictionary and SgProtocol.exact(row, ["name", "decks", "deck", "open"]) \
+	if not row is Dictionary: return false
+	# The rules readout is optional, like the room view's: a row without
+	# one is a standard table.
+	var fields := ["name", "decks", "deck", "open"]
+	if row.has("rules"):
+		fields.append("rules")
+		if not SgViewProtocol.text(row.rules, 64): return false
+	return SgProtocol.exact(row, fields) \
 		and SgProtocol.short_text(row.name) and row.decks in SgProtocol.DECK_RULES \
 		and SgViewProtocol.text(row.deck, 128) and row.open is bool
 
@@ -106,7 +131,7 @@ func _exit_tree() -> void:
 func query(destination := "255.255.255.255", discovery_port := PORT) -> void:
 	if not scanning or (destination != "255.255.255.255" and not SgLanInvite.address(destination)):
 		return
-	var packet := JSON.stringify({"v": SgProtocol.VERSION, "type": "sg-lan-query", "nonce": _nonce})
+	var packet := SgProtocol.encode({"v": SgProtocol.VERSION, "type": "sg-lan-query", "nonce": _nonce})
 	if _socket.set_dest_address(destination, discovery_port) == OK:
 		_socket.put_packet(packet.to_ascii_buffer())
 	_next_query = Time.get_ticks_msec() + 2000
@@ -158,8 +183,12 @@ func accept_reply(data: Dictionary, source: String, now: int) -> bool:
 	if advert.address != source:
 		return false
 	var key := "%s:%d" % [source, int(advert.port)]
-	if not hosts.has(key) and hosts.size() >= MAX_HOSTS:
-		return false
+	if not hosts.has(key):
+		if hosts.size() >= MAX_HOSTS: return false
+		var from_source := 0
+		for other: String in hosts:
+			if other.begins_with(source + ":"): from_source += 1
+		if from_source >= MAX_HOSTS_PER_ADDRESS: return false
 	var previous: Dictionary = hosts.get(key, {})
 	var changed_data: bool = previous.get("host", {}) != advert
 	hosts[key] = {"host": advert.duplicate(true), "seen": now}
@@ -211,5 +240,9 @@ func _process(_delta: float) -> void:
 				"nonce": data.nonce, "host": _advert}
 			# Reply from the queried port so stateful firewalls can associate it
 			# with the outbound query. Routing chooses the source LAN adapter.
+			# SgProtocol.encode, not a bare stringify (2026-10-02): the wire is
+			# ASCII JSON and a bare to_ascii_buffer turns every character past
+			# 127 — a table rules brief's "·", a deck name's "Æ" — into a
+			# space, with an engine error for each. encode escapes them.
 			if _socket.set_dest_address(source, source_port) == OK:
-				_socket.put_packet(JSON.stringify(reply).to_ascii_buffer())
+				_socket.put_packet(SgProtocol.encode(reply).to_ascii_buffer())

@@ -180,7 +180,7 @@ func test_every_lobby_page_and_window_reads() -> void:
 	await _settle()
 	_readable(lobby, "tournament setup")
 	var panel := lobby._tournament_panel
-	for window in ["Change…", "Welcome message…", "Save folder…"]:
+	for window in ["Change…", "Table rules…", "Welcome message…", "Save folder…"]:
 		await _click(panel, window)
 		_readable(lobby, window)
 		panel.close_windows()

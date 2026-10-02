@@ -286,6 +286,15 @@ def render_decision(decision: dict, mode: str) -> dict:
 
 # --- the dumb pilot -------------------------------------------------------
 
+def castable_now(view: dict, card) -> bool:
+    """The referee's live castability of `card` — the view's presentation
+    row, false for a card it does not list."""
+    for row in view.get("presentation", {}).get("cards", []):
+        if row.get("id") == card:
+            return bool(row.get("castable", False))
+    return False
+
+
 def default_answer(decision: dict, memory: dict) -> dict:
     """Keep, order to play, attack with everything, block nothing,
     discard from the front, assign damage as asked, first choice; in a
@@ -294,7 +303,9 @@ def default_answer(decision: dict, memory: dict) -> dict:
     `memory` (`paid`, `tried`, `strikes`) is the game's, so a spell
     refused once is not cast again that step, and a decision the
     referee has already refused an answer to gets the quiet answer
-    (cancel, pass, no attackers) — the third refusal concedes."""
+    (cancel, pass, no attackers) — the third refusal concedes. A
+    payment whose tap put a trigger on the stack is cancelled and the
+    spell cast again once the trigger has resolved."""
     options = decision.get("options", {})
     view = decision.get("view", {})
     mode = decision.get("mode")
@@ -347,6 +358,18 @@ def default_answer(decision: dict, memory: dict) -> dict:
             if key not in paid:
                 paid.add(key)
                 return {"op": "autopay", "excluded": [], "count": 1}
+            if view.get("stack") and not castable_now(view, draft.get("card")):
+                # The payment's tap put a trigger on the stack (City of
+                # Brass, Manabarbs) and the sorcery can no longer be cast
+                # over it: cancel, let the trigger resolve, then cast it
+                # again from the floating pool — forget the payment and the
+                # attempt so the main-phase loop prepares it once more
+                # (2026-10-02; the first MCP play-through lost a Balance
+                # this way, the test pilot waits the same trigger out).
+                paid.discard(key)
+                memory.setdefault("tried", set()).discard(
+                    (seat, view.get("turn"), view.get("step"), draft.get("card")))
+                return {"op": "cancel"}
             targets = []
             for slot in options["announcement"].get("slots", []):
                 if len(slot.get("targets", [])) < int(slot.get("min", 0)):
@@ -773,7 +796,8 @@ class Server:
                        "with its name and card counts read from the file. Search by name/path "
                        "and page with offset/limit; count is the total matching decks.",
                        {"folder": prop("string", "one folder instead (under the checkout or the "
-                                       "workspace), searched recursively"),
+                                       "workspace; `workspace` is the workspace itself), "
+                                       "searched recursively"),
                         "search": prop("string", "case-insensitive part of a deck name or path"),
                         "offset": prop("integer", "skip this many matching decks (default 0)", minimum=0),
                         "limit": prop("integer", "maximum decks to return (unset: all)", minimum=1)},
@@ -1108,7 +1132,20 @@ class Server:
 
     def deck_folders(self, args: dict) -> list[tuple[Path, str]]:
         if args.get("folder"):
-            folder = self.inside(args["folder"], "list_decks", "folder")
+            # The word `workspace` is the workspace wherever it lives; a
+            # relative path is looked for under the checkout, then under the
+            # workspace — the order `find_deck` reads a deck name in
+            # (2026-10-02: with a `--workspace` elsewhere, "workspace" used
+            # to name the checkout's own gitignored folder or nothing).
+            typed = args["folder"]
+            if isinstance(typed, str) and typed.strip() == "workspace":
+                folder = self.workspace
+            else:
+                folder = self.inside(typed, "list_decks", "folder")
+                if not folder.is_dir() and not Path(typed).is_absolute():
+                    other = self.inside(str(self.workspace / typed), "list_decks", "folder")
+                    if other.is_dir():
+                        folder = other
             if not folder.is_dir():
                 raise refusal("list_decks", "path", f"not a folder: {args['folder']}", path=str(args["folder"]))
             return [(folder, self.spoken(folder))]

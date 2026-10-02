@@ -11,10 +11,10 @@ const Pilot = preload("res://tests/support/sg_network_pilot.gd")
 class SeededServer extends SgLocalServer:
 	var duel_seed := 4242
 	var vary_seeds := false
-	func _create_match(decks: Array, names: Array) -> SgPracticeMatch:
+	func _create_match(decks: Array, names: Array, rules: Dictionary = {}) -> SgPracticeMatch:
 		var seed_value := duel_seed
 		if vary_seeds: duel_seed += 1
-		return SgPracticeMatch.new(seed_value, decks, names)
+		return SgPracticeMatch.new(seed_value, decks, names, rules)
 
 
 func before_each() -> void:
@@ -687,9 +687,14 @@ func test_checkpoint_backup_survives_a_damaged_primary_and_recovery_save() -> vo
 	assert_true(FileAccess.file_exists(path + ".bak"))
 	var backup := SgTournamentStore.read_checkpoint(path + ".bak")
 	assert_false(backup.is_empty())
+	# A primary that still reads as what this process wrote rotates on its
+	# digest, without the read-back validation (2026-10-02); the damaged
+	# one below no longer matches and is read back — and found wanting.
+	assert_eq(SgTournamentStore._written.get(path, ""), FileAccess.get_sha256(path), "the digest of the last write")
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	file.store_string("{interrupted")
 	file.close()
+	assert_ne(SgTournamentStore._written.get(path, ""), FileAccess.get_sha256(path))
 	assert_eq(SgTournamentStore.read_checkpoint(path), backup)
 	assert_eq(server.tournament.save(), "")
 	assert_eq(SgTournamentStore.read_checkpoint(path + ".bak"), backup, "bad primary did not replace the last good backup")
@@ -1056,6 +1061,30 @@ func test_the_hosts_own_lobby_takes_an_empty_organiser_chair_back() -> void:
 	assert_null(hall.service)
 	assert_false(bool(hall.client.state.tournament.organiser))
 	assert_true(bool(lobby.client.state.tournament.organiser))
+
+
+func test_an_organiser_who_abandons_a_cancelled_event_leaves_a_chair_the_host_takes_back_to_close_it() -> void:
+	# The chair of a finished or cancelled event used to stay with the
+	# erased session (2026-10-02): nobody could Close, and every host or
+	# join on this service answered "Use the Tournament Hall" for good.
+	var owner := await _register(2)
+	await _act(owner, "t_cancel")
+	assert_eq(server.tournament.event.phase, "cancelled")
+	owner.forget()
+	assert_true(await _until(func() -> bool: return server.tournament.organiser == 0), "the chair empties on a cancelled event too")
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1280, 800)
+	add_child_autofree(viewport)
+	var lobby := SgLobby.new()
+	viewport.add_child(lobby)
+	lobby.service = server
+	clients.append(lobby.client)
+	assert_eq(lobby.client.connect_invitation(server.invitation(), "Organiser"), OK)
+	assert_true(await _until(func() -> bool: return bool(lobby.client.state.get("tournament", {}).get("organiser", false))),
+		"the host's own lobby takes the chair of the cancelled event back")
+	await _act(lobby.client, "t_close")
+	assert_null(server.tournament, "and Close is reachable again")
+	assert_eq(server.reclaim_tournament(lobby.client._resume), "No tournament is under way on this host.")
 
 
 func test_the_hosts_network_drop_keeps_the_tournament_saved_and_resumable() -> void:

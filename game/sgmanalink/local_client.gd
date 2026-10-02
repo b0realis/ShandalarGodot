@@ -243,7 +243,7 @@ func poll() -> void:
 	if connection != WebSocketPeer.STATE_OPEN:
 		return
 	if not _hello_sent:
-		_socket.send_text(JSON.stringify({"v": SgProtocol.VERSION,
+		_socket.send_text(SgProtocol.encode({"v": SgProtocol.VERSION,
 			"type": "hello", "access": _access, "resume": _resume, "nickname": _nickname, "build": build_fingerprint,
 			"stamp": build_stamp}))
 		_hello_sent = true

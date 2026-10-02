@@ -9,9 +9,12 @@ const RULED := "Organiser's ruling"
 const CORRECTED := "Corrected by organiser"
 const REASONS := ["", "Bye", "Series won", "Withdrawal", RULED, CORRECTED]
 
-const MAX_PLAYERS := 20
-const MAX_ROUNDS := 5
-const MAX_PAIRINGS := 16 # A 20-entrant first draw includes twelve byes.
+## FORTY ENTRANTS (2026-10-02, owner's word: *"expand the max player count
+## on the tournament to 40"*). A 64-bracket: six rounds, and a full first
+## draw of forty is twenty-four byes beside eight pairings — thirty-two rows.
+const MAX_PLAYERS := 40
+const MAX_ROUNDS := 6
+const MAX_PAIRINGS := 32 # A 40-entrant first draw includes twenty-four byes.
 const MAX_PAIR_ID := MAX_PLAYERS * MAX_ROUNDS
 const MAX_DECKS := 16
 const MAX_GAMES := 1000
@@ -33,6 +36,11 @@ static func valid_config(value: Variant) -> bool:
 	if value.has("welcome"):
 		fields.append("welcome")
 		if not SgViewProtocol.text(value.welcome, MAX_WELCOME) or String(value.welcome).count("\n") > 3: return false
+	# THE TABLE RULES (2026-10-02): the event's life and forks for every
+	# table it opens. Optional, so a checkpoint from before restores.
+	if value.has("rules"):
+		fields.append("rules")
+		if not SgTableRules.valid(value.rules): return false
 	if not SgProtocol.exact(value, fields): return false
 	if not SgProtocol.short_text(value.name) or not SgProtocol.integer(value.limit, 2, MAX_PLAYERS) \
 		or not SgProtocol.integer(value.wins, 1, 3) or value.policy not in ["own", "fixed", "selection"] \
@@ -51,7 +59,7 @@ static func valid_deck(value: Variant) -> bool:
 
 func configure(options: Dictionary, seed_value := -1) -> String:
 	if not id.is_empty(): return "This tournament is already configured."
-	if not valid_config(options): return "Choose a name, 2–20 players, 1–3 wins and valid tournament decks."
+	if not valid_config(options): return "Choose a name, 2–40 players, 1–3 wins, valid table rules and valid tournament decks."
 	id = Crypto.new().generate_random_bytes(32).hex_encode()
 	if not SgProtocol.token(id): return "Cannot create a tournament identity."
 	config = options.duplicate(true)

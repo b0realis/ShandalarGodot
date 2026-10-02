@@ -193,6 +193,9 @@ func test_an_unplayable_deck_is_refused_with_the_check_report() -> void:
 	assert_true(one.error.detail.has("report"))
 	assert_true(one.error.detail.problems.size() >= 1)
 	assert_true(String(one.error.message).contains("cannot be played"))
+	assert_eq(one.error.detail.report.errors.size(), 0,
+		"the check report's own errors are not grown by the unknown names (the problems list is a copy)")
+	assert_eq(one.error.detail.problems.size(), one.error.detail.report.unknown.size())
 	var good: Dictionary = ref._load_deck("big_green.deck", "--deck-a")
 	assert_eq(good.deck.name, "Big Green")
 	assert_true(good.deck.cards.size() >= 40)
@@ -274,6 +277,21 @@ func test_an_agent_plays_the_wizard_to_a_result() -> void:
 		assert_eq(int(decision.turn), int(decision.view.turn))
 		assert_eq(decision.step, decision.view.step)
 		modes[decision.mode] = decision.options
+		# THE HAND IS THE HAND (2026-10-02): as many rows as the seat's
+		# hand count, every one of them the seat's own card in no zone
+		# the boards list. The options reader used to append both boards
+		# to the view's hand while it read them.
+		var hand: Array = decision.view.hand
+		assert_eq(hand.size(), int(decision.view.players[0].hand_count),
+			"decision %d: the view's hand has hand_count rows" % n)
+		var on_table := {}
+		for player in decision.view.players:
+			for zone in ["battlefield", "graveyard", "exile"]:
+				for card in player.get(zone, []):
+					on_table[card.id] = true
+		for card in hand:
+			assert_eq(int(card.controller), 0, "decision %d: %s in the hand is the seat's" % [n, card.name])
+			assert_false(on_table.has(card.id), "decision %d: %s is in the hand, not on the table" % [n, card.name])
 		for entry in decision.view.journal:
 			assert_false(serials.has(entry.serial), "journal entry %d is sent once" % int(entry.serial))
 			serials[entry.serial] = true

@@ -18749,6 +18749,108 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-02 — Forty at the table, and the table's own rules
+
+*"Can you go over network code, expand the max player count on the
+tournament to 40 and establish a togglable, modifiable basic table
+rules when you host the game. Then try to play a game via MCP with AI
+and go over MCP code for bugfix and improvement run! Go baby."* — the
+owner. Four orders; all four landed in 0.50.1.
+
+### Forty entrants
+
+`SgTournament.MAX_PLAYERS` is 40, `MAX_ROUNDS` 6 and `MAX_PAIRINGS` 32:
+a forty-entrant first draw is eight played pairings beside twenty-four
+byes, the next round sixteen tables, a full event thirty-nine played
+series over six rounds. The server's sockets and sessions both have room
+for a field twice over (`MAX_CONNECTIONS` = `MAX_SESSIONS` = 88, rooms
+20): after a network blip every client reconnects while its half-open
+socket still holds a slot until the kernel gives it up, and the old +4
+headroom let three of forty-one back in. The tournament setup header,
+the home blurb, the refusal text and the documents say forty.
+
+### The table rules
+
+A host chooses the starting life (1–400) and the seven implemented rules
+forks for their table — the Options screen's presets or any custom mix —
+under **Table rules…** on the Host Game page, and the same editor on the
+tournament setup page sets the rules every table of the event plays
+under. The choice is one validated wire dictionary (`SgTableRules`,
+`{"life", "forks"}`) carried by the `host` command and the tournament
+config, kept on the room, shown as a one-line brief in the LAN advert
+and the Game Browser's row, whole in the room view, as the waiting
+room's column, on the opening card and in the tournament hall's header,
+and applied by the referee's process alone (`SgPracticeMatch` takes the
+life and forks). The standard table is exactly what every host opened
+before — 20 life under modern rules with mana burn on — and any message,
+room or checkpoint without the field means that table, so an older
+saved event restores unchanged. The editor remembers the host's last
+table on the device. Protocol **25**.
+
+### The network review
+
+Nine findings, each verified in code and fixed with a pin:
+
+1. The connection cap above (88, not 24).
+2. The LAN advert was built, never measured: twenty tables with long
+   non-Latin deck names were a 20 KB reply every receiver discarded
+   unread. `update_tables` now drops the last rows while `reply_size()`
+   is past `MAX_PACKET`.
+3. `SgTournamentStore.save` parsed the whole primary back before every
+   backup; a digest of the text it last wrote (`_written`) spares the
+   read-back when the file is intact, and a checkpoint past
+   `SgProtocol.MAX_BYTES` is refused instead of written.
+4. `SgTournamentHost.view` deep-copied the event's config, rounds and
+   the entrant's deck for every session on every command — forty copies
+   of sixteen approved decks. The view is the wire body `_state` encodes
+   on the spot; it rides uncopied.
+5. A client walked the whole config of every state message through
+   `SgTournament.valid_config`; `valid_view_config` remembers a copy of
+   the last config that passed and walks only a different one.
+6. `SgTableRules.brief` builds RulesOptions; the advert and every
+   session's listing asked for it per room per frame. The brief is
+   written on the room once (`_table_brief`).
+7. One LAN address could fill the whole host table (a reply names its
+   own port): `MAX_HOSTS_PER_ADDRESS` 4.
+8. An organiser's chair left on a complete or cancelled event held its
+   erased session for good, and with it the only hand that could close
+   the event — the host was wedged out of ordinary duels.
+   `vacated_by_organiser` and `reclaim_tournament` work in every phase.
+9. The discovery query and reply went through a bare `JSON.stringify`
+   `.to_ascii_buffer()`, which turns every character past 127 — the
+   brief's "·", a deck name's "Æ" — into a space with an engine error
+   each; both go through `SgProtocol.encode`.
+
+Left alone by decision: the revision-keyed, bounded `_publish("*")`
+cache clear; the per-pairing save in `launch_ready_games` (a deliberate
+rollback design); `tournament_panel.present`'s copies.
+
+### The MCP play-through
+
+A scripted MCP client played a full AI-against-pilot game through the
+server, 528 decisions, and found three things. The referee's
+`_every_card` built its options walk on `Array(view.hand)` — the SAME
+array, not a copy — so every decision after the first land listed both
+boards, the graveyards and the opponent's lands as the seat's hand,
+growing by a card a turn (90 "hand" cards against a hand count of 7);
+`_load_deck` appended unknowns into the report's own error list the
+same way. Both take copies now and the referee test pins the hand
+against the hand count and every table. The pilot lost a Balance: its
+City of Brass tap put the trigger on the stack mid-payment and the
+sorcery could no longer be cast over it, so the pilot submitted into a
+refusal; it now cancels, lets the trigger resolve, and casts again from
+the floating pool (`castable_now`). `list_decks` with `folder:
+"workspace"` named the checkout's gitignored folder, or nothing, when
+`--workspace` lay elsewhere; the word is the workspace itself and a
+relative folder is tried under the checkout, then the workspace. The
+re-run: 528 decisions, no refusal, no hand mismatch, the full view's
+median 60 KB where it was 92.
+
+### The gate
+
+549 scripts (one new), 8,269 tests, 394,697 asserts, exit 0 in 277 s;
+Python 415 (5 skipped); the five live MCP tests.
+
 ## 2026-10-01 — Development version 0.50.0
 
 *"All the work benefits also other platforms? Superb, bump major version

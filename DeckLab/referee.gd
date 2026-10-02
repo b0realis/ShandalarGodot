@@ -359,7 +359,8 @@ func _load_deck(typed: String, flag: String) -> Dictionary:
 	var Query = load("res://DeckLab/lab_query.gd")
 	var report: Dictionary = Query.deck_report(found, "")
 	if not bool(report.playable):
-		var problems: Array = Array(report.errors)
+		# The report's own errors stay its own: a copy takes the unknowns.
+		var problems: Array = report.errors.duplicate()
 		for entry in report.unknown:
 			problems.append("%s: not in the card pool%s" % [entry.name,
 				"" if entry.pack == "" else " (pack %s)" % entry.pack])
@@ -695,7 +696,13 @@ static func options_for(view: Dictionary, seat: int) -> Dictionary:
 
 
 static func _every_card(view: Dictionary) -> Array:
-	var cards: Array = Array(view.get("hand", []))
+	# A COPY of the hand (2026-10-02). `Array(array)` is the same array,
+	# and appending the two boards to it appended them to the VIEW's hand:
+	# every decision line after the first land listed the whole table —
+	# both players' permanents, graveyards, the opponent's lands — as the
+	# seat's hand, growing by a card a turn (the MCP play-through read 90
+	# "hand" cards against a hand count of 7).
+	var cards: Array = view.get("hand", []).duplicate()
 	for player in view.get("players", []):
 		for zone in ["battlefield", "graveyard", "exile", "revealed"]:
 			cards.append_array(player.get(zone, []))

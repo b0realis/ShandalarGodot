@@ -244,9 +244,12 @@ func launch_ready_games() -> void:
 			names.append(event.entrant(pid).name)
 		var room_id := "r%d" % server()._next_room
 		server()._next_room += 1
+		# Every table of the event plays under the event's rules (an older
+		# checkpoint without them restores the standard table).
+		var rules := SgTableRules.normalize(event.config.get("rules", {}))
 		server()._rooms[room_id] = {"id": room_id, "name": "Round %d Table %d" % [event.rounds.size(), SgTournament.table_number(pair.id)],
-			"seats": seats, "ready": [true, true], "revision": 1, "decks": decks,
-			"match": server()._create_match(decks, names), "t_pair": pair.id, "t_game": pair.game}
+			"seats": seats, "ready": [true, true], "revision": 1, "decks": decks, "rules": rules,
+			"match": server()._create_match(decks, names, rules), "t_pair": pair.id, "t_game": pair.game}
 		server()._attach_bots(server()._rooms[room_id])
 		for sid: int in seats: server()._sessions[sid].room = room_id
 
@@ -268,7 +271,9 @@ func collect_result(room: Dictionary) -> String:
 ## organiser's own pause stands until then: it is theirs to lift. A dropped
 ## connection is not this — the session is held for its resume code.
 func vacated_by_organiser() -> void:
-	if event.phase not in ["registration", "running"]: return
+	# Every phase: a chair left on a complete or cancelled event held its
+	# erased session for good, and with it the only hand that could close
+	# the event — the host was wedged out of ordinary duels (2026-10-02).
 	organiser = 0
 	event.revision += 1
 	save()
@@ -323,7 +328,11 @@ func view(sid: int) -> Dictionary:
 		var game: MtgGame = room.match.game
 		tables.append({"pair": room.t_pair, "life": [game.players[0].life, game.players[1].life],
 			"turn": game.turn_number, "step": Mtg.Step.keys()[game.current_step()]})
-	return {"id": event.id, "config": event.config.duplicate(true), "phase": event.phase,
-		"revision": event.revision, "champion": event.champion, "entrants": roster, "rounds": event.rounds.duplicate(true),
-		"you": pid, "deck": {} if pid == 0 else event.entrant(pid).deck.duplicate(true),
+	# The view is the wire body SgLocalServer._state encodes on the spot:
+	# the event's own config, rounds and deck ride in it uncopied. Forty
+	# deep copies of sixteen approved decks per command were the fan-out's
+	# cost (2026-10-02). Never keep or change a view.
+	return {"id": event.id, "config": event.config, "phase": event.phase,
+		"revision": event.revision, "champion": event.champion, "entrants": roster, "rounds": event.rounds,
+		"you": pid, "deck": {} if pid == 0 else event.entrant(pid).deck,
 		"code": codes.get(sid, ""), "organiser": sid == organiser, "save_error": save_error, "paused": paused, "tables": tables}

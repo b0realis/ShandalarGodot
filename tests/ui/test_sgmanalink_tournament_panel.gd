@@ -25,8 +25,10 @@ func test_tournament_setup_is_opt_in_and_uses_three_deck_policies() -> void:
 	for i in 6: await get_tree().process_frame
 	assert_eq(lobby._tournament_panel._policy.item_count, 3)
 	assert_eq(lobby._tournament_panel._wins.item_count, 3)
-	assert_eq(lobby._tournament_panel._limit.item_count, 19)
+	assert_eq(lobby._tournament_panel._limit.item_count, 39)
 	assert_eq(lobby._tournament_panel._limit.get_item_text(18), "20 players")
+	assert_eq(lobby._tournament_panel._limit.get_item_text(38), "40 players", "forty entrants (owner's word, 2026-10-02)")
+	assert_eq(lobby._tournament_panel._limit.selected, 6, "eight players stays the default")
 	assert_false(lobby._tournament_panel._deck_area.visible)
 	lobby._tournament_panel._policy.select(1)
 	lobby._tournament_panel._policy.item_selected.emit(1)

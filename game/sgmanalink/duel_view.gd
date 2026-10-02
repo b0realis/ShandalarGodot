@@ -61,6 +61,8 @@ func present(room: Dictionary, online: bool, busy: bool, hosting := false) -> vo
 	if not _built:
 		game = projection
 		config = DuelConfig.new()
+		# THE TABLE RULES: the opening card names the table's starting life.
+		config.lives = [SgTableRules.life(room.get("rules", {})), SgTableRules.life(room.get("rules", {}))]
 		for remote in 2:
 			var pid := projection.local_seat(remote)
 			config.player_names[pid] = room.names[remote]

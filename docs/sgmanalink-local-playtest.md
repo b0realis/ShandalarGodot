@@ -1,12 +1,12 @@
 # SGManalink LAN playtest
 
-Development source: `main`, version **0.50.0**. A desktop LAN full-pool duel
+Development source: `main`, version **0.50.1**. A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
 
 The **Tournament** tab adds [LAN knockout events](sgmanalink-tournaments.md)
-with 2–20 entrants, a separate or participating organiser, first to 1/2/3 wins,
+with 2–40 entrants, a separate or participating organiser, first to 1/2/3 wins,
 fixed/approved/own deck policies, a live Master Panel, an advancement diagram
 and final standings. [Computer opponents](sgmanalink-computer-players.md) can fill
 duel rooms and a chosen number of tournament seats. Protocol **21** and the
@@ -26,7 +26,7 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 
 ## Two computers on the same network
 
-Use matching **0.50.0 development builds** and enabled packs on both computers. The older
+Use matching **0.50.1 development builds** and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name
@@ -141,9 +141,14 @@ single-duel format. Build and save a custom list in the existing Deck Builder
 before opening SGManalink. No selection leaves the explicitly named 40-card
 Forest practice deck as a fallback, not a card-pool restriction.
 
-Room rules currently use **Unrestricted**, 20 starting life, mana burn on and
-free combat-damage assignment. The referee flips the coin; its winner chooses
-whether to play or draw first.
+Room decks are **Unrestricted**. The host chooses the table's starting life
+(1–400) and its rules forks under **RULES → Table rules…** on the Host Game
+page — the Options screen's presets or any custom mix of the seven implemented
+forks — and the choice is remembered on that computer for the next table. The
+standard table is 20 life under modern rules with mana burn on and free
+combat-damage assignment; the Game Browser's row, the waiting room and the
+opening card name the table's rules. The referee flips the coin; its winner
+chooses whether to play or draw first.
 There is no between-games sideboarding, match series or ante in this milestone.
 
 That paragraph describes an ordinary duel room. Tournament pairings support
@@ -275,8 +280,9 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   leaving a running match. Host shutdown loses all room/session state;
   there is no durable live-duel journal. Tournament pairings and completed game
   scores have private checkpoints; interrupted games restart, not resume.
-- Limits: twenty-four connections (twenty entrants, organiser and reconnect headroom),
-  forty-eight guest sessions, ten rooms per host;
+- Limits: eighty-eight connections and eighty-eight guest sessions (forty
+  entrants, the organiser, and every one of them reconnecting while their old
+  socket is still closing), twenty rooms per host;
   bounded JSON nesting, arrays, bytes, command queues and acknowledgements;
   32 KiB commands, 2 MiB views and a 512-card limit per transmitted collection
   (legal-block adjacency is bounded separately by rows and columns);
@@ -289,8 +295,8 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   dispatch. Duplicate/contradictory card locations, absent combat-card references
   and unknown keyword values are rejected before replacing the client view.
   Seat authorization comes from the connection, not a player
-  number submitted by the client. The data protocol is version 22 (all players
-  need this updated build, including the table's deck rule and assigned deck,
+  number submitted by the client. The data protocol is version 25 (all players
+  need this updated build, including the table's rules, its deck rule and assigned deck,
   the open host's published invitation, viewer-specific exile-play permissions,
   public hack-effect reminders, live ability badges, the protection-from-
   artifacts badge, each face's printed power/toughness, the turn's

@@ -186,8 +186,8 @@ func test_an_assigned_deck_is_chosen_in_its_window_and_required_before_hosting()
 	assert_true(SgProtocol.valid({"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}))
 	lobby._host_decks.select(0)
 	lobby._host_decks.item_selected.emit(0)
-	assert_eq(lobby._host_action(), {"op": "host", "name": "Knights only", "decks": "own", "deck": {}},
-		"bring your own sends no deck")
+	assert_eq(lobby._host_action(), {"op": "host", "name": "Knights only", "decks": "own", "deck": {},
+		"rules": lobby._rules_setup.value()}, "bring your own sends no deck; the table rules always go")
 	assert_null(lobby.service)
 	assert_false(lobby.client._wanted)
 

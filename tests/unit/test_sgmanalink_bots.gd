@@ -10,7 +10,7 @@ func test_bot_commands_reject_unbounded_counts_and_unrecognised_options() -> voi
 	var message := {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 1,
 		"action": {"op": "t_bots", "event": "a".repeat(64), "count": 8, "bot": SgBotPlayer.defaults(), "deck": _deck()}}
 	assert_true(SgProtocol.valid(message))
-	for count in [0, 21, 1.5, "8"]:
+	for count in [0, SgTournament.MAX_PLAYERS + 1, 1.5, "8"]:
 		message.action.count = count
 		assert_false(SgProtocol.valid(message))
 	message.action.count = 8

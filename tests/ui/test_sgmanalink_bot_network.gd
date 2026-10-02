@@ -14,8 +14,8 @@ class SeededServer extends SgLocalServer:
 			rate_drops += 1
 			print("BOT RATE LIMIT: ", _peers[id].count, " commands in one second")
 		super._drop(id)
-	func _create_match(decks: Array, names: Array) -> SgPracticeMatch:
-		var result := SgPracticeMatch.new(next_seed, decks, names)
+	func _create_match(decks: Array, names: Array, rules: Dictionary = {}) -> SgPracticeMatch:
+		var result := SgPracticeMatch.new(next_seed, decks, names, rules)
 		next_seed += 1
 		return result
 

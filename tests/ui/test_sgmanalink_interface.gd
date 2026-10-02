@@ -146,7 +146,7 @@ func test_overview_states_the_facts_and_repeats_no_navigation() -> void:
 	for label in home.find_children("*", "Label", true, false):
 		explanation += label.text + "\n"
 	for fact in ["local network", SgCompatibility.summary(), "same version and packs", "IDENTITY", "HOST", "JOIN", "TOURNAMENT",
-		"invitation", "referee", "20 players", "LAN address" if not SgLanInvite.local_addresses().is_empty() else "No LAN IPv4 address"]:
+		"invitation", "referee", "40 players", "LAN address" if not SgLanInvite.local_addresses().is_empty() else "No LAN IPv4 address"]:
 		assert_string_contains(explanation, fact)
 	assert_eq(lobby._navigation.size(), 5, "top tabs stay the full map")
 	for dimensions in [Vector2i(1280,800), Vector2i(960,600), Vector2i(640,480)]:

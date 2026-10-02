@@ -4,7 +4,11 @@ extends Node
 ## Access and resume capabilities live in memory, never game settings or duel logs.
 ## LAN binds one private IPv4 address, uses TLS, and never opens router ports.
 
-const MAX_CONNECTIONS := SgTournament.MAX_PLAYERS + 4
+## Sockets, like sessions, have room for a whole field twice over: after a
+## network blip every client reconnects while its half-open socket still
+## holds a slot until the kernel gives it up, and a +4 headroom let three of
+## forty-one back in (2026-10-02). A resumed session closes its old socket.
+const MAX_CONNECTIONS := SgTournament.MAX_PLAYERS * 2 + 8
 const MAX_SESSIONS := SgTournament.MAX_PLAYERS * 2 + 8
 const MAX_ROOMS := SgTournament.MAX_PLAYERS / 2
 const ACK_WINDOW := 128
@@ -78,8 +82,9 @@ func open_tournament(options: Dictionary, resume_code: String, folder: String, r
 func reclaim_tournament(resume_code: String) -> String:
 	var sid := int(_tokens.get(resume_code.sha256_text(), 0))
 	if not _connected(sid): return "Connect the organiser to this host first."
-	if tournament == null or tournament.event.phase not in ["registration", "running"]:
-		return "No tournament is under way on this host."
+	# A finished or cancelled event is still this host's until closed: its
+	# chair is taken back too, so Close is reachable (2026-10-02).
+	if tournament == null: return "No tournament is under way on this host."
 	if sid == tournament.organiser: return "This session already holds the tournament."
 	if _connected(tournament.organiser): return "The organiser is still connected."
 	tournament.organiser = sid
@@ -212,7 +217,8 @@ func poll() -> void:
 			var open: bool = room.match == null and room.seats[1] == 0 and _connected(room.seats[0])
 			if open: available += 1
 			tables.append({"name": room.name, "decks": _deck_rule(room),
-				"deck": String(room.get("fixed", {}).get("name", "")), "open": open})
+				"deck": String(room.get("fixed", {}).get("name", "")), "open": open,
+				"rules": _table_brief(room)})
 		discovery.update_rooms(available)
 		discovery.update_tables(tables)
 	# Bounded work per frame, even if an unauthenticated local process floods us.
@@ -546,9 +552,13 @@ func _command(sid: int, action: Dictionary, revision: int) -> String:
 		# An assigned-deck table deals the host's deck to both seats; it is
 		# the table's, not the seat's, so a departure never takes it away.
 		var fixed: Dictionary = action.deck.duplicate(true) if action.decks == "fixed" else {}
+		# THE TABLE RULES (2026-10-02): the host's life and forks, the
+		# standard table when the command says nothing. The table's, like
+		# the assigned deck: the referee reads them when both seats are ready.
 		_rooms[room_id] = {"id": room_id, "name": action.name.strip_edges(),
 			"seats": [sid, 0], "ready": [false, false], "revision": 1, "match": null,
-			"decks": [fixed.duplicate(true), fixed.duplicate(true)], "fixed": fixed}
+			"decks": [fixed.duplicate(true), fixed.duplicate(true)], "fixed": fixed,
+			"rules": SgTableRules.normalize(action.get("rules", {}))}
 		session.room = room_id
 		return ""
 	if op == "join":
@@ -651,14 +661,14 @@ func _start_if_both_ready(room: Dictionary) -> void:
 		return
 	if not _connected(room.seats[0]) or not _connected(room.seats[1]):
 		return
-	room.match = _create_match(room.decks, [_guest_name(room.seats[0]), _guest_name(room.seats[1])])
+	room.match = _create_match(room.decks, [_guest_name(room.seats[0]), _guest_name(room.seats[1])], _table_rules(room))
 	_attach_bots(room)
 
 
-func _create_match(decks: Array, names: Array) -> SgPracticeMatch:
+func _create_match(decks: Array, names: Array, rules: Dictionary = {}) -> SgPracticeMatch:
 	# The referee chooses its seed. Tests may override this factory on their
 	# own server; no wire command can choose or retrieve a live game's seed.
-	return SgPracticeMatch.new(-1, decks, names)
+	return SgPracticeMatch.new(-1, decks, names, rules)
 
 
 func _guest_name(sid: int) -> String:
@@ -679,12 +689,27 @@ func _table_deck(room: Dictionary) -> Dictionary:
 	return room.get("fixed", {}).duplicate(true)
 
 
+## The table's rules: what the host command carried, or the standard table
+## for a room built without one (a tournament table carries its event's).
+func _table_rules(room: Dictionary) -> Dictionary:
+	return SgTableRules.normalize(room.get("rules", {}))
+
+
+## The table's one-line rules readout, written on the room the first time it
+## is asked for: the brief builds a few RulesOptions, and the advert and
+## every session's listing asked for it per room per frame (2026-10-02).
+func _table_brief(room: Dictionary) -> String:
+	if not room.has("brief"): room.brief = SgTableRules.brief(_table_rules(room))
+	return room.brief
+
+
 func _state(sid: int) -> Dictionary:
 	var rooms: Array = []
 	for room: Dictionary in _rooms.values():
 		rooms.append({"id": room.id, "name": room.name, "host": _guest_name(room.seats[0]),
 			"open": room.match == null and room.seats[1] == 0 and _connected(room.seats[0]),
-			"decks": _deck_rule(room), "deck": String(room.get("fixed", {}).get("name", ""))})
+			"decks": _deck_rule(room), "deck": String(room.get("fixed", {}).get("name", "")),
+			"rules": _table_brief(room)})
 	var own: Dictionary = _rooms.get(_sessions[sid].room, {})
 	var view: Dictionary = {}
 	if not own.is_empty():
@@ -696,7 +721,7 @@ func _state(sid: int) -> Dictionary:
 			"deck_names": [own.decks[0].get("name", "Forest practice"), own.decks[1].get("name", "Forest practice")],
 			"deck": own.decks[seat].duplicate(true),
 			"decks": _deck_rule(own), "fixed_deck": String(own.get("fixed", {}).get("name", "")),
-			"game": _room_game(own, seat)}
+			"rules": _table_rules(own), "game": _room_game(own, seat)}
 		if _is_bot(own.seats[0]) or _is_bot(own.seats[1]):
 			view.bots = []
 			for sid_value: int in own.seats:

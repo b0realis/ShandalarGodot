@@ -3,8 +3,8 @@ extends RefCounted
 ## [QoL] Unrated loopback/LAN protocol. Data only; no Variant object decoding or RPC.
 ## Version this independently from the application release and future rated protocol.
 
-const VERSION := 24
-const SUBPROTOCOL := "sgmanalink-local-v24"
+const VERSION := 25
+const SUBPROTOCOL := "sgmanalink-local-v25"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]
@@ -146,6 +146,9 @@ static func valid(message: Dictionary) -> bool:
 		return false
 	var keys: Array = ["op"] + FIELDS[op]
 	if op in ["deck", "t_deck"] and action.has("printings"): keys.append("printings")
+	# THE TABLE RULES (2026-10-02): optional on a host command, so a sender
+	# that says nothing opens the standard table.
+	if op == "host" and action.has("rules"): keys.append("rules")
 	if not exact(action, keys):
 		return false
 	if op.begins_with("t_") and not token(action.event): return false
@@ -189,6 +192,7 @@ static func valid(message: Dictionary) -> bool:
 		"host":
 			if not short_text(action.name) or not action.decks in DECK_RULES or not action.deck is Dictionary:
 				return false
+			if action.has("rules") and not SgTableRules.valid(action.rules): return false
 			return action.deck.is_empty() if action.decks == "own" else SgDeckCatalog.valid_payload(action.deck)
 		"join": return short_text(action.room, 16)
 		"ready": return action.value is bool

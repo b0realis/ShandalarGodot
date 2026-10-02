@@ -12,18 +12,51 @@ func test_tournament_commands_are_explicitly_versioned_and_validated() -> void:
 	assert_false(SgProtocol.valid(message), "recovery requires a private capability")
 
 
-func test_twenty_entrants_fit_and_twenty_one_is_refused() -> void:
+func test_forty_entrants_fit_and_forty_one_is_refused() -> void:
+	# FORTY ENTRANTS (2026-10-02): the owner's word doubled the cap from
+	# twenty. A 64-bracket needs six rounds; a full first draw is
+	# thirty-two rows (eight pairings and twenty-four byes).
+	assert_eq(SgTournament.MAX_PLAYERS, 40)
+	assert_eq(SgTournament.MAX_ROUNDS, 6)
+	assert_eq(SgTournament.MAX_PAIRINGS, 32)
 	var options := _options("fixed")
-	options.limit = 20
+	options.limit = 40
 	var event := SgTournament.new()
 	var error := event.configure(options, 42)
-	assert_eq(error, "", "a LAN event supports twenty entrants")
+	assert_eq(error, "", "a LAN event supports forty entrants")
 	if not error.is_empty(): return
-	for i in 20:
+	for i in 40:
 		assert_ne(event.register("Entrant %d" % i, str(i).sha256_text()), 0)
 	assert_eq(event.register("Overflow", "overflow".sha256_text()), 0)
-	options.limit = 21
+	options.limit = 41
 	assert_false(SgTournament.valid_config(options))
+	assert_string_contains(SgTournament.new().configure(options, 42), "2–40 players")
+	# The full first draw: every row has a protocol-valid id, the byes
+	# are the bracket's slack, and the bracket closes in six rounds.
+	for i in 40: assert_eq(event.set_ready(i + 1, true), "")
+	assert_eq(event.draw_round(), "")
+	assert_eq(event.rounds[0].size(), SgTournament.MAX_PAIRINGS, "forty entrants fill the first draw's row cap")
+	var byes := 0
+	for pair: Dictionary in event.rounds[0]:
+		if pair.status == "bye": byes += 1
+	assert_eq(byes, 24)
+	assert_true(SgTournamentProtocol.checkpoint(event.checkpoint()), "the forty-entrant draw passes the wire check")
+	var rounds := 1
+	while event.phase != "complete":
+		for pair: Dictionary in event.rounds.back():
+			if pair.status == "bye": continue
+			for pid: int in pair.players: assert_eq(event.set_ready(pid, true), "")
+			assert_eq(event.begin_game(pair.id), "")
+			assert_true(event.record_game(pair.id, pair.game, 0))
+		if event.phase != "complete":
+			assert_eq(event.draw_round(), "")
+			rounds += 1
+	assert_eq(rounds, SgTournament.MAX_ROUNDS, "forty entrants need every round the cap allows")
+	assert_gt(event.champion, 0)
+	assert_lte(SgLocalServer.MAX_ROOMS, SgTournament.MAX_PLAYERS / 2, "every pairing of a round can have a table")
+	assert_gte(SgLocalServer.MAX_CONNECTIONS, SgTournament.MAX_PLAYERS + 1, "every entrant and the organiser connect at once")
+	assert_gte(SgLocalServer.MAX_CONNECTIONS, (SgTournament.MAX_PLAYERS + 1) * 2,
+		"and again after a network blip, while every half-open socket still holds its slot (2026-10-02)")
 
 
 func test_welcome_message_is_bounded_plain_text_and_survives_a_checkpoint() -> void:
@@ -86,12 +119,12 @@ func _event(count: int, wins := 1, seed_value := 42) -> SgTournament:
 
 
 func test_every_roster_size_has_fair_byes_and_exactly_one_champion() -> void:
-	for count in range(2, 21):
+	for count in range(2, SgTournament.MAX_PLAYERS + 1):
 		for seed_value in [1, 7, 42, 100]:
 			var event := _event(count, 1, seed_value)
 			assert_eq(event.draw_round(), "")
 			var played := 0
-			for cycle in 5:
+			for cycle in SgTournament.MAX_ROUNDS:
 				if event.phase == "complete": break
 				var seen: Array = []
 				for pair: Dictionary in event.rounds.back():
@@ -146,6 +179,30 @@ func test_deck_policies_and_registration_lock() -> void:
 	bad.decks[0].cards = bad.decks[0].cards.duplicate()
 	bad.decks[0].cards[0] = "Unknown card"
 	assert_false(SgTournament.valid_config(bad))
+
+
+func test_a_client_walks_the_views_config_once_and_still_refuses_a_changed_one() -> void:
+	# A state message carries the whole config, sixteen approved decks and
+	# all, and a client checks every message: an equal config is remembered,
+	# a config that differs by one card is walked again and refused
+	# (2026-10-02). The memo is a copy — the message it came in is not it.
+	# Every config here came off the wire: a decoded number is a float, and
+	# a float is not the int it was to a dictionary comparison, so the memo
+	# only ever meets what the client decodes.
+	SgTournamentProtocol._valid_config = {}
+	var good: Dictionary = JSON.parse_string(SgProtocol.encode(_options("fixed")))
+	assert_true(SgTournamentProtocol.valid_view_config(good))
+	assert_eq(SgTournamentProtocol._valid_config, good, "remembered")
+	var again: Dictionary = JSON.parse_string(SgProtocol.encode(good))
+	assert_true(SgTournamentProtocol.valid_view_config(again), "the same config off the wire")
+	var bad: Dictionary = JSON.parse_string(SgProtocol.encode(good))
+	bad.decks[0].cards[0] = "Unknown card"
+	assert_false(SgTournamentProtocol.valid_view_config(bad), "one card off is walked and refused")
+	assert_eq(SgTournamentProtocol._valid_config, good, "and not remembered")
+	good.decks[0].cards[0] = "Unknown card"
+	assert_false(SgTournamentProtocol.valid_view_config(good), "the remembered config was a copy: changing the original does not pass")
+	assert_false(SgTournamentProtocol.valid_view_config("config"))
+	SgTournamentProtocol._valid_config = {}
 
 
 func test_withdrawal_is_a_series_forfeit_not_fabricated_game_wins() -> void:

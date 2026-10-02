@@ -31,7 +31,7 @@ finished room releases the computer seat and its table.
 Open registration, then use **Master Panel → Overview → Computer players**.
 Choose how many seats to add, the level/challenge and the deck. Add several
 batches for mixed levels or decks. Human and computer entrants together must
-fit the configured 2–20 entrant limit. Only the organiser may add bots; remove
+fit the configured 2–40 entrant limit. Only the organiser may add bots; remove
 an unwanted entry in **Players** before starting. The roster and bot settings
 lock with registration.
 

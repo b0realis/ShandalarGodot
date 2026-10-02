@@ -43,6 +43,9 @@ var _selected_entrant := 0
 var _bot_draft: Dictionary = {}
 var _invite_only: CheckButton
 var _deck_summary: Label
+## THE TABLE RULES (2026-10-02): the event's editor and its readout.
+var _rules_setup: SgTableRulesSetup
+var _rules_summary: Label
 var _access_hint: Label
 var _windows: Array = []
 
@@ -176,7 +179,7 @@ func _build_setup() -> void:
 	_clear()
 	_setup_built = true
 	var header := SgLobbyStyle.column(self, "Host a LAN tournament", false)
-	header.add_child(SgLobbyStyle.label("Random-draw knockout · 2–20 entrants · One trusted local host", 17, true))
+	header.add_child(SgLobbyStyle.label("Random-draw knockout · 2–%d entrants · One trusted local host" % SgTournament.MAX_PLAYERS, 17, true))
 	header.add_child(SgLobbyStyle.label("Your computer runs all tables. You can join the draw or organise without playing.", 15, true))
 	# The key settings stay on the page; the rest opens in a sub-window
 	# (owner's word, 2026-09-18: front-center, uncluttered).
@@ -208,7 +211,7 @@ func _build_setup() -> void:
 	decks_row.add_child(change)
 	_policy = _option(decks_window, "DECK POLICY", ["Players bring their own decks", "One fixed deck for everyone", "Players choose from host-approved decks"])
 	_policy.name = "TournamentPolicy"
-	decks_window.add_child(SgLobbyStyle.label("Drawn games award no wins. Decks lock when registration closes; no sideboarding. Standard LAN rules: 20 life, mana burn on, unrestricted decks, no ante.", 15))
+	decks_window.add_child(SgLobbyStyle.label("Drawn games award no wins. Decks lock when registration closes; no sideboarding. Unrestricted decks, no ante; life and rules are the table rules.", 15))
 	_deck_area = VBoxContainer.new()
 	_deck_area.add_theme_constant_override("separation", 10)
 	decks_window.add_child(_deck_area)
@@ -229,6 +232,25 @@ func _build_setup() -> void:
 		_approved.clear()
 		_update_approved())
 	_update_approved()
+	# The table rules every table of the event plays under: the readout on
+	# the page, the editor in a window (owner's word, 2026-10-02).
+	settings.add_child(SgLobbyStyle.label("TABLE RULES", 14))
+	var rules_row := SgLobbyStyle.row(settings)
+	_rules_summary = SgLobbyStyle.label("", 16)
+	_rules_summary.name = "TournamentRulesSummary"
+	_rules_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rules_summary.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rules_row.add_child(_rules_summary)
+	var rules_window := _window("Table rules", "TournamentRulesWindow")
+	var rules_change := SgLobbyStyle.button("Table rules…", func() -> void: SgLobbyStyle.open_window(rules_window), Vector2(150, 38))
+	rules_change.name = "TournamentRulesChange"
+	rules_row.add_child(rules_change)
+	_rules_setup = SgTableRulesSetup.new()
+	_rules_setup.name = "TournamentRules"
+	_rules_setup.changed.connect(func(rules: Dictionary) -> void: _rules_summary.text = SgTableRules.brief(rules))
+	rules_window.add_child(_rules_setup)
+	_rules_setup.build()
+	_rules_summary.text = SgTableRules.brief(_rules_setup.value())
 	# Access: open by default, Copy invitation right beside the switch.
 	settings.add_child(SgLobbyStyle.label("ACCESS", 14))
 	var access_row := SgLobbyStyle.row(settings)
@@ -249,7 +271,7 @@ func _build_setup() -> void:
 	var create := SgLobbyStyle.button("Open registration", func() -> void:
 		var options := {"name": _name_edit.text.strip_edges(), "welcome": _welcome_edit.text.strip_edges(), "limit": _limit.selected + 2,
 			"wins": _wins.selected + 1, "policy": ["own", "fixed", "selection"][_policy.selected],
-			"decks": [] if _policy.selected == 0 else _approved.duplicate(true)}
+			"decks": [] if _policy.selected == 0 else _approved.duplicate(true), "rules": _rules_setup.value()}
 		if not SgTournament.valid_config(options):
 			_notice.text = "Use 1–32 letters, numbers, spaces, - or _ for the name. Choose valid decks and a welcome message of at most 280 characters."
 			if _policy.selected != 0 and _approved.is_empty(): SgLobbyStyle.open_window(decks_window)
@@ -478,6 +500,11 @@ func _build_hall() -> void:
 		_view.entrants.size(), int(_view.config.limit), int(_view.config.wins)], 18, true))
 	header.add_child(SgLobbyStyle.label({"own": "Players bring their own decks", "fixed": "One fixed deck for everyone",
 		"selection": "Host-approved deck selection"}[_view.config.policy] + "  ·  No ante or ranking points", 15, true))
+	var table_rules := SgTableRules.normalize(_view.config.get("rules", {}))
+	var rules_line := SgLobbyStyle.label("Table rules: " + SgTableRules.brief(table_rules), 15, true)
+	rules_line.name = "TournamentHallRules"
+	rules_line.tooltip_text = SgTableRules.detail(table_rules)
+	header.add_child(rules_line)
 	# The organiser's own host: how entrants reach it, and the invitation
 	# right there beside it.
 	if _view.organiser and not host_access.is_empty():

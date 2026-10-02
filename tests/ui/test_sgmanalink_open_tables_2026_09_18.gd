@@ -137,10 +137,11 @@ func test_an_open_host_advertises_its_invitation_and_each_table_with_its_deck_ru
 	await _act(owl, {"op": "host", "name": "Knights only", "decks": "fixed", "deck": _deck()})
 	advert = await _advert()
 	assert_eq(int(advert.rooms), 2)
+	var standard := SgTableRules.brief(SgTableRules.standard())
 	assert_eq(advert.tables, [
-		{"name": "Kitchen table", "decks": "own", "deck": "", "open": true},
-		{"name": "Knights only", "decks": "fixed", "deck": "White Knights", "open": true}],
-		"the advert names each duel and its deck rule; that is what the browser shows")
+		{"name": "Kitchen table", "decks": "own", "deck": "", "open": true, "rules": standard},
+		{"name": "Knights only", "decks": "fixed", "deck": "White Knights", "open": true, "rules": standard}],
+		"the advert names each duel, its deck rule and its table rules; that is what the browser shows")
 	assert_true(JSON.stringify(advert).length() <= SgLanDiscovery.MAX_PACKET)
 	assert_false(JSON.stringify(advert).contains(fox._resume), "never a seat's resume capability")
 	# A taken table stays listed, marked so the browser says "In play".
@@ -161,7 +162,8 @@ func test_an_invitation_only_host_lists_its_tables_but_never_its_secret_or_certi
 	assert_eq(String(advert.access), "invitation")
 	assert_false(SgLanDiscovery.open_host(advert))
 	assert_false(advert.has("invitation"))
-	assert_eq(advert.tables, [{"name": "Kitchen table", "decks": "own", "deck": "", "open": true}],
+	assert_eq(advert.tables, [{"name": "Kitchen table", "decks": "own", "deck": "", "open": true,
+		"rules": SgTableRules.brief(SgTableRules.standard())}],
 		"the duel's name is still what a player looks for")
 	var listing := JSON.stringify(scanner.hosts)
 	assert_false(listing.contains(server.access_code), "the secret is never broadcast")
@@ -266,8 +268,10 @@ func test_an_assigned_deck_is_dealt_to_both_seats_and_refused_as_a_choice() -> v
 
 
 func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> void:
-	assert_eq(SgProtocol.VERSION, 24)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v24")
+	# Protocol 25 (2026-10-02): the host command may carry THE TABLE RULES
+	# (SgTableRules) and the listings their one-line brief.
+	assert_eq(SgProtocol.VERSION, 25)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v25")
 	assert_eq(SgLanDiscovery.MAX_PACKET, 16384, "room for the certificate inside an open advert")
 	var message := func(action: Dictionary) -> Dictionary:
 		return {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}
@@ -276,8 +280,16 @@ func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> 
 	assert_true(SgProtocol.valid(message.call(smoke.HOST_ACTION)),
 		"the two-process release probe must speak the current host protocol")
 	assert_true(SgProtocol.valid(message.call({"op": "host", "name": "Knights only", "decks": "fixed", "deck": _deck()})))
+	var custom := SgTableRules.standard()
+	custom.life = 30
+	custom.forks.mana_burn = false
+	assert_true(SgProtocol.valid(message.call({"op": "host", "name": "Thirty life", "decks": "own", "deck": {}, "rules": custom})),
+		"a host may bring table rules")
 	for action in [
 			{"op": "host", "name": "Old shape"},
+			{"op": "host", "name": "Rules not a table", "decks": "own", "deck": {}, "rules": "fifth"},
+			{"op": "host", "name": "Life off the table", "decks": "own", "deck": {}, "rules": {"life": 0, "forks": custom.forks}},
+			{"op": "host", "name": "Unknown fork", "decks": "own", "deck": {}, "rules": {"life": 20, "forks": custom.forks.merged({"ante": true})}},
 			{"op": "host", "name": "Own with a deck", "decks": "own", "deck": _deck()},
 			{"op": "host", "name": "Fixed without one", "decks": "fixed", "deck": {}},
 			{"op": "host", "name": "Unknown rule", "decks": "borrowed", "deck": {}},
@@ -286,10 +298,13 @@ func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> 
 		assert_false(SgProtocol.valid(message.call(action)), str(action))
 	for row in [
 			{"id": "r1", "name": "Kitchen table", "host": "Fox", "open": true, "decks": "own", "deck": ""},
-			{"id": "r1", "name": "Knights only", "host": "Fox", "open": false, "decks": "fixed", "deck": "White Knights"}]:
+			{"id": "r1", "name": "Knights only", "host": "Fox", "open": false, "decks": "fixed", "deck": "White Knights"},
+			{"id": "r1", "name": "Thirty life", "host": "Fox", "open": true, "decks": "own", "deck": "", "rules": SgTableRules.brief(custom)}]:
 		assert_true(SgViewProtocol.valid({"type": "state", "rooms": [row], "room": {}}), str(row))
 	for row in [
 			{"id": "r1", "name": "Old shape", "host": "Fox", "open": true},
+			{"id": "r1", "name": "Rules not text", "host": "Fox", "open": true, "decks": "own", "deck": "", "rules": custom},
+			{"id": "r1", "name": "Rules too long", "host": "Fox", "open": true, "decks": "own", "deck": "", "rules": "x".repeat(65)},
 			{"id": "r1", "name": "Bad rule", "host": "Fox", "open": true, "decks": "any", "deck": ""},
 			{"id": "r1", "name": "Bad deck", "host": "Fox", "open": true, "decks": "fixed", "deck": 7}]:
 		assert_false(SgViewProtocol.valid({"type": "state", "rooms": [row], "room": {}}), str(row))

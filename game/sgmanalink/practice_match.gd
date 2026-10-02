@@ -4,7 +4,8 @@ extends RefCounted
 ## The client component never receives this object. The local host is trusted;
 ## its process contains the referee. Never serialize the game, agents, logs or RNG.
 ## The historical class name is retained for local fixtures; live rooms accept
-## validated decks from the whole registry. No client paths or rules are loaded.
+## validated decks from the whole registry. No client paths are loaded; the
+## table's rules arrive as an [SgTableRules] dictionary the server validated.
 
 const CREATURES := ["Grizzly Bears", "Giant Spider", "War Mammoth",
 	"Ironroot Treefolk", "Craw Wurm", "Durkwood Boars"]
@@ -39,7 +40,11 @@ func set_bot(pid: int, options: Dictionary) -> bool:
 	return true
 
 
-func _init(seed_value := -1, decks: Array = [{}, {}], names: Array = ["Player 1", "Player 2"]) -> void:
+func _init(seed_value := -1, decks: Array = [{}, {}], names: Array = ["Player 1", "Player 2"], rules: Dictionary = {}) -> void:
+	# THE TABLE RULES (2026-10-02): the host's starting life and forks; the
+	# standard table (20 life, mana burn on, free damage assignment) when
+	# the caller passes none, which is every table there was before.
+	var table := SgTableRules.normalize(rules)
 	var deck: Array = []
 	for i in 16:
 		deck.append("Forest")
@@ -54,12 +59,13 @@ func _init(seed_value := -1, decks: Array = [{}, {}], names: Array = ["Player 1"
 		# Cosmetic, public match metadata, computed once from the registered
 		# list just as local setup does; never infer it from a hidden hand.
 		panel_colors[pid] = DuelConfig.dominant_color(selected[pid])
-	game.setup(selected[0], selected[1], names[0], names[1], 20, 20, seed_value)
+	var life := SgTableRules.life(table)
+	game.setup(selected[0], selected[1], names[0], names[1], life, life, seed_value)
 	CardPrintings.apply_game(game, [decks[0].get("printings", {}), decks[1].get("printings", {})])
 	actions = SgDuelActions.new(game)
-	game.rules.mana_burn = true
-	# Free assignment avoids a silent ordering decision by the base agent.
-	game.rules.free_damage_assignment = true
+	# The standard table keeps free assignment on: it avoids a silent
+	# ordering decision by the base agent.
+	SgTableRules.apply(game, table)
 	game.interactive_choices = true
 	game.set_agent(0, HumanAgent.new())
 	game.set_agent(1, HumanAgent.new())

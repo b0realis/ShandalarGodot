@@ -912,6 +912,28 @@ class UnitTest(unittest.TestCase):
                     "options": {"play": {"lands": []}, "prepare": {"casts": [{"card": "c5", "x": True}, {"card": "c6", "x": False}]}}}
         self.assertEqual(mcp.default_answer(priority, memory)["card"], "c6")
         self.assertEqual(mcp.default_answer(priority, memory), {"op": "pass"})
+        # a payment whose tap put a trigger on the stack (City of Brass) is cancelled —
+        # the sorcery is prepared again once the trigger has resolved, paid from the pool
+        memory = {}
+        self.assertEqual(mcp.default_answer(priority, memory)["op"], "prepare")
+        paying = {"mode": "priority", "seat": 0,
+                  "view": {"turn": 2, "step": "MAIN1", "active": 0, "stack": [],
+                           "presentation": {"cards": [{"id": "c6", "castable": True}]}},
+                  "options": {"announcement": {"slots": []}, "draft": {"card": "c6", "reachable": True}}}
+        self.assertEqual(mcp.default_answer(paying, memory)["op"], "autopay")
+        struck_by_brass = dict(paying, view=dict(paying["view"], stack=[{"name": "City of Brass"}],
+                                                presentation={"cards": [{"id": "c6", "castable": False}]}))
+        self.assertEqual(mcp.default_answer(struck_by_brass, memory), {"op": "cancel"})
+        self.assertEqual(mcp.default_answer(dict(priority, view=dict(priority["view"], stack=[{"name": "City of Brass"}])), memory), {"op": "pass"})
+        self.assertEqual(mcp.default_answer(priority, memory), {"op": "prepare", "card": "c6", "kind": "spell", "index": 0, "x": 0, "mode": 0})
+        self.assertEqual(mcp.default_answer(paying, memory)["op"], "autopay")
+        self.assertEqual(mcp.default_answer(paying, memory), {"op": "submit", "targets": []})
+        # an instant the referee still lists as castable over the trigger is submitted as it is
+        memory = {}
+        self.assertEqual(mcp.default_answer(paying, memory)["op"], "autopay")
+        over_a_trigger = dict(paying, view=dict(paying["view"], stack=[{"name": "Manabarbs"}]))
+        self.assertEqual(mcp.default_answer(over_a_trigger, memory), {"op": "submit", "targets": []})
+        self.assertFalse(mcp.castable_now({}, "c6"))
         # a decision the referee refused an answer to gets the quiet answer, the third refusal concedes
         struck = {"strikes": {16: 1}}
         self.assertEqual(mcp.default_answer(dict(announce, n=16), struck), {"op": "cancel"})
@@ -1038,6 +1060,14 @@ class LiveTest(unittest.TestCase):
         self.assertEqual(written["check"]["decks"][0]["unknown"][0]["name"], "Bogus Card")
         listed = self.client.payload("list_decks", {"folder": str(self.workspace)})
         self.assertEqual(listed["decks"][0]["name"], "Burn")
+        # the word names the workspace wherever it lives, a relative folder is tried there too
+        self.assertEqual(self.client.payload("list_decks", {"folder": "workspace"})["decks"][0]["name"], "Burn")
+        (self.workspace / "mine").mkdir()
+        (self.workspace / "mine" / "red.deck").write_text("// NAME: Red\n20 Mountain\n", encoding="utf-8")
+        self.assertEqual([r["name"] for r in self.client.payload("list_decks", {"folder": "mine"})["decks"]], ["Red"])
+        missing = self.client.call("list_decks", {"folder": "nowhere"})
+        self.assertTrue(missing["isError"])
+        self.assertIn("not a folder", missing["structuredContent"]["error"]["message"])
 
     def test_lab_and_autodeck_plan(self):
         plan = self.client.payload("lab", {"deck_a": "big_green.deck", "deck_b": "white_knights.deck",

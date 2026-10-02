@@ -40,7 +40,12 @@ static func valid(message: Dictionary) -> bool:
 				or not message.rooms is Array or message.rooms.size() > SgLocalServer.MAX_ROOMS or not room(message.room):
 				return false
 			for item in message.rooms:
-				if not item is Dictionary or not SgProtocol.exact(item, ["id", "name", "host", "open", "decks", "deck"]) \
+				if not item is Dictionary: return false
+				var row_fields := ["id", "name", "host", "open", "decks", "deck"]
+				if item.has("rules"):
+					row_fields.append("rules")
+					if not text(item.rules, 64): return false
+				if not SgProtocol.exact(item, row_fields) \
 					or not SgProtocol.short_text(item.id, 16) or not SgProtocol.short_text(item.name) \
 					or not text(item.host, 40) or not item.open is bool \
 					or not item.decks in SgProtocol.DECK_RULES or not text(item.deck, 128):
@@ -69,6 +74,11 @@ static func room(value: Variant) -> bool:
 	if value.has("decks") or value.has("fixed_deck"):
 		fields.append_array(["decks", "fixed_deck"])
 		if not value.get("decks") in SgProtocol.DECK_RULES or not text(value.get("fixed_deck"), 128): return false
+	# THE TABLE RULES (2026-10-02): the table's life and forks, the same
+	# shape the host command carried. Optional for the same reason.
+	if value.has("rules"):
+		fields.append("rules")
+		if not SgTableRules.valid(value.rules): return false
 	if value.has("bots"):
 		fields.append("bots")
 		if not value.bots is Array or value.bots.size() != 2: return false

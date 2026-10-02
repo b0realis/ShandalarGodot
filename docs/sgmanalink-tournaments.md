@@ -1,6 +1,6 @@
 # LAN tournaments
 
-Development implementation on `main`, **0.50.0** (protocol **24**). Internet play, permanent accounts,
+Development implementation on `main`, **0.50.1** (protocol **25**). Internet play, permanent accounts,
 MElo and tournament-integrated drafting are parked. A separate
 [timed draft builder](booster-draft.md) is available for local practice.
 Windows, Linux and macOS use the existing LAN
@@ -8,15 +8,24 @@ transport; this does not add web multiplayer.
 
 ## Format and deck policy
 
-One organiser hosts 2–20 entrants, with up to five rounds. Each pairing is first to 1, 2 or 3 wins
+One organiser hosts 2–40 entrants, with up to six rounds. Each pairing is first to 1, 2 or 3 wins
 (normally one game, best of three or best of five; drawn games do not count
 towards the win target). Random fresh pairings are drawn for each round;
 first-round byes fill the next power of two. The organiser cannot reroll a
 published draw. All tables in a round may play concurrently.
 If later withdrawals leave an uneven field, the next draw can include a bye.
 For twenty entrants, the first draw has four played pairings and twelve byes;
-the next round has eight parallel matches. A full event has nineteen played
-series. Byes are shown explicitly, never counted as played wins.
+the next round has eight parallel matches, and a full event has nineteen played
+series. For forty, the first draw has eight played pairings and twenty-four
+byes, the next round sixteen parallel matches, and a full event thirty-nine
+played series over six rounds. Byes are shown explicitly, never counted as
+played wins.
+
+Every table of the event plays under the organiser's **table rules** — the
+starting life and the implemented rules forks chosen under **TABLE RULES →
+Table rules…** on the setup page (the same editor the duel host page uses;
+the standard table is 20 life under modern rules with mana burn on). The
+hall's header names them, and a saved event restores with them.
 
 Choose one fixed deck for everyone, a host-approved list of decks, or let
 each entrant bring a shipped/saved deck. Registration validates the complete
@@ -83,7 +92,8 @@ The hall has five sections:
 Final places reflect elimination round, not an invented tiebreaker. With no
 third-place game, the semifinalists share third; other same-round eliminations
 also share a place. For an uninterrupted twenty-player event, places are 1, 2,
-two at 3, four at 5, eight at 9 and four at 17. Alphabetical display within a
+two at 3, four at 5, eight at 9 and four at 17; for forty, 1, 2, two at 3,
+four at 5, eight at 9, sixteen at 17 and eight at 33. Alphabetical display within a
 shared place is not a competitive advantage. Cancellation or completion without
 a champion does not assign final ranks. These are event results, not MElo points.
 
@@ -135,7 +145,7 @@ same table, same hands, same controls. Only a host restart goes through the
 checkpoint and the recovery codes below.
 Recovery requires a matching build and the same enabled gameplay packs. Earlier
 development checkpoints remain untouched but are not migrated across a changed
-build fingerprint. Use matching 0.50.0 builds and enabled packs for recovery.
+build fingerprint. Use matching 0.50.1 builds and enabled packs for recovery.
 Computer entries retain their settings and are recreated without recovery codes.
 
 **Tournament setup → Save folder** offers a typed path, **Browse…** and
@@ -153,11 +163,12 @@ application cannot reclaim an entry by matching its nickname.
 
 ## Play on a LAN
 
-1. Use matching builds (0.50.0 uses protocol 24) and enabled card packs. Open the globe, choose a
+1. Use matching builds (0.50.1 uses protocol 25) and enabled card packs. Open the globe, choose a
    temporary name, and check the LAN address/port under **Host Game →
    Network settings…** if the computer has several adapters.
-2. Open **Tournament**. Name the event, choose 2–20 maximum entrants and a
-   first-to-1/2/3 win target. **DECKS → Change…** opens the deck policy
+2. Open **Tournament**. Name the event, choose 2–40 maximum entrants and a
+   first-to-1/2/3 win target; **TABLE RULES → Table rules…** sets the
+   starting life and rules forks every table of the event plays under. **DECKS → Change…** opens the deck policy
    (own, fixed or approved decks); for fixed or approved decks, search,
    review and add the required list(s) there. Up to sixteen approved decks
    may be offered. **Welcome message…**, **Save folder…** and **Saved
@@ -173,7 +184,7 @@ application cannot reclaim an entry by matching its nickname.
    and its welcome.
 4. Each entrant chooses **Join tournament**, selects/reviews a deck, copies
    their private recovery code, and selects **Ready for tournament**. The
-   organiser can join too, or keep all twenty places for guests.
+   organiser can join too, or keep all forty places for guests.
 5. In the **Master Panel**, choose **Start tournament**. Each paired player
    chooses **Ready for next game**. Both must be ready before their normal
    duel screen opens. The introduction shows the round, game and series score.

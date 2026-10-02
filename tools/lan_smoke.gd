@@ -95,8 +95,8 @@ var _largest_command := 0
 class MeteredServer extends SgLocalServer:
 	var chosen_seed := -1
 	var largest: Dictionary = {}
-	func _create_match(decks: Array, names: Array) -> SgPracticeMatch:
-		return SgPracticeMatch.new(chosen_seed, decks, names)
+	func _create_match(decks: Array, names: Array, rules: Dictionary = {}) -> SgPracticeMatch:
+		return SgPracticeMatch.new(chosen_seed, decks, names, rules)
 	func _send(id: int, message: Dictionary) -> void:
 		var kind := String(message.get("type", "?"))
 		largest[kind] = maxi(int(largest.get(kind, 0)), SgProtocol.encode(message).length())

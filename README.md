@@ -80,8 +80,9 @@ at a time, or the `shandalar://play-guide` resource.
 
 The desktop release includes local-network duels and
 [random-draw knockout tournaments](docs/sgmanalink-tournaments.md), including
-up to **20 players**, configurable match lengths and deck policies, an
-organiser's Master Panel, graphical advancement and final standings.
+up to **40 players**, configurable match lengths and deck policies, the
+host's own table rules (starting life and the implemented rules forks),
+an organiser's Master Panel, graphical advancement and final standings.
 [Computer seats](docs/sgmanalink-computer-players.md) use the same four local
 opponents and separate Unfair challenge; choose how many to add to a tournament.
 Tables are open by default — the Game Browser lists every duel on the network
@@ -120,8 +121,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([Development version 0.50.0](docs/ROADMAP.md#2026-10-01--development-version-0500)):
-**8,262 GUT tests / 369,757 assertions**, plus **415 Python tests**
+Most recent full-suite verification ([Forty at the table, and the table's own rules](docs/ROADMAP.md#2026-10-02--forty-at-the-table-and-the-tables-own-rules)):
+**8,269 GUT tests / 394,697 assertions**, plus **415 Python tests**
 (the MCP server's five live tests play inside the GUT gate and are
 skipped outside it). The same gate runs on GitHub Actions for
 every push and pull request.

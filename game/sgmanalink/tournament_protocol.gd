@@ -132,11 +132,26 @@ static func roster(value: Variant, private_data: bool) -> bool:
 	return true
 
 
+## The last config a view carried that read valid. A client checks every
+## state message, and the config — sixteen approved decks against the card
+## pool — changes only in registration: an equal one (a deep compare, in
+## the engine) is not walked again (2026-10-02).
+static var _valid_config: Dictionary = {}
+
+
+static func valid_view_config(value: Variant) -> bool:
+	if not value is Dictionary: return false
+	if not _valid_config.is_empty() and value == _valid_config: return true
+	if not SgTournament.valid_config(value): return false
+	_valid_config = value.duplicate(true)
+	return true
+
+
 static func view(value: Variant) -> bool:
 	if not value is Dictionary: return false
 	if value.is_empty(): return true
 	if not SgProtocol.exact(value, ["id", "config", "phase", "revision", "champion", "entrants", "rounds", "you", "deck", "code", "organiser", "save_error", "paused", "tables"]) \
-		or not SgProtocol.token(value.id) or not SgTournament.valid_config(value.config) \
+		or not SgProtocol.token(value.id) or not valid_view_config(value.config) \
 		or not SgProtocol.integer(value.revision, 1) or not roster(value.entrants, false) \
 		or not SgProtocol.integer(value.you) or not SgViewProtocol.deck(value.deck) \
 		or not value.code is String or (value.code != "" and not SgProtocol.token(value.code)) \
