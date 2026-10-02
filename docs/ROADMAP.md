@@ -18749,6 +18749,33 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-02 — The flag the neighbour left (0.50.2)
+
+The 0.50.1 gate was green on the desk and red on one CI runner: shard
+2 of four failed `tests/unit/test_android_corner_2026_09_29.gd` at
+*"nothing consumed"* (run 37039581867). The tracer's test sent a key
+through `_input` and asserted `get_viewport().is_input_handled()` was
+false afterwards — but that flag is only ever reset by a real
+`push_input`, so a test that calls `_input` directly reads whatever the
+previous script's last click left there. The desk's six-way deal never
+put a clicking UI script in front of it; CI's four-way deal did. The
+deal was reproduced in a clean `git archive` tree with `LC_ALL=C
+SHARDS=4 SHARD=2`: 133 scripts, 2,087 tests, the one failure at line
+266, the same neighbours (`test_target_arrows`, `test_text_deck_import`,
+`test_tutor_payment_2026_09_06` before it). The pair alone did not
+reproduce it — only the whole deal does, which is why the first fix was
+checked against the deal and not the pair.
+
+The test now reads the flag before the key and holds the tracer to
+leaving it as found (`assert_eq(..., handled_before, "nothing
+consumed")`). No game code changed. The same clean-tree deal with the
+fix: green.
+
+### The gate
+
+549 scripts, 8,269 tests, 394,784 asserts, exit 0 in
+254 s; Python 415 (5 skipped).
+
 ## 2026-10-02 — Forty at the table, and the table's own rules
 
 *"Can you go over network code, expand the max player count on the

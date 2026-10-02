@@ -360,6 +360,15 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The flag the neighbour left (2026-10-02)
+
+- `tests/unit/test_android_corner_2026_09_29.gd`: the tracer test records
+  `get_viewport().is_input_handled()` before its key and asserts the flag
+  is left as found — the flag is only reset by a real `push_input`, so a
+  test calling `_input` directly inherits the previous script's last
+  click (CI's four-way deal put a clicking UI script in front of it; the
+  desk's six-way deal did not). Test-only; 0.50.2.
+
 ## Forty at the table, and the table's own rules (2026-10-02)
 
 The owner's order: *"go over network code, expand the max player count
@@ -1066,6 +1075,11 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.2.md`: the flag the neighbour left — a test-only
+  version: the Android corner tracer's test holds the viewport's
+  input-handled flag to "as found" instead of "false", since only a real
+  `push_input` resets it and CI's four-way deal ran a clicking script
+  before it.
 - `docs/releases/0.50.1.md`: forty at the table and the table's own rules —
   the tournament cap 40 (six rounds, 32 first-draw rows), the host's
   starting life and rules forks on the wire (protocol 25), the nine

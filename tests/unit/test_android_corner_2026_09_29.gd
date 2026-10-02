@@ -247,6 +247,12 @@ func test_the_tracer_says_the_start_then_each_class_once() -> void:
 	assert_true(notes.back().begins_with("card pool: "), "the pool's line is the last note at ready")
 	assert_false(tracer.is_processing(), "nothing left to wait for")
 	var head := 2 + notes.size()
+	# The viewport's handled flag is only ever reset by a real push_input:
+	# a UI script before this one in the shard leaves it as its last click
+	# left it (CI's four-way split put test_tutor_payment there, 2026-10-02),
+	# so the tracer is held to leaving it as found, not to a flag it never
+	# touched being false.
+	var handled_before := get_viewport().is_input_handled()
 	assert_eq(tracer.traced.size(), head)
 	assert_true(tracer.traced[0].begins_with("android: tree ready after "), tracer.traced[0])
 	assert_eq(tracer.traced[1], AndroidCorner.device_line())
@@ -263,7 +269,7 @@ func test_the_tracer_says_the_start_then_each_class_once() -> void:
 	assert_eq(tracer.traced.size(), head + 1, "a class is reported once")
 	tracer._input(InputEventMouseButton.new())
 	assert_eq(tracer.traced.size(), head + 2)
-	assert_false(get_viewport().is_input_handled(), "nothing consumed")
+	assert_eq(get_viewport().is_input_handled(), handled_before, "nothing consumed")
 	# Up to TRACED_CLASSES classes, then quiet.
 	var classes: Array = [InputEventScreenTouch, InputEventScreenDrag,
 		InputEventJoypadButton, InputEventJoypadMotion, InputEventKey,
