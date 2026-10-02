@@ -11174,6 +11174,16 @@ func _collect_damage_requests(first_strike_wave: bool) -> Array:
 	# the request list stays deterministic. See the blocker side below.
 	var blocker_targets := {}
 	var blocker_order: Array[CardInstance] = []
+	# blocker id -> the attacking player, for every blocker that fights an
+	# attacking BAND (two or more live members, so CR 702.22c put a
+	# banding creature in it). OFFENSIVE BANDING (CR 702.22j, first
+	# sentence; Fifth Edition's "the attacking player divides the damage
+	# from blocking creatures among the band"): that blocker's damage is
+	# divided by the ATTACKING player, freely, among the band — the
+	# 1997 `%s: Assign damage to attackers` pass. Until 0.50.4 the
+	# blocker's controller divided it lethal-first and killed as much of
+	# the band as the points reached.
+	var blocker_band_owner := {}
 	for band in combat.all_bands():
 		# Live band members and live blockers committed against the band.
 		var members: Array[CardInstance] = []
@@ -11257,7 +11267,10 @@ func _collect_damage_requests(first_strike_wave: bool) -> Array:
 			for id in member_ids:
 				if not reach.has(id):
 					reach.append(id)
+			if members.size() >= 2:
+				blocker_band_owner[blocker.id] = members[0].controller_id
 	for blocker in blocker_order:
+		var banded_attack := blocker_band_owner.has(blocker.id)
 		out.append({
 			"source": blocker,
 			"targets": (blocker_targets[blocker.id] as Array).duplicate(),
@@ -11269,8 +11282,9 @@ func _collect_damage_requests(first_strike_wave: bool) -> Array:
 			# lethal-sized sliver), and a band's leftover joins the last
 			# member (CR 510.1d) — both are this flag.
 			"spill_to_last": true,
-			"assigner": blocker.controller_id,
-			"free_order": false,
+			"assigner": int(blocker_band_owner[blocker.id]) if banded_attack \
+				else blocker.controller_id,
+			"free_order": banded_attack,
 			"defender": defender,
 		})
 	return out
@@ -11286,13 +11300,16 @@ func _collect_damage_requests(first_strike_wave: bool) -> Array:
 ## not 2+2. A [param trample] surplus goes to the defending player
 ## (CR 702.19b); without trample the surplus joins the final creature —
 ## all power must be assigned, even when it exceeds lethal (CR 510.1c-d).
-## [param free_order] is the defensive-banding division (CR 702.22f-h),
-## which the DEFENDING player makes: lethal-first is exactly the wrong
-## default there — it would kill as many of their own blockers as the
-## damage can reach — so the whole amount goes onto the ONE body they mind
-## losing least, and every other blocker walks away. Piling it on a single
-## creature also denies a trampling attacker its spill-over, which is the
-## printed interaction and the reason to band-block a trampler at all.
+## [param free_order] is a BANDING division, which the owner of the bodies
+## makes: the DEFENDING player dividing an attacker's damage among banding
+## blockers (CR 702.22f-h), or the ATTACKING player dividing a blocker's
+## damage among their own band (CR 702.22j). Lethal-first is exactly the
+## wrong default there — it would kill as many of their own creatures as
+## the damage can reach — so the whole amount goes onto the ONE body they
+## mind losing least, and every other one walks away. On the defence,
+## piling it on a single creature also denies a trampling attacker its
+## spill-over, which is the printed interaction and the reason to
+## band-block a trampler at all.
 func default_damage_split(_source: CardInstance, targets: Array, amount: int,
 		trample: bool, already: Dictionary, free_order := false) -> Dictionary:
 	if free_order and amount > 0:
@@ -11329,8 +11346,8 @@ func default_damage_split(_source: CardInstance, targets: Array, amount: int,
 	return out
 
 
-## What a blocker is worth to the player who has to choose which of their
-## own creatures eats a banded attacker's damage. Cheap and honest: body
+## What a creature is worth to the player who has to choose which of their
+## own eats the damage a band is dealt or deals. Cheap and honest: body
 ## size first, mana value to break the tie.
 func _defensive_value(inst: CardInstance) -> int:
 	return (inst.cur_power + inst.cur_toughness) * 100 \
@@ -11495,9 +11512,14 @@ func _resume_damage_assignment() -> void:
 		if _request_is_a_choice(request) \
 				and agents[assigner].wants_to_assign_combat_damage():
 			awaiting_damage_assignment = true
-			# `@PROMPT_RESOLVECOMBAT` entry 1, Program/UIStrings.txt:999.
-			log_line("%s: Assign damage to blockers, %d points left" % [
-				request["source"].data.card_name, int(request["amount"])])
+			# `@PROMPT_RESOLVECOMBAT` entries 1 and 7, Program/UIStrings.txt:999
+			# — the second is a blocker's damage divided among the band it
+			# blocked, by the attacking player.
+			var source: CardInstance = request["source"]
+			log_line("%s: Assign damage to %s, %d points left" % [
+				source.data.card_name,
+				"blockers" if combat.attackers.has(source.id) else "attackers",
+				int(request["amount"])])
 			_emit_state()
 			return
 		_commit_split(_agent_split(request))

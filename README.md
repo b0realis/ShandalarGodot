@@ -121,8 +121,8 @@ has its own documented implementation, and changes are checked through
 regression tests and reproducible simulations. Godot keeps the project
 independent and the source accessible.
 
-Most recent full-suite verification ([The tester with no keyboard](docs/ROADMAP.md#2026-10-02--the-tester-with-no-keyboard-0503)):
-**8,294 GUT tests / 394,895 assertions**, plus **419 Python tests**
+Most recent full-suite verification ([The lamb the attacker picks](docs/ROADMAP.md#2026-10-03--the-lamb-the-attacker-picks-0504)):
+**8,299 GUT tests / 404,301 assertions**, plus **419 Python tests**
 (the MCP server's five live tests play inside the GUT gate and are
 skipped outside it). The same gate runs on GitHub Actions for
 every push and pull request.

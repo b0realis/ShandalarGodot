@@ -194,10 +194,12 @@ func order_blockers(_game: MtgGame, _attacker: CardInstance,
 ## [param already] is what this damage step has assigned to each creature
 ## so far, so "lethal" accounts for it.
 ##
-## [param free_order] is true when DEFENSIVE BANDING has handed this
-## division to the DEFENDING player (CR 702.22f-h): the seat being asked
-## owns the blockers, and the lethal-first order of CR 510.1c does not
-## apply, so any distribution totalling [param amount] is legal.
+## [param free_order] is true when BANDING has handed this division to
+## the seat that owns the bodies: the DEFENDING player dividing an
+## attacker's damage among banding blockers (CR 702.22f-h), or the
+## ATTACKING player dividing a blocker's damage among their own band
+## (CR 702.22j). The lethal-first order of CR 510.1c does not apply, so
+## any distribution totalling [param amount] is legal.
 ##
 ## Default: the engine's own lethal-first spread — see
 ## [method MtgGame.default_damage_split], which switches to a

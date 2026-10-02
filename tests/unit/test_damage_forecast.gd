@@ -73,6 +73,25 @@ func test_defensive_banding_keeps_the_other_blocker_alive() -> void:
 	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD)
 
 
+func test_offensive_banding_keeps_the_other_attacker_alive() -> void:
+	# CR 702.22j: the attacking player divides the blocker's damage among
+	# their band — the forecast, which runs the engine on a snapshot,
+	# agrees with the real step (0.50.4).
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var giant := put_battlefield(1, "Hill Giant")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [hero.id, bear.id], [[hero.id, bear.id]]))
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {giant.id: bear.id}))
+	var future := _assert_round_trip(true)
+	assert_false(future["alive"].has(hero.id))
+	assert_true(future["alive"].has(bear.id))
+	advance_to_step(Mtg.Step.COMBAT_DAMAGE)
+	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(hero.zone, Mtg.Zone.GRAVEYARD)
+
+
 func test_shared_prevention_pool_is_spent_only_once() -> void:
 	var giant := put_battlefield(0, "Two-Headed Giant of Foriys")
 	var a := put_battlefield(1, "Grizzly Bears")

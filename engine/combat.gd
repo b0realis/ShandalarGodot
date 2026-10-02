@@ -31,12 +31,14 @@ extends RefCounted
 ## - BANDING (702.22, simplified but honest): creatures with banding may be
 ##   declared in bands (all members banding, or all-but-one). A blocker
 ##   that blocks ANY band member fights the WHOLE band: every striking
-##   member's damage pools against the band's blockers, and blocker damage
-##   is spread across band members lethal-first in band order —
-##   approximating the attacker-assigns rule (702.22j) with the
-##   sacrificial-lamb line real players take. DEFENSIVE banding (the
-##   defending player dividing an attacker's damage among its blockers,
-##   CR 702.22f-h) is the `free_order` flag on a damage request.
+##   member's damage pools against the band's blockers, and the ATTACKING
+##   player divides each blocker's damage among the band's members as they
+##   like (702.22j; the 1997 `%s: Assign damage to attackers` pass) — the
+##   engine's own answer for them is the sacrificial-lamb line real players
+##   take, the whole packet on the member they mind losing least. DEFENSIVE
+##   banding (the defending player dividing an attacker's damage among its
+##   blockers, CR 702.22f-h) is the same `free_order` flag on a damage
+##   request, credited to the other seat.
 ## - TRAMPLE (702.19): excess over the blockers' lethal carries to the
 ##   defending player.
 

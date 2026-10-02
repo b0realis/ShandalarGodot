@@ -270,6 +270,103 @@ func test_a_banding_blocker_denies_a_trampler_its_spill() -> void:
 	assert_eq(bears.zone, Mtg.Zone.BATTLEFIELD)
 
 
+# ---------------------------------------------------- OFFENSIVE BANDING --
+#
+# CR 702.22j, first sentence (Fifth Edition: "the attacking player divides
+# the damage from blocking creatures among the band"): when a creature
+# blocks an attacking band, the ATTACKING player — not the blocker's
+# controller — divides that blocker's combat damage among the band's
+# members, freely. The 1997 game's `%s: Assign damage to attackers, %d
+# points left` pass (Program/UIStrings.txt:1007). Found in a referee game
+# on 2026-10-03: an Air Elemental blocking a White Knight + Pikemen band
+# was let kill both, when four points divided by the attacker keep the
+# Knight. Until 0.50.4 combat.gd called the lethal-first spread an
+# approximation of this rule; it was the opposite seat's choice.
+
+func test_a_blocked_band_hands_the_blocker_s_division_to_the_attacker() -> void:
+	# Benalish Hero (1/1, banding) and Grizzly Bears (2/2) attack as a
+	# band; Hill Giant (3/3) blocks the Bears. Its three points reach the
+	# whole band. Lethal-first in band order would kill BOTH (1 + 2); the
+	# engine's answer for the attacker feeds the cheaper body the lot.
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bears := put_battlefield(0, "Grizzly Bears")
+	var giant := put_battlefield(1, "Hill Giant")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [hero.id, bears.id], [[hero.id, bears.id]]))
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {giant.id: bears.id}))
+	advance_to_step(Mtg.Step.COMBAT_END)
+	assert_eq(hero.zone, Mtg.Zone.GRAVEYARD, "the lamb")
+	assert_eq(bears.zone, Mtg.Zone.BATTLEFIELD,
+		"the better body walked away — lethal-first would have buried it")
+	assert_eq(giant.zone, Mtg.Zone.GRAVEYARD, "the band's pooled 1 + 2 still lands")
+
+
+func test_the_attacker_can_answer_the_blocker_s_division_themselves() -> void:
+	# The choice is the attacking seat's and it is real: an attacker that
+	# would rather lose the Bears and keep the Hero gets exactly that.
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bears := put_battlefield(0, "Grizzly Bears")
+	var giant := put_battlefield(1, "Hill Giant")
+	var picky := PickyAgent.new()
+	picky.favourite = bears.id     # the OPPOSITE of the engine's default
+	g.agents[0] = picky
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [hero.id, bears.id], [[hero.id, bears.id]]))
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {giant.id: bears.id}))
+	advance_to_step(Mtg.Step.COMBAT_END)
+	assert_eq(bears.zone, Mtg.Zone.GRAVEYARD, "the attacker's own answer")
+	assert_eq(hero.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_the_blocker_s_controller_is_not_asked_for_a_band_s_division() -> void:
+	# An interactive DEFENDER is never prompted for it, and an answer from
+	# that seat is refused; the interactive ATTACKER is the one the step
+	# waits on, with the blocker as the request's source and the band as
+	# its targets, free of the lethal-first order.
+	g.agents[0] = PromptAgent.new()
+	g.agents[1] = PromptAgent.new()
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bears := put_battlefield(0, "Grizzly Bears")
+	var giant := put_battlefield(1, "Hill Giant")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [hero.id, bears.id], [[hero.id, bears.id]]))
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {giant.id: bears.id}))
+	advance_to_step(Mtg.Step.COMBAT_DAMAGE)
+	assert_true(g.awaiting_damage_assignment, "the step waits")
+	var request := g.damage_assignment_request()
+	assert_eq(int(request.assigner), 0, "the attacking player's division")
+	assert_eq((request.source as CardInstance).id, giant.id, "the blocker's damage")
+	assert_true(bool(request.free_order), "no lethal-first order")
+	assert_eq(request.targets, [hero.id, bears.id] as Array, "the whole band")
+	assert_eq(g.log_lines[g.log_lines.size() - 1], "Hill Giant: Assign damage to attackers, 3 points left",
+		"the 1997 banding pass, entry 7 of @PROMPT_RESOLVECOMBAT")
+	assert_refused(g.assign_combat_damage(1, {hero.id: 3}), "not yours")
+	assert_eq(g.assign_combat_damage(0, {bears.id: 1, hero.id: 2}), "",
+		"any division totalling the amount is legal")
+	assert_false(g.awaiting_damage_assignment)
+	assert_eq(hero.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(bears.damage, 1)
+	assert_eq(bears.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_a_lone_attacker_s_blocker_damage_is_still_the_defender_s() -> void:
+	# The control: no band, one blocked attacker — the blocker's damage is
+	# a single packet with nothing to divide, and nobody is asked.
+	g.agents[0] = PromptAgent.new()
+	var bears := put_battlefield(0, "Grizzly Bears")
+	var giant := put_battlefield(1, "Hill Giant")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [bears.id]))
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {giant.id: bears.id}))
+	advance_to_step(Mtg.Step.COMBAT_END)
+	assert_false(g.awaiting_damage_assignment)
+	assert_eq(bears.zone, Mtg.Zone.GRAVEYARD)
+
+
 func test_the_defender_can_answer_the_division_themselves() -> void:
 	# The choice is real, not a fixed heuristic: an agent that would rather
 	# lose the Bears and keep the Hero gets exactly that.

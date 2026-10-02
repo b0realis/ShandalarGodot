@@ -40,8 +40,10 @@ func test_lethal_first_split_leaves_no_overkill() -> void:
 func test_band_is_blocked_as_a_group() -> void:
 	# Benalish Hero bands with Grizzly Bears; Serra (4/4) blocks the BEAR.
 	# The whole band fights her: 1+2 power vs her 4 toughness (she lives),
-	# her 4 damage spreads lethal-first across the band in band order —
-	# hero (1) dies, bears take the rest and die too (2 toughness, 3 left).
+	# and her 4 damage is divided among the band by the ATTACKING player
+	# (CR 702.22j) — the engine's answer for them is the sacrificial lamb,
+	# the whole packet on the Hero, so the Bears walk away. (Until 0.50.4
+	# the defender spread it lethal-first and buried both.)
 	var hero := put_battlefield(0, "Benalish Hero")
 	var bears := put_battlefield(0, "Grizzly Bears")
 	var serra := put_battlefield(1, "Serra Angel")
@@ -50,8 +52,8 @@ func test_band_is_blocked_as_a_group() -> void:
 	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
 	assert_ok(g.declare_blockers(1, {serra.id: bears.id}))
 	advance_to_step(Mtg.Step.COMBAT_END)
-	assert_eq(hero.zone, Mtg.Zone.GRAVEYARD)
-	assert_eq(bears.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(hero.zone, Mtg.Zone.GRAVEYARD, "the lamb")
+	assert_eq(bears.zone, Mtg.Zone.BATTLEFIELD, "the attacker kept the better body")
 	assert_eq(serra.damage, 3, "the whole band's power hit the blocker")
 	assert_eq(g.players[1].life, 20, "blocked band deals no player damage")
 

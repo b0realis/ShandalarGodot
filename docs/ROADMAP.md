@@ -18749,6 +18749,41 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-03 — The lamb the attacker picks (0.50.4)
+
+A game played through the MCP server (`tools/shandalar_mcp.py`, the
+Crusader deck against the Wizard's Elementalist, seed 1003, lost on turn
+18 at 1 life): a White Knight and a Pikemen attacked as a band, an Air
+Elemental blocked, and its four points were spread 2 + 2 down the band
+by the Wizard — both died. Under CR 702.22j (and Fifth Edition's banding,
+the 1997 game's `%s: Assign damage to attackers, %d points left` pass,
+`Program/UIStrings.txt:1007`) the ATTACKING player divides a blocker's
+damage among their band, freely, and four points divided by the attacker
+keep the Knight. `engine/combat.gd` had called the lethal-first spread
+"approximating the attacker-assigns rule"; the request was credited to
+the blocker's controller, so the opposite seat chose.
+
+- `engine/mtg_game.gd` `_collect_damage_requests`: a blocker that fights
+  a band of two or more live members gets `assigner` = the band's
+  controller and `free_order` = true; `default_damage_split`'s free-order
+  answer (the whole packet on the body its owner minds losing least) is
+  now the attacker's sacrificial lamb as well as the defender's.
+  `_resume_damage_assignment` logs `Assign damage to attackers` when the
+  source is a blocker; `DuelScreen._damage_prompt` says the same.
+- `engine/combat.gd` header and `DecisionAgent.assign_combat_damage`'s
+  `free_order` doc name both halves of CR 702.22j.
+- Tests: `tests/unit/test_damage_assignment.gd` "OFFENSIVE BANDING"
+  (+4: the default keeps the better body, a PickyAgent attacker chooses
+  the other, an interactive defender is never asked and its answer is
+  refused while the attacker's prompt names the blocker and the band, a
+  lone attacker's blocker is nobody's division);
+  `tests/unit/test_damage_forecast.gd` +1 (the forecast agrees);
+  `tests/cards/test_pool_wave3.gd` `test_band_is_blocked_as_a_group`
+  repointed from "both die" to "the Bears walk away".
+
+Gate: 550 scripts, **8,299/8,299 tests, 404,301 asserts**, exit 0 in
+260 s over 6 shards; Python 419 (5 skipped), exit 0.
+
 ## 2026-10-02 — The tester with no keyboard (0.50.3)
 
 The first word back from the ArkOS experimental build, an R36 Ultra:

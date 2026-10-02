@@ -1769,8 +1769,11 @@ func _damage_prompt() -> String:
 		if request.targets.is_empty():
 			return "%s: click the opponent for all %d damage, or Done to deal none" % [source.data.card_name, int(request.amount)]
 		return "%s: click the opponent to deal all %d damage, or assign to blockers" % [source.data.card_name, int(request.amount)]
+	# `@PROMPT_RESOLVECOMBAT` entry 7 is the banding pass: a blocker's
+	# damage divided among the band it blocked, by the attacking player.
 	var verb := "Assign trample damage to blockers" if bool(request["trample"]) \
-		else "Assign damage to blockers"
+		else ("Assign damage to blockers" if game.combat.attackers.has(source.id) \
+		else "Assign damage to attackers")
 	return "%s: %s, %d points left" % [
 		source.data.card_name, verb, _points_left()]
 

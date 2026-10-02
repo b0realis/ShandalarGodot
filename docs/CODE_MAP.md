@@ -360,6 +360,25 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The lamb the attacker picks (2026-10-03)
+
+A referee game through the MCP server let a blocker's controller spread
+its damage lethal-first down the attacking band; CR 702.22j gives that
+division to the attacking player. 0.50.4.
+
+- `engine/mtg_game.gd`: `_collect_damage_requests` credits a blocker's
+  request to the band's controller with `free_order` when it fights a
+  band of two or more live members (`blocker_band_owner`);
+  `_resume_damage_assignment` logs `Assign damage to attackers` for it;
+  `default_damage_split` / `_defensive_value` docs cover both seats.
+- `engine/combat.gd`: the BANDING bullet names the attacker's division.
+- `engine/decision_agent.gd`: `free_order` is any banding division.
+- `game/duel/duel_screen.gd`: `_damage_prompt` picks "attackers" when
+  the request's source is not an attacker.
+- Tests: `tests/unit/test_damage_assignment.gd` (+4, OFFENSIVE BANDING),
+  `tests/unit/test_damage_forecast.gd` (+1), `tests/cards/test_pool_wave3.gd`
+  (one pin repointed).
+
 ## The tester with no keyboard (2026-10-02)
 
 The first report from an R36 Ultra on ArkOS: the launcher exited with
@@ -1115,6 +1134,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.4.md`: the lamb the attacker picks — a blocked
+  attacking band's incoming damage is divided by the attacking player
+  (CR 702.22j), the engine's default keeping the better body.
 - `docs/releases/0.50.3.md`: the tester with no keyboard — the ArkOS
   launcher survives a full system drive (temporary files beside the game,
   PortMaster's commands split without here-strings, an installed gptokeyb
@@ -5079,7 +5101,8 @@ shandalar/
 │   │   ├── test_damage_assignment.gd  §1.4: the attacker divides its
 │   │   │                      combat damage freely (1997 and, since
 │   │   │                      Foundations 2024, modern too); the
-│   │   │                      2009-2024 order as the opt-in fork
+│   │   │                      2009-2024 order as the opt-in fork; both
+│   │   │                      banding divisions (CR 702.22f-h, 702.22j)
 │   │   ├── test_rules_migration_2026_09_18.gd  Settings._migrate_rules:
 │   │   │                      an older file's "Modern" preset wrote the
 │   │   │                      2009-2024 order; looked at once, moved
