@@ -9587,6 +9587,13 @@ func _on_control(event: InputEvent) -> void:
 		if Controls.pressed(event, "duel_cancel") or Controls.pressed(event, "duel_pause"):
 			_close_pause()
 		return
+	# READ THE CARD (2026-10-02, the R36 Ultra tester: *"an easy way to
+	# bring a card up full-size when you need to read it"*): the key opens
+	# the reader on the sidebar's card — the reader a click on it opens,
+	# behind the same gate — and the reader closes on the same key.
+	if Controls.pressed(event, "duel_read") and _fullscreen_card != null \
+			and _fullscreen_card.open_card(true):
+		return
 	# s30's choice overlay answers to the NUMBER KEYS (`duel.go:2643-2649`
 	# — `ebiten.Key1 + ebiten.Key(i)` for the first nine options), and so
 	# does ours; while it is up they mean nothing else (§1.3) — except

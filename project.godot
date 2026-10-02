@@ -35,6 +35,13 @@ TouchControls="*res://game/input/touch_controls.gd"
 ; without a pad unless the player turns it on (Options > Pad pointer);
 ; see game/input/pad_controls.gd.
 PadControls="*res://game/input/pad_controls.gd"
+; The on-screen keyboard for a handheld with no keys of its own: a board
+; of keys over the bottom of the window whenever a text field takes the
+; focus, each key one key event down the engine's own path. On by
+; default on a named handheld whose system has no on-screen keyboard
+; (ArkOS, a Steam Deck's desktop), never on a desk, Options > On-screen
+; keyboard; see game/input/screen_keyboard.gd.
+ScreenKeyboard="*res://game/input/screen_keyboard.gd"
 
 [application]
 
@@ -44,7 +51,7 @@ config/name="Shandalar"
 ; Keep integration tests separate from concurrent base and pack checkouts.
 ; This feature is never selected by exported player builds.
 config/name.shandalar_test="Shandalar Integration Tests"
-config/version="0.50.2"
+config/version="0.50.3"
 ; An Android back gesture is Escape (game/lifecycle.gd), never a quit.
 config/quit_on_go_back=false
 config/description="Open-source remake of MicroProse's 1997 Magic: The Gathering (Shandalar), with a modular GDScript MTG rules engine."
@@ -196,6 +203,12 @@ duel_log={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":76,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":4,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+duel_read={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":82,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 duel_mute={

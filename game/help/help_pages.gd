@@ -258,10 +258,10 @@ static func _page_table() -> Dictionary:
 		_heading("The prompt tells you what to do next"),
 		_text("The Situation Bar asks for attackers, blockers, targets or mana. Done completes the current choice. Cancel abandons a choice when that is still allowed."),
 		_heading("Keep these keys handy"),
-		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
+		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
 			Controls.key_text("duel_done"), Controls.key_text("duel_cancel"), Controls.key_text("duel_space"),
 			Controls.pad_text("duel_space"), Controls.pad_text("duel_done"), Controls.pad_text("duel_cancel"),
-			Controls.pad_text("duel_pause")]),
+			Controls.pad_text("duel_pause"), Controls.text("duel_read")]),
 		_heading("Hand, library and graveyard"),
 		_text("Your hand holds cards you can play. The face-down library supplies draws. Click either graveyard to inspect discarded cards; the menu also gives access to exile."),
 		_heading("Hotseat · Take turns privately"),

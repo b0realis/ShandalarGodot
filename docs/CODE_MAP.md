@@ -360,6 +360,46 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The tester with no keyboard (2026-10-02)
+
+The first report from an R36 Ultra on ArkOS: the launcher exited with
+`controller mapper unavailable` on a device whose system drive was full,
+the 3.5-inch sidebar card wants a key to read it, and a handheld without
+keys wants a keyboard. 0.50.3.
+
+- `packaging/handhelds/arkos.sh`: every temporary file beside the game —
+  `TMPDIR=$GAMEDIR/tmp` (made before `control.txt` is sourced, removed on
+  exit), the cache under `conf/cache` (`XDG_CACHE_HOME`); PortMaster's
+  `$ESUDO`/`$GPTOKEYB` word-split by the shell under `set -f` (no
+  here-string, so no temporary file); an installed
+  `$controlfolder/gptokeyb` run the way `control.txt` runs it when the
+  export did not survive; a line in `portmaster.log` when `/tmp` has under
+  1 MB free; the mapper named BEFORE weston mounts. No `<<` in the file.
+  Tests: `tools/test_handheld_launchers.py` (+4: TMPDIR traced through
+  `control.txt` and the game, the no-such-drive TMPDIR never created, the
+  full-drive line, the fallback mapper's argv, the missing mapper named
+  before any start).
+- `packaging/handhelds/shandalar.gptk`: L2 the duel log (`l`), R2 reads
+  the card (`r`), R3 mute (`m`), the right stick's up/down Page Up/Down.
+- `game/input/controls.gd` + `project.godot` `[input]`: a twelfth action
+  `duel_read` ("Read the card", `R` / R3). `Controls.names()` is 21.
+- `game/duel/fullscreen_card.gd`: `open_card(by_key := false)` — by key
+  the reader opens whether or not `fullscreen_cards` is on; the hint names
+  the key; the same key dismisses.
+- `game/duel/duel_screen.gd` `_on_control`: `duel_read` after the pause
+  gate, before the choice overlay. `game/deck_builder/deck_builder_screen.gd`:
+  `_read_card` at `_unhandled_key_input` (after `_dialog_busy`) and a new
+  `_unhandled_input` for the pad button, forwarding to the open reader.
+  `game/help/help_pages.gd` names the key. Tests:
+  `tests/ui/test_fullscreen_card_screens.gd` (+6), `tests/unit/test_controls.gd`.
+- `game/input/screen_keyboard.gd` (NEW autoload `ScreenKeyboard`, in
+  `project.godot` after `PadControls`): the on-screen keyboard — see the
+  tree row. `game/settings.gd` `screen_keyboard()`; `game/options_screen.gd`
+  row `On-screen keyboard` (`KEYBOARD_MODES`, OptionButton `ScreenKeyboard`).
+  Test: `tests/ui/test_screen_keyboard_2026_10_02.gd` (NEW, 19 tests).
+- `docs/handhelds.md`: *Reading a card* and *On-screen keyboard* sections,
+  the ArkOS table, the full-system-drive paragraph.
+
 ## The flag the neighbour left (2026-10-02)
 
 - `tests/unit/test_android_corner_2026_09_29.gd`: the tracer test records
@@ -1075,6 +1115,13 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.3.md`: the tester with no keyboard — the ArkOS
+  launcher survives a full system drive (temporary files beside the game,
+  PortMaster's commands split without here-strings, an installed gptokeyb
+  used even when control.txt could not export it), `Read the card`
+  (`R` / R3 / ArkOS R2) brings the sidebar's card up full-size, and the
+  on-screen keyboard (`ScreenKeyboard`, Options → On-screen keyboard)
+  types into any text field on a handheld without keys.
 - `docs/releases/0.50.2.md`: the flag the neighbour left — a test-only
   version: the Android corner tracer's test holds the viewport's
   input-handled flag to "as found" instead of "false", since only a real
@@ -6088,6 +6135,20 @@ shandalar/
 │    and A itself with the layer seeing none of it; the Options row is a
 │    view of the key, the choice survives Settings.reload, and
 │    joy_connection_changed re-reads `auto`;
+│    tests/ui/test_screen_keyboard_2026_10_02.gd — THE ON-SCREEN KEYBOARD
+│    (ScreenKeyboard, 2026-10-02) against real fields on a stage of its
+│    own: the getter refuses any other word, `auto` is a named handheld
+│    without a system keyboard and never a desk, `off` watches nothing;
+│    a focused LineEdit brings the board and its keys type down the
+│    engine's path (text_changed, a one-shot Shift, a shifted digit,
+│    Space, Backspace), Enter is text_submitted and hides, a TextEdit
+│    takes Enter as a new line and keeps the board, a non-editable field
+│    brings nothing; Done hides and a real click on the field re-shows,
+│    the focus to a button / another field / the field freed or hidden;
+│    the keys are FOCUS_NONE and a real push_input click on one types;
+│    every key event carries the keyboard's own device id; placed at the
+│    bottom, at the top over a low field, never over 40% of the height;
+│    the Options row is a view of the key, the choice survives a reload;
 │    tests/ui/test_handheld_defaults.gd — THE HANDHELD'S DEFAULTS AND THE
 │    POWER SAVER (2026-09-27): without SHANDALAR_HANDHELD every default is
 │    the desktop's and nothing is written, both launchers export the
@@ -7938,7 +7999,7 @@ shandalar/
 │   │                            the combat window's and the hand's title
 │   │                            bars — read the event in hand instead. No
 │   │                            class_name — an autoload is its name
-│   │   └── pad_controls.gd    AUTOLOAD `PadControls` — THE PAD LAYER
+│   │   ├── pad_controls.gd    AUTOLOAD `PadControls` — THE PAD LAYER
 │   │                            (2026-09-27, the Steam Deck release): the
 │   │                            one place a controller becomes the mouse,
 │   │                            the touch layer's twin. ACTIVE on `auto`
@@ -7970,6 +8031,41 @@ shandalar/
 │   │                            real mouse event sleeps it; `off`
 │   │                            releases what it held. Events carry
 │   │                            device 4097. No class_name
+│   │   └── screen_keyboard.gd AUTOLOAD `ScreenKeyboard` — THE ON-SCREEN
+│   │                            KEYBOARD (2026-10-02, the ArkOS tester
+│   │                            with no USB keyboard): a board of stone
+│   │                            keys on a CanvasLayer 850 (over the
+│   │                            reader's 100, under the pad arrow's
+│   │                            900) whenever an editable LineEdit or
+│   │                            TextEdit takes the focus
+│   │                            (Viewport.gui_focus_changed). Each key
+│   │                            sends ONE InputEventKey down and up
+│   │                            through Input.parse_input_event with
+│   │                            the keyboard's own device id (a fresh
+│   │                            InputEventKey's default — the engine's
+│   │                            ui_text_* actions match that device
+│   │                            only; a board-stamped id would type
+│   │                            letters and no Backspace or Enter);
+│   │                            keys are FOCUS_NONE so the field keeps
+│   │                            its caret and a physical keyboard still
+│   │                            works. Shift holds for one key, Enter
+│   │                            submits a LineEdit and hides, Done
+│   │                            hides (the field stays focused and
+│   │                            watched — a click on it re-shows),
+│   │                            focus to a non-field / the field
+│   │                            leaving the tree / hidden releases it.
+│   │                            Sized to the window (keys 28–64, at
+│   │                            most HEIGHT_SHARE 0.4 of the height),
+│   │                            docked at the bottom or at the top when
+│   │                            the field is down there. ACTIVE on
+│   │                            `auto` when Settings.handheld() names a
+│   │                            device and the DisplayServer has no
+│   │                            FEATURE_VIRTUAL_KEYBOARD (Android has),
+│   │                            `on` always, `off` never (Settings
+│   │                            `screen_keyboard`, the Options row
+│   │                            `On-screen keyboard` a view of it);
+│   │                            inert = the focus is not even watched.
+│   │                            No class_name
 │   ├── ui_chrome.gd         class UiChrome — the original sandstone panel
 │   │                          (Winbk_Options 9-patch) + era buttons/labels;
 │   │                          ONE place for the game's window look

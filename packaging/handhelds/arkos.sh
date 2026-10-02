@@ -13,6 +13,22 @@ cd "$GAMEDIR" || exit 1
 [[ ! -f portmaster.log ]] || mv -f portmaster.log portmaster.previous.log
 exec >portmaster.log 2>&1
 
+# Bash writes every here-document and here-string to a file under TMPDIR, and
+# PortMaster's own scripts read device_info.txt and the dialog through them.
+# A tester's R36 Ultra had its 11 GB system partition completely full: the
+# shell could not create those files, control.txt came up half-read and the
+# launcher blamed a missing controller mapper. The ports drive is where this
+# game lives, so it is the drive with room: every temporary file goes beside
+# the game, and the system drive is only ever read.
+sg_tmp="$GAMEDIR/tmp"
+mkdir -p "$sg_tmp" || { printf '%s\n' 'Shandalar: the game folder must be writable.'; exit 1; }
+rmdir "$sg_tmp"/weston.* 2>/dev/null || true
+export TMPDIR="$sg_tmp"
+sg_free=$(df -Pk /tmp 2>/dev/null | awk 'NR == 2 { print $4 }')
+if [[ "$sg_free" =~ ^[0-9]+$ && "$sg_free" -lt 1024 ]]; then
+    printf 'Shandalar: /tmp has %s KB free; the system drive is full. PortMaster itself may fail until space is freed.\n' "$sg_free"
+fi
+
 sg_pm_candidates=("${SHANDALAR_PORTMASTER:-}" /opt/system/Tools/PortMaster
     /opt/tools/PortMaster "${XDG_DATA_HOME:-$HOME/.local/share}/PortMaster"
     "$sg_ports/PortMaster" /roms/ports/PortMaster /roms2/ports/PortMaster)
@@ -34,17 +50,26 @@ if [[ -f "$controlfolder/mod_${CFW_NAME}.txt" ]]; then
     source "$controlfolder/mod_${CFW_NAME}.txt" || exit 1
 fi
 get_controls || exit 1
-sg_privilege=()
-read -r -a sg_privilege <<< "${ESUDO:-}"
-sg_mapper=()
-read -r -a sg_mapper <<< "${GPTOKEYB:-}"
 sg_fail() {
     printf 'Shandalar: %s\n' "$*"
     if declare -F pm_message >/dev/null; then pm_message "$*"; fi
     exit 1
 }
 [[ $(uname -m) == aarch64 ]] || sg_fail 'This package needs 64-bit ARM Linux.'
-[[ ${#sg_mapper[@]} -gt 0 ]] || sg_fail 'Update PortMaster: controller mapper unavailable.'
+# Word-split PortMaster's two commands in the shell itself: no here-string,
+# so no temporary file, and no glob expansion of their words.
+set -f
+sg_privilege=(${ESUDO:-})
+sg_mapper=(${GPTOKEYB:-})
+if [[ ${#sg_mapper[@]} -eq 0 && -x "$controlfolder/gptokeyb" ]]; then
+    # control.txt did not export GPTOKEYB but the mapper is installed: run it
+    # the way control.txt does.
+    sg_mapper=("${sg_privilege[@]}" "$controlfolder/gptokeyb" ${ESUDOKILL:-})
+    printf 'Shandalar: GPTOKEYB was not set by control.txt; using %s\n' "$controlfolder/gptokeyb"
+fi
+set +f
+[[ ${#sg_mapper[@]} -gt 0 ]] ||
+    sg_fail 'Update PortMaster: controller mapper (gptokeyb) unavailable; see portmaster.log in the game folder.'
 
 sg_runtime_name=weston_pkg_0.2.squashfs
 sg_runtime=
@@ -63,7 +88,7 @@ if [[ -z "$sg_runtime" ]]; then
 fi
 
 # Only unmount our own successful mount. Never unmount another port's runtime.
-sg_weston=$(mktemp -d /tmp/shandalar-weston.XXXXXX) || exit 1
+sg_weston=$(mktemp -d "$sg_tmp/weston.XXXXXX") || sg_fail 'Cannot create a mount point in the game folder.'
 sg_mounted=0
 sg_started=0
 sg_mapper_pid=
@@ -81,6 +106,7 @@ sg_cleanup() {
         "${sg_privilege[@]}" umount "$sg_weston" || true
     fi
     rmdir "$sg_weston" 2>/dev/null || true
+    rmdir "$sg_tmp" 2>/dev/null || true
     if declare -F pm_finish >/dev/null; then pm_finish; fi
     exit "$sg_status"
 }
@@ -94,7 +120,7 @@ sg_mounted=1
 [[ ${wp_support26:-false} == true ]] || sg_fail 'Update WestonPack to 0.2.6 or newer in PortMaster.'
 
 CONFDIR="$GAMEDIR/conf"
-mkdir -p "$CONFDIR" || sg_fail 'The game folder must be writable for saves.'
+mkdir -p "$CONFDIR" "$CONFDIR/cache" || sg_fail 'The game folder must be writable for saves.'
 chmod +x "$GAMEDIR/Shandalar.arm64" || sg_fail 'Cannot make the game executable.'
 export SDL_GAMECONTROLLERCONFIG="${sdl_controllerconfig:-}"
 # The device's name: settings never written open on a handheld's defaults
@@ -116,7 +142,8 @@ sg_started=1
 # Leave gptokeyb and Crusty's SDL input untouched; keyboard/mouse still work.
 "${sg_privilege[@]}" env CRUSTY_SHOW_CURSOR=1 "$sg_weston/westonwrap.sh" \
     headless noop kiosk crusty_x11egl \
-    XDG_DATA_HOME="$CONFDIR" SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0xffff/0xffff \
+    XDG_DATA_HOME="$CONFDIR" XDG_CACHE_HOME="$CONFDIR/cache" \
+    SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0xffff/0xffff \
     "$GAMEDIR/Shandalar.arm64" --display-driver x11 \
     --rendering-method gl_compatibility --rendering-driver opengl3_es \
     --audio-driver ALSA --resolution "${sg_width}x${sg_height}" --fullscreen --max-fps 30 "$@"

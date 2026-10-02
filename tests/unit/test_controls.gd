@@ -80,6 +80,7 @@ func test_the_project_declares_every_action_with_the_1997_keys() -> void:
 		"duel_pause": ["Q", "Start"],
 		"duel_hand": ["H", "Y"],
 		"duel_log": ["L", "Back"],
+		"duel_read": ["R", "R3"],
 		"duel_mute": ["M", Controls.UNBOUND],
 		"duel_id_tags": ["Ctrl+T", Controls.UNBOUND],
 		"duel_invisible": ["Ctrl+I", Controls.UNBOUND],
@@ -100,7 +101,7 @@ func test_the_project_declares_every_action_with_the_1997_keys() -> void:
 		var choice := Controls.CHOICES[i]
 		assert_true(InputMap.has_action(choice), "%s is declared" % choice)
 		assert_eq(Controls.key_text(choice), str(i + 1), "%s is the digit" % choice)
-	assert_eq(Controls.names().size(), 20, "eleven listed actions and nine choices")
+	assert_eq(Controls.names().size(), 21, "twelve listed actions and nine choices")
 
 
 func test_done_also_answers_to_the_keypads_enter() -> void:
@@ -285,9 +286,11 @@ func test_the_file_holds_only_what_differs_from_the_defaults() -> void:
 	var stored: Dictionary = Settings.get_value(Controls.SETTINGS_KEY, {})
 	assert_eq(stored, {"duel_mute": ["key:N"]}, "one action, in words")
 	assert_eq(_on_disk(), {"duel_mute": ["key:N"]}, "on disk at once")
-	assert_true(Controls.bind("duel_space", _pad(JOY_BUTTON_RIGHT_STICK)))
+	# L3: a button no action owns (R3 reads the card since 0.50.3, and a
+	# binding takes the same event off its other action).
+	assert_true(Controls.bind("duel_space", _pad(JOY_BUTTON_LEFT_STICK)))
 	stored = Settings.get_value(Controls.SETTINGS_KEY, {})
-	assert_eq(stored, {"duel_mute": ["key:N"], "duel_space": ["key:Space", "pad:R3"]},
+	assert_eq(stored, {"duel_mute": ["key:N"], "duel_space": ["key:Space", "pad:L3"]},
 		"both slots of a changed action, in the map's order")
 
 

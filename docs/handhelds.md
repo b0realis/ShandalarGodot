@@ -59,9 +59,10 @@ used in turn without a switch.
 | Y | Fold the hand to name bands and unfold it (the hand's title shows `[+]` while folded) |
 | Start | Pause menu |
 | Back | Duel log |
+| Right stick press (R3) | Read the card: the sidebar's card full-size; the same press closes it |
 
 While a mini-menu is open the D-pad walks its entries and A picks one. RB,
-X, B, Y, Start and Back can be rebound in Options → Controls; A, LB, the
+X, B, Y, Start, Back and R3 can be rebound in Options → Controls; A, LB, the
 triggers, the D-pad and the sticks belong to the pointer while it is on.
 With the pointer off, the D-pad and the left stick move the engine's focus
 ring over the menus' buttons and A presses the focused one; the shell,
@@ -86,6 +87,37 @@ direction again always moves on. An open graveyard or exile view stays
 over every duel window and under the Situation Bar, whose Cancel still
 works over it; its cards are hop targets, a **Done** button under the
 shelves closes it, and a double click on the plate leaves it open.
+
+## Reading a card
+
+**Read the card** (`R` on a keyboard, the right stick's press on a pad,
+R2 on ArkOS; Options → Controls) brings the sidebar's card — the one the
+duel or the Deck Builder is showing large — up full-size to read, whether
+or not *Full-screen card on click* is on, and the same key closes it
+again; so does Escape, controller Cancel, or a click or tap on the card.
+Nothing else happens while the card is up: Space does not pass the turn
+and Enter does not press Done. The key waits under a pause menu, a
+dialog or the Deck Builder's menu. It was asked for by a tester on a
+3.5-inch screen, where the sidebar card is too small to read and the
+table at a glance is still fine.
+
+## On-screen keyboard
+
+A handheld with a pointer and no keys cannot name a deck, a table or a
+seed, or type into the Deck Builder's search. **Options → Display →
+On-screen keyboard** puts a board of keys across the window whenever a
+text field takes the focus: point and click to type, `Shift` holds for
+one key, `Enter` submits a one-line field and puts the board away (it is
+a new line in a notes box), `Done` puts it away without submitting, and
+a click on the field brings it back. The keys never take the focus, so a
+physical keyboard beside the board still works. `Auto`, the default,
+shows the board on a handheld the launcher named — ArkOS, or a Steam
+Deck, where Steam's own keyboard is not always within reach of a game
+started outside Steam — and never at a desk; an Android build has the
+system's keyboard and never sees this one. `On` shows it wherever a
+field takes the focus, `Off` never. The board docks at the
+bottom, or at the top when the field is down there, and takes at most
+two fifths of the window.
 
 ## Steam Deck
 
@@ -166,13 +198,19 @@ read comfortably; there is no dedicated small-screen reflow in this package.
 | R1 | Space: situation-bar action |
 | Y | Fold/unfold the hand in duel |
 | D-pad | Arrow keys; left/right browse cards in Deck Builder |
-| L2 / R2 | Page Up / Page Down where supported |
+| L2 | Duel log |
+| R2 | Read the card: the sidebar's card full-size; the same button, A, B or Start closes it |
+| Right stick up / down | Page Up / Page Down where supported |
 | L3 | Backspace: remove selected card in Deck Builder |
-| R3 | Duel log |
+| R3 | Mute for this session |
 | Start | Escape: cancel / pause |
 | PortMaster hotkey + Start | Emergency exit; may interrupt unsaved work |
 
-Use a USB keyboard for text entry. The mapping is editable in
+Text entry uses the game's own **on-screen keyboard** (see above): a board
+of keys appears whenever a deck name, a table name or the Deck Builder's
+search takes the focus, and the pointer presses them; the launcher's
+`SHANDALAR_HANDHELD=arkos` turns it on for an unwritten settings file.
+A USB keyboard works too. The mapping is editable in
 `shandalar/shandalar.gptk`; logical A/B positions depend on PortMaster's device
 mapping. Physical-pad actions are suppressed in the game process so a mapped
 mouse click cannot also pass the turn — the game sees no controller here, so
@@ -180,6 +218,19 @@ its own pad pointer stays off and gptokeyb is the pointer. Other applications
 are unaffected. The launcher names the device (`SHANDALAR_HANDHELD=arkos`), so
 an unwritten settings file opens full screen with the card reader and the
 power saver on; its own `--fullscreen` is respected by the game's boot.
+
+The launcher keeps every temporary file **beside the game**, under
+`shandalar/tmp/` (removed on exit) and the cache under `shandalar/conf/cache/`,
+and only ever reads the system drive. A tester's R36 Ultra (2026-10-02) had
+its 11 GB system partition completely full: the shell could not write the
+temporary files PortMaster's own scripts need, `control.txt` came up
+half-read and the launcher blamed a missing controller mapper
+(`controller mapper unavailable`) although `gptokeyb` was installed. The
+launcher now word-splits PortMaster's commands without temporary files,
+runs an installed `gptokeyb` even when `control.txt` could not export it,
+and writes a line to `portmaster.log` when `/tmp` has under a megabyte
+free. The game then runs — but free the system drive anyway: PortMaster's
+own dialogs and device detection fail the same way while it is full.
 
 If launch fails, keep `shandalar/portmaster.log` and
 `shandalar/portmaster.previous.log`. Report the exact device/board, ArkOS build,

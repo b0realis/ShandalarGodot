@@ -5624,6 +5624,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	if _dialog_busy():
 		return
+	if _read_card(event):
+		return
 	if event.ctrl_pressed and SHORTCUTS.has(event.keycode):
 		_run_command(String(SHORTCUTS[event.keycode]))
 		accept_event()
@@ -5633,6 +5635,28 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_filter_bar.search_field.grab_focus()
 		_filter_bar.search_field.select_all()
 		accept_event()
+
+
+## The `duel_read` keystroke (R / R3; 2026-10-02, the R36 Ultra tester:
+## *"an easy way to bring a card up full-size when you need to read
+## it"*) opens the reader on the showcase, behind the reader's own gate
+## (no dialog, no menu); the reader closes on the same key. Pad buttons
+## reach this screen only here — the pad pointer autoload clicks for A.
+func _read_card(event: InputEvent) -> bool:
+	if not Controls.pressed(event, "duel_read") or _fullscreen_card == null \
+			or not _fullscreen_card.open_card(true):
+		return false
+	accept_event()
+	return true
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventJoypadButton and event.pressed):
+		return
+	if _fullscreen_card != null and _fullscreen_card.is_open():
+		_fullscreen_card._input(event)
+	elif not _dialog_busy():
+		_read_card(event)
 
 
 ## [QoL] THE CARDS OWN THE ARROWS AND ENTER. The owner, 2026-09-08: *"In

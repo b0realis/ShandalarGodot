@@ -18749,6 +18749,103 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-02 — The tester with no keyboard (0.50.3)
+
+The first word back from the ArkOS experimental build, an R36 Ultra:
+*"I think the small display could work well enough, provided there's an
+easy way to bring a card up full-size when you need to read it. It
+still beats Yu-Gi-Oh on the GBA in terms of being able to tell which
+cards are on the field at a glance. I also don't have a USB keyboard,
+so it'd be nice to have a virtual keyboard option. I tried launching
+Shandalar on my r36 Ultra but it exits with: Shandalar: Update
+PortMaster: controller mapper unavailable. PortMaster itself reports
+that it is up to date, and both gptokeyb and gptokeyb2 are installed."*
+Three things, in the order they block.
+
+### The launcher on a full drive
+
+The tester's `portmaster.log` had the whole story: `cannot create temp
+file for here-document: No space left on device` at the two
+`read -r -a … <<<` lines that split PortMaster's `$ESUDO` and
+`$GPTOKEYB`, and the same failure inside PortMaster's own
+`device_info.txt` and dialog script. The tester's own diagnostics showed
+the device: `/dev/mmcblk0p2` (the 11 GB system partition, `/`) at
+100 %, the 109 GB ports drive two thirds free. Bash writes every
+here-document and here-string to a file under `TMPDIR` — `/tmp` on the
+full system drive — so `control.txt` came up half-read, `GPTOKEYB`
+never got exported, and the launcher blamed the mapper that was sitting
+in `/opt/system/Tools/PortMaster/gptokeyb` all along.
+
+`packaging/handhelds/arkos.sh` now puts every temporary file where the
+game is, which is the drive with room: `TMPDIR=$GAMEDIR/tmp` is made
+and exported before `control.txt` is sourced (removed again on exit),
+the cache goes under `conf/cache`, and the two word-splits are done by
+the shell itself under `set -f` — no here-string, no file, no glob.
+When `control.txt` did not export `GPTOKEYB` but the mapper is
+installed, the launcher runs it the way `control.txt` would and says so
+in the log; when `/tmp` has under a megabyte free it writes
+*"the system drive is full"* to `portmaster.log`; and the mapper is
+checked before weston mounts, so a missing one is named without a
+half-started game. The file has no `<<` left in it. Four new launcher
+tests in `tools/test_handheld_launchers.py` trace `TMPDIR` through the
+fake `control.txt` and the fake game, see the mount point made under
+`game/tmp` and the folder gone after exit, read the full-drive line,
+run the fallback mapper with `control.txt`'s own arguments, and name
+the missing mapper before any start. The system drive should still be
+freed — PortMaster's dialogs and device detection fail the same way
+while it is full — and the doc says so.
+
+### Read the card
+
+A twelfth action, `duel_read` — **Read the card**, `R` on a keyboard,
+the right stick's press on a pad, R2 on ArkOS through the `.gptk` —
+brings the sidebar's card up full-size in the duel and the Deck
+Builder, whether or not *Full-screen card on click* is on, and the same
+key closes it again. It is the reader a click opens, behind the same
+gate (`FullscreenCard.open_card(by_key)`): nothing under it moves while
+it is up, it waits under the pause menu, a dialog and the Deck Builder's
+menu, and the hint names the key. The `.gptk` moves the duel log to L2,
+mute to R3 and the page keys to the right stick to make room. Six tests
+in `tests/ui/test_fullscreen_card_screens.gd`; `Controls.names()` is 21
+and the controls test binds L3 (the one button no action owns) where it
+used to bind R3.
+
+### The on-screen keyboard
+
+`ScreenKeyboard` (`game/input/screen_keyboard.gd`, an autoload after
+`PadControls`): whenever an editable `LineEdit` or `TextEdit` takes the
+focus, a board of stone keys appears across the bottom of the window —
+across the top when the field is down there — and each key sends the
+field one key event, down and up, through `Input.parse_input_event`,
+exactly as a keyboard would: the field inserts the letter and says
+`text_changed`, Enter is `text_submitted` on a one-line field (and the
+board goes) or a new line in a notes box, Backspace is Backspace. No
+field is edited from here, so every screen's reaction to typing stands,
+and a physical keyboard beside the board still works. The keys take no
+focus; `Shift` holds for one key; `Done` puts the board away with the
+field still focused and a click on the field brings it back. `Auto`
+(Options → Display → On-screen keyboard) shows it on a handheld the
+launcher named whose display server has no virtual keyboard of its own
+— ArkOS and the Deck, never Android, never a desk — `On` everywhere,
+`Off` never; inert, the focus is not even watched. The board takes at
+most two fifths of the window.
+
+One lesson cost a red family: the engine's text actions
+(`ui_text_backspace`, `ui_text_submit`, `ui_text_newline`) are bound to
+events made like a fresh `InputEventKey`, and an action matches an
+event from ITS device only — a key stamped with a device id of the
+board's own, the way the touch and pad layers stamp their mouse events,
+typed letters (a field inserts those by their unicode) and no Backspace
+and no Enter. The board's events carry the keyboard's own id, and the
+test pins it. 19 tests in `tests/ui/test_screen_keyboard_2026_10_02.gd`
+against real fields on a stage of their own; the Options row is a view
+of the key.
+
+### The gate
+
+550 scripts, 8,294 tests, 394,895 asserts, exit 0 in
+264 s; Python 419 (5 skipped).
+
 ## 2026-10-02 — The flag the neighbour left (0.50.2)
 
 The 0.50.1 gate was green on the desk and red on one CI runner: shard

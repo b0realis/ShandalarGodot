@@ -27,6 +27,8 @@ const PANEL_MARGIN := 24.0
 const TOUCH_MODES: Array[String] = ["auto", "on", "off"]
 ## The `Pad pointer` row's items, the same way.
 const PAD_MODES: Array[String] = ["auto", "on", "off"]
+## The `On-screen keyboard` row's items, the same way.
+const KEYBOARD_MODES: Array[String] = ["auto", "on", "off"]
 ## The `Controls:` rows' two slots, by action: `action -> [key button,
 ## pad button]`, so a rebind can redraw every row (a key that moved off
 ## another action changes two of them).
@@ -270,6 +272,31 @@ func _add_display_section(content: VBoxContainer) -> void:
 	UiChrome.shadowed_button(pad)
 	pad_row.add_child(pad)
 	content.add_child(pad_row)
+
+	# `[QoL]` ON-SCREEN KEYBOARD (2026-10-02, the ArkOS tester with no
+	# USB keyboard) — the board of keys (`ScreenKeyboard`,
+	# `game/input/screen_keyboard.gd`) a text field brings up on a
+	# handheld without keys. Three states, one stored key, the row a
+	# VIEW of it.
+	var keyboard_row := HBoxContainer.new()
+	keyboard_row.add_theme_constant_override("separation", 12)
+	keyboard_row.add_child(UiChrome.body_label("On-screen keyboard:"))
+	var keyboard := OptionButton.new()
+	keyboard.name = "ScreenKeyboard"
+	keyboard.add_item("Auto", 0)
+	keyboard.add_item("On", 1)
+	keyboard.add_item("Off", 2)
+	keyboard.tooltip_text = "A board of keys across the window whenever " \
+		+ "a text field takes the focus, for a handheld with no " \
+		+ "keyboard: point and click to type. Auto shows it on a " \
+		+ "handheld whose system has no keyboard of its own; On always; " \
+		+ "Off never."
+	keyboard.selected = KEYBOARD_MODES.find(Settings.screen_keyboard())
+	keyboard.item_selected.connect(func(index: int) -> void:
+		ScreenKeyboard.choose(KEYBOARD_MODES[index]))
+	UiChrome.shadowed_button(keyboard)
+	keyboard_row.add_child(keyboard)
+	content.add_child(keyboard_row)
 
 
 ## `[QoL]` CONTROLS — the duel's keys as actions ([Controls],

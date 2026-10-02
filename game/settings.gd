@@ -278,6 +278,15 @@ static func pad_pointer() -> String:
 	return value if value is String and value in ["auto", "on", "off"] else "auto"
 
 
+## [QoL] `On-screen keyboard` on the Options screen — `auto`, `on` or
+## `off`; see the `ScreenKeyboard` autoload for what each means. `auto`
+## by default: a handheld without a keyboard of its own sees the board
+## (2026-10-02, the ArkOS tester with no USB keyboard), a desk never.
+static func screen_keyboard() -> String:
+	var value: Variant = get_value("screen_keyboard", "auto")
+	return value if value is String and value in ["auto", "on", "off"] else "auto"
+
+
 ## [QoL] `Touch controls` on the Options screen — `auto`, `on` or `off`;
 ## see the `TouchControls` autoload for what each means. `auto` by
 ## default: a desk with a mouse never sees the layer, a tablet always

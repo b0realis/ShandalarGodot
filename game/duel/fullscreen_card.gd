@@ -77,11 +77,21 @@ func is_open() -> bool:
 	return _shade.visible
 
 
-func open_card() -> bool:
-	if is_open() or not Settings.fullscreen_cards() or not _readable():
+## [param by_key] is the `duel_read` action (R / R3; 2026-10-02, the R36
+## Ultra tester: *"an easy way to bring a card up full-size when you need
+## to read it"*): a deliberate keystroke, so it opens the reader whether or
+## not the click-to-enlarge switch is on. The screen's own gate (what is
+## in the way) applies to both.
+func open_card(by_key: bool = false) -> bool:
+	if is_open() or not _readable():
+		return false
+	if not by_key and not Settings.fullscreen_cards():
 		return false
 	if _may_open.is_valid() and not _may_open.call():
 		return false
+	var read := Controls.text("duel_read")
+	_hint.text = "Click / tap to close · Esc / Cancel" \
+		+ ("" if read == Controls.UNBOUND else " · " + read)
 	var focus := get_viewport().gui_get_focus_owner()
 	_previous_focus = weakref(focus) if focus != null else null
 	_card.show_card(_source._shown, _source._shown_printing_set)
@@ -180,7 +190,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			dismiss()
-	elif Controls.pressed(event, "duel_cancel") \
+	elif Controls.pressed(event, "duel_cancel") or Controls.pressed(event, "duel_read") \
 			or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
 		dismiss()
 

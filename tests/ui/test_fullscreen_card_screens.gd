@@ -45,6 +45,14 @@ func _press(code: Key) -> void:
 		get_viewport().push_input(event)
 
 
+func _pad(button: JoyButton) -> void:
+	for down in [true, false]:
+		var event := InputEventJoypadButton.new()
+		event.button_index = button
+		event.pressed = down
+		get_viewport().push_input(event)
+
+
 func _click(at: Vector2) -> void:
 	var move := InputEventMouseMotion.new()
 	move.position = at
@@ -200,3 +208,89 @@ func test_touch_close_does_not_press_underlying_button(translator = use_paramete
 		for i in 3: await get_tree().process_frame
 	assert_false(screen._fullscreen_card.is_open())
 	assert_true(hits.is_empty())
+
+
+# ================================================ the key reads the card ==
+## The R36 Ultra tester, 2026-10-02: *"an easy way to bring a card up
+## full-size when you need to read it"*. The `duel_read` keystroke — R,
+## R3 on a pad, R2 through the ArkOS mapping — opens the reader on the
+## sidebar's card on both screens, whether or not click-to-enlarge is
+## on, and the same keystroke closes it. Behind the screen's own gate:
+## nothing opens under the pause menu or the Deck Builder's menu.
+
+func test_the_read_key_opens_and_closes_the_reader_in_the_duel(switch = use_parameters([true, false])) -> void:
+	Settings.set_value("fullscreen_cards", switch, false)
+	var screen := _duel()
+	await get_tree().process_frame
+	screen._card_preview.show_card(screen.game.players[0].hand[0])
+	var before := screen.game.log_lines.size()
+	_press(KEY_R)
+	assert_true(screen._fullscreen_card.is_open(), "R opens the reader (switch %s)" % switch)
+	assert_true(screen._fullscreen_card._hint.text.contains("R or R3"), "the hint names the key")
+	for code in [KEY_SPACE, KEY_ENTER]: _press(code)
+	assert_true(screen._fullscreen_card.is_open(), "the duel's keys wait under it")
+	_press(KEY_R)
+	assert_false(screen._fullscreen_card.is_open(), "R again closes it")
+	assert_eq(screen.game.log_lines.size(), before, "nothing else happened")
+	assert_false(screen.is_paused())
+
+
+func test_the_pad_button_reads_the_card_in_the_duel() -> void:
+	var screen := _duel()
+	await get_tree().process_frame
+	screen._card_preview.show_card(screen.game.players[0].hand[0])
+	_pad(JOY_BUTTON_RIGHT_STICK)
+	assert_true(screen._fullscreen_card.is_open(), "R3 opens the reader")
+	_pad(JOY_BUTTON_RIGHT_STICK)
+	assert_false(screen._fullscreen_card.is_open(), "R3 again closes it")
+
+
+func test_the_read_key_waits_under_the_pause_menu() -> void:
+	var screen := _duel()
+	await get_tree().process_frame
+	screen._card_preview.show_card(screen.game.players[0].hand[0])
+	screen._open_pause()
+	_press(KEY_R)
+	assert_false(screen._fullscreen_card.is_open())
+	assert_true(screen.is_paused(), "and the pause menu stands")
+	screen._close_pause()
+
+
+func test_the_read_key_opens_and_closes_the_reader_in_the_builder(switch = use_parameters([true, false])) -> void:
+	Settings.set_value("fullscreen_cards", switch, false)
+	var screen := _builder()
+	await get_tree().process_frame
+	_press(KEY_RIGHT)
+	var count := screen.deck.total()
+	var cursor := screen._inventory.cursor_index()
+	screen._show_in_showcase(CardRegistry.get_card("Forest"))
+	_press(KEY_R)
+	assert_true(screen._fullscreen_card.is_open(), "R opens the reader (switch %s)" % switch)
+	for code in [KEY_ENTER, KEY_BACKSPACE, KEY_RIGHT]: _press(code)
+	assert_eq(screen.deck.total(), count, "the card keys wait under it")
+	assert_eq(screen._inventory.cursor_index(), cursor)
+	_press(KEY_R)
+	assert_false(screen._fullscreen_card.is_open(), "R again closes it")
+	assert_false(screen.is_menu_open())
+	assert_eq(screen.deck.total(), count)
+
+
+func test_the_pad_button_reads_the_card_in_the_builder() -> void:
+	var screen := _builder()
+	await get_tree().process_frame
+	screen._show_in_showcase(CardRegistry.get_card("Forest"))
+	_pad(JOY_BUTTON_RIGHT_STICK)
+	assert_true(screen._fullscreen_card.is_open(), "R3 opens the reader")
+	_pad(JOY_BUTTON_RIGHT_STICK)
+	assert_false(screen._fullscreen_card.is_open(), "R3 again closes it")
+	assert_eq(screen.deck.total(), 0)
+
+
+func test_the_read_key_waits_under_the_builder_menu() -> void:
+	var screen := _builder()
+	await get_tree().process_frame
+	screen._show_in_showcase(CardRegistry.get_card("Forest"))
+	screen._open_deck_menu()
+	_press(KEY_R)
+	assert_false(screen._fullscreen_card.is_open())
+	assert_true(screen.is_menu_open(), "and the menu stands")

@@ -34,6 +34,9 @@ get_controls() { :; }
 pm_platform_helper() { printf 'platform-helper\\n' >> "$SG_TEST_TRACE"; }
 pm_finish() { printf 'finish\\n' >> "$SG_TEST_TRACE"; }
 pm_message() { printf '%s\\n' "$*"; }
+# PortMaster's own scripts use here-documents; bash keeps those in TMPDIR.
+read -r sg_test_tmp <<< "$TMPDIR"
+printf 'tmpdir %s\\n' "$sg_test_tmp" >> "$SG_TEST_TRACE"
 ''')
         shutil.copyfile(ROOT / "packaging/handhelds/arkos.sh", self.ports / "Shandalar.sh")
         (self.game / "Shandalar.pck").write_bytes(b"fixture")
@@ -44,13 +47,16 @@ pm_message() { printf '%s\\n' "$*"; }
         self.env = {**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
                     "SHANDALAR_PORTMASTER": str(self.pm), "SG_TEST_BIN": str(self.bin),
                     "SG_TEST_TRACE": str(self.trace), "SG_TEST_ROOT": str(self.root),
-                    "SG_TEST_EXIT": "0"}
+                    "SG_TEST_EXIT": "0",
+                    # A full system drive: no here-document can be written there.
+                    "TMPDIR": str(self.root / "no-such-drive")}
         self.script(self.bin / "uname", 'printf aarch64\n')
         self.script(self.bin / "mapper", 'printf "mapper\\n" >> "$SG_TEST_TRACE"\n')
         self.script(self.bin / "mount", '''
 printf 'mount\\n' >> "$SG_TEST_TRACE"
 [[ -z "$SG_TEST_MOUNT_FAIL" ]] || exit 7
 for last; do :; done
+printf '%s' "$last" > "$SG_TEST_ROOT/mount-target"
 cp "$SG_TEST_ROOT/westonwrap.sh" "$last/westonwrap.sh"
 cp "$SG_TEST_ROOT/version.txt" "$last/version.txt"
 ''')
@@ -78,6 +84,7 @@ from pathlib import Path
 Path(os.environ['SG_TEST_ROOT'], 'game-call.json').write_text(json.dumps({
  'args': sys.argv[1:], 'cwd': os.getcwd(),
  'xdg': os.environ.get('XDG_DATA_HOME'),
+ 'cache': os.environ.get('XDG_CACHE_HOME'), 'tmpdir': os.environ.get('TMPDIR'),
  'ignore': os.environ.get('SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT'),
  'handheld': os.environ.get('SHANDALAR_HANDHELD')}))
 sys.exit(int(os.environ['SG_TEST_EXIT']))
@@ -94,7 +101,12 @@ sys.exit(int(os.environ['SG_TEST_EXIT']))
                               text=True, timeout=15)
 
     def events(self):
-        return self.trace.read_text().splitlines() if self.trace.exists() else []
+        lines = self.trace.read_text().splitlines() if self.trace.exists() else []
+        return [line for line in lines if not line.startswith('tmpdir ')]
+
+    def traced_tmpdir(self):
+        lines = self.trace.read_text().splitlines() if self.trace.exists() else []
+        return [line[len('tmpdir '):] for line in lines if line.startswith('tmpdir ')]
 
     def test_launch_scopes_input_and_saves_and_preserves_arguments(self):
         result = self.launch("--custom", "one argument with spaces")
@@ -102,6 +114,8 @@ sys.exit(int(os.environ['SG_TEST_EXIT']))
         call = json.loads((self.root / "game-call.json").read_text())
         self.assertEqual(call['cwd'], str(self.game.resolve()))
         self.assertEqual(Path(call['xdg']).resolve(), (self.game / 'conf').resolve())
+        self.assertEqual(Path(call['cache']).resolve(), (self.game / 'conf/cache').resolve(),
+                         'the shader cache stays off the system drive')
         self.assertEqual(call['ignore'], '0xffff/0xffff')
         self.assertEqual(call['handheld'], 'arkos', 'the handheld defaults (game/settings.gd)')
         self.assertEqual(call['args'][-2:], ['--custom', 'one argument with spaces'])
@@ -112,6 +126,56 @@ sys.exit(int(os.environ['SG_TEST_EXIT']))
         self.assertIn('cleanup', self.events())
         self.assertIn('unmount', self.events())
         self.assertEqual(self.events()[-1], 'finish')
+
+    def test_temporary_files_live_beside_the_game_not_on_the_system_drive(self):
+        # An R36 Ultra with a full system partition: bash could not create the
+        # temp file behind a here-string, control.txt came up half-read and the
+        # launcher reported a missing controller mapper. Everything temporary
+        # now lives under the game folder on the ports drive.
+        result = self.launch()
+        self.assertEqual(result.returncode, 0, (self.game / "portmaster.log").read_text())
+        tmp = (self.game / 'tmp').resolve()
+        self.assertEqual([Path(t).resolve() for t in self.traced_tmpdir()], [tmp],
+                         'TMPDIR is set before control.txt is read')
+        call = json.loads((self.root / "game-call.json").read_text())
+        self.assertEqual(Path(call['tmpdir']).resolve(), tmp)
+        target = Path((self.root / 'mount-target').read_text())
+        self.assertEqual(target.resolve().parent, tmp, 'the runtime mounts beside the game too')
+        self.assertFalse(tmp.exists(), 'a clean exit leaves no tmp folder behind')
+        self.assertFalse((self.root / 'no-such-drive').exists())
+        self.assertNotIn('<<', (ROOT / 'packaging/handhelds/arkos.sh').read_text(),
+                         'no here-document of our own in the launcher')
+
+    def test_full_system_drive_is_reported_in_the_log(self):
+        self.script(self.bin / 'df', 'printf "fs 1K used avail use mount\\n/dev/x 100 90 %s 99%% /\\n" "$SG_TEST_FREE"\n')
+        self.env['SG_TEST_FREE'] = '100'
+        self.assertEqual(self.launch().returncode, 0)
+        self.assertIn('system drive is full', (self.game / 'portmaster.log').read_text())
+        self.env['SG_TEST_FREE'] = '5000000'
+        self.assertEqual(self.launch().returncode, 0)
+        self.assertNotIn('system drive is full', (self.game / 'portmaster.log').read_text())
+
+    def test_installed_mapper_is_used_when_control_txt_did_not_export_it(self):
+        text = (self.pm / 'control.txt').read_text().replace('GPTOKEYB="$SG_TEST_BIN/mapper"',
+                                                               'GPTOKEYB=""\nESUDOKILL="-1"')
+        (self.pm / 'control.txt').write_text(text)
+        self.script(self.pm / 'gptokeyb', 'printf "gptokeyb %s\\n" "$*" >> "$SG_TEST_TRACE"\n')
+        result = self.launch()
+        self.assertEqual(result.returncode, 0, (self.game / "portmaster.log").read_text())
+        self.assertIn(f'gptokeyb -1 Shandalar.arm64 -c {self.game / "shandalar.gptk"}', self.events())
+        self.assertNotIn('mapper', self.events())
+
+    def test_missing_mapper_is_named_before_the_game_starts(self):
+        text = (self.pm / 'control.txt').read_text().replace('GPTOKEYB="$SG_TEST_BIN/mapper"',
+                                                               'GPTOKEYB=""')
+        (self.pm / 'control.txt').write_text(text)
+        result = self.launch()
+        self.assertNotEqual(result.returncode, 0)
+        log = (self.game / 'portmaster.log').read_text()
+        self.assertIn('gptokeyb', log)
+        self.assertIn('portmaster.log', log)
+        self.assertNotIn('start', self.events())
+        self.assertFalse((self.root / 'game-call.json').exists())
 
     def test_game_failure_is_preserved_after_cleanup(self):
         self.env['SG_TEST_EXIT'] = '23'

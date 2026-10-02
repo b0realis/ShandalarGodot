@@ -66,6 +66,8 @@ const ACTIONS: Array[Dictionary] = [
 		"tip": "Folds the hand out of the way of your own attackers, and back."},
 	{"name": "duel_log", "label": "Duel log",
 		"tip": "Opens and closes the log of the duel so far."},
+	{"name": "duel_read", "label": "Read the card",
+		"tip": "Brings the sidebar's card up full-size to read, in the duel and the Deck Builder; the same key closes it."},
 	{"name": "duel_mute", "label": "Mute",
 		"tip": "Silences the music and the effects for this session only; the Options switches are untouched."},
 	{"name": "duel_id_tags", "label": "Show ID tags",
