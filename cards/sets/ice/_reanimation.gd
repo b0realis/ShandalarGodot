@@ -35,7 +35,8 @@ static func _dance_enter(g: MtgGame, s: CardInstance, _pid: int) -> void:
 	g._rec(s, &"memory")
 	s.memory["grave_entry"] = i.graveyard_entry if i != null else -1
 static func _dance_raise(g: MtgGame, s: CardInstance, _event: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	# "if it's on the battlefield" fails while it is phased out (CR 603.4, 702.26b).
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return
 	var i := g.find_instance(s.attached_to)
 	if i == null or i.zone != Mtg.Zone.GRAVEYARD or i.graveyard_entry != int(s.memory.get("grave_entry", -1)): return
 	var pid := int(g.trigger_context(s).controller)

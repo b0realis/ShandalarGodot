@@ -17,6 +17,113 @@ static func ability(cost := "", life := 0, sacrifice_type := "") -> TriggeredAbi
 		("Sacrifice a " + sacrifice_type if sacrifice_type != "" else ""),
 		_your_upkeep).capturing(_capture)
 
+# ------------------------------------------------- custom (non-mana) costs --
+# Pack 8 (2026-10-03): "Cumulative upkeep—Draw a card" (Psychic Vortex),
+# "Cumulative upkeep—Put a -1/-1 counter on this creature" (Aboroth). A
+# PAYMENT is a Dictionary:
+#   "text":    the cost as printed, for the ability text and the prompt;
+#   "kind":    "draw" | "self_counter" | "custom";
+#   "counter": the counter kind ("self_counter");
+#   "can_pay": Callable(game, source, pid, ages) -> bool   ("custom"; unset = always);
+#   "pay":     Callable(game, source, pid, ages) -> void   ("custom");
+#   "hint":    Callable(game, source, pid, ages) -> bool   (optional — the
+#              agent's default answer; the built-in kinds bring their own,
+#              read from public state only).
+# The payment is made ages times over as ONE indivisible payment (CR
+# 702.24a); declined or unpayable, the permanent is sacrificed after the
+# CUMULATIVE_UPKEEP_UNPAID event — the same as every other upkeep here.
+
+## Attach a custom cumulative upkeep (see the block above).
+static func attach_custom(card: CardData, payment: Dictionary) -> CardData:
+	return card.triggered(custom_ability(payment))
+
+static func custom_ability(payment: Dictionary) -> TriggeredAbility:
+	return TriggeredAbility.new(Mtg.EventType.UPKEEP_START,
+		_resolve_custom.bind(payment),
+		"Cumulative upkeep—" + String(payment.get("text", "")),
+		_your_upkeep).capturing(_capture)
+
+## "Cumulative upkeep—Draw a card" (Psychic Vortex).
+static func draw_payment() -> Dictionary:
+	return {"kind": "draw", "text": "Draw a card"}
+
+static func attach_draw(card: CardData) -> CardData:
+	return attach_custom(card, draw_payment())
+
+## "Cumulative upkeep—Put a <kind> counter on this permanent" (Aboroth).
+static func self_counter_payment(kind: String) -> Dictionary:
+	return {"kind": "self_counter", "counter": kind,
+		"text": "Put a %s counter on this permanent" % kind}
+
+static func attach_self_counter(card: CardData, kind: String) -> CardData:
+	return attach_custom(card, self_counter_payment(kind))
+
+## Can [param pid] pay [param payment] for [param ages] age counters?
+static func payment_possible(g: MtgGame, source: CardInstance, pid: int, ages: int,
+		payment: Dictionary) -> bool:
+	match String(payment.get("kind", "custom")):
+		"draw":
+			return true   # drawing from an empty library is a draw (it loses later)
+		"self_counter":
+			return source.zone == Mtg.Zone.BATTLEFIELD
+	var can: Callable = payment.get("can_pay", Callable())
+	return not can.is_valid() or bool(can.call(g, source, pid, ages))
+
+## The default answer to "pay it?" — what a seat reading only PUBLIC state
+## should say: draw while the library stays safe; put P/T counters while
+## the permanent survives them; a custom payment's own hint, else yes.
+static func payment_hint(g: MtgGame, source: CardInstance, pid: int, ages: int,
+		payment: Dictionary) -> bool:
+	match String(payment.get("kind", "custom")):
+		"draw":
+			return g.players[pid].library.size() > ages + 2
+		"self_counter":
+			var delta := ContinuousEffects.parse_pt_counter(String(payment.get("counter", "")))
+			if not source.is_creature() or delta.y >= 0:
+				return true
+			return source.cur_toughness + delta.y * ages > source.damage
+	var hint: Callable = payment.get("hint", Callable())
+	return not hint.is_valid() or bool(hint.call(g, source, pid, ages))
+
+static func _pay_custom(g: MtgGame, source: CardInstance, pid: int, ages: int,
+		payment: Dictionary) -> void:
+	match String(payment.get("kind", "custom")):
+		"draw":
+			g.draw_cards(pid, ages)
+		"self_counter":
+			g.add_counters(source, String(payment.get("counter", "")), ages)
+		_:
+			var pay: Callable = payment.get("pay", Callable())
+			if pay.is_valid(): pay.call(g, source, pid, ages)
+
+static func _resolve_custom(g: MtgGame, source: CardInstance, _event: GameEvent,
+		payment: Dictionary) -> void:
+	var context := g.trigger_context(source)
+	if source.zone != Mtg.Zone.BATTLEFIELD or source.layer_timestamp != int(context.get("timestamp", -1)):
+		return
+	var pid := int(context.get("controller", source.controller_id))
+	g.add_counters(source, "age")
+	var ages := int(source.counters.get("age", 0))
+	var affordable := payment_possible(g, source, pid, ages, payment)
+	var hint := affordable and payment_hint(g, source, pid, ages, payment)
+	var prompt := "%s: pay cumulative upkeep (%d age counters) — %s x%d?" % [
+		source.data.card_name, ages, String(payment.get("text", "")), ages]
+	if not affordable or not g.agents[pid].choose_yes_no(g, pid, prompt, hint):
+		_unpaid(g, source, pid, ages)
+		return
+	_pay_custom(g, source, pid, ages, payment)
+
+
+## The upkeep was NOT paid: say so (Heart of Bogardan's "when a player
+## doesn't pay"), then sacrifice — CR 702.24a. The event goes first so the
+## permanent hears it while it is still on the battlefield.
+static func _unpaid(g: MtgGame, source: CardInstance, pid: int, ages: int) -> void:
+	g.dispatch_event(Mtg.EventType.CUMULATIVE_UPKEEP_UNPAID, {"instance": source,
+		"controller": source.controller_id, "player": pid, "ages": ages}, source)
+	if source.controller_id == pid:
+		g.sacrifice_permanent(source)
+
+
 static func _your_upkeep(_g: MtgGame, source: CardInstance, event: GameEvent) -> bool:
 	return int(event.data.get("player", -1)) == source.controller_id
 
@@ -47,8 +154,7 @@ static func _resolve(g: MtgGame, source: CardInstance, _event: GameEvent,
 		" and %d life" % (life * ages) if life > 0 else "",
 		" and sacrifice %d %s(s)" % [ages, sacrifice_type] if sacrifice_type != "" else ""]
 	if not affordable or not g.agents[pid].choose_yes_no(g, pid, prompt, hint):
-		if source.controller_id == pid:
-			g.sacrifice_permanent(source)
+		_unpaid(g, source, pid, ages)
 		return
 	var selected: Array[CardInstance] = []
 	if sacrifice_type != "":
@@ -65,8 +171,7 @@ static func _resolve(g: MtgGame, source: CardInstance, _event: GameEvent,
 			victims.erase(pick)
 			selected.append(pick)
 	if not g.try_pay(pid, cost, USAGE):
-		if source.controller_id == pid:
-			g.sacrifice_permanent(source)
+		_unpaid(g, source, pid, ages)
 		return
 	g.begin_simultaneous()
 	if life > 0:

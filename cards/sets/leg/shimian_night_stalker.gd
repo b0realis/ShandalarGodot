@@ -64,7 +64,7 @@ class SoakEffect extends EffectBase:
 	static func _soak(game: MtgGame, packet: DamagePacket,
 			stalker_id: int) -> int:
 		var stalker := game.find_instance(stalker_id)
-		if stalker == null or stalker.zone != Mtg.Zone.BATTLEFIELD:
+		if not game.is_present(stalker):   # gone or phased out (CR 702.26b)
 			return -1   # nothing left to take the blow (CR 614.6)
 		return game.redirect_damage(packet, TargetRef.card(stalker))
 

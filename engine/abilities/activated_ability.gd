@@ -51,7 +51,29 @@ var life_cost: int = 0
 ## Exiling the top cards is an announcement cost, not a resolving effect.
 ## Only the size is queried before payment; no chooser/AI sees future cards.
 var library_exile_cost := 0
+## Declarative object costs — groups built by engine/additional_object_costs.gd
+## ("Return a Forest you control to its owner's hand", "Exile the top
+## creature card of your graveyard"). Validated, chosen and paid by
+## MtgGame.activate_ability with the rest of the cost (CR 602.2b).
 var object_costs: Array = []
+
+## Fluent: add one object-cost group (see [member object_costs]).
+func with_object_cost(group: Dictionary) -> ActivatedAbility:
+	object_costs.append(group)
+	return self
+
+## "Return this permanent to its owner's hand" as part of the cost (Cycle
+## of Life, Gossamer Chains, Ovinomancer — CR 602.2b). Paid after mana and
+## {T}, like [member sacrifice_cost]; the source is in its owner's hand
+## while the ability resolves, so its effects must not read battlefield
+## state about itself (the activation's `cost_paid` keeps
+## `_source_returned` and the source's last timestamp).
+var return_cost: bool = false
+
+## Fluent: add "Return this permanent to its owner's hand" to the cost.
+func with_return_cost() -> ActivatedAbility:
+	return_cost = true
+	return self
 
 func with_library_exile_cost(count: int) -> ActivatedAbility:
 	library_exile_cost = maxi(0, count)

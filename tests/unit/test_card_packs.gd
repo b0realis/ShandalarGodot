@@ -105,7 +105,7 @@ func test_every_pack_reads_the_directory_before_any_entry() -> void:
 	zeros.resize(9 * 1024 * 1024)       # past the 8 MB an entry may unpack to
 	for file_name in [CardPacks.FILE_NAME, FallenEmpiresPack.FILE_NAME,
 			IceAgePack.FILE_NAME, HomelandsPack.FILE_NAME, AlliancesPack.FILE_NAME,
-			PortalPack.FILE_NAME, FifthEditionPack.FILE_NAME]:
+			PortalPack.FILE_NAME, FifthEditionPack.FILE_NAME, MirageBlockPack.FILE_NAME]:
 		var path := dir.path_join(file_name)
 		var zip := ZIPPacker.new()
 		assert_eq(zip.open(ProjectSettings.globalize_path(path)), OK)
@@ -134,5 +134,10 @@ func test_the_real_packs_fit_their_bounds() -> void:
 			if FileAccess.file_exists(path):
 				assert_true(PortalPack.bounded_zip(path, int(pack[1])), path)
 				checked += 1
+	# Pack 8 carries its own byte budget as well as its own entry count.
+	for path in CardPacks.candidate_paths(MirageBlockPack.ID):
+		if FileAccess.file_exists(path):
+			assert_true(PortalPack.bounded_zip(path, MirageBlockPack.MAX_ENTRIES, MirageBlockPack.MAX_BYTES), path)
+			checked += 1
 	if checked == 0:
 		pass_test("no real pack on this machine")

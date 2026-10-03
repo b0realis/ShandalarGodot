@@ -120,7 +120,8 @@ static func _mark_ski(g: MtgGame, s: CardInstance, _cost: Dictionary) -> void:
 	s.memory["ski_used"] = true
 static func _ski(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	if not C.same_activation(g, s): return
-	g.continuous.add_until_eot_pump(s.id, 2, 0, [Mtg.Keyword.FLYING], false, ContinuousEffects.Duration.INDEFINITE)
+	# Phased out: no pump (CR 702.26e); the sacrifice is still scheduled.
+	if g.is_present(s): g.continuous.add_until_eot_pump(s.id, 2, 0, [Mtg.Keyword.FLYING], false, ContinuousEffects.Duration.INDEFINITE)
 	g.doom_at_next_end_step(s, false, false, true)
 	g.recalculate()
 static func _bone(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
@@ -160,7 +161,7 @@ static func _cry_context(_g: MtgGame, _s: CardInstance, e: GameEvent) -> Diction
 	return {"blocker_stamp": e.data.blocker.layer_timestamp}
 static func _cry_block(g: MtgGame, s: CardInstance, e: GameEvent) -> void:
 	var i: CardInstance = e.data.blocker
-	if i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(g.trigger_context(s).blocker_stamp):
+	if g.is_present(i) and i.layer_timestamp == int(g.trigger_context(s).blocker_stamp):   # CR 702.26e
 		g.continuous.add_until_eot_pump(i.id, 0, 1)
 		g.recalculate()
 static func _venom(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, _x: int) -> void:

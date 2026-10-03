@@ -13,7 +13,7 @@ func _init(points := 1, x := false) -> void:
 	target_spec = TargetSpec.creature()
 
 func resolve(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, x := 0) -> void:
-	if s.zone != Mtg.Zone.BATTLEFIELD or s.layer_timestamp != int(g.cost_paid("_source_timestamp", s.layer_timestamp)): return
+	if not g.is_present(s) or s.layer_timestamp != int(g.cost_paid("_source_timestamp", s.layer_timestamp)): return
 	g.book_creature_redirect(g.find_instance(t.instance_id), s, x if use_x else amount)
 
 func describe() -> String:

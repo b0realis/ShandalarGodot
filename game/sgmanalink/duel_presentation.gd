@@ -4,9 +4,13 @@ extends RefCounted
 ## References are viewer-local capabilities, not engine ids. Even the host's
 ## UI consumes this filtered representation instead of its referee object.
 
+## `phased_out` / `phased_indirectly` (Pack 8): public, like the table they
+## lie on (CR 702.26); the board ghosts the card and its tooltip says how
+## it comes back (MiniCard.phase_note). A holder rides in `phase_holds`.
 const FLAGS := ["cur_extra_blocks", "extra_blocks_this_turn", "cur_cant_attack",
 	"cur_attacks_as_if_hasty", "cur_must_be_blocked", "must_attack_this_turn",
-	"cur_indestructible", "cur_skips_untap", "skip_next_untap", "skip_untaps"]
+	"cur_indestructible", "cur_skips_untap", "skip_next_untap", "skip_untaps",
+	"phased_out", "phased_indirectly"]
 ## The rows of [constant FLAGS] that carry a COUNT rather than a yes/no.
 ## `-1` is "any number" on either block permission — the static one and
 ## Blaze of Glory's grant for the turn.
@@ -52,7 +56,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 		"attackable": [], "blockable": [], "assignment": {}, "targets": [],
 		"prevention": g.awaiting_damage_prevention, "regeneration": g.awaiting_regeneration,
 		"doomed": [], "draft": {}, "respond": false, "floating": false,
-		"untap_capped": not g.untap_caps.is_empty()}
+		"untap_capped": not g.untap_caps.is_empty(), "block_taxes": [], "phase_holds": []}
 	for key in RULES: result.rules[key] = g.rules.get(key)
 	for seat in 2:
 		var p := g.players[seat]
@@ -65,19 +69,43 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 			"unlimited_lands": g.unlimited_land_plays.has(seat),
 			"hand_revealed": p.hand_revealed, "color": m.panel_colors[seat],
 			"damage_effects": g.player_damage_effects(seat)})
-		var visible: Array = p.battlefield + p.graveyard + p.exile + p.ante
+		# The PHASED-OUT permanents lie on the table too (Pack 8, CR 702.26):
+		# public, and rows of their own for the two phasing flags.
+		var visible: Array = p.battlefield + p.graveyard + p.exile + p.ante + p.phased_out
 		for card in p.hand:
 			if m._visible(pid, card): visible.append(card)
 		for card: CardInstance in visible:
 			var row := {"id": m._handle(pid, card), "flags": {}, "abilities": [], "castable": false}
 			for key in FLAGS:
 				row.flags[key] = (0 if key in COUNTED_FLAGS else false) if card.face_down and card.zone != Mtg.Zone.BATTLEFIELD else card.get(key)
-			if (card.zone == Mtg.Zone.HAND and card.owner_id == pid) or g.can_play_from_exile(pid, card):
+			if card.phased_out and card.phase_hold >= 0:
+				var holder := g.find_instance(card.phase_hold)
+				if m._visible(pid, holder): result.phase_holds.append([row.id, m._handle(pid, holder)])
+			# Where this seat may cast from (Pack 8): its hand, an exiled card
+			# it may play — a Three Wishes card face down to everyone else —
+			# and the top of its graveyard under Bösium Strip, the engine's
+			# own permissions, as MtgGame.playable_cards reads them.
+			if (card.zone == Mtg.Zone.HAND and card.owner_id == pid) or g.can_play_from_exile(pid, card) \
+					or g.can_cast_from_graveyard(pid, card):
 				row.castable = g.cast_timing_refusal(pid, card).is_empty() and SgPayment.affordable(g, pid, card, true)
-				if card.data.is_type(Mtg.CardType.INSTANT):
-					result.floating = result.floating or SgPayment.affordable(g, pid, card)
+				# A FAST EFFECT is anything castable now although a sorcery
+				# could not be (Pack 8): an instant, FLASH, the Mirage flash
+				# rider or a Winding Canyons grant — the engine's own
+				# question, the one the local screen asks (DuelScreen
+				# ._fast_spells). It asked `is_type(INSTANT)` until then, so a
+				# networked King Cheetah never held a window.
+				if g.casts_at_instant_speed(pid, card):
+					# FLOATING is the printed row only, as the local screen's
+					# _has_affordable_fast_effect asks it: a free ALTERNATIVE
+					# row (Fireblast's two Mountains) would otherwise stop
+					# every Done and auto-pass of the duel. RESPOND weighs
+					# every row, like the local _payable_now.
+					result.floating = result.floating or SgPayment.affordable(g, pid, card, false, false)
 					result.respond = result.respond or (SgPayment.affordable(g, pid, card, true) and has_aim(g, card))
-			for option in ([] if card.face_down else SgDuelActions.options(card, pid, g)):
+			# A face-down card this seat may LOOK at (Three Wishes) offers its
+			# actions to that seat; every other face-down card offers none.
+			var hidden := card.face_down and not (card.zone == Mtg.Zone.EXILE and card.exile_visible_to == pid)
+			for option in ([] if hidden else SgDuelActions.options(card, pid, g)):
 				var cost: ManaCost = card.data.cost if option.kind == "spell" else ManaCost.new()
 				if option.kind == "ability": cost = card.cur_activated_abilities[option.index].cost
 				var budget := 0
@@ -92,6 +120,8 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 						result.respond = true
 						result.floating = true
 			result.cards.append(row)
+			# Nothing about a phased-out permanent attacks or blocks (702.26b).
+			if card.phased_out: continue
 			if card.zone == Mtg.Zone.BATTLEFIELD and card.controller_id == pid:
 				if CombatState.attack_illegality(g, card, 1 - pid).is_empty(): result.attackable.append(row.id)
 			if card.zone == Mtg.Zone.BATTLEFIELD and card.controller_id == 1 - g.active_player and g.block_chooser() == pid:
@@ -105,6 +135,18 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 					# reads its own hand exactly as the rules-exact check does.
 					if attacker != null and CombatState.block_illegality(g, card, attacker, card.controller_id, true, pid).is_empty():
 						legal.append(m._handle(pid, attacker))
+						# A LIFE TAX ON BLOCKING (Heat Wave, Pack 8 — CR 509.1d):
+						# what this blocker would owe for this attacker, per
+						# imposing source, so the seat's own screen prices the
+						# pencilled declaration (DuelScreen._block_life_fee)
+						# as the referee will charge it. Public: the taxes
+						# come from permanents on the table and the blocker's
+						# own colour. The filter itself never crosses.
+						for tax in attacker.cur_blocked_by_life_taxes:
+							var filter: Callable = tax.get("filter", Callable())
+							if filter.is_valid() and not bool(filter.call(card)): continue
+							result.block_taxes.append([row.id, m._handle(pid, attacker),
+								object_handle(m, pid, "tax", int(tax.source)), int(tax.life)])
 				if not legal.is_empty(): result.blockable.append([row.id, legal])
 	for item in g.stack:
 		var card := item.card
@@ -180,6 +222,11 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 
 static func has_aim(g: MtgGame, card: CardInstance) -> bool:
 	if card.data.is_modal(): return true
+	# An Aura's one target is what it will enchant (CR 303.4a): a flash-rider
+	# Aura with no creature on the table has nothing to be cast at.
+	if card.data.is_aura():
+		return card.data.aura_target == null \
+			or not card.data.aura_target.legal_targets(g, card).is_empty()
 	for effect in card.data.spell_effects:
 		if effect.target_spec == null or effect.target_min <= 0 or effect.target_count_is_x: continue
 		if effect.target_spec.legal_targets(g, card).is_empty(): return false

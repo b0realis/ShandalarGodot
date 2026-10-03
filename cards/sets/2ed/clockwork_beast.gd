@@ -42,7 +42,7 @@ static func _fought(_game: MtgGame, source: CardInstance, _event: GameEvent) -> 
 
 
 static func _wind_down(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out: unaffected (CR 702.26b)
 		return
 	var left := int(source.counters.get("+1/+0", 0)) - 1
 	if left <= 0:

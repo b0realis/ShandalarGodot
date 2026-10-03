@@ -44,7 +44,50 @@ func forcing_color(color: int, controller_only := false) -> ManaAbility:
 var sacrifice_source: bool = false
 var activation_zone := Mtg.Zone.BATTLEFIELD
 var exile_source := false
+## Object-cost groups (engine/additional_object_costs.gd) — Cadaverous
+## Bloom's "Exile a card from your hand", Lion's Eye Diamond's "Discard
+## your hand". A source with any is never auto-planned (ManaPlanner).
 var object_costs: Array = []
+
+## Fluent: add one object-cost group (see [member object_costs]).
+func with_object_cost(group: Dictionary) -> ManaAbility:
+	object_costs.append(group)
+	return self
+
+## "Activate only as an instant" (Lion's Eye Diamond, CR 605.1a and its
+## ruling): only while the activating player HOLDS PRIORITY outside any
+## resolution — never in the middle of casting a spell or paying a cost —
+## and never auto-tapped by a planner. MtgGame.tap_for_mana refuses it
+## otherwise.
+var instant_only := false
+
+## Fluent: see [member instant_only].
+func as_instant() -> ManaAbility:
+	instant_only = true
+	return self
+
+## "Activate only N times each turn" (Wall of Roots: once). 0 = unlimited.
+## Counted per object in CardInstance.ability_uses under the key
+## "mana:<index>", reset every cleanup and when the permanent leaves
+## (CR 400.7). ManaPlanner drops an exhausted source.
+var max_per_turn := 0
+
+## Fluent: see [member max_per_turn].
+func per_turn(n: int) -> ManaAbility:
+	max_per_turn = n
+	return self
+
+## "Put N <kind> counters on this permanent" as part of the cost (Wall of
+## Roots' -0/-1). Paid by MtgGame.tap_for_mana with the rest of the cost;
+## a planner uses the source only while the counter does not kill it.
+var put_counter_kind := ""
+var put_counter_count := 0
+
+## Fluent: see [member put_counter_kind].
+func with_put_counter_cost(kind: String, count := 1) -> ManaAbility:
+	put_counter_kind = kind
+	put_counter_count = count
+	return self
 ## Borrow a mana type from the first permanent named by object_costs.
 var borrow_paid_land_type := false
 

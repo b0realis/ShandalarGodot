@@ -35,8 +35,8 @@ func resolve(game: MtgGame, source: CardInstance, _controller: int, target: Targ
 	var affected := source
 	if target_spec != null:
 		affected = game.find_instance(target.instance_id)
-	if affected == null or affected.zone != Mtg.Zone.BATTLEFIELD:
-		return   # died before the shield resolved — too late (no retroactive save)
+	if not game.is_present(affected):
+		return   # died (or phased out, CR 702.26e) before the shield resolved
 	if target_spec == null and source.layer_timestamp != int(game.cost_paid("_source_timestamp", source.layer_timestamp)):
 		return
 	game._rec(affected, &"regeneration_shields")

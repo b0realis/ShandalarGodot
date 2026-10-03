@@ -38,12 +38,18 @@ class DividedCounters extends CounterMarkerEffect:
 		super(type, total)
 		divided_among(total)
 		temporary = cleanup
-	func resolve_multi(g: MtgGame, _s: CardInstance, _pid: int, targets: Array, _x := 0) -> void:
+	func resolve_multi(g: MtgGame, s: CardInstance, pid: int, targets: Array, _x := 0) -> void:
 		for ref in targets:
 			var i := g.find_instance(ref.instance_id)
 			if i == null or i.zone != Mtg.Zone.BATTLEFIELD: continue
 			g.add_counters(i, kind, ref.amount)
-			if temporary: g.schedule_cleanup_action(load("res://cards/sets/all/_spells.gd")._remove_counters.bind(i.id, i.layer_timestamp, kind, ref.amount))
+			if not temporary: continue
+			# "For each +1/+1 counter you put on a creature this way, remove
+			# a +1/+1 counter from that creature at the beginning of the
+			# next cleanup step": one delayed trigger per counter, each on
+			# the stack in the cleanup step (CR 514.3a).
+			for _n in ref.amount:
+				g.schedule_cleanup_action(load("res://cards/sets/all/_spells.gd")._remove_counters.bind(i.id, i.layer_timestamp, kind, 1), s, pid, "Remove a %s counter from %s." % [kind, i.data.card_name])
 	func describe() -> String: return "divide %d %s counters among target creatures%s" % [count, kind, "; remove those counters at the next cleanup" if temporary else ""]
 
 class Denial extends CounterEffect:

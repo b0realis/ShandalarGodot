@@ -46,6 +46,31 @@ func x_amount() -> PreventDamageEffect:
 	return self
 
 
+## Fluent: "Prevent the next [param total] damage that would be dealt this
+## turn to any number of targets, divided as you choose" (Remedy) — CR
+## 601.2d: the division is announced with the targets (each gets at least
+## 1, the shares sum to the total, [TargetPlan] checks it) and each target's
+## pool receives its own share ([member TargetRef.amount]). Pass -1 to
+## divide the spell's X. Any target unless a spec was set first.
+func divided(total: int) -> PreventDamageEffect:
+	divided_among(total)
+	if target_spec == null:
+		target_spec = TargetSpec.any_target()
+	return self
+
+
+## A DIVIDED prevention hands each target its own share (locked in at cast,
+## CR 601.2d); an undivided one falls back to "the same amount, once per
+## target".
+func resolve_multi(game: MtgGame, source: CardInstance, controller: int,
+		targets: Array, x_value: int = 0) -> void:
+	if divided_amount(x_value) <= 0:
+		super(game, source, controller, targets, x_value)
+		return
+	for ref in targets:
+		_prevent_into(game, source, ref, int(ref.amount))
+
+
 ## Fluent: shield the controller, no target ("...dealt to you").
 func to_controller() -> PreventDamageEffect:
 	controller_mode = true
@@ -96,7 +121,7 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 	if n <= 0:
 		return
 	if source_mode:
-		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
+		if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 			return
 		source.prevention += n
 		source.prevention_source = source.data
@@ -108,7 +133,14 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 		game.log_line("%s will prevent the next %d damage to %s this turn" % [
 			source.data.card_name, n, game.players[controller].player_name])
 		return
-	if target == null:
+	_prevent_into(game, source, target, n)
+
+
+## Add [param n] to [param target]'s prevention pool — the player's or the
+## creature's (see [method resolve]).
+func _prevent_into(game: MtgGame, source: CardInstance, target: TargetRef,
+		n: int) -> void:
+	if target == null or n <= 0:
 		return
 	if target.is_player:
 		game.players[target.player_id].damage_prevention += n
@@ -116,7 +148,7 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 			source.data.card_name, n, game.players[target.player_id].player_name])
 	else:
 		var inst := game.find_instance(target.instance_id)
-		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
+		if not game.is_present(inst):   # CR 702.26e
 			return
 		inst.prevention += n
 		# WHO SHIELDED IT, for the table to draw behind the creature — see
@@ -130,6 +162,9 @@ func resolve(game: MtgGame, source: CardInstance, controller: int, target: Targe
 ## One-line log/UI text.
 func describe() -> String:
 	var n := "X" if use_x else str(amount)
+	if divided_total > 0 or divided_uses_x:
+		return "prevents the next %s damage this turn to any number of targets, divided as you choose" \
+			% ("X" if divided_uses_x else str(divided_total))
 	if controller_mode:
 		return "prevents the next %s damage to you this turn" % n
 	var rider := "; then pay {1} any time for 1 more" if paid_rider else ""

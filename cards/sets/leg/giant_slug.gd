@@ -51,7 +51,7 @@ static func _armed_and_yours(game: MtgGame, source: CardInstance,
 
 static func _slither(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
 	source.memory.erase("armed_on_turn")
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	var pid := source.controller_id
 	var them := game.opponent_of(pid)

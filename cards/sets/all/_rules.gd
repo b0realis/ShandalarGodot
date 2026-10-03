@@ -13,8 +13,6 @@ static func apply(c: CardData) -> CardData:
 	if not done: done = preload("res://cards/sets/all/_choices.gd").configure(c)
 	if not done: done = preload("res://cards/sets/all/_links.gd").configure(c)
 	if not done: c.castable_only_when(_pending)
-	if c.card_name in ["Bounty of the Hunt", "Thawing Glaciers"]:
-		c.oracle_text += "\n\nSIMPLIFIED: the delayed cleanup action happens without a response window. See docs/simplified-cards.md."
 	preload("res://cards/sets/all/_effect_shapes.gd").annotate(c)
 	for trigger in c.triggered_abilities:
 		if not trigger.capture_context.is_valid(): trigger.capturing(preload("res://cards/sets/fem/_rules.gd")._source_context)

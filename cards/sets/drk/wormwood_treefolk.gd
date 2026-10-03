@@ -39,7 +39,7 @@ class WalkEffect extends EffectBase:
 		# CR 608.2h — the ability resolves with or without its source. Only
 		# the landwalk grant has nothing left to attach to; the 2 damage is
 		# owed either way, exactly like Electric Eel's self-burn in this set.
-		if source.zone == Mtg.Zone.BATTLEFIELD:
+		if game.is_present(source):   # phased out: not included (CR 702.26e)
 			game.continuous.add_until_eot_landwalk(source.id, [land_type])
 			game.recalculate()
 		game.deal_damage(source, TargetRef.player(controller), 2)

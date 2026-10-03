@@ -1242,7 +1242,12 @@ static func _page_builder() -> Dictionary:
 			+ "Select a printing, preview it and press Use variant. Automatic follows the set filter. "
 			+ "Your saved deck remembers one printing for every copy of that card name, including the sideboard. "
 			+ "Rules, copy limits and draft pools stay the same. Missing artwork falls back to the normal face. "
-			+ "Portal and Fifth Edition include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
+			+ "Portal, Fifth Edition and Mirage include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
+		_text("Pack 8 · The Mirage Block brings Mirage, Visions and Weatherlight: 669 different cards "
+			+ "and 684 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
+			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
+			+ "usual rules, and a card first printed in Ice Age, Homelands, Portal or Second Age can be played "
+			+ "with either that pack or Pack 8 installed."),
 		_text("LOAD is a door to the Load Deck dialog from the bar: "
 			+ "your own decks head the list, a finder above it keeps the "
 			+ "rows whose title or file name contains what you type, "

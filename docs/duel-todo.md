@@ -1112,9 +1112,13 @@ a player rather than at a permanent. `DamageMarker` (§6.20b) carries both
 of the table's damage cues: `Damage: %d` and `Damage to player`. Nine of
 the ten are drawn now.
 
-Only `Phased` is still unanswerable, and for the reason recorded: it
-cannot reach a widget, because `MtgGame.phase_out` removes the instance
+Only `Phased` was still unanswerable, and for the reason recorded: it
+could not reach a widget, because `MtgGame.phase_out` removes the instance
 from `players[pid].battlefield` and there is no `Mtg.Zone.PHASED_OUT`.
+**ANSWERED 2026-10-03 (Pack 8):** the board draws `MtgPlayer.phased_out`
+too (`DuelScreen._table_cards`) and the small card wears
+`MiniCard.State.PHASED` — all ten states are drawn now
+(`tests/ui/test_pack_8_phasing_board.gd`).
 
 **The borders.** `MiniCard.Highlight` is now
 `NONE / OPTIONAL / MANDATORY / COMMITTED / TARGET_LEGAL / TARGET_CHOSEN`,
@@ -1853,7 +1857,7 @@ already tracks an item, that is said so we do not double-count it.
 | 5.17 | **"As this enters, choose ___"** as a pre-ETB replacement (CR 614.12) | `pkg/mage/etb_choice.go:29-125` | PARTIAL — ours is an ETB trigger writing to `CardInstance.memory` | Unobservable for Black Vise / The Rack today, but the shape is wrong | S |
 | 5.18 | **State-triggered abilities** with arm/disarm (CR 603.8) | `pkg/mage/game.go:2178-2212`; `triggered.go:203-232` | PARTIAL — we model the era's as SBAs, which is right but can't be responded to | Correct today; the arming rule is what stops future ones re-firing | S |
 | 5.19 | **Empty-library loss as an SBA** | `pkg/mage/game.go:3380-3386` | PARTIAL — `draw_cards` loses immediately (`mechanics.md §8`) | Identical for this pool; changes what an over-draw does mid-resolution | S |
-| 5.20 | **Priority during cleanup + a repeated cleanup step** (CR 514.3a) | `pkg/mage/turn.go:144-152` | ALREADY TRACKED (`mechanics.md §14`); the marker is `MtgGame._cleanup_step`'s `SIMPLIFIED: cleanup grants no priority.` | One line of recursion; closes a documented hole. **AND THE POOL SURVEYED IT, 2026-09-11: nothing in 897 cards can see it.** CR 514.3a grants priority only when the cleanup step performs a state-based action or puts a trigger on the stack, and this pool can do neither there. NO CARD LISTENS ON `CARD_DISCARDED` (`grep` finds the dispatch in `MtgGame` and not one listener in `cards/`), so the hand-size discard raises nothing; and CR 514.2 removes damage and ends until-EOT effects SIMULTANEOUSLY, which is exactly what `_finish_cleanup` does — damage to 0 first, then `continuous.expire_until_eot()` — so a pumped creature with damage on it survives its pump wearing off, as printed. Anything a cleanup could still leave behind is swept at the very next `_open_priority` (upkeep, CR 704.3), one step late and never lost. So the row is a CORRECTNESS row with no observer: worth the one line of recursion for its own sake, not for any card | S |
+| 5.20 | ~~**Priority during cleanup + a repeated cleanup step** (CR 514.3a)~~ **DONE 2026-10-03, Pack 8 E3** (`MtgGame._cleanup_triggers`; the Mirage flash riders are its observers) | `pkg/mage/turn.go:144-152` | ALREADY TRACKED (`mechanics.md §14`); the marker is `MtgGame._cleanup_step`'s `SIMPLIFIED: cleanup grants no priority.` | One line of recursion; closes a documented hole. **AND THE POOL SURVEYED IT, 2026-09-11: nothing in 897 cards can see it.** CR 514.3a grants priority only when the cleanup step performs a state-based action or puts a trigger on the stack, and this pool can do neither there. NO CARD LISTENS ON `CARD_DISCARDED` (`grep` finds the dispatch in `MtgGame` and not one listener in `cards/`), so the hand-size discard raises nothing; and CR 514.2 removes damage and ends until-EOT effects SIMULTANEOUSLY, which is exactly what `_finish_cleanup` does — damage to 0 first, then `continuous.expire_until_eot()` — so a pumped creature with damage on it survives its pump wearing off, as printed. Anything a cleanup could still leave behind is swept at the very next `_open_priority` (upkeep, CR 704.3), one step late and never lost. So the row is a CORRECTNESS row with no observer: worth the one line of recursion for its own sake, not for any card | S |
 | 5.21 | **Optional additional costs** with an "if you do" latch, and either/or costs | `pkg/mage/cost_optional.go:16-81`; `cost.go:564-627` | PARTIAL — mandatory additional costs only | No kicker in this pool, but "discard a card or pay {5}" recurs | S |
 | 5.22 | **Alternative costs / casting from a non-hand zone** | `pkg/mage/alternate_cost.go:26-109`; `effect_cast_alt.go:122-299` | MISSING for cast-from-zone; PARTIAL for lands | Low era pressure; the clean home for `cards/todo/drk/gaea_s_touch.gd` | S |
 | 5.23 | **Attack costs** ("can't attack unless you pay", CR 508.1e) | `pkg/mage/combat_restrictions.go:67-206` | MISSING | No Propaganda in the pool; the right home for Hasran Ogress-style taxes we do as triggers | S |
@@ -4104,7 +4108,9 @@ Four used to be invisible — **`This card will untap`** (the inverse of a
 Meekstone lock), **`Card is not controlled by owner`** (a Control Magic'd
 creature looked identical to your own), **`Dying`**, and **`Is a target,
 can't target again`**. All four are drawn now, with `Is a target` and
-`Can't target this` beside them; see §2.10.
+`Can't target this` beside them; see §2.10. **`Phased`** joined them on
+2026-10-03 (Pack 8): phased-out permanents are drawn ghosted with that cue
+(`MiniCard.State.PHASED`, `DuelScreen._table_cards`).
 
 `@CUECARD_LIFE` (`:678`) shows the life register's readout includes poison
 AND a Lich flag (§6.5). `@CUECARD_MANAPOOL` (`:693`) names seven pool
@@ -4381,8 +4387,10 @@ whose victim is a player, which is the one card-shaped thing on a 1997
 table that can be about damage to a player at all. `DamageMarker` carries
 both damage cues: `Damage: %d` on a marker aimed at a card, `Damage to
 player` on one aimed at a seat. Nine of the ten states are now drawn
-somewhere; only `Phased` is still unanswerable, for the reason
-`MiniCard.active_states()` gives.
+somewhere; only `Phased` was still unanswerable, for the reason
+`MiniCard.active_states()` gave — **until 2026-10-03 (Pack 8)**, when the
+board began drawing phased-out permanents (`DuelScreen._table_cards`) and
+the small card gained `MiniCard.State.PHASED`. All ten are drawn now.
 
 **c. Attackers and blockers are IRREVOCABLE — S, UI (a deliberate divergence).**
 Manual p.126: *"Once you have added a creature to the attack lineup, there

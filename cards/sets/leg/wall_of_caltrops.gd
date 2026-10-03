@@ -52,7 +52,7 @@ static func _wall_only_gang(game: MtgGame, source: CardInstance, event: GameEven
 
 
 static func _band_up(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	if not _wall_only_gang(game, source, event):
 		return   # the intervening "if", tested again on resolution (603.4)

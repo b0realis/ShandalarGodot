@@ -20,6 +20,18 @@ var player_name: String = ""
 
 var life: int = 20
 var skip_draw_steps := 0
+## "You skip your next untap step" (Avizoa): pending one-shot skips, one
+## consumed per untap step skipped (CR 614.10a — two such effects skip the
+## next two). Journaled by MtgGame.skip_next_untap_step.
+var skip_untap_steps := 0
+## "Each player skips their untap step" (Sands of Time): a STATIC skip,
+## rebuilt from scratch by the continuous pipeline on every recalculation.
+## A skipped untap step does nothing at all — no phasing (CR 702.26m), no
+## untapping — but the turn still begins (MtgGame._turn_start_sweep).
+var skips_untap_step := false
+## "You skip your next turn" (Chronatog): pending one-shot turn skips (CR
+## 614.10), consumed as the turn would begin (MtgGame._begin_turn).
+var turns_to_skip := 0
 var last_red_spell_damage_controller := -1
 
 ## Maximum hand size at cleanup (CR 402.2). Normally 7; Cursed Rack sets
@@ -45,6 +57,21 @@ var hand_revealed: bool = false
 ## as a cost or the cleanup step's. Rebuilt from scratch by the continuous
 ## pipeline on every recalculation.
 var discard_to_library_top: bool = false
+
+## "If a card would be put into your graveyard from anywhere, exile that
+## card instead" (Forbidden Crypt, CR 614.1). Rebuilt from scratch by the
+## continuous pipeline; honoured by MtgGame._graveyard_becomes_exile, the
+## one gate every move into THIS player's graveyard passes. A creature so
+## exiled never dies (CR 700.4).
+var graveyard_becomes_exile: bool = false
+
+## "Until end of turn, you may cast <filter> spells from the top of your
+## graveyard" (Bösium Strip) — permissions granted by
+## MtgGame.grant_graveyard_cast, each {filter: Callable(card) -> bool,
+## desc, top_only, exile_instead, source_id}, read by
+## MtgGame.can_cast_from_graveyard and cleared at cleanup. A permission
+## widens the source ZONE only, never timing or payment (CR 601.3).
+var graveyard_cast_permissions: Array[Dictionary] = []
 
 ## Damage can never take this player below this life total (Ali from
 ## Cairo's 1). 0 = no floor. Rebuilt from scratch by the continuous
@@ -74,10 +101,14 @@ var exile: Array[CardInstance] = []
 ## OWNS it; MtgGame.change_owner moves it between the two.
 var ante: Array[CardInstance] = []
 
-## PHASED-OUT permanents (CR 702.25 — Oubliette). While a permanent is in
+## PHASED-OUT permanents (CR 702.26) that phased out under THIS player's
+## control — the ones this player's untap step phases back in (CR 502.1),
+## held ones (Oubliette, CardInstance.phase_hold) and indirect riders
+## (CardInstance.phased_indirectly) excepted. While a permanent is in
 ## here it is "treated as though it doesn't exist": it is off the
 ## battlefield arrays, so nothing sees it, but it never left the
 ## battlefield, so no leave/enter triggers fire when it phases in or out.
+## PUBLIC information (the 1997 board shows it as "Phased").
 var phased_out: Array[CardInstance] = []
 
 ## OUTSIDE THE GAME (Ring of Ma'rûf). Empty in a plain duel; the adventure
@@ -116,6 +147,16 @@ var any_color_spells: int = 0
 ## "You don't lose the game for having 0 or less life" (Lich). Rebuilt
 ## from scratch by the continuous pipeline on every recalculation.
 var cant_lose_to_life: bool = false
+
+## SOURCE-FILTERED targeting bans on this PLAYER — the twin of
+## CardInstance.cur_target_bans (Peace Talks: "players ... can't be the
+## targets of spells or activated abilities"). Each entry is
+## {"filter": func(game: MtgGame, source: CardInstance, spec: TargetSpec)
+## -> bool}, TRUE refusing the targeting; MtgGame.targeting_kind tells a
+## spell's spec from an activated or triggered ability's. Written by
+## statics, emptied by the continuous pipeline on every recalculation and
+## read by TargetSpec.refusal_reason_from.
+var cur_target_bans: Array[Dictionary] = []
 
 ## "If you would gain life, draw that many cards instead" (Lich) — a
 ## replacement effect honoured by MtgGame.adjust_life. Rebuilt by the
@@ -267,6 +308,46 @@ var life_for_mana: bool = false
 ## entry is {"target": TargetRef, "desc": String}; an entry whose permanent
 ## has left the battlefield is dropped (CR 400.7). Cleared at cleanup.
 var paid_prevention: Array[Dictionary] = []
+
+# ------------------------------------------- Pack 8 E10: player state --
+
+## How many CREATURES were put into THIS PLAYER'S GRAVEYARD from the
+## battlefield this turn — keyed by OWNER, not by controller and not by who
+## killed it: "for each creature put into your graveyard from the
+## battlefield this turn" (Asmira, Holy Avenger; Urborg Justice). A token
+## counts (it goes to its owner's graveyard before it ceases to exist, CR
+## 111.7); a creature exiled instead of dying never got there. Counted by
+## MtgGame._move_to_graveyard, cleared at cleanup.
+var creatures_to_graveyard_this_turn: int = 0
+
+## Did this player TAP A LAND FOR MANA this turn — a land's mana ability
+## with {T} in its cost, activated by this player (Desolation: "each player
+## who tapped a land for mana this turn"). Set by MtgGame.tap_for_mana,
+## cleared at cleanup.
+var tapped_land_for_mana_this_turn: bool = false
+
+## The PERMANENT SPELLS this player cast this turn, as
+## `{"id": instance id, "stamp": battlefield timestamp}` — `stamp` is -1
+## while the spell is still on the stack and becomes the timestamp of the
+## permanent it resolved into (CR 400.7: "the creature you cast" is that
+## object and no later one). Read through MtgGame.cast_this_turn_by (Cycle
+## of Life's "target creature you cast this turn"). Cleared at cleanup.
+var cast_permanents_this_turn: Array[Dictionary] = []
+
+## "Players can't gain life" (Forsaken Wastes, CR 119.7): checked FIRST by
+## MtgGame.adjust_life, ahead of any replacement of the gain (Lich's
+## draw). Rebuilt from scratch by the continuous pipeline on every
+## recalculation.
+var cant_gain_life: bool = false
+
+## THE COLOUR OF THIS PLAYER'S CARDS OUTSIDE THE BATTLEFIELD (Celestial
+## Dawn: "The same is true for spells you control and nonland cards you own
+## that aren't on the battlefield") — an Mtg.ManaColor mask, or -1 for no
+## override. Applies to the NONLAND cards this player OWNS in every zone but
+## the battlefield, and to the spells this player CONTROLS on the stack
+## (ContinuousEffects._offzone_colors). Rebuilt from scratch by the
+## continuous pipeline on every recalculation (MtgGame.set_offzone_color).
+var offzone_color: int = -1
 
 
 func _init(p_id: int, p_name: String, p_life: int) -> void:

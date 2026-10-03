@@ -66,6 +66,356 @@ needed); card files have NO class_name (they register by name instead);
 - `docs/pack-7-fifth-edition.md`, `docs/releases/0.40.13.md`: the pack
   guide and the release note.
 
+## The Mirage Block, Pack 8 (2026-10-03)
+
+- `game/mirage_block_pack.gd`: Pack 8's trusted three-set contract
+  (`MirageBlockPack`: Mirage `mir`, Visions `vis`, Weatherlight `wth`;
+  684 printings, 669 names, 621 new identities), bounded ZIP inventory
+  (2,676 entries, its own 384 MiB `MAX_BYTES` through
+  `PortalPack.bounded_zip`'s byte-budget parameter) and hashes; `scripts()`
+  loads the new names from `cards/sets/<set>/` and the 31 shared reprints
+  from their original pack's folder, read from `shared_names.json`.
+- `packaging/card_packs/pack_8_mirage_block/manifest.json`, `cards.json`,
+  `cards_vis.json`, `cards_wth.json`, `set.json`, `set_vis.json`,
+  `set_wth.json`, `reprint_names.json` (48 names), `shared_names.json`
+  (31 names → original set), `README.txt`: the pack's identity (`pack-8`,
+  `Pack-8-Mirage-Block.zip`, badge `8-MIR`, minimum game 0.50.11, set order
+  `mir`, `vis`, `wth`); text only, no artwork.
+- `cards/sets/mir/` (307 cards), `cards/sets/vis/` (154), `cards/sets/wth/`
+  (160): one trusted file per new name; each folder's `_rules.gd` is the
+  fail-closed dispatcher over the family modules `_basic.gd`, `_spells.gd`,
+  `_creatures.gd`, `_auras.gd`, `_artifacts.gd`, `_lands_mana.gd`,
+  `_combat.gd`, `_triggers.gd`, `_phasing.gd`, `_choices.gd`, `_costs.gd`,
+  `_misc.gd` (stubs but `_basic`, which completes the vanilla and
+  keyword-only creatures); unclaimed cards carry the `_pending` cast guard.
+- `game/art/set_icon_mir.png`, `set_icon_vis.png`, `set_icon_wth.png`,
+  `filter_{mir,vis,wth}_{on,off}.png`: the gold palm, eye and skyship and
+  their carved-stone medallions; drawn by `tools/draw_our_art.gd`
+  (`_palm`, `_eye`, `_skyship`), hashed in `game/art/README.md`.
+- `tools/pack_8_mirage_block.py`, `tools/test_pack_8_mirage_block.py`:
+  pinned-printing fetcher over the three sets, deterministic local builder
+  and bounded archive validation tests.
+- `tests/cards/test_pack_8_catalogue.gd`, `tests/ui/test_pack_8_integration.gd`:
+  the pack alone and beside the others (counts per set, shared providers,
+  disable warnings, numbered Mirage basics, scaffold fidelity, and the
+  catalogue gate refusing any `_pending` card) and its title badge, three
+  Extras rows, Options block, Rescan, emblems, draft groups, LAN stamp.
+- `tests/ui/test_pack_8_phasing_board.gd`: phased-out permanents on the duel
+  screen (`DuelScreen._table_cards`, `MiniCard.State.PHASED`,
+  `MiniCard.phase_note`) — both seats, ghosted with the 1997 `Phased` cue
+  and when each comes back (untap step, riding host, Oubliette's hold),
+  Auras drawn on their phased host, a slot of its own beside a land pile,
+  nothing clickable as a target or attacker, a small window.
+- `tests/ui/test_pack_8_flash_windows.gd`: FLASH for a human seat
+  (`DuelScreen._fast_spells` over `MtgGame.casts_at_instant_speed` /
+  `playable_cards`: flash creatures, the Mirage flash rider, Winding
+  Canyons) in the stops, the instant windows and the timing-aware hand
+  highlight; the CR 514.3a cleanup priority window driven through the
+  screen (a combat-cast rider Aura's sacrifice, Bounty of the Hunt).
+- `tests/ui/test_pack_8_zone_actions.gd`: Bösium Strip's graveyard cast from
+  the graveyard view (playable ring), a Three Wishes card played by its
+  only viewer and hidden from the other, Circling Vultures' discard
+  special action from the hand's Cast/Discard menu and the right-click
+  mini-menu.
+- `tests/ui/test_pack_8_choice_flows.gd`: every new human choice completed
+  (and cancelled where legal) through the screen — a two-slot trigger,
+  divided prevention, alternative cost rows, held return/exile/top-of-
+  graveyard costs, an object-counted X (`DuelScreen._object_x_groups`), a
+  colour chosen as an Aura enters, Heat Wave's block life tax, a "can't
+  phase out" activation.
+- `tests/ui/test_pack_8_keep_order.gd`: "in any order" sequences in one
+  click — `DecisionAgent.choose_card_in_order` / `PlayerChoice.in_order`,
+  `HumanAgent.keep_order_for`, the overlay's `Done — keep this order.`
+  line (`DuelScreen.KEEP_ORDER_LINE`), and the real Teferi's Puzzle Box.
+- `tests/ui/test_pack_8_torch_highlight.gd`: Kaervek's Torch on the chain —
+  the castable highlight and the response windows price the targeting
+  surcharge (`MtgGame.targeting_surcharge_floor` through the card passed to
+  `can_afford` / `could_afford`), and the cast's payment wait and prompt
+  include it (`spell_payment(..., targets)`).
+- `tools/pack_8_ui_soak.gd`: the base duel soak (`tools/duel_soak.gd`) with
+  five Mirage block decks — phasing, flash and the flash rider, Winding
+  Canyons, flanking, Circling Vultures, Bösium Strip; real Pack 8 ZIP and
+  the isolated `shandalar_test` profile required; both rules profiles.
+- `tools/pack_8_duel_audit.gd`: seeded complete Wizard-v-Wizard duels with
+  nine themed Mirage block decks in both rules profiles (`--rounds`,
+  `--seed` 87000, `--only-index`, `--rules`, `--turn-cap`, `--verbose`);
+  counts actual use — casts, activations per ability, triggers, phasing
+  events, flanking triggers, flash-rider casts and their cleanup-step
+  sacrifices, alternative/additional-cost casts, cumulative upkeep, damage
+  replacements, mana sources — and exits 2 on a stall (turn cap, a turn
+  that never ends, no seat able to act) or any error/warning a [Logger]
+  sees during a duel. Pack 8 in memory only, `shandalar_test` required.
+- `game/main.gd`: `VERIFY_PACK_8_FLAG` (`--verify-pack-8`) and the static
+  `pack_8_probe` behind it — with the real ZIP, in memory only: 652 dormant
+  scripts, no `_pending` rules, 1,368 decoded pictures and 1,304
+  `skin/cardart` fallbacks, nine UI textures, payment shapes plus an
+  executed Fireblast alternative cost and flash-rider cleanup sacrifice
+  (`_pack_8_play_probe`), and public AI metadata; one summary line, exit
+  0/1. `tests/ui/test_pack_8_verify_probe.gd` runs the same checks on the
+  suite's metadata-only fixture (pictures are its only failures).
+- `tests/ui/test_pack_8_sgmanalink_flash.gd`: flash at an SGManalink table —
+  `SgDuelPresentation.build`'s `respond` / `floating` ask
+  `MtgGame.casts_at_instant_speed` (flash creatures, the flash rider,
+  Winding Canyons), and a rider Aura needs a creature to enchant.
+- `tests/ui/test_sgmanalink_pack_8_zones.gd`: Pack 8 zone actions at an
+  SGManalink table (protocol 26) — Bösium Strip's graveyard cast offered by
+  `SgDuelActions.options` and rung by `SgDuelProjection.can_cast_from_graveyard`,
+  a Three Wishes face-down card cast by its viewer and named nowhere in the
+  other seat's view, Circling Vultures' `discard_special` command (never a
+  projection-side discard), and phased-out permanents (`phased_out` lists,
+  flags, `phase_holds`) public and inert at both seats.
+- `tests/ui/test_sgmanalink_pack_8_costs.gd`: Pack 8 payments over the
+  network — alternative rows lit only when their object costs are payable
+  and never "floating", held return/exile/sacrifice picks, an object-counted
+  X bounded by `AdditionalObjectCosts.max_x` and never auto-decided,
+  Remedy's division, Kaervek's Spite, and Kaervek's Torch's surcharge in
+  the light (`targeting_surcharge_floor`), the PAYING prompt and the
+  referee's auto-tap (`SgDuelActions.payment` keeps the draft's targets).
+- `tests/ui/test_sgmanalink_pack_8_questions.gd`: Pack 8 questions over the
+  network — a two-slot trigger, the untap/upkeep trigger-order question,
+  `Done — keep this order.` for an in-order sequence (the referee answers
+  the rest with the first line listed), Ward of Lights' colour, Heat Wave's
+  per-block life taxes (`block_taxes`, `SgDuelProjection.block_life_fee`)
+  and the cleanup step's priority window.
+- `tests/ui/test_pack_8_help.gd`: the three Mirage block glossary pages
+  (`game/help/ability_glossary.gd`) — phasing, flanking, flash and its
+  rider, the cleanup window, non-mana cumulative upkeep, object costs,
+  Heat Wave, and every Pack 8 digital adaptation in plain words.
+- `tests/cards/test_pack_8_b9_lands.gd`: the Mirage, Visions and
+  Weatherlight `_lands_mana.gd` cards (Diamonds, fetch, bounce and
+  sacrifice lands, Gemstone Mine, Lotus Vale, Squandered Resources…), each
+  mana source also against `ManaPlanner` — paying where it should (AI plan
+  and human auto-tap), refusing where it should not.
+- `tests/cards/test_pack_8_b9_creatures.gd`,
+  `tests/cards/test_pack_8_b9_artifacts.gd`: the Weatherlight
+  `_creatures.gd` and `_artifacts.gd` cards of batch B9 (Maraxus of Keld,
+  Orcish Settlers, Llanowar Behemoth, Steel Golem…; Bubble Matrix, Mana
+  Web, Thran Tome, Well of Knowledge…).
+- `tests/cards/test_pack_8_b4_mirage_wub.gd`, `test_pack_8_b4_mirage_rgm.gd`,
+  `test_pack_8_b4_visions.gd`: the Mirage and Visions instants and
+  sorceries (`cards/sets/mir/_spells.gd`, `cards/sets/vis/_spells.gd`) —
+  every charm mode, X spells, "you may" branches, LKI damage riders and
+  the delayed end-step and upkeep clauses, driven through the cast API.
+- `tests/cards/test_pack_8_b10_vis_creatures.gd`,
+  `test_pack_8_b10_wth_spells.gd`, `test_pack_8_b10_wth_triggers.gd`:
+  batch B10 — the Visions `_creatures.gd` activations (Chimeras, Matopi
+  Golem's "regenerates this way" delayed trigger, Phyrexian Marauder's
+  attack tax…), the Weatherlight `_spells.gd` (Debt of Loyalty, Cone of
+  Flame's three distinct targets, Thunderbolt's modes…) and
+  `_triggers.gd` (dies/ETB/upkeep triggers on the stack, last-controller
+  "you", Urborg Stalker's intervening if, Pendrell Mists' granted tax).
+- `tests/cards/test_pack_8_b5_mirage.gd`, `test_pack_8_b5_visions.gd`,
+  `test_pack_8_b5_weatherlight.gd`: batch B5 — the Mirage and Visions
+  triggered permanents (`cards/sets/mir/_triggers.gd`,
+  `cards/sets/vis/_triggers.gd`: upkeep, end-step, dies, enters, cast,
+  tap and damage triggers on the stack, intervening-if rechecks,
+  last-known-information resolution, state triggers, delayed returns) and
+  the Weatherlight global enchantments (`cards/sets/wth/_misc.gd`).
+- `tests/cards/test_pack_8_b3_white_blue.gd`, `test_pack_8_b3_black_red.gd`,
+  `test_pack_8_b3_green_gold.gd`, `test_pack_8_b3_ai.gd`: batch B3 — the
+  Mirage `_creatures.gd` activations and statics (Guildmages, Hakim's Aura
+  return, Kukemssa Serpent, Tainted Specter's victim choice, Urborg
+  Panther's three-body cost, Zirilan's hasty Dragon, the */* bodies of
+  Maro, Uktabi Wildcats and Haunting Apparition…), LKI sources, the 1997
+  prevention/regeneration windows, the keyword-only `_basic.gd` creatures
+  of the three sets with the batch's catalogue, and two AI seats on a
+  board of them.
+- `tests/cards/test_pack_8_b8_mirage.gd`, `test_pack_8_b8_visions.gd`,
+  `test_pack_8_b8_weatherlight.gd`, `test_pack_8_b8_wth_combat.gd`,
+  `test_pack_8_b8_ai.gd`: batch B8 — the `_costs.gd` cards of the three
+  sets (additional/alternative/X object costs refused before anything
+  moves, the payer's held choice, journal undo, return-to-hand and
+  graveyard-exile costs, Prismatic Circle in both rules profiles, the
+  cumulative upkeeps: age counters, all-or-nothing payment, the draw and
+  -1/-1 payments, Heart of Bogardan's "wasn't paid" trigger), the
+  Weatherlight `_combat.gd` cards (end-of-combat delayed triggers, block
+  and attack restrictions, Goblin Grenadiers' two target slots, Choking
+  Vines, Lava Storm's modes) and the AI's pricing of those costs.
+- `tests/cards/test_pack_8_b1_phasing_mir.gd`, `test_pack_8_b1_phasing_vis_wth.gd`,
+  `test_pack_8_b1_choices.gd`, `test_pack_8_b1_ai.gd`: batch B1 — the
+  `_phasing.gd` cards of the three sets (the untap-step cycle over two of
+  the controller's turns, riding Auras, PHASED_IN/OUT triggers, "can't
+  phase out", Equipoise, Teferi's Realm, Time and Tide, Katabatic Winds…)
+  and the `_choices.gd` cards (the to-the-top tutors, Tithe, Rampant
+  Growth, Natural Balance, Doomsday, Three Wishes' face-down exile, Illicit
+  Auction's bidding, Forbidden Ritual, Tariff), two AI seats on a board of
+  them, and hidden-state substitution checks on every card-authored hint.
+- `tests/cards/test_pack_8_b6_mir_auras.gd`, `test_pack_8_b6_vis_wth_auras.gd`,
+  `test_pack_8_b6_mir_artifacts.gd`, `test_pack_8_b6_vis_artifacts.gd`:
+  batch B6 — the `_auras.gd` cards of the three sets (the flash-rider
+  Auras and Parapet down both paths: main-phase cast kept, instant-speed
+  cast sacrificed at the CR 514.3a cleanup step after damage wears off;
+  Ward of Lights' chosen colour; Aura legality on resolution, falling off
+  on protection, colour or controller changes; control-stealing Auras;
+  granted cumulative upkeep and abilities; sacrifice-this-Aura effects on
+  the creature named at activation) and the Mirage and Visions
+  `_artifacts.gd` cards (Acidic Dagger's delayed triggers, Amber Prison's
+  lock, Bone Mask, Cursed Totem, Grinning Totem, Mangara's Tome's pile,
+  Ventifact Bottle, Sands of Time, Teferi's Puzzle Box, Triangle of War…).
+- `tests/cards/test_pack_8_b7_damage.gd`, `test_pack_8_b7_mirage_rules.gd`,
+  `test_pack_8_b7_visions_rules.gd`: batch B7 — the Mirage and Visions
+  `_misc.gd` cards. The damage replacement suite (Shadowbane, Circle of
+  Despair, Reflect Damage, Honorable Passage, Righteous Aura, Benevolent
+  Unicorn, Lichenthrope, Ogre Enforcer, Soul Echo, Kaervek's Torch and
+  Torrent of Lava's stack statics) including CR 616.1 ordering against a
+  Circle of Protection and both rules profiles (the 1997 damage-prevention
+  window); and the global rules (Celestial Dawn, Null Chamber, Bazaar of
+  Wonders, Forbidden and Breathstealer's Crypts, Forsaken Wastes, Tombstone
+  Stairwell, Chaosphere, Hall of Gemstone, Eye of Singularity, Peace Talks,
+  Blanket of Night, Necromancy, Pillar Tombs of Aku, Elkin Lair, City of
+  Solitude, Righteous War, Unfulfilled Desires).
+- `tests/cards/test_pack_8_b2_flanking.gd`, `test_pack_8_b2_mirage.gd`,
+  `test_pack_8_b2_visions.gd`: batch B2 — the Mirage and Visions
+  `_combat.gd` cards. The flanking knights (one instance each, the stack
+  trigger answered with a pump, a flanking blocker spared, two instances,
+  a knight in a band), Telim'Tor, Knight of Valor and Barbed Foliage's
+  per-attacker triggers; "blocks or becomes blocked (by)" triggers on
+  either side and across bands, the basilisk gazes, Basalt Golem's Wall,
+  Mindbender Spores' granted abilities, Heat Wave's life tax, Elephant
+  Grass's attack tax, Ekundu Cyclops, Dazzling Beauty, Blind Fury's
+  doubling, Rock Slide's division, Song of Blood and Pygmy Hippo.
+- `tests/unit/test_pack_8_e1_phasing.gd`: engine package E1 — PHASING as
+  the keyword (CR 702.26): the untap-step action, one-shot and held
+  ("until") phase-outs, indirect Auras, the simultaneous batch
+  (`MtgGame.phase_simultaneously`), PHASED_OUT / PHASED_IN events, "can't
+  phase out", `MtgGame.is_present` and the liveness audit (nothing affects
+  a phased-out permanent, leashes end, combat removal, 514.2 damage),
+  undo, the fifth-edition rules and two AI seats on a phasing board.
+- `tests/cards/test_phasing_liveness_audit_2026_10_03.gd`: the older
+  sets' card code that remembers a permanent across time, re-pinned to
+  `MtgGame.is_present` — one test per family: a "for as long as" lock
+  (Giant Oyster), an upkeep "if you do" and the exile link that survives
+  phasing (Safe Haven), a damage redirect (Shimian Night Stalker), an
+  effect that never includes a phased-out object (Brine Hag, Dragon
+  Whelp, CR 702.26e), a token roster (Tetravus) and upkeep triggers on
+  the phased-out permanent itself (Divine Intervention, Thought Lash).
+- `tests/cards/test_ability_text_helper_2026_10_03.gd`: the shared
+  `_ability` helper's menu text — "{R}: …", "{T}: …", "{1}, {T}: …", no
+  stray ", :" (Spitting Drake, Kyscu Drake) — and Mischievous
+  Poltergeist's "Pay 1 life:".
+- `tests/unit/test_pack_8_e8_turn_structure.gd`: engine package E8 —
+  skipping a turn (`skip_next_turn`), skipping an untap step (one-shot and
+  static; no phasing, the turn still begins), "as you untap" actions
+  (`schedule_untap_step_action`) and `MAIN_PHASE_START`; and the upkeep's
+  trigger batch (CR 503.1a): untap-step triggers join the upkeep's, APNAP,
+  each controller ordering their own (`MtgGame._flush_upkeep_batch`).
+- `tests/unit/test_phasing_engine_gaps_2026_10_03.gd`: the engine gaps the
+  2026-10-03 phasing audit of the older cards found — mutation helpers and
+  the `ContinuousEffects` adders refusing a phased-out permanent (702.26b/e),
+  move_to_ante/change_owner, Old Man of the Sea's victim-tracking cap,
+  Johan, redirection onto a phased-out creature (614.6), the continuity
+  markers phasing out moves (702.26f: Battle Gear, Stromgald Spy), Gaea's
+  Liege and Cyclopean Tomb going on while their source is phased out, Bronze
+  Tablet, and play bans from a silenced or suspended source.
+- `engine/abilities/flanking.gd` (`Flanking`): FLANKING (CR 702.25) — the
+  live instance count (`FLANKING` entries in `cur_keywords`), the static
+  grant helper, the one shared BLOCKED trigger and the recalculation's
+  last pass that hands it out once per instance
+  (`ContinuousEffects.flanking_trigger`).
+- `engine/effects/make_blocked_effect.gd` (`MakeBlockedEffect`): "target
+  (unblocked) attacking creature becomes blocked", optionally dealing
+  damage to each — over `MtgGame.make_blocked` (CR 509.1h, 702.19e,
+  702.22i).
+- `tests/unit/test_pack_8_e2_flanking.gd`: engine package E2 — the
+  flanking trigger per blocker and per instance, grants and losses, the
+  response window, 0-toughness blockers and trample, bands, effect-made
+  blocks, 400.7/113.7a, silencing, control change, turn expiry, undo and
+  the fifth-edition rules.
+- `tests/unit/test_pack_8_e3_flash_cleanup.gd`: engine package E3 —
+  FLASH (`Mtg.Keyword.FLASH`), the Mirage flash rider
+  (`CardData.with_flash_rider`, the cleanup-step sacrifice of "the
+  permanent it becomes"), the seat's flash (`MtgGame.grant_flash`), the
+  CR 514.3a cleanup triggers (after the discard and the damage removal, on
+  the stack, priority, another cleanup step — `MtgGame._cleanup_triggers`,
+  `Mtg.EventType.CLEANUP_START`), Ward of Lights' chosen-colour grant
+  (`CardData.grants_host_protection_from_chosen`), the lifted Bounty of the
+  Hunt / Thawing Glaciers row, control change, 400.7, both rules and undo.
+- `tests/unit/test_pack_8_e4_bans_targets.gd`: engine package E4 —
+  activation bans reaching mana abilities (`CardData.bans_activations`,
+  `MtgGame.activation_ban_reason`, `add_floating_activation_ban`; Null Rod,
+  Cursed Totem, Katabatic Winds, City of Solitude, Abeyance shapes, the
+  planner and `try_pay`), floating play bans (`add_floating_play_ban`),
+  player target bans (`MtgPlayer.cur_target_bans`,
+  `MtgGame.targeting_kind`) and `BECAME_TARGET` (spells, abilities,
+  triggers incl. a human's held pick, copies, redirections).
+- `tests/unit/test_pack_8_planner_rows.gd`: `ManaPlanner` tries every
+  mana row of a permanent (`_upgrade_row`) — Crystal Vein's "{T},
+  Sacrifice: Add {C}{C}" pays {2}, a plain {1} keeps the land.
+- `tests/unit/test_pack_8_e9_combat_targeting.gd`: engine package E9 —
+  `make_blocked` / `MakeBlockedEffect`, life to block
+  (`CombatState.add_block_life_tax`), the conditional attack requirement
+  (`CombatState.attacks_with_others`) and multi-target triggers
+  (`TriggeredAbility.and_targeting`, `MtgGame.current_trigger_target`).
+- `engine/damage_replacements.gd` (preloaded as `MtgGame.DAMAGE_FX`):
+  engine package E5 — THE DAMAGE REPLACEMENT SUITE. One registry
+  (`MtgGame.damage_effects`, plus the static-written
+  `static_damage_effects`) of replacement/prevention effects over any victim
+  — "the next time a source of your choice would deal damage to <you and/or
+  creatures you control | any target | enchanted creature>", Reflect
+  Damage, damage modifiers (×2, −1), damage into counters, metered
+  redirects to any target, source-keyed metered shields, "until your next
+  upkeep" — each offered as an `&"fx"` gate in the two CR 616.1 walks, used
+  up per damage EVENT (`MtgGame._damage_event_serial`). Public face in
+  `MtgGame`: `add_damage_effect`, `add_static_damage_effect`,
+  `shield_next_damage`, `reflect_next_damage`, `modify_next_damage`,
+  `redirect_next_damage_points`, `prevent_next_damage_points`,
+  `choose_damage_source`, `predict_damage`, `lethal_damage_spared`.
+- `engine/effects/source_shield_effect.gd` (`SourceShieldEffect`): the
+  declarative "source of your choice" effect over that registry (prevent to
+  a target / you and your creatures / enchanted creature, reflect, double,
+  with a rider).
+- `tests/unit/test_pack_8_damage_replacements.gd`: engine package E5 —
+  modifiers, one-shot shields per event, reflect, metered redirects,
+  counters, unpreventable damage, CR 616.1 ordering, CR 400.7, control
+  change, turn and upkeep expiry, the 1997 window, Ogre Enforcer's
+  single-source lethal, Remedy's divided prevention, stack statics,
+  Kaervek's Torch's surcharge, `predict_damage`, undo.
+- `tests/unit/test_pack_8_player_state.gd`: engine package E10 — the
+  per-turn trackers (`MtgPlayer.creatures_to_graveyard_this_turn`,
+  `tapped_land_for_mana_this_turn`, `MtgGame.cast_this_turn_by`), the
+  pending ransom (delayed-trigger settlement), "can't gain life", additive
+  land types (`CardInstance.add_basic_land_type`), colour outside the
+  battlefield (`MtgGame.set_offzone_color`, the layer-5
+  `StaticAbility.changing_colors` tag) and the colourless-only spending rule
+  (`MtgGame.set_mana_spending_rule`, `ManaPool.spend_as_any` /
+  `colorless_only`, the planner's rows).
+- `tests/ai/test_ai_pack_8_flanking.gd`: the fair AI's flanking reads
+  under `reads_gaze` — `_dies_to` / `_flank_pair`, the block ladder's
+  rungs and gang, `_attack_risk`, the crack-back model's
+  `a_flanking`/`d_flanking`, and the Evaluator weight; ON and OFF arms.
+- `engine/ai/mirage_tactics.gd` (Stage 4, the fair AI's Mirage-block
+  readings): phasing (`phase_tools`/`use_tool`, the save from removal or
+  a lost combat, their attacker before blocks, their blocker at our
+  beginning of combat, `phase_swap_value`, `returning_creatures`,
+  `sweep_waits_for_phasers`), flash (`flash_creature_waits`,
+  `flash_ambush`, `end_step_flash`, the one-turn `aura_trick`,
+  `save_by_ward`), `dies_when_targeted` and `fragile_target_option`,
+  entry-cost lands (`land_entry`, `entry_unlocks`), the sweep's scope
+  (`sweep_scope`, `damage_is_shaped`), E5 (`combat_damage_is_shaped`,
+  `shield_covers`/`shield_tools`/`shield_response`, `pay_ransom`,
+  `torrent_option`), E9 (`pending_flank`, `price_forced_attackers`,
+  `price_block_tax`, `make_blocked_response`), the locks (`ban_swing`,
+  `truce_value`, `upkeep_ban`), Magma Mine / Triangle of War
+  (`counter_damage`, `fuelled_kind`, `fight_pair_option`), the flankers'
+  buttons (`menace_option`, `valor_option`), `turn_skip_option` and
+  `lion_eye_action`, and B1's choice roles (`role_choice`: Doomsday never,
+  Natural Balance, Tariff, Illicit Auction). Gated by `forecasts_tactics` (correctness) and
+  `reads_gaze` (combat). Wired into `ai_player.gd` (`_respond_action`,
+  `_ability_option`, `_size_and_aim`, `_try_play_land`, `_end_of_their_turn`,
+  `_declare_attacks`/`_declare_blocks`, `_paying_mode`, `_kills_by_damage`,
+  `_aims_at_own_fragile`); `MtgGame.targeting_surcharge_floor` /
+  `targets_surcharge` price Kaervek's Torch for every castable check.
+- `tests/ai/test_ai_pack_8_phasing.gd`, `test_ai_pack_8_flash.gd`,
+  `test_ai_pack_8_combat.gd`, `test_ai_pack_8_targets.gd`,
+  `test_ai_pack_8_damage.gd`, `test_ai_pack_8_lands.gd`,
+  `test_ai_pack_8_sweepers.gd`, `test_ai_pack_8_torch.gd`,
+  `test_ai_pack_8_costs.gd`, `test_ai_pack_8_mana.gd`,
+  `test_ai_pack_8_artifacts.gd`, `test_ai_pack_8_locks.gd`,
+  `test_ai_pack_8_auras.gd`, `test_ai_pack_8_choices.gd`: action-level pins of the above (uses it,
+  refuses the harmful or unpayable choice), the null arm of each gate and
+  hidden-information permutations.
+- `docs/pack-8-mirage-block.md`: the pack guide.
+
 ## Two lured attackers (2026-09-25)
 
 - `tests/unit/test_two_lures_2026_09_25.gd`: two Lures attacking together —
@@ -593,9 +943,10 @@ with AI and go over MCP code for bugfix and improvement run!"*
   (`TournamentRulesChange`) and editor (`TournamentRules`); the config
   carries `rules`; the hall header's `TournamentHallRules` line (brief,
   detail in the tooltip); the header counts `SgTournament.MAX_PLAYERS`.
-- `game/sgmanalink/protocol.gd`: `VERSION` 25, `SUBPROTOCOL`
-  `sgmanalink-local-v25`; the `host` command's optional `rules`
-  (`SgTableRules.valid`).
+- `game/sgmanalink/protocol.gd`: `VERSION` 26, `SUBPROTOCOL`
+  `sgmanalink-local-v26` (Pack 8: `phased_out` player lists, the phasing
+  flags and `phase_holds`, `block_taxes`, the `discard_special` command);
+  the `host` command's optional `rules` (`SgTableRules.valid`).
 - `game/sgmanalink/view_protocol.gd`: a room view's optional `rules`
   (whole, validated) and a listing row's optional `rules` (text ≤ 64).
 - `game/sgmanalink/local_server.gd`: a hosted room keeps
@@ -1268,6 +1619,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.11.md`: Pack 8 — the Mirage block (Mirage, Visions,
+  Weatherlight; 621 new cards), phasing, flanking, flash and the cleanup
+  window, the new costs and damage replacements, SGManalink protocol 26.
 - `docs/releases/0.50.10.md`: what the review of 0.50.9 found — the
   multicast permission and broadcast at both ends of discovery, the APK
   manifest check, one home guard (`package_release.py --guard`).
@@ -2181,7 +2535,10 @@ per-card reveals and is respected by network views and fair observations.
 - `cards/sets/all/*.gd`: 144 dormant definitions and shared rules-family modules;
   `_effect_shapes.gd` supplies semantic public AI metadata.
 - `engine/additional_object_costs.gd`: disjoint-cost assignment, atomic held
-  choices and journaled payment receipts (sacrifice, tap, untap, discard, counters).
+  choices and journaled payment receipts (sacrifice, tap, untap, discard, counters;
+  since Pack 8 also return-to-hand, exile from any zone, the positional top of a
+  graveyard, discard-your-hand, sacrifice-all and count-is-X groups, with
+  builders and `max_x`).
 - `engine/ai/alliances_tactics.gd`: pitch/payment choices, library budgets,
   exact-X removal and public combat/resource tactics; existing `forecasts_tactics` gate.
 - `engine/core/card_data.gd`, `engine/abilities/mana_ability.gd`: alternative
@@ -2289,6 +2646,21 @@ per-card reveals and is respected by network views and fair observations.
   live power (`StaticAbility.reading_pt`, CR 613.8) runs after every P/T
   layer — Meekstone sees a Bad Moon that entered after it and a floating
   pump, where the anthem pass showed it neither.
+- `tests/unit/test_pack_8_cost_vocabulary.gd`: Pack 8 engine package E6
+  on synthetic cards — return-to-hand costs (a Forest, two Islands, the
+  source itself, a spell's X Swamps), count-is-X object costs, exile from
+  hand and the positional top of a graveyard, discard-your-hand and
+  sacrifice-all, `CardData.with_alternative_cost` (mana value kept),
+  life per target, once-a-turn and put-a-counter mana costs, instant-only
+  mana, custom cumulative upkeep and its unpaid event, held human choices,
+  AI pricing, and a field-exact journal round trip of every new cost.
+- `tests/unit/test_pack_8_zone_replacements.gd`: Pack 8 engine package E7
+  on synthetic cards — dies to the library top, Forbidden Crypt's
+  graveyard-to-exile door on every path, casting from the top of a
+  graveyard with exile-instead, the library-to-graveyard event, counter
+  destinations (exile, the counterer's battlefield), face-down exile play,
+  the special-action discard (both rules profiles), an enchantment
+  becoming an Aura, and a field-exact journal round trip of each.
 
 The Deck Builder keeps its original eight-medallion strip. Extras sits just
 left of the compact Stats button and opens six centered source rows;
@@ -5254,6 +5626,12 @@ shandalar/
 │   │   │                      code review (docs/code-review-2026-08.md)
 │   │   ├── test_audit_2026_09.gd  engine pins from the 2026-09 full audit
 │   │   │                      (docs/audit-2026-09.md)
+│   │   ├── test_aura_controller_enchant_2026_10_03.gd  CR 303.4d: an Aura
+│   │   │                      whose restriction names its controller (Relic
+│   │   │                      Bind, Cocoon) falls off on a control change
+│   │   ├── test_extra_blocks_add_up_2026_10_03.gd  CR 509.1b: printed and
+│   │   │                      granted "additional" blocks add up (Two-Headed
+│   │   │                      Giant of Foriys under Yare blocks four)
 │   │   ├── test_review_2026_09.gd  engine pins from the 2026-09-01 code
 │   │   │                      review (docs/code-review-2026-09.md): the
 │   │   │                      CardRegistry printing-index race, dual-land

@@ -73,7 +73,7 @@ static func _source_color(g: MtgGame, source: CardInstance, color: int) -> bool:
 static func _sleight_x(_g: MtgGame, s: CardInstance, x: int, _targets: Array) -> String:
 	return "" if x == int(s.counters.get("sleight", 0)) else "X must equal the number of sleight counters"
 static func _chromatic(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
-	if not preload("res://cards/sets/ice/_creatures.gd").same_activation(g, s): return
+	if not preload("res://cards/sets/ice/_creatures.gd").same_activation(g, s) or not g.is_present(s): return   # CR 702.26e
 	g.add_counters(s, "sleight")
 	var preferred := 0
 	var i := A.host(g, s)
@@ -110,7 +110,9 @@ static func _cloak(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var ctx := g.trigger_context(s)
 	var i: CardInstance = ctx.attacker
 	var who := int(ctx.controller)
-	if i.zone != Mtg.Zone.BATTLEFIELD or i.layer_timestamp != int(ctx.timestamp): return
+	# Phased out: it can't be made to assign no damage, so "if you do"
+	# fails and nobody discards (CR 702.26b).
+	if not g.is_present(i) or i.layer_timestamp != int(ctx.timestamp): return
 	if g.agents[who].choose_yes_no(g, who, "Cloak of Confusion: forgo combat damage to make the opponent discard?", i.cur_power < 3 and not g.players[1 - who].hand.is_empty()):
 		F._no_assignment(g, s, i.id)
 		g.discard_random(1 - who, 1)

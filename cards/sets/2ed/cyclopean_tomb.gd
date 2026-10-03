@@ -11,11 +11,11 @@ extends CardScript
 ##
 ## Implementation: the mire counters are real counters on the land, and
 ## "that land is a Swamp for as long as it has a mire counter on it" is a
-## static that OUTLIVES the Tomb — on the battlefield the Tomb's own, and
-## as it leaves (CardData.as_it_leaves) the same one registered as a
-## FLOATING static with no end (ContinuousEffects.add_floating_static,
-## INDEFINITE): a land keeps its mire counters, and so its Swampness,
-## until something removes them.
+## FLOATING static with no end, registered by the first mire this Tomb
+## object puts down (ContinuousEffects.add_floating_static, INDEFINITE) —
+## it owes the Tomb nothing, so it goes on while the Tomb is phased out
+## (CR 702.26d) and after it is gone: a land keeps its mire counters, and so
+## its Swampness, until something removes them.
 ##
 ## The second paragraph is a DELAYED triggered ability (CR 603.7) the
 ## dies-trigger creates: at the beginning of EACH of the controller's
@@ -45,14 +45,12 @@ static func _non_swamp_land(inst: CardInstance) -> bool:
 
 func build() -> CardData:
 	return CardData.new("Cyclopean Tomb", "{4}", Mtg.CardType.ARTIFACT) \
-		.static_ability(_mires_are_swamps_static()) \
 		.activated(ActivatedAbility.new("{2}", true,
 			[MireEffect.new(TargetSpec.new(TargetSpec.Kind.PERMANENT,
 				"target non-Swamp land", _non_swamp_land),
 				_mires_are_swamps_static, _schedule_reversion)],
 			"{2}, {T}: Put a mire counter on target non-Swamp land.") \
 			.during_step(Mtg.Step.UPKEEP).your_turn_only()) \
-		.as_it_leaves(_keep_the_mires) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.DIES, _start_the_reversion,
 			"When Cyclopean Tomb is put into a graveyard from the battlefield, at the beginning of each of your upkeeps for the rest of the game, remove all mire counters from a land it mired.",
@@ -74,17 +72,6 @@ static func _mires_are_swamps(game: MtgGame, _source: CardInstance) -> void:
 
 static func _is_self(_game: MtgGame, source: CardInstance, event: GameEvent) -> bool:
 	return event.data.get("instance") == source
-
-
-## The Tomb is gone; the mire counters are not. The Swampness they grant
-## goes on without it (a floating static with no end).
-static func _keep_the_mires(game: MtgGame, source: CardInstance, _controller: int,
-		_parting: Dictionary) -> void:
-	for inst in game.all_battlefield():
-		if inst.is_land() and int(inst.counters.get("mire", 0)) > 0:
-			game.continuous.add_floating_static(source, _mires_are_swamps_static(),
-				ContinuousEffects.Duration.INDEFINITE)
-			return
 
 
 static func _start_the_reversion(game: MtgGame, source: CardInstance,
@@ -141,11 +128,15 @@ static func _revert_one(game: MtgGame, _source: CardInstance, event: GameEvent) 
 	for land_id in mired:
 		var land := game.find_instance(int(land_id))
 		if land != null and land.zone == Mtg.Zone.BATTLEFIELD and land.is_land():
-			candidates.append(land)
 			still.append(land_id)
+			# A PHASED-OUT land stays on the list (phasing is no zone
+			# change, CR 702.26d) but can't be chosen now (702.26b).
+			if game.is_present(land):
+				candidates.append(land)
 	memory["mired"] = still
 	if candidates.is_empty():
-		game.retire_delayed_trigger(int(entry["id"]))
+		if still.is_empty():
+			game.retire_delayed_trigger(int(entry["id"]))
 		return
 	candidates.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
 		var a_mine := a.controller_id == controller
@@ -189,9 +180,18 @@ class MireEffect extends EffectBase:
 		if land == null or land.zone != Mtg.Zone.BATTLEFIELD:
 			return
 		game.add_counters(land, "mire", 1)
-		if source.zone != Mtg.Zone.BATTLEFIELD:
+		# "That land is a Swamp for as long as it has a mire counter on it"
+		# is a resolved effect that owes the Tomb nothing: it goes on while
+		# the Tomb is phased out (CR 702.26d — the Tomb's own static used to
+		# stop with it, the phasing audit of 2026-10-03, D1) and after it is
+		# gone. A floating static with no end, once per Tomb object (every
+		# copy reads every mire counter, so one is enough).
+		if not bool(source.memory.get("swamps_float", false)):
 			game.continuous.add_floating_static(source, swamp_static.call(),
 				ContinuousEffects.Duration.INDEFINITE)
+			if source.zone == Mtg.Zone.BATTLEFIELD:
+				source.memory["swamps_float"] = true
+		if source.zone != Mtg.Zone.BATTLEFIELD:
 			# "When this artifact is put into a graveyard from the
 			# battlefield" — only that departure owes a reversion.
 			if source.zone == Mtg.Zone.GRAVEYARD:
@@ -203,6 +203,7 @@ class MireEffect extends EffectBase:
 		if not mired.has(land.id):
 			mired.append(land.id)
 		source.memory["mired"] = mired
+		game.recalculate()
 
 	func describe() -> String:
 		return "puts a mire counter on target non-Swamp land, making it a Swamp"

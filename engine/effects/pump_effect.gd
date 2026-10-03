@@ -57,8 +57,11 @@ func resolve(game: MtgGame, source: CardInstance, _controller: int, target: Targ
 		x_value: int = 0) -> void:
 	var affected_id := source.id if self_mode else target.instance_id
 	var affected := game.find_instance(affected_id)
-	if affected == null or affected.zone != Mtg.Zone.BATTLEFIELD:
-		return   # source left the battlefield before its own buff resolved
+	if not game.is_present(affected):
+		# Left the battlefield before its own buff resolved — or phased
+		# out: a resolving effect does not include a phased-out
+		# permanent, even once it is back (CR 702.26e).
+		return
 	if self_mode and source.layer_timestamp != int(game.cost_paid("_source_timestamp", source.layer_timestamp)):
 		return   # the old ability cannot buff a new battlefield incarnation
 	var power_boost := x_value if use_x_power else power

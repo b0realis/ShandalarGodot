@@ -47,7 +47,7 @@ static func _destroy_self(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef,
 	if C.same_activation(g, s): g.destroy(s, false)
 static func _shroud(_g: MtgGame, s: CardInstance) -> void: s.cur_shroud = true
 static func _ignore_shroud(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
-	if not C.same_activation(g, s): return
+	if not C.same_activation(g, s) or not g.is_present(s): return   # CR 702.26e
 	g.continuous.add_floating_static(s, StaticAbility.new(_permission.bind(s.id, t.player_id), "The chosen player ignores this permanent's shroud."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
 	g.recalculate()
 static func _permission(g: MtgGame, _s: CardInstance, id: int, who: int) -> void:

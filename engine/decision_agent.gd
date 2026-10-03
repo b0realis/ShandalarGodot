@@ -335,6 +335,27 @@ func choose_yes_no(game: MtgGame, pid: int, prompt: String, hint: bool) -> bool:
 	return said
 
 
+## Set only while [method choose_card_in_order] is asking.
+var _in_order_ask := false
+
+
+## ONE PICK OF AN "IN ANY ORDER" SEQUENCE (Pack 8 — Teferi's Puzzle Box:
+## "puts the cards in their hand on the bottom of their library in any
+## order"). The card asks once per card, each answer going after the last,
+## and calls this instead of [method choose_card] so the question carries
+## [member PlayerChoice.in_order]: a front end may offer "keep this order"
+## for the rest of the sequence (the duel screen does, HumanAgent
+## .keep_order_for). Otherwise exactly `choose_card(game, pid, candidates,
+## prompt, false, false, true)` — not optional, the first candidate is the
+## hint, and a null answer means the caller takes the first candidate.
+func choose_card_in_order(game: MtgGame, pid: int, candidates: Array[CardInstance],
+		prompt: String) -> CardInstance:
+	_in_order_ask = true
+	var picked := choose_card(game, pid, candidates, prompt, false, false, true)
+	_in_order_ask = false
+	return picked
+
+
 ## [param optional] is true where declining is legal — a library search may
 ## "fail to find" (CR 701.19b). Where it is false the caller replaces a null
 ## answer with the first candidate, so the overlay must not offer a way out.
@@ -352,6 +373,7 @@ func choose_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
 	# ORDERED one.
 	choice.adverse = adverse
 	choice.ordered = ordered
+	choice.in_order = _in_order_ask
 	if (adverse or ordered) and not candidates.is_empty():
 		choice.hint = candidates[0]
 	choice.source = game.current_resolution_source()

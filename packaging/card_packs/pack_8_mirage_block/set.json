@@ -1,0 +1,11 @@
+{
+  "all_printings": 350,
+  "code": "mir",
+  "name": "Mirage",
+  "released_at": "1996-10-08",
+  "retrieved_at": "2026-10-03",
+  "selection": "Original English numbered printings 1–350; excludes the variant printings 87†, 120†, 280†.",
+  "source_url": "https://api.scryfall.com/cards/search?include_extras=true&include_variations=true&order=set&q=e%3Amir&unique=prints",
+  "standard_printings": 350,
+  "unique_names": 335
+}

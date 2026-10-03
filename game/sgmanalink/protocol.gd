@@ -3,8 +3,11 @@ extends RefCounted
 ## [QoL] Unrated loopback/LAN protocol. Data only; no Variant object decoding or RPC.
 ## Version this independently from the application release and future rated protocol.
 
-const VERSION := 25
-const SUBPROTOCOL := "sgmanalink-local-v25"
+## 26 (Pack 8, 2026-10-03): phased-out permanents (each seat's `phased_out`
+## list, two flags, the "held by" pairs), Heat Wave's block life taxes and
+## the hand's special-action discard (`discard_special`).
+const VERSION := 26
+const SUBPROTOCOL := "sgmanalink-local-v26"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]
@@ -22,6 +25,7 @@ const FIELDS := {
 	"submit": ["targets"], "cancel": [], "choice": ["picks"],
 	"attack_bands": ["cards", "bands"],
 	"special": ["index"],
+	"discard_special": ["card"],
 	"order": ["play"], "mana": ["card", "index"],
 	"autopay": ["excluded", "count"],
 	"autoprepare": ["card", "kind", "index", "mode", "excluded", "count"],
@@ -227,7 +231,7 @@ static func valid(message: Dictionary) -> bool:
 		"join": return short_text(action.room, 16)
 		"ready": return action.value is bool
 		"t_ready": return action.value is bool and integer(action.round, 0, SgTournament.MAX_ROUNDS) and integer(action.game, 0, SgTournament.MAX_GAMES)
-		"play", "tap": return short_text(action.card, 16)
+		"play", "tap", "discard_special": return short_text(action.card, 16)
 		"attack", "discard":
 			if not action.cards is Array or action.cards.size() > MAX_CARDS:
 				return false

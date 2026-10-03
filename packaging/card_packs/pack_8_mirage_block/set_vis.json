@@ -1,0 +1,11 @@
+{
+  "all_printings": 167,
+  "code": "vis",
+  "name": "Visions",
+  "released_at": "1997-02-03",
+  "retrieved_at": "2026-10-03",
+  "selection": "Original English numbered printings 1–167.",
+  "source_url": "https://api.scryfall.com/cards/search?include_extras=true&include_variations=true&order=set&q=e%3Avis&unique=prints",
+  "standard_printings": 167,
+  "unique_names": 167
+}

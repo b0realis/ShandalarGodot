@@ -54,7 +54,9 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 
 
 static func _discharge(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	# Phased out: no counter can come off it, so "if you do" never happens
+	# (CR 702.26b) — add_counters would refuse while the life still came.
+	if not game.is_present(source):
 		return
 	if int(source.counters.get("vitality", 0)) <= 0:
 		return

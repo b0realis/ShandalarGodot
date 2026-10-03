@@ -13,11 +13,11 @@ extends GameTest
 
 
 ## Every optional pack the suite builds metadata-only (run_tests.sh sets
-## SHANDALAR_PACK_1..7): enabling them all is one reload of the registry
-## through the same path the Card Packs page uses, not seven.
+## SHANDALAR_PACK_1..8): enabling them all is one reload of the registry
+## through the same path the Card Packs page uses, not eight.
 const ALL_PACKS: Array[String] = [CardPacks.ID, FallenEmpiresPack.ID,
 	IceAgePack.ID, HomelandsPack.ID, AlliancesPack.ID, PortalPack.ID,
-	FifthEditionPack.ID]
+	FifthEditionPack.ID, MirageBlockPack.ID]
 
 
 func after_each() -> void:
@@ -75,12 +75,17 @@ func _assert_card_is_sane(card_name: String) -> void:
 ## before any state-based action looks at it: a characteristic-defining
 ## static (Nightmare's */*, Rock Hydra's heads), a copy effect (Clone,
 ## Vesuvan Doppelganger — they adopt a real body as they enter), or the
-## +1/+1 counters it enters with (Wiitigo's six: the one creature across
-## the seven packs whose only body is its counters).
+## +1/+1 counters it enters with (Wiitigo's six). A COUNTED entry is the
+## reviewed list below: Zombie Mob (Pack 8) is a printed 2/0 that enters
+## with one counter per creature card in its controller's graveyard — and
+## with none there it really dies, as printed.
+const COUNTED_ENTRY_BODIES: Array[String] = ["Zombie Mob"]
+
 static func _derives_its_body(data: CardData) -> bool:
 	return not data.static_abilities.is_empty() \
 		or not data.enters_as_copy.is_empty() \
-		or int(data.enters_with_counters.get("+1/+1", 0)) > 0
+		or int(data.enters_with_counters.get("+1/+1", 0)) > 0 \
+		or COUNTED_ENTRY_BODIES.has(data.card_name)
 
 
 func test_generated_keywords_registered() -> void:

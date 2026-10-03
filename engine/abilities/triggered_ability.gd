@@ -30,7 +30,10 @@ extends RefCounted
 ## removed from the stack instead of going on it, and on resolution a
 ## target that has become illegal makes the trigger fizzle (CR 608.2b)
 ## without [member on_resolve] ever being called. The chosen target is what
-## [method MtgGame.current_targets] returns while on_resolve runs.
+## [method MtgGame.current_targets] returns while on_resolve runs. A trigger
+## with SEVERAL "target"s of different kinds ("target creature and target
+## land" — Goblin Grenadiers) adds slots with [method and_targeting] and
+## reads each with [method MtgGame.current_trigger_target].
 ##
 ## A trigger with MODES ("Whenever enchanted artifact becomes tapped,
 ## choose one — ..." — Relic Bind) declares them with [method modal]. The
@@ -140,6 +143,50 @@ func targeting(spec: TargetSpec, order: Callable = Callable(),
 	target_order = order
 	target_prompt = prompt
 	return self
+
+
+## MORE TARGET SLOTS — "destroy target creature AND target land" (Goblin
+## Grenadiers): each further instance of the word "target" with its OWN
+## spec, as {spec: TargetSpec, order: Callable, prompt: String}, after the
+## first slot that [method targeting] declared. Every slot takes exactly
+## one target, chosen in slot order as the trigger goes on the stack
+## (CR 603.3d, 601.2c); a slot with no legal choice removes the trigger;
+## the same object may fill two slots (CR 115.3). On resolution the
+## trigger fizzles only if EVERY target has become illegal, and the rest
+## still happen (CR 608.2b): read each slot with
+## [method MtgGame.current_trigger_target], which answers null for the
+## illegal ones. Empty for every one-slot trigger.
+var extra_target_slots: Array[Dictionary] = []
+
+
+## Fluent: one more target slot — [param spec], with its own [param order]
+## (the same contract as [member target_order]) and [param prompt]. Call
+## after [method targeting]; not with [method targeting_up_to].
+func and_targeting(spec: TargetSpec, order: Callable = Callable(),
+		prompt: String = "") -> TriggeredAbility:
+	assert(target_spec != null and target_min == 1 and target_max == 1,
+		"and_targeting follows a one-target targeting()")
+	extra_target_slots.append({"spec": spec, "order": order, "prompt": prompt})
+	return self
+
+
+## How many target SLOTS this trigger has: 0 (context-only), 1, or more.
+## [method targeting_up_to]'s several same-spec targets are ONE slot.
+func target_slot_count() -> int:
+	return 0 if target_spec == null else 1 + extra_target_slots.size()
+
+
+## The spec / order / prompt of slot [param slot] (0 = [member target_spec]).
+func slot_spec(slot: int) -> TargetSpec:
+	return target_spec if slot == 0 else extra_target_slots[slot - 1]["spec"]
+
+
+func slot_order(slot: int) -> Callable:
+	return target_order if slot == 0 else extra_target_slots[slot - 1]["order"]
+
+
+func slot_prompt(slot: int) -> String:
+	return target_prompt if slot == 0 else String(extra_target_slots[slot - 1]["prompt"])
 
 
 ## The modes of a modal trigger ("choose one —"), as the labels the seat

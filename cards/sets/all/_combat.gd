@@ -69,14 +69,20 @@ static func _unblocked(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		return
 	if s.data.card_name == "Stromgald Spy":
 		if not g.agents[pid].choose_yes_no(g, pid, "Reveal the defending player's hand instead of assigning combat damage?", not g.players[opponent].hand.is_empty()): return
-		if F._same_trigger_source(g, s):
+		# "For as long as it remains on the battlefield" never starts for a
+		# phased-out Spy (CR 611.2b, 702.26f).
+		if F._same_trigger_source(g, s) and g.is_present(s):
 			g._rec(s, &"memory")
 			s.memory["all_spy"] = opponent
+			# Ends for good if the Spy phases out (CR 702.26f) — the
+			# phase marker moves and never matches again.
+			s.memory["all_spy_phase"] = s.phase_sequence
 	else: g.adjust_life(opponent, -4 if s.data.card_name == "Lim-Dûl's Paladin" else -2)
-	if F._same_trigger_source(g, s): g.continuous.add_floating_static(s, StaticAbility.new(_no_damage, "Assigns no combat damage."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
+	if F._same_trigger_source(g, s) and g.is_present(s): g.continuous.add_floating_static(s, StaticAbility.new(_no_damage, "Assigns no combat damage."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)   # CR 702.26e
 	g.recalculate()
 static func _reveal_hand(g: MtgGame, s: CardInstance) -> void:
-	if s.memory.has("all_spy"): g.players[int(s.memory.all_spy)].hand_revealed = true
+	if s.memory.has("all_spy") and s.phase_sequence == int(s.memory.get("all_spy_phase", s.phase_sequence)):
+		g.players[int(s.memory.all_spy)].hand_revealed = true
 static func _paladin_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var pid := int(g.trigger_context(s).controller)
 	var pick := g.agents[pid].choose_card(g, pid, g.players[pid].hand, "Discard a card to keep Lim-Dûl's Paladin?", true, true)
@@ -85,7 +91,7 @@ static func _paladin_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		if F._same_trigger_source(g, s) and s.controller_id == pid: g.sacrifice_permanent(s)
 		g.draw_cards(pid, 1)
 static func _paladin_blocked(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s): g.continuous.add_until_eot_pump(s.id, 6, 3)
+	if F._same_trigger_source(g, s) and g.is_present(s): g.continuous.add_until_eot_pump(s.id, 6, 3)   # CR 702.26e
 	g.recalculate()
 static func _home_guard(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if F._same_trigger_source(g, s): g.add_counters(s, "-0/-1")
@@ -94,7 +100,7 @@ static func _home_guard(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 # blocks every member (CR 702.22h).
 static func _partner(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.blockers_of_band(g.combat.band_of(s.id)).has(i.id) or g.combat.opposing_attackers(s.id).has(i.id)
 static func _defender(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
-	if not B.live_source(g, s): return
+	if not B.live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	var other := g.find_instance(t.instance_id)
 	g.continuous.add_until_eot_base_pt(s.id, other.cur_toughness - 1, other.cur_power + 1, false, ContinuousEffects.Duration.END_OF_TURN, -1, -1, true)
 	g.recalculate()
@@ -107,7 +113,8 @@ static func _wall(i: CardInstance) -> bool: return i.has_subtype("wall")
 static func _walls_only(_g: MtgGame, s: CardInstance) -> void: s.cur_block_restrictions.append({"desc": "Walls", "filter": _wall})
 static func _crusader(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
 	if not B.live_source(g, s): return
-	g.continuous.add_floating_static(s, StaticAbility.new(_walls_only, "Only Walls may block this creature."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
+	# Phased out: no restriction (CR 702.26e); the sacrifice is still scheduled.
+	if g.is_present(s): g.continuous.add_floating_static(s, StaticAbility.new(_walls_only, "Only Walls may block this creature."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
 	g.schedule_delayed_trigger(TriggeredAbility.new(Mtg.EventType.END_STEP_START, _sac_later.bind(s.id, s.layer_timestamp), "Sacrifice this creature."), pid, s)
 	g.recalculate()
 static func _sac_later(g: MtgGame, s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
@@ -156,14 +163,14 @@ static func _gorilla_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if pick != null and forests.has(pick):
 		var snow := (pick.cur_supertypes & Mtg.Supertype.SNOW) != 0
 		g.sacrifice_permanent(pick)
-		if snow and F._same_trigger_source(g, s): g.continuous.add_until_eot_keywords(s.id, [Mtg.Keyword.TRAMPLE])
+		if snow and F._same_trigger_source(g, s) and g.is_present(s): g.continuous.add_until_eot_keywords(s.id, [Mtg.Keyword.TRAMPLE])   # CR 702.26e
 	else:
 		g.deal_damage(s, TargetRef.player(pid), 7)
 		if F._same_trigger_source(g, s) and s.controller_id == pid: g.sacrifice_permanent(s)
 	g.recalculate()
 static func _snow_pump(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	var cards: Array = g.cost_paid("_library_exiled", [])
-	if cards.is_empty() or not B.live_source(g, s): return
+	if cards.is_empty() or not B.live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	if (int(cards[0].types) & Mtg.CardType.LAND) != 0 and (int(cards[0].supertypes) & Mtg.Supertype.SNOW) != 0:
 		g.continuous.add_until_eot_pump(s.id, 1, 1)
 		g.recalculate()

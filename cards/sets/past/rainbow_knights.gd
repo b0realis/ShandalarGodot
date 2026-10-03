@@ -32,7 +32,7 @@ static func _is_self(_game: MtgGame, source: CardInstance, event: GameEvent) -> 
 
 
 static func _gain_protection(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	var color := RandomEffects.color(game)
 	source.added_protection |= color
@@ -45,7 +45,7 @@ static func _gain_protection(game: MtgGame, source: CardInstance, _event: GameEv
 class RandomBoostEffect extends EffectBase:
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
+		if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 			return
 		var boost := RandomEffects.roll(game, 3)   # 0, 1 or 2
 		game.continuous.add_until_eot_pump(source.id, boost, 0)

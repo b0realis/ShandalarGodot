@@ -161,7 +161,7 @@ static func _pheld(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, _x: int,
 		if B.live_source(g, s): g.return_to_hand(s)
 		if g.agents[t.player_id].choose_yes_no(g, t.player_id, "Draw a card from Phelddagrif?", not g.players[t.player_id].library.is_empty()): g.draw_cards(t.player_id, 1)
 	else:
-		if B.live_source(g, s): g.continuous.add_until_eot_keywords(s.id, [Mtg.Keyword.TRAMPLE if color == Mtg.ManaColor.G else Mtg.Keyword.FLYING])
+		if B.live_source(g, s) and g.is_present(s): g.continuous.add_until_eot_keywords(s.id, [Mtg.Keyword.TRAMPLE if color == Mtg.ManaColor.G else Mtg.Keyword.FLYING])
 		if color == Mtg.ManaColor.W: g.adjust_life(t.player_id, 2)
 		else: g.create_token(t.player_id, CardData.new("Hippo", "", Mtg.CardType.CREATURE).pt(1, 1).with_colors(Mtg.ManaColor.G).with_subtypes(["hippo"]))
 		g.recalculate()

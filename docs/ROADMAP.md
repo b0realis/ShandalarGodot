@@ -2721,6 +2721,7 @@ picker before tutor casts).
 | ~~Mid-resolution questions are answered by a heuristic~~ **DONE 2026-08-31, FINISHED 2026-09-01** — every ask is a first-class `PlayerChoice` on the record. 103 of the 109 call sites are inside a stack resolution and the engine PRE-FLIGHTS each one over a `GameSnapshot` rewind point, then holds it open on `MtgGame.awaiting_choice` until `answer_choice`. The four COST payments outside the stack (`tap_for_mana`'s sacrifice, Fellwar Stone's colour, `cast_spell`'s additional sacrifice, `activate_ability`'s sacrifice cost) are held open by `MtgGame._pending_action` — a record of the ACTION that `answer_choice` re-issues, no rewind point, because all four ask after every refusal check and before any mutation (CR 601.2h). Same overlay, same `answer_choice`, told apart by `PlayerChoice.is_cost` (docs/duel-todo.md §1.3) | Only `CardData.as_it_enters` run from a NON-resolution path is left, and reached the ordinary way (a creature resolving) even that is inside the probe. Fellwar Stone's colour moved out of the card into `ManaAbility.color_options` on the way, which also fixed it being asked TWICE per activation and being asked after the source was already tapped |
 | **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"* and Fasting's *"you may skip that step"* are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` — **by `MtgGame.record_choice`, which is where this row's `SIMPLIFIED` marker sits and which the row had never named (2026-09-11).** The marker asks for this ledger under the words of the row struck DONE above (*"mid-resolution choices"*); the live row is this one, and the function name is what the pin holds on to | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
 | **Two draw replacements are applied in a fixed order** (`_replace_draw`): one-shots first, then statics in battlefield timestamp order. CR 616.1 gives the AFFECTED PLAYER the choice | A choice when more than one applies. No pair in the 1997 pool can be on the table at once and disagree, so this is invisible today |
+| **A shield's rider runs per packet** (`engine/damage_replacements.gd`, `apply`; Pack 8, 2026-10-03). "If damage from a black source is prevented this way, you gain that much life" (Shadowbane) and "... deals that much damage to the source's controller" (Honorable Passage) are ONE additional effect after the whole prevented event (CR 615.5); ours runs once per damage PACKET the shield stopped, with that packet's amount. The total is the same; a simultaneous event against several victims (a Pestilence against you and your creatures) gains the life, or deals the damage, in several pieces — visible only to a "whenever you gain life" trigger or a per-event damage cap | Collect the rider's amount per (effect, event) and run it once as the event ends (the end of the simultaneous bracket or of the resolution) |
 | ~~A static ability cannot outlive its source, and nothing runs at the INSTANT a permanent leaves~~ **DONE 2026-09-02** — `CardData.as_it_leaves` is the twin of `as_it_enters`: `MtgGame._run_leave_hook` calls it from all four battlefield exits (graveyard, exile, hand, ante) after the leave-triggers are on the stack and after `forget_instance`, but BEFORE `recalculate()`, and hands it the parting memory snapshot. A trigger cannot do this work — it resolves after the world has been recomputed without the departing permanent. `ContinuousEffects.add_floating_static` is what the hook registers: the same `StaticAbility`, run in the same five sub-passes of `recalculate` in the same layer order, with only the source's presence lifted (CR 611.3a — such an effect is NOT locked in). Lifted Titania's Song's rider and made Oubliette's *"until this enchantment leaves the battlefield"* the duration it is printed as rather than a trigger. Pinned by `tests/unit/test_leave_hook.gd` | — |
 | ~~Departure events carry no CAUSE (`_move_to_graveyard`)~~ **DONE 2026-09-01** — `sacrificed` rides on both the LEAVES_BATTLEFIELD and the DIES payload, set by `sacrifice_permanent` and by nothing else, which lifted Urza's Miter's *"if it wasn't sacrificed"* | — |
 | ~~Nothing can ban a permanent from ENTERING the battlefield~~ **DONE 2026-09-02** — `MtgGame.entry_refused` is asked at the top of `_put_on_battlefield`, which now returns bool. Two sources, both CR 614.1c-shaped prohibitions: `CardData.enters_ban_rule`, radiated the way Kismet's `enters_tapped_rule` is (Worms of the Earth's second line), and `CardData.entry_condition`, a card's veto on its OWN arrival (Frankenstein's Monster's *"instead of onto the battlefield"*). A refused object stays in the zone it came from — back into the library for a search, in the hand for a land drop that `play_land` then refuses in words — a permanent SPELL goes to its owner's graveyard and a TOKEN ceases to exist (CR 111.7). Six callers with post-work read the bool. Pinned by `tests/unit/test_entry_ban.gd` | — |
@@ -2734,6 +2735,8 @@ picker before tutor casts).
 | ~~No POTENTIAL-mana query~~ **HALF-LIFTED 2026-09-03** — `MtgGame.could_afford(pid, data, excluded)` walks the untapped sources through the shared [ManaPlanner] and prices them with `can_afford`'s own modifiers, restricted-mana keys and `spell_payment` arithmetic, so a plan and a payment cannot disagree. The **castable highlight** now uses it, which is what makes the yellow name mean what `Duel.hlp` says it means (*"you must have enough mana available"*, topic **Hands**) and what the click-then-tap flow and the auto-cast both promise. **STILL OWED:** `DuelScreen._has_affordable_fast_effect` — the Done order's third condition — is deliberately left on the FLOATING pool, so Done stops only for a fast effect the player has actually floated for; its own `SIMPLIFIED` marker still says so. Moving it to `could_afford` would make Done stop at every phase you hold an instant, which is the clicking the 2026-09-03 playtest was about. **Narrowed 2026-09-08:** the four instant windows (both combat fast-effects rounds, after first-strike damage, the opponent's end step) hold on POTENTIAL mana through `_could_respond` — see "THE INSTANT WINDOWS" | Point `_has_affordable_fast_effect` at `could_afford` when (and only when) the player asks for the stricter 1997 Done |
 | **SIMPLIFIED — `could_afford` under-reports for two cards** (`mtg_game.gd`): colour SUBSTITUTIONS (Sunglasses of Urza) and North Star's any-type charge widen only the FLOATING half of the answer, because `can_afford` is asked first and [ManaPlanner] models neither. It never over-reports, which is the safe direction for a highlight and for an auto-tapper | Teach the planner substitutions and the wildcard, or price the potential pool through `ManaPool.can_pay` once it can take a source list |
 | **SIMPLIFIED — the legacy/specialised fallback prices one blocker per attacker in forward combat. NARROWED 2026-09-13:** the `studies_combat` path coordinates `_cohort_value`, `_damage_through_blocks` and declarations over whole assignments and the shared `CombatSearch.resolve_block` resolver. Bounded gangs and an own-hand trick are included; repeatable pumps, gaze/tap execution and wide boards retain specialised policies. The historical 2026-09-05 measurement above explains why an isolated ply-2 change was rejected. The new coordinated path and its tests/measurements are documented in [the planning study](planning-study-2026-09-13.md). The old model remains an explicit reproducible null. | Extend the shared model to the remaining specialised cases only with legality, hidden-information, latency and fixed-baseline regression evidence. Multiple attackers per blocker and defensive banding remain separate limits. |
+| **SIMPLIFIED — Two dying-card replacements are applied in a fixed order** (`MtgGame._move_to_graveyard`, Pack 8 E7, 2026-10-03): a creature's OWN "if it would die, instead" (Firestorm Phoenix's hand, Gravebane Zombie's library top, Disintegrate's exile) is applied before Forbidden Crypt's "if a card would be put into your graveyard, exile it instead", without asking. CR 616.1 lets the affected object's controller choose; the fixed order is the one that keeps the card | A choice when both apply (the same CR 616.1 question the draw-replacement row above owes) |
+| **SIMPLIFIED — Phase-out look-back is per permanent** (`MtgGame.phase_simultaneously`, Pack 8 E1, 2026-10-03): CR 603.10a makes "whenever a permanent phases out" look back in time, so the listeners are what was on the battlefield BEFORE the simultaneous phasing event. The engine dispatches each `PHASED_OUT` after the whole batch with only the departing permanent itself added back (`also_listen`), so a permanent that phases IN in the same event hears the others phase out, and two that phase out together do not hear each other. Every phase-out trigger in the pool (Teferi's Imp, Ertai's Familiar) is about the permanent itself, which hears its own; nothing listens for ANOTHER permanent phasing out | A look-back listener set for the batch (the `_departure_batch` shape `DIES` uses), when a card listens for other permanents phasing out |
 Card-level simplifications are tracked separately in
 **docs/simplified-cards.md** — one row per card that deviates from its
 printed behavior, so future passes can lift them one by one.
@@ -11517,6 +11520,15 @@ row by row — **263 rows, every one agrees.**
 
 ### The ledger row `_cleanup_step` never had (2026-09-11)
 
+**DONE 2026-10-03 (Pack 8, engine package E3).** Mirage's ten flash-rider
+cards are the observer this section said the pool lacked: "sacrifice it at
+the beginning of the next cleanup step" now goes on the stack AFTER the
+discard and the damage removal, the active player gets priority and another
+cleanup step follows (`MtgGame._cleanup_triggers`, CR 514.3a/b); the
+`SIMPLIFIED` marker is gone and so is the Bounty of the Hunt / Thawing
+Glaciers card row (`tests/unit/test_pack_8_e3_flash_cleanup.gd`). The text
+below is the history.
+
 `MtgGame._cleanup_step` carries `SIMPLIFIED: cleanup grants no priority.` and is
 written up in `docs/mechanics.md` §1/§14 and `docs/duel-todo.md` §5.20 — but it
 has no row in the engine table, which CONTRIBUTING rule 6 asks for. **SURVEYED
@@ -18748,6 +18760,59 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-04 — Pack 8: the Mirage block (0.50.11)
+
+The owner: *"Can we create a new pack 8 of cards, the same way as last
+packs were done. It will be “The Mirage Block” and will consist of:
+Mirage, Visions and Weatherlight."* Done, all of it
+([pack-8-mirage-block.md](pack-8-mirage-block.md)):
+
+- **The pack**: `tools/pack_8_mirage_block.py`, the trusted
+  `game/mirage_block_pack.gd`, metadata in
+  `packaging/card_packs/pack_8_mirage_block/`; 684 printings, 669 names,
+  621 new identities, 48 reprints (31 provided when their own pack is
+  off); badge 8-MIR, a palm, an eye and a skyship. Rules in
+  `cards/sets/{mir,vis,wth}/`: a fail-closed `_rules.gd` per set over
+  twelve family modules; **no name is pending**.
+- **How it was built**: a read-only inventory (102 capabilities the engine
+  had, 51 it lacked), ten engine packages before any card used them, then
+  ten card batches with disjoint files and their own test scripts. New
+  mechanisms: phasing (CR 702.26) with `MtgGame.is_present` and an audit of
+  the 441 older `zone == BATTLEFIELD` sites (104 fixed); turn and untap
+  skips and untap-step triggers batched with the upkeep's (CR 503.1a);
+  flanking; flash, the Mirage rider and the CR 514.3a cleanup window
+  (lifting the Bounty of the Hunt / Thawing Glaciers row); bans reaching
+  mana abilities and the planner; the cost vocabulary; zone and counter
+  destinations; one damage-replacement registry with `predict_damage`;
+  trackers, colour outside the battlefield, colourless-only spending.
+- **Pool-wide fixes**: controller-relative Aura restrictions re-checked
+  (CR 303.4d); "additional" blocks add up (CR 509.1b); "loses X" removes
+  every instance; the `_ability` helper's menu text; two cost-question
+  fields restored by undo; Gaea's Liege and Cyclopean Tomb keep working
+  while their source is phased out.
+- **The fair AI**: `engine/ai/mirage_tactics.gd` behind the existing
+  knobs; a matched Deck Lab study caught the first flash policy costing
+  14.5 points and the final rows are inside their margins (−0.5 ± 8.9,
+  +5.0 ± 6.3; controls byte-identical).
+- **Player-facing**: phased-out permanents drawn faded for both seats,
+  flash for humans, the cleanup window, casting from a graveyard, Circling
+  Vultures' discard, "Done — keep this order", Kaervek's Torch in the
+  castable light, three Help pages; SGManalink carries all of it on
+  **protocol 26**; `RULES_REVISION` is `sgmanalink-mirage-block-2026-10-03`.
+- **Digital adaptations** (five rows): shield riders per packet, two
+  dying-card replacements in a fixed order, phase-out look-back per
+  permanent, Debt of Loyalty / Matopi Golem, Mind Bend in *Text changes*.
+- **Known, not done**: Necromancy-style graveyard targets name same-named
+  cards once (local and network alike); Rock Slide with X = 0 and no
+  targets is refused; Bronze Tablet's ransom when the Tablet left first
+  is described, not ruled on; `tools/lan_smoke.sh` cannot turn packs on;
+  the Pack 5 manifest's `rules_note` still mentions the lifted cleanup
+  simplification (editing it would refuse every built Pack 5 ZIP).
+
+Gate: 635 scripts, **10,205/10,205 tests, 473,522 asserts**, exit 0 over
+6 shards; Python 508 (8 skipped); 180 audit duels, 24 UI soak duels, a
+Linux export's real-ZIP probe — all clean.
 
 ## 2026-10-03 — What the second review found (0.50.10)
 

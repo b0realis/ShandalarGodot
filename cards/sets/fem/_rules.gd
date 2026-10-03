@@ -252,8 +252,13 @@ static func _ability(cost: String, taps: bool, effect: EffectBase) -> ActivatedA
 			description += " and gains " + Mtg.Keyword.keys()[keyword].capitalize()
 	else:
 		description = effect.describe()
-	return ActivatedAbility.new(cost, taps, [effect], (cost + ", " if cost != "" else "") +
-		("{T}: " if taps else ": ") + description)
+	# "{R}: …", "{T}: …", "{1}, {T}: …" — and no stray ", :" or leading ":"
+	# when the cost is only a sacrifice or life paid by a later builder.
+	var prefix := cost
+	if taps:
+		prefix += (", " if prefix != "" else "") + "{T}"
+	return ActivatedAbility.new(cost, taps, [effect],
+		(prefix + ": " if prefix != "" else "") + description)
 
 static func _saproling() -> CreateTokenEffect:
 	return CreateTokenEffect.new("Saproling", 1, 1, Mtg.ManaColor.G, "saproling")
@@ -376,7 +381,7 @@ static func _dwarf_orc_pair(g: MtgGame, source: CardInstance, _event: GameEvent)
 	return false
 
 static func _dwarf_block(g: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if not _same_trigger_source(g, source):
+	if not _same_trigger_source(g, source) or not g.is_present(source):   # CR 702.26e
 		return
 	g.continuous.add_until_eot_pump(source.id, 0, 2)
 	g.recalculate()
@@ -480,7 +485,7 @@ static func _band_context(g: MtgGame, source: CardInstance, event: GameEvent) ->
 static func _skirmishers(g: MtgGame, source: CardInstance, _event: GameEvent) -> void:
 	for entry in g.trigger_context(source).get("band", []):
 		var body: CardInstance = entry[0]
-		if body.zone == Mtg.Zone.BATTLEFIELD and body.layer_timestamp == int(entry[1]):
+		if g.is_present(body) and body.layer_timestamp == int(entry[1]):   # CR 702.26e
 			g.continuous.add_until_eot_keywords(body.id, [Mtg.Keyword.FIRST_STRIKE])
 	g.recalculate()
 
@@ -532,8 +537,11 @@ static func _original_source(g: MtgGame, source: CardInstance, pid: int) -> bool
 	return _same_activation_source(g, source) and source.controller_id == pid \
 		and source.control_sequence == int(g.cost_paid("_source_control_sequence", source.control_sequence))
 
+## Phased out counts as gone: every caller applies an effect to the source
+## (CR 702.26e) or starts a "for as long as" duration it tracks, which
+## never begins (611.2b, 702.26f).
 static func _same_activation_source(g: MtgGame, source: CardInstance) -> bool:
-	return source.zone == Mtg.Zone.BATTLEFIELD \
+	return g.is_present(source) \
 		and source.layer_timestamp == int(g.cost_paid("_source_timestamp", source.layer_timestamp))
 
 static func _remained_tapped(g: MtgGame, source: CardInstance) -> bool:
@@ -830,7 +838,9 @@ static func _same_trigger_source(g: MtgGame, source: CardInstance) -> bool:
 
 static func _trigger_source_present(g: MtgGame, source: CardInstance) -> bool:
 	var context := g.trigger_context(source)
-	return source.zone == Mtg.Zone.BATTLEFIELD and source.layer_timestamp == int(context.get("timestamp", source.layer_timestamp)) \
+	# is_present: both callers (Mindstab Thrull, Necrite) sacrifice it "if
+	# you do" — a phased-out one can't be sacrificed (CR 702.26b).
+	return g.is_present(source) and source.layer_timestamp == int(context.get("timestamp", source.layer_timestamp)) \
 		and source.controller_id == int(context.get("controller", source.controller_id))
 
 static func _farrel_context(g: MtgGame, source: CardInstance, _event: GameEvent, mantle: bool) -> Dictionary:
@@ -869,7 +879,7 @@ static func _flotilla_fee(g: MtgGame, source: CardInstance, _event: GameEvent) -
 		func(game: MtgGame, src: CardInstance, _event: GameEvent) -> void:
 			var occurrence := game.trigger_context(src)
 			var other: CardInstance = occurrence.other
-			if other.zone != Mtg.Zone.BATTLEFIELD or other.layer_timestamp != int(occurrence.timestamp): return
+			if not game.is_present(other) or other.layer_timestamp != int(occurrence.timestamp): return   # CR 702.26e
 			game.continuous.add_until_eot_keywords(other.id, [Mtg.Keyword.FIRST_STRIKE])
 			game.recalculate(), "The other creature gains first strike.",
 		func(_game: MtgGame, _src: CardInstance, event: GameEvent) -> bool:

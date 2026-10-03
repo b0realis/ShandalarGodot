@@ -204,6 +204,21 @@ var d_first: PackedByteArray = PackedByteArray()
 ## arm of every published sweep replays.
 var a_rampage: PackedInt32Array = PackedInt32Array()
 var d_rampage: PackedInt32Array = PackedInt32Array()
+## FLANKING (CR 702.25, 2026-10-03, [member AiProfile.reads_gaze]): how many
+## instances this creature has. As an ATTACKER it shrinks every blocker
+## whose own count is zero by that many, before any damage
+## ([method resolve_block]); a direction the pair matrices cannot hold,
+## since our attack and their crack-back are the same pair both ways.
+## Zero at every rung the knob is off at — and arrays shorter than the
+## side read as zero — so the null arm's model is unmoved.
+var a_flanking: PackedInt32Array = PackedInt32Array()
+var d_flanking: PackedInt32Array = PackedInt32Array()
+## ...and the TOUGHNESS a shrink is measured against: a body flanking takes
+## to 0 toughness is put into the graveyard however indestructible or
+## shielded it is (CR 704.5f), which [member a_soak] alone cannot tell.
+## Filled only beside a non-empty flanking array; shorter reads as soak.
+var a_tough: PackedInt32Array = PackedInt32Array()
+var d_tough: PackedInt32Array = PackedInt32Array()
 ## Damage cannot finish this creature: indestructible, or a regeneration
 ## shield its controller can still pay for.
 var a_immune: PackedByteArray = PackedByteArray()
@@ -294,6 +309,31 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 		* (blockers.size() - 1)
 	atk_pow += ramp
 	atk_soak += ramp
+	# FLANKING, before anything is assigned too (CR 702.25): every blocker
+	# WITHOUT flanking is N smaller. One that shrinks to nothing is gone at
+	# once (CR 704.5f) — dead, striking and soaking nothing — and the
+	# attacker stays blocked (CR 509.1h): if every blocker went, a
+	# trampler's whole power goes through (702.19e) and anything else's
+	# goes nowhere. Toughness 0 kills whatever shields it (704.5f); damage
+	# already marked up to the new toughness kills what has none.
+	var shrink := {}
+	var gone := 0
+	var flank := _flank_count(attacker, ours_attacks)
+	if flank > 0:
+		var standing: Array = []
+		for b in blockers:
+			if _flank_count(b, not ours_attacks) == 0:
+				shrink[b] = flank
+				if _tough_of(b, ours_attacks) <= flank \
+						or (_soak_of(b, ours_attacks) <= flank and _immune_of(b, ours_attacks) == 0):
+					gone |= 1 << b
+					continue
+			standing.append(b)
+		if standing.is_empty():
+			var unblocked_damage := a_bypass if ours_attacks else d_bypass
+			var bypassing := attacker < unblocked_damage.size() and unblocked_damage[attacker] != 0
+			return [false, gone, atk_pow if atk_trample != 0 or bypassing else 0]
+		blockers = standing
 	# --- 1. does the attacker even live to strike? A blocker with first
 	# strike that it does not share kills it before it assigns anything
 	# (CR 510.4), which is exactly what `_damage_from`'s own first clause
@@ -301,7 +341,7 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 	var pre := 0
 	var total := 0
 	for b in blockers:
-		var raw := _raw_onto(attacker, b, ours_attacks)
+		var raw := _raw_back(attacker, b, ours_attacks, shrink)
 		total += raw
 		if _blocker_first(b, ours_attacks) != 0 and atk_first == 0:
 			pre += raw
@@ -315,12 +355,12 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 	if pre > 0 and pre >= atk_soak and _regen_of_attacker(attacker, ours_attacks) != 0:
 		return [false, 0, 0]
 	# --- 2. the damage order, then lethal-first down it (CR 510.1c).
-	var order := _damage_order(attacker, blockers, atk_pow, ours_attacks)
+	var order := _damage_order(attacker, blockers, atk_pow, ours_attacks, shrink)
 	var remaining := atk_pow
-	var dead := 0
+	var dead := gone
 	var knocked := 0   # regenerated out of combat by this damage (CR 701.15a)
 	for b in order:
-		var need: int = _soak_of(b, ours_attacks)
+		var need: int = _soak_of(b, ours_attacks) - int(shrink.get(b, 0))
 		var give := mini(remaining, maxi(need, 0))
 		remaining -= give
 		if _raw_onto_blocker(attacker, b, ours_attacks) <= 0:
@@ -338,7 +378,7 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 		if atk_first != 0 and _blocker_first(b, ours_attacks) == 0 \
 				and ((dead | knocked) & (1 << b)) != 0:
 			continue
-		back += _raw_onto(attacker, b, ours_attacks)
+		back += _raw_back(attacker, b, ours_attacks, shrink)
 	var atk_dies := atk_immune == 0 and back > 0 and back >= atk_soak
 	# --- 4. trample: only what is left after EVERY blocker has been
 	# assigned lethal damage spills to the face (CR 702.19b).
@@ -359,7 +399,7 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 ## agent whose answer this restates. Ties break on model index, which is
 ## battlefield order (CONTRIBUTING.md rule 7: no RNG anywhere in here).
 func _damage_order(attacker: int, blockers: Array, budget: int,
-		ours_attacks: bool) -> Array[int]:
+		ours_attacks: bool, shrink: Dictionary = {}) -> Array[int]:
 	var entries: Array[int] = []
 	for b in blockers:
 		entries.append(b)
@@ -368,7 +408,8 @@ func _damage_order(attacker: int, blockers: Array, budget: int,
 	var worth := {}
 	for b in entries:
 		var w := _value_of(b, ours_attacks)
-		if _soak_of(b, ours_attacks) <= 0 or _immune_of(b, ours_attacks) != 0 \
+		if _soak_of(b, ours_attacks) - int(shrink.get(b, 0)) <= 0 \
+				or _immune_of(b, ours_attacks) != 0 \
 				or _raw_onto_blocker(attacker, b, ours_attacks) <= 0:
 			w = 0.0
 		worth[b] = w
@@ -381,7 +422,7 @@ func _damage_order(attacker: int, blockers: Array, budget: int,
 			var sum := 0.0
 			for i in entries.size():
 				if (mask & (1 << i)) != 0:
-					cost += maxi(_soak_of(entries[i], ours_attacks), 0)
+					cost += maxi(_soak_of(entries[i], ours_attacks) - int(shrink.get(entries[i], 0)), 0)
 					sum += float(worth[entries[i]])
 			if cost > budget:
 				continue
@@ -416,6 +457,33 @@ func _raw_onto(attacker: int, blocker: int, ours_attacks: bool) -> int:
 	# damage the BLOCKER lands on the attacker
 	return hit_ours[attacker * _m + blocker] if ours_attacks \
 		else hit_theirs[blocker * _m + attacker]
+
+
+func _raw_back(attacker: int, blocker: int, ours_attacks: bool, shrink: Dictionary) -> int:
+	# ...after flanking took [param shrink]'s N off the blocker's power
+	return maxi(_raw_onto(attacker, blocker, ours_attacks) - int(shrink.get(blocker, 0)), 0)
+
+
+## FLANKING instances of creature [param index] on OUR side when
+## [param ours] (else theirs) — zero past the end of a short array, which
+## is what a model built before the field existed reads as.
+func _flank_count(index: int, ours: bool) -> int:
+	var counts := a_flanking if ours else d_flanking
+	return counts[index] if index < counts.size() else 0
+
+
+## The toughness of the BLOCKER [param blocker] (ours when [param
+## ours_attacks] is false) — its soak where the model carries none.
+func _tough_of(blocker: int, ours_attacks: bool) -> int:
+	var tough := d_tough if ours_attacks else a_tough
+	return tough[blocker] if blocker < tough.size() else _soak_of(blocker, ours_attacks)
+
+
+## The shrink OUR attacker [param a] puts on THEIR blocker [param d] in our
+## forward combat (CR 702.25): its count when [param d] has none.
+func _flank_on_their_blocker(a: int, d: int) -> int:
+	var n := _flank_count(a, true)
+	return n if n > 0 and _flank_count(d, false) == 0 else 0
 
 
 func _raw_onto_blocker(attacker: int, blocker: int, ours_attacks: bool) -> int:
@@ -556,7 +624,8 @@ func _after_our_attack(attack_mask: int, slice: int) -> float:
 				continue
 			var soaked := a_pow[a]
 			if a_trample[a] != 0:
-				soaked = mini(soaked, maxi(d_soak[d], 0))
+				# (A flanked blocker soaks N less — CR 702.25.)
+				soaked = mini(soaked, maxi(d_soak[d] - _flank_on_their_blocker(a, d), 0))
 			var gain := _fdv(soaked, their_life)
 			if they_kill[a * _m + d] != 0:
 				gain += a_val[a]

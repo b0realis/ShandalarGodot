@@ -6,7 +6,7 @@ extends CardScript
 ##         While permanents are phased out, they're treated as though they
 ##         don't exist.)
 ##
-## Implementation: real PHASING (CR 702.25) — the creature and everything
+## Implementation: real PHASING (CR 702.26) — the creature and everything
 ## attached to it are lifted out of the battlefield arrays, so no query,
 ## static, trigger or state-based action can see them, and nothing
 ## triggers on the way out or the way in. The Oubliette remembers its
@@ -75,11 +75,14 @@ static func _imprison(game: MtgGame, source: CardInstance, _event: GameEvent) ->
 	if prisoner == null or prisoner.zone != Mtg.Zone.BATTLEFIELD:
 		return
 	source.memory["prisoner"] = prisoner.id
-	game.phase_out(prisoner)
+	# An "until" hold (CR 610.4a): the untap step does not phase it back in.
+	game.phase_out(prisoner, source)
 
 
-static func _release(game: MtgGame, _source: CardInstance, _controller: int,
+## Only while it is still THIS hold's prisoner: one that came back some
+## other way (Time and Tide) stays where it is, even if it has phased out
+## again since (CR 610.4a).
+static func _release(game: MtgGame, source: CardInstance, _controller: int,
 		parting: Dictionary) -> void:
 	var prisoner := game.find_instance(int(parting.get("prisoner", -1)))
-	if prisoner != null and prisoner.phased_out:
-		game.phase_in(prisoner, true)
+	game.release_phase_hold(prisoner, source, true)

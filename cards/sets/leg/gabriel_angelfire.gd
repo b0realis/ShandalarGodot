@@ -89,7 +89,7 @@ static func best_choice(game: MtgGame, source: CardInstance) -> int:
 
 
 static func _choose(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	var pid := source.controller_id
 	source.memory["gift"] = game.agents[pid].choose_option(game, pid, CHOICES,

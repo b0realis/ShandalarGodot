@@ -28,7 +28,8 @@ class WhelpBreathEffect extends EffectBase:
 			_target: TargetRef, _x_value: int = 0) -> void:
 		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
 			return
-		game.continuous.add_until_eot_pump(source.id, 1, 0)
+		if game.is_present(source):   # phased out: the pump can't include it (CR 702.26e)
+			game.continuous.add_until_eot_pump(source.id, 1, 0)
 		game.recalculate()
 		# The count resets with the turn: nothing else clears card memory
 		# between turns, so the turn number is stored beside it.

@@ -55,7 +55,7 @@ func candidates(game: MtgGame, target_player: int) -> Array[CardInstance]:
 func resolve(game: MtgGame, source: CardInstance, _controller: int,
 		target: TargetRef, _x_value: int = 0) -> void:
 	if require_source_on_battlefield \
-			and (source == null or source.zone != Mtg.Zone.BATTLEFIELD):
+			and not game.is_present(source):   # incl. phased out (CR 702.26b)
 		return
 	if not requires_won_coin_flip or game.flip_coin(_controller):
 		var pool := candidates(game, target.player_id)

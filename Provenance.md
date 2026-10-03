@@ -789,6 +789,33 @@ No printed Fifth Edition card wears a set symbol; the emblem is our own
 gold Roman `V`, the Fourth Edition numeral's sibling, drawn by
 `tools/draw_our_art.gd` and recorded with its hashes in `game/art/README.md`.
 
+## The Mirage Block Pack 8 (2026-10-03)
+
+The checked-in snapshots are Scryfall's `set:mir`, `set:vis` and `set:wth`
+catalogues and Oracle text, fetched by `tools/pack_8_mirage_block.py fetch`
+from [the Mirage](https://api.scryfall.com/sets/mir),
+[Visions](https://api.scryfall.com/sets/vis) and
+[Weatherlight](https://api.scryfall.com/sets/wth) set APIs and every page of
+their searches. Each is filtered to the English collector numbers: Mirage
+1–350 (350 printings, 335 names; the three `†` variant printings 87†, 120†
+and 280† — two of them foreign — are excluded), Visions 1–167 and
+Weatherlight 1–167 (167 printings and names each). No name repeats across
+the three sets. Exact Scryfall IDs pin each crop and full scan to the
+credited artist and number. Metadata is checked in; downloaded artwork and
+the built ZIP remain local.
+
+Of the 669 names, 621 are new rules identities with one trusted script each
+in `cards/sets/mir/`, `cards/sets/vis/` and `cards/sets/wth/`, whose header
+carries the exact Oracle text of the snapshot. 48 are reprints the game
+already has (`reprint_names.json`): the five basic lands, twelve cards of
+the 1997 pool, and 31 first printed in Ice Age, Homelands, Portal or Portal
+Second Age, whose existing scripts the pack reuses under
+`packaging/card_packs/pack_8_mirage_block/shared_names.json`. The three
+set emblems — a palm on a dune, an open eye, a sailing skyship — are our
+own drawings, evocative of the sets and not copies of any printed set
+symbol, made by `tools/draw_our_art.gd` and recorded with their hashes in
+`game/art/README.md`.
+
 ## Where the citations live
 
 This file is the register; the citations themselves are in the work.

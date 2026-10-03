@@ -90,6 +90,9 @@ func ingest(room: Dictionary) -> void:
 		var colors := [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B, Mtg.ManaColor.R, Mtg.ManaColor.G, Mtg.ManaColor.C]
 		for i in 6: p.mana_pool.add(colors[i], int(dto.mana_colors[i]))
 		p.battlefield.assign(_zone(dto.battlefield, Mtg.Zone.BATTLEFIELD))
+		# Phased out under this seat's control (Pack 8): on the table, not
+		# on the battlefield list (CR 702.26b) — DuelScreen._table_cards.
+		p.phased_out.assign(_zone(dto.phased_out, Mtg.Zone.BATTLEFIELD))
 		p.graveyard.assign(_zone(dto.graveyard, Mtg.Zone.GRAVEYARD))
 		p.exile.assign(_zone(dto.exile, Mtg.Zone.EXILE))
 		p.ante.assign(_zone(dto.ante, Mtg.Zone.ANTE))
@@ -106,6 +109,12 @@ func ingest(room: Dictionary) -> void:
 		var card := find_instance(local_id(row.id))
 		if card == null: continue
 		for key in SgDuelPresentation.FLAGS: card.set(key, row.flags[key])
+		card.phase_hold = -1
+	# "Held by" (Pack 8 — Oubliette, CR 610.4a): the holder this seat sees,
+	# so the ghost's tooltip names it (MiniCard.phase_note).
+	for pair in presentation.phase_holds:
+		var held := find_instance(local_id(pair[0]))
+		if held != null: held.phase_hold = local_id(pair[1])
 	# BOTH ENDS of every attachment, because the board reads both: a card
 	# whose attached_to is set gets no slot of its own, and what draws it
 	# again is its HOST's `attachments`. Linking only the aura's own end
@@ -287,6 +296,52 @@ func play_land(_pid: int, inst: CardInstance) -> String:
 ## this seat is asked through the host's question like any other.
 func tap_for_mana(_pid: int, inst: CardInstance, ability_index := 0, _chosen := -1) -> String:
 	return send({"op": "mana", "card": handle(inst.id), "index": ability_index})
+
+
+## CASTING FROM THE GRAVEYARD (Pack 8 — Bösium Strip) is the referee's
+## permission, read off the face's own actions: the host offers a "spell"
+## action on exactly the graveyard card this seat may cast. The local
+## screen's graveyard view rings it and its click starts the cast chain.
+func can_cast_from_graveyard(pid: int, inst: CardInstance) -> bool:
+	if pid != 0 or inst == null or inst.zone != Mtg.Zone.GRAVEYARD: return false
+	for option in faces.get(handle(inst.id), {}).get("actions", []):
+		if option.kind == "spell": return true
+	return false
+
+
+func playable_cards(pid: int) -> Array[CardInstance]:
+	var out := super.playable_cards(pid)
+	if pid == 0:
+		for inst in players[0].graveyard:
+			if can_cast_from_graveyard(0, inst): out.append(inst)
+	return out
+
+
+## A hand card's SPECIAL ACTION (Pack 8 — Circling Vultures) is a message,
+## never a discard run on this projection's own copy of the table.
+func discard_as_special_action(_pid: int, inst: CardInstance) -> String:
+	return send({"op": "discard_special", "card": handle(inst.id)})
+
+
+## Heat Wave's tax on the pencilled blocks [param blocks] (blocker id ->
+## attacker ids), as the referee will charge it: each blocker owes each
+## imposing source once, whatever it blocks (CombatState.block_life_owed),
+## read off the rows the host sent per legal block.
+func block_life_fee(blocks: Dictionary) -> int:
+	var taxes := {}
+	for row in presentation.get("block_taxes", []):
+		var key := "%s/%s" % [row[0], row[1]]
+		if not taxes.has(key): taxes[key] = []
+		taxes[key].append([row[2], int(row[3])])
+	var total := 0
+	for id in blocks:
+		var owed := {}
+		var value: Variant = blocks[id]
+		for attacker in (value if value is Array else [value]):
+			for tax in taxes.get("%s/%s" % [handle(int(id)), handle(int(attacker))], []):
+				owed[tax[0]] = tax[1]
+		for tax in owed: total += int(owed[tax])
+	return total
 
 
 func may_tap_foreign_land(pid: int, inst: CardInstance, index := -1) -> bool:

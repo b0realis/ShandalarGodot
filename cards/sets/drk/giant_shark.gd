@@ -49,7 +49,7 @@ static func _smells_blood(_game: MtgGame, source: CardInstance,
 
 
 static func _frenzy(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	game.continuous.add_until_eot_pump(source.id, 2, 0, [Mtg.Keyword.TRAMPLE])
 	game.recalculate()

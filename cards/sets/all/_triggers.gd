@@ -53,7 +53,7 @@ class SentryRegeneration extends RegenerateEffect:
 		super()
 		target_spec = TargetSpec.opponent()
 	func resolve(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, _x := 0) -> void:
-		if not B.live_source(g, s): return
+		if not B.live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 		RegenerateEffect.new().resolve(g, s, pid, null)
 		g._rec(s, &"regeneration_draws")
 		s.regeneration_draws[s.regeneration_shields - 1] = {"beneficiary": t.player_id, "controller": pid}
@@ -161,7 +161,7 @@ static func _skycaptain(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	g.change_control(s, 1 - pid)
 static func _harlequin(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
 	var top := g.exile_top_of_library(pid, false)
-	if top == null or not B.live_source(g, s): return
+	if top == null or not B.live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	g.continuous.add_until_eot_pump(s.id, -4 if top.is_land() else 2, 0)
 	g.recalculate()
 static func _suffocation_window(g: MtgGame, pid: int) -> String:

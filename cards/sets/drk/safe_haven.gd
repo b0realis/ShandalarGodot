@@ -45,7 +45,9 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 
 
 static func _release(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	# Phased out: it can't be sacrificed, so "if you do" fails and nothing
+	# comes back (CR 702.26b). Its exile link survives (702.26d).
+	if not game.is_present(source):
 		return
 	var pid := source.controller_id
 	if not game.agents[pid].choose_yes_no(game, pid,

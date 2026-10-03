@@ -78,7 +78,7 @@ func to_source() -> LoseAbilityEffect:
 func resolve(game: MtgGame, source: CardInstance, _controller: int, target: TargetRef,
 		_x_value: int = 0) -> void:
 	var affected := source if self_mode else game.find_instance(target.instance_id)
-	if affected == null or affected.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(affected):   # gone, or phased out (CR 702.26e)
 		return
 	game.continuous.add_until_eot_loss(affected.id, keywords, all_landwalk,
 		false, landwalk_types, bands_with)

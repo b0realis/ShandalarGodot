@@ -95,13 +95,13 @@ static func _green_anthem(g: MtgGame, s: CardInstance) -> void:
 			i.cur_power += 1
 			i.cur_toughness += 1
 static func _switch(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
-	if not live_source(g, s): return
+	if not live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	g.continuous.add_until_eot_pt_switch(s.id)
 	g.recalculate()
 static func live_source(g: MtgGame, s: CardInstance) -> bool:
 	return s.zone == Mtg.Zone.BATTLEFIELD and s.layer_timestamp == int(g.cost_paid("_source_timestamp", s.layer_timestamp))
 static func _mountainwalk(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
-	if not live_source(g, s): return
+	if not live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	g.continuous.add_floating_static(s, StaticAbility.new(_walk, "Mountainwalk.").changing_abilities(), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
 	g.recalculate()
 static func _walk(_g: MtgGame, s: CardInstance) -> void: s.cur_landwalk.append("mountain")

@@ -98,6 +98,6 @@ static func _smash(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 		return
 	game.destroy(pick)
 	# "If you do, this creature assigns no combat damage this turn."
-	if source.zone == Mtg.Zone.BATTLEFIELD:
+	if game.is_present(source):   # phased out: not included (CR 702.26e)
 		game.continuous.add_until_eot_combat_prevention(source.id, true, false)
 	game.recalculate()

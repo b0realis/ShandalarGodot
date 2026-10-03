@@ -225,7 +225,10 @@ func _on_done() -> void:
 func _on_card_clicked(inst: CardInstance) -> void:
 	if not projection.locked: _announcement_refused = false
 	if projection.locked: return
-	if mode == Mode.NORMAL and inst.zone == Mtg.Zone.BATTLEFIELD and not _modal_open() and not _toss_active:
+	# A PHASED-OUT permanent is read, never used (Pack 8): the shared screen
+	# says so and when it comes back, and sends nothing.
+	if mode == Mode.NORMAL and inst.zone == Mtg.Zone.BATTLEFIELD and not inst.phased_out \
+			and not _modal_open() and not _toss_active:
 		_click_permanent(inst)
 		return
 	super._on_card_clicked(inst)
@@ -238,10 +241,32 @@ func _on_life_clicked(pid: int) -> void:
 
 func _click_hand_card(inst: CardInstance) -> void:
 	if projection.locked or game.priority_player != 0: return
-	if not ((inst.zone == Mtg.Zone.HAND and inst.owner_id == 0) or game.can_play_from_exile(0, inst)): return
+	if not _castable_source(inst): return
 	if inst.is_land():
 		_report(game.play_land(0, inst))
 		return
+	# A hand card with a SPECIAL ACTION too (Pack 8 — Circling Vultures)
+	# asks Cast or Discard, as at a local table; the discard is a message
+	# (SgDuelProjection.discard_as_special_action).
+	if inst.zone == Mtg.Zone.HAND and inst.data.discard_special_action:
+		_open_hand_action_menu(inst)
+		return
+	_start_cast(inst)
+
+
+## Where this seat may cast from (Pack 8): its hand, an exiled card it may
+## play (a Three Wishes card it alone may look at) and the graveyard card
+## the referee offers a cast for (Bösium Strip).
+func _castable_source(inst: CardInstance) -> bool:
+	return (inst.zone == Mtg.Zone.HAND and inst.owner_id == 0) or game.can_play_from_exile(0, inst) \
+		or game.can_cast_from_graveyard(0, inst)
+
+
+## The cast chain of a card the seat has chosen to CAST — the click's, the
+## hand menu's Cast line's and the double-click's. Its announcement is the
+## referee's ([method _prepare]); nothing is cast on the projection.
+func _start_cast(inst: CardInstance) -> void:
+	if projection.locked or game.priority_player != 0 or not _castable_source(inst) or inst.is_land(): return
 	_pending_card = inst
 	_pending_pid = 0
 	_pending_ability_index = -1
@@ -347,7 +372,14 @@ func show_notice(message: String) -> void:
 		mode = Mode.PAYING
 		_paying_pool = _payment_pool_state()
 		_set_target_cursor(false)
-		_set_prompt(GRAB_MANA_PROMPT % _pending_card.data.card_name)
+		var ask := GRAB_MANA_PROMPT % _pending_card.data.card_name
+		# [QoL] What the TARGET adds (Pack 8 — a spell aimed at a Kaervek's
+		# Torch costs {2} more), said as the local screen says it; the
+		# referee's own payment and auto-tap include it.
+		var fee := game.targets_surcharge(_flatten_pending_targets(), _pending_card) \
+			if _pending_ability_index < 0 else 0
+		if fee > 0: ask += " ({%d} more for its target)" % fee
+		_set_prompt(ask)
 		return
 	if _sent_op in ["prepare", "autoprepare"]: _clear_pending()
 	if _sent_op == "submit":
@@ -375,10 +407,16 @@ func _retry_payment() -> void:
 func _auto_cast(inst: CardInstance) -> void:
 	if _pending_card != inst:
 		if projection.locked: return
-		_click_hand_card(inst)
+		# The gesture is a CAST: a card with a second hand action (Circling
+		# Vultures) goes straight to the cast chain, as at a local table.
+		if inst.is_land(): _click_hand_card(inst)
+		else: _start_cast(inst)
 	if _pending_card != inst: return
 	if _x_dialog != null:
 		if _pending_ability_index < 0 and _pending_card.data.additional_life_is_x: return
+		# ...nor a count of the seat's cards or permanents (Pack 8): an
+		# object-counted X is always asked (the referee refuses it too).
+		if not _object_x_groups().is_empty(): return
 		var count := int(_x_dialog.get_meta("targets").value) if _x_dialog.has_meta("targets") else 1
 		_pending_target_count = count if _pending_card.data.extra_cost_per_target > 0 else -1
 		_x_dialog.dismiss()
@@ -426,10 +464,15 @@ func _open_x_dialog() -> void:
 	var prompt := "Life to pay (X):" if life_x else FireballDialog.ASK_MANA
 	if _pending_ability_index < 0 and not _pending_card.data.repeated_additional_cost.is_empty():
 		prompt = "Number of additional %s payments:" % _pending_card.data.repeated_additional_cost
+	# X COUNTS OBJECTS (Pack 8 — Infernal Harvest, Haunting Misery,
+	# Firestorm): the cost's own words, never pre-filled. The bound is the
+	# referee's (SgPayment.budget asks AdditionalObjectCosts.max_x).
+	var object_x := _object_x_groups()
+	if not object_x.is_empty(): prompt = object_x_prompt(object_x)
 	# The referee reports maximum X; the shared dialog dials X payment units.
 	_x_dialog = FireballDialog.window(_pending_card.data.card_name, int(option.get("budget", 0)) * per_x, per_target, SgProtocol.MAX_CARDS, per_x, prompt)
 	_x_spin = _x_dialog.get_meta("mana")
-	if life_x: _x_spin.value = 0
+	if life_x or not object_x.is_empty(): _x_spin.value = 0
 	_x_dialog.add_button("OK").pressed.connect(_on_x_confirmed)
 	_x_dialog.add_button("Cancel").pressed.connect(_on_x_canceled)
 	add_child(_x_dialog)
@@ -448,7 +491,15 @@ func _on_x_confirmed() -> void:
 	_prepare()
 
 
+## Heat Wave's life tax on the pencilled blocks (Pack 8): the referee's
+## rows, priced as it will charge them, so the shared block lineup refuses
+## a block the seat cannot pay for and notes what the rest cost.
+func _block_life_fee(blocks: Dictionary) -> int:
+	return projection.block_life_fee(blocks)
+
+
 func _click_permanent(inst: CardInstance) -> void:
+	if inst.phased_out: return
 	var options: Array = projection.faces.get(projection.handle(inst.id), {}).get("actions", [])
 	if options.size() == 1 and options[0].kind == "mana": _report(game.tap_for_mana(0, inst, int(options[0].index)))
 	elif not options.is_empty(): _open_ability_menu(inst)
@@ -468,7 +519,11 @@ func _on_graveyard_card(inst: CardInstance) -> void:
 		return
 	if _card_preview != null: _card_preview.show_card(inst)
 	if game.priority_player != 0: return
-	if game.can_play_from_exile(0, inst):
+	# Only a quiet table starts something from a pile (the local rule).
+	if mode != Mode.NORMAL or _pending_card != null: return
+	# An exiled card this seat may play (Three Wishes, the Bottle) and the
+	# graveyard card the referee offers a cast for (Bösium Strip, Pack 8).
+	if game.can_play_from_exile(0, inst) or game.can_cast_from_graveyard(0, inst):
 		_close_graveyard()
 		_click_hand_card(inst)
 	elif not projection.faces.get(projection.handle(inst.id), {}).get("actions", []).is_empty():

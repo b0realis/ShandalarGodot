@@ -64,7 +64,9 @@ static func _your_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent)
 
 
 static func _shift(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	# Phased out in response: it can't become a copy (CR 702.26b/e) —
+	# become_copy itself does not ask.
+	if not game.is_present(source):
 		return
 	var pid := source.controller_id
 	# "…become a copy of TARGET creature" — every other creature on the

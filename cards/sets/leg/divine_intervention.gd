@@ -26,7 +26,9 @@ static func _your_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent)
 
 
 static func _tick(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	# Phased out in response: no counter comes off it, so no draw either
+	# (CR 702.26b).
+	if not game.is_present(source):
 		return
 	var left: int = int(source.counters.get("intervention", 0)) - 1
 	if left <= 0:

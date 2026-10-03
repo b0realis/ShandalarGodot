@@ -69,7 +69,9 @@ static func _winter(g: MtgGame, s: CardInstance, e: GameEvent) -> void:
 	g.skip_untap_during_next_step(e.data.instance, int(e.data.controller))
 static func _red_green(i: CardInstance) -> bool: return (i.cur_colors & (Mtg.ManaColor.R | Mtg.ManaColor.G)) != 0
 static func _lash_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	# Cumulative upkeep's "if this permanent is on the battlefield" fails
+	# while it is phased out (CR 702.24a, 702.26b): no payment is owed.
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return
 	var pid := int(g.trigger_context(s).controller)
 	g.add_counters(s, "age")
 	var age := int(s.counters.get("age", 0))
@@ -82,7 +84,7 @@ static func _lash_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 static func _lash_library(g: MtgGame, _s: CardInstance, _e: GameEvent, pid: int) -> void:
 	while not g.players[pid].library.is_empty(): g.exile_top_of_library(pid, false)
 static func _riders(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return   # CR 702.24a, 702.26b
 	var pid := int(g.trigger_context(s).controller)
 	g.add_counters(s, "age")
 	var age := int(s.counters.get("age", 0))

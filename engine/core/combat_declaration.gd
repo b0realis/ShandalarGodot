@@ -23,7 +23,69 @@ static func attack_error(g: MtgGame, pid: int, ids: Array, requirements := true)
 			if i.must_attack_this_turn: return "%s must attack this turn if able" % i.data.card_name
 			return "%s attacks each combat if able" % i.data.card_name
 		return "declare as many required attackers as the combat restrictions allow"
+	if requirements and not ids.is_empty():
+		var why := _conditional_error(g, pid, seen, met)
+		if why != "": return why
 	return ""
+
+
+## The creatures [param pid] controls whose CONDITIONAL requirement
+## applies to this declaration — "if a creature you control attacks, this
+## creature also attacks if able" (Ekundu Cyclops,
+## [member CardInstance.cur_attacks_if_others_attack]) — and that are ABLE:
+## no restriction stops them, and they carry no attack cost, which no
+## player is ever required to pay (CR 508.1d).
+static func conditional_attackers(g: MtgGame, pid: int) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	for i in g.players[pid].battlefield:
+		if not i.cur_attacks_if_others_attack or i.cur_attacks_alone: continue
+		if CombatState.attack_illegality(g, i, 1 - pid) != "": continue
+		if not i.cur_attack_costs.is_empty() or i.cur_attack_land_sacrifices > 0: continue
+		out.append(i)
+	return out
+
+
+## CR 508.1d with conditional requirements: a declaration must obey as
+## many requirements as any legal declaration could. Declaring NOBODY
+## obeys every conditional one (the condition never arises); a declaration
+## of anybody obeys a conditional one only by including that creature. So
+## with nothing stopping it, a Cyclops attacks beside whoever attacks — and
+## under an attacker cap (Caverns of Despair) the declaration that fills
+## the cap with the most requirements wins, which may be the Cyclops alone.
+## [param seen] / [param met]: the declared ids and how many mandatory
+## attackers among them, as [method attack_error] counted them.
+static func _conditional_error(g: MtgGame, pid: int, seen: Dictionary, met: int) -> String:
+	var cond := conditional_attackers(g, pid)
+	if cond.is_empty(): return ""
+	var obeyed := met
+	for i in cond:
+		if seen.has(i.id): obeyed += 1
+	if obeyed >= _most_requirements(g, pid, cond): return ""
+	for i in cond:
+		if not seen.has(i.id):
+			return "%s attacks if able when a creature you control attacks" % i.data.card_name
+	return "declare as many required attackers as the combat restrictions allow"
+
+
+## The most requirements — mandatory and conditional together — that a
+## declaration by [param pid] could obey (CR 508.1d), given the able
+## conditional attackers [param cond]: the empty declaration's
+## `cond.size()`, or the best set of attackers the cap allows, each
+## weighing one per requirement it obeys.
+static func _most_requirements(g: MtgGame, pid: int, cond: Array[CardInstance]) -> int:
+	var weights: Array[int] = []
+	for i in g.players[pid].battlefield:
+		if i.cur_attacks_alone: continue
+		if CombatState.attack_illegality(g, i, 1 - pid) != "": continue
+		if not i.cur_attack_costs.is_empty() or i.cur_attack_land_sacrifices > 0: continue
+		var weight := (1 if mandatory(i) else 0) + (1 if cond.has(i) else 0)
+		if weight > 0: weights.append(weight)
+	weights.sort()
+	weights.reverse()
+	var slots := weights.size() if g.max_attackers <= 0 else mini(weights.size(), g.max_attackers)
+	var best := 0
+	for k in slots: best += weights[k]
+	return maxi(cond.size(), best)
 
 static func required_attacks(g: MtgGame, pid: int) -> int:
 	if g.no_attacks_this_turn: return 0
@@ -52,6 +114,20 @@ static func block_fee(g: MtgGame, blocks: Dictionary) -> int:
 			if a != null and a.cur_power >= i.cur_block_power_tax_threshold: total += i.cur_block_power_tax
 	return total
 
+## The LIFE the whole block declaration costs (CR 509.1d — Heat Wave's
+## "1 life for each blocking creature"): per blocking creature, each
+## imposing source once ([method CombatState.block_life_owed]).
+static func block_life_fee(g: MtgGame, blocks: Dictionary) -> int:
+	var total := 0
+	for id in blocks:
+		var blocker := g.find_instance(int(id))
+		var against: Array = []
+		var value: Variant = blocks[id]
+		for target in (value if value is Array else [value]):
+			against.append(g.find_instance(int(target)))
+		total += CombatState.block_life_owed(blocker, against)
+	return total
+
 static func block_error(g: MtgGame, blocks: Dictionary) -> String:
 	var counts := {}
 	for id in blocks:
@@ -76,17 +152,22 @@ static func repair_attacks(g: MtgGame, pid: int, proposed: Array) -> Array:
 		if i.cur_attacks_alone:
 			if i.cur_min_attack_group <= 1: candidates.append([i.id])
 		else: ordinary.append(i.id)
+	# A CONDITIONAL attacker (Ekundu Cyclops) is required as soon as anyone
+	# attacks, so beside a non-empty plan it ranks with the mandatory ones.
+	var conditional: Array = []
+	if not proposed.is_empty():
+		for i in conditional_attackers(g, pid): conditional.append(i.id)
 	ordinary.sort_custom(func(a: int, b: int) -> bool:
 		var left := g.find_instance(a)
 		var right := g.find_instance(b)
-		var lv := (10000 if mandatory(left) else 0) + (1000 if proposed.has(a) else 0) + left.cur_power
-		var rv := (10000 if mandatory(right) else 0) + (1000 if proposed.has(b) else 0) + right.cur_power
+		var lv := (10000 if mandatory(left) or conditional.has(a) else 0) + (1000 if proposed.has(a) else 0) + left.cur_power
+		var rv := (10000 if mandatory(right) or conditional.has(b) else 0) + (1000 if proposed.has(b) else 0) + right.cur_power
 		return lv > rv)
 	var base: Array = []
 	for id in ordinary:
 		if g.max_attackers > 0 and base.size() >= g.max_attackers: break
 		var i := g.find_instance(id)
-		if proposed.has(id) or mandatory(i): base.append(id)
+		if proposed.has(id) or mandatory(i) or conditional.has(id): base.append(id)
 	# A required Conscripts may need volunteers; an optional one never
 	# conscripts bad attacks merely to preserve the initial plan.
 	var minimum := 1
@@ -135,6 +216,16 @@ static func repair_blocks(g: MtgGame, pid: int, proposed: Dictionary) -> Diction
 				removed = true
 				break
 		if not removed: break
+	# LIFE taxes (Heat Wave) likewise — and never the last point: paying
+	# down to 0 is legal (CR 119.4) but loses the game at once.
+	while block_life_fee(g, out) > 0 and block_life_fee(g, out) >= g.players[pid].life:
+		var dropped := false
+		for id in out.keys():
+			if block_life_fee(g, {id: out[id]}) > 0:
+				out.erase(id)
+				dropped = true
+				break
+		if not dropped: break
 	for id in out.keys():
 		if g.find_instance(id).cur_min_block_group > out.size(): out.erase(id)
 	# A maximum-one restriction combined with menace cannot be satisfied

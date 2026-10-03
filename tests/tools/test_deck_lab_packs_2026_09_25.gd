@@ -87,7 +87,7 @@ func test_a_pack_this_build_does_not_know_is_refused_by_name() -> void:
 	var read: Dictionary = _lab().parse_packs("pack-9", CardPacks.known_ids())
 	assert_string_contains(str(read.get("error", "")), "pack-9 is not a pack this build knows")
 	assert_string_contains(str(read.get("error", "")), ", ".join(PackedStringArray(CardPacks.known_ids())))
-	assert_eq(CardPacks.known_ids(), ["pack-1", "pack-2", "pack-3", "pack-4", "pack-5", "pack-6", "pack-7"] as Array[String])
+	assert_eq(CardPacks.known_ids(), ["pack-1", "pack-2", "pack-3", "pack-4", "pack-5", "pack-6", "pack-7", "pack-8"] as Array[String])
 
 
 func test_a_known_pack_that_was_not_found_says_where_it_looked() -> void:

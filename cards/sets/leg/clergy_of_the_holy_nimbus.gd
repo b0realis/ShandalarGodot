@@ -37,7 +37,7 @@ static func _apply(_game: MtgGame, source: CardInstance) -> void:
 class BanRegenerationEffect extends EffectBase:
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		if source.zone != Mtg.Zone.BATTLEFIELD:
+		if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 			return
 		source.regeneration_banned_this_turn = true
 		game.log_line("%s can't be regenerated this turn" % source.data.card_name)

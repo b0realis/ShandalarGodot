@@ -32,7 +32,7 @@ static func configure(c: CardData) -> bool:
 
 static func _blocking(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return F._blocking(g, s)
 static func _block_bonus(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	var spider := s.data.card_name == "Root Spider"
 	var keywords: Array[int] = []
 	if spider: keywords.append(Mtg.Keyword.FIRST_STRIKE)
@@ -43,7 +43,7 @@ static func _fought_white(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
 	var other: CardInstance = e.data.blocker if e.data.attacker == s else e.data.attacker
 	return (other.cur_colors & Mtg.ManaColor.W) != 0
 static func _ghost(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s):
+	if F._same_trigger_source(g, s) and g.is_present(s):   # CR 702.26e
 		g.continuous.add_until_eot_pump(s.id, 0, 0, [Mtg.Keyword.FIRST_STRIKE])
 		g.recalculate()
 # Band-wide on both sides (2026-10-03): a creature blocking one band member
@@ -56,7 +56,7 @@ static func _fought_black(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool:
 		if i != null and (i.cur_colors & Mtg.ManaColor.B) != 0: return true
 	return false
 static func _black_bonus(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	var rashka := s.data.card_name == "Rashka the Slayer"
 	g.continuous.add_until_eot_pump(s.id, 1 if rashka else 2, 2 if rashka else 0)
 	g.recalculate()
@@ -64,7 +64,9 @@ static func _as_blocker(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool: ret
 static func _labyrinth(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var context := g.trigger_context(s)
 	var i := g.find_instance(int(context.id))
-	if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(context.stamp):
+	# Phased out in response: not included, not even once it phases back
+	# in at that very untap step (CR 702.26e).
+	if g.is_present(i) and i.layer_timestamp == int(context.stamp):
 		g._rec(i, &"skip_next_untap")
 		i.skip_next_untap = true
 static func _fought_blue(g: MtgGame, s: CardInstance) -> String:
@@ -92,7 +94,7 @@ static func _werewolf(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(pair[1]): g.add_counters(i, "-0/-2")
 	g.end_simultaneous()
 static func _ferret_bonus(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s):
+	if F._same_trigger_source(g, s) and g.is_present(s):   # CR 702.26e
 		g.continuous.add_until_eot_pump(s.id, 0, 2)
 		g.recalculate()
 static func _ferret_context(g: MtgGame, s: CardInstance, _e: GameEvent) -> Dictionary:
@@ -105,7 +107,7 @@ static func _ferret_context(g: MtgGame, s: CardInstance, _e: GameEvent) -> Dicti
 static func _ferret_lock(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	for pair in g.trigger_context(s).pairs:
 		var i := g.find_instance(pair[0])
-		if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(pair[1]):
+		if g.is_present(i) and i.layer_timestamp == int(pair[1]):   # CR 702.26e
 			g.tap_permanent(i)
 			g._rec(i, &"skip_next_untap")
 			i.skip_next_untap = true

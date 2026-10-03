@@ -33,7 +33,7 @@ static func _badger(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		g.exile_from_graveyard(i)
 		if i.zone == Mtg.Zone.EXILE: exiled += 1
 	g.adjust_life(pid, exiled)
-	if F._same_trigger_source(g, s): F._no_assignment(g, s, s.id)
+	if F._same_trigger_source(g, s) and g.is_present(s): F._no_assignment(g, s, s.id)   # CR 702.26e
 static func _artifact_card(i: CardInstance) -> bool: return i.is_type(Mtg.CardType.ARTIFACT) and not i.is_token
 static func _physical_source(_g: MtgGame, s: CardInstance) -> String:
 	return "Digital adaptation: token copies cannot exchange ownership" if s.is_token else ""

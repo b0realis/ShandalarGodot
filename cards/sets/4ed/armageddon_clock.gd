@@ -78,7 +78,7 @@ static func _burn(game: MtgGame, source: CardInstance, _event: GameEvent) -> voi
 class RemoveDoomEffect extends EffectBase:
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		if source.zone != Mtg.Zone.BATTLEFIELD:
+		if not game.is_present(source):   # gone, or phased out: unaffected (CR 702.26b)
 			return
 		var left := int(source.counters.get("doom", 0)) - 1
 		if left <= 0:

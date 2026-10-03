@@ -57,6 +57,14 @@ and whether disabling one loses a card's last provider. Such a pack still
 ships fallback pictures (`skin/cardart/`) for the shared names, since the
 original pack's artwork may be absent.
 
+A pack may also span **several sets**. Portal (Pack 6) holds two and the
+Mirage block (Pack 8) three: one `cards*.json`/`set*.json` pair per set,
+one `cards/sets/<code>/` folder and `_rules.gd` dispatcher per set, one
+Extras row and medallion per set, and the shared-names table for the
+reprints whose script lives only in another optional pack — whichever
+pack it is, Portal included (`_shared_provider` names the original pack
+first, then Portal, Fifth Edition and the Mirage block).
+
 Commit metadata and the reviewed reprint checklist, not downloaded art.
 Card headers must retain the actual Oracle text, including Unicode names;
 filenames must use the same ASCII normalization as `GameSkin` and the
@@ -109,10 +117,13 @@ unexpected namespaces, unexpected files, scripts, excessive sizes and
 unverified bytes. A metadata-only fixture must be restricted to the isolated
 test feature; it is not a distributable game pack.
 
-The existing numbered readers enforce exact membership and checksums, but
-do not yet impose a decompressed-byte budget. Before accepting arbitrary
-third-party downloads, add bounded archive inspection rather than treating
-these locally constructed ZIP readers as a complete hostile-archive sandbox.
+Every numbered reader enforces exact membership and checksums, and checks
+the central directory's declared sizes before reading a member
+(`PortalPack.bounded_zip`: 8 MiB a member and 256 MiB in all by default;
+Pack 8, whose real archive measured within 2.3 MiB of that, passes its own
+384 MiB). Measure the real ZIP, not an estimate. Before accepting arbitrary
+third-party downloads, add further defences rather than treating these
+locally constructed ZIP readers as a complete hostile-archive sandbox.
 
 Offline Python tests must cover real tiny image fixtures, exact inventory,
 determinism, corruption, duplicate members, injected paths, unsupported

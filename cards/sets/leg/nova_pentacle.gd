@@ -78,8 +78,9 @@ class PentacleEffect extends EffectBase:
 	static func _deflect(game: MtgGame, packet: DamagePacket,
 			victim_id: int) -> int:
 		var victim := game.find_instance(victim_id)
-		if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD \
-				or not victim.is_creature():
+		# Phased out = not there (CR 702.26b): redirecting onto it would
+		# swallow the damage instead of letting it land on you (614.6).
+		if not game.is_present(victim) or not victim.is_creature():
 			return -1   # nothing to deflect onto: it lands on you after all
 		return game.redirect_damage(packet, TargetRef.card(victim))
 

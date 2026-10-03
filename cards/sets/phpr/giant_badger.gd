@@ -29,7 +29,7 @@ static func _is_the_blocker(_game: MtgGame, source: CardInstance,
 
 
 static func _bulk_up(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	game.continuous.add_until_eot_pump(source.id, 2, 2)
 	game.recalculate()

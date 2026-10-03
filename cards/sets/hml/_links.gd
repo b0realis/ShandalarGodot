@@ -68,7 +68,7 @@ static func _other_context(g: MtgGame, s: CardInstance, e: GameEvent) -> Diction
 static func _harness(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var ctx := g.trigger_context(s)
 	var i := g.find_instance(int(ctx.id))
-	if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(ctx.stamp):
+	if g.is_present(i) and i.layer_timestamp == int(ctx.stamp):   # CR 702.26e
 		g.continuous.add_until_eot_pump(i.id, 0, 0, [Mtg.Keyword.FIRST_STRIKE])
 		g.recalculate()
 static func _choose_type(g: MtgGame, s: CardInstance, _pid: int) -> void:
@@ -112,7 +112,7 @@ class MarjhanDamage extends DamageEffect:
 	static func _ground_attacker(g: MtgGame, i: CardInstance) -> bool:
 		return g.combat.attackers.has(i.id) and not i.has_keyword(Mtg.Keyword.FLYING)
 	func resolve(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, x := 0) -> void:
-		if C.same_activation(g, s):
+		if C.same_activation(g, s) and g.is_present(s):   # CR 702.26e
 			g.continuous.add_until_eot_pump(s.id, -1, 0)
 			g.recalculate()
 		super(g, s, pid, t, x)

@@ -58,6 +58,8 @@ const VERIFY_PACK_2_FLAG := "--verify-pack-2"
 const VERIFY_PACK_3_FLAG := "--verify-pack-3"
 const VERIFY_PACK_4_FLAG := "--verify-pack-4"
 const VERIFY_PACK_5_FLAG := "--verify-pack-5"
+## The Mirage block (Pack 8): [method pack_8_probe] behind the same door.
+const VERIFY_PACK_8_FLAG := "--verify-pack-8"
 
 ## The corner line that reports a skin zip on its way (web builds).
 var _fetching: Label
@@ -102,6 +104,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_5_FLAG):
 		_verify_exported_pack_5()
+		return
+	if OS.get_cmdline_user_args().has(VERIFY_PACK_8_FLAG):
+		_verify_exported_pack_8()
 		return
 	# NO `CardRegistry.ensure_loaded()` HERE ANY MORE (2026-09-30). It
 	# stood on this line for a year and cost the Meta Quest 4.6 of its
@@ -774,6 +779,218 @@ func _verify_exported_pack_5() -> void:
 	else:
 		for why in failures: printerr("PACK 5 EXPORT VERIFY FAILED: " + why)
 		get_tree().quit(2)
+
+
+## The Mirage block (Pack 8) in the RUNNING binary — an export, or the
+## source tree — with the real external ZIP (SHANDALAR_PACK_8 or the card
+## pack folder) under an isolated profile. Prints one summary line either
+## way and exits 0 when every check of [method pack_8_probe] passed, 1
+## otherwise. Editor success is not export success: run it on the export.
+func _verify_exported_pack_8() -> void:
+	var report := pack_8_probe()
+	var failures: Array = report["failures"]
+	var counts: Dictionary = report["counts"]
+	for why in failures: printerr("PACK 8 EXPORT VERIFY FAILED: " + String(why))
+	print("PACK 8 EXPORT RESOURCES %s — %d identities; %d/%d dormant scripts loaded; %d/%d artwork pictures and %d/%d skin fallbacks decoded; %d/9 UI textures; %d rules pending; %d/5 payment checks; %d/5 AI metadata checks" % [
+		"OK" if failures.is_empty() else "FAILED", counts.identities,
+		counts.scripts, PACK_8_SCRIPTS, counts.art, PACK_8_ART, counts.fallbacks,
+		PACK_8_FALLBACKS, counts.textures, counts.pending, counts.payment, counts.ai])
+	get_tree().quit(0 if failures.is_empty() else 1)
+
+
+## What [method pack_8_probe] expects of the real archive: the pool with
+## Pack 8 alone, the 621 new identities plus the 31 shared reprints it
+## provides, an art crop and a full-card scan for each of the 684
+## printings, and both fallbacks for each of the 652 names.
+const PACK_8_POOL := 1549
+const PACK_8_SCRIPTS := 652
+const PACK_8_ART := 1368
+const PACK_8_FALLBACKS := 1304
+
+
+## The checks behind [constant VERIFY_PACK_8_FLAG]: {failures, counts}.
+## Enables Pack 8 IN MEMORY ONLY (never saved) and restores the previous
+## selection before returning. Static, so the suite runs the very same
+## checks against its metadata-only fixture, whose missing pictures are
+## then the only failures (tests/ui/test_pack_8_verify_probe.gd).
+static func pack_8_probe() -> Dictionary:
+	var counts := {"identities": 0, "scripts": 0, "art": 0, "fallbacks": 0,
+		"textures": 0, "pending": 0, "payment": 0, "ai": 0}
+	var failures: Array[String] = []
+	if not CardPacks.has_pack(MirageBlockPack.ID):
+		failures.append("the exact Pack 8 ZIP was not discovered or validated")
+		return {"failures": failures, "counts": counts}
+	var before := Settings.enabled_card_packs()
+	Settings.set_value("enabled_card_packs", [MirageBlockPack.ID], false)
+	CardPacks._configure_registry()
+	CardRegistry.ensure_loaded()
+	counts.identities = CardRegistry.size()
+	if CardRegistry.size() != PACK_8_POOL:
+		failures.append("expected %d identities with Pack 8 alone, found %d" % [PACK_8_POOL, CardRegistry.size()])
+	for code in MirageBlockPack.SET_COUNTS:
+		var wanted := int(MirageBlockPack.SET_COUNTS[code][1])
+		if CardRegistry.names_in_set(code).size() != wanted:
+			failures.append("expected %d %s names, found %d" % [wanted, code, CardRegistry.names_in_set(code).size()])
+	# Every dormant script: the 621 new names and the 31 shared reprints.
+	var rows := MirageBlockPack.scripts()
+	if rows.size() != PACK_8_SCRIPTS:
+		failures.append("expected %d dormant scripts, the contract lists %d" % [PACK_8_SCRIPTS, rows.size()])
+	for row in rows:
+		var name := String(row.name)
+		var path := String(row.path)
+		if not ResourceLoader.exists(path) or load(path) == null or not CardRegistry.has_card(name):
+			failures.append("dormant script did not load: %s (%s)" % [name, path])
+			continue
+		counts.scripts += 1
+		var card := CardRegistry.get_card(name)
+		if card.cast_condition.is_valid() and card.cast_condition.get_method() == "_pending":
+			counts.pending += 1
+			failures.append("unfinished rules: " + name)
+	# Every picture of every printing, decoded — not merely present.
+	var missing: Array[String] = []
+	for row in MirageBlockPack.printings():
+		for full in [false, true]:
+			var path := CardPacks.art_path(String(row.name), String(row.set), full, String(row.collector_number))
+			var picture := Image.load_from_file(path) if path != "" else null
+			if picture == null or picture.is_empty():
+				missing.append("%s/%s #%s%s" % [row.set, row.name, row.collector_number, " (card)" if full else ""])
+			else:
+				counts.art += 1
+	if counts.art != PACK_8_ART:
+		failures.append("artwork: %d of %d pictures decoded; missing %d, e.g. %s" % [counts.art,
+			PACK_8_ART, missing.size(), ", ".join(PackedStringArray(missing.slice(0, 4)))])
+	var named: Array[String] = MirageBlockPack.new_names()
+	for shared_name in MirageBlockPack.shared(): named.append(String(shared_name))
+	missing.clear()
+	for name in named:
+		for suffix in [".jpg", "_card.jpg"]:
+			var path: String = "res://skin/cardart/" + MirageBlockPack.snake(name) + String(suffix)
+			var picture := Image.load_from_file(path) if FileAccess.file_exists(path) else null
+			if picture == null or picture.is_empty(): missing.append(path.get_file())
+			else: counts.fallbacks += 1
+	if counts.fallbacks != PACK_8_FALLBACKS:
+		failures.append("skin/cardart fallbacks: %d of %d decoded; missing %d, e.g. %s" % [counts.fallbacks,
+			PACK_8_FALLBACKS, missing.size(), ", ".join(PackedStringArray(missing.slice(0, 4)))])
+	# The palm, eye and skyship glyphs and their six Extras medallions.
+	for code in MirageBlockPack.SET_COUNTS:
+		for key in ["set_icon_" + code, "filter_%s_on" % code, "filter_%s_off" % code]:
+			var symbol := GameSkin.our_art(key)
+			if symbol == null or symbol.get_image() == null or symbol.get_image().is_empty():
+				failures.append("missing UI texture: " + key)
+			else:
+				counts.textures += 1
+	# Payment modes: loaded, then executed by the shipped engine.
+	var blast := CardRegistry.get_card("Fireblast")
+	var alternative: Dictionary = blast.modes[1] if blast != null and blast.modes.size() == 2 else {}
+	if not Array(Dictionary(alternative.get("payment", {})).get("object_costs", [])).is_empty():
+		counts.payment += 1
+	else:
+		failures.append("Fireblast's alternative cost (sacrifice two Mountains) did not load")
+	var armor := CardRegistry.get_card("Armor of Thorns")
+	if armor != null and armor.flash_rider: counts.payment += 1
+	else: failures.append("the Mirage flash rider (Armor of Thorns) did not load")
+	var cheetah := CardRegistry.get_card("King Cheetah")
+	if cheetah != null and cheetah.keywords.has(Mtg.Keyword.FLASH): counts.payment += 1
+	else: failures.append("King Cheetah's flash did not load")
+	var spite := CardRegistry.get_card("Kaervek's Spite")
+	if spite != null and spite.object_costs.size() == 2: counts.payment += 1
+	else: failures.append("Kaervek's Spite's additional costs did not load")
+	var played := _pack_8_play_probe()
+	if played == "": counts.payment += 1
+	else: failures.append(played)
+	# Public AI metadata the fair planner reads.
+	var ai := {
+		"Fireblast's payment-row picker": blast != null and blast.ai_mode_picker.is_valid(),
+		"Reality Ripple's phase_out role": _pack_8_has_role("Reality Ripple", &"phase_out"),
+		"Time and Tide's phase_swap role": _pack_8_has_role("Time and Tide", &"phase_swap"),
+		"Vodalian Illusionist's phase_out role": _pack_8_has_role("Vodalian Illusionist", &"phase_out"),
+		"Rainbow Efreet's phase_out_self role": _pack_8_has_role("Rainbow Efreet", &"phase_out_self"),
+	}
+	for what in ai:
+		if ai[what]: counts.ai += 1
+		else: failures.append("AI metadata did not load: " + String(what))
+	Settings.set_value("enabled_card_packs", before, false)
+	CardPacks._configure_registry()
+	return {"failures": failures, "counts": counts}
+
+
+## Does [param card_name] carry an effect (spell or activated) with the
+## public AI role [param role]?
+static func _pack_8_has_role(card_name: String, role: StringName) -> bool:
+	var card := CardRegistry.get_card(card_name)
+	if card == null:
+		return false
+	var effects: Array = card.spell_effects.duplicate()
+	for ability in card.activated_abilities: effects.append_array(ability.effects)
+	return effects.any(func(effect: EffectBase) -> bool: return effect.ai_role == role)
+
+
+## Fireblast cast by its alternative row (two Mountains sacrificed, 4
+## damage), and Armor of Thorns cast in response — as though it had flash,
+## since a sorcery could not have been — and sacrificed by the cleanup
+## step (CR 514.3a). "" when the shipped engine did all of it.
+static func _pack_8_play_probe() -> String:
+	var g := MtgGame.new()
+	var filler: Array = []
+	for _i in 20: filler.append("Mountain")
+	g.setup(filler, filler, "P0", "P1", 20, 20, 8)
+	g.start(0)
+	var guard := 0
+	while g.current_step() != Mtg.Step.MAIN1 and not g.game_over and guard < 50:
+		g.pass_priority(g.priority_player)
+		guard += 1
+	if g.current_step() != Mtg.Step.MAIN1:
+		return "the payment probe never reached a main phase"
+	var mountains: Array[CardInstance] = [_pack_8_probe_card(g, "Mountain", true),
+		_pack_8_probe_card(g, "Mountain", true)]
+	var bear := _pack_8_probe_card(g, "Grizzly Bears", true)
+	var blast := _pack_8_probe_card(g, "Fireblast", false)
+	var armor := _pack_8_probe_card(g, "Armor of Thorns", false)
+	var refused := g.cast_spell(0, blast, [TargetRef.player(1)], 0, 1)
+	if refused != "":
+		return "Fireblast's alternative cost was refused: " + refused
+	for mountain in mountains:
+		if mountain.zone != Mtg.Zone.GRAVEYARD:
+			return "Fireblast's alternative cost did not sacrifice two Mountains"
+	g.players[0].mana_pool.add(Mtg.ManaColor.G, 2)
+	refused = g.cast_spell(0, armor, [TargetRef.card(bear)])
+	if refused != "":
+		return "Armor of Thorns could not be cast as though it had flash: " + refused
+	if not bool(armor.memory.get("flash_cast", false)):
+		return "the flash rider did not schedule its cleanup-step sacrifice"
+	guard = 0
+	while not g.stack.is_empty() and not g.game_over and guard < 20:
+		g.pass_priority(g.priority_player)
+		guard += 1
+	if g.players[1].life != 16:
+		return "Fireblast did not deal its 4 damage (life %d)" % g.players[1].life
+	if armor.zone != Mtg.Zone.BATTLEFIELD:
+		return "Armor of Thorns did not resolve onto the battlefield"
+	var turn := g.turn_number
+	guard = 0
+	while g.turn_number == turn and not g.game_over and guard < 200:
+		if g.awaiting_attackers: g.declare_attackers(g.active_player, [])
+		elif g.awaiting_blockers: g.declare_blockers(g.opponent_of(g.active_player), {})
+		else: g.pass_priority(g.priority_player)
+		guard += 1
+	if armor.zone != Mtg.Zone.GRAVEYARD:
+		return "the flash-cast Armor of Thorns was not sacrificed in the cleanup step"
+	return ""
+
+
+## A fresh card for seat 0 of the payment probe, on the battlefield (able
+## to act) or in the hand — the probe's own setup, as Pack 2's does.
+static func _pack_8_probe_card(g: MtgGame, card_name: String, on_battlefield: bool) -> CardInstance:
+	var inst := CardInstance.new(CardRegistry.get_card(card_name), g._next_instance_id, 0)
+	g._next_instance_id += 1
+	g._instances[inst.id] = inst
+	if on_battlefield:
+		g._put_on_battlefield(inst, 0)
+		inst.summoning_sick = false
+	else:
+		inst.zone = Mtg.Zone.HAND
+		g.players[0].hand.append(inst)
+	return inst
 
 
 ## One shell button, at this screen's size.

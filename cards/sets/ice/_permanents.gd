@@ -120,7 +120,7 @@ static func _music_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var n := int(s.counters.get("music", 0))
 	if not EffectBase.unless_paid(g, who, ManaCost.parse("{%d}" % n), "Pay {%d} for %s's music upkeep?" % [n, s.data.card_name]): g.destroy(s)
 static func _presence(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	var who := int(g.trigger_context(s).controller)
 	var types: Array[String] = ["plains", "island", "swamp", "mountain", "forest", "desert", "gate", "lair", "locus", "mine", "power-plant", "sphere", "tower", "urza's"]
 	var hint := 0
@@ -152,7 +152,8 @@ static func _golem(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	g.untap_permanent(g.find_instance(targets[0].instance_id))
 	if F._same_trigger_source(g, s): g.untap_permanent(s)
 static func _freeze(g: MtgGame, s: CardInstance, target_id: int, stamp: int, untaps: int) -> void:
-	if s.zone != Mtg.Zone.BATTLEFIELD or s.layer_timestamp != stamp or not s.tapped or s.untap_sequence != untaps: return
+	# A phased-out source can't be seen to "remain tapped" (CR 702.26f).
+	if not g.is_present(s) or s.layer_timestamp != stamp or not s.tapped or s.untap_sequence != untaps: return
 	var i := g.find_instance(target_id)
 	if i != null and i.zone == Mtg.Zone.BATTLEFIELD: i.cur_skips_untap = true
 
@@ -162,7 +163,7 @@ class Freeze extends TapEffect:
 		super(g, s, pid, t, x)
 		var stamp := int(g.cost_paid("_source_timestamp", s.layer_timestamp))
 		var untaps := int(g.cost_paid("_source_untap_sequence", s.untap_sequence))
-		if not CREATURES.same_activation(g, s) or not s.tapped or s.untap_sequence != untaps: return
+		if not CREATURES.same_activation(g, s) or not g.is_present(s) or not s.tapped or s.untap_sequence != untaps: return   # CR 611.2b, 702.26f
 		g._rec(s, &"memory")
 		s.memory["holding"] = t.instance_id
 		g.continuous.add_floating_static(s, StaticAbility.new(load("res://cards/sets/ice/_permanents.gd")._freeze.bind(t.instance_id, stamp, untaps), "Doesn't untap while its source stays tapped."), ContinuousEffects.Duration.INDEFINITE, -1, false, t.instance_id)

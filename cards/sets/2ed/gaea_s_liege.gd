@@ -8,11 +8,14 @@ extends CardScript
 ##         battlefield.
 ##
 ## Implementation: a characteristic-defining static that counts the right
-## board depending on whether the Liege is attacking, plus an ability that
-## records land ids in the Liege's own memory — a second static then turns
-## each of those lands into a Forest every recalculation, so the change
-## lasts exactly as long as the Liege is on the battlefield, which is what
-## "until this creature leaves the battlefield" means.
+## board depending on whether the Liege is attacking, plus an ability whose
+## resolution registers a FLOATING static (layer 4) bound to the Liege's id:
+## ContinuousEffects.forget_instance drops it the moment the Liege leaves
+## the battlefield, which is what "until this creature leaves the
+## battlefield" means — and nothing else ends it. A PHASED-OUT Liege has not
+## left (CR 702.26d), so its Forests stay Forests meanwhile; a Liege static
+## standing in for the effect used to stop with it (the phasing audit of
+## 2026-10-03, D1).
 
 
 static func _is_land(inst: CardInstance) -> bool:
@@ -25,9 +28,6 @@ func build() -> CardData:
 		.with_subtypes(["avatar"]) \
 		.static_ability(StaticAbility.new(_count_forests,
 			"Its power and toughness are each equal to the number of Forests you (or, while attacking, the defending player) control.").setting_base_pt()) \
-		.static_ability(StaticAbility.new(_hold_the_forests,
-			"Lands it has touched are Forests for as long as it is on the battlefield.") \
-			.changing_land_types()) \
 		.activated(ActivatedAbility.new("", true,
 			[ForestifyEffect.new(TargetSpec.new(
 				TargetSpec.Kind.PERMANENT, "target land", _is_land))],
@@ -47,13 +47,6 @@ static func _count_forests(game: MtgGame, source: CardInstance) -> void:
 	source.cur_toughness = forests
 
 
-static func _hold_the_forests(game: MtgGame, source: CardInstance) -> void:
-	for land_id in Array(source.memory.get("forests", [])):
-		var land := game.find_instance(int(land_id))
-		if land != null and land.zone == Mtg.Zone.BATTLEFIELD and land.is_land():
-			land.become_basic_land_type("forest", Mtg.ManaColor.G)
-
-
 class ForestifyEffect extends EffectBase:
 	func _init(spec: TargetSpec) -> void:
 		target_spec = spec
@@ -69,14 +62,24 @@ class ForestifyEffect extends EffectBase:
 		# old activation cannot speak for (CR 400.7) — the source-timestamp
 		# guard PumpEffect uses. Until 2026-10-03 the claim was written onto
 		# the dead card and came back with it.
+		# A PHASED-OUT Liege has not left (CR 702.26d): the zone, not
+		# is_present, is the right question here.
 		if source.zone != Mtg.Zone.BATTLEFIELD or source.layer_timestamp \
 				!= int(game.cost_paid("_source_timestamp", source.layer_timestamp)):
 			return
-		var claimed: Array = source.memory.get("forests", [])
-		if not claimed.has(land.id):
-			claimed.append(land.id)
-		source.memory["forests"] = claimed
+		game.continuous.add_floating_static(source, StaticAbility.new(
+			_forest.bind(land.id, land.layer_timestamp),
+			"%s is a Forest until Gaea's Liege leaves the battlefield." % land.data.card_name) \
+				.changing_land_types(),
+			ContinuousEffects.Duration.INDEFINITE, -1, false, source.id)
 		game.recalculate()
+
+	## The land it touched, while it is that same land and phased in.
+	static func _forest(game: MtgGame, _source: CardInstance, land_id: int,
+			stamp: int) -> void:
+		var land := game.find_instance(land_id)
+		if game.is_present(land) and land.layer_timestamp == stamp and land.is_land():
+			land.become_basic_land_type("forest", Mtg.ManaColor.G)
 
 	func describe() -> String:
 		return "target land becomes a Forest for as long as this creature is around"

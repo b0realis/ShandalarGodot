@@ -49,8 +49,10 @@ static func _is_artifact(inst: CardInstance) -> bool:
 static func _apply(game: MtgGame, source: CardInstance) -> void:
 	if not source.memory.has("holding"):
 		return
-	if not source.tapped:
-		# The duration ran out: the lock is over, not paused (CR 611.2b).
+	if not source.tapped or source.untap_sequence \
+			!= int(source.memory.get("holding_untaps", source.untap_sequence)):
+		# The duration ran out — untapped, or phased out since (CR 702.26f):
+		# the lock is over, not paused (CR 611.2b).
 		if game.undo_log != null:
 			game.undo_log.record(source, &"memory", source.memory)
 		source.memory.erase("holding")
@@ -66,6 +68,8 @@ static func _apply(game: MtgGame, source: CardInstance) -> void:
 		source.memory.erase("holding")
 		source.memory.erase("holding_stamp")
 		return
+	if held.phased_out:
+		return   # the duration tracks the Gremlins; nothing to write meanwhile
 	held.cur_skips_untap = true
 
 
@@ -80,6 +84,10 @@ class HoldEffect extends EffectBase:
 			return
 		source.memory["holding"] = held.id
 		source.memory["holding_stamp"] = held.layer_timestamp
+		# "Remains tapped" from the activation on: an untap — or the
+		# Gremlins phasing out (CR 702.26f) — ends it.
+		source.memory["holding_untaps"] = int(game.cost_paid("_source_untap_sequence",
+			source.untap_sequence))
 		game.tap_permanent(held)
 		game.recalculate()
 

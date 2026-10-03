@@ -8,8 +8,15 @@ const COSTS := preload("res://engine/additional_object_costs.gd")
 static func result(value: float, targets: Array = [], x := 0) -> Dictionary: return {"value": value, "targets": targets, "x": x}
 static func affordable(g: MtgGame, pid: int, pay: Dictionary) -> bool: return g.players[pid].mana_pool.can_pay(pay.cost, pay.extra, pay.usage) or not ManaPlanner.plan(g, pid, pay.cost, pay.extra, pay.usage).is_empty()
 static func sizes_x(pilot, a: ActivatedAbility) -> bool: return pilot.profile.forecasts_tactics and not a.effects.is_empty() and a.effects[0].ai_role in [&"exact_mv_removal", &"tap_x_lands", &"mill_until_creature"]
-static func object_price(g: MtgGame, pilot, s: CardInstance, groups: Array) -> float:
-	var slots := COSTS.pools(g, pilot.pid, groups, s)
+## What paying [param groups] (engine/additional_object_costs.gd) costs the
+## pilot, on its own-value scale; INF when it cannot be paid at [param x].
+## Pack 8 (2026-10-03) priced the new operations from the pilot's OWN board,
+## hand and graveyard only: a returned land is a land drop (cheap while one
+## is left this turn), a returned spell is its recasting tempo, a graveyard
+## card is nearly free, a card from hand is a card, and the all-at-once
+## operations price every object they take.
+static func object_price(g: MtgGame, pilot, s: CardInstance, groups: Array, x := 0) -> float:
+	var slots := COSTS.pools(g, pilot.pid, groups, s, x)
 	if not COSTS.can_assign(slots): return INF
 	var total := 0.0
 	var used := {}
@@ -21,15 +28,37 @@ static func object_price(g: MtgGame, pilot, s: CardInstance, groups: Array) -> f
 			var next := used.duplicate()
 			next[i.id] = true
 			if not COSTS.can_assign(slots, index + 1, next): continue
-			var price := 0.5
-			if slots[index].group.operation in ["sacrifice", "discard"]: price = pilot._own_value(g, i)
-			elif slots[index].group.operation == "counter": price = pilot._own_value(g, i) if i.cur_toughness <= i.damage + 1 else 1.5
+			var price := _object_unit_price(g, pilot, slots[index].group, i)
 			if price < best:
 				best = price
 				chosen = i.id
 		total += best
 		used[chosen] = true
+	for group in groups:
+		if not COSTS.is_all(group): continue
+		match String(group.operation):
+			"discard_hand":
+				for card in g.players[pilot.pid].hand:
+					if card != s: total += Evaluator.card_value(card.data)
+			"sacrifice_all":
+				for body in g.players[pilot.pid].battlefield:
+					if COSTS._passes(group, body): total += pilot._own_value(g, body, body == s)
 	return total
+
+static func _object_unit_price(g: MtgGame, pilot, group: Dictionary, i: CardInstance) -> float:
+	match String(group.operation):
+		"sacrifice", "discard": return pilot._own_value(g, i)
+		"counter": return pilot._own_value(g, i) if i.cur_toughness <= i.damage + 1 else 1.5
+		"return":
+			if i.is_token: return pilot._own_value(g, i)   # it ceases to exist
+			if i.is_land(): return 0.75 if g.land_drop_available(pilot.pid) else 1.75
+			return maxf(1.0, i.data.cost.mana_value() * 0.75)
+		"exile":
+			match i.zone:
+				Mtg.Zone.GRAVEYARD: return 0.25
+				Mtg.Zone.HAND: return Evaluator.card_value(i.data)
+				_: return pilot._own_value(g, i)
+	return 0.5
 
 static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: String) -> Variant:
 	if not pilot.profile.forecasts_tactics: return null
@@ -237,7 +266,9 @@ static func special_spell(g: MtgGame, pilot, response := false) -> String:
 			elif custom != null: choice = custom
 			else: continue
 			if choice.is_empty() or g.cast_refusal(pilot.pid, s, choice.targets, choice.x, mode) != "": continue
-			var payment := g.spell_payment(pilot.pid, s.data, choice.x, maxi(1, choice.targets.size()), s, mode)
+			# The chosen targets priced in: a Force of Will at a Kaervek's
+			# Torch pays its "{2} more" too (Pack 8, 2026-10-03).
+			var payment := g.spell_payment(pilot.pid, s.data, choice.x, maxi(1, choice.targets.size()), s, mode, choice.targets)
 			if not affordable(g, pilot.pid, payment): continue
 			var pitch_price := 0.0
 			var alternate: Dictionary = s.data.payment_option(mode)
@@ -245,6 +276,11 @@ static func special_spell(g: MtgGame, pilot, response := false) -> String:
 				pitch_price = INF
 				for i in g.pitch_candidates(pilot.pid, s, mode): pitch_price = minf(pitch_price, Evaluator.card_value(i.data))
 			pitch_price += int(alternate.get("life", 0)) * pilot._life_price(g.players[pilot.pid].life)
+			# Object costs, additional and alternative (Fireblast's two
+			# Mountains, Spinning Darkness's three black cards) — Pack 8.
+			var object_groups: Array = g.spell_object_costs(s.data, mode)
+			if not object_groups.is_empty():
+				pitch_price += object_price(g, pilot, s, object_groups, int(choice.x))
 			var value: float = choice.value - pitch_price - float(payment.cost.mana_value() + payment.extra) * 0.25
 			if value > 2.0 and (best.is_empty() or value > best.value): best = {"value": value, "source": s, "mode": mode, "choice": choice, "payment": payment}
 	if best.is_empty(): return ""

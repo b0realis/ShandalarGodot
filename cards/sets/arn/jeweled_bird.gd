@@ -22,7 +22,9 @@ func build() -> CardData:
 class BirdEffect extends EffectBase:
 	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
+		# Phased out: it can't be anted, so "if you do" fails (CR 702.26b) —
+		# and move_to_ante would lift it out of its phased-out state.
+		if not game.is_present(source):
 			return
 		game.move_to_ante(source)
 		# "all other cards YOU OWN" — you is the ACTIVATOR, not the Bird's

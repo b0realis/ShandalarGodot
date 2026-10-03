@@ -606,6 +606,12 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 			return WHY["player"]   # "target opponent" excludes its controller
 		if ref.player_id < 0 or ref.player_id >= game.players.size():
 			return WHY["player"]
+		# SOURCE-FILTERED bans on the PLAYER (Peace Talks), the twin of
+		# the permanents' cur_target_bans below — filed, like those, under
+		# `,abilities`.
+		for ban in game.players[ref.player_id].cur_target_bans:
+			if source != null and bool(ban["filter"].call(game, source, self)):
+				return WHY["abilities"]
 		if player_filter.is_valid() and not player_filter.call(game, ref.player_id):
 			return filter_reason
 		if player_source_filter.is_valid() and not player_source_filter.call(game, ref.player_id, source):

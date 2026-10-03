@@ -87,13 +87,15 @@ static func _pony(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x: int
 	g.continuous.add_until_eot_landwalk(t.instance_id, ["mountain"])
 	g.recalculate()
 static func _veldrane(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
-	if not C.same_activation(g, s): return
+	if not C.same_activation(g, s) or not g.is_present(s): return   # CR 702.26e
 	g.continuous.add_until_eot_pump(s.id, -3, 0)
 	g.continuous.add_until_eot_landwalk(s.id, ["forest"])
 	g.recalculate()
 static func _maze(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
 	if not C.same_activation(g, s): return
-	g.continuous.add_floating_static(s, StaticAbility.new(_can_attack.bind(s.id), "Can attack as though it didn't have defender."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
+	# Phased out: no attack permission (CR 702.26e); the exile below is
+	# still scheduled — it is a delayed trigger, guarded at the end step.
+	if g.is_present(s): g.continuous.add_floating_static(s, StaticAbility.new(_can_attack.bind(s.id), "Can attack as though it didn't have defender."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
 	g.schedule_delayed_trigger(TriggeredAbility.new(Mtg.EventType.END_STEP_START, _exile.bind(s.id, s.layer_timestamp), "Exile this creature."), pid, s)
 	g.recalculate()
 static func _can_attack(g: MtgGame, _s: CardInstance, id: int) -> void:

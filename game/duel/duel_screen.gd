@@ -1445,6 +1445,17 @@ func _on_card_clicked(inst: CardInstance) -> void:
 		return
 	if inst.zone == Mtg.Zone.HAND and not _may_see_hand(inst.controller_id):
 		return
+	# A PHASED-OUT PERMANENT IS ON THE TABLE TO BE READ, NOT USED (Pack 8,
+	# [method _table_cards]): it is no target, no attacker, no blocker and
+	# no mana source (CR 702.26b), in every mode. The click says so —
+	# with when it comes back — instead of being refused deeper down in
+	# words about targets or abilities that would only puzzle.
+	if inst.zone == Mtg.Zone.BATTLEFIELD and inst.phased_out:
+		if _card_preview != null:
+			_card_preview.show_card(inst)
+		_report("%s is phased out. %s." % [inst.data.card_name,
+			MiniCard.phase_note(game, inst)])
+		return
 	match mode:
 		Mode.TARGETING:
 			_try_take_target(TargetRef.card(inst))
@@ -1927,8 +1938,22 @@ func _repopulate_graveyard() -> void:
 	# BOARD only: the sidebar holds the big card they fill, and a pile
 	# sitting on top of it would hide the very thing hovering is for.
 	_grave_view.board_area = _board_area()
-	_grave_view.populate(game,
-		_private_decision_seat() if config.private_hotseat() else _human_seat(), legal)
+	var seat := _private_decision_seat() if config.private_hotseat() else _human_seat()
+	# OUTSIDE targeting, the cards the seat may PLAY from these piles wear
+	# the "you may act on this" ring (Pack 8: Bösium Strip's top card, a
+	# Three Wishes card; and the Bottle and Bazaar plays before them).
+	var playable := Callable()
+	if mode == Mode.NORMAL and _pending_card == null:
+		playable = func(inst: CardInstance) -> bool:
+			if game.priority_player != seat:
+				return false
+			if not (game.can_play_from_exile(seat, inst)
+					or game.can_cast_from_graveyard(seat, inst)):
+				return false
+			# The same promise the hand's yellow makes: the step admits it
+			# (a sorcery on top of the graveyard waits for your main phase).
+			return inst.is_land() or game.cast_timing_refusal(seat, inst) == ""
+	_grave_view.populate(game, seat, legal, playable)
 
 
 ## A card in the open view was clicked. While targeting it is a target
@@ -1936,7 +1961,14 @@ func _repopulate_graveyard() -> void:
 ## submits and closes, an invalid one is refused); otherwise it is just
 ## something to look at, which is the original's Showcase.
 func _on_graveyard_card(inst: CardInstance) -> void:
-	if inst.face_down:
+	# A card exiled FACE DOWN is a card back to everyone but the one seat a
+	# rule lets look at it (Three Wishes: "You may look at those cards for
+	# as long as they remain exiled" — `CardInstance.exile_visible_to`,
+	# CR 406.3). The view already draws it face up for that seat
+	# (GraveyardView._may_look); the click used to show the back to the
+	# viewer as well, and never reached the play below.
+	if inst.face_down and not (inst.zone == Mtg.Zone.EXILE
+			and inst.exile_visible_to == _viewing_seat()):
 		if _card_preview != null: _card_preview.show_back()
 		return
 	if mode != Mode.TARGETING:
@@ -1952,6 +1984,16 @@ func _on_graveyard_card(inst: CardInstance) -> void:
 			return
 		var seat := _viewing_seat()
 		if game.can_play_from_exile(seat, inst) and game.priority_player == seat:
+			_close_graveyard()
+			_click_hand_card(inst)
+			return
+		# CASTING FROM THE GRAVEYARD (Bösium Strip, Pack 8): "Until end of
+		# turn, you may cast instant and sorcery spells from the top of
+		# your graveyard" — the engine's own permission
+		# ([method MtgGame.can_cast_from_graveyard]) decides which card,
+		# and the cast is the hand's own chain from there (timing, mode,
+		# targets, mana: the printed ones, CR 601.3).
+		if game.can_cast_from_graveyard(seat, inst) and game.priority_player == seat:
 			_close_graveyard()
 			_click_hand_card(inst)
 			return
@@ -1978,6 +2020,20 @@ func _click_hand_card(inst: CardInstance) -> void:
 	if inst.is_land():
 		_report(game.play_land(pid, inst))
 		return
+	# A CARD THAT CAN ALSO BE DISCARDED AS A SPECIAL ACTION (Circling
+	# Vultures, Pack 8) asks which, the way a permanent with two abilities
+	# does ([method _open_hand_action_menu]).
+	if inst.zone == Mtg.Zone.HAND and inst.data.discard_special_action:
+		_open_hand_action_menu(inst)
+		return
+	_start_cast(inst)
+
+
+## The cast chain proper, from a card the player has chosen to CAST —
+## [method _click_hand_card] past its land and special-action doors, and
+## the double-click's own entry ([method _auto_cast]).
+func _start_cast(inst: CardInstance) -> void:
+	var pid := inst.exile_playable_by if inst.zone == Mtg.Zone.EXILE else inst.owner_id
 	# A CAST THE STEP FORBIDS IS REFUSED BEFORE IT COSTS ANYTHING —
 	# `[QoL]`, 2026-09-09. The owner's playtest of 2026-09-08: *"If you
 	# are in draw phase and you double click on creature - you are warned
@@ -2030,6 +2086,59 @@ func _click_hand_card(inst: CardInstance) -> void:
 	_pending_specs = _specs_for_cast(inst, 0)
 	_build_target_slots(inst.data, 0)
 	_continue_cast_chain()
+
+
+## THE HAND CARD'S OWN SMALL MENU (Pack 8): "Cast" or "Discard" for a
+## card the rules let you discard as a SPECIAL ACTION — Circling Vultures'
+## "You may discard this card any time you could cast an instant" (CR
+## 116.2, [method MtgGame.discard_as_special_action]). The discard uses no
+## stack, cannot be answered, and leaves the player holding priority
+## (CR 116.3) — so it is offered beside the cast at the pointer, the way
+## a permanent's two abilities are, with the cast greyed when the step
+## forbids it (a creature outside your main phase) and the discard when
+## the seat does not hold priority. The engine stays the referee on the
+## rest and its refusal is shown verbatim.
+const HAND_ACTION_CAST := 0
+const HAND_ACTION_DISCARD := 1
+var _hand_action_menu: PopupMenu = null
+var _hand_action_inst: CardInstance = null
+
+
+func _open_hand_action_menu(inst: CardInstance) -> void:
+	if _hand_action_menu == null:
+		return
+	_hand_action_inst = inst
+	_hand_action_menu.clear()
+	var card_name := inst.data.card_name
+	_hand_action_menu.add_item("Cast %s" % card_name, HAND_ACTION_CAST)
+	var cast_why := game.cast_timing_refusal(inst.owner_id, inst)
+	_hand_action_menu.set_item_disabled(
+		_hand_action_menu.get_item_index(HAND_ACTION_CAST), cast_why != "")
+	if cast_why != "":
+		_hand_action_menu.set_item_tooltip(
+			_hand_action_menu.get_item_index(HAND_ACTION_CAST), cast_why)
+	_hand_action_menu.add_item("Discard %s (special action)" % card_name,
+		HAND_ACTION_DISCARD)
+	var at := _hand_action_menu.get_item_index(HAND_ACTION_DISCARD)
+	_hand_action_menu.set_item_disabled(at, game.priority_player != inst.owner_id)
+	_hand_action_menu.set_item_tooltip(at,
+		"Any time you could cast an instant. It uses no stack, nobody can "
+		+ "respond to it, and you keep priority.")
+	_popup_menu_at(_hand_action_menu, _pointer())
+
+
+func _on_hand_action_chosen(id: int) -> void:
+	var inst := _hand_action_inst
+	_hand_action_inst = null
+	if inst == null or inst.zone != Mtg.Zone.HAND or game == null:
+		return   # the hand changed under the open menu
+	match id:
+		HAND_ACTION_CAST:
+			if mode == Mode.NORMAL and _pending_card == null and not _modal_open():
+				_start_cast(inst)
+		HAND_ACTION_DISCARD:
+			_report(game.discard_as_special_action(inst.owner_id, inst))
+			_refresh()
 
 
 ## The steps of the cast chain AFTER any mode is known.
@@ -2218,8 +2327,15 @@ func _submit_pending() -> void:
 		mode = Mode.PAYING
 		_set_target_cursor(false)
 		_paying_pool = _payment_pool_state()
-		_set_prompt("Pay mana to activate %s" % _pending_card.data.card_name
-			if _pending_ability_index >= 0 else GRAB_MANA_PROMPT % _pending_card.data.card_name)
+		var ask: String = "Pay mana to activate %s" % _pending_card.data.card_name \
+			if _pending_ability_index >= 0 else GRAB_MANA_PROMPT % _pending_card.data.card_name
+		# [QoL] What the TARGET adds (Pack 8 — a spell aimed at a Kaervek's
+		# Torch costs {2} more): said, so the extra land is not a mystery.
+		var fee := game.targets_surcharge(_pending_targets, _pending_card) \
+			if _pending_ability_index < 0 else 0
+		if fee > 0:
+			ask += " ({%d} more for its target)" % fee
+		_set_prompt(ask)
 		return
 	# A cast that WENT THROUGH keeps its tutor pick: the search happens
 	# when the spell resolves, priority rounds from now, and the pick is
@@ -2254,8 +2370,13 @@ func _pending_is_reachable() -> bool:
 		return false
 	var payment: Dictionary
 	if _pending_ability_index < 0:
+		# The chosen targets ride along: a spell aimed at a Kaervek's Torch
+		# costs {2} more (Pack 8, [method MtgGame.targets_surcharge]), and
+		# both the mana the cast waits for and the double-click's taps
+		# have to include it.
 		payment = game.spell_payment(_pending_pid, _pending_card.data,
-			_pending_x, maxi(_flatten_pending_targets().size(), 1), _pending_card, _pending_mode)
+			_pending_x, maxi(_flatten_pending_targets().size(), 1), _pending_card, _pending_mode,
+			_flatten_pending_targets())
 	elif _pending_ability_index < _pending_card.cur_activated_abilities.size():
 		payment = game.ability_payment(_pending_pid, _pending_card,
 			_pending_ability_index, _pending_x)
@@ -2387,7 +2508,9 @@ func _auto_cast(inst: CardInstance) -> void:
 		# cast now rather than second-guessing which.
 		if mode != Mode.NORMAL or _modal_open() or _pending_card != null:
 			return
-		_click_hand_card(inst)
+		# The gesture is a CAST, so a card with a second hand action
+		# (Circling Vultures) goes straight to the cast chain.
+		_start_cast(inst)
 		if _pending_card != inst:
 			return
 	# THE X QUESTION IS ANSWERED BY THE GESTURE: "all of the mana you have
@@ -2399,6 +2522,9 @@ func _auto_cast(inst: CardInstance) -> void:
 		# A double click may spend available mana, never all of a player's
 		# life. Fire Covenant always keeps its explicit payment question.
 		if _pending_ability_index < 0 and _pending_card.data.additional_life_is_x: return
+		# ...nor a count of the player's permanents or cards (Infernal
+		# Harvest's Swamps): an object-counted X is always asked.
+		if not _object_x_groups().is_empty(): return
 		var budget := _auto_x_budget()
 		_x_spin.max_value = maxi(budget, int(_x_spin.max_value))
 		_x_spin.value = budget
@@ -2503,8 +2629,13 @@ func _auto_tap_for_pending() -> void:
 		return
 	var payment: Dictionary
 	if _pending_ability_index < 0:
+		# The chosen targets ride along: a spell aimed at a Kaervek's Torch
+		# costs {2} more (Pack 8, [method MtgGame.targets_surcharge]), and
+		# both the mana the cast waits for and the double-click's taps
+		# have to include it.
 		payment = game.spell_payment(_pending_pid, _pending_card.data,
-			_pending_x, maxi(_flatten_pending_targets().size(), 1), _pending_card, _pending_mode)
+			_pending_x, maxi(_flatten_pending_targets().size(), 1), _pending_card, _pending_mode,
+			_flatten_pending_targets())
 	else:
 		payment = game.ability_payment(_pending_pid, _pending_card,
 			_pending_ability_index, _pending_x)
@@ -3309,17 +3440,45 @@ func _pick_block(inst: CardInstance) -> void:
 			return
 		against = against.duplicate()
 		against.append(inst.id)
+		# A LIFE TAX ON BLOCKING (Heat Wave, Pack 8 — CR 509.1d): the whole
+		# declaration's life is locked in and paid with it, and a player may
+		# pay life only while their total is at least the payment (CR
+		# 119.4). A block that would take the total past what the player
+		# has is refused HERE, in the engine's own words, rather than at
+		# Done after the lineup is built.
+		var tentative := _block_map.duplicate()
+		tentative[_selected_blocker] = against
+		var owed := _block_life_fee(tentative)
+		if owed > 0 and game.players[defender].life < owed:
+			_set_prompt("Illegal block. not enough life for all blocking costs (%d life)" % owed)
+			return
 		_block_map[_selected_blocker] = against
 		# Keep holding it while it can still take another (the whole point
 		# of the two cards); put it down when it is full.
 		if _blocks_left_for(blocker) <= 0:
 			_selected_blocker = -1
-			_set_prompt("Combat phase: Choose blockers.")
+			_set_prompt("Combat phase: Choose blockers." + _block_cost_note())
+		elif owed > 0:
+			_set_prompt("Block which attacker?" + _block_cost_note())
 		_refresh()
 	# An attacker clicked with NOTHING in hand needs no sentence of its own:
 	# the bar is already standing on @PROMPT_MAIN entry 8, "Combat phase:
 	# Choose blockers.", which is the instruction — and writing it again
 	# here would rub out a refusal the previous click had just put up.
+
+
+## The LIFE the pencilled blocks [param blocks] (blocker id -> attacker ids)
+## owe — `CombatDeclaration.block_life_fee`, the sum `declare_blockers`
+## charges.
+func _block_life_fee(blocks: Dictionary) -> int:
+	return int(load("res://engine/core/combat_declaration.gd").block_life_fee(game, blocks))
+
+
+## " (Blocking costs N life.)" while the lineup owes life, else "" — said
+## after the prompt so the bar keeps the 1997 sentence it stands on.
+func _block_cost_note() -> String:
+	var owed := _block_life_fee(_block_map)
+	return "" if owed <= 0 else " (Blocking costs %d life.)" % owed
 
 
 ## Why [param blocker] can block NONE of the declared attackers, or "" when
@@ -3939,6 +4098,8 @@ static func choice_options(choice: PlayerChoice) -> Array:
 			var names: Array = []
 			for line in choice_card_lines(choice):
 				names.append(line["label"])
+			if offers_keep_order(choice):
+				names.append(KEEP_ORDER_LINE)
 			if choice.optional:
 				names.append("Cancel.")       # prompts.txt:949 — fail to find
 			return names
@@ -3952,6 +4113,23 @@ static func choice_options(choice: PlayerChoice) -> Array:
 			# so nothing here needs to know what an option means.
 			return Array(choice.options)
 	return []
+
+
+## THE ONE-CLICK END OF AN "IN ANY ORDER" SEQUENCE (Pack 8 — Teferi's
+## Puzzle Box, which asks once per card in the hand, every draw step):
+## the line that answers this pick with the first card listed and every
+## later pick of the same sequence the same way, i.e. the rest go in the
+## order they are listed. Offered on a question that says it is one pick
+## of such a sequence ([member PlayerChoice.in_order], [method
+## DecisionAgent.choose_card_in_order]) with more than one card left;
+## any order is legal and the cards go where nobody can see them, so it
+## takes nothing from the player but clicks.
+const KEEP_ORDER_LINE := "Done — keep this order."
+
+
+static func offers_keep_order(choice: PlayerChoice) -> bool:
+	return choice.kind == PlayerChoice.Kind.CARD and choice.in_order \
+		and choice_card_lines(choice).size() > 1
 
 
 ## A CARD question's lines, `{label, answer}` each, in order — the labels
@@ -4160,11 +4338,20 @@ func _on_choice_option(index: int) -> void:
 		PlayerChoice.Kind.COLOR:
 			_answer_choice(choice_colors(choice)[index])
 		PlayerChoice.Kind.CARD:
+			var lines := choice_card_lines(choice)
 			# The trailing `Cancel.` is the legal "fail to find".
 			if choice.optional and index == labels.size() - 1:
 				_answer_choice("")
+			elif offers_keep_order(choice) and index == lines.size():
+				# `Done — keep this order.`: this pick is the first card
+				# listed, and the seat answers the rest of the sequence the
+				# same way (HumanAgent.keep_order_for).
+				if _humans.has(choice.pid) \
+						and _humans[choice.pid].has_method("keep_order_for"):
+					_humans[choice.pid].keep_order_for(choice.source)
+				_answer_choice(lines[0]["answer"])
 			else:
-				_answer_choice(choice_card_lines(choice)[index]["answer"])
+				_answer_choice(lines[index]["answer"])
 		PlayerChoice.Kind.DISCARD:
 			if _choice_picks.has(index):
 				_choice_picks.remove_at(_choice_picks.find(index))
@@ -4318,6 +4505,81 @@ func _phase_key() -> Array:
 	return [half, PhaseStops.Bar.PHASE, _phase_icon_slot(step)]
 
 
+## THE SPELLS [param pid] COULD CAST RIGHT NOW ALTHOUGH A SORCERY COULD
+## NOT BE (Pack 8, 2026-10-03) — every card the engine says the seat may
+## cast from where it lies ([method MtgGame.playable_cards]: the hand, an
+## exiled card it may play, the top of a graveyard under Bösium Strip)
+## whose timing is an INSTANT's: an instant, a creature with FLASH (King
+## Cheetah), a Mirage flash-rider card (Armor of Thorns: "you may cast
+## this spell as though it had flash"), or a card a seat permission covers
+## (Winding Canyons) — [method MtgGame.casts_at_instant_speed], the
+## engine's own question, so the stops, the windows and the highlight
+## cannot disagree with what `cast_spell` accepts.
+##
+## UNTIL PACK 8 the three "has a fast effect" predicates asked
+## `is_type(INSTANT)` of the hand alone. Every spell in the pool that could
+## be cast at instant speed WAS an instant, so the question was the same;
+## a flash creature made it a different one, and the automatic pass walked
+## the player straight past the window their King Cheetah was for.
+func _fast_spells(pid: int) -> Array:
+	var out: Array = []
+	for inst in game.playable_cards(pid):
+		if game.casts_at_instant_speed(pid, inst):
+			out.append(inst)
+	return out
+
+
+## COULD [param pid] PAY FOR [param inst] RIGHT NOW, by ANY of its payment
+## rows — the printed mana from what is floating or untapped
+## ([method MtgGame.could_afford], the card passed so a Kaervek's Torch's
+## targeting surcharge is priced), or an ALTERNATIVE row
+## ([method _alternative_row_payable]: Fireblast's two Mountains, Spinning
+## Darkness's black cards, Force of Will's blue card and life). The
+## castable highlight and the response test ([method _could_respond]) ask
+## this; the floating-pool test of the standing orders
+## ([method _has_affordable_fast_effect]) deliberately does not — a free
+## row would otherwise hold every window of the duel for a player who has
+## not prepared anything.
+func _payable_now(pid: int, inst: CardInstance) -> bool:
+	return game.could_afford(pid, inst.data, _no_auto_tap, inst) \
+		or _alternative_row_payable(pid, inst)
+
+
+## Is one of [param inst]'s ALTERNATIVE payment rows ([method
+## CardData.with_alternative_cost], [method CardData.with_pitch_cost])
+## payable now? Every part of the row is asked of the engine's own
+## pricing: its life (CR 119.4 — not more than the total), a card to pitch
+## ([method MtgGame.pitch_candidates]), its object costs with the spell's
+## additional ones ([method MtgGame.spell_object_costs] through
+## `AdditionalObjectCosts.refusal`), and its mana with every surcharge
+## ([method MtgGame.spell_payment] for that row, plus the Torch floor)
+## from the sources the planner can still tap.
+func _alternative_row_payable(pid: int, inst: CardInstance) -> bool:
+	var data := inst.data
+	if not data.is_modal():
+		return false
+	for mode in data.modes.size():
+		var row: Dictionary = data.payment_option(mode)
+		if row.is_empty():
+			continue
+		if int(row.get("life", 0)) > game.players[pid].life:
+			continue
+		if int(row.get("exile_color", 0)) != 0 \
+				and game.pitch_candidates(pid, inst, mode).is_empty():
+			continue
+		var groups: Array = game.spell_object_costs(data, mode)
+		if not groups.is_empty() and OC.refusal(game, pid, groups, inst, 0) != "":
+			continue
+		var payment := game.spell_payment(pid, data, 0, 1, inst, mode)
+		var extra := int(payment["extra"]) + game.targeting_surcharge_floor(pid, data, inst, mode)
+		if ManaPlanner.cost_is_free(payment["cost"]) and extra <= 0:
+			return true
+		if not ManaPlanner.plan(game, pid, payment["cost"], extra, payment["usage"],
+				_no_auto_tap).is_empty():
+			return true
+	return false
+
+
 ## Does the human seat hold a fast effect it *"has the mana available to
 ## use"* (manual p.112)? Instants in hand and non-mana activated abilities
 ## on your permanents, priced through the engine's own payability check so
@@ -4341,9 +4603,12 @@ func _phase_key() -> Array:
 func _has_affordable_fast_effect(pid: int) -> bool:
 	if not _is_human(pid):
 		return false
-	for inst in game.players[pid].hand:
-		if inst.data.is_type(Mtg.CardType.INSTANT) \
-				and game.can_afford(pid, inst.data):
+	for inst in _fast_spells(pid):
+		# The card itself rides along (Pack 8): a Kaervek's Torch on the
+		# chain makes a spell that targets it cost {2} more, and only the
+		# card's own target specs say whether it must
+		# ([method MtgGame.targeting_surcharge_floor]).
+		if game.can_afford(pid, inst.data, inst):
 			return true
 	for inst in game.all_battlefield():
 		if inst.controller_id != pid:
@@ -4413,6 +4678,12 @@ func _ability_open(pid: int, inst: CardInstance, ability: ActivatedAbility) -> b
 func _has_something_to_aim_at(inst: CardInstance) -> bool:
 	if inst.data.is_modal():
 		return true
+	# An AURA's one target is what it will enchant (CR 303.4a) — a Mirage
+	# flash-rider Aura (Armor of Thorns) with no creature on the table has
+	# nothing to be cast at, and has no spell effects for the walk below.
+	if inst.data.is_aura():
+		return inst.data.aura_target == null \
+			or not inst.data.aura_target.legal_targets(game, inst).is_empty()
 	for effect in inst.data.spell_effects:
 		var spec: TargetSpec = effect.target_spec
 		if spec == null or effect.target_min <= 0 or effect.target_count_is_x:
@@ -4453,10 +4724,8 @@ func _has_something_to_aim_at(inst: CardInstance) -> bool:
 func _could_respond(pid: int) -> bool:
 	if not _is_human(pid):
 		return false
-	for inst in game.players[pid].hand:
-		if inst.data.is_type(Mtg.CardType.INSTANT) \
-				and game.could_afford(pid, inst.data, _no_auto_tap) \
-				and _has_something_to_aim_at(inst):
+	for inst in _fast_spells(pid):
+		if _payable_now(pid, inst) and _has_something_to_aim_at(inst):
 			return true
 	for inst in game.all_battlefield():
 		if inst.controller_id != pid:
@@ -5171,6 +5440,16 @@ func _open_x_dialog() -> void:
 		label += " — number of additional " + _pending_card.data.repeated_additional_cost + " payments"
 	var life_x := _pending_ability_index < 0 and _pending_card.data.additional_life_is_x
 	if life_x: budget = maxi(0, game.players[_pending_pid].life)
+	# X COUNTS OBJECTS, NOT MANA (Pack 8 — Infernal Harvest's "return X
+	# Swamps", Haunting Misery's "exile X creature cards", Firestorm's
+	# "discard X cards"): no {X} is printed, X costs no mana at all, and the
+	# bound is how many of those objects the seat could pay with
+	# (`AdditionalObjectCosts.max_x`, the engine's own count).
+	var object_x := _object_x_groups()
+	var ask := "Life to pay (X):" if life_x else FireballDialog.ASK_MANA
+	if not object_x.is_empty():
+		budget = maxi(0, OC.max_x(game, _pending_pid, object_x, _pending_card))
+		ask = object_x_prompt(object_x)
 	if per_target <= 0:
 		# A plain {X} spell: only entries 1 and 2, and the field steps by
 		# x_count so every value on it buys a whole point of X.
@@ -5179,12 +5458,51 @@ func _open_x_dialog() -> void:
 	if _x_dialog != null:
 		_x_dialog.queue_free()
 	_x_dialog = FireballDialog.window(label, budget, per_target,
-		_legal_target_ceiling(), per_x, "Life to pay (X):" if life_x else FireballDialog.ASK_MANA)
+		_legal_target_ceiling(), per_x, ask)
 	_x_spin = _x_dialog.get_meta("mana")
-	if life_x: _x_spin.value = 0
+	if life_x or not object_x.is_empty(): _x_spin.value = 0
 	_x_dialog.add_button("OK").pressed.connect(_on_x_confirmed)
 	_x_dialog.add_button("Cancel").pressed.connect(_on_x_canceled)
 	add_child(_x_dialog)
+
+
+const OC := preload("res://engine/additional_object_costs.gd")
+
+
+## The pending action's object-cost groups whose count IS X (Pack 8,
+## `AdditionalObjectCosts.times_x`), when X counts objects rather than
+## mana — the spell prints no {X}. Empty otherwise. A payment row's own
+## groups (an alternative cost, CR 118.9) are included for the chosen row.
+func _object_x_groups() -> Array:
+	if _pending_card == null:
+		return []
+	var groups: Array = []
+	var printed: ManaCost
+	if _pending_ability_index >= 0:
+		if _pending_ability_index >= _pending_card.cur_activated_abilities.size():
+			return []
+		var ability: ActivatedAbility = _pending_card.cur_activated_abilities[_pending_ability_index]
+		printed = ability.cost
+		groups.append_array(ability.object_costs)
+	else:
+		printed = _pending_card.data.cost
+		groups.append_array(_pending_card.data.object_costs)
+		groups.append_array(_pending_card.data.payment_option(_pending_mode).get("object_costs", []))
+	if printed.x_count > 0 or not OC.uses_x(groups):
+		return []
+	return groups
+
+
+## The X window's question for an object-counted X: "X — Return a Swamp
+## you control for each:" — the cost's own words, so the player knows what
+## each point will take.
+static func object_x_prompt(groups: Array) -> String:
+	for group in groups:
+		if not bool(group.get("count_is_x", false)):
+			continue
+		var verb := String(group.get("operation", "pay")).capitalize()
+		return "X — %s %s for each:" % [verb, String(group.get("desc", "object"))]
+	return "X:"
 
 
 ## How many legal targets the pending spell's first variable-count slot
@@ -6605,6 +6923,8 @@ func _popup_menu_at(menu: PopupMenu, at: Vector2) -> void:
 ## `Don't auto tap this card` is entry 4 of `@MENU_SMALLCARD`.
 const CARD_MENU_NO_AUTO_TAP := 3
 const CARD_MENU_HAND_MANA := 100
+## Circling Vultures' special action, on the card's own mini-menu too.
+const CARD_MENU_DISCARD_SPECIAL := 101
 
 func _hand_mana(inst: CardInstance) -> bool:
 	if inst.zone != Mtg.Zone.HAND: return false
@@ -6619,6 +6939,13 @@ func _open_card_menu(inst: CardInstance, at: Vector2) -> void:
 	if _hand_mana(inst) and _is_human(inst.owner_id):
 		_card_menu.add_separator()
 		_card_menu.add_item("Activate mana ability from hand…", CARD_MENU_HAND_MANA)
+	if inst.zone == Mtg.Zone.HAND and inst.data.discard_special_action \
+			and _is_human(inst.owner_id) and _may_see_hand(inst.owner_id):
+		_card_menu.add_separator()
+		_card_menu.add_item("Discard %s (special action)" % inst.data.card_name,
+			CARD_MENU_DISCARD_SPECIAL)
+		_card_menu.set_item_disabled(_card_menu.get_item_index(CARD_MENU_DISCARD_SPECIAL),
+			game.priority_player != inst.owner_id)
 	# The mark is a property of THIS card, so its tick and its greying are
 	# settled here: only a permanent that makes mana has anything to lock.
 	var at_lock := _card_menu.get_item_index(CARD_MENU_NO_AUTO_TAP)
@@ -6634,6 +6961,11 @@ func _open_card_menu(inst: CardInstance, at: Vector2) -> void:
 func _on_card_menu_chosen(id: int) -> void:
 	if id == CARD_MENU_HAND_MANA and _card_menu_inst != null and _hand_mana(_card_menu_inst):
 		_open_ability_menu(_card_menu_inst, true)
+		return
+	if id == CARD_MENU_DISCARD_SPECIAL and _card_menu_inst != null \
+			and _card_menu_inst.zone == Mtg.Zone.HAND:
+		_report(game.discard_as_special_action(_card_menu_inst.owner_id, _card_menu_inst))
+		_refresh()
 		return
 	if _card_menu_inst == null or id < 0 or id >= CardMenu.SMALL_CARD.size():
 		return
@@ -7068,7 +7400,7 @@ func _rebuild_field(pid: int) -> void:
 	# stands rather than lost, so a state change mid-drag cannot swallow it.
 	_commit_drag(false)
 	var by_row := {Row.LANDS: [], Row.OTHER: [], Row.CREATURES: []}
-	for inst in game.players[pid].battlefield:
+	for inst in _table_cards(pid):
 		# Attached auras don't get their own slot — they render as bands
 		# stacked over their host (s30: attachedPerms, -14px per aura).
 		if inst.attached_to != -1:
@@ -7124,7 +7456,11 @@ func _rebuild_field(pid: int) -> void:
 		# remedy as the aura's: a slot of its own.
 		var waiting: Array = []
 		for inst in _display_order(pid, by_row[row], row):
-			if _fan_steps(inst) > 0 or _carries_counters(inst):
+			# ...AND A PHASED-OUT ONE (Pack 8): its "Phased out" letters sit
+			# across the ART, which a covered card in a pile does not show,
+			# and when it comes back is in its tooltip, which a pile row
+			# does not carry. A slot of its own, for the same reason.
+			if _fan_steps(inst) > 0 or _carries_counters(inst) or inst.phased_out:
 				_flush_pile(container, waiting)
 				waiting = []
 				container.add_child(_make_widget(inst))
@@ -7135,6 +7471,28 @@ func _rebuild_field(pid: int) -> void:
 				waiting = []
 		_flush_pile(container, waiting)
 	_rebuild_placed(pid)
+
+
+## EVERY CARD LYING ON [param pid]'s SIDE OF THE TABLE: the permanents
+## that exist (`MtgPlayer.battlefield`) and, after them, the ones PHASED
+## OUT under that seat's control (`MtgPlayer.phased_out`, Pack 8).
+##
+## A phased-out permanent is treated as though it does not exist
+## (CR 702.26b) — which is why the engine lifts it out of the battlefield
+## array every rule reads — but it never left the table: it lies there
+## face up, public to both seats, and comes back at its controller's next
+## untap step. Until 2026-10-03 the board drew only the first list, so a
+## Merfolk Raiders that phased out simply VANISHED and reappeared a turn
+## later, and nothing on screen said it would. The second list is drawn
+## ghosted with the 1997 `Phased` cue (MiniCard.State.PHASED); nothing
+## about it is clickable ([method _on_card_clicked]), lightable
+## ([method _highlight_for]) or targetable — the engine refuses all three
+## anyway. Its Auras ride on it exactly as on any host, because they
+## phased out with it (702.26g) and keep `attached_to`.
+func _table_cards(pid: int) -> Array:
+	var out: Array = game.players[pid].battlefield.duplicate()
+	out.append_array(game.players[pid].phased_out)
+	return out
 
 
 ## WHY AN ENCHANTED PERMANENT IS NEVER FOLDED INTO A PILE — the playtest
@@ -7205,7 +7563,7 @@ func _rebuild_placed(pid: int) -> void:
 		return
 	_clear_children(layer)
 	var live: Dictionary = {}
-	for inst in game.players[pid].battlefield:
+	for inst in _table_cards(pid):
 		live[inst.id] = inst
 	for id in _placements.keys():
 		var inst: CardInstance = live.get(id)
@@ -7430,7 +7788,7 @@ func _arrange_seat(pid: int, on: bool) -> void:
 ## restore semantics are untouched — the rows were never the thing that
 ## changed (see [method _display_order]).
 func _clear_placements(pid: int) -> void:
-	for inst in game.players[pid].battlefield:
+	for inst in _table_cards(pid):
 		_placements.erase(inst.id)
 
 
@@ -7782,7 +8140,8 @@ func _half_of(inst: CardInstance) -> int:
 	if inst.zone != Mtg.Zone.BATTLEFIELD:
 		return -1
 	for pid in 2:
-		if game.players[pid].battlefield.has(inst):
+		if game.players[pid].battlefield.has(inst) \
+				or game.players[pid].phased_out.has(inst):
 			return pid
 	return -1
 
@@ -8378,6 +8737,11 @@ func _make_widget(inst: CardInstance, chain_item: StackItem = null) -> Control:
 func _target_state_for(inst: CardInstance) -> int:
 	if mode != Mode.TARGETING or _pending_slot >= _pending_slots.size():
 		return -1
+	# A phased-out card is not "something you can't target" — it is not
+	# there at all (CR 702.26b); the ghost already says so, a slash would
+	# only be noise ([method _table_cards]).
+	if inst.phased_out:
+		return -1
 	for chosen in _pending_groups[_pending_slot]:
 		if not chosen.is_player and chosen.instance_id == inst.id:
 			return MiniCard.State.TARGET_AGAIN
@@ -8400,6 +8764,10 @@ func _target_state_for(inst: CardInstance) -> int:
 ## s30's orange means "there is something you can do here", the manual's
 ## means "you must", and the manual wins on meaning.
 func _highlight_for(inst: CardInstance) -> int:
+	# Nothing can be done to or with a phased-out permanent, in any mode
+	# ([method _table_cards]).
+	if inst.zone == Mtg.Zone.BATTLEFIELD and inst.phased_out:
+		return MiniCard.Highlight.NONE
 	match mode:
 		Mode.TARGETING:
 			# Highlight against the CURRENT slot's spec (the targeting
@@ -8507,7 +8875,17 @@ func _highlight_for(inst: CardInstance) -> int:
 			# 2026-09-03 coherent: the yellow name is the promise that
 			# clicking it (Mode.PAYING) or double-clicking it (the
 			# auto-cast) will work.
-			elif game.could_afford(inst.owner_id, inst.data, _no_auto_tap):
+			#
+			# ...AND THE CLOCK (Pack 8, 2026-10-03): the yellow name is
+			# that promise only when the step admits the cast — the
+			# engine's own [method MtgGame.cast_timing_refusal], which is
+			# what the click asks first. Until flash every card a seat
+			# held priority with was either an instant or plainly not
+			# castable outside its main phase; a King Cheetah, an Armor
+			# of Thorns or a creature under Winding Canyons is yellow in
+			# the opponent's combat and the Grizzly Bears beside it is not.
+			elif game.cast_timing_refusal(inst.owner_id, inst) == "" \
+					and _payable_now(inst.owner_id, inst):
 				return MiniCard.Highlight.OPTIONAL
 	return MiniCard.Highlight.NONE
 
@@ -9080,6 +9458,7 @@ func _build_ui() -> void:
 	_mana_menu = _dress_menu(func(_i: int) -> void: pass, menu_font)
 	_full_card_menu = _dress_menu(_on_full_card_menu_chosen, menu_font)
 	_attack_menu = _dress_menu(_on_attack_menu_chosen, menu_font)
+	_hand_action_menu = _dress_menu(_on_hand_action_chosen, menu_font)
 
 	# THE LIFE REGISTER'S mini-menu (`@MENU_LIFE` / `@MENU_FACE`, §6.5),
 	# same stone again. Rebuilt on every open because its third entry is

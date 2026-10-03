@@ -18,7 +18,10 @@ static func configure(c: CardData) -> bool:
 static func _tapped(i: CardInstance) -> bool: return i.tapped
 static func _live(g: MtgGame, id: int, stamp: int) -> CardInstance:
 	var i := g.find_instance(id)
-	return i if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == stamp else null
+	# is_present: a phased-out source holds nothing ("for as long as it
+	# remains tapped" sees it no more, CR 702.26f) and a phased-out
+	# creature can't be redirected to or affected (702.26b).
+	return i if g.is_present(i) and i.layer_timestamp == stamp else null
 static func _held(g: MtgGame, s: CardInstance, stamp: int, sequence: int) -> bool:
 	return _live(g, s.id, stamp) != null and s.tapped and s.untap_sequence == sequence
 static func _oyster(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, _x: int) -> void:

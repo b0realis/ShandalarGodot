@@ -200,10 +200,11 @@ static func game(value: Variant) -> bool:
 	for i in 2:
 		var player: Variant = value.players[i]
 		if not player is Dictionary or not SgProtocol.exact(player, ["seat", "life", "hand_count",
-			"library_count", "mana", "kept", "battlefield", "graveyard", "deck_name", "mana_colors", "revealed", "top", "exile", "ante"]) \
+			"library_count", "mana", "kept", "battlefield", "graveyard", "deck_name", "mana_colors", "revealed", "top", "exile", "ante", "phased_out"]) \
 			or not SgProtocol.integer(player.seat, i, i) \
 			or not SgProtocol.integer(player.life, -1000000, 1000000) or not player.kept is bool \
 			or not cards(player.battlefield) or not cards(player.graveyard) or not cards(player.revealed) \
+			or not cards(player.phased_out) \
 			or not cards(player.exile) or not cards(player.ante) or not text(player.top, 128) \
 			or not text(player.deck_name, 128) or not numbers(player.mana_colors, 6) or player.mana_colors.size() != 6:
 			return false
@@ -246,7 +247,9 @@ static func linked_cards(value: Dictionary) -> bool:
 			if int(card.owner) != owner: return false
 		if not _zone_cards(index, value.hand, "hand/%d" % owner): return false
 	for seat in 2:
-		for zone in ["battlefield", "graveyard", "exile", "ante", "revealed"]:
+		# A PHASED-OUT permanent is no battlefield card (CR 702.26b) but lies
+		# on the table: a zone of its own here, never aliasing a present one.
+		for zone in ["battlefield", "graveyard", "exile", "ante", "revealed", "phased_out"]:
 			if not _zone_cards(index, value.players[seat][zone],
 				"%s/%d" % ["hand" if zone == "revealed" else zone, seat]): return false
 	var objects := {}
@@ -281,6 +284,12 @@ static func linked_cards(value: Dictionary) -> bool:
 		if not index.has(row[0]): return false
 		for id in row[1]:
 			if not index.has(id): return false
+	# Heat Wave's tax rows name a legal block; the "held by" pairs two cards
+	# this view carries (a phased-out permanent and its Oubliette).
+	for row in value.presentation.block_taxes:
+		if not index.has(row[0]) or not index.has(row[1]): return false
+	for pair_value in value.presentation.phase_holds:
+		if not index.has(pair_value[0]) or not index.has(pair_value[1]): return false
 	if not value.damage_request.is_empty():
 		for target in value.damage_request.targets:
 			if target.id != "player" and not index.has(target.id): return false
@@ -408,6 +417,19 @@ static func pairs(value: Variant, amounts := false, departed_target := false) ->
 	return true
 
 
+## Heat Wave's tax on a legal block (Pack 8): `[blocker, attacker, tax,
+## life]` per restriction the blocker would owe for that attacker — `tax`
+## an opaque id for the imposing source, so a blocker pays each one ONCE
+## however many of its creatures it blocks (CombatState.block_life_owed).
+static func block_taxes(value: Variant) -> bool:
+	if not value is Array or value.size() > SgProtocol.MAX_CARDS: return false
+	for row in value:
+		if not row is Array or row.size() != 4 or not SgProtocol.short_text(row[0], 16) \
+			or not SgProtocol.short_text(row[1], 16) or not SgProtocol.short_text(row[2], 16) \
+			or not SgProtocol.integer(row[3], 1, 1000000): return false
+	return true
+
+
 static func block_matrix(value: Variant) -> bool:
 	# Bound rows and columns separately: legal relationships are not cards.
 	if not value is Array or value.size() > SgProtocol.MAX_CARDS: return false
@@ -427,7 +449,7 @@ static func presentation(value: Variant) -> bool:
 	if not value is Dictionary or not SgProtocol.exact(value, ["priority", "toss", "order", "rules", "cues",
 		"cards", "players", "chain", "packets", "bands", "blocks", "blocked", "attackable", "blockable", "events",
 		"assignment", "targets", "prevention", "regeneration", "doomed", "draft", "respond", "floating",
-		"untap_capped"]): return false
+		"untap_capped", "block_taxes", "phase_holds"]): return false
 	for key in ["priority", "toss"]:
 		if not SgProtocol.integer(value[key], 0, 1): return false
 	for key in ["order", "prevention", "regeneration", "respond", "floating", "untap_capped"]:
@@ -440,7 +462,8 @@ static func presentation(value: Variant) -> bool:
 	if value.players.size() != 2 or value.cues.size() > 64: return false
 	if not SgProtocol.handles(value.blocked) or not SgProtocol.handles(value.attackable) \
 		or not SgProtocol.handles(value.doomed) \
-		or not pairs(value.blocks, false, true) or not block_matrix(value.blockable): return false
+		or not pairs(value.blocks, false, true) or not block_matrix(value.blockable) \
+		or not pairs(value.phase_holds) or not block_taxes(value.block_taxes): return false
 	for cue in value.cues:
 		if not cue is Dictionary or not SgProtocol.exact(cue, ["serial", "cue"]) or not SgProtocol.integer(cue.serial, 1): return false
 		if cue.cue not in SgDuelPresentation.CUES and cue.cue not in DuelAudio.LAND_PAIR_SOUNDS.values() \

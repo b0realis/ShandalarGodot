@@ -66,6 +66,17 @@ func put_synthetic(pid: int, data: CardData) -> CardInstance:
 	return inst
 
 
+## Put a SYNTHETIC card (see [method put_synthetic]) into [param pid]'s
+## hand, so an engine test can CAST the three-line definition it wrote.
+func give_synthetic(pid: int, data: CardData) -> CardInstance:
+	var inst := CardInstance.new(data, g._next_instance_id, pid)
+	g._next_instance_id += 1
+	g._instances[inst.id] = inst
+	inst.zone = Mtg.Zone.HAND
+	g.players[pid].hand.append(inst)
+	return inst
+
+
 ## Put a fresh copy of [param card_name] into [param pid]'s hand.
 func give_hand(pid: int, card_name: String) -> CardInstance:
 	var inst := _make_instance(pid, card_name)

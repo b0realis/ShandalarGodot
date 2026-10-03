@@ -180,6 +180,16 @@ var regenerates: bool = false
 ## Life gained by the controller.
 var life_gain: int = 0
 
+## Life a TARGETED player loses (Pack 8, 2026-10-03): a negative
+## [GainLifeEffect] with a player target — Kaervek's Spite's "target player
+## loses 5 life", Ebony Charm's drain. Not damage (CR 119.3 vs 120): no
+## prevention, protection or Circle reads it. It used to be summed into
+## [member life_gain] as a negative gain, so the spell read as HELP, was
+## aimed at its own caster and never counted as lethal. An UNTARGETED
+## negative gain is the caster's own price ("you lose 2 life", Cruel
+## Tutor) and keeps its old reading in [member life_gain].
+var life_loss: int = 0
+
 ## Mana produced by a SPELL (Dark Ritual) — worth nothing on its own.
 var adds_mana: bool = false
 
@@ -690,7 +700,10 @@ static func read(effects: Array, card_name: String = "") -> EffectIntent:
 		elif e is RegenerateEffect:
 			intent.regenerates = true
 		elif e is GainLifeEffect:
-			intent.life_gain += e.amount
+			if e.amount < 0 and not e.use_x and e.target_spec != null:
+				intent.life_loss -= e.amount
+			else:
+				intent.life_gain += e.amount
 		elif e is AddManaEffect:
 			intent.adds_mana = true
 		elif e is CounterEffect:
@@ -867,7 +880,7 @@ const WHEEL_COUNTS := {
 func is_harmful() -> bool:
 	if damage > 0 or damage_uses_x or removes or bounces or taps \
 			or random_destroy != null or coin_damage != null \
-			or chosen_discard != null or discards != 0:
+			or chosen_discard != null or discards != 0 or life_loss > 0:
 		return true
 	if shrinks():
 		return true
@@ -1049,6 +1062,24 @@ const AURA_HOSTILE := {
 	# [method AiPlayer._conscription_kills]. Read as a clause, not a name:
 	# [method aura_conscripts].
 	"Aggression": true,            # attack or be destroyed
+	# THE MIRAGE BLOCK (Pack 8, 2026-10-03), swept card by card from the
+	# oracle text. Each of these hurts, holds or punishes its host's
+	# CONTROLLER; the friendly rest is the every-pack test's reviewed
+	# list. Betrayal's own spec already says "an opponent controls"; the
+	# row keeps the picker shopping their side first all the same.
+	"Pacifism": true,              # can't attack or block
+	"Enfeeblement": true,          # -2/-2
+	"Apathy": true,                # doesn't untap unless they discard
+	"Thirst": true,                # taps it and holds it down
+	"Mana Chains": true,           # cumulative upkeep {1} on their creature
+	"Decomposition": true,         # cumulative upkeep in life, 2 more when it dies
+	"Consuming Ferocity": true,    # counters until it hits its controller and dies
+	"Binding Agony": true,         # its damage is dealt to its controller too
+	"Mortal Wound": true,          # any damage destroys it
+	"Death Watch": true,           # its death costs its controller life
+	"Teferi's Curse": true,        # their permanent is gone half the time
+	"Wellspring": true,            # their land, ours each upkeep
+	"Betrayal": true,              # their creature taps, we draw
 }
 
 
@@ -1064,8 +1095,8 @@ static func aura_aim(data: CardData) -> int:
 		return Aim.HOSTILE          # Control Magic, Steal Artifact
 	if data.aura_reanimates or data.aura_graveyard_entry:
 		return Aim.FRIENDLY         # Animate Dead — the host is in a graveyard
-	if data.aura_grants_protection != 0:
-		return Aim.FRIENDLY         # the ward cycle
+	if data.aura_grants_protection != 0 or data.aura_protection_memory_key != "":
+		return Aim.FRIENDLY         # the ward cycle, Ward of Lights' chosen colour
 	return Aim.HOSTILE if AURA_HOSTILE.has(data.card_name) else Aim.FRIENDLY
 
 
@@ -1076,7 +1107,8 @@ static func aura_is_classified(data: CardData) -> bool:
 	if data == null or not data.is_aura():
 		return false
 	return data.aura_steals or data.aura_reanimates or data.aura_graveyard_entry \
-		or data.aura_grants_protection != 0 or AURA_HOSTILE.has(data.card_name)
+		or data.aura_grants_protection != 0 or data.aura_protection_memory_key != "" \
+		or AURA_HOSTILE.has(data.card_name)
 
 
 ## THE CLAUSE THAT CONSCRIPTS (2026-09-25): does [param data] destroy the

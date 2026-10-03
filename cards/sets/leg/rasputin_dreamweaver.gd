@@ -88,7 +88,7 @@ static func _refill(game: MtgGame, source: CardInstance, _event: GameEvent) -> v
 class DreamShieldEffect extends EffectBase:
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		if source != null and source.zone == Mtg.Zone.BATTLEFIELD:
+		if game.is_present(source):   # phased out: no shield (CR 702.26e)
 			source.prevention += 1
 			source.prevention_source = source.data
 			game.log_line("%s shields itself from the next 1 damage"

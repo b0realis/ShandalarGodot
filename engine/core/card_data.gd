@@ -372,6 +372,53 @@ func static_ability(ability: StaticAbility) -> CardData:
 	static_abilities.append(ability)
 	return self
 
+
+# ------------------------------------------- Pack 8 E5: stack statics --
+
+## STATIC ABILITIES THAT FUNCTION WHILE THIS CARD IS A SPELL ON THE STACK
+## (CR 611.3, 113.6b): "As long as Torrent of Lava is on the stack, each
+## creature has '{T}: Prevent the next 1 damage that would be dealt to this
+## creature by Torrent of Lava this turn.'" Run by
+## [method ContinuousEffects.recalculate] for every spell on the stack that
+## carries one, in the same layer passes and with the same tags as a
+## battlefield static ([member StaticAbility.changes_types] ...); the
+## `source` handed to `apply` is the spell's [CardInstance] on the stack.
+## They stop the moment the spell leaves the stack, resolved or not.
+var stack_static_abilities: Array[StaticAbility] = []
+
+## Fluent: add a static that functions while this card is on the stack.
+func stack_static(ability: StaticAbility) -> CardData:
+	stack_static_abilities.append(ability)
+	return self
+
+
+## "As long as this is on the stack, spells that target it cost {N} more
+## to cast" (Kaervek's Torch): generic mana added to the cost of every
+## SPELL cast with this spell among its targets ([method
+## MtgGame.spell_payment]'s `targets`, CR 601.2f). 0 = none.
+var targeting_surcharge: int = 0
+
+## Fluent: set [member targeting_surcharge].
+func with_targeting_surcharge(n: int) -> CardData:
+	targeting_surcharge = maxi(n, 0)
+	return self
+
+
+## "This creature can't be destroyed by lethal damage unless lethal damage
+## dealt by a single source is marked on it" (Ogre Enforcer): installs the
+## static that sets [member CardInstance.cur_lethal_needs_single_source], so
+## the rule follows the live object (a silenced or face-down Ogre loses it)
+## and the lethal-damage state-based action reads it
+## ([method MtgGame.lethal_damage_spared]).
+func with_lethal_needs_single_source() -> CardData:
+	static_abilities.append(StaticAbility.new(CardData._lethal_needs_single_source,
+		"This creature can't be destroyed by lethal damage unless lethal damage dealt by a single source is marked on it."))
+	return self
+
+
+static func _lethal_needs_single_source(_game: MtgGame, source: CardInstance) -> void:
+	source.cur_lethal_needs_single_source = true
+
 ## Append a mana ability (tap-for-mana).
 func mana(ability: ManaAbility) -> CardData:
 	mana_abilities.append(ability)
@@ -653,6 +700,42 @@ func bans_playing(cb: Callable) -> CardData:
 	return self
 
 
+## "Activated abilities of artifacts can't be activated" (Null Rod) — an
+## ACTIVATION ban this permanent radiates while it is on the battlefield
+## (and not silenced or phased out). A predicate
+## [code]func(game: MtgGame, source: CardInstance, pid: int,
+## inst: CardInstance, ability: Variant, is_mana: bool) -> bool[/code]:
+## TRUE forbids [param pid] to activate [param ability] (an
+## ActivatedAbility, or a ManaAbility when [param is_mana]) of
+## [param inst]. Mana abilities are activated abilities (CR 605.1a), so a
+## ban that does not test [param is_mana] reaches them too — read by
+## MtgGame.activation_ban_reason for activate_ability, tap_for_mana and
+## ManaPlanner.sources. Set with [method bans_activations].
+var activation_ban: Callable = Callable()
+
+## Fluent: radiate an activation ban (see [member activation_ban]).
+func bans_activations(cb: Callable) -> CardData:
+	activation_ban = cb
+	return self
+
+
+## Mirage's "You may cast this spell as though it had flash. If you cast it
+## any time a sorcery couldn't have been cast, the controller of the
+## permanent it becomes sacrifices it at the beginning of the next cleanup
+## step" (Armor of Thorns, Soar, Parapet, Necromancy ...). MtgGame reads it
+## twice: the timing check lets the spell be cast like an instant, and
+## cast_spell — when a sorcery could NOT have been cast at that moment —
+## stamps `memory["flash_cast"] = true` on the spell and schedules the
+## cleanup-step sacrifice of the permanent it becomes (CR 514.3a). Set with
+## [method with_flash_rider].
+var flash_rider: bool = false
+
+## Fluent: the Mirage flash rider (see [member flash_rider]).
+func with_flash_rider() -> CardData:
+	flash_rider = true
+	return self
+
+
 ## "Artifacts, creatures and lands your opponents control ENTER TAPPED"
 ## (Kismet) — a REPLACEMENT effect (CR 614.1c), not a trigger: the
 ## permanent is never untapped, so nothing that watches for a permanent
@@ -746,6 +829,75 @@ func with_extra_cost_per_target(n: int) -> CardData:
 	extra_cost_per_target = n
 	return self
 
+## "This spell costs N life more to cast for each target" (Phyrexian
+## Purge) — a cost increase paid in LIFE (CR 601.2f), for EVERY target
+## (not "beyond the first"). MtgGame refuses the cast when the caster's
+## life is below it and pays it with the rest of the cost.
+var extra_life_per_target: int = 0
+
+## Fluent: see [member extra_life_per_target].
+func with_life_per_target(n: int) -> CardData:
+	extra_life_per_target = n
+	return self
+
+## Add one ADDITIONAL object-cost group (engine/additional_object_costs.gd)
+## — "As an additional cost to cast this spell, return X Swamps you control
+## to their owner's hand" (Infernal Harvest), "sacrifice all permanents you
+## control and discard your hand" (Kaervek's Spite). A count-is-X group
+## makes X an announced value even with no {X} in the mana cost (CR 107.3,
+## 601.2b); the mana value stays the printed one.
+func with_object_cost(group: Dictionary) -> CardData:
+	object_costs.append(group)
+	if group.get("count_is_x", false):
+		cost.has_x = true
+	return self
+
+## An ALTERNATIVE COST — "You may sacrifice two Mountains rather than pay
+## this spell's mana cost" (Fireblast), "You may exile the top three black
+## cards of your graveyard rather than pay this spell's mana cost"
+## (Spinning Darkness). [param payment] keys, all optional:
+##   "mana": String — the mana paid instead (default: none);
+##   "object_costs": Array — groups from engine/additional_object_costs.gd;
+##   "life": int — life paid with it;
+##   "exile_color": int — "exile a <color> card from your hand" (the pitch
+##   cost [method with_pitch_cost] makes).
+## It is the same mode/payment row with_pitch_cost writes: the spell gets a
+## "Pay <printed cost>" row and one row per alternative, sharing the SAME
+## effects, so the caster picks the payment exactly as they pick a mode.
+## The printed mana cost and so the mana value never change (CR 118.9,
+## 202.3). Call it once per alternative; call it on a non-modal card only.
+func with_alternative_cost(label: String, payment: Dictionary) -> CardData:
+	var effects := spell_effects.duplicate()
+	if modes.is_empty():
+		modes = [{"label": "Pay " + cost.text, "effects": effects}]
+	var row := {"cost": ManaCost.parse(String(payment.get("mana", "")))}
+	if payment.has("object_costs"): row["object_costs"] = payment.object_costs
+	if int(payment.get("life", 0)) > 0: row["life"] = int(payment.life)
+	if int(payment.get("exile_color", 0)) != 0: row["exile_color"] = int(payment.exile_color)
+	modes.append({"label": label, "effects": modes[0]["effects"], "payment": row})
+	return self
+
+## "If this creature would die, put it on top of its owner's library
+## instead" (Gravebane Zombie) — a REPLACEMENT (CR 614.1): MtgGame puts it
+## on top of the library and it never dies, so no dies-trigger fires. The
+## sibling of [member dies_returns_to_hand].
+var dies_to_library_top: bool = false
+
+## Fluent: see [member dies_to_library_top].
+func with_dies_to_library_top() -> CardData:
+	dies_to_library_top = true
+	return self
+
+## "You may discard this card any time you could cast an instant"
+## (Circling Vultures) — a SPECIAL ACTION from the hand (CR 116.2, no
+## stack): MtgGame.discard_as_special_action.
+var discard_special_action: bool = false
+
+## Fluent: see [member discard_special_action].
+func with_discard_special_action() -> CardData:
+	discard_special_action = true
+	return self
+
 ## "Spend only black mana on X" (Drain Life) — the spell's X is paid in
 ## COLOURED mana of this Mtg.ManaColor instead of generic. 0 = the usual
 ## generic X. The 1997 exe charged Drain Life's X as black
@@ -784,6 +936,43 @@ static func _apply_host_protection(game: MtgGame, source: CardInstance, mask: in
 	var host := game.find_instance(source.attached_to)
 	if host != null and host.zone == Mtg.Zone.BATTLEFIELD:
 		host.cur_protection |= mask
+
+
+## The memory key of a CHOSEN-colour protection grant ("As this Aura
+## enters, choose a color. Enchanted creature has protection from the
+## chosen color. This effect doesn't remove this Aura." — Ward of Lights):
+## the aura-vs-protection state-based action exempts THIS aura from the
+## colour stored under `memory[key]` on this instance, as
+## [member aura_grants_protection] does for a printed colour. "" = none.
+var aura_protection_memory_key: String = ""
+
+## Fluent: Ward of Lights' grant — enchanted permanent has protection from
+## the colour (an Mtg.ManaColor mask) this Aura keeps under
+## `memory[key]`, and that grant never removes this Aura (CR 702.16d).
+## The CHOICE is the card's own "as it enters" ([method as_it_enters]);
+## until it is made the grant is empty.
+func grants_host_protection_from_chosen(key := "chosen_color", text := "") -> CardData:
+	aura_protection_memory_key = key
+	static_abilities.append(StaticAbility.new(
+		CardData._apply_chosen_host_protection.bind(key),
+		text if text != "" else "Enchanted creature has protection from the chosen color."))
+	return self
+
+
+static func _apply_chosen_host_protection(game: MtgGame, source: CardInstance, key: String) -> void:
+	var mask := int(source.memory.get(key, 0))
+	if mask != 0:
+		_apply_host_protection(game, source, mask)
+
+
+## The colours [param inst] (an Aura of this definition) grants its host
+## protection from and is therefore not removed by: the printed
+## [member aura_grants_protection] plus the colour it chose as it entered.
+func self_protection_mask(inst: CardInstance) -> int:
+	var mask := aura_grants_protection
+	if aura_protection_memory_key != "" and inst != null:
+		mask |= int(inst.memory.get(aura_protection_memory_key, 0))
+	return mask
 
 
 ## Mark this aura as taking control of its host (Control Magic).

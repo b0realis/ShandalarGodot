@@ -47,8 +47,10 @@ static func _yours(_game: MtgGame, source: CardInstance, inst: CardInstance) -> 
 static func _apply(game: MtgGame, source: CardInstance) -> void:
 	if not source.memory.has("holding"):
 		return
-	if not source.tapped:
-		# The duration ran out: the effect is over, not paused (CR 611.2b).
+	if not source.tapped or source.untap_sequence \
+			!= int(source.memory.get("holding_untaps", source.untap_sequence)):
+		# The duration ran out — untapped, or phased out since (CR 702.26f):
+		# the effect is over, not paused (CR 611.2b).
 		if game.undo_log != null:
 			game.undo_log.record(source, &"memory", source.memory)
 		source.memory.erase("holding")
@@ -64,6 +66,8 @@ static func _apply(game: MtgGame, source: CardInstance) -> void:
 		source.memory.erase("holding")
 		source.memory.erase("holding_stamp")
 		return
+	if held.phased_out:
+		return   # the duration tracks the Gear; nothing to write meanwhile
 	held.cur_power += 2
 	held.cur_toughness -= 2
 
@@ -79,6 +83,10 @@ class EquipEffect extends EffectBase:
 			return
 		source.memory["holding"] = held.id
 		source.memory["holding_stamp"] = held.layer_timestamp
+		# "Remains tapped" from the activation on: an untap — or the Gear
+		# phasing out (CR 702.26f), which moves the same marker — ends it.
+		source.memory["holding_untaps"] = int(game.cost_paid("_source_untap_sequence",
+			source.untap_sequence))
 		game.recalculate()
 		game.check_state_based_actions()
 

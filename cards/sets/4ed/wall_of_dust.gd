@@ -27,7 +27,9 @@ static func _self_blocks(_game: MtgGame, source: CardInstance, event: GameEvent)
 
 static func _choke(game: MtgGame, _source: CardInstance, event: GameEvent) -> void:
 	var attacker: CardInstance = event.data["attacker"]
-	if attacker != null and attacker.zone == Mtg.Zone.BATTLEFIELD:
+	# A blocked creature phased out in response isn't included, not even
+	# once it phases back in for that next turn (CR 702.26e).
+	if game.is_present(attacker):
 		attacker.cant_attack_next_turn = true
 		game.log_line("%s can't attack during its controller's next turn" %
 			attacker.data.card_name)

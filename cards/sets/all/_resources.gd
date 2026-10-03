@@ -96,7 +96,8 @@ static func _glaciers(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: 
 	if pick != null and choices.has(pick):
 		g.put_library_card_onto_battlefield(pick, pid, true)
 	g.shuffle_library(pid)
-	if B.live_source(g, s): g.schedule_cleanup_action(_cleanup_return.bind(s.id, s.layer_timestamp))
+	# A delayed trigger on the stack in the cleanup step (CR 514.3a).
+	if B.live_source(g, s): g.schedule_cleanup_action(_cleanup_return.bind(s.id, s.layer_timestamp), s, pid, "Return Thawing Glaciers to its owner's hand.")
 static func _cleanup_return(g: MtgGame, id: int, stamp: int) -> void:
 	var i := g.find_instance(id)
 	if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == stamp: g.return_to_hand(i)

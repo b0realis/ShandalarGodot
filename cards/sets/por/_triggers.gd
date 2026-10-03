@@ -87,7 +87,7 @@ static func _mare(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	for i in g.all_battlefield():
 		if i.is_creature() and (i != s or not F._same_trigger_source(g, s)): g.tap_permanent(i)
 static func _charge(g: MtgGame, s: CardInstance, _e: GameEvent, power: int, toughness: int) -> void:
-	if F._same_trigger_source(g, s):
+	if F._same_trigger_source(g, s) and g.is_present(s):   # CR 702.26e
 		g.continuous.add_until_eot_pump(s.id, power, toughness)
 		g.recalculate()
 static func _death_context(_g: MtgGame, s: CardInstance, e: GameEvent) -> Dictionary:

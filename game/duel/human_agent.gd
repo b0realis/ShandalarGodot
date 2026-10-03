@@ -52,6 +52,10 @@ var _preselected_name := ""
 ## Entries are `{"kind": PlayerChoice.Kind, "value": Variant}`.
 var _parked: Array = []
 
+## "KEEP THIS ORDER" (Pack 8): the card whose "in any order" sequence the
+## player has finished in one click ([method keep_order_for]); "" when none.
+var _keep_order_source := ""
+
 
 ## Park the next answer_card answer for the pending cast ("" clears).
 func preselect(card_name: String) -> void:
@@ -77,6 +81,21 @@ func park(kind: int, value: Variant, source := "") -> void:
 ## asked, so the re-run of that resolution serves it instead of asking again.
 func accept_answer(choice: PlayerChoice, value: Variant) -> void:
 	park(choice.kind, value, choice.source)
+
+
+## THE REST IN THE ORDER OFFERED (Pack 8 — Teferi's Puzzle Box). The
+## player answered one pick of an "in any order" sequence
+## ([member PlayerChoice.in_order], [method DecisionAgent
+## .choose_card_in_order]) with the screen's `Done — keep this order.`:
+## every further pick of [param source]'s sequence in this resolution is
+## answered with its FIRST candidate — the order the card offers them in —
+## and counted as the player's own answer, so the engine holds no more
+## questions for it (MtgGame._preflight). Any order is legal and the cards
+## go where nobody can see them, so this is a complete answer. Dropped
+## when the resolution ends ([method end_resolution]); a probe's use of it
+## is rewound with the rest of this mailbox (GameSnapshot).
+func keep_order_for(source: String) -> void:
+	_keep_order_source = source
 
 
 ## Is anything parked?
@@ -116,6 +135,8 @@ func begin_resolution(_source: String) -> void:
 
 
 func end_resolution(source: String) -> void:
+	# A "keep this order" lasts for the one resolution it was given in.
+	_keep_order_source = ""
 	# Anything this resolution did not ask for is dropped: an unnamed
 	# answer is good for exactly one resolution, and a named one only
 	# until its own card has resolved.
@@ -171,6 +192,11 @@ func answer_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
 		# "" is the overlay's own "fail to find", and a stale name is not a
 		# licence to grab a card they did not pick. Either way: decline.
 		return null
+	var asking := current_choice()
+	if _keep_order_source != "" and asking != null and asking.in_order \
+			and asking.source == _keep_order_source and not candidates.is_empty():
+		mark_answered_by_player()
+		return candidates[0]
 	if _preselected_name != "":
 		var wanted := _preselected_name
 		_preselected_name = ""

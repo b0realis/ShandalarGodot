@@ -97,8 +97,12 @@ digital rules text, in the manifest, Help and [the ledger](simplified-cards.md):
   mode on resolution. Fatal Lore also selects its creatures then, with normal
   targeting restrictions. Players cannot respond knowing that choice in
   advance; the opponent gets later information than under announcement timing.
-- **Bounty of the Hunt, Thawing Glaciers:** counters expire / the land returns
-  at cleanup, not the end step, but without an additional response window.
+- ~~**Bounty of the Hunt, Thawing Glaciers:** counters expire / the land returns
+  at cleanup, not the end step, but without an additional response window.~~
+  LIFTED by Pack 8 (engine package E3): "at the beginning of the next cleanup
+  step" is now a delayed trigger on the stack after the discard and the damage
+  removal, with priority and a further cleanup step (CR 514.3a/b) —
+  `tests/unit/test_pack_8_e3_flash_cleanup.gd`.
 
 ## AI review
 

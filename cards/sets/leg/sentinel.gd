@@ -59,7 +59,9 @@ class MeasureEffect extends EffectBase:
 
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
-		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
+		# Phased out in response: the change doesn't include it, not even
+		# once it is back (CR 702.26e) — the number would last for good.
+		if not game.is_present(source):
 			return
 		var other := game.find_instance(target.instance_id)
 		if other == null:

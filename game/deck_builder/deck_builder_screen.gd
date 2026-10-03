@@ -1022,6 +1022,21 @@ func _open_extra_sets() -> void:
 			if filter.set_on("5ed") != on:
 				filter.toggle_set("5ed"),
 		"Fifth Edition (1997): 434 distinct cards across 449 printings, all reprints.\nFour illustrations for each basic land; other filters still apply.")
+	_extra_source_row(body, "Pack8", "Mirage Pack 8", CardRegistry.extra_set_order().has("mir"),
+		filter.set_on("mir"), func(on: bool) -> void:
+			if filter.set_on("mir") != on:
+				filter.toggle_set("mir"),
+		"Mirage (1996): 335 distinct cards across 350 printings.\nFour illustrations for each basic land; other filters still apply.")
+	_extra_source_row(body, "Visions", "Visions Pack 8", CardRegistry.extra_set_order().has("vis"),
+		filter.set_on("vis"), func(on: bool) -> void:
+			if filter.set_on("vis") != on:
+				filter.toggle_set("vis"),
+		"Visions (1997): 167 distinct cards, the Mirage block's second set.\nIts own artwork and switch within Pack 8; other filters still apply.")
+	_extra_source_row(body, "Weatherlight", "Weatherlight Pack 8", CardRegistry.extra_set_order().has("wth"),
+		filter.set_on("wth"), func(on: bool) -> void:
+			if filter.set_on("wth") != on:
+				filter.toggle_set("wth"),
+		"Weatherlight (1997): 167 distinct cards, the Mirage block's third set.\nIts own artwork and switch within Pack 8; other filters still apply.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 

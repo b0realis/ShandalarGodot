@@ -99,14 +99,19 @@ static func brood(game: MtgGame, source: CardInstance) -> Array[CardInstance]:
 	for id in source.memory.get("brood", []):
 		var tok := game.find_instance(int(id))
 		if tok != null and tok.is_token and tok.zone == Mtg.Zone.BATTLEFIELD:
-			live.append(tok)
+			# A phased-out Tetravite stays on the roster (no zone change, CR
+			# 702.26d) but can't be exiled while it's gone (702.26b).
+			if game.is_present(tok):
+				live.append(tok)
 			ids.append(int(id))
 	source.memory["brood"] = ids
 	return live
 
 
 static func _bud(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	# Phased out: no counter can be removed, so no Tetravite is made (CR
+	# 702.26b) — add_counters would refuse while the tokens still came.
+	if not game.is_present(source):
 		return
 	var pid := source.controller_id
 	var have: int = int(source.counters.get("+1/+1", 0))

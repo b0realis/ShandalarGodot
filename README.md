@@ -64,7 +64,8 @@ and a Stats window that audits the mana base. The duel's keys are rebindable
 under Options, Controls, and a controller's face buttons play beside the mouse.
 Further optional packs
 add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age and
-Fifth Edition**, with engine and AI support.
+Fifth Edition**, with engine and AI support; Pack 8 — **the Mirage block** (Mirage,
+Visions, Weatherlight) — is in progress.
 Adventure and public Internet matchmaking remain future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
@@ -157,7 +158,7 @@ python3 tools/pack_3_ice_age.py verify cardpacks/Pack-3-Ice_Age.zip
 
 The [card artwork and pack guide](docs/card-art-and-packs.md) gives complete
 commands for **Pack 1 (1-tDotP), Fallen Empires, Ice Age, Homelands,
-Alliances, Portal, Second Age and Fifth Edition**, cache locations and platform-specific installation details.
+Alliances, Portal, Second Age, Fifth Edition and the Mirage block**, cache locations and platform-specific installation details.
 It also ships as `CARD-ART-AND-PACKS.md` and is included in each package's README.
 
 On desktop, keep `original_skin.zip` and `cardart.zip` in **`skin/`**, and
@@ -270,13 +271,23 @@ Work completed or planned after the 0.20.0 release:
   `python3 tools/pack_7_fifth_edition.py fetch-art`, then
   `python3 tools/pack_7_fifth_edition.py`. Requires 0.40.13 or later.
   ZIPs and downloaded art stay local.
+- [ ] **Pack 8 — The Mirage Block** — Mirage, Visions and Weatherlight:
+  669 names across 684 original English printings, 621 of them new
+  identities, with a gold palm, eye and skyship and an Extras switch for
+  each set. The pack, its builder and the 621 card files are in place; the
+  rules are being implemented set by set, and until every card is done the
+  unfinished ones are listed but refuse to be cast. See the
+  [pack guide](docs/pack-8-mirage-block.md). Build locally with
+  `python3 tools/pack_8_mirage_block.py fetch-art`, then
+  `python3 tools/pack_8_mirage_block.py`. Requires 0.50.11 or later.
+  ZIPs and downloaded art stay local.
 - [ ] **Internet play and community MElo (Magic Elo)** — parked until
   resources allow. No authentication or ranking service is required for LAN play.
 
 Experienced multiplayer, networking and backend developers are especially
 welcome to help improve LAN play and explore those longer-term ideas.
 
-With all six packs enabled: **2,359 set entries · 1,898 unique cards**.
+With all eight packs enabled: **3,462 set entries · 2,519 unique cards**.
 Want to add another set? Follow the [card-pack authoring guide](docs/adding-card-packs.md).
 
 See the [development roadmap](docs/ROADMAP.md#major-features-for-the-future)

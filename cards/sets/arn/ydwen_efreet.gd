@@ -52,7 +52,7 @@ static func _is_the_blocker(game: MtgGame, source: CardInstance,
 
 
 static func _gamble(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	if game.flip_coin(source.controller_id):
 		return

@@ -163,6 +163,17 @@ func mana_ability_for(pid: int, inst: CardInstance, index: int) -> ManaAbility:
 	return ability
 
 
+## Has [param inst]'s mana ability [param index] an activation left this
+## turn ("Activate only once each turn" — Wall of Roots)? Always true for
+## an ability with no such limit. Read by tap_for_mana and ManaPlanner.
+func mana_ability_ready(inst: CardInstance, index: int) -> bool:
+	if index < 0 or index >= inst.cur_mana_abilities.size():
+		return false
+	var ability: ManaAbility = inst.cur_mana_abilities[index]
+	return ability.max_per_turn <= 0 \
+		or int(inst.ability_uses.get("mana:%d" % index, 0)) < ability.max_per_turn
+
+
 ## CR 500.8: an additional combat followed by a main phase goes directly
 ## after THIS main phase. Repeated resolutions insert repeated pairs.
 func add_combat_after_current_main() -> void:
@@ -182,6 +193,27 @@ var combat_damage_prevented := false
 ## while a window is open, so nothing reads it in a duel played under the
 ## modern default (`RulesOptions.damage_prevention_window`).
 var damage_pending: Array[DamagePacket] = []
+
+## THE DAMAGE REPLACEMENT SUITE (Pack 8) — `engine/damage_replacements.gd`
+## holds the rules; these are its state. [member damage_effects] are the
+## effects a resolved spell or ability created ("the next time a source of
+## your choice would deal damage ...", Reflect Damage, Blind Fury,
+## Zhalfirin Crusader's points), journaled whole before any entry changes;
+## [member static_damage_effects] are DERIVED — rebuilt every recalculation
+## by the statics that write them (Benevolent Unicorn, Lichenthrope; see
+## [method add_static_damage_effect]). Both are offered as gates of kind
+## `&"fx"` in the two CR 616.1 walks.
+const DAMAGE_FX := preload("res://engine/damage_replacements.gd")
+var damage_effects: Array[Dictionary] = []
+var static_damage_effects: Array[Dictionary] = []
+var _next_damage_effect_id := 1
+## ONE DAMAGE EVENT, numbered (see `engine/damage_replacements.gd`): the
+## unit a "the next time ..." shield is used up by. Bumped by
+## [method _begin_damage_event]; [member _damage_event_item] is the stack
+## object whose resolution the current event belongs to, so one spell's
+## damage to several victims is one event (CR 608.2).
+var _damage_event_serial := 0
+var _damage_event_item: StackItem = null
 
 ## Caps on how many permanents of a kind a player may UNTAP during their
 ## untap step (Smoke, Winter Orb, Damping Field): keys "creature",
@@ -317,7 +349,7 @@ func _attacks_without_tapping_now(pid: int) -> bool:
 	if held is bool:
 		return bool(held)
 	var anchor := find_instance(int(held))
-	return anchor != null and anchor.zone == Mtg.Zone.BATTLEFIELD and not anchor.tapped
+	return is_present(anchor) and not anchor.tapped   # CR 702.26b
 
 
 ## "Instead of declaring blockers, blocks are assigned at random this turn"
@@ -335,15 +367,55 @@ var _end_of_combat_actions: Array[Callable] = []
 ## Delayed actions to run at the beginning of the next END STEP — the
 ## end-step twin of [member _end_of_combat_actions]. Rakalite.
 var _end_step_actions: Array[Callable] = []
-## Delayed cleanup actions (Bounty of the Hunt, Thawing Glaciers). Like
-## existing end-step actions these outlive the source and are journaled.
-var _cleanup_actions: Array[Callable] = []
+## "At the beginning of the next cleanup step, ..." (Bounty of the Hunt,
+## Thawing Glaciers, the Mirage flash riders' sacrifice). Each entry is
+## {"action": Callable(game) -> void, "source": CardInstance or null,
+## "controller": int, "desc": String} — see [method
+## schedule_cleanup_action]. Like the end-step actions these outlive their
+## source and are journaled; unlike them they are DELAYED TRIGGERS that use
+## the stack (CR 514.3a — [method _cleanup_triggers]).
+var _cleanup_actions: Array[Dictionary] = []
+
+## "You may cast <these> spells this turn as though they had flash"
+## (Winding Canyons, CR 702.8a/601.3): {"player", "filter":
+## Callable(game, inst) -> bool, "desc"}. Emptied at cleanup (CR 514.2).
+## See [method grant_flash].
+var flash_permissions: Array[Dictionary] = []
+
+## Until-end-of-turn PLAY bans (Solfatara's "can't play lands this turn",
+## Abeyance's "can't cast instant or sorcery spells"): {"player", "filter":
+## Callable(game, pid, data: CardData) -> bool, "desc"}; read by
+## [method play_banned] beside the battlefield statics' CardData.play_ban.
+var floating_play_bans: Array[Dictionary] = []
+
+## Until-end-of-turn ACTIVATION bans (Abeyance's "can't activate abilities
+## that aren't mana abilities"): {"player" (-1 = everyone), "filter":
+## Callable(game, pid, inst, ability, is_mana) -> bool, "desc"}; read by
+## [method activation_ban_reason] beside CardData.activation_ban.
+var floating_activation_bans: Array[Dictionary] = []
+
+## Stack objects whose targets are locked but whose BECAME_TARGET events
+## have not been dispatched yet — a trigger (whose targets a human seat may
+## still be naming) and a copy (whose controller may still re-aim it, CR
+## 707.10c). Flushed the next time a player would receive priority (CR
+## 603.3) by [method _flush_target_announcements].
+var _target_announcements: Array[StackItem] = []
+
+## Monotonic id of each flash-rider cast — "the permanent it becomes"
+## (CR 400.7) is the instance that carries the same id in its memory.
+var _flash_cast_serial := 0
 
 ## Delayed actions to run at the beginning of one player's NEXT main phase.
 ## Each entry is {"player": int, "action": Callable}. Mana Drain's "at the
 ## beginning of your next main phase, add {C} equal to that spell's mana
 ## value" is the pool's only user.
 var _next_main_actions: Array[Dictionary] = []
+
+## Delayed actions to run during one player's NEXT untap step that happens,
+## as their permanents untap (CR 502.3) — {"player", "action":
+## Callable(game) -> void, "source": instance id or -1, "stamp"}. See
+## [method schedule_untap_step_action] (Undiscovered Paradise). Journaled.
+var _untap_actions: Array[Dictionary] = []
 
 ## "Whenever <that creature> is dealt damage this turn, you gain that much
 ## life" (Glyph of Life). Entries are {instance_id: int, controller: int,
@@ -648,11 +720,18 @@ const RESOLUTION_TABLES: Array[StringName] = [
 	&"_end_step_tokens", &"_end_of_combat_doom", &"_control_until_eot", &"_control_layers",
 	&"_end_step_doom_stamps", &"_end_of_combat_doom_stamps",
 	&"_end_of_combat_actions", &"_end_step_actions", &"_cleanup_actions", &"_next_main_actions",
+	&"_untap_actions",   # Pack 8 E8 (Undiscovered Paradise)
 	&"life_on_damage_watchers", &"death_watchers", &"damage_watchers",
 	&"extra_turns", &"combat_damage_prevented", &"no_attacks_this_turn",
 	&"extra_turn_losses", &"_pending_extra_turn_loss", &"_resume_after_extra", &"next_turn_statics",
 	&"camouflage_this_turn", &"attacks_without_tapping",
 	&"_one_shot_draws", &"delayed_triggers",
+	# Pack 8 E3/E4: the this-turn grants and bans cleanup empties.
+	&"flash_permissions", &"floating_play_bans", &"floating_activation_bans",
+	&"_target_announcements", &"_flash_cast_serial",
+	# Pack 8 E5: the damage replacement suite's own registry and clock.
+	&"damage_effects", &"_next_damage_effect_id", &"_damage_event_serial",
+	&"_damage_event_item",
 ]
 ## The [MtgPlayer] fields a resolution may write by hand — every one a
 ## this-turn flag or shield the cleanup step clears — minus the ones
@@ -664,6 +743,7 @@ const PLAYER_RESOLUTION_FIELDS: Array[StringName] = [
 	&"damage_replacements", &"damage_prevention", &"poison",
 	&"untapped_lands_at_turn_start",
 	&"skip_draw_steps", &"last_red_spell_damage_controller",
+	&"skip_untap_steps", &"turns_to_skip",   # Pack 8 E8 (Avizoa, Chronatog)
 ]
 
 
@@ -725,6 +805,11 @@ const TURN_PLAYER_FIELDS: Array[StringName] = [
 	&"acted_this_turn", &"acted_last_turn", &"last_turn_number", &"artifact_damage_this_turn",
 	&"damage_taken_this_turn", &"drawn_this_turn", &"has_lost",
 	&"mana_substitutions", &"damage_caps",
+	# Pack 8 E10: the per-turn trackers cleanup empties.
+	&"creatures_to_graveyard_this_turn", &"tapped_land_for_mana_this_turn",
+	&"cast_permanents_this_turn",
+	# Pack 8 E7: Bösium Strip's until-end-of-turn graveyard permission.
+	&"graveyard_cast_permissions",
 ]
 
 ## The [CardInstance] fields the UNTAP STEP writes on every permanent
@@ -1344,6 +1429,12 @@ func _rebuild_battlefield_index() -> void:
 	_battlefield_draw_replacements.clear()
 	_battlefield_draw_step_replacements.clear()
 	_sba_watch.clear()
+	# FLANKING (CR 702.25a) is a BLOCKED trigger the recalculation
+	# synthesises from a live keyword count — and a grant (Jabari's Banner)
+	# changes that count without changing the battlefield, so this index
+	# would not hear of it. BLOCKED fires once per block pair; always
+	# listening for it costs nothing worth saving.
+	_trigger_index[Mtg.EventType.BLOCKED] = true
 	for inst in _battlefield_cache:
 		for trig in inst.data.triggered_abilities:
 			_trigger_index[trig.event_type] = true
@@ -1419,26 +1510,110 @@ func find_in_hand(pid: int, card_name: String) -> CardInstance:
 # All return "" on success or a refusal reason. See class doc.
 
 ## Play a land from hand (special action — no stack, CR 305).
+## A FACE-DOWN exiled card is playable only by a seat that may LOOK at it
+## (Three Wishes: "You may look at those cards for as long as they remain
+## exiled. Until your next turn, you may play those cards" — CR 406.3); it
+## stays hidden from everybody else until it is played (it is turned face
+## up as it leaves exile, MtgGame.cast_spell / play_land).
 func can_play_from_exile(pid: int, inst: CardInstance) -> bool:
-	return inst != null and inst.zone == Mtg.Zone.EXILE and not inst.face_down and inst.exile_playable_by == pid and players[inst.owner_id].exile.has(inst)
+	return inst != null and inst.zone == Mtg.Zone.EXILE \
+		and (not inst.face_down or inst.exile_visible_to == pid) \
+		and inst.exile_playable_by == pid and players[inst.owner_id].exile.has(inst)
 
 
 ## Available identities are public or in the player's own hand. A permission
 ## expands the source zone, never timing, land limits, or payment rules.
+## A graveyard permission (Bösium Strip) adds the card it currently names.
 func playable_cards(pid: int) -> Array[CardInstance]:
 	var out: Array[CardInstance] = players[pid].hand.duplicate()
 	for p in players:
 		for inst in p.exile:
 			if can_play_from_exile(pid, inst): out.append(inst)
+	if not players[pid].graveyard_cast_permissions.is_empty():
+		for inst in players[pid].graveyard:
+			if can_cast_from_graveyard(pid, inst): out.append(inst)
 	return out
 
 
 func grant_exile_play(inst: CardInstance, pid: int, next_upkeep := false) -> void:
-	if inst == null or inst.zone != Mtg.Zone.EXILE or inst.face_down: return
+	if inst == null or inst.zone != Mtg.Zone.EXILE: return
+	if inst.face_down and inst.exile_visible_to != pid: return   # unseen: unplayable
 	_rec(inst, &"exile_playable_by")
 	_rec(inst, &"exile_play_until_upkeep_of")
 	inst.exile_playable_by = pid
 	inst.exile_play_until_upkeep_of = pid if next_upkeep else -1
+
+
+# ------------------------------------------- casting from the graveyard --
+# "Until end of turn, you may cast instant and sorcery spells from the top
+# of your graveyard. If a spell cast this way would be put into a
+# graveyard, exile it instead." (Bösium Strip.) A PERMISSION widens the
+# zone a spell may be cast from (CR 601.3) and nothing else: timing, the
+# mana and every other cost stay the printed ones.
+
+## Grant [param pid] the right, until end of turn, to cast spells passing
+## [param filter] (Callable(card) -> bool; unset = any) from their own
+## graveyard — only its TOP card when [param top_only]. With
+## [param exile_instead] a spell cast this way is exiled wherever it would
+## go to a graveyard (CR 614.1). Journaled; cleared at cleanup.
+func grant_graveyard_cast(pid: int, filter: Callable, desc: String,
+		top_only := true, exile_instead := true, source: CardInstance = null) -> void:
+	_rec(players[pid], &"graveyard_cast_permissions")
+	players[pid].graveyard_cast_permissions.append({"filter": filter, "desc": desc,
+		"top_only": top_only, "exile_instead": exile_instead,
+		"source_id": source.id if source != null else -1})
+	log_line("%s may cast %s from their graveyard this turn" % [players[pid].player_name, desc])
+
+
+## The permission row that lets [param pid] cast [param inst] from their
+## graveyard right now, or {} — the card must be theirs, in their
+## graveyard, on top when the permission says so, and pass its filter.
+func graveyard_cast_permission(pid: int, inst: CardInstance) -> Dictionary:
+	if inst == null or inst.zone != Mtg.Zone.GRAVEYARD or inst.owner_id != pid:
+		return {}
+	var grave := players[pid].graveyard
+	if not grave.has(inst):
+		return {}
+	for row in players[pid].graveyard_cast_permissions:
+		if bool(row.get("top_only", true)) and grave.back() != inst: continue
+		var filter: Callable = row.get("filter", Callable())
+		if filter.is_valid() and not bool(filter.call(inst)): continue
+		return row
+	return {}
+
+
+## May [param pid] cast [param inst] from their graveyard right now?
+func can_cast_from_graveyard(pid: int, inst: CardInstance) -> bool:
+	return not graveyard_cast_permission(pid, inst).is_empty()
+
+
+## "You may discard this card any time you could cast an instant"
+## (Circling Vultures, [member CardData.discard_special_action]): a SPECIAL
+## ACTION (CR 116.2) taken from the hand — it needs priority, never uses
+## the stack and cannot be responded to, and its taker receives priority
+## again afterwards (CR 116.3). Not an effect's discard, so Library of
+## Leng has no say (`by_effect` false). "" on success, else the refusal.
+func discard_as_special_action(pid: int, inst: CardInstance) -> String:
+	var err := _act_precheck(pid)
+	if err != "":
+		return err
+	if inst == null or inst.zone != Mtg.Zone.HAND or inst.owner_id != pid \
+			or not players[pid].hand.has(inst):
+		return "that card is not in your hand"
+	if not inst.data.discard_special_action:
+		return "%s can't be discarded this way" % inst.data.card_name
+	if priority_player != pid:
+		return "you don't have priority"
+	# The 1997 damage-prevention window admits prevention effects only
+	# (`Duel.hlp`; the same refusal play_land gives).
+	if awaiting_damage_prevention or awaiting_regeneration:
+		return "no other kind of fast effects or spells are permitted " \
+			+ "during damage prevention"
+	log_line("%s discards %s (special action)" % [players[pid].player_name, inst.data.card_name],
+		inst, "", pid)
+	discard_cards(pid, [inst], false)
+	_resume_priority(pid)
+	return ""
 
 
 func play_land(pid: int, inst: CardInstance) -> String:
@@ -1484,6 +1659,7 @@ func play_land(pid: int, inst: CardInstance) -> String:
 	if inst.zone == Mtg.Zone.EXILE:
 		_rec(players[inst.owner_id], &"exile")
 		players[inst.owner_id].exile.erase(inst)
+		_turn_face_up_leaving_exile(inst)
 	else: players[pid].hand.erase(inst)
 	players[pid].lands_played_this_turn += 1
 	_put_on_battlefield(inst, pid)
@@ -1658,6 +1834,24 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		return "you don't control that permanent"
 	if inst.zone != ability.activation_zone or ((inst.owner_id if inst.zone == Mtg.Zone.HAND else inst.controller_id) != pid and not borrowed):
 		return "that mana ability is not available to you from this zone"
+	if inst.phased_out:
+		return "%s is phased out" % inst.data.card_name   # CR 702.26b
+	# A mana ability IS an activated ability (CR 605.1a): Null Rod, Cursed
+	# Totem and City of Solitude stop it too ([method activation_ban_reason]).
+	var mana_banned_by := activation_ban_reason(pid, inst, ability, true)
+	if mana_banned_by != "":
+		return "%s's mana ability can't be activated (%s)" % [inst.data.card_name, mana_banned_by]
+	# "Activate only as an instant" (Lion's Eye Diamond): only by a seat
+	# HOLDING PRIORITY, outside every resolution and every cost payment —
+	# never in the middle of casting a spell (the LED ruling; CR 605.1a).
+	if ability.instant_only:
+		if _act_precheck(pid) != "" or priority_player != pid or _resolving_item != null:
+			return "%s: activate only as an instant (you need priority, not a payment in progress)" \
+				% inst.data.card_name
+	# "Activate only once each turn" (Wall of Roots).
+	if not mana_ability_ready(inst, ability_index):
+		return "activate only %s each turn" % ("once" if ability.max_per_turn == 1
+			else "%d times" % ability.max_per_turn)
 	# {T} in the cost: the usual case. Ashnod's Altar-style abilities skip
 	# both the tap and (CR 302.6) the summoning-sickness gate.
 	if ability.taps_source:
@@ -1791,6 +1985,16 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	OBJECT_COSTS.pay(self, pid, object_picks)
 	if ability.life_cost > 0:
 		adjust_life(pid, -ability.life_cost)
+	if ability.max_per_turn > 0:
+		_rec(inst, &"ability_uses")
+		var use_key := "mana:%d" % ability_index
+		inst.ability_uses[use_key] = int(inst.ability_uses.get(use_key, 0)) + 1
+	if ability.put_counter_kind != "":
+		# "Put a -0/-1 counter on this creature:" (Wall of Roots) — a cost,
+		# paid before the mana is made; a counter that kills the source
+		# still leaves its mana (the mana ability has already resolved by
+		# the time anyone could act, CR 605.3a).
+		add_counters(inst, ability.put_counter_kind, maxi(1, ability.put_counter_count))
 	if ability.taps_source:
 		if undo_log != null: _rec(inst, &"tapped")
 		inst.tapped = true
@@ -1860,6 +2064,11 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	# and `player` is the ACTING one. Piracy can make these different seats:
 	# borrowing a land's mana ability does not change its controller.
 	if inst.is_land() and ability.taps_source:
+		# "Each player who tapped a land for mana this turn" (Desolation):
+		# the ACTING player, whoever controls the land (Piracy).
+		if not players[pid].tapped_land_for_mana_this_turn:
+			_rec(players[pid], &"tapped_land_for_mana_this_turn")
+			players[pid].tapped_land_for_mana_this_turn = true
 		dispatch_event(Mtg.EventType.TAPPED_FOR_MANA,
 			{"instance": inst, "controller": inst.controller_id, "player": pid,
 				"color": produced_color, "colors": produced_types})
@@ -1956,12 +2165,146 @@ func _release_hand_locks(pid: int) -> void:
 
 
 func play_banned(pid: int, data: CardData) -> String:
+	# A ban is a STATIC ability of the permanent radiating it: it works only
+	# while that permanent is on the battlefield and phased in (the list
+	# below holds nothing else, CR 702.26b) and still has the ability — not
+	# silenced (Titania's Song, CR 613 layer 6) and not a tapped artifact
+	# under the 1997 rule (manual p.124) — the same gate entry_refused
+	# applies to the entry bans. The callback is not told its source, so
+	# the card cannot ask for itself.
 	for inst in all_battlefield():
-		if not inst.data.play_ban.is_valid():
+		if not inst.data.play_ban.is_valid() or not is_present(inst) \
+				or inst.cur_abilities_silenced or inst.cur_statics_suspended:
 			continue
 		if bool(inst.data.play_ban.call(self, pid, data)):
 			return inst.data.card_name
+	# Until-end-of-turn bans a resolved spell left behind (Solfatara,
+	# Abeyance — [method add_floating_play_ban]).
+	for ban in floating_play_bans:
+		var who := int(ban["player"])
+		if (who < 0 or who == pid) and bool((ban["filter"] as Callable).call(self, pid, data)):
+			return String(ban["desc"])
 	return ""
+
+
+## "Target player can't play lands this turn" (Solfatara), "... can't cast
+## instant or sorcery spells" (Abeyance): until end of turn, [param pid]
+## (-1 = every player) can't play what [param filter] —
+## `func(game: MtgGame, pid: int, data: CardData) -> bool` — accepts.
+## [param desc] names the ban in the refusal. Read by [method play_banned]
+## (so by the cast, the land drop and the AI's own checks); emptied at
+## cleanup and journaled.
+func add_floating_play_ban(pid: int, filter: Callable, desc: String) -> void:
+	_rec(self, &"floating_play_bans")
+	floating_play_bans.append({"player": pid, "filter": filter, "desc": desc})
+	log_line("%s can't play some cards this turn (%s)" % [
+		players[pid].player_name if pid >= 0 else "Every player", desc])
+
+
+## "Activated abilities of artifacts can't be activated" — WHY [param pid]
+## may not activate [param ability] of [param inst] right now, or "" when
+## nothing forbids it. [param is_mana] says whether it is a mana ability
+## (a [ManaAbility]; CR 605.1a — still an activated ability, which is why
+## Null Rod stops a Mox). Two sources of bans: every battlefield permanent
+## radiating [member CardData.activation_ban] (live — a silenced or
+## phased-out source radiates nothing) and the until-end-of-turn
+## [member floating_activation_bans]. Asked by [method activate_ability]
+## (through [method ability_timing_refusal]), [method tap_for_mana] and
+## [method ManaPlanner.sources], so no payment plan counts a banned source.
+func activation_ban_reason(pid: int, inst: CardInstance, ability: Variant, is_mana: bool) -> String:
+	for source in all_battlefield():
+		if not source.data.activation_ban.is_valid() or source.cur_abilities_silenced \
+				or source.phased_out:
+			continue
+		if bool(source.data.activation_ban.call(self, source, pid, inst, ability, is_mana)):
+			return source.data.card_name
+	for ban in floating_activation_bans:
+		var who := int(ban["player"])
+		if (who < 0 or who == pid) \
+				and bool((ban["filter"] as Callable).call(self, pid, inst, ability, is_mana)):
+			return String(ban["desc"])
+	return ""
+
+
+## Is ANY activation ban in force? The cheap gate [method
+## ManaPlanner.sources] asks once per build before it asks
+## [method activation_ban_reason] per source.
+func has_activation_bans() -> bool:
+	if not floating_activation_bans.is_empty():
+		return true
+	for source in all_battlefield():
+		if source.data.activation_ban.is_valid():
+			return true
+	return false
+
+
+## "Until end of turn, target player can't activate abilities that aren't
+## mana abilities" (Abeyance): [param pid] (-1 = every player) can't
+## activate what [param filter] —
+## `func(game, pid, inst, ability, is_mana: bool) -> bool` — accepts.
+## Emptied at cleanup (CR 514.2) and journaled.
+func add_floating_activation_ban(pid: int, filter: Callable, desc: String) -> void:
+	_rec(self, &"floating_activation_bans")
+	floating_activation_bans.append({"player": pid, "filter": filter, "desc": desc})
+	log_line("%s can't activate some abilities this turn (%s)" % [
+		players[pid].player_name if pid >= 0 else "Every player", desc])
+
+
+## WHAT is targeting with [param spec] from [param source]: a SPELL, an
+## activated ABILITY or a TRIGGER (Mtg.StackKind) — for the bans worded
+## "can't be the targets of spells or activated abilities" (Peace Talks),
+## whose filters see only (source, spec). Read off the spec's owner: the
+## spell's own effects or Aura target, one of the source's activated
+## abilities (live list, so a granted one counts), or one of its triggers;
+## a spec owned by none of them (a delayed trigger's) is a TRIGGER, unless
+## the source is itself being cast.
+func targeting_kind(source: CardInstance, spec: TargetSpec) -> int:
+	if source == null or spec == null:
+		return Mtg.StackKind.TRIGGER
+	var data := source.data
+	# A card off the battlefield targets with its spell effects only while
+	# it is being cast — from the hand, or from exile with a permission —
+	# or on the stack; a permanent never does.
+	var being_cast := source.zone != Mtg.Zone.BATTLEFIELD
+	if being_cast:
+		if data.aura_target == spec:
+			return Mtg.StackKind.SPELL
+		for e in data.spell_effects:
+			if e.target_spec == spec:
+				return Mtg.StackKind.SPELL
+		for m in data.modes:
+			for e in m["effects"]:
+				if e.target_spec == spec:
+					return Mtg.StackKind.SPELL
+	for ability in source.cur_activated_abilities:
+		for e in ability.effects:
+			if e.target_spec == spec:
+				return Mtg.StackKind.ABILITY
+	for ability in data.activated_abilities:
+		for e in ability.effects:
+			if e.target_spec == spec:
+				return Mtg.StackKind.ABILITY
+	for trig in source.cur_triggered_abilities:
+		if trig.target_spec == spec:
+			return Mtg.StackKind.TRIGGER
+	for trig in data.triggered_abilities:
+		if trig.target_spec == spec:
+			return Mtg.StackKind.TRIGGER
+	# Nothing of the card owns the spec: a delayed or zone trigger's — unless
+	# the card is in the middle of being cast (an effect built on the fly).
+	return Mtg.StackKind.SPELL if source.zone in [Mtg.Zone.HAND, Mtg.Zone.STACK] \
+		else Mtg.StackKind.TRIGGER
+
+
+## Does [param ability] — an [ActivatedAbility] or a [ManaAbility] — have
+## {T} in its cost? Katabatic Winds' "activated abilities with {T} in their
+## costs".
+static func ability_has_tap_cost(ability: Variant) -> bool:
+	if ability is ActivatedAbility:
+		return (ability as ActivatedAbility).tap_cost
+	if ability is ManaAbility:
+		return (ability as ManaAbility).taps_source
+	return false
 
 
 ## The RESTRICTION KEYS a spell qualifies for — which restricted mana
@@ -2170,13 +2513,58 @@ func cast_timing_refusal(pid: int, inst: CardInstance) -> String:
 	return _cast_announce_checks(pid, inst)
 
 
+## Could [param pid] cast a SORCERY right now, as far as the clock goes —
+## their own main phase with an empty stack (CR 307.1)? The Mirage flash
+## riders' "if you cast it any time a sorcery couldn't have been cast"
+## reads exactly this, before the spell itself is on the stack.
+func sorcery_timing_open(pid: int) -> bool:
+	return pid == active_player and Mtg.is_main_step(current_step()) and stack.is_empty()
+
+
+## May [param inst] be cast any time [param pid] could cast an instant?
+## FLASH (CR 702.8a, King Cheetah), the Mirage rider "you may cast this
+## spell as though it had flash" ([member CardData.flash_rider]), or a
+## seat permission "you may cast <these> spells this turn as though they
+## had flash" ([method grant_flash], Winding Canyons).
+func has_flash(pid: int, inst: CardInstance) -> bool:
+	if inst.has_keyword(Mtg.Keyword.FLASH) or inst.data.has_keyword(Mtg.Keyword.FLASH) \
+			or inst.data.flash_rider:
+		return true
+	for grant in flash_permissions:
+		if int(grant["player"]) == pid and bool((grant["filter"] as Callable).call(self, inst)):
+			return true
+	return false
+
+
+## The AI's and the duel screen's question for a response window: may
+## [param pid] cast [param inst] NOW although a sorcery could not be —
+## an instant, or a spell with flash in any of its three forms. Timing
+## only, like [method cast_timing_refusal] (which it also asks).
+func casts_at_instant_speed(pid: int, inst: CardInstance) -> bool:
+	if not inst.is_type(Mtg.CardType.INSTANT) and not has_flash(pid, inst):
+		return false
+	return cast_timing_refusal(pid, inst) == ""
+
+
+## "You may cast <[param filter]> spells this turn as though they had
+## flash" for [param pid] (Winding Canyons: creature spells). [param filter]
+## is `func(game: MtgGame, inst: CardInstance) -> bool`. The permission
+## ends with the turn (CR 514.2) and is journaled.
+func grant_flash(pid: int, filter: Callable, desc := "") -> void:
+	_rec(self, &"flash_permissions")
+	flash_permissions.append({"player": pid, "filter": filter, "desc": desc})
+	if desc != "":
+		log_line("%s may cast %s as though they had flash" % [players[pid].player_name, desc])
+
+
 ## The block of [method _cast_checks] that judges the CARD and the CLOCK,
 ## lifted out whole so that [method cast_timing_refusal] runs the SAME
 ## code the cast runs rather than a copy of it that can drift. Nothing in
 ## here reads the mode, the targets, X or the pool, which is what lets it
 ## be asked before any of them exists.
 func _cast_announce_checks(pid: int, inst: CardInstance) -> String:
-	if not ((inst.zone == Mtg.Zone.HAND and inst.owner_id == pid) or can_play_from_exile(pid, inst)):
+	if not ((inst.zone == Mtg.Zone.HAND and inst.owner_id == pid) or can_play_from_exile(pid, inst)
+			or can_cast_from_graveyard(pid, inst)):
 		return "%s is not in your hand" % inst.data.card_name
 	var locked_why := hand_lock_reason(inst)
 	if locked_why != "":
@@ -2186,10 +2574,10 @@ func _cast_announce_checks(pid: int, inst: CardInstance) -> String:
 	var banned_by := play_banned(pid, inst.data)
 	if banned_by != "":
 		return "%s can't be cast (%s)" % [inst.data.card_name, banned_by]
-	if not inst.is_type(Mtg.CardType.INSTANT):
-		if pid != active_player or not Mtg.is_main_step(current_step()) or not stack.is_empty():
-			return "%s can only be cast in your main phase with an empty stack" \
-				% inst.data.card_name
+	if not inst.is_type(Mtg.CardType.INSTANT) and not sorcery_timing_open(pid) \
+			and not has_flash(pid, inst):
+		return "%s can only be cast in your main phase with an empty stack" \
+			% inst.data.card_name
 	# "Cast this spell only ..." timing riders (Reset, Berserk, Teleport).
 	if inst.data.cast_condition.is_valid():
 		var when_why: String = inst.data.cast_condition.call(self, pid)
@@ -2250,7 +2638,10 @@ func _cast_checks(pid: int, inst: CardInstance, targets: Array,
 			out.error = why
 			return out
 	var alternate := inst.data.payment_option(mode)
-	var object_why := OBJECT_COSTS.refusal(self, pid, inst.data.object_costs, inst)
+	# Additional object costs AND the chosen alternative cost's (Fireblast's
+	# two Mountains), with X announced (Infernal Harvest's X Swamps).
+	var object_why := OBJECT_COSTS.refusal(self, pid, spell_object_costs(inst.data, mode),
+		inst, x_value)
 	if object_why != "":
 		out.error = object_why
 		return out
@@ -2270,6 +2661,13 @@ func _cast_checks(pid: int, inst: CardInstance, targets: Array,
 	_pop_proposed_x(inst, was)
 	if target_why != "":
 		out["error"] = target_why
+		return out
+	# "This spell costs N life more to cast for each target" (Phyrexian
+	# Purge, CR 601.2f): priced once the target count is known.
+	var target_life := inst.data.extra_life_per_target * plan.count()
+	if target_life > 0 and players[pid].life < inst.data.life_payment(x_value) \
+			+ int(alternate.get("life", 0)) + target_life:
+		out["error"] = "not enough life to pay %d life for %d target(s)" % [target_life, plan.count()]
 		return out
 	out["plan"] = plan
 	# ADDITIONAL COSTS: "as an additional cost, sacrifice a creature"
@@ -2312,6 +2710,12 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	var plan: TargetPlan = checks["plan"]
 	var extra_bodies: Array[CardInstance] = checks["bodies"]
 	var extra_sacrifice: CardInstance = null
+	var from_graveyard := graveyard_cast_permission(pid, inst) \
+		if inst.zone == Mtg.Zone.GRAVEYARD else {}
+	# The Mirage flash rider's condition is judged NOW, before the spell
+	# itself is on the stack: "if you cast it any time a sorcery couldn't
+	# have been cast" (CR 307.1 timing; [member CardData.flash_rider]).
+	var rider_sacrifice := inst.data.flash_rider and not sorcery_timing_open(pid)
 	# --- cost (base + cost-modifier surcharges, CR 601.2f) ---
 	# Cost modifiers may REDUCE (Mana Matrix, Planar Gate, Stone Calendar);
 	# a reduction can never eat into the coloured part of the cost, so the
@@ -2326,8 +2730,10 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	# of it and is priced only once the target group is known. Restricted
 	# mana ("spend this only to cast artifact spells"), colour
 	# substitutions (Sunglasses of Urza) and North Star's any-type charge
-	# all widen what this pool can cover (CR 106.6).
-	var payment := spell_payment(pid, inst.data, x_value, plan.count(), inst, mode)
+	# all widen what this pool can cover (CR 106.6). A spell that targets a
+	# Kaervek's Torch on the stack pays its surcharge too (`targets`).
+	var payment := spell_payment(pid, inst.data, x_value, plan.count(), inst, mode,
+		plan.flat())
 	var pay_cost: ManaCost = payment["cost"]
 	var pay_extra: int = payment["extra"]
 	var surcharge: int = payment["surcharge"]
@@ -2397,8 +2803,9 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		if _hold_cost_choice(question, {"kind": "cast", "pid": pid, "inst": inst,
 				"targets": targets, "x": x_value, "mode": mode}): return ""
 		pitch = _ask_cost_card(pid, inst, candidates, question.prompt)
-	var object_picks := OBJECT_COSTS.choose(self, pid, inst, inst.data.object_costs,
-		{"kind": "cast", "pid": pid, "inst": inst, "targets": targets, "x": x_value, "mode": mode})
+	var object_picks := OBJECT_COSTS.choose(self, pid, inst, spell_object_costs(inst.data, mode),
+		{"kind": "cast", "pid": pid, "inst": inst, "targets": targets, "x": x_value, "mode": mode},
+		x_value)
 	if awaiting_choice != null: return ""
 	# Every question is answered and nothing can refuse: the game rolls
 	# the targets that are its to roll (CR 601.2c, before the cost of
@@ -2431,10 +2838,27 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 			sacrifice_permanent(extra_sacrifice)
 	if inst.data.life_payment(x_value) > 0:
 		adjust_life(pid, -inst.data.life_payment(x_value))
+	if inst.data.extra_life_per_target > 0 and plan.count() > 0:
+		adjust_life(pid, -inst.data.extra_life_per_target * plan.count())   # Phyrexian Purge
+	# A spell cast through a graveyard permission (Bösium Strip) leaves the
+	# graveyard, and keeps the permission's "exile it instead" as it goes.
+	# The permission was read at announcement (CR 601.2a: the card is on
+	# the stack before any cost is paid, so a sacrifice burying a land on
+	# top of it cannot take the permission away).
+	if not from_graveyard.is_empty():
+		_rec(players[inst.owner_id], &"graveyard")
+		_rec(inst, &"zone")
+		players[inst.owner_id].graveyard.erase(inst)
+		if bool(from_graveyard.get("exile_instead", false)):
+			_rec(inst, &"graveyard_exile_spell")
+			inst.graveyard_exile_spell = true
 	if undo_log != null:
 		_rec(players[pid], &"hand")
 		_rec(inst, &"zone")
-	if inst.zone == Mtg.Zone.EXILE:
+	if not from_graveyard.is_empty():
+		pass
+	elif inst.zone == Mtg.Zone.EXILE:
+		_turn_face_up_leaving_exile(inst)
 		_rec(players[inst.owner_id], &"exile")
 		players[inst.owner_id].exile.erase(inst)
 	else: players[pid].hand.erase(inst)
@@ -2482,6 +2906,18 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	_next_stack_id += 1
 	stack.append(item)
 	spells_cast_this_turn[pid].append(inst.data)
+	# "Target creature you cast this turn" (Cycle of Life): the PERMANENT
+	# spell, by instance — its battlefield stamp is filled in as it resolves.
+	if inst.data.is_permanent_type():
+		_rec(players[pid], &"cast_permanents_this_turn")
+		players[pid].cast_permanents_this_turn.append({"id": inst.id, "stamp": -1})
+	# A static that functions ON THE STACK (CR 611.3, Torrent of Lava)
+	# applies from the moment the spell is there; its leaving is covered by
+	# the recalculation every resolution ends with.
+	if not inst.data.stack_static_abilities.is_empty():
+		recalculate()
+	if rider_sacrifice:
+		_schedule_flash_rider_sacrifice(inst, pid)
 	# Arboria: "cast a spell ... during their last turn" — only what a
 	# player does on their OWN turn counts.
 	if pid == active_player:
@@ -2497,6 +2933,9 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 			break
 	dispatch_event(Mtg.EventType.SPELL_CAST, {"instance": inst, "controller": pid},
 		self_listener)
+	# Its targets are locked: each one BECOMES THE TARGET now (CR 601.2i —
+	# those triggers wait with the cast triggers and go on above it).
+	_announce_targets(item)
 	log_line(item.description, inst, "cast", pid)
 	# The spell is on the stack and its own cast event has been dispatched:
 	# everything that triggered since the announcement goes on now, in one
@@ -2526,6 +2965,12 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 ## records or asks a seat anything: the conditions are pure reads, so
 ## the AI and the screen may ask as often as they like.
 func ability_timing_refusal(pid: int, inst: CardInstance, ability: ActivatedAbility) -> String:
+	# The activation BANS ride along (Null Rod, Cursed Totem, City of
+	# Solitude, Abeyance — CR 602.5 via the card text): every asker of this
+	# one reading (activate_ability, the AI, the duel screen) hears them.
+	var banned_by := activation_ban_reason(pid, inst, ability, false)
+	if banned_by != "":
+		return "that ability can't be activated (%s)" % banned_by
 	if ability.only_during_combat and not Mtg.is_combat_step(current_step()):
 		return "activate only during combat"
 	if ability.only_during_step >= 0 and current_step() != ability.only_during_step:
@@ -2558,10 +3003,12 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	if index < 0 or index >= inst.cur_activated_abilities.size():
 		return "no such ability"
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
-	var object_why := OBJECT_COSTS.refusal(self, pid, ability.object_costs, inst)
+	var object_why := OBJECT_COSTS.refusal(self, pid, ability.object_costs, inst, x_value)
 	if object_why != "": return object_why
 	if inst.zone != ability.activation_zone:
 		return "that ability is not available from this zone"
+	if inst.phased_out:
+		return "%s is phased out" % inst.data.card_name   # CR 702.26b
 	if ability.activation_zone == Mtg.Zone.GRAVEYARD and inst.owner_id != pid:
 		return "only the card's owner may activate it from their graveyard"
 	# Normally only the controller may activate; Clergy of the Holy
@@ -2714,7 +3161,7 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	if not sacrifice_bodies.is_empty() and not ability.sacrifice_any_number:
 		drought_groups.append({"bodies": sacrifice_bodies, "count": ability.sacrifice_count})
 	if not exile_bodies.is_empty(): drought_groups.append({"bodies": exile_bodies, "count": 1})
-	var drought_excluded: Array = [inst] if ability.sacrifice_cost or ability.exile_cost else []
+	var drought_excluded: Array = [inst] if ability.sacrifice_cost or ability.exile_cost or ability.return_cost else []
 	if not BLACK_SYMBOL_COST.can_pay(self, pid, ability.cost, drought_groups, drought_excluded):
 		return "Drought requires a separate Swamp sacrifice for each black mana symbol"
 	# picks the body its sacrifice cost eats — and, first, where an OPPONENT
@@ -2732,7 +3179,8 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		exile_bodies.erase(i)
 	var sacrifice_picks: Array[CardInstance] = []
 	var object_picks := OBJECT_COSTS.choose(self, pid, inst, ability.object_costs,
-		{"kind": "activate", "pid": pid, "inst": inst, "index": index, "targets": targets, "x": x_value})
+		{"kind": "activate", "pid": pid, "inst": inst, "index": index, "targets": targets, "x": x_value},
+		x_value)
 	if awaiting_choice != null: return ""
 	if ability.sacrifice_any_number or ability.sacrifice_count > 1:
 		# "Sacrifice any number of <desc>" (Sword of the Ages): one optional
@@ -2977,6 +3425,12 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		sacrifice_permanent(inst)
 	if ability.exile_cost:
 		exile_permanent(inst)
+	if ability.return_cost:
+		# "Return this permanent to its owner's hand" (Cycle of Life,
+		# Gossamer Chains, Ovinomancer): paid with the rest of the cost, so
+		# the ability resolves with its source already in a hand (CR 602.2b).
+		cost_record["_source_returned"] = true
+		return_to_hand(inst)
 	for i in drought_picks: sacrifice_permanent(i)
 	if ability.on_cost_paid.is_valid():
 		ability.on_cost_paid.call(self, inst, cost_record)
@@ -3013,6 +3467,8 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		# never uses the stack (CR 605.3a) and so carries -1.
 		"stack_id": item.id,
 	})
+	# Its targets are locked: each one BECOMES THE TARGET (CR 602.2b).
+	_announce_targets(item)
 	# Everything the cost raised goes on top of the ability now (CR 603.3b).
 	_unfreeze_stack()
 	# The activator keeps priority afterward (CR 117.3c).
@@ -3074,7 +3530,8 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 	var declared: Array[CardInstance] = []
 	for id in attacker_ids:
 		var inst := find_instance(id)
-		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD or inst.controller_id != pid:
+		# is_present: a phased-out creature doesn't exist (CR 702.26b).
+		if not is_present(inst) or inst.controller_id != pid:
 			return "attacker #%s is not a permanent you control" % str(id)
 		var why := CombatState.attack_illegality(self, inst, defender)
 		if why != "":
@@ -3245,8 +3702,9 @@ func _normalise_block_map(block_map: Dictionary) -> Dictionary:
 ## number. The printed permission
 ## ([member CardInstance.cur_extra_blocks], Two-Headed Giant of Foriys) and
 ## the granted one ([member CardInstance.extra_blocks_this_turn], Blaze of
-## Glory) are taken together, with "any number" winning over any count —
-## two permissions never add up to fewer blocks than one.
+## Glory, Yare) ADD UP — each says "an additional" creature, so Two-Headed
+## Giant of Foriys under Yare blocks 1 + 1 + 2 — with "any number" winning
+## over any count.
 ##
 ## PUBLIC because the duel screen needs the same answer to know when to
 ## stop offering a second block; a UI that computed it separately would be
@@ -3254,7 +3712,7 @@ func _normalise_block_map(block_map: Dictionary) -> Dictionary:
 func blocks_allowed(blocker: CardInstance) -> int:
 	if blocker.cur_extra_blocks < 0 or blocker.extra_blocks_this_turn < 0:
 		return -1
-	return 1 + maxi(blocker.cur_extra_blocks, blocker.extra_blocks_this_turn)
+	return 1 + blocker.cur_extra_blocks + blocker.extra_blocks_this_turn
 
 
 ## Every block [param candidate] has declared is on a lured attacker, and
@@ -3301,8 +3759,8 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 	var declared_blocks := _normalise_block_map(block_map)
 	for blocker_id in declared_blocks:
 		var blocker := find_instance(int(blocker_id))
-		if blocker == null or blocker.zone != Mtg.Zone.BATTLEFIELD \
-				or blocker.controller_id != pid:
+		if not is_present(blocker) \
+				or blocker.controller_id != pid:   # (CR 702.26b)
 			return "blocker #%s is not a creature you control" % str(blocker_id)
 		var against: Array = declared_blocks[blocker_id]
 		# A creature blocks ONE attacker unless something says otherwise
@@ -3336,6 +3794,12 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 	var block_fee: int = load("res://engine/core/combat_declaration.gd").block_fee(self, declared_blocks)
 	if block_fee > 0 and not can_afford_cost(pid, ManaCost.parse("{%d}" % block_fee)):
 		return "not enough mana for all blocking costs"
+	# LIFE to block (Heat Wave, CR 509.1d): the total is locked in with the
+	# declaration and paid with it, and a player may pay life only while
+	# their life total is at least the payment (CR 119.4).
+	var block_life: int = load("res://engine/core/combat_declaration.gd").block_life_fee(self, declared_blocks)
+	if block_life > 0 and players[pid].life < block_life:
+		return "not enough life for all blocking costs (%d life)" % block_life
 	for attacker_id in combat.attackers:
 		var attacker := find_instance(attacker_id)
 		if attacker == null or attacker.cur_min_blockers <= 1:
@@ -3361,6 +3825,9 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 			if not candidate.is_creature() or candidate.tapped:
 				continue
 			if candidate.cur_block_power_tax > 0 and lured.cur_power >= candidate.cur_block_power_tax_threshold: continue
+			# A life tax is a cost too, and no requirement makes a player
+			# pay one (CR 509.1c).
+			if CombatState.block_life_owed(candidate, [lured]) > 0: continue
 			# CR 509.1c: the requirement is "all creatures able to block IT
 			# do so" — blocking some OTHER attacker does not satisfy it.
 			if (declared_blocks.get(candidate.id, []) as Array).has(lured.id):
@@ -3412,18 +3879,28 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 			var target := find_instance(attacker_id)
 			if target != null and target.cur_blocked_by_tax > 0: continue
 			if target != null and candidate.cur_block_power_tax > 0 and target.cur_power >= candidate.cur_block_power_tax_threshold: continue
+			if target != null and CombatState.block_life_owed(candidate, [target]) > 0: continue
 			if target != null and can_meet_minimum_blockers(target, pid) \
 					and CombatState.block_illegality(self, candidate, target, pid) == "":
 				return "%s must block %s if able" % [
 					candidate.data.card_name, target.data.card_name]
-	if block_fee > 0 and chooser != pid:
-		var q := _turn_question(pid, "Blocking cost", PlayerChoice.Kind.OPTION, "Pay {%d} for the blocks chosen by the opponent?" % block_fee)
-		q.options = ["Decline — opponent must choose different blocks", "Pay {%d}" % block_fee]
+	if (block_fee > 0 or block_life > 0) and chooser != pid:
+		var price := PackedStringArray()
+		if block_fee > 0: price.append("{%d}" % block_fee)
+		if block_life > 0: price.append("%d life" % block_life)
+		var priced := " and ".join(price)
+		var q := _turn_question(pid, "Blocking cost", PlayerChoice.Kind.OPTION, "Pay %s for the blocks chosen by the opponent?" % priced)
+		q.options = ["Decline — opponent must choose different blocks", "Pay %s" % priced]
 		q.hint = 0
 		if _hold_cost_choice(q, {"kind": "blockers", "pid": chooser, "map": block_map}): return ""
 		if _ask_turn_option(pid, "Blocking cost", q.options, q.prompt, 0) != 1: return "defender declined the blocking cost; choose different blocks"
 	if block_fee > 0 and not try_pay(pid, ManaCost.parse("{%d}" % block_fee)):
 		return "unable to pay blocking costs"
+	if block_life > 0:
+		# Paying life is losing it (CR 119.4, 118.3).
+		adjust_life(pid, -block_life)
+		log_line("%s pays %d life to block" % [players[pid].player_name, block_life],
+			null, "block", pid)
 	# THE JOURNAL (see `undo_log`): nothing above this line has written
 	# anything, and everything below does — the combat collections as a
 	# whole (the way declare_attackers records them), the per-blocker
@@ -3663,7 +4140,26 @@ func deal_damage(source: CardInstance, target: TargetRef, amount: int,
 		# value is what is PLANNED, which is all anyone can know yet —
 		# a caller that needs the real answer passes [param after].
 		return packet.remaining()
+	if _defer_depth == 0:
+		_begin_damage_event()   # inside a bracket the bracket is the event
 	return _land_damage(packet)
+
+
+## A DAMAGE EVENT begins (`engine/damage_replacements.gd`): the unit a
+## "the next time a source would deal damage ..." shield is used up by
+## (CR 615.8). Every damage dealt by one stack object's resolution is one
+## event (CR 608.2 — a spell's damage is dealt at once), and so is every
+## simultaneous bracket ([method begin_simultaneous]); anything else is an
+## event of its own. Prunes the one-shot effects an earlier event spent.
+func _begin_damage_event() -> void:
+	if _resolving_item != null and _resolving_item == _damage_event_item:
+		return
+	_rec(self, &"_damage_event_serial")
+	_rec(self, &"_damage_event_item")
+	_damage_event_serial += 1
+	_damage_event_item = _resolving_item
+	if not damage_effects.is_empty():
+		DAMAGE_FX.prune_spent(self)
 
 
 ## The PLANNING half: create the damage event unless a source-wide or
@@ -3878,7 +4374,7 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 			"packet": packet})
 	else:
 		var inst := find_instance(target.instance_id)
-		if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
+		if not is_present(inst):   # gone, or phased out (CR 702.26b)
 			return 0
 		# A face-down creature that would be dealt damage is turned face up
 		# FIRST (Illusionary Mask), ahead of every gate rather than in the
@@ -3986,7 +4482,8 @@ func _has_damage_gates(p: MtgPlayer, source: CardInstance,
 		or p.min_life_from_damage > 0 \
 		or p.combat_damage_redirect != -1 \
 		or p.artifact_damage_redirect != -1 \
-		or (source.damage_all_redirect_to >= 0 and not packet.from_redirect)
+		or (source.damage_all_redirect_to >= 0 and not packet.from_redirect) \
+		or DAMAGE_FX.any(self)
 
 
 ## Every replacement and prevention effect that would apply to [param packet]
@@ -4003,6 +4500,16 @@ func _damage_gates(packet: DamagePacket, p: MtgPlayer,
 		candidates.append({"kind": &"source_redirect",
 			"label": "%s's damage goes to %s" % [source.data.card_name,
 				players[source.damage_all_redirect_to].player_name]})
+	# The damage replacement suite (`engine/damage_replacements.gd`): what
+	# helps the victim is offered here, what hurts it at the very end — the
+	# default hint only; the seat orders them (CR 616.1).
+	var fx_late: Array[Dictionary] = []
+	if DAMAGE_FX.any(self):
+		var fx_front: Array[Dictionary] = []
+		DAMAGE_FX.collect(self, packet, fx_front, fx_late)
+		for gate in fx_front + fx_late:
+			gate["label"] = String(gate["entry"]["desc"])
+		candidates.append_array(fx_front)
 	# The one-shot list is walked from the BACK, the way the chain walked
 	# it: the last shield put up is the first candidate offered.
 	for i in range(p.damage_replacements.size() - 1, -1, -1):
@@ -4038,6 +4545,7 @@ func _damage_gates(packet: DamagePacket, p: MtgPlayer,
 			"label": "%d prevented damage" % p.damage_prevention})
 	if p.min_life_from_damage > 0:
 		candidates.append({"kind": &"floor", "label": "life floor"})
+	candidates.append_array(fx_late)
 	var out: Array[Dictionary] = []
 	for gate in candidates:
 		if _damage_gate_applies(packet, p, gate):
@@ -4063,6 +4571,7 @@ func _damage_gate_applies(packet: DamagePacket, p: MtgPlayer,
 		return false
 	match StringName(gate["kind"]):
 		&"local_prevention": return packet.local_prevention != null and packet.local_prevention.remaining > 0
+		&"fx": return DAMAGE_FX.applies(self, packet, gate["entry"])
 		&"source_redirect":
 			return source.damage_all_redirect_to >= 0 and not packet.from_redirect
 		&"replacement":
@@ -4129,6 +4638,9 @@ func _apply_damage_gate(packet: DamagePacket, p: MtgPlayer,
 		&"local_prevention":
 			_apply_local_prevention(packet)
 			return -1
+		&"fx":
+			# The damage replacement suite (`engine/damage_replacements.gd`).
+			return DAMAGE_FX.apply(self, packet, gate)
 		&"source_redirect":
 			log_line("%s's damage is turned on %s" % [
 				source.data.card_name,
@@ -4256,6 +4768,12 @@ func _apply_damage_gate(packet: DamagePacket, p: MtgPlayer,
 ## all (docs/ROADMAP.md carries the measured price).
 func _has_creature_damage_gates(inst: CardInstance, source: CardInstance,
 		packet: DamagePacket) -> bool:
+	# The damage replacement suite first: a damage MODIFIER (Blind Fury) and
+	# damage-into-counters (Lichenthrope) still apply to damage that can't
+	# be prevented (CR 615.12) — `engine/damage_replacements.gd` sorts out
+	# which of its entries may.
+	if DAMAGE_FX.any(self):
+		return true
 	if inst.damage_unpreventable_this_turn or packet.unpreventable_to_creatures:
 		return false  # Whippoorwill also forbids the redirects and Hydra's prevention
 	if packet.local_prevention != null and packet.local_prevention.remaining > 0: return true
@@ -4303,8 +4821,16 @@ func _has_creature_damage_gates(inst: CardInstance, source: CardInstance,
 func _creature_damage_gates(packet: DamagePacket, inst: CardInstance,
 		source: CardInstance) -> Array[Dictionary]:
 	var candidates: Array[Dictionary] = []
+	# The damage replacement suite (`engine/damage_replacements.gd`): what
+	# helps the creature is offered early, what hurts it (a doubling,
+	# Lichenthrope's counters) last — the default hint only, CR 616.1. Its
+	# entries judge unpreventable damage themselves (CR 615.12).
+	var fx_front: Array[Dictionary] = []
+	var fx_late: Array[Dictionary] = []
+	if DAMAGE_FX.any(self):
+		DAMAGE_FX.collect(self, packet, fx_front, fx_late)
 	if inst.damage_unpreventable_this_turn or packet.unpreventable_to_creatures:
-		return candidates
+		return fx_front + fx_late
 	if packet.local_prevention != null and packet.local_prevention.remaining > 0:
 		candidates.append({"kind": &"local_prevention"})
 	if source.damage_all_redirect_to >= 0 and not packet.from_redirect:
@@ -4313,6 +4839,7 @@ func _creature_damage_gates(packet: DamagePacket, inst: CardInstance,
 		for taker in players:
 			if taker.may_take_creature_damage:
 				candidates.append({"kind": &"martyr", "pid": taker.id})
+	candidates.append_array(fx_front)
 	if inst.damage_eats_counters != "":
 		candidates.append({"kind": &"counters"})
 	if not inst.damage_unpreventable_this_turn:
@@ -4336,6 +4863,7 @@ func _creature_damage_gates(packet: DamagePacket, inst: CardInstance,
 			candidates.append({"kind": &"pool"})
 		for row in inst.tracked_prevention:
 			if int(row.remaining) > 0: candidates.append({"kind": &"tracked_pool", "receipt": int(row.id)})
+	candidates.append_array(fx_late)
 	var out: Array[Dictionary] = []
 	for gate in candidates:
 		if _creature_damage_gate_applies(packet, inst, gate):
@@ -4350,6 +4878,7 @@ func _creature_damage_gate_label(inst: CardInstance, source: CardInstance,
 		gate: Dictionary) -> String:
 	match StringName(gate["kind"]):
 		&"local_prevention": return "Prevention paid for this damage"
+		&"fx": return String(gate["entry"]["desc"])
 		&"source_redirect":
 			return "%s's damage goes to %s" % [source.data.card_name,
 				players[source.damage_all_redirect_to].player_name]
@@ -4403,6 +4932,11 @@ func _creature_damage_gate_applies(packet: DamagePacket, inst: CardInstance,
 		gate: Dictionary) -> bool:
 	var source: CardInstance = packet.source
 	var amount := packet.remaining()
+	if StringName(gate["kind"]) == &"fx":
+		# Judges unpreventable damage itself (CR 615.12): a modifier or the
+		# counters replacement still applies to it.
+		return inst.zone == Mtg.Zone.BATTLEFIELD \
+			and DAMAGE_FX.applies(self, packet, gate["entry"])
 	if source == null or amount <= 0 or inst.zone != Mtg.Zone.BATTLEFIELD \
 			or inst.damage_unpreventable_this_turn or packet.unpreventable_to_creatures:
 		return false
@@ -4485,6 +5019,11 @@ func _apply_creature_damage_gate(packet: DamagePacket, inst: CardInstance,
 		&"local_prevention":
 			_apply_local_prevention(packet)
 			return -1
+		&"fx":
+			# The damage replacement suite (`engine/damage_replacements.gd`);
+			# a METERED redirect writes what it landed elsewhere back onto
+			# the gate, like Personal Incarnation's points.
+			return DAMAGE_FX.apply(self, packet, gate)
 		&"tracked_pool":
 			var row := prevention_receipt(inst, int(gate.receipt))
 			var stopped := packet.prevent(mini(int(row.get("remaining", 0)), amount))
@@ -4631,6 +5170,12 @@ func _mark_creature_damage(packet: DamagePacket, inst: CardInstance) -> int:
 		int(inst.damage_from_this_turn.get(source.id, 0)) + amount
 	_rec(inst, &"damage_origins_this_turn")
 	inst.damage_origins_this_turn["%d:%d" % [source.id, packet.source_timestamp]] = true
+	# MARKED damage per SOURCE (Ogre Enforcer: "unless lethal damage dealt by
+	# a single source is marked on it") — wiped with the marked damage itself.
+	_rec(inst, &"marked_damage_by_source")
+	var marker := "%d:%d" % [source.id, packet.source_timestamp]
+	inst.marked_damage_by_source[marker] = \
+		int(inst.marked_damage_by_source.get(marker, 0)) + amount
 	log_line("%s deals %d damage to %s (%d marked)" % [
 		source.data.card_name, amount, inst.data.card_name, inst.damage],
 		source, "damage")
@@ -4709,6 +5254,339 @@ func redirect_damage(packet: DamagePacket, to: TargetRef) -> int:
 	return _redirect_damage(packet, to)
 
 
+## METERED redirection to ANY victim — "the next 1 damage that would be
+## dealt to this creature this turn is dealt to any target instead"
+## (Zhalfirin Crusader): split [param n] points of [param packet] off into
+## a NEW packet aimed at [param to] and land it (or, with the 1997 window
+## armed, queue it for the second damage-prevention step). The rest of the
+## original event carries on. Returns what the split-off packet dealt (0
+## while it waits). The generalisation of [method _divert_damage_points]
+## (its owner only) and [method _divert_to_creature] (a creature only).
+func _split_damage(packet: DamagePacket, to: TargetRef, n: int) -> int:
+	# Onto a creature that is gone or phased out the split can't happen: the
+	# points stay in the event (CR 614.6, 702.26b).
+	if to != null and not to.is_player and not is_present(find_instance(to.instance_id)):
+		return 0
+	var moved := packet.divert(n)
+	if moved <= 0 or to == null:
+		return 0
+	var split := _plan_damage(packet.source, to, moved, packet.is_combat, true,
+		packet.unpreventable_to_creatures)
+	if split == null:
+		return 0
+	split.source_was_spell = packet.source_was_spell
+	split.source_timestamp = packet.source_timestamp
+	split.local_prevention = packet.local_prevention
+	split.applied_creature_redirects = packet.applied_creature_redirects.duplicate()
+	if _damage_window_armed():
+		split.after_landing = packet.after_landing.duplicate()
+		if _queue_damage(split):
+			return 0
+	return _land_damage(split)
+
+
+# ------------------------------- THE DAMAGE REPLACEMENT SUITE (Pack 8) --
+# The public face of `engine/damage_replacements.gd` — read its class note
+# for the spec, the event rule and the CR 616.1 ordering.
+
+## Register a damage replacement or prevention effect created by a
+## resolving spell or ability (CR 614, 615). [param spec] is the
+## dictionary `engine/damage_replacements.gd` documents. Returns the
+## effect's id, or -1 when the spec cannot describe an effect (an unknown
+## kind, a redirect with nowhere to go). Journaled.
+func add_damage_effect(spec: Dictionary) -> int:
+	var e := DAMAGE_FX.normalize(self, spec)
+	if e.is_empty():
+		return -1
+	_rec(self, &"damage_effects")
+	_rec(self, &"_next_damage_effect_id")
+	e["id"] = _next_damage_effect_id
+	_next_damage_effect_id += 1
+	damage_effects.append(e)
+	_emit_state()
+	return int(e["id"])
+
+
+## End a damage effect early (its source's "until ..." ended). Journaled.
+func remove_damage_effect(id: int) -> void:
+	for i in damage_effects.size():
+		if int(damage_effects[i].get("id", -1)) == id:
+			_rec(self, &"damage_effects")
+			damage_effects.remove_at(i)
+			_emit_state()
+			return
+
+
+## The live entry of effect [param id], or `{}` once it is gone (used up,
+## expired or removed). Read-only by contract.
+func damage_effect(id: int) -> Dictionary:
+	for e in damage_effects:
+		if int(e.get("id", -1)) == id:
+			return e
+	return {}
+
+
+## A STATIC damage replacement — "If a spell would deal damage to a
+## permanent or player, it deals that much damage minus 1 ... instead"
+## (Benevolent Unicorn), "If damage would be dealt to this creature, put
+## that many -1/-1 counters on it instead" (Lichenthrope). Call it from a
+## [StaticAbility]'s apply: the list is rebuilt from scratch by every
+## recalculation, so the effect lasts exactly as long as its source is on
+## the battlefield with its abilities (CR 611.3a), and is never journaled.
+## Same spec as [method add_damage_effect]; durations do not apply.
+func add_static_damage_effect(source: CardInstance, spec: Dictionary) -> void:
+	var e := DAMAGE_FX.normalize(self, spec)
+	if e.is_empty() or source == null:
+		return
+	var ordinal := 0
+	var prefix := "%d:%d:" % [source.id, source.layer_timestamp]
+	for live in static_damage_effects:
+		if String(live.get("static_key", "")).begins_with(prefix):
+			ordinal += 1
+	e["static_key"] = prefix + str(ordinal)
+	e["one_shot"] = false
+	e["points"] = 0
+	e["lasts"] = &"static"
+	if e["card"] == "":
+		e["card"] = source.data.card_name
+	if int(e["controller"]) < 0:
+		e["controller"] = source.controller_id
+	static_damage_effects.append(e)
+
+
+## "A source of your choice" (CR 609.7a) — [param pid] names one of
+## [method damage_sources] (narrowed by [param accept], ranked for
+## [param threatened] so the default is the one about to deal damage).
+## [param threatened] is a [TargetRef], an Array of them (ranked by the
+## worst threat to any — "you and/or creatures you control"), or null for
+## [param pid] and every creature they control (Reflect Damage's "would
+## deal damage" to anyone: what the chooser cares about is their own side).
+## Null when there is nothing to name: a choice with nothing to choose does
+## nothing (CR 608.2), which is why these effects are cast in RESPONSE.
+func choose_damage_source(pid: int, prompt: String, accept := Callable(),
+		threatened: Variant = null) -> CardInstance:
+	var victims: Array = []
+	if threatened is TargetRef:
+		victims = [threatened]
+	elif threatened is Array:
+		victims = threatened
+	else:
+		victims = [TargetRef.player(pid)]
+		for inst in players[pid].battlefield:
+			if inst.is_creature():
+				victims.append(TargetRef.card(inst))
+	var choices := damage_sources(accept)
+	if choices.is_empty():
+		return null
+	var scored: Array = []
+	for inst in choices:
+		var best := -1
+		for victim in victims:
+			best = maxi(best, _threat_score(inst, victim))
+		scored.append([best, inst])
+	scored.sort_custom(func(a: Array, b: Array) -> bool:
+		if a[0] != b[0]:
+			return a[0] > b[0]
+		return (a[1] as CardInstance).id < (b[1] as CardInstance).id)
+	choices.clear()
+	for pair in scored:
+		choices.append(pair[1])
+	var named := agents[pid].choose_card(self, pid, choices, prompt, false, false, true)
+	if named == null or not choices.has(named):
+		named = choices[0]
+	return named
+
+
+## "The next time [param source] would deal damage to [param victims]
+## this turn, prevent that damage" — ONE shield, used up by ONE damage
+## event however many of the victims it touches (CR 615.8). [param victims]
+## is an Array of [TargetRef] / [CardInstance]; [param creatures_of] >= 0
+## also covers every creature that player controls when the damage would be
+## dealt ("you and/or creatures you control", Shadowbane). [param then] is
+## the rider, `func(game, packet, prevented: int)` (CR 615.5). Circle of
+## Despair, Honorable Passage, Kithkin Armor, Shadowbane.
+func shield_next_damage(controller: int, card_name: String,
+		source: CardInstance, victims: Array, creatures_of := -1,
+		then := Callable()) -> int:
+	var spec := {"kind": DAMAGE_FX.KIND_PREVENT, "one_shot": true,
+		"controller": controller, "card": card_name, "source": source,
+		"victims": victims, "creatures_of": creatures_of,
+		"desc": "%s (%s)" % [card_name, source.data.card_name if source != null else "?"]}
+	if then.is_valid():
+		spec["then"] = then
+	return add_damage_effect(spec)
+
+
+## "The next time [param source] would deal damage this turn, that damage
+## is dealt to that source's controller instead" (Reflect Damage) — every
+## victim, one event.
+func reflect_next_damage(controller: int, card_name: String,
+		source: CardInstance) -> int:
+	return add_damage_effect({"kind": DAMAGE_FX.KIND_REDIRECT, "one_shot": true,
+		"to_source_controller": true, "controller": controller,
+		"card": card_name, "source": source,
+		"desc": "%s (%s)" % [card_name, source.data.card_name if source != null else "?"]})
+
+
+## "The next time [param source] would deal damage this turn, it deals
+## double that damage instead" (Desperate Gambit's win: [param factor] 2)
+## — every victim, one event. [param delta] adds after the factor.
+func modify_next_damage(controller: int, card_name: String,
+		source: CardInstance, factor := 2, delta := 0) -> int:
+	return add_damage_effect({"kind": DAMAGE_FX.KIND_MODIFY, "one_shot": true,
+		"factor": factor, "delta": delta, "controller": controller,
+		"card": card_name, "source": source,
+		"desc": "%s (%s)" % [card_name, source.data.card_name if source != null else "?"]})
+
+
+## "The next [param points] damage that would be dealt to [param victim]
+## this turn is dealt to [param to] instead" (Zhalfirin Crusader: 1 point,
+## any target). Metered: each point moves one point of a later event and
+## the rest of that event carries on. Nothing is booked when [param to]
+## names nothing.
+func redirect_next_damage_points(controller: int, card_name: String,
+		victim: CardInstance, points: int, to: TargetRef) -> int:
+	if victim == null or points <= 0 or to == null:
+		return -1
+	return add_damage_effect({"kind": DAMAGE_FX.KIND_REDIRECT, "points": points,
+		"to": to, "victims": [victim], "controller": controller,
+		"card": card_name,
+		"desc": "%s: the next %d damage to %s goes elsewhere" % [card_name, points,
+			victim.data.card_name]})
+
+
+## "Prevent the next [param points] damage that would be dealt to
+## [param victim] (a [TargetRef] or [CardInstance]) by [param source] this
+## turn" — a metered shield keyed to one source (Torrent of Lava's granted
+## ability). [param source] null = any source.
+func prevent_next_damage_points(controller: int, card_name: String,
+		victim: Variant, points: int, source: CardInstance = null) -> int:
+	if points <= 0:
+		return -1
+	var spec := {"kind": DAMAGE_FX.KIND_PREVENT, "points": points,
+		"victims": [victim], "controller": controller, "card": card_name,
+		"desc": "%s: prevent the next %d damage" % [card_name, points]}
+	if source != null:
+		spec["source"] = source
+	return add_damage_effect(spec)
+
+
+## THE DAMAGE PREDICTION — what [param amount] damage from [param source]
+## to [param target] would ACTUALLY do right now, through every
+## replacement, prevention and redirection on the table and the
+## state-based actions after it. Runs the live engine under the search
+## journal and puts everything back (the same mechanism as
+## [method forecast_damage]); the heuristic DecisionAgent answers any
+## question on the way, so nothing is asked and no seat's memory is read.
+## [param as_spell]: 1 = the source deals it as a spell (Benevolent
+## Unicorn), 0 = not, -1 = judge from the source (on the stack, or an
+## instant/sorcery not on the battlefield).
+##
+## Returns `{"dealt": damage that landed on the target (life lost for a
+## player, damage marked for a creature), "prevented": int, "elsewhere":
+## damage that landed somewhere else instead, "dies": the target creature
+## is gone or holds lethal damage afterwards, "toughness": its toughness
+## afterwards (counters included), "life": the target player's life
+## afterwards}`. Public information only: every effect it consults is on
+## the table — pass the asking seat as [param viewer] so a face-down object
+## it does not control is predicted as the 2/2 it shows (the AI must; -1 is
+## the referee's full knowledge).
+func predict_damage(source: CardInstance, target: TargetRef, amount: int,
+		is_combat := false, as_spell := -1, viewer := -1) -> Dictionary:
+	var result := {"dealt": 0, "prevented": 0, "elsewhere": 0, "dies": false,
+		"toughness": 0, "life": 0}
+	if source == null or target == null or target.is_damage or target.is_ability:
+		return result
+	var victim: CardInstance = null
+	if not target.is_player:
+		victim = find_instance(target.instance_id)
+		if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD:
+			return result
+		result["toughness"] = victim.cur_toughness
+	else:
+		result["life"] = players[target.player_id].life
+	# FAIR INFORMATION (CONTRIBUTING.md rule 8): dealing damage turns a
+	# face-down source or victim face up, and the live run would then read
+	# its hidden face. A [param viewer] who does not control such an object
+	# gets the public answer instead — the 2/2 it shows, no gates.
+	if viewer >= 0 and ((source.face_down and source.controller_id != viewer)
+			or (victim != null and victim.face_down and victim.controller_id != viewer)):
+		result["dealt"] = maxi(amount, 0)
+		if victim != null:
+			result["dies"] = victim.damage + amount >= victim.cur_toughness
+		else:
+			result["life"] = int(result["life"]) - maxi(amount, 0)
+		return result
+	var nested := undo_log != null
+	var mark := make_mark()
+	_rec_turn()
+	_rec(self, &"agents")
+	agents = [DecisionAgent.new(), DecisionAgent.new()]
+	var life_before: Array[int] = [players[0].life, players[1].life]
+	var marked_before := victim.damage if victim != null else 0
+	var packet := _plan_damage(source, target, amount, is_combat)
+	if packet != null:
+		if as_spell == 1 or (as_spell < 0 and (source.zone == Mtg.Zone.STACK
+				or (source.zone != Mtg.Zone.BATTLEFIELD
+					and source.is_type(Mtg.CardType.INSTANT | Mtg.CardType.SORCERY)))):
+			packet.source_was_spell = true
+		elif as_spell == 0:
+			packet.source_was_spell = false
+		begin_simultaneous()
+		var total := _land_damage(packet)
+		if victim != null:
+			var landed := victim.damage - marked_before \
+				if victim.zone == Mtg.Zone.BATTLEFIELD else 0
+			result["dealt"] = maxi(landed, 0)
+			result["toughness"] = victim.cur_toughness
+		else:
+			result["dealt"] = maxi(life_before[target.player_id] - players[target.player_id].life, 0)
+		result["prevented"] = packet.prevented
+		result["elsewhere"] = maxi(total - int(result["dealt"]), 0)
+		end_simultaneous()
+	if victim != null:
+		result["dies"] = victim.zone != Mtg.Zone.BATTLEFIELD \
+			or victim.cur_toughness <= 0 \
+			or (not victim.cur_indestructible and victim.regeneration_shields <= 0
+				and victim.damage >= victim.cur_toughness and not lethal_damage_spared(victim))
+	else:
+		result["life"] = players[target.player_id].life
+	unmake_to(mark)
+	if not nested:
+		end_search()
+	return result
+
+
+## "This creature can't be destroyed by lethal damage unless lethal damage
+## dealt by a SINGLE source is marked on it" (Ogre Enforcer, CR 704.5g as
+## the card modifies it): true when [param inst] holds lethal damage in all
+## but no one source's share of it is lethal by itself. Read by the
+## lethal-damage state-based action and by [method predict_damage].
+func lethal_damage_spared(inst: CardInstance) -> bool:
+	if not inst.cur_lethal_needs_single_source or inst.cur_abilities_silenced:
+		return false
+	for key in inst.marked_damage_by_source:
+		if int(inst.marked_damage_by_source[key]) >= inst.cur_toughness:
+			return false
+	return true
+
+
+## [param pid]'s upkeep begins: every damage replacement that lasted "until
+## your next upkeep" ends (CR 611.2b) — the registry's (`"lasts": &"upkeep"`)
+## and the seat-level [member MtgPlayer.damage_replacements] entries that
+## carry `"until_upkeep_of"` (Soul Echo's echo counters).
+func _expire_damage_effects_upkeep_of(pid: int) -> void:
+	DAMAGE_FX.expire_upkeep_of(self, pid)
+	for p in players:
+		var kept: Array[Dictionary] = []
+		for row in p.damage_replacements:
+			if int(row.get("until_upkeep_of", -1)) != pid:
+				kept.append(row)
+		if kept.size() != p.damage_replacements.size():
+			_rec(p, &"damage_replacements")
+			p.damage_replacements = kept
+
+
 ## "The next 1 damage that would be dealt to this creature this turn is
 ## dealt to its owner instead" (Personal Incarnation): book [param n]
 ## points of metered redirection on [param inst] toward seat [param to].
@@ -4716,7 +5594,7 @@ func redirect_damage(packet: DamagePacket, to: TargetRef) -> int:
 ## event lands on the creature. Cleared at cleanup and when the card
 ## leaves the battlefield.
 func add_point_redirect(inst: CardInstance, to: int, n := 1) -> void:
-	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD or n <= 0 \
+	if not is_present(inst) or n <= 0 \
 			or to < 0 or to >= players.size():
 		return
 	if undo_log != null:
@@ -4772,7 +5650,13 @@ func _divert_damage_points(packet: DamagePacket, inst: CardInstance) -> int:
 ## the same source and amount. CR 614 makes redirection a replacement, so
 ## the original packet never becomes damage at all — which is why this
 ## returns what the new packet dealt and not what the old one was worth.
+## -1 — the gates' "the event carries on" — when [param to] names a creature
+## that is gone or PHASED OUT: a replacement that can't do what it says
+## doesn't apply (CR 614.6), so the damage goes where it was going instead
+## of vanishing (702.26b).
 func _redirect_damage(packet: DamagePacket, to: TargetRef) -> int:
+	if to != null and not to.is_player and not is_present(find_instance(to.instance_id)):
+		return -1
 	var moved := _plan_damage(packet.source, to, packet.remaining(),
 		packet.is_combat, true, packet.unpreventable_to_creatures)
 	if moved == null:
@@ -4946,6 +5830,7 @@ func player_damage_effects(pid: int) -> Array[String]:
 		raw.append(description + ": " + action + ("; all matching hits this turn" if row.get("all_turn", false) else "; next matching hit this turn"))
 	for row in p.static_prevention_shields:
 		raw.append(String(row.get("desc", "Damage prevention")) + "; while active")
+	raw.append_array(DAMAGE_FX.describe_for_player(self, pid))   # Pack 8 E5
 	if combat_damage_prevented: raw.append("Prevent all combat damage; this turn")
 	if p.combat_damage_redirect >= 0:
 		raw.append("Unblocked combat damage goes to %s; while active" % _public_damage_source_name(p.combat_damage_redirect))
@@ -5554,7 +6439,9 @@ func put_on_bottom_of_library(inst: CardInstance) -> void:
 ## destruction with: tap, clear damage, remove from combat — unless the
 ## destroyer says "can't be regenerated" (Terror, Wrath of God).
 func destroy(inst: CardInstance, can_regenerate := true) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD:
+	# is_present: a phased-out permanent can't be affected (CR 702.26b) —
+	# a doom or a stale reference must not move it out of `phased_out`.
+	if not is_present(inst):
 		return
 	# INDESTRUCTIBLE (CR 700.4): destruction simply does nothing.
 	if inst.cur_indestructible:
@@ -5572,6 +6459,8 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 			_rec(inst, &"damage")
 		inst.destruction_shields -= 1
 		inst.damage = 0
+		_rec(inst, &"marked_damage_by_source")
+		inst.marked_damage_by_source.clear()
 		log_line("%s survives — all damage is removed from it"
 			% inst.data.card_name)
 		recalculate()
@@ -5602,6 +6491,8 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 		var became_tapped := not inst.tapped
 		inst.tapped = true
 		inst.damage = 0
+		_rec(inst, &"marked_damage_by_source")
+		inst.marked_damage_by_source.clear()
 		# CR 701.15a removes the REGENERATED creature from combat — and only
 		# it. An attacker it was blocking stays blocked (CR 509.1h) and, with
 		# no trample, deals no damage at all.
@@ -5627,7 +6518,7 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 ## still DIES (dies-triggers fire). Cost payments (Strip Mine) and effects
 ## (Animate Dead's departing aura) both come through here.
 func sacrifice_permanent(inst: CardInstance) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(inst):   # CR 702.26b
 		return
 	log_line("%s is sacrificed" % inst.data.card_name, inst)
 	_move_to_graveyard(inst, true, true)
@@ -5652,10 +6543,21 @@ func _forget_x(inst: CardInstance) -> void:
 
 ## Counter a spell on the stack (CR 701.5a): its stack item vanishes, the
 ## card goes to its owner's graveyard. No effects run, no ETB happens.
-func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD) -> void:
+## [param destination] is the counterspell's own replacement of that move:
+## Mtg.Zone.LIBRARY (Memory Lapse's top of the library), Mtg.Zone.EXILE
+## ("exile it instead of putting it into its owner's graveyard" —
+## Dissipate) or Mtg.Zone.BATTLEFIELD ("put that card onto the battlefield
+## under your control instead" — Desertion; [param controller] is "you",
+## and the card ENTERS: summoning sickness, ETB triggers, X = 0 per CR
+## 107.3b). A spell that would go to a graveyard and is marked to be
+## exiled instead (Bösium Strip), or whose owner's graveyard exiles
+## (Forbidden Crypt), is exiled.
+func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
+		controller := -1) -> void:
 	if inst.zone != Mtg.Zone.STACK:
 		return
-	assert(destination == Mtg.Zone.GRAVEYARD or destination == Mtg.Zone.LIBRARY)
+	if destination == Mtg.Zone.BATTLEFIELD and controller < 0:
+		destination = Mtg.Zone.GRAVEYARD
 	_rec(self, &"stack")
 	for i in range(stack.size() - 1, -1, -1):
 		if stack[i].kind == Mtg.StackKind.SPELL and stack[i].card == inst:
@@ -5676,13 +6578,29 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD) ->
 		return
 	# Memory Lapse replaces the destination. Never visit the graveyard:
 	# graveyard-entry effects and timestamps must not see an intermediate move.
+	if destination == Mtg.Zone.GRAVEYARD and inst.graveyard_exile_spell:
+		destination = Mtg.Zone.EXILE   # Bösium Strip: exiled instead (CR 614.1)
+	if inst.graveyard_exile_spell:
+		_rec(inst, &"graveyard_exile_spell")
+		inst.graveyard_exile_spell = false
+	if destination == Mtg.Zone.BATTLEFIELD:
+		# Desertion: onto the battlefield under the counterer's control.
+		_rec(inst, &"zone")
+		log_line("%s is put onto the battlefield under %s's control" % [
+			inst.data.card_name, players[controller].player_name], inst)
+		_put_on_battlefield(inst, controller)
+		_emit_state()
+		return
 	_rec_move(inst, inst.owner_id, destination)
 	if destination == Mtg.Zone.LIBRARY:
 		inst.zone = Mtg.Zone.LIBRARY
 		players[inst.owner_id].library.append(inst)
+	elif destination == Mtg.Zone.EXILE:
+		_enter_exile(inst)
+		players[inst.owner_id].exile.append(inst)
+		log_line("%s is exiled" % inst.data.card_name, inst)
 	else:
-		_enter_graveyard(inst)
-		players[inst.owner_id].graveyard.append(inst)
+		_land_in_graveyard(inst)
 	_emit_state()
 
 
@@ -5722,7 +6640,7 @@ func return_permanent_to_library_top(inst: CardInstance) -> void:
 
 
 func _return_from_battlefield(inst: CardInstance, destination: int) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(inst):   # CR 702.26b
 		return
 	if _exile_departure_instead(inst): return
 	_rec_departure(inst, inst.owner_id, destination)
@@ -5772,7 +6690,7 @@ func _return_from_battlefield(inst: CardInstance, destination: int) -> void:
 ## Exile a permanent (Swords to Plowshares). Like bouncing, exiling is not
 ## destruction — no dies-trigger, no regeneration.
 func exile_permanent(inst: CardInstance) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(inst):   # CR 702.26b
 		return
 	_rec_departure(inst, inst.owner_id, Mtg.Zone.EXILE)
 	_detach_departing_aura(inst)
@@ -5831,9 +6749,141 @@ func doom_at_end_of_combat(inst: CardInstance) -> void:
 func schedule_end_step_action(action: Callable) -> void:
 	_end_step_actions.append(action)
 
-func schedule_cleanup_action(action: Callable) -> void:
+## "At the beginning of the next cleanup step, [param action]" — a DELAYED
+## TRIGGER (CR 603.7) that goes on the stack in the cleanup step AFTER the
+## hand-size discard and the damage removal (CR 514.1-514.3a), with the
+## active player getting priority and a further cleanup step following
+## (514.3b); see [method _cleanup_triggers]. [param action] is
+## `func(game: MtgGame) -> void`, run when the trigger RESOLVES.
+## [param source] is the object the trigger is shown as coming from (the
+## spell or permanent that created it — it may have left by then) and
+## [param controller] the player who controlled that spell or ability
+## (CR 603.7d; -1 = the source's controller). A null [param source] is the
+## legacy stackless form: the action runs at the same 514.3a moment
+## without a stack object. "Next" is the first cleanup step to BEGIN after
+## this call, so a call made inside a cleanup step's own priority window
+## waits for the following one.
+func schedule_cleanup_action(action: Callable, source: CardInstance = null,
+		controller := -1, desc := "") -> void:
 	_rec(self, &"_cleanup_actions")
-	_cleanup_actions.append(action)
+	if controller < 0:
+		controller = source.controller_id if source != null else active_player
+	_cleanup_actions.append({"action": action, "source": source,
+		"controller": controller,
+		"desc": desc if desc != "" else "At the beginning of the next cleanup step, its delayed effect happens."})
+
+
+## The Mirage flash rider (CardData.flash_rider), cast when a sorcery
+## couldn't have been: stamp the spell and schedule "the controller of the
+## permanent it becomes sacrifices it at the beginning of the next cleanup
+## step" — a delayed trigger created AS IT IS CAST, the way Forge's
+## `MayFlashSac` builds it ([forge] forge-game/src/main/java/forge/game/
+## card/CardFactoryUtil.java:2025-2036, commit b09a3d3f). "The permanent it
+## becomes" is this instance id carrying this cast's serial in its memory
+## with no graveyard/exile visit in between (CR 400.7): a countered spell,
+## a bounced-and-recast Aura or a copy (another id) is never sacrificed.
+func _schedule_flash_rider_sacrifice(inst: CardInstance, pid: int) -> void:
+	_rec(self, &"_flash_cast_serial")
+	_flash_cast_serial += 1
+	_rec(inst, &"memory")
+	inst.memory["flash_cast"] = true
+	inst.memory["flash_cast_serial"] = _flash_cast_serial
+	schedule_cleanup_action(MtgGame._sacrifice_flash_cast.bind(inst.id,
+		_flash_cast_serial, inst.graveyard_entry, inst.exile_entry), inst, pid,
+		"%s was cast as though it had flash: its controller sacrifices it." % inst.data.card_name)
+
+
+static func _sacrifice_flash_cast(game: MtgGame, id: int, serial: int,
+		grave_entry: int, exile_entry: int) -> void:
+	var inst := game.find_instance(id)
+	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
+		return
+	if int(inst.memory.get("flash_cast_serial", -1)) != serial \
+			or inst.graveyard_entry != grave_entry or inst.exile_entry != exile_entry:
+		return
+	game.sacrifice_permanent(inst)   # by whoever controls it now
+
+
+# ------------------------------------------------ BECOMES THE TARGET --
+#
+# CR 603.2 with CR 115: an object or player "becomes the target" of a
+# spell, activated ability or triggered ability as that object is put on
+# the stack with its targets chosen — and again when a target is CHANGED
+# (CR 115.7) or a COPY is put on the stack aimed at it (CR 707.10c, with
+# the copy's FINAL targets). Skulking Ghost and Tar Pit Warrior sacrifice
+# themselves; Forsaken Wastes drains the spell's controller.
+#
+# Where each kind is announced: a spell and an activated ability inside
+# cast_spell / activate_ability, while the stack is frozen, so the
+# triggers wait with the cast triggers and go on above it (CR 601.2i,
+# 602.2b). A trigger and a copy are QUEUED ([member _target_announcements])
+# and flushed the next time a player would receive priority (CR 603.3):
+# a human seat may still be naming the trigger's target, and a copy's
+# controller may still re-aim it. A redirection announces its new target
+# at once.
+
+## Dispatch BECAME_TARGET for every distinct object and player
+## [param item] targets — once each, however many slots name it.
+func _announce_targets(item: StackItem) -> void:
+	if item == null or item.targets.is_empty():
+		return
+	var seen := {}
+	for ref in item.targets:
+		if ref == null or ref.is_damage or ref.is_ability:
+			continue
+		var key := ("p%d" % ref.player_id) if ref.is_player else ("c%d" % ref.instance_id)
+		if seen.has(key):
+			continue
+		seen[key] = true
+		_announce_target_ref(item, ref)
+
+
+func _announce_target_ref(item: StackItem, ref: TargetRef) -> void:
+	var data := {"source": item.card, "controller": item.controller,
+		"kind": item.kind, "is_spell": item.kind == Mtg.StackKind.SPELL,
+		"item": item, "instance": null, "player": -1}
+	if ref.is_player:
+		data["player"] = ref.player_id
+	else:
+		var target := find_instance(ref.instance_id)
+		if target == null:
+			return
+		data["instance"] = target
+	dispatch_event(Mtg.EventType.BECAME_TARGET, data)
+
+
+## Queue [param item]'s BECAME_TARGET announcement for the next priority
+## moment (see the block comment above).
+func _queue_target_announcement(item: StackItem) -> void:
+	if item == null or item.targets.is_empty():
+		return
+	_rec(self, &"_target_announcements")
+	_target_announcements.append(item)
+
+
+## Announce every queued item that is still on the stack with its targets
+## final; a trigger whose target a human is still naming waits.
+func _flush_target_announcements() -> void:
+	var guard := 0
+	while not _target_announcements.is_empty() and guard < 32:
+		guard += 1
+		var pending := _target_announcements
+		_rec(self, &"_target_announcements")
+		_target_announcements = []
+		var held: Array[StackItem] = []
+		var progressed := false
+		for item in pending:
+			if not stack.has(item):
+				progressed = true
+				continue   # removed (CR 603.3d) or already resolved
+			if item.target_held:
+				held.append(item)
+				continue
+			_announce_targets(item)   # may queue the triggers it caused
+			progressed = true
+		_target_announcements.append_array(held)
+		if not progressed:
+			return   # only held ones are left
 
 
 ## Run [param action] at the beginning of [param pid]'s NEXT main phase
@@ -5866,6 +6916,8 @@ func watch_damage_for_life(inst: CardInstance, controller: int,
 ## Wurm's "loses defender") — persists through recalculations until the
 ## card leaves the battlefield.
 func remove_keyword_permanently(inst: CardInstance, keyword: int) -> void:
+	if not is_present(inst):   # CR 702.26e: a phased-out one isn't affected
+		return
 	if not inst.removed_keywords.has(keyword):
 		_rec(inst, &"removed_keywords")
 		inst.removed_keywords.append(keyword)
@@ -5879,7 +6931,7 @@ func remove_keyword_permanently(inst: CardInstance, keyword: int) -> void:
 ## For "until end of turn" use ContinuousEffects.add_until_eot_pump's
 ## keyword list instead.
 func grant_keyword_permanently(inst: CardInstance, keyword: int) -> void:
-	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(inst):   # CR 702.26e: a phased-out one isn't affected
 		return
 	if not inst.added_keywords.has(keyword):
 		_rec(inst, &"added_keywords")
@@ -5900,7 +6952,7 @@ func grant_keyword_permanently(inst: CardInstance, keyword: int) -> void:
 func move_aura(aura: CardInstance, new_host: CardInstance) -> void:
 	if aura == null or new_host == null:
 		return
-	if aura.zone != Mtg.Zone.BATTLEFIELD or new_host.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(aura) or not is_present(new_host):   # CR 702.26b
 		return
 	if not aura.data.is_aura() or aura.attached_to == new_host.id or aura == new_host:
 		return
@@ -5940,8 +6992,12 @@ func put_from_hand_face_down(inst: CardInstance, pid: int) -> void:
 
 
 ## Exile the top card of [param pid]'s library FACE DOWN (Knowledge
-## Vault). Returns the card, or null on an empty library.
-func exile_top_of_library(pid: int, face_down := true) -> CardInstance:
+## Vault). Returns the card, or null on an empty library. [param viewer]
+## is the one seat that may look at a face-down card (Three Wishes: "You
+## may look at those cards for as long as they remain exiled" — its owner);
+## -1 = nobody. The other seat never learns its name (CONTRIBUTING.md
+## rule 8).
+func exile_top_of_library(pid: int, face_down := true, viewer := -1) -> CardInstance:
 	if players[pid].library.is_empty():
 		return null
 	var inst: CardInstance = players[pid].library.back()
@@ -5950,6 +7006,7 @@ func exile_top_of_library(pid: int, face_down := true) -> CardInstance:
 	players[pid].library.pop_back()
 	_enter_exile(inst)
 	inst.face_down = face_down
+	inst.exile_visible_to = viewer if face_down else -1
 	players[pid].exile.append(inst)
 	log_line("%s exiles %s from the top of their library" % [players[pid].player_name,
 		"a card face down" if face_down else inst.data.card_name])
@@ -5984,7 +7041,7 @@ func attach_aura_from_anywhere(aura: CardInstance, host: CardInstance,
 	if host.zone == Mtg.Zone.GRAVEYARD and aura.data.aura_reanimates:
 		reanimate(host, controller)
 	var graveyard_entry := host.zone == Mtg.Zone.GRAVEYARD and aura.data.aura_graveyard_entry
-	if host.zone != Mtg.Zone.BATTLEFIELD and not graveyard_entry:
+	if not is_present(host) and not graveyard_entry:   # CR 702.26b
 		return
 	_remove_from_zone(aura)
 	if not _put_on_battlefield(aura, controller, host):
@@ -6016,6 +7073,76 @@ func return_aura_unattached(aura: CardInstance, controller: int) -> bool:
 	check_state_based_actions()
 	_emit_state()
 	return true
+
+
+## NECROMANCY'S HALF (CR 303.4, the card's own text): "it becomes an Aura
+## with 'enchant creature put onto the battlefield with [this]'. Put target
+## creature card from a graveyard onto the battlefield under your control
+## and attach this enchantment to it." [param aura] must be on the
+## battlefield and [param card] in a graveyard; the card enters under
+## [param controller] ("you": the enchantment's controller when -1), and
+## [method become_aura] then attaches. False — nothing attached — when the
+## card could not be raised (it left its graveyard, or its entry was
+## refused). Leaving, the Aura makes its creature's controller sacrifice it
+## ([member CardData.aura_reanimates]); the creature leaving puts the Aura
+## into its owner's graveyard (CR 704.5m).
+func reanimate_as_aura(aura: CardInstance, card: CardInstance, controller := -1) -> bool:
+	if aura == null or card == null or aura.zone != Mtg.Zone.BATTLEFIELD \
+			or card.zone != Mtg.Zone.GRAVEYARD:
+		return false
+	var pid := aura.controller_id if controller < 0 else controller
+	reanimate(card, pid)
+	if card.zone != Mtg.Zone.BATTLEFIELD:
+		return false
+	become_aura(aura, card)
+	return true
+
+
+## An enchantment on the battlefield BECOMES an Aura attached to
+## [param host] (Necromancy) — an INSTANCE-level identity: its definition
+## is swapped for a derived one carrying "enchant creature put onto the
+## battlefield with this" (the raised-creature check Animate Dead's kind
+## already uses, [method aura_can_enchant]), the Aura subtype and the
+## leaves-the-battlefield sacrifice, the way [method become_copy] swaps a
+## copy's. It is the permanent's own state: leaving the battlefield
+## restores the printed card ([method CardInstance.restore_printed_identity],
+## CR 400.7), so Necromancy in a hand or graveyard is a plain enchantment
+## again. Aura hate (Serene Heart, Hope Charm) sees an Aura.
+func become_aura(aura: CardInstance, host: CardInstance) -> void:
+	if aura == null or host == null or aura.zone != Mtg.Zone.BATTLEFIELD \
+			or host.zone != Mtg.Zone.BATTLEFIELD:
+		return
+	var derived := aura.data.shallow_copy()
+	derived.aura_target = TargetSpec.creature("creature put onto the battlefield with %s"
+		% aura.data.card_name)
+	derived.aura_graveyard_entry = true   # "...put onto the battlefield with this"
+	derived.aura_reanimates = true        # leaving: its creature is sacrificed
+	var subtypes: Array[String] = aura.data.subtypes.duplicate()
+	if not subtypes.has("aura"):
+		subtypes.append("aura")
+	derived.subtypes = subtypes
+	if undo_log != null:
+		_rec(aura, &"data")
+		_rec(aura, &"memory")
+		_rec(aura, &"attached_to")
+		_rec(host, &"attachments")
+	var old_host := find_instance(aura.attached_to)
+	if old_host != null and old_host != host:
+		_rec(old_host, &"attachments")
+		old_host.attachments.erase(aura.id)
+	aura.data = derived
+	aura.memory["raised"] = true
+	aura.memory["raised_id"] = host.id
+	aura.memory["raised_stamp"] = host.layer_timestamp
+	aura.attached_to = host.id
+	if not host.attachments.has(aura.id):
+		host.attachments.append(aura.id)
+	log_line("%s becomes an Aura attached to %s" % [aura.data.card_name, host.data.card_name])
+	# The trigger/static/SBA indexes are derived from `data` (become_copy).
+	_battlefield_changed()
+	recalculate()
+	check_state_based_actions()
+	_emit_state()
 
 
 ## Return an EXILED card to the battlefield (Tawnos's Coffin).
@@ -6063,10 +7190,9 @@ func return_from_exile_to_graveyard(inst: CardInstance) -> void:
 	_rec_move(inst, inst.owner_id, Mtg.Zone.GRAVEYARD)
 	_rec(inst, &"face_down")
 	players[inst.owner_id].exile.erase(inst)
-	_enter_graveyard(inst)
 	inst.face_down = false
-	players[inst.owner_id].graveyard.append(inst)
-	log_line("%s is put into its owner's graveyard" % inst.data.card_name)
+	if _land_in_graveyard(inst):   # Forbidden Crypt: back into exile, a new object
+		log_line("%s is put into its owner's graveyard" % inst.data.card_name)
 	_emit_state()
 
 
@@ -6086,7 +7212,7 @@ func exile_from_graveyard(inst: CardInstance) -> void:
 
 ## Tap / untap a permanent by effect (Icy Manipulator, Twiddle-style).
 func tap_permanent(inst: CardInstance) -> void:
-	if inst.zone == Mtg.Zone.BATTLEFIELD and not inst.tapped:
+	if is_present(inst) and not inst.tapped:   # CR 702.26b
 		# A face-down Illusionary Mask creature turns up rather than being
 		# tapped face down (CR 708 as the card words it).
 		if inst.face_down:
@@ -6102,7 +7228,7 @@ func tap_permanent(inst: CardInstance) -> void:
 ## Untap a permanent by effect (Ley Druid, Twiddle, an Instill Energy
 ## untap). Fires BECAME_UNTAPPED, which Tawnos's Coffin listens for.
 func untap_permanent(inst: CardInstance) -> void:
-	if inst.zone == Mtg.Zone.BATTLEFIELD and inst.tapped:
+	if is_present(inst) and inst.tapped:   # CR 702.26b
 		if undo_log != null: _rec(inst, &"tapped")
 		_rec(inst, &"untap_sequence")
 		inst.untap_sequence += 1
@@ -6143,74 +7269,354 @@ func top_of_library_to_hand(pid: int) -> CardInstance:
 ## nothing.
 func mill(pid: int, count: int) -> void:
 	var p := players[pid]
+	var milled: Array[CardInstance] = []
 	for _i in count:
 		if p.library.is_empty():
-			return
+			break
 		var inst: CardInstance = p.library.back()
 		_rec_move(inst, p.id, Mtg.Zone.GRAVEYARD)
 		p.library.pop_back()
-		_enter_graveyard(inst)
-		p.graveyard.append(inst)
 		log_line("%s mills %s" % [p.player_name, inst.data.card_name])
+		if _land_in_graveyard(inst):   # Forbidden Crypt exiles it instead
+			milled.append(inst)
 	_emit_state()
+	# One event per card that REACHED the graveyard, after the whole move
+	# (the cards leave together): Gaea's Blessing hears its own.
+	for inst in milled:
+		_announce_library_to_graveyard(pid, inst)
+
+
+## A card went from [param pid]'s library into their graveyard — say so
+## ([constant Mtg.EventType.PUT_INTO_GRAVEYARD_FROM_LIBRARY]; the card's own
+## graveyard triggers hear it, CR 603.10a). Every library -> graveyard path
+## ends here: [method mill], [method put_into_graveyard] of a card picked
+## out of a library, [method put_library_card_into_graveyard].
+func _announce_library_to_graveyard(pid: int, inst: CardInstance) -> void:
+	if inst.zone == Mtg.Zone.GRAVEYARD:
+		dispatch_event(Mtg.EventType.PUT_INTO_GRAVEYARD_FROM_LIBRARY,
+			{"instance": inst, "player": pid, "controller": pid})
+
+
+## Put [param inst], a card in its owner's LIBRARY (any position — Thran
+## Tome's and Wand of Denial's looked-at cards), into their graveyard: the
+## library-to-graveyard move every "put it into your graveyard" of a library
+## card makes, Forbidden Crypt and the milled event included.
+func put_library_card_into_graveyard(inst: CardInstance) -> void:
+	if inst == null or inst.zone != Mtg.Zone.LIBRARY:
+		return
+	var p := players[inst.owner_id]
+	if not p.library.has(inst):
+		return
+	_rec(p, &"library")
+	p.library.erase(inst)
+	put_into_graveyard(inst)
 
 
 # ---------------------------------------------------------------- phasing --
-# CR 702.25: a phased-out permanent is "treated as though it doesn't
-# exist", but it never changed zones — so nothing triggers on the way out
-# or the way in. Here that means lifting it out of the battlefield arrays
-# (which every query, static and state-based action reads) and parking it
-# on its controller.
+# CR 702.26 (Pack 8 E1). A phased-out permanent is "treated as though it
+# doesn't exist" (702.26b), but it never changed zones or control (702.26d)
+# — so no zone-change trigger fires on the way out or the way in, a token
+# stays a token, counters stay, and it keeps its timestamp, its place in the
+# battlefield order and its summoning-sickness clock. Here that means
+# lifting it out of the battlefield arrays (which every query, static,
+# trigger and state-based action reads) and parking it in the
+# `MtgPlayer.phased_out` of the seat that controlled it as it phased out —
+# the seat whose untap step brings it back (CR 502.1). It KEEPS
+# `zone == BATTLEFIELD`: whether a remembered permanent is there is
+# [method is_present]'s question, never the zone's.
+#
+# ONE DOOR. Every phase-out and phase-in — the untap step's turn-based
+# action ([method _phasing_step]), a one-shot "phases out" (Reality Ripple,
+# Mist Dragon), a whole category at once (Time and Tide, Taniwha, Teferi's
+# Realm, Equipoise), Oubliette's "until" — goes through
+# [method phase_simultaneously], so the indirect riders (702.26g-i), the
+# "can't phase out" ban, the single recalculation and the events are
+# written exactly once.
 
-## Phase [param inst] out (Oubliette). Auras attached to it go with it.
-func phase_out(inst: CardInstance) -> void:
-	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD or inst.phased_out:
-		return
-	for aura_id in inst.attachments.duplicate():
-		var aura := find_instance(aura_id)
-		if aura != null and not aura.phased_out:
-			phase_out(aura)
-	_rec_departure(inst)
-	inst.phased_out = true
-	# CR 702.25a: a phased-out permanent is treated as though it does
-	# not exist, so it cannot still be an attacker or a blocker.
-	combat.forget(inst.id)
-	players[inst.controller_id].battlefield.erase(inst)
-	_battlefield_order.erase(inst.id)
-	players[inst.controller_id].phased_out.append(inst)
+## Does [param inst] EXIST on the battlefield right now — on it AND phased
+## in (CR 702.26b)? The liveness question for a REMEMBERED permanent: a
+## leash's source, a doomed creature, an aura's host, the object of a
+## delayed action. A phased-out permanent keeps `zone == BATTLEFIELD`, so
+## the zone alone answers "yes" for something the rules treat as though it
+## does not exist. Null-safe.
+func is_present(inst: CardInstance) -> bool:
+	return inst != null and inst.zone == Mtg.Zone.BATTLEFIELD and not inst.phased_out
+
+
+func _init() -> void:
+	# CR 702.26e at the one door every floating effect comes through: an
+	# instance-keyed ContinuousEffects adder registers nothing for a
+	# phased-out instance (ContinuousEffects.phased_out_check).
+	continuous.phased_out_check = _instance_phased_out
+
+
+func _instance_phased_out(instance_id: int) -> bool:
+	var inst := find_instance(instance_id)
+	return inst != null and inst.phased_out
+
+
+## Every phased-out permanent — both seats' when [param pid] is -1, else
+## the ones that phased out under [param pid]'s control (the ones
+## [param pid]'s untap step brings back, holds and riders aside). Public
+## information: a phased-out card lies face up on the table. A fresh array.
+func phased_out_permanents(pid := -1) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	for p in players:
+		if pid < 0 or p.id == pid:
+			out.append_array(p.phased_out)
+	return out
+
+
+## Phase [param inst] out — the one-shot "phases out" (Reality Ripple,
+## Mist Dragon, Vodalian Illusionist, Teferi's Veil): it phases back in
+## before its controller untaps during their next untap step (CR 502.1),
+## Auras attached to it riding along indirectly (702.26g).
+##
+## [param hold_source] makes it an "until" instead — "phases out until this
+## enchantment leaves the battlefield" (Oubliette): the untap step leaves it
+## alone (CR 610.4a) and only [method release_phase_hold] by that source,
+## or an effect that phases phased-out permanents in (Time and Tide), brings
+## it back.
+##
+## False, and nothing happens, when it is not present or can't phase out
+## ([member CardInstance.cur_cant_phase_out]).
+func phase_out(inst: CardInstance, hold_source: CardInstance = null) -> bool:
+	if not is_present(inst) or inst.cur_cant_phase_out:
+		return false
+	var done := phase_simultaneously([inst], [], hold_source)
+	return (done["out"] as Array).has(inst)
+
+
+## Phase [param inst] back in by an effect (Time and Tide's half, a test).
+## [param tapped] taps it as it arrives — Oubliette's "Tap that creature as
+## it phases in this way", which is not a "becomes tapped" event. False
+## when it is not phased out, or phased out INDIRECTLY: a rider comes back
+## only with its host (702.26g).
+func phase_in(inst: CardInstance, tapped := false) -> bool:
+	if inst == null or not inst.phased_out or inst.phased_indirectly:
+		return false
+	var done := phase_simultaneously([], [inst], null, tapped)
+	return (done["in"] as Array).has(inst)
+
+
+## End [param hold_source]'s "until" hold on [param inst] (see
+## [method phase_out]): it phases in — tapped when [param tapped] — if it is
+## STILL phased out under that hold. If it came back some other way in the
+## meantime, nothing happens, even if it has phased out again since (CR
+## 610.4a). True when it phased in.
+func release_phase_hold(inst: CardInstance, hold_source: CardInstance,
+		tapped := false) -> bool:
+	if inst == null or hold_source == null or not inst.phased_out \
+			or inst.phase_hold != hold_source.id:
+		return false
+	return phase_in(inst, tapped)
+
+
+## THE PHASING EVENT, SIMULTANEOUS (CR 702.26a, 502.1): every permanent in
+## [param outs] phases out and every one in [param ins] phases in, AT ONCE
+## — Time and Tide's "simultaneously, all phased-out creatures phase in and
+## all creatures with phasing phase out", Taniwha's lands, Teferi's Realm,
+## Equipoise's chosen permanents, and the untap step's own action. Nothing
+## moves until everything has been decided; then one recalculation, one
+## state-based check, and only then the events, so every trigger sees the
+## finished board.
+##
+## Callers may pass whole categories; this filters:
+## - an OUT must be present and may not have "can't phase out". Its
+##   attached Auras ride out INDIRECTLY (702.26g) — even one that was named
+##   directly too (702.26h) — unless that Aura can't phase out, in which
+##   case it stays behind and falls off (CR 704.5m);
+## - an IN must be phased out and must not be an indirect rider: a rider
+##   comes back only with its host, and attached to it (702.26g, 702.26i).
+##   An Aura that phased out DIRECTLY comes back still pointing at its old
+##   host, and the state-based check takes it if that host is gone.
+## [param hold_source] marks every direct OUT as held (see
+## [method phase_out]); [param tap_ins] taps every direct IN as it arrives.
+##
+## Events: [constant Mtg.EventType.PHASED_OUT] for each permanent that
+## phased out — heard by that permanent although it is gone (CR 603.10a
+## looks back for phase-out triggers) — then
+## [constant Mtg.EventType.PHASED_IN] for each that phased in, riders
+## included, each with {instance, controller, indirect}.
+##
+## Returns {"out": Array[CardInstance], "in": Array[CardInstance]}: what
+## actually phased, riders included.
+func phase_simultaneously(outs: Array, ins: Array, hold_source: CardInstance = null,
+		tap_ins := false) -> Dictionary:
+	# ---- 1. decide, mutating nothing ----------------------------------
+	var going: Array[CardInstance] = []
+	for x in outs:
+		var inst := x as CardInstance
+		if is_present(inst) and not inst.cur_cant_phase_out and not going.has(inst):
+			going.append(inst)
+	var riders := {}   # instance id -> true: phasing out INDIRECTLY
+	var scan := 0
+	while scan < going.size():   # an Aura on an Aura rides too
+		for aura_id in going[scan].attachments:
+			var aura := find_instance(aura_id)
+			if not is_present(aura) or aura.cur_cant_phase_out:
+				continue
+			riders[aura.id] = true
+			if not going.has(aura):
+				going.append(aura)
+		scan += 1
+	var coming: Array[CardInstance] = []
+	for x in ins:
+		var inst := x as CardInstance
+		if inst != null and inst.phased_out and not inst.phased_indirectly \
+				and not coming.has(inst):
+			coming.append(inst)
+	var direct_ins := coming.size()
+	scan = 0
+	while scan < coming.size():
+		for aura_id in coming[scan].attachments:
+			var aura := find_instance(aura_id)
+			if aura != null and aura.phased_out and aura.phased_indirectly \
+					and not coming.has(aura):
+				coming.append(aura)
+		scan += 1
+	if going.is_empty() and coming.is_empty():
+		return {"out": going, "in": coming}
+	# ---- 2. commit ------------------------------------------------------
+	for inst in going:
+		_rec_phasing(inst)
+		var seat := players[inst.controller_id]
+		# 702.26b: removed from combat (CR 506.4). A blocked attacker whose
+		# blocker phased out stays blocked (509.1h) — CombatState.forget
+		# leaves that flag on the attacker.
+		combat.forget(inst.id)
+		seat.battlefield.erase(inst)
+		_battlefield_order.erase(inst.id)
+		seat.phased_out.append(inst)
+		inst.phased_out = true
+		inst.phased_indirectly = riders.has(inst.id)
+		inst.phase_hold = hold_source.id \
+			if hold_source != null and not riders.has(inst.id) else -1
+		# CR 702.26f: "for as long as" durations that track it END — not
+		# pause — so the continuity markers move (CardInstance.untap_sequence
+		# for "remains tapped", phase_sequence for the rest) and a stamp
+		# taken before never matches again, even if it comes back tapped.
+		inst.untap_sequence += 1
+		inst.phase_sequence += 1
+		log_line("%s phases out" % inst.data.card_name, inst)
+	for i in coming.size():
+		var inst := coming[i]
+		_rec_phasing(inst)
+		players[inst.controller_id].phased_out.erase(inst)
+		_reinsert_phased(inst)
+		inst.phased_out = false
+		inst.phased_indirectly = false
+		inst.phase_hold = -1
+		if tap_ins and i < direct_ins:
+			inst.tapped = true
+		log_line("%s phases in" % inst.data.card_name, inst)
 	_battlefield_changed()
-	log_line("%s phases out" % inst.data.card_name)
 	recalculate()
 	check_state_based_actions()
+	# ---- 3. the events, on the finished board ---------------------------
+	#
+	# SIMPLIFIED (docs/ROADMAP.md, "Phase-out look-back"): each phasing-out
+	# permanent hears its OWN phase-out (also_listen); the look-back of CR
+	# 603.10a is not modelled further — a permanent that phases in in this
+	# same event hears the others phase out, and two that phase out
+	# together do not hear each other. No card in the pool listens for
+	# another permanent phasing out.
+	for inst in going:
+		dispatch_event(Mtg.EventType.PHASED_OUT, {"instance": inst,
+			"controller": inst.controller_id, "indirect": inst.phased_indirectly}, inst)
+	for i in coming.size():
+		var inst := coming[i]
+		dispatch_event(Mtg.EventType.PHASED_IN, {"instance": inst,
+			"controller": inst.controller_id, "indirect": i >= direct_ins}, inst)
 	_emit_state()
+	return {"out": going, "in": coming}
 
 
-## Phase [param inst] back in. [param tapped] taps it as it arrives
-## (Oubliette's "Tap that creature as it phases in this way").
-func phase_in(inst: CardInstance, tapped := false) -> void:
-	if inst == null or not inst.phased_out:
+## Journal one permanent about to phase: the whole object (its flags, its
+## tapped state), both seats' battlefield and phased-out arrays, the
+## battlefield order and combat.
+func _rec_phasing(inst: CardInstance) -> void:
+	if undo_log == null:
 		return
-	if undo_log != null:
-		_rec(inst, &"phased_out")
-		_rec(players[inst.controller_id], &"phased_out")
-		_rec(players[inst.controller_id], &"battlefield")
-		_rec(self, &"_battlefield_order")
-	inst.phased_out = false
-	players[inst.controller_id].phased_out.erase(inst)
-	players[inst.controller_id].battlefield.append(inst)
-	_battlefield_order.append(inst.id)
-	if tapped:
-		if undo_log != null: _rec(inst, &"tapped")
-		inst.tapped = true
-	for aura_id in inst.attachments.duplicate():
-		var aura := find_instance(aura_id)
-		if aura != null and aura.phased_out:
-			phase_in(aura)
-	_battlefield_changed()
-	log_line("%s phases in" % inst.data.card_name)
+	undo_log.record_object(inst)
+	for p in players:
+		undo_log.record(p, &"battlefield", p.battlefield)
+		undo_log.record(p, &"phased_out", p.phased_out)
+	undo_log.record(self, &"_battlefield_order", _battlefield_order)
+	undo_log.record_object(combat)
+
+
+## Put a permanent that phased in back where its TIMESTAMP puts it, in both
+## the battlefield order and its seat's array. Phasing is no zone change
+## (702.26d), so it keeps the timestamp it entered with (CR 613.7d) — and
+## the battlefield order IS timestamp order here (statics apply in it), so
+## it must not come back as the newest arrival.
+func _reinsert_phased(inst: CardInstance) -> void:
+	var stamp := inst.layer_timestamp
+	var at := _battlefield_order.size()
+	for i in _battlefield_order.size():
+		var other: CardInstance = _instances.get(_battlefield_order[i])
+		if other != null and other.layer_timestamp > stamp:
+			at = i
+			break
+	_battlefield_order.insert(at, inst.id)
+	var seat := players[inst.controller_id].battlefield
+	var pos := seat.size()
+	for i in seat.size():
+		if seat[i].layer_timestamp > stamp:
+			pos = i
+			break
+	seat.insert(pos, inst)
+
+
+## THE UNTAP STEP'S FIRST TURN-BASED ACTION (CR 502.1, 702.26a): every
+## phased-in permanent with phasing [param pid] controls phases out and,
+## simultaneously, every permanent that phased out under [param pid]'s
+## control phases in — but not an indirect rider (it comes with its host,
+## 702.26g) and not one held by an "until" (Oubliette, CR 610.4a). Run once
+## per untap step that happens — never in a skipped one (702.26m) — before
+## anything untaps, so a permanent that phases in untaps with the rest
+## (502.3). Multiple instances of phasing are redundant (702.26p).
+func _phasing_step(pid: int) -> void:
+	var outs: Array[CardInstance] = []
+	for inst in players[pid].battlefield:
+		if inst.has_keyword(Mtg.Keyword.PHASING):
+			outs.append(inst)
+	var ins: Array[CardInstance] = []
+	for inst in players[pid].phased_out:
+		if not inst.phased_indirectly and inst.phase_hold < 0:
+			ins.append(inst)
+	if not outs.is_empty() or not ins.is_empty():
+		phase_simultaneously(outs, ins)
+
+
+## "Until your next upkeep, target permanent can't phase out" (Spatial
+## Binding; Ertai's Familiar on itself): [param inst] can't phase out —
+## not at an untap step, not by a one-shot, not riding with a host — until
+## [param until_upkeep_of]'s next upkeep begins. That player's own untap
+## step comes first, so it is covered. A floating static (CR 611.2b): it
+## outlives [param source] (default: [param inst] itself) and ends early
+## only if [param inst] leaves the battlefield (CR 400.7). Nothing happens
+## unless [param inst] is present.
+func forbid_phasing_out(inst: CardInstance, until_upkeep_of: int,
+		source: CardInstance = null) -> void:
+	if not is_present(inst):
+		return
+	var ability := StaticAbility.new(
+		_cant_phase_out_apply.bind(inst.id, inst.layer_timestamp),
+		"%s can't phase out." % inst.data.card_name)
+	continuous.add_floating_static(source if source != null else inst, ability,
+		ContinuousEffects.Duration.UNTIL_UPKEEP_OF, until_upkeep_of, false, inst.id)
+	log_line("%s can't phase out until %s's next upkeep" % [
+		inst.data.card_name, players[until_upkeep_of].player_name], inst)
 	recalculate()
-	check_state_based_actions()
-	_emit_state()
+
+
+static func _cant_phase_out_apply(game: MtgGame, _source: CardInstance,
+		id: int, stamp: int) -> void:
+	var inst := game.find_instance(id)
+	if game.is_present(inst) and inst.layer_timestamp == stamp:
+		inst.cur_cant_phase_out = true
 
 
 # ------------------------------------------------------------- face down --
@@ -6276,7 +7682,7 @@ static func face_down_copiable_data() -> CardData:
 ## (Vesuvan Doppelganger's "it doesn't copy that creature's color").
 func become_copy(inst: CardInstance, source_data: CardData,
 		extra_types: int = 0, keep_own_colors := false) -> void:
-	if inst == null or source_data == null:
+	if inst == null or source_data == null or inst.phased_out:   # CR 702.26b
 		return
 	var own_colors := inst.cur_colors
 	if undo_log != null:
@@ -6340,6 +7746,9 @@ func retarget_spell(spell: CardInstance, index: int, ref: TargetRef) -> bool:
 	item.targets = plan.flat()
 	item.target_groups = plan.groups
 	log_line("%s is redirected to %s" % [spell.data.card_name, str(ref)])
+	# CR 115.7: the NEW target becomes the target of the spell.
+	if not ref.same_object(old_ref):
+		_announce_target_ref(item, ref)
 	_emit_state()
 	return true
 
@@ -6479,7 +7888,16 @@ func copy_spell_on_stack(spell: CardInstance, controller: int,
 	made.id = _next_stack_id
 	_next_stack_id += 1
 	stack.append(made)
+	# A copy was not CAST, so no flash rider follows it (it carries the
+	# original's memory above); and its targets — after any re-aim
+	# (offer_new_targets, CR 707.10c) — become the targets at the next
+	# priority moment.
+	copy.memory.erase("flash_cast")
+	copy.memory.erase("flash_cast_serial")
+	_queue_target_announcement(made)
 	log_line(made.description)
+	if not copy.data.stack_static_abilities.is_empty():
+		recalculate()   # the copy's statics function on the stack too (CR 611.3)
 	_emit_state()
 	return copy
 
@@ -6606,7 +8024,9 @@ func all_ante() -> Array[CardInstance]:
 ## Move [param inst] into the ante from wherever it is. Tokens can't be
 ## anted (they would cease to exist, CR 704.5e).
 func move_to_ante(inst: CardInstance) -> void:
-	if inst == null or inst.is_token or inst.zone == Mtg.Zone.ANTE:
+	# A phased-out permanent can't be affected (CR 702.26b) — moved, it
+	# ended in the ante still listed in MtgPlayer.phased_out.
+	if inst == null or inst.is_token or inst.zone == Mtg.Zone.ANTE or inst.phased_out:
 		return
 	if _exile_departure_instead(inst): return
 	var was_battlefield := inst.zone == Mtg.Zone.BATTLEFIELD
@@ -6763,7 +8183,9 @@ func remove_from_ante(inst: CardInstance, to_zone: int) -> void:
 ## The card physically moves to the new owner's copy of its current zone —
 ## an owner change is the one thing that outlives the duel.
 func change_owner(inst: CardInstance, new_owner: int) -> void:
-	if inst == null or inst.owner_id == new_owner or inst.is_token:
+	# A phased-out permanent can't be affected (CR 702.26b) — moved, it was
+	# appended to a battlefield list while still parked (Bronze Tablet).
+	if inst == null or inst.owner_id == new_owner or inst.is_token or inst.phased_out:
 		return
 	var zone := inst.zone
 	if undo_log != null:
@@ -6854,9 +8276,8 @@ func discard_cards(pid: int, cards: Array, by_effect := true) -> void:
 			continue
 		_rec_move(inst, pid, Mtg.Zone.GRAVEYARD)
 		p.hand.erase(inst)
-		_enter_graveyard(inst)
-		p.graveyard.append(inst)
 		log_line("%s discards %s" % [p.player_name, inst.data.card_name])
+		_land_in_graveyard(inst)   # still a discard when Forbidden Crypt exiles it
 		_announce_discard(pid, inst, by_effect, false)
 	_emit_state()
 	# After the whole discard, so a card that punishes the discarder sees a
@@ -6942,11 +8363,16 @@ func put_from_hand_into_play(inst: CardInstance, controller: int) -> void:
 func put_into_graveyard(inst: CardInstance) -> void:
 	if inst == null:
 		return
+	# A card still marked as in the LIBRARY (picked out of it, or moved by
+	# card_to_graveyard_from_anywhere) is making the library -> graveyard
+	# trip Gaea's Blessing listens for.
+	var from_library := inst.zone == Mtg.Zone.LIBRARY
 	_rec_move(inst, inst.owner_id, Mtg.Zone.GRAVEYARD)
-	_enter_graveyard(inst)
-	players[inst.owner_id].graveyard.append(inst)
-	log_line("%s is put into its owner's graveyard" % inst.data.card_name)
+	if _land_in_graveyard(inst):   # Forbidden Crypt exiles it instead
+		log_line("%s is put into its owner's graveyard" % inst.data.card_name)
 	_emit_state()
+	if from_library:
+		_announce_library_to_graveyard(inst.owner_id, inst)
 
 
 ## Unqualified move from anywhere (Timmerian Fiends), not discard, destroy
@@ -7028,8 +8454,7 @@ func discard_hand(pid: int) -> void:
 			_announce_discard(pid, inst, true, true)
 			continue
 		p.hand.pop_back()
-		_enter_graveyard(inst)
-		p.graveyard.append(inst)
+		_land_in_graveyard(inst)   # (Forbidden Crypt: exiled, still discarded)
 		_announce_discard(pid, inst, true, false)
 	log_line("%s discards their hand" % p.player_name)
 	_emit_state()
@@ -7150,8 +8575,7 @@ func discard_random(pid: int, count := 1, by_effect := true) -> void:
 		if not to_library:
 			_rec_move(inst, pid, Mtg.Zone.GRAVEYARD)
 			p.hand.remove_at(idx)
-			_enter_graveyard(inst)
-			p.graveyard.append(inst)
+			_land_in_graveyard(inst)
 		_announce_discard(pid, inst, by_effect, to_library)
 		if inst.data.on_discarded.is_valid():
 			inst.data.on_discarded.call(self, inst, pid, _resolving_controller)
@@ -7160,6 +8584,13 @@ func discard_random(pid: int, count := 1, by_effect := true) -> void:
 
 ## Gain/lose life outside of damage.
 func adjust_life(pid: int, delta: int) -> void:
+	# "Players can't gain life" (Forsaken Wastes) — CR 119.7: the gain does
+	# not happen, and "effects that would replace having the player gain
+	# life with some other event won't be applied" — so this comes FIRST,
+	# ahead of Lich's draw below. Loss is untouched.
+	if delta > 0 and players[pid].cant_gain_life:
+		log_line("%s can't gain life" % players[pid].player_name)
+		return
 	# "If you would gain life, draw that many cards instead" (Lich) — a
 	# REPLACEMENT effect, so no life is gained at all.
 	if delta > 0 and players[pid].life_gain_becomes_draw:
@@ -7173,6 +8604,61 @@ func adjust_life(pid: int, delta: int) -> void:
 	log_line("%s %s %d life (now %d)" % [players[pid].player_name,
 		"gains" if delta >= 0 else "loses", absi(delta), players[pid].life])
 	check_state_based_actions()
+
+
+# -------------------------------------------- Pack 8 E10: player state --
+
+## Is [param inst] — a permanent on the battlefield — the object a spell
+## [param pid] CAST THIS TURN resolved into? "Target creature you cast this
+## turn" (Cycle of Life). The cast is remembered by instance and the
+## permanent by the timestamp it entered with, so a creature put onto the
+## battlefield without being cast, one cast last turn, or one that has left
+## and come back since (CR 400.7 — a new object) is not it.
+func cast_this_turn_by(inst: CardInstance, pid: int) -> bool:
+	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD or pid < 0 or pid >= players.size():
+		return false
+	for row in players[pid].cast_permanents_this_turn:
+		if int(row["id"]) == inst.id and int(row["stamp"]) == inst.layer_timestamp:
+			return true
+	return false
+
+
+## The permanent spell [param inst] that [param pid] cast has just resolved
+## onto the battlefield: pin the cast to the object it became.
+func _stamp_cast_permanent(inst: CardInstance, pid: int) -> void:
+	if inst.zone != Mtg.Zone.BATTLEFIELD or pid < 0 or pid >= players.size():
+		return
+	var rows := players[pid].cast_permanents_this_turn
+	for i in range(rows.size() - 1, -1, -1):
+		if int(rows[i]["id"]) == inst.id and int(rows[i]["stamp"]) < 0:
+			_rec(players[pid], &"cast_permanents_this_turn")
+			rows[i]["stamp"] = inst.layer_timestamp
+			return
+
+
+## "You may spend white mana as though it were mana of any color. You may
+## spend other mana only as though it were colorless mana" (Celestial
+## Dawn): set [param pid]'s spending rule — [param any_mask] the colours
+## that may pay any coloured pip, [param colorless_mask] the colours that
+## may pay only generic mana. Call it from a [StaticAbility]: the rule is
+## derived, reset by every recalculation (see [member
+## ManaPool.spend_as_any]). Two such statics combine.
+func set_mana_spending_rule(pid: int, any_mask: int, colorless_mask: int) -> void:
+	if pid < 0 or pid >= players.size():
+		return
+	var pool := players[pid].mana_pool
+	pool.spend_as_any |= any_mask
+	pool.colorless_only |= colorless_mask
+
+
+## "The same is true for spells you control and nonland cards you own that
+## aren't on the battlefield" (Celestial Dawn): paint [param pid]'s cards
+## off the battlefield [param color_mask] (see
+## [member MtgPlayer.offzone_color]). Call it from a [StaticAbility]; the
+## pipeline applies it at the end of the recalculation.
+func set_offzone_color(pid: int, color_mask: int) -> void:
+	if pid >= 0 and pid < players.size():
+		players[pid].offzone_color = color_mask
 
 
 # --------------------------------------------------------------- internals --
@@ -7343,9 +8829,16 @@ func _mana_ability_asks(inst: CardInstance, index: int) -> bool:
 ## will actually accept. An {X} spell is priced at X=0, the cheapest it
 ## can be cast for. Payability ONLY: timing, priority and legal targets
 ## remain the caller's business.
-func can_afford(pid: int, data: CardData) -> bool:
+##
+## [param inst], when given, is the card being asked about: the floor of a
+## targeting surcharge ([method targeting_surcharge_floor] — Kaervek's
+## Torch) is read with it as the source. Without it the floor is read with
+## no source, which is the same answer for every spec that does not filter
+## on its caster.
+func can_afford(pid: int, data: CardData, inst: CardInstance = null) -> bool:
 	var cost := spell_cost_for(pid, data)
-	var surcharge: int = maxi(spell_surcharge(pid, data), -data.cost.generic)
+	var surcharge: int = maxi(spell_surcharge(pid, data), -data.cost.generic) \
+		+ targeting_surcharge_floor(pid, data, inst)
 	var usage := mana_usage_keys(data)
 	var subs: Array = players[pid].mana_substitutions
 	var pool: ManaPool = players[pid].mana_pool
@@ -7378,10 +8871,12 @@ func can_afford(pid: int, data: CardData) -> bool:
 ## `can_afford` is asked first and the planner models neither. It therefore
 ## under-reports for those two cards and never over-reports, which is the
 ## safe direction for a highlight. (docs/ROADMAP.md)
-func could_afford(pid: int, data: CardData, excluded: Dictionary = {}) -> bool:
-	if can_afford(pid, data):
+func could_afford(pid: int, data: CardData, excluded: Dictionary = {},
+		inst: CardInstance = null) -> bool:
+	if can_afford(pid, data, inst):
 		return true
-	var surcharge: int = maxi(spell_surcharge(pid, data), -data.cost.generic)
+	var surcharge: int = maxi(spell_surcharge(pid, data), -data.cost.generic) \
+		+ targeting_surcharge_floor(pid, data, inst)
 	return not ManaPlanner.plan(self, pid, spell_cost_for(pid, data), surcharge,
 		mana_usage_keys(data), excluded).is_empty()
 
@@ -7425,7 +8920,145 @@ func pitch_candidates(pid: int, source: CardInstance, mode: int) -> Array[CardIn
 		if card != source and (card.cur_colors & color) != 0: out.append(card)
 	return out
 
+
+## The object-cost groups casting [param data] in [param mode] pays: its
+## ADDITIONAL costs (Infernal Harvest's X Swamps, Kaervek's Spite) plus the
+## chosen ALTERNATIVE cost's (Fireblast's two Mountains — CR 118.9; see
+## [method CardData.with_alternative_cost]).
+func spell_object_costs(data: CardData, mode := 0) -> Array:
+	var alternate: Array = data.payment_option(mode).get("object_costs", [])
+	if alternate.is_empty():
+		return data.object_costs
+	return data.object_costs + alternate
+
+
+## Would paying [param groups] (engine/additional_object_costs.gd) for
+## [param pid] be refused right now, and why? "" = payable.
+func object_costs_refusal(pid: int, groups: Array, source: CardInstance = null, x := 0) -> String:
+	return OBJECT_COSTS.refusal(self, pid, groups, source, x)
+
+
+## Pay [param groups] NOW, while a spell or ability RESOLVES — "sacrifice
+## it unless you return three basic lands you control to their owner's
+## hand" (Ovinomancer), "unless you exile the top creature card of your
+## graveyard" (Circling Vultures). The payer chooses through their agent
+## (the resolution pre-flight holds a human seat, docs/duel-todo.md §1.3).
+## Returns false, paying nothing, when the groups cannot be paid.
+func pay_object_costs(pid: int, source: CardInstance, groups: Array, x := 0) -> bool:
+	if OBJECT_COSTS.refusal(self, pid, groups, source, x) != "":
+		return false
+	var picks := OBJECT_COSTS.choose(self, pid, source, groups, {}, x)
+	OBJECT_COSTS.pay(self, pid, picks)
+	return true
+
+
+## "... unless [param payer] <pays [param groups]>": the object-cost twin of
+## [method EffectBase.unless_paid]. TRUE when the payer could pay, agreed
+## ([param prompt], [param hint] — the agent's default) and paid.
+func unless_objects_paid(payer: int, source: CardInstance, groups: Array,
+		prompt: String, hint := true, x := 0) -> bool:
+	if OBJECT_COSTS.refusal(self, payer, groups, source, x) != "":
+		return false
+	if not agents[payer].choose_yes_no(self, payer, prompt, hint):
+		return false
+	return pay_object_costs(payer, source, groups, x)
+
+
+## A face-down exiled card a seat may look at (Three Wishes) is played FACE
+## UP: the spell on the stack, the land on the battlefield, are public.
+func _turn_face_up_leaving_exile(inst: CardInstance) -> void:
+	if inst.face_down:
+		_rec(inst, &"face_down")
+		inst.face_down = false
+
+
 func spell_payment(pid: int, data: CardData, x_value := 0,
+		target_count := 1, inst: CardInstance = null, mode := 0,
+		targets: Array = []) -> Dictionary:
+	var payment := _spell_payment_base(pid, data, x_value, target_count, inst, mode)
+	# "As long as this is on the stack, spells that target it cost {2} more
+	# to cast" (Kaervek's Torch, CR 601.2f) — once per targeted spell,
+	# however many of this spell's slots name it. [param targets] are the
+	# chosen [TargetRef]s; a caller that has none yet prices without it
+	# (a castable check asks [method targeting_surcharge_floor] instead).
+	var fee := targets_surcharge(targets, inst)
+	payment["extra"] = int(payment["extra"]) + fee
+	payment["surcharge"] = int(payment["surcharge"]) + fee
+	return payment
+
+
+## The targeting surcharge [param targets] carry for the spell [param inst]
+## (Kaervek's Torch's "{2} more", CR 601.2f): each distinct spell on the
+## stack that charges one and that a ref names, once — however many slots
+## name it. 0 for a target list that names no such spell.
+func targets_surcharge(targets: Array, inst: CardInstance = null) -> int:
+	var fee := 0
+	var aimed := {}
+	for ref in targets:
+		if not (ref is TargetRef) or ref.is_player or ref.is_damage or ref.is_ability:
+			continue
+		var spell := find_instance(ref.instance_id)
+		if spell != null and spell != inst and spell.zone == Mtg.Zone.STACK \
+				and spell.data.targeting_surcharge > 0 and not aimed.has(spell.id):
+			aimed[spell.id] = true
+			fee += spell.data.targeting_surcharge
+	return fee
+
+
+## THE TARGETING SURCHARGE AT ITS FLOOR (Pack 8, 2026-10-03): the least
+## [method targets_surcharge] any legal target set for [param data] (cast
+## by [param pid] as [param inst], in [param mode]) could carry right now.
+## A castable check is made before a target is chosen — the duel screen's
+## highlight ([method can_afford], [method could_afford]) and the AI's
+## counter ranking — and without this a Counterspell on two Islands read
+## as castable against a Kaervek's Torch, then the cast was refused "plus
+## {2} more". {2} when every legal target of a required slot is a
+## surcharged spell; 0 when any slot may name something free, or nothing
+## surcharged is on the stack at all (the fast path, which is every
+## ordinary priority round). A FLOOR: a slot a later slot must differ from
+## is not modelled, so it may under-report and never over-report.
+func targeting_surcharge_floor(pid: int, data: CardData, inst: CardInstance = null,
+		mode := 0) -> int:
+	if data == null or data.is_aura():
+		return 0   # an Aura targets what it will enchant: a permanent
+	var taxed := false
+	for item in stack:
+		if item.card != null and item.card.zone == Mtg.Zone.STACK \
+				and item.card != inst and item.card.data.targeting_surcharge > 0:
+			taxed = true
+			break
+	if not taxed:
+		return 0
+	var effects: Array = data.spell_effects
+	if data.is_modal():
+		effects = data.modes[clampi(mode, 0, data.modes.size() - 1)]["effects"]
+	var charged := {}
+	var total := 0
+	for e in effects:
+		var spec: TargetSpec = e.target_spec
+		if spec == null or e.target_min <= 0 or (spec.kind != TargetSpec.Kind.SPELL
+				and spec.kind != TargetSpec.Kind.SPELL_OR_PERMANENT):
+			continue
+		var cheapest := -1
+		var cheapest_id := -1
+		for ref in spec.legal_targets(self, inst):
+			var spell := find_instance(ref.instance_id) if not ref.is_player else null
+			var fee := 0
+			if spell != null and spell.zone == Mtg.Zone.STACK and spell != inst \
+					and not charged.has(spell.id):
+				fee = spell.data.targeting_surcharge
+			if cheapest < 0 or fee < cheapest:
+				cheapest = fee
+				cheapest_id = spell.id if spell != null else -1
+			if cheapest == 0:
+				break
+		if cheapest > 0:
+			total += cheapest
+			charged[cheapest_id] = true
+	return total
+
+
+func _spell_payment_base(pid: int, data: CardData, x_value := 0,
 		target_count := 1, inst: CardInstance = null, mode := 0) -> Dictionary:
 	var base := data.payment_base(mode)
 	var total_cost := spell_cost_for(pid, data, x_value, mode)
@@ -7824,6 +9457,10 @@ func is_probing() -> bool:
 ## that can ask one; a REPLAYED action (see [method answer_choice]) keeps the
 ## answers already given so it can serve them instead of re-asking.
 func _begin_cost_choices() -> void:
+	# Journaled (Pack 8, 2026-10-03): a search node that casts or activates
+	# with a cost question moves this counter, and its unmake must put it
+	# back like any other field.
+	_rec(self, &"_cost_asked")
 	_cost_asked = 0
 	if not _replaying_cost:
 		_cost_answers = 0
@@ -7852,6 +9489,7 @@ func _cost_question(pid: int, source: CardInstance, kind: int,
 ## is one the player has ALREADY answered in an earlier run of the same
 ## action, whose answer is waiting in the mailbox.
 func _hold_cost_choice(question: PlayerChoice, action: Dictionary) -> bool:
+	_rec(self, &"_cost_asked")
 	_cost_asked += 1
 	if _cost_asked <= _cost_answers:
 		# The player's own answer to THIS question, parked now so the ask
@@ -8193,11 +9831,16 @@ func _replay_cost_action(action: Dictionary) -> String:
 				return ""
 			# What _enter_step does between the two (bug pass 2026-10-03:
 			# the replay skipped it, so "until your next untap step"
-			# effects outlived a human's "Play this turn." by a turn).
-			continuous.expire_untap_of(active_player)
-			recalculate()
-			if _untap_step():
-				_advance_step()
+			# effects outlived a human's "Play this turn." by a turn) —
+			# one shared helper since Pack 8, so the census, the skip and
+			# the phasing cannot be forgotten here either.
+			_run_untap_step()
+			return ""
+		"upkeep_batch":
+			# The upkeep's trigger batch (CR 503.1a): re-run the ordering
+			# questions with the answers in hand, then priority as usual.
+			if _flush_upkeep_batch(int(action.get("untap_raised", 0))):
+				_open_priority()
 			return ""
 		"trigger_target":
 			# A targeted trigger's question (CR 603.3d), put as a player
@@ -8332,6 +9975,7 @@ func _resolve_spell(item: StackItem) -> void:
 			recalculate()
 		else:
 			_put_on_battlefield(inst, item.controller)
+		_stamp_cast_permanent(inst, item.controller)
 	else:
 		log_line("Resolving: %s" % inst.data.card_name, inst, "resolve")
 		_run_effects(item)
@@ -8348,6 +9992,8 @@ func _spell_to_graveyard(inst: CardInstance) -> void:
 		_rec_move(inst, inst.owner_id, Mtg.Zone.EXILE)
 		_rec(inst, &"exile_after_resolution")
 		inst.exile_after_resolution = false
+		_rec(inst, &"graveyard_exile_spell")
+		inst.graveyard_exile_spell = false
 		_enter_exile(inst)
 		players[inst.owner_id].exile.append(inst)
 		log_line("%s is exiled" % inst.data.card_name, inst)
@@ -8360,8 +10006,9 @@ func _spell_to_graveyard(inst: CardInstance) -> void:
 		_instances.erase(inst.id)
 		return
 	_rec_move(inst, inst.owner_id, Mtg.Zone.GRAVEYARD)
-	_enter_graveyard(inst)
-	players[inst.owner_id].graveyard.append(inst)
+	# Bösium Strip's "exile it instead" and Forbidden Crypt both apply here,
+	# to a resolved spell and to a fizzled one alike.
+	_land_in_graveyard(inst)
 
 
 ## Run a stack item's effects in order, pairing each targeting effect with
@@ -8450,6 +10097,11 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 		_rec(self, &"_battlefield_order")
 	inst.zone = Mtg.Zone.BATTLEFIELD
 	inst.controller_id = controller
+	if inst.graveyard_exile_spell:
+		# A spell's "if it would be put into a graveyard, exile it instead"
+		# (Bösium Strip) ends when it stops being a spell (CR 400.7).
+		_rec(inst, &"graveyard_exile_spell")
+		inst.graveyard_exile_spell = false
 	# CR 613.7b — a permanent receives a timestamp when it enters the
 	# battlefield, and it is the same clock every floating effect is stamped
 	# from, so a static's layer-6 grant can be ordered against an
@@ -8572,9 +10224,8 @@ func _arrival_refused(inst: CardInstance, why: String) -> void:
 			if not home.graveyard.has(inst):
 				home.graveyard.append(inst)
 		_:
-			_enter_graveyard(inst)
 			if not home.graveyard.has(inst):
-				home.graveyard.append(inst)
+				_land_in_graveyard(inst)   # a refused permanent SPELL (Forbidden Crypt applies)
 	_emit_state()
 
 
@@ -8680,6 +10331,22 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 		log_line("%s is exiled instead of dying" % inst.data.card_name)
 		exile_permanent(inst)
 		return
+	# "If this creature would die, put it on top of its owner's library
+	# instead" (Gravebane Zombie, CR 614.1) — no dies-trigger either.
+	# SIMPLIFIED (docs/ROADMAP.md, "Two dying-card replacements"): with a
+	# Forbidden Crypt also applying, the card's own replacement is applied
+	# without asking (CR 616.1 lets its controller choose; this order keeps
+	# the card).
+	if died and inst.data.dies_to_library_top and not inst.is_token:
+		log_line("%s goes on top of its owner's library instead of dying" % inst.data.card_name)
+		return_permanent_to_library_top(inst)
+		return
+	# Forbidden Crypt: the card is exiled instead of being put into its
+	# owner's graveyard — so it never DIES (CR 700.4), no dies-trigger.
+	if _graveyard_becomes_exile(inst):
+		log_line("%s is exiled instead of being put into a graveyard" % inst.data.card_name)
+		exile_permanent(inst)
+		return
 	var controller := inst.controller_id
 	_rec_departure(inst, inst.owner_id, Mtg.Zone.GRAVEYARD)
 	# Snapshot per-turn bookkeeping BEFORE the battlefield-state wipe —
@@ -8701,6 +10368,13 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 	# Anything attached to it is now orphaned; SBA sweeps it to the graveyard.
 	inst.clear_battlefield_state()
 	_enter_graveyard(inst)
+	# "For each creature put into YOUR graveyard from the battlefield this
+	# turn" (Asmira, Urborg Justice): its OWNER's tally — a token included,
+	# it reached that graveyard before it ceased to exist (CR 111.7). Last
+	# known information decides what it was (CR 608.2h).
+	if (inst.last_types & Mtg.CardType.CREATURE) != 0:
+		_rec(players[inst.owner_id], &"creatures_to_graveyard_this_turn")
+		players[inst.owner_id].creatures_to_graveyard_this_turn += 1
 	# A TOKEN ceases to exist instead of resting in a graveyard
 	# (CR 704.5e) — its dies-trigger still fires, then it is gone.
 	if not inst.is_token:
@@ -8813,6 +10487,39 @@ func _enter_graveyard(inst: CardInstance) -> void:
 	_rec(inst, &"graveyard_entry")
 	inst.zone = Mtg.Zone.GRAVEYARD
 	inst.graveyard_entry += 1
+
+
+## FORBIDDEN CRYPT'S GATE: "If a card would be put into your graveyard from
+## anywhere, exile that card instead" (CR 614.1). True when [param inst] —
+## a CARD (a token or a spell copy is not one) — is about to be put into
+## the graveyard of an owner whose graveyard exiles.
+func _graveyard_becomes_exile(inst: CardInstance) -> bool:
+	return inst != null and not inst.is_token and not inst.is_copy \
+		and players[inst.owner_id].graveyard_becomes_exile
+
+
+## THE ONE DOOR INTO A GRAVEYARD for a card already out of every zone
+## array: its owner's graveyard, or exile when [method
+## _graveyard_becomes_exile] says so. The caller journaled the move with
+## [method _rec_move] (toward the graveyard); the exile array is recorded
+## here. Returns true when the card is in the graveyard.
+func _land_in_graveyard(inst: CardInstance) -> bool:
+	var home := players[inst.owner_id]
+	var spell_exiled := inst.graveyard_exile_spell   # Bösium Strip's cast
+	if spell_exiled:
+		_rec(inst, &"graveyard_exile_spell")
+		inst.graveyard_exile_spell = false
+	if spell_exiled or _graveyard_becomes_exile(inst):
+		_rec(home, &"exile")
+		_rec(inst, &"face_down")
+		_enter_exile(inst)
+		inst.face_down = false
+		home.exile.append(inst)
+		log_line("%s is exiled instead of being put into a graveyard" % inst.data.card_name, inst)
+		return false
+	_enter_graveyard(inst)
+	home.graveyard.append(inst)
+	return true
 
 
 func _enter_exile(inst: CardInstance) -> void:
@@ -8999,7 +10706,9 @@ func _dispatch_delayed(pid: int, event: GameEvent) -> void:
 ## on a card on the STACK too, and the change rides along when that spell
 ## resolves into a permanent, exactly as printed.
 func set_color(inst: CardInstance, color_mask: int) -> void:
-	if inst == null:
+	# A spell on the stack may be painted; a phased-out permanent may not
+	# (CR 702.26e).
+	if inst == null or inst.phased_out:
 		return
 	_rec(inst, &"color_override")
 	inst.color_override = color_mask
@@ -9103,6 +10812,45 @@ func set_block(blocker: CardInstance, attacker: CardInstance) -> void:
 	recalculate()
 
 
+## "Target creature BECOMES BLOCKED" — by an EFFECT, with no creature
+## blocking it (Dazzling Beauty, Choking Vines; [MakeBlockedEffect]).
+## CR 509.1h: an attacking creature stays unblocked "until ... an effect
+## says that it becomes blocked", and stays blocked from then on — so the
+## damage step treats it exactly like an attacker whose blockers have all
+## gone: no combat damage, unless it has TRAMPLE, which then assigns all
+## of it to the player (CR 702.19e; [method _collect_damage_requests] reads
+## [method CombatState.was_blocked]). "Can't be blocked" restricts the
+## DECLARATION (CR 509.1b), not this. A member of an attacking band takes
+## the whole band with it (CR 702.22i).
+##
+## Triggers: BECOMES_BLOCKED for every creature that was unblocked
+## (CR 509.3c) — and nothing on BLOCKED, because no creature blocked it
+## (CR 509.3d: flanking and "becomes blocked by a creature" stay silent).
+## "Attacks and isn't blocked" has already triggered as blockers were
+## declared and is not undone (CR 509.3g).
+##
+## Returns false, having changed nothing, when [param attacker] is not an
+## attacking creature on the battlefield or is already blocked.
+func make_blocked(attacker: CardInstance) -> bool:
+	if not is_present(attacker) or not combat.attackers.has(attacker.id):
+		return false
+	var band: Array = combat.band_of(attacker.id)
+	if combat.was_blocked(band):
+		return false
+	_rec(combat, &"blocked_attackers")
+	for id in band:
+		combat.blocked_attackers[int(id)] = true
+	log_line("%s becomes blocked" % attacker.data.card_name, attacker, "block",
+		attacker.controller_id)
+	for id in band:
+		var body := find_instance(int(id))
+		if body != null:
+			dispatch_event(Mtg.EventType.BECOMES_BLOCKED,
+				{"instance": body, "controller": body.controller_id})
+	recalculate()
+	return true
+
+
 ## Record without redispatching a "blocks" trigger. General Jarkeld changes
 ## the pair, not whether a creature became a blocker. Integer-only history
 ## also works after tokens disappear and never retains departed objects.
@@ -9146,7 +10894,9 @@ func change_control(inst: CardInstance, new_pid: int) -> void:
 
 ## Physical move used only after evaluating all active control effects.
 func _set_controller(inst: CardInstance, new_pid: int) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD or inst.controller_id == new_pid:
+	# A phased-out permanent never changes control (CR 702.26d) — moving it
+	# would also append it to a battlefield array while it is parked.
+	if not is_present(inst) or inst.controller_id == new_pid:
 		return
 	# "Other players can't gain control of them" (Guardian Beast). Every
 	# control change in the engine comes through here, so one gate covers
@@ -9198,7 +10948,7 @@ func _set_controller(inst: CardInstance, new_pid: int) -> void:
 func exchange_control(a: CardInstance, b: CardInstance) -> bool:
 	if a == null or b == null or a == b:
 		return false
-	if a.zone != Mtg.Zone.BATTLEFIELD or b.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(a) or not is_present(b):   # CR 701.10c, 702.26b
 		return false
 	var pa := a.controller_id
 	var pb := b.controller_id
@@ -9245,14 +10995,23 @@ func aura_can_enchant(aura: CardInstance, host: CardInstance) -> bool:
 		if not aura.memory.get("raised", false):
 			return host.zone == Mtg.Zone.GRAVEYARD and host.graveyard_entry == int(aura.memory.get("grave_entry", host.graveyard_entry))
 		return host.zone == Mtg.Zone.BATTLEFIELD and host.is_creature() and host.id == int(aura.memory.get("raised_id", -1)) and host.layer_timestamp == int(aura.memory.get("raised_stamp", -1))
-	return aura.data.aura_target == null or aura.data.aura_target.can_attach_to(self, host)
+	var spec: TargetSpec = aura.data.aura_target
+	if spec == null:
+		return true
+	if not spec.can_attach_to(self, host):
+		return false
+	# CR 303.4d/704.5m: an enchant restriction stated relative to the Aura's
+	# controller ("enchant creature you control", "… an opponent controls")
+	# is re-checked as a state-based action, so a control change of either
+	# object can make the Aura fall off.
+	return not spec.source_filter.is_valid() or spec.source_filter.call(self, aura, host)
 
 
 ## Put [param count] counters of [param kind] on a permanent ("+1/+1",
 ## "-1/-1", ...). Characteristics recompute; -1/-1 deaths fall out of the
 ## toughness state-based action.
 func add_counters(inst: CardInstance, kind: String, count := 1) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(inst):   # CR 702.26b
 		return
 	_rec(inst, &"counters")
 	inst.counters[kind] = int(inst.counters.get(kind, 0)) + count
@@ -9267,7 +11026,7 @@ func add_counters(inst: CardInstance, kind: String, count := 1) -> void:
 ## so a resolution may strip a permanent that is neither its source nor
 ## its target. Characteristics recompute.
 func remove_counters(inst: CardInstance, kind: String, count := 1) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(inst):   # CR 702.26b
 		return
 	var had := int(inst.counters.get(kind, 0))
 	if had <= 0 or count <= 0:
@@ -9388,6 +11147,7 @@ func begin_simultaneous() -> void:
 	if _defer_depth == 0:
 		_rec(self, &"_departure_batch")
 		_departure_batch = _death_listener_snapshot()
+		_begin_damage_event()   # the bracket's damage is ONE event (CR 615.8)
 	_defer_depth += 1
 	_defer_state_based_actions = true
 
@@ -9458,7 +11218,9 @@ func check_state_based_actions() -> void:
 		for inst in all_battlefield():
 			if not inst.is_creature(): continue
 			if inst.cur_toughness <= 0: lethal.append([inst, true])
-			elif not inst.cur_indestructible and inst.damage >= inst.cur_toughness: lethal.append([inst, false])
+			elif not inst.cur_indestructible and inst.damage >= inst.cur_toughness \
+					and not (inst.cur_lethal_needs_single_source and lethal_damage_spared(inst)):
+				lethal.append([inst, false])   # Ogre Enforcer: one source's share must be lethal
 		if not lethal.is_empty():
 			_rec(self, &"_departure_batch")
 			_departure_batch = _death_listener_snapshot()
@@ -9567,7 +11329,10 @@ func check_state_based_actions() -> void:
 				var host := find_instance(inst.attached_to)
 				if inst.data.aura_graveyard_entry and not inst.memory.get("raised", false) and aura_can_enchant(inst, host):
 					continue
-				if host == null or host.zone != Mtg.Zone.BATTLEFIELD:
+				# is_present: an Aura left behind by a host that phased out
+				# (it couldn't ride along) is attached to something that is
+				# treated as though it doesn't exist (CR 702.26b, 704.5m).
+				if not is_present(host):
 					log_line("%s is no longer attached and is put into the graveyard" % inst.data.card_name)
 					_move_to_graveyard(inst, false)
 					acted = true
@@ -9595,8 +11360,10 @@ func check_state_based_actions() -> void:
 				# protection from the aura's color sheds it — EXCEPT the
 				# protection this very aura grants ("This effect doesn't
 				# remove this Aura" — the Wards).
+				# The exemption reads THIS aura's chosen colour too (Ward of
+				# Lights, CardData.self_protection_mask).
 				if (host.cur_protection & inst.cur_colors
-						& ~inst.data.aura_grants_protection) != 0:
+						& ~inst.data.self_protection_mask(inst)) != 0:
 					log_line("%s falls off %s (protection)" % [
 						inst.data.card_name, host.data.card_name])
 					host.attachments.erase(inst.id)
@@ -9664,18 +11431,17 @@ func _is_sustaining(inst: CardInstance) -> bool:
 	var oyster: Array = inst.memory.get("hml_oyster", [])
 	if oyster.size() == 3 and inst.untap_sequence == int(oyster[2]):
 		var captive := find_instance(int(oyster[0]))
-		if captive != null and captive.zone == Mtg.Zone.BATTLEFIELD and captive.layer_timestamp == int(oyster[1]): return true
+		if is_present(captive) and captive.layer_timestamp == int(oyster[1]): return true
 	# Fallen Empires' shield/sword bonuses last only while the artifact
 	# stays tapped, and only for the original battlefield incarnation.
 	var fem_held: Array = inst.memory.get("fem_held", [])
 	if fem_held.size() == 4:
 		var held := find_instance(int(fem_held[0]))
-		if held != null and held.zone == Mtg.Zone.BATTLEFIELD \
-				and held.layer_timestamp == int(fem_held[3]):
+		if is_present(held) and held.layer_timestamp == int(fem_held[3]):
 			return true
 	if inst.memory.has("holding"):
 		var held := find_instance(int(inst.memory["holding"]))
-		if held != null and held.zone == Mtg.Zone.BATTLEFIELD:
+		if is_present(held):   # 702.26f: a phased-out one is no longer held
 			return true
 	# Tawnos's Coffin keeps its prisoner in exile only while it stays tapped.
 	if inst.memory.has("buried"):
@@ -9697,7 +11463,7 @@ func _is_sustaining(inst: CardInstance) -> bool:
 ## power remains less than or equal to this creature's power"*.
 func gain_control_leashed(victim: CardInstance, leash: CardInstance,
 		needs_tapped := false, power_capped := false, control_bound := true) -> void:
-	if victim.zone != Mtg.Zone.BATTLEFIELD or leash.zone != Mtg.Zone.BATTLEFIELD:
+	if not is_present(victim) or not is_present(leash):   # CR 702.26b
 		return
 	CONTROL_LAYERS.add(self, victim, leash.controller_id, "leash", leash,
 		needs_tapped, power_capped, control_bound)
@@ -9928,6 +11694,24 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 					grave_item.description = "%s — %s" % [
 						buried.data.card_name, grave_trig.text]
 					_push_trigger(grave_item)
+	# "When this card is put into your graveyard from your library" (Gaea's
+	# Blessing, CR 603.6a): the card that just MOVED hears its own trip
+	# with its graveyard triggers. Only the moved card is offered, so the
+	# event stays off every other graveyard's hot path.
+	if type == Mtg.EventType.PUT_INTO_GRAVEYARD_FROM_LIBRARY:
+		var moved: CardInstance = data.get("instance", null)
+		if moved != null and moved.zone == Mtg.Zone.GRAVEYARD:
+			for grave_trig in moved.data.graveyard_triggers:
+				if not grave_trig.matches(self, moved, event):
+					continue
+				var moved_item := StackItem.new()
+				moved_item.kind = Mtg.StackKind.TRIGGER
+				moved_item.card = moved
+				moved_item.controller = moved.owner_id
+				moved_item.trigger = grave_trig
+				moved_item.event = event
+				moved_item.description = "%s — %s" % [moved.data.card_name, grave_trig.text]
+				_push_trigger(moved_item)
 	all_battlefield()
 	var delayed_listen := _delayed_listens(type)
 	var death_batch := type in [Mtg.EventType.DIES, Mtg.EventType.LEAVES_BATTLEFIELD] and not _departure_batch.is_empty()
@@ -9948,8 +11732,11 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 	# active player's dying Onulet went on above the opponent's Soul Net;
 	# the dies-trigger stacks the suite had pinned to that order were
 	# re-pinned to APNAP.
+	# A PHASED-OUT permanent hearing its own phase-out (Teferi's Imp, CR
+	# 603.10a) listens the same way: it is off the battlefield arrays while
+	# keeping zone BATTLEFIELD.
 	var departed_seat := -1
-	if also_listen != null and also_listen.zone != Mtg.Zone.BATTLEFIELD:
+	if also_listen != null and (also_listen.zone != Mtg.Zone.BATTLEFIELD or also_listen.phased_out):
 		departed_seat = also_listen.controller_id if also_listen.zone == Mtg.Zone.STACK \
 			else int(data.get("from_controller", data.get("controller", also_listen.controller_id)))
 	for seat_index in seats.size():
@@ -10072,6 +11859,9 @@ func _push_trigger(item: StackItem) -> void:
 	_next_stack_id += 1
 	stack.append(item)
 	log_line("Trigger: %s" % item.description, item.card, "trigger", item.controller)
+	# Its targets become the targets at the next priority moment, once a
+	# human seat has named them (see _flush_target_announcements).
+	_queue_target_announcement(item)
 
 
 # ------------------------------------------------- targeted TRIGGERS --
@@ -10107,10 +11897,17 @@ func _arm_trigger_targets(item: StackItem) -> bool:
 	if trig == null or (trig.target_spec == null and trig.modes.is_empty()):
 		return true
 	var refs: Array[TargetRef] = []
+	var slot_refs: Array = []
 	if trig.target_spec != null:
 		refs = _trigger_target_candidates(item)
 		if refs.size() < trig.target_min:
 			return false
+		# SEVERAL SLOTS (TriggeredAbility.and_targeting): every slot needs a
+		# legal target, or the trigger is removed (CR 603.3d).
+		if trig.target_slot_count() > 1:
+			slot_refs = _trigger_slot_candidates(item, refs)
+			if slot_refs.is_empty():
+				return false
 	if not trig.modes.is_empty():
 		var mode_q := _trigger_mode_question(item)
 		if _seat_will_be_held(mode_q):
@@ -10120,6 +11917,17 @@ func _arm_trigger_targets(item: StackItem) -> bool:
 			_set_trigger_mode(item, mode_q.hint if _probing
 				else _ask_trigger_mode(item, mode_q))
 	if trig.target_spec == null:
+		return true
+	if not slot_refs.is_empty():
+		var first_q := _trigger_question(item, slot_refs[0], 0)
+		if item.target_held or _seat_will_be_held(first_q):
+			item.target_held = true
+			var provisional: Array[TargetRef] = []
+			for candidates in slot_refs:
+				provisional.append(candidates[0])
+			_set_trigger_targets(item, provisional)   # replaced at priority
+		else:
+			_pick_trigger_slots(item, slot_refs)
 		return true
 	if trig.target_min != 1 or trig.target_max != 1:
 		var count_q := _trigger_count_question(item, refs.size())
@@ -10178,12 +11986,15 @@ func _set_trigger_mode(item: StackItem, mode: int) -> void:
 
 ## Every legal target of [param item]'s trigger right now, ranked with the
 ## trigger's own order (TriggeredAbility.target_order) — first is best for
-## its controller.
-func _trigger_target_candidates(item: StackItem) -> Array[TargetRef]:
+## its controller. [param slot] picks one of a multi-target trigger's slots
+## (TriggeredAbility.and_targeting); 0 is the first, and the only one most
+## triggers have.
+func _trigger_target_candidates(item: StackItem, slot := 0) -> Array[TargetRef]:
 	var trig := item.trigger
-	var refs: Array[TargetRef] = trig.target_spec.legal_targets(self, item.card)
-	if trig.target_order.is_valid() and refs.size() > 1:
-		var order: Callable = trig.target_order
+	var refs: Array[TargetRef] = trig.slot_spec(slot).legal_targets(self, item.card)
+	var slot_order: Callable = trig.slot_order(slot)
+	if slot_order.is_valid() and refs.size() > 1:
+		var order: Callable = slot_order
 		var source: CardInstance = item.card
 		var outer := _ranking_item
 		_ranking_item = item      # whose preference it is: controller_acting_for
@@ -10193,15 +12004,49 @@ func _trigger_target_candidates(item: StackItem) -> Array[TargetRef]:
 	return refs
 
 
+## A MULTI-TARGET trigger's candidates per slot (CR 603.3d, 601.2c):
+## [param first] is slot 0's, already ranked; the rest are ranked here.
+## Empty when any slot has no legal target — the trigger cannot go on.
+## Slots are independent: the same object may fill two of them (CR 115.3).
+func _trigger_slot_candidates(item: StackItem, first: Array[TargetRef]) -> Array:
+	if first.is_empty():
+		return []
+	var out: Array = [first]
+	for slot in range(1, item.trigger.target_slot_count()):
+		var refs := _trigger_target_candidates(item, slot)
+		if refs.is_empty():
+			return []
+		out.append(refs)
+	return out
+
+
+## Ask the seat for one target PER SLOT, in slot order, through the same
+## record/replay funnel as [method _pick_multiple_trigger_targets]: with a
+## [param replay] a question the seat has not answered yet holds the duel
+## (true is returned and nothing is recorded); otherwise every answer is
+## taken on the spot (a probe takes each slot's ranked first).
+func _pick_trigger_slots(item: StackItem, slot_refs: Array, replay := {}) -> bool:
+	var picks: Array[TargetRef] = []
+	for slot in slot_refs.size():
+		var refs: Array[TargetRef] = slot_refs[slot]
+		var question := _trigger_question(item, refs, slot)
+		if not replay.is_empty() and _hold_cost_choice(question, replay):
+			return true
+		picks.append(refs[0] if _probing else _ask_trigger_target(item, refs, question))
+	_set_trigger_targets(item, picks)
+	return false
+
+
 ## The question a targeted trigger puts to its controller: a CARD list
 ## when every candidate is a card, an OPTION list of names when a player
 ## is among them ("target player" — Axelrod Gunnarson, Relic Bind). Ranked
-## (PlayerChoice.ordered), so the first entry is the hint.
-func _trigger_question(item: StackItem, refs: Array[TargetRef]) -> PlayerChoice:
+## (PlayerChoice.ordered), so the first entry is the hint. [param slot]:
+## which of a multi-target trigger's slots it asks for.
+func _trigger_question(item: StackItem, refs: Array[TargetRef], slot := 0) -> PlayerChoice:
 	var trig := item.trigger
-	var prompt: String = trig.target_prompt
+	var prompt: String = trig.slot_prompt(slot)
 	if prompt == "":
-		prompt = "Select %s." % trig.target_spec.description
+		prompt = "Select %s." % trig.slot_spec(slot).description
 	var name: String = item.card.data.card_name
 	var cards: Array[CardInstance] = []
 	for ref in refs:
@@ -10272,6 +12117,12 @@ func _set_trigger_target(item: StackItem, ref: TargetRef) -> void:
 func _set_trigger_targets(item: StackItem, targets: Array[TargetRef]) -> void:
 	item.targets = targets
 	item.target_groups = [targets]
+	if item.trigger.target_slot_count() > 1:
+		# One group per SLOT (TriggeredAbility.and_targeting), in slot order.
+		item.target_groups = []
+		for ref in targets:
+			var group: Array[TargetRef] = [ref]
+			item.target_groups.append(group)
 	item.trigger_target_incarnations = {}
 	var labels: Array[String] = []
 	for ref in targets:
@@ -10336,9 +12187,13 @@ func _hold_trigger_targets(actor := -1) -> bool:
 	for item in held:
 		var trig := item.trigger
 		var refs: Array[TargetRef] = []
+		var slot_refs: Array = []
 		if trig.target_spec != null:
 			refs = _trigger_target_candidates(item)
-			if refs.size() < trig.target_min:
+			if trig.target_slot_count() > 1:
+				slot_refs = _trigger_slot_candidates(item, refs)
+			if refs.size() < trig.target_min \
+					or (trig.target_slot_count() > 1 and slot_refs.is_empty()):
 				log_line("Trigger: %s — no legal target, removed (CR 603.3d)"
 					% item.description)
 				_rec(self, &"stack")
@@ -10352,6 +12207,9 @@ func _hold_trigger_targets(actor := -1) -> bool:
 				return true
 			_set_trigger_mode(item, _ask_trigger_mode(item, mode_q))
 		if trig.target_spec == null:
+			continue
+		if not slot_refs.is_empty():
+			if _pick_trigger_slots(item, slot_refs, replay): return true
 			continue
 		if trig.target_min != 1 or trig.target_max != 1:
 			if _pick_multiple_trigger_targets(item, refs, replay): return true
@@ -10384,16 +12242,28 @@ static func _trigger_incarnation(i: CardInstance) -> Array:
 
 func _legal_trigger_targets(item: StackItem) -> Array[TargetRef]:
 	var out: Array[TargetRef] = []
-	var spec := item.trigger.target_spec
-	if spec == null: return out
-	for ref in item.targets:
-		# The trigger's controller, not its departed source's (CR 603.3a).
-		if not spec.is_legal(self, ref, item.card, [], item.controller): continue
-		if item.trigger_target_incarnations.has(ref.instance_id):
-			var i := find_instance(ref.instance_id)
-			if i == null or _trigger_incarnation(i) != item.trigger_target_incarnations[ref.instance_id]: continue
-		out.append(ref)
+	if item.trigger.target_spec == null: return out
+	for i in item.targets.size():
+		if _trigger_ref_legal(item, i):
+			out.append(item.targets[i])
 	return out
+
+
+## Is the [param index]-th chosen target of trigger [param item] still
+## legal — for its own slot's spec (TriggeredAbility.and_targeting), and
+## still the object that was chosen (CR 400.7)?
+func _trigger_ref_legal(item: StackItem, index: int) -> bool:
+	var trig := item.trigger
+	var ref: TargetRef = item.targets[index]
+	var spec: TargetSpec = trig.slot_spec(index) \
+		if trig.target_slot_count() > 1 and index < trig.target_slot_count() \
+		else trig.target_spec
+	# The trigger's controller, not its departed source's (CR 603.3a).
+	if not spec.is_legal(self, ref, item.card, [], item.controller): return false
+	if item.trigger_target_incarnations.has(ref.instance_id):
+		var i := find_instance(ref.instance_id)
+		if i == null or _trigger_incarnation(i) != item.trigger_target_incarnations[ref.instance_id]: return false
+	return true
 
 
 ## Recalculate after a permanent's TAPPED state changed.
@@ -10412,7 +12282,11 @@ func _recalculate_for_tap_change() -> void:
 	if not _control_layers.is_empty():
 		recalculate()
 		return
-	if battlefield_with_statics().is_empty() and continuous._floating_statics.is_empty():
+	# Under the 1997 rule a tap SUSPENDS an artifact's continuous effects —
+	# its play and entry bans too (City in a Bottle), which are not statics
+	# in this list — so the flag must be re-derived whatever the list says.
+	if battlefield_with_statics().is_empty() and continuous._floating_statics.is_empty() \
+			and not rules.tapped_artifacts_stop:
 		_emit_state()
 		return
 	recalculate()
@@ -10616,6 +12490,24 @@ func current_targets() -> Array:
 	return _resolving_targets
 
 
+## The target chosen for SLOT [param slot] of the multi-target trigger
+## being resolved right now (TriggeredAbility.and_targeting — Goblin
+## Grenadiers' slot 0 "target creature", slot 1 "target land"), or null
+## when that target has become illegal: CR 608.2b — the trigger fizzles
+## only when EVERY target is illegal, and otherwise does what it can to the
+## rest. [method current_targets] lists only the legal ones and so cannot
+## say WHICH slot is missing; this can. Null outside a trigger resolution
+## and for a slot the trigger does not have.
+func current_trigger_target(slot: int) -> TargetRef:
+	var item := _resolving_item
+	if item == null or item.kind != Mtg.StackKind.TRIGGER or item.trigger == null \
+			or item.trigger.target_spec == null:
+		return null
+	if slot < 0 or slot >= item.targets.size():
+		return null
+	return item.targets[slot] if _trigger_ref_legal(item, slot) else null
+
+
 ## The mode the modal trigger being resolved right now was put on the
 ## stack with (TriggeredAbility.modal — an index into its modes; CR
 ## 603.3c), read by its on_resolve callable. Relic Bind is the pool's
@@ -10714,6 +12606,7 @@ func record_choice(choice: PlayerChoice, seat_wanted_it := false) -> void:
 		# resolution's list (which _preflight reads and the rewind then
 		# clears) and nowhere else. No log line, no ledger, no signal —
 		# none of this has happened yet.
+		_rec(self, &"_resolving_choices")   # a search node's ask, unmade with it
 		_resolving_choices.append(choice)
 		return
 	choice_log.append(choice)
@@ -10768,7 +12661,21 @@ func _resume_priority(pid: int) -> void:
 	_passes = 0
 	if _hold_trigger_targets(pid):
 		return
+	if _announce_queued_targets(pid):
+		return
 	_emit_state()
+
+
+## The queued BECAME_TARGET announcements go out as a player would receive
+## priority, after every held trigger target is named; what they trigger
+## may itself need a target named, so the hold is asked again. True when
+## the duel is held on such a question.
+func _announce_queued_targets(actor := -1) -> bool:
+	if _target_announcements.is_empty():
+		return false
+	_flush_target_announcements()
+	check_state_based_actions()
+	return _hold_trigger_targets(actor)
 
 
 func _open_priority() -> void:
@@ -10784,6 +12691,9 @@ func _open_priority() -> void:
 	# controller names its target (CR 603.3d). A human seat's question is
 	# put HERE and holds the duel open; see the targeted-triggers block.
 	if _hold_trigger_targets():
+		return
+	# Their targets (and a copy's) BECOME the targets now (CR 603.2).
+	if _announce_queued_targets():
 		return
 	# THE DAMAGE-PREVENTION WINDOW (§6.8) sits exactly here, because
 	# `Duel.hlp` puts it at the same moment: damage has been dealt and
@@ -10860,6 +12770,13 @@ func _advance_step() -> void:
 	_rec_turn()   # the search journal, if one is running (see TURN_FIELDS)
 	_close_step_boundary()
 	if game_over:
+		return
+	# CR 514.3b: a cleanup step in which players received priority is
+	# followed by ANOTHER cleanup step, not by the next turn — the hand
+	# size, the damage and the "next cleanup step" triggers are all asked
+	# again ([method _cleanup_triggers]).
+	if _turn_steps[_step_index] == Mtg.Step.CLEANUP:
+		_enter_step(_step_index)
 		return
 	# "Until the end of your next upkeep" (Halfdane) ends as the upkeep
 	# step ends (CR 611.2b) — the effects created before this turn only.
@@ -10988,6 +12905,17 @@ func _phase_ends_now() -> bool:
 func _begin_turn() -> bool:
 	_begin_cost_choices()
 	var pid := active_player
+	# "You skip your next turn" (Chronatog, CR 614.10): the turn that would
+	# begin is replaced by nothing, the next one follows. Applied BEFORE
+	# Time Vault's optional replacement — the affected player's CR 616.1
+	# order, and never a worse one for them: a Vault still tapped is asked
+	# again as their next turn begins, while spending this turn on the
+	# Vault would leave the skip pending for that next turn as well.
+	if players[pid].turns_to_skip > 0:
+		_rec(players[pid], &"turns_to_skip")
+		players[pid].turns_to_skip -= 1
+		_skip_turn()
+		return false
 	for inst in players[pid].battlefield:
 		if not inst.data.skips_turn_to_untap or not inst.tapped \
 				or inst.cur_abilities_silenced:
@@ -11061,28 +12989,301 @@ func _skip_turn() -> void:
 
 
 func skip_untap_during_next_step(inst: CardInstance, pid: int) -> void:
-	if inst.zone != Mtg.Zone.BATTLEFIELD or inst.skip_untap_for.has(pid): return
+	if not is_present(inst) or inst.skip_untap_for.has(pid): return
 	_rec(inst, &"skip_untap_for")
 	inst.skip_untap_for.append(pid)
+
+
+# ------------------------------------------------ turn structure (Pack 8 E8) --
+
+## "You skip your next turn" (Chronatog): [param count] more of
+## [param pid]'s turns are skipped, the next one first. "Skip" is a
+## replacement (CR 614.10: "instead of taking that turn, do nothing"), so
+## the turn does not happen at all — no untap, upkeep, draw or cleanup, and
+## nothing scheduled for that player's "next turn" fires (614.10a: it waits
+## for one that is not skipped); two such effects skip the next two.
+## Consumed as the turn would begin ([method _begin_turn]); the turn after
+## it follows as usual, an extra turn queued behind it included.
+func skip_next_turn(pid: int, count := 1) -> void:
+	if count <= 0:
+		return
+	_rec(players[pid], &"turns_to_skip")
+	players[pid].turns_to_skip += count
+	log_line("%s will skip their next turn" % players[pid].player_name, null, "", pid)
+
+
+## "You skip your next untap step" (Avizoa): [param count] more of
+## [param pid]'s untap steps are skipped (CR 614.10, 614.10a). A skipped
+## untap step does nothing at all — nothing phases (CR 702.26m), nothing
+## untaps, and "your next untap step" effects wait for one that happens —
+## but the turn still began, so summoning sickness ends and the land drop
+## resets ([method _turn_start_sweep]). The STATIC skip (Sands of Time's
+## "each player skips their untap step") is [member MtgPlayer.skips_untap_step],
+## written by a static on every recalculation.
+func skip_next_untap_step(pid: int, count := 1) -> void:
+	if count <= 0:
+		return
+	_rec(players[pid], &"skip_untap_steps")
+	players[pid].skip_untap_steps += count
+	log_line("%s will skip their next untap step" % players[pid].player_name,
+		null, "", pid)
+
+
+## "During your next untap step, as you untap your permanents, return this
+## land to its owner's hand" (Undiscovered Paradise): run [param action]
+## (`func(game: MtgGame) -> void`) during [param pid]'s next untap step
+## that actually happens — a skipped one does not count (CR 614.10a) — as
+## that player's permanents untap (CR 502.3): after the untap, in the same
+## turn-based action, with no priority (502.4). With [param source] the
+## action is ABOUT that permanent and is dropped unless the very same
+## object is still there and phased in (CR 400.7, 702.26b). The action
+## outlives whatever scheduled it.
+func schedule_untap_step_action(pid: int, action: Callable,
+		source: CardInstance = null) -> void:
+	_rec(self, &"_untap_actions")
+	_untap_actions.append({"player": pid, "action": action,
+		"source": source.id if source != null else -1,
+		"stamp": source.layer_timestamp if source != null else -1})
+
+
+## The untap step as the turn machinery ENTERS it — once per turn that
+## begins (from [method _enter_step], and from the replay of a held
+## "begin your turn" question). Everything the step does exactly once sits
+## here, around [method _untap_step]'s own decisions, which may be HELD on a
+## question and re-run (answer_choice, kind "untap") without repeating any
+## of this:
+## 0. the pre-untap census — Power Surge counts what was untapped AS THE
+##    TURN BEGAN, before anything phases or untaps, and whether or not the
+##    step happens;
+## 1. a SKIPPED untap step (Sands of Time, Avizoa — CR 614.10) does nothing:
+##    no phasing (702.26m), no untapping, and no "until your next untap
+##    step" effect ends (614.10a). The turn's own beginning still happens
+##    ([method _turn_start_sweep]);
+## 2. otherwise: "until your next untap step" effects end (Orcish Farmer),
+##    then the phasing (CR 502.1, [method _phasing_step]), then the untap
+##    itself (502.3) — and no priority in it (502.4).
+func _run_untap_step() -> void:
+	var pid := active_player
+	# CR 502.4 / 503.1a: nobody gets priority in the untap step, so whatever
+	# triggers in it (a phase-in, an untap) WAITS and goes on the stack with
+	# the upkeep's own triggers as ONE batch — see _flush_upkeep_batch.
+	_freeze_stack()
+	_take_untap_census(pid)
+	if _untap_step_skipped(pid):
+		log_line("%s skips their untap step" % players[pid].player_name, null, "", pid)
+		_turn_start_sweep(pid)
+		recalculate()
+		_advance_step()
+		return
+	continuous.expire_untap_of(pid)
+	recalculate()
+	_phasing_step(pid)
+	if game_over:
+		return
+	if _untap_step():
+		_advance_step()   # no priority in untap (CR 502.4)
+
+
+## Is [param pid]'s untap step replaced away (CR 614.10)? A pending one-shot
+## (Avizoa) or the static skip (Sands of Time). When both want the same
+## step the one-shot is spent on it — the affected player's CR 616.1 order,
+## and never a worse one: kept, it would only skip a later step as well.
+func _untap_step_skipped(pid: int) -> bool:
+	var p := players[pid]
+	if p.skip_untap_steps > 0:
+		_rec(p, &"skip_untap_steps")
+		p.skip_untap_steps -= 1
+		return true
+	return p.skips_untap_step
+
+
+## Power Surge counts what is untapped AS THE TURN BEGINS, which is before
+## the untap step unties — or phases — anything: the whole "tap out or
+## burn" bargain of the card (2026-09-17). Taken once, by
+## [method _run_untap_step], before the phasing; a held untap step re-runs
+## [method _untap_step] but not this.
+func _take_untap_census(pid: int) -> void:
+	var standing := 0
+	for inst in players[pid].battlefield:
+		if inst.is_land() and not inst.tapped:
+			standing += 1
+	_rec(players[pid], &"untapped_lands_at_turn_start")
+	players[pid].untapped_lands_at_turn_start = standing
+
+
+## What BEGINNING [param pid]'s turn does to the permanents — run by the
+## untap step, and by a skipped one too, because a skipped untap step is
+## not a skipped turn:
+## - summoning sickness ends for everything [param pid] controls, the
+##   phased-out ones included (CR 302.6 asks only for control since the
+##   turn began, and phasing never interrupts control, 702.26d);
+## - Wall of Dust's "can't attack during its controller's next turn"
+##   becomes this turn's ban, and last turn's ends;
+## - "attacked this turn" and "could attack this turn" are per-TURN state
+##   and expire for every permanent, not just the active player's — Berserk,
+##   Clockwork Beast and Lurker read them about the OTHER player's creatures;
+##   cleared here rather than at cleanup because Goblin Rock Sled reads them
+##   at the end step;
+## - the land drop resets.
+func _turn_start_sweep(pid: int) -> void:
+	var mine: Array[CardInstance] = []
+	mine.append_array(players[pid].battlefield)
+	mine.append_array(players[pid].phased_out)
+	var everyone: Array[CardInstance] = []
+	everyone.append_array(all_battlefield())
+	everyone.append_array(phased_out_permanents())
+	if undo_log != null:
+		for inst in everyone:
+			for field in UNTAP_INSTANCE_FIELDS:
+				undo_log.record(inst, field, inst.get(field))
+		_rec(players[pid], &"lands_played_this_turn")
+	for inst in mine:
+		inst.summoning_sick = false
+		inst.cant_attack_this_turn = inst.cant_attack_next_turn
+		inst.cant_attack_next_turn = false
+	for inst in everyone:
+		inst.attacked_this_turn = false
+		inst.could_attack_this_turn = false
+	players[pid].lands_played_this_turn = 0
+
+
+## Run [param pid]'s due [method schedule_untap_step_action] entries, as
+## that player's permanents untap.
+func _run_untap_actions(pid: int) -> void:
+	if _untap_actions.is_empty():
+		return
+	var due: Array[Dictionary] = []
+	var still: Array[Dictionary] = []
+	for entry in _untap_actions:
+		if int(entry["player"]) == pid:
+			due.append(entry)
+		else:
+			still.append(entry)
+	if due.is_empty():
+		return
+	_rec(self, &"_untap_actions")
+	_untap_actions = still
+	for entry in due:
+		var source_id := int(entry["source"])
+		if source_id >= 0:
+			var source := find_instance(source_id)
+			if not is_present(source) or source.layer_timestamp != int(entry["stamp"]):
+				continue   # gone, back as a new object, or phased out
+		(entry["action"] as Callable).call(self)
+		if game_over:
+			return
+
+
+## The prompt of the upkeep batch's ordering question (one per pick).
+const TRIGGER_ORDER_PROMPT := "Which of your triggered abilities resolves first?"
+
+
+## THE UPKEEP'S TRIGGER BATCH (CR 503.1a): "any abilities that triggered
+## during the untap step and any abilities that triggered at the beginning
+## of the upkeep are put onto the stack before the active player gets
+## priority; the order in which they triggered doesn't matter." The untap
+## step froze the stack ([method _run_untap_step]); everything that
+## triggered since — the untap step's phase-ins and untaps, the upkeep's
+## own triggers, anything a state-based action or a glyph tick raised on
+## the way — waits in [member _waiting_triggers] and goes on here as ONE
+## batch: the active player's first, then the other's (APNAP, CR 603.3b),
+## each player putting their own on in the order THEY choose — Warping
+## Wurm's phase-in counter before its "phases out unless you pay".
+##
+## A seat whose share MIXES the two moments — something that triggered in
+## the untap step and something at the beginning of the upkeep, the order
+## the engine used to force (untap step's under the upkeep's) — is asked,
+## one pick at a time, which of its triggers resolves first
+## ([constant TRIGGER_ORDER_PROMPT]); the hint, which is what the heuristic
+## and the AI answer, is the one that triggered first (so a phase-in
+## resolves before the upkeep trigger it came back for). A human seat is
+## HELD on each pick through the turn-based hold (kind "upkeep_batch"):
+## every pick is asked before anything goes on the stack, so the replay is
+## safe. A share from ONE moment keeps the order it triggered in, unasked —
+## the convention every other simultaneous batch in this engine follows
+## ([method _unfreeze_stack], [method dispatch_event]).
+## [param untap_raised]: how many of [member _waiting_triggers] were waiting
+## as the upkeep began (they triggered in the untap step). Returns false
+## while held, true once the batch is on the stack (targets are named as
+## each goes on, CR 603.3d — [method _push_trigger]).
+func _flush_upkeep_batch(untap_raised: int) -> bool:
+	if not _stack_frozen:
+		return true
+	_begin_cost_choices()
+	var plan: Array[StackItem] = []
+	for seat in [active_player, opponent_of(active_player)]:
+		var own: Array[StackItem] = []
+		var from_untap := false
+		var from_upkeep := false
+		for i in _waiting_triggers.size():
+			var item := _waiting_triggers[i]
+			if item.controller != seat:
+				continue
+			own.append(item)
+			if i < untap_raised:
+				from_untap = true
+			else:
+				from_upkeep = true
+		if not (from_untap and from_upkeep):
+			plan.append_array(own)   # one moment: the order they triggered in
+			continue
+		var resolving := _order_own_triggers(seat, own, untap_raised)
+		if resolving.size() != own.size():
+			return false   # held on this seat's question
+		# The one that resolves FIRST goes on the stack LAST.
+		resolving.reverse()
+		plan.append_array(resolving)
+	for item in _waiting_triggers:   # a seat neither player holds: as fired
+		if not plan.has(item):
+			plan.append(item)
+	if undo_log != null:
+		_rec(self, &"_stack_frozen")
+		_rec(self, &"_waiting_triggers")
+	_stack_frozen = false
+	_waiting_triggers = []
+	for item in plan:
+		_push_trigger(item)
+	return true
+
+
+## [param seat]'s own [param items] in the order they will RESOLVE, asked
+## pick by pick (CR 603.3b). An EMPTY array (with items given) means the
+## seat is held on its question.
+func _order_own_triggers(seat: int, items: Array[StackItem],
+		untap_raised: int) -> Array[StackItem]:
+	var left: Array[StackItem] = items.duplicate()
+	var order: Array[StackItem] = []
+	while left.size() > 1:
+		var labels: Array[String] = []
+		for item in left:
+			var label := item.description
+			for other in left:
+				if other != item and other.description == item.description:
+					label += " (#%d)" % (item.card.id if item.card != null else 0)
+					break
+			labels.append(label)
+		# The hint: the one that triggered first ([member _waiting_triggers]
+		# keeps firing order — the untap step's before the upkeep's).
+		var q := _turn_question(seat, "Triggered abilities", PlayerChoice.Kind.OPTION,
+			TRIGGER_ORDER_PROMPT)
+		q.options = labels
+		q.hint = 0
+		if _hold_cost_choice(q, {"kind": "upkeep_batch", "untap_raised": untap_raised}):
+			return []
+		var pick := clampi(_ask_turn_option(seat, "Triggered abilities", labels,
+			TRIGGER_ORDER_PROMPT, 0), 0, left.size() - 1)
+		order.append(left[pick])
+		left.remove_at(pick)
+	order.append_array(left)
+	return order
 
 
 func _untap_step() -> bool:
 	_begin_cost_choices()
 	var pid := active_player
 	var mine := players[pid].battlefield
-	# ---- 0. the pre-untap census --------------------------------------
-	# Power Surge counts what is untapped AS THE TURN BEGINS, which is
-	# before this step unties anything — the whole "tap out or burn"
-	# bargain of the card. Taken here rather than after the sweep below,
-	# where it used to be and where it could only ever read the player's
-	# entire land count (2026-09-17). The step may hold on a "may choose
-	# not to untap" question and re-enter; nothing has untapped by this
-	# point either way, so the census is the same on every pass.
-	var standing := 0
-	for inst in mine:
-		if inst.is_land() and not inst.tapped:
-			standing += 1
-	players[pid].untapped_lands_at_turn_start = standing
+	# ---- 0. (the pre-untap census and the phasing ran once, before this:
+	#         _run_untap_step — this part may be held and re-run) -----------
 	# ---- 1. classify, mutating nothing --------------------------------
 	var eligible: Array[CardInstance] = []   # untaps unless a cap says no
 	var may_stay: Array[CardInstance] = []   # tapped, "may choose not to"
@@ -11186,26 +13387,20 @@ func _untap_step() -> bool:
 				inst.untap_sequence += 1
 			if undo_log != null: _rec(inst, &"tapped")
 			inst.tapped = false
-		inst.summoning_sick = false
-		# Wall of Dust bans: "next turn" becomes "this turn" now,
-		# and last turn's ban expires.
-		inst.cant_attack_this_turn = inst.cant_attack_next_turn
-		inst.cant_attack_next_turn = false
 	# The named player's step consumes the duration even if the creature
 	# changed sides or is phased out. Other players' untaps do not consume it.
 	for inst in all_battlefield() + players[0].phased_out + players[1].phased_out:
 		if inst.skip_untap_for.has(pid):
 			_rec(inst, &"skip_untap_for")
 			inst.skip_untap_for.erase(pid)
-	# "Attacked this turn" is per-TURN state and must expire for every
-	# permanent, not just the active player's — Berserk's delayed
-	# destruction, Clockwork Beast's wind-down and Lurker's shroud all
-	# read it about the OTHER player's creatures. Cleared here rather
-	# than at cleanup because Goblin Rock Sled reads it at the end step.
-	for inst in all_battlefield():
-		inst.attacked_this_turn = false
-		inst.could_attack_this_turn = false
-	players[pid].lands_played_this_turn = 0
+	# Summoning sickness, Wall of Dust's ban, the per-turn attack flags and
+	# the land drop: the turn's beginning, shared with a SKIPPED untap step
+	# (which must still do all of it — CR 302.6).
+	_turn_start_sweep(pid)
+	# "As you untap your permanents" (Undiscovered Paradise, CR 502.3).
+	_run_untap_actions(pid)
+	if game_over:
+		return true
 	recalculate()   # untapping re-enables Castle-style statics
 	for woken in just_untapped:
 		dispatch_event(Mtg.EventType.BECAME_UNTAPPED,
@@ -11231,14 +13426,16 @@ func _enter_step(index: int) -> void:
 			# begun: either way nothing more happens here.
 			if not _begin_turn():
 				return
-			continuous.expire_untap_of(active_player)
-			recalculate()
-			# Turn-based actions (CR 502): untap everything, clear sickness
-			# and per-turn combat bookkeeping — unless the step is HELD on
-			# one of its questions, in which case answer_choice re-runs it.
-			if _untap_step():
-				_advance_step()   # no priority in untap (CR 502.4)
+			# Turn-based actions (CR 502): the census, a skipped step,
+			# phasing, untap everything, clear sickness and per-turn combat
+			# bookkeeping — unless the step is HELD on one of its
+			# questions, in which case answer_choice re-runs _untap_step.
+			_run_untap_step()
 		Mtg.Step.UPKEEP:
+			# What waits now triggered in the UNTAP STEP (the stack has been
+			# frozen since it began); everything from here on triggered at
+			# the beginning of the upkeep — see _flush_upkeep_batch.
+			var untap_raised := _waiting_triggers.size()
 			for p in players:
 				for card in p.exile:
 					if card.exile_play_until_upkeep_of == active_player:
@@ -11251,6 +13448,7 @@ func _enter_step(index: int) -> void:
 			# so an artifact Xenic Poltergeist animated last turn is a
 			# plain artifact again by the time anything can look at it.
 			continuous.expire_upkeep_of(active_player)
+			_expire_damage_effects_upkeep_of(active_player)
 			recalculate()
 			check_state_based_actions()
 			# "At the beginning of your upkeep, remove a glyph counter from
@@ -11268,6 +13466,11 @@ func _enter_step(index: int) -> void:
 				log_line("%s loses a glyph counter" % inst.data.card_name)
 				_counter_removal_event(inst, "glyph", 1)
 			dispatch_event(Mtg.EventType.UPKEEP_START, {"player": active_player})
+			# CR 503.1a: the untap step's triggers and the upkeep's go on
+			# the stack together, ordered by their controllers — which may
+			# HOLD on a human seat's ordering question.
+			if not _flush_upkeep_batch(untap_raised):
+				return
 			_open_priority()
 		Mtg.Step.DRAW:
 			# "If you would begin your draw step, you may skip that step
@@ -11391,6 +13594,14 @@ func _enter_step(index: int) -> void:
 			_next_main_actions = still
 			for entry in due:
 				entry["action"].call()
+			if game_over:
+				return
+			# CR 505: the main phase has begun — "at the beginning of your
+			# first (precombat) main phase" (Ventifact Bottle). Only the
+			# turn's first main phase is precombat (505.1a): a MAIN2, and
+			# any main phase after an extra combat, is postcombat.
+			dispatch_event(Mtg.EventType.MAIN_PHASE_START,
+				{"player": active_player, "precombat": step == Mtg.Step.MAIN1})
 			_open_priority()
 		_:
 			_open_priority()
@@ -12013,20 +14224,21 @@ func _after_combat_damage() -> void:
 	_open_priority()
 
 
-## Cleanup (CR 514): discard to hand size, damage wears off, until-EOT
-## effects expire; then the turn passes. The discard is either answered by
-## the seat's DecisionAgent or — for a seat that asked to choose, i.e. the
-## human — held open as THE DISCARD PHASE until
-## [method discard_to_hand_size] arrives (docs/duel-todo.md §1.1).
-## SIMPLIFIED: cleanup grants no priority.
+## Cleanup (CR 514): discard to hand size (514.1), damage wears off and
+## until-EOT effects expire (514.2) — and only THEN, if a state-based
+## action is performed or a trigger is waiting ("at the beginning of the
+## next cleanup step" among them), the triggers go on the stack and the
+## active player gets priority; once the stack is empty and both pass,
+## ANOTHER cleanup step begins (514.3a/b, [method _cleanup_triggers]).
+## Otherwise the turn passes. The discard is either answered by the seat's
+## DecisionAgent or — for a seat that asked to choose, i.e. the human —
+## held open as THE DISCARD PHASE until [method discard_to_hand_size]
+## arrives (docs/duel-todo.md §1.1).
+## Until Pack 8 the delayed actions ran at the TOP of this step, before
+## the discard and the damage removal and with no priority: an
+## instant-speed Armor of Thorns was sacrificed while its creature still
+## carried the damage the +2/+2 had been holding off.
 func _cleanup_step() -> void:
-	# SIMPLIFIED: cleanup has no priority window (docs/duel-todo.md §1.1;
-	# docs/simplified-cards.md: Bounty of the Hunt and Thawing Glaciers). Actions
-	# happen at the correct cleanup boundary, never at the earlier end step.
-	var due := _cleanup_actions.duplicate()
-	_rec(self, &"_cleanup_actions")
-	_cleanup_actions.clear()
-	for action in due: action.call(self)
 	_flush_stranded_damage()
 	var p := players[active_player]
 	var over := p.hand.size() - p.max_hand_size
@@ -12080,6 +14292,10 @@ func discard_to_hand_size(pid: int, cards: Array) -> String:
 ## Everything cleanup does AFTER the discard: damage wears off, the
 ## until-end-of-turn ledgers empty, and the turn passes (CR 514.2).
 func _finish_cleanup() -> void:
+	# Taken before 514.2 so a state-based action performed anywhere from
+	# here to 514.3a (an Aura shed as a control change goes home, a 0/0
+	# whose pump wore off) is seen by [method _cleanup_triggers].
+	var zones_before := _cleanup_zone_signature()
 	_rec(self, &"combat_pair_history")
 	combat_pair_history.clear()
 	if undo_log != null:
@@ -12088,13 +14304,17 @@ func _finish_cleanup() -> void:
 		# a this-turn flag is added below (`engine/undo_log.gd`,
 		# [method UndoLog.record_object]). It is the one boundary whose
 		# record is linear in the board, and it is once a turn.
-		for inst in all_battlefield():
+		for inst in all_battlefield() + phased_out_permanents():
 			undo_log.record_object(inst)
-	for inst in all_battlefield():
+	# CR 514.2: "all damage marked on permanents (including phased-out
+	# permanents) is removed and all 'until end of turn' and 'this turn'
+	# effects end" — the phased-out ones too (Pack 8 E1).
+	for inst in all_battlefield() + phased_out_permanents():
 		inst.damage = 0
 		inst.damaged_by_this_turn.clear()
 		inst.damage_from_this_turn.clear()
 		inst.damage_origins_this_turn.clear()
+		inst.marked_damage_by_source.clear()   # with the damage itself
 		for row in inst.tracked_prevention: row.remaining = 0
 		inst.tracked_prevention = inst.tracked_prevention.filter(func(row: Dictionary) -> bool: return not bool(row.collected))
 		inst.damaged_players_this_turn.clear()
@@ -12131,13 +14351,18 @@ func _finish_cleanup() -> void:
 		pl.prevention_shields.clear()   # CoP shields are this-turn only
 		pl.prevention_shield_filters.clear()
 		pl.damage_prevention = 0
-		pl.damage_replacements.clear()  # "the next time ... this turn"
+		# "The next time ... THIS TURN" ends here; an entry that says
+		# "until_upkeep_of" lasts until that player's next upkeep instead
+		# (CR 611.2b — Soul Echo) and is dropped as that upkeep begins.
+		pl.damage_replacements = pl.damage_replacements.filter(
+			func(row: Dictionary) -> bool: return int(row.get("until_upkeep_of", -1)) >= 0)
 		pl.may_take_creature_damage = false   # Blood of the Martyr
 		pl.drawn_this_turn.clear()      # "cards drawn this turn" (Sylvan Library)
 		pl.attacked_this_turn = false   # "who attacked this turn" (Fire and Brimstone)
 		pl.life_for_mana = false        # Channel is an until-end-of-turn grant
 		pl.paid_prevention.clear()      # Guardian Angel's rider is too
 		pl.land_mana_becomes = 0        # Deep Water is until end of turn too
+		pl.graveyard_cast_permissions.clear()   # Bösium Strip's "until end of turn"
 	# "The next time you would draw a card THIS TURN" expires unspent
 	# (Aladdin's Lamp).
 	_one_shot_draws.clear()
@@ -12159,12 +14384,91 @@ func _finish_cleanup() -> void:
 	for pl2 in players:
 		pl2.any_color_spells = 0      # North Star's charge is this-turn only
 		pl2.last_red_spell_damage_controller = -1
+		# Pack 8 E10: the per-turn trackers (recorded by _rec_turn's
+		# TURN_PLAYER_FIELDS at the step boundary).
+		pl2.creatures_to_graveyard_this_turn = 0
+		pl2.tapped_land_for_mana_this_turn = false
+		pl2.cast_permanents_this_turn.clear()
+	# The damage replacement suite's "this turn" effects (CR 514.2).
+	DAMAGE_FX.expire_turn(self)
 	combat_damage_prevented = false
 	creatures_died_this_turn = 0
 	spells_cast_this_turn = [[], []]
+	# "This turn" grants and bans end with the turn's other effects
+	# (CR 514.2): Winding Canyons' flash, Solfatara, Abeyance.
+	_rec(self, &"flash_permissions")
+	_rec(self, &"floating_play_bans")
+	_rec(self, &"floating_activation_bans")
+	flash_permissions.clear()
+	floating_play_bans.clear()
+	floating_activation_bans.clear()
 	continuous.expire_until_eot()
 	recalculate()
+	if _cleanup_triggers(zones_before):
+		return   # priority in the cleanup step (CR 514.3a)
 	_end_turn()
+
+
+## CR 514.3a — what follows the discard and the damage removal: perform the
+## state-based actions, put every waiting trigger on the stack ("at the
+## beginning of the next cleanup step" ones included — [member
+## _cleanup_actions] and the CLEANUP_START delayed triggers), and if either
+## happened give the ACTIVE player priority and return true. Once the stack
+## is empty and both players pass, [method _advance_step] begins ANOTHER
+## cleanup step (514.3b). False — nothing happened — lets the turn pass
+## with no priority at all, which is every ordinary cleanup.
+func _cleanup_triggers(zones_before: Array) -> bool:
+	if game_over:
+		return true
+	check_state_based_actions()
+	if game_over:
+		return true
+	var sba_acted := zones_before != _cleanup_zone_signature()
+	if not _cleanup_actions.is_empty():
+		var due := _cleanup_actions
+		_rec(self, &"_cleanup_actions")
+		_cleanup_actions = []
+		for entry in due:
+			var source: CardInstance = entry.get("source")
+			if source == null:
+				(entry["action"] as Callable).call(self)   # the stackless form
+				continue
+			# A one-shot delayed trigger (CR 603.7c) that the CLEANUP_START
+			# dispatch below puts on the stack in APNAP order with every
+			# other one, and drops from the queue as it does.
+			schedule_delayed_trigger(TriggeredAbility.new(Mtg.EventType.CLEANUP_START,
+				MtgGame._run_cleanup_action.bind(entry["action"]), String(entry["desc"])),
+				int(entry["controller"]), source)
+		if game_over:
+			return true
+	dispatch_event(Mtg.EventType.CLEANUP_START, {"player": active_player})
+	if game_over:
+		return true
+	if stack.is_empty() and not sba_acted:
+		return false
+	log_line("Cleanup: priority before the turn ends (CR 514.3a)")
+	_open_priority()
+	return true
+
+
+static func _run_cleanup_action(game: MtgGame, _source: CardInstance,
+		_event: GameEvent, action: Callable) -> void:
+	action.call(game)
+
+
+## The sizes of the public and hidden zones, summed over both seats — a
+## state-based action always moves a card (or ends the game), and a control
+## change moves none, so a difference across [method _finish_cleanup] is
+## "a state-based action was performed" (CR 514.3a).
+func _cleanup_zone_signature() -> Array:
+	var out := [0, 0, 0, 0, 0]
+	for p in players:
+		out[0] += p.battlefield.size()
+		out[1] += p.graveyard.size()
+		out[2] += p.exile.size()
+		out[3] += p.hand.size()
+		out[4] += p.library.size()
+	return out
 
 
 func _end_turn() -> void:

@@ -34,7 +34,7 @@ class PumpHostEffect extends EffectBase:
 		if source.attached_to == -1:
 			return
 		var host := game.find_instance(source.attached_to)
-		if host == null or host.zone != Mtg.Zone.BATTLEFIELD:
+		if not game.is_present(host):   # gone, or phased out (CR 702.26e)
 			return
 		game.continuous.add_until_eot_pump(host.id, 0, 1, [])
 		game.log_line("%s gives %s +0/+1 until end of turn" % [

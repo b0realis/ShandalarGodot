@@ -66,12 +66,12 @@ func test_portal_and_fifth_edition_share_two_ice_age_names() -> void:
 
 func test_every_pack_together_adds_no_identity() -> void:
 	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, true)
-	assert_eq(CardRegistry.size(), 1898)
+	assert_eq(CardRegistry.size(), 2519)   # 1,898 with Packs 1-7, and the Mirage block's 621
 	assert_eq(CardRegistry.names_in_set("5ed").size(), 434)
 	for name in FifthEditionPack.shared():
 		assert_ne(CardRegistry.get_card(name).set_code, "5ed", name)
 	CardPacks.set_enabled("pack-7", false)
-	assert_eq(CardRegistry.size(), 1898)
+	assert_eq(CardRegistry.size(), 2519)
 
 func test_numbered_basic_lands_offer_four_fifth_edition_pictures() -> void:
 	CardPacks.set_enabled("pack-7", true)

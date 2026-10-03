@@ -99,6 +99,18 @@ python3 tools/pack_7_fifth_edition.py build cardpacks/Pack-7-Fifth-Edition.zip
 python3 tools/pack_7_fifth_edition.py verify cardpacks/Pack-7-Fifth-Edition.zip
 ```
 
+Pack 8 — The Mirage Block (requires game 0.50.11 or later). Mirage,
+Visions and Weatherlight in one pack: 669 names and 684 printings, 621 of
+them new to the game, with four illustrations for each Mirage basic land
+and a separate Extras switch for each set. Its fetched artwork is the
+largest of the packs (about 135 MB in the cache):
+
+```sh
+python3 tools/pack_8_mirage_block.py fetch-art
+python3 tools/pack_8_mirage_block.py build cardpacks/Pack-8-Mirage-Block.zip
+python3 tools/pack_8_mirage_block.py verify cardpacks/Pack-8-Mirage-Block.zip
+```
+
 Run `build` only after `fetch-art` succeeds. Each builder's default artwork
 cache is `../shandalar-packs/cache/pack_N_art/`, relative to the game folder.
 To put it elsewhere, pass the same `--art-dir PATH` to `fetch-art` and `build`.
@@ -130,7 +142,8 @@ extracted-game-folder/
     ├── Pack-4-Homelands.zip
     ├── Pack-5-Alliances.zip
     ├── Pack-6-Portal.zip
-    └── Pack-7-Fifth-Edition.zip
+    ├── Pack-7-Fifth-Edition.zip
+    └── Pack-8-Mirage-Block.zip
 ```
 
 On Mac, `skin/` and `cardpacks/` go **beside Shandalar.app**, never inside

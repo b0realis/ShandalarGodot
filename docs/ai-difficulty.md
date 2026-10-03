@@ -38,6 +38,14 @@ matched measurements are recorded in [the Pack 5 audit](pack-5-alliances.md).
 It does not grant knowledge of hidden piles or future library cards, and its
 conservative limits are documented there rather than claimed as perfect play.
 
+The Mirage block (Pack 8) adds phasing, flash, "dies when targeted",
+the damage-replacement suite, entry-cost lands, payment rows, Kaervek's
+Torch's targeting tax, pending flanking triggers, Heat Wave's block tax
+and the activation locks to `engine/ai/mirage_tactics.gd`. They sit behind
+the same two gates: `forecasts_tactics` for correctness, `reads_gaze` for
+combat. Difficulty presets are unchanged. Tests and limits are in
+[the Pack 8 guide](pack-8-mirage-block.md).
+
 ## 1. The rule of the ladder
 
 **Every standard opponent plays fair.** Difficulty changes analysis and mistakes,

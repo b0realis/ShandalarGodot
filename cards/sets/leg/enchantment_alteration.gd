@@ -64,8 +64,7 @@ class AlterEffect extends EffectBase:
 				continue
 			if not want_creature and not inst.is_land():
 				continue
-			if aura.data.aura_target != null \
-					and not aura.data.aura_target.can_attach_to(game, inst):
+			if not game.aura_can_enchant(aura, inst):
 				continue
 			candidates.append(inst)
 		if candidates.is_empty():

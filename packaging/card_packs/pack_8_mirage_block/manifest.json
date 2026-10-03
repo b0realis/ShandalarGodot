@@ -1,0 +1,17 @@
+{
+  "badge": "8-MIR",
+  "description": "The Mirage block — Mirage (1996), Visions (1997) and Weatherlight (1997): 669 distinct cards and 684 original English printings, 621 of them new to the game.",
+  "file_name": "Pack-8-Mirage-Block.zip",
+  "id": "pack-8",
+  "minimum_game_version": "0.50.11",
+  "name": "The Mirage Block",
+  "number": 8,
+  "pack_format": 1,
+  "rules_note": "Original Mirage, Visions and Weatherlight artwork with current Oracle rules. The 43 cards the game already has keep their existing scripts; the 31 of them that live only in Ice Age, Homelands, Portal or Portal Second Age are provided by this pack too when that pack is off.",
+  "set_order": [
+    "mir",
+    "vis",
+    "wth"
+  ],
+  "version": "1.0.0"
+}

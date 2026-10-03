@@ -43,7 +43,9 @@ class PackSixTests(unittest.TestCase):
         self.assertEqual(set(catalog['sets']['por']['names']) | set(catalog['sets']['p02']['names']), names)
         previous = {name for _, name in first.assigned_pairs()}
         for path in (pack.ROOT / 'packaging/card_packs').glob('*/cards.json'):
-            if path.parent == pack.SOURCE:
+            # Reprints are of the core and EARLIER packs; a later pack
+            # (the Mirage block reprints six Portal cards) is not previous.
+            if path.parent == pack.SOURCE or int(path.parent.name.split('_')[1]) > 6:
                 continue
             previous.update(row['name'] for row in pack.read_json(path))
         self.assertEqual(names & previous, set(pack.read_json(pack.SOURCE / 'reprint_names.json')))

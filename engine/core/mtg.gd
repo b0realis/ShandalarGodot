@@ -103,7 +103,18 @@ const PRIORITY_STEPS: Array[int] = [
 ##   turn (Dwarven Warriors) rather than printed.
 ## - FEAR: can't be blocked except by artifact creatures and/or black
 ##   creatures (CR 702.36) — granted by the Fear aura in this pool.
-enum Keyword { FLYING, REACH, VIGILANCE, HASTE, TRAMPLE, DEFENDER, FIRST_STRIKE, MUST_ATTACK, BANDING, UNBLOCKABLE, FEAR }
+## - FLASH: may be cast any time its controller could cast an instant
+##   (CR 702.8a) — MtgGame._cast_announce_checks honours it.
+## - PHASING: phases out (or back in) before its controller untaps during
+##   each of their untap steps (CR 702.26a) — MtgGame._phasing_step. Printed
+##   (Teferi's Drake) or granted by a layer-6 static (Teferi's Curse);
+##   multiple instances are redundant (CR 702.26p).
+## - FLANKING: "whenever a creature without flanking blocks this creature,
+##   the blocking creature gets -1/-1 until end of turn" (CR 702.25a) — a
+##   TRIGGER per instance (702.25b), so unlike every keyword above it may
+##   appear in `cur_keywords` more than once: one entry per instance
+##   ([Flanking], engine/abilities/flanking.gd).
+enum Keyword { FLYING, REACH, VIGILANCE, HASTE, TRAMPLE, DEFENDER, FIRST_STRIKE, MUST_ATTACK, BANDING, UNBLOCKABLE, FEAR, FLASH, PHASING, FLANKING }
 
 ## Events the engine dispatches. TriggeredAbility instances subscribe to
 ## these; the UI layer can also listen (via MtgGame's signals) to animate.
@@ -226,6 +237,49 @@ enum EventType {
 	REGENERATED,         ## data: {instance, controller}; actual replacement, not shield creation.
 	BECOMES_BLOCKED,     ## data: {instance, controller}; once on unblocked -> blocked.
 	BECOMES_BLOCKER,     ## data: {instance, controller}; once when a creature starts blocking.
+	CLEANUP_START,       ## data: {player} — CR 514.3a: dispatched in the cleanup
+	                     ## step AFTER the 514.1 discard and the 514.2 damage
+	                     ## removal, which is when "at the beginning of the next
+	                     ## cleanup step" triggers go on the stack. Each further
+	                     ## cleanup step (514.3b) dispatches it again.
+	BECAME_TARGET,       ## data: {instance? / player?, source, controller, kind,
+	                     ## is_spell, item} — CR 603.2 / 115: an object or player
+	                     ## BECOMES THE TARGET as a spell, activated ability or
+	                     ## trigger is put on the stack with its targets locked
+	                     ## (also a copy put on the stack with targets, and a
+	                     ## changed target, CR 115.7). Once per distinct target
+	                     ## per stack object. `kind` is the Mtg.StackKind of
+	                     ## the targeting object, `controller` its controller.
+	PHASED_OUT,          ## data: {instance, controller, indirect} — CR 702.26:
+	                     ## a permanent phased out (directly, or `indirect`ly
+	                     ## with the permanent it is attached to, 702.26g).
+	                     ## One event per permanent, dispatched after the whole
+	                     ## simultaneous batch (MtgGame.phase_simultaneously);
+	                     ## the phased-out permanent hears its OWN event
+	                     ## (CR 603.10a looks back in time for phase-out
+	                     ## triggers). Not a zone change (702.26d): no
+	                     ## LEAVES_BATTLEFIELD.
+	PHASED_IN,           ## data: {instance, controller, indirect} — CR 702.26c:
+	                     ## the permanent exists again. No ENTERS_BATTLEFIELD.
+	                     ## Raised in the untap step, its triggers wait for the
+	                     ## upkeep's priority (CR 502.4).
+	MAIN_PHASE_START,    ## data: {player, precombat} — CR 505: a main phase of
+	                     ## `player`'s turn has begun, before anyone gets
+	                     ## priority in it. `precombat` is true only for the
+	                     ## turn's FIRST main phase (CR 505.1a); an additional
+	                     ## main phase after an extra combat is postcombat.
+	CUMULATIVE_UPKEEP_UNPAID,  ## data: {instance, controller, player, ages} —
+	                     ## CR 702.24a: `player` did not pay `instance`'s
+	                     ## cumulative upkeep (declined or could not). Dispatched
+	                     ## BEFORE the sacrifice, so the permanent hears its own
+	                     ## "when a player doesn't pay" (Heart of Bogardan);
+	                     ## `ages` is its age-counter count at that moment.
+	PUT_INTO_GRAVEYARD_FROM_LIBRARY,  ## data: {instance, player} — a card went
+	                     ## from `player`'s library into their graveyard (mill,
+	                     ## a search that buries, MtgGame.
+	                     ## put_library_card_into_graveyard). The moved card's
+	                     ## own GRAVEYARD triggers hear it (Gaea's Blessing,
+	                     ## CR 603.6a/603.10a), and so does the battlefield.
 }
 
 ## What kind of object a StackItem is.

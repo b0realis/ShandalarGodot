@@ -16,6 +16,9 @@ const KEYWORD_VALUE := {
 	Mtg.Keyword.VIGILANCE: 0.5,
 	Mtg.Keyword.REACH: 0.4,
 	Mtg.Keyword.BANDING: 0.3,
+	# FLANKING (CR 702.25): per INSTANCE — `cur_keywords` holds one entry
+	# each, and every one is another -1/-1 on a blocker without it.
+	Mtg.Keyword.FLANKING: 0.5,
 	Mtg.Keyword.MUST_ATTACK: -0.5,   # a drawback
 	Mtg.Keyword.DEFENDER: -1.0,      # can't attack
 }
@@ -23,6 +26,10 @@ const KEYWORD_VALUE := {
 # Position-score weights, in the same "stat points" currency as
 # KEYWORD_VALUE — one point of life is the unit everything else is priced
 # against.
+
+## THE SHARE OF ITS WORTH A PHASING CREATURE KEEPS (Pack 8): present one
+## turn in two, and untouchable in the other (see [method permanent_value]).
+const PHASING_SHARE := 0.55
 
 ## Weight of a life-total lead. The cheapest resource, so the lowest weight.
 const W_LIFE := 1.0
@@ -91,6 +98,15 @@ static func permanent_value(inst: CardInstance, profile: AiProfile = null) -> fl
 		if not inst.cur_landwalk.is_empty():
 			v += 0.5
 		v += inst.regeneration_shields * 0.5
+		# PHASING (CR 702.26, Pack 8, 2026-10-03, [member
+		# AiProfile.forecasts_tactics]): a body that phases out at every
+		# untap step of its controller's is on the table for one turn of
+		# each two — its own and the opponent's after it, then gone for
+		# both of the next — so it is worth about half; a little more,
+		# because nothing can touch it while it is gone.
+		if profile != null and profile.forecasts_tactics \
+				and Mtg.Keyword.PHASING in inst.cur_keywords and not inst.cur_cant_phase_out:
+			v *= PHASING_SHARE
 		return maxf(v, 0.5)
 	if inst.is_land():
 		return 1.0

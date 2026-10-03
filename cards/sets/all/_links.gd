@@ -52,7 +52,7 @@ class AnyRedirect extends CreatureRedirectEffect:
 		super(1)
 		target_spec = TargetSpec.any_target()
 	func resolve(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, x := 0) -> void:
-		if not B.live_source(g, s): return
+		if not B.live_source(g, s) or not g.is_present(s): return   # CR 702.26e
 		if not t.is_player:
 			super(g, s, pid, t, x)
 			return

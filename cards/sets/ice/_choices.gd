@@ -42,12 +42,13 @@ static func _color_spell(g: MtgGame, s: CardInstance, _e: GameEvent, charm: bool
 		var chosen := g.agents[who].choose_card(g, who, cards, "Leshrac's Sigil: look at that hand and choose a card to discard")
 		if chosen != null and cards.has(chosen): g.discard_cards(other, [chosen])
 static func _royal_guard(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
-	if not C.same_activation(g, s): return
+	if not C.same_activation(g, s) or not g.is_present(s): return   # CR 702.26e
 	g.continuous.add_floating_static(s, StaticAbility.new(_redirect.bind(pid, s.id), "Redirect unblocked combat damage to the Royal Guard."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
 	g.recalculate()
 static func _redirect(g: MtgGame, _s: CardInstance, pid: int, id: int) -> void:
 	var i := g.find_instance(id)
-	if i != null and i.zone == Mtg.Zone.BATTLEFIELD: g.players[pid].combat_damage_redirect = id
+	# A phased-out Guard takes nothing: the damage stays with you (CR 702.26b).
+	if g.is_present(i): g.players[pid].combat_damage_redirect = id
 static func _minion(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var ctx := g.trigger_context(s)
 	var pid := int(ctx.controller)

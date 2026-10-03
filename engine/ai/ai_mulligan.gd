@@ -128,10 +128,19 @@ static func land_count(hand: Array[CardInstance]) -> int:
 ## is read here. A Sol Ring is not one of them, because {1} is a mana
 ## this hand may not have; nor is a land, which [method land_count] has
 ## already counted.
+##
+## A source whose every mana ability costs the HAND or waits for instant
+## speed (Pack 8's Lion's Eye Diamond: "Discard your hand, Sacrifice this
+## artifact: ... Activate only as an instant") is no such land drop — the
+## hand it is counted for is the price of the mana.
 static func is_free_source(inst: CardInstance) -> bool:
-	return not inst.is_land() \
-		and inst.data.cost.mana_value() == 0 \
-		and not inst.data.mana_abilities.is_empty()
+	if inst.is_land() or inst.data.cost.mana_value() != 0 \
+			or inst.data.mana_abilities.is_empty():
+		return false
+	for ability in inst.data.mana_abilities:
+		if ability.object_costs.is_empty() and not ability.instant_only:
+			return true
+	return false
 
 
 ## The mana [param hand] can make on its own — its lands plus its free

@@ -116,7 +116,7 @@ const OUT_DIR := "res://game/art"
 func _init() -> void:
 	var dir := ProjectSettings.globalize_path(OUT_DIR)
 	DirAccess.make_dir_recursive_absolute(dir)
-	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02", "5ed"]:
+	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02", "5ed", "mir", "vis", "wth"]:
 		var img := _render(Vector2i(GLYPH_SIZE, GLYPH_SIZE),
 			[[_glyph(code), GOLD_LIT, GOLD_DARK]], RIM)
 		_write(img, dir, "set_icon_%s.png" % code)
@@ -134,6 +134,12 @@ func _init() -> void:
 	_write(_stone_medallion(false, _second_age()), dir, "filter_p02_off.png")
 	_write(_stone_medallion(true, _roman_five()), dir, "filter_5ed_on.png")
 	_write(_stone_medallion(false, _roman_five()), dir, "filter_5ed_off.png")
+	_write(_stone_medallion(true, _palm()), dir, "filter_mir_on.png")
+	_write(_stone_medallion(false, _palm()), dir, "filter_mir_off.png")
+	_write(_stone_medallion(true, _eye()), dir, "filter_vis_on.png")
+	_write(_stone_medallion(false, _eye()), dir, "filter_vis_off.png")
+	_write(_stone_medallion(true, _skyship()), dir, "filter_wth_on.png")
+	_write(_stone_medallion(false, _skyship()), dir, "filter_wth_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
@@ -204,7 +210,130 @@ func _glyph(code: String) -> Array:
 			return _second_age()
 		"5ed":
 			return _roman_five()
+		"mir":
+			return _palm()
+		"vis":
+			return _eye()
+		"wth":
+			return _skyship()
 	return []
+
+
+## MIRAGE — a desert palm on a dune. A leaning trunk that narrows as it
+## rises, four broad fronds from one crown (the two long ones drooping
+## outward, the two short ones lifting) and the crest of a dune under it.
+## Polygons only, so the same geometry carves the stone medallion. Our own
+## drawing of an oasis palm, not a trace of any printed set symbol.
+func _palm() -> Array:
+	var crown := Vector2(0.55, 0.34)
+	return [
+		{"op": "add", "poly": _strip(Vector2(0.47, 0.86), Vector2(0.40, 0.58), crown, 0.068, 0.036, 24)},
+		{"op": "add", "poly": _tapered_curve(crown, Vector2(0.28, 0.12), Vector2(0.05, 0.44), 0.085, 28)},
+		{"op": "add", "poly": _tapered_curve(crown, Vector2(0.82, 0.10), Vector2(0.97, 0.46), 0.085, 28)},
+		{"op": "add", "poly": _tapered_curve(crown, Vector2(0.38, 0.06), Vector2(0.20, 0.10), 0.065, 24)},
+		{"op": "add", "poly": _tapered_curve(crown, Vector2(0.70, 0.02), Vector2(0.86, 0.12), 0.065, 24)},
+		{"op": "add", "poly": _circle_poly(Vector2(0.57, 0.40), 0.05, 24)},
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.06, 0.96), Vector2(0.20, 0.88), Vector2(0.36, 0.83),
+			Vector2(0.52, 0.81), Vector2(0.68, 0.83), Vector2(0.84, 0.88),
+			Vector2(0.96, 0.96)])},
+	]
+
+
+## VISIONS — an open eye that sees ahead: an almond lid outline, a solid
+## iris with a round pupil cut through it, and three short rays above the
+## lid. Drawn bold — a thin lid is the first thing a 14 px card slot loses.
+func _eye() -> Array:
+	var outer := _almond(Vector2(0.03, 0.56), Vector2(0.97, 0.56), 0.30, 0.27, 32)
+	var inner := _almond(Vector2(0.15, 0.56), Vector2(0.85, 0.56), 0.20, 0.18, 32)
+	var ops: Array = [{"op": "add", "poly": outer}, {"op": "sub", "poly": inner},
+		{"op": "add", "poly": _circle_poly(Vector2(0.5, 0.56), 0.165, 40)},
+		{"op": "sub", "poly": _circle_poly(Vector2(0.5, 0.56), 0.065, 24)}]
+	for ray in [[Vector2(0.5, 0.05), 0.0], [Vector2(0.21, 0.13), -0.62], [Vector2(0.79, 0.13), 0.62]]:
+		var tip: Vector2 = ray[0]
+		var across := Vector2.RIGHT.rotated(float(ray[1])) * 0.055
+		var foot := tip + Vector2.DOWN.rotated(float(ray[1])) * 0.15
+		ops.append({"op": "add", "poly": PackedVector2Array([tip, foot + across, foot - across])})
+	return ops
+
+
+## WEATHERLIGHT — a sailing skyship: a curved hull with a bowsprit, one
+## mast, a great forward sail and a smaller aft one, a pennant at the top,
+## and a swept wing under the keel — a ship of the air, not of the sea.
+func _skyship() -> Array:
+	return [
+		# the hull, bow to the right, its keel a shallow curve
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.06, 0.58), Vector2(0.30, 0.62), Vector2(0.62, 0.62),
+			Vector2(0.97, 0.52), Vector2(0.86, 0.66), Vector2(0.74, 0.74),
+			Vector2(0.56, 0.78), Vector2(0.36, 0.78), Vector2(0.20, 0.73),
+			Vector2(0.10, 0.66)])},
+		# the mast
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.475, 0.08), Vector2(0.525, 0.08), Vector2(0.525, 0.62), Vector2(0.475, 0.62)])},
+		# the great sail, bellied forward
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.56, 0.12), Vector2(0.70, 0.20), Vector2(0.80, 0.34),
+			Vector2(0.84, 0.50), Vector2(0.56, 0.54)])},
+		# the aft sail
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.44, 0.20), Vector2(0.44, 0.54), Vector2(0.18, 0.52),
+			Vector2(0.30, 0.38)])},
+		# the pennant
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.475, 0.04), Vector2(0.30, 0.08), Vector2(0.475, 0.13)])},
+		# the wing below the keel, swept back past the stern
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.70, 0.71), Vector2(0.36, 0.89), Vector2(0.05, 0.96),
+			Vector2(0.20, 0.86), Vector2(0.46, 0.76)])},
+	]
+
+
+## A circle as a polygon, so the stone medallion (polygons only) can carve it.
+func _circle_poly(centre: Vector2, radius: float, steps: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for n in steps:
+		out.append(centre + Vector2.from_angle(TAU * float(n) / float(steps)) * radius)
+	return out
+
+
+## A curved stroke of changing width: the quadratic curve through
+## [param a], [param bend] and [param b], offset both ways by a width that
+## runs from [param w0] at [param a] to [param w1] at [param b].
+func _strip(a: Vector2, bend: Vector2, b: Vector2, w0: float, w1: float,
+		steps: int) -> PackedVector2Array:
+	var front := PackedVector2Array()
+	var back := PackedVector2Array()
+	for i in steps + 1:
+		var s: float = float(i) / float(steps)
+		var u: float = 1.0 - s
+		var p: Vector2 = a * (u * u) + bend * (2.0 * u * s) + b * (s * s)
+		var d: Vector2 = (bend - a) * (2.0 * u) + (b - bend) * (2.0 * s)
+		var n := Vector2(-d.normalized().y, d.normalized().x)
+		var w: float = lerpf(w0, w1, s)
+		front.append(p + n * w)
+		back.append(p - n * w)
+	var out := PackedVector2Array(front)
+	for i in range(back.size() - 1, -1, -1):
+		out.append(back[i])
+	return out
+
+
+## An almond between two corners: an upper lid rising [param up] above
+## the corners' line and a lower lid falling [param down] below it.
+func _almond(left: Vector2, right: Vector2, up: float, down: float,
+		steps: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var mid := (left + right) * 0.5
+	for i in steps + 1:
+		var s: float = float(i) / float(steps)
+		var u: float = 1.0 - s
+		out.append(left * (u * u) + (mid + Vector2(0, -up * 2.0)) * (2.0 * u * s) + right * (s * s))
+	for i in range(steps - 1, 0, -1):
+		var s: float = float(i) / float(steps)
+		var u: float = 1.0 - s
+		out.append(left * (u * u) + (mid + Vector2(0, down * 2.0)) * (2.0 * u * s) + right * (s * s))
+	return out
 
 
 ## PORTAL — the original set's round gate: solid center, two concentric

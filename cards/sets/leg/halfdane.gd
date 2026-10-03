@@ -65,7 +65,7 @@ static func _biggest_first(game: MtgGame, _source: CardInstance,
 
 
 static func _take_a_shape(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	var refs: Array = game.current_targets()
 	if refs.is_empty():

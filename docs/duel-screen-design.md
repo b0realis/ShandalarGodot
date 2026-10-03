@@ -1600,15 +1600,19 @@ stamp, which is the transient targeting news and belongs on top. The three
 centre stamps are mutually exclusive and a refusal beats a re-pick beats a
 plain target, because the original stamps ONE mark over a card's art.
 
-**THE TWO IT CANNOT DRAW, and why, so nobody hunts for them again:**
+**THE TWO IT COULD NOT DRAW (as of this pass), and why, so nobody hunts for them again:**
 
 - **`Damage to player`** is the life register's, not a card's.
-- **`Phased`** cannot reach a widget. `MtgGame.phase_out` moves the
-  instance OUT of `players[pid].battlefield` into `phased_out` while
+- **`Phased`** could not reach a widget THEN: `MtgGame.phase_out` moves
+  the instance OUT of `players[pid].battlefield` into `phased_out` while
   leaving `zone == BATTLEFIELD`, and **there is no `Mtg.Zone.PHASED_OUT`**
-  — so the board never builds a card for a phased permanent in the first
-  place. `test_phased_and_damage_to_player_are_recorded_as_unanswerable`
-  fails the day that changes.
+  — so the board never built a card for a phased permanent.
+  **ANSWERED 2026-10-03 (Pack 8):** `DuelScreen._table_cards` draws both
+  seats' `MtgPlayer.phased_out` too, and `MiniCard.State.PHASED` (cue
+  `Phased`, lettered — the 1997 set ships no art for it) ghosts the card
+  with a `Phased out` mark and a tooltip line saying when it comes back
+  (`MiniCard.phase_note`). Pinned by `tests/ui/test_pack_8_phasing_board.gd`
+  and `test_mini_card.gd::test_a_phased_out_permanent_wears_the_phased_state`.
 
 **§2.9's PREMISE WAS BACKWARDS, AND THE DEFECT WAS ON THE OTHER SIDE.**
 The to-do asked whether we should adopt s30's `power/(toughness − damage)`.

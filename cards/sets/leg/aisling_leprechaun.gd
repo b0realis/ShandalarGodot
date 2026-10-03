@@ -37,5 +37,7 @@ static func _involves_self(_game: MtgGame, source: CardInstance, event: GameEven
 
 static func _paint(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
 	var other := _other(source, event)
-	if other != null and other.zone == Mtg.Zone.BATTLEFIELD:
+	# One phased out in response isn't painted, not even once it is back
+	# (CR 702.26e) — set_color itself does not ask.
+	if game.is_present(other):
 		game.set_color(other, Mtg.ManaColor.G)

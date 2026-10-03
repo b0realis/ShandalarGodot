@@ -24,8 +24,17 @@ func _information_received(viewer: int, title: String, names: Array) -> void:
 
 static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Array:
 	var result: Array = []
+	# A PHASED-OUT permanent is treated as though it does not exist (CR
+	# 702.26b): nothing of it is activated, whatever its lists still hold.
+	if card.phased_out: return result
+	# Where a spell may be cast from is the ENGINE's permission (Pack 8),
+	# the one MtgGame.playable_cards reads: the hand; an exiled card this
+	# seat may play — a Three Wishes card face down to everyone but its
+	# viewer included (MtgGame.can_play_from_exile); the top of the
+	# graveyard under Bösium Strip (MtgGame.can_cast_from_graveyard).
 	var spell_source := (card.zone == Mtg.Zone.HAND and card.owner_id == pid) \
-		or (card.zone == Mtg.Zone.EXILE and not card.face_down and card.exile_playable_by == pid)
+		or (referee != null and (referee.can_play_from_exile(pid, card) or referee.can_cast_from_graveyard(pid, card))) \
+		or (referee == null and card.zone == Mtg.Zone.EXILE and not card.face_down and card.exile_playable_by == pid)
 	if spell_source and not card.is_land():
 		var modes: Array = []
 		for mode in card.data.modes:
@@ -78,9 +87,14 @@ func clear() -> void:
 
 
 func auto_prepare(pid: int, card: CardInstance, action: Dictionary, excluded: Dictionary) -> String:
-	# Auto-cast may spend mana, never choose how much life the player loses.
+	# Auto-cast may spend mana, never choose how much life the player loses
+	# — nor how many of their cards or permanents an X takes (Pack 8:
+	# Infernal Harvest, Haunting Misery, Firestorm), as the local double-
+	# click never decides it either (DuelScreen._auto_cast).
 	if card != null and action.kind == "spell" and card.data.additional_life_is_x:
 		return "Choose the life payment explicitly."
+	if card != null and SgPayment.object_x(card, String(action.kind), int(action.index), int(action.mode)):
+		return "Choose X explicitly: it counts cards or permanents, not mana."
 	var request_data := action.duplicate()
 	request_data.x = 0
 	var error := prepare(pid, card, request_data)
@@ -187,6 +201,10 @@ func submit(pid: int, values: Array) -> String:
 		if not _targets.has(pair[0]): return "Target unavailable."
 		refs.append((_targets[pair[0]] as TargetRef).with_amount(int(pair[1])))
 	draft["count"] = maxi(1, refs.size())
+	# The named targets stay with the draft: a spell aimed at a Kaervek's
+	# Torch costs {2} more (Pack 8, MtgGame.targets_surcharge), and a cast
+	# refused for its mana is paid by the auto-tap with that {2} in it.
+	draft["targets"] = refs
 	var error := ""
 	match draft.kind:
 		"spell": error = game.cast_spell(pid, draft.card, refs, draft.x, draft.mode)
@@ -201,7 +219,8 @@ func submit(pid: int, values: Array) -> String:
 func payment(count := 1) -> Dictionary:
 	if draft.is_empty() or draft.kind == "mana": return {}
 	if draft.kind == "spell":
-		return game.spell_payment(draft.pid, draft.card.data, draft.x, count, draft.card, draft.mode)
+		return game.spell_payment(draft.pid, draft.card.data, draft.x, count, draft.card, draft.mode,
+			draft.get("targets", []))
 	return game.ability_payment(draft.pid, draft.card, draft.index, draft.x)
 
 
@@ -261,7 +280,38 @@ func _choice_entries() -> Array:
 				if entries[i].answer is int: entries[i].label += " [choice %d]" % (i + 1)
 			if question.kind == PlayerChoice.Kind.CARD and question.optional:
 				entries.append({"label": "Choose none", "answer": ""})
+			# ONE PICK OF AN "IN ANY ORDER" SEQUENCE (Pack 8 — Teferi's Puzzle
+			# Box, PlayerChoice.in_order) ends in one click with the local
+			# screen's own line: the rest go in the order LISTED here
+			# ([method _keep_order]).
+			if question.kind == PlayerChoice.Kind.CARD and question.in_order and entries.size() > 1:
+				entries.append({"label": DuelScreen.KEEP_ORDER_LINE, "answer": KEEP_ORDER})
 	return entries
+
+
+## The answer of the `Done — keep this order.` line; no card is a Dictionary.
+const KEEP_ORDER := {"keep_order": true}
+
+
+## `Done — keep this order.` (Pack 8): this pick and every further pick of
+## [param question]'s sequence take the FIRST line listed — the order the
+## seat was shown, which here is the sorted list, never a hidden order —
+## each answered through the engine as the seat's own, until the sequence
+## asks no more. Any order is legal and the cards go where nobody sees
+## them, so this is a complete answer (HumanAgent.keep_order_for is the
+## local screen's form of the same click).
+func _keep_order(pid: int, question: PlayerChoice) -> String:
+	var source := question.source
+	for i in SgProtocol.MAX_CARDS:
+		var asking := game.awaiting_choice
+		if asking == null or asking.pid != pid or not asking.in_order or asking.source != source \
+			or asking.kind != PlayerChoice.Kind.CARD:
+			break
+		var entries := _choice_entries()
+		if entries.is_empty() or entries[0].answer is Dictionary: break
+		var error := game.answer_choice(entries[0].answer)
+		if not error.is_empty(): return error
+	return ""
 
 
 func choice_view(pid: int) -> Dictionary:
@@ -289,7 +339,11 @@ func answer(pid: int, picks: Array) -> String:
 		if index < 0 or index >= entries.size() or seen.has(int(index)): return "Invalid or repeated choice."
 		seen[int(index)] = true
 		answers.append(entries[int(index)].answer)
-	var error := game.answer_choice(answers if question.kind == PlayerChoice.Kind.DISCARD else answers[0])
+	var error := ""
+	if question.kind == PlayerChoice.Kind.CARD and answers[0] is Dictionary:
+		error = _keep_order(pid, question)
+	else:
+		error = game.answer_choice(answers if question.kind == PlayerChoice.Kind.DISCARD else answers[0])
 	if error.is_empty() and game.awaiting_choice == null and not _auto_payment.is_empty():
 		var resume := _auto_payment.duplicate(true)
 		return autopay(resume.pid, resume.excluded, resume.count)

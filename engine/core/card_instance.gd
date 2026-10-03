@@ -82,8 +82,16 @@ var tapped: bool = false
 ## Monotonic continuity markers for "for as long as" effects. An untap or
 ## control change breaks a duration even if the old state is restored before
 ## resolution. Updated and journaled by MtgGame, never reset on a new turn.
+## PHASING OUT breaks them too (CR 702.26f: "for as long as" effects that
+## track a permanent end when it phases out): [method
+## MtgGame.phase_simultaneously] bumps [member untap_sequence] — so every
+## "for as long as it remains tapped" stamp ends — and [member
+## phase_sequence], the marker for the durations that track nothing but the
+## permanent itself ("for as long as it remains on the battlefield",
+## Stromgald Spy).
 var untap_sequence: int = 0
 var control_sequence: int = 0
+var phase_sequence: int = 0
 
 ## Damage marked this turn (cleared at cleanup, CR 514.2).
 var damage: int = 0
@@ -163,6 +171,13 @@ var damage_from_this_turn: Dictionary = {}
 ## Source id AND battlefield incarnation; a returned Vampire is a new
 ## object and must not claim damage dealt by its previous incarnation.
 var damage_origins_this_turn: Dictionary = {}
+## The damage MARKED on it right now, per source incarnation
+## ("source id:timestamp" -> amount) — unlike the two ledgers above this
+## one is wiped whenever the marked damage is (regeneration, Pyramids,
+## cleanup), because "lethal damage dealt by a single source is marked on
+## it" (Ogre Enforcer, MtgGame.lethal_damage_spared) asks about MARKED
+## damage, not damage dealt this turn.
+var marked_damage_by_source: Dictionary = {}
 
 ## Regeneration shields built up this turn (CR 701.15): each one replaces
 ## the next destruction with tap + clear damage + leave combat. Created by
@@ -198,6 +213,20 @@ var cur_attack_land_sacrifices := 0
 var cur_block_power_tax_threshold := 0
 var cur_block_power_tax := 0
 var cur_blocked_by_tax := 0
+## LIFE TO BLOCK THIS CREATURE (CR 509.1d, 119.4): "nonblue creatures can't
+## block creatures you control unless their controller pays 1 life for each
+## blocking creature they control" (Heat Wave). One entry per imposing
+## effect, {source: int (its permanent's id), life: int, filter:
+## Callable(blocker) -> bool (which blockers owe it), desc: String}, added
+## through CombatState.add_block_life_tax by a static each recalculation.
+## A blocker owes each SOURCE once, however many of its creatures it blocks
+## (CombatState.block_life_owed); the defender pays as blockers are declared.
+var cur_blocked_by_life_taxes: Array[Dictionary] = []
+## "If a creature you control attacks, this creature also attacks if able"
+## (Ekundu Cyclops) — a CONDITIONAL attack requirement (CR 508.1d), enforced
+## by the declaration check. Set by a static each recalculation
+## (CombatState.attacks_with_others), so a silenced creature has none.
+var cur_attacks_if_others_attack := false
 
 ## Derived land-mana replacement choices, collected by continuous effects.
 var cur_land_mana_replacements: Array[int] = []
@@ -272,11 +301,30 @@ var blocked_ids_this_turn: Dictionary = {}
 ## engine's blocks became one-to-many on 2026-09-02. Cleared at cleanup.
 var must_block_this_turn: bool = false
 
-## PHASED OUT (CR 702.25): still on the battlefield in the rules sense,
+## PHASED OUT (CR 702.26b): still on the battlefield in the rules sense,
 ## but "treated as though it doesn't exist" — MtgGame keeps it out of the
 ## battlefield arrays, so no query, static, trigger or state-based action
-## sees it, and TargetSpec refuses it.
+## sees it, and TargetSpec refuses it. It keeps `zone == BATTLEFIELD`, so a
+## liveness check on a remembered instance asks [method MtgGame.is_present],
+## never the zone alone. It sits in the `phased_out` array of the seat that
+## controlled it as it phased out — the seat whose untap step brings it back
+## (CR 502.1).
 var phased_out: bool = false
+
+## It phased out INDIRECTLY, riding with the permanent it is attached to
+## (CR 702.26g). Such a permanent never phases in by itself — only along
+## with its host (702.26g), and attached to it (702.26i). Cleared as it
+## phases in.
+var phased_indirectly: bool = false
+
+## The id of the permanent whose "until" holds this one phased out — "phases
+## out until this enchantment leaves the battlefield" (Oubliette). -1 = none.
+## A held permanent does not phase in during the untap step (CR 610.4a);
+## only its holder's release ([method MtgGame.release_phase_hold]) or
+## another effect that names phased-out permanents (Time and Tide) brings it
+## back, and once it is back by any route the hold is gone, so a later
+## release does nothing (610.4a, second sentence).
+var phase_hold: int = -1
 
 ## "If it would die this turn, exile it instead" (Disintegrate). A
 ## replacement honoured by MtgGame; cleared at cleanup.
@@ -286,6 +334,13 @@ var exile_instead_of_dying: bool = false
 ## resolving effect; MtgGame sends the finished spell to exile instead of
 ## its owner's graveyard.
 var exile_after_resolution: bool = false
+
+## "If a spell cast this way would be put into a graveyard, exile it
+## instead" (Bösium Strip): stamped by MtgGame.cast_spell on a spell cast
+## through a graveyard permission that says so, honoured wherever the
+## spell leaves the stack for a graveyard — resolution, a fizzle, a
+## counter (CR 614.1) — and cleared as it does.
+var graveyard_exile_spell: bool = false
 
 ## "The next time a source of your choice would deal damage to this
 ## creature this turn, that damage is dealt to <player> instead" (Jade
@@ -658,6 +713,20 @@ var cur_indestructible: bool = false
 ## until-end-of-turn borrows and the CR 701.10 exchange included.
 var cur_cant_change_control: bool = false
 
+## "Can't phase out" (Spatial Binding, Ertai's Familiar). Set by statics
+## each recalculation — printed, or a floating one from
+## [method MtgGame.forbid_phasing_out]. Honoured by every phase-out
+## ([method MtgGame.phase_simultaneously]): the untap step's phasing, a
+## one-shot "phases out" and riding out indirectly with a host alike.
+var cur_cant_phase_out: bool = false
+
+## "This creature can't be destroyed by lethal damage unless lethal damage
+## dealt by a single source is marked on it" (Ogre Enforcer) — set by the
+## static [method CardData.with_lethal_needs_single_source] installs, so a
+## silenced or face-down Ogre loses it. Read by
+## MtgGame.lethal_damage_spared.
+var cur_lethal_needs_single_source: bool = false
+
 ## "Prevent ALL damage that would be dealt to this creature this turn"
 ## (Glyph of Destruction) — combat and non-combat alike.
 var cur_prevent_all_damage_taken: bool = false
@@ -745,6 +814,8 @@ func reset_characteristics() -> void:
 	cur_block_power_tax_threshold = 0
 	cur_block_power_tax = 0
 	cur_blocked_by_tax = 0
+	cur_blocked_by_life_taxes.clear()
+	cur_attacks_if_others_attack = false
 	cur_attacks_as_if_hasty = false
 	cur_abilities_silenced = false
 	cur_prevent_damage_from_creatures = false
@@ -763,7 +834,9 @@ func reset_characteristics() -> void:
 	cur_prevent_combat_damage_taken = false
 	cur_prevent_all_damage_taken = false
 	cur_indestructible = false
+	cur_lethal_needs_single_source = false
 	cur_cant_change_control = false
+	cur_cant_phase_out = false
 	damage_eats_counters = ""
 	for k in added_keywords:     # durationless grants (Cocoon's flying)
 		if not cur_keywords.has(k):
@@ -876,6 +949,25 @@ func become_basic_land_type(land_type: String, color: int) -> void:
 	cur_abilities_silenced = true
 
 
+## "Each land is a Swamp IN ADDITION TO its other land types" (Blanket of
+## Night) — the exception CR 305.7 carves out of the retyping above: the
+## land GAINS the basic land type [param land_type] and the intrinsic mana
+## ability that comes with it (CR 305.6), and keeps every other subtype and
+## ability it had. A land that already has the type is left alone (one
+## intrinsic ability per type). Called from layer-4 land-type statics
+## (`StaticAbility.changing_land_types`) during recalculation, in timestamp
+## order with the replacing retypers: a Blood Moon that applies after the
+## Blanket still makes a nonbasic land a Mountain and nothing else.
+func add_basic_land_type(land_type: String) -> void:
+	var kind := land_type.to_lower()
+	if cur_subtypes.has(kind):
+		return
+	cur_subtypes.append(kind)
+	var color := int(Mtg.BASIC_LAND_COLORS.get(kind, 0))
+	if color != 0:
+		cur_mana_abilities.append(ManaAbility.new(color))
+
+
 ## Live keyword check (use this, not data.has_keyword, in rules code).
 func has_keyword(keyword: int) -> bool:
 	return cur_keywords.has(keyword)
@@ -985,6 +1077,7 @@ func clear_battlefield_state() -> void:
 	damaged_by_this_turn.clear()
 	damage_from_this_turn.clear()
 	damage_origins_this_turn.clear()
+	marked_damage_by_source.clear()
 	tracked_prevention.clear()
 	damaged_players_this_turn.clear()
 	regeneration_shields = 0
@@ -1016,6 +1109,8 @@ func clear_battlefield_state() -> void:
 	added_types = 0
 	added_protection = 0
 	phased_out = false
+	phased_indirectly = false
+	phase_hold = -1
 	face_down = false
 	exile_instead_of_dying = false
 	text_changes.clear()

@@ -40,7 +40,7 @@ static func _your_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent)
 
 
 static func _count_the_dead(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	var corpses := 0
 	for inst in game.players[source.controller_id].graveyard:

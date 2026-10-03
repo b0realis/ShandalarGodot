@@ -30,14 +30,14 @@ static func _your_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent)
 
 
 static func _repaint_trigger(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone == Mtg.Zone.BATTLEFIELD:
+	if game.is_present(source):   # phased out: not repainted (CR 702.26e)
 		game.set_color(source, RandomEffects.color(game))
 
 
 class RepaintSelfEffect extends EffectBase:
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		if source != null and source.zone == Mtg.Zone.BATTLEFIELD:
+		if game.is_present(source):   # phased out: not repainted (CR 702.26e)
 			game.set_color(source, RandomEffects.color(game))
 
 	func describe() -> String:

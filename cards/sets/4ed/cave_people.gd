@@ -34,7 +34,7 @@ static func _self_attacks(_game: MtgGame, source: CardInstance, event: GameEvent
 
 
 static func _charge(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	game.continuous.add_until_eot_pump(source.id, 1, -2)
 	game.recalculate()

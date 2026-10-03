@@ -96,6 +96,11 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 			for unit in int(pool._restricted[key][color]):
 				out.append([null, unit, int(color), 1, false, String(key), 0, 0])
 	var candidates: Array[CardInstance] = game.players[pid].battlefield + game.players[pid].hand
+	# ACTIVATION BANS reach mana abilities (CR 605.1a — Null Rod's Mox,
+	# Cursed Totem's Elves, City of Solitude's off-turn lands): a banned
+	# source is no source, so no plan — the AI's or the human's auto-pay —
+	# counts mana tap_for_mana would then refuse. One cheap gate per build.
+	var bans := game.has_activation_bans()
 	if game.foreign_land_mana.has(pid):
 		for land in game.players[1 - pid].battlefield:
 			if game.may_tap_foreign_land(pid, land): candidates.append(land)
@@ -115,7 +120,16 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 			var borrowed := inst.zone == Mtg.Zone.BATTLEFIELD and inst.controller_id != pid
 			if borrowed and not game.may_tap_foreign_land(pid, inst, index): continue
 			if not ability.object_costs.is_empty(): continue # not free, must be chosen explicitly
+			# Lion's Eye Diamond is "activate only as an instant": never in
+			# the middle of a payment, so never an auto-tapped source.
+			if ability.instant_only: continue
+			# "Activate only once each turn" (Wall of Roots), already used.
+			if not game.mana_ability_ready(inst, index): continue
+			# A put-a-counter cost (Wall of Roots' -0/-1) is planned only while
+			# the counter leaves the source alive.
+			if ability.put_counter_kind != "" and _counter_kills(inst, ability): continue
 			if inst.zone != ability.activation_zone: continue
+			if bans and game.activation_ban_reason(pid, inst, ability, true) != "": continue
 			# Sacrificing a Swamp is never an implicit auto-tap. A player may
 			# activate it explicitly; planners must not count its output free.
 			if game.BLACK_SYMBOL_COST.amount(game, ability.cost) > 0: continue
@@ -173,10 +187,52 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 						for n in ability.produces.size(): row[8].outputs[n][2] = row[5]
 				if not row.is_empty():
 					out.append(row)
+	if pool.spend_as_any != 0 or pool.colorless_only != 0:
+		out = _under_spending_rule(out, pool)
 	# Fewer options first; painful sources after painless; sacrifices last;
 	# and last of all, the source that is holding something back.
 	out.sort_custom(cheapest_source_first)
 	return out
+
+
+## THE SEAT'S SPENDING RULE, read into the source list (Celestial Dawn —
+## [member ManaPool.spend_as_any] / [member ManaPool.colorless_only]): a
+## source whose mana may pay only generic is listed as {C}, and a source
+## whose mana may pay any colour is listed once per colour — the way a
+## dual land is listed once per ability, sharing its instance's key so a
+## plan still taps it once ([method source_key]). The tap makes what it
+## always made; the pool's own rule spends it ([method ManaPool.pay]).
+## Floating mana keeps its colour: the pool already answers for it.
+static func _under_spending_rule(src: Array, pool: ManaPool) -> Array:
+	var out: Array = []
+	for s in src:
+		var color := int(s[2])
+		if (color & pool.colorless_only) != 0 and color != Mtg.ManaColor.C:
+			var generic_only: Array = s.duplicate()
+			generic_only[2] = Mtg.ManaColor.C
+			out.append(generic_only)
+			continue
+		out.append(s)
+		if s[0] == null or (color & pool.spend_as_any) == 0 or s.size() > 8 \
+				or source_chooses_color(s):
+			continue
+		for other in Mtg.WUBRG:
+			if other != color:   # white pays a red pip even when red can't
+				var any_row: Array = s.duplicate()
+				any_row[2] = other
+				out.append(any_row)
+	return out
+
+
+## Would paying [param ability]'s put-a-counter cost kill [param inst]
+## (Wall of Roots' last -0/-1)? A P/T counter shrinks the live toughness;
+## any other kind is harmless here.
+static func _counter_kills(inst: CardInstance, ability: ManaAbility) -> bool:
+	if not inst.is_creature():
+		return false
+	var delta := ContinuousEffects.parse_pt_counter(ability.put_counter_kind)
+	var toughness_after := inst.cur_toughness + delta.y * maxi(1, ability.put_counter_count)
+	return toughness_after <= 0 or toughness_after <= inst.damage
 
 
 ## The source row for one mana ability making [param color] — a plain
@@ -325,17 +381,56 @@ static func _plan_free_sources(src: Array, cost: ManaCost, x_value: int,
 	var generic := cost.generic + x_value
 	var floating := pool_check.total() - cost.mana_value() + cost.generic
 	generic -= maxi(floating, 0)
+	var generic_rows: Dictionary = {}   # source key -> true: taken by THIS pass
 	for s in src:
 		if generic <= 0:
 			break
-		if used_instances.has(source_key(s)) or not source_usable(s, usage_keys):
+		if not source_usable(s, usage_keys):
+			continue
+		var key := source_key(s)
+		if used_instances.has(key):
+			# THE SAME PERMANENT'S RICHER ROW (2026-10-03). A source lists
+			# one row per mana ability, and only its first was ever tried:
+			# Crystal Vein's "{T}, Sacrifice: Add {C}{C}" sorts after its
+			# plain "{T}: Add {C}" (sacrifices last), found the instance
+			# taken and was skipped, so the Vein could not pay {2}. Once
+			# every cheaper row is spent and the cost is still short, a
+			# taken permanent may trade its row for a richer one — any
+			# colour for a row this pass took, the SAME colour for one a
+			# coloured pip took (the pip stays paid).
+			var upgraded := _upgrade_row(out, used_instances, key, s,
+				generic_rows.has(key))
+			generic -= upgraded
 			continue
 		out.append(step_of(s))
-		used_instances[source_key(s)] = true
+		used_instances[key] = s
+		generic_rows[key] = true
 		generic -= s[3]
 	if generic > 0:
 		return []
 	return out
+
+
+## Trade the row [param used] holds for [param key] for the richer row
+## [param s] of the same permanent, in place in the plan [param out]:
+## the extra mana it makes, or 0 when [param s] is no better (or would
+## change the colour of a row a coloured pip counts on — [param any_color]
+## false). One tap either way: a permanent's mana abilities share its {T}.
+static func _upgrade_row(out: Array, used: Dictionary, key: String, s: Array,
+		any_color: bool) -> int:
+	var old: Variant = used.get(key)
+	if not (old is Array) or s[0] == null:
+		return 0
+	var was: Array = old
+	if int(s[3]) <= int(was[3]) or (not any_color and int(s[2]) != int(was[2])):
+		return 0
+	var old_step := step_of(was)
+	for i in out.size():
+		if out[i] == old_step:
+			out[i] = step_of(s)
+			used[key] = s
+			return int(s[3]) - int(was[3])
+	return 0
 
 
 ## The coloured pips the planner always had: each takes the first unused
@@ -354,10 +449,24 @@ static func _cover_colored_greedy(src: Array, cost: ManaCost, usage_keys: Array,
 						or not source_usable(s, usage_keys):
 					continue
 				out.append(step_of(s))
-				used[source_key(s)] = true
+				used[source_key(s)] = s
 				pool_check.add(s[2], s[3])
 				found = true
 				break
+			if not found:
+				# No untouched source left: a taken permanent may still
+				# make MORE of this colour on another of its rows (a
+				# "{T}, Sacrifice: Add {G}{G}" beside its "{T}: Add {G}" —
+				# see _plan_free_sources). Same colour only.
+				for s in src:
+					if s[2] != color or not source_usable(s, usage_keys) \
+							or not used.has(source_key(s)):
+						continue
+					var extra := _upgrade_row(out, used, source_key(s), s, false)
+					if extra > 0:
+						pool_check.add(color, extra)
+						found = true
+						break
 			if not found:
 				return false
 	return true
@@ -421,7 +530,7 @@ static func _cover_colored_matched(src: Array, cost: ManaCost, usage_keys: Array
 			continue
 		var s: Array = rows[owner[slot]][slot_color[slot]]
 		out.append(step_of(s))
-		used[owner[slot]] = true
+		used[owner[slot]] = s   # the row, so the generic pass may enrich it
 		pool_check.add(s[2], s[3])
 	return true
 

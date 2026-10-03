@@ -291,7 +291,7 @@ static func attack_illegality(game: MtgGame, inst: CardInstance, defender_pid: i
 	# duel screen would put it in the Combat window's attack lane, where it
 	# could only ever produce a declaration the engine refused as a whole —
 	# taking the player's real attackers down with it.
-	if inst.zone != Mtg.Zone.BATTLEFIELD:
+	if inst.zone != Mtg.Zone.BATTLEFIELD or inst.phased_out:   # CR 702.26b
 		return "%s is not on the battlefield" % inst.data.card_name
 	# The turn-wide ban (Festival) is a creature's answer too (2026-09-16):
 	# [method MtgGame.declare_attackers] refused the declaration as a
@@ -431,7 +431,7 @@ static func block_illegality(game: MtgGame, blocker: CardInstance,
 	# it into the blocker lane, where it could only ever produce a
 	# declaration the engine refused as a whole — taking the player's real
 	# blocks down with it.
-	if blocker.zone != Mtg.Zone.BATTLEFIELD:
+	if blocker.zone != Mtg.Zone.BATTLEFIELD or blocker.phased_out:   # CR 702.26b
 		return "%s is not on the battlefield" % blocker.data.card_name
 	# CR 506.4: a permanent that has LEFT the battlefield is no longer an
 	# attacker. Its combat entry is deliberately left standing until its
@@ -439,7 +439,7 @@ static func block_illegality(game: MtgGame, blocker: CardInstance,
 	# blocking or blocked by it, and reads that state as it dies), so the
 	# check belongs here — otherwise a blocker could be spent on a
 	# creature that is already in the graveyard.
-	if attacker.zone != Mtg.Zone.BATTLEFIELD:
+	if attacker.zone != Mtg.Zone.BATTLEFIELD or attacker.phased_out:   # CR 702.26b
 		return "%s is no longer on the battlefield" % attacker.data.card_name
 	if blocker.tapped:
 		return "tapped creatures can't block"
@@ -503,6 +503,12 @@ static func block_illegality(game: MtgGame, blocker: CardInstance,
 		return "can't afford the blocking cost"
 	if attacker.cur_blocked_by_tax > 0 and not game.can_afford_cost(defender_pid, ManaCost.parse("{%d}" % attacker.cur_blocked_by_tax), [], viewer):
 		return "can't afford the cost to block this attacker"
+	# A LIFE tax (Heat Wave): a player may pay life only while their life
+	# total is at least the payment (CR 119.4). Life is public, so the
+	# AI's read of the other seat needs no [param viewer] here.
+	var life_owed := block_life_owed(blocker, [attacker])
+	if life_owed > 0 and game.players[defender_pid].life < life_owed:
+		return "can't pay the life to block this attacker"
 	if check_group and blocker.cur_min_block_group > 1:
 		if game.max_blockers > 0 and game.max_blockers < blocker.cur_min_block_group: return "not enough permitted blockers"
 		var possible := 0
@@ -514,6 +520,67 @@ static func block_illegality(game: MtgGame, blocker: CardInstance,
 					break
 		if possible < blocker.cur_min_block_group: return "not enough other creatures can block"
 	return ""
+
+
+## LIFE TO BLOCK (CR 509.1d — Heat Wave: "Nonblue creatures can't block
+## creatures you control unless their controller pays 1 life for each
+## blocking creature they control"). Called from a STATIC's apply callback,
+## once per creature the restriction protects: [param attacker] is that
+## creature, [param source] the permanent imposing the tax, [param life]
+## what each blocking creature owes, and [param blocker_filter]
+## `func(blocker: CardInstance) -> bool` says WHICH blockers owe it
+## (Heat Wave: the nonblue ones). Rebuilt every recalculation
+## ([member CardInstance.cur_blocked_by_life_taxes]).
+static func add_block_life_tax(attacker: CardInstance, source: CardInstance,
+		life: int, blocker_filter: Callable, desc := "") -> void:
+	if attacker == null or source == null or life <= 0:
+		return
+	attacker.cur_blocked_by_life_taxes.append({
+		"source": source.id, "life": life, "filter": blocker_filter,
+		"desc": desc if desc != "" else "pay %d life" % life})
+
+
+## The LIFE [param blocker] owes to block every attacker in
+## [param attackers] (CardInstances; a null is skipped). Each imposing
+## source is owed ONCE per blocking creature, however many of the
+## creatures it protects that blocker blocks: "1 life for each blocking
+## creature" counts creatures, not blocks (CR 509.1b lets one creature
+## block several). Two Heat Waves are two restrictions and two payments.
+static func block_life_owed(blocker: CardInstance, attackers: Array) -> int:
+	if blocker == null:
+		return 0
+	var owed := {}
+	for entry in attackers:
+		var attacker := entry as CardInstance
+		if attacker == null:
+			continue
+		for tax in attacker.cur_blocked_by_life_taxes:
+			var source := int(tax["source"])
+			if owed.has(source):
+				continue
+			var filter: Callable = tax["filter"]
+			if filter.is_valid() and not bool(filter.call(blocker)):
+				continue
+			owed[source] = int(tax["life"])
+	var total := 0
+	for source in owed:
+		total += int(owed[source])
+	return total
+
+
+## "If a creature you control attacks, this creature also attacks if able"
+## (Ekundu Cyclops) as a printed STATIC: put it on the card with
+## `CardData.static_ability(CombatState.attacks_with_others())`. It sets
+## [member CardInstance.cur_attacks_if_others_attack] each recalculation,
+## so a silenced or face-down creature has no such requirement; the
+## declaration check (engine/core/combat_declaration.gd) enforces it under
+## CR 508.1d.
+static func attacks_with_others(text := "If a creature you control attacks, this creature also attacks if able.") -> StaticAbility:
+	return StaticAbility.new(_attacks_with_others, text)
+
+
+static func _attacks_with_others(_game: MtgGame, source: CardInstance) -> void:
+	source.cur_attacks_if_others_attack = true
 
 
 ## Does [param pid] control a land of [param land_type]? The pseudo-type

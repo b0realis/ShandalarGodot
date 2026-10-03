@@ -88,7 +88,7 @@ static func _fight_context(_g: MtgGame, s: CardInstance, e: GameEvent) -> Dictio
 static func _cohort(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var ctx := g.trigger_context(s)
 	var i := g.find_instance(int(ctx.id))
-	if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(ctx.stamp):
+	if g.is_present(i) and i.layer_timestamp == int(ctx.stamp):   # CR 702.26e
 		g._rec(i, &"regeneration_banned_this_turn")
 		i.regeneration_banned_this_turn = true
 # "Blocking or blocked by this creature" includes the band (2026-10-03): a
@@ -110,7 +110,7 @@ static func _combat_end(g: MtgGame, s: CardInstance, e: GameEvent, wight: bool) 
 		return
 	for pair in pairs:
 		var i := g.find_instance(pair[0])
-		if i == null or i.zone != Mtg.Zone.BATTLEFIELD or i.layer_timestamp != int(pair[1]): continue
+		if not g.is_present(i) or i.layer_timestamp != int(pair[1]): continue   # CR 702.26e
 		g.add_counters(i, "paralyzation")
 		g.tap_permanent(i)
 		g.continuous.add_floating_static(s, StaticAbility.new(_paralyzed.bind(i.id), "Doesn't untap with paralyzation counters."), ContinuousEffects.Duration.INDEFINITE, -1, false, i.id)
@@ -139,7 +139,7 @@ static func _titan_grow(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, st
 	var i := g.find_instance(id)
 	if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == stamp: g.add_counters(i, "+1/+1")
 static func _shyft(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	var options: Array[String] = ["Keep current colors"]
 	var colors := [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B, Mtg.ManaColor.R, Mtg.ManaColor.G]
 	var masks: Array[int] = [0]

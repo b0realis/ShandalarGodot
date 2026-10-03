@@ -99,7 +99,9 @@ class SoakEffect extends EffectBase:
 
 	func resolve(game: MtgGame, source: CardInstance, _controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
-		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
+		# Phased out: no shield (CR 702.26e) — add_point_redirect only asks
+		# for the zone.
+		if not game.is_present(source):
 			return
 		# ONE point per activation (metered — the rest of the event still
 		# lands on the Avatar); lifted 2026-09-02 off Jade Monolith's

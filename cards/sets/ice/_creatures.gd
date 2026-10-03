@@ -135,7 +135,7 @@ static func _source_blocks(g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
 	var blocked := g.combat.attackers_blocked_by(s.id)
 	return blocked.is_empty() or blocked.front() == e.data.attacker.id
 static func _snowman(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s):
+	if F._same_trigger_source(g, s) and g.is_present(s):   # CR 702.26e
 		g.continuous.add_until_eot_combat_prevention(s.id, true, true)
 		g.recalculate()
 static func _mutant(g: MtgGame, s: CardInstance) -> void:
@@ -171,7 +171,7 @@ static func _wolves(g: MtgGame, s: CardInstance) -> void:
 			if not s.cur_keywords.has(Mtg.Keyword.BANDING): s.cur_keywords.append(Mtg.Keyword.BANDING)
 			return
 static func _aurochs(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if not F._same_trigger_source(g, s): return
+	if not F._same_trigger_source(g, s) or not g.is_present(s): return   # CR 702.26e
 	var n := 0
 	for id in g.combat.attackers:
 		var i := g.find_instance(id)
@@ -189,13 +189,13 @@ static func _first_block(g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
 		return g.combat.attackers_blocked_by(s.id).front() == e.data.attacker.id
 	return false
 static func _chub(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s):
+	if F._same_trigger_source(g, s) and g.is_present(s):   # CR 702.26e
 		g.continuous.add_until_eot_pump(s.id, 2, 2)
 		g.recalculate()
 static func _blocks_flyer(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
 	return e.data.get("blocker") == s and e.data.attacker.has_keyword(Mtg.Keyword.FLYING)
 static func _spider(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s):
+	if F._same_trigger_source(g, s) and g.is_present(s):   # CR 702.26e
 		g.continuous.add_until_eot_pump(s.id, 0, 2)
 		g.recalculate()
 static func _sibilant(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
@@ -205,7 +205,7 @@ static func _hydra_enter(g: MtgGame, s: CardInstance, _pid: int) -> void: g.add_
 static func _hydra_grow(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	if same_activation(g, s): g.add_counters(s, "+1/+0")
 static func _walk(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
-	if same_activation(g, s):
+	if same_activation(g, s) and g.is_present(s):   # CR 702.26e
 		g.continuous.add_floating_static(s, StaticAbility.new(_can_walk.bind(s.id), "Can attack with defender."), ContinuousEffects.Duration.END_OF_TURN, -1, false, s.id)
 		g.recalculate()
 static func _can_walk(g: MtgGame, _s: CardInstance, id: int) -> void:
@@ -219,7 +219,7 @@ static func _elder(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: int
 	elif option == 1: g.untap_permanent(i)
 static func _wurm_blocked(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return not _band_blockers(g, s).is_empty()
 static func _johtull(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	if F._same_trigger_source(g, s):
+	if F._same_trigger_source(g, s) and g.is_present(s):   # CR 702.26e
 		var count := maxi(0, _band_blockers(g, s).size() - 1)
 		g.continuous.add_until_eot_pump(s.id, -2 * count, -count)
 		g.recalculate()

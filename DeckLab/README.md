@@ -1664,12 +1664,13 @@ writes it, `--field` or `--matrix` reads it) and at one switch.
 **What `--packs` has to do with building a deck.** A set's cards exist
 only while its card pack is in play. The base game is `4ed 2ed arn atq
 leg drk past phpr`; `fem` arrives with pack 2, `ice` with 3, `hml` with
-4, `all` with 5, `por`/`p02` with 6 and `5ed` with 7 (the one table of
+4, `all` with 5, `por`/`p02` with 6, `5ed` with 7 and `mir`/`vis`/`wth`
+with 8 (the one table of
 this is `CardPacks.pack_of_set`). So `--sets ice` with no pack in play is
 not a typo, and the tool now says what it is — *set 'ice' (Ice Age) is in
 card pack 3, which is not in play — add `--packs 3`, or `--packs all` for
 every pack found* — and `--sets every` builds from whatever is in play at
-the time: 8 sets without the switch, 15 with `--packs all`. `--packs`
+the time: 8 sets without the switch, 18 with `--packs all`. `--packs`
 puts packs in play for this run alone and never writes the game's own
 setting; the CLI reads it with the Lab's own code (`Lab.parse_packs`,
 `Lab.enable_packs`) so the two tools cannot drift on it.

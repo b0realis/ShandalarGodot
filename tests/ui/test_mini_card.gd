@@ -168,6 +168,7 @@ func test_every_state_carries_its_1997_cue_card_string_verbatim() -> void:
 		"Can't target this")
 	assert_eq(MiniCard.STATE_CUE[MiniCard.State.TARGET_AGAIN],
 		"Is a target, can't target again")
+	assert_eq(MiniCard.STATE_CUE[MiniCard.State.PHASED], "Phased")
 
 
 func test_every_state_overlay_wears_its_own_cue_card_as_a_tooltip() -> void:
@@ -438,17 +439,27 @@ func test_the_state_art_decodes_from_the_1997_mask() -> void:
 			"state %d has real transparency — the mask half was applied" % state)
 
 
-func test_phased_and_damage_to_player_are_recorded_as_unanswerable() -> void:
-	# The two of the original's ten this widget does NOT draw, so that the
-	# next pass does not go hunting for them:
-	#   * `Damage to player` (Poison.pic) is the LIFE REGISTER's state.
-	#   * `Phased` cannot reach a widget — MtgGame.phase_out takes the
-	#     instance out of players[pid].battlefield and there is no
-	#     Mtg.Zone.PHASED_OUT, so the board never builds a card for one.
+func test_damage_to_player_is_the_one_state_this_widget_does_not_draw() -> void:
+	# The one of the original's ten this widget does NOT draw, so that the
+	# next pass does not go hunting for it: `Damage to player` is the
+	# DAMAGE MARKER's (DamageMarker), not a card's.
 	assert_false(MiniCard.STATE_CUE.values().has("Damage to player"))
-	assert_false(MiniCard.STATE_CUE.values().has("Phased"))
-	assert_false("PHASED_OUT" in Mtg.Zone.keys(),
-		"if this ever fails, `Phased` has become answerable")
+	# `Phased` was the second until Pack 8 (2026-10-03): the board draws
+	# phased-out permanents now (DuelScreen._table_cards), still without a
+	# Mtg.Zone of their own — the widget reads CardInstance.phased_out.
+	assert_true(MiniCard.STATE_CUE.values().has("Phased"))
+	assert_false("PHASED_OUT" in Mtg.Zone.keys())
+
+
+func test_a_phased_out_permanent_wears_the_phased_state() -> void:
+	var raiders := put_battlefield(0, "Grizzly Bears")
+	assert_true(g.phase_out(raiders))
+	var card := _mini(raiders)
+	assert_true(card.active_states().has(MiniCard.State.PHASED))
+	assert_string_contains(card.tooltip_text, "Phased")
+	assert_string_contains(card.tooltip_text, "Phases in at")
+	assert_false(MiniCard.STATE_SPRITE.has(MiniCard.State.PHASED),
+		"lettered, like `stolen`: the 1997 set ships no art for it")
 
 
 # ====================================== the P/T, and how big it letters ==

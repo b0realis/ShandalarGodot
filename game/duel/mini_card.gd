@@ -56,13 +56,14 @@ enum Highlight {
 	SELECTED = COMMITTED,
 }
 
-## EIGHT of the ten states `@CUECARD_SMALLCARD` (`UIStrings.txt:732`) says
+## NINE of the ten states `@CUECARD_SMALLCARD` (`UIStrings.txt:732`) says
 ## a card on the table can be in — the original's own vocabulary, and the
 ## reason this widget draws overlays at all. [constant STATE_CUE] carries
 ## the verbatim strings; [constant STATE_SPRITE] the skin key of the art
-## that ships for each. The other two — `Damage to player` and `Phased` —
-## are NOT here because this engine cannot answer them, and the reasons are
-## written out at [method active_states] so nobody goes hunting.
+## that ships for each. The tenth, `Damage to player`, is the damage
+## marker's ([DamageMarker]); [method active_states] says why. `Phased`
+## joined on 2026-10-03 (Pack 8), when the board began drawing phased-out
+## permanents — see [method _refresh_phased].
 enum State {
 	SUMMONING_SICK,   ## "Summoning sickness"           — Summon.pic spiral
 	DAMAGE,           ## "Damage: %d"                   — Damage.pic dagger
@@ -72,6 +73,7 @@ enum State {
 	IS_TARGET,        ## "Is a target"                  — Target.pic crosshair
 	CANT_TARGET,      ## "Can't target this"            — CantTarget.pic slash
 	TARGET_AGAIN,     ## "Is a target, can't target again"
+	PHASED,           ## "Phased"                       — no art shipped
 }
 
 ## The engine card this widget shows. The widget never mutates it.
@@ -81,6 +83,11 @@ var instance: CardInstance
 ## filter selects a particular reprint. It never changes CardData or the
 ## name-based deck identity.
 var art_override: Texture2D = null
+
+## Where pack art comes from — the `CardPacks` autoload unless something
+## else is set ([method table_art]). Tests hand in a stand-in, because the
+## suite's packs are metadata-only and carry no pictures.
+var packs_service: Object = null
 
 ## OPTIONAL game reference, set by whoever builds the widget when it has
 ## one (the duel screen does; the deck builder, the help screen and the
@@ -243,6 +250,10 @@ var _stripes: Control = null
 ## [constant TAPPED_MARK] on it. See [method shows_tap_mark].
 var _tap_wash: ColorRect = null
 var _tap_mark: Label = null
+## The PHASED cue's two halves ([method _refresh_phased]), built the first
+## time a card phases out — nearly no card ever does.
+var _phase_wash: ColorRect = null
+var _phase_mark: Label = null
 ## State overlay -> its TextureRect (see [enum State]). Built once.
 var _overlays: Dictionary = {}
 ## The targeting states the DUEL SCREEN pushes down (they are questions
@@ -319,6 +330,7 @@ const STATE_CUE := {
 	State.IS_TARGET: "Is a target",
 	State.CANT_TARGET: "Can't target this",
 	State.TARGET_AGAIN: "Is a target, can't target again",
+	State.PHASED: "Phased",
 }
 ## Skin key of the 1997 art for each state that ships one. "Card is not
 ## controlled by owner" has NO art in the original's set — it is drawn as a
@@ -1110,7 +1122,7 @@ func refresh() -> void:
 		# and the mana a card taps for is exactly the information a card
 		# back exists to withhold. Same reason the state overlays are
 		# hidden two lines down.
-		for child in [_name_label, _name_band, _band_texture, _art, _art_frame, _art_placeholder, _pt_label, _status_label, _badges, _damage_count, _stripes, _tap_wash, _tap_mark, _shield_words, _counter_row, _pending_icon, _pending_count]:
+		for child in [_name_label, _name_band, _band_texture, _art, _art_frame, _art_placeholder, _pt_label, _status_label, _badges, _damage_count, _stripes, _tap_wash, _tap_mark, _shield_words, _counter_row, _pending_icon, _pending_count, _phase_wash, _phase_mark]:
 			if child != null:
 				child.visible = false
 		# EVERY state overlay too (the dagger and the spiral included): a
@@ -1140,10 +1152,8 @@ func refresh() -> void:
 	# The ART window — real art when fetched, identity color otherwise.
 	# art_name, not card_name: a land whose SUBTYPE has been changed wears
 	# the new basic land's art (§2.12).
-	var art := art_override
-	if art == null and art_name(instance) == instance.data.card_name:
-		art = CardPrintings.texture(art_name(instance), CardPrintings.of(instance))
-	if art == null: art = GameSkin.card_art(art_name(instance))
+	var art := art_override if art_override != null \
+		else table_art(instance, packs_service if packs_service != null else _card_packs())
 	_art.texture = art
 	_art.visible = art != null
 	_art_placeholder.color = frame_color(d).darkened(0.35)
@@ -1171,6 +1181,7 @@ func refresh() -> void:
 	_rebuild_counter_chips()
 	_refresh_pending()
 	_refresh_tap_mark()
+	_refresh_phased(states)
 	# The card's tooltip is name + rules + THE 1997 CUE CARDS for whatever
 	# it is currently wearing. The overlays are mouse-transparent so the
 	# card stays clickable, which makes this the only place the player
@@ -1178,6 +1189,9 @@ func refresh() -> void:
 	tooltip_text = "%s\n%s" % [d.card_name, d.oracle_text]
 	if instance.prevention > 0:
 		tooltip_text += "\n" + shield_cue()
+	if instance.zone == Mtg.Zone.BATTLEFIELD and instance.cur_cant_phase_out \
+			and not states.has(State.PHASED):
+		tooltip_text += "\n" + CANT_PHASE_OUT_NOTE
 	# `Show cue cards` (§6.4) — *"controls the appearance of the tiny hints
 	# that pop up when you position the mouse cursor over an active
 	# location. If you don't like the little tips, toggle the cue cards
@@ -1190,8 +1204,45 @@ func refresh() -> void:
 		# which is a cue card too and goes with the same switch.
 		for line in counter_cues():
 			tooltip_text += "\n" + line
+	# WHEN IT COMES BACK, under the `Phased` cue: rules information rather
+	# than a cue card, so it is said whether cue cards are on or not.
+	if states.has(State.PHASED):
+		tooltip_text += "\n" + phase_note(game, instance)
 	_apply_modulate()
 	_apply_style()
+
+
+## THE PICTURE IN [param inst]'s ART WINDOW: its pinned printing's art,
+## else — a card with no pinned printing — its PACK's own art for its set
+## (`CardPacks.art_texture`, through [param packs]), else the skin's art
+## folder (`GameSkin.card_art`). A land whose subtype was changed wears the
+## new basic land's art from the skin (§2.12).
+##
+## THE PACK STEP WAS MISSING until 2026-10-03 (found staging the Pack 8
+## phasing board): the big card already fell back to the pack's art
+## (CardPreview.show_card) and the small one went straight to the skin,
+## which holds only what the art tool fetched — so a Merfolk Raiders was a
+## blank blue frame on the table, phased in or out, beside its own
+## illustrated Showcase. Same order as the preview's now, and the ONE path
+## every small card takes, a phased-out ghost included.
+static func table_art(inst: CardInstance, packs: Object) -> Texture2D:
+	var art: Texture2D = null
+	if art_name(inst) == inst.data.card_name:
+		art = CardPrintings.texture(art_name(inst), CardPrintings.of(inst))
+		if art == null and packs != null and packs.has_method("art_texture"):
+			art = packs.art_texture(inst.data.card_name, inst.data.set_code)
+	if art == null:
+		art = GameSkin.card_art(art_name(inst))
+	return art
+
+
+## The `CardPacks` autoload, through the tree rather than by its name:
+## standalone SceneTree tools compile this class before the autoloads exist.
+static func _card_packs() -> Object:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return null
+	return tree.root.get_node_or_null("CardPacks")
 
 
 ## The 1997 cue-card line for each state, in [enum State] order, with
@@ -1407,8 +1458,7 @@ func _apply_states(states: Array[int]) -> void:
 ## Every `@CUECARD_SMALLCARD` state this card is in right now, in
 ## [enum State] order.
 ##
-## TWO OF THE ORIGINAL'S TEN ARE ABSENT FROM THIS WIDGET, and only one of
-## them is unanswerable:
+## ONE OF THE ORIGINAL'S TEN IS ABSENT FROM THIS WIDGET:
 ##
 ## * **`Damage to player`** is not a state of a CARD — but it is a state of
 ##   a small card, and that card is the DAMAGE MARKER: manual p.119's
@@ -1420,11 +1470,17 @@ func _apply_states(states: Array[int]) -> void:
 ##   declares eight entries and this is not among them; the state was in
 ##   `@CUECARD_SMALLCARD` all along because the object it describes is a
 ##   small card (docs/duel-todo.md §2.10, §6.20b).
-## * **`Phased`** cannot happen to a widget. `MtgGame.phase_out` moves the
-##   instance OUT of `players[pid].battlefield` into `phased_out` while
-##   leaving `zone == BATTLEFIELD`, and there is no `Mtg.Zone.PHASED_OUT`,
-##   so a phased permanent is never handed to this widget in the first
-##   place. It becomes answerable the day the board draws phased-out cards.
+## * **`Phased`** WAS absent until 2026-10-03, and for a reason that was
+##   true then: `MtgGame.phase_out` moves the instance OUT of
+##   `players[pid].battlefield` into `MtgPlayer.phased_out` while leaving
+##   `zone == BATTLEFIELD` (there is no `Mtg.Zone.PHASED_OUT`), so the board
+##   never built a card for one. Pack 8 made phasing real, and a phased-out
+##   permanent is PUBLIC — it lies face up on the table (CR 702.26b treats
+##   it as though it does not exist, not as hidden) — so
+##   `DuelScreen._rebuild_field` now draws both seats' `phased_out` too and
+##   this widget answers the state off [member CardInstance.phased_out].
+##   The original asked the same flag (`STATE_OUBLIETTED`) for the same
+##   cue card (`shandalar-src/src/functions/windows.c:730`).
 func active_states() -> Array[int]:
 	var out: Array[int] = []
 	for state in State.values():
@@ -1507,6 +1563,8 @@ func _state_active(state: int) -> bool:
 			return on_table and _is_on_the_stacks_targets()
 		State.CANT_TARGET, State.TARGET_AGAIN:
 			return _target_state == state
+		State.PHASED:
+			return on_table and instance.phased_out
 	return false
 
 
@@ -1588,13 +1646,110 @@ func pt_color() -> Color:
 
 
 ## Tapped cards dim; the row under the pointer lifts (see [member hovered]).
+## A PHASED-OUT card is a GHOST of itself ([constant PHASED_GHOST]).
 func _apply_modulate() -> void:
 	if instance == null:
 		return
 	var base := Color(0.75, 0.75, 0.8) if instance.tapped else Color.WHITE
+	if instance.phased_out and instance.zone == Mtg.Zone.BATTLEFIELD and not face_down:
+		base = PHASED_GHOST
 	# A MULTIPLY, not lightened(): the resting modulate is already white,
 	# and lightening white leaves it exactly where it was.
 	modulate = base * 1.25 if hovered else base
+
+
+## THE PHASED CUE (Pack 8, 2026-10-03). `@CUECARD_SMALLCARD`'s tenth entry
+## is the single word `Phased` (`UIStrings.txt:743`) and, like `Card is
+## not controlled by owner`, it ships with NO art — so it is LETTERED
+## rather than invented, and the card itself turns into a ghost of itself:
+##
+##  * [constant PHASED_GHOST] — the whole card faded and cooled, so a
+##    phased-out permanent reads as "not really there" across the table
+##    (CR 702.26b: it is treated as though it does not exist) while its
+##    name, art and P/T stay legible: it is PUBLIC, it lies face up;
+##  * a dark wash over the art and [constant PHASED_MARK] across it, the
+##    lettered half, which is what tells a phased card from a tapped one
+##    when only the picture is showing.
+##
+## The tooltip carries the 1997 cue (`Phased`, under `Show cue cards`) and,
+## always, [method phase_note] — WHEN it comes back, which is the one
+## thing about a phased card a player has to plan around.
+const PHASED_GHOST := Color(0.78, 0.84, 1.0, 0.62)
+const PHASED_WASH := Color(0.04, 0.06, 0.16, 0.55)
+const PHASED_INK := Color(0.80, 0.90, 1.0)
+const PHASED_MARK := "Phased out"
+## The tooltip line of a permanent that may not phase out right now
+## (Spatial Binding, Ertai's Familiar — MtgGame.forbid_phasing_out).
+const CANT_PHASE_OUT_NOTE := "Can't phase out"
+
+
+## WHEN A PHASED-OUT [param inst] COMES BACK, in a line for its tooltip —
+## the three ways the engine brings one back (`MtgGame.phase_simultaneously`):
+##  * an Aura or other attachment that rode out with its host comes back
+##    only WITH that host (CR 702.26g);
+##  * one HELD by an "until" (Oubliette, CR 610.4a) comes back when the
+##    holder lets go, never at an untap step;
+##  * anything else phases in during the untap step of the player it
+##    phased out under (CR 502.1) — the seat whose
+##    [member MtgPlayer.phased_out] holds it, which is not always today's
+##    controller.
+## [param game] may be null (a widget built without one); the line then
+## names no player. "" for a card that is not phased out.
+static func phase_note(game: MtgGame, inst: CardInstance) -> String:
+	if inst == null or not inst.phased_out:
+		return ""
+	if inst.phased_indirectly:
+		var host: CardInstance = game.find_instance(inst.attached_to) \
+			if game != null and inst.attached_to != -1 else null
+		return "Phases in with %s" % (host.data.card_name if host != null
+			else "the permanent it is attached to")
+	if inst.phase_hold >= 0:
+		var holder: CardInstance = game.find_instance(inst.phase_hold) \
+			if game != null else null
+		var holder_name := holder.data.card_name if holder != null else "another card"
+		return "Held by %s: phases in when %s leaves the battlefield" % [
+			holder_name, holder_name]
+	if game != null:
+		for p in game.players:
+			if p.phased_out.has(inst):
+				return "Phases in at %s's next untap step" % p.player_name
+	return "Phases in at its controller's next untap step"
+
+
+## Put the lettered half of the phased cue up or take it down (see
+## [constant PHASED_MARK]). Built on first use, like the rare overlays —
+## and over the art only, under the name and the P/T, so the card's own
+## lettering still reads through it.
+func _refresh_phased(states: Array[int]) -> void:
+	var on := states.has(State.PHASED)
+	if not on and _phase_wash == null:
+		return
+	if _phase_wash == null:
+		_phase_wash = ColorRect.new()
+		_phase_wash.name = "PhasedWash"
+		_phase_wash.color = PHASED_WASH
+		_phase_wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_set_art_region(_phase_wash)
+		add_child(_phase_wash)
+		_phase_mark = Label.new()
+		_phase_mark.name = "PhasedMark"
+		_phase_mark.text = PHASED_MARK
+		_set_art_region(_phase_mark)
+		_phase_mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_phase_mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_phase_mark.add_theme_font_size_override("font_size", 15)
+		_phase_mark.add_theme_color_override("font_color", PHASED_INK)
+		_phase_mark.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+		_phase_mark.add_theme_constant_override("outline_size", 4)
+		_phase_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_phase_mark)
+		# Under every part the player reads: just before the counter row,
+		# the same slot the lazy overlays take ([method _add_overlay]).
+		if _counter_row != null and _counter_row.get_parent() == self:
+			move_child(_phase_wash, _counter_row.get_index())
+			move_child(_phase_mark, _counter_row.get_index())
+	_phase_wash.visible = on
+	_phase_mark.visible = on
 
 
 ## Should this widget render sideways (1997 tapped rotation)? The parent

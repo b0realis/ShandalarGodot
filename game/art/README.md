@@ -102,6 +102,27 @@ a set symbol, so the numeral keeps the core editions on one row.
 | `card_variant_on.png` | Card variants — two picture frames carved into a round stone medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `e9479fd2cc33a330f880ba9f73b4f39c56e78403ed955513c51e8fe039c0072a` |
 | `card_variant_off.png` | Card variants — matching recessed/dim medallion, 48x48 | `tools/draw_our_art.gd` (`_variant_medallion`) | GPL-3.0 | `1d036fde388f708a42e77e337e405b2a132e3048b7f96ae0185128d05aa51034` |
 
+The Mirage block (Pack 8) has three sets and three emblems of our own,
+drawn as polygons by `_palm`, `_eye` and `_skyship` in the same gold relief
+and carved stone as the earlier packs. Each is evocative of its set, not a
+copy of any printed set symbol: **Mirage** a desert palm leaning over the
+crest of a dune, **Visions** an open almond eye with a pierced iris under
+three short rays, **Weatherlight** a sailing skyship — hull, mast, two
+sails and a pennant — with a wing swept back beneath its keel. No reference
+image or SVG is read or embedded.
+
+| File | Artwork | Generator | License | SHA-256 |
+|---|---|---|---|---|
+| `set_icon_mir.png` | Mirage — gold palm on a dune, 48x48 | `tools/draw_our_art.gd` (`_palm`) | GPL-3.0 | `5c43fcdfbaea80e1ca1d4611259561c4301cebfdab210f88969e110f8b7339ce` |
+| `filter_mir_on.png` | Mirage — palm carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_palm`, `_stone_medallion`) | GPL-3.0 | `7ca71029332be18c36dd93c99935d297d370c0f56fcfe932f31fac2ba7dcb83f` |
+| `filter_mir_off.png` | Mirage — matching dim stone palm, 48x48 | `tools/draw_our_art.gd` (`_palm`, `_stone_medallion`) | GPL-3.0 | `e664150a5397aec223d1eeb7d3f17da9ab97e8dd3b7481b8c920a15a5d1b77a7` |
+| `set_icon_vis.png` | Visions — gold open eye under three rays, 48x48 | `tools/draw_our_art.gd` (`_eye`) | GPL-3.0 | `908d8e4630528b66ed07270556a50faa9f705570fa66b512f0d45b350f78c904` |
+| `filter_vis_on.png` | Visions — eye carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_eye`, `_stone_medallion`) | GPL-3.0 | `7509bedffc6d55a2c7a1ea215f9f90b4ae1d4c5ddaf6d108803ae2754b3dcfde` |
+| `filter_vis_off.png` | Visions — matching dim stone eye, 48x48 | `tools/draw_our_art.gd` (`_eye`, `_stone_medallion`) | GPL-3.0 | `93a013eb5e7df1dabaaa0ee828268bba54c04f314ae5794be16d02234f9d3bca` |
+| `set_icon_wth.png` | Weatherlight — gold sailing skyship, 48x48 | `tools/draw_our_art.gd` (`_skyship`) | GPL-3.0 | `8264b795b4a5ddac4edb23a3ef48a5eb1ad459c52d785aa3dd0cce7108a2b3f2` |
+| `filter_wth_on.png` | Weatherlight — skyship carved into lit stone, 48x48 | `tools/draw_our_art.gd` (`_skyship`, `_stone_medallion`) | GPL-3.0 | `d60012e145dc284601cd0c9fbc3e394196798b900b0bd544da214c8418004c74` |
+| `filter_wth_off.png` | Weatherlight — matching dim stone skyship, 48x48 | `tools/draw_our_art.gd` (`_skyship`, `_stone_medallion`) | GPL-3.0 | `159c583d9c924bae7ce4adae98f254298ffb017bed453bf56865cbbea9f2023c` |
+
 The card-variant medallion floats at 32px just below the large card's lower-right
 corner, over the unchanged information area. Its overlapping frames distinguish artwork selection
 from Pack 1's fanned-card pool emblem. The transparent circular edge,

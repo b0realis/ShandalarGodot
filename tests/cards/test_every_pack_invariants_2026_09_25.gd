@@ -11,8 +11,8 @@ extends GameTest
 ## dependency analysis, an Aura the AI aims at its own board by default, a
 ## token-making ability the planner cannot see.
 ##
-## This file enables all seven packs from the suite's own metadata-only
-## archives (run_tests.sh sets SHANDALAR_PACK_1..7; one registry reload)
+## This file enables all eight packs from the suite's own metadata-only
+## archives (run_tests.sh sets SHANDALAR_PACK_1..8; one registry reload)
 ## and asks the pack cards. The base pool keeps its own pins in the tests
 ## these are drawn from — a player with no pack installed loses nothing —
 ## so where a list is compared, the names the base tests already vouch for
@@ -20,7 +20,7 @@ extends GameTest
 
 const ALL_PACKS: Array[String] = [CardPacks.ID, FallenEmpiresPack.ID,
 	IceAgePack.ID, HomelandsPack.ID, AlliancesPack.ID, PortalPack.ID,
-	FifthEditionPack.ID]
+	FifthEditionPack.ID, MirageBlockPack.ID]
 
 ## The base pool as the suite sees it with no pack enabled, taken before
 ## the packs are; the names a pack adds are `_pack_names`.
@@ -51,7 +51,7 @@ func after_each() -> void:
 
 func test_the_packs_add_a_thousand_identities_to_the_base_pool() -> void:
 	assert_gt(_base.size(), 890, "the base pool")
-	assert_gt(_pack_names.size(), 990, "the seven packs' own identities")
+	assert_gt(_pack_names.size(), 990, "the eight packs' own identities")
 	assert_eq(CardRegistry.all_names().size(), _base.size() + _pack_names.size())
 
 
@@ -129,8 +129,9 @@ func test_only_reviewed_pack_triggers_opt_into_aftermath() -> void:
 			assert_null(trigger.target_spec)
 			assert_true(trigger.modes.is_empty())
 	opted.sort()
-	assert_eq(opted, ["Baron Sengir", "Sengir Bats"] as Array[String],
-		"the two Homelands death triggers of Sengir Vampire's shape, and no other")
+	assert_eq(opted, ["Baron Sengir", "Dingus Staff", "Sengir Bats"] as Array[String],
+		"the two Homelands death triggers of Sengir Vampire's shape and Dingus "
+		+ "Staff's fixed 2 damage to the dead creature's controller, and no other")
 
 
 ## From test_ai_targeting: an Aura nobody classified is aimed at OUR OWN
@@ -156,6 +157,14 @@ func test_every_pack_aura_is_classified() -> void:
 		"Soul Kiss", "Spectral Shield", "Stonehands", "Thrull Retainer",
 		"Tourach's Gate", "Veteran's Voice", "Viscerid Armor", "White Scarab",
 		"Wings of Aesthir",
+		# Pack 8, the Mirage block (2026-10-03, the AI agent's sweep): pumps,
+		# grants, wards, phasing on our own body and engines that use it.
+		"Agility", "Armor of Thorns", "Betrothed of Fire", "Briar Shield",
+		"Cloak of Invisibility", "Coils of the Medusa", "Dark Privilege",
+		"Empyrial Armor", "Favorable Destiny", "Fire Whip", "Grave Servitude",
+		"Kithkin Armor", "Lightning Reflexes", "Mob Mentality", "Mystic Veil",
+		"Nature's Kiss", "Phantom Wings", "Relic Ward", "Ritual of Steel", "Soar",
+		"Spider Climb", "Sun Clasp", "Vampirism", "Vanishing",
 	]
 	var unclassified: Array[String] = []
 	var auras := 0
@@ -187,9 +196,10 @@ func test_every_pack_aura_is_classified() -> void:
 ## Homarid Spawning Bed is refused on the base file's own ruling: a row
 ## states what ONE activation GUARANTEES, and "X is the sacrificed
 ## creature's mana value" guarantees nothing — a Camarid fed back to it
-## makes no Camarid at all.
+## makes no Camarid at all. Ovinomancer's Ox is the destroyed creature's
+## controller's (Pack 8): a removal ability, not a maker for its own side.
 func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
-	const NAMES_A_TOKEN_BUT_MAKES_NONE: Array[String] = ["Caribou Range"]
+	const NAMES_A_TOKEN_BUT_MAKES_NONE: Array[String] = ["Caribou Range", "Ovinomancer"]
 	const REFUSED_FOR_THE_SACRIFICE: Array[String] = ["Homarid Spawning Bed"]
 	var unlisted: Array[String] = []
 	var priced: Array[String] = []
@@ -214,8 +224,9 @@ func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
 	assert_eq(unlisted, [] as Array[String],
 		"an activated ability makes a token the planner cannot price")
 	priced.sort()
-	assert_eq(priced, ["Drudge Spell", "Elvish Farmer", "Goblin Warrens",
-		"Kjeldoran Outpost", "Night Soil", "Thallid", "Thallid Devourer",
-		"Wall of Kelp"] as Array[String])
+	assert_eq(priced, ["Diamond Kaleidoscope", "Drudge Spell", "Elvish Farmer",
+		"Giant Caterpillar", "Goblin Warrens", "Jungle Patrol", "Kjeldoran Outpost",
+		"Night Soil", "Sacred Mesa", "Snake Basket", "Thallid", "Thallid Devourer",
+		"Wall of Kelp"] as Array[String], "priced: " + str(priced))
 	for refused in REFUSED_FOR_THE_SACRIFICE:
 		assert_false(EffectIntent.TOKEN_MAKERS.has(refused), refused + " stays refused")

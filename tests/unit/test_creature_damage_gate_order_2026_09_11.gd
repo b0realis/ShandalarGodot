@@ -338,7 +338,10 @@ func test_the_pool_has_one_counter_eater_and_one_point_redirect() -> void:
 	# Alliances adds Wandering Mage, Scars and Thought Lash in three shared
 	# modules. Scars reuses the metered receipt gate (Sacred Boon), while
 	# ordinary pools/floors retain the affected player's CR 616.1 ordering.
-	assert_eq(pools.size(), 20, "the prevention-pool family through Alliances: %s" % [pools])
+	# Pack 8 (2026-10-03) adds four ordinary pools in shared modules: Ivory
+	# Charm (mir/_spells), Femeref Healer and a self-prevention (mir/
+	# _creatures), Remedy's divided pool (vis/_spells) and Alms (wth/_costs).
+	assert_eq(pools.size(), 24, "the prevention-pool family through the Mirage block: %s" % [pools])
 	assert_has(pools, "_rules.gd")
 
 
@@ -360,8 +363,9 @@ func test_the_pool_has_the_seven_creature_side_gate_writers() -> void:
 	assert_eq(immunities.size(), 14,
 		"the source-filtered immunities: %s" % [immunities])
 	var combat_shields := _cards_containing("add_until_eot_combat_prevention")
-	# Elvish Scout and Heroism share the new Fallen Empires writer.
-	assert_eq(combat_shields.size(), 12,
+	# Elvish Scout and Heroism share the new Fallen Empires writer. Pack 8's
+	# Mtenda Lion and Delirium share mir/_combat.gd (2026-10-03).
+	assert_eq(combat_shields.size(), 13,
 		"the floating combat-damage preventions including Winter's Chill: %s" % [combat_shields])
 	assert_has(combat_shields, "_rules.gd")
 

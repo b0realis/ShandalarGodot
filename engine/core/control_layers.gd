@@ -6,7 +6,9 @@ extends RefCounted
 static func add(g: MtgGame, victim: CardInstance, pid: int, kind := "permanent",
 		source: CardInstance = null, tapped := false, power_cap := false,
 		control_bound := true) -> void:
-	if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD: return
+	# CR 702.26e: a control change made while the permanent is phased out
+	# never includes it — not even once it has phased back in.
+	if not g.is_present(victim): return
 	if victim.controller_id != pid and victim.cur_cant_change_control: return
 	g._rec(g, &"_control_layers")
 	var row: Dictionary = g._control_layers.get(victim.id, {})
@@ -27,6 +29,10 @@ static func _live(g: MtgGame, victim: CardInstance, e: Dictionary) -> bool:
 	if e.kind == "aura": return s.attached_to == victim.id
 	if bool(e.control_bound) and s.control_sequence != int(e.control): return false
 	if bool(e.tapped) and (not s.tapped or s.untap_sequence != int(e.untap)): return false
+	# "...and that creature's power remains <= this one's" (Old Man of the
+	# Sea) TRACKS THE VICTIM: it ends when the victim phases out (702.26f) —
+	# and a broken duration never revives (refresh drops it).
+	if bool(e.power) and victim.phased_out: return false
 	return not bool(e.power) or victim.cur_power <= s.cur_power
 
 static func refresh(g: MtgGame, cleanup := false) -> bool:

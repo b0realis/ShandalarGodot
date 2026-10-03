@@ -28,6 +28,46 @@ var _mana: Dictionary = {}
 ## RESTRICTED floating mana: usage key (String) → {Mtg.ManaColor: count}.
 var _restricted: Dictionary = {}
 
+## THE SEAT'S SPENDING RULE (Celestial Dawn: "You may spend white mana as
+## though it were mana of any color. You may spend other mana only as
+## though it were colorless mana."), as two Mtg.ManaColor masks: mana of a
+## colour in [member spend_as_any] may pay a coloured pip of ANY colour;
+## mana of a colour in [member colorless_only] may pay only GENERIC mana
+## (and a {C} pip) — never a coloured pip, not even its own, and never a
+## restricted "X of these colours" share. DERIVED: reset to 0 by every
+## [method ContinuousEffects.recalculate] and rebuilt by the static that
+## imposes it ([method MtgGame.set_mana_spending_rule]); 0 / 0 is the
+## ordinary pool. Living on the pool means every payment honours it —
+## casting, activating, an "unless you pay" mid-trigger, the planner's
+## own check — without any caller passing it in. North Star's "mana of
+## any type" (the `any_color` argument) still overrides it.
+var spend_as_any: int = 0
+var colorless_only: int = 0
+
+
+## May mana of [param color] pay a coloured pip of [param pip] under the
+## spending rule above, before any substitution? (The exact match.)
+func _pays_own_pip(color: int) -> bool:
+	return color == Mtg.ManaColor.C or (color & colorless_only) == 0
+
+
+## The colours, other than the pip's own, that may pay [param pip] under
+## the spending rule: [member spend_as_any] for a coloured pip, the
+## [member colorless_only] colours for a {C} pip. In WUBRG order.
+func _rule_payers(pip: int) -> Array[int]:
+	var out: Array[int] = []
+	if spend_as_any == 0 and colorless_only == 0:
+		return out
+	for color in Mtg.WUBRG:
+		if color == pip:
+			continue
+		if pip == Mtg.ManaColor.C:
+			if (color & colorless_only) != 0:
+				out.append(color)
+		elif (color & spend_as_any) != 0 and (color & colorless_only) == 0:
+			out.append(color)
+	return out
+
 
 ## Add [param amount] mana of [param color] to the pool.
 func add(color: int, amount: int = 1) -> void:
@@ -110,12 +150,12 @@ func can_pay(cost: ManaCost, x_value: int = 0, usage_keys: Array = [],
 	for c in cost.colored:
 		if any_color: break
 		var need: int = int(cost.colored[c])
-		var take: int = mini(int(avail.get(c, 0)), need)
+		var take: int = mini(int(avail.get(c, 0)), need) if _pays_own_pip(int(c)) else 0
 		avail[c] = int(avail.get(c, 0)) - take
 		need -= take
 		if need > 0:
 			for sub in substitutions:
-				if int(sub["to"]) != c:
+				if int(sub["to"]) != c or not _pays_own_pip(int(sub["from"])):
 					continue
 				var from_color: int = int(sub["from"])
 				var swapped: int = mini(int(avail.get(from_color, 0)), need)
@@ -124,10 +164,18 @@ func can_pay(cost: ManaCost, x_value: int = 0, usage_keys: Array = [],
 				if need <= 0:
 					break
 		if need > 0:
+			for payer in _rule_payers(int(c)):
+				var spent: int = mini(int(avail.get(payer, 0)), need)
+				avail[payer] = int(avail.get(payer, 0)) - spent
+				need -= spent
+				if need <= 0:
+					break
+		if need > 0:
 			return false
 	var restricted_need := cost.restricted_x_due(x_value)
 	for c in avail:
 		if (int(c) & cost.restricted_x_mask) == 0: continue
+		if not _pays_own_pip(int(c)): continue   # only as though colourless
 		var take := mini(int(avail[c]), restricted_need)
 		avail[c] = int(avail[c]) - take
 		restricted_need -= take
@@ -163,12 +211,18 @@ func pay(cost: ManaCost, x_value: int = 0, usage_keys: Array = [],
 		for c in cost.colored: generic_due += int(cost.colored[c])
 	else:
 		for c in cost.colored:
-			var need: int = _take(c, int(cost.colored[c]), usage_keys)
+			var need: int = int(cost.colored[c])
+			if _pays_own_pip(int(c)):
+				need = _take(c, need, usage_keys)
 			for sub in substitutions:
 				if need <= 0:
 					break
-				if int(sub["to"]) == c:
+				if int(sub["to"]) == c and _pays_own_pip(int(sub["from"])):
 					need = _take(int(sub["from"]), need, usage_keys)
+			for payer in _rule_payers(int(c)):   # Celestial Dawn's white
+				if need <= 0:
+					break
+				need = _take(payer, need, usage_keys)
 			assert(need == 0, "ManaPool.pay could not cover a colored pip")
 	var restricted_spent := {}
 	var remaining := cost.restricted_x_due(x_value)
@@ -176,6 +230,7 @@ func pay(cost: ManaCost, x_value: int = 0, usage_keys: Array = [],
 	# float a different legal mixture; only actual mana spent is recorded.
 	for c in RESTRICTED_SPEND_ORDER:
 		if (c & cost.restricted_x_mask) == 0: continue
+		if not _pays_own_pip(c): continue   # only as though colourless
 		var next := _take(c, remaining, usage_keys)
 		if next < remaining: restricted_spent[c] = remaining - next
 		remaining = next

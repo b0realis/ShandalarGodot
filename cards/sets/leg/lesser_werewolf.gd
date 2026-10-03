@@ -79,7 +79,7 @@ class MaulEffect extends EffectBase:
 		# The self-shrink is paid even if the victim slipped away: the
 		# ability would only be countered if EVERY target were illegal
 		# (CR 608.2b), and the engine already checked that above.
-		if source.zone == Mtg.Zone.BATTLEFIELD:
+		if game.is_present(source):   # phased out: not included (CR 702.26e)
 			game.continuous.add_until_eot_pump(source.id, -1, 0)
 		game.add_counters(victim, "-0/-1", 1)
 		game.recalculate()

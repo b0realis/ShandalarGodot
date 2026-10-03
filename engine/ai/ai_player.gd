@@ -224,6 +224,11 @@ func _main_phase_action(game: MtgGame) -> String:
 	var cast := _try_cast_best(game)
 	if cast != "":
 		return cast
+	# The Lion's Eye Diamond, cracked only into an empty hand for an
+	# ability its mana pays for (Pack 8, forecasts_tactics).
+	var diamond := MIRAGE_TACTICS.lion_eye_action(game, self, Moment.MAIN)
+	if diamond != "":
+		return diamond
 	return _try_activate(game)
 
 
@@ -402,9 +407,14 @@ func _land_unlocks_a_cast(game: MtgGame, sources: Array,
 		for colour in colours:
 			var with_land: Array = sources.duplicate()
 			# One entry per unit, shaped the way the planner's own
-			# floating-mana rows are ([method ManaPlanner.sources]).
-			for _unit in int(colours[colour]):
-				with_land.append([null, 0, int(colour), 1, false, "", 0])
+			# floating-mana rows are ([method ManaPlanner.sources]) — each
+			# with its OWN unit index (2026-10-03): the planner keys a
+			# floating row by it ([method ManaPlanner.source_key]), so a
+			# land making two was read as making one, and a unit 0 shared
+			# the key of the pool's own first floating unit of that colour.
+			for unit in int(colours[colour]):
+				with_land.append([null, MIRAGE_TACTICS.LAND_UNIT_BASE + unit,
+					int(colour), 1, false, "", 0, 0])
 			if not _plan_taps_from(with_land, inst.data.cost, surcharge,
 					keys).is_empty():
 				return true
@@ -481,12 +491,28 @@ func _try_play_land(game: MtgGame) -> bool:
 			continue
 		if _arrival_wasted(game, inst.data):
 			continue   # a second Karakas is buried on arrival: the drop is worth more
+		# WHAT THE LAND COSTS TO KEEP (Pack 8, 2026-10-03,
+		# AiProfile.forecasts_tactics): a Lotus Vale with one land to
+		# sacrifice, a Karoo with no Plains to return, a Soldevi Excavations
+		# with no untapped Island went down and were lost — the card and
+		# the land drop ([method MirageTactics.land_entry]).
+		var entry: Dictionary = {}
+		if profile.forecasts_tactics:
+			entry = MIRAGE_TACTICS.land_entry(game, self, inst)
+			if not bool(entry["ok"]):
+				continue
 		var score := 0.0
 		for ability in inst.data.mana_abilities:
 			for pair in ability.produces:
 				score = maxf(score, float(shortfall.get(int(pair[0]), 0)))
 		if inst.data.mana_abilities.is_empty():
 			score = -0.5   # a land that makes no mana (Maze of Ith) comes last
+		# Two lands for one is a trade the hand has to want: only when the
+		# mana it makes unlocks a cast this turn, and after every free land.
+		if not entry.is_empty() and int(entry["eats"]) >= 2:
+			if not MIRAGE_TACTICS.entry_unlocks(game, self, inst, entry["eaten"]):
+				continue
+			score = -0.75
 		if score > best_score:
 			best = inst
 			best_score = score
@@ -562,7 +588,7 @@ func _planned_cast(game: MtgGame, proposals: Array, sources: Array,
 			spared.merge(_own_target_ids(game, cards[i]["targets"]))
 			var card: CardInstance = cards[i]["card"]
 			var x: int = cards[i]["x"]
-			cost = _combined_cost(cost, game.spell_cost_for(pid, card.data, x))
+			cost = _combined_cost(cost, game.spell_cost_for(pid, card.data, x, int(cards[i].get("mode", 0))))
 			extra += _generic_x(card.data, x) + game.spell_surcharge(pid, card.data)
 			var card_keys: Array = game.mana_usage_keys(card.data, card)
 			if i == 0: keys = card_keys.duplicate()
@@ -623,14 +649,25 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue   # a second Kismet, a second Winter Orb: the same card thrown away
 		if not _sacrifice_fodder_ok(game, inst):
 			continue   # "As an additional cost, sacrifice ..." with nothing worth giving
+		if MIRAGE_TACTICS.flash_creature_waits(game, self, inst):
+			continue   # a flash creature is their turn's (Pack 8)
+		if MIRAGE_TACTICS.trick_aura_waits(game, self, inst):
+			continue   # a trick aura is the combat's, then main 2's (Pack 8)
 		# Cost modifiers (Gloom) are part of the real price — plan them in,
 		# or the cast bounces off the engine and the AI stalls.
 		var surcharge := game.spell_surcharge(pid, inst.data)
 		# Restricted mana (Mishra's Workshop) pays only for what its key
 		# names — the same answer the engine's pool gives.
 		var keys: Array = game.mana_usage_keys(inst.data, inst)
-		var plan := _plan_taps_from(sources, inst.data.cost, surcharge, keys)
-		if plan.is_empty() and not (_cost_is_free(inst.data.cost) and surcharge == 0):
+		# THE PAYMENT ROW (Pack 8, 2026-10-03, forecasts_tactics): the
+		# row the card's own picker pays with — Fireblast's two Mountains,
+		# Spinning Darkness's three black cards — is what is checked, not
+		# the printed cost it replaces ([method _paying_mode]).
+		var row := _paying_mode(game, inst.data)
+		var row_cost: ManaCost = inst.data.cost if row < 0 \
+			else game.spell_cost_for(pid, inst.data, 0, row)
+		var plan := _plan_taps_from(sources, row_cost, surcharge, keys)
+		if plan.is_empty() and not (_cost_is_free(row_cost) and surcharge == 0):
 			continue
 		if _pain_kills(game, sources, plan):
 			continue   # the plan's taps together are the last life (2026-10-03)
@@ -651,6 +688,12 @@ func _try_cast_best(game: MtgGame) -> String:
 			max_x = _max_affordable_x(game, inst.data.cost, surcharge, sources,
 				inst.data.x_color, keys)
 			if inst.data.additional_life_is_x: max_x = maxi(0, game.players[pid].life - 4)
+			# An X paid in OBJECTS (Infernal Harvest's X Swamps, Firestorm's
+			# X discards — Pack 8): the objects bound X, and with no {X}
+			# printed they are its only bound.
+			var object_x: int = game.OBJECT_COSTS.max_x(game, pid, inst.data.object_costs, inst)
+			if object_x >= 0:
+				max_x = object_x if inst.data.cost.x_count == 0 else mini(max_x, object_x)
 			if max_x <= 0:
 				continue
 		# A held instant waits for its moment (their combat, their end
@@ -681,6 +724,8 @@ func _try_cast_best(game: MtgGame) -> String:
 		var x: int = sized["x"]
 		var targets: Array = sized["targets"]
 		var value: float = sized["value"]
+		if profile.forecasts_tactics and _aims_at_own_fragile(game, targets):
+			continue   # our own Skulking Ghost would be sacrificed (Pack 8)
 		# THE TARGET IS NOT THE PAYMENT (2026-10-03): with the targets
 		# known, the plan is made again without any permanent of ours
 		# among them — a Firebreathing aimed at a Tinder Wall was paid for
@@ -689,13 +734,30 @@ func _try_cast_best(game: MtgGame) -> String:
 		var spared := _own_target_ids(game, targets)
 		if not spared.is_empty():
 			plan = _plan_taps_from(_sources_sparing(sources, spared),
-				game.spell_cost_for(pid, inst.data, x),
+				game.spell_cost_for(pid, inst.data, x, mode),
 				_generic_x(inst.data, x) + surcharge, keys)
-			if plan.is_empty() and not (_cost_is_free(inst.data.cost) and surcharge == 0):
+			if plan.is_empty() and not (_cost_is_free(game.spell_cost_for(pid, inst.data, x, mode)) \
+					and surcharge == 0):
 				continue
 			if _pain_kills(game, sources, plan):
 				continue
 		value -= _black_symbol_price(game, inst.data.cost)
+		# OBJECT COSTS ARE PART OF THE PRICE (Pack 8, 2026-10-03): what an
+		# additional or alternative cost eats — Kaervek's Spite's whole
+		# board and hand, Infernal Harvest's X Swamps — on the same own-value
+		# scale as a sacrifice. Unpayable at this X: not this card.
+		var object_groups: Array = game.spell_object_costs(inst.data, mode)
+		if not object_groups.is_empty():
+			var object_cost: float = ALLIANCES_TACTICS.object_price(game, self, inst, object_groups, x)
+			if is_inf(object_cost):
+				continue
+			# No board is too dear for the game itself: burn aimed at the
+			# opponent that is lethal now is cast whatever it eats.
+			var aimed_at_them := false
+			for t in targets:
+				if t.is_player and t.player_id != pid: aimed_at_them = true
+			if not (aimed_at_them and _lethal_burn(game, intent, x)):
+				value -= object_cost
 		# DEVELOP AFTER COMBAT (2026-09-10, AiProfile.develops_late). In
 		# our FIRST main phase only what Forge's `castPermanentInMain1`
 		# would cast is cast; everything else has a whole second main
@@ -714,7 +776,7 @@ func _try_cast_best(game: MtgGame) -> String:
 		# 1 R is two mana it does not have.
 		if not reserve.is_empty() and int(reserve.get("for", -1)) != inst.id \
 				and value < float(reserve["value"]) * 1.5 \
-				and _plan_taps_from(sources, _combined_cost(game.spell_cost_for(pid, inst.data, x), reserve["cost"]),
+				and _plan_taps_from(sources, _combined_cost(game.spell_cost_for(pid, inst.data, x, mode), reserve["cost"]),
 					_generic_x(inst.data, x) + surcharge).is_empty():
 			continue
 		# Phase 2: hold counterspell mana open. A marginal main-phase cast
@@ -760,12 +822,12 @@ func _try_cast_best(game: MtgGame) -> String:
 		best_x = picked["x"]
 		best_mode = picked["mode"]
 		best_targets = picked["targets"]
-	var plan := _plan_taps(game, game.spell_cost_for(pid, best.data, best_x),
+	var plan := _plan_taps(game, game.spell_cost_for(pid, best.data, best_x, best_mode),
 		_generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data),
 		game.mana_usage_keys(best.data, best), _own_target_ids(game, best_targets))
 	# Revalidate the entire selected choice before spending any source.
 	if game.cast_refusal(pid, best, best_targets, best_x, best_mode) != "" \
-			or (plan.is_empty() and not (_cost_is_free(game.spell_cost_for(pid, best.data, best_x)) \
+			or (plan.is_empty() and not (_cost_is_free(game.spell_cost_for(pid, best.data, best_x, best_mode)) \
 				and _generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data) == 0)) \
 			or _pain_kills(game, sources, plan):
 		_action_line.clear()
@@ -1286,6 +1348,19 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 	var trick := _trick_reserve(game)
 	if not trick.is_empty() and float(trick["value"]) > float(out.get("value", 0.0)):
 		out = {"cost": trick["cost"], "value": trick["value"]}
+	# AND SO DOES THE TRICK AURA (Pack 8, 2026-10-03, forecasts_tactics)
+	# that waits out our first main phase for the blocks: the mana it needs
+	# then is mana a main-phase cast must be worth half again as much to
+	# spend. (A waiting flash creature books nothing: it waits only when
+	# nothing else in hand wants the mana — the Deck Lab's lesson.)
+	if profile.forecasts_tactics and game.active_player == pid:
+		for inst in me.hand:
+			if not MIRAGE_TACTICS.trick_aura_waits(game, self, inst) \
+					or _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+				continue
+			var worth := _card_value(inst.data)
+			if worth > float(out.get("value", 0.0)):
+				out = {"cost": inst.data.cost, "value": worth, "for": inst.id}
 	# AND SO DOES THE RENT, UNDER A FREEZE (2026-09-26, [member
 	# AiProfile.pays_the_rent]): the {U} a Stasis charges at our upkeep is
 	# mana that must still be there when the moment comes, and with the
@@ -1660,6 +1735,10 @@ func _turn_is_dead(game: MtgGame) -> bool:
 # profiles that [member AiProfile.pays_sacrifices] says may pay one.
 
 const ABILITY_BAR_MAIN := 3.0
+## The most an object cost may price at ([method AlliancesTactics
+## object_price]) and still be spent by a caller that does not price it —
+## graveyard fuel (Pack 8, 2026-10-03; see [method _ability_available]).
+const OBJECT_FUEL_PRICE := 0.5
 const ABILITY_BAR_UPKEEP := 2.0
 const ABILITY_BAR_SINK := 0.5
 ## The power from which trample is worth an aura that destroys its host
@@ -1678,6 +1757,7 @@ const ICE_AGE_TACTICS := preload("res://engine/ai/ice_age_tactics.gd")
 const HOMELANDS_TACTICS := preload("res://engine/ai/homelands_tactics.gd")
 const ALLIANCES_TACTICS := preload("res://engine/ai/alliances_tactics.gd")
 const PORTAL_TACTICS := preload("res://engine/ai/portal_tactics.gd")
+const MIRAGE_TACTICS := preload("res://engine/ai/mirage_tactics.gd")
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
@@ -1760,6 +1840,8 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 			if option.is_empty() \
 					or float(option["value"]) < float(option.get("bar", bar)):
 				continue
+			if profile.forecasts_tactics and _aims_at_own_fragile(game, option.get("targets", [])):
+				continue   # our own Skulking Ghost would be sacrificed (Pack 8)
 			if not reserve.is_empty() and float(option["value"]) < float(reserve["value"]) * 1.5 \
 					and _plan_taps_from(own_sources,
 						_combined_cost(ability.cost, reserve["cost"]), surcharge).is_empty():
@@ -1836,8 +1918,17 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	if ability.library_exile_cost > game.players[pid].library.size(): return false
 	if profile.forecasts_tactics and ability.library_exile_cost > 0 and game.players[pid].library.size() <= ability.library_exile_cost + 3: return false
 	if not ability.object_costs.is_empty():
-		if not priced_sacrifice or not profile.forecasts_tactics: return false
+		if not profile.forecasts_tactics: return false
 		if game.OBJECT_COSTS.refusal(game, pid, ability.object_costs, inst) != "": return false
+		# THE FUEL (Pack 8, 2026-10-03). A caller that does not price the
+		# cost — the shield read, the breath — may still spend what costs
+		# next to nothing: the top creature card of our graveyard (Zombie
+		# Scavengers' regeneration, Necratog's +2/+2), priced by the one
+		# object pricer at a quarter-point a card. Anything dearer stays
+		# the priced scorer's.
+		if not priced_sacrifice and ALLIANCES_TACTICS.object_price(
+				game, self, inst, ability.object_costs) > OBJECT_FUEL_PRICE:
+			return false
 	# A SACRIFICE IS A PRICE, NOT A REFUSAL (2026-09-06). Until this
 	# landed every sacrifice rider was refused here outright, and 2,733
 	# battlefield-turns of Strip Mine produced zero activations — the
@@ -1919,7 +2010,7 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	# scorer leaves them to their moment.
 	if not ability.tap_cost and ability.cost.mana_value() == 0 and not ability.cost.has_x \
 			and ability.life_cost <= 0 and ability.max_per_turn <= 0 \
-			and not sacrifices \
+			and not sacrifices and ability.object_costs.is_empty() \
 			and ability.counter_cost_kind == "" and ability.tap_permanent_count == 0 \
 			and inst.data.card_name != "Blinking Spirit" \
 			and not (profile.forecasts_tactics and not ability.effects.is_empty() and ability.effects[0].ai_role == &"attack_once" and not inst.cur_can_attack_with_defender) \
@@ -2030,6 +2121,8 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 	if expansion == null:
 		expansion = ALLIANCES_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
+		expansion = MIRAGE_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
+	if expansion == null:
 		expansion = preload("res://engine/ai/second_age_tactics.gd").option(game, self, inst, index)
 	# THE RESPONSE MOMENT admits an expansion reading and, since 2026-09-26,
 	# the two prison readings whose only moment it is: the life that keeps
@@ -2071,6 +2164,9 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		targets = expansion["targets"]
 		value = float(expansion["value"])
 		price += float(expansion.get("x", 0)) * 0.5
+		# An arm may state its own bar (Pack 8: a Magma Mine's pressure
+		# counter is bought at the mana sink's, for the sink's reason).
+		if expansion.has("bar"): own_bar = float(expansion["bar"])
 	elif tactical != null:
 		var option := _tactical_option(game, inst, tactical)
 		if option.is_empty():
@@ -2747,13 +2843,36 @@ func _decking_draw(game: MtgGame, source: CardInstance, intent: EffectIntent,
 ## those are shopped only when [member EffectIntent.removes] is set, and
 ## priced by [method _victim_value], which is what lets a Strip Mine pick
 ## the dual over the basic and a Scavenger Folk the Disk over the Ring.
+## Would [param intent]'s damage from [param source] at X = [param
+## x_value] kill [param inst]? [method EffectIntent.kills] — toughness
+## against the printed number — unless the table can change the number
+## (Pack 8, 2026-10-03, forecasts_tactics: Benevolent Unicorn's "minus 1",
+## a prevention shield, Lichenthrope's counters, protection): then the
+## engine's own prediction, from OUR seat ([method MtgGame.predict_damage]
+## with this seat as the viewer — a face-down creature is the 2/2 it
+## shows). A creature of theirs that dies to being named is killed by any
+## of it (mirage_tactics.gd `dies_when_targeted`).
+func _kills_by_damage(game: MtgGame, source: CardInstance, intent: EffectIntent,
+		inst: CardInstance, x_value: int) -> bool:
+	if intent.removes or intent.bounces:
+		return intent.kills(inst, x_value)
+	if profile.forecasts_tactics:
+		if inst.controller_id != pid and MIRAGE_TACTICS.dies_when_targeted(inst):
+			return true
+		var dmg := intent.damage_at(x_value)
+		if dmg > 0 and MIRAGE_TACTICS.damage_is_shaped(game, inst):
+			return bool(game.predict_damage(source, TargetRef.card(inst), dmg,
+				false, -1, pid)["dies"])
+	return intent.kills(inst, x_value)
+
+
 func _best_victim(game: MtgGame, source: CardInstance, intent: EffectIntent,
 		x_value: int) -> CardInstance:
 	var best: CardInstance = null
 	var best_value := 0.0
 	for inst in game.players[game.opponent_of(pid)].battlefield:
 		if inst.is_creature():
-			if not intent.kills(inst, x_value):
+			if not _kills_by_damage(game, source, intent, inst, x_value):
 				continue
 		elif not (intent.removes or intent.bounces):
 			continue
@@ -3043,6 +3162,12 @@ func _own_value(game: MtgGame, inst: CardInstance, as_source := false) -> float:
 	if priced and EffectIntent.loses_the_game_on_leaving(inst.data):
 		return LETHAL_WORTH
 	var toll := _liability_price(game, inst) if priced else 0.0
+	# A FLASH-RIDER AURA cast at instant speed is sacrificed at the next
+	# cleanup step (Pack 8, E3's `memory["flash_cast"]`): worth nothing to
+	# keep, and the first thing to give up.
+	if profile.forecasts_tactics and inst.zone == Mtg.Zone.BATTLEFIELD \
+			and bool(inst.memory.get("flash_cast", false)):
+		return 0.0
 	if not inst.is_land():
 		if priced and _dead_weight(game, inst):
 			return 0.0 - toll   # nothing it does is ours until it untaps
@@ -3353,6 +3478,10 @@ func _sacrifice_price(game: MtgGame, inst: CardInstance,
 	if not ability.object_costs.is_empty(): price += ALLIANCES_TACTICS.object_price(game, self, inst, ability.object_costs)
 	if ability.sacrifice_cost:
 		price += _own_value(game, inst, true)
+	# "Return this permanent to its owner's hand" (Pack 8): the tempo of
+	# casting it again — what a returned nonland permanent costs anywhere.
+	if ability.return_cost:
+		price += maxf(1.0, inst.data.cost.mana_value() * 0.75)
 	if ability.sacrifice_filter.is_valid():
 		var prices: Array[float] = []
 		for body in game.players[pid].battlefield:
@@ -3431,7 +3560,16 @@ func _has_attackers(game: MtgGame) -> bool:
 ## Under [member AiProfile.levels_boards] a sweep whose every kill is a
 ## LAND is read as the leveller it is — [method _land_sweep] for the two
 ## readings and why they belong to that knob.
-func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
+##
+## [param source], when given, is the sweeper card itself: with [member
+## AiProfile.forecasts_tactics] a damage sweep's kill is then asked of
+## [method MtgGame.predict_damage] wherever the table can change it
+## (Pack 8, 2026-10-03 — protection, a prevention shield, a damage
+## replacement; mirage_tactics.gd `damage_is_shaped`), and the sweep's
+## SCOPE — Simoon's "each creature target opponent controls" — is read
+## off its spec (`sweep_scope`).
+func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int,
+		source: CardInstance = null) -> float:
 	var me := game.players[pid]
 	var them := game.players[game.opponent_of(pid)]
 	var swing := 0.0
@@ -3442,10 +3580,17 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 			return 0.0
 	elif not (effect is DestroyAllEffect):
 		return 0.0
+	var scope := MIRAGE_TACTICS.sweep_scope(game, effect, pid) \
+		if profile.forecasts_tactics else -1
 	var levels_lands := profile.levels_boards and _land_sweep(game, effect, n)
 	for inst in game.all_battlefield():
-		if not _sweep_kills(effect, inst, n):
+		if not _sweep_kills(effect, inst, n, scope):
 			continue
+		if source != null and profile.forecasts_tactics and effect is DamageAllEffect \
+				and inst.is_creature() and MIRAGE_TACTICS.damage_is_shaped(game, inst) \
+				and not bool(game.predict_damage(source, TargetRef.card(inst), n,
+					false, 1, pid)["dies"]):
+			continue   # the damage it would actually deal does not kill
 		var worth := Evaluator.land_value(game, inst) if levels_lands \
 			else Evaluator.permanent_value(inst, profile)
 		swing += -worth if inst.controller_id == pid else worth
@@ -3475,14 +3620,18 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int) -> float:
 		var life_price := 1.0 if me.life - n > 10 else 2.0
 		swing -= n * life_price
 	if profile.times_sweeps:
-		swing += _sweep_relief(game, effect, n)
+		swing += _sweep_relief(game, effect, n, scope)
 	return swing
 
 
 ## Would [param effect] (a DestroyAllEffect, or a DamageAllEffect dealing
 ## [param n]) kill [param inst] as it stands? The one death rule
-## [method _sweep_value] and [method _sweep_relief] share.
-func _sweep_kills(effect: EffectBase, inst: CardInstance, n: int) -> bool:
+## [method _sweep_value] and [method _sweep_relief] share. [param scope]
+## is the one seat a targeted sweep reaches (-1 every seat; see
+## mirage_tactics.gd `sweep_scope`).
+func _sweep_kills(effect: EffectBase, inst: CardInstance, n: int, scope := -1) -> bool:
+	if scope >= 0 and inst.controller_id != scope:
+		return false
 	if effect is DestroyAllEffect:
 		var hit: bool = effect.filter.call(inst) if effect.filter.is_valid() \
 			else inst.is_creature()
@@ -3598,7 +3747,7 @@ func _drought_clock(game: MtgGame, of_pid: int) -> int:
 ## first cut of this read the board without it and fired a Disk at one
 ## life into a lone Llanowar Elves our own Abyss was about to eat, losing
 ## two Tomes, two Scepters and the mana that went with them.
-func _sweep_relief(game: MtgGame, effect: EffectBase, n: int) -> float:
+func _sweep_relief(game: MtgGame, effect: EffectBase, n: int, scope := -1) -> float:
 	var me := game.players[pid]
 	var them := game.players[game.opponent_of(pid)]
 	var attackers: Array[CardInstance] = []
@@ -3620,19 +3769,19 @@ func _sweep_relief(game: MtgGame, effect: EffectBase, n: int) -> float:
 			if blocks_in and game.combat.was_blocked(game.combat.band_of(attacker_id)):
 				continue   # a blocked attacker lands nothing on us (trample aside)
 			attackers.append(attacker)
-			if not _sweep_kills(effect, attacker, n):
+			if not _sweep_kills(effect, attacker, n, scope):
 				survivors.append(attacker)
 		if not blocks_in:
 			for inst in me.battlefield:
 				if inst.is_creature() and not inst.tapped:
 					blockers.append(inst)
-					if not _sweep_kills(effect, inst, n):
+					if not _sweep_kills(effect, inst, n, scope):
 						left.append(inst)
 	else:
 		var board := game.all_battlefield()
 		var remains: Array[CardInstance] = []
 		for inst in board:
-			if not _sweep_kills(effect, inst, n):
+			if not _sweep_kills(effect, inst, n, scope):
 				remains.append(inst)
 		var eaten := _upkeep_meals(game, them.id, board)
 		var eaten_after := _upkeep_meals(game, them.id, remains)
@@ -3653,7 +3802,7 @@ func _sweep_relief(game: MtgGame, effect: EffectBase, n: int) -> float:
 		for inst in me.battlefield:
 			if inst.is_creature() and not inst.tapped:
 				blockers.append(inst)
-				if not _sweep_kills(effect, inst, n):
+				if not _sweep_kills(effect, inst, n, scope):
 					left.append(inst)
 	if attackers.is_empty():
 		return 0.0
@@ -4099,6 +4248,19 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 			var sting := _controller_sting(intent, x_value)
 			if sting > 0:
 				value -= float(sting) * _life_price(game.players[pid].life)
+	# A LIFE LOSS AT THEIR FACE (Pack 8, 2026-10-03, forecasts_tactics) is
+	# priced the way a burn at it is: the game when it is lethal.
+	if profile.forecasts_tactics:
+		for t in targets:
+			if not (t is TargetRef) or not t.is_player or t.player_id == pid:
+				continue
+			if intent == null:
+				intent = _intent_of(inst)
+			if intent.life_loss <= 0:
+				break
+			if intent.life_loss >= game.players[t.player_id].life:
+				return LETHAL_WORTH
+			value += _face_damage_value(game, intent.life_loss, t.player_id)
 	return value
 
 
@@ -4352,6 +4514,8 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	if homelands != null: return homelands
 	var ice: Variant = ICE_AGE_TACTICS.spell_choice(game, self, inst, max_x, mode)
 	if ice != null: return ice
+	var mirage: Variant = MIRAGE_TACTICS.spell_choice(game, self, inst, mode)
+	if mirage != null: return mirage
 	if data.card_name == "Dwarven Catapult":
 		return FALLEN_EMPIRES_TACTICS.catapult_choice(game, self, inst, max_x)
 	if profile.uses_tactical_effects and not data.is_modal():
@@ -4359,19 +4523,38 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 		if tactical != null:
 			return _tactical_option(game, inst, tactical)
 	if intent.sweeper != null and not data.is_modal():
+		# THE TARGETED SWEEP (Pack 8, 2026-10-03, forecasts_tactics):
+		# Simoon names the opponent whose creatures it sweeps; the cast
+		# carries that target, and the price reads only their side.
+		var sweep_targets: Array = []
+		var source: CardInstance = null
+		if profile.forecasts_tactics:
+			source = inst
+			if intent.sweeper.target_spec != null:
+				var seat := MIRAGE_TACTICS.sweep_scope(game, intent.sweeper, pid)
+				var aim := TargetRef.player(seat if seat >= 0 else game.opponent_of(pid))
+				if not game.target_legal_at(intent.sweeper.target_spec, aim, inst, 0):
+					return {}
+				sweep_targets = [aim]
 		var best_x := 0
 		var best_value := 0.0
 		if data.cost.has_x:
 			for x in range(1, max_x + 1):
-				var swing := _sweep_value(game, intent.sweeper, x)
+				var swing := _sweep_value(game, intent.sweeper, x, source)
 				if swing > best_value:
 					best_value = swing
 					best_x = x
 		else:
-			best_value = _sweep_value(game, intent.sweeper, 0)
+			best_value = _sweep_value(game, intent.sweeper, 0, source)
 		if best_value < SWEEP_BAR:
 			return {}
-		return {"x": best_x, "targets": [], "value": best_value}
+		# ...and not while most of what it would take is PHASED OUT
+		# (Pack 8): it comes back at their untap step.
+		if profile.forecasts_tactics and MIRAGE_TACTICS.sweep_waits_for_phasers(game, self,
+				intent.sweeper, best_x if data.cost.has_x \
+					else (intent.sweeper.amount if intent.sweeper is DamageAllEffect else 0)):
+			return {}
+		return {"x": best_x, "targets": sweep_targets, "value": best_value}
 	# THE LEVELLER (2026-09-07, AiProfile.levels_boards): a spell that
 	# levels lands, hands and creatures down to the fewest is priced the
 	# way a sweeper is — by what each side would lose — and waits below
@@ -5216,7 +5399,13 @@ func _lethal_burn(game: MtgGame, intent: EffectIntent, max_x: int) -> bool:
 	if intent.target_spec.kind != TargetSpec.Kind.ANY \
 			and intent.target_spec.kind != TargetSpec.Kind.PLAYER:
 		return false
-	return intent.damage_at(max_x) >= game.players[game.opponent_of(pid)].life
+	var life := game.players[game.opponent_of(pid)].life
+	# THE LIFE LOSS (Pack 8, 2026-10-03, forecasts_tactics): Kaervek's
+	# Spite's five is as lethal as five damage, and nothing prevents it.
+	if profile.forecasts_tactics and intent.life_loss > 0 \
+			and intent.damage_at(max_x) + intent.life_loss >= life:
+		return true
+	return intent.damage_at(max_x) >= life
 
 
 ## An instant this seat keeps in hand for a better moment — mage-go's
@@ -5226,7 +5415,10 @@ func _lethal_burn(game: MtgGame, intent: EffectIntent, max_x: int) -> bool:
 func _is_held_instant(inst: CardInstance, intent: EffectIntent) -> bool:
 	if not profile.holds_instants or not inst.is_type(Mtg.CardType.INSTANT):
 		return false
-	if inst.data.is_modal():
+	# A card whose "modes" are only PAYMENT ROWS is one spell (Pack 8,
+	# Spinning Darkness): held like any other of its shape.
+	if inst.data.is_modal() and not (profile.forecasts_tactics
+			and _payment_rows_only(inst.data)):
 		return false
 	if intent.sweeper != null or intent.adds_mana or intent.counters or intent.fogs:
 		return false
@@ -5448,8 +5640,16 @@ func _fire_held_instant(game: MtgGame) -> String:
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue   # locked, banned, "cast only ...", or refused this step
 		var surcharge := game.spell_surcharge(pid, inst.data)
-		if _plan_taps_from(sources, inst.data.cost, surcharge).is_empty() \
-				and not (_cost_is_free(inst.data.cost) and surcharge == 0):
+		# The row the card pays with (Pack 8 — Spinning Darkness's
+		# graveyard), the printed cost otherwise.
+		var row := _paying_mode(game, inst.data)
+		var row_cost: ManaCost = inst.data.cost if row < 0 \
+			else game.spell_cost_for(pid, inst.data, 0, row)
+		if _plan_taps_from(sources, row_cost, surcharge).is_empty() \
+				and not (_cost_is_free(row_cost) and surcharge == 0):
+			continue
+		if row >= 0 and game.object_costs_refusal(pid,
+				game.spell_object_costs(inst.data, row), inst) != "":
 			continue
 		var targets: Array = []
 		var value := 0.0
@@ -5492,13 +5692,17 @@ func _fire_held_instant(game: MtgGame) -> String:
 				and _plan_taps_from(sources, _combined_cost(inst.data.cost, rent["cost"]),
 					surcharge).is_empty():
 			continue   # the Stasis's {U} is not mana about to be wasted
+		if row >= 0:
+			value -= ALLIANCES_TACTICS.object_price(game, self, inst,
+				game.spell_object_costs(inst.data, row))
 		if value > best_value:
 			best = inst
 			best_targets = targets
 			best_value = value
 	if best == null:
 		return ""
-	return _cast_response(game, best, best_targets, 0, "cast %s at end of turn" % best.data.card_name)
+	return _cast_response(game, best, best_targets, maxi(_paying_mode(game, best.data), 0),
+		"cast %s at end of turn" % best.data.card_name)
 
 
 # ====================================================== phase 2: responses --
@@ -5523,6 +5727,12 @@ func _respond_action(game: MtgGame) -> String:
 	var counter := _try_counter(game)
 	if counter != "":
 		return counter
+	# THE MIRAGE BLOCK'S MOMENTS (Pack 8, 2026-10-03): phasing out of a
+	# removal spell or a lost combat, their attacker before blocks, their
+	# blocker at our beginning of combat (mirage_tactics.gd `respond`).
+	var mirage := MIRAGE_TACTICS.respond(game, self)
+	if mirage != "":
+		return mirage
 	var expansion := _try_activate(game, Moment.RESPONSE)
 	if expansion != "": return expansion
 	if profile.uses_tactical_effects:
@@ -5562,6 +5772,10 @@ func _respond_action(game: MtgGame) -> String:
 				# The tap policy's strongest reading (see "the tap policy"):
 				# a tap laid down HERE holds through their turn and ours.
 				response = _fire_tap_instant(game)
+				# The floating bans (Pack 8: Solfatara, Abeyance) — their
+				# turn's lands and instants, as it begins.
+				if response == "" and profile.forecasts_tactics:
+					response = MIRAGE_TACTICS.upkeep_ban(game, self)
 				if response == "":
 					response = _try_activate(game, Moment.UPKEEP)
 			Mtg.Step.COMBAT_BEGIN:
@@ -5589,6 +5803,17 @@ func _end_of_their_turn(game: MtgGame) -> String:
 	var fired := _fire_held_instant(game)
 	if fired != "":
 		return fired
+	# A ransom due before our upkeep (Pack 8, Sabertooth Cobra).
+	var ransom := MIRAGE_TACTICS.pay_ransom(game, self)
+	if ransom != "":
+		return ransom
+	# The flash creature that waited out our main phase (Pack 8).
+	var flashed := MIRAGE_TACTICS.end_step_flash(game, self)
+	if flashed != "":
+		return flashed
+	var diamond := MIRAGE_TACTICS.lion_eye_action(game, self, Moment.SINK)
+	if diamond != "":
+		return diamond
 	return _try_activate(game, Moment.SINK)
 
 
@@ -6807,7 +7032,11 @@ func _combat_damage_to(game: MtgGame, inst: CardInstance) -> int:
 		for blocker_id in game.combat.blockers_of(inst.id):
 			var blocker := game.find_instance(blocker_id)
 			if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD:
-				incoming += _damage_from(blocker, inst)
+				# A blocker its pending flanking triggers shrink to nothing
+				# is gone before damage (Pack 8, reads_gaze).
+				var shrink := MIRAGE_TACTICS.pending_flank(game, blocker) \
+					if profile.reads_gaze else 0
+				incoming += _damage_from(blocker, inst, Vector2i(-shrink, -shrink))
 	elif game.combat.blocks.has(inst.id):
 		for attacker_id in game.combat.attackers_blocked_by(inst.id):
 			var attacker := game.find_instance(attacker_id)
@@ -6823,10 +7052,15 @@ func _dies_in_combat(game: MtgGame, inst: CardInstance) -> bool:
 	if not game.combat.attackers.has(inst.id) and not game.combat.blocks.has(inst.id):
 		return false
 	var incoming := _combat_damage_to(game, inst)
+	# Its own pending flanking shrink (Pack 8, reads_gaze): the -N/-N lands
+	# before the damage, and a body it takes to nothing dies with no hit.
+	var shrink := MIRAGE_TACTICS.pending_flank(game, inst) if profile.reads_gaze else 0
+	if shrink > 0 and inst.cur_toughness - shrink <= 0:
+		return true
 	# A prevention pool already on it (Healing Salve, a Guardian Angel
 	# point bought earlier) soaks the first points.
 	return incoming > 0 \
-		and inst.damage + maxi(incoming - inst.prevention, 0) >= inst.cur_toughness
+		and inst.damage + maxi(incoming - inst.prevention, 0) >= inst.cur_toughness - shrink
 
 
 ## Combat damage [param hitter] deals to [param victim], zero when the
@@ -6842,6 +7076,15 @@ func _dies_in_combat(game: MtgGame, inst: CardInstance) -> bool:
 ## 701.15a removes it from combat), so only the first is spared here.
 func _damage_from(hitter: CardInstance, victim: CardInstance,
 		hitter_bonus := Vector2i.ZERO, victim_bonus := Vector2i.ZERO) -> int:
+	# A hitter its own NEGATIVE bonus leaves without toughness — a blocker
+	# flanking shrank ([method _flank_pair]) — is gone before combat damage
+	# (CR 704.5f), or destroyed by the damage already marked on it
+	# (indestructible aside): it deals none. Unreachable for every bonus
+	# that is a pump.
+	if hitter_bonus.y < 0:
+		var left := hitter.cur_toughness + hitter_bonus.y
+		if left <= 0 or (left <= hitter.damage and not hitter.cur_indestructible):
+			return 0
 	if victim.has_keyword(Mtg.Keyword.FIRST_STRIKE) \
 			and not hitter.has_keyword(Mtg.Keyword.FIRST_STRIKE) \
 			and not hitter.cur_indestructible \
@@ -6888,6 +7131,18 @@ func _damage_after_prevention(hitter: CardInstance, victim: CardInstance,
 ## with {B} open is a wall to both.
 func _dies_to(game: MtgGame, victim: CardInstance, hitter: CardInstance,
 		victim_bonus := Vector2i.ZERO, hitter_bonus := Vector2i.ZERO) -> bool:
+	# FLANKING (CR 702.25, 2026-10-03, [member AiProfile.reads_gaze]): the
+	# blocker of the pair is N smaller when the other is an attacker with N
+	# instances and it has none — on whichever side of the pair it is
+	# ([method _flank_pair]). A body that shrinks to nothing is put into the
+	# graveyard before any damage, which neither indestructibility nor a
+	# shield prevents (CR 704.5f), so this comes first.
+	var flank := _flank_pair(game, victim, hitter)
+	if flank != Vector2i.ZERO:
+		victim_bonus -= Vector2i(flank.x, flank.x)
+		hitter_bonus -= Vector2i(flank.y, flank.y)
+		if victim.cur_toughness + victim_bonus.y <= 0:
+			return true
 	if victim.cur_indestructible:
 		return false
 	# THE GAZE (2026-09-10, [member AiProfile.reads_gaze]): a Cockatrice
@@ -6935,6 +7190,16 @@ func _dies_to(game: MtgGame, victim: CardInstance, hitter: CardInstance,
 	if profile.reads_pumps:
 		victim_bonus += _pump_reach(game, victim)
 	var hit := _damage_from(hitter, victim, hitter_bonus, victim_bonus)
+	# THE DAMAGE SUITE (Pack 8, 2026-10-03, forecasts_tactics): where the
+	# table changes combat damage — Blind Fury's double, a damage-to-
+	# counters creature, Ogre Enforcer's single source — the engine's own
+	# prediction, from our seat, says what the hit does.
+	if hit > 0 and profile.forecasts_tactics \
+			and MIRAGE_TACTICS.combat_damage_is_shaped(game, victim):
+		var told := game.predict_damage(hitter, TargetRef.card(victim), hit, true, 0, pid)
+		if victim_bonus == Vector2i.ZERO:
+			return bool(told["dies"]) and not _shieldable(game, victim)
+		hit = int(told["dealt"])
 	if hit <= 0 or hit < victim.cur_toughness + victim_bonus.y - victim.damage:
 		return false
 	return not _shieldable(game, victim)
@@ -6996,6 +7261,52 @@ func _rampage_bonus(attacker: CardInstance, blockers: int) -> int:
 	if not profile.reads_gaze or attacker == null or blockers <= 1:
 		return 0
 	return maxi(attacker.cur_rampage, 0) * (blockers - 1)
+
+
+## FLANKING (CR 702.25, 2026-10-03, [member AiProfile.reads_gaze]) for the
+## combat pair [param a] / [param b]: the shrink each of them takes,
+## `Vector2i(on a, on b)` — N on the BLOCKER when the ATTACKER has N
+## instances ([method Flanking.instances]) and the blocker none, zero
+## otherwise. Applied as a -N/-N before damage by [method _dies_to] and by
+## the gang rung; the crack-back model carries it per side
+## ([member CombatSearch.a_flanking]).
+##
+## WHICH IS THE ATTACKER: the one in the live combat if either is,
+## otherwise the active player's — attack planning happens on our turn
+## and block planning on theirs, so the seat whose combat it is owns the
+## attacker. (The crack-back's NEXT-turn combat is the model's own
+## resolution, which knows its direction.) A block already declared is
+## not read again: its trigger has fired and, resolved, the -1/-1 is in
+## the live numbers — counting it twice would see a ghost.
+func _flank_pair(game: MtgGame, a: CardInstance, b: CardInstance) -> Vector2i:
+	if not profile.reads_gaze or a == null or b == null:
+		return Vector2i.ZERO
+	var na := Flanking.instances(a)
+	var nb := Flanking.instances(b)
+	if na == nb:
+		return Vector2i.ZERO   # neither, or both: no blocker without it
+	var attacker: CardInstance = null
+	if game.combat.attackers.has(a.id):
+		attacker = a
+	elif game.combat.attackers.has(b.id):
+		attacker = b
+	elif a.controller_id == game.active_player and b.controller_id != game.active_player:
+		attacker = a
+	elif b.controller_id == game.active_player and a.controller_id != game.active_player:
+		attacker = b
+	if attacker == null:
+		return Vector2i.ZERO
+	var blocker := b if attacker == a else a
+	var n := Flanking.instances(attacker)
+	if n <= 0 or Flanking.instances(blocker) > 0:
+		return Vector2i.ZERO
+	if game.combat.blocks.has(blocker.id):
+		# Declared: a resolved trigger is in the live numbers, but one
+		# still ON THE STACK is not (Pack 8, 2026-10-03) — count those.
+		n = MIRAGE_TACTICS.pending_flank(game, blocker)
+		if n <= 0:
+			return Vector2i.ZERO
+	return Vector2i(n, 0) if blocker == a else Vector2i(0, n)
 
 
 ## Would attacking TAP [param inst] into an execution (2026-09-10,
@@ -7646,7 +7957,9 @@ func _counter_key(game: MtgGame, inst: CardInstance, top_ref: TargetRef,
 	if spec == null:
 		return no_answer
 	var data := inst.data
-	var surcharge := game.spell_surcharge(pid, data)
+	# ...and the "{2} more" for naming a Kaervek's Torch (Pack 8): the
+	# spell this counter would answer is the one it is priced against.
+	var surcharge := game.spell_surcharge(pid, data) + game.targets_surcharge([top_ref], inst)
 	var keys: Array = game.mana_usage_keys(data, inst)
 	var unless := _unless_price(data)
 	var unpayable := 0   # 1 = the mana on the table does not cover it
@@ -7784,8 +8097,11 @@ func _their_sweep_loss(game: MtgGame, effect: EffectBase, x_value: int) -> float
 	elif not (effect is DestroyAllEffect):
 		return 0.0
 	var loss := 0.0
+	# THEIR targeted sweep reaches OUR side alone (Pack 8, Simoon).
+	var scope := MIRAGE_TACTICS.sweep_scope(game, effect, game.opponent_of(pid)) \
+		if profile.forecasts_tactics else -1
 	for inst in game.all_battlefield():
-		if not _sweep_kills(effect, inst, n):
+		if not _sweep_kills(effect, inst, n, scope):
 			continue
 		var worth := Evaluator.permanent_value(inst, profile)
 		loss += worth if inst.controller_id == pid else -worth
@@ -8767,7 +9083,10 @@ func _tactical_response(game: MtgGame) -> String:
 ## Cast an instant-speed response from hand (plans mana, taps, casts).
 func _cast_response(game: MtgGame, inst: CardInstance, targets: Array,
 		mode := 0, verb := "", x_value := 0) -> String:
-	if not inst.is_type(Mtg.CardType.INSTANT):
+	# An instant — or, under forecasts_tactics, any spell with flash in one
+	# of its three forms (Pack 8: the flash creature, the flash-rider aura).
+	if not inst.is_type(Mtg.CardType.INSTANT) \
+			and not (profile.forecasts_tactics and game.casts_at_instant_speed(pid, inst)):
 		return ""
 	# The same question `_try_cast_best` asks, for the same reason: every
 	# instant-speed cast in this file goes through here, and a refusal
@@ -8775,10 +9094,16 @@ func _cast_response(game: MtgGame, inst: CardInstance, targets: Array,
 	if game.cast_refusal(pid, inst, targets, x_value, mode) != "":
 		_refused[str(inst.id)] = true
 		return ""
+	if profile.forecasts_tactics and _aims_at_own_fragile(game, targets):
+		return ""   # our own Skulking Ghost would be sacrificed (Pack 8)
 	var response_cost := game.spell_cost_for(pid, inst.data, x_value)
-	var response_extra := _generic_x(inst.data, x_value) + game.spell_surcharge(pid, inst.data)
+	# The targets are known here, so a Kaervek's Torch's "{2} more" for
+	# naming it is part of the plan (Pack 8, 2026-10-03): planned without
+	# it, the taps were made and the cast refused "plus {2} more".
+	var response_extra := _generic_x(inst.data, x_value) + game.spell_surcharge(pid, inst.data) \
+		+ game.targets_surcharge(targets, inst)
 	if not inst.data.payment_option(mode).is_empty():
-		var payment := game.spell_payment(pid, inst.data, x_value, maxi(1, targets.size()), inst, mode)
+		var payment := game.spell_payment(pid, inst.data, x_value, maxi(1, targets.size()), inst, mode, targets)
 		response_cost = payment.cost
 		response_extra = payment.extra
 	if not _plan_and_pay(game, response_cost, response_extra, game.mana_usage_keys(inst.data, inst),
@@ -9114,9 +9439,16 @@ func _attack_choice(game: MtgGame, candidates: Array[CardInstance],
 	# card saves a single creature.
 	if not lethal_push:
 		var pump := _find_pump_instant(game)
+		var trick := Vector2i.ZERO
 		if pump != null:
-			var bonus := Vector2i(pump.data.spell_effects[0].power,
+			trick = Vector2i(pump.data.spell_effects[0].power,
 				pump.data.spell_effects[0].toughness)
+		elif profile.forecasts_tactics:
+			# ...or a flash-rider Aura held for the combat (Pack 8): the
+			# same one-turn pump, cast after the blocks.
+			trick = MIRAGE_TACTICS.trick_aura_bonus(game, self)
+		if trick != Vector2i.ZERO:
+			var bonus := trick
 			var extra: CardInstance = null
 			for inst in candidates:
 				if inst.cur_power <= 0 or attackers.has(inst.id) \
@@ -9717,6 +10049,9 @@ func _declare_attacks(game: MtgGame) -> String:
 	# it, optional bodies first.
 	if game.no_attacks_this_turn:
 		attackers = []
+	# THE FORCED COMPANION (Pack 8, reads_gaze): an Ekundu Cyclops joins any
+	# attack — priced before the repair below brings it along.
+	attackers = MIRAGE_TACTICS.price_forced_attackers(game, self, attackers, defender)
 	attackers = _trim_attackers_to_cap(game, attackers)
 	attackers = _trim_attackers_to_lands(game, attackers)
 	attackers = load("res://engine/core/combat_declaration.gd").repair_attacks(game, pid, attackers)
@@ -9901,19 +10236,38 @@ func _study_responses(game: MtgGame, mine: Array[CardInstance],
 		defender: int, base: CombatSearch) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var pump := _find_pump_instant(game)
-	if pump == null or pump.data.cost.has_x: return out
+	var spec: TargetSpec = null
+	var power := 0
+	var toughness := 0
+	var granted: Array[int] = []
+	if pump != null:
+		if pump.data.cost.has_x: return out
+		var effect: PumpEffect = pump.data.spell_effects[0]
+		spec = effect.target_spec
+		power = effect.power
+		toughness = effect.toughness
+		granted = effect.granted_keywords
+	elif profile.forecasts_tactics:
+		# A flash-rider Aura held for the combat (Pack 8) is the same
+		# one-turn pump: the study may count on it as on a Giant Growth.
+		pump = MIRAGE_TACTICS.trick_aura_in_hand(game, self)
+		if pump == null: return out
+		spec = pump.data.aura_target
+		var bonus := MIRAGE_TACTICS.aura_pump(pump.data)
+		power = bonus.x
+		toughness = bonus.y
+	else:
+		return out
 	var extra := game.spell_surcharge(pid, pump.data)
 	if not (_cost_is_free(pump.data.cost) and extra == 0) and _plan_taps_from(
 		_mana_sources(game), pump.data.cost, extra, game.mana_usage_keys(pump.data, pump)).is_empty():
 		return out
-	var effect: PumpEffect = pump.data.spell_effects[0]
 	for index in mini(mine.size(), 6):
-		if not game.target_legal_at(effect.target_spec, TargetRef.card(mine[index]), pump, 0):
+		if not game.target_legal_at(spec, TargetRef.card(mine[index]), pump, 0):
 			continue
 		var owned := game.undo_log == null
 		var mark := game.make_mark()
-		game.continuous.add_until_eot_pump(mine[index].id, effect.power,
-			effect.toughness, effect.granted_keywords)
+		game.continuous.add_until_eot_pump(mine[index].id, power, toughness, granted)
 		game.recalculate()
 		var variant := _build_combat_model(game, mine, theirs, candidates, defender)
 		# Temporary stats do not make the card itself more costly to lose.
@@ -10157,8 +10511,18 @@ func _search_hold_back(game: MtgGame, candidates: Array[CardInstance],
 		return chosen
 	var reach := 0
 	for inst in game.players[defender].battlefield:
-		if inst.is_creature() and not inst.has_keyword(Mtg.Keyword.DEFENDER):
+		if inst.is_creature() and not inst.has_keyword(Mtg.Keyword.DEFENDER) \
+				and not (profile.forecasts_tactics
+					and MIRAGE_TACTICS.phases_out_before_attacking(inst)):
 			reach += maxi(inst.cur_power, 0)
+	# Their phased-out creatures swing too: back at their untap step
+	# (Pack 8, forecasts_tactics).
+	var returning: Array[CardInstance] = []
+	if profile.forecasts_tactics:
+		returning = MIRAGE_TACTICS.returning_creatures(game, defender)
+		for inst in returning:
+			if not inst.has_keyword(Mtg.Keyword.DEFENDER):
+				reach += maxi(inst.cur_power, 0)
 	if reach < game.players[pid].life - profile.crack_back_margin:
 		return chosen
 	var mine: Array[CardInstance] = []
@@ -10169,6 +10533,7 @@ func _search_hold_back(game: MtgGame, candidates: Array[CardInstance],
 	for inst in game.players[defender].battlefield:
 		if inst.is_creature():
 			theirs.append(inst)   # ALL of them: they untap before they swing
+	theirs.append_array(returning)   # no blockers now, attackers then
 	if mine.is_empty() or theirs.is_empty() \
 			or mine.size() > 24 or theirs.size() > 24:
 		return chosen        # the move mask is a 64-bit int; keep it honest
@@ -10224,6 +10589,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	search.a_immune.resize(n)
 	search.a_regen.resize(n)
 	search.a_rampage.resize(n)
+	search.a_flanking.resize(n)
 	for i in n:
 		var inst := mine[i]
 		search.a_pow[i] = maxi(inst.cur_power, 0)
@@ -10251,6 +10617,12 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		# zero unless the knob is on, so the model the null arm searches
 		# is byte-identical to the one it always searched.
 		search.a_rampage[i] = inst.cur_rampage if profile.reads_gaze else 0
+		# FLANKING (CR 702.25, 2026-10-03, [member AiProfile.reads_gaze]):
+		# the instance count, zero unless the knob is on — the model's own
+		# resolution shrinks a blocker without it ([method
+		# CombatSearch.resolve_block]), so the null arm is unmoved.
+		search.a_flanking[i] = Flanking.instances(inst) if profile.reads_gaze else 0
+		search.a_tough.append(inst.cur_toughness)
 	search.d_pow.resize(m)
 	search.d_val.resize(m)
 	search.d_free.resize(m)
@@ -10262,11 +10634,12 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 	search.d_immune.resize(m)
 	search.d_regen.resize(m)
 	search.d_rampage.resize(m)
+	search.d_flanking.resize(m)
 	for j in m:
 		var inst := theirs[j]
 		search.d_pow[j] = maxi(inst.cur_power, 0)
 		search.d_val[j] = AiContextValue.of(game, inst, profile)
-		search.d_free[j] = 0 if inst.tapped else 1
+		search.d_free[j] = 0 if (inst.tapped or inst.phased_out) else 1
 		search.d_can_attack[j] = 1 if _could_attack_next_turn(game, inst) else 0
 		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) else 0
 		search.d_bypass[j] = 1 if inst.cur_damage_as_unblocked else 0
@@ -10276,6 +10649,8 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_immune[j] = 1 if (inst.cur_indestructible or d_shield) else 0
 		search.d_regen[j] = 1 if (d_shield and not inst.cur_indestructible) else 0
 		search.d_rampage[j] = inst.cur_rampage if profile.reads_gaze else 0
+		search.d_flanking[j] = Flanking.instances(inst) if profile.reads_gaze else 0
+		search.d_tough.append(inst.cur_toughness)
 	var cells := n * m
 	search.block_ours.resize(cells)
 	search.block_theirs.resize(cells)
@@ -10313,6 +10688,10 @@ func _could_attack_next_turn(game: MtgGame, inst: CardInstance,
 	if not inst.is_creature():
 		return false
 	if inst.has_keyword(Mtg.Keyword.DEFENDER) or inst.cur_cant_attack:
+		return false
+	# A PHASER is gone before its controller's next combat (CR 702.26a,
+	# Pack 8, forecasts_tactics) — the untap step phases it out first.
+	if profile.forecasts_tactics and MIRAGE_TACTICS.phases_out_before_attacking(inst):
 		return false
 	if inst.face_down: return true
 	var needs := inst.data.attack_needs_defender_land
@@ -10369,6 +10748,12 @@ func _race_reach(game: MtgGame, seat: int, defender: int) -> int:
 	for inst in game.players[seat].battlefield:
 		if _could_attack_next_turn(game, inst, defender):
 			reach += maxi(inst.cur_power, 0)
+	# ...and the creatures it phased out, which come back at its own untap
+	# step before that combat (Pack 8, forecasts_tactics; public, CR 702.26).
+	if profile.forecasts_tactics:
+		for inst in MIRAGE_TACTICS.returning_creatures(game, seat):
+			if _could_attack_next_turn(game, inst, defender):
+				reach += maxi(inst.cur_power, 0)
 	return reach
 
 
@@ -10781,6 +11166,9 @@ func _declare_blocks(game: MtgGame) -> String:
 	# The engine refuses a declaration that breaks either, and before the
 	# 2026-09-02 sweep a refusal fell back to NO blocks, which the same
 	# requirement refused again: the declare-blockers step never ended.
+	# THE LIFE A BLOCK COSTS (Pack 8, Heat Wave; reads_gaze): a taxed block
+	# that stops less than it costs and kills nothing is not made.
+	block_map = MIRAGE_TACTICS.price_block_tax(game, self, block_map)
 	block_map = _conscript_blocks(game, block_map, free)
 	block_map = _minimum_blockers(game, block_map, free)
 	block_map = load("res://engine/core/combat_declaration.gd").repair_blocks(game, pid, block_map)
@@ -11411,7 +11799,10 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 	for blocker in legal:
 		if not tramples and blocker.controller_id == pid \
 				and _damage_from(attacker, blocker) >= blocker.cur_toughness - blocker.damage \
+				and blocker.cur_toughness > _flank_pair(game, attacker, blocker).y \
 				and _can_shield(game, blocker):
+			# (No shield saves a body flanking takes to 0 toughness — CR
+			# 704.5f — so that one is not a free soak.)
 			return [blocker.id]
 	# 1.7) Safe block: the blocker lives through the hit and the hit was
 	#      worth stopping (two or more, or we are in the red). Not for a
@@ -11436,8 +11827,12 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 		var grows := _pump_reach(game, attacker)
 		for i in legal.size():
 			for j in range(i + 1, legal.size()):
-				if _damage_from(legal[i], attacker, Vector2i.ZERO, grows) \
-						+ _damage_from(legal[j], attacker, Vector2i.ZERO, grows) \
+				# FLANKING ([method _flank_pair]): each flanked body lands
+				# N less, or nothing once it is gone.
+				var shrink_i := -_flank_pair(game, attacker, legal[i]).y
+				var shrink_j := -_flank_pair(game, attacker, legal[j]).y
+				if _damage_from(legal[i], attacker, Vector2i(shrink_i, shrink_i), grows) \
+						+ _damage_from(legal[j], attacker, Vector2i(shrink_j, shrink_j), grows) \
 						>= attacker.cur_toughness - attacker.damage \
 							+ _rampage_bonus(attacker, 2) + grows.y:
 					var price := Evaluator.permanent_value(legal[i], profile) \
@@ -11694,6 +12089,44 @@ func _pick_mode(game: MtgGame, data: CardData) -> int:
 	return 0
 
 
+## THE PAYMENT ROW THE PILOT PAYS WITH (Pack 8, 2026-10-03,
+## [member AiProfile.forecasts_tactics]): for a card whose modes are
+## PAYMENT ROWS ([method CardData.with_alternative_cost] — Fireblast's
+## "sacrifice two Mountains", Spinning Darkness's three black cards) and
+## that ships its own picker ([method CardData.with_ai_mode]), the row the
+## picker names; -1 for every other card, which pays its printed cost as
+## it always did. The planner checked, planned and paid the PRINTED cost
+## for such a card whatever row it then cast, so the alternative was
+## never reached when mana was short — and with mana enough, a picked row
+## would have been paid on top of the printed mana.
+func _paying_mode(game: MtgGame, data: CardData) -> int:
+	if not profile.forecasts_tactics or not data.is_modal() \
+			or not data.ai_mode_picker.is_valid():
+		return -1
+	var has_rows := false
+	for m in data.modes:
+		if not Dictionary(m).get("payment", {}).is_empty():
+			has_rows = true
+			break
+	if not has_rows:
+		return -1
+	return _pick_mode(game, data)
+
+
+## Are [param data]'s modes nothing but PAYMENT ROWS of one spell — every
+## row the same effects ([method CardData.with_alternative_cost])?
+static func _payment_rows_only(data: CardData) -> bool:
+	if not data.is_modal():
+		return false
+	var rows := 0
+	for m in data.modes:
+		if m["effects"] != data.modes[0]["effects"]:
+			return false
+		if not Dictionary(m).get("payment", {}).is_empty():
+			rows += 1
+	return rows > 0
+
+
 static func _mode_intent(data: CardData, mode: int) -> EffectIntent:
 	return EffectIntent.read(data.modes[mode]["effects"] if data.is_modal() \
 		else data.spell_effects, data.card_name)
@@ -11704,7 +12137,14 @@ static func _mode_intent(data: CardData, mode: int) -> EffectIntent:
 func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictionary:
 	var hinted := _pick_mode(game, inst.data)
 	var modes: Array = [hinted]
-	if profile.plans_modes and inst.data.is_modal():
+	# A card whose modes are PAYMENT ROWS pays with the row its own picker
+	# names and no other (Pack 8, 2026-10-03): the value of every row is
+	# the same spell, so the comparison below could only ever pick a row
+	# the card's author ruled out — two Mountains thrown at a 2/2.
+	var row := _paying_mode(game, inst.data)
+	if row >= 0:
+		modes = [row]
+	elif profile.plans_modes and inst.data.is_modal():
 		for mode in inst.data.modes.size():
 			if mode != hinted: modes.append(mode)
 	var best := {}
@@ -11715,8 +12155,8 @@ func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictio
 		var x: int = choice["x"]
 		if game.cast_refusal(pid, inst, choice["targets"], x, int(mode)) != "": continue
 		var extra := _generic_x(inst.data, x) + game.spell_surcharge(pid, inst.data)
-		if not (_cost_is_free(game.spell_cost_for(pid, inst.data, x)) and extra == 0) \
-				and _plan_taps(game, game.spell_cost_for(pid, inst.data, x), extra,
+		if not (_cost_is_free(game.spell_cost_for(pid, inst.data, x, int(mode))) and extra == 0) \
+				and _plan_taps(game, game.spell_cost_for(pid, inst.data, x, int(mode)), extra,
 					game.mana_usage_keys(inst.data, inst)).is_empty(): continue
 		if profile.plans_modes and inst.data.is_modal() and not intent.unknown:
 			if intent.life_gain > 0:
@@ -11742,6 +12182,24 @@ func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictio
 func _information_cast_value(_game: MtgGame, _inst: CardInstance,
 		choice: Dictionary, _intent: EffectIntent) -> float:
 	return float(choice["value"])
+
+
+## Does [param targets] name a creature of OURS that dies to being named
+## — "When this creature becomes the target of a spell or ability,
+## sacrifice it" (Pack 8, 2026-10-03; mirage_tactics.gd
+## `dies_when_targeted`)? The central guard every cast and activation of
+## this seat passes under [member AiProfile.forecasts_tactics]: whatever
+## the effect was for, the creature is gone before it resolves.
+func _aims_at_own_fragile(game: MtgGame, targets: Array) -> bool:
+	for ref in targets:
+		if not (ref is TargetRef) or ref.is_player or ref.is_damage or ref.is_ability:
+			continue
+		var inst := game.find_instance(ref.instance_id)
+		if inst != null and inst.controller_id == pid \
+				and inst.zone == Mtg.Zone.BATTLEFIELD \
+				and MIRAGE_TACTICS.dies_when_targeted(inst):
+			return true
+	return false
 
 
 ## Pick targets for a cast, or null when a targeted card has no target
@@ -11887,6 +12345,11 @@ func _extra_targets(game: MtgGame, source: CardInstance, spec: TargetSpec,
 					and profile.spares_own \
 					and not _worth_giving_up(game, source, effect, found, x_value):
 				continue
+			# ...and never a creature of ours that dies to being named
+			# (Pack 8, Skulking Ghost), whatever the slot is for.
+			if found != null and owner_pid == pid and profile.forecasts_tactics \
+					and MIRAGE_TACTICS.dies_when_targeted(found):
+				continue
 		if owner_pid == wanted_pid:
 			preferred.append(ref)
 		else:
@@ -12001,9 +12464,18 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 				continue   # "two target creatures" are two DIFFERENT ones (CR 601.2c)
 			if conscripts and scan_pid != pid and not _conscription_kills(game, inst):
 				continue
+			# NAMED IS DEAD (Pack 8, 2026-10-03, forecasts_tactics): a
+			# Skulking Ghost of ours is sacrificed by the aura or the pump
+			# meant to help it — never offered; one of theirs dies to the
+			# naming itself, whatever the damage.
+			var fragile := profile.forecasts_tactics and inst.is_creature() \
+				and MIRAGE_TACTICS.dies_when_targeted(inst)
+			if fragile and inst.controller_id == pid:
+				continue
 			# Don't waste damage — fixed or X — on what it can't kill.
 			if harmful and intent != null and intent.damage_at(x_value) > 0 \
-					and inst.is_creature() and not intent.kills(inst, x_value):
+					and inst.is_creature() and not fragile \
+					and not _kills_by_damage(game, source, intent, inst, x_value):
 				continue
 			# ...and don't waste a TAP on what it costs nothing to tap.
 			if intent != null and intent.is_tap_utility() \
@@ -12216,6 +12688,12 @@ func _is_harmful(source: CardInstance, effect: EffectBase) -> bool:
 	# Craw Wurm. The same line [method EffectIntent.shrinks] draws.
 	if effect is PumpEffect:
 		return effect.toughness < 0 or (effect.power < 0 and effect.toughness <= 0)
+	# A LIFE LOSS AIMED AT A PLAYER is harm (Pack 8, 2026-10-03,
+	# forecasts_tactics): Kaervek's Spite's GainLifeEffect(-5) was aimed
+	# at its own caster. See [member EffectIntent.life_loss].
+	if effect is GainLifeEffect and profile.forecasts_tactics \
+			and effect.amount < 0 and not effect.use_x and effect.target_spec != null:
+		return true
 	if effect is DrawEffect or effect is GainLifeEffect or effect is UntapEffect:
 		return false
 	# Card-local custom effects: ask the READER, which knows the ones the
@@ -12538,6 +13016,11 @@ func _effects_answer(game: MtgGame, effects: Array, packet: DamagePacket,
 				return false
 		if e is PreventCombatDamageEffect and not e.targeted_mode:
 			return packet.is_combat and not game.combat_damage_prevented
+	# THE SOURCE SHIELD (Pack 8, forecasts_tactics): Circle of Despair,
+	# Honorable Passage, Shadowbane — the Circle's answer for whatever
+	# victim the shield covers (mirage_tactics.gd `shield_covers`).
+	if profile.forecasts_tactics and e is SourceShieldEffect:
+		return MIRAGE_TACTICS.shield_covers(game, e, source, _victim_ref(packet), pid)
 	if e is PreventDamageShieldEffect:
 		# The 1997 Circle: it names the packet, so the packet has to be one
 		# it may name.
@@ -13221,6 +13704,12 @@ func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 		for land in game.players[p_pid].battlefield:
 			owns_plains = owns_plains or land.cur_subtypes.has("plains")
 		if not owns_plains: return null
+	# A "SOURCE OF YOUR CHOICE" (Pack 8's shields, the Circles): never a
+	# source that cannot deal damage — the audit saw Reflect Damage name a
+	# Mountain (mirage_tactics.gd `pick_damage_source`).
+	if profile.forecasts_tactics and p_pid == pid and asked != null and asked.ordered \
+			and prompt.contains(": Select ") and prompt.contains("source"):
+		return MIRAGE_TACTICS.pick_damage_source(game, candidates)
 	if asked != null and (asked.adverse or asked.ordered) \
 			and not candidates.is_empty():
 		return candidates[0]

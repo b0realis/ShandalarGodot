@@ -166,6 +166,9 @@ var _human := 0
 ## When the DuelScreen last opened the view ([method opened]).
 var _opened_ms := -1000000
 var _legal := Callable()
+## Outside targeting: which cards the seat may PLAY from here right now
+## (Pack 8 — Bösium Strip's graveyard cast, Three Wishes' exiled cards).
+var _playable := Callable()
 ## Window start index per "zone:pid" shelf, kept across repopulates (a
 ## taken target rebuilds the view and must not throw the player back to
 ## the first page). Cleared when the overlay is opened afresh.
@@ -261,10 +264,12 @@ func reset_paging() -> void:
 ## Callable outside targeting, when every card is merely viewable.
 ## [param human] is the seat sitting at this screen — the one whose piles
 ## say "Your".
-func populate(game: MtgGame, human: int, legal := Callable()) -> void:
+func populate(game: MtgGame, human: int, legal := Callable(),
+		playable := Callable()) -> void:
 	_game = game
 	_human = human
 	_legal = legal
+	_playable = playable
 	_shelves.clear()
 	_place_scroll()
 	# Un-parent BEFORE queueing: a queue_free'd child is still in the tree
@@ -491,6 +496,15 @@ func _card(inst: CardInstance, legal: Callable, counter: String) -> MiniCard:
 	if legal.is_valid() and bool(legal.call(inst)):
 		card.set_highlight(MiniCard.Highlight.TARGET)
 		card.add_child(_target_ring())
+	elif _playable.is_valid() and _may_look(inst) and bool(_playable.call(inst)):
+		# A card the seat may CAST or PLAY from this pile (Pack 8: the top
+		# of a graveyard under Bösium Strip, a Three Wishes card) wears the
+		# board's own "you may act on this" ring and yellow name — the
+		# promise that clicking it starts the cast (DuelScreen
+		# ._on_graveyard_card).
+		card.castable = true
+		card.set_highlight(MiniCard.Highlight.OPTIONAL)
+		card.add_child(_target_ring(MiniCard.Highlight.OPTIONAL))
 	card.pressed.connect(func() -> void: card_picked.emit(inst))
 	# The big card in the sidebar, exactly as the hand and the battlefield
 	# fill it (CardPile._on_card_hover) — one preview for the whole duel.
@@ -504,11 +518,12 @@ func _card(inst: CardInstance, legal: Callable, counter: String) -> MiniCard:
 ## The 2px ring round a card the pending spell can legally take — s30's
 ## own outline (`duel.go:3699-3712`), drawn exactly as `CardPile` draws it
 ## for a target on the battlefield.
-func _target_ring() -> Control:
+func _target_ring(highlight: int = MiniCard.Highlight.TARGET) -> Control:
 	var ring := Panel.new()
+	ring.name = "PlayableRing" if highlight == MiniCard.Highlight.OPTIONAL else "TargetRing"
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(0, 0, 0, 0)
-	box.border_color = MiniCard.HIGHLIGHT_COLORS[MiniCard.Highlight.TARGET]
+	box.border_color = MiniCard.HIGHLIGHT_COLORS[highlight]
 	box.set_border_width_all(2)
 	ring.add_theme_stylebox_override("panel", box)
 	ring.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -579,7 +594,7 @@ func step(zone: int, pid: int, delta: int) -> void:
 	var last_start: int = maxi(0, pile.size() - page)
 	_starts[_key(zone, pid)] = clampi(
 		page_start(zone, pid) + delta * page, 0, last_start)
-	populate(_game, _human, _legal)
+	populate(_game, _human, _legal, _playable)
 
 
 ## Index of the first card on screen for a shelf.

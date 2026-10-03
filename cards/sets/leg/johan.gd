@@ -46,7 +46,7 @@ static func _your_combat(_game: MtgGame, source: CardInstance,
 
 
 static func _offer(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD or source.tapped:
+	if not game.is_present(source) or source.tapped:   # phased out: no bargain (CR 702.26b)
 		return
 	var pid := source.controller_id
 	# Worth it when there is a team to keep back — the heuristic's answer.

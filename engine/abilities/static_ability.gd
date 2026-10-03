@@ -222,6 +222,23 @@ func silencing_abilities() -> StaticAbility:
 	return self
 
 
+## Does this static change COLOURS — CR 613 LAYER 5 ("Nonland permanents
+## you control are white", Celestial Dawn)? Layer 5 precedes layer 6 and
+## every P/T layer, and the anthems that READ a colour (Crusade: "white
+## creatures get +1/+1") must see it whatever entered first, so a flagged
+## static runs in the colour pass of [method ContinuousEffects.recalculate]
+## — in TIMESTAMP order (CR 613.7) with the floating until-end-of-turn
+## colour changes, its own timestamp being its source's
+## [member CardInstance.layer_timestamp] — instead of with the untagged
+## statics.
+var changes_colors: bool = false
+
+## Fluent: mark this static as a CR 613 layer-5 colour changer.
+func changing_colors() -> StaticAbility:
+	changes_colors = true
+	return self
+
+
 ## Mtg.EventType values of the TRIGGERED abilities this static grants to
 ## other permanents (Energy Flux's upkeep tax on every artifact). The
 ## dispatcher's early-out index is rebuilt from the printed lists when the

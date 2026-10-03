@@ -1036,6 +1036,10 @@ func test_the_castable_name_yellows_in_the_fan_as_well_as_the_pile(): # §5.5
 	# double-click auto-cast landed the same yellow is also the promise
 	# that double-clicking will work.
 	var g := screen.game
+	# Seat 0's own main phase: since Pack 8 (flash) the yellow name also
+	# asks the step, as the click does (MtgGame.cast_timing_refusal).
+	g.active_player = 0
+	g._step_index = Mtg.STEP_ORDER.find(Mtg.Step.MAIN1)
 	g.priority_player = 0
 	_summon_for_highlight("Plains", 0)
 	_summon_for_highlight("Plains", 0)

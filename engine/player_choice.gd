@@ -104,6 +104,15 @@ var adverse := false
 ## says so for a seat choosing FOR itself.
 var ordered := false
 
+## CARD only: is this ONE PICK OF AN "IN ANY ORDER" SEQUENCE — the card
+## asks once per card, each answer going after the last (Teferi's Puzzle
+## Box: "puts the cards in their hand on the bottom of their library in any
+## order")? Set by [method DecisionAgent.choose_card_in_order]. A front end
+## may then offer to keep the order the rest are offered in for the rest of
+## the sequence (HumanAgent.keep_order_for) — any order is legal, so that
+## is a complete answer, one click instead of one per card.
+var in_order := false
+
 
 ## COLOR only: the Mtg.ManaColor flags on offer, in the order a UI should
 ## list them. Empty means "any of the five", which is what every colour

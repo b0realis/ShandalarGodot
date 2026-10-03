@@ -36,7 +36,8 @@ static func _is_self(_game: MtgGame, source: CardInstance, event: GameEvent) -> 
 static func _curse(game: MtgGame, _source: CardInstance, event: GameEvent) -> void:
 	for id in event.data.get("damaged_by", []):
 		var killer := game.find_instance(int(id))
-		if killer != null and killer.zone == Mtg.Zone.BATTLEFIELD and killer.is_creature():
+		# A phased-out killer isn't included, not even once back (CR 702.26e).
+		if game.is_present(killer) and killer.is_creature():
 			game.continuous.add_until_eot_base_pt(killer.id, 0, 2, false,
 				ContinuousEffects.Duration.INDEFINITE)
 	game.recalculate()

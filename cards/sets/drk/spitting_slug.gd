@@ -75,7 +75,7 @@ static func _engaged_with(game: MtgGame, source: CardInstance) -> Array[CardInst
 
 
 static func _spit(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
+	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	var pid := source.controller_id
 	var cost := ManaCost.parse("{1}{G}")

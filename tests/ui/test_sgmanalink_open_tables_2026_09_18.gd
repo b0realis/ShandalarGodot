@@ -269,9 +269,10 @@ func test_an_assigned_deck_is_dealt_to_both_seats_and_refused_as_a_choice() -> v
 
 func test_protocol_21_carries_the_deck_rule_and_refuses_the_old_host_shape() -> void:
 	# Protocol 25 (2026-10-02): the host command may carry THE TABLE RULES
-	# (SgTableRules) and the listings their one-line brief.
-	assert_eq(SgProtocol.VERSION, 25)
-	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v25")
+	# (SgTableRules) and the listings their one-line brief. 26 (Pack 8,
+	# 2026-10-03): phased-out lists, block life taxes, `discard_special`.
+	assert_eq(SgProtocol.VERSION, 26)
+	assert_eq(SgProtocol.SUBPROTOCOL, "sgmanalink-local-v26")
 	assert_eq(SgLanDiscovery.MAX_PACKET, 16384, "room for the certificate inside an open advert")
 	var message := func(action: Dictionary) -> Dictionary:
 		return {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}

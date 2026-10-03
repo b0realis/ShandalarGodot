@@ -234,7 +234,8 @@ func _text_effects(card: CardInstance) -> Array:
 
 
 func _playable(pid: int, card: CardInstance) -> bool:
-	if not ((card.owner_id == pid and card.zone == Mtg.Zone.HAND) or game.can_play_from_exile(pid, card)) or game.game_over \
+	if not ((card.owner_id == pid and card.zone == Mtg.Zone.HAND) or game.can_play_from_exile(pid, card) \
+		or game.can_cast_from_graveyard(pid, card)) or game.game_over \
 		or game.mulligan_open or game.priority_player != pid:
 		return false
 	if card.is_land():
@@ -282,7 +283,11 @@ func view(pid: int) -> Dictionary:
 			"top": "" if top == null else top.data.card_name,
 			"exile": _cards(pid, player.exile), "ante": _cards(pid, player.ante),
 			"battlefield": _cards(pid, player.battlefield),
-			"graveyard": _cards(pid, player.graveyard)})
+			"graveyard": _cards(pid, player.graveyard),
+			# Phased out under this seat's control (Pack 8, CR 702.26): off
+			# the battlefield list every rule reads, still on the table and
+			# public to both seats, drawn ghosted (DuelScreen._table_cards).
+			"phased_out": _cards(pid, player.phased_out)})
 	var stack: Array = []
 	for item in game.stack:
 		var details: String = ["Spell", "Activated ability", "Triggered ability"][item.kind]
@@ -388,6 +393,14 @@ func act(pid: int, action: Dictionary) -> String:
 		"special":
 			if state.mode != "priority": return "Wait for priority."
 			return actions.special(pid, int(action.index))
+		"discard_special":
+			# A hand card's SPECIAL ACTION (Pack 8 — Circling Vultures: "You
+			# may discard this card any time you could cast an instant"):
+			# no stack, the seat keeps priority. The engine judges the rest.
+			if state.mode != "priority": return "Wait for priority."
+			var card := _card(pid, action.card)
+			if card == null or not game.players[pid].hand.has(card): return "Card unavailable."
+			return game.discard_as_special_action(pid, card)
 		"choice": return actions.answer(pid, action.picks)
 		"cancel":
 			if game.awaiting_choice != null:

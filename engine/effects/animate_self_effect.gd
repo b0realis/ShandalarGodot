@@ -51,8 +51,8 @@ func until_end_of_combat() -> AnimateSelfEffect:
 ## unrelated recalculations and vanish exactly on expiry.
 func resolve(game: MtgGame, source: CardInstance, _controller: int, _target: TargetRef,
 		_x_value: int = 0) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		return   # left the battlefield in response — nothing to animate
+	if not game.is_present(source):
+		return   # left (or phased out, CR 702.26e) in response — nothing to animate
 	game.continuous.add_until_eot_animation(source.id, add_types,
 		set_power, set_toughness, add_subtypes, combat_duration)
 	game.log_line("%s becomes a %d/%d creature until end of %s" % [
