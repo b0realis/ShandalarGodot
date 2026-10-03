@@ -10,6 +10,9 @@ signal locks_changed
 
 const ID := "pack-1"
 const FILE_NAME := "Pack-1-DotP-complete.zip"
+## Every entry of the exact layout (4 metadata files + 754 art files) —
+## the directory guard's bound ([method PortalPack.bounded_zip]).
+const MAX_ENTRIES := 758
 const PACK_VERSION := "1.0.0"
 const MINIMUM_GAME_VERSION := "0.20.0"
 const PREFIX := "card_packs/pack_1_dotp_complete/"
@@ -199,6 +202,11 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 		return FallenEmpiresPack.inspect(path, art_trusted)
 	if path.get_file() != FILE_NAME:
 		return _refusal("must be named exactly " + FILE_NAME)
+	# The declared sizes first, as Packs 6 and 7 always did (bug pass
+	# 2026-10-03): `read_file` below allocates whatever an entry declares,
+	# and the name checks before it do not bound a single byte.
+	if not PortalPack.bounded_zip(path, MAX_ENTRIES):
+		return _refusal("invalid ZIP directory or Pack 1 size limit exceeded")
 	var reader := ZIPReader.new()
 	if reader.open(path) != OK:
 		return _refusal("not a ZIP file")
@@ -574,6 +582,16 @@ func set_current_deck_names(names: Array[String]) -> void:
 
 func current_deck_conflicts(id: String) -> Array[String]:
 	var found: Array[String] = []
+	for name in _names_of(id):
+		if _current_deck_names.has(name):
+			if _shared_source(name) != "" and not _shared_provider(name, id).is_empty(): continue
+			found.append(name)
+	return found
+
+
+## The names pack [param id] brings into play: its new identities and the
+## shared reprints it carries.
+func _names_of(id: String) -> Array:
 	var names: Array = FallenEmpiresPack.names() if id == FallenEmpiresPack.ID else ADDED_NAMES
 	if id == IceAgePack.ID:
 		names = IceAgePack.new_names()
@@ -586,11 +604,45 @@ func current_deck_conflicts(id: String) -> Array[String]:
 		names.append_array(PortalPack.SHARED.keys())
 	if id == FifthEditionPack.ID:
 		names = FifthEditionPack.shared().keys()
+	return names
+
+
+## THE DECLARED PACKS A DECK STILL NEEDS, for the gates and for the save
+## (bug pass 2026-10-03). A shared reprint — Pyroclasm is Ice Age's, and
+## Portal carries it too — is written into a deck as `# requires-pack:`
+## naming whichever provider was on at the save ([method
+## packs_required_by]), and the declaration was carried for ever: the
+## gates read DECLARED ids, so the deck was refused once that provider
+## went off although another enabled pack provides the card ([method
+## _shared_provider]'s own rule), and every re-save under another provider
+## declared one pack more. A declared EXPANSION id is dropped when the
+## deck ([param names], both piles) holds cards it provides and every one
+## of them is a shared reprint another enabled pack provides too — the
+## implied requirement ([method packs_required_by]) then names the pack in
+## play. Pack 1's ids (its printings) and a declaration no card in the
+## deck explains are kept as written.
+func effective_requirements(declared: Array[String], names: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for id in declared:
+		if id == ID or not _provided_elsewhere(id, names):
+			out.append(id)
+	return out
+
+
+## Does the deck hold cards [param id] provides, every one of them a shared
+## reprint that another enabled pack provides as well?
+func _provided_elsewhere(id: String, names: Array[String]) -> bool:
+	if not known_ids().has(id):
+		return false
+	var provides := _names_of(id)
+	var any := false
 	for name in names:
-		if _current_deck_names.has(name):
-			if _shared_source(name) != "" and not _shared_provider(name, id).is_empty(): continue
-			found.append(name)
-	return found
+		if not provides.has(name):
+			continue
+		if _shared_source(name) == "" or _shared_provider(name, id).is_empty():
+			return false
+		any = true
+	return any
 
 
 func disable_warning(id: String) -> String:

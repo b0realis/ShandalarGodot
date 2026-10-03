@@ -89,3 +89,50 @@ func test_disable_reloads_the_base_pool_immediately() -> void:
 	assert_false(CardRegistry.has_card("Chaos Orb"))
 	assert_false(Settings.has_value("enabled_card_packs"),
 		"disabling the final pack does not materialise an empty default")
+
+
+## A ZIP THAT DECLARES MORE THAN IT HOLDS (bug pass 2026-10-03). Packs 6
+## and 7 read the central directory's declared sizes before `ZIPReader`
+## allocates a byte (`PortalPack._bounded_zip`); Packs 1-5 went straight
+## to `read_file`, so a pack-named ZIP whose entry declared gigabytes was
+## allocated whole at startup. Every pack now refuses an over-size entry
+## by its directory alone — the guard's own refusal, not the file-list one
+## a later check would have given.
+func test_every_pack_reads_the_directory_before_any_entry() -> void:
+	var dir := "user://bounded_zip_test"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var zeros := PackedByteArray()
+	zeros.resize(9 * 1024 * 1024)       # past the 8 MB an entry may unpack to
+	for file_name in [CardPacks.FILE_NAME, FallenEmpiresPack.FILE_NAME,
+			IceAgePack.FILE_NAME, HomelandsPack.FILE_NAME, AlliancesPack.FILE_NAME,
+			PortalPack.FILE_NAME, FifthEditionPack.FILE_NAME]:
+		var path := dir.path_join(file_name)
+		var zip := ZIPPacker.new()
+		assert_eq(zip.open(ProjectSettings.globalize_path(path)), OK)
+		zip.start_file("card_packs/manifest.json")
+		zip.write_file(zeros)
+		zip.close_file()
+		zip.close()
+		var report := CardPacks.inspect(ProjectSettings.globalize_path(path))
+		assert_false(bool(report.get("ok", true)), file_name)
+		assert_string_contains(String(report.get("why", "")), "size limit",
+			"%s: refused by the directory guard" % file_name)
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(dir))
+
+
+## The bound is each layout's own entry count: the real packs, where this
+## machine has them, still pass it.
+func test_the_real_packs_fit_their_bounds() -> void:
+	var checked := 0
+	for pack in [[CardPacks.ID, CardPacks.MAX_ENTRIES],
+			[FallenEmpiresPack.ID, FallenEmpiresPack.MAX_ENTRIES],
+			[IceAgePack.ID, IceAgePack.MAX_ENTRIES],
+			[HomelandsPack.ID, HomelandsPack.MAX_ENTRIES],
+			[AlliancesPack.ID, AlliancesPack.MAX_ENTRIES]]:
+		for path in CardPacks.candidate_paths(String(pack[0])):
+			if FileAccess.file_exists(path):
+				assert_true(PortalPack.bounded_zip(path, int(pack[1])), path)
+				checked += 1
+	if checked == 0:
+		pass_test("no real pack on this machine")

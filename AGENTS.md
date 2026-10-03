@@ -209,7 +209,9 @@ pair.
 
 A run writes `run.json` with `exit: null` before its first game and,
 as each game lands, one JSON line to `OUT/checkpoint.jsonl` —
-`{arm, pair, seed, record}`. A run that finishes removes the
+`{arm, pair, seed, record, run}` (`run` = `run.json`'s `run_id`; a
+resume keeps only its own run's lines, and a fresh run truncates the
+file). A run that finishes removes the
 checkpoint; a run that was killed leaves both behind, and that is what
 an interrupted run looks like: `run.json` with `exit: null` beside a
 `checkpoint.jsonl`.
@@ -223,7 +225,10 @@ is the whole line: the switches are read back from `OUT/run.json`
 played, and the report is written as if nothing had happened —
 `run.json` then has `exit: 0`, the original `argv`, and
 `resumed {from, reused, played}`. Anything typed beside `--resume` is
-refused (exit 2, `kind: "option"`) rather than merged into the line;
+refused (exit 2, `kind: "option"`) rather than merged into the line —
+but for the chrome flags `--quiet`, `--no-banner` and `--progress MODE`,
+which change how the run prints, not what it plays, and never enter the
+recorded `argv` (2026-10-03);
 a folder without `run.json`, a `run.json` another tool wrote, or a run
 that finished (`exit` not null) is refused with `kind: "resume"` and
 `path` (and `run_exit` for the finished one). Works for every mode —
@@ -501,7 +506,9 @@ python3 tools/shandalar_mcp.py [--door PATH] [--workspace DIR]
 `engine/deck_list.gd` reads and **checked by the engine as it is
 written** — the answer is `check_deck`'s), `convert_deck`; `autodeck`,
 `lab` (structured arguments for every switch, `--no-elo` unless `rated`,
-`--quiet` always, `dry_run` for the plan; or a whole `argv`),
+`--quiet` always, `dry_run` for the plan; or a whole `argv`; a line
+that names no `out` runs into `workspace/runs/lab-STAMP`, so its answer
+carries `run`, `results` and `next` like any other),
 `lab_resume`, `read_run`, `lab_next` (runs `run.json`'s `next.argv`);
 `referee_start`, `referee_join`, `referee_host`, `referee_act`,
 `referee_autoplay`, `referee_wait`, `referee_stop`, `referee_resume`.
@@ -583,6 +590,25 @@ the previous decision is consumed, not offered again. Call `referee_wait`
 until the next decision or result arrives; do not resend the action.
 Timeouts must be finite and greater than zero.
 
+**Progress** (2026-10-03). A `lab` or `lab_next` call whose request
+carries `_meta.progressToken` is run with the Lab's `--progress json`
+(one `{"progress": {done, total, unit, elapsed}}` line a second on its
+stderr), and each line reaches the client as `notifications/progress`
+(`progress` = games played, `total`, a `message`), before the answer and
+never decreasing. Without a token the line is unchanged.
+
+**Cancelling, and the server while a call runs** (2026-10-03). Calls are
+answered one at a time, in the order they came, while the server keeps
+reading: a `ping` is answered at once even behind a fifteen-minute Lab
+run, and `notifications/cancelled {requestId}` stops that call — the
+door's child is killed with its whole process group (the Lab's worker
+processes too), a referee wait stops reading — and the cancelled call is
+not answered; a call cancelled before it started is skipped. A game a
+cancelled `referee_act` was waiting on stays open: its last answer was
+sent, so `referee_wait` reads on. A SIGTERM does the same to the call in
+flight before the server ends; closing the input still answers every
+request already sent, so a file of requests may be piped in.
+
 **Passing with `until`.** `referee_act {action, until}` sends the
 answer and then passes priority for the seat up to the next point a
 player would act: `main` the seat's own main phase, `end` this turn's
@@ -623,7 +649,9 @@ kept game too (`kept: true` in its answer), and removes the record.
 The token that opens the socket is drawn by the referee and written to
 the handshake file only — never on a command line, never in an answer.
 Games are numbered past every file in `workspace/games`, so a second
-server never writes over the first's.
+server never writes over the first's — the number is claimed on disk as
+each game opens, so two servers running at once on one workspace never
+share one either.
 
 **The rules the server keeps**: stdout is the protocol's (each game's
 stderr goes to `workspace/games/GAME.stderr`); a path a tool writes —

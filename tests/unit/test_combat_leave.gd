@@ -70,3 +70,29 @@ func test_a_dead_attacker_deals_no_damage() -> void:
 	g.destroy(bear)
 	advance_to_step(Mtg.Step.COMBAT_END)
 	assert_eq(g.players[1].life, before, "a dead attacker hits nobody")
+
+
+func test_a_dead_attacker_is_out_of_combat_when_blockers_are_declared() -> void:
+	# Bug pass 2026-10-03: the dead attacker's entry, kept for its own
+	# dies-trigger (Abu Ja'far), was still standing when blockers were
+	# declared, so it was announced UNBLOCKED ("attacks and isn't blocked"
+	# triggers heard a card in the graveyard) and Camouflage dealt it a
+	# pile. Its trigger has resolved by the time the step changes — the
+	# stack is empty — so the declare-blockers step drops it (CR 506.4).
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var other := put_battlefield(0, "Grizzly Bears")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [bear.id, other.id]))
+	g.destroy(bear)
+	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD)
+	var unblocked: Array = []
+	g.event_occurred.connect(func(e: GameEvent) -> void:
+		if e.type == Mtg.EventType.UNBLOCKED_ATTACKER:
+			unblocked.append(e.data["instance"]))
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_false(g.combat.attackers.has(bear.id), "the dead attacker left combat")
+	assert_true(g.combat.attackers.has(other.id), "the living one did not")
+	assert_ok(g.declare_blockers(1, {}))
+	assert_eq(unblocked, [other], "only the living attacker is unblocked")
+	advance_to_step(Mtg.Step.COMBAT_END)
+	assert_eq(g.players[1].life, 18, "and it still hits")

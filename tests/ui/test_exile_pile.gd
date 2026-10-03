@@ -12,8 +12,9 @@ extends GutTest
 ## derived art never invents a colour.
 ##
 ## Every test needs the original skin (`assets/original/`); without it the
-## duel table draws no pile plates at all and the checks are skipped, which
-## is the same contract `GameSkin` gives every other caller.
+## duel table draws no pile ART (only the bare stand-in plates, since
+## 2026-10-03) and the checks are skipped, which is the same contract
+## `GameSkin` gives every other caller.
 
 
 func _skin_present() -> bool:
@@ -142,12 +143,18 @@ func test_clicking_the_exile_pile_opens_the_same_viewer() -> void:
 
 
 func test_a_seat_without_a_plate_leaves_nothing_behind() -> void:
-	# THE ORPHAN. A table drawn without the original skin has no plates,
-	# and the TextureRect built for the graveyard's never joined the tree
-	# in that case — nor was it freed, so every such duel left one behind
-	# and Godot listed it at exit. The skin's own cache is the seam: a
-	# null under every plate key is exactly what a player without the art
+	# THE ORPHAN. A table drawn without the original skin has no plate
+	# ART, and the TextureRect built for the graveyard's once never joined
+	# the tree in that case — nor was it freed, so every such duel left one
+	# behind and Godot listed it at exit. The skin's own cache is the seam:
+	# a null under every plate key is exactly what a player without the art
 	# gets, so this pins the no-plate table with the art present too.
+	#
+	# Since 2026-10-03 the plates are built WITHOUT the art as well (a bare
+	# stand-in under the same node — without one, nothing on the table
+	# opened the graveyard view; tests/ui/test_graveyard_view.gd pins the
+	# clicks), so what this pins now is that they all joined the row and
+	# went with the table. It used to assert the plate node was null.
 	var keys: Array[String] = []
 	for seat_color in ["white", "blue", "black", "red", "green"]:
 		keys.append("grave_panel_" + seat_color)
@@ -155,14 +162,23 @@ func test_a_seat_without_a_plate_leaves_nothing_behind() -> void:
 	for key in keys:
 		saved[key] = GameSkin._texture_cache.get(key)
 		GameSkin._texture_cache[key] = null
+	# ExilePlate caches a null per colour when it finds no grave plate to
+	# paint from: emptied here and put back below, or every later table in
+	# the run would lose its exile art.
+	var saved_exile: Dictionary = ExilePlate._cache.duplicate()
+	ExilePlate._cache = {}
 	var screen: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
 	add_child(screen)
 	await get_tree().process_frame
 	for pid in 2:
-		assert_null(screen._grave_icons[pid],
-			"seat %d: no plate, so no plate node either" % pid)
-		assert_not_null(screen._grave_labels[pid],
-			"seat %d: the count still stands at the end of the row" % pid)
+		assert_not_null(screen._grave_icons[pid],
+			"seat %d: no plate art, but still a plate to click" % pid)
+		assert_true(screen._grave_icons[pid] != null and screen._grave_icons[pid].is_inside_tree(),
+			"seat %d: and it joined the row" % pid)
+		assert_true(screen._exile_icons[pid] != null and screen._exile_icons[pid].is_inside_tree(),
+			"seat %d: the exile plate too" % pid)
+		assert_eq(screen._grave_labels[pid].get_parent(), screen._grave_icons[pid],
+			"seat %d: the count rides the plate" % pid)
 	screen.free()
 	assert_no_new_orphans("a table without plates frees everything it built")
 	for key in keys:
@@ -170,3 +186,4 @@ func test_a_seat_without_a_plate_leaves_nothing_behind() -> void:
 			GameSkin._texture_cache.erase(key)
 		else:
 			GameSkin._texture_cache[key] = saved[key]
+	ExilePlate._cache = saved_exile

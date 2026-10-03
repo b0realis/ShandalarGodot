@@ -145,6 +145,45 @@ func test_an_interactive_seat_is_asked_and_the_step_waits() -> void:
 	assert_eq(cast[2].damage, 1)
 
 
+## Bug pass 2026-10-03: the gang block of [method _gang_block] plus an
+## unblocked Grizzly Bears beside the giant and an Ashnod's Altar.
+func _held_step_with_an_unblocked_bear() -> Array:
+	g.agents[0] = PromptAgent.new()
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var altar := put_battlefield(0, "Ashnod's Altar")
+	var giant := put_battlefield(0, "Hill Giant")
+	var a := put_battlefield(1, "Savannah Lions")
+	var b := put_battlefield(1, "Savannah Lions")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [bear.id, giant.id]))
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {a.id: giant.id, b.id: giant.id}))
+	advance_to_step(Mtg.Step.COMBAT_DAMAGE)
+	assert_true(g.awaiting_damage_assignment)
+	return [bear, altar, giant, a, b]
+
+
+func test_no_mana_ability_while_the_damage_split_is_held() -> void:
+	# Nobody has priority and no cost is being paid while the step waits
+	# for a division (CR 605.3a), so Ashnod's Altar cannot eat the unblocked
+	# attacker mid-step — it used to, and the dead Bears still dealt 2.
+	var cast := _held_step_with_an_unblocked_bear()
+	assert_refused(g.tap_for_mana(0, cast[1], 0), "damage")
+	assert_eq(cast[0].zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_a_creature_gone_while_the_split_is_held_deals_no_damage() -> void:
+	# The requests are planned when the step begins; a source that has left
+	# the battlefield (or combat) by the time they land deals nothing
+	# (CR 510.1, 506.4). Removed here by hand, standing in for any path
+	# that can still reach it.
+	var cast := _held_step_with_an_unblocked_bear()
+	g.sacrifice_permanent(cast[0])
+	assert_ok(g.assign_combat_damage(0, {cast[3].id: 1, cast[4].id: 2}))
+	assert_eq(g.players[1].life, 20, "the sacrificed Bears hit nobody")
+	assert_eq(cast[3].zone, Mtg.Zone.GRAVEYARD, "the giant's split still landed")
+
+
 func test_every_point_must_be_assigned() -> void:
 	g.agents[0] = PromptAgent.new()
 	var cast := _gang_block()

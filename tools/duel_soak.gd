@@ -123,10 +123,10 @@ func _parse_args() -> bool:
 				count = int(value)
 				i += 1
 			"--seeds":
-				for part in value.split(",", false):
-					if not part.is_valid_int():
-						return _bad_argument("--seeds takes whole numbers, not '%s'" % part)
-					seeds.append(int(part))
+				var read := parse_seeds(value)
+				if read.has("error"):
+					return _bad_argument(String(read["error"]))
+				seeds.append_array(read["seeds"])
 				i += 1
 			"--stall":
 				if not value.is_valid_float() or float(value) <= 0.0:
@@ -162,6 +162,20 @@ func _parse_args() -> bool:
 		for n in maxi(count, 1):
 			seeds.append(1000 + n * 37)
 	return true
+
+
+## `--seeds a,b,c` as `{"seeds": [a, b, c]}`, or `{"error": ...}`.
+## EVERY PART A SEED (2026-10-03): `1,2,` and an empty `--seeds ''` used
+## to be read as `1,2` and as no seeds at all — and no seeds is the three
+## default ones, so a soak asked for one seed played three others.
+static func parse_seeds(value: String) -> Dictionary:
+	var parsed: Array = []
+	for part in value.split(",", true):
+		var word := part.strip_edges()
+		if not word.is_valid_int():
+			return {"error": "--seeds takes whole numbers, comma-separated, not '%s'" % value}
+		parsed.append(int(word))
+	return {"seeds": parsed}
 
 
 func _bad_argument(why: String) -> bool:
@@ -231,7 +245,7 @@ static func restore_settings(before: Variant) -> bool:
 	if before == null:
 		DirAccess.remove_absolute(
 			ProjectSettings.globalize_path(Settings.PATH))
-		Settings.reload()
+		Settings.reload_file()
 		return true
 	var file := FileAccess.open(Settings.PATH, FileAccess.WRITE)
 	if file == null:
@@ -240,7 +254,7 @@ static func restore_settings(before: Variant) -> bool:
 	file.close()
 	# The file is the player's again; memory has to agree, or the next
 	# reader in this process answers with what the fuzzer wrote.
-	Settings.reload()
+	Settings.reload_file()
 	return true
 
 

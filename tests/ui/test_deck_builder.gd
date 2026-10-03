@@ -3598,3 +3598,249 @@ func test_clear_deck_still_refuses_an_empty_surface() -> void:
 	screen._clear_deck()
 	assert_eq(screen._clear_button.text, "Clear deck", "nothing was cleared")
 	assert_string_contains(screen._status_label.text, "nothing to clear")
+
+
+# ------------------------------------ bug pass of 2026-10-03 (the shell) --
+
+## Two unsaved slots: Deck1 holds four Bolts, Deck2 four Giant Growth.
+func _two_unsaved_slots() -> void:
+	screen.deck.deck_name = "Gut Slot A"
+	for _i in 4:
+		screen._add_one("Lightning Bolt")
+	screen._switch_slot(1)
+	screen.deck.deck_name = "Gut Slot B"
+	for _i in 4:
+		screen._add_one("Giant Growth")
+	screen._switch_slot(0)
+
+
+## The Label text of the front-most dialog, joined.
+func _dialog_text() -> String:
+	var text := ""
+	for node in _walk(screen.open_dialogs()[-1]):
+		if node is Label:
+			text += String(node.text) + " "
+	return text.strip_edges()
+
+
+## A slot button that still held the keyboard under the scrim switched the
+## surface under an open `@SAVE`, and the prompt's "No" then threw away
+## the OTHER deck — Deck2's four Giant Growth, never asked about.
+func test_a_slot_button_cannot_switch_the_surface_under_a_save_prompt() -> void:
+	_two_unsaved_slots()
+	screen._run_command("New deck")
+	assert_eq(screen.open_dialogs().size(), 1, "@SAVE asks about Deck A")
+	screen._slot_buttons[1].pressed.emit()      # Space on a focused slot button
+	assert_eq(screen._slot, 0, "the surface stays on the deck being asked about")
+	_answer("No")
+	assert_eq(screen._slots[1].count_of("Giant Growth"), 4, "Deck2 is untouched")
+	assert_eq(screen.deck.total(), 0, "and No discarded the deck it asked about")
+
+
+func test_the_exit_walk_cannot_start_under_an_open_prompt() -> void:
+	_two_unsaved_slots()
+	screen._run_command("New deck")
+	screen._confirm_discard_all(func() -> void: pass)
+	assert_eq(screen._slot, 0, "no slot switch under the prompt")
+	assert_eq(screen.open_dialogs().size(), 1, "and no second prompt on top")
+
+
+## The keyboard comes off the screen behind: before, focus stayed on
+## whatever command-bar button had it, under the scrim, and answered Space.
+func test_a_dialog_takes_the_keyboard_off_the_screen_behind_it() -> void:
+	screen._add_one("Lightning Bolt")
+	screen._slot_buttons[1].grab_focus()
+	screen._run_command("New deck")
+	assert_eq(screen.open_dialogs().size(), 1)
+	var owner := get_viewport().gui_get_focus_owner()
+	assert_true(owner == null or screen.open_dialogs()[-1].is_ancestor_of(owner),
+		"no control behind the dialog holds the keyboard")
+	_answer("Cancel")
+
+
+## "No" on one slot and then "Cancel" on the next marked the first slot
+## SAVED: the walk cleared its dirty flag the moment it was answered, so
+## the next `Exit deck builder` dropped its edits without a question.
+func test_cancel_in_the_exit_walk_keeps_every_slot_unsaved() -> void:
+	_two_unsaved_slots()
+	assert_eq(screen._unsaved_slots(), [0, 1] as Array[int])
+	screen._exit()
+	_answer("No")
+	assert_eq(screen._slot, 1, "on to Deck2")
+	_answer("Cancel")
+	assert_eq(screen.open_dialogs().size(), 0)
+	assert_eq(screen._unsaved_slots(), [0, 1] as Array[int],
+		"Cancel abandons the whole walk — Deck1 is still unsaved work")
+
+
+func test_a_walk_answered_no_everywhere_asks_each_slot_once() -> void:
+	_two_unsaved_slots()
+	var left := [false]
+	screen._confirm_discard_all(func() -> void: left[0] = true)
+	_answer("No")
+	_answer("No")
+	assert_true(left[0], "two answers, and the walk is done")
+	assert_eq(screen.open_dialogs().size(), 0, "nobody asked a third time")
+
+
+## `Copy deck to` replaced an unsaved, non-empty slot without a word.
+func test_copy_deck_to_asks_before_replacing_unsaved_work() -> void:
+	screen._switch_slot(1)
+	for _i in 4:
+		screen._add_one("Shivan Dragon")
+	screen._switch_slot(0)
+	for _i in 3:
+		screen._add_one("Lightning Bolt")
+	screen._run_command("Copy deck to")
+	_answer("Deck2  (holds 4 cards)")
+	assert_eq(screen.open_dialogs().size(), 1, "a question, not a copy")
+	assert_string_contains(_dialog_text(), "Deck2")
+	assert_eq(screen._slots[1].count_of("Shivan Dragon"), 4, "nothing replaced yet")
+	_answer("Cancel")
+	assert_eq(screen._slots[1].count_of("Shivan Dragon"), 4, "Cancel keeps Deck2")
+	screen._run_command("Copy deck to")
+	_answer("Deck2  (holds 4 cards)")
+	_answer("Yes")
+	assert_eq(screen._slots[1].count_of("Lightning Bolt"), 3, "Yes replaces it")
+	assert_eq(screen._slots[1].count_of("Shivan Dragon"), 0)
+
+
+func test_copy_deck_to_an_empty_or_saved_slot_does_not_ask() -> void:
+	for _i in 3:
+		screen._add_one("Lightning Bolt")
+	screen._run_command("Copy deck to")
+	_answer("Deck2")
+	assert_eq(screen.open_dialogs().size(), 0, "an empty slot holds nothing to lose")
+	assert_eq(screen._slots[1].count_of("Lightning Bolt"), 3)
+	screen._slot_dirty[1] = false                   # as if Deck2 were saved
+	screen._run_command("Copy deck to")
+	_answer("Deck2  (holds 3 cards)")
+	assert_eq(screen.open_dialogs().size(), 0, "a saved deck is still on disk")
+
+
+## The pressed-Delete of the row naming [param title] in the Load dialog.
+func _load_row_delete(title: String) -> Button:
+	for node in _walk(screen.open_dialogs()[-1]):
+		if node is HBoxContainer:
+			var hit := false
+			for child in node.get_children():
+				if child is Button and String(child.text).contains(title):
+					hit = true
+			if hit:
+				for child in node.get_children():
+					if child is Button and child.text == "Delete":
+						return child
+	return null
+
+
+## Load Deck's `Delete` removed the file on one click; and deleting the
+## deck on the surface left it "saved", so `Done` then dropped it too.
+func test_delete_in_the_load_dialog_asks_first_and_unsaves_the_open_deck() -> void:
+	screen.deck.deck_name = "Gut Delete Ask"
+	for _i in 4:
+		screen._add_one("Lightning Bolt")
+	screen._write_deck()
+	var path := DeckStore.path_for("Gut Delete Ask")
+	assert_true(FileAccess.file_exists(path))
+	assert_false(screen._dirty)
+	screen._run_command("Load deck")
+	var drop := _load_row_delete("Gut Delete Ask")
+	assert_not_null(drop, "the player's own deck carries a Delete")
+	drop.pressed.emit()
+	assert_true(FileAccess.file_exists(path), "one click deletes nothing")
+	assert_eq(_dialog_text(), "Delete Gut Delete Ask? This cannot be undone.")
+	_answer("Cancel")
+	assert_true(FileAccess.file_exists(path), "Cancel keeps the file")
+	assert_not_null(_load_row_delete("Gut Delete Ask"), "and goes back to the list")
+	_load_row_delete("Gut Delete Ask").pressed.emit()
+	_answer("Delete")
+	assert_false(FileAccess.file_exists(path), "Delete deletes")
+	assert_true(screen._dirty, "the deck on the surface has no file any more")
+	assert_eq(screen._unsaved_slots(), [0] as Array[int], "so leaving asks about it")
+	assert_eq(_dialog_text(), DeckStore.SAVE_QUESTION % "Gut Delete Ask",
+		"and so does the list that could replace it")
+	for dialog in screen.open_dialogs():
+		dialog.dismiss()
+
+
+## `Clear deck` recorded no undo step and left the old one in place, so
+## `Undo` (labelled "Undo Add Giant Growth") jumped past the clear and
+## brought back the deck WITHOUT the Giant Growth.
+func test_undo_never_jumps_past_a_clear() -> void:
+	for _i in 4:
+		screen._add_one("Lightning Bolt")
+	screen._add_one("Giant Growth")
+	screen._clear_deck()
+	assert_eq(screen._undo_menu_label(), "Undo", "nothing older is on offer")
+	screen._undo_last()
+	assert_eq(screen.deck.total(), 0, "Undo does not resurrect a half deck")
+	screen._restore_deck()
+	assert_eq(screen.deck.count_of("Giant Growth"), 1, "Restore is the clear's undo")
+	assert_eq(screen.deck.count_of("Lightning Bolt"), 4)
+
+
+func test_a_fresh_sealed_deal_leaves_no_undo_that_skips_past_it() -> void:
+	for _i in 4:
+		screen._add_one("Lightning Bolt")
+	screen._add_one("Giant Growth")
+	var pool := SealedPool.new()
+	pool.free_lands = 1
+	pool.deal([], 1997)
+	screen._enter_sealed(pool, true)
+	assert_eq(screen.deck.total(), 0, "the fresh deal cleared the deck")
+	assert_eq(screen._undo_menu_label(), "Undo")
+	screen._undo_last()
+	assert_eq(screen.deck.total(), 0)
+	screen._leave_sealed()
+
+
+func test_a_rename_and_a_note_are_undo_steps_of_their_own() -> void:
+	for _i in 2:
+		screen._add_one("Lightning Bolt")
+	screen.deck.deck_name = "Gut Before"
+	screen._open_deck_info()
+	for node in _walk(screen.open_dialogs()[-1]):
+		if node is LineEdit:
+			node.text = "Gut After"
+	_answer("OK")
+	assert_eq(screen.deck.deck_name, "Gut After")
+	screen._undo_last()
+	assert_eq(screen.deck.deck_name, "Gut Before", "Undo puts the old title back")
+	assert_eq(screen.deck.count_of("Lightning Bolt"), 2, "and leaves the cards alone")
+	screen._open_notes_dialog()
+	for node in _walk(screen.open_dialogs()[-1]):
+		if node is TextEdit:
+			node.text = "Fears Circle of Protection: Red"
+	_answer("OK")
+	assert_eq(screen.deck.notes, "Fears Circle of Protection: Red")
+	screen._undo_last()
+	assert_eq(screen.deck.notes, "", "Undo puts the old notes back")
+
+
+## `CardPacks` was told the builder's deck on every refresh and never told
+## it was gone, so after leaving the builder Options still warned that
+## "the current deck requires Pack 3" for a deck nobody had open.
+func test_leaving_the_builder_forgets_its_deck_in_card_packs() -> void:
+	screen._add_one("Lightning Bolt")
+	assert_true(CardPacks._current_deck_names.has("Lightning Bolt"))
+	remove_child(screen)
+	assert_eq(CardPacks._current_deck_names, [] as Array[String],
+		"no builder on screen, no current deck")
+	add_child(screen)
+
+
+## The Filters window's creature types and artists were computed once per
+## PROCESS: a pack turned on later added creatures whose types the window
+## never listed. Every registry rebuild bumps the revision; the lists
+## follow it. (The stale entry stands in for a pool that has since grown.)
+func test_the_filter_lists_follow_a_registry_rebuild() -> void:
+	FilterBar.creature_types()
+	FilterBar.artists()
+	FilterBar._creature_types = ["gut-stale-type"]
+	FilterBar._artists = ["Gut Stale Painter"]
+	CardRegistry.revision += 1
+	assert_false(FilterBar.creature_types().has("gut-stale-type"),
+		"the creature types were walked again")
+	assert_gt(FilterBar.creature_types().size(), 1, "from the real pool")
+	assert_false(FilterBar.artists().has("Gut Stale Painter"),
+		"and so were the painters")

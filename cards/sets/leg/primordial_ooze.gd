@@ -41,11 +41,18 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 	return int(event.data["player"]) == source.controller_id
 
 
+## The rent is due even if the Ooze has left the battlefield (CR 603.6 /
+## 608.2h): no counter can go on it any more, X is the +1/+1 counters it
+## LAST had, and the unpaid rent is X damage from the Ooze as it last
+## existed — there is just nothing left to tap (CR 609.3). Until
+## 2026-10-03 bouncing it in response skipped the bill.
 static func _grow(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		return
-	game.add_counters(source, "+1/+1", 1)
-	var x := int(source.counters.get("+1/+1", 0))
+	var x := 0
+	if source.zone == Mtg.Zone.BATTLEFIELD:
+		game.add_counters(source, "+1/+1", 1)
+		x = int(source.counters.get("+1/+1", 0))
+	else:
+		x = int(source.last_counters.get("+1/+1", 0))
 	var pid := int(event.data["player"])
 	var cost := ManaCost.parse("{%d}" % x)
 	# The HINT: keep paying while the rent is small, or while the damage is

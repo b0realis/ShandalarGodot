@@ -181,6 +181,28 @@ func test_mirror_universe_swaps_life_totals() -> void:
 	assert_eq(g.players[1].life, 3)
 
 
+func test_a_stolen_mirror_universe_still_exchanges() -> void:
+	# Bug pass 2026-10-03: sacrificing the source as a cost sends its
+	# controller home to the owner, and the resolution re-check judged
+	# "target opponent" from that seat — the thief's own opponent (the
+	# owner) looked like "you", and the ability was countered. The ability
+	# is its CONTROLLER's (CR 113.7a, 608.2b), so the check is from there.
+	var mirror := put_battlefield(0, "Mirror Universe")
+	g.change_control(mirror, 1)       # as Steal Artifact would
+	var guard := 0
+	while not (g.active_player == 1 and g.current_step() == Mtg.Step.UPKEEP) \
+			and guard < 400:
+		_advance_once()               # on to the thief's upkeep
+		guard += 1
+	assert_eq(g.active_player, 1)
+	g.players[1].life = 3
+	assert_ok(g.activate_ability(1, mirror, 0, [TargetRef.player(0)]))
+	assert_eq(mirror.zone, Mtg.Zone.GRAVEYARD)
+	resolve_stack()
+	assert_eq(g.players[0].life, 3, "the owner got the thief's 3")
+	assert_eq(g.players[1].life, 20, "and the thief the owner's 20")
+
+
 func test_giant_turtle_needs_a_turn_off() -> void:
 	var turtle := put_battlefield(0, "Giant Turtle")
 	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)

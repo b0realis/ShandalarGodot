@@ -50,7 +50,8 @@ your home directory.
 Every script in this folder answers `-h` for its own manual and
 `--version` for the build it came from, and run with nothing after its
 name it shows you what to type before it does anything. Those four .py
-files need nothing but Python 3 — no libraries, no installation.
+files need nothing but Python 3.10 or newer — no libraries, no
+installation.
 
 The .pck holds no art of any kind, and neither does this zip: the game
 is one download, the art another. Art is read off the filesystem at
@@ -207,15 +208,15 @@ them, beside this file:
     python3 fetch_card_art.py --out cardart/
     python3 mtg_assets.py --from-cardart cardart/ --out cardart.zip
 
-Needs Python 3 and a network connection, nothing else. It takes a few
-minutes (it is deliberately polite to the API — about eight requests a
-second), it SKIPS what it already has, so an interrupted run just carries
-on where it stopped, and it prints what it could not fetch rather than
-stopping. The second line zips the folder the way the game reads it —
-a card pack: choose it in Options > Skin, drop it on the window, put it
-in skin/ beside the game as skin/cardart.zip, or in the card folder
-(section 3). The same two lines make a pack for a card set of the
-future, too: the game wears every pack in the folder.
+Needs Python 3.10 or newer and a network connection, nothing else. It
+takes a few minutes (it is deliberately polite to the API — about eight
+requests a second), it SKIPS what it already has, so an interrupted run
+just carries on where it stopped, and it prints what it could not fetch
+rather than stopping. The second line zips the folder the way the game
+reads it — a card pack: choose it in Options > Skin, drop it on the
+window, put it in skin/ beside the game as skin/cardart.zip, or in the
+card folder (section 3). The same two lines make a pack for a card set
+of the future, too: the game wears every pack in the folder.
 
 Without it, cards draw with a clean placeholder and are perfectly
 playable — every name, cost, type, rules text and picture frame is there,

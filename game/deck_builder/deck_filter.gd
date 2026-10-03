@@ -273,7 +273,7 @@ var text := "":
 	set(value):
 		if text != value:
 			text = value
-			_needle = value.strip_edges().to_lower()
+			_needle = fold(value.strip_edges())
 			revision += 1
 ## [QoL] Also match the type-ahead against a card's RULES TEXT. Not 1997:
 ## the original's box searched names only, because in 1997 you had the
@@ -287,8 +287,9 @@ var search_rules := false:
 		if search_rules != value:
 			search_rules = value
 			revision += 1
-## `text` folded once (stripped, lower-cased) — [method matches_text] runs
-## per card and must not redo that work 800 times.
+## `text` folded once (stripped, lower-cased, accents off — [method
+## fold]) — [method matches_text] runs per card and must not redo that
+## work 800 times.
 var _needle := ""
 ## The Casting Cost filter (`@CASTCOST`).
 var cost_mode: int = Cost.OFF:
@@ -489,6 +490,10 @@ func select_all() -> void:
 	for code in CardRegistry.active_set_order():
 		sets[code] = true
 	gold = true
+	# The Gold button's mini-menu mode too (2026-10-03): `Matching all
+	# selected color buttons` survived, and with all five colours lit no
+	# gold card came back — every medallion down, the pool short of them.
+	gold_mode = Gold.ALL
 	cost_mode = Cost.OFF
 	power_mode = Rank.OFF
 	toughness_mode = Rank.OFF
@@ -542,7 +547,7 @@ func active() -> bool:
 	for code in sets:
 		if not sets[code]:
 			return true
-	return not gold or _needle != "" or cost_mode != Cost.OFF \
+	return not gold or gold_mode != Gold.ALL or _needle != "" or cost_mode != Cost.OFF \
 		or power_mode != Rank.OFF or toughness_mode != Rank.OFF \
 		or land_mode != Land.LAND_ONLY \
 		or not artifact_creatures or not artifact_noncreatures \
@@ -747,7 +752,8 @@ static func filtered_by_cue_card(subject: String, on: bool) -> String:
 # not a wrong answer.
 
 ## CardData instance id -> [folded name, colour mask, cost rank, type
-## rank, colour rank, set rank, folded rules text].
+## rank, colour rank, set rank, folded rules text] — folded by [method
+## fold], so the name sort reads Juzám Djinn as "juzam djinn" too.
 static var _facts: Dictionary = {}
 
 static func _facts_for(d: CardData) -> Array:
@@ -755,16 +761,41 @@ static func _facts_for(d: CardData) -> Array:
 	var got: Array = _facts.get(key, [])
 	if got.is_empty():
 		got = [
-			d.card_name.to_lower(),
+			fold(d.card_name),
 			d.color_mask(),
 			mini(d.cost.mana_value(), 99),
 			type_rank(d),
 			color_rank(d),
 			maxi(CardRegistry.active_set_order().find(d.set_code), 0),
-			d.oracle_text.to_lower(),
+			fold(d.oracle_text),
 		]
 		_facts[key] = got
 	return got
+
+
+## THE TYPE-AHEAD FOLDS ACCENTS (2026-10-03). The 1997 printings carry
+## them — Juzám Djinn, Dandân, Ghazbán Ogre, Ring of Ma'rûf, Lim-Dûl —
+## and nobody types them, so "juzam" found nothing. Both sides go
+## through here: the needle once per edit, each card's facts once per
+## process. Latin letters only, which is every accent a card name has.
+const _ACCENTS := {
+	"à": "a", "á": "a", "â": "a", "ã": "a", "ä": "a", "å": "a",
+	"æ": "ae", "ç": "c", "è": "e", "é": "e", "ê": "e", "ë": "e",
+	"ì": "i", "í": "i", "î": "i", "ï": "i", "ñ": "n",
+	"ò": "o", "ó": "o", "ô": "o", "õ": "o", "ö": "o", "ø": "o", "œ": "oe",
+	"ù": "u", "ú": "u", "û": "u", "ü": "u", "ý": "y", "ÿ": "y",
+}
+
+
+## Lower-cased with the accents off. A pure-ASCII string — nearly every
+## name and every needle — costs one length comparison.
+static func fold(value: String) -> String:
+	var out := value.to_lower()
+	if out.to_utf8_buffer().size() == out.length():
+		return out
+	for accented in _ACCENTS:
+		out = out.replace(accented, _ACCENTS[accented])
+	return out
 
 
 ## Which colours and types are DEPRESSED, as bit masks, so the two group
@@ -1163,14 +1194,21 @@ func apply(pool: Array) -> Array[CardData]:
 ## say) gets a fresh sort and never another list's cards. The order itself
 ## depends on nothing but the card facts, which never change, and on
 ## [member sort_mode].
+##
+## AND ONLY WITHIN ONE REGISTRY LOAD (2026-10-03): the Deck Builder refills
+## its pool array IN PLACE when the card packs change, and a reload that
+## leaves the count alone (Pack 7, a pure reprint set, with Packs 2-4 on)
+## kept serving the pre-reload [CardData] objects for good.
 var _order: Array[CardData] = []
 var _order_pool: Array = []
 var _order_mode := -1
+var _order_registry := -1
 
 
 func _pool_in_order(pool: Array) -> Array[CardData]:
 	if _order_mode == sort_mode and _order.size() == pool.size() \
-			and is_same(_order_pool, pool):
+			and is_same(_order_pool, pool) \
+			and _order_registry == CardRegistry.revision:
 		return _order
 	var column: int = SORT_COLUMN.get(sort_mode, FACT_NAME)
 	var keyed: Array = []
@@ -1191,6 +1229,7 @@ func _pool_in_order(pool: Array) -> Array[CardData]:
 	_order = out
 	_order_pool = pool
 	_order_mode = sort_mode
+	_order_registry = CardRegistry.revision
 	return out
 
 

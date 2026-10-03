@@ -26,7 +26,7 @@ func build() -> CardData:
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _haunt,
 			"At the beginning of your upkeep, this creature deals 1 damage to each opponent it has dealt damage to this game.",
-			_own_upkeep)) \
+			_own_upkeep).capturing(_grudges_now)) \
 		.oracle("At the beginning of your upkeep, this creature deals 1 damage to each "
 			+ "opponent and planeswalker it has dealt damage to this game.")
 
@@ -54,8 +54,21 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 	return int(event.data["player"]) == source.controller_id
 
 
+## The list as the trigger goes on the stack — kept on the TRIGGER, not
+## the permanent, because a Fallen killed in response has its memory wiped
+## by the zone change (CR 400.7) while its trigger still resolves with what
+## it last knew (CR 603.6 / 608.2h). Until 2026-10-03 that kill also
+## cancelled the bite.
+static func _grudges_now(_game: MtgGame, source: CardInstance,
+		_event: GameEvent) -> Dictionary:
+	return {"bitten": (source.memory.get("bitten", []) as Array).duplicate()}
+
+
 static func _haunt(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	for victim in (source.memory.get("bitten", []) as Array):
+	var bitten: Array = source.memory.get("bitten", []) \
+		if source.zone == Mtg.Zone.BATTLEFIELD \
+		else game.trigger_context(source).get("bitten", [])
+	for victim in bitten:
 		var pid := int(victim)
 		if not game.players[pid].has_lost:
 			game.deal_damage(source, TargetRef.player(pid), 1)

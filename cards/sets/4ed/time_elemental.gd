@@ -14,6 +14,10 @@ extends CardScript
 ## in combat, is bounced or is sacrificed still burns its controller for
 ## five — only the sacrifice half is skipped (CR 608.2, "as much as
 ## possible"). A 0/2 that should never be in combat.
+##
+## "Blocks" listens to BECOMES_BLOCKER, once per creature that starts
+## blocking (2026-10-03): BLOCKED is one event per block PAIR, and a band
+## is one pair per member, so blocking a band of two cost ten life.
 
 
 func build() -> CardData:
@@ -29,7 +33,7 @@ func build() -> CardData:
 			+ "it deals 5 damage to you.",
 			_self_attacks)) \
 		.triggered(TriggeredAbility.new(
-			Mtg.EventType.BLOCKED, _schedule_doom,
+			Mtg.EventType.BECOMES_BLOCKER, _schedule_doom,
 			"When Time Elemental blocks, at end of combat sacrifice it and "
 			+ "it deals 5 damage to you.",
 			_self_blocks)) \
@@ -55,7 +59,7 @@ static func _self_attacks(_game: MtgGame, source: CardInstance, event: GameEvent
 
 
 static func _self_blocks(_game: MtgGame, source: CardInstance, event: GameEvent) -> bool:
-	return event.data.get("blocker") == source
+	return event.data.get("instance") == source
 
 
 ## The trigger: hand the end-of-combat step a delayed action. The player

@@ -21,7 +21,12 @@
 ; off) are ruled out, the game's windows look right as they are.
 ;
 ; Excluded from the .pck: tests/, tools/, docs/, the addons and ALL of
-; assets/. Nothing under game/, engine/ or cards/ references the first
+; assets/ — and the run folders, DeckLab/results/ and the MCP server's
+; workspace/ (2026-10-03): the `*.txt`/`*.deck` include below packed every
+; Deck Lab report and every mined deck kept there, a report's "next:"
+; line naming a deck under the builder's home folder. (A Lab or AutoDeck
+; --out folder elsewhere in the checkout carries a .gdignore, which the
+; exporter skips like the importer does.) Nothing under game/, engine/ or cards/ references the first
 ; four at runtime (checked 2026-09-02) — they exist for the suite and the
 ; editor only. assets/ is excluded on purpose: `game/skin.gd` loads the
 ; original graphics and the card art through Image.load_from_file from
@@ -65,7 +70,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
 export_path="../shandalar-build/linux64/Shandalar.x86_64"
 patches=PackedStringArray()
 encryption_include_filters=""
@@ -107,7 +112,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
 export_path="../shandalar-build/web/index.html"
 patches=PackedStringArray()
 encryption_include_filters=""
@@ -153,7 +158,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
 export_path="../shandalar-build/macos/Shandalar.app"
 script_export_mode=2
 
@@ -180,7 +185,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
 export_path="../shandalar-build/windows64/Shandalar.exe"
 script_export_mode=2
 
@@ -210,7 +215,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
 export_path="../shandalar-build/macos-arm64/Shandalar.app"
 script_export_mode=2
 
@@ -239,7 +244,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
 export_path="../shandalar-build/macos-intel/Shandalar.app"
 script_export_mode=2
 
@@ -268,7 +273,7 @@ dedicated_server=false
 custom_features=""
 export_filter="all_resources"
 include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
-exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
 export_path="../shandalar-build/raspberry-pi5-arm64/Shandalar.arm64"
 script_export_mode=2
 

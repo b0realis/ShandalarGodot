@@ -191,3 +191,106 @@ func test_only_the_mana_refusal_is_an_unpaid_one() -> void:
 	assert_false(MtgGame.is_unpaid_refusal("you don't have priority"))
 	assert_false(MtgGame.is_unpaid_refusal("not enough life to pay 3"))
 	assert_false(MtgGame.is_unpaid_refusal(""))
+
+
+# ---------------------------------- two duals, either pip order (2026-10-03) --
+# The coloured pass took, for each pip, the FIRST unused source of its
+# colour and never went back: an Underground Sea beside a Volcanic Island
+# spent the Sea on {U} and then found no {B}, so `{U}{B}` was refused while
+# `{B}{U}` — the same two pips — was paid. The pips are a matching
+# (Volcanic for U, Sea for B), and every payment question rode on the
+# refusal: `can_afford_cost`, `try_pay` (an "unless you pay" or an upkeep
+# cost, answered by a sacrifice), the auto-cast and the AI's own casts.
+
+func _covers(pid: int, cost_text: String) -> bool:
+	var cost := ManaCost.parse(cost_text)
+	var tap_plan := ManaPlanner.plan(g, pid, cost, 0)
+	if tap_plan.is_empty():
+		return false
+	ManaPlanner.run_plan(g, pid, tap_plan)
+	var paid := g.players[pid].mana_pool.can_pay(cost, 0)
+	g.players[pid].mana_pool.clear()
+	for inst in g.players[pid].battlefield:
+		inst.tapped = false
+	return paid
+
+
+func test_two_duals_pay_two_colours_in_either_pip_order() -> void:
+	put_battlefield(0, "Underground Sea")
+	put_battlefield(0, "Volcanic Island")
+	assert_true(_covers(0, "{U}{B}"), "Volcanic for the {U}, the Sea for the {B}")
+	assert_true(_covers(0, "{B}{U}"), "the same two pips, read the other way round")
+	assert_true(g.can_afford_cost(0, ManaCost.parse("{U}{B}")))
+	assert_true(g.can_afford_cost(0, ManaCost.parse("{B}{U}")))
+	assert_false(g.can_afford_cost(0, ManaCost.parse("{B}{B}")),
+		"...and a cost they really cannot cover is still refused")
+
+
+func test_tundra_and_scrubland_pay_white_blue_either_way() -> void:
+	put_battlefield(0, "Tundra")
+	put_battlefield(0, "Scrubland")
+	assert_true(_covers(0, "{W}{U}"))
+	assert_true(_covers(0, "{U}{W}"))
+	# try_pay is what an "unless you pay" and an upkeep cost ask.
+	assert_true(g.try_pay(0, ManaCost.parse("{W}{U}")), "try_pay pays it")
+	assert_eq(g.players[0].mana_pool.total(), 0, "and spends what it tapped")
+
+
+func test_the_matching_spends_the_basic_and_spares_the_city() -> void:
+	# The matching may re-route a dual, never reach past a basic that pays,
+	# nor onto a City of Brass a painless re-route spares: {U}{B}{B} over a
+	# Swamp, a Sea and a Volcanic Island is the Swamp and the Sea for the
+	# {B}s and the Volcanic for the {U}. The greedy pass got it right only
+	# when the Volcanic sorted first; with the Sea first it paid the {U}
+	# from the Sea and the second {B} from the City. Both battlefield
+	# orders, so whichever way the duals tie the answer is the same.
+	for sea_first in [true, false]:
+		before_each()
+		var swamp := put_battlefield(0, "Swamp")
+		var city := put_battlefield(0, "City of Brass")
+		if sea_first:
+			put_battlefield(0, "Underground Sea")
+			put_battlefield(0, "Volcanic Island")
+		else:
+			put_battlefield(0, "Volcanic Island")
+			put_battlefield(0, "Underground Sea")
+		var tap_plan := ManaPlanner.plan(g, 0, ManaCost.parse("{U}{B}{B}"), 0)
+		assert_eq(tap_plan.size(), 3)
+		var tapped: Array = []
+		for step in tap_plan:
+			tapped.append(step[0])
+		assert_true(tapped.has(swamp), "the basic pays (sea first: %s)" % sea_first)
+		assert_false(tapped.has(city), "the City is not needed (sea first: %s)" % sea_first)
+		ManaPlanner.run_plan(g, 0, tap_plan)
+		assert_true(g.players[0].mana_pool.can_pay(ManaCost.parse("{U}{B}{B}"), 0))
+
+
+func test_floating_mana_and_two_duals_pay_four_pips() -> void:
+	# Floating mana is a source like any other in the matching: two {G}
+	# already in the pool and a Tundra + Scrubland pay {G}{G}{W}{U} only
+	# with the duals re-routed.
+	add_mana(0, Mtg.ManaColor.G, 2)
+	put_battlefield(0, "Tundra")
+	put_battlefield(0, "Scrubland")
+	assert_true(_covers(0, "{G}{G}{W}{U}"))
+
+
+# ------------------------------------- a hasty mana creature (2026-10-03) --
+
+func test_a_summoning_sick_mana_creature_with_haste_is_a_source() -> void:
+	# CR 302.6: haste lifts summoning sickness for {T} abilities, mana ones
+	# included — MtgGame.tap_for_mana always let the hasty Elves tap; the
+	# planner skipped them, so the auto-cast and the AI never would.
+	put_battlefield(0, "Concordant Crossroads")
+	var elves := put_battlefield(0, "Llanowar Elves", true)
+	g.recalculate()
+	assert_true(elves.summoning_sick and elves.has_keyword(Mtg.Keyword.HASTE))
+	var tap_plan := ManaPlanner.plan(g, 0, ManaCost.parse("{G}"), 0)
+	assert_eq(tap_plan.size(), 1, "the hasty Elves pay the {G}")
+	ManaPlanner.run_plan(g, 0, tap_plan)
+	assert_eq(g.players[0].mana_pool.total_of(Mtg.ManaColor.G), 1)
+
+
+func test_a_summoning_sick_mana_creature_without_haste_is_not() -> void:
+	put_battlefield(0, "Llanowar Elves", true)
+	assert_true(ManaPlanner.plan(g, 0, ManaCost.parse("{G}"), 0).is_empty())

@@ -418,9 +418,10 @@ func test_the_docked_big_card_rests_under_the_windows() -> void:
 # above drives the screen's methods; these drive the SCREEN, with the same
 # mouse events the engine makes from a real click — the plate, the mini
 # card in the open view, the Situation Bar's Cancel over the dim, and the
-# double click that used to shut the view on the Deck. The plates are
-# skin art, so without the skin there is nothing to click and the tests
-# pass as read.
+# double click that used to shut the view on the Deck. The plates were
+# skin art, so without the skin there was nothing to click and the tests
+# passed as read; since 2026-10-03 a bare plate stands in (see the
+# no-skin tests at the end), so they always click.
 
 var _xform: Transform2D
 
@@ -529,3 +530,147 @@ func test_the_bars_cancel_is_clicked_over_the_open_view() -> void:
 	await _click(cancel.get_global_rect().get_center())
 	assert_false(screen.graveyard_is_open(), "the bar's Cancel, over the dim, peels the view")
 	assert_eq(screen.mode, DuelScreen.Mode.TARGETING, "the cast still waits — Escape's own ladder")
+
+
+# ------------------------------- the clean build: no 1997 skin (2026-10-03) --
+#
+# THE PLATES WERE SKIN ART AND THE CLICK RODE ON THEM. Until 2026-10-03
+# the grave and exile plates — and with them the only click that opens
+# this view — were built inside `if grave_texture != null:`; a table drawn
+# without the imported skin (every fresh clone, every CI runner, any player
+# who never imported the 1997 files) got a bare count at the end of the
+# row and nothing to click. Raise Dead entered TARGETING with no way to
+# answer it, graveyard abilities and play-from-exile were unreachable, and
+# the exile count was never drawn. The skin's own cache is the seam: a null
+# under every plate key is exactly what a player without the art gets, so
+# these run with the art present too — and need no skin themselves.
+
+const PLATE_COLOURS := ["white", "blue", "black", "red", "green", "artifact", "gold"]
+
+
+## Null every grave plate in [GameSkin]'s cache and empty [ExilePlate]'s
+## (which caches a null per colour when it finds no grave plate to paint
+## from — so it is restored afterwards too, or every later table in the
+## run would lose its exile art). Returns what to put back.
+func _strip_plates() -> Dictionary:
+	var saved := {"skin": {}, "exile": ExilePlate._cache.duplicate()}
+	for colour in PLATE_COLOURS:
+		var key: String = "grave_panel_" + colour
+		saved["skin"][key] = GameSkin._texture_cache.get(key)
+		GameSkin._texture_cache[key] = null
+	ExilePlate._cache = {}
+	return saved
+
+
+func _restore_plates(saved: Dictionary) -> void:
+	for key in saved["skin"]:
+		if saved["skin"][key] == null:
+			GameSkin._texture_cache.erase(key)
+		else:
+			GameSkin._texture_cache[key] = saved["skin"][key]
+	ExilePlate._cache = saved["exile"]
+
+
+## A fresh table built while the plates are absent.
+func _bare_table() -> void:
+	screen.free()
+	screen = load("res://game/duel/duel_screen.tscn").instantiate()
+	_stage.add_child(screen)
+	await get_tree().process_frame
+	_xform = get_tree().root.get_final_transform()
+
+
+func test_without_the_skin_both_piles_are_still_controls() -> void:
+	var saved := _strip_plates()
+	await _bare_table()
+	for pid in 2:
+		var grave: TextureRect = screen._grave_icons[pid]
+		assert_not_null(grave, "seat %d: a graveyard plate with no art" % pid)
+		if grave == null:
+			continue
+		assert_null(grave.texture, "no skin, no plate art")
+		assert_true(grave.is_inside_tree(), "the plate joined the row")
+		assert_eq(grave.mouse_filter, Control.MOUSE_FILTER_STOP, "it takes the click")
+		assert_true(grave.has_meta("pad_target"), "and the pad can hop to it")
+		assert_not_null(screen._grave_rings[pid], "the target ring rides it")
+		assert_eq(screen._grave_labels[pid].get_parent(), grave, "the count rides it")
+		var gone: TextureRect = screen._exile_icons[pid]
+		assert_not_null(gone, "seat %d: an exile plate with no art" % pid)
+		if gone != null:
+			assert_true(gone.is_inside_tree())
+			assert_eq(screen._exile_labels[pid].get_parent(), gone)
+	_restore_plates(saved)
+
+
+func test_without_the_skin_raise_dead_is_answered_with_real_clicks() -> void:
+	var saved := _strip_plates()
+	await _bare_table()
+	var staged := _stage_raise_dead()
+	var bear: CardInstance = staged[0]
+	screen._click_hand_card(staged[1])
+	assert_eq(screen.mode, DuelScreen.Mode.TARGETING)
+	assert_true(screen._grave_rings[0] != null and screen._grave_rings[0].visible,
+		"the bare plate wears the target ring")
+	await _click(_plate_centre(0))
+	assert_true(screen.graveyard_is_open(), "a real click on the bare plate opens the pile")
+	if screen.graveyard_is_open():
+		await _wait_ms(GraveyardView.SETTLE_MS + 20)
+		screen._on_graveyard_card(bear)
+	assert_eq(screen.game.stack.size(), 1, "Raise Dead is on the chain")
+	_restore_plates(saved)
+
+
+func test_without_the_skin_the_exile_pile_counts_and_opens() -> void:
+	var saved := _strip_plates()
+	await _bare_table()
+	var game: MtgGame = screen.game
+	game.exile_top_of_library(0)
+	screen._refresh()
+	assert_eq(screen._exile_labels[0].text if screen._exile_labels.size() == 2 else "",
+		"1", "the exile count is drawn on its plate")
+	if screen._exile_icons.size() == 2 and screen._exile_icons[0] != null:
+		await _click(screen._exile_icons[0].get_global_rect().get_center())
+	assert_true(screen.graveyard_is_open(), "the exile plate opens the same viewer")
+	_restore_plates(saved)
+
+
+# ---------------------------------- a pile card under a pending cast (2026-10-03) --
+
+## THE VIEW CAN BE OPENED IN ANY MODE — a click on a plate is not gated —
+## and outside TARGETING a click on a playable card in it used to start a
+## SECOND cast: [method DuelScreen._click_hand_card] (play from exile) or
+## the graveyard-ability menu, both writing `_pending_*` over the cast
+## the player was in the middle of paying for. Only a quiet table may
+## start something new from a pile; anywhere else the click only shows
+## the card.
+func test_a_pile_card_does_not_start_a_cast_over_one_being_paid_for() -> void:
+	var game: MtgGame = screen.game
+	game.active_player = 0
+	game.priority_player = 0
+	game._enter_step(Mtg.STEP_ORDER.find(Mtg.Step.MAIN1))
+	game.players[0].mana_pool.clear()
+	game.players[0].battlefield.clear()
+	for i in 2:
+		var forest := CardInstance.new(CardRegistry.get_card("Forest"),
+			game._next_instance_id, 0)
+		game._next_instance_id += 1
+		game._instances[forest.id] = forest
+		game._put_on_battlefield(forest, 0)
+	var bears := _hand(0, "Grizzly Bears")
+	screen._refresh()
+	screen._on_card_clicked(bears)
+	assert_eq(screen.mode, DuelScreen.Mode.PAYING, "the cast waits for its mana")
+	# A card the seat may play from exile (Ice Cauldron's kind of leave).
+	var exiled := CardInstance.new(CardRegistry.get_card("Llanowar Elves"),
+		game._next_instance_id, 0)
+	game._next_instance_id += 1
+	game._instances[exiled.id] = exiled
+	exiled.zone = Mtg.Zone.EXILE
+	game.players[0].exile.append(exiled)
+	game.grant_exile_play(exiled, 0)
+	assert_true(game.can_play_from_exile(0, exiled))
+	screen._on_grave_pile_clicked(0)
+	assert_true(screen.graveyard_is_open())
+	screen._on_graveyard_card(exiled)
+	assert_eq(screen._pending_card, bears, "the cast being paid for is still the cast")
+	assert_eq(screen.mode, DuelScreen.Mode.PAYING, "and still waiting for its mana")

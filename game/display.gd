@@ -81,9 +81,38 @@ static func apply_settings() -> void:
 ## Whether the engine was started with `--fullscreen` (or its short
 ## `-f`) — a launcher's request for the window, honoured while the
 ## player has not written one of their own (class doc).
+##
+## THE ENGINE EATS THE FLAG (bug pass 2026-10-03). Godot consumes
+## `--fullscreen`/`-f` itself and opens the window full screen; neither
+## [method OS.get_cmdline_args] nor the user args carry it (measured
+## under Xvfb: the args read `["-s", …]` while the window was already
+## full screen at the first script line), so the args test alone never
+## fired and the boot put the window straight back. What the flag leaves
+## behind is its effect — a full-screen window in a project that opens
+## windowed — and that is read here, at boot, before anything else has
+## touched the window ([Lifecycle] runs [method apply_settings] first).
 static func launcher_asked_fullscreen() -> bool:
+	var mode := DisplayServer.WINDOW_MODE_WINDOWED
+	if DisplayServer.get_name() != "headless":
+		mode = DisplayServer.window_get_mode()
 	var args := OS.get_cmdline_args()
-	return args.has("--fullscreen") or args.has("-f")
+	args.append_array(OS.get_cmdline_user_args())
+	return launcher_fullscreen_from(args, mode,
+		int(ProjectSettings.get_setting("display/window/size/mode",
+			DisplayServer.WINDOW_MODE_WINDOWED)))
+
+
+## The rule, pure, so a headless test can pin it: the flag in the args
+## (should a build ever pass it through), or a full-screen window the
+## project itself did not ask for.
+static func launcher_fullscreen_from(args: PackedStringArray, mode: int,
+		project_mode: int) -> bool:
+	if args.has("--fullscreen") or args.has("-f"):
+		return true
+	var full := mode == DisplayServer.WINDOW_MODE_FULLSCREEN \
+		or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	return full and project_mode != DisplayServer.WINDOW_MODE_FULLSCREEN \
+		and project_mode != DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
 
 
 ## The switch's own setter: store, then apply. The Options screen calls

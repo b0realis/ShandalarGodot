@@ -92,10 +92,11 @@ static func seal(seal: String) -> void:
 	seals.append(seal)
 	while seals.size() > KEPT:
 		seals.pop_front()
-	var file := FileAccess.open(FILE, FileAccess.WRITE)
-	if file != null:
-		file.store_string(JSON.stringify({"seals": seals}))
-		file.close()
+	# Whole or not at all (bug pass of 2026-10-03): a list cut short by a
+	# failed write in place read back as no seals, and every pack was
+	# hashed in full again. A list that cannot be written is left as it
+	# was; this pack is simply hashed again at the next start.
+	Settings.write_atomically(FILE, JSON.stringify({"seals": seals}).to_utf8_buffer())
 
 
 ## Forget every seal — a test's clean slate, or a player who wants the

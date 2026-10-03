@@ -1240,3 +1240,53 @@ func test_the_words() -> void:
 	assert_eq(AutoDeck._bucket(_card("Lightning Bolt")), 0)
 	assert_eq(AutoDeck._bucket(_card("Serra Angel")), 4, "five and up is the last bucket")
 	assert_eq(AutoDeck._bucket(_card("Shivan Dragon")), 4)
+
+
+# =============================================== BUG PASS 2026-10-03 ==
+
+## More kept spells than the build has spell slots: `short_by` went
+## NEGATIVE (slots - placed) and [method AutoDeck._lay_lands] laid `lands +
+## short_by` — so 30 kept spells in a 40 left ten lands, and 44 left a
+## 44-card deck with none. A kept card is the player's and stays; the
+## lands are laid in full beside them.
+func test_more_kept_spells_than_slots_never_eats_the_lands() -> void:
+	var red: Array[String] = []
+	for name in CardRegistry.all_names():
+		var data := CardRegistry.get_card(name)
+		if not data.is_land() and data.color_mask() == Mtg.ManaColor.R \
+				and not DeckFormat.BANNED.has(name):
+			red.append(name)
+	red.sort()
+	for kept_spells in [30, 44]:
+		var keep := DeckModel.new()
+		var i := 0
+		while keep.total() < kept_spells:
+			keep.add(red[i % red.size()])
+			i += 1
+		var auto := _builder(AutoDeck.pool_from_sets(["4ed"]), 11)
+		auto.size = 40
+		auto.keep = keep
+		var deck := auto.build()
+		var table := int(AutoDeck.LANDS[auto.size_key()][auto.speed])
+		assert_eq(auto.short_by, 0, "nothing ran short: %d kept" % kept_spells)
+		assert_gte(_lands(deck), table - AutoDeck.LAND_PLAY,
+			"%d kept spells still get their lands: %d" % [kept_spells, _lands(deck)])
+		assert_eq(deck.total() - _lands(deck), kept_spells, "every kept card, and only those")
+		assert_false(deck.notes.contains("extra basic land"), deck.notes)
+
+
+## A pasted pool line's count is capped at the most copies a deck could
+## ever hold ([constant DeckModel.MAX_TOTAL]) — "5000000 Lightning Bolt"
+## was five million pool copies for the Inventory to offer, and the
+## window's own pool count ran to the same.
+func test_a_text_pool_caps_a_huge_count() -> void:
+	var report: Array = []
+	# Each line is within DeckList.MAX_COUNT; together they are not.
+	var pool := AutoDeck.pool_from_text("400 Lightning Bolt\n2 Serra Angel\nSB: 300 Lightning Bolt\n", report)
+	assert_eq(pool, {"Lightning Bolt": DeckModel.MAX_TOTAL, "Serra Angel": 2})
+	assert_eq(report.size(), 1, str(report))
+	assert_string_contains(String(report[0]), "Lightning Bolt")
+	# One line past any deck is refused by the parser itself.
+	var refused: Array = []
+	assert_eq(AutoDeck.pool_from_text("5000000 Lightning Bolt\n", refused), {})
+	assert_string_contains(str(refused), "count too large")

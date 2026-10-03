@@ -1189,6 +1189,47 @@ func test_a_kept_duel_nobody_comes_back_for_is_conceded_idle() -> void:
 
 # ------------------------------------------------------- the doors --
 
+## A kept game's socket reads BYTES and decodes whole lines (2026-10-03):
+## each read used to be decoded on its own, so a character whose UTF-8
+## bytes straddled two reads came out as two replacement marks.
+func test_a_socket_line_split_inside_a_character_is_read_whole() -> void:
+	var Referee: GDScript = load(REFEREE)
+	var text := "{\"op\": \"pass\", \"name\": \"Lim-D\u00fbl\"}"
+	var bytes := (text + "\n").to_utf8_buffer()
+	var split := bytes.find(0xC3) + 1
+	assert_gt(split, 0, "the fixture holds a two-byte character")
+	var server := TCPServer.new()
+	assert_eq(server.listen(0, "127.0.0.1"), OK)
+	var client := StreamPeerTCP.new()
+	assert_eq(client.connect_to_host("127.0.0.1", server.get_local_port()), OK)
+	var deadline := Time.get_ticks_msec() + 5000
+	while not server.is_connection_available() and Time.get_ticks_msec() < deadline:
+		client.poll()
+		OS.delay_msec(5)
+	var peer := server.take_connection()
+	assert_not_null(peer)
+	while client.get_status() != StreamPeerTCP.STATUS_CONNECTED and Time.get_ticks_msec() < deadline:
+		client.poll()
+		OS.delay_msec(5)
+	var buffer := PackedByteArray()
+	client.put_data(bytes.slice(0, split))
+	while buffer.size() < split and Time.get_ticks_msec() < deadline:
+		buffer = Referee._drain(peer, buffer).bytes
+		OS.delay_msec(5)
+	assert_eq(buffer.size(), split, "the first read ends inside the character")
+	assert_true(Referee._cut_line(buffer).is_empty(), "no line before its newline")
+	client.put_data(bytes.slice(split))
+	while buffer.size() < bytes.size() and Time.get_ticks_msec() < deadline:
+		buffer = Referee._drain(peer, buffer).bytes
+		OS.delay_msec(5)
+	var cut: Dictionary = Referee._cut_line(buffer)
+	assert_eq(String(cut.get("line", "")), text)
+	assert_eq(PackedByteArray(cut.get("rest", PackedByteArray([1]))).size(), 0)
+	client.disconnect_from_host()
+	peer.disconnect_from_host()
+	server.stop()
+
+
 func test_the_doors_and_the_docs_know_the_referee() -> void:
 	var main_script := FileAccess.get_file_as_string("res://game/main.gd")
 	assert_true(main_script.contains('const REFEREE_FLAG := "--referee"'))

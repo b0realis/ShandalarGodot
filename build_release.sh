@@ -284,15 +284,38 @@ WORK_DIR="$(cd "$(dirname "$OUT")" && pwd)/tmp"
 # the builder's home path before it is zipped — a text file written
 # from a checkout path once carried one into a package — and the build
 # fails rather than ship it.
+# THE .pck IS SEARCHED TOO, AND A LINK IS REFUSED (2026-10-03). The
+# presets pack every `*.txt`/`*.deck` they are not told to skip, so a
+# Deck Lab report under DeckLab/results/ rode inside the .pck with its
+# "next:" line naming a deck under the home folder — and the .pck was
+# the one file this grep left out (`-a`: it is binary, its packed text
+# files are stored as they are). A symlink in a stage is refused: `zip
+# -r` follows one and packs what it points at, which `grep -r` never
+# reads. An unreadable file is refused rather than skipped (grep's
+# exit 2), and a home of "/" or "" — which every file "names" — is not
+# a home to search for.
 guard_stage() {  # guard_stage STAGE_DIR
-	local hit pack_zip
+	local hit pack_zip link status
 	pack_zip="$(find "$1" -type f -name 'Pack-[0-9]*.zip' -print -quit)"
 	if [ -n "$pack_zip" ]; then
 		echo "BUILD FAILED: numbered card-pack ZIPs are local artifacts, not release files:" >&2
 		echo "$pack_zip" >&2
 		exit 1
 	fi
-	hit="$(grep -rlF --exclude='*.zip' --exclude='*.pck' --exclude='*.wasm' --exclude='*.x86_64' -- "$HOME" "$1" 2>/dev/null || true)"
+	link="$(find "$1" -type l | head -5)"
+	if [ -n "$link" ]; then
+		echo "BUILD FAILED: a symlink in the package (zip would pack whatever it points at):" >&2
+		echo "$link" >&2
+		exit 1
+	fi
+	[ -n "${HOME:-}" ] && [ "$HOME" != / ] || return 0
+	status=0
+	hit="$(grep -rlaF --exclude='*.zip' --exclude='*.wasm' --exclude='*.x86_64' -- "$HOME" "$1" 2>&1)" || status=$?
+	if [ "$status" -gt 1 ]; then
+		echo "BUILD FAILED: could not search every file in the package for the home folder:" >&2
+		echo "$hit" >&2
+		exit 1
+	fi
 	if [ -n "$hit" ]; then
 		echo "BUILD FAILED: a file in the package names this machine's home folder:" >&2
 		echo "$hit" >&2
@@ -496,7 +519,9 @@ if [ "$MACOS" = 1 ]; then
 		tail -20 "$SMOKE" >&2
 		exit 1
 	fi
-	if grep -qE '^(ERROR|SCRIPT ERROR)|ObjectDB instances were leaked' "$SMOKE"; then
+	# "1 ObjectDB instance WAS leaked" for one object, "N instances WERE"
+	# for more — the gate read only the plural until 2026-10-03.
+	if grep -qE '^(ERROR|SCRIPT ERROR)|ObjectDB instances? (was|were) leaked at exit' "$SMOKE"; then
 		tail -20 "$SMOKE" >&2
 		exit 1
 	fi
@@ -522,16 +547,28 @@ fi
 
 # Smoke-boot it: a release build that cannot reach its main scene is not a
 # build. --quit-after counts FRAMES, so this is a second or two.
+# IN A PROFILE OF ITS OWN (2026-10-03). The boot used to run on the
+# owner's real `user://` — writing it, and pushing one of their play
+# logs out of the five Godot keeps in `user://logs/` on every build.
+# Now it gets a fresh XDG_DATA_HOME beside the build and its own
+# --log-file (CONTRIBUTING.md, "Scratch files"), so it boots what a new
+# player boots: no skin, no settings, no packs.
 SMOKE="${TMPDIR:-/tmp}/shandalar-smoke.log"
-if ! "$SHANDALAR_TIMEOUT" -k 5 120 "$BIN" --headless --quit-after 120 \
-		> "$SMOKE" 2>&1 </dev/null; then
+SMOKE_HOME="$WORK_DIR/smoke-home"
+rm -rf "$SMOKE_HOME"
+mkdir -p "$SMOKE_HOME"
+if ! XDG_DATA_HOME="$SMOKE_HOME" "$SHANDALAR_TIMEOUT" -k 5 120 "$BIN" --headless --quit-after 120 \
+		--log-file "$WORK_DIR/smoke-engine.log" > "$SMOKE" 2>&1 </dev/null; then
 	echo "BUILD FAILED: the exported game did not boot (log: $SMOKE)" >&2
 	tail -20 "$SMOKE" >&2
 	exit 1
 fi
-if grep -qE '^(ERROR|SCRIPT ERROR)' "$SMOKE"; then
+# The exit-time leak line too (2026-10-03), as the macOS smoke and the
+# gate read it: an object alive after the tree is gone is a bug the
+# release would ship. Godot words one object in the singular.
+if grep -qE '^(ERROR|SCRIPT ERROR)|ObjectDB instances? (was|were) leaked at exit' "$SMOKE"; then
 	echo "BUILD FAILED: the exported game booted with errors (log: $SMOKE)" >&2
-	grep -nE '^(ERROR|SCRIPT ERROR)' "$SMOKE" | head -5 >&2
+	grep -nE '^(ERROR|SCRIPT ERROR)|ObjectDB instances? (was|were) leaked at exit' "$SMOKE" | head -5 >&2
 	exit 1
 fi
 
@@ -575,14 +612,35 @@ if [ "${1:-}" = "--remove" ]; then
 	exit 0
 fi
 mkdir -p "$(dirname "$ENTRY")"
+# Exec= is a COMMAND LINE, not a path (Desktop Entry Specification,
+# "The Exec key"): a folder such as "My Games" split it in two. The
+# program goes in double quotes, inside which " ` $ and \ take a
+# backslash, and % is written %%; then the file's own string escaping
+# doubles every backslash again. Path= and Icon= are plain strings:
+# only their backslashes are doubled.
+desktop_string() { local s="${1//\\/\\\\}"; printf '%s' "${s//$'\n'/\\n}"; }
+exec_arg="$HERE/Shandalar.x86_64"
+exec_arg="${exec_arg//\\/\\\\}"
+exec_arg="${exec_arg//\"/\\\"}"
+exec_arg="${exec_arg//\`/\\\`}"
+exec_arg="${exec_arg//\$/\\\$}"
+exec_arg="${exec_arg//%/%%}"
+EXEC_LINE="\"$(desktop_string "$exec_arg")\""
+# GLib (GNOME's launcher) looks the PROGRAM up before it turns %% back
+# into %, so a folder whose path holds a % cannot be the program: there,
+# sh is, and the game is its argument — where %% IS read back as %
+# (both spellings tried with `gio launch`, 2026-10-03).
+case "$HERE" in *%*) EXEC_LINE="$(desktop_string 'sh -c "exec \"\$0\""') $EXEC_LINE" ;; esac
+PATH_LINE="$(desktop_string "$HERE")"
+ICON_LINE="$(desktop_string "$HERE/icon.png")"
 cat > "$ENTRY" <<ENTRY
 [Desktop Entry]
 Type=Application
 Name=Shandalar
 Comment=A remake of the 1997 Magic: The Gathering
-Exec=$HERE/Shandalar.x86_64
-Path=$HERE
-Icon=$HERE/icon.png
+Exec=$EXEC_LINE
+Path=$PATH_LINE
+Icon=$ICON_LINE
 Terminal=false
 Categories=Game;CardGame;
 ENTRY
@@ -713,7 +771,13 @@ case "$verb" in
 	play) exec ./run.sh "$@" ;;
 	mcp) exec python3 tools/shandalar_mcp.py "$@" ;;
 esac
-safe="$(printf '%s' "$verb" | tr -d '"\\\n\r\t')"
+# The verb goes into the line with what JSON cannot carry raw removed —
+# quotes, backslashes, EVERY control byte, and every non-ASCII byte
+# unless the whole verb is valid UTF-8 — so the line is always one
+# valid document (an ESC or a Latin-1 byte broke it until 2026-10-03).
+safe="$(printf '%s' "$verb" | LC_ALL=C tr -d '\000-\037\177"\\')"
+printf '%s' "$safe" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1 \
+	|| safe="$(printf '%s' "$safe" | LC_ALL=C tr -d '\200-\377')"
 printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, play, mcp","verb":"%s"}}\n' \
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2

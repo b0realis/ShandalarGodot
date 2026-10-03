@@ -9,10 +9,14 @@ extends CardScript
 ## empty library cannot kill you through it. The offer is only made for the
 ## enchantment's own controller, and only in their own draw step.
 ##
-## The shield is card-local memory: the turn the draw was skipped is written
-## on the instance, and the static reads it. "Until your next turn" is that
-## turn plus the opponent's — turns alternate, so the ban lifts as your next
-## turn begins. Cast a second Island Sanctuary and each keeps its own memory.
+## The shield is the REPLACEMENT's effect, not a static of the enchantment
+## (2026-10-03): skipping the draw registers a floating static
+## (ContinuousEffects.add_floating_static) that lasts until the skipping
+## player's next untap step — "until your next turn" (Duration.
+## UNTIL_UNTAP_OF) — whatever becomes of the Sanctuary, and however many
+## turns (Time Walk, Stolen Time) come in between. It used to be a static
+## reading the turn number off the Sanctuary's memory, so destroying the
+## Sanctuary dropped the shield and an opponent's extra turn outlasted it.
 ##
 ## The ban itself is Moat's mechanism (CardInstance.cur_cant_attack) narrowed
 ## to the opponent's ground creatures, so LIVE keywords decide: a creature
@@ -29,8 +33,6 @@ extends CardScript
 func build() -> CardData:
 	return CardData.new("Island Sanctuary", "{1}{W}", Mtg.CardType.ENCHANTMENT) \
 		.replaces_draws(_offer, _catches) \
-		.static_ability(StaticAbility.new(
-			_shield, "Until your next turn, you can't be attacked except by creatures with flying and/or islandwalk.")) \
 		.oracle("If you would draw a card during your draw step, instead you may "
 			+ "skip that draw. If you do, until your next turn, you can't be attacked "
 			+ "except by creatures with flying and/or islandwalk.")
@@ -55,11 +57,13 @@ static func _offer(game: MtgGame, source: CardInstance, pid: int,
 	if not game.agents[pid].choose_yes_no(game, pid, "Select draw potential.",
 			_worth_it(game, source)):
 		return false
-	source.memory["closed_on_turn"] = game.turn_number
+	game.continuous.add_floating_static(source, StaticAbility.new(
+			_shield.bind(pid), "Until your next turn, you can't be attacked "
+			+ "except by creatures with flying and/or islandwalk."),
+		ContinuousEffects.Duration.UNTIL_UNTAP_OF, pid)
 	game.log_line("%s skips their draw — the Island Sanctuary closes"
 		% game.players[pid].player_name)
-	# The shield is a STATIC reading that memory, so the pipeline has to be
-	# told the memory changed — nothing else in this path recalculates.
+	# Nothing else in this path recalculates.
 	game.recalculate()
 	return true
 
@@ -79,12 +83,9 @@ static func _flies_or_swims(inst: CardInstance) -> bool:
 	return inst.has_keyword(Mtg.Keyword.FLYING) or inst.cur_landwalk.has("island")
 
 
-## While the gates are shut, the opponent's ground creatures can't attack.
-static func _shield(game: MtgGame, source: CardInstance) -> void:
-	var closed := int(source.memory.get("closed_on_turn", -1))
-	# "Until your next turn": the turn it was closed, plus the one after it.
-	if closed < 0 or game.turn_number > closed + 1:
-		return
-	for inst in game.players[game.opponent_of(source.controller_id)].battlefield:
+## While the gates are shut, the opponent's ground creatures can't attack
+## [param pid] — the player who skipped the draw, fixed as it was skipped.
+static func _shield(game: MtgGame, _source: CardInstance, pid: int) -> void:
+	for inst in game.players[game.opponent_of(pid)].battlefield:
 		if inst.is_creature() and not _flies_or_swims(inst):
 			inst.cur_cant_attack = true

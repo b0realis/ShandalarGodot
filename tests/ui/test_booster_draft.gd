@@ -11,6 +11,14 @@ class ResumeBuilder extends DeckBuilderScreen:
 		music_applied += 1
 
 
+## A session whose window close is COUNTED rather than obeyed: the real
+## [method DraftSession._quit_game] ends the process, the test runner with it.
+class QuitSpySession extends DraftSession:
+	var quits := 0
+	func _quit_game() -> void:
+		quits += 1
+
+
 func before_each() -> void:
 	CardRegistry.ensure_loaded()
 	for key in [DraftPoolConfig.SETTING, DraftPoolConfig.OPTIONS, GamePaths.KEY_DRAFTS]:
@@ -397,7 +405,7 @@ func test_deadline_uses_elapsed_real_time_not_frame_delta() -> void:
 
 
 func test_close_during_opening_still_saves_a_partial_deck() -> void:
-	var session := DraftSession.new()
+	var session := QuitSpySession.new()
 	session.pool = _small_pool()
 	session.store = _store(session.pool)
 	add_child_autofree(session)
@@ -578,3 +586,52 @@ func test_scene_cleanup_is_not_treated_as_a_return_to_draft_setup() -> void:
 	assert_false(session.returning_to_setup)
 	session.return_to_setup()
 	assert_true(session.returning_to_setup)
+
+
+# =============================================== BUG PASS 2026-10-03 ==
+
+func _spy_session() -> QuitSpySession:
+	var session := QuitSpySession.new()
+	session.pool = _small_pool()
+	session.store = _store(session.pool)
+	session.seconds = 60
+	add_child_autofree(session)
+	session.start_building()
+	return session
+
+
+## The session turns `auto_accept_quit` off so a close saves first — and
+## then never closed at all: the first request finished the draft and the
+## window stayed, every later request returned at `finished`. A saved
+## draft now lets the window go, and so does any request once finished.
+func test_the_window_closes_once_the_draft_is_saved() -> void:
+	var session := _spy_session()
+	session.builder._add_one("Mountain")
+	session._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+	assert_true(session.finished)
+	assert_eq(session._save_warning, "")
+	assert_eq(session.quits, 1, "the save is on disk, so the window closes")
+	assert_string_contains(FileAccess.get_file_as_string(session.store.deck_path), "1 Mountain")
+
+
+func test_a_close_after_the_draft_finished_closes_the_window() -> void:
+	var session := _spy_session()
+	session.finish("done")
+	assert_eq(session.quits, 0, "Done shows the result; it does not quit")
+	session._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+	assert_eq(session.quits, 1, "the close button works on the result window")
+
+
+## A save that FAILED keeps the window for its `Retry save` — the deck is
+## only in memory — and a second request is the player insisting.
+func test_a_failed_save_keeps_the_window_once_for_the_retry() -> void:
+	var session := _spy_session()
+	assert_eq(DirAccess.make_dir_absolute(session.store.deck_path + ".pending"), OK)
+	session.builder._add_one("Mountain")
+	session._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+	assert_true(session.finished)
+	assert_ne(session._save_warning, "")
+	assert_eq(session.quits, 0, "the unsaved deck is still on screen")
+	session._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+	assert_eq(session.quits, 1, "and a second close is obeyed")
+	assert_eq(DirAccess.remove_absolute(session.store.deck_path + ".pending"), OK)

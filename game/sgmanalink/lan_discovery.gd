@@ -25,6 +25,10 @@ const MAX_HOSTS := 64
 const MAX_HOSTS_PER_ADDRESS := 4
 const EXPIRES_MS := 7000
 var hosts: Dictionary = {}
+## Hosts of another protocol version (2026-10-03), listed so the browser
+## can say so instead of hiding them: {"host": {address, port, name,
+## protocol, game}, "seen"}. Never joinable; never in [member hosts].
+var others: Dictionary = {}
 var scanning := false
 var advertising := false
 var status := ""
@@ -115,6 +119,7 @@ func update_tournament(tournament_name: String) -> void:
 func stop() -> void:
 	_socket.close()
 	hosts.clear()
+	others.clear()
 	scanning = false
 	advertising = false
 	_advert = {}
@@ -169,26 +174,29 @@ static func open_host(advert: Dictionary) -> bool:
 	return advert.get("access") == "open" and advert.get("invitation") is String
 
 
+## True for a joinable listing of this protocol version. A reply from a
+## host of another version is kept in [member others] and answers false.
 func accept_reply(data: Dictionary, source: String, now: int) -> bool:
 	# A UDP packet is anyone's: read every field through a typed check, since
 	# GDScript raises on `5 != "sg-lan-host"` instead of answering false.
 	if not scanning or not SgProtocol.exact(data, ["v", "type", "nonce", "host"]) \
-		or not SgProtocol.integer(data.v, SgProtocol.VERSION, SgProtocol.VERSION) \
+		or not SgProtocol.integer(data.v, 1) \
 		or not SgProtocol.literal(data.type, "sg-lan-host") \
 		or not SgProtocol.literal(data.nonce, _nonce) or not SgLanInvite.address(source) \
-		or not data.get("host") is Dictionary or not valid_advert(data.host):
+		or not data.get("host") is Dictionary:
+		return false
+	if int(data.v) != SgProtocol.VERSION:
+		_accept_other(data.host, int(data.v), source, now)
+		return false
+	if not valid_advert(data.host):
 		return false
 	var advert: Dictionary = data.host
 	# A discovery packet is never permission to contact a different IP.
 	if advert.address != source:
 		return false
 	var key := "%s:%d" % [source, int(advert.port)]
-	if not hosts.has(key):
-		if hosts.size() >= MAX_HOSTS: return false
-		var from_source := 0
-		for other: String in hosts:
-			if other.begins_with(source + ":"): from_source += 1
-		if from_source >= MAX_HOSTS_PER_ADDRESS: return false
+	if not _has_room(hosts, key, source): return false
+	others.erase(key)
 	var previous: Dictionary = hosts.get(key, {})
 	var changed_data: bool = previous.get("host", {}) != advert
 	hosts[key] = {"host": advert.duplicate(true), "seen": now}
@@ -197,12 +205,42 @@ func accept_reply(data: Dictionary, source: String, now: int) -> bool:
 	return true
 
 
+## A host of ANOTHER PROTOCOL VERSION (2026-10-03) used to vanish from the
+## browser without a word. Its advert's shape is that version's, so only the
+## fields every version has carried are read, each through a typed check.
+func _accept_other(advert: Dictionary, version: int, source: String, now: int) -> void:
+	if not SgLanInvite.address(advert.get("address")) or advert.address != source \
+		or not SgProtocol.integer(advert.get("port"), 1, 65535) \
+		or not SgProtocol.short_text(advert.get("name"), SgProtocol.NICKNAME_LIMIT):
+		return
+	var key := "%s:%d" % [source, int(advert.port)]
+	if hosts.has(key) or not _has_room(others, key, source): return
+	var stamp: Variant = advert.get("stamp")
+	var listing := {"address": source, "port": int(advert.port), "name": String(advert.name), "protocol": version,
+		"game": String(stamp.game) if stamp is Dictionary and SgCompatibility.plain(stamp.get("game"), 24) else ""}
+	var changed_data: bool = others.get(key, {}).get("host", {}) != listing
+	others[key] = {"host": listing, "seen": now}
+	if changed_data:
+		changed.emit()
+
+
+## Whether [param table] may hold [param key]: bounded overall and per address.
+func _has_room(table: Dictionary, key: String, source: String) -> bool:
+	if table.has(key): return true
+	if table.size() >= MAX_HOSTS: return false
+	var from_source := 0
+	for other: String in table:
+		if other.begins_with(source + ":"): from_source += 1
+	return from_source < MAX_HOSTS_PER_ADDRESS
+
+
 func expire(now: int) -> void:
 	var removed := false
-	for key in hosts.keys():
-		if now - int(hosts[key].seen) >= EXPIRES_MS:
-			hosts.erase(key)
-			removed = true
+	for table: Dictionary in [hosts, others]:
+		for key in table.keys():
+			if now - int(table[key].seen) >= EXPIRES_MS:
+				table.erase(key)
+				removed = true
 	if removed:
 		changed.emit()
 
@@ -237,9 +275,11 @@ func pump() -> void:
 		var data := SgProtocol.decode_payload(bytes, 4)
 		if scanning:
 			accept_reply(data, source, now)
+		# A query of any version is answered, in this version's own words: a
+		# browser of another version lists this host as such (2026-10-03).
 		elif advertising and _replies < 16 \
 			and SgProtocol.exact(data, ["v", "type", "nonce"]) \
-			and SgProtocol.integer(data.v, SgProtocol.VERSION, SgProtocol.VERSION) \
+			and SgProtocol.integer(data.v, 1) \
 			and SgProtocol.literal(data.type, "sg-lan-query") \
 			and SgProtocol.token(data.nonce):
 			_replies += 1

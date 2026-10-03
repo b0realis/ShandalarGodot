@@ -6,7 +6,7 @@ extends RefCounted
 ## The readable stamp travels beside the digest so a mismatch can be named
 ## ("you run 0.31.0", "the host has Pack 3 enabled") instead of only detected.
 
-const RULES_REVISION := "sgmanalink-second-age-2026-09-24"
+const RULES_REVISION := "sgmanalink-bug-pass-2026-10-03"
 const MAX_PACKS := 12
 static var _fingerprint := ""
 static var _cache_key := ""
@@ -108,6 +108,26 @@ static func brief(mine: Dictionary, theirs: Dictionary) -> String:
 	if mine.packs != theirs.packs: return "No card packs" if theirs.packs.is_empty() else pack_labels(theirs.packs)
 	if mine.rules != theirs.rules: return "Different build"
 	return ""
+
+
+## Two SGManalink protocol versions, named from the reader's side
+## (2026-10-03). A protocol apart, no other message can be read, so this is
+## all either computer can say: each version, and each release when known.
+static func protocol_difference(mine: int, theirs: int, my_game := "", their_game := "", them := "The host") -> String:
+	if not their_game.is_empty() and not my_game.is_empty():
+		return "%s runs Shandalar %s (SGManalink protocol %d); you run Shandalar %s (protocol %d). Both players need the same version." \
+			% [them, their_game, theirs, my_game, mine]
+	if not their_game.is_empty():
+		return "%s runs Shandalar %s (SGManalink protocol %d); your game uses protocol %d. Both players need the same version." \
+			% [them, their_game, theirs, mine]
+	return "%s runs %s version of Shandalar (SGManalink protocol %d; you run %d). Both players need the same version." \
+		% [them, "an older" if theirs < mine else "a newer", theirs, mine]
+
+
+## The same for a table cell: the other release when it differs, else the protocol.
+static func protocol_brief(theirs: int, their_game := "") -> String:
+	if not their_game.is_empty() and their_game != game_version(): return "Shandalar %s" % their_game
+	return "Protocol %d" % theirs
 
 
 ## Why two builds with equal stamps still differ: modified files or card data.

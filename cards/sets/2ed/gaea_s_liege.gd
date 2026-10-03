@@ -63,6 +63,15 @@ class ForestifyEffect extends EffectBase:
 		var land := game.find_instance(target.instance_id)
 		if land == null or land.zone != Mtg.Zone.BATTLEFIELD:
 			return
+		# "Until this creature leaves the battlefield": a Liege that left
+		# before this resolved ends the duration before it begins (CR
+		# 611.2b), and a Liege back on the battlefield is a new object the
+		# old activation cannot speak for (CR 400.7) — the source-timestamp
+		# guard PumpEffect uses. Until 2026-10-03 the claim was written onto
+		# the dead card and came back with it.
+		if source.zone != Mtg.Zone.BATTLEFIELD or source.layer_timestamp \
+				!= int(game.cost_paid("_source_timestamp", source.layer_timestamp)):
+			return
 		var claimed: Array = source.memory.get("forests", [])
 		if not claimed.has(land.id):
 			claimed.append(land.id)

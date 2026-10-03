@@ -126,7 +126,29 @@ if verb == "check":
     emit({"tool": "lab_query", "query": "check", "packs": packs, "decks": rows, "playable": all(r["playable"] for r in rows)})
 if verb == "convert":
     Path(rest[1]).write_text("converted from %s\n" % rest[0]); print("converted 1 deck"); sys.exit(0)
+if verb == "lab" and "--resume" in rest:
+    # The real Lab's rule: `--resume OUT` is the whole line, but for the
+    # chrome flags that only change how it prints (2026-10-03).
+    extra = [a for a in rest if a not in ("--resume", rest[rest.index("--resume") + 1])]
+    i = 0
+    while i < len(extra):
+        if extra[i] in ("--quiet", "--no-banner"):
+            i += 1
+        elif extra[i] == "--progress" and i + 1 < len(extra):
+            i += 2
+        else:
+            refuse("deck_lab", "--resume takes only the run's folder", kind="option", flag="--resume")
 if verb in ("lab", "autodeck"):
+    if verb == "lab" and "--progress" in rest and rest[rest.index("--progress") + 1] == "json":
+        import time as _t
+        for i in range(1, 4):
+            sys.stderr.write(json.dumps({"progress": {"done": i, "total": 3, "unit": "games", "elapsed": 0.1 * i}}) + "\n")
+            sys.stderr.flush()
+            _t.sleep(0.05)
+    if "--sleep" in rest:
+        import time
+        (here / "sleeping.pid").write_text(str(os.getpid()))
+        time.sleep(float(rest[rest.index("--sleep") + 1]))
     out = rest[rest.index("--out") + 1] if "--out" in rest else None
     if "--dry-run" in rest:
         emit({"tool": verb, "dry_run": True, "argv": rest, "out": out})
@@ -792,7 +814,13 @@ class FakeDoorTest(unittest.TestCase):
         self.assertNotIn("--no-elo", rated["argv"])
         self.assertIn("--gauntlet", rated["argv"])
         raw = self.client.payload("lab", {"argv": ["--matrix", "decks/tournament", "--games", "5", "--dry-run"]})
-        self.assertEqual(raw["argv"], ["--matrix", "decks/tournament", "--games", "5", "--dry-run", "--no-elo", "--quiet"])
+        # A line that names no folder is given one under the workspace
+        # (2026-10-03), the folder the answer then reads `run.json` from.
+        self.assertEqual(raw["argv"][:6], ["--matrix", "decks/tournament", "--games", "5", "--dry-run", "--no-elo"])
+        self.assertEqual(raw["argv"][-3], "--out")
+        self.assertEqual(Path(raw["argv"][-2]).parent, (self.workspace / "runs").resolve())
+        self.assertTrue(Path(raw["argv"][-2]).name.startswith("lab-"))
+        self.assertEqual(raw["argv"][-1], "--quiet")
 
     def test_lab_run_and_results(self):
         out = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "games": 20, "out": "ws/run1", "limit": 2})
@@ -826,6 +854,86 @@ class FakeDoorTest(unittest.TestCase):
         self.assertEqual(refused["structuredContent"]["error"]["tool"], "deck_lab")
         empty = self.client.call("read_run", {"out": "ws"})
         self.assertTrue(empty["isError"])
+
+    def test_a_lab_run_without_out_goes_to_the_workspace_and_is_read(self):
+        # 2026-10-03: the folder was looked for on stderr while the Lab
+        # names it on stdout, so the answer had no run, results or next.
+        out = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "games": 20})
+        folder = Path(out["argv"][out["argv"].index("--out") + 1])
+        self.assertEqual(folder.parent, (self.workspace / "runs").resolve())
+        self.assertEqual(out["run"]["tool"], "lab")
+        self.assertIn("matchups", out["results"])
+        self.assertIn("next", out)
+        self.assertTrue((folder / "run.json").is_file())
+
+    def test_a_lab_run_reports_progress_to_a_client_that_asks(self):
+        # MCP progress (2026-10-03): with `_meta.progressToken` the server
+        # runs the Lab with `--progress json` and turns each heartbeat into
+        # `notifications/progress`, before the answer, always increasing.
+        ident = self.client.next_id
+        self.client.next_id += 1
+        self.client.raw(json.dumps({"jsonrpc": "2.0", "id": ident, "method": "tools/call", "params": {
+            "name": "lab", "_meta": {"progressToken": "lab-1"},
+            "arguments": {"deck_a": "a.deck", "deck_b": "b.deck", "out": "ws/progress"}}}))
+        notes = []
+        while True:
+            message = json.loads(self.client.line(30))
+            if message.get("method") == "notifications/progress":
+                notes.append(message["params"])
+                continue
+            self.assertEqual(message.get("id"), ident, message)
+            answer = message
+            break
+        self.assertFalse(answer["result"]["isError"], answer)
+        self.assertIn("--progress", answer["result"]["structuredContent"]["argv"])
+        self.assertEqual([n["progress"] for n in notes], [1, 2, 3])
+        self.assertTrue(all(n["progressToken"] == "lab-1" and n["total"] == 3 for n in notes))
+        self.assertEqual(notes[-1]["message"], "3 of 3 games")
+        # Without a token nothing is reported and nothing extra is asked.
+        plain = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "out": "ws/progress2"})
+        self.assertNotIn("--progress", plain["argv"])
+        self.assertFalse(self.client.has_line(0.3))
+
+    def test_lab_resume_is_a_line_the_lab_takes(self):
+        # 2026-10-03: the server sent `--resume OUT --quiet`, and the real
+        # Lab refused anything beside `--resume` — every lab_resume failed.
+        first = self.client.payload("lab", {"deck_a": "a.deck", "deck_b": "b.deck", "out": "ws/resumable"})
+        self.assertEqual(first["exit"], 0)
+        resumed = self.client.call("lab_resume", {"out": "ws/resumable"})
+        self.assertFalse(resumed["isError"], resumed)
+
+    def test_a_cancelled_call_is_not_answered_and_ping_is_not_held(self):
+        pid_file = self.home / "sleeping.pid"
+        pid_file.unlink(missing_ok=True)
+        ident = self.client.next_id
+        self.client.next_id += 1
+        self.client.raw(json.dumps({"jsonrpc": "2.0", "id": ident, "method": "tools/call", "params": {
+            "name": "lab", "arguments": {"deck_a": "a.deck", "deck_b": "b.deck", "out": "ws/slow",
+                                         "extra_args": ["--sleep", "60"]}}}))
+        deadline = time.time() + 20
+        while not pid_file.is_file() and time.time() < deadline:
+            time.sleep(0.05)
+        self.assertTrue(pid_file.is_file(), "the slow door never started")
+        child = int(pid_file.read_text())
+        started = time.time()
+        self.assertEqual(self.client.ask("ping", timeout=5)["result"], {})
+        self.assertLess(time.time() - started, 5, "a ping waited behind the Lab run")
+        self.client.notify("notifications/cancelled", {"requestId": ident, "reason": "test"})
+        gone = False
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            try:
+                os.kill(child, 0)
+            except ProcessLookupError:
+                gone = True
+                break
+            time.sleep(0.1)
+        self.assertTrue(gone, "the cancelled call's door child is still running")
+        # Nothing is said for the cancelled call; the next request is
+        # answered as usual.
+        answer = self.client.ask("ping", timeout=10)
+        self.assertEqual(answer["result"], {})
+        self.assertFalse(self.client.has_line(0.5))
 
     def test_autodeck(self):
         plan = self.client.payload("autodeck", {"out": "ws/field", "count": 3, "colors": "WU,BR", "max_colors": 2,
@@ -1115,13 +1223,16 @@ class WindowsDoorTest(unittest.TestCase):
                   **{v: ["--lab-query", v] for v in ("packs", "cards", "check")}}
         args = ["a deck & other.deck", "Éowyn; $HOME", 'a"b']
         for verb, flags in routes.items():
-            with self.subTest(verb=verb), mock.patch.object(mcp.subprocess, "run") as run:
-                self.server.run(verb, args, timeout=17)
-                self.assertEqual(run.call_args.args[0],
+            with self.subTest(verb=verb), mock.patch.object(mcp.subprocess, "Popen") as popen:
+                popen.return_value.communicate.return_value = ("", "")
+                popen.return_value.returncode = 0
+                done = self.server.run(verb, args, timeout=17)
+                self.assertEqual(done.returncode, 0)
+                self.assertEqual(popen.call_args.args[0],
                                  [str(self.door), "--headless", "--no-header", "--", *flags, *args])
-                self.assertFalse(run.call_args.kwargs.get("shell", False))
-                self.assertEqual(run.call_args.kwargs["cwd"], str(self.home))
-                self.assertEqual(run.call_args.kwargs["timeout"], 17)
+                self.assertFalse(popen.call_args.kwargs.get("shell", False))
+                self.assertEqual(popen.call_args.kwargs["cwd"], str(self.home))
+                self.assertLessEqual(popen.return_value.communicate.call_args.kwargs["timeout"], 17)
 
     def test_referee_uses_the_same_native_route(self):
         with mock.patch.object(mcp, "Game") as game:
@@ -1405,6 +1516,14 @@ class UnitTest(unittest.TestCase):
     """The pieces without a process: the deck reader, the brief view,
     the pilot, the pass-until stops, the delta."""
 
+    def test_parse_deck_reads_like_the_engine(self):
+        # engine/deck_list.gd, rule for rule (2026-10-03).
+        parsed = mcp.parse_deck("\ufeff// NAME : Spaced\n4x Lightning Bolt\n4 x Card\n0 Island\nName: Wrong\n")
+        self.assertEqual(parsed["name"], "Spaced")
+        self.assertEqual(parsed["main"], [{"count": 4, "name": "Lightning Bolt"}, {"count": 4, "name": "x Card"}])
+        self.assertEqual(parsed["errors"], ["0 Island", "Name: Wrong"])
+        self.assertEqual(mcp.parse_deck("// Nameless idea: not a title\nname: Kept\n")["name"], "Kept")
+
     def test_parse_deck(self):
         parsed = mcp.parse_deck("# a comment\n// NAME: Old\nname: New\n4x Lightning Bolt\n20 Mountain\nSB: 3 Pyroblast\nnonsense\n")
         self.assertEqual(parsed["name"], "New")
@@ -1682,6 +1801,40 @@ class LiveTest(unittest.TestCase):
         self.assertIn("plan", field)
         manual = self.client.payload("manual", {"verb": "lab"}, timeout=120)
         self.assertIn("--deck-a", manual["text"])
+
+    def test_a_small_lab_run_reads_back_and_resume_is_heard(self):
+        # 2026-10-03, against the real Lab: a run without `out` lands in the
+        # workspace and comes back with run/results/next; progress is
+        # reported when asked; `lab_resume` reaches the Lab's own resume
+        # check (kind "resume") instead of being refused as an option.
+        ident = self.client.next_id
+        self.client.next_id += 1
+        self.client.raw(json.dumps({"jsonrpc": "2.0", "id": ident, "method": "tools/call", "params": {
+            "name": "lab", "_meta": {"progressToken": 7},
+            "arguments": {"deck_a": "big_green.deck", "deck_b": "white_knights.deck", "games": 2,
+                          "procs": 1, "timeout": 300}}}))
+        notes = []
+        while True:
+            message = json.loads(self.client.line(300))
+            if message.get("method") == "notifications/progress":
+                notes.append(message["params"])
+                continue
+            self.assertEqual(message.get("id"), ident, message)
+            break
+        result = message["result"]
+        self.assertFalse(result["isError"], result)
+        run = result["structuredContent"]
+        self.assertEqual(run["run"]["tool"], "deck_lab")
+        self.assertIn("matchups", run["results"])
+        self.assertTrue(run["out"].startswith("workspace/"), run["out"])
+        self.assertTrue(notes, "the finished heartbeat at least")
+        self.assertEqual(notes[-1]["progress"], 2)
+        self.assertEqual(notes[-1]["total"], 2)
+        empty = self.workspace / "not_a_run"
+        empty.mkdir(parents=True, exist_ok=True)
+        refused = self.client.call("lab_resume", {"out": str(empty)}, timeout=180)
+        self.assertTrue(refused["isError"])
+        self.assertEqual(refused["structuredContent"]["error"]["kind"], "resume")
 
     def test_duel_to_the_end(self):
         opened = self.client.payload("referee_start", {"deck_a": "decks/tournament/ec2015_beckert.deck",

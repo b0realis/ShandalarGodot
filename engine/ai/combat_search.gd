@@ -208,6 +208,12 @@ var d_rampage: PackedInt32Array = PackedInt32Array()
 ## shield its controller can still pay for.
 var a_immune: PackedByteArray = PackedByteArray()
 var d_immune: PackedByteArray = PackedByteArray()
+## ...and of those, the ones whose immunity is a REGENERATION shield and
+## not indestructibility (2026-10-03). A regenerated creature is removed
+## from combat (CR 701.15a): lethal first-strike damage leaves it alive
+## but it deals no regular damage afterwards. Empty arrays read as 0.
+var a_regen: PackedByteArray = PackedByteArray()
+var d_regen: PackedByteArray = PackedByteArray()
 ## What their d lands on our a, and our a on their d, if it strikes at all
 ## (row a, column d).
 var hit_ours: PackedInt32Array = PackedInt32Array()
@@ -302,18 +308,27 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 	var struck_down := atk_immune == 0 and pre > 0 and pre >= atk_soak
 	if struck_down:
 		return [true, 0, 0]
+	# ...and a body that REGENERATES from that first strike lives, but
+	# leaves combat having dealt nothing (CR 701.15a, 2026-10-03): the
+	# shield used to count as immunity alone, and a Drudge Skeletons
+	# struck down by Tundra Wolves still killed them afterwards.
+	if pre > 0 and pre >= atk_soak and _regen_of_attacker(attacker, ours_attacks) != 0:
+		return [false, 0, 0]
 	# --- 2. the damage order, then lethal-first down it (CR 510.1c).
 	var order := _damage_order(attacker, blockers, atk_pow, ours_attacks)
 	var remaining := atk_pow
 	var dead := 0
+	var knocked := 0   # regenerated out of combat by this damage (CR 701.15a)
 	for b in order:
 		var need: int = _soak_of(b, ours_attacks)
 		var give := mini(remaining, maxi(need, 0))
 		remaining -= give
-		if _immune_of(b, ours_attacks) != 0:
-			continue
 		if _raw_onto_blocker(attacker, b, ours_attacks) <= 0:
 			continue      # protection or a prevention shield: the damage lands as 0
+		if _immune_of(b, ours_attacks) != 0:
+			if give >= maxi(need, 1) and _regen_of_blocker(b, ours_attacks) != 0:
+				knocked |= 1 << b
+			continue
 		if give >= maxi(need, 1):
 			dead |= 1 << b
 	# --- 3. what the blockers land back. One killed by first strike never
@@ -321,7 +336,7 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 	var back := 0
 	for b in blockers:
 		if atk_first != 0 and _blocker_first(b, ours_attacks) == 0 \
-				and (dead & (1 << b)) != 0:
+				and ((dead | knocked) & (1 << b)) != 0:
 			continue
 		back += _raw_onto(attacker, b, ours_attacks)
 	var atk_dies := atk_immune == 0 and back > 0 and back >= atk_soak
@@ -415,6 +430,16 @@ func _soak_of(blocker: int, ours_attacks: bool) -> int:
 
 func _immune_of(blocker: int, ours_attacks: bool) -> int:
 	return d_immune[blocker] if ours_attacks else a_immune[blocker]
+
+
+func _regen_of_attacker(attacker: int, ours_attacks: bool) -> int:
+	var flags := a_regen if ours_attacks else d_regen
+	return flags[attacker] if attacker < flags.size() else 0
+
+
+func _regen_of_blocker(blocker: int, ours_attacks: bool) -> int:
+	var flags := d_regen if ours_attacks else a_regen
+	return flags[blocker] if blocker < flags.size() else 0
 
 
 func _blocker_first(blocker: int, ours_attacks: bool) -> int:

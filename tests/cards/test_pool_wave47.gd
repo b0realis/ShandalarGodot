@@ -67,6 +67,95 @@ func test_a_cloned_pinger_brings_its_abilities() -> void:
 	assert_eq(g.players[1].life, 19)
 
 
+## Says yes to the Doppelganger's shift and picks [member wanted].
+class ShapeSeat extends DecisionAgent:
+	var wanted: CardInstance = null
+
+	func answer_yes_no(_game: MtgGame, _pid: int, _prompt: String, _hint: bool) -> bool:
+		return true
+
+	func answer_card(_game: MtgGame, _pid: int, candidates: Array[CardInstance],
+			_prompt: String) -> CardInstance:
+		return wanted if candidates.has(wanted) else null
+
+
+func _masked_dragon() -> CardInstance:
+	# Illusionary Mask's route: a Shivan Dragon on the battlefield face down.
+	var dragon := give_hand(1, "Shivan Dragon")
+	g.put_from_hand_face_down(dragon, 1)
+	assert_true(dragon.face_down)
+	return dragon
+
+
+func _no_line_names(name: String) -> void:
+	for line in g.log_lines:
+		assert_false(String(line).contains(name), "the log names the hidden card: %s" % line)
+
+
+func test_clone_of_a_face_down_creature_is_a_nameless_two_two() -> void:
+	# Bug pass 2026-10-03, CR 707.2 / 708.2: the copiable values of a
+	# face-down permanent are those of a 2/2 creature with no name, no
+	# colour and no abilities. Clone adopted the CARD underneath — a 5/5
+	# flying Shivan Dragon — and the log announced "Clone becomes a copy of
+	# Shivan Dragon", reading a hidden identity out to both seats (rule 8).
+	_masked_dragon()
+	var clone := give_hand(0, "Clone")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U)
+	add_mana(0, Mtg.ManaColor.C, 3)
+	assert_ok(g.cast_spell(0, clone, []))
+	resolve_stack()
+	assert_eq(clone.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(clone.cur_power, 2)
+	assert_eq(clone.cur_toughness, 2)
+	assert_false(clone.has_keyword(Mtg.Keyword.FLYING), "no abilities")
+	assert_eq(clone.cur_colors, 0, "colourless")
+	assert_ne(clone.data.card_name, "Shivan Dragon")
+	assert_true(clone.cur_activated_abilities.is_empty())
+	_no_line_names("Shivan Dragon")
+
+
+func test_doppelganger_of_a_face_down_creature_keeps_only_its_own_riders() -> void:
+	_masked_dragon()
+	var doppel := give_hand(0, "Vesuvan Doppelganger")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 2)
+	add_mana(0, Mtg.ManaColor.C, 3)
+	assert_ok(g.cast_spell(0, doppel, []))
+	resolve_stack()
+	assert_eq(doppel.cur_power, 2)
+	assert_eq(doppel.cur_toughness, 2)
+	assert_false(doppel.has_keyword(Mtg.Keyword.FLYING))
+	assert_true(doppel.has_color(Mtg.ManaColor.U), "still blue")
+	assert_ne(doppel.data.card_name, "Shivan Dragon")
+	assert_false(doppel.data.triggered_abilities.is_empty(),
+		"and it keeps its shape-shifting ability")
+	_no_line_names("Shivan Dragon")
+
+
+func test_doppelganger_shifting_into_a_face_down_creature_learns_nothing() -> void:
+	# The upkeep shift is the same copy (vesuvan_doppelganger.gd _shift).
+	put_battlefield(1, "Grizzly Bears")
+	var doppel := give_hand(0, "Vesuvan Doppelganger")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.U, 2)
+	add_mana(0, Mtg.ManaColor.C, 3)
+	assert_ok(g.cast_spell(0, doppel, []))
+	resolve_stack()
+	assert_eq(doppel.data.card_name, "Grizzly Bears")
+	var dragon := _masked_dragon()
+	var seat := ShapeSeat.new()
+	seat.wanted = dragon
+	g.set_agent(0, seat)
+	advance_to_next_turn()                        # their turn
+	advance_to_next_turn()                        # ours: the upkeep trigger
+	resolve_stack()
+	assert_eq(doppel.cur_power, 2, "a nameless 2/2, not a 5/5 dragon")
+	assert_false(doppel.has_keyword(Mtg.Keyword.FLYING))
+	assert_ne(doppel.data.card_name, "Shivan Dragon")
+	_no_line_names("Shivan Dragon")
+
+
 # ----------------------------------------------------------- Copy Artifact --
 
 func test_copy_artifact_copies_a_mana_rock_and_stays_an_enchantment() -> void:

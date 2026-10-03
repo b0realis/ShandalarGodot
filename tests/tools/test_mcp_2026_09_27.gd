@@ -47,7 +47,9 @@ func test_the_live_half_runs_against_this_engine() -> void:
 		"python3", "-m", "unittest", "-v", SELF_TEST + ".LiveTest"], output, true)
 	var report := "".join(PackedStringArray(output))
 	assert_eq(status, 0, "the live half passes:\n" + report.right(6000))
-	assert_true(report.contains("Ran 7 tests"), "the seven live tests ran:\n" + report.right(2000))
+	assert_true(report.contains("Ran 8 tests"), "the eight live tests ran:\n" + report.right(2000))
+	assert_true(report.contains("test_a_small_lab_run_reads_back_and_resume_is_heard"),
+		"a real Lab run, its progress and lab_resume (2026-10-03)")
 	assert_false(report.contains("skipped"), "nothing was skipped: SHANDALAR_MCP_LIVE reached the test")
 	assert_true(report.contains("test_duel_to_the_end"), "the duel was played")
 	assert_true(report.contains("test_a_kept_duel_is_taken_up_by_another_server_and_passed_until"),

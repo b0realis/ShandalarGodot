@@ -119,7 +119,11 @@ static func sources(game: MtgGame, pid: int, excluded: Dictionary = {},
 			# Sacrificing a Swamp is never an implicit auto-tap. A player may
 			# activate it explicitly; planners must not count its output free.
 			if game.BLACK_SYMBOL_COST.amount(game, ability.cost) > 0: continue
-			if ability.taps_source and (inst.tapped or (inst.is_creature() and inst.summoning_sick)):
+			# Haste lifts summoning sickness for a {T} mana ability as for any
+			# other (CR 302.6) — the gate MtgGame.tap_for_mana keeps; until
+			# 2026-10-03 the planner skipped every sick creature regardless.
+			if ability.taps_source and (inst.tapped or (inst.is_creature() and inst.summoning_sick
+					and not inst.has_keyword(Mtg.Keyword.HASTE))):
 				continue
 			# Only abilities the planner can actually pay for: a rider it
 			# does not model (mana, life, a sacrifice, counters to remove)
@@ -308,23 +312,15 @@ static func _plan_free_sources(src: Array, cost: ManaCost, x_value: int,
 	var out: Array = []
 	var used_instances: Dictionary = {}   # source key -> true (O(1) probes)
 	var pool_check := ManaPool.new()
-	# Colored requirements first.
-	for color in cost.colored:
-		for _n in cost.colored[color]:
-			if pool_check.amount_of(color) >= int(cost.colored[color]):
-				break   # one charged source can cover several coloured pips
-			var found := false
-			for s in src:
-				if used_instances.has(source_key(s)) or s[2] != color \
-						or not source_usable(s, usage_keys):
-					continue
-				out.append(step_of(s))
-				used_instances[source_key(s)] = true
-				pool_check.add(s[2], s[3])
-				found = true
-				break
-			if not found:
-				return []
+	# Colored requirements first. Two colours or more are a MATCHING
+	# ([method _cover_colored_matched]); one colour is the greedy pass, which
+	# is already the best answer there — and the greedy pass stays the
+	# fallback for anything the matching cannot place.
+	var covered := cost.colored.size() > 1 \
+		and _cover_colored_matched(src, cost, usage_keys, out, used_instances, pool_check)
+	if not covered and not _cover_colored_greedy(src, cost, usage_keys, out,
+			used_instances, pool_check):
+		return []
 	# Generic + X from whatever remains.
 	var generic := cost.generic + x_value
 	var floating := pool_check.total() - cost.mana_value() + cost.generic
@@ -340,6 +336,130 @@ static func _plan_free_sources(src: Array, cost: ManaCost, x_value: int,
 	if generic > 0:
 		return []
 	return out
+
+
+## The coloured pips the planner always had: each takes the first unused
+## source of its colour in [method sources]' order, and a source that makes
+## several of a colour covers several pips. Appends to [param out] /
+## [param used] / [param pool_check]; false when a pip finds nothing.
+static func _cover_colored_greedy(src: Array, cost: ManaCost, usage_keys: Array,
+		out: Array, used: Dictionary, pool_check: ManaPool) -> bool:
+	for color in cost.colored:
+		for _n in cost.colored[color]:
+			if pool_check.amount_of(color) >= int(cost.colored[color]):
+				break   # one charged source can cover several coloured pips
+			var found := false
+			for s in src:
+				if used.has(source_key(s)) or s[2] != color \
+						or not source_usable(s, usage_keys):
+					continue
+				out.append(step_of(s))
+				used[source_key(s)] = true
+				pool_check.add(s[2], s[3])
+				found = true
+				break
+			if not found:
+				return false
+	return true
+
+
+## THE COLOURED PIPS AS A MATCHING (2026-10-03). The greedy pass never went
+## back: an Underground Sea beside a Volcanic Island spent the Sea on {U}
+## and then found no {B}, so `{U}{B}` was refused while `{B}{U}` was paid,
+## and a Tundra + Scrubland refused `{W}{U}` — and every payment question
+## rides on the planner (`MtgGame.can_afford_cost`, `try_pay` for an
+## "unless you pay" or an upkeep cost, the auto-cast, the castable
+## highlight, the AI's casts). Each pip is a slot, each source a vertex that
+## taps once, and the slots are filled by augmenting paths — the house
+## pattern of `BlackSymbolCost._match`.
+##
+## THE PREFERENCE IS KEPT BY THE ORDER THE SOURCES ARE OFFERED IN. Sources
+## join one at a time in [method sources]' order (basic before dual,
+## painless before painful, sacrifice last, the tie-break last of all), and
+## a source is kept only when the matching can grow with it — the greedy
+## rule over a transversal matroid, which picks the EARLIEST set of sources
+## that covers the pips. So the matching only ever re-routes a dual; it
+## never reaches past a basic, or onto a City of Brass, that a painless
+## re-route would have spared — the case the greedy pass got wrong whenever
+## the Sea happened to sort before the Volcanic.
+##
+## A source that makes several of one colour covers that many pips of THAT
+## colour (one tap, one colour); a path re-routes such a source one pip at
+## a time, so a charged source that would have to change colour wholesale
+## is not found here — the greedy pass behind it is the fallback. Appends
+## to [param out] / [param used] / [param pool_check] only on success.
+static func _cover_colored_matched(src: Array, cost: ManaCost, usage_keys: Array,
+		out: Array, used: Dictionary, pool_check: ManaPool) -> bool:
+	var slot_color: Array[int] = []   # one slot per pip, in the cost's own order
+	for color in cost.colored:
+		for _n in int(cost.colored[color]):
+			slot_color.append(int(color))
+	var order: Array[String] = []     # source keys, cheapest first
+	var rows: Dictionary = {}         # key -> {colour: the first row making it}
+	for s in src:
+		if not cost.colored.has(int(s[2])) or not source_usable(s, usage_keys):
+			continue
+		var key := source_key(s)
+		if not rows.has(key):
+			rows[key] = {}
+			order.append(key)
+		if not rows[key].has(int(s[2])):
+			rows[key][int(s[2])] = s
+	var owner: Array[String] = []     # slot -> source key, "" while open
+	owner.resize(slot_color.size())
+	var held: Dictionary = {}         # source key -> [colour, pips covered]
+	var open := slot_color.size()
+	for key in order:
+		while open > 0 and _augment(key, slot_color, rows, owner, held, {}, {}):
+			open -= 1
+		if open == 0:
+			break
+	if open > 0:
+		return false
+	for slot in slot_color.size():
+		if used.has(owner[slot]):
+			continue
+		var s: Array = rows[owner[slot]][slot_color[slot]]
+		out.append(step_of(s))
+		used[owner[slot]] = true
+		pool_check.add(s[2], s[3])
+	return true
+
+
+## One augmenting path from source [param key] to an open slot, re-routing
+## the slots' holders on the way ([method _cover_colored_matched]).
+## [param visited] is per slot, [param busy] the sources on the path now —
+## a source re-routes once per path, so a charged source's colour lock can
+## never be broken behind its back.
+static func _augment(key: String, slot_color: Array[int], rows: Dictionary,
+		owner: Array[String], held: Dictionary, visited: Dictionary,
+		busy: Dictionary) -> bool:
+	var mine: Dictionary = rows[key]
+	busy[key] = true
+	for slot in slot_color.size():
+		var color := slot_color[slot]
+		if visited.has(slot) or owner[slot] == key or not mine.has(color):
+			continue
+		var h: Array = held.get(key, [0, 0])
+		if h[1] > 0 and (h[0] != color or h[1] >= int(mine[color][3])):
+			continue   # one tap makes one colour, and only so much of it
+		var rival := owner[slot]
+		if rival != "" and busy.has(rival):
+			continue
+		visited[slot] = true
+		if rival != "":
+			held[rival][1] -= 1   # the rival lets go while it looks elsewhere
+			owner[slot] = ""
+			if not _augment(rival, slot_color, rows, owner, held, visited, busy):
+				held[rival] = [color, held[rival][1] + 1]
+				owner[slot] = rival
+				continue
+		held[key] = [color, h[1] + 1]
+		owner[slot] = key
+		busy.erase(key)
+		return true
+	busy.erase(key)
+	return false
 
 
 ## [method plan_from] against a source list built on the spot.

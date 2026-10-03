@@ -300,9 +300,9 @@ var _pump_pending := 0
 # journal of the view it was asked from.
 var _server: TCPServer
 var _peer: StreamPeerTCP
-var _peer_buffer := ""
+var _peer_buffer := PackedByteArray()
 var _knock: StreamPeerTCP
-var _knock_buffer := ""
+var _knock_buffer := PackedByteArray()
 var _knock_since := 0
 var _token := ""
 var _listen_path := ""
@@ -470,13 +470,12 @@ func _read_socket(tick: Callable) -> Variant:
 		tick.call()
 		_serve()
 		if _peer != null:
-			var cut := _peer_buffer.find("\n")
-			if cut >= 0:
-				var line := _peer_buffer.substr(0, cut)
-				_peer_buffer = _peer_buffer.substr(cut + 1)
-				return line
-			if _peer_buffer.length() > LINE_LIMIT:
-				_peer_buffer = ""
+			var cut := _cut_line(_peer_buffer)
+			if not cut.is_empty():
+				_peer_buffer = cut.rest
+				return String(cut.line)
+			if _peer_buffer.size() > LINE_LIMIT:
+				_peer_buffer = PackedByteArray()
 		elif _awaiting and _idle_ms > 0 and Time.get_ticks_msec() - _idle_since >= _idle_ms:
 			_eof_reason = "idle"
 			return null
@@ -491,15 +490,15 @@ func _serve() -> void:
 	if _knock == null and _server.is_connection_available():
 		_knock = _server.take_connection()
 		_knock.set_no_delay(true)
-		_knock_buffer = ""
+		_knock_buffer = PackedByteArray()
 		_knock_since = now
 	if _knock != null:
 		var got := _drain(_knock, _knock_buffer)
-		_knock_buffer = String(got.text)
-		var cut := _knock_buffer.find("\n")
-		if cut >= 0:
-			var parsed = JSON.parse_string(_knock_buffer.substr(0, cut))
-			_knock_buffer = _knock_buffer.substr(cut + 1)
+		_knock_buffer = got.bytes
+		var cut := _cut_line(_knock_buffer)
+		if not cut.is_empty():
+			var parsed = JSON.parse_string(String(cut.line))
+			_knock_buffer = cut.rest
 			if parsed is Dictionary and parsed.get("token") is String and String(parsed.token) == _token:
 				if _peer != null:
 					_peer.disconnect_from_host()
@@ -511,30 +510,43 @@ func _serve() -> void:
 				printerr("referee: a connection without the token was dropped")
 				_knock.disconnect_from_host()
 				_knock = null
-		elif not bool(got.alive) or now - _knock_since > KNOCK_MS or _knock_buffer.length() > LINE_LIMIT:
+		elif not bool(got.alive) or now - _knock_since > KNOCK_MS or _knock_buffer.size() > LINE_LIMIT:
 			_knock.disconnect_from_host()
 			_knock = null
 	if _peer != null:
 		var got := _drain(_peer, _peer_buffer)
-		_peer_buffer = String(got.text)
+		_peer_buffer = got.bytes
 		if not bool(got.alive):
 			_peer = null
-			_peer_buffer = ""
+			_peer_buffer = PackedByteArray()
 			_idle_since = now
 
 
-## Polls one connection and appends what arrived: {text, alive}.
-static func _drain(peer: StreamPeerTCP, buffer: String) -> Dictionary:
+## Polls one connection and appends the bytes that arrived: {bytes,
+## alive}. BYTES, NOT TEXT (2026-10-03): each read used to be decoded on
+## its own, so a character whose UTF-8 bytes straddled two reads became
+## two replacement marks — a nickname or a name in an action garbled, or
+## a line that no longer parsed as JSON.
+static func _drain(peer: StreamPeerTCP, buffer: PackedByteArray) -> Dictionary:
 	peer.poll()
 	var status := peer.get_status()
 	if status != StreamPeerTCP.STATUS_CONNECTED:
-		return {"text": buffer, "alive": status == StreamPeerTCP.STATUS_CONNECTING}
+		return {"bytes": buffer, "alive": status == StreamPeerTCP.STATUS_CONNECTING}
 	var pending := peer.get_available_bytes()
 	if pending > 0:
 		var chunk: Array = peer.get_data(pending)
 		if int(chunk[0]) == OK:
-			buffer += PackedByteArray(chunk[1]).get_string_from_utf8()
-	return {"text": buffer, "alive": true}
+			buffer.append_array(PackedByteArray(chunk[1]))
+	return {"bytes": buffer, "alive": true}
+
+
+## The first whole line of [param buffer], decoded, and the bytes after
+## it: {line, rest} — or {} while its newline has not arrived.
+static func _cut_line(buffer: PackedByteArray) -> Dictionary:
+	var cut := buffer.find(10)
+	if cut < 0:
+		return {}
+	return {"line": buffer.slice(0, cut).get_string_from_utf8(), "rest": buffer.slice(cut + 1)}
 
 
 ## What a client that (re)connects is told: hello again, where the duel

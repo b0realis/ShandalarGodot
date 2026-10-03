@@ -219,6 +219,12 @@ var _repack_disposable := false
 ## The folder beside the game a boot-time repack came from, so the next
 ## kind's tar there is taken when this one is done; "" otherwise.
 var _beside := ""
+## Every tar beside the game a repack was started from this run. Each is
+## taken ONCE (bug pass of 2026-10-03): the look that follows a finished
+## job found a tar that had failed — cut short, or card art under the
+## skin's name, so the skin was still missing — and started it again,
+## every frame for as long as the game ran.
+var _beside_tried := {}
 var _notice: CanvasLayer = null
 var _arrived_at := 0.0
 
@@ -446,8 +452,9 @@ static func portable_zip(kind: String = "skin") -> String:
 ## player's folder of that kind — the zip a chosen tar of that name
 ## would leave there, worn from now on and mounted at every later
 ## start, so the tar is read once. The kinds go one at a time; the next
-## is looked for when the first is done ([method _repack_step]). True
-## when a repack was started.
+## is looked for when the first is done ([method _repack_step]). A tar
+## is taken at most once a run, whatever it came to ([member
+## _beside_tried]). True when a repack was started.
 func repack_beside(beside: String) -> bool:
 	_beside = ""
 	if beside == "" or _repack != null:
@@ -456,7 +463,10 @@ func repack_beside(beside: String) -> bool:
 		if has(kind) or (kind == "skin" and GamePaths.use_skin_folder()):
 			continue
 		var tar := tar_beside(kind, beside)
-		if tar != "" and _repack_start(tar, tar.get_file(), false):
+		if tar == "" or _beside_tried.has(tar):
+			continue
+		_beside_tried[tar] = true
+		if _repack_start(tar, tar.get_file(), false):
 			_beside = beside
 			return true
 	return false

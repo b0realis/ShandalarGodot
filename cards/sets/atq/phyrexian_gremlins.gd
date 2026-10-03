@@ -56,8 +56,17 @@ static func _apply(game: MtgGame, source: CardInstance) -> void:
 		source.memory.erase("holding")
 		return
 	var held := game.find_instance(int(source.memory["holding"]))
-	if held != null and held.zone == Mtg.Zone.BATTLEFIELD:
-		held.cur_skips_untap = true
+	if held == null or held.zone != Mtg.Zone.BATTLEFIELD \
+			or held.layer_timestamp != int(source.memory.get("holding_stamp",
+				held.layer_timestamp)):
+		# Gone — and a card that comes back is a NEW object (CR 400.7), not
+		# the one this effect was given; the id alone survived the trip.
+		if game.undo_log != null:
+			game.undo_log.record(source, &"memory", source.memory)
+		source.memory.erase("holding")
+		source.memory.erase("holding_stamp")
+		return
+	held.cur_skips_untap = true
 
 
 class HoldEffect extends EffectBase:
@@ -70,6 +79,7 @@ class HoldEffect extends EffectBase:
 		if held == null or held.zone != Mtg.Zone.BATTLEFIELD:
 			return
 		source.memory["holding"] = held.id
+		source.memory["holding_stamp"] = held.layer_timestamp
 		game.tap_permanent(held)
 		game.recalculate()
 

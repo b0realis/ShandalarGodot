@@ -498,6 +498,15 @@ func _notification(what: int) -> void:
 		_layout()
 
 
+## [method refresh] tells [CardPacks] the deck on the surface, for the
+## Card Packs page's "the current deck requires Pack 3" warning — and
+## nothing ever told it the builder had gone, so Options went on warning
+## about a deck nobody had open (2026-10-03).
+func _exit_tree() -> void:
+	var none: Array[String] = []
+	CardPacks.set_current_deck_names(none)
+
+
 ## The 1997 order, read off the screenshot from the bottom up: the
 ## Inventory band, the Filter strip above it, then the command bar that
 ## closes the deck area, then the deck area itself — with the Deck Header,
@@ -2077,8 +2086,15 @@ func _run_command(label: String) -> void:
 ## is prompted for: the deck you leave stays in its slot, in memory, ready
 ## to come back to — that is what makes this cheaper than save-and-load and
 ## therefore worth having. `Save deck` still writes the file.
+##
+## NEVER UNDER A DIALOG (2026-10-03). The scrim stops the mouse and not the
+## keyboard, so a slot button that still held focus answered Space under an
+## open `@SAVE` — and the prompt's "No" then discarded the deck that had
+## just been switched ONTO the surface, which nobody had asked about. The
+## exit walk ([method _confirm_discard_all]) switches only between
+## questions, after the last one was dismissed.
 func _switch_slot(index: int) -> void:
-	if index == _slot or index >= _slots.size():
+	if index == _slot or index >= _slots.size() or _dialog_busy():
 		return
 	_slots[_slot] = deck
 	_slot_dirty[_slot] = _dirty
@@ -2137,8 +2153,28 @@ func _open_copy_dialog() -> void:
 			"" if _slots[i].total() == 0 else "  (holds %d cards)" % _slots[i].total()])
 		line.pressed.connect(func() -> void:
 			dialog.dismiss()
-			_copy_deck_to(target))
+			_confirm_copy_over(target))
 		dialog.body().add_child(line)
+	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
+	_show_dialog(dialog)
+
+
+## ASK BEFORE THE COPY LANDS ON UNSAVED WORK (2026-10-03). The copy
+## replaced whatever the target slot held, and a slot holding changes that
+## were never saved went without a word — the one loss the slots' own exit
+## walk ([method _confirm_discard_all]) exists to prevent. An empty slot,
+## or one whose deck is saved on disk, is copied over as before.
+func _confirm_copy_over(index: int) -> void:
+	var target: DeckModel = _slots[index]
+	if not _slot_dirty[index] or target.total() + target.side_total() == 0:
+		_copy_deck_to(index)
+		return
+	var dialog := _deck_save_question(
+		"Deck%d holds %s, which has not been saved. Replace it with a copy of %s?"
+		% [index + 1, target.deck_name, deck.deck_name])
+	dialog.add_button("Yes").pressed.connect(func() -> void:
+		dialog.dismiss()
+		_copy_deck_to(index))
 	dialog.add_button("Cancel").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 
@@ -2430,9 +2466,11 @@ func _enter_sealed(pool: SealedPool, fresh := false) -> void:
 	if _pool_button != null:
 		_pool_button.set_pressed_no_signal(pool == _auto_pool)
 	if fresh and deck.total() + deck.side_total() > 0:
-		# `Clear deck`'s own route, so `Restore deck` can undo it.
+		# `Clear deck`'s own route, so `Restore deck` can undo it — and,
+		# like it, no older `Undo` step that would jump past the clear.
 		_cleared = deck.duplicate_model()
 		deck.clear()
+		_undo = null
 		_clear_button.text = "Restore deck"
 		refresh()
 	_inventory.count_source = Callable()
@@ -2949,6 +2987,9 @@ func _open_notes_dialog() -> void:
 	dialog.body().add_child(edit)
 	dialog.add_button("OK").pressed.connect(func() -> void:
 		if edit.text.strip_edges() != deck.notes:
+			# An undo step of its own: without one, `Undo` jumped past the
+			# note to the edit before it (2026-10-03).
+			_remember(deck.duplicate_model(), "Deck notes")
 			deck.notes = edit.text.strip_edges()
 			_dirty = true
 		dialog.dismiss()
@@ -3381,6 +3422,19 @@ func _show_dialog(dialog: OriginalDialog, blocker_z := 199) -> void:
 	dialog.tree_exited.connect(func() -> void:
 		if is_instance_valid(scrim):
 			scrim.queue_free())
+	# THE KEYBOARD COMES OFF THE SCREEN BEHIND (2026-10-03). The scrim
+	# swallows clicks, not keys: a command-bar button that kept the focus
+	# answered Space under the dialog — on a slot button that switched
+	# decks under an open `@SAVE`, and its "No" then discarded the wrong
+	# deck. The focus is RELEASED, not handed to the dialog's first button:
+	# nothing fences Godot's arrow-key focus search inside the window, so
+	# from a foot button an arrow walked straight back out onto the
+	# Inventory and Enter there added a card under the open dialog (pinned
+	# by `test_an_open_dialog_keeps_the_keyboard`). A caller with a field
+	# or a line to type in still takes the focus from here.
+	var held := get_viewport().gui_get_focus_owner()
+	if held != null and not dialog.is_ancestor_of(held):
+		held.release_focus()
 
 
 ## The same commands as a right-click mini-menu on the deck surface —
@@ -3612,9 +3666,15 @@ func _open_filter_window(request: Dictionary) -> void:
 			if not was_on and _page_enabled(view):
 				_say(ENABLED_HINT % String(page["title"])))
 	dialog.add_button("OK").pressed.connect(dialog.dismiss)
-	dialog.add_button("Cancel").pressed.connect(func() -> void:
+	var cancel := func() -> void:
 		request["restore"].call(kept)
-		dialog.dismiss())
+		dialog.dismiss()
+	dialog.add_button("Cancel").pressed.connect(cancel)
+	# *"Esc is just like clicking the Cancel button"* — and this Cancel
+	# puts the snapshot back. Escape only dismissed the window, keeping
+	# every live edit as if OK had been pressed (2026-10-03); see
+	# [method _on_escape].
+	dialog.set_meta(ESCAPE_META, cancel)
 	_show_dialog(dialog)
 
 
@@ -3841,8 +3901,24 @@ func _unsaved_slots() -> Array[int]:
 ## each one onto the surface first so the question is about a deck the
 ## player can see. [param then] runs when none is left; `Cancel` at any
 ## point abandons the whole thing and leaves the builder open.
-func _confirm_discard_all(then: Callable) -> void:
-	var pending := _unsaved_slots()
+##
+## [param answered] is the slots already settled on this walk — saved or
+## waved off — so none is asked about twice. It used to be done by
+## clearing each slot's dirty flag as it was answered, and that outlived a
+## `Cancel` further on: "No" to Deck1, then "Cancel" to Deck2, left the
+## builder open with Deck1 marked SAVED, and the next exit dropped it
+## without a word (2026-10-03). A waved-off slot stays unsaved work until
+## the walk actually finishes and the builder goes.
+func _confirm_discard_all(then: Callable, answered: Array[int] = []) -> void:
+	# One walk at a time, never under another dialog — the walk switches
+	# slots, and a switch under an open prompt is the bug [method
+	# _switch_slot] refuses.
+	if _dialog_busy():
+		return
+	var pending: Array[int] = []
+	for index in _unsaved_slots():
+		if not answered.has(index):
+			pending.append(index)
 	if pending.is_empty():
 		then.call()
 		return
@@ -3850,11 +3926,9 @@ func _confirm_discard_all(then: Callable) -> void:
 	if index != _slot:
 		_switch_slot(index)
 	_confirm_discard(func() -> void:
-		# Answered — saved or waved off. Either way this slot is settled,
-		# or the walk would ask about it again for ever.
-		_dirty = false
-		_slot_dirty[_slot] = false
-		_confirm_discard_all(then))
+		var settled: Array[int] = answered.duplicate()
+		settled.append(index)
+		_confirm_discard_all(then, settled))
 
 
 func _new_deck() -> void:
@@ -3891,6 +3965,11 @@ func _clear_deck() -> void:
 		return
 	_cleared = deck.duplicate_model()
 	deck.clear()
+	# `Restore deck` IS this command's undo. The step `Undo` held was taken
+	# before the clear, so pressing it jumped PAST the clear and brought
+	# back the deck as it was one edit earlier — "Undo Add Giant Growth"
+	# returned the deck without its Giant Growth (2026-10-03).
+	_undo = null
 	_clear_button.text = "Restore deck"
 	refresh()
 	_say("Deck cleared")
@@ -4031,6 +4110,8 @@ func _open_deck_info(then := Callable(), reason := "",
 		if wanted == "":
 			_say(DeckModel.NAME_YOUR_DECK, true)
 		elif wanted != deck.deck_name:
+			# A rename is an undo step too — see the notes' OK above.
+			_remember(deck.duplicate_model(), "Rename")
 			deck.deck_name = wanted
 			_dirty = true
 			named = true
@@ -4226,20 +4307,68 @@ func _fill_load_rows(column: VBoxContainer, dialog: OriginalDialog,
 			# salmon slab on a dark-stone dialog with its letters lost in it.
 			var drop := OriginalDialog.button("Delete", Vector2(70, 24))
 			drop.size_flags_horizontal = Control.SIZE_SHRINK_END
+			var title := list.deck_name
 			drop.pressed.connect(func() -> void:
-				var refusal := DeckStore.delete_deck(path)
 				dialog.dismiss()
-				if refusal != "":
-					_say(refusal, true)
-				else:
-					_say("%s deleted" % path.get_file())
-					_show_load_dialog())
+				_confirm_delete(path, title))
 			row.add_child(drop)
 		column.add_child(row)
 		rows.append({"line": row,
 			"key": ("%s %s" % [list.deck_name, path.get_file()]).to_lower(),
 			"path": path})
 	return rows
+
+
+## ASK BEFORE A FILE GOES (2026-10-03). `Delete` removed the player's deck
+## on one click — a slip of the pointer from the title beside it was enough
+## — and there is no undo for a file. Either answer goes back to the list.
+## A deck on any slot that was saved under that file is unsaved work once
+## the file is gone ([method _mark_unsaved_after_delete]).
+func _confirm_delete(path: String, title: String) -> void:
+	var shown := title if title.strip_edges() != "" else path.get_file()
+	var dialog := _deck_save_question("Delete %s? This cannot be undone." % shown)
+	dialog.add_button("Delete").pressed.connect(func() -> void:
+		dialog.dismiss()
+		var refusal := DeckStore.delete_deck(path)
+		if refusal != "":
+			_say(refusal, true)
+			_show_load_dialog()
+			return
+		_say("%s deleted" % path.get_file())
+		# The list can replace the deck on the surface, so when THAT deck
+		# has just lost its file the list is reached through `@SAVE`, the
+		# way `Load deck` itself reaches it ([method _open_load_dialog]).
+		if _mark_unsaved_after_delete(path, title):
+			_open_load_dialog()
+		else:
+			_show_load_dialog())
+	dialog.add_button("Cancel").pressed.connect(func() -> void:
+		dialog.dismiss()
+		_show_load_dialog())
+	_show_dialog(dialog)
+
+
+## The deck on the surface — or in another slot — whose file was just
+## deleted is no longer saved anywhere: it was "clean" because the file
+## held it, and `Exit deck builder` dropped it without asking. A slot
+## counts when its deck saves to [param path] ([method DeckStore.path_for])
+## or carries the deleted file's [param title]; marking one too many only
+## costs a question at the exit. True when the deck ON THE SURFACE was one.
+func _mark_unsaved_after_delete(path: String, title: String) -> bool:
+	var surface := false
+	var gone := ProjectSettings.globalize_path(path).simplify_path()
+	for i in _slots.size():
+		var model: DeckModel = deck if i == _slot else _slots[i]
+		if model.total() + model.side_total() == 0:
+			continue
+		var saves_there := ProjectSettings.globalize_path(
+			DeckStore.path_for(model.deck_name)).simplify_path() == gone
+		if saves_there or (title != "" and model.deck_name == title):
+			if i == _slot:
+				_dirty = true
+				surface = true
+			_slot_dirty[i] = true
+	return surface
 
 
 ## The pip strip for one Load Deck row: the 1997 mana symbols for every
@@ -5601,6 +5730,12 @@ const SHORTCUTS := {
 }
 
 
+## The meta a dialog carries when its Cancel does more than close it
+## (the Filters window's restore): the Callable Escape runs instead of a
+## bare dismiss ([method _on_escape]).
+const ESCAPE_META := "escape_runs"
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if _fullscreen_card != null and _fullscreen_card.is_open():
 		_fullscreen_card._input(event)
@@ -5741,7 +5876,11 @@ func _on_escape() -> void:
 		return
 	var dialogs := open_dialogs()
 	if not dialogs.is_empty():
-		dialogs[-1].dismiss()
+		var front := dialogs[-1]
+		if front.has_meta(ESCAPE_META):
+			(front.get_meta(ESCAPE_META) as Callable).call()
+		else:
+			front.dismiss()
 		return
 	var box := _filter_bar.search_field
 	if box != null and (box.has_focus() or filter.text != ""):

@@ -115,6 +115,40 @@ func test_bug_hunt_dec_comments_do_not_rename_the_deck() -> void:
 	assert_eq(deck.cards.size(), 2)
 
 
+## Bug pass 2026-10-03: a count line had no upper bound. "5000000 Forest"
+## loaded five million copies, and a 20-digit count passed is_valid_int(),
+## clamped to INT64_MAX in to_int() and expanded forever — the setup screen
+## and the Deck Builder's import froze on one pasted line. No deck holds
+## more than 500 cards (`@TOOMANYCARDS`), so a bigger count is refused.
+func test_bug_pass_a_count_above_any_deck_is_refused_in_both_formats() -> void:
+	for strict in [true, false]:
+		var text := DeckList.new()
+		text.parse("5000000 Forest\n99999999999999999999 Island\n%d Plains\n2 Swamp\nSB: 501 Mountain\n"
+			% DeckList.MAX_COUNT, "x", strict)
+		assert_eq(text.errors.size(), 3, str(text.errors))
+		for error in text.errors:
+			assert_string_contains(error, "count too large")
+		assert_eq(text.cards.size(), DeckList.MAX_COUNT + 2, "the largest count still loads")
+		assert_eq(text.sideboard.size(), 0)
+		var dck := DeckList.new()
+		dck.parse_dck("Huge\n.1\t5000000\tForest\n.1\t99999999999999999999\tIsland\n.1\t2\tSwamp\n" +
+			".vNone\n.1\t501\tMountain\n", "x", strict)
+		assert_eq(dck.errors.size(), 3, str(dck.errors))
+		for error in dck.errors:
+			assert_string_contains(error, "count too large")
+		assert_eq(dck.cards, ["Swamp", "Swamp"] as Array[String])
+		assert_eq(dck.sideboard.size(), 0)
+
+
+## Bug pass 2026-10-03: the text parser stripped a Windows editor's UTF-8
+## BOM, the .dck parser kept it — in the deck's NAME, its first line.
+func test_bug_pass_a_dck_bom_is_not_part_of_the_deck_name() -> void:
+	var deck := DeckList.from_text("﻿Lord of Fate (Bl/Wh)\r\n.1\t2\tForest\r\n", "y.dck", true)
+	assert_eq(deck.errors, [] as Array[String])
+	assert_eq(deck.deck_name, "Lord of Fate")
+	assert_eq(deck.cards, ["Forest", "Forest"] as Array[String])
+
+
 # --------------------------------------------------------------- EloLedger --
 
 const ELO_TMP := "user://test_elo_ledger.txt"
@@ -638,8 +672,11 @@ func test_non_numbers_are_refused_not_read_as_zero() -> void:
 	assert_true(_parse(BASE + ["--lives", "20,abc"]).has("error"))
 	assert_true(_parse(BASE + ["--jobs", "-1"]).has("error"))
 	assert_eq(_parse(BASE + ["--jobs", "0"]).jobs, 0, "0 selects the default thread cap")
-	assert_eq(_parse(BASE + ["--seed", "-7"]).seed, -7,
-		"a negative seed is still a whole number")
+	# A negative seed IS a whole number, but MtgGame rolls its own for one,
+	# so the run could never be repeated — refused since 2026-10-03.
+	assert_string_contains(str(_parse(BASE + ["--seed", "-7"]).get("error", "")), "--seed",
+		"a negative seed is refused, by name")
+	assert_eq(_parse(BASE + ["--seed", "0"]).seed, 0, "0 is an ordinary seed")
 
 
 func test_help_names_every_rules_fork() -> void:
@@ -1223,6 +1260,27 @@ func test_the_progress_shape_is_the_terminals_answer_only_when_nobody_said() -> 
 	assert_false(lab._drawing_bar(),
 		"log keeps the accumulating lines on a terminal, which is the point")
 	OS.set_environment(LabConsole.TTY_ENV, tty)
+
+
+## `--progress json` (2026-10-03): the heartbeat a PROGRAM reads — one
+## JSON object a line on stderr, {"progress": {done, total, unit,
+## elapsed}}, about once a second; the MCP server turns each into a
+## `notifications/progress`. Never a bar, whatever stderr is.
+func test_the_json_progress_is_one_line_a_program_reads() -> void:
+	var lab := _lab()
+	assert_true(lab.PROGRESS_MODES.has(lab.PROGRESS_JSON))
+	var line: String = lab.progress_json(12, 400, 3.25, "games")
+	assert_false(line.contains("\n"))
+	var parsed = JSON.parse_string(line)
+	assert_true(parsed is Dictionary)
+	assert_eq(parsed.progress, {"done": 12.0, "total": 400.0, "unit": "games", "elapsed": 3.3})
+	var tty := OS.get_environment(LabConsole.TTY_ENV)
+	OS.set_environment(LabConsole.TTY_ENV, "1")
+	lab._progress_mode = lab.PROGRESS_JSON
+	assert_false(lab._drawing_bar(), "json on a terminal is still json")
+	OS.set_environment(LabConsole.TTY_ENV, tty)
+	assert_eq(lab.progress_mode({"quiet": true, "progress": "json"}), lab.PROGRESS_JSON,
+		"an explicit --progress json wins over the off --quiet implies")
 
 
 # ------------------------------------------------- the process fan-out --

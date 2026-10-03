@@ -220,7 +220,7 @@ func _ready() -> void:
 	# a front door on the shell instead. `game/help/help_screen.gd`.
 	var help := _menu_button("Help")
 	help.tooltip_text = "The mana, the rules, and every icon — explained."
-	help.pressed.connect(_open.bind("res://game/help/help_screen.tscn"))
+	help.pressed.connect(_open.bind("res://game/help/help_screen.tscn", help))
 	box.add_child(help)
 
 	var exit_button := _menu_button("Exit")
@@ -801,12 +801,18 @@ static func _corner_label(label: Label, size: int) -> void:
 ## POOL_SCREENS]) are opened from [method _process] the frame the pool
 ## is in; until then the pressed button says so in place of its label
 ## (the version corner already does), and a second card screen pressed
-## meanwhile takes the wait over. Options and Help read no card and open
-## at once; Exit quits at once. [param button] is the one to hold.
+## meanwhile takes the wait over. Options reads no card and opens at
+## once; Exit quits at once. [param button] is the one to hold.
+##
+## HELP IS A CARD SCREEN TOO (bug pass 2026-10-03): its format pages
+## list the restricted and banned cards the pool holds
+## (`HelpPages._page_format_lists` joins the build), so it froze the
+## title for the rest of the build while the list called it card-free.
 const POOL_SCREENS: Array[String] = [
 	"res://game/setup_screen.tscn",
 	"res://game/duel/gauntlet_screen.tscn",
 	"res://game/deck_builder/deck_builder_screen.tscn",
+	"res://game/help/help_screen.tscn",
 ]
 const WAITING_TEXT := "Loading cards…"
 

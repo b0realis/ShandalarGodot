@@ -446,6 +446,68 @@ func test_a_held_additional_cost_can_be_withdrawn() -> void:
 	assert_eq(g.stack.size(), 0)
 
 
+func test_a_refused_x_cast_leaves_no_x_on_the_card() -> void:
+	# Bug pass 2026-10-03 (CR 601.2h, 107.3b): the chosen X was stamped on
+	# the card BEFORE the mana check, so a Rock Hydra refused at X=5 kept
+	# memory["x_value"] = 5 in hand, and a later put-into-play (Eureka,
+	# Gaea's Touch...) entered it with five +1/+1 counters.
+	advance_to_step(Mtg.Step.MAIN1)
+	var hydra := give_hand(0, "Rock Hydra")
+	add_mana(0, Mtg.ManaColor.R, 2)
+	assert_refused(g.cast_spell(0, hydra, [], 5), "not enough mana")
+	assert_false(hydra.memory.has("x_value"), "a refused cast stamps nothing")
+	g.put_from_hand_into_play(hydra, 0)
+	assert_eq(int(hydra.counters.get("+1/+1", 0)), 0,
+		"put into play uncast, X is 0 (CR 107.3b)")
+
+
+func test_a_withdrawn_x_cast_leaves_no_x_on_the_card() -> void:
+	# The same for a cast held on a cost question and then withdrawn:
+	# Howl from Beyond for X=3 under Drought (Ice Age pack — the core pool
+	# has no X spell with a cost question) asks which Swamp to sacrifice.
+	CardPacks.set_enabled(IceAgePack.ID, true)
+	advance_to_step(Mtg.Step.MAIN1)
+	_human_seat(0)
+	put_battlefield(1, "Drought")
+	put_battlefield(0, "Swamp")
+	put_battlefield(0, "Swamp")
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var howl := give_hand(0, "Howl from Beyond")
+	add_mana(0, Mtg.ManaColor.B, 4)
+	assert_ok(g.cast_spell(0, howl, [TargetRef.card(bear)], 3))
+	assert_not_null(g.awaiting_choice, "the Drought sacrifice holds the cast")
+	assert_ok(g.cancel_choice())
+	assert_eq(howl.zone, Mtg.Zone.HAND)
+	assert_false(howl.memory.has("x_value"), "the withdrawn cast left no X behind")
+	CardPacks.set_enabled(IceAgePack.ID, false)
+
+
+func test_an_unfiltered_discard_cost_holds_the_duel_open() -> void:
+	# Bug pass 2026-10-03: "Discard a card:" with no filter (Land's Edge)
+	# went straight to choose_discard, so a seat that wanted to be asked got
+	# the heuristic's pick (the Bears) and an unanswered-ledger line, while
+	# the FILTERED discard just above it was held like every other cost.
+	advance_to_step(Mtg.Step.MAIN1)
+	_human_seat(0)
+	var edge := put_battlefield(0, "Land's Edge")
+	var forest := give_hand(0, "Forest")
+	var bear := give_hand(0, "Grizzly Bears")
+	assert_ok(g.activate_ability(0, edge, 0, [TargetRef.player(1)]))
+	assert_not_null(g.awaiting_choice, "the discard is the player's to choose")
+	assert_eq(g.awaiting_choice.kind, PlayerChoice.Kind.DISCARD)
+	assert_eq(g.awaiting_choice.count, 1)
+	assert_true(g.awaiting_choice.is_cost)
+	assert_eq(forest.zone, Mtg.Zone.HAND, "nothing was paid while it waits")
+	assert_eq(bear.zone, Mtg.Zone.HAND)
+	assert_ok(g.answer_choice(["Forest"]))
+	assert_null(g.awaiting_choice)
+	assert_eq(forest.zone, Mtg.Zone.GRAVEYARD, "the card the player picked went")
+	assert_eq(bear.zone, Mtg.Zone.HAND)
+	assert_eq(g.unanswered_choices.size(), 0, "nothing was decided for the seat")
+	resolve_stack()
+	assert_eq(g.players[1].life, 18, "a land was discarded: 2 damage")
+
+
 func test_a_turn_based_question_cannot_be_withdrawn() -> void:
 	# Smoke's untap pick is not a cost — the untap step has to finish.
 	put_battlefield(0, "Smoke")

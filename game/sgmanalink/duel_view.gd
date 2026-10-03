@@ -6,6 +6,9 @@ extends DuelScreen
 signal action_requested(action: Dictionary)
 signal reconnect_requested
 signal exit_requested
+## OK on a friendly duel's result: leave this room for the lobby, keeping
+## the connection — and, on a host, every other table (2026-10-03).
+signal leave_requested
 signal hall_requested
 signal tournament_requested
 
@@ -841,7 +844,13 @@ func _request_exit() -> void:
 	dialog.add_button("Confirm close").pressed.connect(exit_requested.emit)
 
 
+## OK LEAVES THE ROOM, NOT SGMANALINK (bug pass 2026-10-03). It emitted
+## exit_requested, which frees the whole lobby: the guest lost its seat
+## and connection, and a host's server stopped with every other table's
+## running duel — past the confirmation [method _request_exit] asks for.
+## A finished room is left like any other; the referee allows it once the
+## game is over, and the lobby comes back with its connection.
 func _on_game_over_dismissed() -> void:
 	super._on_game_over_dismissed()
 	if _room.has("tournament"): hall_requested.emit()
-	else: exit_requested.emit()
+	else: leave_requested.emit()

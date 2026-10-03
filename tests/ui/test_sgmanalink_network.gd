@@ -311,6 +311,147 @@ func test_incompatible_build_fails_before_allocating_a_seat() -> void:
 	assert_true(server._sessions.is_empty())
 
 
+## A guest of another build, exactly as its own code connects: its version's
+## subprotocol, and on opening the hello. Returns what the host answered.
+func _foreign_hello(subprotocol: String, hello: Dictionary) -> Array:
+	var socket := WebSocketPeer.new()
+	socket.supported_protocols = PackedStringArray([subprotocol])
+	assert_eq(socket.connect_to_url("ws://127.0.0.1:%d" % server.port), OK)
+	var answers: Array = []
+	var sent := false
+	for i in 400:
+		socket.poll()
+		var state := socket.get_ready_state()
+		if state == WebSocketPeer.STATE_OPEN and not sent:
+			sent = true
+			socket.send_text(SgProtocol.encode(hello))
+		while socket.get_available_packet_count() > 0:
+			answers.append(SgProtocol.decode_payload(socket.get_packet()))
+		if state == WebSocketPeer.STATE_CLOSED or not answers.is_empty(): break
+		await get_tree().process_frame
+	socket.close()
+	return answers
+
+
+## THE OTHER VERSION HEARS WHY (bug pass 2026-10-03). Every protocol bump
+## renames the WebSocket subprotocol, so a guest one version behind failed
+## the handshake itself and retried forever under "Host unavailable"; the
+## readable build comparison after the hello could never run. The host now
+## completes the older handshake to say which versions differ, in the fatal
+## shape every client since protocol 6 reads, and never seats it.
+func test_a_guest_of_another_protocol_version_hears_which_versions_differ() -> void:
+	var older := SgProtocol.VERSION - 1
+	var stamp := SgCompatibility.stamp()
+	stamp.game = "0.49.0"
+	var hello := {"v": older, "type": "hello", "access": server.access_code, "resume": "", "nickname": "",
+		"build": "0".repeat(64), "stamp": stamp}
+	var expected := "The host runs Shandalar %s (SGManalink protocol %d); you run Shandalar 0.49.0 (protocol %d). Both players need the same version." \
+		% [SgCompatibility.game_version(), SgProtocol.VERSION, older]
+	var answers := await _foreign_hello("sgmanalink-local-v%d" % older, hello)
+	assert_eq(answers.size(), 1, "the older handshake completes and the guest hears a reason")
+	if answers.is_empty(): return
+	assert_true(SgViewProtocol.valid(answers[0]) and SgProtocol.exact(answers[0], ["type", "error"]))
+	assert_eq(String(answers[0].get("error")), expected)
+	# Its own `v` on this version's subprotocol: named the same way.
+	answers = await _foreign_hello(SgProtocol.SUBPROTOCOL, hello)
+	assert_eq(String(answers[0].get("error", "")) if not answers.is_empty() else "", expected)
+	# A hello from before the readable stamp still hears the protocols.
+	hello.erase("stamp")
+	hello.erase("build")
+	answers = await _foreign_hello("sgmanalink-local-v%d" % older, hello)
+	assert_eq(String(answers[0].get("error", "")) if not answers.is_empty() else "",
+		"The host runs Shandalar %s (SGManalink protocol %d); your game uses protocol %d. Both players need the same version." \
+		% [SgCompatibility.game_version(), SgProtocol.VERSION, older])
+	# Without the access code, nothing about this host but the refusal.
+	hello.access = "0".repeat(64)
+	answers = await _foreign_hello("sgmanalink-local-v%d" % older, hello)
+	assert_string_contains(String(answers[0].get("error", "")) if not answers.is_empty() else "", "Invalid invitation")
+	# Another version's handshake never seats a guest, whatever its hello claims.
+	answers = await _foreign_hello("sgmanalink-local-v%d" % older, {"v": SgProtocol.VERSION, "type": "hello",
+		"access": server.access_code, "resume": "", "nickname": "", "build": SgCompatibility.fingerprint(),
+		"stamp": SgCompatibility.stamp()})
+	assert_string_contains(String(answers[0].get("error", "")) if not answers.is_empty() else "", "protocol %d" % older)
+	assert_true(server._sessions.is_empty())
+	assert_true(server._tokens.is_empty())
+
+
+## A stand-in for a host of another build: it completes only its own
+## version's handshake and, with [param hang_up], closes on the first packet.
+## Polls until [param done] holds; returns the connections it accepted.
+func _foreign_host(subprotocol: String, client: SgLocalClient, done: Callable, hang_up := false) -> int:
+	var listener := TCPServer.new()
+	assert_eq(listener.listen(0, "127.0.0.1"), OK)
+	assert_eq(client.connect_local(listener.get_local_port(), "0".repeat(64)), OK)
+	var peers: Array[WebSocketPeer] = []
+	for i in 600:
+		if listener.is_connection_available():
+			var peer := WebSocketPeer.new()
+			peer.supported_protocols = PackedStringArray([subprotocol])
+			peer.accept_stream(listener.take_connection())
+			peers.append(peer)
+		for peer in peers:
+			peer.poll()
+			if hang_up and peer.get_available_packet_count() > 0:
+				peer.get_packet()
+				peer.close(-1)
+		# Retry at once: the backoff is not under test.
+		if client._socket != null and client._socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+			client._retry_at = 0
+		if done.call(): break
+		await get_tree().process_frame
+	listener.stop()
+	return peers.size()
+
+
+func test_a_host_of_another_protocol_version_is_named_and_not_retried() -> void:
+	# This client offers every earlier subprotocol beside its own, so an
+	# older host completes the handshake by choosing its own — which names it.
+	var older := SgProtocol.VERSION - 1
+	var attempts := await _foreign_host("sgmanalink-local-v%d" % older, a, func() -> bool: return not a._wanted)
+	assert_false(a._wanted, "a different version is not retried")
+	assert_eq(attempts, 1)
+	assert_eq(a.status, "The host runs an older version of Shandalar (SGManalink protocol %d; you run %d). Both players need the same version." \
+		% [older, SgProtocol.VERSION])
+	assert_eq(SgProtocol.subprotocols()[0], SgProtocol.SUBPROTOCOL, "its own version first, so a current host picks it")
+
+
+func test_a_host_that_hangs_up_on_the_hello_is_not_retried_forever() -> void:
+	# A host that closes on the hello without a word — an earlier build
+	# that cannot read it — is given a few attempts, then named a suspect.
+	var attempts := await _foreign_host(SgProtocol.SUBPROTOCOL, a, func() -> bool: return not a._wanted, true)
+	assert_false(a._wanted)
+	assert_eq(attempts, SgLocalClient.UNANSWERED_LIMIT)
+	assert_string_contains(a.status, "may run a different version of Shandalar")
+	# A host that is simply not there is still retried (unchanged).
+	var listener := TCPServer.new()
+	assert_eq(listener.listen(0, "127.0.0.1"), OK)
+	var port := listener.get_local_port()
+	listener.stop()
+	a.forget()
+	assert_eq(a.connect_local(port, "0".repeat(64)), OK)
+	for i in 60: await get_tree().process_frame
+	assert_true(a._wanted, "an unreachable host is retried")
+
+
+## An invitation from another version cannot be parsed, and used to be
+## refused as incomplete; the lobby now says which versions differ.
+func test_an_invitation_from_another_version_names_both_versions() -> void:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(960, 600)
+	add_child_autofree(viewport)
+	var lobby := SgLobby.new()
+	viewport.add_child(lobby)
+	for i in 4: await get_tree().process_frame
+	var older := SgProtocol.VERSION - 1
+	lobby._code.text = SgLanInvite.PREFIX + Marshalls.raw_to_base64(JSON.stringify({"v": older,
+		"address": "192.168.1.2", "port": 17897, "access": "a".repeat(64),
+		"certificate": "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n"}).to_utf8_buffer())
+	lobby._connect_local()
+	assert_eq(lobby._notice.text, "This invitation is from an older version of Shandalar (SGManalink protocol %d; you run %d). Both players need the same version." \
+		% [older, SgProtocol.VERSION])
+	assert_false(lobby.client.connecting())
+
+
 func test_reconnect_waits_for_fresh_snapshot_before_enabling_input() -> void:
 	server.stop()
 	var gate := SnapshotGateServer.new()
@@ -494,6 +635,92 @@ func test_gui_host_browser_join_and_ready_reach_a_private_table() -> void:
 	first.service.stop()
 
 
+## OK ON A FRIENDLY RESULT LEAVES THE ROOM, NOT SGMANALINK (bug pass
+## 2026-10-03). It used to free the whole lobby: the guest lost its
+## connection, and on the host the server stopped with it — every other
+## table's running duel ended, past the confirmation Close asks for.
+func test_ok_on_a_friendly_result_returns_both_players_to_the_lobby() -> void:
+	var lobbies: Array[SgLobby] = []
+	for i in 2:
+		var viewport := SubViewport.new()
+		viewport.size = Vector2i(960, 600)
+		add_child_autofree(viewport)
+		var lobby := SgLobby.new()
+		viewport.add_child(lobby)
+		lobbies.append(lobby)
+	var host := lobbies[0]
+	var guest := lobbies[1]
+	host._port.min_value = 0
+	host._port.value = 0
+	host._start_service()
+	assert_not_null(host.service)
+	if host.service == null: return
+	var service := host.service
+	guest._port.value = service.port
+	guest._code.text = service.access_code
+	guest._connect_local()
+	await _until(func() -> bool: return host.client.online and guest.client.online)
+	# Another table on the same host, mid-duel throughout.
+	server.stop()
+	assert_eq(a.connect_local(service.port, service.access_code), OK)
+	assert_eq(b.connect_local(service.port, service.access_code), OK)
+	await _until(func() -> bool: return a.online and b.online)
+	await _act(a, {"op": "host", "name": "Other table", "decks": "own", "deck": {}})
+	await _act(b, {"op": "join", "room": a.state.room.id})
+	await _act(a, {"op": "ready", "value": true})
+	await _act(b, {"op": "ready", "value": true})
+	assert_false(a.state.room.game.is_empty(), "the other table's duel runs")
+	# The host's own friendly table.
+	await _act(host.client, {"op": "host", "name": "Friendly", "decks": "own", "deck": {}})
+	await _act(guest.client, {"op": "join", "room": host.client.state.room.id})
+	await _act(host.client, {"op": "ready", "value": true})
+	await _act(guest.client, {"op": "ready", "value": true})
+	await _until(func() -> bool: return is_instance_valid(host._duel) and is_instance_valid(guest._duel))
+	await _act(guest.client, {"op": "concede"})
+	await _until(func() -> bool: return int(host.client.state.room.game.get("winner", -1)) == 0 \
+		and int(guest.client.state.room.game.get("winner", -1)) == 0)
+	for i in 4: await get_tree().process_frame
+	for lobby in lobbies: watch_signals(lobby._duel)
+	var guest_duel := guest._duel
+	guest_duel._on_game_over_dismissed()
+	assert_signal_not_emitted(guest_duel, "exit_requested")
+	await _until(func() -> bool: return guest.client.state.room.is_empty() and not is_instance_valid(guest._duel))
+	assert_true(is_instance_valid(guest), "the guest's lobby stays open")
+	assert_true(guest.client.online, "with its connection")
+	assert_true(guest._shell.visible)
+	var host_duel := host._duel
+	host_duel._on_game_over_dismissed()
+	assert_signal_not_emitted(host_duel, "exit_requested")
+	await _until(func() -> bool: return host.client.state.room.is_empty() and not is_instance_valid(host._duel))
+	assert_true(is_instance_valid(host))
+	assert_true(service._listener.is_listening(), "the host keeps hosting")
+	assert_true(service._rooms.size() == 1, "the finished room is gone; the other table stays")
+	for i in 30: await get_tree().process_frame
+	assert_true(a.online and b.online, "the other table's players stay connected")
+	assert_false(a.state.room.game.is_empty())
+	assert_eq(int(a.state.room.game.winner), -1, "their duel keeps running")
+	host.client.forget()
+	guest.client.forget()
+	service.stop()
+
+
+## The OK above leaves with whatever revision the player last saw; the
+## opponent leaving first has already moved it on. A finished duel has
+## nothing left that a fresher room could change, like a concession.
+func test_leaving_a_finished_duel_needs_no_fresh_revision() -> void:
+	await _start_duel()
+	var room_id := String(a.state.room.id)
+	a.state.room.revision = 0
+	await _act(a, {"op": "leave"})
+	assert_eq(String(a.state.room.get("id", "")), room_id, "a running duel is still left only by its rules")
+	await _act(b, {"op": "concede"})
+	await _act(b, {"op": "leave"})
+	a.state.room.revision = 0
+	await _act(a, {"op": "leave"})
+	assert_true(a.state.room.is_empty())
+	assert_false(server._rooms.has(room_id))
+
+
 func test_disconnect_pauses_play_and_resuming_replaces_the_old_connection() -> void:
 	await _start_duel()
 	a.set_process(false)
@@ -643,6 +870,62 @@ func test_lan_discovery_real_udp_reply_has_no_credentials_and_stops() -> void:
 	assert_true(scanner.hosts.is_empty())
 	scanner.stop()
 	assert_false(scanner._socket.is_bound())
+
+
+## A HOST OF ANOTHER VERSION IS LISTED AS SUCH (bug pass 2026-10-03). A
+## query and a reply each carry their version, and both ends used to drop
+## any other one unread: two builds apart simply never saw each other.
+func test_lan_discovery_lists_a_host_of_another_version_as_such() -> void:
+	var advertiser := SgLanDiscovery.new()
+	add_child_autofree(advertiser)
+	var advert := {"address": "127.0.0.1", "port": server.port, "name": "Forest Fox", "access": "invitation", "tables": [],
+		"fingerprint": "a".repeat(64), "rooms": 1, "build": SgCompatibility.fingerprint(), "stamp": SgCompatibility.stamp()}
+	assert_eq(advertiser.advertise(advert, 0), OK)
+	# A browser of the next version asks; this host answers in its own words.
+	var newer := PacketPeerUDP.new()
+	assert_eq(newer.bind(0, "127.0.0.1"), OK)
+	assert_eq(newer.set_dest_address("127.0.0.1", advertiser._socket.get_local_port()), OK)
+	assert_eq(newer.put_packet(JSON.stringify({"v": SgProtocol.VERSION + 1,
+		"type": "sg-lan-query", "nonce": "c".repeat(64)}).to_ascii_buffer()), OK)
+	await _until(func() -> bool: return newer.get_available_packet_count() > 0)
+	var reply := SgProtocol.decode_payload(newer.get_packet(), 4)
+	newer.close()
+	assert_eq(int(reply.get("v", 0)), SgProtocol.VERSION)
+	assert_eq(String(reply.get("nonce", "")), "c".repeat(64))
+	# This browser hears an older host's reply: listed, not joinable.
+	var lobby := SgLobby.new()
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(960, 600)
+	add_child_autofree(viewport)
+	viewport.add_child(lobby)
+	for i in 4: await get_tree().process_frame
+	lobby._show_page("browser")
+	lobby._scan_lan()
+	var scanner: SgLanDiscovery = lobby._discovery
+	assert_true(scanner.scanning)
+	var older := SgProtocol.VERSION - 1
+	var stamp := SgCompatibility.stamp()
+	stamp.game = "0.49.0"
+	var old_reply := {"v": older, "type": "sg-lan-host", "nonce": scanner._nonce,
+		"host": {"address": "192.168.0.7", "port": 17897, "name": "Amber Owl", "stamp": stamp, "shape": "of its own"}}
+	assert_false(scanner.accept_reply(old_reply, "192.168.0.7", Time.get_ticks_msec()), "never a joinable listing")
+	assert_true(scanner.hosts.is_empty())
+	assert_eq(scanner.others.size(), 1)
+	for i in 4: await get_tree().process_frame
+	var texts := PackedStringArray()
+	for label: Label in lobby._body.find_children("*", "Label", true, false): texts.append(label.text)
+	assert_true(texts.has("Amber Owl"))
+	assert_true(texts.has("Shandalar 0.49.0"))
+	var other: Button
+	for button: Button in lobby._body.find_children("*", "Button", true, false):
+		if button.text == "Other version": other = button
+	assert_not_null(other)
+	if other == null: return
+	other.pressed.emit()
+	assert_eq(lobby._notice.text, "This host runs Shandalar 0.49.0 (SGManalink protocol %d); you run Shandalar %s (protocol %d). Both players need the same version." \
+		% [older, SgCompatibility.game_version(), SgProtocol.VERSION])
+	assert_false(lobby.client.connecting())
+	advertiser.stop()
 
 
 func test_hostile_server_view_is_refused_without_exposing_it_to_ui() -> void:

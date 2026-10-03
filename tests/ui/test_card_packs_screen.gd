@@ -191,3 +191,84 @@ func test_selected_set_chooses_reprint_art_without_changing_identity() -> void:
 			filter.toggle_set(code)
 	assert_eq(filter.preferred_printing(data), "4ed")
 	assert_eq(CardRegistry.all_names().count("Disenchant"), 1)
+
+
+## THE CATALOGUE LOCK REACHES EVERY PACK (bug pass 2026-10-03). While an
+## SGManalink session holds the catalogue, `_refresh` greys every pack
+## button and says why on its tooltip — but its list stopped at Pack 6,
+## so Pack 7's two stayed live under the lock. The tooltip is the tell
+## that works on any machine: only the lock loop writes the refusal there,
+## whether or not the pack itself was found.
+func test_the_catalogue_lock_greys_every_packs_buttons() -> void:
+	var holder := RefCounted.new()
+	CardPacks.lock_catalogue(holder)
+	var refusal := CardPacks.change_refusal()
+	assert_ne(refusal, "", "a held catalogue says why")
+	var page := await _screen("res://game/card_packs_screen.tscn")
+	for n in range(1, 8):
+		for verb in ["Enable", "Disable"]:
+			var button := _button(page, "%sPack%d" % [verb, n])
+			assert_not_null(button, "%sPack%d" % [verb, n])
+			if button == null:
+				continue
+			assert_true(button.disabled, "%s is greyed under the lock" % button.name)
+			assert_eq(button.tooltip_text, refusal, "%s says why" % button.name)
+	CardPacks.unlock_catalogue(holder)
+
+
+# ================================ bug pass 2026-10-03: shared reprints ==
+#
+# Pyroclasm is Ice Age's card and Portal carries it too. A deck saved with
+# Ice Age on declared `# requires-pack: pack-3`, the declaration was
+# carried for ever, and the gates checked DECLARED ids — so the deck was
+# refused once Ice Age went off although the enabled Portal pack provides
+# the card (`_shared_provider`'s own rule: any one enabled provider), and
+# every re-save under another provider declared one pack more.
+
+func _only_enabled(ids: Array) -> void:
+	for id in CardPacks.known_ids():
+		CardPacks.set_enabled(id, ids.has(id))
+
+
+func test_a_shared_reprint_needs_any_one_enabled_provider() -> void:
+	_only_enabled([IceAgePack.ID, PortalPack.ID])
+	var names: Array[String] = ["Pyroclasm", "Mountain"]
+	var declared: Array[String] = [IceAgePack.ID]
+	assert_eq(CardPacks.effective_requirements(declared, names), [] as Array[String],
+		"Portal provides Pyroclasm as well")
+	_only_enabled([PortalPack.ID])
+	assert_eq(CardPacks.missing_requirements(
+		CardPacks.effective_requirements(declared, names)), [] as Array[String],
+		"Ice Age off, Portal on: nothing is missing")
+	_only_enabled([])
+	assert_eq(CardPacks.effective_requirements(declared, names), declared,
+		"no other provider on: the declaration stands")
+	_only_enabled([PortalPack.ID])
+	var with_new: Array[String] = ["Pyroclasm", "Arctic Foxes"]
+	assert_eq(CardPacks.effective_requirements(declared, with_new), declared,
+		"an Ice Age card only Ice Age provides keeps it")
+	var unexplained: Array[String] = ["Mountain"]
+	assert_eq(CardPacks.effective_requirements(declared, unexplained), declared,
+		"a declaration no card explains is kept as written")
+	var pack_one: Array[String] = [CardPacks.ID]
+	assert_eq(CardPacks.effective_requirements(pack_one, names), pack_one,
+		"Pack 1's own ids (printings) are kept")
+
+
+func test_a_deck_saved_under_one_provider_loads_and_saves_under_another() -> void:
+	_only_enabled([PortalPack.ID])
+	var file := FileAccess.open(DECK_PATH, FileAccess.WRITE)
+	file.store_string("# requires-pack: pack-3\nname: Burn\n4 Pyroclasm\n36 Mountain\n")
+	file.close()
+	var builder := await _screen(
+		"res://game/deck_builder/deck_builder_screen.tscn") as DeckBuilderScreen
+	builder._load_deck(DECK_PATH)
+	await get_tree().process_frame
+	assert_false(is_instance_valid(builder._pack_requirement_notice),
+		"no pack to ask for: Portal provides the card")
+	assert_eq(builder.deck.deck_name, "Burn")
+	assert_eq(builder.deck.count_of("Pyroclasm"), 4)
+	var text := builder.deck.to_text()
+	assert_string_contains(text, "# requires-pack: pack-6")
+	assert_false(text.contains("# requires-pack: pack-3"),
+		"the re-save names the provider in play, not one more pack")

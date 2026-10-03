@@ -30,10 +30,14 @@ extends CardScript
 ##
 ## Implementation (lifted 2026-09-02; was "combat re-arrangement" in
 ## docs/simplified-cards.md): the piles and the labels are worked out when
-## the trigger resolves and remembered on the enchantment; a static
-## ability then writes one block restriction per labelled attacker, so the
+## the trigger resolves (and remembered on the enchantment, for the log and
+## the tests), and each labelled attacker gets an until-end-of-combat block
+## restriction (ContinuousEffects.add_until_eot_block_restriction), so the
 ## whole thing rides the normal "can't be blocked except by …" machinery
-## every other evasion card uses. BOTH divisions are the players' choices
+## every other evasion card uses. The restriction is the RESOLVED
+## trigger's effect, so it lasts "this combat" whatever becomes of the
+## River (CR 611.2a); until 2026-10-03 it was a static reading the River's
+## memory, and destroying the River before blocks lifted it. BOTH divisions are the players' choices
 ## through the DecisionAgent funnel — the defender sorts each non-flyer
 ## onto a bank ("left bank" / "right bank"; the hint alternates so the
 ## default split is even, which is what the engine used to do on its own),
@@ -62,8 +66,6 @@ func build() -> CardData:
 			Mtg.EventType.DECLARED_ATTACKERS, _split_the_river,
 			"Whenever one or more creatures you control attack, each defending player divides their non-flying creatures into a left and a right pile, and each attacker picks a side.",
 			_my_attackers)) \
-		.static_ability(StaticAbility.new(_apply_labels,
-			"Attacking creatures can't be blocked except by flyers and creatures in the pile with the chosen label.")) \
 		.oracle("Whenever one or more creatures you control attack, each defending player divides all creatures without flying they control into a \"left\" pile and a \"right\" pile. Then, for each attacking creature you control, choose \"left\" or \"right.\" That creature can't be blocked this combat except by creatures with flying and creatures in a pile with the chosen label.")
 
 
@@ -75,7 +77,9 @@ static func _my_attackers(_game: MtgGame, source: CardInstance, event: GameEvent
 
 
 static func _split_the_river(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
-	var controller := source.controller_id
+	var controller := game.current_resolution_controller()
+	if controller < 0:
+		controller = source.controller_id
 	var defender := game.opponent_of(controller)
 	var left: Array = []
 	var right: Array = []
@@ -94,8 +98,6 @@ static func _split_the_river(game: MtgGame, source: CardInstance, event: GameEve
 		else:
 			left.append(inst.id)
 		i += 1
-	source.memory["left"] = left
-	source.memory["right"] = right
 	game.log_line("Raging River splits the defenders %d / %d" % [left.size(), right.size()])
 	# Then the attacking player's label per attacker (`@RAGING_RIVER`
 	# entries 2 and 3). The hint is the smaller pile — the harder side to
@@ -110,23 +112,16 @@ static func _split_the_river(game: MtgGame, source: CardInstance, event: GameEve
 			"Raging River: %s attacks on which bank?" % inst.data.card_name, hint)
 		labels[inst.id] = "right" if side == 1 else "left"
 		game.log_line("%s attacks on the %s bank" % [inst.data.card_name, labels[inst.id]])
-	source.memory["labels"] = labels
+		# "That creature can't be blocked THIS COMBAT except by ..." — bound
+		# to the attacker by this resolution, not a static of the River.
+		game.continuous.add_until_eot_block_restriction(inst.id,
+			"flyers and the %s pile" % String(labels[inst.id]),
+			_in_pile.bind(right if side == 1 else left), true)
+	if source.zone == Mtg.Zone.BATTLEFIELD:
+		source.memory["left"] = left
+		source.memory["right"] = right
+		source.memory["labels"] = labels
 	game.recalculate()
-
-
-static func _apply_labels(game: MtgGame, source: CardInstance) -> void:
-	var labels: Dictionary = source.memory.get("labels", {})
-	for attacker_id in labels:
-		var attacker := game.find_instance(attacker_id)
-		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD:
-			continue
-		if not game.combat.attackers.has(attacker_id):
-			continue
-		var pile: Array = source.memory.get(String(labels[attacker_id]), [])
-		attacker.cur_block_restrictions.append({
-			"desc": "flyers and the %s pile" % String(labels[attacker_id]),
-			"filter": _in_pile.bind(pile),
-		})
 
 
 ## Only flyers and members of the chosen pile may block.

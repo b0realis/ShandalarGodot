@@ -68,7 +68,7 @@ func test_fullscreen_card_choice_is_persisted_and_restored() -> void:
 	var switch := screen.find_child("FullscreenCards", true, false) as CheckButton
 	switch.button_pressed = true
 	assert_eq(_on_disk("fullscreen_cards"), true)
-	Settings.reload()
+	Settings.reload_file()
 	assert_true(Settings.fullscreen_cards())
 	var fresh: Control = load("res://game/options_screen.tscn").instantiate()
 	add_child_autofree(fresh)
@@ -162,7 +162,7 @@ func test_the_choice_survives_a_reload_of_the_file() -> void:
 	# What "keep as default on your next run" means for this key: the
 	# in-memory copy is forgotten and the file alone has to carry it.
 	GameDisplay.set_fullscreen(true)
-	Settings.reload()
+	Settings.reload_file()
 	assert_true(Settings.fullscreen(), "the file carries the choice")
 
 

@@ -287,12 +287,14 @@ func _card_packs() -> Node:
 
 ## Which of [param ids] the CardPacks autoload has NOT enabled — none
 ## when it is not running, so a deck is never refused for a pack this
-## process cannot see.
-func _missing_packs(ids: Array[String]) -> Array[String]:
+## process cannot see. [param names] are the deck's cards: a declared pack
+## whose cards another enabled pack provides is not a wall ([method
+## CardPacks.effective_requirements], bug pass 2026-10-03).
+func _missing_packs(ids: Array[String], names: Array[String] = []) -> Array[String]:
 	var packs := _card_packs()
 	if packs == null:
 		return []
-	return packs.missing_requirements(ids)
+	return packs.missing_requirements(packs.effective_requirements(ids, names))
 
 
 ## The pack's label for a note or a refusal; the bare id without the
@@ -351,7 +353,9 @@ func _scan_decks() -> void:
 		# below agree, and a deck listed for its proxies still shows the
 		# colours of the cards it does hold.
 		_deck_masks[path] = DeckStore.colors_of(lenient)
-		var missing := _missing_packs(lenient.required_packs)
+		var deck_names: Array[String] = []
+		deck_names.assign(lenient.cards + lenient.sideboard)
+		var missing := _missing_packs(lenient.required_packs, deck_names)
 		if not missing.is_empty() and lenient.errors.is_empty() \
 				and lenient.cards.size() >= DeckModel.CASUAL_MIN_CARDS:
 			_deck_paths.append(path)
@@ -810,7 +814,10 @@ func _update_territory_preview() -> void:
 		child.queue_free()
 	var meta: Variant = _deck_options[0].get_selected_metadata()
 	var deck_color := "white"
-	if meta != null and str(meta) != "":
+	# A pooled row (`group:…`) is not a deck file yet — read as one it
+	# was a file that does not load, so always "white" (bug pass
+	# 2026-10-03). Like `<random deck>`, it keeps the default.
+	if meta != null and str(meta) != "" and not str(meta).begins_with(GROUP_RANDOM):
 		deck_color = _color_of(str(meta))
 	_territory_preview.add_child(TerritoryGround.node(
 		DuelOptions.ground_color_for(0, 0, deck_color),
@@ -940,8 +947,12 @@ func _cycle_portrait(pid: int, step: int) -> void:
 	var faces := PortraitLibrary.all()
 	if faces.is_empty():
 		return
+	# FROM THE FACE ON SHOW ([method _chosen_portrait]), not from face 0:
+	# a seat that had chosen nothing showed its own default and its first
+	# press stepped from the first face — seat 2 "moved" onto the face it
+	# was already wearing (bug pass 2026-10-03).
 	var index := 0
-	var current := String(Settings.get_value(PORTRAIT_KEY % pid, ""))
+	var current := String(_chosen_portrait(pid)["id"])
 	for i in faces.size():
 		if faces[i]["id"] == current:
 			index = i
@@ -964,15 +975,27 @@ func _update_portrait(pid: int) -> void:
 		_portrait_rects[pid].texture = null
 		_portrait_captions[pid].text = NO_PORTRAITS
 		return
-	var current := String(Settings.get_value(PORTRAIT_KEY % pid, ""))
-	var chosen: Dictionary = faces[mini(pid, faces.size() - 1)]
-	for face in faces:
-		if face["id"] == current:
-			chosen = face
-			break
+	var chosen := _chosen_portrait(pid)
 	_portrait_rects[pid].texture = PortraitLibrary.texture(String(chosen["id"]))
 	_portrait_captions[pid].text = String(chosen["name"])
 	_portrait_captions[pid].tooltip_text = String(chosen["name"])
+
+
+## THE FACE A SEAT WEARS — the one resolver the chooser shows, the arrows
+## step from and `Go!` hands the duel ([method _build_config]). The stored
+## id when it names a portrait there is; otherwise the seat's own default,
+## the library's face for that seat. Until the bug pass of 2026-10-03 the
+## chooser showed that default while the duel was handed "" and wore the
+## deck-colour duelist instead. `{}` when there is no portrait art at all.
+func _chosen_portrait(pid: int) -> Dictionary:
+	var faces := PortraitLibrary.all()
+	if faces.is_empty():
+		return {}
+	var current := String(Settings.get_value(PORTRAIT_KEY % pid, ""))
+	for face in faces:
+		if face["id"] == current:
+			return face
+	return faces[mini(pid, faces.size() - 1)]
 
 
 ## Repoint one seat's portrait at whatever its picker now names. On
@@ -987,6 +1010,15 @@ func _update_face(pid: int) -> void:
 	if path == "":
 		_face_rects[pid].texture = null
 		_face_captions[pid].text = RANDOM_DECK
+		return
+	# `<random from …>` is the same promise not yet kept: the seed draws
+	# its deck at `Go!`. Its metadata is `group:…`, which this read as a
+	# deck path — no file, no cards, a "White duelist" on every pooled
+	# seat (bug pass 2026-10-03). Empty, and named by its own row.
+	if path.begins_with(GROUP_RANDOM):
+		_face_rects[pid].texture = null
+		_face_captions[pid].text = _deck_options[pid].get_item_text(
+			_deck_options[pid].selected)
 		return
 	var color := _color_of(path)
 	_face_rects[pid].texture = DuelistFace.portrait(color)
@@ -1614,8 +1646,7 @@ func _build_config() -> DuelConfig:
 		# splash printed until the 2026-09-08 playtest saw it: *"it
 		# writes random deck and not the actually randomly chosen deck"*.
 		config.deck_names[pid] = _deck_label(paths[pid], deck.deck_name)
-		config.portraits[pid] = String(
-			Settings.get_value(PORTRAIT_KEY % pid, ""))
+		config.portraits[pid] = String(_chosen_portrait(pid).get("id", ""))
 		config.lives[pid] = int(_life_spins[pid].value)
 		config.panel_colors[pid] = DuelConfig.dominant_color(deck.cards)
 		var seat_is_ai: bool = (_mode == BattleMode.DEMO) \

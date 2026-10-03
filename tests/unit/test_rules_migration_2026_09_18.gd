@@ -33,7 +33,7 @@ func after_each() -> void:
 		file.close()
 	elif FileAccess.file_exists(_path):
 		DirAccess.remove_absolute(_path)
-	Settings.reload()
+	Settings.reload_file()
 
 
 ## Put exactly these keys in the file and read it as a fresh boot would.
@@ -42,7 +42,7 @@ func _boot_with(values: Dictionary) -> void:
 	for key in values:
 		file.set_value("options", key, values[key])
 	assert_eq(file.save(Settings.PATH), OK)
-	Settings.reload()
+	Settings.reload_file()
 
 
 static func _on_disk(key: String) -> Variant:
@@ -101,7 +101,7 @@ func test_the_1997_preset_file_needs_nothing_but_the_marker() -> void:
 func test_a_file_without_the_fork_is_not_written() -> void:
 	_boot_with({"music_volume_db": -6.0})
 	var writes := Settings.write_count
-	Settings.reload()
+	Settings.reload_file()
 	assert_eq(Settings.write_count, writes, "nothing to migrate, nothing written")
 	assert_null(_on_disk(Settings.RULES_REVISION_KEY))
 	assert_true(Settings.rule("free_damage_assignment"), "the built-in default")

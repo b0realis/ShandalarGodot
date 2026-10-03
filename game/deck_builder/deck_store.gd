@@ -379,6 +379,14 @@ static func file_stem(deck_name: String) -> String:
 		and out[3] >= "1" and out[3] <= "9"
 	if out in ["con", "prn", "aux", "nul"] or numbered_device:
 		return "deck_" + out
+	# A TITLE WITH NOTHING LATIN IN IT (bug pass of 2026-10-03): `Колода
+	# огня` and `龍のデッキ` both folded to "" and so to `new_deck` — the
+	# default deck's file, and each other's, so the second save asked to
+	# overwrite the first. Such a title gets a stem of its own from its
+	# digest; every title that folds to something keeps the stem it had.
+	var title := deck_name.strip_edges().to_lower()
+	if out == "" and title != "":
+		return "deck_" + title.md5_text().left(10)
 	return out if out != "" else "new_deck"
 
 
@@ -408,11 +416,11 @@ static func save(deck: DeckModel) -> String:
 	DirAccess.make_dir_recursive_absolute(
 		ProjectSettings.globalize_path(USER_DIR))
 	var path := path_for(deck.deck_name)
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
+	# WHOLE OR NOT AT ALL (bug pass of 2026-10-03): the deck was written
+	# over in place and the write never checked, so a full disk cut the
+	# player's deck short and this said it had been saved.
+	if Settings.write_atomically(path, deck.to_text().to_utf8_buffer()) != OK:
 		return SAVE_ERROR % path.get_file()
-	file.store_string(deck.to_text())
-	file.close()
 	return ""
 
 
@@ -636,12 +644,11 @@ static func export_deck(deck: DeckModel, extension: String,
 	DirAccess.make_dir_recursive_absolute(
 		ProjectSettings.globalize_path(EXPORT_DIR))
 	var path := "%s/%s%s" % [EXPORT_DIR, file_stem(deck.deck_name), extension]
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
+	# Whole or not at all, as [method save] writes.
+	var text := deck.to_dck_text(dck_ids()) if extension == ".dck" \
+		else deck.to_dec_text()
+	if Settings.write_atomically(path, text.to_utf8_buffer()) != OK:
 		return SAVE_ERROR % path.get_file()
-	file.store_string(deck.to_dck_text(dck_ids()) if extension == ".dck"
-		else deck.to_dec_text())
-	file.close()
 	out_path.append(path)
 	return ""
 

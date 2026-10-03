@@ -100,6 +100,30 @@ func test_johan_declined_leaves_the_team_tapping() -> void:
 	assert_true(bear.tapped)
 
 
+func test_a_johan_tapped_after_the_offer_lets_the_team_tap() -> void:
+	# Bug pass 2026-10-03: "...doesn't cause creatures you control to tap
+	# this combat IF JOHAN IS UNTAPPED" is judged as the attackers tap, not
+	# as the offer resolves. An Icy Manipulator on Johan between the two
+	# used to leave the team attacking untapped anyway.
+	g.set_agent(0, Eager.new())
+	var johan := put_battlefield(0, "Johan")
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var giant := put_battlefield(0, "Hill Giant")
+	var icy := put_battlefield(1, "Icy Manipulator")
+	advance_to_step(Mtg.Step.COMBAT_BEGIN)
+	resolve_stack()
+	assert_true(g.attacks_without_tapping.has(0), "the offer was taken")
+	assert_ok(g.pass_priority(0))
+	add_mana(1, Mtg.ManaColor.C)
+	assert_ok(g.activate_ability(1, icy, 0, [TargetRef.card(johan)]))
+	resolve_stack()
+	assert_true(johan.tapped)
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [bear.id, giant.id]))
+	assert_true(bear.tapped, "Johan is tapped: attacking taps")
+	assert_true(giant.tapped)
+
+
 func test_johans_offer_ends_with_the_combat() -> void:
 	g.set_agent(0, Eager.new())
 	put_battlefield(0, "Johan")

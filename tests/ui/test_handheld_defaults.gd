@@ -149,7 +149,7 @@ func test_the_row_applies_at_once_and_is_remembered() -> void:
 	row.button_pressed = true
 	assert_true(OS.low_processor_usage_mode, "the engine rests between frames from now on")
 	assert_eq(Settings.get_value("power_saver", null), true, "and the file has it")
-	Settings.reload()
+	Settings.reload_file()
 	assert_true(Settings.power_saver(), "on disk")
 	row.button_pressed = false
 	assert_false(OS.low_processor_usage_mode)
@@ -198,5 +198,30 @@ func test_an_unwritten_window_mode_never_overrides_the_launchers_fullscreen() ->
 	assert_gt(call, guard, "and read before the window is touched")
 	assert_true(source.contains('args.has("--fullscreen") or args.has("-f")'),
 		"both spellings of the engine's flag")
+
+
+## THE ENGINE EATS THE FLAG (bug pass 2026-10-03). Godot consumes
+## `--fullscreen`/`-f` itself — neither `OS.get_cmdline_args()` nor the
+## user args ever carry it (measured under Xvfb: args `["-s", …]`, the
+## window already full screen at the first script line) — so the check
+## above never fired and the boot put the window straight back. What CAN
+## be read is the flag's effect: a window that is full screen although
+## the project opens windowed. Headless there is no window to read, so
+## the rule is pinned through its pure half.
+func test_the_launchers_flag_is_read_from_the_window_it_left() -> void:
+	var none := PackedStringArray()
+	var windowed := DisplayServer.WINDOW_MODE_WINDOWED
+	var full := DisplayServer.WINDOW_MODE_FULLSCREEN
+	assert_true(GameDisplay.launcher_fullscreen_from(none, full, windowed),
+		"a full-screen window the project did not ask for is the launcher's")
+	assert_true(GameDisplay.launcher_fullscreen_from(none,
+		DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN, windowed))
+	assert_false(GameDisplay.launcher_fullscreen_from(none, windowed, windowed),
+		"a window is a window")
+	assert_false(GameDisplay.launcher_fullscreen_from(none, full, full),
+		"a project that opens full screen asked for it itself")
+	assert_true(GameDisplay.launcher_fullscreen_from(
+		PackedStringArray(["--fullscreen"]), windowed, windowed),
+		"a flag that did reach the args still counts")
 	assert_string_contains(FileAccess.get_file_as_string("res://packaging/handhelds/arkos.sh"),
 		"--fullscreen", "ArkOS is the launcher that passes it")

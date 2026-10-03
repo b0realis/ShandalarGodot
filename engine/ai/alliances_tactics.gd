@@ -94,7 +94,12 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			if window != "RESPONSE": return {}
 			for ref in refs:
 				var i := g.find_instance(ref.instance_id)
-				if i.controller_id != pid: best = H.better(best, result(Evaluator.card_value(i.data) + 3.0, [ref]))
+				if i.controller_id == pid: continue
+				# The profile's own bar and the shape before it
+				# (2026-10-03), the question AiPlayer._try_counter asks.
+				var item := _stack_item_of(g, i)
+				if item == null or not pilot._counter_clears_bar(g, item): continue
+				best = H.better(best, result(Evaluator.card_value(i.data) + 3.0, [ref]))
 		&"self_bounce", &"self_bounce_gift":
 			if window != "RESPONSE": return {}
 			for item in g.stack:
@@ -161,6 +166,12 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		_: return null
 	return best
 
+## The stack item that holds [param card], or null.
+static func _stack_item_of(g: MtgGame, card: CardInstance) -> StackItem:
+	for item in g.stack:
+		if item.card == card: return item
+	return null
+
 static func special_spell(g: MtgGame, pilot, response := false) -> String:
 	if not pilot.profile.forecasts_tactics: return ""
 	var best := {}
@@ -185,8 +196,19 @@ static func special_spell(g: MtgGame, pilot, response := false) -> String:
 				if not e.target_spec.is_legal(g, ref, s) or not e.affects_spell(top.card): continue
 				var value := Evaluator.card_value(top.card.data)
 				var intent := EffectIntent.read(top.effects)
+				var lethal := false
 				for t in top.targets:
-					if t.is_player and t.player_id == pilot.pid and intent.damage_at(top.x_value) >= g.players[pilot.pid].life: value += 100.0
+					if t.is_player and t.player_id == pilot.pid and intent.damage_at(top.x_value) >= g.players[pilot.pid].life:
+						value += 100.0
+						lethal = true
+				# THE PROFILE'S BAR (2026-10-03): this branch countered
+				# anything worth more than the flat 2.0 below, so a
+				# Magician (counter_threshold 7.0) Forced a Llanowar Elves.
+				# The same question AiPlayer._try_counter asks — the threat
+				# against the bar, unless the shape says always or never —
+				# except for the burn that kills us, which this branch has
+				# always answered whatever the bar.
+				if not lethal and not pilot._counter_clears_bar(g, top): continue
 				choice = result(value + 2.0, [ref])
 			elif e.divided_total > 0 and (e is DamageEffect or e is CounterMarkerEffect): choice = _divided(g, pilot, s, e)
 			elif e is PreventDamageEffect: choice = _prevention(g, pilot, s, e)
@@ -227,7 +249,9 @@ static func special_spell(g: MtgGame, pilot, response := false) -> String:
 			if value > 2.0 and (best.is_empty() or value > best.value): best = {"value": value, "source": s, "mode": mode, "choice": choice, "payment": payment}
 	if best.is_empty(): return ""
 	var pay: Dictionary = best.payment
-	if not ManaPlanner.plan_and_pay(g, pilot.pid, pay.cost, pay.extra, pay.usage): return ""
+	# The pilot's own payer (2026-10-03): the pain it may not pay and the
+	# targets it may not tap or sacrifice for the spell aimed at them.
+	if not pilot._plan_and_pay(g, pay.cost, pay.extra, pay.usage, pilot._own_target_ids(g, best.choice.targets)): return ""
 	if g.cast_spell(pilot.pid, best.source, best.choice.targets, best.choice.x, best.mode) != "": return ""
 	return "cast %s" % best.source.data.card_name
 

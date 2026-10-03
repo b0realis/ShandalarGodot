@@ -46,9 +46,11 @@ static func _ghost(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if F._same_trigger_source(g, s):
 		g.continuous.add_until_eot_pump(s.id, 0, 0, [Mtg.Keyword.FIRST_STRIKE])
 		g.recalculate()
+# Band-wide on both sides (2026-10-03): a creature blocking one band member
+# blocks every member (CR 702.22h).
 static func _fought_black(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool:
-	var ids: Array[int] = g.combat.attackers_blocked_by(s.id)
-	if s.data.card_name != "Rashka the Slayer": ids.append_array(g.combat.blockers_of(s.id))
+	var ids: Array[int] = g.combat.opposing_attackers(s.id)
+	if s.data.card_name != "Rashka the Slayer": ids.append_array(g.combat.blockers_of_band(g.combat.band_of(s.id)))
 	for id in ids:
 		var i := g.find_instance(id)
 		if i != null and (i.cur_colors & Mtg.ManaColor.B) != 0: return true

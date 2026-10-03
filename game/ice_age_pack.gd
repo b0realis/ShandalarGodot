@@ -6,6 +6,9 @@ const ID := "pack-3"
 const FILE_NAME := "Pack-3-Ice_Age.zip"
 const PREFIX := "card_packs/pack_3_ice_age/"
 const SOURCE := "res://packaging/card_packs/pack_3_ice_age/"
+## Every entry of the exact layout (4 metadata files + the art) — the
+## directory guard's bound ([method PortalPack.bounded_zip]).
+const MAX_ENTRIES := 1442
 const COUNTS := {"published_printings": 383, "named_set_entries": 373,
 	"distinct_cards": 373, "pack_card_entries": 373,
 	"reprint_entries": 27, "new_rules_identities": 346}
@@ -63,6 +66,10 @@ static func snake(value: String) -> String:
 static func inspect(path: String, art_trusted := false) -> Dictionary:
 	if path.get_file() != FILE_NAME:
 		return {"ok": false, "why": "must be named exactly " + FILE_NAME}
+	# The declared sizes first, as Packs 6 and 7 always did (bug pass
+	# 2026-10-03): `read_file` allocates whatever an entry declares.
+	if not PortalPack.bounded_zip(path, MAX_ENTRIES):
+		return {"ok": false, "why": "invalid ZIP directory or Pack 3 size limit exceeded"}
 	var reader := ZIPReader.new()
 	if reader.open(path) != OK:
 		return {"ok": false, "why": "not a ZIP file"}

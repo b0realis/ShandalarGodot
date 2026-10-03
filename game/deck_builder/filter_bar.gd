@@ -742,14 +742,25 @@ static func _labels(kinds: Array, table: Dictionary) -> Array:
 	return out
 
 
-## Every creature type the pool knows, sorted, computed once; and every
-## painter.
+## Every creature type the pool knows, sorted; and every painter.
+##
+## ONCE PER POOL, not once per process (2026-10-03). The two lists were
+## filled on the first ask and never again, so a card pack turned on in
+## Options after the first Deck Builder visit added creatures whose types
+## the Filters window never listed — Ice Age's Arctic Foxes, Aurochs, Chub
+## Toad — and `Clear All` on the Creatures page left them on the shelf: a
+## type the window cannot show is a type it cannot untick. Every registry
+## rebuild bumps [member CardRegistry.revision], wherever the pack was
+## toggled from, so the lists are keyed on it.
 static var _creature_types: Array = []
 static var _artists: Array = []
+static var _creature_types_revision := -1
+static var _artists_revision := -1
 
 
 static func creature_types() -> Array:
-	if _creature_types.is_empty():
+	if _creature_types.is_empty() \
+			or _creature_types_revision != CardRegistry.revision:
 		var seen := {}
 		for card_name in CardRegistry.all_names():
 			var d := CardRegistry.get_card(card_name)
@@ -758,11 +769,12 @@ static func creature_types() -> Array:
 					seen[subtype] = true
 		_creature_types = seen.keys()
 		_creature_types.sort()
+		_creature_types_revision = CardRegistry.revision
 	return _creature_types
 
 
 static func artists() -> Array:
-	if _artists.is_empty():
+	if _artists.is_empty() or _artists_revision != CardRegistry.revision:
 		var seen := {}
 		for card_name in CardRegistry.all_names():
 			var artist := CardRegistry.get_card(card_name).artist
@@ -770,6 +782,7 @@ static func artists() -> Array:
 				seen[artist] = true
 		_artists = seen.keys()
 		_artists.sort()
+		_artists_revision = CardRegistry.revision
 	return _artists
 
 

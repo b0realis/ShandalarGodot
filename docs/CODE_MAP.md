@@ -344,6 +344,10 @@ needed); card files have NO class_name (they register by name instead);
   (the pack scan on stderr): the two bug passes,
   `tests/tools/test_deck_lab_fixes_2026_09_26.gd` and
   `tests/tools/test_auto_deck_cli_fixes_2026_09_26.gd` naming each.
+- `tests/tools/test_bug_pass_2026_10_03_lab_tools.gd`: the tools' bug pass
+  of 2026-10-03 over `DeckLab/simulate.gd` (checkpoint run stamps, records/,
+  the field by pair, seeds, the folder), `DeckLab/auto_deck_cli.gd`,
+  `DeckLab/elo_ledger.gd`, `tools/duel_soak.gd`, `tools/screenshot_tour.gd`.
 - Tests: `tests/ai/test_ai_conscriptions_2026_09_26.gd`,
   `test_ai_pays_the_rent_2026_09_26.gd`, `test_ai_buys_life_2026_09_26.gd`,
   `test_ai_swaps_life_2026_09_26.gd`, `test_ai_takes_the_turn_2026_09_26.gd`,
@@ -1257,6 +1261,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.7.md`: the pass over the whole tree — about 150
+  defects found by nine hunters and fixed test-first across the engine,
+  the cards, the AI, the screens, the LAN, the Deck Lab and the MCP
+  server; see `docs/bug-pass-2026-10-03.md`.
 - `docs/releases/0.50.6.md`: the table the program hosts — `--host` and
   `referee_host`, the `table` line, the chair held for a guest; the wait
   given to each lobby step, lobby commands sent again, the kept knock
@@ -1800,7 +1808,8 @@ The same tests keep set/rarity text out of the original illustrator/P/T footer.
   and round-trip/message-size numbers. One computer cannot hear its own UDP
   broadcast, so the sweep falls back to a query addressed at the host.
 - `tools/test_lan_smoke_launcher.py`: launcher regression checks for distinct
-  Mac-compatible profiles, import failure and cleanup of only an owned child.
+  Mac-compatible profiles, import failure and cleanup of only an owned child;
+  an INT/TERM stops every Godot before its run directory goes (2026-10-03).
 - `docs/sgmanalink-network-campaign.md`: fair-information network self-play
   design, reproducible fault campaign, evidence and two-machine limitations.
 - `tests/support/sg_network_pilot.gd`: DTO-only coverage pilot and normalized
@@ -2233,6 +2242,20 @@ per-card reveals and is respected by network views and fair observations.
   the journaled path, Vesuvan Doppelganger and Reincarnation delegate their
   choices, Eye for an Eye ranks its sources, False Orders serves the
   defending player too.
+- `tests/cards/test_bug_pass_2026_10_03_cards_core.gd`: the 2026-10-03 bug
+  pass over the base pool's card files — "whenever it blocks" once per
+  blocker, not per band member (Giant Badger, Time Elemental); upkeep/end
+  step/combat triggers that resolve without their source on last known
+  information (Juzám, Serendib, Elder Spawn, Voodoo Doll, Primordial Ooze,
+  Floral Spuzzem, Imprison, Armageddon Clock, The Fallen, Psychic Allergy,
+  Dance of Many, Infinite Authority, Axelrod); effects that outlive their
+  source (Raging River, Island Sanctuary, Cyclopean Tomb) or end with it
+  (Tangle Kelp, Gaea's Liege); a held id that survived a zone change
+  (Tawnos's Weaponry, Ashnod's Battle Gear, Phyrexian Gremlins); Eureka's
+  Auras attached on entry (CR 303.4f); The Brute's regeneration window;
+  Hell's Caretaker, Transmute Artifact, the Urzatron by land type,
+  Hellfire's count, Chain Lightning's LKI controller, Ydwen Efreet's
+  "can't block this turn" and Gem Bazaar's side-effect-free colour query.
 - `tests/unit/test_festival_predicate_2026_09_16.gd`: Festival's turn-wide
   ban answered by `CombatState.attack_illegality` itself, so the seats that
   only ask the predicate (the SGManalink "attackable" lane) offer no
@@ -2320,6 +2343,7 @@ and Elo. `docs/manalink-planning.md` records scope, references and validation.
 | `tests/ai/test_ai_deck_study.gd` | Own-deck roles, curves, colours, synergies and profile gating. |
 | `tests/ai/test_ai_fair_planning.gd` | Hidden-information invariance, targets/X/evaluation, bounded sequencing and safe cache reuse/invalidation. |
 | `tests/ai/test_ai_fair_hand_mana_2026_09_16.gd` | Rule 8 for mana in the hand: the AI's read of the other seat's blocking taxes, open mana and payable costs (`ManaPlanner.sources`/`plan`, `MtgGame.can_afford_cost`, `CombatState.block_illegality`, all with a `viewer` seat) ignores a hidden Elvish Spirit Guide and counts a revealed one; the engine's own check stays rules-exact. |
+| `tests/ai/test_bug_pass_2026_10_03_ai.gd` | The 2026-10-03 AI bug pass: `EffectIntent`'s static caches under a lock (a worker-thread race aborted the Deck Lab), the summed pain of a tap plan, an unaffordable Fog no longer hiding the removal, shrinks (Contagion, Shrink) never aimed at our own creatures, +X/-Y breaths that stop before they kill, a face-down legend unread (rule 8), land-taxed attacks priced and trimmed, Force of Will at the profile's counter bar, a spell's target / a {T} ability's source never spent on its own payment, dual lands counted once in pump shares, no evasive band rider, protected blockers last in the damage order, the lethal push's block matching, the banded damage division, colour-aware reads of their open mana, prevented first strike, regeneration out of combat in the model, and no mistake roll at chance 0. |
 | `tests/ai/test_ai_combat_study.gd` | Joint blocks, casualties, first strike, trample, danger defence, single-trick accounting, hidden-state invariance and specialised fallbacks. |
 | `tests/ai/test_ai_probe_nesting_2026_09_16.gd` | A search a strategy opens from inside the engine's own pre-flight probe must hand probe mode back — else the rewound run's log lines and signals reach the duel screen. |
 | `tests/ai/test_ai_cast_gate_2026_09_16.gd` | Arity sweep over every card-authored predicate the planner and the engine call ("cast only if ...", announcement, sacrifice, activator, X and the cost filters). |
@@ -3023,7 +3047,10 @@ shandalar/
 │   │                          and its colours (a basic land reads as
 │   │                          what it taps for); log_appended carries
 │   │                          both; a probe writes neither; draws are
-│   │                          logged without naming the card.
+│   │                          logged without naming the card. A PRIVATE
+│   │                          line (a tutored card, a put-back) adds
+│   │                          meta private_to (the one seat) + public
+│   │                          (everyone else's sentence) (2026-10-03).
 │   │                          THE DAMAGE-PREVENTION WINDOW (§6.8, a
 │   │                          RulesOptions fork, default OFF): packets
 │   │                          queue in damage_pending instead of landing;
@@ -4560,6 +4587,13 @@ shandalar/
 │   │                          verb is one JSON line and exit 2, --help
 │   │                          and -V without an engine; the query
 │   │                          wrapper's -V, exit 3, exec line, no banner
+│   ├── test_build_release_sh.py  unittest for build_release.sh with a
+│   │                          stub Godot (2026-10-03): the leak gate's
+│   │                          singular wording, guard_stage on the .pck
+│   │                          and on links, every preset excluding the
+│   │                          run folders, the smoke boot's own profile,
+│   │                          shortcut.sh's Exec= quoting, the release
+│   │                          door's JSON refusal for any bytes
 │   ├── shandalar_mcp.py     THE MCP SERVER (2026-09-27): every tool for a
 │   │                          program that speaks the Model Context
 │   │                          Protocol — JSON-RPC over stdio, stdlib
@@ -6175,7 +6209,7 @@ shandalar/
 │    tests/ui/test_options_display.gd — [QoL] `Full screen` (2026-09-07):
 │    windowed by default with nothing materialized into the file, the
 │    switch a VIEW of the `fullscreen` key (opens on what is stored,
-│    writes to disk at once, survives Settings.reload), the Display row
+│    writes to disk at once, survives Settings.reload_file), the Display row
 │    above Sound, borderless not exclusive, applying silent headless,
 │    and the Lifecycle autoload applying it at boot;
 │    tests/ui/test_fullscreen_card.gd — [QoL] optional full-screen card
@@ -6260,7 +6294,7 @@ shandalar/
 │    reaches it and 40 px away does not; on the DUEL TABLE touching a card
 │    docks its preview, holding one and lifting opens @MENU_SMALLCARD, and
 │    dragging one places it; the Options row is a view of the key and
-│    the layer follows it at once, the choice survives Settings.reload,
+│    the layer follows it at once, the choice survives Settings.reload_file,
 │    and switching off mid-drag lets the button go;
 │    tests/ui/test_pad_controls.gd — THE PAD LAYER (PadControls,
 │    2026-09-27) driven through Input.parse_input_event on a stage above
@@ -6287,7 +6321,7 @@ shandalar/
 │    two after it, a second pad reporting A or a D-pad button is not a
 │    second press or hop (2026-09-28); a PopupMenu takes the D-pad
 │    and A itself with the layer seeing none of it; the Options row is a
-│    view of the key, the choice survives Settings.reload, and
+│    view of the key, the choice survives Settings.reload_file, and
 │    joy_connection_changed re-reads `auto`;
 │    tests/ui/test_screen_keyboard_2026_10_02.gd — THE ON-SCREEN KEYBOARD
 │    (ScreenKeyboard, 2026-10-02) against real fields on a stage of its
@@ -6915,6 +6949,15 @@ shandalar/
 │    ink is its colour (gold for several, steel for none), and the screen
 │    keeps the running duel_log.txt through DuelLogFile's seam — banner,
 │    seed, every engine line;
+│    tests/ui/test_bug_pass_2026_10_03_private_info.gd — WHAT THE TABLE
+│    MAY TELL WHOM (bug pass 2026-10-03): a log line marked private_to a
+│    seat the viewer may not see prints its `public` sentence in the
+│    window, its refill and duel_log.txt (the AI's tutor find; the
+│    player's own reads in full; an AI Demo reads both; a private hotseat
+│    neither); MtgGame.information_revealed opens one `Revealed
+│    information` window (Glasses of Urza for the player, never the AI's;
+│    looks join it; Esc closes it) and a private hotseat's look waits for
+│    its seat's shown hand;
 │    tests/unit/test_log_meta.gd — THE LOG'S SECOND COLUMN
 │    (MtgGame.log_meta): index for index with log_lines; a cast names
 │    its card, colour, caster, kind and step; a basic land carries the
@@ -6948,6 +6991,13 @@ shandalar/
 │    Shaman: both seats, piles, tapping, combat, stack-to-battlefield,
 │    coexistence with real Auras/choices/shields, full change on hover,
 │    non-targetable presentation only, cleanup and zone-change lifetime;
+│    tests/unit/test_bug_pass_2026_10_03_shell_io.gd — THE PLAYER'S FILES
+│    WRITTEN WHOLE (bug pass 2026-10-03): a settings.cfg that will not
+│    parse kept as settings.cfg.bad before the next save (once; never
+│    overwritten), an unreadable one never written; Settings, DeckStore
+│    save/export written through a pending file (Settings.write_atomically)
+│    so a failed write leaves the old file and says so; a title with no
+│    Latin letter gets a file stem of its own (deck_ + digest);
 │    tests/unit/test_game_paths.gd — THE PLAYER'S PLACES (GamePaths,
 │    2026-09-08): the built-in places with no key written (and reading
 │    leaves no trace), a key moving its place (trailing slash dropped,
@@ -8009,6 +8059,10 @@ shandalar/
 │   │                          false) + flush() for a slider's drag;
 │   │                          failed saves remain dirty for a later retry
 │   │                          and do not increment the saved-write count;
+│   │                          `write_atomically(path, bytes)` (pending
+│   │                          file + rename; also DeckStore, PackSeal) and
+│   │                          a file that will not parse kept as
+│   │                          settings.cfg.bad first (2026-10-03);
 │   │                          `touch_controls()` reads auto/on/off and
 │   │                          answers `auto` to anything else, and so
 │   │                          does `pad_pointer()` (2026-09-27). THE
@@ -10274,6 +10328,9 @@ shandalar/
     │                          fixes, verification commands and evidence
     ├── bug-hunt-2026-09-13.md  Deck parser/save-name regressions, reproduced
     │                          failures, verification and platform limits
+    ├── bug-pass-2026-10-03.md  The whole-tree bug pass and MCP review
+    │                          (0.50.7): findings, fixes, the owner's
+    │                          rulings and the verification
     ├── decklab-audit-2026-09-13.md  DeckLab and base-game audit: seed
     │                          transport, Elo failure status, CSV titles,
     │                          settings retries, home paths and verification

@@ -1317,16 +1317,77 @@ func test_the_choice_is_remembered_by_id_not_by_index() -> void:
 
 
 func test_each_seat_keeps_its_own_portrait() -> void:
+	# THREE faces since the bug pass of 2026-10-03: seat 2 opens on the
+	# second face and its arrow now steps FROM that face (it used to step
+	# from the first and land on the face already shown), so with two
+	# faces one press wrapped it onto seat 1's.
 	_clean_portraits()
 	_only_the_players_folder()
 	_drop_portrait("alpha_mage.png")
 	_drop_portrait("beta_mage.png")
+	_drop_portrait("gamma_mage.png")
 	for pid in 2:
 		screen._update_portrait(pid)
 	screen._cycle_portrait(1, 1)
 	assert_ne(screen._portrait_captions[0].text,
 		screen._portrait_captions[1].text, "two seats, two faces")
 	_clean_portraits()
+
+
+## WHAT THE CHOOSER SHOWS IS WHAT THE DUEL WEARS (bug pass 2026-10-03).
+## A seat that never pressed an arrow showed the library's face for its
+## seat but handed the duel "" — the deck-colour duelist instead — and
+## its first forward press stepped from face 0, so seat 2 "moved" onto
+## the face it was already showing. One resolver now feeds all three.
+func test_the_portrait_shown_is_the_portrait_the_duel_gets() -> void:
+	_clean_portraits()
+	_only_the_players_folder()
+	_drop_portrait("alpha_mage.png")
+	_drop_portrait("beta_mage.png")
+	_drop_portrait("gamma_mage.png")
+	for pid in 2:
+		screen._update_portrait(pid)
+	var shown: Array[String] = [screen._portrait_captions[0].text,
+		screen._portrait_captions[1].text]
+	assert_eq(shown, ["Alpha Mage", "Beta Mage"] as Array[String])
+	for pid in 2:
+		_deck_pickers()[pid].select(SetupScreen._row_of_deck(_deck_pickers()[pid], 0))
+	var config := screen._build_config()
+	assert_not_null(config)
+	if config != null:
+		assert_eq(config.portraits, ["alpha_mage", "beta_mage"],
+			"the faces the chooser showed, not the deck-colour fallback")
+	screen._cycle_portrait(1, 1)
+	assert_eq(screen._portrait_captions[1].text, "Gamma Mage",
+		"one press moves seat 2 off the face it was showing")
+	_clean_portraits()
+
+
+## A POOLED ROW IS NOT A DECK YET (bug pass 2026-10-03). `<random from …>`
+## — the screen's default row — carries `group:…` as its metadata, and the
+## face and the territory preview read that as a deck PATH: a file that
+## does not load, no cards, so every pooled seat showed a "White duelist"
+## and `Deck color (white)` whatever the seed would deal. Like
+## `<random deck>`, the frame stays empty until the seed has drawn.
+func test_a_pooled_random_row_shows_no_invented_duelist() -> void:
+	var picker: OptionButton = _deck_pickers()[0]
+	var row := -1
+	for i in picker.item_count:
+		if str(picker.get_item_metadata(i)).begins_with(SetupScreen.GROUP_RANDOM):
+			row = i
+			break
+	if row < 0:
+		pass_test("no group holds two playable decks — no pooled row to test")
+		return
+	picker.select(row)
+	screen._update_face(0)
+	assert_null(screen._face_rects[0].texture, "no face before the seed draws one")
+	assert_eq(screen._face_captions[0].text, picker.get_item_text(row),
+		"the frame says what the row is")
+	screen._update_territory_preview()
+	for key in screen._deck_colors:
+		assert_false(String(key).begins_with(SetupScreen.GROUP_RANDOM),
+			"a pool is never read as a deck file: %s" % key)
 
 
 func test_the_deck_color_row_says_which_colour_that_is() -> void:
@@ -1704,3 +1765,28 @@ func test_a_name_the_default_was_played_under_stands_through_the_restore() -> vo
 	fresh._apply_mode(SetupScreen.BattleMode.HOTSEAT)
 	assert_eq(fresh._name_edits[1].text, "Mishra",
 		"a typed name survives a mode change, restored or not")
+
+
+## A SHARED REPRINT'S DECLARATION IS NOT A WALL (bug pass 2026-10-03).
+## A deck saved with Ice Age on declares `# requires-pack: pack-3` for its
+## Pyroclasm; with Ice Age off and Portal — which carries Pyroclasm too —
+## on, this screen listed it as needing Pack 3 and refused it. Any one
+## enabled provider is enough ([method CardPacks.effective_requirements]).
+func test_a_shared_reprint_deck_plays_under_another_provider() -> void:
+	var was: Array[String] = Settings.enabled_card_packs()
+	for id in CardPacks.known_ids():
+		CardPacks.set_enabled(id, id == PortalPack.ID)
+	var path := DeckStore.USER_DIR.path_join("bug_pass_shared_reprint.deck")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DeckStore.USER_DIR))
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string("# requires-pack: pack-3\nname: Shared Burn\n4 Pyroclasm\n36 Mountain\n")
+	file.close()
+	var fresh: SetupScreen = load("res://game/setup_screen.tscn").instantiate()
+	add_child_autofree(fresh)
+	await get_tree().process_frame
+	assert_false(fresh._pack_paths.has(path), "not listed as needing Pack 3")
+	assert_true(fresh._playable_paths.has(path), "playable: Portal provides Pyroclasm")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	Settings.set_enabled_card_packs(was)
+	CardPacks._configure_registry()
+	CardRegistry.ensure_loaded()

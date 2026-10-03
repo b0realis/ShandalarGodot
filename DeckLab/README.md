@@ -346,11 +346,11 @@ same tournament at `--procs 1` and `--procs 3`).
 | `--no-svg` | skip chart files | off |
 | `--quiet` | no banner and no progress bar; the report still prints — exactly `--no-banner --progress off` | off |
 | `--no-banner` | keep the progress bar, drop the artwork (or export `DECK_LAB_NO_BANNER=1`) | off |
-| `--progress MODE` | which SHAPE the progress takes: `auto` (a redrawing bar on a terminal, one heartbeat line a minute in a log), `bar` (the bar whatever stderr is), `log` (the lines whatever stderr is — they accumulate, so a long sweep leaves a record of itself), `off` (none, and the banner stays). An explicit `--progress` wins over the `off` that `--quiet` implies | `auto` |
+| `--progress MODE` | which SHAPE the progress takes: `auto` (a redrawing bar on a terminal, one heartbeat line a minute in a log), `bar` (the bar whatever stderr is), `log` (the lines whatever stderr is — they accumulate, so a long sweep leaves a record of itself), `off` (none, and the banner stays), `json` (for a program: one `{"progress": {done, total, unit, elapsed}}` line a second on stderr — the MCP server's progress notifications). An explicit `--progress` wins over the `off` that `--quiet` implies | `auto` |
 | `--dry-run` | every check a run makes — the decks loaded, the packs enabled, the pairs built — and then THE PLAN as JSON on stdout instead of a game: the decks with their files and sizes, the matchups, the games (or matches) in total, seed, jobs and processes, packs, the output folder and a clock estimate labelled as the guess it is. Exit 0; no folder is made (2026-09-27, [AGENTS.md](../AGENTS.md)) | off |
 | `--record FILTER` | write the engine log of every game the filter admits to `OUT/records/`: `losses` (every game deck A lost), `stalls` (every game that hit the turn limit), `all`. One file a game, `pairP_seedS[_armA][_duelD]_OUTCOME.log`, a `#` header first (`deck_a`, `deck_b`, `pair`, `seed`, `a_on_play`, `outcome`, `turns`, `lines`), then the log the engine kept — what a person reads to see WHY a deck lost, what a program feeds to the next question. The seed in the name replays the game (`--seed S --games 1`). `results.json` / `sweep.json` gain `records{filter,max,written,dir}` (2026-09-27, [what a run leaves](#the-records-and-runjson-2026-09-27)) | off |
 | `--record-max N` | at most N logs per run; `0` is no cap. Exact per process, "about N" across `--procs` workers, each of which counts the folder before it writes. A thousand logs is a gigabyte | 50 |
-| `--resume OUT` | finish the run in OUT that was interrupted: its `run.json` says `exit: null` and its `checkpoint.jsonl` holds the games that landed. The line that started it is read back from `run.json`, those games are kept, the rest are played, and the report is written as if nothing had happened. The whole command — anything typed beside it is refused (2026-09-27, [the resume](#the-resume-2026-09-27)) | — |
+| `--resume OUT` | finish the run in OUT that was interrupted: its `run.json` says `exit: null` and its `checkpoint.jsonl` holds the games that landed. The line that started it is read back from `run.json`, those games are kept, the rest are played, and the report is written as if nothing had happened. The whole command — anything typed beside it is refused (2026-09-27, [the resume](#the-resume-2026-09-27)) but for `--quiet`, `--no-banner` and `--progress MODE`, which change only how it prints (2026-10-03) | — |
 | `--deck-pool LIST\|DIR` | what `random` draws from (see below) | `decks/` |
 | `--packs LIST` | the card packs in force for THIS RUN: `all` (every pack found), `none` (the base cards alone), or ids — `pack-3,pack-7`, or bare `3,7`. In memory only, workers included; the game's own setting is never written. Omitted, the run plays with whatever the game has enabled (see [the packs](#the-card-packs----packs-2026-09-25)) | — |
 | `-h`, `--help` | switch reference | — |
@@ -1318,12 +1318,15 @@ the third hour used to lose them all, and the only answer was to start
 again. Now a run writes `run.json` **first**, with `exit: null`, before
 a game is played — so a killed run still names the line that started
 it — and appends one JSON line to `OUT/checkpoint.jsonl` as each game
-lands: `{arm, pair, seed, record}`, from the thread that played it or
+lands: `{arm, pair, seed, record, run}`, from the thread that played it or
 from the parent as a `--procs` slice comes back, under a lock and
 flushed, so a kill leaves whole lines and at most one torn one. A run
 that finishes removes the checkpoint; a run that did not leaves it
 beside a `run.json` whose `exit` is null, and that is what an
-interrupted run looks like.
+interrupted run looks like. `run` is the run's own id (`run.json`'s
+`run_id`, kept across resumes) and a fresh run truncates any checkpoint
+it finds (2026-10-03): a resume used to fold an EARLIER interrupted
+run's games, left in the same `--out`, into the new run's figures.
 
     DeckLab/deck_lab.sh --resume OUT
 
@@ -1383,6 +1386,7 @@ rather than whether any of it survives, which is what `--quiet` and
 | `--quiet` | never | none |
 | `--progress bar` | on a terminal | the bar, even when stderr is a log |
 | `--progress log` | on a terminal | the lines, even on a terminal |
+| `--progress json` | on a terminal | one JSON line a second, for a program (2026-10-03) |
 
 `bar` is for a terminal the shell could not see (Godot run directly rather
 than through `deck_lab.sh`, a CI runner that renders ANSI, a pty wrapper);
@@ -1720,7 +1724,7 @@ and may be repeated; see *Alternatives and the cartesian walk* below.
 | `--completion-pack on\|off` | the Extras window's `tDotP Pack 1` switch | on |
 | `--boosters N` / `--starters N` / `--free-lands N` / `--extras N` | the sealed deal's four numbers | 3 / 1 / 0 / 0 |
 | `--force` | write into an output folder that already holds files — the previous run's `deck_*.deck`, `decks.csv` and `decklist.txt` go first, so the folder is the new run and nothing else (the Lab's `--field DIR` plays the folder); other files stay | off |
-| `--progress auto\|bar\|log\|off` | the shape of the progress, the Lab's own four | auto |
+| `--progress auto\|bar\|log\|off\|json` | the shape of the progress, the Lab's own five | auto |
 | `--quiet` / `--no-banner` | the Lab's own two (`--quiet` is no banner and no progress bar; the report still prints) | off |
 | `--dry-run` | every check, then THE PLAN as JSON on stdout and nothing written: the count and the wish combinations, the seed (and whether the run would roll one), source, sets, packs, the kept deck and its varied cards, whether `--out` exists and how many files it holds (the `--force` question, answered before anything is cleared), the files the run would write and the disk they take (~4.2 KB a deck), and the `next:` line as data. Exit 0 (2026-09-27) | off |
 | `-h`, `--help` | switch reference | — |

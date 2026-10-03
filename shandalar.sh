@@ -43,9 +43,13 @@ case "$verb" in
 	convert) exec ./deck_convert.sh "$@" ;;
 	mcp) exec python3 tools/shandalar_mcp.py "$@" ;;
 esac
-# The verb goes into the line with the characters JSON would need
-# escaped removed, so the line is always one valid document.
-safe="$(printf '%s' "$verb" | tr -d '"\\\n\r\t')"
+# The verb goes into the line with what JSON cannot carry raw removed —
+# quotes, backslashes, EVERY control byte, and every non-ASCII byte
+# unless the whole verb is valid UTF-8 — so the line is always one
+# valid document (an ESC or a Latin-1 byte broke it until 2026-10-03).
+safe="$(printf '%s' "$verb" | LC_ALL=C tr -d '\000-\037\177"\\')"
+printf '%s' "$safe" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1 \
+	|| safe="$(printf '%s' "$safe" | LC_ALL=C tr -d '\200-\377')"
 printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s — the verbs are lab, autodeck, check, packs, cards, referee, convert, mcp","verb":"%s"}}\n' \
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' — try ./shandalar.sh --help" >&2

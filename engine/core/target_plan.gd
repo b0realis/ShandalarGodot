@@ -232,19 +232,28 @@ func _validate(game: MtgGame, source: CardInstance, effects: Array,
 				return
 			within.append(ref)
 		earlier.append_array(groups[gi])
-	# "Two target creatures" means two DIFFERENT ones (CR 601.2c) — and the
-	# rule spans the whole spell, so a divided spell can't double-dip either.
-	var all := flat()
-	for i in all.size():
-		for j in range(i + 1, all.size()):
-			var a: TargetRef = all[i]
-			var b: TargetRef = all[j]
-			# One identity test for the whole TargetRef union: comparing
-			# `instance_id` by hand read -1 == -1 for two DIFFERENT damage
-			# packets (§6.8 slice 3).
-			if a.same_object(b):
-				error = "can't choose the same target twice"
-				return
+	# "Two target creatures" means two DIFFERENT ones (CR 601.2c) — and a
+	# divided spell can't double-dip either. The rule is PER INSTANCE OF THE
+	# WORD "target", which is one group here: "the same player or object
+	# can be chosen once for each instance of the word 'target' on the
+	# spell".
+	# Until 2026-10-03 it spanned the whole spell, so Fiery Justice ("5
+	# damage divided among any number of targets. Target opponent gains 5
+	# life.") could not aim 2 of its 5 at the opponent who gains the life.
+	# "Two target X" is therefore ONE effect taking two refs (Ashes to
+	# Ashes, Dust to Dust, Wicked Pact); a second one-target slot that must
+	# differ from the first says so with a sibling filter.
+	for group in groups:
+		for i in group.size():
+			for j in range(i + 1, group.size()):
+				var a: TargetRef = group[i]
+				var b: TargetRef = group[j]
+				# One identity test for the whole TargetRef union: comparing
+				# `instance_id` by hand read -1 == -1 for two DIFFERENT damage
+				# packets (§6.8 slice 3).
+				if a.same_object(b):
+					error = "can't choose the same target twice"
+					return
 	# DIVISION (CR 601.2d): every chosen target gets at least 1, and the
 	# shares add up to the stated total. A single chosen target absorbs the
 	# whole total, so callers may pass a plain TargetRef for the common case.

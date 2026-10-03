@@ -145,7 +145,8 @@ is none.
 Measured counts and timings live in the dated verification records rather
 than another counter here: `docs/decklab-audit-2026-09-13.md` for the latest
 DeckLab/game pass, `docs/bug-hunt-2026-09-13.md` for the deck-input pass,
-and `docs/macos-baseline-2026-09-12.md` for the imported baseline.
+`docs/bug-pass-2026-10-03.md` for the whole-tree bug pass and the MCP
+review, and `docs/macos-baseline-2026-09-12.md` for the imported baseline.
 
 `run_tests.sh` checks its own log because **GUT lies by omission**: a test
 script it cannot parse is silently skipped and the summary still reads "All

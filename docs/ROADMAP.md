@@ -4460,7 +4460,7 @@ The sweep fixed its four real findings (`tests/unit/test_engine_sweep_2026_09_02
 
 The sweep fixed its real findings (`tests/cards/test_fidelity_2026_09_02_sweep.gd`: Lesser Werewolf, the three "for as long as this remains tapped" cards, Tawnos's Coffin's per-activation records, Fork's copy memory, Halfdane's negative power, Spitting Slug under Blaze of Glory, two oracle texts). These it verified and left, each because the fix is an engine question or a rules-option fork rather than a card edit:
 
-- **Gauntlets of Chaos under stolen control never exchanges.** `cards/sets/leg/gauntlets_of_chaos.gd` re-judges `yours` / `theirs` against `source.controller_id` on resolution — by then the sacrifice cost has reset the Gauntlets' controller (it is in a graveyard, owned by its owner), so a Gauntlets activated by a thief compares the wrong seats and finds no exchange. The right reading is last-known information of the controller AS THE ABILITY WAS ACTIVATED (CR 113.7a); the engine has no LKI of a sacrificed cost source's controller to hand a filter. An engine-level `StackItem` field for the activating controller (already `controller` on the item — the filters would need to read the item rather than the source) is the fix.
+- ~~**Gauntlets of Chaos under stolen control never exchanges.**~~ LIFTED 2026-10-03 (bug pass): the engine judges a resolving ability's targets from the stack item's controller (`TargetSpec.is_legal(..., controller)`, `MtgGame.controller_acting_for`), and the card's `yours`/`theirs` filters read the activator; pinned by `tests/cards/test_pool_wave65.gd::test_stolen_gauntlets_still_exchange` (and Mirror Universe by `test_pool_wave37.gd::test_a_stolen_mirror_universe_still_exchanges`).
 - **Magical Hack / Sleight of Mind reach LESS than Duel.hlp's ruling.** Their word-pair filters (`cards/sets/2ed/magical_hack.gd`, `cards/sets/2ed/sleight_of_mind.gd`) only offer cards whose implementation registered a `land_word` / `color_word`; Duel.hlp (1997) lets Sleight of Mind change the colour word on a Circle of Protection, which ours cannot reach. Their `docs/simplified-cards.md` rows now say so plainly instead of claiming the whole 1997 reach.
 - **Glyph of Delusion's granted upkeep ability is a turn-based tick, not a trigger.** "At the beginning of your upkeep, remove a glyph counter" (`cards/sets/leg/glyph_of_delusion.gd`) is done by the upkeep step itself (MtgGame's upkeep walks the glyph counters) rather than by a granted `TriggeredAbility`; nothing in the pool can respond to it or counter it, so no observer today — a granted-ability mechanism would make it a real trigger.
 - **Jade Monolith's `CardInstance.damage_redirect_to` is a single int** (`engine/core/card_instance.gd:220`): two Monoliths both naming the same creature's next damage keep only the last; the pool's decks never run two.
@@ -17913,7 +17913,7 @@ pointer is clamped, the wheel scrolls a ScrollContainer, hops land
 right, far, stay with nothing ahead, take the off-line one below, pass
 over a covered, a hidden and a disabled button, a real mouse motion
 sleeps the layer, `off` mid-hold releases, a PopupMenu takes the D-pad
-and A itself, the row and the key agree over `Settings.reload`, and a
+and A itself, the row and the key agree over `Settings.reload_file`, and a
 connection change re-reads auto. `tests/ui/test_handheld_defaults.gd`
 (new, 12): the desktop's defaults unwritten, both launchers export the
 word, the three keys true under it and only the three, any word
@@ -18748,6 +18748,47 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-03 — The pass over the whole tree (0.50.7)
+
+The owner, after 0.50.6: *"Analyze now all and do a bug find and bug pass
+run over Our ShandalarGodot. Then examine MCP we were building last and
+go over it again and do a bug hunt and improvement and optimization
+run."* Nine read-only hunters split the tree by area and reproduced what
+they found; fixers with disjoint file ownership fixed it test-first; then
+a second round took what was left ("Do all other fixes!"). The record —
+every finding, the rulings, the verification — is
+`docs/bug-pass-2026-10-03.md`; the release note `docs/releases/0.50.7.md`.
+
+- **Rules:** simultaneous losses are draws (an empty-library draw joins
+  the state-based check; a resolution defers its checks until it ends);
+  Fifth Edition's end of turn empties pools and checks life; a refused X
+  cast leaves no X; delayed dooms and watches respect CR 400.7; dead
+  attackers leave combat before blocks; one band per creature; face-down
+  permanents lose their printed clauses and their names (Clone, Vesuvan,
+  Dance of Many copy a nameless 2/2; the log redacts them centrally); a
+  stolen Mirror Universe, Gauntlets of Chaos and Axelrod act for their
+  controller; Johan's "if untapped" is read at declaration; about forty
+  core and thirteen pack cards to their oracle.
+- **AI:** pain-land suicide, the unpayable Fog, own-creature shrinks,
+  self-killing pumps, the land-taxed attack, Force of Will's bar, the
+  target sacrificed to pay for its own aura, colour-blind open mana, the
+  banding damage split; every lazily filled static cache behind a mutex.
+- **Lifted ledger rows:** Gauntlets of Chaos (ROADMAP), Voodoo Doll and
+  Eureka (both added and lifted in this pass); CR 601.2c duplicate targets
+  are judged per target word (`docs/audit-2026-09.md`).
+- **Tools:** the gate reads "1 ObjectDB instance was leaked" and a TERM
+  reaches Godot; the Linux smoke reads the leak line; `Settings.reload()`
+  (which resolved to `Script.reload`) is `reload_file()`; the shortcut
+  launches from a folder with `%`; the release guard reads the `.pck`.
+- **MCP:** the default run folder, cancellation and a live `ping`,
+  progress notifications, `lab_resume` (refused by the real Lab every
+  time — the fake door now holds the real rule), the game-id claim, the
+  kept-socket close race, the transcript tail, ASCII on the wire.
+
+Gate: 555 scripts, **8,562/8,562 tests, 412,099 asserts**, exit 0 in
+521 s wall over 6 shards; Python 484 (8 skipped), exit 0; `duel_soak.sh`
+fifth and modern, 24 duels, clean.
 
 ## 2026-10-03 — The table the program hosts (0.50.6)
 

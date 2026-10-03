@@ -16,14 +16,18 @@ func build() -> CardData:
 			+ "Power-Plant, add {C}{C}{C} instead.")
 
 
-static func _controls(game: MtgGame, pid: int, card_name: String) -> bool:
+## "An Urza's Power-Plant" names a LAND TYPE pair (Urza's + Power-Plant),
+## not a card: read the live subtypes (CONTRIBUTING.md rule 5), so an Evil
+## Presence on the Tower breaks the set and nothing else completes it by
+## name alone. Until 2026-10-03 this matched card names.
+static func _controls(game: MtgGame, pid: int, piece: String) -> bool:
 	for inst in game.players[pid].battlefield:
-		if inst.data.card_name == card_name:
+		if inst.is_land() and inst.has_subtype("urza's") and inst.has_subtype(piece):
 			return true
 	return false
 
 
 static func _amount(game: MtgGame, _source: CardInstance, pid: int) -> int:
-	if _controls(game, pid, "Urza's Mine") and _controls(game, pid, "Urza's Power Plant"):
+	if _controls(game, pid, "mine") and _controls(game, pid, "power-plant"):
 		return 3
 	return 1

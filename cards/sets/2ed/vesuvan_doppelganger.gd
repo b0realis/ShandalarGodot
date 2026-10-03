@@ -18,6 +18,11 @@ extends CardScript
 ## §1.3) and every other seat answers for itself. The value the card
 ## computes is only the HINT, and the candidates are pre-sorted for it.
 ##
+## What it copies is the target's COPIABLE VALUES (MtgGame.copiable_data):
+## a face-down creature is a nameless colourless 2/2 with no abilities (CR
+## 707.2 / 708.2), so the Doppelganger never learns — or announces — the
+## card underneath (bug pass 2026-10-03).
+##
 ## The hint on the upkeep trigger is "shift only when the new shape is
 ## bigger"; the hint on arrival is the biggest creature on the board. The
 ## upkeep trigger asks BOTH of its questions — whether to shift, and into
@@ -92,4 +97,6 @@ static func _shift(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 		"Become a copy of which creature?", false, false, true)
 	if shape == null or not shapes.has(shape):
 		shape = shapes[0]
-	game.become_copy(source, _keep_the_ability(shape.data), 0, true)
+	# Copiable values (CR 707.2): a face-down shape is a nameless 2/2, never
+	# the card underneath (CR 708.2; bug pass 2026-10-03).
+	game.become_copy(source, _keep_the_ability(game.copiable_data(shape)), 0, true)

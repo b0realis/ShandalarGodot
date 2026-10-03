@@ -1029,3 +1029,68 @@ func test_a_ticked_list_moves_the_revision_only_when_it_changes() -> void:
 	assert_eq(filter.revision, before + 2, "already unticked")
 	filter.tick_creature_type("elf", true)
 	assert_eq(filter.revision, before + 3)
+
+
+# =============================================== BUG PASS 2026-10-03 ==
+
+## `Select All` means everything, the Gold button's mini-menu mode with
+## it. It used to keep `Matching all selected color buttons`, so with all
+## five colours lit no gold card came back (none carries all five) while
+## [method DeckFilter.active] said nothing was hiding anything.
+func test_select_all_resets_the_gold_mode_and_active_reports_it() -> void:
+	var gold_cards: Array[CardData] = []
+	for d in _pool():
+		var mask: int = d.color_mask() & DeckFilter.WUBRG_MASK
+		if mask & (mask - 1):
+			gold_cards.append(d)
+	assert_gt(gold_cards.size(), 0, "the pool has gold cards to lose")
+	filter.gold_mode = DeckFilter.Gold.MATCH_ALL
+	assert_true(filter.active(), "a gold mode other than All is a filter in force")
+	filter.select_all()
+	assert_eq(filter.gold_mode, DeckFilter.Gold.ALL, "Select All puts the Gold menu back")
+	assert_false(filter.active())
+	var shown := filter.apply(_pool())
+	assert_eq(shown.size(), CardRegistry.size(), "the whole pool, gold cards and all")
+	for d in gold_cards:
+		assert_true(shown.has(d), d.card_name)
+
+
+## The type-ahead folds accents on BOTH sides: the 1997 printings carry
+## them (Juzám Djinn, Dandân, Ghazbán Ogre) and nobody types them, so
+## "juzam" found nothing at all. Typing the accent still works.
+func test_the_type_ahead_folds_accents_both_ways() -> void:
+	var pool := _pool()
+	for pair in [["juzam", "Juzám Djinn"], ["juzám", "Juzám Djinn"],
+			["dandan", "Dandân"], ["ghazban", "Ghazbán Ogre"],
+			["JUNUN", "Junún Efreet"], ["ma'ruf", "Ring of Ma'rûf"]]:
+		filter.text = String(pair[0])
+		var names: Array = []
+		for d in filter.apply(pool):
+			names.append(d.card_name)
+		assert_has(names, String(pair[1]), "'%s' finds %s" % pair)
+	filter.text = "jüzam"
+	assert_true(filter.matches(_card("Juzám Djinn")), "a different accent folds to the same letter")
+	filter.text = "juzam"
+	assert_eq(String(filter.apply(pool)[0].card_name), "Juzám Djinn",
+		"and a folded prefix still leads the list")
+
+
+## The sorted-pool cache is keyed on the array's identity and length, and
+## the Deck Builder refills its `_pool` IN PLACE when the card packs change
+## — so a registry reload that left the count alone (Pack 7, a pure
+## reprint set, with Packs 2-4 on) handed back the pre-reload [CardData]
+## objects for good. It is keyed on [member CardRegistry.revision] too.
+func test_the_order_cache_follows_a_registry_reload() -> void:
+	var pool := _pool()
+	assert_eq(filter.apply(pool).size(), CardRegistry.size())
+	CardRegistry.unload()
+	CardRegistry.ensure_loaded()
+	var fresh := _pool()
+	assert_eq(fresh.size(), pool.size(), "the same count after the reload")
+	pool.clear()
+	pool.append_array(fresh)    # what the screen's pack-change handler does
+	var stale := 0
+	for d in filter.apply(pool):
+		if not is_same(d, CardRegistry.get_card(d.card_name)):
+			stale += 1
+	assert_eq(stale, 0, "every card the Inventory gets is the live registry's")

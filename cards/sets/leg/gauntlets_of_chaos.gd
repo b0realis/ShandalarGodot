@@ -50,13 +50,18 @@ class GauntletsFilters:
 		return inst.is_type(Mtg.CardType.ARTIFACT) or inst.is_creature() \
 			or inst.is_land()
 
-	static func yours(_game: MtgGame, source: CardInstance,
+	## "you control" / "an opponent controls" are the ACTIVATOR's (CR
+	## 113.7a): by resolution the sacrifice has sent a stolen Gauntlets home
+	## to its owner, so its own controller_id names the wrong seat —
+	## [method MtgGame.controller_acting_for] answers the stack item's
+	## controller while its ability resolves (bug pass 2026-10-03).
+	static func yours(game: MtgGame, source: CardInstance,
 			inst: CardInstance) -> bool:
-		return source == null or inst.controller_id == source.controller_id
+		return source == null or inst.controller_id == game.controller_acting_for(source)
 
-	static func theirs(_game: MtgGame, source: CardInstance,
+	static func theirs(game: MtgGame, source: CardInstance,
 			inst: CardInstance) -> bool:
-		return source == null or inst.controller_id != source.controller_id
+		return source == null or inst.controller_id != game.controller_acting_for(source)
 
 	## "… that shares one of those types with it" — [param earlier] holds
 	## the first slot's ref, the permanent being given away.

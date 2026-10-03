@@ -202,6 +202,27 @@ func test_gauntlets_exchanges_two_creatures() -> void:
 	assert_eq(theirs.controller_id, 0)
 
 
+## A THIEF'S GAUNTLETS still exchange (bug pass 2026-10-03, the ROADMAP
+## row "Gauntlets of Chaos under stolen control never exchanges" lifted):
+## the sacrifice sends the artifact home to its owner, and "you control"
+## / "an opponent controls" are judged for the player who ACTIVATED it
+## (CR 113.7a, MtgGame.controller_acting_for), not its owner.
+func test_stolen_gauntlets_still_exchange() -> void:
+	var gauntlets := put_battlefield(0, "Gauntlets of Chaos")
+	var mine := put_battlefield(1, "Grizzly Bears")      # the thief's
+	var theirs := put_battlefield(0, "Hill Giant")       # the owner's
+	g.change_control(gauntlets, 1)                       # as Steal Artifact would
+	var guard := 0
+	while (g.active_player != 1 or g.current_step() != Mtg.Step.MAIN1) and guard < 400:
+		_advance_once()
+		guard += 1
+	add_mana(1, Mtg.ManaColor.C, 5)
+	assert_ok(g.activate_ability(1, gauntlets, 0, [TargetRef.card(mine), TargetRef.card(theirs)]))
+	resolve_stack()
+	assert_eq(mine.controller_id, 0, "the thief's Bears went to the owner")
+	assert_eq(theirs.controller_id, 1, "and the owner's Giant to the thief")
+
+
 func test_gauntlets_pays_by_sacrificing_itself() -> void:
 	var mine := put_battlefield(0, "Grizzly Bears")
 	var theirs := put_battlefield(1, "Serra Angel")

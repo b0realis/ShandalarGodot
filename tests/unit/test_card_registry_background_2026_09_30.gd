@@ -243,23 +243,49 @@ func test_a_press_before_the_pool_holds_the_button_then_opens() -> void:
 		get_tree().current_scene = null
 
 
+## OPTIONS, NOT HELP, since the bug pass of 2026-10-03: this test used
+## Help as the screen that reads no card, and Help does read them — its
+## format pages list the restricted and banned cards the pool holds
+## (`HelpPages._page_format_lists` joins the build), so the press froze
+## the title for the rest of the build. Help is held now (below).
 func test_a_screen_that_reads_no_card_opens_at_once_under_the_build() -> void:
 	assert_null(get_tree().current_scene, "the runner has no current scene to replace")
 	CardRegistry.unload()
 	assert_true(CardRegistry.load_in_background())
 	var title: Control = load("res://game/main.tscn").instantiate()
 	add_child_autofree(title)
-	var help := _menu_entry(title, "Help")
-	assert_not_null(help)
-	help.pressed.emit()
+	var options := _menu_entry(title, "Options")
+	assert_not_null(options)
+	options.pressed.emit()
 	assert_eq(title._pending_open, "", "nothing held")
-	assert_eq(help.text, "Help")
+	assert_eq(options.text, "Options")
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var opened := get_tree().current_scene
 	assert_not_null(opened, "opened without the pool")
 	if opened != null:
-		assert_eq(opened.scene_file_path, "res://game/help/help_screen.tscn")
+		assert_eq(opened.scene_file_path, "res://game/options_screen.tscn")
 		opened.free()
 		get_tree().current_scene = null
+	assert_true(await _await_pool())
+
+
+func test_help_reads_cards_so_a_press_under_the_build_is_held() -> void:
+	assert_true(MainScreen.POOL_SCREENS.has("res://game/help/help_screen.tscn"),
+		"Help's format pages read the pool")
+	CardRegistry.unload()
+	assert_true(CardRegistry.load_in_background())
+	var title: Control = load("res://game/main.tscn").instantiate()
+	add_child_autofree(title)
+	var help := _menu_entry(title, "Help")
+	assert_not_null(help)
+	if not CardRegistry.is_loading():
+		pass_test("the pool built before the title stood — nothing to hold")
+		return
+	var pressed_at := Time.get_ticks_msec()
+	help.pressed.emit()
+	assert_lt(Time.get_ticks_msec() - pressed_at, 100, "the press did not wait for the thread")
+	assert_eq(title._pending_open, "res://game/help/help_screen.tscn")
+	assert_eq(help.text, MainScreen.WAITING_TEXT, "the button says why")
+	title._let_go()
 	assert_true(await _await_pool())

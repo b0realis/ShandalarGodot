@@ -156,3 +156,91 @@ func test_goblin_mutant_attacks_past_a_creature_that_stayed_small() -> void:
 	put_battlefield(1, "Grizzly Bears")
 	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
 	assert_ok(g.declare_attackers(0, [mutant.id]))
+
+# --- BANDING (bug pass 2026-10-03). A creature blocking one member of a band
+# blocks every member of it (CR 702.22h), so "becomes blocked", "blocking it"
+# and "creatures blocking it" read the whole band: the attacking side asks
+# CombatState.blockers_of_band(band_of(id)), the blocking side
+# opposing_attackers(id). Each test declares the block on the OTHER member.
+
+## P0 attacks with [param band] as one band; P1 then declares [param block_map].
+func _band_attack(band: Array, block_map: Dictionary) -> void:
+	var ids: Array = []
+	for inst in band: ids.append(inst.id)
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, ids, [ids]))
+	resolve_stack()
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, block_map))
+
+func test_chub_toad_becomes_blocked_through_its_band_mate() -> void:
+	var toad := put_battlefield(0, "Chub Toad")
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bear := put_battlefield(1, "Grizzly Bears")
+	_band_attack([toad, hero], {bear.id: hero.id})
+	assert_eq(g.stack.size(), 1, "becoming blocked through the band triggers once")
+	resolve_stack()
+	assert_eq(Vector2i(toad.cur_power, toad.cur_toughness), Vector2i(3, 3))
+
+func test_johtull_wurm_counts_every_creature_blocking_its_band() -> void:
+	var wurm := put_battlefield(0, "Johtull Wurm")
+	var hero := put_battlefield(0, "Benalish Hero")
+	var a := put_battlefield(1, "Grizzly Bears")
+	var b := put_battlefield(1, "Grizzly Bears")
+	var c := put_battlefield(1, "Grizzly Bears")
+	_band_attack([wurm, hero], {a.id: wurm.id, b.id: hero.id, c.id: hero.id})
+	resolve_stack()
+	assert_eq(Vector2i(wurm.cur_power, wurm.cur_toughness), Vector2i(2, 4),
+		"three creatures block the band, so two beyond the first: -4/-2")
+
+func test_grizzled_wolverine_pumps_when_the_block_was_declared_on_its_band_mate() -> void:
+	var wolverine := put_battlefield(0, "Grizzled Wolverine")
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bear := put_battlefield(1, "Grizzly Bears")
+	_band_attack([wolverine, hero], {bear.id: hero.id})
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.activate_ability(0, wolverine, 0))
+	resolve_stack()
+	assert_eq(wolverine.cur_power, 4)
+
+func test_tinder_wall_can_burn_a_band_mate_of_the_creature_it_blocks() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var wall := put_battlefield(1, "Tinder Wall")
+	_band_attack([hero, bear], {wall.id: hero.id})
+	resolve_stack()
+	assert_ok(g.pass_priority(0))
+	add_mana(1, Mtg.ManaColor.R)
+	assert_ok(g.activate_ability(1, wall, 0, [TargetRef.card(bear)]))
+	resolve_stack()
+	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD)
+
+func test_goblin_snowman_can_ping_a_band_mate_of_the_creature_it_blocks() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var snowman := put_battlefield(1, "Goblin Snowman")
+	_band_attack([hero, bear], {snowman.id: hero.id})
+	resolve_stack()
+	assert_ok(g.pass_priority(0))
+	assert_ok(g.activate_ability(1, snowman, 0, [TargetRef.card(bear)]))
+	resolve_stack()
+	assert_eq(bear.damage, 1)
+
+## "Whenever this creature blocks" — one block of a band of two is ONE
+## trigger, though the engine sends a BLOCKED event per band member
+## (bug pass 2026-10-03; the same first-pair guard as Chub Toad).
+func test_goblin_snowman_blocking_a_band_triggers_once() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var snowman := put_battlefield(1, "Goblin Snowman")
+	_band_attack([hero, bear], {snowman.id: hero.id})
+	assert_eq(g.stack.size(), 1, "blocking two band members is still one block")
+
+func test_chub_toad_blocking_a_band_still_triggers_once() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var bear := put_battlefield(0, "Grizzly Bears")
+	var toad := put_battlefield(1, "Chub Toad")
+	_band_attack([hero, bear], {toad.id: hero.id})
+	assert_eq(g.stack.size(), 1, "blocking two band members is still one block")
+	resolve_stack()
+	assert_eq(toad.cur_toughness, 3)

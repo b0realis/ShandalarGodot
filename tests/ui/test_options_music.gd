@@ -253,11 +253,47 @@ func test_one_chosen_track_plays_whatever_screen_asks() -> void:
 		["music_temple"] as Array[String])
 
 
-func test_a_chosen_track_that_is_gone_is_silence_not_an_error() -> void:
+## A CHOSEN TRACK THAT IS GONE SHUFFLES — it used to be SILENCE (bug pass
+## 2026-10-03). The file left `user://music`, the stored choice still named
+## it, and every duel played nothing while Options showed "Shuffle all
+## tracks" (it selects row 0 for an id it cannot find) and the shell's
+## bed ([method MusicLibrary.single_for]) already fell back. One answer
+## for all three views now: the shuffle the Options row says.
+func test_a_chosen_track_that_is_gone_falls_back_to_the_shuffle() -> void:
 	_unset(MusicLibrary.SETTING)
 	_write(SKIN_DIR, "music_duel.wav")
+	_write(SKIN_DIR, "music_temple.wav")
 	MusicLibrary.set_choice("music_from_a_machine_i_no_longer_have")
-	assert_eq(MusicLibrary.playlist_for("music_duel"), [] as Array[String])
+	var list := MusicLibrary.playlist_for("music_duel")
+	assert_eq(list.size(), 2, "every track there is, not silence")
+	assert_eq(list[0], "music_duel", "and the duel still opens on its bed")
+
+
+## A PLAYER'S FILE NAMED LIKE A MODE (bug pass 2026-10-03). `original.ogg`
+## and `shuffle.ogg` took the ids `original` and `shuffle` — the very
+## words `music_choice` stores for the two modes — so picking the track
+## called "Original" under Options selected the 1997 MODE instead. Such a
+## file is filed under an id no mode word can be; its name is unchanged.
+func test_a_track_named_like_a_mode_is_still_that_track() -> void:
+	_unset(MusicLibrary.SETTING)
+	_write(SKIN_DIR, "music_duel.wav")
+	_write(PLAYER_DIR, "original.wav")
+	_write(PLAYER_DIR, "shuffle.wav")
+	var by_name := {}
+	for entry in MusicLibrary.all():
+		by_name[String(entry["name"])] = String(entry["id"])
+	assert_true(by_name.has("Original") and by_name.has("Shuffle"),
+		"both files are listed under their own names")
+	for mode in [MusicLibrary.CHOICE_ORIGINAL, MusicLibrary.CHOICE_SHUFFLE]:
+		assert_false(_ids().has(mode), "no track takes the mode word " + mode)
+	MusicLibrary.set_choice(String(by_name["Original"]))
+	assert_eq(MusicLibrary.playlist_for("music_duel"),
+		[String(by_name["Original"])] as Array[String],
+		"picking the track plays the track")
+	assert_ne(MusicLibrary.stream(String(by_name["Original"])), null)
+	MusicLibrary.set_choice(MusicLibrary.CHOICE_ORIGINAL)
+	assert_eq(MusicLibrary.playlist_for("music_duel"),
+		["music_duel"] as Array[String], "and the mode is still the mode")
 
 
 func test_shuffle_takes_everything_and_still_opens_on_the_screens_bed() -> void:

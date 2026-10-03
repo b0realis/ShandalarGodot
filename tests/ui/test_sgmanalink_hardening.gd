@@ -129,6 +129,43 @@ func test_duplicate_commands_coalesce_their_state_refresh() -> void:
 	server._flush_publish()
 	assert_eq(server.states_sent - sent, 1, "one snapshot per recipient per polling batch")
 
+## THE REPLAY CACHE HOLDS DIGESTS, NOT COMMANDS (bug pass 2026-10-03): it
+## kept the last ACK_WINDOW command texts of every session, refused ones
+## too — 128 x 32 KiB x 4 bytes a character, ~15 MiB a session, and one LAN
+## peer holding an open host's advertised access code could open dozens.
+## The replay rule itself is unchanged: the same sequence number with the
+## same command answers with the recorded acknowledgement; with a different
+## command it is refused.
+func test_acknowledgement_cache_keeps_digests_and_the_replay_rule() -> void:
+	await _pair()
+	var names: Array = []
+	for i in 200: names.append("Unsent card name %03d" % i)
+	assert_true(a.command({"op": "deck", "name": "Cached digest deck", "cards": names, "sideboard": []}))
+	var duplicate := SgProtocol.decode(SgProtocol.encode(a._pending).to_ascii_buffer())
+	await _until(func() -> bool: return not a.busy())
+	for i in 4: await get_tree().process_frame
+	var session: Dictionary = server._sessions[_sid(a)]
+	var cached: Dictionary = session.acks[int(duplicate.seq)]
+	assert_false(cached.ack.ok, "a refused command is cached all the same")
+	var stored := JSON.stringify(session.acks)
+	assert_false(stored.contains("Unsent card name"), "no command text survives in the cache")
+	assert_lt(stored.length(), 1024, "one acknowledgement and one digest, not the command")
+	# Same sequence, same command: the recorded acknowledgement again.
+	var acknowledgements := server.acknowledgements
+	var peer: int = session.peer
+	server._receive(peer, duplicate)
+	assert_eq(server.acknowledgements, acknowledgements + 1)
+	assert_false(server._peers[peer].has("reject_until"), "a faithful retry keeps its connection")
+	assert_eq(int(session.seq), int(duplicate.seq), "the retry consumed no sequence number")
+	# Same sequence, a different command: refused, connection closing.
+	var conflicting: Dictionary = duplicate.duplicate(true)
+	conflicting.action.name = "Another deck"
+	server._receive(peer, conflicting)
+	assert_eq(server.acknowledgements, acknowledgements + 1, "no acknowledgement for a conflict")
+	assert_true(server._peers[peer].has("reject_until"))
+	await _until(func() -> bool: return not a._wanted)
+	assert_string_contains(a.status, "Expired or conflicting command")
+
 func test_host_view_rejects_aliases_and_impossible_combat_references() -> void:
 	put_battlefield(0, "Grizzly Bears")
 	var duel := SgPracticeMatch.new(42)

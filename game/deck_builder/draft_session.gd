@@ -168,10 +168,27 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+## The window's close button. `auto_accept_quit` is off so a close SAVES
+## first ([method _ready]) — and until 2026-10-03 nothing then closed:
+## the first request finished the draft and the window stayed, and every
+## later one returned at `finished`. A draft that is now on disk lets the
+## window go; a FAILED save keeps it once, for `Retry save` (the deck is
+## only in memory), and any request once finished is the player
+## insisting.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and is_inside_tree():
+		if finished:
+			_quit_game()
+			return
 		if builder == null: start_building()
 		finish("window closed")
+		if _save_warning == "":
+			_quit_game()
+
+
+## Ends the process; a seam so a test can count the close instead.
+func _quit_game() -> void:
+	get_tree().quit()
 
 
 func finish(why: String) -> void:

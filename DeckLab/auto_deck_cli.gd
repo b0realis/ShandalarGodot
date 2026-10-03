@@ -839,6 +839,11 @@ static func parse_args(argv: PackedStringArray) -> Dictionary:
 		deal.extras = opts.extras
 		if deal.card_total() == 0:
 			return {"error": "a sealed pool of no cards: --boosters, --starters, --free-lands and --extras are all 0"}
+		# THE BASICS ARE FREE IN EVERY DECK and never in a builder's pool,
+		# so a deal of nothing else is a pool of nothing (2026-10-03): it
+		# passed here and failed at the first deck, after the folder.
+		if deal.boosters + deal.starters + deal.extras == 0:
+			return {"error": "a sealed pool of only basic lands: --boosters, --starters and --extras are all 0, and the basics are free in every deck"}
 	if not (opts.vary as Array).is_empty() and String(opts.keep) == "":
 		return {"error": "--vary needs --keep FILE, the deck to hold  (%s)" % FLAG_HINTS["--keep"]}
 	# `--distinct` at variety 0 would fail on the second deck of any one
@@ -1056,6 +1061,19 @@ static func combo_at(opts: Dictionary, index: int) -> Dictionary:
 static func deck_seed(base: int, index: int) -> int:
 	var span := SEED_MOST - SEED_LEAST + 1
 	return posmod(base - SEED_LEAST + index * SEED_STRIDE, span) + SEED_LEAST
+
+
+## `--distinct`'s next fresh seed: the [param retries]th past a run of
+## [param count] decks — or 0 (never a seed) once the space is spent.
+## [method deck_seed] is a ring of 999,999, and an index past its end
+## came round onto the run's OWN seeds (2026-10-03: index 999,999 of
+## base 4242 is deck 1's 4242), so a retry rebuilt a deck of the run and
+## two decks shared one seed — the one thing the stride promises not to.
+static func retry_seed(base: int, count: int, retries: int) -> int:
+	var index := count + retries
+	if index >= SEED_MOST - SEED_LEAST + 1:
+		return 0
+	return deck_seed(base, index)
 
 
 ## The colors `--colors random` draws for a deck: 1..[param max_colors]
@@ -1332,6 +1350,14 @@ func _main(argv: PackedStringArray) -> int:
 
 	var out_dir := String(opts.out)
 	if bool(opts.dry_run):
+		# THE PLAN REFUSES WHAT THE RUN REFUSES (2026-10-03): an `--out`
+		# that is a FILE is the run's exit 1, and the plan said 0. A
+		# folder that holds files stays a plan (`out_holds`): --force is
+		# the caller's call.
+		var absolute_out := ProjectSettings.globalize_path(out_dir)
+		if FileAccess.file_exists(absolute_out) and not DirAccess.dir_exists_absolute(absolute_out):
+			return _refuse(1, "'%s' is a file, not a folder" % out_dir,
+				{"kind": "out", "path": out_dir, "flag": "--out"})
 		return _plan(_plan_of(opts, out_dir, list_label, keep, held, varied))
 	var prepared := _prepare_out_dir(out_dir, bool(opts.force))
 	if prepared != "":
@@ -1406,7 +1432,10 @@ func _main(argv: PackedStringArray) -> int:
 				# switches that look harmless on the line.
 				printerr("  --sets names a set the registry has no card for, or")
 				printerr("  --original-cards off / --completion-pack off left nothing in it.")
-			return 1
+			# THE JSON LINE TOO (2026-10-03): a driving program got exit 1
+			# and nothing on stdout to say why.
+			return _refuse(1, "the pool for deck %d is empty (%s)" % [index + 1, pool_label],
+				{"kind": "pool", "deck": index + 1}, true)
 		# THE ATTEMPTS: one, or with --distinct as many fresh seeds as it
 		# takes (DISTINCT_TRIES at most) — and the most distinct of them
 		# is the deck kept, which is the only one when there was one.
@@ -1419,7 +1448,11 @@ func _main(argv: PackedStringArray) -> int:
 		while true:
 			var seed_value := deck_seed(base_seed, index)
 			if attempt > 0:
-				seed_value = deck_seed(base_seed, count + retries)
+				seed_value = retry_seed(base_seed, count, retries)
+				if seed_value == 0:
+					# Every seed of the space is dealt: the best attempt
+					# so far is the deck (see [method retry_seed]).
+					break
 				retries += 1
 			var auto := _builder_for(wish, opts, seed_value, keep, held, pool, pool_label)
 			if distinct > 0 and attempt >= DISTINCT_WILD_AFTER \
@@ -1929,6 +1962,14 @@ static func _record(file_name: String, index: int, seed_value: int,
 ## beside three new ones were thirteen decks under a three-row
 ## manifest. Foreign files are left alone. And a path that is a FILE is
 ## refused here rather than at the first deck's write.
+##
+## THE PREVIOUS RUN IS WHAT ITS MANIFEST LISTS (2026-10-03). The clear
+## used to take every `deck_*.deck` and any `decklist.txt` from whatever
+## folder `--force` pointed at — a folder this tool never wrote, with the
+## player's own `deck_my_favourite.deck` in it, included. Now a folder
+## without this tool's manifest is written into and nothing is removed,
+## and one with it loses the decks its rows name, the manifest and the
+## list — never a deck file the manifest does not name.
 func _prepare_out_dir(out_dir: String, force: bool) -> String:
 	var absolute := ProjectSettings.globalize_path(out_dir)
 	if FileAccess.file_exists(absolute) and not DirAccess.dir_exists_absolute(absolute):
@@ -1938,12 +1979,13 @@ func _prepare_out_dir(out_dir: String, force: bool) -> String:
 		var dir := DirAccess.open(absolute)
 		if dir != null:
 			var held := dir.get_files().size() + dir.get_directories().size()
-			ours = held == 0 or dir.file_exists(MANIFEST_NAME)
+			var previous: Variant = previous_run_decks(absolute)
+			ours = held == 0 or previous != null
 			if held > 0 and not force:
 				return "'%s' already holds %d file(s) — --force writes into it anyway" \
 					% [out_dir, held]
-			if held > 0 and force:
-				_clear_previous_run(dir)
+			if held > 0 and force and previous != null:
+				_clear_previous_run(dir, previous)
 	else:
 		var made := DirAccess.make_dir_recursive_absolute(absolute)
 		if made != OK and not DirAccess.dir_exists_absolute(absolute):
@@ -1956,13 +1998,55 @@ func _prepare_out_dir(out_dir: String, force: bool) -> String:
 	return ""
 
 
-## The files a previous run of this tool left in [param dir]: its
-## `deck_*.deck` files, the manifest and the deck list.
-static func _clear_previous_run(dir: DirAccess) -> void:
+## The files a previous run of this tool left in [param dir]: the
+## `deck_*.deck` files its manifest names ([param listed]), the manifest
+## and the deck list.
+static func _clear_previous_run(dir: DirAccess, listed: PackedStringArray) -> void:
 	for file_name in dir.get_files():
-		if (file_name.begins_with("deck_") and file_name.ends_with(".deck")) \
-				or file_name == MANIFEST_NAME or file_name == DECKLIST_NAME:
+		if listed.has(file_name) or file_name == MANIFEST_NAME \
+				or file_name == DECKLIST_NAME:
 			dir.remove(file_name)
+
+
+## The deck files the manifest in the folder [param absolute] names, or
+## null when there is no manifest of this tool's there — no `decks.csv`,
+## or one whose first column is not [constant MANIFEST_COLUMNS]'s `file`.
+## Only a `deck_*.deck` name with no folder in it counts.
+static func previous_run_decks(absolute: String) -> Variant:
+	var path := absolute.path_join(MANIFEST_NAME)
+	if not FileAccess.file_exists(path):
+		return null
+	var lines := FileAccess.get_file_as_string(path).split("\n", false)
+	if lines.is_empty() or first_csv_field(lines[0]) != MANIFEST_COLUMNS[0]:
+		return null
+	var listed := PackedStringArray()
+	for i in range(1, lines.size()):
+		var file_name := first_csv_field(lines[i])
+		if file_name.begins_with("deck_") and file_name.ends_with(".deck") \
+				and file_name.get_file() == file_name:
+			listed.append(file_name)
+	return listed
+
+
+## A CSV line's first field, unquoted — the inverse of [method csv_field]
+## for the one column the clear reads.
+static func first_csv_field(line: String) -> String:
+	var text := line.strip_edges(false, true)
+	if not text.begins_with("\""):
+		return text.get_slice(",", 0)
+	var out := ""
+	var i := 1
+	while i < text.length():
+		var c := text[i]
+		if c == "\"":
+			if i + 1 < text.length() and text[i + 1] == "\"":
+				out += "\""
+				i += 2
+				continue
+			break
+		out += c
+		i += 1
+	return out
 
 
 ## [param pool] less the varied cards — the `--vary` names leave the

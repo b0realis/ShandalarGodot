@@ -91,11 +91,19 @@ static func _host_used_a_tap_ability(_game: MtgGame, source: CardInstance,
 	return int(event.data.get("stack_id", -1)) != -1   # not a mana ability
 
 
+## Both tolls resolve even if Imprison has left the battlefield in
+## response (CR 603.6 / 608.2h): the payment is still offered and still
+## does its work — "destroy this Aura" is all that has become impossible
+## (CR 609.3). Until 2026-10-03 destroying the Aura in response also
+## dropped the counter and the haul out of combat.
+static func _toll_payer(game: MtgGame, source: CardInstance) -> int:
+	var pid := game.current_resolution_controller()
+	return pid if pid >= 0 else source.controller_id
+
+
 static func _host_taps_for_something(game: MtgGame, source: CardInstance,
 		event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		return
-	var pid := source.controller_id
+	var pid := _toll_payer(game, source)
 	var toll := ManaCost.parse("{1}")
 	if game.can_afford_cost(pid, toll) and game.agents[pid].choose_yes_no(
 			game, pid, "Pay {1} to counter that ability?", true) \
@@ -114,12 +122,14 @@ static func _host_blocks(game: MtgGame, source: CardInstance, _event: GameEvent)
 
 
 static func _collect_the_toll(game: MtgGame, source: CardInstance) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		return
-	var host := game.find_instance(source.attached_to)
+	# "The creature" is the one it enchanted — as it last was, for an Aura
+	# that has already gone (CardInstance.last_attached_to).
+	var host_id := source.attached_to if source.zone == Mtg.Zone.BATTLEFIELD \
+		else source.last_attached_to
+	var host := game.find_instance(host_id)
 	if host == null or host.zone != Mtg.Zone.BATTLEFIELD:
 		return
-	var pid := source.controller_id
+	var pid := _toll_payer(game, source)
 	var toll := ManaCost.parse("{1}")
 	if game.can_afford_cost(pid, toll) and game.agents[pid].choose_yes_no(
 			game, pid, "Pay {1} to hold %s?" % host.data.card_name, true) \

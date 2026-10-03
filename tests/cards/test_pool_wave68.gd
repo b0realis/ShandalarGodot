@@ -116,6 +116,35 @@ func test_rakalite_books_only_one_bounce_however_often_it_is_used() -> void:
 	assert_eq(rock.zone, Mtg.Zone.HAND)
 
 
+func test_a_pending_rakalite_bounce_does_not_keep_the_game_alive() -> void:
+	# Bug pass 2026-10-03: the end-step action captured `game` strongly
+	# and lives in the game's own pool — a reference cycle, so a duel that
+	# ended before that end step was never freed ("ObjectDB instances were
+	# leaked at exit").
+	var rock := put_battlefield(0, "Rakalite")
+	add_mana(0, Mtg.ManaColor.C, 2)
+	assert_ok(g.activate_ability(0, rock, 0, [TargetRef.player(0)]))
+	resolve_stack()
+	assert_ok(g.concede(1))
+	var weak: WeakRef = weakref(g)
+	rock = null
+	g = null
+	assert_null(weak.get_ref(), "the finished game was freed")
+
+
+func test_rakalite_does_not_send_home_its_next_life() -> void:
+	# CR 400.7: the booking named the activated object. Bounced and put
+	# back before the end step, the new Rakalite stays.
+	var rock := put_battlefield(0, "Rakalite")
+	add_mana(0, Mtg.ManaColor.C, 2)
+	assert_ok(g.activate_ability(0, rock, 0, [TargetRef.player(0)]))
+	resolve_stack()
+	g.return_to_hand(rock)
+	g.put_from_hand_into_play(rock, 0)
+	advance_to_step(Mtg.Step.END)
+	assert_eq(rock.zone, Mtg.Zone.BATTLEFIELD)
+
+
 # -------------------------------------------------------------- Scarecrow --
 
 func test_scarecrow_stops_every_flier_all_turn() -> void:

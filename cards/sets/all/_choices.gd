@@ -98,13 +98,14 @@ static func _vault(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: in
 		g.adjust_life(pid, -1)
 		for card in _ordered(g, pid, cards, "Choose the next card to put on the bottom"): g.put_on_bottom_of_library(card)
 		cards = _top(g, pid, 5)
-	# Temporarily detach the selected cards from the library for the shuffle.
-	g._rec(g.players[pid], &"library")
-	for card in cards: g.players[pid].library.erase(card)
+	# Shuffle with the last five in place, then lift them to the top through
+	# the engine (hard rule 2, 2026-10-03): they used to be erased from the
+	# library array here and appended back, in no zone while their order was
+	# asked. The last one moved ends on top, so move them in reverse.
 	g.shuffle_library(pid)
 	var ordered := _ordered(g, pid, cards, "Choose the next card from the top")
 	ordered.reverse()
-	for card in ordered: g.players[pid].library.append(card)
+	for card in ordered: g.move_library_card_to_top(card)
 static func _portal(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: int) -> void:
 	if g.players[pid].library.size() < 10: return
 	var rest := _top(g, pid, 10)

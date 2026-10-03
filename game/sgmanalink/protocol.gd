@@ -38,7 +38,37 @@ const FIELDS := {
 	"t_pause": ["event"], "t_resume": ["event"],
 	"t_rule": ["event", "pair", "winner"],
 }
+## Earlier versions a handshake still names (see [method subprotocols]).
+const OLDER_SUBPROTOCOLS := 64
+const SUBPROTOCOL_PREFIX := "sgmanalink-local-v"
 static var _unicode_pattern: RegEx
+
+
+## THE OTHER VERSION IS NAMED, NOT HUNG UP ON (bug pass 2026-10-03). Every
+## protocol bump renames the WebSocket subprotocol, so two builds a version
+## apart failed the handshake itself: no message could cross, and the guest
+## retried "Host unavailable" forever. Both ends now name this version first
+## and every earlier one after it. A host completes an earlier guest's
+## handshake only to refuse it with the versions named; a guest that finds
+## its host chose an earlier version names that itself and stops. Wire
+## messages and [constant VERSION] are unchanged.
+static func subprotocols() -> PackedStringArray:
+	var names := PackedStringArray([SUBPROTOCOL])
+	for older in range(VERSION - 1, maxi(0, VERSION - 1 - OLDER_SUBPROTOCOLS), -1):
+		names.append(subprotocol_name(older))
+	return names
+
+
+static func subprotocol_name(version: int) -> String:
+	return SUBPROTOCOL_PREFIX + str(version)
+
+
+## The protocol version a negotiated subprotocol names; 0 for any other text.
+static func subprotocol_version(name: String) -> int:
+	if not name.begins_with(SUBPROTOCOL_PREFIX): return 0
+	var digits := name.substr(SUBPROTOCOL_PREFIX.length())
+	if not digits.is_valid_int() or str(int(digits)) != digits or int(digits) < 1: return 0
+	return int(digits)
 
 
 static func integer(value: Variant, low := 0, high := 1000000) -> bool:

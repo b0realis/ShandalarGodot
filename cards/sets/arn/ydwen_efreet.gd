@@ -12,9 +12,11 @@ extends CardScript
 ## really becomes unblocked instead of staying blocked-by-nobody. A 3/6
 ## for three mana that blocks half the time.
 ##
-## The "and it can't block this turn" half is not modelled: the engine has
-## one combat phase per turn, so a creature removed from THIS combat has no
-## later block to forbid.
+## "And it can't block this turn" is a floating static bound to the
+## Efreet until end of turn (Panic's mechanism: cur_cant_block_filter), so
+## nothing — an extra combat, or an effect that makes a creature block —
+## can put it back in front of an attacker (2026-10-03; it was unmodelled
+## and unmarked before).
 
 
 func build() -> CardData:
@@ -61,3 +63,17 @@ static func _gamble(game: MtgGame, source: CardInstance, _event: GameEvent) -> v
 	# flip turned the Efreet into a Fog: the attacker stayed BLOCKED with no
 	# blockers and dealt its damage to nobody.
 	game.remove_from_combat(source, true)
+	game.continuous.add_floating_static(source, StaticAbility.new(
+			_cant_block.bind(source.id), "It can't block this turn."),
+		ContinuousEffects.Duration.END_OF_TURN, -1, false, source.id)
+	game.recalculate()
+
+
+static func _cant_block(game: MtgGame, _source: CardInstance, efreet_id: int) -> void:
+	var efreet := game.find_instance(efreet_id)
+	if efreet != null and efreet.zone == Mtg.Zone.BATTLEFIELD:
+		efreet.cur_cant_block_filter = _any_attacker
+
+
+static func _any_attacker(_attacker: CardInstance) -> bool:
+	return true

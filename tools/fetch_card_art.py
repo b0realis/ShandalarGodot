@@ -33,8 +33,10 @@ per Scryfall's guidelines).
 
 import argparse
 import json
+import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -183,6 +185,14 @@ def fetch_art_url(name: str, set_code: str) -> dict | None:
     just the one this function is named after — preferring the card's own
     set's printing. (The annotation said `str | None` until 2026-09-11;
     every caller already read it as the dict it is.)"""
+    # ONLY A 404 MEANS "NO SUCH PRINTING" (bug pass 2026-10-03). This
+    # loop used to `except Exception: continue`, so a 429, a timeout or a
+    # dropped connection on the set-pinned ask fell through to the
+    # set-less one and came back with Scryfall's DEFAULT printing —
+    # another set's art, which packs 1-5/7 then filed under art/<set>/
+    # and a resumed run never replaced, because the file existed. Any
+    # other failure is a failure: the caller counts it and backs off, and
+    # the next run asks again.
     for params in ({"exact": name, "set": set_code}, {"exact": name}):
         url = API + "?" + urllib.parse.urlencode(params)
         time.sleep(DELAY_S)   # pace EVERY metadata call, success or not
@@ -190,11 +200,17 @@ def fetch_art_url(name: str, set_code: str) -> dict | None:
             req = urllib.request.Request(url, headers=HEADERS)
             with urllib.request.urlopen(req, timeout=30) as resp:
                 card = json.load(resp)
-            uris = card.get("image_uris") or {}
-            if uris.get("art_crop"):
-                return uris
-        except Exception:
-            continue   # fall through to the set-less lookup / caller skip
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                continue   # no printing in that set: ask for any printing
+            print(f"WARN: Scryfall answered {err.code} for {name}")
+            return None
+        except (OSError, ValueError) as err:   # URLError, timeout, bad JSON
+            print(f"WARN: lookup failed for {name}: {err}")
+            return None
+        uris = card.get("image_uris") or {}
+        if uris.get("art_crop"):
+            return uris
         time.sleep(DELAY_S)
     return None
 
@@ -230,14 +246,29 @@ def fetch_missing_art(name: str, set_code: str,
         url = uris.get(variant)
         if not url:
             continue
+        # CHECKED, STAGED, THEN MOVED INTO PLACE (bug pass 2026-10-03),
+        # the way packs 6 and 7 write theirs. A body that is not a whole
+        # JPEG — an HTML error page, a transfer cut short — is a failure
+        # rather than a file the game cannot decode and a resumed run
+        # skips because it exists; and with --force the picture already
+        # there is replaced only by a complete one, in one rename.
+        staged = dest.with_name(dest.name + ".download")
         try:
             req = urllib.request.Request(url, headers=HEADERS)
             with urllib.request.urlopen(req, timeout=60) as resp:
-                dest.write_bytes(resp.read())
+                payload = resp.read()
+            if not (payload.startswith(b"\xff\xd8") and payload.endswith(b"\xff\xd9")):
+                raise ValueError("not a whole JPEG (%d bytes)" % len(payload))
+            staged.write_bytes(payload)
+            os.replace(staged, dest)
             done += 1
         except Exception as e:
             print(f"WARN: download failed for {name} ({variant}): {e}")
             failed += 1
+            try:
+                staged.unlink()
+            except OSError:
+                pass
     time.sleep(DELAY_S)
     return done, failed
 

@@ -22,6 +22,7 @@ import unittest
 import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import import_original as imp  # noqa: E402
@@ -216,6 +217,40 @@ class TestLandmarks(unittest.TestCase):
         for name in mtg_assets.LANDMARKS["the deck builder art"]:
             self.assertTrue(name == "dbart" or name in wanted, name)
 
+
+
+class TestAFailedImportIsAFailedInstall(unittest.TestCase):
+    """`--install` EXITS NON-ZERO WHEN THE IMPORTER DID (bug pass
+    2026-10-03). It says "the importer exited N; archiving what it
+    wrote" and keeps that half-skin in the zip — deliberately, a player
+    loses nothing — but then returned the zip's own 0, so a script or a
+    build that ran it had no way to tell a whole skin from a broken one."""
+
+    def test_the_importers_failure_is_the_exit_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            install = root / "install" / "Cardart"
+            install.mkdir(parents=True)
+            (install / "Manasymbols.pic").write_bytes(b"art")
+            fake = root / "import_original.py"
+            fake.write_text(
+                "import sys, pathlib\n"
+                "dest = pathlib.Path(sys.argv[sys.argv.index('--dest') + 1])\n"
+                "dest.mkdir(parents=True, exist_ok=True)\n"
+                "(dest / 'card_back.png').write_bytes(b'x')\n"
+                "sys.exit(2)\n")
+            out = root / "skin.zip"
+            argv = ["mtg_assets.py", "--install", str(root / "install"),
+                    "--out", str(out), "--no-videos", "--no-bundle-movies"]
+            log = io.StringIO()
+            with mock.patch.object(mtg_assets, "IMPORTER", fake), \
+                    mock.patch.object(sys, "argv", argv), redirect_stdout(log):
+                code = mtg_assets.main()
+            self.assertNotEqual(code, 0, log.getvalue())
+            self.assertIn("the importer exited 2", log.getvalue())
+            with zipfile.ZipFile(out) as zf:
+                self.assertIn("skin/card_back.png", zf.namelist(),
+                              "what it wrote is still archived")
 
 
 if __name__ == "__main__":

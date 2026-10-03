@@ -91,8 +91,11 @@ static func _cohort(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if i != null and i.zone == Mtg.Zone.BATTLEFIELD and i.layer_timestamp == int(ctx.stamp):
 		g._rec(i, &"regeneration_banned_this_turn")
 		i.regeneration_banned_this_turn = true
+# "Blocking or blocked by this creature" includes the band (2026-10-03): a
+# creature blocking one band member blocks every member (CR 702.22h), on
+# either side of the block. Greater Werewolf asks this too.
 static func _opponents(g: MtgGame, s: CardInstance) -> Array[int]:
-	return g.combat.blockers_of(s.id) if g.combat.attackers.has(s.id) else g.combat.attackers_blocked_by(s.id)
+	return g.combat.blockers_of_band(g.combat.band_of(s.id)) if g.combat.attackers.has(s.id) else g.combat.opposing_attackers(s.id)
 static func _in_combat(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return not _opponents(g, s).is_empty()
 static func _combat_context(g: MtgGame, s: CardInstance, _e: GameEvent) -> Dictionary:
 	var pairs: Array = []

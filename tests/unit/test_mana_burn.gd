@@ -55,6 +55,22 @@ func test_burning_to_zero_loses_the_duel() -> void:
 	assert_eq(g.winner, 1, "the other seat wins")
 
 
+func test_a_lethal_burn_as_the_end_step_ends_is_acted_on_at_once() -> void:
+	# Bug pass 2026-10-03: the burn is life loss written straight to the
+	# total, and nothing checked it until the next priority — in the NEXT
+	# turn's upkeep, after its untap and its triggers. CR 514.3a performs
+	# state-based actions in cleanup, so the burned player loses in turn 1.
+	g.rules.set_preset("modern_mana_burn")
+	g.players[0].life = 1
+	advance_to_step(Mtg.Step.END)
+	add_mana(0, Mtg.ManaColor.G, 3)
+	assert_ok(g.pass_priority(g.priority_player))
+	assert_ok(g.pass_priority(g.priority_player))
+	assert_true(g.game_over, "burned from 1 to -2")
+	assert_eq(g.turn_number, 1, "and lost before the next turn began")
+	assert_eq(g.winner, 1)
+
+
 func test_only_the_owner_of_the_mana_burns() -> void:
 	g.rules.mana_burn = true
 	var mine: int = g.players[0].life

@@ -415,10 +415,12 @@ read_gate() {
 	fi
 	# The exit-time leak report is a WARNING, and the one WARNING this script
 	# reads: an object alive after the tree is gone is the same class of bug
-	# as the SIGABRT above, one step earlier.
-	if grep -q 'ObjectDB instances were leaked at exit' "$log"; then
+	# as the SIGABRT above, one step earlier. Godot words ONE object in the
+	# singular ("1 ObjectDB instance was leaked at exit"), which the plural
+	# grep let through until 2026-10-03.
+	if grep -qE 'ObjectDB instances? (was|were) leaked at exit' "$log"; then
 		echo "SUITE IS NOT GREEN: Godot exited 0 but leaked objects at exit ($label):" >&2
-		grep -n 'ObjectDB instances were leaked at exit' "$log" | head -3 >&2
+		grep -nE 'ObjectDB instances? (was|were) leaked at exit' "$log" | head -3 >&2
 		return 1
 	fi
 	return 0
@@ -461,16 +463,32 @@ if [ "$SHARDS" -eq 1 ] || [ -n "${SHARD:-}" ]; then
 		selection="-gdir=res://tests -ginclude_subdirs"
 	fi
 	log="$(mktemp)"
-	trap 'rm -f "$log"' EXIT
+	# A CTRL-C MUST REACH GODOT (2026-10-03). `timeout` puts itself in a
+	# process group of its own, so the terminal's INT never reaches it:
+	# with `timeout … | tee` the shell then waited the whole run out, and
+	# a TERM left Godot writing the test profile for up to SUITE_TIMEOUT
+	# under the next run. So the suite runs in the background (its `$!` IS
+	# timeout, which passes a TERM on to Godot), tee reads a FIFO, and an
+	# INT or a TERM is trapped, passed on, and waited for.
+	fifo="$log.fifo"
+	mkfifo "$fifo"
+	trap 'rm -f "$log" "$fifo"' EXIT
 	started=$SECONDS
 	set +e
+	tee "$log" <"$fifo" &
+	tee_pid=$!
 	# shellcheck disable=SC2086  # the selection is one or two GUT flags
 	"$SHANDALAR_TIMEOUT" -k 5 "$SUITE_TIMEOUT" "$GODOT" --headless --path . \
 		--log-file "$SHANDALAR_TEST_DATA_HOME/gut-engine.log" \
 		-s addons/gut/gut_cmdln.gd \
 		$selection -gjunit_xml_file="$SHANDALAR_TEST_DATA_HOME/gut-junit.xml" \
-		-gexit "$@" </dev/null 2>&1 | tee "$log"
-	status=${PIPESTATUS[0]}
+		-gexit "$@" </dev/null >"$fifo" 2>&1 &
+	suite_pid=$!
+	trap 'kill -TERM "$suite_pid" 2>/dev/null; wait; exit 130' INT
+	trap 'kill -TERM "$suite_pid" 2>/dev/null; wait; exit 143' TERM
+	wait "$suite_pid"; status=$?
+	wait "$tee_pid"
+	trap - INT TERM
 	set -e
 	read_gate "$log" "$status" "the run" || exit $?
 	if [ -z "${SHARD:-}" ] && [ "$#" -eq 0 ]; then
@@ -489,6 +507,14 @@ fi
 # runs back to back), then the gate reads every log, then the sum.
 echo "Dealing $script_count test scripts over $SHARDS Godot processes."
 started=$SECONDS
+# EVERY SHARD'S PID IS ITS `timeout` (2026-10-03): the subshell `exec`s
+# it, and an INT or a TERM here is passed on to every shard and waited
+# for — `timeout` sits in a process group of its own, so without this a
+# Ctrl-C ended this script and left every shard's Godot running for up to
+# SUITE_TIMEOUT. `jobs -pr`: this script's own running jobs, never a pid
+# already reaped.
+trap 'running="$(jobs -pr)"; [ -z "$running" ] || kill -TERM $running 2>/dev/null; wait; exit 130' INT
+trap 'running="$(jobs -pr)"; [ -z "$running" ] || kill -TERM $running 2>/dev/null; wait; exit 143' TERM
 i=1
 while [ "$i" -le "$SHARDS" ]; do
 	home="$SHANDALAR_TEST_DATA_HOME/shard-$i"
@@ -499,7 +525,7 @@ while [ "$i" -le "$SHARDS" ]; do
 	(
 		export XDG_DATA_HOME="$home"
 		reset_packs
-		"$SHANDALAR_TIMEOUT" -k 5 "$SUITE_TIMEOUT" "$GODOT" --headless --path . \
+		exec "$SHANDALAR_TIMEOUT" -k 5 "$SUITE_TIMEOUT" "$GODOT" --headless --path . \
 			--log-file "$home/gut-engine.log" \
 			-s addons/gut/gut_cmdln.gd \
 			-gtest="$list" -gjunit_xml_file="$home/gut-junit.xml" \

@@ -40,10 +40,16 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 	return int(event.data["player"]) == source.controller_id
 
 
+## The trigger resolves even if the Spawn has left the battlefield (CR
+## 603.6 / 608.2h): the Island is still on offer, and refusing it still
+## costs six — from the Spawn as it last existed — though there is no
+## longer a Spawn to sacrifice (CR 609.3, as much as possible). It used to
+## fizzle, so bouncing your own Spawn in response dodged the bill
+## (until 2026-10-03).
 static func _feed(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		return
-	var pid := source.controller_id
+	var pid := game.current_resolution_controller()
+	if pid < 0:
+		pid = source.controller_id
 	# "Unless you sacrifice an Island" is an OPTIONAL cost: the controller
 	# decides whether to pay, and which Island to give up.
 	var islands: Array[CardInstance] = []

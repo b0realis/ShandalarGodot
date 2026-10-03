@@ -20,6 +20,18 @@ static func _blocking_opponent_creature(game: MtgGame, source: CardInstance,
 		and game.combat.blocks.has(inst.id)
 
 
+## The second slot is the same target word as the first ("choose two
+## target blocking creatures"), so it may not name the first one again
+## (CR 601.2c). The engine judges duplicates per word, and the Path's two
+## words are two effects, so the distinctness is said here (2026-10-03).
+static func _not_the_first(_game: MtgGame, _source: CardInstance,
+		ref: TargetRef, earlier: Array) -> bool:
+	for other in earlier:
+		if other is TargetRef and other.same_object(ref):
+			return false
+	return true
+
+
 static func _is_self(_game: MtgGame, source: CardInstance, event: GameEvent) -> bool:
 	return event.data.get("instance") == source
 
@@ -37,6 +49,7 @@ func build() -> CardData:
 	first.with_source_filter(_blocking_opponent_creature)
 	var second := TargetSpec.creature("a second blocking creature the same opponent controls")
 	second.with_source_filter(_blocking_opponent_creature)
+	second.with_sibling_filter(_not_the_first, TargetSpec.WHY["blocking"])
 	return CardData.new("Sorrow's Path", "", Mtg.CardType.LAND) \
 		.activated(ActivatedAbility.new("", true,
 			[SwapBlocksEffect.new(first), NoopSecondTargetEffect.new(second)],

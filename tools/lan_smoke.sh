@@ -132,25 +132,45 @@ dir="$(mktemp -d "$run_parent/shandalar-lan-smoke.XXXXXX")" || exit 3
 dir="$(cd "$dir" && pwd -P)" || exit 3
 mkdir -p "$dir/host" "$dir/guest" || exit 3
 
-pids=()
+# EVERY BACKGROUND JOB HERE IS A `timeout` (2026-10-03). Each process
+# is started in a subshell that `exec`s timeout, so the job IS timeout —
+# which passes a TERM on to its Godot and, five seconds later, a KILL.
+# Before, `$!` was the subshell: the kill in cleanup ended a shell, while
+# timeout (in a process group of its own, out of a Ctrl-C's reach) and
+# its Godot played on for up to SMOKE_TIMEOUT in a run directory this
+# script had just deleted. Now an INT or a TERM is trapped, this
+# script's own running jobs (`jobs -pr`: never a pid already reaped,
+# never anyone else's) are signalled AND WAITED FOR, and only then is
+# the directory removed. Every process runs in the background and is
+# `wait`ed for, even the import that runs alone: bash runs a trap only
+# once a foreground command has finished, but `wait` returns to it at
+# once.
+stop_processes() {
+	local running
+	running="$(jobs -pr)"
+	[ -z "$running" ] || kill -TERM $running 2>/dev/null
+	wait
+}
 cleanup() {
-	for pid in ${pids+"${pids[@]}"}; do
-		kill "$pid" 2>/dev/null
-	done
+	stop_processes
 	[ "$keep" = 1 ] || rm -rf "$dir"
 }
 trap cleanup EXIT
+trap 'stop_processes; exit 130' INT
+trap 'stop_processes; exit 143' TERM
 
 # Warm the import cache with ONE process first: two cold Godots writing
 # the same .godot folder at once is a race nobody needs to debug.
 (
 	shandalar_test_profile || exit $?
-	"$SHANDALAR_TIMEOUT" -k 5 900 "$GODOT" --headless --import .
-) > "$dir/import.log" 2>&1 </dev/null || {
+	exec "$SHANDALAR_TIMEOUT" -k 5 900 "$GODOT" --headless --import .
+) > "$dir/import.log" 2>&1 </dev/null &
+wait $!; import_status=$?
+if [ "$import_status" -ne 0 ]; then
 	echo "LAN SMOKE IS NOT CLEAN: import failed" >&2
 	cat "$dir/import.log" >&2
 	exit 1
-}
+fi
 
 # Share only the warmed resource cache, not project settings. Each role
 # gets its own override before autoloads start; no tracked file changes.
@@ -166,22 +186,21 @@ for role in host guest; do
 		"${dir##*/}" "$role" > "$project/override.cfg"
 done
 
-run_role() {
+run_role() {  # always started with `&`: it execs, so $! is the timeout
 	local role="$1"; shift
-	GODOT_EDITOR_CUSTOM_FEATURES= XDG_DATA_HOME="$dir/$role" \
-		"$SHANDALAR_TIMEOUT" -k 5 "$SMOKE_TIMEOUT" \
+	export GODOT_EDITOR_CUSTOM_FEATURES= XDG_DATA_HOME="$dir/$role"
+	exec "$SHANDALAR_TIMEOUT" -k 5 "$SMOKE_TIMEOUT" \
 		"$GODOT" --headless --path "$dir/$role/project" --log-file "$dir/$role/engine.log" \
 		res://tools/lan_smoke.tscn -- --role "$role" --invite "$dir/invite.txt" \
 		"$@" > "$dir/$role.log" 2>&1 </dev/null
 }
 
 run_role host ${common+"${common[@]}"} ${host_only+"${host_only[@]}"} &
-pids+=($!)
+host_pid=$!
 run_role guest ${common+"${common[@]}"} ${guest_only+"${guest_only[@]}"} &
-pids+=($!)
-wait "${pids[0]}"; host_status=$?
-wait "${pids[1]}"; guest_status=$?
-pids=()
+guest_pid=$!
+wait "$host_pid"; host_status=$?
+wait "$guest_pid"; guest_status=$?
 
 for role in host guest; do
 	echo "----- $role -----"

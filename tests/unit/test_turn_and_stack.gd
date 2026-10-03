@@ -123,3 +123,40 @@ func test_priority_required_to_act() -> void:
 	# Turn 1 upkeep: P0 holds priority; P1 cannot cast yet.
 	add_mana(1, Mtg.ManaColor.R)
 	assert_refused(g.cast_spell(1, bolt, [TargetRef.player(0)]), "priority")
+
+
+func test_a_dying_cards_own_trigger_takes_its_controllers_apnap_slot() -> void:
+	# Bug pass 2026-10-03, CR 603.3b: the active player's triggers go on the
+	# stack first, the non-active player's on top. A card that has just
+	# died hears its own dies-trigger through dispatch_event's also_listen,
+	# which used to be offered with the NON-ACTIVE seat whoever controlled
+	# it — so the active player's Onulet went on above the opponent's Soul
+	# Net and resolved first.
+	advance_to_step(Mtg.Step.MAIN1)
+	var onulet := put_battlefield(0, "Onulet")
+	put_battlefield(1, "Soul Net")
+	var bolt := give_hand(0, "Lightning Bolt")
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.cast_spell(0, bolt, [TargetRef.card(onulet)]))
+	assert_ok(g.pass_priority(0))
+	assert_ok(g.pass_priority(1))
+	assert_eq(onulet.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.stack.size(), 2, "Onulet's and Soul Net's triggers")
+	assert_eq(g.stack[0].card, onulet, "the active player's trigger went on first")
+	assert_eq(g.stack[0].controller, 0)
+	assert_eq(g.stack[1].controller, 1, "the non-active player's is on top")
+
+
+func test_a_dying_card_of_the_non_active_player_still_goes_on_top() -> void:
+	# The mirror: P1's Onulet dies on P0's turn beside P0's Soul Net.
+	advance_to_step(Mtg.Step.MAIN1)
+	var onulet := put_battlefield(1, "Onulet")
+	put_battlefield(0, "Soul Net")
+	var bolt := give_hand(0, "Lightning Bolt")
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.cast_spell(0, bolt, [TargetRef.card(onulet)]))
+	assert_ok(g.pass_priority(0))
+	assert_ok(g.pass_priority(1))
+	assert_eq(g.stack.size(), 2)
+	assert_eq(g.stack[1].card, onulet, "the non-active player's trigger is on top")
+	assert_eq(g.stack[1].controller, 1)

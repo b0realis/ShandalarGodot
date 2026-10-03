@@ -156,3 +156,16 @@ func test_pox_rounds_up_separately_and_keeps_choosing_players_own_permanents() -
 		assert_eq(g.players[who].life, 6)
 		assert_eq(g.players[who].hand.size(), 2)
 		assert_eq(g.players[who].battlefield.size(), 4)
+
+# CR 601.2c, per instance of the word "target" (2026-10-03): the opponent may
+# take part of the divided 5 AND be the "target opponent" who gains 5 life.
+# The whole-spell duplicate check refused it ("can't choose the same target
+# twice").
+func test_fiery_justice_may_hit_the_opponent_who_gains_the_life() -> void:
+	var bear := put_battlefield(1, "Grizzly Bears")
+	var spell := give_hand(0, "Fiery Justice")
+	mana()
+	assert_ok(g.cast_spell(0, spell, [TargetRef.card(bear, 3), TargetRef.player(1, 2), TargetRef.player(1)]))
+	resolve_stack()
+	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(g.players[1].life, 23, "20 - 2 + 5")

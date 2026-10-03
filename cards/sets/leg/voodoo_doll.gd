@@ -63,14 +63,29 @@ static func _stick_a_pin(game: MtgGame, source: CardInstance, _event: GameEvent)
 		game.add_counters(source, "pin", 1)
 
 
+## The backfire resolves even if the Doll has left the battlefield (CR
+## 603.6 / 608.2h): the intervening "if" is rechecked against the Doll as
+## it last existed (CR 603.4), there is nothing left to destroy, and the
+## damage is its LAST pin count — so bouncing your own Doll in response no
+## longer dodges it (until 2026-10-03 the trigger simply fizzled).
 static func _backfire(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD or source.tapped:
-		return
-	var pins := int(source.counters.get("pin", 0))
-	var owner := source.controller_id
-	game.destroy(source)
+	var pid := game.current_resolution_controller()
+	if pid < 0:
+		pid = source.controller_id
+	var pins := 0
+	if source.zone == Mtg.Zone.BATTLEFIELD:
+		if source.tapped:
+			return   # the intervening "if", rechecked (CR 603.4)
+		pins = int(source.counters.get("pin", 0))
+		game.destroy(source)
+	else:
+		# Departed: the "if" is rechecked against the Doll as it last
+		# existed — tapped as it left, no backfire (CardInstance.last_tapped).
+		if source.last_tapped:
+			return
+		pins = int(source.last_counters.get("pin", 0))
 	if pins > 0:
-		game.deal_damage(source, TargetRef.player(owner), pins)
+		game.deal_damage(source, TargetRef.player(pid), pins)
 
 
 class PinDamageEffect extends EffectBase:

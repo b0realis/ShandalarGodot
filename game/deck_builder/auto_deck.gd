@@ -424,6 +424,20 @@ static func pool_from_text(text: String, out_report: Array) -> Dictionary:
 		out_report.append("%d name%s the game does not have: %s" % [
 			list.proxies.size(), "" if list.proxies.size() == 1 else "s",
 			", ".join(list.proxies)])
+	# NO MORE COPIES THAN A DECK CAN HOLD (2026-10-03). A pasted
+	# "5000000 Lightning Bolt" was five million copies on offer; no deck
+	# holds more than [constant DeckModel.MAX_TOTAL] cards, so more of one
+	# name than that is never used. (A single line above
+	# [constant DeckList.MAX_COUNT] is refused by [method DeckList.parse]
+	# itself; this caps the sum of several lines of one name.)
+	var capped: PackedStringArray = []
+	for name in counts:
+		if int(counts[name]) > DeckModel.MAX_TOTAL:
+			counts[name] = DeckModel.MAX_TOTAL
+			capped.append(String(name))
+	if not capped.is_empty():
+		out_report.append("More copies than any deck holds, read as %d: %s" % [
+			DeckModel.MAX_TOTAL, ", ".join(capped)])
 	return pool_from_counts(counts)
 
 
@@ -853,7 +867,11 @@ func _fill_spells(out: DeckModel, candidates: Array, slots: int) -> void:
 		for color in Mtg.WUBRG:
 			if (best.color_mask() & color) != 0:
 				colors_have[color] = int(colors_have.get(color, 0)) + 1
-	short_by = slots - placed
+	# NEVER BELOW NOTHING (2026-10-03). Kept cards past the spell slots
+	# made this negative, and [method _lay_lands] lays `lands + short_by`
+	# — 44 kept spells in a 40 left a 44-card deck with no land at all.
+	# A kept card is the player's and stays; the lands are laid in full.
+	short_by = maxi(slots - placed, 0)
 
 
 ## THE SPLASH THE LANDS CANNOT CARRY (2026-09-26): a colour the fill

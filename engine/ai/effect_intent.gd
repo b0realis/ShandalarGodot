@@ -869,9 +869,22 @@ func is_harmful() -> bool:
 			or random_destroy != null or coin_damage != null \
 			or chosen_discard != null or discards != 0:
 		return true
+	if shrinks():
+		return true
 	if draws > 0 or draws_use_x or pumps or life_gain > 0 or untaps or regenerates:
 		return false
 	return unknown   # removal-shaped by default
+
+
+## A pump that TAKES (2026-10-03): toughness taken away, or power taken
+## with nothing given back — Contagion's -2/-1 counters, Shrink's -5/-0.
+## Every pump read as help until then, and the picker aimed both at our
+## own Craw Wurm. A +X/-Y breath on the caster's own body (Phantasmal
+## Fiend) reads the same here; nothing aims a self pump, and the pump
+## paths price its toughness themselves ([method AiPlayer._self_pump_once]).
+func shrinks() -> bool:
+	return pumps and not pump_host \
+		and (pump_toughness < 0 or (pump_power < 0 and pump_toughness <= 0))
 
 
 ## Damage this intent would deal to one target at X = [param x_value]
@@ -1121,6 +1134,43 @@ const AURA_GRANTS := {
 }
 const LANDWALKS := ["plains", "island", "swamp", "mountain", "forest"]
 
+## THE CACHE LOCK (2026-10-03). Every static cache in this file is filled
+## lazily, on the first ask — and the first ask can come from a WORKER
+## THREAD: the Deck Lab plays its games on a [WorkerThreadPool], and eight
+## duels starting together all read the same cold caches on their first
+## turns. Two threads writing one Dictionary (or one appending to
+## [member _scaling] while another walks it) aborted the process with
+## "double free or corruption" on every run of an 8-thread probe — the
+## bug [method CardRegistry._ensure_printings] already learnt. A Godot
+## Dictionary is not safe to READ while another thread writes it either,
+## so every lookup takes the lock too (it is one hash lookup); the
+## reading itself is done OUTSIDE the lock into a local and published
+## under it, so two threads that miss together both build and the first
+## one's answer is the one kept — the answer is a pure function of the
+## printed text, so either is right.
+static var _cache_lock := Mutex.new()
+
+
+## [param cache]'s entry for [param key] under [member _cache_lock], or
+## null on a miss (no cache here ever stores a null).
+static func _cache_get(cache: Dictionary, key: Variant) -> Variant:
+	_cache_lock.lock()
+	var hit: Variant = cache.get(key)
+	_cache_lock.unlock()
+	return hit
+
+
+## Publish [param value] under [param key] and return what the cache holds
+## — the value already there if another thread published first.
+static func _cache_put(cache: Dictionary, key: Variant, value: Variant) -> Variant:
+	_cache_lock.lock()
+	if not cache.has(key):
+		cache[key] = value
+	var kept: Variant = cache[key]
+	_cache_lock.unlock()
+	return kept
+
+
 static var _aura_gifts_cache: Dictionary = {}
 
 
@@ -1130,8 +1180,9 @@ static var _aura_gifts_cache: Dictionary = {}
 static func aura_gifts(data: CardData) -> Array:
 	if data == null or not data.is_aura():
 		return []
-	if _aura_gifts_cache.has(data.card_name):
-		return _aura_gifts_cache[data.card_name]
+	var hit: Variant = _cache_get(_aura_gifts_cache, data.card_name)
+	if hit != null:
+		return hit
 	var out: Array = []
 	var text := _read_conjunctions(data.oracle_text.to_lower())
 	for phrase in AURA_GRANTS:
@@ -1142,8 +1193,7 @@ static func aura_gifts(data: CardData) -> Array:
 	for land in LANDWALKS:
 		if text.contains("has " + land + "walk"):
 			out.append({"keyword": -1, "landwalk": land, "attack_only": true})
-	_aura_gifts_cache[data.card_name] = out
-	return out
+	return _cache_put(_aura_gifts_cache, data.card_name, out)
 
 
 ## "has first strike and trample" spelt out as "has first strike has
@@ -1251,21 +1301,38 @@ static var _stacks_cache: Dictionary = {}
 static func stacks(data: CardData) -> bool:
 	if data == null:
 		return true
-	if _stacks_cache.has(data.card_name):
-		return _stacks_cache[data.card_name]
-	if _scaling.is_empty():
-		for phrase in SCALING_PHRASES:
-			var regex := RegEx.new()
-			regex.compile(phrase)
-			_scaling.append(regex)
+	var hit: Variant = _cache_get(_stacks_cache, data.card_name)
+	if hit != null:
+		return hit
 	var out := not data.enters_as_copy.is_empty()
 	var text := _repeatable_text(data)
-	for regex in _scaling:
+	for regex in _scaling_regexes():
 		if out:
 			break
 		out = regex.search(text) != null
-	_stacks_cache[data.card_name] = out
-	return out
+	return _cache_put(_stacks_cache, data.card_name, out)
+
+
+## [constant SCALING_PHRASES] compiled once, built into a local and
+## published whole under [member _cache_lock]: appending to the shared
+## array while another thread walked it was the crash.
+static func _scaling_regexes() -> Array:
+	_cache_lock.lock()
+	var ready := _scaling
+	_cache_lock.unlock()
+	if not ready.is_empty():
+		return ready
+	var built: Array = []
+	for phrase in SCALING_PHRASES:
+		var regex := RegEx.new()
+		regex.compile(phrase)
+		built.append(regex)
+	_cache_lock.lock()
+	if _scaling.is_empty():
+		_scaling = built
+	ready = _scaling
+	_cache_lock.unlock()
+	return ready
 
 
 ## [param data]'s lower-cased oracle text with every activated line a
@@ -1411,14 +1478,14 @@ static var _toll_cache: Dictionary = {}
 ##
 ## Cached by the line itself: the pool's trigger texts are a fixed set.
 static func toll_of_line(text: String) -> Dictionary:
-	if _toll_cache.has(text):
-		return _toll_cache[text]
+	var hit: Variant = _cache_get(_toll_cache, text)
+	if hit != null:
+		return hit
 	var lower := text.to_lower()
 	var out := {"damage": 0, "escape": _mana_price_in(lower)}
 	for word in TOLL_UNKNOWABLE:
 		if lower.contains(word):
-			_toll_cache[text] = out
-			return out
+			return _cache_put(_toll_cache, text, out)
 	# "deals N damage to you", and the N has to be RIGHT THERE: Primordial
 	# Ooze's "it deals X damage to you" is a count this reader will not do,
 	# and a looser search read the 1 out of the "+1/+1 counter" three
@@ -1430,8 +1497,7 @@ static func toll_of_line(text: String) -> Dictionary:
 		if m != null:
 			out["damage"] = maxi(int(m.get_string(1)), 0)
 			break
-	_toll_cache[text] = out
-	return out
+	return _cache_put(_toll_cache, text, out)
 
 
 static var _rent_cache: Dictionary = {}
@@ -1460,8 +1526,9 @@ static var _rent_cache: Dictionary = {}
 ## a rent — Cosmic Horror's eight damage is a toll and is read as one.
 ## Cached by the line itself, like the toll.
 static func rent_of_line(text: String) -> String:
-	if _rent_cache.has(text):
-		return _rent_cache[text]
+	var hit: Variant = _cache_get(_rent_cache, text)
+	if hit != null:
+		return hit
 	var lower := text.to_lower()
 	var out := ""
 	if lower.contains("unless you pay {") and not lower.contains("for each") \
@@ -1471,8 +1538,7 @@ static func rent_of_line(text: String) -> String:
 			if lower.contains(word):
 				out = ""
 				break
-	_rent_cache[text] = out
-	return out
+	return _cache_put(_rent_cache, text, out)
 
 
 ## THE HAND TOLL (2026-09-10, [member AiProfile.minds_the_vise];
@@ -1517,8 +1583,9 @@ static func rent_of_line(text: String) -> String:
 ## make of the same kind of text, and cached by that line the same way —
 ## the pool's trigger texts are a fixed set.
 static func hand_toll_of_line(text: String) -> Dictionary:
-	if _hand_toll_cache.has(text):
-		return _hand_toll_cache[text]
+	var hit: Variant = _cache_get(_hand_toll_cache, text)
+	if hit != null:
+		return hit
 	var out: Dictionary = {}
 	var lower := text.to_lower()
 	# The damage has to land on a PLAYER and the line has to say which hand
@@ -1537,8 +1604,7 @@ static func hand_toll_of_line(text: String) -> Dictionary:
 			m = stretch.search(lower)
 			if m != null:
 				out = {"slope": -1, "threshold": int(m.get_string(1))}
-	_hand_toll_cache[text] = out
-	return out
+	return _cache_put(_hand_toll_cache, text, out)
 
 
 ## What one hand toll takes at a hand of [param hand_size] — the BEAT, and
@@ -1610,11 +1676,10 @@ static var _reckoning_cache: Dictionary = {}
 static func loses_the_game_on_leaving(data: CardData) -> bool:
 	if data == null:
 		return false
-	if _reckoning_cache.has(data.card_name):
-		return _reckoning_cache[data.card_name]
-	var found := _read_reckoning(data)
-	_reckoning_cache[data.card_name] = found
-	return found
+	var hit: Variant = _cache_get(_reckoning_cache, data.card_name)
+	if hit != null:
+		return hit
+	return _cache_put(_reckoning_cache, data.card_name, _read_reckoning(data))
 
 
 static func _read_reckoning(data: CardData) -> bool:
@@ -1651,13 +1716,13 @@ static var _gaze_cache: Dictionary = {}
 static func is_gaze(trig: TriggeredAbility) -> bool:
 	if trig == null or trig.event_type != Mtg.EventType.BLOCKED:
 		return false
-	if _gaze_cache.has(trig.text):
-		return _gaze_cache[trig.text]
+	var hit: Variant = _cache_get(_gaze_cache, trig.text)
+	if hit != null:
+		return hit
 	var lower := trig.text.to_lower()
 	var found := lower.contains("destroy that creature") \
 		and lower.contains("end of combat")
-	_gaze_cache[trig.text] = found
-	return found
+	return _cache_put(_gaze_cache, trig.text, found)
 
 
 ## THE EXECUTIONER'S SHAPE (2026-09-10, [member AiProfile.reads_gaze]):

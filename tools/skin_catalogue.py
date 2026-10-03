@@ -723,33 +723,87 @@ def render(skin: Path, cardart: Path) -> str:
 
 # -------------------------------------------------------------- checking --
 
+## THE GAME'S DOOR, MIRRORED (bug pass 2026-10-03). `--check` approved —
+## "skin, 0 files", exit 0 — an empty zip, a zip of folders alone, a
+## backslashed name and a `.tar.xz`, every one of which the game refuses.
+## What it takes is two functions of game/, and these follow them:
+##   * `TarPack.is_tar`: a tar is a GZIP header or `ustar` at byte 257 —
+##     by its bytes, never its name, so xz and bzip2 are not tars;
+##   * `SkinPack._take`/`adopt`: a file NAMED as a tar (TAR_TAILS) whose
+##     bytes are none is refused before it is ever read as a zip;
+##   * `TarPack`: regular files only, a name's `./` and `/` at the front
+##     dropped and its backslashes made slashes; no file at all is a refusal;
+##   * `SkinPack.inspect` (over the zip a tar becomes, too): at least one
+##     file, every one under `skin/`, none with `..` or a backslash.
+TAR_TAILS = (".tar.gz", ".tgz", ".tar")
+NOT_A_TAR = "is not a tar the game can read"
+
+
+def is_tar(target: Path) -> bool:
+    """`TarPack.is_tar`: gzipped (the two magic bytes) or plain (`ustar`
+    at 257), by content."""
+    with target.open("rb") as handle:
+        head = handle.read(262)
+    return head[:2] == b"\x1f\x8b" or head[257:262] == b"ustar"
+
+
+def tidy(name: str) -> str:
+    """`TarPack._tidy`: an entry's name as the zip made of it carries it."""
+    out = name.replace("\\", "/")
+    while out.startswith("./"):
+        out = out[2:]
+    while out.startswith("/"):
+        out = out[1:]
+    return out
+
+
+def archive_names(target: Path) -> tuple[list[str] | None, str]:
+    """(every file the game would mount, with its `skin/`; "") — or
+    (None, the game's reason for refusing it)."""
+    if is_tar(target):
+        names = []
+        try:
+            with tarfile.open(target) as tf:
+                for member in tf.getmembers():
+                    if member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE):
+                        continue   # a directory, a link, a device
+                    name = tidy(member.name)
+                    if name and not name.endswith("/"):
+                        names.append(name)
+        except (tarfile.TarError, OSError, EOFError) as err:
+            return None, "%s (%s)" % (NOT_A_TAR, err)
+        if not names:
+            return None, "holds no files"
+    elif target.name.lower().endswith(TAR_TAILS):
+        return None, NOT_A_TAR
+    elif zipfile.is_zipfile(target):
+        with zipfile.ZipFile(target) as zf:
+            names = [n for n in zf.namelist() if not n.endswith("/")]
+    else:
+        return None, "not a zip file"
+    for name in names:
+        if not name.startswith(PREFIX) or ".." in name or "\\" in name:
+            return None, "an entry outside skin/: " + name
+    if not names:
+        return None, "no skin/ folder inside"
+    return names, ""
+
+
 def names_in(target: Path) -> list[str] | None:
     """The files a skin zip, tar (plain or gzipped) or folder holds,
-    relative to skin/; None when the target is none of those, or the
-    archive has an entry outside skin/."""
+    relative to skin/; None when the game would refuse the archive (the
+    reason is printed) or the target is none of those."""
     if target.is_dir():
         return sorted(str(p.relative_to(target)).replace("\\", "/")
                       for p in target.rglob("*")
                       if p.is_file() and not p.name.endswith(".import"))
-    if zipfile.is_zipfile(target):
-        with zipfile.ZipFile(target) as zf:
-            names = [n for n in zf.namelist() if not n.endswith("/")]
-    elif target.is_file() and tarfile.is_tarfile(target):
-        # The game repacks a tar into a zip at the door (game/tar_pack.gd)
-        # with the same names — `./` at the front dropped — so a tar is
-        # checked as the zip it will become.
-        with tarfile.open(target) as tf:
-            names = [m.name[2:] if m.name.startswith("./") else m.name
-                     for m in tf.getmembers() if m.isfile() and not m.name.endswith("/")]
-    else:
+    if not target.is_file():
         return None
-    out = []
-    for name in names:
-        if not name.startswith(PREFIX) or ".." in name:
-            print("!! %s: entry outside skin/: %s" % (target.name, name))
-            return None
-        out.append(name[len(PREFIX):])
-    return sorted(out)
+    names, why = archive_names(target)
+    if names is None:
+        print("!! %s: %s" % (target.name, why))
+        return None
+    return sorted(name[len(PREFIX):] for name in names)
 
 
 def kind_of(names: list[str]) -> str:
@@ -812,7 +866,8 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT,
                         help="where to write the catalogue")
     parser.add_argument("--check", type=Path, metavar="ZIP_OR_DIR",
-                        help="report what a skin is missing; writes nothing")
+                        help="report what a skin is missing; writes nothing; "
+                             "exit 1 for an archive the game would refuse")
     parser.add_argument("--stdout", action="store_true",
                         help="print the catalogue instead of writing it")
     tool_banner.add_version_flag(parser, TOOL, __file__)

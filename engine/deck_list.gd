@@ -54,6 +54,16 @@ var printings: Dictionary = {}
 
 const REQUIRED_PACK_PREFIX := "# requires-pack:"
 
+## The most copies one count line may ask for (bug pass 2026-10-03). No
+## deck holds more than 500 cards — `@TOOMANYCARDS`, *"Decks are limited to
+## 200 unique cards / 500 total cards"*, which the Deck Builder keeps as
+## `DeckModel.MAX_TOTAL` (game/, so not nameable from here) — so a bigger
+## count is a broken line, not a deck. Without the cap `5000000 Forest`
+## loaded five million copies and a 20-digit count, clamped to INT64_MAX by
+## to_int(), expanded forever: one pasted line froze the setup screen and
+## the Deck Builder's import.
+const MAX_COUNT := 500
+
 
 ## Load any supported format; .dck files route to the MicroProse parser.
 ## [param strict] = validate names against the card registry (gameplay
@@ -102,7 +112,9 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 	var sideboard_max := {}
 	var first_line := true
 	var line_number := 0
-	for raw_line in text.split("\n"):
+	# A UTF-8 BOM from a Windows editor is not part of the deck's name (the
+	# first line); [method parse] has always stripped it (2026-10-03).
+	for raw_line in text.trim_prefix("\ufeff").split("\n"):
 		line_number += 1
 		var line := raw_line.strip_edges(false, true)   # keep leading tabs intact
 		if first_line:
@@ -127,10 +139,13 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 		if not count_token.is_valid_int():
 			errors.append("line %d: bad count '%s'" % [line_number, count_token])
 			continue
-		var count := count_token.to_int()
+		var count := _read_count(count_token)
 		var card_name := parts[2].strip_edges()
 		if count < 1:
 			errors.append("line %d: bad count" % line_number)
+			continue
+		if count > MAX_COUNT:
+			errors.append(_too_large(line_number))
 			continue
 		if not CardRegistry.has_card(card_name):
 			if strict:
@@ -213,10 +228,13 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 			errors.append("line %d: expected 'COUNT Card Name', got '%s'" % [
 				line_number, line])
 			continue
-		var count := count_token.to_int()
+		var count := _read_count(count_token)
 		var card_name := line.substr(space + 1).strip_edges()
 		if count < 1:
 			errors.append("line %d: count must be positive" % line_number)
+			continue
+		if count > MAX_COUNT:
+			errors.append(_too_large(line_number))
 			continue
 		if not into_sideboard: saw_main_card = true
 		if not CardRegistry.has_card(card_name):
@@ -230,6 +248,21 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 				sideboard.append(card_name)
 			else:
 				cards.append(card_name)
+
+
+## A count token that is_valid_int() already passed, read WITHOUT letting
+## to_int() see more digits than a count could need: on an overflow it
+## clamps to INT64_MAX and prints an ERROR. Anything over six significant
+## digits reads as one past [constant MAX_COUNT] (or -1 when negative).
+static func _read_count(token: String) -> int:
+	if token.trim_prefix("+").trim_prefix("-").lstrip("0").length() > 6:
+		return -1 if token.begins_with("-") else MAX_COUNT + 1
+	return token.to_int()
+
+
+static func _too_large(line_number: int) -> String:
+	return "line %d: count too large (no deck holds more than %d cards)" % [
+		line_number, MAX_COUNT]
 
 
 ## Record one name the registry does not know, ONCE. Both parsers call it

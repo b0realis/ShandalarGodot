@@ -392,3 +392,54 @@ func test_a_closing_word_from_a_dropped_duel_is_ignored() -> void:
 	runner._advance_once(first)
 	assert_false(runner._duel_advanced, "not the duel on the table: ignored")
 	assert_eq(runner.state.duels_played(), played)
+
+
+# ============================== bug pass 2026-10-03: Continue under Sideboard ==
+#
+# The between-duels window draws no blocker, and its `Continue match`
+# button kept the keyboard while the Sideboard window was up: Tab from
+# `Done` reached it, Enter pressed it, and duel 2 began with the deck one
+# card short (the very size rule `Done` was greyed to enforce) and the
+# Sideboard window still open over the new table.
+
+func _continue_button(screen: MatchScreen) -> Button:
+	for b in screen._window.find_children("*", "Button", true, false):
+		if (b as Button).text == MatchScreen.CONTINUE:
+			return b
+	return null
+
+
+func test_continue_is_refused_while_the_sideboard_window_is_open() -> void:
+	runner = load("res://game/match_screen.tscn").instantiate()
+	runner.config = _config(3)
+	runner.config.sideboard_between_duels = true
+	add_child_autofree(runner)
+	await get_tree().process_frame
+	runner.state.record(0)
+	runner._show_window()
+	runner._open_sideboard(0)
+	await get_tree().process_frame
+	var size_at_open: int = runner._sb_size
+	runner.move_one(0, String(runner.config.decks[0][0]), true)
+	runner._refresh_sideboard()
+	assert_true(runner._sb_done.disabled, "a short deck cannot leave by Done")
+	var cont := _continue_button(runner)
+	assert_not_null(cont)
+	assert_eq(cont.focus_mode, Control.FOCUS_NONE,
+		"no button under the Sideboard window takes the keyboard")
+	var duel_before: DuelScreen = runner._duel
+	cont.pressed.emit()
+	await get_tree().process_frame
+	assert_eq(runner._duel, duel_before, "no new duel while the window is up")
+	assert_eq(runner.state.duels_played(), 1)
+	assert_eq((runner.config.decks[0] as Array).size(), size_at_open - 1,
+		"the deck is still being boarded, not dealt")
+	# Back to size, Done, and Continue works again — with its focus back.
+	runner.move_one(0, String(runner.config.sideboards[0][-1]), false)
+	runner._refresh_sideboard()
+	runner._close_sideboard()
+	assert_eq(cont.focus_mode, Control.FOCUS_ALL, "the window's buttons answer again")
+	cont.pressed.emit()
+	await get_tree().process_frame
+	assert_ne(runner._duel, duel_before, "Continue starts duel 2 once boarded")
+	assert_eq((runner._duel.config.decks[0] as Array).size(), size_at_open)

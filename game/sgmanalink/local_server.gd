@@ -238,7 +238,8 @@ func poll() -> void:
 				continue
 			transport = tls
 		var socket := WebSocketPeer.new()
-		socket.supported_protocols = PackedStringArray([SgProtocol.SUBPROTOCOL])
+		# Earlier versions too, only to tell such a guest why (2026-10-03).
+		socket.supported_protocols = SgProtocol.subprotocols()
 		socket.inbound_buffer_size = 65536
 		socket.outbound_buffer_size = SgProtocol.MAX_BYTES * 2
 		socket.max_queued_packets = 64
@@ -262,7 +263,10 @@ func poll() -> void:
 			continue
 		if socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
 			continue
-		if socket.get_selected_protocol() != SgProtocol.SUBPROTOCOL:
+		# Another version's handshake is never a session: its first message
+		# is answered below with both versions, never read as a hello.
+		var negotiated := SgProtocol.subprotocol_version(socket.get_selected_protocol())
+		if negotiated == 0 or (negotiated != SgProtocol.VERSION and peer.session != 0):
 			_drop(id)
 			continue
 		for i in 16:
@@ -273,7 +277,16 @@ func poll() -> void:
 				peer.window = now
 				peer.count = 0
 			peer.count += 1
-			var message := SgProtocol.decode(bytes) if socket.was_string_packet() else {}
+			var text := socket.was_string_packet()
+			var message := SgProtocol.decode(bytes) if text and negotiated == SgProtocol.VERSION else {}
+			# THE OTHER VERSION HEARS WHY (bug pass 2026-10-03): a guest of
+			# another protocol version was dropped without a word, and
+			# retried "Host unavailable" forever.
+			if message.is_empty() and peer.session == 0 and text and peer.count <= 64:
+				var refusal := _version_refusal(bytes, negotiated)
+				if not refusal.is_empty():
+					_reject(id, refusal)
+					break
 			if message.is_empty() or peer.count > 64:
 				_drop(id)
 				break
@@ -294,6 +307,27 @@ func _drop(id: int) -> void:
 		session.disconnected_at = Time.get_ticks_msec()
 		_bump_room(session.room)
 		_publish(session.room, 0, true)
+
+
+## What a guest of another protocol version reads, or "" when [param bytes]
+## are merely malformed. [param negotiated] is the version its handshake
+## chose; within this version's own handshake, a hello whose `v` differs
+## names that version instead. The fatal envelope — `type` and `error`, no
+## `v` — has had this shape since protocol 6, so an older client reads it.
+## Only a guest holding the access code hears this host's release.
+func _version_refusal(bytes: PackedByteArray, negotiated: int) -> String:
+	var hello := SgProtocol.decode_payload(bytes, 6) if bytes.size() <= SgProtocol.MAX_COMMAND_BYTES else {}
+	var theirs := negotiated
+	if theirs == SgProtocol.VERSION:
+		if not SgProtocol.literal(hello.get("type"), "hello") or not SgProtocol.integer(hello.get("v"), 1) \
+			or int(hello.v) == SgProtocol.VERSION:
+			return ""
+		theirs = int(hello.v)
+	if not SgProtocol.literal(hello.get("access"), access_code):
+		return "Invalid invitation. Ask the host for a current invitation."
+	var stamp: Variant = hello.get("stamp")
+	var their_game := String(stamp.game) if stamp is Dictionary and SgCompatibility.plain(stamp.get("game"), 24) else ""
+	return SgCompatibility.protocol_difference(theirs, SgProtocol.VERSION, their_game, SgCompatibility.game_version())
 
 
 func _reject(id: int, reason: String) -> void:
@@ -423,11 +457,15 @@ func _receive(id: int, message: Dictionary) -> void:
 		return
 	var session: Dictionary = _sessions[sid]
 	var seq := int(message.seq)
-	var encoded := JSON.stringify(message)
+	# The replay cache keeps a digest of each command, not its text (bug
+	# pass 2026-10-03): ACK_WINDOW full commands of up to MAX_COMMAND_BYTES
+	# each, refused ones too, were ~15 MiB a session, and one LAN peer with
+	# an open host's advertised access code can hold dozens of sessions.
+	var digest := JSON.stringify(message).sha256_text()
 	var ack: Dictionary
 	if seq <= int(session.seq):
 		var previous: Dictionary = session.acks.get(seq, {})
-		if previous.is_empty() or previous.payload != encoded:
+		if previous.is_empty() or previous.digest != digest:
 			_reject(id, "Expired or conflicting command. Disconnect and start a new session.")
 			return
 		_send(id, previous.ack)
@@ -443,7 +481,7 @@ func _receive(id: int, message: Dictionary) -> void:
 		error = _command(sid, message.action, int(message.revision))
 	ack = {"type": "ack", "seq": seq, "ok": error.is_empty(), "error": error}
 	session.seq = seq
-	session.acks[seq] = {"payload": encoded, "ack": ack}
+	session.acks[seq] = {"digest": digest, "ack": ack}
 	session.acks.erase(seq - ACK_WINDOW)
 	_send(id, ack)
 	var current_room: String = session.room
@@ -541,8 +579,12 @@ func _command(sid: int, action: Dictionary, revision: int) -> String:
 		if not tournament.hold().is_empty(): return tournament.hold()
 	# A concession is not a move that a fresher room can make wrong: it asks
 	# for the one outcome no later state changes, and a bot's polling bumps
-	# the revision while a human is still deciding to give up.
-	if not room.is_empty() and revision != int(room.revision) and op != "concede":
+	# the revision while a human is still deciding to give up. Nor is
+	# leaving a finished duel (2026-10-03): OK on the result leaves the
+	# room, and the opponent leaving first bumps the revision under it.
+	var finished: bool = not room.is_empty() and room.match != null and room.match.game.game_over
+	if not room.is_empty() and revision != int(room.revision) and op != "concede" \
+		and not (op == "leave" and finished):
 		return "The room changed. Please try again."
 	if op == "host":
 		if not room.is_empty() or _rooms.size() >= MAX_ROOMS:

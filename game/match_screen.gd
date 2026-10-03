@@ -320,6 +320,15 @@ static func _centred(text: String, size := 14, bold := false) -> Label:
 
 
 func _next_duel() -> void:
+	# NOT UNDER THE SIDEBOARD WINDOW (bug pass 2026-10-03). The
+	# between-duels window draws no blocker, so its `Continue match` kept
+	# the keyboard while `Sideboard...` was open: Tab from `Done` reached
+	# it and Enter dealt duel 2 with the deck still short — the size rule
+	# `Done` is greyed to enforce — and the Sideboard window left open
+	# over the new table. [method _open_sideboard] also takes the focus
+	# off these buttons; this is the gate for any other way in.
+	if _sideboard_open():
+		return
 	if _window != null:
 		_window.queue_free()
 		_window = null
@@ -351,7 +360,7 @@ func _open_sideboard(pid: int) -> void:
 	# built a second window over the first, and only the newest is
 	# remembered — `Done` closed that one and left the older sitting over
 	# `Continue match` with nothing on screen able to close it.
-	if is_instance_valid(_sb_dialog) and not _sb_dialog.is_queued_for_deletion():
+	if _sideboard_open():
 		return
 	_sb_pid = pid
 	_sb_size = (config.decks[pid] as Array).size()
@@ -373,7 +382,10 @@ func _open_sideboard(pid: int) -> void:
 	_refresh_sideboard()
 	add_child(dialog)
 	# ...and the keyboard comes with it, so Enter answers THIS window
-	# rather than the button that opened it.
+	# rather than the button that opened it — and STAYS with it: the
+	# between-duels buttons under it leave the focus ring until it closes
+	# (bug pass 2026-10-03; see [method _next_duel]).
+	_set_window_focusable(false)
 	_sb_done.grab_focus()
 
 
@@ -382,6 +394,27 @@ func _close_sideboard() -> void:
 		_sb_dialog.dismiss()
 	_sb_dialog = null
 	_sb_pid = -1
+	_set_window_focusable(true)
+
+
+## Is the Sideboard window up (and not on its way out)?
+func _sideboard_open() -> bool:
+	return is_instance_valid(_sb_dialog) and not _sb_dialog.is_queued_for_deletion()
+
+
+## Take the between-duels window's buttons out of the keyboard's ring
+## while the Sideboard window is over them, and put them back after.
+func _set_window_focusable(on: bool) -> void:
+	if not is_instance_valid(_window):
+		return
+	for button: Control in _window.find_children("*", "BaseButton", true, false):
+		if not on:
+			if not button.has_meta(&"sb_focus_mode"):
+				button.set_meta(&"sb_focus_mode", button.focus_mode)
+			button.focus_mode = Control.FOCUS_NONE
+		elif button.has_meta(&"sb_focus_mode"):
+			button.focus_mode = button.get_meta(&"sb_focus_mode")
+			button.remove_meta(&"sb_focus_mode")
 
 
 func _refresh_sideboard() -> void:

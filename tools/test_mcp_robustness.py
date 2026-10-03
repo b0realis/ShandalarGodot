@@ -2,9 +2,12 @@
 import io
 import json
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -36,7 +39,8 @@ class RobustnessTest(unittest.TestCase):
     def test_deck_rows_cannot_inject_lines_or_truncate_counts(self):
         for row in ({"count": 1.5, "name": "Island"}, {"count": True, "name": "Island"},
                     {"count": 1, "name": None}, {"count": 1, "name": "Island\n99 Black Lotus"},
-                    {"name": "Island\rSB: 1 Mountain"}, {"name": "Island\u2028name: Changed"}):
+                    {"name": "Island\rSB: 1 Mountain"}, {"name": "Island\u2028name: Changed"},
+                    {"count": mcp.MAX_COUNT + 1, "name": "Island"}, "5000000 Island"):
             with self.subTest(row=row), self.assertRaises(mcp.ToolError):
                 mcp.deck_rows([row], "write_deck", "cards")
         with self.assertRaises(mcp.ToolError):
@@ -155,6 +159,87 @@ class RobustnessTest(unittest.TestCase):
             with self.assertRaises(mcp.ToolError):
                 self.open_game("unused")
         self.assertTrue(opened[0].closed)
+
+
+    # --- the bug pass of 2026-10-03 ------------------------------------------
+
+    def test_a_key_error_inside_a_tool_is_not_an_unknown_tool(self):
+        tool = next(t for t in self.server.tools if t["name"] == "status")
+        with mock.patch.dict(tool, {"handler": lambda args: {}["missing"]}):
+            answer = self.server.handle({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                                         "params": {"name": "status", "arguments": {}}})
+        self.assertEqual(answer["error"]["code"], -32603)
+        self.assertNotIn("unknown tool", answer["error"]["message"])
+        unknown = self.server.handle({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                                      "params": {"name": "stauts", "arguments": {}}})
+        self.assertEqual(unknown["error"]["code"], -32602)
+        self.assertIn("status", unknown["error"]["data"]["suggestions"])
+
+    def test_a_half_written_run_is_a_refusal_not_a_protocol_error(self):
+        run = self.server.workspace / "broken"
+        run.mkdir(parents=True)
+        (run / "run.json").write_text('{"tool": "lab", "exit": nu', encoding="utf-8")
+        for name in ("read_run", "lab_next"):
+            with self.subTest(name=name), self.assertRaises(mcp.ToolError) as caught:
+                self.server.call(name, {"out": str(run)})
+            self.assertEqual(caught.exception.envelope["kind"], "run")
+        (run / "run.json").write_text("[]", encoding="utf-8")
+        with self.assertRaises(mcp.ToolError):
+            self.server.call("read_run", {"out": str(run)})
+
+    def test_the_lab_folder_is_found_from_the_line_the_lab_prints(self):
+        folder = self.root / "DeckLab" / "results" / "run_5"
+        folder.mkdir(parents=True)
+        (folder / "run.json").write_text("{}", encoding="utf-8")
+        text = "REPORT\n\nwrote DeckLab/results/run_5/{report.txt, results.json, run.json}\n"
+        self.assertEqual(self.server.out_from_output(text, ""), folder)
+        self.assertIsNone(self.server.out_from_output("no folder here", ""))
+
+    def test_two_servers_on_one_workspace_never_share_a_game_number(self):
+        other = mcp.Server(self.root / "shandalar.sh", self.root / "workspace")
+        self.addCleanup(other.shutdown)
+        with mock.patch.object(mcp, "Game") as game:
+            game.side_effect = lambda ident, *rest, **more: mock.Mock(ident=ident)
+            first = self.server.new_game(["--deck-a", "a"], "brief")
+            second = other.new_game(["--deck-a", "a"], "brief")
+            third = self.server.new_game(["--deck-a", "a"], "brief")
+        self.assertEqual([first.ident, second.ident, third.ident], ["g1", "g2", "g3"])
+
+    def test_a_kept_socket_closed_while_booting_never_connects(self):
+        handshake = self.root / "late.keep.json"
+        transport = mcp.SocketTransport(handshake, boot=5)
+        lines = []
+        reader = threading.Thread(target=lambda: lines.extend(transport.read_lines()), daemon=True)
+        reader.start()
+        time.sleep(0.3)
+        transport.close(0)
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(listener.close)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        listener.settimeout(1.5)
+        handshake.write_text(json.dumps({"port": listener.getsockname()[1], "token": "t"}), encoding="utf-8")
+        with self.assertRaises(socket.timeout):
+            conn, _ = listener.accept()
+            conn.close()
+        reader.join(5)
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(lines, [])
+
+    def test_a_transcript_is_read_from_its_tail(self):
+        transcript = self.root / "g9.lines"
+        decision = json.dumps({"type": "decision", "n": 1, "view": {"journal": ["x" * 500] * 20}})
+        with transcript.open("w", encoding="utf-8") as stream:
+            for _ in range(400):
+                stream.write(decision + "\n")
+        record = {"game": "g9", "lines": str(transcript)}
+        real = json.loads
+        with mock.patch.object(mcp.json, "loads", side_effect=real) as loads:
+            self.assertIsNone(mcp.Server.transcript_result(record))
+        self.assertLessEqual(loads.call_count, mcp.Server.TRANSCRIPT_LINES)
+        with transcript.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"type": "result", "winner": 1, "reason": "idle"}) + "\n")
+        self.assertEqual(mcp.Server.transcript_result(record)["reason"], "idle")
 
 
 if __name__ == "__main__":

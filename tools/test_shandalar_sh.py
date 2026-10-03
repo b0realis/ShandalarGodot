@@ -107,6 +107,23 @@ class DoorTest(unittest.TestCase):
                               error["message"])
                 self.assertIn("unknown verb", done.stderr)
 
+    def test_the_refusal_is_valid_json_whatever_bytes_the_verb_held(self):
+        # 2026-10-03: only " \ and three controls were removed, so an ESC
+        # or a Latin-1 byte (not UTF-8) made the line invalid JSON.
+        env = dict(os.environ, GODOT="/nonexistent/godot")
+        for verb in (b"bad\x1bverb", b"bell\x07\x7f", b"caf\xe9", b"\xff\xfe", "café".encode()):
+            with self.subTest(verb=verb):
+                done = subprocess.run([b"./" + DOOR.encode(), verb], cwd=str(ROOT),
+                                      capture_output=True, timeout=180,
+                                      stdin=subprocess.DEVNULL, env=env)
+                self.assertEqual(done.returncode, 2, done.stderr)
+                lines = done.stdout.splitlines()
+                self.assertEqual(len(lines), 1, done.stdout)
+                error = json.loads(lines[0])["error"]
+                self.assertEqual(error["kind"], "option")
+                if verb == "café".encode():
+                    self.assertEqual(error["verb"], "café", "valid UTF-8 is kept")
+
     def test_a_known_verb_reaches_its_tool(self):
         # No Godot: the Lab's wrapper answers 3, which is the proof the
         # door handed the line on and added nothing of its own.

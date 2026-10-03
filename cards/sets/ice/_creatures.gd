@@ -120,8 +120,20 @@ static func _targets_source(g: MtgGame, s: CardInstance, spell: CardInstance) ->
 	for ref in item.targets:
 		if not ref.is_player and ref.instance_id == s.id: return true
 	return false
-static func _blocking_it(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.attackers_blocked_by(s.id).has(i.id)
-static func _source_blocks(_g: MtgGame, s: CardInstance, e: GameEvent) -> bool: return e.data.get("blocker") == s
+# BANDING (2026-10-03): a creature blocking one member of a band blocks every
+# member (CR 702.22h), so "it's blocking" / "blocking it" read the whole band
+# — opposing_attackers() on the blocking side, blockers_of_band(band_of())
+# on the attacking side — not just the attacker the block was declared on.
+static func _blocking_it(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.opposing_attackers(s.id).has(i.id)
+static func _band_blockers(g: MtgGame, s: CardInstance) -> Array[int]: return g.combat.blockers_of_band(g.combat.band_of(s.id))
+## "Whenever this creature blocks": once per block, though a blocker of a
+## band hears a BLOCKED event per member — only the first answers (bug pass
+## 2026-10-03, the guard [method _first_block] keeps for Chub Toad).
+static func _source_blocks(g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
+	if e.data.get("blocker") != s:
+		return false
+	var blocked := g.combat.attackers_blocked_by(s.id)
+	return blocked.is_empty() or blocked.front() == e.data.attacker.id
 static func _snowman(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if F._same_trigger_source(g, s):
 		g.continuous.add_until_eot_combat_prevention(s.id, true, true)
@@ -134,7 +146,7 @@ static func _evasion(_g: MtgGame, s: CardInstance, name: String) -> void:
 		return blocker.has_subtype("wall") if name == "Flow of Maggots" else not blocker.has_keyword(Mtg.Keyword.FLYING)
 	s.cur_block_restrictions.append({"desc": name, "filter": allowed})
 static func _is_blocked(g: MtgGame, s: CardInstance) -> String:
-	return "" if not g.combat.blockers_of(s.id).is_empty() else "This creature must be blocked"
+	return "" if not _band_blockers(g, s).is_empty() else "This creature must be blocked"
 static func _choose_opponent(g: MtgGame, s: CardInstance, pid: int) -> void: s.memory["opponent"] = g.opponent_of(pid)
 static func _variable_stats(g: MtgGame, s: CardInstance, name: String) -> void:
 	var count := 0
@@ -167,8 +179,12 @@ static func _aurochs(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	g.continuous.add_until_eot_pump(s.id, n, 0)
 	g.recalculate()
 static func _first_block(g: MtgGame, s: CardInstance, e: GameEvent) -> bool:
+	# One trigger per block: the attacker hears a BLOCKED event per blocker of
+	# its band, the blocker one per band member it blocks — each answers only
+	# the first.
 	if e.data.get("attacker") == s:
-		return g.combat.blockers_of(s.id).front() == e.data.blocker.id
+		var blockers := _band_blockers(g, s)
+		return not blockers.is_empty() and blockers.front() == e.data.blocker.id
 	if e.data.get("blocker") == s:
 		return g.combat.attackers_blocked_by(s.id).front() == e.data.attacker.id
 	return false
@@ -201,10 +217,10 @@ static func _elder(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: int
 	var option := g.agents[pid].choose_option(g, pid, ["Tap", "Untap", "Leave unchanged"], "Elder Druid", 1 if i.controller_id == pid else 0)
 	if option == 0: g.tap_permanent(i)
 	elif option == 1: g.untap_permanent(i)
-static func _wurm_blocked(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return not g.combat.blockers_of(s.id).is_empty()
+static func _wurm_blocked(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return not _band_blockers(g, s).is_empty()
 static func _johtull(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if F._same_trigger_source(g, s):
-		var count := maxi(0, g.combat.blockers_of(s.id).size() - 1)
+		var count := maxi(0, _band_blockers(g, s).size() - 1)
 		g.continuous.add_until_eot_pump(s.id, -2 * count, -count)
 		g.recalculate()
 

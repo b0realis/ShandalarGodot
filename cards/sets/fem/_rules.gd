@@ -365,7 +365,8 @@ static func _catapult(g: MtgGame, source: CardInstance, _pid: int, target: Targe
 	g.end_simultaneous()
 
 static func _dwarf_orc_pair(g: MtgGame, source: CardInstance, _event: GameEvent) -> bool:
-	var others: Array = g.combat.attackers_blocked_by(source.id).duplicate()
+	# Blocking one band member is blocking every member (CR 702.22h, 2026-10-03).
+	var others: Array = g.combat.opposing_attackers(source.id)
 	if g.combat.attackers.has(source.id):
 		others.append_array(g.combat.blockers_of_band(g.combat.band_of(source.id)))
 	for id in others:

@@ -43,7 +43,7 @@ func build() -> CardData:
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _burn,
 			"At the beginning of each opponent's upkeep, this enchantment deals X damage to that player, where X is the number of nontoken permanents of the chosen color they control.",
-			_enemy_upkeep)) \
+			_enemy_upkeep).capturing(_color_now)) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.UPKEEP_START, _pay_the_rent,
 			"At the beginning of your upkeep, destroy this enchantment unless you sacrifice two Islands.",
@@ -87,11 +87,22 @@ static func _enemy_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent
 	return int(event.data["player"]) != source.controller_id
 
 
+## The chosen colour as the burn goes on the stack — kept on the TRIGGER,
+## because an Allergy destroyed in response has its memory wiped by the
+## zone change (CR 400.7) while the burn still resolves with what it last
+## knew (CR 603.6 / 608.2h). Until 2026-10-03 that answered the burn too.
+static func _color_now(_game: MtgGame, source: CardInstance,
+		_event: GameEvent) -> Dictionary:
+	return {"color": source.memory["color"]} if source.memory.has("color") else {}
+
+
 static func _burn(game: MtgGame, source: CardInstance, event: GameEvent) -> void:
-	if not source.memory.has("color"):
+	var known: Dictionary = source.memory if source.zone == Mtg.Zone.BATTLEFIELD \
+		else game.trigger_context(source)
+	if not known.has("color"):
 		return   # the colour has not been chosen yet
 	var victim := int(event.data["player"])
-	var color := int(source.memory["color"])
+	var color := int(known["color"])
 	var count := 0
 	for inst in game.players[victim].battlefield:
 		if not inst.is_token and inst.has_color(color):

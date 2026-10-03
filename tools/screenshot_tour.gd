@@ -333,10 +333,11 @@ func _tour() -> void:
 		await _settle(0.4)
 		_capture("shot_menu_phasebar.png")
 		duel._phase_menu.hide()
-		# Leave nothing in the player's settings file: the tour marks these
-		# for the camera only.
+		# The tour marks these for the camera only, IN MEMORY: nothing here
+		# saves them, so there is nothing to take out of the settings file
+		# — and erasing the key (as this did until 2026-10-03) threw away
+		# the player's own saved Stops and handed them the defaults back.
 		duel.stops.clear_all()
-		Settings.clear_value(PhaseStops.SETTING_KEY)
 		duel._refresh()
 		await _settle(0.2)
 

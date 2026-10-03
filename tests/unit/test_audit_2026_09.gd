@@ -252,6 +252,31 @@ func test_removing_a_band_member_from_combat_stops_its_damage() -> void:
 	assert_eq(g.players[1].life, 19, "only the Hero connects")
 
 
+func test_a_band_cannot_name_the_same_creature_twice() -> void:
+	# Bug pass 2026-10-03 (CR 702.22c — a creature is in at most one
+	# band): [[hero, hero]] passed band_illegality as a "band of two" and
+	# the Hero dealt its damage twice. A LAN client's attack_bands reach
+	# this unfiltered, so it is a fair-play hole as well as a rules one.
+	var hero := put_battlefield(0, "Benalish Hero")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_refused(g.declare_attackers(0, [hero.id], [[hero.id, hero.id]]),
+		"only one band")
+	assert_true(g.combat.attackers.is_empty(), "nothing was declared")
+
+
+func test_two_bands_cannot_share_a_member() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var wolves := put_battlefield(0, "Timber Wolves")
+	var giant := put_battlefield(0, "Hill Giant")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_refused(g.declare_attackers(0, [hero.id, wolves.id, giant.id],
+		[[hero.id, wolves.id], [hero.id, giant.id]]), "only one band")
+	assert_true(g.combat.attackers.is_empty(), "nothing was declared")
+	# The control: one band of three is fine.
+	assert_ok(g.declare_attackers(0, [hero.id, wolves.id, giant.id],
+		[[hero.id, wolves.id]]))
+
+
 func test_a_must_attacker_yields_to_a_ban_instead_of_deadlocking() -> void:
 	# CR 508.1d — a restriction always beats a requirement; an unsatisfiable
 	# requirement is simply not met. Festival + Juggernaut used to make the
@@ -322,6 +347,26 @@ func test_a_countered_copy_of_a_spell_never_becomes_a_card() -> void:
 	g.counter_spell(copy)
 	assert_eq(g.players[0].graveyard.size(), 0, "no phantom card in a graveyard")
 	assert_null(g.find_instance(copy.id))
+
+
+func test_a_copy_of_a_spell_gets_a_stack_id_of_its_own() -> void:
+	# Bug pass 2026-10-03: copy_spell_on_stack never numbered the item it
+	# made, so every copy sat on the stack as id 0 — which the forecast's
+	# "was this already on the stack?" (old_stack.has(item.id)) and
+	# anything else that names a stack object by id could not tell apart.
+	var bolt := give_hand(0, "Lightning Bolt")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.R)
+	assert_ok(g.cast_spell(0, bolt, [TargetRef.player(1)]))
+	var first := g.copy_spell_on_stack(bolt, 0)
+	var second := g.copy_spell_on_stack(bolt, 0)
+	var ids := {}
+	for item in g.stack:
+		assert_gt(item.id, 0, "%s has a real stack id" % item.description)
+		ids[item.id] = true
+	assert_eq(ids.size(), 3, "the spell and both copies are distinct")
+	assert_eq(g.find_stack_item(second).id, g.stack[-1].id)
+	assert_ne(g.find_stack_item(first).id, g.find_stack_item(second).id)
 
 
 func test_a_copy_keeps_its_borrowed_dies_trigger() -> void:

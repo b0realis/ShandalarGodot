@@ -51,24 +51,29 @@ static func _he_wounded_it(_game: MtgGame, source: CardInstance,
 	return (event.data.get("damaged_by", []) as Array).has(source.id)
 
 
-## The opponent first. (Axelrod may have died in the same wave, in which
-## case his controller_id was reset to his owner — who is choosing.)
-static func _opponent_first(_game: MtgGame, source: CardInstance,
+## The opponent first — the TRIGGER CONTROLLER's opponent. Axelrod may
+## have died in the same wave, his controller_id then reset to his owner;
+## a stolen Axelrod's ranking read that and aimed at the thief himself
+## until 2026-10-03 (MtgGame.controller_acting_for answers while the
+## trigger's targets are ranked).
+static func _opponent_first(game: MtgGame, source: CardInstance,
 		a: TargetRef, b: TargetRef) -> bool:
-	var a_enemy := a.player_id != source.controller_id
-	var b_enemy := b.player_id != source.controller_id
+	var me := game.controller_acting_for(source)
+	var a_enemy := a.player_id != me
+	var b_enemy := b.player_id != me
 	if a_enemy != b_enemy:
 		return a_enemy
 	return a.player_id < b.player_id
 
 
 static func _reap(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	# The trigger resolves even if Axelrod died in the same wave (CR 603.6),
-	# in which case his own battlefield state — including controller_id — was
-	# already reset to his owner.
-	var pid := source.controller_id
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		pid = source.owner_id
+	# The trigger resolves even if Axelrod died in the same wave (CR 603.6).
+	# "You" is the trigger's CONTROLLER — whoever controlled Axelrod when it
+	# triggered — not his owner, which is what a dead Axelrod's reset
+	# controller_id reads (a stolen Axelrod paid his owner until 2026-10-03).
+	var pid := game.current_resolution_controller()
+	if pid < 0:
+		pid = source.controller_id
 	game.adjust_life(pid, 1)
 	var refs: Array = game.current_targets()
 	if refs.is_empty():

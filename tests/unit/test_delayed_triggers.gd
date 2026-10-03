@@ -271,3 +271,107 @@ func test_settling_refuses_the_wrong_player_the_wrong_moment_and_a_plain_entry()
 	assert_refused(g.settle_delayed_trigger(1, int(entry["id"])), "not yours")
 	assert_refused(g.settle_delayed_trigger(0, int(entry["id"])), "priority")
 	assert_eq(g.delayed_triggers.size(), 2)
+
+
+# ------------------- the engine's id-keyed pools and CR 400.7 (2026-10-03) --
+#
+# The doom lists and the floating watches key off an instance id, and an
+# instance id survives a zone change — but the object does not (CR 400.7).
+# Each pool also stores the battlefield timestamp it was armed against and
+# ignores a later object wearing the same id.
+
+## Bounce [param inst] and put it straight back: same id, new object.
+func _reenter(inst: CardInstance) -> void:
+	g.return_to_hand(inst)
+	assert_eq(inst.zone, Mtg.Zone.HAND)
+	g.put_from_hand_into_play(inst, inst.owner_id)
+	assert_eq(inst.zone, Mtg.Zone.BATTLEFIELD)
+
+
+func test_an_end_step_doom_does_not_follow_the_card_into_its_next_life() -> void:
+	# Rocket Launcher: "destroy Rocket Launcher at the beginning of the
+	# next end step" — bounced and recast, the new Launcher was destroyed.
+	advance_to_step(Mtg.Step.MAIN1)
+	var launcher := put_battlefield(0, "Rocket Launcher")
+	add_mana(0, Mtg.ManaColor.C, 2)
+	assert_ok(g.activate_ability(0, launcher, 0, [TargetRef.player(1)]))
+	resolve_stack()
+	assert_true(g.is_doomed_at_end_step(launcher))
+	_reenter(launcher)
+	assert_false(g.is_doomed_at_end_step(launcher), "the new object is not doomed")
+	advance_to_step(Mtg.Step.END)
+	assert_eq(launcher.zone, Mtg.Zone.BATTLEFIELD, "and survives the end step")
+
+
+func test_an_end_step_doom_still_destroys_the_object_it_named() -> void:
+	# The control.
+	advance_to_step(Mtg.Step.MAIN1)
+	var launcher := put_battlefield(0, "Rocket Launcher")
+	add_mana(0, Mtg.ManaColor.C, 2)
+	assert_ok(g.activate_ability(0, launcher, 0, [TargetRef.player(1)]))
+	resolve_stack()
+	advance_to_step(Mtg.Step.END)
+	assert_eq(launcher.zone, Mtg.Zone.GRAVEYARD)
+
+
+func test_an_end_of_combat_doom_does_not_follow_the_card() -> void:
+	advance_to_step(Mtg.Step.MAIN1)
+	var bear := put_battlefield(1, "Grizzly Bears")
+	g.doom_at_end_of_combat(bear)
+	_reenter(bear)
+	advance_to_step(Mtg.Step.MAIN2)
+	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD, "the gaze named the old object")
+
+
+func test_a_death_watch_does_not_follow_the_card() -> void:
+	advance_to_step(Mtg.Step.MAIN1)
+	var bear := put_battlefield(1, "Grizzly Bears")
+	var fired: Array = []
+	g.watch_death(bear, func(_game: MtgGame, dead: CardInstance) -> void: fired.append(dead))
+	_reenter(bear)
+	g.destroy(bear, false)
+	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(fired.size(), 0, "a watch on the old object does not see the new one die")
+
+
+func test_a_death_watch_still_fires_for_the_object_it_named() -> void:
+	advance_to_step(Mtg.Step.MAIN1)
+	var bear := put_battlefield(1, "Grizzly Bears")
+	var fired: Array = []
+	g.watch_death(bear, func(_game: MtgGame, dead: CardInstance) -> void: fired.append(dead))
+	g.destroy(bear, false)
+	assert_eq(fired, [bear])
+
+
+func test_a_life_on_damage_watch_does_not_follow_the_card() -> void:
+	# Glyph of Life's "whenever that creature is dealt damage this turn".
+	advance_to_step(Mtg.Step.MAIN1)
+	var wall := put_battlefield(0, "Wall of Stone")
+	g.watch_damage_for_life(wall, 0)
+	_reenter(wall)
+	var gun := put_battlefield(1, "Orcish Artillery")
+	g.deal_damage(gun, TargetRef.card(wall), 2)
+	assert_eq(g.players[0].life, 20, "no life for damage to the new object")
+	g.watch_damage_for_life(wall, 0)
+	g.deal_damage(gun, TargetRef.card(wall), 2)
+	assert_eq(g.players[0].life, 22, "the control: a watch on the live object pays")
+
+
+func test_a_finished_game_lets_go_of_its_pending_actions() -> void:
+	# Bug pass 2026-10-03: a delayed action is a Callable in the game's own
+	# pool, and one that captures the game strongly (Rakalite's did) is a
+	# reference cycle. The engine drops its action pools when the game
+	# ends, so a card written that way can no longer leak a whole duel.
+	_schedule_strong_actions(g)
+	assert_ok(g.concede(1))
+	var weak: WeakRef = weakref(g)
+	g = null
+	assert_null(weak.get_ref(), "the finished game was freed")
+
+
+## One of each delayed-action pool, every one holding [param game] strongly.
+func _schedule_strong_actions(game: MtgGame) -> void:
+	game.schedule_end_step_action(func() -> void: game.log_line("never"))
+	game.schedule_end_of_combat_action(func(_x: MtgGame) -> void: game.log_line("never"))
+	game.schedule_cleanup_action(func(_x: MtgGame) -> void: game.log_line("never"))
+	game.schedule_next_main_phase_action(0, func() -> void: game.log_line("never"))

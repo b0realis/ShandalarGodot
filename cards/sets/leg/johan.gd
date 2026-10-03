@@ -17,8 +17,12 @@ extends CardScript
 ## MtgGame.attacks_without_tapping for the team, which declare_attackers
 ## reads and which clears when the combat PHASE ends (CR 700.5).
 ##
-## "If Johan is untapped" is checked as the offer is taken: a Johan who is
-## already tapped has nothing to trade, so the trigger declines itself.
+## "If Johan is untapped" is checked twice: as the offer is taken (a Johan
+## who is already tapped has nothing to trade, so the trigger declines
+## itself) and again as the attackers are declared — the flag holds Johan's
+## id, and MtgGame only spares the team while that Johan is on the
+## battlefield and untapped (bug pass 2026-10-03: tapping him between the
+## offer and the declaration used to change nothing).
 
 
 func build() -> CardData:
@@ -55,7 +59,10 @@ static func _offer(game: MtgGame, source: CardInstance, _event: GameEvent) -> vo
 			others >= 2):
 		return
 	source.cant_attack_this_turn = true
-	game.attacks_without_tapping[pid] = true
+	# Johan's id, not `true`: "if Johan is untapped" is judged as the
+	# attackers are declared (MtgGame._attacks_without_tapping_now), so an
+	# Icy Manipulator on him in between turns the offer off.
+	game.attacks_without_tapping[pid] = source.id
 	game.recalculate()
 	game.log_line("Johan holds the line — %s's creatures attack without tapping"
 		% game.players[pid].player_name)

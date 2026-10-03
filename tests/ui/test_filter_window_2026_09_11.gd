@@ -248,6 +248,24 @@ func test_cancel_still_puts_the_switch_back() -> void:
 	assert_false(_funnel().button_pressed)
 
 
+## *"Esc is just like clicking the Cancel button"* (manual p.116) — and on
+## this window Cancel puts the snapshot back. Escape only dismissed it, so
+## the live edits stayed in force as if OK had been pressed (2026-10-03).
+func test_escape_is_cancel_and_puts_the_filters_back() -> void:
+	var whole := _shown()
+	await _open_page("Abilities")
+	_press("Clear All")
+	_line("First strike").pressed.emit()
+	assert_true(screen.filter.ability_on)
+	assert_lt(_shown(), whole, "the edit is live while the window is up")
+	screen._on_escape()
+	await get_tree().process_frame
+	assert_null(_window(), "Escape closes the window")
+	assert_false(screen.filter.ability_on, "and restores the snapshot, switch included")
+	assert_true(screen.filter.ability_ticked(DeckAbilities.Ability.FLYING))
+	assert_eq(_shown(), whole, "the Inventory is whole again")
+
+
 # ----------------------------------------------------------- realtime --
 
 func test_every_medallion_on_the_strip_moves_the_inventory() -> void:

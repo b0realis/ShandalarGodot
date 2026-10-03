@@ -479,3 +479,59 @@ func test_the_listener_gate_sees_a_permanent_that_became_a_copy() -> void:
 	g.become_copy(blank, CardRegistry.get_card("Powerleech"))
 	assert_true(g.has_trigger_listener(Mtg.EventType.ABILITY_ACTIVATED),
 		"a permanent that BECAME a listener is heard")
+
+
+# ------------------------------- the shared caches under threads (2026-10-03) --
+
+var _race_games: Array = []
+var _race_results: Array = []
+var _race_mutex := Mutex.new()
+
+
+## Bug pass 2026-10-03: the per-script property tables behind a snapshot
+## ([member GameSnapshot._props_by_script], [member
+## GameSnapshot._is_state_by_script]) and behind [method
+## UndoLog.record_object] ([member UndoLog._primary_props]) are static and
+## filled lazily — and the Deck Lab plays its games on a WorkerThreadPool,
+## every one of them snapshotting (each pre-flight probe) and journaling
+## (each AI search). Eight games doing that at once on COLD tables wrote one
+## Dictionary from eight threads: signal 11 or Array `_ref` errors, every
+## run. Before the fix this test did not fail, it crashed the process.
+func test_cold_property_caches_survive_eight_games_snapshotting_at_once() -> void:
+	var filler: Array = []
+	for i in 30:
+		filler.append("Forest")
+	_race_games.clear()
+	for i in 8:
+		var game := MtgGame.new()
+		game.setup(filler, filler, "P0", "P1", 20, 20, 7000 + i)
+		game.start(0)
+		_race_games.append(game)
+	for round in 40:
+		# Cold, as at the start of a Deck Lab run.
+		GameSnapshot._props_by_script.clear()
+		GameSnapshot._is_state_by_script.clear()
+		UndoLog._primary_props.clear()
+		_race_results.clear()
+		var task := WorkerThreadPool.add_group_task(_race_one, 8, -1, true, "snapshot race")
+		WorkerThreadPool.wait_for_group_task_completion(task)
+		assert_eq(_race_results.size(), 8)
+		for result in _race_results:
+			assert_eq(result, _race_results[0], "every game captured the same shape")
+	_race_games.clear()
+	_race_results.clear()
+
+
+func _race_one(i: int) -> void:
+	var game: MtgGame = _race_games[i]
+	var snap := GameSnapshot.take(game)
+	var journal := UndoLog.new()
+	journal.record_object(game)
+	journal.record_object(game.players[0])
+	journal.record_object(game.players[0].mana_pool)
+	journal.record_object(game.combat)
+	var result := [snap.object_count(), journal.size()]
+	journal.clear()
+	_race_mutex.lock()
+	_race_results.append(result)
+	_race_mutex.unlock()

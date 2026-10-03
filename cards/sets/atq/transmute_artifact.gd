@@ -23,22 +23,33 @@ extends CardScript
 ## computes is only the HINT, and the candidates are pre-sorted for it.
 
 
+## An artifact CARD in the library: the printed type is all a card in a
+## hidden zone has.
 static func _any_artifact(inst: CardInstance) -> bool:
 	return inst.data.is_type(Mtg.CardType.ARTIFACT)
 
 
+## An artifact on the BATTLEFIELD, by its live type (CONTRIBUTING.md rule
+## 5): a Bear that Ashnod's Transmogrant made an artifact can be fed to the
+## spell. Until 2026-10-03 the printed type was read there too.
+static func _live_artifact(inst: CardInstance) -> bool:
+	return inst.is_type(Mtg.CardType.ARTIFACT)
+
+
 func build() -> CardData:
 	return CardData.new("Transmute Artifact", "{U}{U}", Mtg.CardType.SORCERY) \
-		.spell(TransmuteEffect.new(_any_artifact) \
-			.with_ai_role(&"needs_own_permanent", {"filter": _any_artifact})) \
+		.spell(TransmuteEffect.new(_live_artifact, _any_artifact) \
+			.with_ai_role(&"needs_own_permanent", {"filter": _live_artifact})) \
 		.oracle("Sacrifice an artifact. If you do, search your library for an artifact card. If that card's mana value is less than or equal to the sacrificed artifact's mana value, put it onto the battlefield. If it's greater, you may pay {X}, where X is the difference. If you do, put it onto the battlefield. If you don't, put it into its owner's graveyard. Then shuffle.")
 
 
 class TransmuteEffect extends EffectBase:
-	var artifact_filter: Callable
+	var artifact_filter: Callable   # what may be sacrificed (live type)
+	var card_filter: Callable       # what may be found (printed type)
 
-	func _init(filter: Callable) -> void:
+	func _init(filter: Callable, library_filter: Callable) -> void:
 		artifact_filter = filter
+		card_filter = library_filter
 
 	func resolve(game: MtgGame, _source: CardInstance, controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
@@ -58,7 +69,7 @@ class TransmuteEffect extends EffectBase:
 			eaten = bodies[0]
 		var paid: int = eaten.data.cost.mana_value()
 		game.sacrifice_permanent(eaten)
-		var found := game.pick_from_library(controller, artifact_filter,
+		var found := game.pick_from_library(controller, card_filter,
 			"Search for an artifact card")
 		if found == null:
 			return

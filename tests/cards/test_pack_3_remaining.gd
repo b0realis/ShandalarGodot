@@ -208,6 +208,25 @@ func test_dance_of_the_dead_enters_attached_to_graveyard_card_then_triggers() ->
 	resolve_stack()
 	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD)
 
+## Through Eureka (CR 303.4f): Dance of the Dead enters attached to a
+## creature card in a graveyard and its own enters trigger raises it — the
+## same as the cast path above (bug pass 2026-10-03).
+func test_eureka_puts_dance_of_the_dead_onto_a_graveyard_creature() -> void:
+	var bear := put_battlefield(1, "Grizzly Bears")
+	g.destroy(bear, false)
+	var aura := give_hand(0, "Dance of the Dead")
+	var eureka := give_hand(0, "Eureka")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.G, 2)
+	add_mana(0, Mtg.ManaColor.C, 2)
+	assert_ok(g.cast_spell(0, eureka, []))
+	resolve_stack()
+	assert_eq(aura.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(bear.zone, Mtg.Zone.BATTLEFIELD, "its enters trigger raised the Bears")
+	assert_eq(bear.controller_id, 0)
+	assert_true(bear.tapped)
+	assert_eq(bear.cur_power, 3)
+
 func test_dance_cannot_raise_after_aura_leaves_in_response() -> void:
 	var bear := put_battlefield(1, "Grizzly Bears")
 	g.destroy(bear, false)

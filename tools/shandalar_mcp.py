@@ -75,6 +75,7 @@ import math
 import os
 import queue
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -104,6 +105,8 @@ VIEWS = ("brief", "full", "options", "delta")
 UNTIL = ("main", "end", "turn", "respond", "play")
 ACCESS = ("open", "invitation")
 MAX_PASSES = 400
+# The most copies one deck line may name: engine/deck_list.gd's MAX_COUNT.
+MAX_COUNT = 500
 RESULT_LIMIT = 50
 # A kept game: the referee listens on a loopback socket and outlives
 # this server; the handshake file it writes, the seconds a boot may take,
@@ -151,6 +154,29 @@ class ToolError(Exception):
         self.envelope = envelope
 
 
+class UnknownTool(LookupError):
+    """`tools/call` named a tool the catalogue does not have (2026-10-03:
+    its own class, because a KeyError raised INSIDE a handler — a row
+    without its key — used to be answered "unknown tool" for a tool that
+    is there)."""
+
+    def __init__(self, name: str, near: list[str]):
+        super().__init__(name)
+        self.name = name
+        self.near = near
+
+
+class UnknownResource(LookupError):
+    """`resources/read` named a URI the server does not serve."""
+
+
+class Cancelled(Exception):
+    """The client cancelled the request in flight (`notifications/cancelled`)
+    or the server is shutting down: the door's child is killed, a referee
+    wait stops reading, and no answer is sent (MCP: a cancelled request is
+    not answered)."""
+
+
 def refusal(tool: str, kind: str, message: str, exit_code: int = 2, **more) -> ToolError:
     body = {"tool": tool, "exit": exit_code, "kind": kind, "message": message}
     body.update(more)
@@ -159,7 +185,9 @@ def refusal(tool: str, kind: str, message: str, exit_code: int = 2, **more) -> T
 
 # --- the deck files, read and written without an engine ----------------
 
-DECK_LINE = re.compile(r"^\s*(\d+)\s*[xX]?\s+(.+?)\s*$")
+# `4 Card` or the Dojo's `4x Card` — the x touches the count, as in
+# engine/deck_list.gd (`4 x Card` is four of a card called "x Card" there).
+DECK_LINE = re.compile(r"^\s*(\d+)[xX]?\s+(.+?)\s*$")
 
 
 def parse_deck(text: str) -> dict:
@@ -171,18 +199,23 @@ def parse_deck(text: str) -> dict:
     main: list[dict] = []
     side: list[dict] = []
     errors: list[str] = []
-    for raw in text.splitlines():
+    # The engine's own reading, rule for rule (2026-10-03): a UTF-8 BOM
+    # from a Windows editor is not part of the first line, "// NAME : X"
+    # may space its colon, and a bare header is the lower-case `name:`
+    # (any other spelling is a line the engine refuses, so it is an error
+    # here too).
+    for raw in text.lstrip("﻿").splitlines():
         line = raw.strip()
         if not line:
             continue
         if line.startswith("//"):
-            body = line[2:].strip()
-            if body.upper().startswith("NAME:"):
-                name = body[5:].strip()
+            field, colon, value = line[2:].strip().partition(":")
+            if colon and field.strip().lower() == "name":
+                name = value.strip()
             continue
         if line.startswith("#"):
             continue
-        if line.lower().startswith("name:"):
+        if line.startswith("name:"):
             name = line[5:].strip()
             continue
         target = main
@@ -190,7 +223,7 @@ def parse_deck(text: str) -> dict:
             target = side
             line = line[3:].strip()
         found = DECK_LINE.match(line)
-        if not found:
+        if not found or int(found.group(1)) < 1:
             errors.append(raw)
             continue
         target.append({"count": int(found.group(1)), "name": found.group(2)})
@@ -224,6 +257,11 @@ def deck_rows(cards, tool: str, what: str) -> list[dict]:
                           flag=what)
         if count < 1 or not name or len(name.splitlines()) != 1 or "\0" in name:
             raise refusal(tool, "option", f"`{what}`: '{row}' needs a count and a name", flag=what)
+        if count > MAX_COUNT:
+            # engine/deck_list.gd refuses the line (DeckList.MAX_COUNT); said
+            # here before a file is written that the engine would refuse.
+            raise refusal(tool, "option", f"`{what}`: '{row}' — no deck holds more than {MAX_COUNT} cards",
+                          flag=what)
         rows.append({"count": count, "name": name})
     return rows
 
@@ -380,17 +418,21 @@ def zone_additions(old: list, new: list) -> list:
     return out
 
 
-def render_decision(decision: dict, mode: str, before: dict | None = None) -> dict:
+def render_decision(decision: dict, mode: str, before: dict | None = None,
+                    brief: dict | None = None) -> dict:
     """One `decision` line for the client: `full` is the referee's own,
     `options` drops the view, `brief` replaces it, `delta` replaces it
-    with what changed since `before` (the last brief shown)."""
+    with what changed since `before` (the last brief shown). `brief` is
+    the decision's brief when the caller has already made it."""
     if mode == "full":
         return decision
     out = {k: v for k, v in decision.items() if k != "view"}
+    if mode in ("brief", "delta") and brief is None:
+        brief = brief_view(decision.get("view", {}), int(decision.get("seat", 0)))
     if mode == "brief":
-        out["brief"] = brief_view(decision.get("view", {}), int(decision.get("seat", 0)))
+        out["brief"] = brief
     elif mode == "delta":
-        out["delta"] = delta_view(before, brief_view(decision.get("view", {}), int(decision.get("seat", 0))))
+        out["delta"] = delta_view(before, brief)
     return out
 
 
@@ -510,12 +552,14 @@ def default_answer(decision: dict, memory: dict) -> dict:
             return {"op": "order", "play": True}
         return {"op": "keep"}
     if mode == "attack":
-        return {"op": "attack", "cards": [c["card"] for c in options.get("attack", {}).get("attackable", [])]}
+        return {"op": "attack", "cards": [c["card"] for c in options.get("attack", {}).get("attackable", [])
+                                          if isinstance(c, dict) and c.get("card")]}
     if mode == "block":
         return {"op": "block", "pairs": []}
     if mode == "discard":
         want = options.get("discard", {})
-        return {"op": "discard", "cards": [c["card"] for c in want.get("hand", [])[:int(want.get("count", 0))]]}
+        hand = [c["card"] for c in want.get("hand", []) if isinstance(c, dict) and c.get("card")]
+        return {"op": "discard", "cards": hand[:int(want.get("count", 0))]}
     if mode == "damage":
         request = options.get("damage", {}).get("request", {})
         left = int(request.get("amount", 0))
@@ -555,7 +599,7 @@ def default_answer(decision: dict, memory: dict) -> dict:
             for slot in options["announcement"].get("slots", []):
                 if len(slot.get("targets", [])) < int(slot.get("min", 0)):
                     return {"op": "cancel"}
-                for target in slot["targets"][:int(slot.get("min", 0))]:
+                for target in slot.get("targets", [])[:int(slot.get("min", 0))]:
                     targets.append([target.get("id"), slot.get("divided", 0)])
             return {"op": "submit", "targets": targets}
         lands = options.get("play", {}).get("lands", [])
@@ -662,6 +706,8 @@ class SocketTransport(Transport):
         deadline = time.monotonic() + self.boot
         record: dict | None = None
         while time.monotonic() < deadline:
+            if self.dead:
+                return None
             try:
                 record = json.loads(self.handshake.read_text(encoding="utf-8"))
                 if isinstance(record, dict) and record.get("port"):
@@ -676,6 +722,8 @@ class SocketTransport(Transport):
             return None
         last = ""
         while time.monotonic() < deadline:
+            if self.dead:
+                return None
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5)
             try:
@@ -683,6 +731,13 @@ class SocketTransport(Transport):
                 sock.sendall((json.dumps({"token": record.get("token", ""), "client": SERVER_NAME}) + "\n").encode("utf-8"))
                 sock.settimeout(None)
                 with self.lock:
+                    # Closed while this thread was still connecting (a stop
+                    # or a detach during a slow boot): the connection made
+                    # now would seat a client nobody reads — and replace the
+                    # one that comes back — so it is let go at once.
+                    if self.dead:
+                        sock.close()
+                        return None
                     self.sock = sock
                     for text in self.queued:
                         sock.sendall((text + "\n").encode("utf-8"))
@@ -698,8 +753,10 @@ class SocketTransport(Transport):
 
     def read_lines(self):
         if self.connect() is None:
+            closed = self.dead and self.queued_error is None
             self.dead = True
-            yield json.dumps({"error": self.queued_error})
+            if not closed:
+                yield json.dumps({"error": self.queued_error})
             return
         assert self.sock is not None
         reader = self.sock.makefile("r", encoding="utf-8", errors="replace")
@@ -727,6 +784,50 @@ class SocketTransport(Transport):
                 self.sock = None
 
 
+def own_group() -> dict:
+    """Popen keywords that give a door child a process group of its own —
+    the handle `stop_tree` kills it and everything it started by."""
+    if os.name == "nt":
+        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    return {"start_new_session": True}
+
+
+def stop_tree(proc: subprocess.Popen, drain: bool = True) -> None:
+    """Kill a door child and its process group (the Lab's worker processes
+    with it), reap it, and close its pipes even when something that left
+    the group still holds them open. `drain=False` when reader threads own
+    the pipes: the child is killed and reaped, and they see the end."""
+    if proc.returncode is None and os.name != "nt":
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+    if not drain:
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        return
+    try:
+        proc.communicate(timeout=10)
+    except (subprocess.TimeoutExpired, ValueError, OSError):
+        pass
+    for pipe in (proc.stdout, proc.stderr):
+        try:
+            if pipe is not None:
+                pipe.close()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def detached_popen(argv: list[str], cwd: Path, stdout, stderr, env: dict) -> subprocess.Popen:
     """A child that outlives this server: its own session (POSIX) or
     process group and console (Windows), stdin closed."""
@@ -742,8 +843,11 @@ def detached_popen(argv: list[str], cwd: Path, stdout, stderr, env: dict) -> sub
 
 class Game:
     def __init__(self, ident: str, argv: list[str], view: str, cwd: Path, stderr_path: Path,
-                 keep: dict | None = None, resume: bool = False):
+                 keep: dict | None = None, resume: bool = False, cancelled=None):
         self.ident = ident
+        # The server's "is the call in flight cancelled?" — read while a
+        # line is waited for, so a cancelled wait stops within a beat.
+        self.cancelled = cancelled
         self.argv = argv
         self.view = view
         self.started = time.time()
@@ -815,7 +919,9 @@ class Game:
         if not self.running:
             raise refusal("referee", "game", f"game {self.ident} is over", game=self.ident)
         try:
-            self.transport.send_line(json.dumps(action, ensure_ascii=False))
+            # ASCII on the wire (2026-10-03): an action is JSON either way,
+            # and no referee read can then end inside a character.
+            self.transport.send_line(json.dumps(action))
             # An answer is in flight now. A timeout must not expose the old
             # decision to wait/autoplay or let the client submit it twice.
             self.pending = None
@@ -832,11 +938,13 @@ class Game:
         refused: list[dict] = []
         deadline = time.monotonic() + max(0.0, timeout)
         while True:
+            if self.cancelled is not None and self.cancelled():
+                raise Cancelled(f"game {self.ident}: the wait was cancelled")
             left = deadline - time.monotonic()
             if left <= 0:
                 return self._state(refused, pending=True, render=render)
             try:
-                line = self.lines.get(timeout=min(left, 1.0))
+                line = self.lines.get(timeout=min(left, 0.25))
             except queue.Empty:
                 continue
             if line is None:
@@ -923,8 +1031,9 @@ class Game:
             view["journal"] = self.passed_journal + list(view.get("journal") or [])
             self.pending["view"] = view
             self.passed_journal = []
-        out = render_decision(self.pending, self.view, self.last_brief)
-        self.last_brief = brief_view(self.pending.get("view", {}), int(self.pending.get("seat", 0)))
+        brief = brief_view(self.pending.get("view", {}), int(self.pending.get("seat", 0)))
+        out = render_decision(self.pending, self.view, self.last_brief, brief)
+        self.last_brief = brief
         return out
 
     def stderr_tail(self, lines: int = 12) -> list[str]:
@@ -1041,6 +1150,25 @@ class Server:
                 self.next_game = max(self.next_game, int(found.group(1)) + 1)
         self.version_cache: str | None = None
         self.tools = self._catalogue()
+        # THE CALL IN FLIGHT (2026-10-03). Requests are answered one at a
+        # time, in order, on a worker thread, while the reader thread keeps
+        # reading: a `ping` is answered at once and `notifications/cancelled`
+        # sets the in-flight call's event — the door's child is killed, a
+        # referee wait stops, and the call is not answered. Before this a
+        # cancelled fifteen-minute Lab run held every later request behind
+        # it until it finished on its own.
+        self.write_lock = threading.Lock()
+        self.flight_lock = threading.RLock()   # re-entered by the SIGTERM handler
+        self.flight_id = None
+        self.flight_cancel = threading.Event()
+        self.cancelled_ids: set = set()
+        self.children: set = set()
+        self.stopping = False
+        # PROGRESS (2026-10-03): the `_meta.progressToken` of the call in
+        # flight, and where its `notifications/progress` go (the sink
+        # `serve` writes to; None when a test calls a tool directly).
+        self.flight_progress = None
+        self.sink = None
 
     # ----- the door ---------------------------------------------------------
 
@@ -1058,20 +1186,138 @@ class Server:
             raise refusal("shandalar", "option", message, flag=verb)
         return [str(self.door), "--headless", "--no-header", "--", *routes[verb], *args]
 
-    def run(self, verb: str, args: list[str], timeout: float = DEFAULT_TIMEOUT) -> subprocess.CompletedProcess:
+    def is_cancelled(self) -> bool:
+        return self.stopping or self.flight_cancel.is_set()
+
+    def run(self, verb: str, args: list[str], timeout: float = DEFAULT_TIMEOUT,
+            on_stderr=None) -> subprocess.CompletedProcess:
+        """One door verb to its end, its output captured. The child runs in
+        a process group of its own, so a timeout or a cancellation stops the
+        whole of it — the Lab's worker processes too — not just the door.
+        With [on_stderr], each stderr line is handed to it as it arrives
+        (the Lab's `--progress json` lines) instead of only at the end."""
+        if on_stderr is not None:
+            return self._run_streaming(verb, args, timeout, on_stderr)
         env = dict(os.environ)
         env["SHANDALAR_NO_BANNER"] = "1"
         env["NO_COLOR"] = "1"
         argv = self.command(verb, args)
         try:
-            return subprocess.run(argv, cwd=str(self.root), capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", timeout=timeout,
-                                  stdin=subprocess.DEVNULL, env=env)
-        except subprocess.TimeoutExpired:
-            raise refusal(verb, "timeout", f"{verb} did not finish in {timeout:.0f} s", exit_code=1,
-                          argv=argv[1:], timeout=timeout)
+            proc = subprocess.Popen(argv, cwd=str(self.root), stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                    encoding="utf-8", errors="replace", env=env, **own_group())
         except OSError as exc:
             raise refusal("shandalar", "door", f"the door {self.door} would not run: {exc}", exit_code=3)
+        with self.flight_lock:
+            self.children.add(proc)
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                try:
+                    out, err = proc.communicate(timeout=max(0.0, min(0.25, deadline - time.monotonic())))
+                    break
+                except subprocess.TimeoutExpired:
+                    cancelled = self.is_cancelled()
+                    if not cancelled and time.monotonic() < deadline:
+                        continue
+                    stop_tree(proc)
+                    if cancelled:
+                        raise Cancelled(f"{verb} was cancelled")
+                    raise refusal(verb, "timeout", f"{verb} did not finish in {timeout:.0f} s", exit_code=1,
+                                  argv=argv[1:], timeout=timeout)
+        finally:
+            with self.flight_lock:
+                self.children.discard(proc)
+        return subprocess.CompletedProcess(argv, proc.returncode, out, err)
+
+    def _run_streaming(self, verb: str, args: list[str], timeout: float, on_stderr) -> subprocess.CompletedProcess:
+        """`run` with stderr read line by line on a thread of its own (and
+        stdout on another, so neither pipe can fill and stall the child)."""
+        env = dict(os.environ)
+        env["SHANDALAR_NO_BANNER"] = "1"
+        env["NO_COLOR"] = "1"
+        argv = self.command(verb, args)
+        try:
+            proc = subprocess.Popen(argv, cwd=str(self.root), stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                    encoding="utf-8", errors="replace", env=env, **own_group())
+        except OSError as exc:
+            raise refusal("shandalar", "door", f"the door {self.door} would not run: {exc}", exit_code=3)
+        out_parts: list[str] = []
+        err_lines: list[str] = []
+
+        def read_out() -> None:
+            out_parts.append(proc.stdout.read())
+
+        def read_err() -> None:
+            for line in proc.stderr:
+                err_lines.append(line)
+                try:
+                    on_stderr(line)
+                except Exception as exc:  # noqa: BLE001 — a reader never kills the run
+                    print(f"shandalar_mcp: progress: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+        readers = [threading.Thread(target=read_out, daemon=True), threading.Thread(target=read_err, daemon=True)]
+        for reader in readers:
+            reader.start()
+        with self.flight_lock:
+            self.children.add(proc)
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                try:
+                    proc.wait(timeout=max(0.0, min(0.25, deadline - time.monotonic())))
+                    break
+                except subprocess.TimeoutExpired:
+                    cancelled = self.is_cancelled()
+                    if not cancelled and time.monotonic() < deadline:
+                        continue
+                    stop_tree(proc, drain=False)
+                    if cancelled:
+                        raise Cancelled(f"{verb} was cancelled")
+                    raise refusal(verb, "timeout", f"{verb} did not finish in {timeout:.0f} s", exit_code=1,
+                                  argv=argv[1:], timeout=timeout)
+        finally:
+            with self.flight_lock:
+                self.children.discard(proc)
+            for reader in readers:
+                reader.join(timeout=10)
+        return subprocess.CompletedProcess(argv, proc.returncode, "".join(out_parts), "".join(err_lines))
+
+    def progress_reporter(self):
+        """A stderr-line reader that turns the Lab's `--progress json` lines
+        into `notifications/progress` for the call in flight — or None when
+        the client asked for no progress (no `_meta.progressToken`) or no
+        client is listening."""
+        token = self.flight_progress
+        sink = self.sink
+        if token is None or sink is None:
+            return None
+        last = {"done": -1}
+
+        def report(line: str) -> None:
+            text = line.strip()
+            if not text.startswith("{"):
+                return
+            try:
+                record = json.loads(text)
+            except ValueError:
+                return
+            row = record.get("progress") if isinstance(record, dict) else None
+            if not isinstance(row, dict):
+                return
+            done, total = row.get("done"), row.get("total")
+            if not isinstance(done, int) or isinstance(done, bool) or done <= last["done"]:
+                return   # MCP: progress only ever increases
+            last["done"] = done
+            params: dict = {"progressToken": token, "progress": done}
+            if isinstance(total, int) and not isinstance(total, bool) and total > 0:
+                params["total"] = total
+            unit = str(row.get("unit") or "games")
+            params["message"] = (f"{done} of {total} {unit}" if "total" in params else f"{done} {unit}")
+            self.emit(sink, {"jsonrpc": "2.0", "method": "notifications/progress", "params": params})
+
+        return report
 
     @staticmethod
     def parse_stdout(done: subprocess.CompletedProcess):
@@ -1139,6 +1385,32 @@ class Server:
             return str(path.relative_to(self.root))
         except ValueError:
             return str(path)
+
+    def read_json(self, path: Path, tool: str) -> dict:
+        """A JSON object a run left on disk (`run.json`, `results.json`).
+        One that is half-written (a run still going, a run that was
+        killed) or not an object is a refusal with its path — before
+        2026-10-03 it escaped as a protocol-level internal error."""
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise refusal(tool, "run", f"{self.spoken(path)} could not be read as JSON: {exc}",
+                          exit_code=1, path=self.spoken(path))
+        if not isinstance(data, dict):
+            raise refusal(tool, "run", f"{self.spoken(path)} is not a JSON object", exit_code=1,
+                          path=self.spoken(path))
+        return data
+
+    def default_out(self, tool: str) -> Path:
+        """A fresh run folder under the workspace (`runs/lab-STAMP`), for a
+        run whose line names none: where the module docstring and
+        .gitignore say a client's runs go, and a folder `read_run` reads."""
+        base = self.workspace / "runs" / f"{tool}-{time.strftime('%Y%m%d-%H%M%S')}"
+        path, n = base, 1
+        while path.exists():
+            n += 1
+            path = base.with_name(f"{base.name}-{n}")
+        return path
 
     def deck_arg(self, text) -> str:
         """A deck a tool names for the door. As typed when the door will find it
@@ -1499,7 +1771,7 @@ class Server:
         tool = next((t for t in self.tools if t["name"] == name), None)
         if tool is None:
             near = difflib.get_close_matches(str(name), [t["name"] for t in self.tools], n=3)
-            raise KeyError(name, near)
+            raise UnknownTool(str(name), near)
         if arguments is None:
             arguments = {}
         if not isinstance(arguments, dict):
@@ -1794,7 +2066,7 @@ class Server:
         result: dict = {"exit": done.returncode, "out": self.spoken(out), "argv": argv}
         run_file = out / "run.json"
         if run_file.is_file():
-            result["run"] = json.loads(run_file.read_text(encoding="utf-8"))
+            result["run"] = self.read_json(run_file, tool)
             result["next"] = result["run"].get("next")
         listing = out / "decklist.txt"
         if listing.is_file():
@@ -1820,6 +2092,9 @@ class Server:
                 argv.append("--no-elo")
             if args.get("dry_run") and "--dry-run" not in argv:
                 argv.append("--dry-run")
+            if out is None and "--resume" not in argv:
+                out = self.default_out(tool)
+                argv += ["--out", str(out)]
             return argv + ["--quiet"], out
         argv: list[str] = []
         args = dict(args)
@@ -1840,14 +2115,26 @@ class Server:
         self.flag(argv, args, "dry_run", "--dry-run")
         if args.get("extra_args"):
             argv += self.strings(args["extra_args"], tool, "extra_args")
-        argv.append("--quiet")
         argv, actual_out = self.output_args(argv, tool)
         out = actual_out or out
-        return argv, out
+        # A run the client named no folder for goes to the workspace
+        # (2026-10-03). It used to go to the Lab's own default under
+        # DeckLab/results/, and the answer then lacked `run`, `results`
+        # and `next`: the folder was looked for on stderr, while the Lab
+        # names it on stdout.
+        if out is None and "--resume" not in argv:
+            out = self.default_out(tool)
+            argv += ["--out", str(out)]
+        return argv + ["--quiet"], out
 
     def run_lab(self, argv: list[str], out: Path | None, args: dict) -> dict:
         timeout = float(args.get("timeout") or DEFAULT_TIMEOUT)
-        done = self.run("lab", argv, timeout=timeout)
+        reporter = self.progress_reporter() if "--dry-run" not in argv else None
+        if reporter is not None and "--progress" not in argv:
+            # The Lab's machine-readable heartbeat (one JSON line a second on
+            # stderr); an explicit `--progress` beats the off `--quiet` implies.
+            argv = argv + ["--progress", "json"]
+        done = self.run("lab", argv, timeout=timeout, on_stderr=reporter)
         if "--dry-run" in argv:
             return {"plan": self.quote("lab", done, require_json=True), "argv": argv}
         parsed = self.quote("lab", done, ok=(0, 4))
@@ -1855,21 +2142,23 @@ class Server:
         if done.returncode == 4:
             result["warning"] = "the control pair did not replay game for game — the results are suspect"
         if out is None:
-            out = self.out_from_stderr(done.stderr)
+            out = self.out_from_output(done.stdout, done.stderr)
         if out is not None:
             result.update(self.read_run(out, int(args.get("limit") or RESULT_LIMIT)))
         elif isinstance(parsed, dict):
             result["stdout"] = parsed
         return result
 
-    def out_from_stderr(self, stderr: str) -> Path | None:
-        """The Lab names its default `--out` on stderr; a run without
-        `--out` is found there."""
-        found = re.findall(r"(?:results?|out(?:put)?)\S*:?\s+(\S*run_\d+\S*)", stderr)
-        for text in found:
-            path = (self.root / text.strip("'\"")).resolve()
-            if (path / "run.json").is_file():
-                return path
+    def out_from_output(self, *texts: str) -> Path | None:
+        """The folder a run wrote when its line named none (a raw line
+        that resumes, an older recorded `next.argv`): the Lab's last stdout
+        line names it — `wrote DIR/{report.txt, ...}`."""
+        for text in texts:
+            for found in reversed(re.findall(r"^wrote (.+?)/\{", text or "", re.MULTILINE)):
+                path = Path(found.strip().strip("'\""))
+                path = (path if path.is_absolute() else self.root / path).resolve()
+                if (path / "run.json").is_file():
+                    return path
         return None
 
     def tool_lab(self, args: dict) -> dict:
@@ -1885,13 +2174,13 @@ class Server:
         run_file = out / "run.json"
         if not run_file.is_file():
             raise refusal("read_run", "resume", f"no run.json in {self.spoken(out)}", path=self.spoken(out))
-        run = json.loads(run_file.read_text(encoding="utf-8"))
+        run = self.read_json(run_file, "read_run")
         result["run"] = run
         result["next"] = run.get("next")
         for name in ("results.json", "sweep.json"):
             path = out / name
             if path.is_file():
-                data = json.loads(path.read_text(encoding="utf-8"))
+                data = self.read_json(path, "read_run")
                 if isinstance(data, dict):
                     for key in ("matchups", "standings"):
                         rows = data.get(key)
@@ -1918,7 +2207,7 @@ class Server:
         run_file = out / "run.json"
         if not run_file.is_file():
             raise refusal("lab_next", "resume", f"no run.json in {self.spoken(out)}", path=self.spoken(out))
-        run = json.loads(run_file.read_text(encoding="utf-8"))
+        run = self.read_json(run_file, "lab_next")
         nxt = run.get("next")
         if not isinstance(nxt, dict) or not nxt.get("argv"):
             return {"out": self.spoken(out), "next": None,
@@ -1931,13 +2220,39 @@ class Server:
 
     # ----- the referee ----------------------------------------------------
 
+    def claim_game(self) -> str:
+        """The next game id, claimed on disk (2026-10-03): the folder is
+        read again and the game's stderr file is created exclusively, so
+        two servers sharing one workspace — the second started before the
+        first opened a game — can no longer both number a game `g1` and
+        write over each other's record and transcript."""
+        folder = self.workspace / "games"
+        folder.mkdir(parents=True, exist_ok=True)
+        number = self.next_game
+        for path in folder.iterdir():
+            found = re.match(r"g(\d+)\.", path.name)
+            if found:
+                number = max(number, int(found.group(1)) + 1)
+        while True:
+            ident = f"g{number}"
+            number += 1
+            if ident in self.games:
+                continue
+            try:
+                with (folder / f"{ident}.stderr").open("x", encoding="utf-8"):
+                    pass
+            except FileExistsError:
+                continue
+            self.next_game = number
+            return ident
+
     def new_game(self, argv: list[str], view: str, keep: bool = False) -> Game:
-        ident = f"g{self.next_game}"
-        self.next_game += 1
+        ident = self.claim_game()
         folder = self.workspace / "games"
         stderr = folder / f"{ident}.stderr"
         if not keep:
-            game = Game(ident, self.command("referee", argv), view, self.root, stderr)
+            game = Game(ident, self.command("referee", argv), view, self.root, stderr,
+                        cancelled=self.is_cancelled)
             self.games[ident] = game
             return game
         folder.mkdir(parents=True, exist_ok=True)
@@ -1950,7 +2265,7 @@ class Server:
                 pass
         full = self.command("referee", argv + ["--listen", record["keep"], "--idle", str(KEEP_IDLE)])
         record["command"] = full
-        game = Game(ident, full, view, self.root, stderr, keep=record)
+        game = Game(ident, full, view, self.root, stderr, keep=record, cancelled=self.is_cancelled)
         (folder / f"{ident}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
         self.games[ident] = game
         return game
@@ -2006,14 +2321,31 @@ class Server:
             except OSError:
                 pass
 
+    TRANSCRIPT_TAIL = 262144
+    TRANSCRIPT_LINES = 8
+
     @staticmethod
     def transcript_result(record: dict) -> dict | None:
         """The result line of a kept game's transcript, if the referee
-        wrote one (it ends the game when no client comes back)."""
+        wrote one (it ends the game when no client comes back). The result
+        — or the error envelope of a referee that could not start — is the
+        LAST line a referee writes, so only the transcript's tail is read
+        (2026-10-03): `status` and `referee_resume {}` used to parse every
+        decision line of every kept game, the whole view each time, on
+        every call."""
         try:
-            lines = Path(record["lines"]).read_text(encoding="utf-8", errors="replace").splitlines()
-        except (OSError, KeyError):
+            with Path(record["lines"]).open("rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                size = stream.tell()
+                start = max(0, size - Server.TRANSCRIPT_TAIL)
+                stream.seek(start)
+                tail = stream.read().decode("utf-8", errors="replace")
+        except (OSError, KeyError, TypeError):
             return None
+        lines = tail.splitlines()
+        if start > 0 and lines:
+            lines = lines[1:]   # the first line of a tail may be cut
+        lines = [line for line in lines if line.strip()][-Server.TRANSCRIPT_LINES:]
         for line in reversed(lines):
             try:
                 parsed = json.loads(line)
@@ -2054,8 +2386,9 @@ class Server:
                 out["error"] = done["error"]
             return out
         view = self.view_of(args, str(record.get("view") or "brief"))
-        game = Game(ident, list(record.get("command") or []), view, self.root, Path(record["stderr"]),
-                    keep=record, resume=True)
+        game = Game(ident, list(record.get("command") or []), view, self.root,
+                    Path(record.get("stderr") or self.workspace / "games" / f"{ident}.stderr"),
+                    keep=record, resume=True, cancelled=self.is_cancelled)
         self.games[ident] = game
         state = game.advance(float(args.get("timeout") or 30))
         if game.error is not None and game.hello is None:
@@ -2274,7 +2607,12 @@ class Server:
 
     def shutdown(self) -> None:
         """Games on a pipe end with the server; kept games are let go —
-        their referee listens on, `referee_resume` finds them again."""
+        their referee listens on, `referee_resume` finds them again. A door
+        child still running (a call cut short) is stopped with its group."""
+        with self.flight_lock:
+            children = list(self.children)
+        for proc in children:
+            stop_tree(proc)
         for game in list(self.games.values()):
             if game.kept and game.result is None and game.error is None:
                 game.detach()
@@ -2303,7 +2641,7 @@ class Server:
         if found and found.group(1) in MANUALS:
             page = self.tool_manual({"verb": found.group(1)})
             return {"uri": uri, "mimeType": "text/plain", "text": page["text"]}
-        raise KeyError(uri)
+        raise UnknownResource(uri)
 
     def handle(self, message) -> dict | None:
         if (not isinstance(message, dict) or message.get("jsonrpc") != "2.0"
@@ -2336,10 +2674,9 @@ class Server:
                 try:
                     payload = self.call(name, params.get("arguments"))
                     result = tool_result(payload, False)
-                except KeyError as exc:
-                    near = exc.args[1] if len(exc.args) > 1 else []
+                except UnknownTool as exc:
                     return None if notification else error_response(
-                        ident, -32602, f"unknown tool '{name}'", {"suggestions": near, "tools": [t["name"] for t in self.tools]})
+                        ident, -32602, f"unknown tool '{name}'", {"suggestions": exc.near, "tools": [t["name"] for t in self.tools]})
                 except ToolError as exc:
                     result = tool_result({"error": exc.envelope}, True)
             elif method == "resources/list":
@@ -2348,7 +2685,7 @@ class Server:
                 uri = params.get("uri") if isinstance(params, dict) else None
                 try:
                     result = {"contents": [self.read_resource(str(uri))]}
-                except KeyError:
+                except UnknownResource:
                     return None if notification else error_response(ident, -32002, f"unknown resource '{uri}'")
                 except ToolError as exc:
                     return None if notification else error_response(ident, -32603, exc.envelope.get("message", "refused"))
@@ -2356,6 +2693,10 @@ class Server:
                 return None
             else:
                 return None if notification else error_response(ident, -32601, f"Method not found: {method}")
+        except Cancelled as exc:
+            # MCP: a cancelled request is not answered.
+            print(f"shandalar_mcp: {method}: cancelled ({exc})", file=sys.stderr)
+            return None
         except Exception as exc:  # noqa: BLE001 — the protocol answer is the report
             print(f"shandalar_mcp: {method}: {type(exc).__name__}: {exc}", file=sys.stderr)
             return None if notification else error_response(ident, -32603, f"{type(exc).__name__}: {exc}")
@@ -2364,8 +2705,18 @@ class Server:
         return {"jsonrpc": "2.0", "id": ident, "result": result}
 
     def serve(self, source=None, sink=None) -> int:
+        """Read the client's lines until end of input. Requests are
+        answered in order, one at a time, on a worker thread; this thread
+        answers a `ping` at once and applies `notifications/cancelled` to
+        the call in flight (or to a call still queued) while the worker is
+        busy. At end of input every request already read is still answered
+        — a client may pipe a file of requests — and then the games end."""
         source = source or sys.stdin
         sink = sink or sys.stdout
+        self.sink = sink
+        work: queue.Queue = queue.Queue()
+        worker = threading.Thread(target=self._work, args=(work, sink), name="mcp-worker", daemon=True)
+        worker.start()
         try:
             for raw in source:
                 line = raw.strip()
@@ -2374,22 +2725,107 @@ class Server:
                 try:
                     message = json.loads(line)
                 except ValueError:
-                    emit(sink, error_response(None, -32700, "Parse error"))
+                    self.emit(sink, error_response(None, -32700, "Parse error"))
                     continue
-                if isinstance(message, list):
-                    if not message:
-                        emit(sink, error_response(None, -32600, "Invalid Request"))
-                        continue
-                    answers = [a for a in (self.handle(m) for m in message) if a is not None]
-                    if answers:
-                        emit(sink, answers)
+                if isinstance(message, list) and not message:
+                    self.emit(sink, error_response(None, -32600, "Invalid Request"))
                     continue
-                answer = self.handle(message)
-                if answer is not None:
-                    emit(sink, answer)
+                if isinstance(message, dict) and self._urgent(message, sink):
+                    continue
+                work.put(message)
         finally:
+            if self.stopping:
+                self.cancel_all(work)
+            work.put(None)
+            while worker.is_alive():
+                worker.join(0.25)
             self.shutdown()
         return 0
+
+    def _urgent(self, message: dict, sink) -> bool:
+        """What the reader thread answers itself rather than queueing:
+        `ping` (a liveness probe must not wait behind a Lab run) and
+        `notifications/cancelled`. True when the message was handled."""
+        method = message.get("method")
+        if message.get("jsonrpc") != "2.0":
+            return False
+        if method == "ping" and "id" in message and not isinstance(message.get("id"), (bool, dict, list)):
+            self.emit(sink, {"jsonrpc": "2.0", "id": message["id"], "result": {}})
+            return True
+        if method == "notifications/cancelled" and "id" not in message:
+            params = message.get("params")
+            target = params.get("requestId") if isinstance(params, dict) else None
+            if target is not None and not isinstance(target, (bool, dict, list)):
+                with self.flight_lock:
+                    if self.flight_id is not None and self.flight_id == target:
+                        self.flight_cancel.set()
+                    else:
+                        self.cancelled_ids.add(json.dumps(target))
+            return True
+        return False
+
+    def _work(self, work: queue.Queue, sink) -> None:
+        while True:
+            message = work.get()
+            if message is None:
+                return
+            if isinstance(message, list):
+                answers = [a for a in (self._dispatch(m) for m in message) if a is not None]
+                if answers:
+                    self.emit(sink, answers)
+                continue
+            answer = self._dispatch(message)
+            if answer is not None:
+                self.emit(sink, answer)
+
+    def _dispatch(self, message) -> dict | None:
+        """One message through `handle`, as the call in flight: a request
+        cancelled while it waited is skipped, one cancelled while it ran is
+        not answered."""
+        ident = message.get("id") if isinstance(message, dict) else None
+        key = json.dumps(ident) if ident is not None and not isinstance(ident, (dict, list)) else None
+        with self.flight_lock:
+            if key is not None and key in self.cancelled_ids:
+                self.cancelled_ids.discard(key)
+                return None
+            self.flight_id = ident if key is not None else None
+            self.flight_cancel = threading.Event()
+            self.flight_progress = progress_token(message)
+            cancel = self.flight_cancel
+        try:
+            answer = self.handle(message)
+        finally:
+            with self.flight_lock:
+                self.flight_id = None
+                self.flight_progress = None
+        return None if cancel.is_set() else answer
+
+    def cancel_all(self, work: queue.Queue | None = None) -> None:
+        """Stop the call in flight and drop what is queued: the server is
+        going away (a SIGTERM from the client)."""
+        self.stopping = True
+        with self.flight_lock:
+            self.flight_cancel.set()
+        while work is not None:
+            try:
+                work.get_nowait()
+            except queue.Empty:
+                break
+
+    def emit(self, sink, message) -> None:
+        with self.write_lock:
+            emit(sink, message)
+
+
+def progress_token(message) -> str | int | None:
+    """A request's `params._meta.progressToken` (MCP: a string or an
+    integer), or None."""
+    params = message.get("params") if isinstance(message, dict) else None
+    meta = params.get("_meta") if isinstance(params, dict) else None
+    token = meta.get("progressToken") if isinstance(meta, dict) else None
+    if isinstance(token, bool) or not isinstance(token, (str, int)):
+        return None
+    return token
 
 
 def tool_result(payload: dict, is_error: bool) -> dict:
@@ -2449,6 +2885,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.catalogue:
         print(json.dumps({"tools": server.listing(), "resources": server.resources()}, indent=1, ensure_ascii=False))
         return 0
+    # A client ends a stdio server by closing its input and then, if it
+    # lingers, with SIGTERM (2026-10-03). Python's default SIGTERM ends the
+    # process at once, without its `finally`: the door child of a call in
+    # flight then played on alone — a Lab run for the rest of its games.
+    # Now the call is cancelled, its child stopped, and pipe games end.
+    def terminate(signum, _frame):
+        if server.stopping:
+            return
+        server.cancel_all()
+        raise SystemExit(128 + signum)
+
+    if hasattr(signal, "SIGTERM"):
+        try:
+            signal.signal(signal.SIGTERM, terminate)
+        except ValueError:
+            pass   # not the main thread (an embedding host): keep the default
     return server.serve()
 
 

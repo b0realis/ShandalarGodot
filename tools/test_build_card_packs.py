@@ -18,7 +18,9 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_card_packs as bcp  # noqa: E402
@@ -360,6 +362,195 @@ class OfflineBuildTest(unittest.TestCase):
                 if p.name.startswith(".stage") or p.name.endswith(".partial")]
         self.assertEqual(left, [])
         self.assertFalse((self.fx.out / "cache").exists())   # offline never writes it
+
+
+class FakeResponse(io.BytesIO):
+    """What `urllib.request.urlopen` hands back, minus the network."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class FakeScryfall:
+    """A stand-in for Scryfall that answers by URL. [member answers] maps
+    a URL fragment to bytes (the body) or an exception to raise; every URL
+    asked for is kept in [member calls]."""
+
+    def __init__(self, answers):
+        self.answers = answers
+        self.calls = []
+
+    def __call__(self, request, timeout=None):
+        url = request.full_url
+        self.calls.append(url)
+        for fragment, answer in self.answers.items():
+            if fragment in url:
+                if isinstance(answer, BaseException):
+                    raise answer
+                return FakeResponse(answer)
+        raise AssertionError("unexpected fetch: " + url)
+
+
+def card_json(set_code):
+    return json.dumps({"set": set_code, "image_uris": {
+        "art_crop": f"https://img/{set_code}/art.jpg",
+        "border_crop": f"https://img/{set_code}/card.jpg"}}).encode()
+
+
+JPEG = b"\xff\xd8\xff\xe0 a whole picture \xff\xd9"
+
+
+class FetchArtFallsBackOnlyOnNotFoundTest(unittest.TestCase):
+    """A SET-PINNED LOOKUP THAT FAILS FOR ANY REASON BUT 404 IS A FAILURE,
+    not a cue to take Scryfall's default printing (bug pass 2026-10-03).
+
+    `fetch_art_url` asks for the card's own set's printing first and, when
+    Scryfall has none, for any printing. It used to treat EVERY exception
+    as "none": a 429 or a timeout on the first ask quietly returned
+    another set's art, which packs 1-5/7 then filed under art/<set>/ and
+    which a resumed run never re-fetched, because the file existed.
+    """
+
+    def setUp(self):
+        patcher = mock.patch.object(fetch_card_art.time, "sleep", lambda _s: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _ask(self, first_answer):
+        scryfall = FakeScryfall({"set=fem": first_answer, "named?exact": card_json("ema")})
+        with mock.patch.object(fetch_card_art.urllib.request, "urlopen", scryfall), \
+                contextlib.redirect_stdout(io.StringIO()):
+            uris = fetch_card_art.fetch_art_url("Hymn to Tourach", "fem")
+        return uris, scryfall.calls
+
+    def test_a_429_on_the_set_lookup_does_not_take_another_sets_art(self):
+        error = urllib.error.HTTPError("https://api", 429, "Too Many Requests", {}, None)
+        self.addCleanup(error.close)
+        uris, calls = self._ask(error)
+        self.assertIsNone(uris)
+        self.assertTrue(all("set=fem" in url for url in calls), calls)
+
+    def test_a_timeout_on_the_set_lookup_does_not_fall_back_either(self):
+        uris, calls = self._ask(urllib.error.URLError(TimeoutError("timed out")))
+        self.assertIsNone(uris)
+        self.assertTrue(all("set=fem" in url for url in calls), calls)
+
+    def test_a_404_on_the_set_lookup_still_falls_back_to_any_printing(self):
+        error = urllib.error.HTTPError("https://api", 404, "Not Found", {}, None)
+        self.addCleanup(error.close)
+        uris, calls = self._ask(error)
+        self.assertEqual(uris["art_crop"], "https://img/ema/art.jpg")
+        self.assertEqual(len(calls), 2)
+
+
+class FetchArtWritesOnlyWholePicturesTest(unittest.TestCase):
+    """A DOWNLOAD IS CHECKED, THEN MOVED INTO PLACE (bug pass 2026-10-03),
+    as packs 6 and 7 already do: a body that is not a whole JPEG (an HTML
+    error page, a truncated transfer) is a failure, and the file that was
+    there before — `--force` re-downloads over existing pictures — stays.
+    It used to be `dest.write_bytes(resp.read())` with no check at all."""
+
+    def setUp(self):
+        patcher = mock.patch.object(fetch_card_art.time, "sleep", lambda _s: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def _fetch(self, art_body, card_body=JPEG):
+        scryfall = FakeScryfall({"named?exact": card_json("tst"),
+                                 "/art.jpg": art_body, "/card.jpg": card_body})
+        targets = fetch_card_art.targets_for("Sol Ring", self.dir)
+        with mock.patch.object(fetch_card_art.urllib.request, "urlopen", scryfall), \
+                contextlib.redirect_stdout(io.StringIO()):
+            return fetch_card_art.fetch_missing_art("Sol Ring", "tst", targets)
+
+    def test_an_error_page_is_not_saved_as_a_picture(self):
+        done, failed = self._fetch(b"<html>slow down</html>")
+        self.assertEqual((done, failed), (1, 1))
+        self.assertFalse((self.dir / "sol_ring.jpg").exists())
+        self.assertTrue((self.dir / "sol_ring_card.jpg").exists())
+
+    def test_a_truncated_download_never_clobbers_the_picture_already_there(self):
+        (self.dir / "sol_ring.jpg").write_bytes(JPEG)
+        done, failed = self._fetch(JPEG[:-2])     # SOI but no EOI
+        self.assertEqual(failed, 1)
+        self.assertEqual((self.dir / "sol_ring.jpg").read_bytes(), JPEG)
+
+    def test_a_whole_picture_lands_and_leaves_no_staging_file(self):
+        done, failed = self._fetch(JPEG)
+        self.assertEqual((done, failed), (2, 0))
+        self.assertEqual((self.dir / "sol_ring.jpg").read_bytes(), JPEG)
+        self.assertEqual(sorted(p.name for p in self.dir.iterdir()),
+                         ["sol_ring.jpg", "sol_ring_card.jpg"])
+
+
+class ForceOverTheFetchLimitTest(unittest.TestCase):
+    """`--force` WITH MORE ART THAN `--max-art-fetch` (bug pass 2026-10-03).
+
+    The over-limit branch already packs every picture assets/cardart/
+    holds, so the pack comes out whole — but it still wrote "N files not
+    fetched" into the missing report, and that report is the manifest's
+    `incomplete` and the run's exit 1. A picture that is THERE and was
+    only not refreshed is a note; a card with no picture at all is still
+    missing."""
+
+    def setUp(self):
+        self.fx = Fixture()
+        bcp._REFETCHED.clear()
+
+    def tearDown(self):
+        bcp._REFETCHED.clear()
+        self.fx.close()
+
+    def _collect(self, names):
+        cards = [c for c in TST + REP if c["name"] in names]
+        missing = []
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            files, incomplete = bcp.collect_art(cards, offline=False, force=True,
+                                                max_fetch=2, missing_report=missing)
+        return files, incomplete, missing, out.getvalue()
+
+    def test_every_local_picture_packed_is_a_complete_pack(self):
+        files, incomplete, missing, log = self._collect(
+            {"Giant Growth", "Sol Ring", "Mishra's Factory"})
+        self.assertEqual(len(files), 6)
+        self.assertEqual(incomplete, [])
+        self.assertEqual(missing, [], "nothing is missing; it was only not refreshed")
+        self.assertIn("not re-fetched", log, "the skipped refresh is still said")
+
+    def test_a_card_with_no_picture_at_all_is_still_missing(self):
+        files, incomplete, missing, _log = self._collect(
+            {"Giant Growth", "Sol Ring", "Serra Angel"})
+        self.assertEqual(incomplete, ["Serra Angel"])
+        self.assertEqual(len(missing), 1)
+        self.assertIn("2 files for 1 cards not fetched", missing[0])
+
+
+class CacheOfflineBeatsForceTest(unittest.TestCase):
+    """`--offline --force`: offline WINS, as it already does for the art
+    (`collect_art`'s `refetch = force and not offline`). `Cache._get`
+    checked force first, so a cached set object, listing or icon was
+    skipped for a fetch offline then refused — and reported as missing,
+    the pack built without it (bug pass 2026-10-03)."""
+
+    def test_a_cached_file_is_read_not_reported_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            cache = bcp.Cache(out, offline=True, force=True)
+            cache.dir.mkdir()
+            (cache.dir / "tst.set.json").write_text('{"name": "Test Set"}', encoding="utf-8")
+
+            def no_network():
+                raise AssertionError("offline must not fetch")
+            got = cache._get(cache.dir / "tst.set.json", no_network, "set object tst")
+            self.assertEqual(got, {"name": "Test Set"})
+            self.assertEqual(cache.missing, [])
 
 
 if __name__ == "__main__":

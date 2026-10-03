@@ -66,6 +66,51 @@ func test_lan_discovery_rejects_spoofed_stale_or_oversized_listings() -> void:
 	scanner.stop()
 
 
+## ANOTHER VERSION IS READ ONLY AS FAR AS NAMING IT (bug pass 2026-10-03):
+## the handshake's subprotocol, an invitation's `v`, a listing's address,
+## port, name and release — each through a typed, bounded check.
+func test_other_protocol_versions_are_read_only_as_far_as_naming_them() -> void:
+	var names := SgProtocol.subprotocols()
+	assert_eq(names[0], SgProtocol.SUBPROTOCOL, "this version first: a current host chooses it")
+	assert_true(names.has(SgProtocol.subprotocol_name(SgProtocol.VERSION - 1)))
+	assert_false(names.has(SgProtocol.subprotocol_name(SgProtocol.VERSION + 1)))
+	assert_lte(names.size(), SgProtocol.OLDER_SUBPROTOCOLS + 1)
+	assert_eq(SgProtocol.subprotocol_version(SgProtocol.SUBPROTOCOL), SgProtocol.VERSION)
+	for name in ["", "sgmanalink-local-v", "sgmanalink-local-v0", "sgmanalink-local-v07", "sgmanalink-local-v-3",
+		"sgmanalink-local-vx", "sgmanalink-local-v5 ", "other-v5"]:
+		assert_eq(SgProtocol.subprotocol_version(name), 0, name)
+	var older := SgLanInvite.PREFIX + Marshalls.raw_to_base64(JSON.stringify({"v": 24, "shape": "its own"}).to_utf8_buffer())
+	assert_eq(SgLanInvite.protocol(older), 24)
+	assert_true(SgLanInvite.parse(older).is_empty())
+	for invitation in ["", "sglan1:", "sglan1:@@@=", SgLanInvite.PREFIX + Marshalls.utf8_to_base64('{"v":"24"}'),
+		SgLanInvite.PREFIX + Marshalls.utf8_to_base64("[".repeat(50))]:
+		assert_eq(SgLanInvite.protocol(invitation), 0, invitation)
+	assert_eq(SgLanInvite.version_mismatch(SgProtocol.VERSION), "")
+	assert_string_contains(SgLanInvite.version_mismatch(SgProtocol.VERSION + 1), "a newer version")
+	var scanner := SgLanDiscovery.new()
+	add_child_autofree(scanner)
+	scanner.scanning = true
+	scanner._nonce = "b".repeat(64)
+	var reply := {"v": SgProtocol.VERSION - 1, "type": "sg-lan-host", "nonce": scanner._nonce,
+		"host": {"address": "192.168.0.5", "port": 17897, "name": "Forest Fox", "stamp": {"game": "0.49.0"}}}
+	assert_false(scanner.accept_reply(reply, "192.168.0.6", 100), "no redirected discovery targets")
+	reply.host.name = "[url=bad]host[/url]"
+	assert_false(scanner.accept_reply(reply, "192.168.0.5", 100))
+	assert_true(scanner.others.is_empty())
+	reply.host.name = "Forest Fox"
+	scanner.accept_reply(reply, "192.168.0.5", 100)
+	assert_eq(scanner.others.values()[0].host, {"address": "192.168.0.5", "port": 17897, "name": "Forest Fox",
+		"protocol": SgProtocol.VERSION - 1, "game": "0.49.0"}, "only the fields that name it")
+	for i in SgLanDiscovery.MAX_HOSTS + 10:
+		reply.host.port = 18000 + i
+		scanner.accept_reply(reply, "192.168.0.5", 100)
+	assert_eq(scanner.others.size(), SgLanDiscovery.MAX_HOSTS_PER_ADDRESS)
+	assert_true(scanner.hosts.is_empty())
+	scanner.expire(100 + SgLanDiscovery.EXPIRES_MS)
+	assert_true(scanner.others.is_empty())
+	scanner.stop()
+
+
 func test_server_dtos_validate_nested_shapes_before_ui_use() -> void:
 	var duel := SgPracticeMatch.new(42)
 	var view := duel.view(0)

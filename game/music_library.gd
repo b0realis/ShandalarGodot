@@ -185,7 +185,11 @@ static func playlist_for(context_key: String) -> Array[String]:
 	var picked := choice()
 	if picked == CHOICE_ORIGINAL:
 		return _just(context_key)
-	if picked != CHOICE_SHUFFLE:
+	# A chosen track that is still there; one that has GONE shuffles
+	# (bug pass 2026-10-03) — it was silence, while Options showed
+	# "Shuffle all tracks" for the id it could not find and
+	# [method single_for] already fell back. One answer for every view.
+	if picked != CHOICE_SHUFFLE and has(picked):
 		return _just(picked)
 	var ids := ids_of(all())
 	if ids.is_empty():
@@ -296,13 +300,26 @@ static func all() -> Array[Dictionary]:
 		mine.erase(id)
 	var extra: Array[Dictionary] = []
 	for id in mine:
-		extra.append({"id": String(id), "name": title_of(String(id)),
+		extra.append({"id": _own_id(String(id)), "name": title_of(String(id)),
 			"path": String(mine[id]), "mine": true})
 	extra.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return String(a["name"]).naturalnocasecmp_to(String(b["name"])) < 0)
 	out.append_array(extra)
 	_cache = out
 	return _cache
+
+
+## The id a player's file is stored under: its name, unless that name
+## IS one of the two mode words `music_choice` stores — `original.ogg`
+## picked under Options selected the 1997 mode instead of the track (bug
+## pass 2026-10-03). Such a file goes under [constant OWN_PREFIX] plus its
+## name; a `/` cannot be in a file name, so nothing else can take that id,
+## and every other id (and every stored choice) is unchanged.
+const OWN_PREFIX := "file/"
+
+
+static func _own_id(base: String) -> String:
+	return OWN_PREFIX + base if base in [CHOICE_SHUFFLE, CHOICE_ORIGINAL] else base
 
 
 ## Is there a tune under this id?

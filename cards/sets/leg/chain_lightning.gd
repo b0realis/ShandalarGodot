@@ -34,9 +34,11 @@ class ChainEffect extends EffectBase:
 
 	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
-		game.deal_damage(source, target, 3)
 		# Who gets the option: the targeted player, or the targeted
-		# permanent's controller.
+		# permanent's controller — read BEFORE the damage, because a
+		# creature it kills has its controller reset to its owner by the
+		# zone change, and "that permanent's controller" is the one it had
+		# (CR 608.2h). Until 2026-10-03 a stolen creature's OWNER was asked.
 		var victim := -1
 		if target.is_player:
 			victim = target.player_id
@@ -44,6 +46,7 @@ class ChainEffect extends EffectBase:
 			var hit := game.find_instance(target.instance_id)
 			if hit != null:
 				victim = hit.controller_id
+		game.deal_damage(source, target, 3)
 		if victim < 0 or game.players[victim].has_lost:
 			return
 		var rent := ManaCost.parse("{R}{R}")

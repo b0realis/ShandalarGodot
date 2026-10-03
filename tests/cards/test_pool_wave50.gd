@@ -178,6 +178,25 @@ func test_sorrows_path_swaps_two_blockers() -> void:
 	assert_eq(g.combat.blocks[y.id], a.id)
 
 
+## "Choose two target blocking creatures" is ONE target word for two
+## objects (CR 601.2c): the same blocker twice is refused before the {T}
+## is paid. The engine's duplicate check is per word since the bug pass
+## of 2026-10-03, and the Path's two slots are two effects — so the second
+## slot names the first as a sibling it must differ from.
+func test_sorrows_path_cannot_name_one_blocker_twice() -> void:
+	var a := put_battlefield(0, "Hill Giant")
+	var x := put_battlefield(1, "Wall of Stone")
+	var path := put_battlefield(0, "Sorrow's Path")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [a.id]))
+	resolve_stack()
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {x.id: a.id}))
+	assert_ne(g.activate_ability(0, path, 0, [TargetRef.card(x), TargetRef.card(x)]), "")
+	assert_false(path.tapped, "a refused activation pays nothing")
+	assert_eq(g.players[0].life, 20)
+
+
 func test_sorrows_path_hurts_you_when_it_taps() -> void:
 	var path := put_battlefield(0, "Sorrow's Path")
 	var mine := put_battlefield(0, "Grizzly Bears")

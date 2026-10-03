@@ -424,8 +424,13 @@ class PackageReleaseTest(unittest.TestCase):
                 path.unlink()
 
     def test_home_path_in_binary_is_refused(self):
+        # A path INTO the home, which is what a leak is. (It wrote the bare
+        # home until 2026-10-03; since the guard matches on a path boundary
+        # a bare one-component home — HOME=/root — is no longer a hit by
+        # itself, and this test should not depend on the runner's home.)
         self.make_export("linux64")
-        (self.folder / "Shandalar.x86_64").write_bytes(str(Path.home()).encode())
+        (self.folder / "Shandalar.x86_64").write_bytes(
+            (str(Path.home()) + "/PROJECTS/shandalar/game/main.gd").encode())
         with self.assertRaises(ValueError):
             self.build("linux64")
 
@@ -436,6 +441,84 @@ class PackageReleaseTest(unittest.TestCase):
         binary.symlink_to(self.root / "LICENSE")
         with self.assertRaises(ValueError):
             self.build("linux64")
+
+
+class GuardPrivateTest(unittest.TestCase):
+    """THE HOME-PATH GUARD MATCHES A PATH, NOT A SUBSTRING (bug pass
+    2026-10-03).
+
+    `guard_private` looked for `$HOME` as bare bytes: HOME=/root (a Docker
+    build) refused the stock Godot template, whose scene tree root is
+    "/root", HOME=/ refused every file there is, and a home spelt the way
+    a Windows binary or a JSON file spells it — UTF-16, backslashes,
+    escaped slashes — went through.
+    """
+
+    def _refused(self, payload: bytes, home: str) -> bool:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "payload.bin"
+            path.write_bytes(payload)
+            try:
+                pack.guard_private([path], home=home)
+            except ValueError:
+                return True
+            return False
+
+    def test_the_home_is_caught_in_every_form_a_file_carries_it(self):
+        cases = {
+            "utf-8": b"x /home/builder/src/a.gd y",
+            "the bare home": b'"/home/builder"',
+            "utf-16-le": "/home/builder/src".encode("utf-16-le"),
+            "utf-16-be": "/home/builder/src".encode("utf-16-be"),
+            "json-escaped": b'{"p": "\\/home\\/builder\\/src"}',
+            "windows backslashes": b"C:\\Users\\builder\\Desktop",
+            "utf-16 backslashes": "C:\\Users\\builder\\x".encode("utf-16-le"),
+            "across a block": b"x" * (1024 * 1024 - 5) + b"/home/builder/x",
+        }
+        for label, payload in cases.items():
+            with self.subTest(label):
+                self.assertTrue(self._refused(payload, "/home/builder"), label)
+
+    def test_a_longer_name_is_not_the_home(self):
+        self.assertFalse(self._refused(
+            b"/home/builders/x and /home/builder_old/y", "/home/builder"))
+        self.assertFalse(self._refused(
+            "/home/buildery".encode("utf-16-le"), "/home/builder"))
+
+    def test_a_root_build_passes_godots_root_node_and_catches_its_files(self):
+        self.assertFalse(self._refused(
+            b"get_node('/root') /root\x00_msg /root_node_layout /rootorg", "/root"))
+        self.assertTrue(self._refused(b"/root/PROJECTS/shandalar/x", "/root"))
+        self.assertTrue(self._refused("/root/x".encode("utf-16-le"), "/root"))
+
+    def test_an_empty_or_slash_home_refuses_nothing_by_itself(self):
+        for home in ("", "/"):
+            with self.subTest(home=home):
+                self.assertFalse(self._refused(b"/usr/lib/x /etc /home/", home))
+
+
+class DispatcherRefusalTest(unittest.TestCase):
+    """THE PACKAGED DOOR'S REFUSAL IS ONE JSON LINE WHATEVER THE VERB HELD
+    (bug pass 2026-10-03) — the same fix as shandalar.sh's own door
+    (tools/test_shandalar_sh.py): only `"`, `\\` and three controls were
+    removed, so an ESC or a Latin-1 byte made the line invalid JSON."""
+
+    def test_an_unknown_verb_is_valid_json_whatever_bytes_it_held(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            door = Path(tmp) / "shandalar.sh"
+            door.write_text(pack.DISPATCHER, encoding="utf-8")
+            for verb in (b"bad\x1bverb", b"bell\x07\x7f", b"caf\xe9", b"\xff\xfe", "caf\u00e9".encode()):
+                with self.subTest(verb=verb):
+                    done = subprocess.run([b"bash", str(door).encode(), verb], cwd=tmp,
+                                          capture_output=True, timeout=60,
+                                          stdin=subprocess.DEVNULL)
+                    self.assertEqual(done.returncode, 2, done.stderr)
+                    lines = done.stdout.splitlines()
+                    self.assertEqual(len(lines), 1, done.stdout)
+                    error = json.loads(lines[0])["error"]
+                    self.assertEqual(error["kind"], "option")
+                    if verb == "caf\u00e9".encode():
+                        self.assertEqual(error["verb"], "caf\u00e9", "valid UTF-8 is kept")
 
 
 if __name__ == "__main__":

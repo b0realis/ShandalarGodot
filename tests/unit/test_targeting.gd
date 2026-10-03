@@ -163,3 +163,46 @@ func test_plain_single_target_spells_still_work() -> void:
 	assert_ok(g.cast_spell(0, bolt, [TargetRef.card(bear)]))
 	resolve_stack()
 	assert_eq(bear.zone, Mtg.Zone.GRAVEYARD)
+
+
+# ------------------------- one object, two instances of "target" (2026-10-03) --
+# CR 601.2c: "the same player or object can be chosen once for each instance
+# of the word 'target' on the spell". The duplicate check spanned the whole
+# spell until 2026-10-03, so Fiery Justice (Pack 3 — pinned on the real card
+# in test_pack_3_additional.gd) could not aim part of its damage at the
+# opponent who also gains its 5 life.
+
+func test_two_target_words_may_name_the_same_object() -> void:
+	# The shape as an ability on a synthetic permanent, so the engine rule is
+	# pinned without any pack: "deal 3 damage to any target. Target opponent
+	# gains 1 life."
+	var gain := GainLifeEffect.new(1)
+	gain.target_spec = TargetSpec.opponent()
+	var data := CardData.new("Two Words", "", Mtg.CardType.ARTIFACT) \
+		.activated(ActivatedAbility.new("", true,
+			[DamageEffect.new(3).any_target(), gain],
+			"{T}: 3 damage to any target. Target opponent gains 1 life."))
+	var rod := put_synthetic(0, data)
+	advance_to_step(Mtg.Step.MAIN1)
+	assert_ok(g.activate_ability(0, rod, 0, [TargetRef.player(1), TargetRef.player(1)]))
+	resolve_stack()
+	assert_eq(g.players[1].life, 18, "3 damage and 1 life, both to the opponent")
+
+
+func test_one_target_word_for_two_objects_still_wants_two_different_ones() -> void:
+	# "Two target ..." is ONE instance of the word: Ashes to Ashes and Dust
+	# to Dust take both refs in one group, so the per-word check still
+	# refuses the same object twice.
+	var bear := put_battlefield(1, "Grizzly Bears")
+	var icy := put_battlefield(1, "Icy Manipulator")
+	var ashes := give_hand(0, "Ashes to Ashes")
+	var dust := give_hand(0, "Dust to Dust")
+	advance_to_step(Mtg.Step.MAIN1)
+	add_mana(0, Mtg.ManaColor.B, 2)
+	add_mana(0, Mtg.ManaColor.W, 2)
+	add_mana(0, Mtg.ManaColor.C, 2)
+	assert_refused(g.cast_spell(0, ashes, [TargetRef.card(bear), TargetRef.card(bear)]),
+		"same target twice")
+	assert_refused(g.cast_spell(0, dust, [TargetRef.card(icy), TargetRef.card(icy)]),
+		"same target twice")
+	assert_refused(g.cast_spell(0, dust, [TargetRef.card(icy)]), "needs 2 target")

@@ -451,6 +451,10 @@ var cur_toughness: int = 0
 ## does not.
 var last_power: int = 0
 var last_counters: Dictionary = {}
+## Whether it was tapped as it left — an intervening "if" rechecked
+## against a departed permanent (Voodoo Doll's "if it's untapped",
+## CR 603.4) reads this (2026-10-03).
+var last_tapped := false
 var last_blocked_this_turn := false
 var last_regenerations_this_turn := 0
 var last_toughness: int = 0
@@ -960,6 +964,7 @@ func clear_battlefield_state() -> void:
 	# LAST KNOWN INFORMATION (CR 608.2h) must be captured BEFORE the wipe.
 	last_power = cur_power
 	last_counters = counters.duplicate()
+	last_tapped = tapped
 	last_blocked_this_turn = blocked_this_turn
 	last_regenerations_this_turn = regenerations_this_turn
 	last_toughness = cur_toughness

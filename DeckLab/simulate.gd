@@ -196,9 +196,9 @@ OPTIONS
   --games N           Games per matchup (default 1000). See HOW MANY
                       GAMES DO I NEED below — it is the flag that decides
                       whether the answer means anything.
-  --seed N            Base RNG seed (default 1). Same seed + same decks =
-                      identical results, regardless of --jobs. Quote it
-                      whenever you quote a number.
+  --seed N            Base RNG seed (default 1, 0 or more). Same seed +
+                      same decks = identical results, regardless of
+                      --jobs. Quote it whenever you quote a number.
   --jobs N            Worker threads INSIDE one process (default 4).
                       More is not faster: measured on 22 idle cores, one
                       duel runs at 12 games/s on 1 thread, 18 on 4, and
@@ -263,6 +263,9 @@ OPTIONS
                               record of itself instead of one line that
                               erases itself 14,000 times
                         off   no progress at all; the banner stays
+                        json  for a program: one JSON line a second on
+                              stderr, {"progress": {done, total, unit,
+                              elapsed}} (the MCP server's progress)
                       --quiet is exactly --no-banner --progress off, and
                       an explicit --progress wins over it.
   --record FILTER     Keep THE ENGINE'S OWN LOG of some games, one text
@@ -655,15 +658,34 @@ func _main(argv: PackedStringArray) -> int:
 	# own run.json holds the line that started the run, so `--resume OUT`
 	# is the whole command — anything typed beside it would be a second
 	# opinion on that line, which is refused rather than merged.
+	# THE CHROME RIDES ALONG (2026-10-03): `--quiet`, `--no-banner` and
+	# `--progress MODE` say how a run PRINTS, not which games it plays, so
+	# they are taken beside `--resume` (before or after it) and applied to
+	# the resumed run without entering its recorded line. The MCP server's
+	# `lab_resume` sends --quiet, and was refused every time.
 	var resume_at := argv.find("--resume")
 	if resume_at >= 0:
-		if argv.size() == 1:
+		var line := PackedStringArray()
+		var chrome := PackedStringArray()
+		var i := 0
+		while i < argv.size():
+			var word := String(argv[i])
+			if word in ["--quiet", "--no-banner"]:
+				chrome.append(word)
+			elif word == "--progress" and i + 1 < argv.size():
+				chrome.append_array(PackedStringArray([word, argv[i + 1]]))
+				i += 1
+			else:
+				line.append(word)
+			i += 1
+		if line.size() == 1:
 			return _refuse(2, "--resume needs a value  (%s)" % FLAG_HINTS["--resume"],
 				{"kind": "option", "flag": "--resume"})
-		if argv.size() != 2 or resume_at != 0:
-			return _refuse(2, "--resume takes only the run's folder — the line that started it is in its %s" % RUN_JSON,
+		if line.size() != 2 or line[0] != "--resume":
+			return _refuse(2, "--resume takes only the run's folder (and --quiet, --no-banner or --progress) — the line that started it is in its %s" % RUN_JSON,
 				{"kind": "option", "flag": "--resume"})
-		return _resume(argv[1])
+		_resume_chrome = chrome
+		return _resume(line[1])
 	# THE CARD PACKS GO ON BEFORE THE PARSER RUNS (2026-09-25), the way
 	# `--group` is read first: a folder given to --gauntlet or --matrix is
 	# expanded as it is parsed, and a deck of Ice Age cards is a deck of
@@ -672,6 +694,8 @@ func _main(argv: PackedStringArray) -> int:
 	# one the parser keeps, so it is the one that goes on.
 	_argv = argv
 	_run_started = int(Time.get_unix_time_from_system())
+	if _resume_dir == "" or _run_id == "":
+		_run_id = "%d-%d-%d" % [_run_started, OS.get_process_id(), Time.get_ticks_usec()]
 	var packs_at := argv.rfind("--packs")
 	if packs_at >= 0 and packs_at + 1 < argv.size():
 		var chosen := parse_packs(argv[packs_at + 1], available_packs())
@@ -680,7 +704,7 @@ func _main(argv: PackedStringArray) -> int:
 			if refusal != "":
 				return _refuse(2, refusal, {"kind": "packs"})
 			_packs_in_force = chosen.ids
-	var opts := _parse_args(argv)
+	var opts := _parse_args(argv + _resume_chrome)
 	_quiet = bool(opts.get("quiet", false))
 	_banner_wanted = not bool(opts.get("no_banner", false)) \
 		and OS.get_environment(LabConsole.NO_BANNER_ENV) != "1"
@@ -832,11 +856,32 @@ func _main(argv: PackedStringArray) -> int:
 	# for. Implied rather than required, so the command line stays short.
 	if mode == "tournament":
 		opts.no_elo = true
+	# EVERY SEED THE RUN DEALS FITS, checked once the pairs are counted
+	# (2026-10-03): the last game's seed is `seed + pairs * games - 1`,
+	# and past [constant SEED_CEILING] the checkpoint's JSON gives a seed
+	# back rounded, so a resume would not find its own games. (A negative
+	# seed is the parser's refusal: MtgGame rolls its own for one.)
+	if int(opts.seed) > SEED_CEILING - pairs.size() * int(opts.games):
+		return _refuse(2, "--seed %d is too large: this run deals %s seeds from it, and the last must stay <= %s"
+			% [int(opts.seed), LabConsole.commas(pairs.size() * int(opts.games)),
+				LabConsole.commas(SEED_CEILING)], {"kind": "option", "flag": "--seed"})
+	# A SWEEP'S CONTROL DECKS ARE DECKS OF THE RUN, loaded with the rest
+	# before the folder is made (2026-10-03): loaded after it, a refused
+	# control deck left a run.json saying `exit: null` — which is what an
+	# interrupted run looks like, and `--resume` then offered to finish it.
+	var controls: Array[DeckList] = []
+	if not opts.sweep.is_empty():
+		for control_path in [opts.control_a, opts.control_b]:
+			var control := _load_deck(control_path, opts.format)
+			if control == null:
+				return 2
+			controls.append(control)
 	# WHERE THE RUN IS WRITING, DECIDED BEFORE IT STARTS — printed with
 	# the plan, so a sweep interrupted after forty minutes still says
 	# where its half of a result was going, and a bad --out fails now
 	# rather than after the games.
 	var out_dir: String = opts.out
+	var default_out := out_dir == "" and _resume_dir == ""
 	if out_dir == "":
 		out_dir = "DeckLab/results/%s_%d" % ["unfair" if _is_unfair_run(opts) else "run",
 			int(Time.get_unix_time_from_system())]
@@ -844,15 +889,29 @@ func _main(argv: PackedStringArray) -> int:
 	# say about --out.
 	if _resume_dir != "":
 		out_dir = _resume_dir
+	elif default_out:
+		# TWO RUNS OF ONE SECOND ARE TWO FOLDERS (2026-10-03): the stamp
+		# is whole seconds, and two runs started together wrote into one
+		# folder. The run claims its own (a dry run only names one).
+		out_dir = fresh_out_dir(out_dir, not bool(opts.dry_run))
 	if _is_unfair_run(opts):
 		opts.no_elo = true
-		print("UNFAIR CHALLENGE: sees the current opposing hand. Unrated; not a fair benchmark.")
+		# ON stderr FOR A PLAN: a dry run's stdout is ONE JSON document,
+		# and this line ahead of it made it none (2026-10-03).
+		var warning := "UNFAIR CHALLENGE: sees the current opposing hand. Unrated; not a fair benchmark."
+		if bool(opts.dry_run):
+			printerr(warning)
+		else:
+			print(warning)
 	var out_absolute := ProjectSettings.globalize_path(out_dir)
 	if FileAccess.file_exists(out_absolute) and not DirAccess.dir_exists_absolute(out_absolute):
 		# `make_dir_recursive` on a path that is a FILE says OK, and the
 		# run's first write failed after the games (2026-09-26).
 		return _refuse(1, "--out '%s' is a file, not a directory" % out_dir,
 			{"kind": "out", "path": out_dir})
+	# WHOSE FOLDER IT IS, read before anything is written into it — see
+	# [method out_is_ours] (2026-10-03).
+	var ours := out_is_ours(out_absolute)
 	var unit := "games" if opts.best_of == MatchState.FREE_PLAY else "matches"
 	# THE PLAN AND NOTHING ELSE (`--dry-run`, 2026-09-27): every deck
 	# loaded and every refusal above still refuses, the pairs counted,
@@ -869,7 +928,8 @@ func _main(argv: PackedStringArray) -> int:
 			printerr("  --out takes a directory this user may write to.")
 			return _refuse(1, "cannot create the output directory '%s' (error %d)"
 				% [out_dir, made], {"kind": "out", "path": out_dir, "flag": "--out"}, true)
-		_keep_the_importer_out(out_dir)
+		if ours:
+			_keep_the_importer_out(out_dir)
 		_out_absolute = out_absolute
 		# THE RUN'S FIRST WORD (--resume, 2026-09-27): run.json with
 		# `exit: null` before a game is played, so a run that is killed
@@ -882,11 +942,17 @@ func _main(argv: PackedStringArray) -> int:
 	_duel_opts = _duel_options(opts)
 	if String(opts.record) != "":
 		_duel_opts["record_dir"] = out_absolute.path_join(RECORDS_DIR)
+		# A RUN'S records/ IS ITS OWN GAMES (2026-10-03): a reused --out
+		# kept an older run's logs, which the cap counted against this
+		# run and results.json reported as written. A resume keeps the
+		# games its first half recorded.
+		if _resume_dir == "" and not bool(opts.dry_run):
+			clear_records(String(_duel_opts["record_dir"]))
 	# A SWEEP IS ITS OWN RUN FROM HERE: the same decks, loader, fan-out
 	# and per-game records, but three pairs and a verdict where a plain
 	# run has one report (THE SWEEP, towards the foot of this file).
 	if not opts.sweep.is_empty():
-		return _run_sweep(opts, decks, pairs, out_dir, jobs, unit)
+		return _run_sweep(opts, decks, pairs, controls, out_dir, jobs, unit)
 	print("Deck Lab (%s): %d deck(s), %d matchup(s) x %d %s, seed %d, %d thread(s)"
 		% [mode, decks.size(), pairs.size(), opts.games, unit, opts.seed, jobs])
 	# WHICH DECKS, BY NAME. "5 deck(s)" is not enough to know that the
@@ -981,21 +1047,42 @@ func _main(argv: PackedStringArray) -> int:
 	# just a weighted average of a handful of matchups. So the run also
 	# reports the split, which costs nothing: every game already knows
 	# the deck it was dealt.
+	#
+	# BY PAIR AND DEALT DECK (2026-10-03): `--deck-a random` against a
+	# gauntlet of several decks is one field pair per opponent, and
+	# pooling the dealt decks across them booked every game in the Elo
+	# ledger against the FIRST opponent (twelve games to Big Green, none
+	# to White Knights) and captioned them all with its name. Each row
+	# now carries its pair and the deck it really played.
 	var field_rows: Array = []
 	if random_index >= 0:
-		var by_deck := {}
+		var by_pair := {}
 		for i in _tasks.size():
 			var dealt: String = _tasks[i].dealt
 			if dealt == "":
 				continue
+			var pair_index := int(_tasks[i].pair)
+			if not by_pair.has(pair_index):
+				by_pair[pair_index] = {}
+			var by_deck: Dictionary = by_pair[pair_index]
 			if not by_deck.has(dealt):
 				by_deck[dealt] = []
 			by_deck[dealt].append(_results[i])
-		var dealt_names: Array = by_deck.keys()
-		dealt_names.sort()
-		for dealt_name in dealt_names:
-			field_rows.append({"name": dealt_name,
-				"stats": SimStats.summarize(by_deck[dealt_name])})
+		for pair_index in pairs.size():
+			if not by_pair.has(pair_index):
+				continue
+			var pair: Array = pairs[pair_index]
+			var against: String = decks[pair[1] if pair[0] == random_index
+				else pair[0]].deck_name
+			var by_deck: Dictionary = by_pair[pair_index]
+			var dealt_names: Array = by_deck.keys()
+			dealt_names.sort()
+			for dealt_name in dealt_names:
+				field_rows.append({"name": dealt_name, "pair": pair_index,
+					"against": against, "stats": SimStats.summarize(by_deck[dealt_name])})
+	var field_pairs := {}
+	for row in field_rows:
+		field_pairs[row["pair"]] = true
 
 	# ---- Elo ledger ----
 	var elo_lines := PackedStringArray()
@@ -1028,14 +1115,13 @@ func _main(argv: PackedStringArray) -> int:
 				stats.a_wins, stats.b_wins)
 		for row in field_rows:
 			var stats: Dictionary = row["stats"]
-			var opponent: String = decks[0].deck_name
 			if random_index == 0:
 				# The FIELD is deck A, so the dealt deck is the row and
 				# the winrate already belongs to it.
-				ledger.record_matchup(row["name"], decks[1].deck_name,
+				ledger.record_matchup(row["name"], row["against"],
 					stats.a_wins, stats.b_wins)
 			else:
-				ledger.record_matchup(opponent, row["name"],
+				ledger.record_matchup(row["against"], row["name"],
 					stats.a_wins, stats.b_wins)
 		elo_saved = ledger.save()
 		if elo_saved:
@@ -1125,18 +1211,21 @@ func _main(argv: PackedStringArray) -> int:
 	else:
 		report.append_array(_reading_block(mode, opts, decks, pairs,
 			per_pair_stats, unit))
-	if not field_rows.is_empty():
-		report.append("")
-		var against: String = decks[1 if random_index == 0 else 0].deck_name
-		report.append("the field, deck by deck (%s):"
-			% field_caption(random_index == 0, against))
-		for row in field_rows:
-			var stats: Dictionary = row["stats"]
-			report.append("  %-24s %s  CI [%s..%s]  (n=%d)" % [
-				row["name"], SimStats.percent(stats.winrate.mid),
-				SimStats.percent(stats.winrate.low).strip_edges(),
-				SimStats.percent(stats.winrate.high).strip_edges(),
-				stats.games])
+	# One block per field pair, each captioned with the deck it played —
+	# a single pair reads exactly as it always has.
+	var block_pair := -1
+	for row in field_rows:
+		if int(row["pair"]) != block_pair:
+			block_pair = int(row["pair"])
+			report.append("")
+			report.append("the field, deck by deck (%s):"
+				% field_caption(random_index == 0, row["against"]))
+		var stats: Dictionary = row["stats"]
+		report.append("  %-24s %s  CI [%s..%s]  (n=%d)" % [
+			row["name"], SimStats.percent(stats.winrate.mid),
+			SimStats.percent(stats.winrate.low).strip_edges(),
+			SimStats.percent(stats.winrate.high).strip_edges(),
+			stats.games])
 	if not elo_lines.is_empty():
 		report.append("")
 		report.append_array(elo_lines)
@@ -1172,7 +1261,7 @@ func _main(argv: PackedStringArray) -> int:
 	# written. (Only matchups.csv is compared byte for byte — see the
 	# report header above for why this file and report.txt cannot be.)
 	if not field_rows.is_empty():
-		results_json["field"] = _field_json(field_rows)
+		results_json["field"] = _field_json(field_rows, field_pairs.size() > 1)
 	if mode == "tournament":
 		results_json["standings"] = tournament.standings_json
 		results_json["gauntlet"] = tournament.gauntlet_json
@@ -1275,6 +1364,8 @@ func _run_json(out_dir: String, exit: Variant, run: Dictionary) -> bool:
 		"started": Time.get_datetime_string_from_unix_time(_run_started) + "Z",
 		"exit": exit,
 	}
+	if _run_id != "":
+		record["run_id"] = _run_id
 	if _resume_dir != "":
 		record["resumed"] = {"from": _resume_dir}.merged(_resumed)
 	for key in run:
@@ -1312,6 +1403,19 @@ var _out_absolute := ""
 var _resume_dir := ""
 var _reused: Dictionary = {}
 var _resumed: Dictionary = {}
+## WHICH RUN A CHECKPOINT LINE BELONGS TO (2026-10-03). A fresh run used
+## to open an existing checkpoint.jsonl for appending, so a folder reused
+## after an interrupted run held two runs' lines, and a `--resume` of the
+## second took the first one's games as its own (a 999-turn stale record
+## sat in its average). A fresh run now truncates the file, and every
+## line carries this name — made when a run starts, written to run.json,
+## and read back by `--resume`, which keeps it — so a resume reads only
+## its own run's lines. A line without one (an older build's) is read as
+## before.
+var _run_id := ""
+## The chrome flags typed beside `--resume` — applied to the resumed run's
+## options, never written into its recorded line ([member _argv]).
+var _resume_chrome := PackedStringArray()
 
 
 ## `--resume OUT`: the run's own line, read back from its run.json, and
@@ -1340,7 +1444,8 @@ func _resume(dir: String) -> int:
 		return _refuse(2, "the run in '%s' was itself a --resume line; nothing to read back" % dir,
 			{"kind": "resume", "path": dir, "flag": "--resume"})
 	_resume_dir = dir
-	_reused = checkpoint_records(absolute.path_join(CHECKPOINT))
+	_run_id = String(run.get("run_id", ""))
+	_reused = checkpoint_records(absolute.path_join(CHECKPOINT), _run_id)
 	return _main(argv)
 
 
@@ -1353,8 +1458,9 @@ static func task_key(task: Dictionary) -> String:
 
 ## A checkpoint's records by [method task_key]. A line that does not
 ## parse, or is not a record, is skipped — the torn last line of a kill,
-## which is exactly what the file is for.
-static func checkpoint_records(path: String) -> Dictionary:
+## which is exactly what the file is for. With [param run_id], so is a
+## line another run stamped (see [member _run_id]).
+static func checkpoint_records(path: String, run_id := "") -> Dictionary:
 	var out := {}
 	if not FileAccess.file_exists(path):
 		return out
@@ -1364,6 +1470,8 @@ static func checkpoint_records(path: String) -> Dictionary:
 			continue
 		var entry: Dictionary = parser.data
 		if not (entry.get("record") is Dictionary) or not entry.has("seed"):
+			continue
+		if run_id != "" and entry.has("run") and String(entry.run) != run_id:
 			continue
 		out[task_key(entry)] = entry.record
 	return out
@@ -1386,7 +1494,10 @@ func _checkpoint_open() -> void:
 	if _out_absolute == "":
 		return
 	var path := _out_absolute.path_join(CHECKPOINT)
-	if FileAccess.file_exists(path):
+	# APPENDED TO ONLY BY THE RUN IT BELONGS TO: a resume adds to its
+	# own run's lines; a run of its own starts the file again, whatever
+	# an older run in the same folder left there (2026-10-03).
+	if FileAccess.file_exists(path) and _resume_dir != "":
 		_checkpoint = FileAccess.open(path, FileAccess.READ_WRITE)
 		if _checkpoint != null:
 			# A kill mid-line left a torn line; start the next one clean.
@@ -1416,8 +1527,11 @@ func _checkpoint_record(index: int) -> void:
 	if _checkpoint == null:
 		return
 	var task: Dictionary = _tasks[index]
-	var line := JSON.stringify({"arm": int(task.get("arm", -1)), "pair": int(task.get("pair", 0)),
-		"seed": int(task.get("seed", 0)), "record": _results[index]})
+	var entry := {"arm": int(task.get("arm", -1)), "pair": int(task.get("pair", 0)),
+		"seed": int(task.get("seed", 0)), "record": _results[index]}
+	if _run_id != "":
+		entry["run"] = _run_id
+	var line := JSON.stringify(entry)
 	_checkpoint_lock.lock()
 	_checkpoint.store_line(line)
 	_checkpoint.flush()
@@ -2359,6 +2473,17 @@ static func records_in(dir: String) -> int:
 	return n
 
 
+## Empty [param dir] of game logs before a run records into it — the
+## `*.log` files alone, so nothing else a folder holds is touched.
+static func clear_records(dir: String) -> void:
+	var found := DirAccess.open(dir)
+	if found == null:
+		return
+	for file_name in found.get_files():
+		if file_name.ends_with(RECORD_EXTENSION):
+			found.remove(file_name)
+
+
 ## ONE MATCH — the original's `&Best of:` (`Program/Text.res:2862`), which
 ## [MatchState] owns the rule for, played out headless.
 ##
@@ -2803,7 +2928,7 @@ const FLAG_HINTS := {
 	"--top": "--top N: tournament mode — how many of the field's best the report details and top.txt lists, default 10",
 	"--deck-pool": "--deck-pool LIST|DIR: what `random` draws from (default decks/)",
 	"--games": "--games N: games per matchup, default 1000",
-	"--seed": "--seed N: base RNG seed, default 1 — the same seed replays a run",
+	"--seed": "--seed N: base RNG seed, 0 or more, default 1 — the same seed replays a run",
 	"--jobs": "--jobs N: worker threads INSIDE one process, default min(4, cores) (0 = default — see --procs)",
 	"--procs": "--procs N: separate worker processes, default 8 when the run is big enough (1 = none). Each is ~235 MB and about 8x the speed of threads",
 	"--profile-a": "--profile-a NAME[:knob=value,...]: apprentice|magician|sorcerer|wizard; separate unrated challenge: unfair",
@@ -2825,10 +2950,10 @@ const FLAG_HINTS := {
 	"--null": "--null VALUE: the swept knob's null — off for a boolean knob, the preset's own value for a number",
 	"--control-deck-a": "--control-deck-a PATH: the sweep's control pair, deck A — a deck the knob cannot fire on",
 	"--control-deck-b": "--control-deck-b PATH: the sweep's control pair, deck B",
-	"--progress": "--progress auto|bar|log|off: auto is a redrawing bar on a terminal and a heartbeat line a minute in a log; bar and log force one shape either way; off keeps the banner",
+	"--progress": "--progress auto|bar|log|off|json: auto is a redrawing bar on a terminal and a heartbeat line a minute in a log; bar and log force one shape either way; off keeps the banner; json is one JSON line a second for a program",
 	"--record": "--record losses|stalls|all: write the engine log of every game deck A lost, of every stalled game, or of every game, to OUT/records/ (see --record-max)",
 	"--record-max": "--record-max N: at most N game logs per run, default 50 (0 = no cap; a thousand logs is a gigabyte)",
-	"--resume": "--resume OUT: finish the interrupted run in OUT from its run.json and checkpoint.jsonl; takes no other switch",
+	"--resume": "--resume OUT: finish the interrupted run in OUT from its run.json and checkpoint.jsonl; takes no other switch but --quiet, --no-banner and --progress",
 }
 
 ## The flags that take no value. Same contract as [constant FLAG_HINTS]:
@@ -2882,6 +3007,11 @@ static func flags_near(arg: String) -> PackedStringArray:
 
 ## The flags whose value must be a whole number. `String.to_int()` is
 ## silent about "abc" (it is 0), so `_parse_args` refuses these up front.
+## THE HIGHEST SEED A GAME MAY CARRY, 2^53 (2026-10-03): the checkpoint
+## and results.json are JSON, which Godot parses into doubles, and past
+## 2^53 a double no longer holds every whole number — a resumed run's
+## seeds came back rounded and named games nobody played.
+const SEED_CEILING := 1 << 53
 const WHOLE_NUMBER_FLAGS := ["--games", "--seed", "--jobs", "--procs", "--ante", "--best-of", "--top", "--record-max"]
 
 ## What `--record` may ask for: the games deck A (the row deck) lost,
@@ -3013,7 +3143,12 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				opts.games = value.to_int()
 				if opts.games < 1:
 					return {"error": "--games must be >= 1"}
-			"--seed": opts.seed = value.to_int()
+			"--seed":
+				opts.seed = value.to_int()
+				# MtgGame.setup rolls its own seed for a negative one, so
+				# every game of the run would be unrepeatable (2026-10-03).
+				if opts.seed < 0:
+					return {"error": "--seed must be >= 0 — a negative seed makes every game roll its own, and the run could not be repeated"}
 			"--procs":
 					if value.to_int() < 0:
 						return {"error": "--procs must be >= 0 (0 = decide from the size of the run)"}
@@ -3238,12 +3373,17 @@ func _field_placeholder() -> DeckList:
 ## The field breakdown as plain data for results.json — [] when no side
 ## was the field, so a run without one writes the same key it always did
 ## not write anything else into.
-func _field_json(field_rows: Array) -> Array:
+## [param several]: the field played more than one deck (`--deck-a
+## random` against a gauntlet), so each row also names the one it played
+## — `against` — and a run of one field pair writes what it always did.
+func _field_json(field_rows: Array, several := false) -> Array:
 	var out: Array = []
 	for row in field_rows:
 		var stats: Dictionary = (row["stats"] as Dictionary).duplicate()
 		stats.erase("turns")
 		stats["deck"] = row["name"]
+		if several:
+			stats["against"] = row["against"]
 		out.append(stats)
 	return out
 
@@ -3253,6 +3393,50 @@ func _deck_names(list: Array[DeckList]) -> PackedStringArray:
 	for deck in list:
 		names.append(deck.deck_name)
 	return names
+
+
+## WHETHER A FOLDER IS THE LAB'S TO MARK (2026-10-03): one that is not
+## there yet, holds nothing (a `.gdignore` aside), or holds a run of the
+## Lab's own (its run.json, or the results.json of a run from before
+## run.json existed) — AutoDeck's own rule for `--force`. `--out decks`
+## used to drop a `.gdignore` into the project's deck folder, and a
+## folder the importer skips is a folder the export leaves out.
+static func out_is_ours(absolute: String) -> bool:
+	if not DirAccess.dir_exists_absolute(absolute):
+		return true
+	var dir := DirAccess.open(absolute)
+	if dir == null:
+		return false
+	if FileAccess.file_exists(absolute.path_join(RUN_JSON)) \
+			or FileAccess.file_exists(absolute.path_join("results.json")):
+		return true
+	dir.include_hidden = true
+	var held := Array(dir.get_files()) + Array(dir.get_directories())
+	held.erase(".gdignore")
+	return held.is_empty()
+
+
+## THE DEFAULT FOLDER'S OWN NAME (2026-10-03): [param base] when no
+## folder holds it, else `base_2`, `base_3`, ... — and with [param claim]
+## the folder is made here, one `mkdir` each, so two runs started in the
+## same second cannot both take one name. A plan claims nothing.
+static func fresh_out_dir(base: String, claim: bool) -> String:
+	var parent := ProjectSettings.globalize_path(base).get_base_dir()
+	if claim:
+		DirAccess.make_dir_recursive_absolute(parent)
+	for n in range(1, 100_000):
+		var candidate := base if n == 1 else "%s_%d" % [base, n]
+		var absolute := ProjectSettings.globalize_path(candidate)
+		if claim:
+			var made := DirAccess.make_dir_absolute(absolute)
+			if made != ERR_ALREADY_EXISTS:
+				# OK, or a failure the creation in `_main` reports in its
+				# own words.
+				return candidate
+		elif not DirAccess.dir_exists_absolute(absolute) \
+				and not FileAccess.file_exists(absolute):
+			return candidate
+	return base
 
 
 ## A run directory INSIDE THE PROJECT is otherwise imported: Godot reads
@@ -3513,7 +3697,16 @@ func _write(path: String, content: String) -> bool:
 	if file == null:
 		printerr("deck_lab: cannot write %s" % path)
 		return false
-	file.store_string(content)
+	# A FILE THAT OPENED IS NOT A FILE THAT WAS WRITTEN (2026-10-03): a
+	# full disk takes the open and refuses the bytes, and the run said
+	# exit 0 over a truncated results.json.
+	var stored := file.store_string(content)
+	file.flush()
+	var err := file.get_error()
+	file.close()
+	if not stored or err != OK:
+		printerr("deck_lab: cannot finish writing %s (%s)" % [path, error_string(err)])
+		return false
 	return true
 
 
@@ -3798,18 +3991,14 @@ static func delta_of(candidate: Dictionary, baseline: Dictionary) -> Dictionary:
 
 
 ## The three pairs, one work list, one report. [param decks] and
-## [param pairs] are the plain run's own, loaded by `_main`; the control
-## pair is loaded here and appended, so the work list, the fan-out and
+## [param pairs] are the plain run's own, loaded by `_main`, as are the
+## two [param controls]; the control pair is appended here, so the work list, the fan-out and
 ## the aggregation are the plain run's code paths and not a second set.
 func _run_sweep(opts: Dictionary, decks: Array[DeckList], pairs: Array,
-		out_dir: String, jobs: int, unit: String) -> int:
+		controls: Array[DeckList], out_dir: String, jobs: int, unit: String) -> int:
 	var sweep: Dictionary = opts.sweep
-	var control_a := _load_deck(opts.control_a, opts.format)
-	if control_a == null:
-		return 2
-	var control_b := _load_deck(opts.control_b, opts.format)
-	if control_b == null:
-		return 2
+	var control_a: DeckList = controls[0]
+	var control_b: DeckList = controls[1]
 	var control_pair := pairs.size()
 	decks.append(control_a)
 	decks.append(control_b)
@@ -4198,11 +4387,17 @@ const PROGRESS_LOG_SECONDS := 60.0
 ##         scrollback (or `2>&1 | tee`) is then the record of the run.
 ##   off   no progress, banner untouched — which `--quiet` could not say,
 ##         because it takes the banner with it.
-const PROGRESS_MODES := ["auto", "bar", "log", "off"]
+const PROGRESS_MODES := ["auto", "bar", "log", "off", "json"]
 const PROGRESS_AUTO := "auto"
 const PROGRESS_BAR := "bar"
 const PROGRESS_LOG := "log"
 const PROGRESS_OFF := "off"
+## The heartbeat for a PROGRAM (2026-10-03): one JSON object a line on
+## stderr, [method progress_json], every [constant PROGRESS_JSON_SECONDS]
+## and once more as the games end — what the MCP server reads to send
+## `notifications/progress`. stdout stays the report.
+const PROGRESS_JSON := "json"
+const PROGRESS_JSON_SECONDS := 1.0
 
 
 ## WHICH OF THE THREE CHROME FLAGS WINS, in one place so that the answer
@@ -4268,7 +4463,7 @@ func _done_so_far() -> int:
 func _drawing_bar() -> bool:
 	if _progress_mode == PROGRESS_BAR:
 		return true
-	if _progress_mode == PROGRESS_LOG:
+	if _progress_mode == PROGRESS_LOG or _progress_mode == PROGRESS_JSON:
 		return false
 	return LabConsole.is_terminal()
 
@@ -4283,6 +4478,11 @@ func _drawing_bar() -> bool:
 func _progress(done: int, total: int, elapsed: float, unit: String,
 		finished: bool) -> void:
 	if _progress_mode == PROGRESS_OFF:
+		return
+	if _progress_mode == PROGRESS_JSON:
+		if finished or elapsed - _last_logged >= PROGRESS_JSON_SECONDS:
+			_last_logged = elapsed
+			printerr(progress_json(done, total, elapsed, unit))
 		return
 	_eta.observe(elapsed, done)
 	if finished:
@@ -4320,6 +4520,13 @@ func _progress(done: int, total: int, elapsed: float, unit: String,
 ## the work left, so it has to be the recent one; when it is over there
 ## is nothing left to predict and the honest number is the one the report
 ## prints — the whole run over the whole clock.
+## One `--progress json` line: {"progress": {done, total, unit, elapsed}}
+## — elapsed in seconds to a tenth.
+static func progress_json(done: int, total: int, elapsed: float, unit: String) -> String:
+	return JSON.stringify({"progress": {"done": done, "total": total, "unit": unit,
+		"elapsed": snappedf(elapsed, 0.1)}})
+
+
 func _log_progress(done: int, total: int, elapsed: float,
 		unit: String) -> void:
 	_last_logged = elapsed
@@ -4449,13 +4656,27 @@ func _tournament_tables(decks: Array[DeckList], contestants: int,
 			continue
 		gauntlet.append({"name": decks[j].deck_name,
 			"stats": SimStats.summarize(records)})
-	standings.sort_custom(best_first)
+	# A FIELD DECK THAT PLAYED NOBODY RANKS LAST (2026-10-03): a field
+	# deck whose only gauntlet deck was its own file has no games, and
+	# SimStats reads no games as 50% — which ranked it above every deck
+	# that lost more than it won and sent it into top.txt's next round.
+	# It keeps its row (standings.csv says it played 0) but is never
+	# one of the best.
+	standings.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_played := int(a.stats.games) > 0
+		var b_played := int(b.stats.games) > 0
+		if a_played != b_played:
+			return a_played
+		return best_first(a, b))
 	gauntlet.sort_custom(best_first)
+	var played := 0
 	for rank in standings.size():
 		standings[rank]["rank"] = rank + 1
+		if int(standings[rank].stats.games) > 0:
+			played += 1
 	for rank in gauntlet.size():
 		gauntlet[rank]["rank"] = rank + 1
-	var shown := mini(top, standings.size())
+	var shown := mini(top, played)
 	# standings.csv: every field deck, ranked — the table the report
 	# only shows the head of.
 	var csv := PackedStringArray()

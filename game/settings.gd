@@ -24,11 +24,74 @@ static var _dirty := false
 static var write_count := 0
 
 
+## Set when the file on disk could not be read AND could not be copied
+## aside (see [method _load]): nothing is written over it this session.
+static var _unwritable_reason := ""
+
+
 static func _ensure() -> void:
 	if _config == null:
-		_config = ConfigFile.new()
-		_config.load(PATH)   # missing file is fine — defaults apply
-		_migrate_rules()
+		_load()
+
+
+## Read the file into a fresh [ConfigFile]. A missing file is fine —
+## defaults apply.
+##
+## A FILE THAT WILL NOT PARSE IS KEPT BEFORE ANYTHING IS WRITTEN (bug
+## pass of 2026-10-03). `setup.txt` and the Options notes invite editing
+## the folder keys by hand, and one bad line — an unquoted path, a
+## Windows path whose `\U` Godot reads as an escape — stops
+## [method ConfigFile.load] there: the keys above it are read, the ones
+## below are not, and the next [method set_value] used to rewrite the
+## file from that, every key below the bad line gone. So the file is
+## copied aside first ([method _keep_aside]) and the player told where;
+## the game goes on with what it could read. A file that cannot even be
+## READ (its permissions) cannot be copied, and then it is never written
+## at all this session — writing would replace it with the defaults.
+static func _load() -> void:
+	_config = ConfigFile.new()
+	_unwritable_reason = ""
+	var err := _config.load(PATH)
+	if err != OK and FileAccess.file_exists(PATH):
+		_keep_aside(err)
+	_migrate_rules()
+
+
+## See [method _load]. Reads the file itself rather than through
+## [method DirAccess.copy_absolute], which prints an engine error for a
+## file it cannot open; the same broken file is not copied twice (a
+## start that saves nothing leaves it as it was), and an older copy is
+## never overwritten — the next free name is taken.
+static func _keep_aside(err: Error) -> void:
+	var source := FileAccess.open(PATH, FileAccess.READ)
+	var bytes := PackedByteArray()
+	if source != null:
+		bytes = source.get_buffer(source.get_length())
+		source.close()
+	var kept := ""
+	if source != null:
+		var candidate := PATH + ".bad"
+		var n := 2
+		while FileAccess.file_exists(candidate):
+			if FileAccess.get_file_as_bytes(candidate) == bytes:
+				kept = candidate
+				break
+			candidate = "%s.bad%d" % [PATH, n]
+			n += 1
+		if kept == "" and write_atomically(candidate, bytes) == OK:
+			kept = candidate
+	if kept != "":
+		printerr(("settings: %s could not be read (%s) — a copy of it is kept "
+			+ "as %s. The game goes on with what it could read and the "
+			+ "defaults; fix the line or copy your keys back from the copy.")
+			% [ProjectSettings.globalize_path(PATH), error_string(err),
+				ProjectSettings.globalize_path(kept)])
+		return
+	_unwritable_reason = error_string(err)
+	printerr(("settings: %s could not be read (%s) and could not be copied "
+		+ "aside, so it will not be written this session and nothing in it "
+		+ "is lost. Fix or remove it and restart.")
+		% [ProjectSettings.globalize_path(PATH), _unwritable_reason])
 
 
 ## The marker a file carries once [method _migrate_rules] has looked at it.
@@ -83,13 +146,63 @@ static func _save() -> void:
 	# [QoL] A failed write is still pending. Before this guard a blocked
 	# settings.cfg reported `dirty=false counted_writes=1` (2026-09-13),
 	# so leaving the options screen could never retry the player's change.
-	var err := _config.save(PATH)
+	# A file that could not be read and could not be kept ([method _load])
+	# is never written over: the changes stay in memory, pending.
+	if _unwritable_reason != "":
+		_dirty = true
+		printerr("settings: not saving over %s, which could not be read (%s); changes remain pending" % [
+			PATH, _unwritable_reason])
+		return
+	# WHOLE OR NOT AT ALL (bug pass of 2026-10-03): [method ConfigFile.save]
+	# truncates the file in place and never says whether the bytes went
+	# down, so a full disk left an empty settings.cfg and reported OK.
+	var err := write_atomically(PATH, _config.encode_to_text().to_utf8_buffer())
 	_dirty = err != OK
 	if err == OK:
 		write_count += 1
 	else:
 		printerr("settings: cannot save %s (%s); changes remain pending" % [
 			PATH, error_string(err)])
+
+
+## The tail of the file [method write_atomically] writes before it is
+## renamed into place.
+const PENDING_TAIL := ".tmp"
+
+
+## WRITE [param bytes] TO [param path] WHOLE OR NOT AT ALL (bug pass of
+## 2026-10-03) — the player's files ([Settings], [method DeckStore.save]
+## and its export, [method PackSeal.seal]) used to be truncated in place
+## with the write never checked, so a full disk or a quota cut a deck
+## short and the game said it had been saved. The bytes go to `path` +
+## [constant PENDING_TAIL], are checked (the write's own error and the
+## length that reached the disk) and only then renamed over the old file
+## — the pattern `DraftStore._write` and the tournament store already
+## use. Anything but OK leaves the old file exactly as it was and no
+## pending file behind.
+static func write_atomically(path: String, bytes: PackedByteArray) -> Error:
+	var pending := path + PENDING_TAIL
+	var file := FileAccess.open(pending, FileAccess.WRITE)
+	if file == null:
+		var why := FileAccess.get_open_error()
+		return why if why != OK else ERR_FILE_CANT_WRITE
+	var stored := file.store_buffer(bytes)
+	file.flush()
+	var err := file.get_error()
+	file.close()
+	if err == OK and not stored:
+		err = ERR_FILE_CANT_WRITE
+	if err == OK:
+		var check := FileAccess.open(pending, FileAccess.READ)
+		if check == null or check.get_length() != bytes.size():
+			err = ERR_FILE_CANT_WRITE
+		if check != null:
+			check.close()   # closed before the rename: Windows will not move an open file
+	if err == OK:
+		err = DirAccess.rename_absolute(pending, path)
+	if err != OK and FileAccess.file_exists(pending):
+		DirAccess.remove_absolute(pending)
+	return err
 
 
 ## Write out whatever [method set_value] was asked not to. A no-op when
@@ -113,11 +226,13 @@ static func is_dirty() -> bool:
 ## soak restores `user://settings.cfg` byte for byte after fuzzing the
 ## live options panel — the cached [ConfigFile] would otherwise go on
 ## answering with what the fuzzer wrote.
-static func reload() -> void:
-	_config = ConfigFile.new()
-	_config.load(PATH)
+##
+## NOT `reload` (renamed 2026-10-03): called on the class, `Settings.reload()`
+## resolved to Godot's own Script.reload — it RECOMPILED this script, which
+## forgot the cache by accident and never ran this body.
+static func reload_file() -> void:
 	_dirty = false
-	_migrate_rules()
+	_load()
 
 
 ## Remove a key so the built-in default applies again. Tests use this to

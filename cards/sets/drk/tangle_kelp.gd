@@ -6,13 +6,17 @@ extends CardScript
 ##         step if it attacked during its controller's last turn.
 ##
 ## Implementation: a one-mana tapper that then punishes attacking. The
-## untap denial is Goblin Rock Sled's mechanism seen from the Aura's side:
-## an END_STEP_START trigger on the host's controller's turn converts "it
-## attacked this turn" into the engine's one-shot
-## CardInstance.skip_next_untap, which their NEXT untap step consumes.
-## Reading the flag at the end step is what makes "during its controller's
-## LAST turn" exact — the engine clears attacked_this_turn at each untap
-## step, so it cannot be read later.
+## untap denial is a STATIC (2026-10-03), as printed: while the Kelp is on
+## the host, the host skips its controller's untap step
+## (CardInstance.cur_skips_untap) if it attacked during that player's last
+## turn — the turn number declare_attackers stamps on the attacker
+## (`attack_turn_<pid>` in its memory, wiped when it changes zones)
+## against MtgGame's per-seat `last_turn_number` (extra turns counted),
+## Halls of Mist's reading of the same words.
+##
+## It used to be an end-step trigger that set the engine's one-shot
+## `skip_next_untap`, which outlived the Kelp: an Aura destroyed between
+## that end step and the untap step still kept the creature down.
 
 
 func build() -> CardData:
@@ -22,10 +26,8 @@ func build() -> CardData:
 			Mtg.EventType.ENTERS_BATTLEFIELD, _entangle,
 			"When this Aura enters, tap enchanted creature.",
 			_is_self)) \
-		.triggered(TriggeredAbility.new(
-			Mtg.EventType.END_STEP_START, _hold_it_down,
-			"Enchanted creature doesn't untap during its controller's untap step if it attacked during its controller's last turn.",
-			_host_attacked_this_turn)) \
+		.static_ability(StaticAbility.new(_hold_it_down,
+			"Enchanted creature doesn't untap during its controller's untap step if it attacked during its controller's last turn.")) \
 		.oracle("Enchant creature\n"
 			+ "When this Aura enters, tap enchanted creature.\n"
 			+ "Enchanted creature doesn't untap during its controller's untap step if it "
@@ -51,14 +53,11 @@ static func _entangle(game: MtgGame, source: CardInstance, _event: GameEvent) ->
 		game.tap_permanent(host)
 
 
-static func _host_attacked_this_turn(game: MtgGame, source: CardInstance,
-		event: GameEvent) -> bool:
+static func _hold_it_down(game: MtgGame, source: CardInstance) -> void:
 	var host := _host_of(game, source)
-	return host != null and host.attacked_this_turn \
-		and host.controller_id == int(event.data["player"])
-
-
-static func _hold_it_down(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	var host := _host_of(game, source)
-	if host != null:
-		host.skip_next_untap = true
+	if host == null:
+		return
+	var pid := host.controller_id
+	var last := game.players[pid].last_turn_number
+	if last > 0 and int(host.memory.get("attack_turn_%d" % pid, -1)) == last:
+		host.cur_skips_untap = true

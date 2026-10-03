@@ -199,3 +199,39 @@ func test_the_extra_turn_can_be_the_one_skipped() -> void:
 	assert_eq(g.active_player, 1)
 	assert_eq(g.turn_number, 3)
 	assert_string_contains("\n".join(g.log_lines), "takes an extra turn")
+
+
+static func _noop_static(_game: MtgGame, _source: CardInstance) -> void:
+	pass
+
+
+func _untap_scoped_effects(pid: int) -> int:
+	var left := 0
+	for entry in g.continuous._floating_statics:
+		if int(entry.get("lasts", -1)) == ContinuousEffects.Duration.UNTIL_UNTAP_OF \
+				and int(entry.get("lasts_pid", -1)) == pid:
+			left += 1
+	return left
+
+
+func test_playing_the_turn_after_the_hold_still_ends_untap_scoped_effects() -> void:
+	# Bug pass 2026-10-03: the turn-based hold's replay ran _begin_turn and
+	# the untap step but skipped what _enter_step does between them —
+	# "until your next untap step" effects expiring (continuous.
+	# expire_untap_of) and the recalculation — so a human who answered
+	# "Play this turn." kept such an effect for a whole extra turn.
+	var vault := put_battlefield(0, "Time Vault")
+	var forest := put_battlefield(0, "Forest")
+	forest.tapped = true
+	_human_seat(0)
+	advance_to_step(Mtg.Step.MAIN1)
+	advance_to_next_turn()   # P1's turn 2
+	g.continuous.add_floating_static(forest,
+		StaticAbility.new(_noop_static, "until P0's next untap step"),
+		ContinuousEffects.Duration.UNTIL_UNTAP_OF, 0, false, forest.id)
+	assert_eq(_untap_scoped_effects(0), 1)
+	_advance_until_held()
+	assert_ok(g.answer_choice(0))   # "Play this turn."
+	assert_true(vault.tapped)
+	assert_eq(g.turn_number, 3)
+	assert_eq(_untap_scoped_effects(0), 0, "P0's untap step ended it")

@@ -93,7 +93,7 @@ func test_emerald_done_also_styles_the_skinless_button() -> void:
 
 
 func test_a_saved_classic_choice_still_wins_after_a_settings_reload() -> void:
-	Settings.reload()
+	Settings.reload_file()
 	screen.queue_free()
 	await _settle()
 	await _open()
@@ -118,14 +118,14 @@ func test_big_cards_match_the_duel_and_widen_both_card_surfaces() -> void:
 
 func test_the_choice_survives_a_settings_reload_and_screen_reopen() -> void:
 	screen._run_command("Big cards")
-	Settings.reload()
+	Settings.reload_file()
 	assert_true(bool(Settings.get_value(SETTING, false)), "written to disk, not just cached")
 	screen.queue_free()
 	await _settle()
 	await _open()
 	assert_eq(screen._showcase.scale, Vector2.ONE)
 	screen._run_command("Big cards")
-	Settings.reload()
+	Settings.reload_file()
 	assert_false(bool(Settings.get_value(SETTING, true)))
 
 

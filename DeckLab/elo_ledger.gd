@@ -9,6 +9,12 @@ extends RefCounted
 ##   # deck | elo | games | wins | losses | updated
 ##   White Knights | 1536.2 | 800 | 512 | 288 | 2026-08-30
 ##
+## THE NAME IS EVERYTHING LEFT OF THE LAST FIVE PIPES (2026-10-03), so a
+## deck called `Burn | v2` keeps its name — split from the left, it was
+## `Burn` with a rating of 0. A name that begins with `#` (or `\`) is
+## written with a `\` in front, because a line that begins with `#` is a
+## comment and `#1 Sligh` vanished from the ledger on the next read.
+##
 ## Rating math: standard Elo, K=8 PER GAME, applied game-by-game with the
 ## matchup's wins/losses interleaved evenly (Bresenham spread) so the
 ## result is order-stable and deterministic. New decks start at 1500.
@@ -37,10 +43,10 @@ static func load_from(p_path: String) -> EloLedger:
 		var line := raw_line.strip_edges()
 		if line.is_empty() or line.begins_with("#"):
 			continue
-		var parts := line.split("|")
+		var parts := line.rsplit("|", true, 5)
 		if parts.size() < 6:
 			continue
-		ledger.entries[parts[0].strip_edges()] = {
+		ledger.entries[_unescaped(parts[0].strip_edges())] = {
 			"elo": parts[1].strip_edges().to_float(),
 			"games": parts[2].strip_edges().to_int(),
 			"wins": parts[3].strip_edges().to_int(),
@@ -96,13 +102,25 @@ func save() -> bool:
 	for deck_name in names:
 		var e: Dictionary = entries[deck_name]
 		file.store_line("%s | %.1f | %d | %d | %d | %s" % [
-			deck_name, e.elo, e.games, e.wins, e.losses, e.updated])
+			_escaped(deck_name), e.elo, e.games, e.wins, e.losses, e.updated])
 	file.flush()
 	var err := file.get_error()
 	file.close()
 	if err != OK:
 		printerr("EloLedger: cannot finish writing %s (%s)" % [path, error_string(err)])
 	return err == OK
+
+
+## A name as the file writes it: `\` in front of one that would read
+## as a comment (`#`) or as an escape (`\`). [method _unescaped] undoes it.
+static func _escaped(deck_name: String) -> String:
+	if deck_name.begins_with("#") or deck_name.begins_with("\\"):
+		return "\\" + deck_name
+	return deck_name
+
+
+static func _unescaped(written: String) -> String:
+	return written.substr(1) if written.begins_with("\\") else written
 
 
 func rating(deck_name: String) -> float:

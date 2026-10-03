@@ -35,7 +35,8 @@ func build() -> CardData:
 			"When this enchantment enters, create a token that's a copy of target nontoken creature.",
 			_is_self) \
 			.targeting(TargetSpec.creature("target nontoken creature", _nontoken),
-				_biggest_first, "Select target creature.")) \
+				_biggest_first, "Select target creature.") \
+			.capturing(_entry_stamp)) \
 		.triggered(TriggeredAbility.new(
 			Mtg.EventType.LEAVES_BATTLEFIELD, _exile_token,
 			"When this enchantment leaves the battlefield, exile the token.",
@@ -90,19 +91,36 @@ static func _biggest_first(game: MtgGame, _source: CardInstance,
 	return ia.id < ib.id
 
 
+## The token is made even if the Dance has already left the battlefield
+## (CR 603.6): the ETB resolves on its own. Nothing then links the two —
+## the Dance's leave-trigger already resolved with no token to exile, and
+## a Dance that is gone cannot be sacrificed — so the token simply stays
+## (the card's Gatherer ruling says as much; until 2026-10-03 no token was
+## made).
+## Only the Dance that is still the object that entered remembers it.
+static func _entry_stamp(_game: MtgGame, source: CardInstance,
+		_event: GameEvent) -> Dictionary:
+	return {"stamp": source.layer_timestamp}
+
+
 static func _make_token(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		return
 	var refs: Array = game.current_targets()
 	if refs.is_empty():
 		return
 	var best := game.find_instance(refs[0].instance_id)
 	if best == null or best.zone != Mtg.Zone.BATTLEFIELD:
 		return
-	var made := game.create_token(source.controller_id, best.data)
+	var pid := game.current_resolution_controller()
+	if pid < 0:
+		pid = source.controller_id
+	# The copiable values of a face-down creature are a nameless 2/2
+	# (CR 707.2, 708.2) — not the card under the mask (2026-10-03).
+	var made := game.create_token(pid, game.copiable_data(best))
 	if made.is_empty():
 		return
-	source.memory["token"] = made[0].id
+	var stamp := int(game.trigger_context(source).get("stamp", source.layer_timestamp))
+	if source.zone == Mtg.Zone.BATTLEFIELD and source.layer_timestamp == stamp:
+		source.memory["token"] = made[0].id
 
 
 static func _exile_token(game: MtgGame, source: CardInstance, event: GameEvent) -> void:

@@ -633,6 +633,16 @@ func test_clear_deck_takes_the_sideboard_and_the_group_with_it() -> void:
 	assert_eq(deck.group, "")
 
 
+## The cleared surface is a `New Deck` all through — the old deck's notes
+## ("weak to Circle of Protection: Red") stayed on it and saved into the
+## next deck built there (2026-10-03). `Restore deck` keeps its own copy.
+func test_clear_deck_takes_the_notes_with_it() -> void:
+	_add("Mountain", 4)
+	deck.notes = "Weak to Circle of Protection: Red"
+	deck.clear()
+	assert_eq(deck.notes, "")
+
+
 func test_a_duplicated_model_carries_every_field() -> void:
 	# This is what UNDO keeps. A field missing here is a field the player
 	# loses by pressing Undo.

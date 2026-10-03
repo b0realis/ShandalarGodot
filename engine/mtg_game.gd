@@ -232,6 +232,13 @@ var _end_step_doom_unless_attacked: Dictionary = {}
 ## can't be regenerated and ignores indestructible (CR 701.17).
 var _end_step_doom_sacrifice: Dictionary = {}
 
+## Instance id -> the battlefield timestamp ([member CardInstance.layer_timestamp])
+## of the OBJECT each [member _end_step_doom] entry condemned. An id survives
+## a zone change and the object does not (CR 400.7): a Rocket Launcher
+## bounced and recast the same turn is a new object, and the old doom must
+## not destroy it (bug pass 2026-10-03).
+var _end_step_doom_stamps: Dictionary = {}
+
 ## Tokens queued to be created at the beginning of the next end step
 ## (Rukh Egg's bird), as {controller: int, data: CardData}.
 var _end_step_tokens: Array = []
@@ -271,6 +278,8 @@ var nullified_landwalk: Dictionary = {}
 ## Processed and cleared on entering the end-of-combat step; regeneration
 ## applies (it is a destruction).
 var _end_of_combat_doom: Array[int] = []
+## The same CR 400.7 guard for [member _end_of_combat_doom]: id -> stamp.
+var _end_of_combat_doom_stamps: Dictionary = {}
 
 ## Control changes that end at cleanup ("gain control of that creature
 ## until end of turn" — Disharmony). Entries are {instance_id, owner_pid}.
@@ -291,7 +300,25 @@ var no_attacks_this_turn: bool = false
 ## tap this combat" (Johan). Set by a card, read by
 ## [method declare_attackers], cleared when the combat phase ends — the same
 ## moment the until-end-of-combat effects expire (CR 700.5).
+## The value is the id of the permanent whose condition must still hold as
+## the attackers are declared ("...if Johan is untapped", judged then, not
+## when the offer resolved — bug pass 2026-10-03); a plain `true` is an
+## unconditional grant.
 var attacks_without_tapping: Dictionary = {}
+
+
+## Does [member attacks_without_tapping] spare [param pid]'s attackers from
+## tapping RIGHT NOW? An entry naming a permanent applies only while that
+## permanent is on the battlefield and untapped (Johan).
+func _attacks_without_tapping_now(pid: int) -> bool:
+	if not attacks_without_tapping.has(pid):
+		return false
+	var held: Variant = attacks_without_tapping[pid]
+	if held is bool:
+		return bool(held)
+	var anchor := find_instance(int(held))
+	return anchor != null and anchor.zone == Mtg.Zone.BATTLEFIELD and not anchor.tapped
+
 
 ## "Instead of declaring blockers, blocks are assigned at random this turn"
 ## (Camouflage). Set by the spell, honoured by declare_blockers, cleared at
@@ -363,7 +390,10 @@ func watch_damage_dealt(inst: CardInstance, callback: Callable) -> void:
 func watch_death(inst: CardInstance, callback: Callable) -> void:
 	if inst == null:
 		return
-	death_watchers.append({"instance_id": inst.id, "callback": callback})
+	# The stamp pins the watch to THIS object (CR 400.7): the same card
+	# bounced and replayed is a new creature (bug pass 2026-10-03).
+	death_watchers.append({"instance_id": inst.id, "stamp": inst.layer_timestamp,
+		"callback": callback})
 
 ## How many creatures DIED this turn (Khabál Ghoul, Osai Vultures,
 ## Scavenging Ghoul read it). Reset at cleanup with the other per-turn
@@ -389,6 +419,11 @@ var log_lines := PackedStringArray()
 ## basic land carries the colour it taps for), so a viewer can letter the
 ## name in the card's own colour. The duel log window and the running
 ## log file both read it; the engine itself never does.
+## A PRIVATE line (hidden information — a tutored card, a card put back on
+## top of a library; see [method log_line]) also carries `private_to`, the
+## one seat that may read the line as written, and `public`, the sentence
+## every other viewer is shown instead; its `card` is "" and `colors` 0.
+## The two keys are absent from every public line (bug pass 2026-10-03).
 var log_meta: Array[Dictionary] = []
 
 # ------------------------------------------------- the mid-resolution ask --
@@ -457,6 +492,9 @@ var _resolving_controller: int = -1
 ## outside a resolution. A spell that copies ITSELF as it resolves (Chain
 ## Lightning's rider) reads its own targets, mode and X from here.
 var _resolving_item: StackItem = null
+## The trigger whose targets [method _trigger_target_candidates] is ranking
+## for its controller, or null — read by [method controller_acting_for].
+var _ranking_item: StackItem = null
 
 ## OPT IN to the pre-flight. Off by default, so the AI, the heuristic agent
 ## and every headless test resolve exactly as they always did; the DuelScreen
@@ -480,6 +518,9 @@ var _probe_information: Array = []
 ## journal, so [method end_search] can hand an outer probe back untouched.
 var _search_outer_probing := false
 var _search_outer_information: Array = []
+## [member _resolution_sba_hold] as the outermost search found it; see
+## [method make_mark].
+var _search_outer_sba_hold := 0
 
 ## THE SEARCH JOURNAL, or null — and null is the default, so a normal duel
 ## pays one reference comparison per instrumented write and nothing else.
@@ -605,6 +646,7 @@ const RESOLUTION_TABLES: Array[StringName] = [
 	&"_end_step_doom", &"_end_step_doom_if_attacked",
 	&"_end_step_doom_unless_attacked", &"_end_step_doom_sacrifice",
 	&"_end_step_tokens", &"_end_of_combat_doom", &"_control_until_eot", &"_control_layers",
+	&"_end_step_doom_stamps", &"_end_of_combat_doom_stamps",
 	&"_end_of_combat_actions", &"_end_step_actions", &"_cleanup_actions", &"_next_main_actions",
 	&"life_on_damage_watchers", &"death_watchers", &"damage_watchers",
 	&"extra_turns", &"combat_damage_prevented", &"no_attacks_this_turn",
@@ -747,6 +789,13 @@ func make_mark() -> int:
 		# lines, state signals and reveals reached the duel screen.
 		_search_outer_probing = _probing
 		_search_outer_information = _probe_information
+		# The same for the resolution's state-based-action hold (see
+		# [member _resolution_sba_hold]): a search opened by an agent
+		# answering mid-resolution simulates OTHER moves, whose own
+		# resolutions must sweep as they end — so it starts from zero and
+		# [method end_search] gives the outer resolution its hold back.
+		_search_outer_sba_hold = _resolution_sba_hold
+		_resolution_sba_hold = 0
 	var m := undo_log.mark(self)
 	# A search node IS a probe: its log lines never happened, its signals
 	# must not reach a UI, and its questions must not hold a resolution
@@ -796,6 +845,8 @@ func end_search() -> void:
 	_probe_information = _search_outer_information
 	_search_outer_probing = false
 	_search_outer_information = []
+	_resolution_sba_hold = _search_outer_sba_hold
+	_search_outer_sba_hold = 0
 
 ## How many of the current item's questions the player had answered the
 ## last time the engine held it open, -1 before the first hold. If a probe
@@ -936,6 +987,19 @@ var _announced_tops: Array[int] = [-1, -1]
 var _defer_state_based_actions := false
 ## How many nested [method begin_simultaneous] calls are open.
 var _defer_depth := 0
+## How many stack objects are mid-resolution ([method _run_item]). While it
+## is above 0 state-based actions wait (CR 704.3: they are checked only when
+## a player would receive priority, never inside one resolution), so a
+## Psionic Blast lethal to both duelists is a draw (CR 104.4a) rather than a
+## win for the seat hit second (bug pass 2026-10-03). Kept apart from
+## [member _defer_depth] on purpose: [method begin_simultaneous] also takes
+## the departure snapshot, and a whole resolution must not freeze that at
+## its first line — a sweeper inside it snapshots its own board.
+var _resolution_sba_hold := 0
+## Seats that tried to draw from an empty library and have not yet been
+## judged for it — the state-based loss of CR 704.5b, collected with life
+## and poison in ONE simultaneous pass (bug pass 2026-10-03).
+var _empty_library_draws: Array[int] = []
 ## Who had FIRST STRIKE when the first combat damage step began (CR 510.5).
 ## Frozen there and read again by the normal damage step, so a creature
 ## that gains or loses first strike in the priority window between the two
@@ -1575,6 +1639,12 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 	# question, which is the one hold this method can raise itself.
 	if awaiting_choice != null:
 		return "waiting for a choice to be made"
+	# Nor while the damage step waits for a division: nobody has priority
+	# and no cost is being paid (CR 605.3a), and an Ashnod's Altar that ate
+	# an attacker here left its planned damage standing (bug pass
+	# 2026-10-03).
+	if awaiting_damage_assignment:
+		return "waiting for combat damage to be assigned"
 	# LIVE mana abilities: a land turned into a Swamp taps for {B}.
 	if inst.cur_mana_abilities.is_empty():
 		return "%s has no mana ability" % inst.data.card_name
@@ -2239,15 +2309,6 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		mode = clampi(mode, 0, inst.data.modes.size() - 1)
 	else:
 		mode = 0
-	# The chosen X is stamped on the card now that nothing above can refuse
-	# the cast (CR 601.2h — a refused announcement leaves everything as it
-	# was). Its targets were validated at exactly this X a moment ago, by
-	# the PROPOSAL the checks ran under; the stamp is what carries the same
-	# answer forward to the rolls below, to resolution, and to a permanent
-	# that "enters with X counters" (Frankenstein's Monster, Rock Hydra).
-	if inst.data.cost.has_x:
-		_rec(inst, &"memory")
-		inst.memory["x_value"] = x_value
 	var plan: TargetPlan = checks["plan"]
 	var extra_bodies: Array[CardInstance] = checks["bodies"]
 	var extra_sacrifice: CardInstance = null
@@ -2284,6 +2345,19 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		else:
 			return "not enough mana for %s (%s)" % [
 				inst.data.card_name, inst.data.cost.text]
+	# The chosen X is stamped on the card now that nothing can refuse the
+	# cast (CR 601.2h — a refused announcement leaves everything as it
+	# was). It used to be stamped above the mana check, so a Rock Hydra
+	# refused at X=5 kept the 5 in hand and a later Eureka entered it with
+	# five counters (CR 107.3b; bug pass 2026-10-03) — a held cast that is
+	# then withdrawn forgets it in [method cancel_choice]. Its targets were
+	# validated at exactly this X a moment ago, by the PROPOSAL the checks
+	# ran under; the stamp is what carries the same answer forward to the
+	# rolls below, to resolution, and to a permanent that "enters with X
+	# counters" (Frankenstein's Monster, Rock Hydra).
+	if inst.data.cost.has_x:
+		_rec(inst, &"memory")
+		inst.memory["x_value"] = x_value
 	# THE COST IS PAYABLE — from here nothing can refuse, so this is where
 	# the seat is asked which body the additional cost eats. Asking earlier
 	# filed a PlayerChoice (and a "(decided for …)" log line) for a cast the
@@ -2387,8 +2461,9 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		item.targets.append(t)
 	item.target_groups = plan.groups
 	item.x_value = x_value
-	# (memory["x_value"] was stamped above, before target validation — the
-	# permanent this becomes reads it for "enters with X counters".)
+	# (memory["x_value"] was stamped above, once the cost was known to be
+	# payable — the permanent this becomes reads it for "enters with X
+	# counters".)
 	# SIMPLIFIED: the description names the caster and the card and no
 	# more. s30's is `"<controller> casts <name>[ for N][ targeting A,
 	# B]"`, and this string is the game LOG's sentence as well as the
@@ -2736,6 +2811,20 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		var pick := _ask_cost_card(pid, inst, filtered_discards, discard_q.prompt)
 		filtered_discards.erase(pick)
 		discard_picks.append(pick)
+	# "Discard a card:" with NO filter (Land's Edge) is the player's choice
+	# as much as the filtered one above, so it holds the activation open the
+	# same way (bug pass 2026-10-03 — it went straight to the heuristic and
+	# the ledger). The answer is parked here and served by the
+	# _ask_cost_discard at payment below, which keeps its place after any
+	# random discard.
+	if ability.discard_cost > 0 and not ability.discard_filter.is_valid():
+		var hand_q := _cost_question(pid, inst, PlayerChoice.Kind.DISCARD,
+			"Select card to discard.")
+		hand_q.count = ability.discard_cost
+		hand_q.candidates = players[pid].hand.duplicate()
+		if _hold_cost_choice(hand_q, {"kind": "activate", "pid": pid, "inst": inst,
+				"index": index, "targets": targets, "x": x_value}):
+			return ""
 	var stored_mana := {}
 	if ability.capture_mana_spent:
 		# These abilities have only generic mana costs. Taxes/discounts
@@ -2991,10 +3080,18 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 		if why != "":
 			return "%s can't attack: %s" % [inst.data.card_name, why]
 		declared.append(inst)
+	# A creature is in at most ONE band, once (CR 702.22c). [[a, a]] read
+	# as a band of two and two bands sharing a member were both accepted,
+	# and the member then dealt its damage twice — reachable from a LAN
+	# client's attack_bands (bug pass 2026-10-03).
+	var banded := {}
 	for band in band_list:
 		for id in band:
 			if not attacker_ids.has(id):
 				return "band member #%s is not among the declared attackers" % str(id)
+			if banded.has(int(id)):
+				return "a creature can be in only one band"
+			banded[int(id)] = true
 		var band_why := CombatState.band_illegality(self, band)
 		if band_why != "":
 			return band_why
@@ -3080,7 +3177,7 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 		_rec(inst, &"memory")
 		inst.memory["attack_turn_" + str(pid)] = turn_number
 		if not inst.has_keyword(Mtg.Keyword.VIGILANCE) and not inst.tapped \
-				and not attacks_without_tapping.has(pid):
+				and not _attacks_without_tapping_now(pid):
 			if undo_log != null: _rec(inst, &"tapped")
 			inst.tapped = true   # attacking taps (CR 508.1f)
 			newly_tapped.append(inst)
@@ -3216,8 +3313,15 @@ func declare_blockers(chooser: int, block_map: Dictionary) -> String:
 				blocker.data.card_name, allowance]
 		for attacker_id in against:
 			var attacker := find_instance(int(attacker_id))
-			if attacker == null or not combat.attackers.has(attacker.id):
+			if attacker == null:
 				return "#%s is not an attacking creature" % str(attacker_id)
+			if not combat.attackers.has(attacker.id):
+				# A dead attacker has been dropped from combat as this step
+				# began (see _enter_step); say why, by name.
+				if attacker.zone != Mtg.Zone.BATTLEFIELD:
+					return "%s is no longer on the battlefield" % attacker.data.card_name
+				return "%s is not an attacking creature" % (
+					"a face-down creature" if attacker.face_down else attacker.data.card_name)
 			var why := CombatState.block_illegality(self, blocker, attacker, pid)
 			if why != "":
 				return "%s can't block %s: %s" % [
@@ -4538,8 +4642,9 @@ func _mark_creature_damage(packet: DamagePacket, inst: CardInstance) -> int:
 	# "Whenever that creature is dealt damage this turn, you gain that
 	# much life" (Glyph of Life) — a floating watch, not a permanent's
 	# trigger, so it survives the Glyph itself being long gone.
-	for watch in life_on_damage_watchers:
-		if int(watch["instance_id"]) != inst.id:
+	for watch in life_on_damage_watchers.duplicate():
+		if int(watch["instance_id"]) != inst.id \
+				or int(watch.get("stamp", inst.layer_timestamp)) != inst.layer_timestamp:
 			continue
 		if bool(watch["attackers_only"]) and not combat.attackers.has(source.id):
 			continue
@@ -5233,7 +5338,17 @@ func draw_cards(pid: int, count: int) -> void:
 			continue
 		if p.library.is_empty():
 			log_line("%s tries to draw from an empty library" % p.player_name)
-			_lose(pid, "drew from an empty library")
+			# A STATE-BASED loss (CR 704.5b), not an immediate one: noted
+			# here and judged with life and poison in the same pass, so a
+			# Wheel of Fortune that empties BOTH libraries is a draw (CR
+			# 104.4a) rather than a win for whichever seat drew second (bug
+			# pass 2026-10-03). The check below acts at once outside a
+			# resolution (the draw step) and at its end inside one.
+			if not _empty_library_draws.has(pid):
+				_rec(self, &"_empty_library_draws")
+				_empty_library_draws = _empty_library_draws.duplicate()
+				_empty_library_draws.append(pid)
+			check_state_based_actions()
 			return
 		if undo_log != null:
 			_rec(p, &"library")
@@ -5412,8 +5527,12 @@ func put_from_hand_on_top_of_library(inst: CardInstance) -> void:
 	p.hand.erase(inst)
 	inst.zone = Mtg.Zone.LIBRARY
 	p.library.append(inst)
+	# Hand to library: hidden zone to hidden zone, so the name is the
+	# owner's alone (bug pass 2026-10-03 — Sylvan Library's put-backs
+	# were read out to the whole table).
 	log_line("%s puts %s on top of their library" % [
-		p.player_name, inst.data.card_name])
+		p.player_name, inst.data.card_name], null, "", p.id,
+		"%s puts a card on top of their library" % p.player_name)
 	_emit_state()
 
 
@@ -5693,8 +5812,11 @@ func exile_permanent(inst: CardInstance) -> void:
 ## Condemn a creature to destruction at the end of this combat
 ## (Cockatrice's gaze). Duplicates are harmless (destroy checks the zone).
 func doom_at_end_of_combat(inst: CardInstance) -> void:
-	if not _end_of_combat_doom.has(inst.id):
-		_end_of_combat_doom.append(inst.id)
+	if not _end_of_combat_doom.has(inst.id) \
+			or int(_end_of_combat_doom_stamps.get(inst.id, -1)) != inst.layer_timestamp:
+		if not _end_of_combat_doom.has(inst.id):
+			_end_of_combat_doom.append(inst.id)
+		_end_of_combat_doom_stamps[inst.id] = inst.layer_timestamp
 		log_line("%s will be destroyed at end of combat" % inst.data.card_name)
 
 
@@ -5735,6 +5857,8 @@ func watch_damage_for_life(inst: CardInstance, controller: int,
 	life_on_damage_watchers.append({
 		"instance_id": inst.id, "controller": controller,
 		"attackers_only": attackers_only,
+		# CR 400.7: this object, not the next one to wear its id.
+		"stamp": inst.layer_timestamp,
 	})
 
 
@@ -5848,9 +5972,19 @@ func exile_from_hand(inst: CardInstance, face_down := false, viewer := -1) -> vo
 
 ## Put an AURA from anywhere onto the battlefield attached to
 ## [param host] under [param controller]'s control (Takklemaggot's return).
+## A host in a GRAVEYARD is for the Auras that enchant a card there, put
+## onto the battlefield without being cast (Eureka, CR 303.4f; bug pass
+## 2026-10-03): Animate Dead raises the card first, exactly as its resolving
+## spell does; Dance of the Dead enters attached to the card and its own
+## enters trigger raises it.
 func attach_aura_from_anywhere(aura: CardInstance, host: CardInstance,
 		controller: int) -> void:
-	if aura == null or host == null or host.zone != Mtg.Zone.BATTLEFIELD:
+	if aura == null or host == null:
+		return
+	if host.zone == Mtg.Zone.GRAVEYARD and aura.data.aura_reanimates:
+		reanimate(host, controller)
+	var graveyard_entry := host.zone == Mtg.Zone.GRAVEYARD and aura.data.aura_graveyard_entry
+	if host.zone != Mtg.Zone.BATTLEFIELD and not graveyard_entry:
 		return
 	_remove_from_zone(aura)
 	if not _put_on_battlefield(aura, controller, host):
@@ -5993,7 +6127,12 @@ func top_of_library_to_hand(pid: int) -> CardInstance:
 	p.library.pop_back()
 	inst.zone = Mtg.Zone.HAND
 	p.hand.append(inst)
-	log_line("%s puts %s into their hand" % [p.player_name, inst.data.card_name])
+	# Library to hand. Every caller that REVEALED the card (Petra Sphinx,
+	# Demonic Consultation) has logged it already; the others (look at the
+	# top cards, keep one) must not name it to the table.
+	log_line("%s puts %s into their hand" % [p.player_name, inst.data.card_name],
+		null, "", p.id,
+		"%s puts the top card of their library into their hand" % p.player_name)
 	_emit_state()
 	return inst
 
@@ -6109,6 +6248,27 @@ func turn_face_up(inst: CardInstance) -> void:
 # CardInstance.printed_data restores it the moment it leaves the
 # battlefield (CR 707.2).
 
+## The COPIABLE VALUES of [param inst] (CR 707.2) — the definition a Clone
+## or a Vesuvan Doppelganger adopts when it copies it. Its own definition,
+## unless it is FACE DOWN: then it is a 2/2 creature with no name, no mana
+## cost, no colour, no subtypes and no abilities (CR 707.2 / 708.2), and the
+## card underneath is hidden information no copy may read (CONTRIBUTING.md
+## rule 8). Until the bug pass of 2026-10-03 a Clone of a masked Shivan
+## Dragon became a 5/5 flier and the log announced the Dragon's name.
+func copiable_data(inst: CardInstance) -> CardData:
+	if inst == null:
+		return null
+	if inst.face_down:
+		return face_down_copiable_data()
+	return inst.data
+
+
+## A fresh face-down definition (CR 708.2) — built per call, never cached:
+## no static may hold a CardData (CONTRIBUTING.md, run_tests.sh notes).
+static func face_down_copiable_data() -> CardData:
+	return CardData.new("", "", Mtg.CardType.CREATURE).pt(2, 2)
+
+
 ## Make [param inst] a copy of [param source_data] (Clone, Copy Artifact,
 ## Vesuvan Doppelganger's upkeep). [param extra_types] is OR'd on top for
 ## "except it's an enchantment in addition to its other types" (Copy
@@ -6127,8 +6287,11 @@ func become_copy(inst: CardInstance, source_data: CardData,
 	inst.added_types |= extra_types
 	if keep_own_colors:
 		inst.color_override = own_colors
+	# A nameless definition is what copying a face-down creature adopts
+	# (see [method copiable_data]); the line says that and no more.
 	log_line("%s becomes a copy of %s" % [
-		inst.printed_data.card_name, source_data.card_name])
+		inst.printed_data.card_name,
+		source_data.card_name if source_data.card_name != "" else "a face-down creature"])
 	# The trigger/static/cost-modifier/SBA indexes are derived from
 	# `data`, so a copy made while the battlefield is otherwise unchanged
 	# (Vesuvan Doppelganger's upkeep shift) has to mark them stale — else
@@ -6309,6 +6472,12 @@ func copy_spell_on_stack(spell: CardInstance, controller: int,
 		made.target_groups = groups
 	made.description = "%s copies %s" % [
 		players[controller].player_name, spell.data.card_name]
+	# A stack id of its own, as every other stack object gets (bug pass
+	# 2026-10-03: every copy used to be id 0, so a forecast's "was this
+	# here already?" could not tell two of them, or a copy and the default,
+	# apart). _rec_stack_push above journaled the counter.
+	made.id = _next_stack_id
+	_next_stack_id += 1
 	stack.append(made)
 	log_line(made.description)
 	_emit_state()
@@ -6726,8 +6895,11 @@ func pick_from_library(pid: int, filter: Callable, prompt: String) -> CardInstan
 		_emit_state()
 		return null
 	p.library.erase(chosen)
+	# Private: the caller decides where it goes next, and that move says
+	# what the table may learn (bug pass 2026-10-03).
 	log_line("%s searches their library and finds %s" % [
-		p.player_name, chosen.data.card_name])
+		p.player_name, chosen.data.card_name], null, "", pid,
+		"%s searches their library and finds a card" % p.player_name)
 	_shuffle(p.library)
 	_emit_state()
 	return chosen
@@ -6819,8 +6991,13 @@ func search_library(pid: int, filter: Callable, prompt: String,
 			reveal_information(-1, reveal_title, [chosen.data.card_name])
 		_rec_move(chosen, pid, Mtg.Zone.HAND)
 		p.library.erase(chosen)
+		# A private search (Demonic Tutor) names its card to its searcher
+		# only; a revealed one, or one that goes onto the battlefield face
+		# up, is public (bug pass 2026-10-03).
+		var public_find := "" if not reveal_title.is_empty() or to_battlefield \
+			else "%s searches their library and finds a card" % p.player_name
 		log_line("%s searches their library and finds %s" % [
-			p.player_name, chosen.data.card_name])
+			p.player_name, chosen.data.card_name], null, "", pid, public_find)
 		if to_battlefield:
 			_put_on_battlefield(chosen, pid)
 		else:
@@ -6894,8 +7071,11 @@ func _discard_to_library_instead(pid: int, inst: CardInstance,
 	p.hand.erase(inst)
 	inst.zone = Mtg.Zone.LIBRARY
 	p.library.append(inst)
+	# Library of Leng: the card goes from the hand to the top of the
+	# library — both hidden — so only its owner hears its name.
 	log_line("%s discards %s to the top of their library" % [
-		p.player_name, inst.data.card_name])
+		p.player_name, inst.data.card_name], null, "", pid,
+		"%s discards a card to the top of their library" % p.player_name)
 	return true
 
 
@@ -7413,6 +7593,20 @@ func _resolve_top() -> void:
 ## the bookkeeping around it. Split out of [method _resolve_top] because the
 ## pre-flight probe runs exactly this and nothing else.
 func _run_item(item: StackItem) -> void:
+	# ONE RESOLUTION, ONE STATE-BASED CHECK (CR 704.3, bug pass 2026-10-03):
+	# nothing is swept until the whole item has finished, so two lethal
+	# blows in one resolution (Psionic Blast, Orcish Artillery, Fire and
+	# Brimstone, Mana Clash...) land together and both seats at 0 is a draw
+	# (CR 104.4a). The check runs here as well as in _resolve_top so the
+	# pre-flight probe, which runs only this, sees the same fallout.
+	_resolution_sba_hold += 1
+	_run_item_body(item)
+	_resolution_sba_hold = maxi(_resolution_sba_hold - 1, 0)
+	if _resolution_sba_hold == 0:
+		check_state_based_actions()
+
+
+func _run_item_body(item: StackItem) -> void:
 	match item.kind:
 		Mtg.StackKind.TRIGGER:
 			# CR 608.2b — a targeted trigger whose target has become
@@ -7600,6 +7794,11 @@ func cancel_choice() -> String:
 			or not (kind == "cast" or kind == "activate" or kind == "mana"):
 		return "that question must be answered"
 	awaiting_choice = null
+	# A withdrawn CAST was stamped with its X before the question was put
+	# (see cast_spell); the card is back to being a card in hand (CR 107.3b).
+	var held_card: CardInstance = _pending_action.get("inst") as CardInstance
+	if kind == "cast" and held_card != null and held_card.zone != Mtg.Zone.STACK:
+		_forget_x(held_card)
 	_pending_action = {}
 	_cost_answers = 0
 	_cost_values.clear()
@@ -7947,7 +8146,14 @@ func target_label(ref: TargetRef) -> String:
 	if ref.is_ability:
 		return "ability #%d" % ref.ability_id
 	var inst := find_instance(ref.instance_id)
-	return inst.data.card_name if inst != null else str(ref)
+	if inst == null:
+		return str(ref)
+	# A face-down permanent has no name (CR 708.2): the label is read out on
+	# the stack and in the log to both seats (bug pass 2026-10-03 — "(targeting
+	# Shivan Dragon)" named the card under an Illusionary Mask).
+	if inst.face_down:
+		return "a face-down creature"
+	return inst.data.card_name
 
 
 ## Re-issue the action a cost question was held open on. Nothing had been
@@ -7983,7 +8189,14 @@ func _replay_cost_action(action: Dictionary) -> String:
 			# Vault): re-run the asking with the answer in hand. "Play"
 			# goes on into the untap step, which may hold on a question
 			# of its own; "skip" has already entered the next turn.
-			if _begin_turn() and _untap_step():
+			if not _begin_turn():
+				return ""
+			# What _enter_step does between the two (bug pass 2026-10-03:
+			# the replay skipped it, so "until your next untap step"
+			# effects outlived a human's "Play this turn." by a turn).
+			continuous.expire_untap_of(active_player)
+			recalculate()
+			if _untap_step():
 				_advance_step()
 			return ""
 		"trigger_target":
@@ -8071,7 +8284,9 @@ func _all_targets_illegal(item: StackItem) -> bool:
 			continue
 		targeting = true
 		for ref in group:
-			if effect.target_spec.is_legal(self, ref, item.card, earlier):
+			# Judged from the ABILITY's controller, not its source's
+			# current one (CR 113.7a): a sacrificed source has gone home.
+			if effect.target_spec.is_legal(self, ref, item.card, earlier, item.controller):
 				return false
 		earlier.append_array(group)
 	return targeting
@@ -8187,7 +8402,7 @@ func _run_effects_impl(item: StackItem) -> void:
 			# about the object that was named.
 			var still_legal: Array = []
 			for ref in group:
-				if effect.target_spec.is_legal(self, ref, item.card, earlier):
+				if effect.target_spec.is_legal(self, ref, item.card, earlier, item.controller):
 					still_legal.append(ref)
 			earlier.append_array(group)
 			if still_legal.size() < group.size():
@@ -8406,10 +8621,10 @@ func _apply_enters_as_copy(inst: CardInstance, controller: int) -> void:
 		return
 	if not candidates.has(chosen):
 		chosen = candidates[0]
-	var adopted: CardData = chosen.data
+	var adopted: CardData = copiable_data(chosen)
 	var transform: Callable = spec.get("transform", Callable())
 	if transform.is_valid():
-		adopted = transform.call(chosen.data)
+		adopted = transform.call(adopted)
 	become_copy(inst, adopted, int(spec.get("extra_types", 0)),
 		bool(spec.get("keep_own_colors", false)))
 
@@ -8514,7 +8729,8 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 		# (Reincarnation) — they outlive whatever placed them, and each
 		# fires once.
 		for i in range(death_watchers.size() - 1, -1, -1):
-			if int(death_watchers[i]["instance_id"]) != inst.id:
+			if int(death_watchers[i]["instance_id"]) != inst.id \
+					or int(death_watchers[i].get("stamp", inst.layer_timestamp)) != inst.layer_timestamp:
 				continue
 			var watch: Dictionary = death_watchers[i]
 			death_watchers.remove_at(i)
@@ -9198,7 +9414,7 @@ func _death_listener_snapshot() -> Array[Dictionary]:
 
 
 func check_state_based_actions() -> void:
-	if game_over or _defer_state_based_actions:
+	if game_over or _defer_state_based_actions or _resolution_sba_hold > 0:
 		return
 	var acted := true
 	while acted:
@@ -9225,6 +9441,10 @@ func check_state_based_actions() -> void:
 			elif p.poison >= 10:
 				losers.append(p.id)
 				reasons.append("ten poison counters")
+			# CR 704.5b: drew from an empty library since the last check.
+			elif _empty_library_draws.has(p.id):
+				losers.append(p.id)
+				reasons.append("drew from an empty library")
 		if losers.size() >= players.size():
 			draw_game("both duelists lost at the same time")
 			return
@@ -9269,7 +9489,10 @@ func check_state_based_actions() -> void:
 			# NEWEST one is buried (the era's "first in time, first in
 			# right" rule — not the modern controller-chooses 704.5j).
 			# Timestamp = position in _battlefield_order.
-			if (inst.data.supertypes & Mtg.Supertype.LEGENDARY) != 0:
+			# LIVE supertypes, and never a face-down permanent: it has no
+			# name and no supertypes (CR 708.2; bug pass 2026-10-03 — a
+			# masked second Sir Shandlar used to be buried by name).
+			if (inst.cur_supertypes & Mtg.Supertype.LEGENDARY) != 0 and not inst.face_down:
 				var doomed := _newest_duplicate_legend(inst.data.card_name)
 				if doomed != null:
 					log_line("%s is buried — the legend rule (a %s already in play)" % [
@@ -9277,9 +9500,15 @@ func check_state_based_actions() -> void:
 					_move_to_graveyard(doomed, true)
 					acted = true
 					break
+			# The three printed "sacrifice" clauses below are ABILITIES
+			# (state triggers): a face-down permanent (CR 708.2) or one that
+			# lost all its abilities obeys none of them (bug pass
+			# 2026-10-03 — a masked Sea Serpent was sacrificed for want of
+			# an Island).
+			var printed_clauses := not inst.cur_abilities_silenced
 			# "When you control a Dwarf, sacrifice this" (Goblins of the
 			# Flarg) — the mirror of the clause below.
-			if inst.data.sacrifice_if_you_control_subtype != "":
+			if printed_clauses and inst.data.sacrifice_if_you_control_subtype != "":
 				var hated := inst.data.sacrifice_if_you_control_subtype
 				for other in players[inst.controller_id].battlefield:
 					if other != inst and other.is_creature() and other.has_subtype(hated):
@@ -9294,7 +9523,7 @@ func check_state_based_actions() -> void:
 			# Dandan, Merchant Ship). Printed as a state trigger; checked
 			# here because a state-based check fires at exactly the same
 			# moments and needs no stack.
-			if inst.data.sacrifice_if_no_land_type != "":
+			if printed_clauses and inst.data.sacrifice_if_no_land_type != "":
 				var kind := inst.data.sacrifice_if_no_land_type
 				var has_one := false
 				for land in players[inst.controller_id].battlefield:
@@ -9310,7 +9539,7 @@ func check_state_based_actions() -> void:
 			# The general "When <condition>, sacrifice this permanent"
 			# (Jihad). Same state-trigger-as-SBA treatment as the clause
 			# above; the predicate lives on the card.
-			if inst.data.sacrifice_condition.is_valid() \
+			if printed_clauses and inst.data.sacrifice_condition.is_valid() \
 					and inst.data.sacrifice_condition.call(self, inst):
 				log_line("%s is sacrificed — its condition is no longer met" % \
 					inst.data.card_name)
@@ -9502,6 +9731,15 @@ static func _untap_kinds(inst: CardInstance) -> Array[String]:
 ## apply (CR 701.17).
 func doom_at_next_end_step(inst: CardInstance, only_if_attacked := false,
 		only_if_it_did_not_attack := false, as_sacrifice := false) -> void:
+	if _end_step_doom.has(inst.id) \
+			and int(_end_step_doom_stamps.get(inst.id, inst.layer_timestamp)) != inst.layer_timestamp:
+		# A stale entry for an EARLIER object with this id (CR 400.7): it
+		# condemns nothing any more, so this doom starts from scratch.
+		_end_step_doom.erase(inst.id)
+		_end_step_doom_if_attacked.erase(inst.id)
+		_end_step_doom_unless_attacked.erase(inst.id)
+		_end_step_doom_sacrifice.erase(inst.id)
+	_end_step_doom_stamps[inst.id] = inst.layer_timestamp
 	if _end_step_doom.has(inst.id):
 		if not only_if_attacked and not only_if_it_did_not_attack:
 			_end_step_doom_if_attacked.erase(inst.id)   # unconditional wins
@@ -9527,7 +9765,8 @@ func doom_at_next_end_step_if_it_did_not_attack(inst: CardInstance) -> void:
 ## Whether [param inst] is already on the end-step doom list (any of its
 ## three shapes). The AI asks before it dooms a body a second time.
 func is_doomed_at_end_step(inst: CardInstance) -> bool:
-	return _end_step_doom.has(inst.id)
+	return _end_step_doom.has(inst.id) \
+		and int(_end_step_doom_stamps.get(inst.id, inst.layer_timestamp)) == inst.layer_timestamp
 
 
 ## Legend-rule helper: if 2+ battlefield permanents share [param legend_name],
@@ -9537,7 +9776,10 @@ func _newest_duplicate_legend(legend_name: String) -> CardInstance:
 	var newest: CardInstance = null
 	for id in _battlefield_order:   # oldest → newest
 		var inst: CardInstance = _instances[id]
-		if inst.zone == Mtg.Zone.BATTLEFIELD and inst.data.card_name == legend_name:
+		# A face-down permanent has no name and is no legend (CR 708.2).
+		if inst.zone == Mtg.Zone.BATTLEFIELD and not inst.face_down \
+				and (inst.cur_supertypes & Mtg.Supertype.LEGENDARY) != 0 \
+				and inst.data.card_name == legend_name:
 			seen += 1
 			newest = inst
 	return newest if seen >= 2 else null
@@ -9551,10 +9793,29 @@ func draw_game(reason: String) -> void:
 	game_over = true
 	is_draw = true
 	winner = -1
+	_release_pending_actions()
 	log_line("The game is a draw: %s" % reason, null, "end")
 	if not _probing:
 		game_ended.emit(-1)
 	_emit_state()
+
+
+## The game has ended: let go of the delayed-ACTION pools. Each holds
+## Callables a card handed the game, and nothing runs them once the duel is
+## over (they fire only at turn-structure moments). A card's lambda that
+## captured the game strongly (Rakalite's did until the bug pass of
+## 2026-10-03) is a reference cycle through these arrays, and a duel that
+## ended with it pending leaked the whole game. Recorded, so a search that
+## explored a game-ending line puts them back. Deliberately NOT here:
+## [member delayed_triggers] and [member death_watchers], which are read by
+## index in loops a game-ending effect can be inside of — none of their
+## users captures the game.
+func _release_pending_actions() -> void:
+	for field in [&"_end_step_actions", &"_end_of_combat_actions",
+			&"_cleanup_actions", &"_next_main_actions", &"damage_watchers",
+			&"life_on_damage_watchers", &"_one_shot_draws"]:
+		_rec(self, field)
+		(get(field) as Array).clear()
 
 
 ## PUBLIC loss: a card says "you lose the game" (Lich). Same path as every
@@ -9592,11 +9853,15 @@ func concede(pid: int) -> String:
 
 
 func _lose(pid: int, reason: String) -> void:
-	if players[pid].has_lost:
+	# A FINISHED GAME STAYS FINISHED (bug pass 2026-10-03): a second loss —
+	# the other seat's, or anyone's after a draw — must not rewrite
+	# [member winner] or emit [signal game_ended] again.
+	if game_over or players[pid].has_lost:
 		return
 	players[pid].has_lost = true
 	game_over = true
 	winner = opponent_of(pid)
+	_release_pending_actions()
 	log_line("%s loses: %s. %s wins!" % [
 		players[pid].player_name, reason, players[winner].player_name],
 		null, "end", pid)
@@ -9674,20 +9939,24 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 	# permanents', after them: the order among one player's own triggers
 	# is that player's to choose (CR 603.3b), and this is the choice.
 	var seats: Array[int] = [active_player, opponent_of(active_player)]
+	# A SPELL hearing its own cast (Mana Vortex) listens with its
+	# controller's seat; a card that just LEFT the battlefield listens with
+	# the seat of the player who controlled it last (CR 603.3a/603.3b,
+	# 608.2h — its own controller_id has already gone home to the owner),
+	# after that seat's permanents. Until the bug pass of 2026-10-03 the
+	# departed card was always offered with the NON-ACTIVE seat, so the
+	# active player's dying Onulet went on above the opponent's Soul Net;
+	# the dies-trigger stacks the suite had pinned to that order were
+	# re-pinned to APNAP.
+	var departed_seat := -1
+	if also_listen != null and also_listen.zone != Mtg.Zone.BATTLEFIELD:
+		departed_seat = also_listen.controller_id if also_listen.zone == Mtg.Zone.STACK \
+			else int(data.get("from_controller", data.get("controller", also_listen.controller_id)))
 	for seat_index in seats.size():
 		var pid := seats[seat_index]
 		var listeners: Array[CardInstance] = players[pid].battlefield.duplicate()
-		if also_listen != null and not listeners.has(also_listen) \
-				and not players[seats[0]].battlefield.has(also_listen):
-			# A SPELL hearing its own cast (Mana Vortex) listens with its
-			# controller's seat, so APNAP holds for it; a card that just
-			# LEFT the battlefield is offered with the last seat, after
-			# every permanent — the order every dies-trigger stack in the
-			# suite is pinned to.
-			var seat_for_it: int = also_listen.controller_id \
-				if also_listen.zone == Mtg.Zone.STACK else seats[seats.size() - 1]
-			if pid == seat_for_it:
-				listeners.append(also_listen)
+		if departed_seat == pid and not listeners.has(also_listen):
+			listeners.append(also_listen)
 		for inst in listeners:
 			if inst.cur_abilities_silenced:
 				continue   # Titania's Song: it lost all its abilities
@@ -9703,7 +9972,10 @@ func dispatch_event(type: int, data: Dictionary, also_listen: CardInstance = nul
 					var item := StackItem.new()
 					item.kind = Mtg.StackKind.TRIGGER
 					item.card = inst
-					item.controller = inst.controller_id
+					# The departed card's trigger is its LAST controller's
+					# (CR 603.3a), the seat it was offered with above.
+					item.controller = pid if inst == also_listen and departed_seat >= 0 \
+						else inst.controller_id
 					item.trigger = trig
 					item.event = event
 					item.description = "%s — %s" % [inst.data.card_name, trig.text]
@@ -9913,8 +10185,11 @@ func _trigger_target_candidates(item: StackItem) -> Array[TargetRef]:
 	if trig.target_order.is_valid() and refs.size() > 1:
 		var order: Callable = trig.target_order
 		var source: CardInstance = item.card
+		var outer := _ranking_item
+		_ranking_item = item      # whose preference it is: controller_acting_for
 		refs.sort_custom(func(a: TargetRef, b: TargetRef) -> bool:
 			return bool(order.call(self, source, a, b)))
+		_ranking_item = outer
 	return refs
 
 
@@ -10112,7 +10387,8 @@ func _legal_trigger_targets(item: StackItem) -> Array[TargetRef]:
 	var spec := item.trigger.target_spec
 	if spec == null: return out
 	for ref in item.targets:
-		if not spec.is_legal(self, ref, item.card): continue
+		# The trigger's controller, not its departed source's (CR 603.3a).
+		if not spec.is_legal(self, ref, item.card, [], item.controller): continue
 		if item.trigger_target_incarnations.has(ref.instance_id):
 			var i := find_instance(ref.instance_id)
 			if i == null or _trigger_incarnation(i) != item.trigger_target_incarnations[ref.instance_id]: continue
@@ -10167,22 +10443,83 @@ func recalculate() -> void:
 ## player's name ("HAL 9000 plays Island") is that player's, and nothing
 ## else is — "HAL 9000's damage to Serra Angel is prevented" is about a
 ## card, not an act, and stays unattributed.
-func log_line(msg: String, about: CardInstance = null, kind := "", pid := -1) -> void:
+##
+## [param public_msg] makes the line PRIVATE to seat [param pid] (which the
+## caller must then name): [param msg] says what only that seat may know
+## ("P0 searches their library and finds Shivan Dragon") and
+## [param public_msg] what everyone else may ("P0 searches their library
+## and finds a card"). The engine's own log keeps [param msg] — the audit
+## trail, and a seed plus a log still reproduces the game — and the meta
+## carries both, so each reader shows a viewer the line that viewer may
+## see (CONTRIBUTING.md rule 8; bug pass 2026-10-03).
+func log_line(msg: String, about: CardInstance = null, kind := "", pid := -1,
+		public_msg := "") -> void:
 	if _probing:
 		return   # a probe is rewound; its log lines never happened
 	if pid < 0:
 		pid = _seat_of_sentence(msg)
+	var private_seat := pid if public_msg != "" else -1
+	# A FACE-DOWN PERMANENT HAS NO NAME (CR 708.2), and some 330 writers
+	# name the card they are about (counters, pumps, damage, regeneration,
+	# the cards' own lines). Rather than each of them asking, the line is
+	# read here: one that names a face-down permanent is private to that
+	# permanent's controller, and everyone else reads it with the name
+	# replaced (bug pass 2026-10-03). Both seats' secrets in one line: the
+	# private seat is FACE_DOWN_NOBODY, and every viewer reads the redaction.
+	if public_msg == "":
+		var redacted := _redact_face_down(msg)
+		if String(redacted["text"]) != msg:
+			public_msg = String(redacted["text"])
+			private_seat = int(redacted["seat"])
+	var private := public_msg != "" and private_seat != -1
+	var nameless := about != null and about.face_down
 	var meta := {
 		"turn": turn_number,
 		"step": current_step() if turn_number > 0 else -1,
 		"pid": pid,
 		"kind": kind,
-		"card": "" if about == null else about.data.card_name,
-		"colors": 0 if about == null else _log_ink(about),
+		# A private line names no card in its meta: `card` is read for
+		# lettering by viewers that may only see `public`. Nor does a line
+		# about a face-down permanent, whatever its prose says.
+		"card": "" if about == null or private or nameless else about.data.card_name,
+		"colors": 0 if about == null or private or nameless else _log_ink(about),
 	}
+	if private:
+		meta["private_to"] = private_seat
+		meta["public"] = public_msg
 	log_lines.append(msg)
 	log_meta.append(meta)
 	log_appended.emit(msg, meta)
+
+
+## What a face-down permanent is called where its name would be read out.
+const FACE_DOWN_NAME := "a face-down creature"
+## [member log_meta]'s `private_to` for a line that names BOTH seats'
+## face-down permanents: a secret of each, so no seat may read it whole.
+const FACE_DOWN_NOBODY := -2
+
+
+## [param msg] with the real name of every face-down permanent replaced by
+## [constant FACE_DOWN_NAME], and whose secret it was: {text, seat} — seat
+## -1 when nothing was named, the controller when one seat's were,
+## [constant FACE_DOWN_NOBODY] when both seats' were. A face-up permanent
+## that shares the name is redacted with it: the line cannot say which one
+## it meant without saying which one is hidden.
+func _redact_face_down(msg: String) -> Dictionary:
+	var text := msg
+	var seat := -1
+	for p in players:
+		for inst in p.battlefield:
+			if not inst.face_down:
+				continue
+			var real: String = inst.data.card_name
+			if real.is_empty() or not text.contains(real):
+				continue
+			text = text.replace(real, FACE_DOWN_NAME)
+			seat = inst.controller_id if seat in [-1, inst.controller_id] else FACE_DOWN_NOBODY
+	if text != msg and text.begins_with(FACE_DOWN_NAME):
+		text = text.left(1).to_upper() + text.substr(1)
+	return {"text": text, "seat": seat}
 
 
 ## The seat whose name opens [param msg], or -1. The longer name is tried
@@ -10308,6 +10645,27 @@ func current_resolution_controller() -> int:
 	return _resolving_controller
 
 
+## The seat [param source]'s ability is acting for: the controller of the
+## stack object being resolved when [param source] is its card, else
+## [param source]'s own controller. A sacrificed cost source has gone home
+## to its owner while the ability it paid for is still its activator's
+## (CR 113.7a) — what a card's targeting predicate reading "you control" /
+## "an opponent controls" must ask instead of `source.controller_id`
+## (Gauntlets of Chaos, docs/ROADMAP.md; bug pass 2026-10-03). The same
+## while a trigger's targets are RANKED for its controller: a stolen
+## Axelrod Gunnarson that died in the wave that triggered him is his
+## owner's again, and his "opponent first" preference must still be his
+## trigger controller's (`_trigger_target_candidates`).
+func controller_acting_for(source: CardInstance) -> int:
+	if source == null:
+		return -1
+	if _resolving_item != null and _resolving_item.card == source:
+		return _resolving_item.controller
+	if _ranking_item != null and _ranking_item.card == source:
+		return _ranking_item.controller
+	return source.controller_id
+
+
 ## WHAT THE COST OF THE ABILITY BEING RESOLVED ATE — the key an effect wants
 ## out of [member StackItem.cost_paid], or [param fallback] when this
 ## resolution paid no such cost.
@@ -10366,8 +10724,19 @@ func record_choice(choice: PlayerChoice, seat_wanted_it := false) -> void:
 		# SIMPLIFIED: the engine cannot pause a resolution to ask, so it
 		# says out loud what it decided instead. Ledgered in
 		# docs/ROADMAP.md ("mid-resolution choices").
+		# A card picked out of a HIDDEN place (a library search, a hand,
+		# a face-down permanent) is the seat's own business: the line is
+		# private to it and the table hears only the question (bug pass
+		# 2026-10-03).
+		var picked: CardInstance = choice.answer as CardInstance \
+			if choice.kind == PlayerChoice.Kind.CARD and choice.answer is CardInstance else null
+		var hidden := picked != null and (picked.face_down
+			or picked.zone == Mtg.Zone.LIBRARY or picked.zone == Mtg.Zone.HAND)
 		log_line("(decided for %s) %s" % [
-			players[choice.pid].player_name, choice.describe()])
+			players[choice.pid].player_name, choice.describe()], null, "",
+			choice.pid if hidden else -1,
+			"(decided for %s) %s — a card" % [players[choice.pid].player_name,
+				choice.prompt] if hidden else "")
 	choice_requested.emit(choice)
 
 
@@ -10426,10 +10795,14 @@ func _open_priority() -> void:
 	_emit_state()
 
 
-## Advance to the next step; runs turn-based actions and grants priority
-## (or auto-advances for steps that have none — untap, cleanup).
-func _advance_step() -> void:
-	_rec_turn()   # the search journal, if one is running (see TURN_FIELDS)
+## What happens as ANY step is left, the last step of the turn included:
+## the pool empties (and burns), and the 1997 phase-end life check. Shared
+## by [method _advance_step] and [method _end_turn] — the CLEANUP step
+## passes the turn without going through _advance_step, so under the
+## Fifth-Edition preset (whose END -> CLEANUP boundary is inside one phase)
+## mana floated in the end step survived into the next turn unburned and a
+## player below 0 lived to heal in the next upkeep (bug pass 2026-10-03).
+func _close_step_boundary() -> void:
 	# Mana pools empty at the end of each STEP (CR 500.4) — or, under the
 	# 1997 ruleset, at the end of each PHASE, combat counting as one phase
 	# that empties only when it is over (RulesOptions.pool_empties_on_attack;
@@ -10456,6 +10829,15 @@ func _advance_step() -> void:
 			# presentation signals during speculative search as usual.
 			dispatch_event(Mtg.EventType.MANA_BURN, burn)
 			dispatch_event(Mtg.EventType.LIFE_LOST, burn)
+		# A lethal burn is a state-based loss NOW (CR 514.3a performs them
+		# in cleanup), not at the next turn's first priority (bug pass
+		# 2026-10-03). Both seats have burned already, so this is one
+		# simultaneous judgement. A no-op under the 1997 life fork, whose
+		# check is the one just below.
+		if not burns.is_empty():
+			check_state_based_actions()
+			if game_over:
+				return
 	# The 1997 ruleset checks for a dead player at PHASE boundaries; the
 	# modern one has already done it continuously as a state-based action.
 	#
@@ -10470,8 +10852,15 @@ func _advance_step() -> void:
 	# the two together were wrong, which is why no single-fork test saw it.
 	if rules.life_checked_at_phase_end and _phase_ends_now():
 		_check_lethal_life()
-		if game_over:
-			return
+
+
+## Advance to the next step; runs turn-based actions and grants priority
+## (or auto-advances for steps that have none — untap, cleanup).
+func _advance_step() -> void:
+	_rec_turn()   # the search journal, if one is running (see TURN_FIELDS)
+	_close_step_boundary()
+	if game_over:
+		return
 	# "Until the end of your next upkeep" (Halfdane) ends as the upkeep
 	# step ends (CR 611.2b) — the effects created before this turn only.
 	if _turn_steps[_step_index] == Mtg.Step.UPKEEP \
@@ -10911,6 +11300,16 @@ func _enter_step(index: int) -> void:
 			awaiting_attackers = true
 			_emit_state()
 		Mtg.Step.DECLARE_BLOCKERS:
+			# An attacker that died in the declare-attackers step keeps its
+			# combat entry only until its own dies-trigger has resolved
+			# (Abu Ja'far reads it — see CombatState.block_illegality); the
+			# stack is empty by now, so it is dropped here (CR 506.4). Left
+			# standing it was announced UNBLOCKED from the graveyard and
+			# Camouflage dealt it a pile (bug pass 2026-10-03).
+			for attacker_id in combat.attackers.keys():
+				var gone := find_instance(int(attacker_id))
+				if gone == null or gone.zone != Mtg.Zone.BATTLEFIELD:
+					combat.forget(int(attacker_id))
 			awaiting_blockers = true
 			_emit_state()
 		Mtg.Step.FIRST_STRIKE_DAMAGE:
@@ -10924,9 +11323,11 @@ func _enter_step(index: int) -> void:
 			# "at end of combat"), before combat state clears.
 			for doomed_id in _end_of_combat_doom:
 				var doomed := find_instance(doomed_id)
-				if doomed != null and doomed.zone == Mtg.Zone.BATTLEFIELD:
+				if doomed != null and doomed.zone == Mtg.Zone.BATTLEFIELD \
+						and doomed.layer_timestamp == int(_end_of_combat_doom_stamps.get(doomed_id, doomed.layer_timestamp)):
 					destroy(doomed, true)
 			_end_of_combat_doom.clear()
+			_end_of_combat_doom_stamps.clear()
 			# Delayed end-of-combat ACTIONS (Glyph of Doom). Taken as a
 			# snapshot so an action that schedules another does not loop.
 			var pending := _end_of_combat_actions.duplicate()
@@ -10943,6 +11344,10 @@ func _enter_step(index: int) -> void:
 				var doomed := find_instance(doomed_id)
 				if doomed == null or doomed.zone != Mtg.Zone.BATTLEFIELD:
 					continue
+				# CR 400.7: the object the doom named, not a later one
+				# wearing its id (bounced and replayed this turn).
+				if doomed.layer_timestamp != int(_end_step_doom_stamps.get(doomed_id, doomed.layer_timestamp)):
+					continue
 				# Berserk's intervening "if it attacked this turn" is
 				# checked HERE, when the delayed trigger goes off.
 				if _end_step_doom_if_attacked.has(doomed_id) \
@@ -10956,6 +11361,7 @@ func _enter_step(index: int) -> void:
 				else:
 					destroy(doomed, true)
 			_end_step_doom.clear()
+			_end_step_doom_stamps.clear()
 			_end_step_doom_sacrifice.clear()
 			_end_step_doom_if_attacked.clear()
 			_end_step_doom_unless_attacked.clear()
@@ -11565,6 +11971,13 @@ func _apply_damage_requests() -> void:
 		var request: Dictionary = _damage_requests[i]
 		var source: CardInstance = request["source"]
 		var defender := int(request["defender"])
+		# The requests were planned as the step began; a source that has
+		# since left the battlefield or combat deals nothing (CR 510.1,
+		# 506.4 — bug pass 2026-10-03). Leaving forgets its combat entry
+		# (combat.forget), so a creature that left and came back is out too.
+		if source == null or source.zone != Mtg.Zone.BATTLEFIELD \
+				or not (combat.attackers.has(source.id) or combat.blocks.has(source.id)):
+			continue
 		if not bool(request["blocked"]):
 			# CR 509.1h: only an UNBLOCKED attacker hits the player directly.
 			packets.append([source, TargetRef.player(defender),
@@ -11581,7 +11994,7 @@ func _apply_damage_requests() -> void:
 				packets.append([source, TargetRef.player(defender), points])
 				continue
 			var victim := find_instance(int(key))
-			if victim != null:
+			if victim != null and victim.zone == Mtg.Zone.BATTLEFIELD:
 				packets.append([source, TargetRef.card(victim), points])
 	_damage_requests = []
 	_damage_splits = []
@@ -11762,6 +12175,10 @@ func _end_turn() -> void:
 	players[active_player].acted_last_turn = players[active_player].acted_this_turn
 	players[active_player].last_turn_number = turn_number
 	players[active_player].acted_this_turn = false
+	# The turn's last step is being left too (see _close_step_boundary).
+	_close_step_boundary()
+	if game_over:
+		return
 	_next_turn()
 
 

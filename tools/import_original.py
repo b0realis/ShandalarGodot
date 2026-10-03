@@ -1449,6 +1449,35 @@ def tile_frames(rgb: bytes, cols: int, rows: int, w: int, h: int,
     return bytes(sheet)
 
 
+def _decode_to_fit(program: str, path: Path, w: int,
+                   h: int) -> tuple[bytes, int, int, int, int, int]:
+    """(rgb, frames, cols, rows, frame width, frame height): `path`
+    decoded at a size whose sheet fits MAX_SHEET.
+
+    The decoder is the authority on how many frames there ACTUALLY are;
+    an AVI header's count and its stream have been known to disagree, and
+    trusting the header would tile garbage. So the grid is re-planned
+    against the decoded count — and WHEN THAT RE-PLAN SHRINKS THE FRAMES
+    THE MOVIE IS DECODED AGAIN AT THE NEW SIZE (bug pass 2026-10-03). It
+    used to tile the RGB decoded at the old size as if it were the new
+    one: every frame after the first sheared, and the JSON named a frame
+    size the pixels never had. A re-plan only ever shrinks, so this
+    settles in a pass or two; ValueError when it does not, or when the
+    decoder produced nothing.
+    """
+    for _attempt in range(4):
+        rgb = decode_frames(program, path, w, h)
+        frames = len(rgb) // (w * h * 3)
+        if frames <= 0:
+            raise ValueError("no frames came out")
+        cols, rows, fit_w, fit_h = plan_sheet(w, h, frames)
+        if (fit_w, fit_h) == (w, h):
+            return rgb, frames, cols, rows, w, h
+        w, h = fit_w, fit_h
+    raise ValueError("the frame size would not settle (last tried %dx%d)"
+                     % (w, h))
+
+
 def import_videos(index: dict[str, Path], dest: Path) -> None:
     """Transcode each original AVI into `<key>.png` + `<key>.json`.
 
@@ -1503,20 +1532,11 @@ def import_videos(index: dict[str, Path], dest: Path) -> None:
         _, _, w, h = plan_sheet(header["width"], header["height"],
                                 max(1, header["frames"]))
         try:
-            rgb = decode_frames(program, path, w, h)
-        except (OSError, subprocess.SubprocessError) as err:
+            rgb, frames, cols, rows, w, h = _decode_to_fit(program, path, w, h)
+        except (OSError, subprocess.SubprocessError, ValueError) as err:
             print("  %-18s SKIPPED — %s could not decode %s (%s): %s"
                   % (key, program, path.name, header["codec"], err))
             continue
-        # The decoder is the authority on how many frames there ACTUALLY
-        # are; an AVI header's count and its stream have been known to
-        # disagree, and trusting the header would tile garbage.
-        frames = len(rgb) // (w * h * 3)
-        if frames <= 0:
-            print("  %-18s SKIPPED — %s produced no frames from %s"
-                  % (key, program, path.name))
-            continue
-        cols, rows, w, h = plan_sheet(w, h, frames)
         sheet = tile_frames(rgb, cols, rows, w, h, frames)
         write_png(dest / (key + ".png"), cols * w, rows * h, sheet)
         (dest / (key + ".json")).write_text(json.dumps({
@@ -2376,7 +2396,8 @@ def _player_face_from_pic(index: dict[str, Path], out_dir: Path) -> int:
     return 1
 
 
-def import_portraits(index: dict[str, Path], dest: Path) -> None:
+def import_portraits(index: dict[str, Path], dest: Path,
+                     allow_conversions: bool = False) -> None:
     """Write `<dest>/portraits/<name>.png`, one per face.
 
     THREE POOLS, and every one of them optional:
@@ -2393,11 +2414,25 @@ def import_portraits(index: dict[str, Path], dest: Path) -> None:
     faces the conversion lost, and they are the player's own copy rather
     than a third party's rendering of it. No path can fail the import:
     each reports and returns.
+
+    THE CONVERTED SHEET IS BEHIND THE CONVERSION DOOR like every other
+    `*.png` conversion (see `main`): [param allow_conversions] is
+    `--allow-conversions`, the maintainer's flag. Until 2026-10-03 this
+    step cut s30's `16faces.spr.png` without it, so a player's run
+    against a reimplementation's tree came out wearing its faces.
     """
     out_dir = dest / "portraits"
     written = _portraits_from_raw(index, out_dir)
     if written == 0:
-        written = _portraits_from_sheet(index, out_dir)
+        if allow_conversions:
+            written = _portraits_from_sheet(index, out_dir)
+        else:
+            sheet = _first_of(index, PORTRAIT_SHEET_PNG)
+            if sheet is not None:
+                print("\nportraits: %s is a reimplementation's CONVERTED"
+                      " sheet, not a 1997 file; it is not cut without"
+                      " --allow-conversions (THE CONVERSION DOOR)"
+                      % sheet.name)
     written += _player_face_from_pic(index, out_dir)
     written += _rogues_from_raw(index, out_dir)
     if written == 0:
@@ -3116,7 +3151,7 @@ def main() -> int:
     # The portraits are their own step for the same reason: sheets and
     # `.pic`s cut rather than copied, and skippable without failing the
     # import.
-    import_portraits(index, dest)
+    import_portraits(index, dest, args.allow_conversions)
     # Raw `.pic` screens, decoded rather than copied — see PIC_SCREENS.
     import_pic_screens(index, dest)
     return 0

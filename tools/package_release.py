@@ -71,7 +71,12 @@ case "$verb" in
 	play) exec ./run.sh "$@" ;;
 	mcp) exec python3 tools/shandalar_mcp.py "$@" ;;
 esac
-safe="$(printf '%s' "$verb" | tr -d '"\\\\\\n\\r\\t')"
+# Every control byte, DEL, `"` and `\\` out, and every byte past ASCII
+# too unless the verb is valid UTF-8 — what is left is a JSON string
+# (2026-10-03; the repo door shandalar.sh does the same).
+safe="$(printf '%s' "$verb" | LC_ALL=C tr -d '\\000-\\037\\177"\\\\')"
+printf '%s' "$safe" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1 \\
+	|| safe="$(printf '%s' "$safe" | LC_ALL=C tr -d '\\200-\\377')"
 printf '{"error":{"tool":"shandalar","exit":2,"kind":"option","message":"unknown verb %s - the verbs are lab, autodeck, check, packs, cards, referee, play, mcp","verb":"%s"}}\\n' \\
 	"'$safe'" "$safe"
 echo "shandalar.sh: unknown verb '$verb' - try ./shandalar.sh --help" >&2
@@ -264,16 +269,58 @@ def payload(folder: Path, platform: str) -> dict[str, Path]:
     return result
 
 
-def guard_private(paths: list[Path]) -> None:
-    needles = [str(Path.home()).encode()]
-    login = Path.home().name
-    needles.extend(p.encode() for p in (f"/Users/{login}/", f"/home/{login}/"))
+## The bytes a path component is made of. A home followed by one of these
+## is a LONGER name ("/home/ann" inside "/home/anna"), not the home.
+_NAME_CHARS = b"A-Za-z0-9._-"
+
+
+def private_patterns(home: str | None = None) -> list[tuple[bytes, re.Pattern]]:
+    """(literal, pattern) pairs for every spelling of the builder's home.
+
+    A PATH, NOT A SUBSTRING (bug pass 2026-10-03). The needle used to be
+    `$HOME` as bare bytes, so HOME=/root (a Docker build) refused the
+    stock Godot template — "/root" is its scene tree's root node — and
+    HOME=/ refused every file there is; while the same home spelt as a
+    Windows binary or a JSON file spells it went through. So: "" and "/"
+    are no home at all; a home of one component (/root) counts only with
+    a separator after it, where it is a path into that folder; a deeper
+    one (/home/ann) counts at any boundary but a longer name. Each is
+    looked for with forward slashes, backslashes and JSON's escaped `\\/`,
+    in UTF-8 and both UTF-16s. The literal is the cheap test a block must
+    pass before the pattern is run on it."""
+    home = (str(Path.home()) if home is None else home).rstrip("/\\")
+    login = home.replace("\\", "/").rsplit("/", 1)[-1]
+    roots = [home] if home else []
+    if login and login not in (".", ".."):
+        roots += [f"/home/{login}", f"/Users/{login}"]
+    follows = {"utf-8": b"[%s]" % _NAME_CHARS,
+               "utf-16-le": b"[%s]\x00" % _NAME_CHARS,
+               "utf-16-be": b"\x00[%s]" % _NAME_CHARS}
+    out = []
+    for root in dict.fromkeys(roots):
+        deep = root.count("/") >= 2
+        for sep in ("/", "\\", "\\/"):
+            form = root.replace("/", sep)
+            for codec, follow in follows.items():
+                if deep:
+                    literal = form.encode(codec)
+                    pattern = re.escape(literal) + b"(?!" + follow + b")"
+                else:
+                    literal = (form + sep).encode(codec)
+                    pattern = re.escape(literal)
+                out.append((literal, re.compile(pattern)))
+    return out
+
+
+def guard_private(paths: list[Path], home: str | None = None) -> None:
+    patterns = private_patterns(home)
     for path in paths:
         tail = b""
         with path.open("rb") as source:
             for block in iter(lambda: source.read(1024 * 1024), b""):
                 data = tail + block
-                if any(needle in data for needle in needles):
+                if any(literal in data and pattern.search(data)
+                       for literal, pattern in patterns):
                     raise ValueError(f"Personal home path in {path.name}")
                 tail = data[-512:]
 

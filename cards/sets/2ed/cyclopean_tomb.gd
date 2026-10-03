@@ -48,7 +48,8 @@ func build() -> CardData:
 		.static_ability(_mires_are_swamps_static()) \
 		.activated(ActivatedAbility.new("{2}", true,
 			[MireEffect.new(TargetSpec.new(TargetSpec.Kind.PERMANENT,
-				"target non-Swamp land", _non_swamp_land))],
+				"target non-Swamp land", _non_swamp_land),
+				_mires_are_swamps_static, _schedule_reversion)],
 			"{2}, {T}: Put a mire counter on target non-Swamp land.") \
 			.during_step(Mtg.Step.UPKEEP).your_turn_only()) \
 		.as_it_leaves(_keep_the_mires) \
@@ -93,11 +94,32 @@ static func _start_the_reversion(game: MtgGame, source: CardInstance,
 	if mired.is_empty():
 		return   # it never mired anything: nothing to revert, ever
 	var controller := int(event.data.get("controller", source.controller_id))
+	_schedule_reversion(game, source, controller, mired)
+
+
+const _REVERSION := "Cyclopean Tomb's reversion"
+
+
+## Create the reversion — or, when this Tomb already has one, add
+## [param mired] to its list. The second case is a Tomb that died in
+## response to its own activation (MireEffect below): its dies-trigger
+## resolved first, and the land the activation then mires is still "a land
+## that a mire counter was put onto with this artifact".
+static func _schedule_reversion(game: MtgGame, source: CardInstance,
+		controller: int, mired: Array) -> void:
+	for entry in game.delayed_triggers:
+		if entry.get("source") == source and String(entry.get("desc", "")) == _REVERSION:
+			var listed: Array = entry["memory"].get("mired", [])
+			for land_id in mired:
+				if not listed.has(land_id):
+					listed.append(land_id)
+			entry["memory"]["mired"] = listed
+			return
 	game.schedule_delayed_trigger(TriggeredAbility.new(
 		Mtg.EventType.UPKEEP_START, _revert_one,
 		"At the beginning of each of your upkeeps, remove all mire counters from a land Cyclopean Tomb mired.",
 		_upkeep_of.bind(controller)), controller, source, true,
-		{"mired": mired}, "Cyclopean Tomb's reversion")
+		{"mired": mired}, _REVERSION)
 
 
 static func _upkeep_of(_game: MtgGame, _source: CardInstance, event: GameEvent,
@@ -143,16 +165,39 @@ static func _revert_one(game: MtgGame, _source: CardInstance, event: GameEvent) 
 		game.retire_delayed_trigger(int(entry["id"]))
 
 
+## "Put a mire counter on target non-Swamp land. That land is a Swamp for
+## as long as it has a mire counter on it." The second sentence is part of
+## the ABILITY's effect (CR 611.2a), so it holds even when the Tomb was
+## destroyed in response to its own activation: the counter still goes on,
+## the land still becomes a Swamp (a floating static with no end, as
+## `_keep_the_mires` registers for a Tomb that leaves), and the land joins
+## the reversion list of the Tomb's dies-trigger. Until 2026-10-03 such a
+## land got its counter and stayed a Forest.
 class MireEffect extends EffectBase:
-	func _init(spec: TargetSpec) -> void:
-		target_spec = spec
+	var swamp_static: Callable     # () -> StaticAbility
+	var schedule_reversion: Callable   # (game, tomb, controller, mired)
 
-	func resolve(game: MtgGame, source: CardInstance, _controller: int,
+	func _init(spec: TargetSpec, p_swamp_static: Callable,
+			p_schedule_reversion: Callable) -> void:
+		target_spec = spec
+		swamp_static = p_swamp_static
+		schedule_reversion = p_schedule_reversion
+
+	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
 		var land := game.find_instance(target.instance_id)
 		if land == null or land.zone != Mtg.Zone.BATTLEFIELD:
 			return
 		game.add_counters(land, "mire", 1)
+		if source.zone != Mtg.Zone.BATTLEFIELD:
+			game.continuous.add_floating_static(source, swamp_static.call(),
+				ContinuousEffects.Duration.INDEFINITE)
+			# "When this artifact is put into a graveyard from the
+			# battlefield" — only that departure owes a reversion.
+			if source.zone == Mtg.Zone.GRAVEYARD:
+				schedule_reversion.call(game, source, controller, [land.id])
+			game.recalculate()
+			return
 		# Remembered for the reversion after the Tomb is gone.
 		var mired: Array = source.memory.get("mired", [])
 		if not mired.has(land.id):

@@ -18,6 +18,7 @@ is outside any test — the 70 faces were LOOKED AT on a contact sheet
 
 import datetime
 import io
+import json
 import os
 import struct
 import sys
@@ -26,6 +27,7 @@ import unittest
 import zlib
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import import_original as imp  # noqa: E402
@@ -1502,6 +1504,107 @@ class TestDefaultDestination(unittest.TestCase):
                 os.environ.pop("XDG_DATA_HOME", None)
             else:
                 os.environ["XDG_DATA_HOME"] = was
+
+
+def _has_pillow() -> bool:
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+class TestThePortraitSheetIsBehindTheConversionDoor(RawStepCase):
+    """s30's `16faces.spr.png` IS A CONVERSION, AND THE DOOR IS SHUT
+    (bug pass 2026-10-03).
+
+    The copy loop has refused a `*.png` conversion without
+    `--allow-conversions` since 2026-09-09, but the portrait step had its
+    own way in: with no raw `16faces.spr` in the tree it cut the
+    converted sheet regardless, so a player's run against an s30 checkout
+    came out wearing a reimplementation's faces — the one thing the
+    owner's ruling forbids.
+    """
+
+    CELLS = 3
+
+    def _tree(self, tmp: str) -> Path:
+        root = Path(tmp) / "s30"
+        root.mkdir()
+        width, height = imp.PORTRAIT_CELL
+        imp.write_png(root / "16faces.spr.png", width * self.CELLS, height,
+                      bytes(width * self.CELLS * height * 3))
+        return root
+
+    def test_a_players_run_does_not_cut_a_converted_sheet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "skin"
+            log = self._run(self._tree(tmp), dest)
+            faces = sorted((dest / "portraits").glob("*.png")) \
+                if (dest / "portraits").is_dir() else []
+            self.assertEqual(faces, [])
+            self.assertIn("--allow-conversions", log, "the refusal says why")
+
+    @unittest.skipUnless(_has_pillow(), "cutting a sheet needs Pillow")
+    def test_the_maintainers_door_still_cuts_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "skin"
+            self._run(self._tree(tmp), dest, conversions=True)
+            self.assertEqual(len(list((dest / "portraits").glob("*.png"))),
+                             self.CELLS)
+
+
+class TestTheCoinSheetIsCutAtTheSizeItWasDecodedAt(unittest.TestCase):
+    """THE RE-PLAN THAT SHRINKS MUST RE-DECODE (bug pass 2026-10-03).
+
+    `import_videos` decodes at the size a first plan gives for the
+    HEADER's frame count, then re-plans for the count the decoder really
+    produced. When the stream held more frames than the header said and
+    the second plan shrank them to fit MAX_SHEET, the RGB decoded at the
+    old size was tiled as if it were the new one — every frame after the
+    first sheared — and the JSON named a frame size the pixels never had.
+    """
+
+    WIDTH, HEIGHT, HEADER_FRAMES, STREAM_FRAMES = 64, 48, 20, 120
+
+    @staticmethod
+    def colour(index: int) -> bytes:
+        return bytes((index % 256, (index * 7) % 256, 200))
+
+    def test_every_frame_lands_whole_in_its_cell(self):
+        decoded_at = []
+
+        def fake_decode(_program, _path, width, height):
+            decoded_at.append((width, height))
+            return b"".join(self.colour(i) * (width * height)
+                            for i in range(self.STREAM_FRAMES))
+
+        header = {"width": self.WIDTH, "height": self.HEIGHT,
+                  "frames": self.HEADER_FRAMES, "fps": 15.0, "codec": "CRAM"}
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(imp, "MAX_SHEET", 512), \
+                mock.patch.object(imp, "find_decoder", lambda: ("ffmpeg", "fake")), \
+                mock.patch.object(imp, "decode_frames", fake_decode), \
+                mock.patch.object(imp, "read_avi_header", lambda _p: dict(header)), \
+                redirect_stdout(io.StringIO()):
+            dest = Path(tmp)
+            imp.import_videos({"cointoss_heads.avi": dest / "COINTOSS_Heads.AVI"}, dest)
+            meta = json.loads((dest / "coin_toss_heads.json").read_text())
+            width, height, channels, pixels = read_png(
+                (dest / "coin_toss_heads.png").read_bytes())
+        w, h = meta["frame_width"], meta["frame_height"]
+        self.assertLess(w, self.WIDTH, "the fixture is one whose re-plan shrinks")
+        self.assertEqual(decoded_at[-1], (w, h),
+                         "the sheet is cut at the size the pixels were decoded at")
+        self.assertEqual(meta["frames"], self.STREAM_FRAMES)
+        self.assertEqual((width, height), (meta["cols"] * w, meta["rows"] * h))
+        stride = width * channels
+        for i in range(self.STREAM_FRAMES):
+            col, row = i % meta["cols"], i // meta["cols"]
+            for x, y in ((0, 0), (w - 1, h - 1)):
+                at = (row * h + y) * stride + (col * w + x) * channels
+                self.assertEqual(pixels[at:at + 3], self.colour(i),
+                                 "frame %d at (%d, %d) of its cell" % (i, x, y))
 
 
 if __name__ == "__main__":

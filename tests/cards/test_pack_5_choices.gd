@@ -175,3 +175,48 @@ func test_vault_keeps_five_top_cards_and_preserves_every_card() -> void:
 	assert_eq(g.players[0].library.size(), before)
 	for i in g.players[0].library.slice(-5): assert_has(original, i)
 	assert_eq(g.players[0].life, 20)
+
+## Keeps the first five it is shown and orders them by [member order]
+## (instance ids, top first), noting the library's size at every ask.
+class VaultOrderSeat extends DecisionAgent:
+	var order: Array = []
+	var library_sizes: Array = []
+
+	func answer_card(game: MtgGame, pid: int, candidates: Array[CardInstance],
+			_prompt: String) -> CardInstance:
+		library_sizes.append(game.players[pid].library.size())
+		for id in order:
+			for card in candidates:
+				if card.id == id: return card
+		return candidates[0]
+
+# Bug pass 2026-10-03: the Vault's last step moved cards through the library
+# array by hand (hard rule 2), lifting the five out for the shuffle, so they
+# were in no zone while their order was asked. Now the whole library
+# shuffles and the five go on top through MtgGame.move_library_card_to_top.
+func test_vault_orders_the_kept_five_on_top_without_lifting_them_out() -> void:
+	var before: Array = g.players[0].library.duplicate()
+	var top: Array = before.slice(-5)   # the back of the array is the top
+	var seat := VaultOrderSeat.new()
+	seat.order = [top[1].id, top[3].id, top[0].id, top[4].id, top[2].id]
+	g.set_agent(0, seat)
+	var vault := give_hand(0, "Lim-Dûl's Vault")
+	for color in Mtg.WUBRG: add_mana(0, color, 2)
+	var mark := g.make_mark()
+	assert_ok(g.cast_spell(0, vault, []))
+	resolve_stack()
+	var now: Array = g.players[0].library
+	var top_first: Array = []
+	for n in 5: top_first.append(now[now.size() - 1 - n].id)
+	assert_eq(top_first, seat.order, "the chosen order, the first choice on top")
+	assert_eq(now.size(), before.size())
+	for card in before:
+		assert_eq(now.count(card), 1)
+		assert_eq(card.zone, Mtg.Zone.LIBRARY)
+	assert_eq(seat.library_sizes.size(), 6, "keep these five, then five ordering picks")
+	for size in seat.library_sizes:
+		assert_eq(size, before.size(), "every card stayed in the library while asked")
+	assert_eq(g.players[0].life, 20)
+	g.unmake_to(mark)
+	g.end_search()
+	assert_eq(g.players[0].library, before, "the journal puts the library back")

@@ -114,6 +114,48 @@ func test_a_masked_amrou_kithkin_can_be_blocked_by_anything() -> void:
 		"a masked 2/2 has no 'can't be blocked by power 3 or greater'")
 
 
+func test_a_masked_sea_serpent_is_not_sacrificed_without_islands() -> void:
+	# Bug pass 2026-10-03: the state-based check read Sea Serpent's printed
+	# "when you control no Islands, sacrifice" off `data` and sacrificed a
+	# face-down 2/2 that has no abilities at all (CR 708.2).
+	var serpent := give_hand(0, "Sea Serpent")
+	g.put_from_hand_face_down(serpent, 0)
+	g.check_state_based_actions()
+	assert_eq(serpent.zone, Mtg.Zone.BATTLEFIELD, "no ability, no sacrifice")
+
+
+func test_a_masked_sea_serpent_attacks_a_player_without_islands() -> void:
+	# The attack half of the same clause (CombatState.attack_illegality).
+	put_battlefield(0, "Island")
+	var serpent := give_hand(0, "Sea Serpent")
+	g.put_from_hand_face_down(serpent, 0)
+	serpent.summoning_sick = false
+	assert_eq(CombatState.attack_illegality(g, serpent, 1), "",
+		"a masked 2/2 has no 'can't attack unless defending player controls an Island'")
+
+
+func test_a_masked_legend_is_not_buried_by_the_legend_rule() -> void:
+	# A face-down permanent has no name and no supertypes (CR 708.2): the
+	# legend rule cannot see a duplicate in it.
+	var face_up := put_battlefield(0, "Sir Shandlar of Eberyn")
+	var masked := give_hand(0, "Sir Shandlar of Eberyn")
+	g.put_from_hand_face_down(masked, 0)
+	g.check_state_based_actions()
+	assert_eq(face_up.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(masked.zone, Mtg.Zone.BATTLEFIELD, "nameless, so no duplicate")
+
+
+func test_a_masked_bartel_runeaxe_can_be_enchanted() -> void:
+	# "Can't be the target of Aura spells" is Bartel's ability, and a
+	# face-down Bartel has none.
+	var bartel := give_hand(0, "Bartel Runeaxe")
+	g.put_from_hand_face_down(bartel, 0)
+	advance_to_step(Mtg.Step.MAIN1)
+	var aura := give_hand(0, "Holy Strength")
+	add_mana(0, Mtg.ManaColor.W)
+	assert_ok(g.cast_spell(0, aura, [TargetRef.card(bartel)]))
+
+
 # -------------------- 1997 fork: a TAPPED artifact's statics (p.124) --
 
 func test_an_animated_tapped_artifact_keeps_its_static() -> void:

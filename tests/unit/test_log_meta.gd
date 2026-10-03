@@ -117,3 +117,82 @@ func test_a_line_before_the_first_turn_has_no_step() -> void:
 	h.setup(filler, filler, "P0", "P1", 20, 20, 1)
 	assert_eq(h.log_meta[0].get("step"), -1, "no step before the first turn")
 	assert_eq(h.log_meta[0].get("turn"), 0)
+
+
+# ----------------------------- private lines (bug pass 2026-10-03) --------
+
+func test_a_private_tutor_line_is_private_to_its_searcher() -> void:
+	# Demonic Tutor's find is hidden information: the log keeps the full
+	# sentence (the audit trail), and the meta tells every reader which
+	# seat may read it and what everyone else is shown.
+	advance_to_step(Mtg.Step.MAIN1)
+	var tutor := give_hand(0, "Demonic Tutor")
+	add_mana(0, Mtg.ManaColor.B, 2)
+	assert_ok(g.cast_spell(0, tutor, []))
+	resolve_stack()
+	var meta := _find("searches their library and finds")
+	assert_false(meta.is_empty(), "the search was logged")
+	assert_eq(int(meta.get("private_to", -1)), 0, "private to the searcher")
+	assert_eq(String(meta.get("public", "")),
+		"P0 searches their library and finds a card", "the table's version")
+	assert_eq(String(meta["card"]), "", "and the meta names no card")
+
+
+func test_a_revealed_search_line_stays_public() -> void:
+	advance_to_step(Mtg.Step.MAIN1)
+	g.search_library(0, Callable(), "Pick a card", false, true, "Test — revealed card")
+	var meta := _find("searches their library and finds")
+	assert_false(meta.is_empty())
+	assert_false(meta.has("private_to"), "a revealed find is public")
+	assert_false(meta.has("public"))
+
+
+func test_a_card_put_back_on_top_is_private_to_its_owner() -> void:
+	# Sylvan Library's put-back: hand to library, both hidden.
+	var bear := give_hand(1, "Grizzly Bears")
+	g.put_from_hand_on_top_of_library(bear)
+	var meta := _last()
+	assert_eq(g.log_lines[g.log_lines.size() - 1], "P1 puts Grizzly Bears on top of their library")
+	assert_eq(int(meta.get("private_to", -1)), 1)
+	assert_eq(String(meta.get("public", "")), "P1 puts a card on top of their library")
+
+
+func test_a_public_line_carries_no_privacy_keys() -> void:
+	g.log_line("a plain line")
+	assert_false(_last().has("private_to"))
+	assert_false(_last().has("public"))
+
+
+# ------------------------- face-down permanents (bug pass 2026-10-03) --
+
+## A face-down permanent has no name (CR 708.2). A line that names one —
+## here add_counters's "Shivan Dragon gets 1 +1/+1 counter(s)" — is the
+## controller's secret: the log keeps the audit sentence, the meta says
+## whose it is and what everyone else reads.
+func test_a_line_naming_a_face_down_creature_is_private_to_its_controller() -> void:
+	var dragon := give_hand(1, "Shivan Dragon")
+	g.put_from_hand_face_down(dragon, 1)
+	g.add_counters(dragon, "+1/+1", 1)
+	var meta := _last()
+	assert_string_contains(g.log_lines[g.log_lines.size() - 1], "Shivan Dragon")
+	assert_eq(int(meta.get("private_to", -1)), 1)
+	assert_false(String(meta.get("public", "")).contains("Shivan Dragon"))
+	assert_string_starts_with(String(meta.get("public", "")), "A face-down creature gets 1")
+	assert_eq(String(meta["card"]), "")
+
+
+func test_a_line_naming_both_seats_face_down_creatures_is_nobodys() -> void:
+	var dragon := give_hand(1, "Shivan Dragon")
+	g.put_from_hand_face_down(dragon, 1)
+	var angel := give_hand(0, "Serra Angel")
+	g.put_from_hand_face_down(angel, 0)
+	g.log_line("Shivan Dragon stares at Serra Angel")
+	var meta := _last()
+	assert_eq(int(meta.get("private_to", -1)), MtgGame.FACE_DOWN_NOBODY)
+	assert_eq(String(meta.get("public", "")), "A face-down creature stares at a face-down creature")
+
+
+func test_a_face_up_creatures_line_stays_public() -> void:
+	var dragon := put_battlefield(1, "Shivan Dragon")
+	g.add_counters(dragon, "+1/+1", 1)
+	assert_false(_last().has("private_to"))

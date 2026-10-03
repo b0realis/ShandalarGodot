@@ -178,3 +178,52 @@ func test_barbarian_guides_asks_for_the_land_type_and_returns_the_creature() -> 
 	assert_eq(g.choice_log.size(), 1, "the type question is on the record")
 	advance_to_next_turn()
 	assert_eq(bear.zone, Mtg.Zone.HAND, "returned at the next end step")
+
+# --- BANDING (bug pass 2026-10-03). "Blocking or blocked by this creature"
+# includes the band (CR 702.22h: a creature blocking one band member blocks
+# every member). The blocks are declared on the OTHER member, and a blocker's
+# combat damage is prevented where it would otherwise kill a band member
+# before the end-of-combat trigger looks (setup only).
+
+## P0 attacks with [param band] as one band; P1 then declares [param block_map].
+func _band_attack(band: Array, block_map: Dictionary) -> void:
+	var ids: Array = []
+	for inst in band: ids.append(inst.id)
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, ids, [ids]))
+	resolve_stack()
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, block_map))
+
+func test_frostbeast_in_a_band_destroys_the_creature_blocking_its_band_mate() -> void:
+	var beast := put_battlefield(0, "Kjeldoran Frostbeast")
+	var bearer := put_battlefield(0, "Shield Bearer")
+	var wall := put_battlefield(1, "Wall of Stone")
+	_band_attack([beast, bearer], {wall.id: bearer.id})
+	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()
+	assert_eq(wall.zone, Mtg.Zone.GRAVEYARD)
+
+func test_frostbeast_blocking_a_band_destroys_every_member() -> void:
+	var bearer := put_battlefield(0, "Shield Bearer")
+	var phalanx := put_battlefield(0, "Kjeldoran Phalanx")
+	var beast := put_battlefield(1, "Kjeldoran Frostbeast")
+	_band_attack([bearer, phalanx], {beast.id: bearer.id})
+	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()
+	assert_eq(beast.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(bearer.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(phalanx.zone, Mtg.Zone.GRAVEYARD, "the band-mate was blocked by it too")
+
+func test_dread_wight_blocking_a_band_paralyzes_every_member() -> void:
+	var bearer := put_battlefield(0, "Shield Bearer")
+	var phalanx := put_battlefield(0, "Kjeldoran Phalanx")
+	var wight := put_battlefield(1, "Dread Wight")
+	g.continuous.add_until_eot_combat_prevention(wight.id, true, false)
+	_band_attack([bearer, phalanx], {wight.id: phalanx.id})
+	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()
+	assert_eq(wight.zone, Mtg.Zone.BATTLEFIELD)
+	for member in [bearer, phalanx]:
+		assert_eq(member.zone, Mtg.Zone.BATTLEFIELD)
+		assert_eq(int(member.counters.get("paralyzation", 0)), 1, member.data.card_name)

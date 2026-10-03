@@ -747,6 +747,45 @@ func test_a_tar_beside_the_game_is_repacked_once_into_the_players_folder() -> vo
 	elsewhere.queue_free()
 
 
+## A TAR BESIDE THE GAME THAT CANNOT BE REPACKED IS TRIED ONCE (bug pass
+## of 2026-10-03): after every finished job the boot-time repack looked
+## beside the game again, found the same tar — cut short, or card art
+## under the skin's name, so the skin was still missing — and started it
+## again: 121 repacks in 120 frames, for as long as the game ran.
+func test_a_tar_beside_the_game_that_fails_is_repacked_once_not_every_frame() -> void:
+	var beside := SCRATCH + "/beside_bad"
+	DirAccess.make_dir_recursive_absolute(beside)
+	var whole: PackedByteArray = TarTest._tar([["skin/zz_cut.txt", "x".repeat(3000)]])
+	TarTest._write(beside + "/original_skin.tgz",
+		whole.slice(0, 700).compress(FileAccess.COMPRESSION_GZIP))
+	var was_mounted := SkinPack.mounted.duplicate()
+	var was_reports := SkinPack._reports.duplicate()
+	SkinPack.mounted.clear()
+	SkinPack._reports.clear()
+	var starts := [0]
+	var count := func(fraction: float) -> void:
+		if fraction == 0.0:
+			starts[0] += 1
+	SkinPack.fetch_progressed.connect(count)
+	assert_true(SkinPack.repack_beside(beside), "the tar is taken up")
+	await wait_until(func() -> bool: return not SkinPack.busy(), 2.0)
+	await wait_frames(20)
+	assert_eq(starts[0], 1, "one repack, not one a frame")
+	assert_false(SkinPack.busy(), "nothing left in flight")
+	assert_false(SkinPack.repack_beside(beside), "a second look takes the same tar no more")
+	SkinPack.fetch_progressed.disconnect(count)
+	# Whatever happened, stop a loop before the next test inherits it.
+	SkinPack._beside = ""
+	await wait_until(func() -> bool: return SkinPack._repack == null, 2.0)
+	SkinPack.mounted.clear()
+	SkinPack.mounted.append_array(was_mounted)
+	for path in was_reports:
+		SkinPack._reports[path] = was_reports[path]
+	for name in DirAccess.get_files_at(beside):
+		DirAccess.remove_absolute(beside.path_join(name))
+	DirAccess.remove_absolute(beside)
+
+
 func test_nothing_is_in_flight_under_the_editor() -> void:
 	assert_false(SkinPack.busy())
 	assert_false(SkinPack.picking)

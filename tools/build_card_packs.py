@@ -467,7 +467,13 @@ class Cache:
         self.fetched: list[str] = []
 
     def _get(self, path: Path, fetch, label: str, binary: bool = False):
-        if path.exists() and not self.force:
+        # OFFLINE BEATS FORCE (bug pass 2026-10-03), as it already did for
+        # the art (`collect_art`): `--offline --force` cannot refetch, so
+        # the cache is what there is. Force used to be asked first, and a
+        # cached set object, listing or icon was skipped for a fetch the
+        # offline line below then refused — reported missing, packed
+        # without.
+        if path.exists() and (self.offline or not self.force):
             return path.read_bytes() if binary else json.loads(path.read_text(encoding="utf-8"))
         if self.offline:
             self.missing.append(label)
@@ -587,13 +593,27 @@ def collect_art(cards: list[dict], offline: bool, force: bool,
     n_files = sum(len(w) for _, w in to_fetch)
     if to_fetch and (offline or (max_fetch and n_files > max_fetch)):
         why = "offline" if offline else f"{n_files} files > --max-art-fetch {max_fetch}"
-        missing_report.append(f"art: {n_files} files for {len(to_fetch)} cards not fetched ({why})")
         if force:   # the files we skipped are still there to be packed
             for name, want in to_fetch:
                 for suffix, _variant in fetch_card_art.VARIANTS:
                     local = local_art_file(name, suffix)
                     if local is not None:
                         files[snake(name) + suffix] = local
+        # ONLY WHAT IS STILL ABSENT IS MISSING (bug pass 2026-10-03). Under
+        # --force the skipped files were refreshes of pictures that are
+        # there and were packed just above; reporting all of them made a
+        # complete pack `incomplete` in its manifest and the run exit 1.
+        # The refresh that did not happen is said, as a note.
+        absent = [(name, [(d, v) for d, v in want if d.name not in files])
+                  for name, want in to_fetch]
+        absent = [(name, want) for name, want in absent if want]
+        n_absent = sum(len(w) for _, w in absent)
+        if n_absent < n_files:
+            print(f"  note: {n_files - n_absent} art files kept as they are, "
+                  f"not re-fetched ({why})")
+        if absent:
+            missing_report.append(f"art: {n_absent} files for {len(absent)} "
+                                  f"cards not fetched ({why})")
     elif to_fetch:
         print(f"  fetching {n_files} art files for {len(to_fetch)} cards …")
         ART_DIR.mkdir(parents=True, exist_ok=True)

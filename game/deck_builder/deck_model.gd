@@ -406,11 +406,14 @@ func side_names() -> Array[String]:
 ## The SIDEBOARD and the carried `# group:` line go with it: what is left
 ## has to be a new deck all through, or `Clear deck` would leave a
 ## fifteen-card sideboard attached to an empty deck and a heading claimed
-## by a file the player has just wiped.
+## by a file the player has just wiped. The NOTES too (2026-10-03): they
+## stayed on the cleared surface and saved into the next deck built there.
+## `Restore deck` keeps its own copy of all of it.
 func clear() -> void:
 	counts.clear()
 	sideboard.clear()
 	group = ""
+	notes = ""
 	draft_comments = ""
 	required_packs.clear()
 	printings.clear()
@@ -1010,13 +1013,17 @@ func to_text() -> String:
 
 ## Declared requirements plus any pack implied by a name in either pile.
 ## Cosmetic printing choices do not add gameplay pack requirements.
+## A declared expansion whose cards are all shared reprints another
+## enabled pack provides is dropped (bug pass 2026-10-03, [method
+## CardPacks.effective_requirements]): it gated the Deck Builder's load,
+## and every re-save under another provider declared one pack more.
 func required_pack_ids() -> Array[String]:
-	var out: Array[String] = required_packs.duplicate()
 	var all_names := names()
 	all_names.append_array(side_names())
 	# Command-line SceneTree scripts compile their dependencies before
 	# autoload identifiers exist (Deck Lab's Pack 3 campaign reproduced it).
 	var packs := (Engine.get_main_loop() as SceneTree).root.get_node("CardPacks")
+	var out: Array[String] = packs.effective_requirements(required_packs, all_names)
 	for pack_id in packs.packs_required_by(all_names):
 		if not out.has(pack_id):
 			out.append(pack_id)

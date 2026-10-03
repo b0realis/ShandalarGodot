@@ -32,9 +32,17 @@ class HellfireEffect extends EffectBase:
 		game.begin_simultaneous()
 		var died := 0
 		for inst in victims:
+			# "Died" is the engine's own count of creatures put into a
+			# graveyard (MtgGame.creatures_died_this_turn): a regenerated
+			# creature never died this way, and neither did a Firestorm
+			# Phoenix that went to its owner's hand INSTEAD or a creature
+			# exiled instead of dying — both of which merely left the
+			# battlefield, which is all this loop used to ask (until
+			# 2026-10-03). A token that dies does count (CR 700.4).
+			var before := game.creatures_died_this_turn
 			game.destroy(inst)
-			if inst.zone != Mtg.Zone.BATTLEFIELD:
-				died += 1   # a regenerated creature never "died this way"
+			if game.creatures_died_this_turn > before:
+				died += 1
 		game.deal_damage(source, TargetRef.player(controller), died + 3)
 		game.end_simultaneous()
 

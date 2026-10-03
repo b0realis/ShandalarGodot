@@ -537,7 +537,12 @@ def main() -> int:
             print("\nsource movies:")
             if copy_movies(sources, dest) == 0:
                 print("  none found (they ship only with the 1997 game)")
-        return write_zip(dest, Path(args.out).expanduser())
+        zipped = write_zip(dest, Path(args.out).expanduser())
+        # THE IMPORTER'S FAILURE IS THE EXIT CODE (bug pass 2026-10-03).
+        # What it wrote is still archived — a player loses nothing — but
+        # this returned the zip's own 0 after it, so a script or a build
+        # could not tell a whole skin from a broken one.
+        return code if code != 0 else zipped
     finally:
         if temp is not None:
             shutil.rmtree(temp, ignore_errors=True)

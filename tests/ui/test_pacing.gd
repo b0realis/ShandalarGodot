@@ -147,3 +147,44 @@ func test_the_dwell_adds_no_wait_of_its_own() -> void:
 	assert_eq(sched.count("create_timer"), 1,
 		"one wait, the one that was always there")
 	assert_false(sched.contains("await"), "and nothing that yields")
+
+
+# ------------------------------------ no dwell fires under the toss (2026-10-03) --
+
+## Stands in for an AI seat and only counts how often it was asked to act.
+class CountingSeat:
+	extends RefCounted
+	var acted := 0
+
+	func act(_game: MtgGame) -> String:
+		acted += 1
+		return ""
+
+
+## THE DWELL ARMED BEFORE THE TOSS. `_new_game` deals the opening hands
+## before `_run_coin_toss` raises `_toss_active`, and the deal's own
+## `state_changed` refresh arms an AI dwell; in AI Demo mode that timer
+## then fired under the splash and the coin, and the seat acted on a duel
+## that had not begun (turn 0, mulligans open — an AI pass there). The
+## scheduler already refused to ARM a dwell under the toss; the step it
+## arms must refuse to RUN under it too, and a fresh one is armed when the
+## toss is over.
+func test_a_dwell_armed_before_the_toss_does_not_act_under_it() -> void:
+	var demo: DuelScreen = load("res://game/duel/duel_screen.tscn").instantiate()
+	demo.config = DuelConfig.demo_default()
+	demo.config.pace = 1000.0     # no timer of its own fires during the test
+	add_child_autofree(demo)
+	await get_tree().process_frame
+	var seat: int = demo._ai_seat_to_act()
+	assert_ne(seat, -1, "an AI seat is due to act")
+	var counting := CountingSeat.new()
+	demo._ais[seat] = counting
+	demo._toss_active = true
+	demo._ai_step()
+	assert_eq(counting.acted, 0, "nothing acts under the toss")
+	assert_false(demo._ai_pending, "and nothing new is armed under it")
+	demo._toss_active = false
+	demo._refresh()
+	assert_true(demo._ai_pending, "the toss over, a fresh dwell is armed")
+	demo._ai_step()
+	assert_eq(counting.acted, 1, "and the seat acts on the duel that has begun")

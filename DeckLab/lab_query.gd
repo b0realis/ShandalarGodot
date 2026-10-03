@@ -214,9 +214,17 @@ static func deck_report(path: String, format: String) -> Dictionary:
 			entry["near"] = Array(near_names(name))
 		unknown.append(entry)
 	var needed: Array = []
+	# A pack the file DECLARES (`# requires-pack:`) whose cards another
+	# enabled pack also provides is not a requirement — the shared-reprint
+	# rule the game's own gates use (CardPacks.effective_requirements, bug
+	# pass 2026-10-03); the check, the Lab and the referee then agree with
+	# the setup screen about which decks can be played.
+	var declared: Array[String] = []
+	declared.assign(deck.required_packs)
 	if packs != null:
 		needed = Array(packs.packs_required_by(distinct))
-	for id in deck.required_packs:
+		declared = packs.effective_requirements(declared, distinct)
+	for id in declared:
 		if not needed.has(id):
 			needed.append(id)
 	var missing: Array = []

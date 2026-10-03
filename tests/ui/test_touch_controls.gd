@@ -597,7 +597,7 @@ func test_the_options_row_is_a_view_of_the_key() -> void:
 
 func test_the_choice_survives_a_reload_of_the_file() -> void:
 	layer.choose(TouchControls.ON)
-	Settings.reload()
+	Settings.reload_file()
 	assert_eq(Settings.touch_controls(), "on", "the file carries it")
 
 

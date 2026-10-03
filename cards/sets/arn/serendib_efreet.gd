@@ -24,6 +24,12 @@ static func _own_upkeep(_game: MtgGame, source: CardInstance, event: GameEvent) 
 	return event.data["player"] == source.controller_id
 
 
+## The bite resolves even if the creature left the battlefield in response
+## (CR 603.6 / 608.2h — a triggered ability exists independently of its
+## source): the damage comes from it as it last existed, to the player who
+## controlled the trigger. It used to fizzle (until 2026-10-03).
 static func _bite(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone == Mtg.Zone.BATTLEFIELD:
-		game.deal_damage(source, TargetRef.player(source.controller_id), 1)
+	var pid := game.current_resolution_controller()
+	if pid < 0:
+		pid = source.controller_id
+	game.deal_damage(source, TargetRef.player(pid), 1)

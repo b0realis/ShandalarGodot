@@ -312,8 +312,11 @@ func _refresh() -> void:
 	var rescan := find_child("Rescan", true, false) as Button
 	rescan.disabled = not refusal.is_empty()
 	rescan.tooltip_text = refusal
+	# EVERY pack's pair — Pack 7's was missing until the bug pass of
+	# 2026-10-03, so it stayed live under an SGManalink session's lock.
 	for button in [_enable, _disable, _second_enable, _second_disable,
-		_third_enable, _third_disable, _fourth_enable, _fourth_disable, _fifth_enable, _fifth_disable, _sixth_enable, _sixth_disable]:
+		_third_enable, _third_disable, _fourth_enable, _fourth_disable, _fifth_enable, _fifth_disable, _sixth_enable, _sixth_disable,
+		_seventh_enable, _seventh_disable]:
 		button.disabled = button.disabled or not refusal.is_empty()
 		button.tooltip_text = refusal
 	if not refusal.is_empty(): _status.text += "\n" + refusal

@@ -206,6 +206,13 @@ var _options_dialog: OriginalDialog = null    # `Duel Options...` (§6.4)
 var _duel_log: DuelLog = null                # the log window, `L` [QoL]
 var _log_file: DuelLogFile = null            # the running `duel_log.txt` [QoL]
 var _log_button: Button = null                # its switch on the reserve strip
+## THE LOOK (2026-10-03): the window naming the cards an effect showed
+## the viewer (Glasses of Urza, Rag Man, Nebuchadnezzar...), whether a
+## seat-private one is in it, and the looks a private hotseat holds until
+## their seat is at the screen — see [method _on_information_revealed].
+var _reveal_window: OriginalDialog = null
+var _reveal_private := false
+var _reveals_waiting: Array[Dictionary] = []
 var _card_preview: CardPreview = null        # shared enlarged-card popup
 var _fullscreen_card: FullscreenCard = null
 var _phase_bar: PhaseBar = null
@@ -622,6 +629,8 @@ func _new_game() -> void:
 	game.state_changed.connect(_on_engine_state_changed)
 	game.game_ended.connect(_on_game_over)
 	game.event_occurred.connect(_on_game_event)
+	game.information_revealed.connect(_on_information_revealed)
+	_reveals_waiting.clear()
 	# Every duel runs on a KNOWN seed, logged on the first line, so a
 	# player's bug report can be replayed exactly (DuelConfig.rng_seed).
 	# Without one the shuffles were unreproducible (2026-09 audit).
@@ -727,10 +736,51 @@ func _is_human(pid: int) -> bool:
 ## rule: the original had none) — the viewer is a window on `L`, § THE
 ## DUEL LOG below.
 func _on_log_line(line: String, meta: Dictionary) -> void:
+	var shown := _log_for_viewer(line, meta)
 	if _log_file != null:
-		_log_file.write(line, meta)
+		_log_file.write(shown[0], shown[1])
 	if _duel_log != null and is_instance_valid(_duel_log):
-		_duel_log.append_line(line, meta)
+		_duel_log.append_line(shown[0], shown[1])
+
+
+## THE PRIVATE LINE (2026-10-03). Some engine lines are one seat's secret
+## — what a Demonic Tutor found, the cards Sylvan Library let its
+## controller see — and both the log window and `duel_log.txt` printed
+## every line verbatim, so the AI's find was on the player's screen and in
+## the player's file. The engine marks such a line in its meta:
+## `private_to`, the seat it belongs to, and `public`, the sentence
+## everybody else may read ("... searches their library and finds a
+## card"). This returns `[line, meta]` as the local viewer may read them:
+## unchanged for a line with no `private_to` or one whose seat
+## [method _sees_private_log] says is the viewer's, the public sentence
+## otherwise. Both readers go through here — the running file and the
+## window (line by line, and its refill in [method _open_duel_log]).
+func _log_for_viewer(line: String, meta: Dictionary) -> Array:
+	if not meta.has("private_to") or _sees_private_log(int(meta["private_to"])):
+		return [line, meta]
+	var shown := meta.duplicate()
+	# The window inks the first mention of `card` in the text; a redacted
+	# line has nothing of the secret card's to mention.
+	shown["card"] = ""
+	shown["colors"] = 0
+	return [String(meta.get("public", "(hidden)")), shown]
+
+
+## May the local viewer read [param seat]'s private log lines? The same
+## reading as the hands: a seat whose hand this table hides (the AI's,
+## against the computer) keeps its secrets too, and a spectator — the AI
+## Demo, both hands open — reads both. A PRIVATE HOTSEAT reads neither:
+## one window and one file serve both players there, and either may be the
+## one looking.
+func _sees_private_log(seat: int) -> bool:
+	if config.private_hotseat():
+		return false
+	if seat not in [0, 1]:
+		# Both seats' secrets in one line (MtgGame.FACE_DOWN_NOBODY, a
+		# line naming each side's face-down creature): whole only where
+		# every hand is open — the AI Demo (2026-10-03).
+		return hidden_hands.is_empty()
+	return not hidden_hands.has(seat)
 
 
 ## THE DUEL'S LAST WORD. `@DIALOG_SHANDALARENDDUEL` (UIStrings.txt:514)
@@ -1892,6 +1942,14 @@ func _on_graveyard_card(inst: CardInstance) -> void:
 	if mode != Mode.TARGETING:
 		if _card_preview != null:
 			_card_preview.show_card(inst)
+		# ONLY A QUIET TABLE STARTS SOMETHING FROM A PILE (2026-10-03). The
+		# view opens in any mode, and both doors below write `_pending_*`
+		# — so a click here while a cast waited for its mana (PAYING), or
+		# during a declaration, the discard or the damage division, threw
+		# away the cast in progress for a second one. Anywhere but a quiet
+		# NORMAL table the click only shows the card.
+		if mode != Mode.NORMAL or _pending_card != null:
+			return
 		var seat := _viewing_seat()
 		if game.can_play_from_exile(seat, inst) and game.priority_player == seat:
 			_close_graveyard()
@@ -3450,6 +3508,14 @@ func _can_cancel() -> bool:
 		return true
 	if mode == Mode.TARGETING or mode == Mode.PAYING:
 		return true
+	# A pending cast on a NORMAL table is something to cancel too, and
+	# [method _on_cancel]'s first branch drops exactly that case — the
+	# ladder only has to be able to reach it. Whatever leaves one behind
+	# (the forced declarations above were the known way, 2026-10-03), Esc
+	# and the bar's Cancel take it back instead of opening the Pause
+	# window over it.
+	if mode == Mode.NORMAL and _pending_card != null:
+		return true
 	if mode == Mode.ATTACKERS:
 		# ...and only while they can be TAKEN BACK. The sentence above
 		# already made that the reason ("because ours are revocable up to
@@ -3566,6 +3632,10 @@ func _on_escape() -> void:
 		return
 	if _options_dialog != null and is_instance_valid(_options_dialog):
 		_options_dialog.dismiss()
+		return
+	# The look's window is a bare dialog too, with one button: OK.
+	if reveal_window_open():
+		_close_reveal_window()
 		return
 	if _choice_overlay != null:
 		if _choice_withdrawable():
@@ -3736,7 +3806,14 @@ func _ai_step() -> void:
 	# The dwell this timer belongs to was armed before the Pause window
 	# opened. Drop it on the floor: [method _close_pause] refreshes, and
 	# that arms a fresh one.
-	if is_paused() or _fullscreen_card_open():
+	#
+	# THE SAME FOR THE TOSS (2026-10-03): `_new_game` deals the opening
+	# hands before [method _run_coin_toss] raises `_toss_active`, and the
+	# deal's own refresh arms a dwell — which in AI Demo mode then fired
+	# under the splash and the coin and had a seat act on a duel that had
+	# not begun (turn 0, the mulligans still open). The toss's last line
+	# refreshes, and that arms a fresh one.
+	if is_paused() or _fullscreen_card_open() or _toss_active:
 		return
 	var pid := _ai_seat_to_act()
 	if pid != -1:
@@ -3745,6 +3822,17 @@ func _ai_step() -> void:
 
 
 func _on_pass() -> void:
+	# NOT UNDER A CENTRE POPUP (2026-10-03). Return and Space already
+	# refused to reach past the X question, the tutor picker, the mode
+	# menu, the graveyard view and the held-open choice ([method
+	# _on_control]); the Situation Bar's Done button — which none of them
+	# covers, and which [method _done_applies] already leaves dark under
+	# them — still passed priority with the half-built cast hanging under
+	# the window. The popup's own buttons answer it. TARGETING never comes
+	# here: Done closes a target slot there ([method _on_done]), the reason
+	# the bar stays clickable over the graveyard view.
+	if _modal_open():
+		return
 	if mode == Mode.NORMAL and _is_human(game.priority_player):
 		if config.private_hotseat():
 			if not _hotseat_can_interject():
@@ -5305,11 +5393,39 @@ func _refresh_hotseat_after_action() -> void:
 	_refresh()
 
 
+## A DECLARATION THE ENGINE NOW DEMANDS OUTRANKS A CAST LEFT HANGING
+## (2026-10-03). A player may start a cast while the other seat still
+## holds priority ([method _click_hand_card] lets them aim during the
+## other seat's beat), and an AI's dwell runs on under the X question —
+## so the engine can begin waiting on THIS seat's attackers, blockers,
+## discard or damage division with a cast still pending here. No seat
+## has priority inside a declaration, so the cast could never be
+## submitted; [method _refresh] used to switch the mode over it all the
+## same, and once the declaration was made the table stood in NORMAL
+## with a ghost cast — the crosshair still up, the automatic pass and the
+## double-click auto-cast dead (both refuse while `_pending_card` is
+## set), Cancel hidden and Escape opening the Pause window. Called just
+## before each forced mode: the cast's windows close and the cast goes,
+## exactly as Cancel would take it (mana already drawn stays in the pool),
+## and a graveyard view open for its target goes with it — the
+## declaration needs the table.
+func _drop_cast_for_declaration() -> void:
+	if _x_dialog != null:
+		_x_dialog.dismiss()
+		_x_dialog = null
+	_close_search_dialog()
+	if _pending_card != null:
+		_clear_pending()
+		if graveyard_is_open():
+			_close_graveyard()
+
+
 func _refresh() -> void:
 	if game == null or _hotseat_passing:
 		return
 	_settle_hotseat_priority()
 	_sync_hotseat()
+	_show_waiting_reveals()
 	if _spectator_hands():
 		# [QoL] Both demo hands stay open. Following priority made them
 		# alternately fold and unfold on every pass, obscuring the game.
@@ -5327,6 +5443,7 @@ func _refresh() -> void:
 	# declaration (the AI's own declarations run through its timer).
 	if game.awaiting_attackers and mode != Mode.ATTACKERS \
 			and _is_human(game.active_player):
+		_drop_cast_for_declaration()
 		mode = Mode.ATTACKERS
 		_clear_attack_lineup()
 		# The 1997 line, verbatim — @PROMPT_MAIN entry 5, UIStrings.txt:1063,
@@ -5337,6 +5454,7 @@ func _refresh() -> void:
 		_set_prompt("Combat phase: Choose attackers.")
 	elif game.awaiting_blockers and mode != Mode.BLOCKERS \
 			and _is_human(game.block_chooser()):
+		_drop_cast_for_declaration()
 		mode = Mode.BLOCKERS
 		_block_map = {}
 		_selected_blocker = -1
@@ -5363,11 +5481,13 @@ func _refresh() -> void:
 	# for them, entered and left the same way the declarations are.
 	elif game.awaiting_discard and mode != Mode.DISCARD \
 			and _is_human(game.active_player):
+		_drop_cast_for_declaration()
 		mode = Mode.DISCARD
 		_discard_picks = []
 		_set_prompt(_discard_prompt())
 	elif game.awaiting_damage_assignment and mode != Mode.DAMAGE \
 			and _is_human(int(game.damage_assignment_request().get("assigner", -1))):
+		_drop_cast_for_declaration()
 		mode = Mode.DAMAGE
 		_damage_picks = {}
 		_set_prompt(_damage_prompt())
@@ -5678,6 +5798,10 @@ func _may_see_hand(pid: int) -> bool:
 func _conceal_private_views() -> void:
 	if _card_preview != null:
 		_card_preview.show_back()
+	# A seat's own look goes when its hand does (the public ones may stay,
+	# but they share the window, so it goes whole).
+	if _reveal_private:
+		_close_reveal_window()
 	_close_choice_overlay()
 	for popup in [_card_menu, _ability_menu, _library_menu]:
 		if popup != null:
@@ -6205,7 +6329,17 @@ func _open_duel_log() -> void:
 	window.place(Vector2(room.x - DuelLog.SIZE.x - 12.0, 8.0))
 	window.set_names(PackedStringArray([game.players[0].player_name,
 		game.players[1].player_name]))
-	window.fill(game.log_lines, game.log_meta)
+	# THE REFILL READS THE LOG THE SAME WAY the line-by-line follow does
+	# ([method _log_for_viewer]): a private line stays redacted however
+	# late the window is opened.
+	var lines := PackedStringArray()
+	var metas: Array[Dictionary] = []
+	for i in game.log_lines.size():
+		var meta: Dictionary = game.log_meta[i] if i < game.log_meta.size() else {}
+		var shown := _log_for_viewer(game.log_lines[i], meta)
+		lines.append(shown[0])
+		metas.append(shown[1])
+	window.fill(lines, metas)
 	_duel_log = window
 	if _log_button != null:
 		_log_button.set_pressed_no_signal(true)
@@ -6230,6 +6364,93 @@ func _on_log_button_toggled(on: bool) -> void:
 		_open_duel_log()
 	else:
 		_close_duel_log()
+
+
+# ------------------------------------------------------- THE LOOK (2026-10-03) --
+#
+# "Look at target player's hand" (Glasses of Urza), "reveals their hand"
+# (Inquisition, Amnesia, Rag Man), "reveal the top cards" (Nebuchadnezzar):
+# the engine says what an effect showed, and to whom, on
+# [signal MtgGame.information_revealed] — `viewer` is the seat that may
+# look, or -1 for everybody. Only SGManalink listened (its `Revealed
+# information` window); on the local table a look showed nothing at all.
+# Here it opens the same kind of window, `Revealed information`, the look's
+# title over the cards' names — and only for a viewer this table may show
+# that seat's secrets to: everyone for -1, the player's own seat against
+# the computer, both seats to an AI Demo spectator (both hands are open),
+# and at a PRIVATE HOTSEAT the seat whose hand is shown right now. A look
+# for a hotseat seat that is not at the screen waits for it
+# ([member _reveals_waiting]), and goes when that hand is hidden again.
+#
+# NOT A MODAL, like the concede question: the duel runs on under it, its
+# OK or Esc puts it away (Return and Space wait for it, as under every bare
+# dialog — [method _dialogs_open]), and a second look while it is up joins
+# it rather than stacking a second window.
+
+func _on_information_revealed(viewer: int, title: String, names: Array) -> void:
+	if _may_see_information(viewer):
+		_show_reveal(viewer, title, names)
+	elif viewer >= 0 and config.private_hotseat():
+		_reveals_waiting.append({"viewer": viewer, "title": title,
+			"names": names.duplicate()})
+
+
+## Is [param viewer]'s look the local viewer's to read right now?
+func _may_see_information(viewer: int) -> bool:
+	if viewer < 0:
+		return true
+	if config.private_hotseat():
+		# [method _may_see_hand] without its revealed-hand shortcut: a hand
+		# a rule turned face up says nothing about what else its seat saw.
+		return _hotseat_revealed and viewer == _hotseat_seat \
+			and _hotseat_key == _private_view_key()
+	return not hidden_hands.has(viewer)
+
+
+## The hotseat's held looks whose seat is at the screen now.
+func _show_waiting_reveals() -> void:
+	if _reveals_waiting.is_empty():
+		return
+	var still: Array[Dictionary] = []
+	for look in _reveals_waiting:
+		if _may_see_information(int(look["viewer"])):
+			_show_reveal(int(look["viewer"]), String(look["title"]), look["names"])
+		else:
+			still.append(look)
+	_reveals_waiting = still
+
+
+func reveal_window_open() -> bool:
+	return _reveal_window != null and is_instance_valid(_reveal_window) \
+		and not _reveal_window.is_queued_for_deletion()
+
+
+func _show_reveal(viewer: int, title: String, names: Array) -> void:
+	if not reveal_window_open():
+		_reveal_window = OriginalDialog.create("Revealed information",
+			Vector2(440, 200))
+		_reveal_window.add_button("OK").pressed.connect(_close_reveal_window)
+		add_child(_reveal_window)
+		_reveal_private = false
+	var body := _reveal_window.body()
+	body.add_child(OriginalDialog.wrapped(title, 15, true))
+	var cards := PackedStringArray()
+	for card_name in names:
+		cards.append(String(card_name))
+	var line := OriginalDialog.wrapped(", ".join(cards) if not cards.is_empty()
+		else "(no cards)", 14)
+	line.add_theme_color_override("font_color", OriginalDialog.CHOICE)
+	body.add_child(line)
+	_reveal_window.fit_height()
+	if viewer >= 0:
+		_reveal_private = true
+
+
+func _close_reveal_window() -> void:
+	if reveal_window_open():
+		_reveal_window.dismiss()
+	_reveal_window = null
+	_reveal_private = false
 
 
 # ------------------------------------------------ THE PAUSE WINDOW (Q/Esc) --
@@ -9066,92 +9287,98 @@ func _player_panel(pid: int, life_first := true) -> Control:
 	piles_row.add_child(deck_stack)
 	# The graveyard shows its TOP CARD when it has one, and the original's
 	# empty-grave art otherwise (the reference: a card face in a full
-	# graveyard, the red skull plate in an empty one). The node is built
-	# INSIDE the branch: a seat with no plate keeps a null here (every
-	# reader checks), where a TextureRect made outside it and never added
-	# to the row was an orphan for the run — one per seat, listed at exit
-	# on every table drawn without the original skin.
+	# graveyard, the red skull plate in an empty one).
+	#
+	# THE PLATE IS BUILT WITH OR WITHOUT THE SKIN (2026-10-03). It used to
+	# be built only inside `if grave_texture != null:` — and with it the
+	# one click that opens the graveyard view — so a table drawn without
+	# the imported 1997 art (every fresh clone, every CI runner) had a bare
+	# count at the end of the row and nothing to click: Raise Dead aimed
+	# at nothing, graveyard abilities and play-from-exile were out of
+	# reach and the exile count was never drawn. Without the art the plate
+	# is a flat stand-in ([method _bare_plate]) under the same node, so
+	# every reader below finds the same control either way — and the node
+	# always joins the row, so it is never the exit-time orphan a
+	# TextureRect made outside the row once was.
 	_grave_icons.resize(2)
 	var grave_texture := GameSkin.texture("grave_panel_" + config.panel_colors[pid])
-	if grave_texture != null:
-		var grave_icon := TextureRect.new()
-		_grave_icons[pid] = grave_icon
-		grave_icon.texture = grave_texture
-		grave_icon.custom_minimum_size = Vector2(40, 60)
-		grave_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		grave_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		grave_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
-		# THE PILE IS A CONTROL, not decoration (docs/duel-todo.md §1.2):
-		# `@MENU_GRAVEYARD` is the original's own right-click menu on it,
-		# and until this line the four graveyard target kinds had nothing
-		# clickable to point at. s30's handleGraveyardClick: a non-empty
-		# pile opens the view, the same pile again closes it.
-		grave_icon.mouse_filter = Control.MOUSE_FILTER_STOP
-		# A hop target for the pad's D-pad (`PadControls.TARGET_META`, by
-		# its literal: the tools parse this screen before the autoloads
-		# are named) — a TextureRect is no button, and the second Steam
-		# Deck playtest reached the piles only with the trackpad.
-		grave_icon.set_meta("pad_target", true)
-		grave_icon.tooltip_text = "Your graveyard" if pid == _human_seat() and not config.private_hotseat() \
-			else "%s graveyard" % config.seat_name(pid)
-		grave_icon.gui_input.connect(func(event: InputEvent) -> void:
-			if event is InputEventMouseButton and event.pressed \
-					and event.button_index == MOUSE_BUTTON_LEFT:
-				_on_grave_pile_clicked(pid))
-		var ring := Panel.new()
-		var ring_box := StyleBoxFlat.new()
-		ring_box.bg_color = Color(0, 0, 0, 0)
-		ring_box.set_border_width_all(2)
-		ring_box.border_color = MiniCard.HIGHLIGHT_COLORS[MiniCard.Highlight.TARGET]
-		ring.add_theme_stylebox_override("panel", ring_box)
-		ring.set_anchors_preset(Control.PRESET_FULL_RECT)
-		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		ring.visible = false
-		grave_icon.add_child(ring)
-		_grave_rings.resize(2)
-		_grave_rings[pid] = ring
-		# THE GRAVEYARD'S COUNT, on the graveyard — see the record beside
-		# [constant PILE_COUNT_INK]. Until 2026-09-03 this number was a
-		# loose Label at the END of the row, so it stood in the black gap
-		# to the right of the EXILE plate and read as a stray digit.
-		_grave_labels.resize(2)
-		_grave_labels[pid] = _pile_count_label(grave_icon)
-		piles_row.add_child(grave_icon)
-		# THE EXILE PILE, immediately RIGHT of the graveyard (the owner's
-		# ask): the same 40x60 plate, the same click, the same viewer. It is
-		# built inside this branch on purpose — a seat with no grave plate
-		# gets no exile plate either, and ExilePlate paints one only when the
-		# grave plate it borrows its palette from exists.
-		var exile_icon := TextureRect.new()
-		_exile_icons.resize(2)
-		_exile_icons[pid] = exile_icon
-		exile_icon.texture = ExilePlate.plate(config.panel_colors[pid])
-		exile_icon.custom_minimum_size = Vector2(40, 60)
-		exile_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		exile_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		exile_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
-		exile_icon.mouse_filter = Control.MOUSE_FILTER_STOP
-		exile_icon.set_meta("pad_target", true)
-		exile_icon.tooltip_text = "Exiled cards (out of play)"
-		# `@MENU_GRAVEYARD`'s three views live in ONE overlay, so this plate
-		# opens the very viewer the graveyard does — the exile section is
-		# already in it — rather than a second one of its own.
-		exile_icon.gui_input.connect(func(event: InputEvent) -> void:
-			if event is InputEventMouseButton and event.pressed \
-					and event.button_index == MOUSE_BUTTON_LEFT:
-				_on_grave_pile_clicked(pid))
-		# The count rides ON the plate (the row has no width to spare beside
-		# the mana column) and is blank while the pile is empty.
-		_exile_labels.resize(2)
-		_exile_labels[pid] = _pile_count_label(exile_icon)
-		piles_row.add_child(exile_icon)
-	else:
-		# NO 1997 PLATES: there is no graveyard art for the count to ride,
-		# so it stays what it always was — a bare number at the end of the
-		# row. The seat's portrait still stands beside it.
-		_grave_labels.resize(2)
-		_grave_labels[pid] = _pile_count_label(null)
-		piles_row.add_child(_grave_labels[pid])
+	var grave_icon := TextureRect.new()
+	_grave_icons[pid] = grave_icon
+	grave_icon.texture = grave_texture
+	if grave_texture == null:
+		grave_icon.add_child(_bare_plate("Grave"))
+	grave_icon.custom_minimum_size = Vector2(40, 60)
+	grave_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	grave_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	grave_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	# THE PILE IS A CONTROL, not decoration (docs/duel-todo.md §1.2):
+	# `@MENU_GRAVEYARD` is the original's own right-click menu on it,
+	# and until this line the four graveyard target kinds had nothing
+	# clickable to point at. s30's handleGraveyardClick: a non-empty
+	# pile opens the view, the same pile again closes it.
+	grave_icon.mouse_filter = Control.MOUSE_FILTER_STOP
+	# A hop target for the pad's D-pad (`PadControls.TARGET_META`, by
+	# its literal: the tools parse this screen before the autoloads
+	# are named) — a TextureRect is no button, and the second Steam
+	# Deck playtest reached the piles only with the trackpad.
+	grave_icon.set_meta("pad_target", true)
+	grave_icon.tooltip_text = "Your graveyard" if pid == _human_seat() and not config.private_hotseat() \
+		else "%s graveyard" % config.seat_name(pid)
+	grave_icon.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed \
+				and event.button_index == MOUSE_BUTTON_LEFT:
+			_on_grave_pile_clicked(pid))
+	var ring := Panel.new()
+	var ring_box := StyleBoxFlat.new()
+	ring_box.bg_color = Color(0, 0, 0, 0)
+	ring_box.set_border_width_all(2)
+	ring_box.border_color = MiniCard.HIGHLIGHT_COLORS[MiniCard.Highlight.TARGET]
+	ring.add_theme_stylebox_override("panel", ring_box)
+	ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.visible = false
+	grave_icon.add_child(ring)
+	_grave_rings.resize(2)
+	_grave_rings[pid] = ring
+	# THE GRAVEYARD'S COUNT, on the graveyard — see the record beside
+	# [constant PILE_COUNT_INK]. Until 2026-09-03 this number was a
+	# loose Label at the END of the row, so it stood in the black gap
+	# to the right of the EXILE plate and read as a stray digit.
+	_grave_labels.resize(2)
+	_grave_labels[pid] = _pile_count_label(grave_icon)
+	piles_row.add_child(grave_icon)
+	# THE EXILE PILE, immediately RIGHT of the graveyard (the owner's
+	# ask): the same 40x60 plate, the same click, the same viewer. The
+	# two appear and disappear TOGETHER as art — ExilePlate paints one
+	# only when the grave plate it borrows its palette from exists —
+	# but both are always there as controls, the bare stand-in under
+	# each when the skin is absent.
+	var exile_icon := TextureRect.new()
+	_exile_icons.resize(2)
+	_exile_icons[pid] = exile_icon
+	exile_icon.texture = ExilePlate.plate(config.panel_colors[pid]) \
+		if grave_texture != null else null
+	if exile_icon.texture == null:
+		exile_icon.add_child(_bare_plate("Exile"))
+	exile_icon.custom_minimum_size = Vector2(40, 60)
+	exile_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	exile_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	exile_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	exile_icon.mouse_filter = Control.MOUSE_FILTER_STOP
+	exile_icon.set_meta("pad_target", true)
+	exile_icon.tooltip_text = "Exiled cards (out of play)"
+	# `@MENU_GRAVEYARD`'s three views live in ONE overlay, so this plate
+	# opens the very viewer the graveyard does — the exile section is
+	# already in it — rather than a second one of its own.
+	exile_icon.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed \
+				and event.button_index == MOUSE_BUTTON_LEFT:
+			_on_grave_pile_clicked(pid))
+	# The count rides ON the plate (the row has no width to spare beside
+	# the mana column) and is blank while the pile is empty.
+	_exile_labels.resize(2)
+	_exile_labels[pid] = _pile_count_label(exile_icon)
+	piles_row.add_child(exile_icon)
 	# THE SEAT'S PORTRAIT, in the space the stray count used to occupy.
 	piles_row.add_child(_seat_portrait_block(pid, not life_first))
 
@@ -9222,12 +9449,48 @@ func _deck_name_label(pid: int, below_piles: bool) -> Label:
 	return label
 
 
+## The stand-in plate's stone and its edge-and-word ink — dark like the
+## black the piles sit on, edged in the tan of the deck names.
+const BARE_PLATE_FILL := Color(0.14, 0.12, 0.11)
+const BARE_PLATE_INK := Color(0.55, 0.48, 0.36)
+
+
+## THE PLATE WITHOUT THE ART (2026-10-03): a flat stand-in for a grave or
+## exile plate on a table drawn without the imported 1997 skin, so the
+## pile is still a thing to see and to click (see the plates' record in
+## the piles row). It draws BEHIND the TextureRect it is put under
+## (`show_behind_parent`), so a top card's face — when the card art is
+## there — covers it exactly as it covers the 1997 plate, and [param word]
+## names the pile while it shows no face. It takes no input: the plate
+## above it does.
+func _bare_plate(word: String) -> Panel:
+	var plate := Panel.new()
+	var box := StyleBoxFlat.new()
+	box.bg_color = BARE_PLATE_FILL
+	box.set_border_width_all(1)
+	box.border_color = BARE_PLATE_INK
+	plate.add_theme_stylebox_override("panel", box)
+	plate.set_anchors_preset(Control.PRESET_FULL_RECT)
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.show_behind_parent = true
+	var caption := Label.new()
+	caption.text = word
+	caption.add_theme_font_size_override("font_size", 10)
+	caption.add_theme_color_override("font_color", BARE_PLATE_INK)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.set_anchors_preset(Control.PRESET_FULL_RECT)
+	caption.offset_top = 4
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.add_child(caption)
+	return plate
+
+
 ## ONE PILE'S COUNT, in the bottom-right corner of the art it belongs to.
 ## [param host] is that art — the top card back, the grave plate, the
 ## exile plate — and the label anchors to its whole rect so the corner
-## stays the corner however the row is stretched. A null [param host]
-## (no 1997 skin, so no plate to ride) returns the label unparented for
-## the caller to place; the colouring is the same either way.
+## stays the corner however the row is stretched. Every pile has a host
+## now, skin or no skin ([method _bare_plate]); a null [param host]
+## still returns the label unparented for the caller to place.
 ##
 ## The voice is [constant PILE_COUNT_INK] over a hard black outline; see
 ## the record beside that constant for why yellow and why an outline.

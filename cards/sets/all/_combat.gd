@@ -90,7 +90,9 @@ static func _paladin_blocked(g: MtgGame, s: CardInstance, _e: GameEvent) -> void
 static func _home_guard(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	if F._same_trigger_source(g, s): g.add_counters(s, "-0/-1")
 	g.create_token(int(g.trigger_context(s).controller), CardData.new("Deserter", "", Mtg.CardType.CREATURE).pt(0, 1).with_colors(Mtg.ManaColor.W).with_subtypes(["deserter"]))
-static func _partner(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.blockers_of(s.id).has(i.id) or g.combat.attackers_blocked_by(s.id).has(i.id)
+# Band-wide on both sides (2026-10-03): a creature blocking one band member
+# blocks every member (CR 702.22h).
+static func _partner(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return g.combat.blockers_of_band(g.combat.band_of(s.id)).has(i.id) or g.combat.opposing_attackers(s.id).has(i.id)
 static func _defender(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
 	if not B.live_source(g, s): return
 	var other := g.find_instance(t.instance_id)
@@ -111,7 +113,7 @@ static func _crusader(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: 
 static func _sac_later(g: MtgGame, s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
 	var i := O._live(g, id, stamp)
 	if i != null and i.controller_id == g.current_resolution_controller(): g.sacrifice_permanent(i)
-static func _vine_target(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return i.has_keyword(Mtg.Keyword.FLYING) and g.combat.attackers_blocked_by(s.id).has(i.id)
+static func _vine_target(g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return i.has_keyword(Mtg.Keyword.FLYING) and g.combat.opposing_attackers(s.id).has(i.id)
 static func _vine(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
 	var i := g.find_instance(t.instance_id)
 	g.tap_permanent(i)
@@ -130,14 +132,20 @@ static func _vermin(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var counters := s.counters if F._same_trigger_source(g, s) else s.last_counters
 	for t in g.current_targets(): g.deal_damage(s, t, int(counters.get("infection", 0)))
 static func _other(_g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return i != s
+# A Gorilla gone before resolution still deals its damage, with its last
+# known power (CR 608.2h) — only the damage back has nowhere to go (Karplusan
+# Yeti's Fight, 2026-10-03). One still here but no longer a creature has no
+# power at all (CR 208.3).
 static func _fight(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int) -> void:
-	if not B.live_source(g, s) or not s.is_creature(): return
 	var other := g.find_instance(t.instance_id)
-	var power := s.cur_power
+	if other == null: return
+	var live := B.live_source(g, s)
+	if live and not s.is_creature(): return
+	var power := s.cur_power if live else s.last_power
 	var other_power := other.cur_power
 	g.begin_simultaneous()
-	g.deal_damage(s, t, power)
-	g.deal_damage(other, TargetRef.card(s), other_power)
+	g.deal_damage(s, t, maxi(0, power))
+	if live: g.deal_damage(other, TargetRef.card(s), maxi(0, other_power))
 	g.end_simultaneous()
 static func _gorilla_upkeep(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var pid := int(g.trigger_context(s).controller)

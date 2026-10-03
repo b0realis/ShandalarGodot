@@ -118,6 +118,18 @@ static var _props_by_script: Dictionary = {}
 ## scripts (CardData, the effects, the abilities) once per card in play.
 static var _is_state_by_script: Dictionary = {}
 
+## Guards BOTH tables above, every read and every write (bug pass
+## 2026-10-03). The Deck Lab plays its games on a WorkerThreadPool and each
+## of them snapshots (every pre-flight probe), so the first snapshots of a
+## run filled these from several threads at once — and a Godot Dictionary
+## is not safe to READ while another thread writes it, let alone written
+## from two. Eight pool threads snapshotting eight games on cold tables
+## crashed three runs of three (signal 11, Array `_ref` errors). The lock is
+## cheap because it is rare: [method _capture] keeps its own copy of every
+## answer it looks up, so a snapshot takes it once per SCRIPT it meets — a
+## dozen — not once per object.
+static var _cache_mutex := Mutex.new()
+
 var _game: MtgGame = null
 var _objects: Array = []    ## the objects captured, parallel with the two below
 ## Per captured object, its saved property values IN THE CACHED ORDER — a
@@ -141,6 +153,10 @@ func _capture(game: MtgGame) -> void:
 	_game = game
 	_rng_state = game.rng.state
 	var seen := {}
+	# script instance id -> its [plain, deep] names, or false for a
+	# DEFINITION: this snapshot's own copy of the shared tables, so the
+	# lock on those is taken once per script rather than per object.
+	var kinds := {}
 	var queue: Array = [game]
 	while not queue.is_empty():
 		var obj: Object = queue.pop_back()
@@ -157,9 +173,14 @@ func _capture(game: MtgGame) -> void:
 		var script: Script = obj.get_script()
 		if script == null:
 			continue
-		if not _is_state(script, obj):
+		var sid := script.get_instance_id()
+		var kind: Variant = kinds.get(sid)
+		if kind == null:
+			kind = _property_names(script, obj) if _is_state(script, obj) else false
+			kinds[sid] = kind
+		if kind is bool:
 			continue
-		var props: Array = _property_names(script, obj)
+		var props: Array = kind
 		var plain: Array = props[0]
 		var deep: Array = props[1]
 		var saved: Array = []
@@ -214,7 +235,9 @@ func object_count() -> int:
 ## [member _is_state_by_script].
 static func _is_state(script: Script, obj: Object) -> bool:
 	var key := script.get_instance_id()
+	_cache_mutex.lock()
 	var known: Variant = _is_state_by_script.get(key)
+	_cache_mutex.unlock()
 	if known != null:
 		return bool(known)
 	# The agents are rewound too, whatever subclass they are. That is what
@@ -232,7 +255,9 @@ static func _is_state(script: Script, obj: Object) -> bool:
 	# this line.
 	var answer: bool = STATE_CLASSES.has(script.get_global_name()) \
 		or (obj is DecisionAgent) or (obj is DamagePacket.PreventionBudget)
+	_cache_mutex.lock()
 	_is_state_by_script[key] = answer
+	_cache_mutex.unlock()
 	return answer
 
 
@@ -240,8 +265,11 @@ static func _is_state(script: Script, obj: Object) -> bool:
 ## value needs copying. See [member _props_by_script].
 static func _property_names(script: Script, obj: Object) -> Array:
 	var key := script.get_instance_id()
-	if _props_by_script.has(key):
-		return _props_by_script[key]
+	_cache_mutex.lock()
+	var known: Variant = _props_by_script.get(key)
+	_cache_mutex.unlock()
+	if known != null:
+		return known
 	# StringName keys, kept as they come out of get_property_list(): every
 	# Object.get()/set() with a String argument pays for the conversion.
 	var plain: Array[StringName] = []
@@ -259,7 +287,13 @@ static func _property_names(script: Script, obj: Object) -> Array:
 		else:
 			plain.append(pname)
 	var split: Array = [plain, deep]
-	_props_by_script[key] = split
+	# Built into locals and PUBLISHED under the lock; a thread that built the
+	# same list meanwhile keeps the first one, so every caller shares it.
+	_cache_mutex.lock()
+	if not _props_by_script.has(key):
+		_props_by_script[key] = split
+	split = _props_by_script[key]
+	_cache_mutex.unlock()
 	return split
 
 

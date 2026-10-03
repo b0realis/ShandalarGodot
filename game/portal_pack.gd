@@ -103,6 +103,13 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 ## Inspect declared uncompressed lengths before ZIPReader allocates them.
 ## Our builder produces ordinary, single-disk ZIPs, never ZIP64 archives.
 static func _bounded_zip(path: String) -> bool:
+	return bounded_zip(path, MAX_ENTRIES)
+
+
+## The same guard for any pack, with that pack's own entry count — Packs
+## 1-5 call it too since the bug pass of 2026-10-03; they went straight to
+## `ZIPReader.read_file`, which allocates whatever an entry DECLARES.
+static func bounded_zip(path: String, max_entries: int) -> bool:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null or file.get_length() < 22 or file.get_length() > 256 * 1024 * 1024: return false
 	var tail_size := mini(65557, file.get_length())
@@ -114,7 +121,7 @@ static func _bounded_zip(path: String) -> bool:
 		end -= 1
 	if end < 0 or tail.decode_u16(end + 4) != 0 or tail.decode_u16(end + 6) != 0: return false
 	var count := tail.decode_u16(end + 10)
-	if count > MAX_ENTRIES or count != tail.decode_u16(end + 8): return false
+	if count > max_entries or count != tail.decode_u16(end + 8): return false
 	var directory_end := file.get_length() - tail_size + end
 	var offset := tail.decode_u32(end + 16)
 	if offset + tail.decode_u32(end + 12) != directory_end: return false

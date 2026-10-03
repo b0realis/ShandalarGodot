@@ -13,7 +13,9 @@ rather than going undocumented.
 """
 
 import io
+import os
 import struct
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -239,6 +241,99 @@ class TestCheckingASkin(unittest.TestCase):
         path.write_bytes(b"<html>")
         with redirect_stdout(io.StringIO()):
             self.assertEqual(cat.check(path), 1)
+
+
+class TestCheckRefusesWhatTheGameRefuses(unittest.TestCase):
+    """`--check` SAYS NO WHERE THE GAME SAYS NO, AND EXITS 1 (bug pass
+    2026-10-03).
+
+    It approved — "skin, 0 files", exit 0 — an empty zip, a zip of
+    folders alone, a zip with a backslash in a name and a `.tar.xz` or
+    `.tar.bz2`, every one of which the game refuses at the door:
+    `SkinPack.inspect` wants at least one file, all under `skin/`, none
+    with `..` or `\\`; `TarPack.is_tar` knows a tar by a gzip header or
+    `ustar` at byte 257 and nothing else, and a file NAMED as a tar whose
+    bytes are none is refused before it is read as a zip
+    (`SkinPack._take`/`adopt`, NOT_A_TAR).
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _zip(self, name: str, entries: dict[str, bytes]) -> Path:
+        path = self.dir / name
+        with zipfile.ZipFile(path, "w") as zf:
+            for entry, body in entries.items():
+                zf.writestr(entry, body)
+        return path
+
+    def _tar(self, name: str, mode: str, entries: dict[str, bytes]) -> Path:
+        path = self.dir / name
+        with tarfile.open(path, mode) as tf:
+            for entry, body in entries.items():
+                info = tarfile.TarInfo(entry)
+                info.size = len(body)
+                tf.addfile(info, io.BytesIO(body))
+        return path
+
+    def _check(self, path: Path) -> tuple[int, str]:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = cat.check(path)
+        return code, out.getvalue()
+
+    def assertRefused(self, path: Path, why: str) -> None:
+        code, report = self._check(path)
+        self.assertEqual(code, 1, report)
+        self.assertIn(why, report)
+
+    def test_an_empty_zip_is_refused(self):
+        self.assertRefused(self._zip("empty.zip", {}), "no skin/ folder inside")
+
+    def test_a_zip_of_folders_alone_is_refused(self):
+        self.assertRefused(self._zip("dirs.zip", {"skin/": b"", "skin/portraits/": b""}),
+                           "no skin/ folder inside")
+
+    def test_a_backslash_in_a_zip_name_refuses_the_zip(self):
+        self.assertRefused(self._zip("bs.zip", {"skin/portraits\\face.png": b"x",
+                                                "skin/title_background.png": b"x"}),
+                           "an entry outside skin/")
+
+    def test_a_tar_xz_and_a_tar_bz2_are_not_tars_the_game_reads(self):
+        entries = {"skin/card_back.png": png_bytes(2, 2)}
+        for name, mode in (("skin.tar.xz", "w:xz"), ("skin.tar.bz2", "w:bz2")):
+            with self.subTest(name):
+                self.assertRefused(self._tar(name, mode, entries), "not a zip file")
+
+    def test_a_zip_named_as_a_tar_is_refused(self):
+        self.assertRefused(self._zip("skin.tar.gz", {"skin/card_back.png": b"x"}),
+                           "is not a tar the game can read")
+
+    def test_a_tar_with_no_files_is_refused(self):
+        path = self.dir / "folders.tar.gz"
+        with tarfile.open(path, "w:gz") as tf:
+            folder = tarfile.TarInfo("skin/")
+            folder.type = tarfile.DIRTYPE
+            tf.addfile(folder)
+        self.assertRefused(path, "holds no files")
+
+    def test_a_tar_backslash_is_the_separator_it_was_meant_as(self):
+        # TarPack._tidy turns them into slashes before the zip is made, so
+        # the zip the game inspects has none.
+        path = self._tar("bs.tar", "w", {"skin\\portraits\\face.png": png_bytes(2, 2)})
+        self.assertEqual(cat.names_in(path), ["portraits/face.png"])
+
+    def test_the_command_line_exits_non_zero_on_a_refusal(self):
+        path = self._zip("empty.zip", {})
+        env = dict(os.environ, SHANDALAR_NO_BANNER="1", PYTHONDONTWRITEBYTECODE="1")
+        run = subprocess.run([sys.executable, str(ROOT / "tools" / "skin_catalogue.py"),
+                              "--check", str(path)], capture_output=True, text=True,
+                             env=env, stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
 
 
 if __name__ == "__main__":

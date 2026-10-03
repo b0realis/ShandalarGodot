@@ -500,3 +500,110 @@ func test_nothing_answers_under_the_coin_toss() -> void:
 	screen._on_territory_input(click, 0)
 	assert_eq(screen._territory_menu_pid, -1, "the territory menu did not open")
 	screen._toss_active = false
+
+
+# ------------------------- a cast left hanging by a forced mode (2026-10-03) --
+#
+# A player may start aiming while the other seat still holds priority (see
+# `DuelScreen._click_hand_card`), and the AI's dwell runs on under the X
+# question. So the engine can begin waiting on a HUMAN DECLARATION — the
+# attackers, the blockers, the discard, the damage division — with a cast
+# still pending on this screen. `_refresh` used to switch the mode and
+# leave the cast where it was: the crosshair stayed, `_pending_card` stayed,
+# and once the declaration was done the table stood in NORMAL with a ghost
+# cast that disabled the automatic pass and the double-click auto-cast,
+# hid the Cancel button, and turned Escape into the Pause window.
+
+## Combat's beginning on our own turn, a creature that can attack, and a
+## Forest: the human (seat 0) has just passed, so seat 1 holds priority and
+## its pass will take the step into the attacker declaration.
+func _stage_combat_with_a_pass_made() -> void:
+	var g: MtgGame = screen.game
+	g.players[0].hand.clear()
+	g.players[0].battlefield.clear()
+	var bears := _put(0, "Grizzly Bears")
+	bears.summoning_sick = false
+	_put(0, "Swamp")
+	_put(0, "Forest")
+	g._enter_step(Mtg.STEP_ORDER.find(Mtg.Step.COMBAT_BEGIN))
+	g.priority_player = 0
+	g._passes = 0
+	screen.mode = DuelScreen.Mode.NORMAL
+	screen._refresh()
+	assert_eq(g.pass_priority(0), "")
+	assert_eq(g.priority_player, 1, "the other seat holds priority now")
+
+
+func test_a_forced_declaration_drops_a_cast_left_aiming() -> void:
+	_stage_combat_with_a_pass_made()
+	var g: MtgGame = screen.game
+	var growth := _give("Giant Growth")
+	screen._on_card_clicked(growth)
+	assert_eq(screen.mode, DuelScreen.Mode.TARGETING, "aiming during the other seat's beat")
+	assert_eq(g.pass_priority(1), "")
+	assert_true(g.awaiting_attackers, "the engine now waits on the attackers")
+	assert_eq(screen.mode, DuelScreen.Mode.ATTACKERS)
+	assert_null(screen._pending_card, "the cast left hanging was dropped")
+	assert_false(screen._target_cursor_active, "and the crosshair with it")
+	screen._on_confirm()   # no attackers
+	assert_eq(screen.mode, DuelScreen.Mode.NORMAL)
+	assert_null(screen._pending_card, "no ghost cast behind the declaration")
+	assert_false(screen._can_cancel(), "a quiet table: Esc means Pause again")
+
+
+func test_a_forced_declaration_closes_the_x_question_and_drops_its_cast() -> void:
+	_stage_combat_with_a_pass_made()
+	var g: MtgGame = screen.game
+	var howl := _give("Howl from Beyond")
+	screen._on_card_clicked(howl)
+	assert_not_null(screen._x_dialog, "Howl from Beyond asks for X first")
+	assert_eq(g.pass_priority(1), "")
+	assert_true(g.awaiting_attackers)
+	assert_eq(screen.mode, DuelScreen.Mode.ATTACKERS)
+	assert_null(screen._x_dialog, "the X question went with the cast")
+	assert_null(screen._pending_card)
+	assert_false(screen._modal_open(), "nothing stands over the declaration")
+
+
+func test_a_cast_left_pending_in_normal_mode_can_still_be_cancelled() -> void:
+	# THE SECOND GUARD: whatever else leaves a pending cast behind on a
+	# NORMAL table, the cancel ladder must still be able to reach it —
+	# `_on_cancel` already drops exactly that case, but `_can_cancel` kept
+	# both the key and the bar's button away from it.
+	screen._pending_card = _give("Giant Growth")
+	screen.mode = DuelScreen.Mode.NORMAL
+	assert_true(screen._can_cancel(), "a pending cast is something to cancel")
+	_send_key(KEY_ESCAPE)
+	assert_false(screen.is_paused(), "Escape did not open the Pause window")
+	assert_null(screen._pending_card, "it dropped the cast")
+
+
+# ------------------------------- Done's MOUSE door under a popup (2026-10-03) --
+
+func test_a_click_on_done_does_not_pass_under_the_x_question() -> void:
+	# Return and Space already refused to reach past the X question (above);
+	# the Situation Bar's Done button, which the X window does not cover,
+	# still passed priority with the cast hanging under it.
+	var g: MtgGame = screen.game
+	g.priority_player = 0
+	g._passes = 0
+	for i in 3:
+		_put(0, "Mountain")
+	screen._click_hand_card(_give("Fireball"))
+	assert_not_null(screen._x_dialog, "Fireball asks for X first")
+	var before := _clock()
+	screen._pass_button.pressed.emit()
+	assert_eq(_clock(), before, "the click did not move the duel")
+	assert_eq(g.priority_player, 0, "priority stayed with the caster")
+	assert_not_null(screen._x_dialog, "and the question is still up")
+
+
+func test_done_still_closes_a_target_slot_over_the_graveyard_view() -> void:
+	# TARGETING keeps its door: the bar is deliberately clickable over the
+	# open view so Done can close a variable slot (`_finish_target_slot`).
+	var victims := _aim_many()
+	screen._on_card_clicked(victims[0])
+	screen._open_graveyard(0)
+	assert_true(screen._modal_open())
+	screen._pass_button.pressed.emit()
+	assert_eq(screen.mode, DuelScreen.Mode.NORMAL, "Done closed the slot and the spell went")

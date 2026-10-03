@@ -82,6 +82,8 @@ var _network_button_open: Button
 var _invite_window: VBoxContainer
 var _invite_prompt: Label
 var _pending_join := ""
+## The finished room OK on its result asked to leave (2026-10-03).
+var _leave_room := ""
 var _room_copy: Button
 
 
@@ -784,6 +786,10 @@ func _connect_local() -> void:
 	var invitation := _code.text.strip_edges()
 	var result: Error
 	if invitation.begins_with(SgLanInvite.PREFIX):
+		var other_version := SgLanInvite.version_mismatch(SgLanInvite.protocol(invitation))
+		if not other_version.is_empty():
+			_notice.text = other_version
+			return
 		var data := SgLanInvite.parse(invitation)
 		if not _selected_host.is_empty() and (data.is_empty() \
 			or data.address != _selected_host.address or data.port != _selected_host.port \
@@ -861,6 +867,13 @@ func _refresh() -> void:
 				break
 		if not found and not wanted.is_empty():
 			_notice.text = "The table “%s” is no longer open. Pick another on this host." % wanted
+	# OK on a friendly result leaves its room (2026-10-03) as soon as the
+	# connection can say so: a reconnecting or busy client sends it later.
+	if not _leave_room.is_empty():
+		if String(room.get("id", "")) != _leave_room: _leave_room = ""
+		elif client.online and not client.busy():
+			_leave_room = ""
+			_send({"op": "leave"})
 	if not room.is_empty():
 		_page = "room"
 	elif not _room_id.is_empty():
@@ -881,6 +894,9 @@ func _refresh() -> void:
 			_duel.action_requested.connect(_send)
 			_duel.reconnect_requested.connect(client.reconnect)
 			_duel.exit_requested.connect(func() -> void: queue_free())
+			_duel.leave_requested.connect(func() -> void:
+				_leave_room = String(client.state.room.get("id", ""))
+				_queue_refresh())
 			_duel.hall_requested.connect(func() -> void: _send({"op": "t_return", "event": client.state.tournament.id}))
 			_duel.tournament_requested.connect(_open_master)
 		_duel.present(room, client.online, client.busy(), service != null)
@@ -955,6 +971,7 @@ func _refresh() -> void:
 		var keys := _discovery.hosts.keys()
 		keys.sort()
 		for key in keys: adverts.append(_discovery.hosts[key].host)
+		for key in _discovery.others: adverts.append(_discovery.others[key].host)
 	var room_display := room.duplicate(true)
 	room_display.erase("revision")
 	var snapshot := {"page":_page, "room":room_display, "rooms":client.state.rooms,
@@ -984,6 +1001,7 @@ func _disconnect() -> void:
 	_code.text = ""
 	_selected_host.clear()
 	_pending_join = ""
+	_leave_room = ""
 	_host_pending = false
 	_tournament_pending.clear()
 	_tournament_id = ""
@@ -1185,7 +1203,7 @@ static func _deck_text(deck: Dictionary) -> String:
 func _browser() -> void:
 	if not client.online:
 		var nearby := SgLobbyStyle.column(_body, "Tables on your network")
-		if _discovery == null or _discovery.hosts.is_empty():
+		if _discovery == null or (_discovery.hosts.is_empty() and _discovery.others.is_empty()):
 			nearby.add_child(_label("No tables listed yet", 21))
 			nearby.add_child(_label("Click Find LAN games. Your friend must keep their host open on the same network; "
 				+ "if their table stays unlisted, ask for their invitation.", 16))
@@ -1217,6 +1235,24 @@ func _browser() -> void:
 				var join := _button("Join" if entry.open else "In play", _join_advert.bind(advert.duplicate(true), String(entry.table)), Vector2(100,34))
 				join.disabled = not entry.open or client.connecting() or client.has_session()
 				table.add_child(join)
+		# A host of another protocol version (2026-10-03): listed, named, never joinable.
+		var other_keys := _discovery.others.keys()
+		other_keys.sort()
+		for key in other_keys:
+			var other: Dictionary = _discovery.others[key].host
+			var why := SgCompatibility.protocol_difference(SgProtocol.VERSION, int(other.protocol),
+				SgCompatibility.game_version(), String(other.game), "This host")
+			_cell(table, "Another version of Shandalar", true).tooltip_text = why
+			var host := _cell(table, String(other.name))
+			host.tooltip_text = "%s:%d" % [other.address, int(other.port)]
+			_cell(table, "")
+			_cell(table, "")
+			var build := _cell(table, SgCompatibility.protocol_brief(int(other.protocol), String(other.game)))
+			build.add_theme_color_override("font_color", UiChrome.ACCENT)
+			build.tooltip_text = why
+			var join := _button("Other version", func() -> void: _notice.text = why, Vector2(100, 34))
+			join.tooltip_text = why
+			table.add_child(join)
 		return
 	if not client.state.get("tournament", {}).is_empty():
 		var event := SgLobbyStyle.column(_body, client.state.tournament.config.name)

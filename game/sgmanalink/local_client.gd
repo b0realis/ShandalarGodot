@@ -6,6 +6,9 @@ extends Node
 signal changed
 signal refused(reason: String)
 const COMMAND_TIMEOUT_MS := 15000
+## Connections a host may close on the hello, without a welcome or a reason,
+## before this client stops retrying it (2026-10-03).
+const UNANSWERED_LIMIT := 3
 var state: Dictionary = {"rooms": [], "room": {}}
 var status := "Not connected"
 var command_error := ""
@@ -34,6 +37,7 @@ var build_fingerprint := SgCompatibility.fingerprint()
 var build_stamp := SgCompatibility.stamp()
 var _closing: Array = []
 var _unavailable_since := 0
+var _unanswered := 0
 
 
 func connect_invitation(invitation: String, temporary_name := "") -> Error:
@@ -77,7 +81,9 @@ func connect_local(local_port: int, code: String, temporary_name := "") -> Error
 
 func _connect() -> Error:
 	_socket = WebSocketPeer.new()
-	_socket.supported_protocols = PackedStringArray([SgProtocol.SUBPROTOCOL])
+	# Every earlier version too: an older host completes the handshake by
+	# choosing its own, which names it (SgProtocol.subprotocols, 2026-10-03).
+	_socket.supported_protocols = SgProtocol.subprotocols()
 	_socket.inbound_buffer_size = SgProtocol.MAX_BYTES * 2
 	_socket.outbound_buffer_size = 65536
 	_socket.max_queued_packets = 64
@@ -123,6 +129,7 @@ func forget() -> void:
 	online = false
 	_backoff = 500
 	_unavailable_since = 0
+	_unanswered = 0
 	state = {"rooms": [], "room": {}}
 	status = "Not connected"
 
@@ -151,6 +158,7 @@ func reconnect() -> void:
 	online = false
 	_wanted = true
 	_retry_at = 0
+	_unanswered = 0
 	_connect()
 
 
@@ -222,6 +230,18 @@ func poll() -> void:
 			status = "This seat was resumed in another connection."
 			changed.emit()
 			return
+		# A HOST THAT HANGS UP ON THE HELLO (2026-10-03), with neither a
+		# welcome nor a reason, is no host this build can talk to — an
+		# earlier build drops a hello it cannot read. A few tries, then say so.
+		if _hello_sent and not _welcomed:
+			_hello_sent = false
+			_unanswered += 1
+			if _unanswered >= UNANSWERED_LIMIT:
+				_wanted = false
+				online = false
+				status = "The host closed the connection without answering. It may run a different version of Shandalar; both players need the same version."
+				changed.emit()
+				return
 		if online:
 			online = false
 			status = "Connection lost; reconnecting..."
@@ -241,6 +261,16 @@ func poll() -> void:
 		changed.emit()
 		return
 	if connection != WebSocketPeer.STATE_OPEN:
+		return
+	# The host chose an earlier version's handshake: it is that version.
+	if _socket.get_selected_protocol() != SgProtocol.SUBPROTOCOL:
+		var theirs := SgProtocol.subprotocol_version(_socket.get_selected_protocol())
+		_wanted = false
+		online = false
+		status = SgCompatibility.protocol_difference(SgProtocol.VERSION, theirs) if theirs > 0 \
+			else "Host sent an invalid response. Connection stopped."
+		_socket.close(-1)
+		changed.emit()
 		return
 	if not _hello_sent:
 		_socket.send_text(SgProtocol.encode({"v": SgProtocol.VERSION,
@@ -277,6 +307,7 @@ func poll() -> void:
 				guest = message.guest
 				_seq = maxi(_seq, int(message.seq) + 1)
 				_welcomed = true
+				_unanswered = 0
 				status = "Synchronizing with host..."
 			"state":
 				if not message.get("rooms") is Array or not message.get("room") is Dictionary:

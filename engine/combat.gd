@@ -313,8 +313,12 @@ static func attack_illegality(game: MtgGame, inst: CardInstance, defender_pid: i
 		return "can't attack"
 	if inst.cant_attack_this_turn:
 		return "can't attack this turn (Wall of Dust-style ban)"
+	# Sea Serpent's clause is an ABILITY: a face-down Serpent (CR 708.2) or
+	# one that lost its abilities has no such restriction (bug pass
+	# 2026-10-03 — it was read off the printed data regardless).
 	var needs := inst.data.attack_needs_defender_land
-	if needs != "" and not _controls_land_of_type(game, defender_pid, needs):
+	if needs != "" and not inst.cur_abilities_silenced \
+			and not _controls_land_of_type(game, defender_pid, needs):
 		return "can't attack unless the defending player controls a %s" % needs.capitalize()
 	if check_group and inst.cur_min_attack_group > 1:
 		if inst.cur_attacks_alone or (game.max_attackers > 0 and game.max_attackers < inst.cur_min_attack_group): return "not enough permitted attackers"
@@ -340,6 +344,11 @@ static func band_illegality(game: MtgGame, band: Array) -> String:
 		var inst := game.find_instance(id)
 		if inst == null:
 			return "unknown creature in band"
+		# The same creature named twice is not a band of two (bug pass
+		# 2026-10-03; MtgGame.declare_attackers also refuses a member
+		# shared between two bands).
+		if members.has(inst):
+			return "a creature can be in only one band"
 		members.append(inst)
 		if not inst.has_keyword(Mtg.Keyword.BANDING):
 			non_banding += 1

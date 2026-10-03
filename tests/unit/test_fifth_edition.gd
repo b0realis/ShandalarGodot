@@ -454,6 +454,37 @@ func test_the_turn_boundary_burns_and_checks_like_any_other() -> void:
 	assert_eq(g.winner, 1)
 
 
+func test_the_end_of_the_turn_empties_the_pool_before_the_next_turn() -> void:
+	# Bug pass 2026-10-03: under the preset CLEANUP passes the turn through
+	# _finish_cleanup -> _end_turn -> _next_turn and never through
+	# _advance_step, which is where the pool empties. The END -> CLEANUP
+	# step is inside one phase, so nothing emptied it at all: mana floated
+	# in the end step survived into the opponent's turn, unburned and
+	# spendable (the test above only passed because the burn landed at
+	# the NEXT turn's first phase boundary).
+	_fifth()
+	advance_to_step(Mtg.Step.END)
+	add_mana(1, Mtg.ManaColor.R, 3)   # the non-active seat floats mana
+	advance_to_step(Mtg.Step.UPKEEP)
+	assert_eq(g.turn_number, 2, "the next turn began")
+	assert_eq(g.players[1].mana_pool.total(), 0, "the pool emptied as turn 1 ended")
+	assert_eq(g.players[1].life, 17, "and burned there")
+
+
+func test_a_player_below_zero_as_the_turn_ends_loses_then() -> void:
+	# The other half of the same boundary: the phase-end life check. A
+	# player at -2 when turn 1 ended used to reach turn 2 alive and could
+	# heal in its upkeep (manual p.174: the check is at the end of a PHASE,
+	# and the end of the turn ends one).
+	_fifth()
+	advance_to_step(Mtg.Step.END)
+	g.players[0].life = -2
+	advance_to_step(Mtg.Step.UPKEEP)
+	assert_true(g.game_over, "the check fired as the turn ended")
+	assert_eq(g.turn_number, 1, "before the next turn began")
+	assert_eq(g.winner, 1)
+
+
 # ---------------- the half of a tapped artifact that does NOT stop ---------
 
 func test_a_tapped_artifact_can_still_answer_the_1997_window() -> void:

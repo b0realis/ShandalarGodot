@@ -78,21 +78,26 @@ static func _dearest_first(game: MtgGame, _source: CardInstance,
 	return ia.id < ib.id
 
 
+## The trigger resolves even if the Spuzzem has died in response (CR 603.6
+## / 608.2h): its controller may still destroy the artifact — the "no
+## combat damage" rider then binds nothing. Until 2026-10-03 a Bolt in
+## response also saved the artifact.
 static func _smash(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	if source.zone != Mtg.Zone.BATTLEFIELD:
-		return
 	var refs: Array = game.current_targets()
 	if refs.is_empty():
 		return
 	var pick := game.find_instance(refs[0].instance_id)
 	if pick == null or pick.zone != Mtg.Zone.BATTLEFIELD:
 		return
-	var pid := source.controller_id
+	var pid := game.current_resolution_controller()
+	if pid < 0:
+		pid = source.controller_id
 	if not game.agents[pid].choose_yes_no(game, pid,
 			"Destroy %s instead of dealing combat damage?"
 				% pick.data.card_name, true):
 		return
 	game.destroy(pick)
 	# "If you do, this creature assigns no combat damage this turn."
-	game.continuous.add_until_eot_combat_prevention(source.id, true, false)
+	if source.zone == Mtg.Zone.BATTLEFIELD:
+		game.continuous.add_until_eot_combat_prevention(source.id, true, false)
 	game.recalculate()

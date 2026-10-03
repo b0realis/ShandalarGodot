@@ -528,9 +528,16 @@ func because(reason: String) -> TargetSpec:
 ## [param earlier] is the refs already chosen for the slots BEFORE this
 ## one — what a [member sibling_filter] reads; leave it empty when they
 ## are not known and the sibling check is deferred to the plan.
+## [param controller]: the seat the targeting is done FROM, when that is not
+## [param source]'s current controller — an ability whose source was
+## sacrificed as its cost is still its activator's (CR 113.7a, 608.2b),
+## though the card's own controller has gone home to its owner. -1 =
+## [param source]'s controller.
 func is_legal(game: MtgGame, ref: TargetRef, source: CardInstance,
-		earlier: Array = []) -> bool:
-	return refusal_reason(game, ref, source, earlier) == ""
+		earlier: Array = [], controller := -1) -> bool:
+	if controller < 0:
+		return refusal_reason(game, ref, source, earlier) == ""
+	return refusal_reason_from(game, ref, source, earlier, controller) == ""
 
 
 ## WHY [param ref] is not a legal choice — one of [constant WHY]'s 29
@@ -539,8 +546,24 @@ func is_legal(game: MtgGame, ref: TargetRef, source: CardInstance,
 ## set of checks and it is this one.
 func refusal_reason(game: MtgGame, ref: TargetRef, source: CardInstance,
 		earlier: Array = []) -> String:
+	return refusal_reason_from(game, ref, source, earlier, -1)
+
+
+## [method refusal_reason] judged from seat [param controller] rather than
+## from [param source]'s current controller (see [method is_legal]). A
+## separate method so [method refusal_reason]'s signature — which
+## presentation subclasses override (SgTargetSpec) — never changes.
+func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
+		earlier: Array, controller: int) -> String:
 	if ref == null:
 		return WHY["cant_target"]
+	# WHO is targeting (see [method is_legal]): "target opponent", "your
+	# graveyard" and a shroud's exemption are all judged from this seat. A
+	# stolen Mirror Universe used to be countered on resolution: the
+	# sacrifice had sent it home, so "opponent" was read from the owner's
+	# side (bug pass 2026-10-03).
+	var who: int = controller if controller >= 0 \
+		else (source.controller_id if source != null else -1)
 	# DAMAGE (§6.8). `can't target this` is the original's word for "not a
 	# legal object for this at all", and it is the right one in both
 	# directions: damage offered to a spell that wants a creature, and a
@@ -579,7 +602,7 @@ func refusal_reason(game: MtgGame, ref: TargetRef, source: CardInstance,
 			return WHY["player"]
 		if kind != Kind.PLAYER and kind != Kind.ANY:
 			return WHY["player"]
-		if opponent_only and source != null and ref.player_id == source.controller_id:
+		if opponent_only and who >= 0 and ref.player_id == who:
 			return WHY["player"]   # "target opponent" excludes its controller
 		if ref.player_id < 0 or ref.player_id >= game.players.size():
 			return WHY["player"]
@@ -628,7 +651,7 @@ func refusal_reason(game: MtgGame, ref: TargetRef, source: CardInstance,
 				return WHY["cant_target"]
 			if source != null and (inst.cur_protection & source.cur_colors) != 0:
 				return WHY["abilities"]
-			if inst.cur_shroud and (source == null or not inst.cur_shroud_ignored_by.has(source.controller_id)):
+			if inst.cur_shroud and (source == null or not inst.cur_shroud_ignored_by.has(who)):
 				return WHY["abilities"]
 			if inst.cur_cant_be_spell_target and source != null \
 					and (source.zone == Mtg.Zone.STACK
@@ -646,7 +669,7 @@ func refusal_reason(game: MtgGame, ref: TargetRef, source: CardInstance,
 		# `targets.c:260` then `:268` tests them in.
 		if (kind == Kind.CREATURE_IN_YOUR_GRAVEYARD
 				or kind == Kind.CARD_IN_YOUR_GRAVEYARD) \
-				and source != null and inst.owner_id != source.controller_id:
+				and source != null and inst.owner_id != who:
 			return WHY["owner"]   # "your graveyard" means the ABILITY's
 			                      # controller (CR 109.5) — a stolen Adun
 			                      # Oakenshield digs in the THIEF's
@@ -683,11 +706,14 @@ func refusal_reason(game: MtgGame, ref: TargetRef, source: CardInstance,
 		# enchant spec), so testing the source's card type is enough —
 		# and it must be tested here, since cast_spell validates targets
 		# while the card is still in hand.
-		if inst.data.cant_be_aura_target and source != null and source.data.is_aura():
+		# Printed, so it goes with the abilities: a face-down Bartel (CR
+		# 708.2) has none (bug pass 2026-10-03).
+		if inst.data.cant_be_aura_target and not inst.cur_abilities_silenced \
+				and source != null and source.data.is_aura():
 			return WHY["abilities"]
 		# SHROUD: nothing may target it, not even its controller's own
 		# abilities (Spectral Cloak while its host is untapped).
-		if inst.cur_shroud and (source == null or not inst.cur_shroud_ignored_by.has(source.controller_id)):
+		if inst.cur_shroud and (source == null or not inst.cur_shroud_ignored_by.has(who)):
 			return WHY["abilities"]
 		# "Can't be enchanted by other Auras" (Anti-Magic Aura) — the
 		# aura that granted the ban is already attached, so any AURA

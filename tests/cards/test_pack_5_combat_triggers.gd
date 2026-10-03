@@ -173,3 +173,61 @@ func test_player_can_choose_prevention_before_martyrdom_redirect() -> void:
 	assert_eq(g.players[0].life, 20)
 	assert_eq(bear.damage, 0)
 	assert_eq(g.players[0].damage_replacements.size(), 1)
+
+# --- BANDING (bug pass 2026-10-03). A creature blocking one member of a band
+# blocks every member (CR 702.22h); the blocks below are declared on the OTHER
+# member. Benalish Hero and Mesa Pegasus are the base game's 1/1 banders.
+
+## P0 attacks with [param band] as one band; P1 then declares [param block_map].
+func _band_attack(band: Array, block_map: Dictionary) -> void:
+	var ids: Array = []
+	for inst in band: ids.append(inst.id)
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, ids, [ids]))
+	resolve_stack()
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, block_map))
+	resolve_stack()
+
+func test_sworn_defender_can_target_the_creature_blocking_its_band_mate() -> void:
+	var defender := put_battlefield(0, "Sworn Defender")
+	var hero := put_battlefield(0, "Benalish Hero")
+	var giant := put_battlefield(1, "Hill Giant")
+	_band_attack([defender, hero], {giant.id: hero.id})
+	add_mana(0, Mtg.ManaColor.C)
+	assert_ok(g.activate_ability(0, defender, 0, [TargetRef.card(giant)]))
+	resolve_stack()
+	assert_eq(Vector2i(defender.cur_power, defender.cur_toughness), Vector2i(2, 4))
+
+func test_whip_vine_can_lock_a_flying_band_mate_of_the_creature_it_blocks() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var pegasus := put_battlefield(0, "Mesa Pegasus")
+	var vine := put_battlefield(1, "Whip Vine")
+	_band_attack([hero, pegasus], {vine.id: hero.id})
+	assert_ok(g.pass_priority(0))
+	assert_ok(g.activate_ability(1, vine, 0, [TargetRef.card(pegasus)]))
+	resolve_stack()
+	assert_true(pegasus.cur_skips_untap, "held while Whip Vine stays tapped")
+
+# Bug pass 2026-10-03: "{T}: This creature deals damage equal to its power to
+# another target creature. That creature deals damage equal to its power to
+# this creature." A Gorilla gone before resolution still deals its damage,
+# with its last known power (CR 608.2h); only the damage back is lost. The
+# same wording Karplusan Yeti already resolved this way.
+func test_gargantuan_gorilla_deals_last_known_power_after_it_leaves() -> void:
+	var gorilla := put_battlefield(0, "Gargantuan Gorilla")
+	var giant := put_battlefield(1, "Hill Giant")
+	assert_ok(g.activate_ability(0, gorilla, 0, [TargetRef.card(giant)]))
+	g.return_to_hand(gorilla)
+	resolve_stack()
+	assert_eq(giant.zone, Mtg.Zone.GRAVEYARD, "7 damage from the Gorilla's last known power")
+	assert_eq(gorilla.zone, Mtg.Zone.HAND)
+	assert_eq(gorilla.damage, 0)
+
+func test_gargantuan_gorilla_and_its_target_trade_damage() -> void:
+	var gorilla := put_battlefield(0, "Gargantuan Gorilla")
+	var giant := put_battlefield(1, "Hill Giant")
+	assert_ok(g.activate_ability(0, gorilla, 0, [TargetRef.card(giant)]))
+	resolve_stack()
+	assert_eq(giant.zone, Mtg.Zone.GRAVEYARD)
+	assert_eq(gorilla.damage, 3)

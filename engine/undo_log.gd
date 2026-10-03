@@ -126,15 +126,22 @@ func record(obj: Object, prop: StringName, value: Variant) -> void:
 func record_object(obj: Object) -> void:
 	var script: Script = obj.get_script()
 	var key := script.get_instance_id()
-	var names: Array = _primary_props.get(key, [])
-	if names.is_empty():
+	# The whole lookup under the lock — see [member _primary_props_mutex].
+	# Only the first call per script builds the list; every other one is a
+	# Dictionary read between a lock and an unlock.
+	_primary_props_mutex.lock()
+	var names: Variant = _primary_props.get(key)
+	if names == null:
+		var built: Array = []
 		for p in obj.get_property_list():
 			if (int(p["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0:
 				continue
 			var pname: StringName = p["name"]
 			if not String(pname).begins_with("cur_"):
-				names.append(pname)
-		_primary_props[key] = names
+				built.append(pname)
+		_primary_props[key] = built
+		names = built
+	_primary_props_mutex.unlock()
 	for pname in names:
 		record(obj, pname, obj.get(pname))
 
@@ -142,6 +149,13 @@ func record_object(obj: Object) -> void:
 ## Primary (non-`cur_*`) script variable names per script instance id —
 ## filled by the first [method record_object] on each class.
 static var _primary_props: Dictionary = {}
+
+## Guards [member _primary_props], reads included (bug pass 2026-10-03).
+## The Deck Lab runs its games on a WorkerThreadPool and every AI search
+## journals through here, so the first searches of a run filled this table
+## from several threads at once; a Godot Dictionary is not safe to read
+## while another thread writes it. Never held while recording.
+static var _primary_props_mutex := Mutex.new()
 
 
 ## Open a node: returns the mark to hand back to [method undo_to].

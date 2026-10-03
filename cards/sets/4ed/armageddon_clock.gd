@@ -60,8 +60,14 @@ static func _tick(game: MtgGame, source: CardInstance, _event: GameEvent) -> voi
 		game.add_counters(source, "doom", 1)
 
 
+## The burn resolves even if the Clock is gone (CR 603.6), and then counts
+## the doom counters it LAST had (CR 608.2h): its live counters were wiped
+## by the zone change, so a Clock destroyed in response used to deal
+## nothing (until 2026-10-03).
 static func _burn(game: MtgGame, source: CardInstance, _event: GameEvent) -> void:
-	var n := int(source.counters.get("doom", 0))
+	var counters: Dictionary = source.counters \
+		if source.zone == Mtg.Zone.BATTLEFIELD else source.last_counters
+	var n := int(counters.get("doom", 0))
 	if n <= 0:
 		return
 	for p in game.players:

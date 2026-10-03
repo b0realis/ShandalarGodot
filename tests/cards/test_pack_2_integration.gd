@@ -405,3 +405,18 @@ func test_conversion_search_does_not_need_to_activate_a_converter_when_plain_man
 	assert_eq(plan.size(), 1)
 	assert_eq(plan[0][0], plains)
 	assert_eq(int(priest.memory.get("conversions", 0)), 0)
+
+# Bug pass 2026-10-03: blocking one member of a band blocks every member
+# (CR 702.22h), so a Dwarf declared on the Benalish Hero is also blocking
+# the Orc banded with it.
+func test_dwarf_blocking_a_band_with_an_orc_gets_the_bonus() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var orc := put_battlefield(0, "Orcish Veteran")
+	var dwarf := put_battlefield(1, "Dwarven Soldier")
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, [hero.id, orc.id], [[hero.id, orc.id]]))
+	resolve_stack()
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, {dwarf.id: hero.id}))
+	resolve_stack()
+	assert_eq(dwarf.cur_toughness, 3)

@@ -61,18 +61,7 @@ static func create(host: String, port: int, code: String, pem: String) -> String
 
 
 static func parse(invitation: String) -> Dictionary:
-	if invitation.length() > MAX_LENGTH or not invitation.begins_with(PREFIX):
-		return {}
-	var encoded := invitation.substr(PREFIX.length())
-	if encoded.is_empty() or encoded.length() % 4 != 0:
-		return {}
-	for character in encoded:
-		if not "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=".contains(character):
-			return {}
-	var bytes := Marshalls.base64_to_raw(encoded)
-	if bytes.has(0) or Marshalls.raw_to_base64(bytes) != encoded:
-		return {}
-	var data := SgProtocol.decode_payload(bytes, 2)
+	var data := _decode(invitation)
 	if not SgProtocol.exact(data, ["v", "address", "port", "access", "certificate"]) \
 		or not SgProtocol.integer(data.get("v"), SgProtocol.VERSION, SgProtocol.VERSION) \
 		or not address(data.get("address")) or not SgProtocol.integer(data.get("port"), 1, 65535) \
@@ -86,6 +75,38 @@ static func parse(invitation: String) -> Dictionary:
 		return {}
 	data["fingerprint"] = pem.sha256_text()
 	return data
+
+
+## The bounded JSON inside an invitation's text, unchecked; {} if none.
+static func _decode(invitation: String) -> Dictionary:
+	if invitation.length() > MAX_LENGTH or not invitation.begins_with(PREFIX):
+		return {}
+	var encoded := invitation.substr(PREFIX.length())
+	if encoded.is_empty() or encoded.length() % 4 != 0:
+		return {}
+	for character in encoded:
+		if not "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=".contains(character):
+			return {}
+	var bytes := Marshalls.base64_to_raw(encoded)
+	if bytes.has(0) or Marshalls.raw_to_base64(bytes) != encoded:
+		return {}
+	return SgProtocol.decode_payload(bytes, 2)
+
+
+## The protocol version an invitation was made by, read no further
+## (2026-10-03): another version's invitation fails [method parse], and was
+## refused as incomplete; this lets the lobby name both versions instead.
+## 0 when the text is no invitation at all.
+static func protocol(invitation: String) -> int:
+	var data := _decode(invitation)
+	return int(data.v) if SgProtocol.integer(data.get("v"), 1) else 0
+
+
+## Why an invitation of [param version] cannot be used here, or "".
+static func version_mismatch(version: int) -> String:
+	if version == 0 or version == SgProtocol.VERSION: return ""
+	return "This invitation is from %s version of Shandalar (SGManalink protocol %d; you run %d). Both players need the same version." \
+		% ["an older" if version < SgProtocol.VERSION else "a newer", version, SgProtocol.VERSION]
 
 
 static func certificate(data: Dictionary) -> X509Certificate:

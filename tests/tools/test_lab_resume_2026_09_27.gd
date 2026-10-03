@@ -113,6 +113,9 @@ func test_the_checkpoint_appends_after_a_torn_line_and_flushes_each_record() -> 
 		JSON.stringify({"arm": -1, "pair": 0, "seed": 1, "record": {"a_won": true,
 			"a_on_play": true, "turns": 3, "stalled": false, "drawn": false}}) + "\n{\"torn")
 	lab._out_absolute = absolute
+	# A RESUME appends; a run of its own starts the file again (the bug
+	# pass of 2026-10-03, tests/tools/test_bug_pass_2026_10_03_lab_tools.gd).
+	lab._resume_dir = out
 	lab._tasks = [{"pair": 0, "seed": 2}, {"arm": 4, "pair": 1, "seed": 3}]
 	lab._results = [{"a_won": false, "a_on_play": true, "turns": 5, "stalled": false, "drawn": false},
 		{"a_won": true, "a_on_play": false, "turns": 6, "stalled": false, "drawn": false}]
@@ -284,10 +287,14 @@ func test_resume_with_an_empty_checkpoint_plays_everything() -> void:
 	run["exit"] = null
 	_write(out.path_join(lab.RUN_JSON), JSON.stringify(run, "  ") + "\n")
 	var again = _lab()
-	assert_eq(again._main(PackedStringArray(["--resume", out])), 0, str(again.last_error))
+	# The chrome flags may ride beside --resume (2026-10-03) — they change
+	# how the run prints, not the line it plays, and run.json keeps the line.
+	assert_eq(again._main(PackedStringArray(["--resume", out, "--quiet", "--progress", "off"])), 0,
+		str(again.last_error))
 	assert_eq(again._resumed, {"reused": 0, "played": 2})
 	run = _json(out.path_join(lab.RUN_JSON))
 	assert_eq(int(run.exit), 0)
+	assert_eq(Array(run.argv), Array(argv), "the chrome is not part of the recorded line")
 	assert_eq(int(run.resumed.reused), 0)
 	assert_eq(int(run.resumed.played), 2)
 
@@ -307,6 +314,21 @@ func test_resume_refusals() -> void:
 	lab = _lab()
 	code = lab._main(PackedStringArray(["--games", "1", "--resume", nowhere]))
 	assert_eq(code, 2, "nor before it")
+	# The chrome flags are not a second opinion on the line: they are taken
+	# beside it, before or after, and the run's own checks answer
+	# (2026-10-03 — the MCP server's `lab_resume` sends --quiet, and was
+	# refused every time).
+	for chrome in [["--quiet"], ["--no-banner", "--progress", "json"], ["--progress", "log", "--quiet"]]:
+		lab = _lab()
+		code = lab._main(PackedStringArray(["--resume", nowhere] + chrome))
+		assert_eq(code, 2)
+		assert_eq(lab.last_error.kind, "resume", "%s beside --resume: %s" % [chrome, lab.last_error])
+	lab = _lab()
+	code = lab._main(PackedStringArray(["--quiet", "--resume", nowhere]))
+	assert_eq(lab.last_error.kind, "resume", str(lab.last_error))
+	lab = _lab()
+	code = lab._main(PackedStringArray(["--resume", nowhere, "--progress"]))
+	assert_eq(lab.last_error.kind, "option", "a --progress without its value is still an option error")
 	lab = _lab()
 	code = lab._main(PackedStringArray(["--resume", nowhere]))
 	assert_eq(code, 2)

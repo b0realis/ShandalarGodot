@@ -143,3 +143,44 @@ func test_baron_does_not_get_credit_for_damage_from_its_previous_incarnation() -
 	g.destroy(wall)
 	resolve_stack()
 	assert_eq(int(baron.counters.get("+2/+2", 0)), 0)
+
+# --- BANDING (bug pass 2026-10-03). A creature blocking one member of a band
+# blocks every member (CR 702.22h); the blocks below are declared on the OTHER
+# member. Benalish Hero and Timber Wolves are the base game's 1/1 banders.
+
+## P0 attacks with [param band] as one band; P1 then declares [param block_map].
+func _band_attack(band: Array, block_map: Dictionary) -> void:
+	var ids: Array = []
+	for inst in band: ids.append(inst.id)
+	advance_to_step(Mtg.Step.DECLARE_ATTACKERS)
+	assert_ok(g.declare_attackers(0, ids, [ids]))
+	resolve_stack()
+	advance_to_step(Mtg.Step.DECLARE_BLOCKERS)
+	assert_ok(g.declare_blockers(1, block_map))
+	resolve_stack()
+
+func test_greater_werewolf_blocking_a_band_counters_every_member() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var wolves := put_battlefield(0, "Timber Wolves")
+	var wolf := put_battlefield(1, "Greater Werewolf")
+	# Setup: its own combat damage would kill a 1/1 first.
+	g.continuous.add_until_eot_combat_prevention(wolf.id, true, false)
+	_band_attack([hero, wolves], {wolf.id: hero.id})
+	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()
+	assert_eq(hero.zone, Mtg.Zone.GRAVEYARD, "-0/-2 on a 1/1")
+	assert_eq(wolves.zone, Mtg.Zone.GRAVEYARD, "the band-mate was blocked by it too")
+
+func test_inquisitors_get_the_bonus_from_a_black_creature_blocking_their_band() -> void:
+	var inquisitors := put_battlefield(0, "Serra Inquisitors")
+	var hero := put_battlefield(0, "Benalish Hero")
+	var zombies := put_battlefield(1, "Scathe Zombies")
+	_band_attack([inquisitors, hero], {zombies.id: hero.id})
+	assert_eq(inquisitors.cur_power, 5)
+
+func test_rashka_blocking_a_band_with_a_black_member_gets_the_bonus() -> void:
+	var hero := put_battlefield(0, "Benalish Hero")
+	var zombies := put_battlefield(0, "Scathe Zombies")
+	var rashka := put_battlefield(1, "Rashka the Slayer")
+	_band_attack([hero, zombies], {rashka.id: hero.id})
+	assert_eq(Vector2i(rashka.cur_power, rashka.cur_toughness), Vector2i(4, 5))

@@ -57,6 +57,21 @@ func before_each() -> void:
 	file.close()
 
 
+## WRITTEN WHOLE OR NOT AT ALL (bug pass of 2026-10-03): the seal list
+## was truncated in place and its write never checked. It now goes
+## through a pending file renamed over the old one; a pending name the
+## game cannot write (a folder sits there) leaves the old list whole.
+func test_a_seal_list_that_cannot_be_written_whole_is_left_as_it_was() -> void:
+	PackSeal.seal("aaa")
+	DirAccess.make_dir_recursive_absolute(PackSeal.FILE + ".tmp")
+	PackSeal.seal("bbb")
+	DirAccess.remove_absolute(PackSeal.FILE + ".tmp")
+	assert_true(PackSeal.sealed("aaa"), "the old list is still read, whole")
+	assert_false(PackSeal.sealed("bbb"), "never opened for writing in place")
+	PackSeal.seal("bbb")
+	assert_true(PackSeal.sealed("aaa") and PackSeal.sealed("bbb"), "the next write goes through")
+
+
 func after_all() -> void:
 	PackSeal.clear()
 	if _had_seals:
