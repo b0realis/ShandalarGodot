@@ -18749,6 +18749,24 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-03 — What the second review found (0.50.10)
+
+A code review of 0.50.9, then the owner: *"Do it, go baby!"* All ten:
+
+- **Discovery on Android**: CHANGE_WIFI_MULTICAST_STATE in the Quest
+  preset (Godot's `GodotMulticastLock` is gated on it — read in the
+  4.7.stable template's classes.dex) and broadcast enabled on the host's
+  discovery socket too (`SgLanDiscovery._bind_broadcast`, both ends).
+- **The APK's manifest is checked** by `build_release.sh --quest` (aapt).
+- **One home guard**: `package_release.py --guard`, used by `guard_stage`
+  and the Quest branch; archive members (the skin zip included) read by
+  name (`.apk .aab .jar .zip`), stored members not read twice; a damaged
+  member is `UnreadablePayload`, not a leak; the block edge no longer
+  cuts a longer user name into the home. The real 0.50.6 stage (932 MB)
+  passes in ~8 s.
+- **Tests that can fail**: `--quest` end to end with stubs; the presets
+  read once and by name; the vacuous source check is gone.
+
 ## 2026-10-03 — What the review found (0.50.9)
 
 A code review of 0.50.8, then the owner: *"First correct co-authored by and

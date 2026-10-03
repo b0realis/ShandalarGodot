@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import stat
 import subprocess
+import os
 import sys
 import tempfile
 import unittest
@@ -84,6 +85,16 @@ class PackageReleaseTest(unittest.TestCase):
     def build(self, platform):
         return pack.package(self.folder, self.out, platform, self.skin,
                             "a" * 40, self.root)
+
+    def test_a_skin_zip_naming_the_home_is_refused(self):
+        # The skin zip rides in the -with-skin package; its members are
+        # deflated, so they are read one by one (review of 0.50.9).
+        self.make_export("linux64")
+        with zipfile.ZipFile(self.skin, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("skin/SKIN.txt", ("made in %s/skins\n" % Path.home()).encode() * 40)
+        with self.assertRaises(ValueError) as caught:
+            self.build("linux64")
+        self.assertIn("original_skin.zip", str(caught.exception))
 
     def test_all_platforms_two_packages_checksums_and_metadata(self):
         for platform in pack.PLATFORMS:
@@ -489,6 +500,61 @@ class GuardPrivateTest(unittest.TestCase):
             with self.assertRaises(ValueError) as caught:
                 pack.guard_private([broken], home="/home/builder")
             self.assertIn("not an APK", str(caught.exception))
+
+    def test_a_name_cut_by_a_read_block_is_judged_whole(self):
+        # The guard reads 1 MiB at a time; "/home/ann" ending right on the
+        # block's edge is "/home/anna" once the next block is read — a
+        # LONGER name, not the home (review of 0.50.9).
+        edge = 1024 * 1024
+        longer = b"x" * (edge - len(b"/home/ann")) + b"/home/ann" + b"a/notes\n"
+        self.assertFalse(self._refused(longer, "/home/ann"), "a longer name is not the home")
+        inside = b"x" * (edge - len(b"/home/ann")) + b"/home/ann" + b"/notes\n"
+        self.assertTrue(self._refused(inside, "/home/ann"), "a path into the home is")
+        at_end = b"x" * 100 + b"/home/ann"
+        self.assertTrue(self._refused(at_end, "/home/ann"), "the home as the file's last bytes")
+
+    def test_any_zip_payload_is_read_member_by_member(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("skin.zip", "Shandalar.aab", "Shandalar.apk"):
+                archive_path = Path(tmp) / name
+                with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                    archive.writestr("notes.txt", b"see /home/builder/x\n" * 40)
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    pack.guard_private([archive_path], home="/home/builder")
+
+    def test_an_unreadable_member_is_unreadable_not_a_home_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = Path(tmp) / "Shandalar.apk"
+            with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("classes.dex", b"dex bytes " * 400)
+            data = bytearray(apk.read_bytes())
+            data[60] ^= 0xFF          # inside the deflated member
+            apk.write_bytes(bytes(data))
+            with self.assertRaises(pack.UnreadablePayload) as caught:
+                pack.guard_private([apk], home="/home/builder")
+            self.assertIn("cannot read", str(caught.exception))
+
+    def test_the_guard_command_line_names_what_it_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stage = Path(tmp) / "stage"
+            (stage / "sub").mkdir(parents=True)
+            (stage / "clean.txt").write_text("nothing here\n")
+            env = dict(os.environ, HOME="/home/builder", SHANDALAR_NO_BANNER="1")
+            run = lambda *paths: subprocess.run(
+                [sys.executable, str(pack.ROOT / "tools" / "package_release.py"), "--guard", *map(str, paths)],
+                capture_output=True, text=True, env=env, timeout=60)
+            done = run(stage)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            (stage / "sub" / "report.txt").write_text("next: /home/builder/decks/x.deck\n".encode("utf-16-le").decode("latin-1"),
+                                                      encoding="latin-1")
+            done = run(stage)
+            self.assertEqual(done.returncode, 1, done.stderr)
+            self.assertIn("report.txt", done.stderr)
+            broken = Path(tmp) / "Broken.apk"
+            broken.write_bytes(b"not a zip")
+            done = run(broken)
+            self.assertEqual(done.returncode, 2, done.stderr)
+            self.assertIn("Broken.apk", done.stderr)
 
     def test_the_home_is_caught_in_every_form_a_file_carries_it(self):
         cases = {

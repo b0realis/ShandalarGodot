@@ -299,8 +299,12 @@ ssh_remote_deploy/enabled=false
 ; the network/Wi-Fi state reads) are asked for (2026-10-03): SGManalink's
 ; LAN host, join, discovery and tournaments open sockets, which Android
 ; refuses an app whose manifest lacks INTERNET — and a sideloaded APK
-; cannot be given it afterwards. All three are normal permissions: no
-; prompt on the headset.
+; cannot be given it afterwards. CHANGE_WIFI_MULTICAST_STATE too: Godot's
+; Android runtime takes the Wi-Fi multicast lock (GodotMulticastLock) for a
+; socket with broadcast enabled only when it is declared, and without the
+; lock the Wi-Fi drops the Game Browser's broadcasts. All four are normal
+; permissions: no prompt on the headset. build_release.sh --quest checks
+; the built APK asks for them (aapt).
 [preset.7]
 
 name="Android Quest"
@@ -367,6 +371,7 @@ apk_expansion/public_key=""
 permissions/custom_permissions=PackedStringArray()
 permissions/access_network_state=true
 permissions/access_wifi_state=true
+permissions/change_wifi_multicast_state=true
 permissions/internet=true
 keystore/debug=""
 keystore/debug_user=""

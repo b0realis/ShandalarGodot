@@ -142,9 +142,12 @@ or their own named project; changing XDG alone does not protect player data.
   the same two ways (`…-web.zip`, `…-web-with-skin.zip`: the page's
   files, `skin/SKIN.txt`, the tools under `tools/`, `docs/setup-web.txt`
   as README.txt — never the card art, whatever `--cardart` put beside
-  the page). Every stage is grepped for the builder's home path before
-  it is zipped and the build fails on a hit (`guard_stage`) — a stale
-  README once carried one. A release is the five zips: two Linux, two
+  the page). Every stage is read for the builder's home path before
+  it is zipped and the build fails on a hit (`guard_stage`, through
+  `tools/package_release.py --guard` — the packager's own guard: every
+  spelling of the home, the members of every zip; since 0.50.10) — a
+  stale README once carried one. `--quest` reads its APK the same way
+  and checks its manifest asks for the network. A release is the five zips: two Linux, two
   web, the skin. Since 2026-09-08 a built game mounts
   the skin as TWO zips (`SkinPack`, `load_resource_pack`): the 1997
   material and, apart, the card art — a zip's kind is what it holds,

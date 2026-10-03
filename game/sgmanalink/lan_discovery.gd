@@ -44,10 +44,9 @@ func scan() -> Error:
 	if OS.has_feature("web") or advertising:
 		return ERR_UNAVAILABLE
 	stop()
-	var error := _socket.bind(0, "0.0.0.0", 65536)
+	var error := _bind_broadcast(0)
 	if error != OK:
 		return error
-	_socket.set_broadcast_enabled(true)
 	_nonce = Crypto.new().generate_random_bytes(32).hex_encode()
 	scanning = true
 	status = "Looking for LAN hosts..."
@@ -59,13 +58,26 @@ func advertise(advert: Dictionary, discovery_port := PORT) -> Error:
 	if OS.has_feature("web") or not valid_advert(advert):
 		return ERR_INVALID_PARAMETER
 	stop()
-	var error := _socket.bind(discovery_port, "0.0.0.0", 65536)
+	var error := _bind_broadcast(discovery_port)
 	if error != OK:
 		status = "LAN discovery port is busy; share the invitation to join directly."
 		return error
 	_advert = advert.duplicate(true)
 	advertising = true
 	return OK
+
+
+## Bind the discovery socket with broadcast ON — for BOTH ends (2026-10-03).
+## On Android, Godot's runtime takes the Wi-Fi multicast lock (without it
+## the Wi-Fi drops broadcast packets) only for a socket with broadcast
+## enabled and only under CHANGE_WIFI_MULTICAST_STATE (the Android Quest
+## preset asks for it); the host's socket RECEIVES the Game Browsers'
+## broadcast queries, so it needs the lock as much as the scanner does.
+func _bind_broadcast(port: int) -> Error:
+	var error := _socket.bind(port, "0.0.0.0", 65536)
+	if error == OK:
+		_socket.set_broadcast_enabled(true)
+	return error
 
 
 func update_rooms(count: int) -> void:

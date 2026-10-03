@@ -921,7 +921,10 @@ with AI and go over MCP code for bugfix and improvement run!"*
   (`QUEST_KEY_ENV`), `JAVA_HOME` from the editor's
   `export/android/java_sdk_path` when unset, apksigner's verdict and
   the signer's CN checked, the APK's members read for the builder's home
-  folder (`package_release.guard_private`, 0.50.9), the adb lines
+  folder (`package_release.py --guard`, 0.50.9/0.50.10; a damaged APK is
+  "could not be read", not a leak), its manifest checked with aapt for
+  INTERNET, the network/Wi-Fi state and CHANGE_WIFI_MULTICAST_STATE
+  (0.50.10), the adb lines
   printed. The preset is in the tracked `export_presets.cfg.example`
   (since 0.50.8; a machine's own `export_presets.cfg` is a copy with its
   home in the template paths): prebuilt 4.7.stable template APKs by
@@ -1265,6 +1268,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.10.md`: what the review of 0.50.9 found — the
+  multicast permission and broadcast at both ends of discovery, the APK
+  manifest check, one home guard (`package_release.py --guard`).
 - `docs/releases/0.50.9.md`: what the review of 0.50.8 found — the Quest
   APK's network permissions, the home guard inside an APK, the presets
   pinned by name.
@@ -4605,8 +4611,12 @@ shandalar/
 │   │                          wrapper's -V, exit 3, exec line, no banner
 │   ├── test_build_release_sh.py  unittest for build_release.sh with a
 │   │                          stub Godot (2026-10-03): the leak gate's
-│   │                          singular wording, guard_stage on the .pck
-│   │                          and on links, every preset excluding the
+│   │                          singular wording, guard_stage on the .pck,
+│   │                          on links and on every spelling and zip
+│   │                          (the packager's guard), the presets by
+│   │                          name and the Quest permissions, --quest end
+│   │                          to end (home, unreadable, manifest),
+│   │                          every preset excluding the
 │   │                          run folders, the smoke boot's own profile,
 │   │                          shortcut.sh's Exec= quoting, the release
 │   │                          door's JSON refusal for any bytes
@@ -5155,10 +5165,14 @@ shandalar/
 │                              (stage_copy; 2026-09-08, when a full
 │                              tmpfs made a card art zip of stumps).
 │                              zip_stage() is the two zips of a stage;
-│                              guard_stage() greps a stage for the
-│                              builder's home path first and fails the
-│                              build on a hit (a stale README once
-│                              carried one into a package).
+│                              guard_stage() reads a stage for the
+│                              builder's home path first (package_release
+│                              --guard, 0.50.10: every spelling, every
+│                              zip's members) and fails the build on a
+│                              hit (a stale README once carried one into
+│                              a package). --quest reads the APK the same
+│                              way and checks its manifest (aapt) asks for
+│                              INTERNET and the multicast state.
 │                              --web --skin puts the skin zip and the
 │                              catalogue beside index.html for SkinPack
 │                              to fetch; --web --skin --cardart the card

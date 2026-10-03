@@ -18,16 +18,27 @@ WHAT THIS HOLDS:
     `*.txt` it is not told to skip, so a stray run report naming the
     builder's home rode inside it, unsearched) and REFUSES A SYMLINK in
     a stage (`zip -r` follows one and packs whatever it points at, while
-    `grep -r` does not follow it, so it was never searched).
-  * EVERY PRESET IN export_presets.cfg.example EXCLUDES DeckLab/results/
-    and workspace/ — the Deck Lab's and the MCP server's run folders.
+    `grep -r` does not follow it, so it was never searched). It reads
+    the stage through package_release's own guard (`--guard`), so every
+    spelling the packager refuses — UTF-16, backslashed, JSON-escaped,
+    inside a zip's deflated member — is refused here too.
+  * THE PRESETS, BY NAME: every preset the script exports is in
+    export_presets.cfg.example, each EXCLUDES DeckLab/results/ and
+    workspace/ (the Deck Lab's and the MCP server's run folders), and
+    the Quest preset asks for INTERNET, the network/Wi-Fi state and
+    CHANGE_WIFI_MULTICAST_STATE (LAN play and its discovery).
+  * `--quest`, END TO END with a stub Godot and SDK: the APK is read for
+    the home folder member by member, an APK that cannot be read is said
+    to be unreadable, and a manifest without the network permissions is
+    refused — a machine's own export_presets.cfg may predate them.
   * THE SMOKE BOOT NEVER TOUCHES THE OWNER'S PROFILE: the exported binary
     runs with its own XDG_DATA_HOME under the build's tmp/ and its own
     --log-file, so it neither writes `user://` nor rotates the owner's
     play logs out of `user://logs/`.
   * shortcut.sh WRITES AN Exec= LINE THE DESKTOP READS AS ONE PROGRAM
     whatever folder the game was unpacked in — a space (`My Games`), a
-    quote, a dollar, a backslash, a percent sign.
+    quote, a dollar, a backslash, a percent sign (where GLib cannot look
+    the program up, sh is the program and the game its argument).
   * THE RELEASE'S ONE DOOR refuses an unknown verb as one VALID JSON
     line whatever bytes the verb held.
 """
@@ -95,7 +106,7 @@ class GuardStageTest(unittest.TestCase):
         if home is not None:
             env["HOME"] = home
         return subprocess.run(["bash", "-c", guard_function() + 'guard_stage "$1"', "guard-test",
-                               str(self.stage)], capture_output=True, text=True, env=env)
+                               str(self.stage)], capture_output=True, text=True, env=env, cwd=str(ROOT))
 
     def test_a_clean_stage_with_a_binary_pck_passes(self):
         (self.stage / "Shandalar.pck").write_bytes(b"GDPC\x00\x01\x02res://decks/a.deck\x00\xff")
@@ -140,6 +151,31 @@ class GuardStageTest(unittest.TestCase):
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("notes.txt", done.stderr)
 
+    def test_every_spelling_of_the_home_is_refused_as_the_packager_refuses_it(self):
+        # ONE GUARD (review of 0.50.9): the stage is read by
+        # package_release's guard, so a UTF-16 or backslashed home — which
+        # a grep for the literal $HOME bytes let through — is refused here
+        # as it is in a package, and a home inside a zip's deflated member.
+        home = os.environ["HOME"]
+        cases = {"report.txt": ("next: " + home + "/x").encode("utf-16-le"),
+                 "notes.json": ('{"p": "%s"}' % home.replace("/", "\\/")).encode()}
+        for name, data in cases.items():
+            with self.subTest(file=name):
+                for old in self.stage.iterdir():
+                    old.unlink()
+                (self.stage / name).write_bytes(data)
+                done = self.guard()
+                self.assertNotEqual(done.returncode, 0, name)
+                self.assertIn(name, done.stderr)
+        for old in self.stage.iterdir():
+            old.unlink()
+        import zipfile
+        with zipfile.ZipFile(self.stage / "original_skin.zip", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("skin/SKIN.txt", (home + "/skins\n").encode() * 40)
+        done = self.guard()
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("original_skin.zip", done.stderr)
+
     def test_a_root_or_empty_home_does_not_refuse_every_file(self):
         (self.stage / "README.txt").write_text("see /usr/share/doc\n")
         for home in ("/", ""):
@@ -149,59 +185,130 @@ class GuardStageTest(unittest.TestCase):
 
 
 class PresetFilterTest(unittest.TestCase):
+    """The tracked presets, read once: every preset the release script
+    exports is there BY NAME, each keeps the run folders out of its .pck,
+    and the Quest preset asks for what LAN play needs."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = (ROOT / "export_presets.cfg.example").read_text(encoding="utf-8")
+        cls.presets = {}
+        for section in re.split(r"(?m)^\[preset\.\d+\]\n", cls.text)[1:]:
+            name = re.search(r'(?m)^name="([^"]*)"', section)
+            assert name, "a preset section without a name= line"
+            assert name.group(1) not in cls.presets, "two presets named %r" % name.group(1)
+            cls.presets[name.group(1)] = section
+
     def test_every_preset_excludes_the_lab_and_mcp_run_folders(self):
-        text = (ROOT / "export_presets.cfg.example").read_text(encoding="utf-8")
-        sections = re.split(r"(?m)^\[preset\.\d+\]\n", text)[1:]
-        self.assertGreaterEqual(len(sections), 7)
-        for section in sections:
-            name = re.search(r'(?m)^name="([^"]*)"', section).group(1)
+        for name, section in self.presets.items():
             exclude = re.search(r'(?m)^exclude_filter="([^"]*)"', section).group(1)
             entries = [entry.strip() for entry in exclude.split(",")]
             with self.subTest(preset=name):
                 self.assertIn("DeckLab/results/*", entries)
                 self.assertIn("workspace/*", entries)
 
-    @staticmethod
-    def sections():
-        text = (ROOT / "export_presets.cfg.example").read_text(encoding="utf-8")
-        out = {}
-        for section in re.split(r"(?m)^\[preset\.\d+\]\n", text)[1:]:
-            out[re.search(r'(?m)^name="([^"]*)"', section).group(1)] = section
-        return out
-
     def test_every_preset_the_script_exports_is_in_the_example(self):
         # The example is what a new machine starts from; the Android Quest
         # preset was missing from it from 0.40.48 until 0.50.8, and a
-        # count ("at least seven") could not notice (bug pass 2026-10-03).
+        # count ("at least seven") could not notice.
         wanted = set(re.findall(r'PRESET="([^"$]+)"', SOURCE))
         self.assertTrue({"Linux 64", "Web", "macOS", "Android Quest"} <= wanted, wanted)
-        self.assertEqual(wanted - set(self.sections()), set())
+        self.assertEqual(wanted - set(self.presets), set())
 
     def test_the_quest_preset_asks_for_the_network(self):
-        # LAN play (host, join, discovery, tournaments) needs sockets, and
-        # Android refuses them to an app whose manifest lacks INTERNET; the
-        # permission cannot be added after a sideload (2026-10-03).
-        quest = self.sections()["Android Quest"]
-        for permission in ("internet", "access_network_state", "access_wifi_state"):
+        # LAN play needs sockets, which Android refuses an app whose
+        # manifest lacks INTERNET; Godot takes the Wi-Fi multicast lock
+        # that lets broadcasts through only when CHANGE_WIFI_MULTICAST_STATE
+        # is declared. Neither can be added after a sideload.
+        quest = self.presets["Android Quest"]
+        for permission in ("internet", "access_network_state", "access_wifi_state",
+                           "change_wifi_multicast_state"):
             with self.subTest(permission=permission):
                 self.assertRegex(quest, r"(?m)^permissions/%s=true$" % permission)
 
     def test_the_quest_preset_names_the_script_that_loads_the_key(self):
-        text = (ROOT / "export_presets.cfg.example").read_text(encoding="utf-8")
-        self.assertNotIn("build_quest.sh", text, "no such script exists")
-        self.assertIn("build_release.sh --quest", text)
+        self.assertNotIn("build_quest.sh", self.text, "no such script exists")
+        self.assertIn("build_release.sh --quest", self.text)
         self.assertIn("QUEST_KEY_ENV", SOURCE)
 
 
-class QuestGuardTest(unittest.TestCase):
-    def test_the_quest_build_scans_the_apk_for_the_home_folder(self):
-        # An APK is a zip of DEFLATED files: a grep of its bytes cannot see
-        # a home path inside one, so the Quest branch hands the APK to
-        # package_release.guard_private, which reads every member.
-        branch = SOURCE[SOURCE.index("# THE QUEST BUILD ENDS HERE"):]
-        branch = branch[:branch.index("exit 0")]
-        self.assertIn("guard_private", branch)
-        self.assertIn('"$BIN"', branch[branch.index("guard_private"):])
+STUB_QUEST_GODOT = r'''
+import os, pathlib, sys, zipfile
+args = sys.argv[1:]
+if "--import" in args:
+    sys.exit(0)
+if any(a.startswith("--export-") for a in args):
+    apk = pathlib.Path(args[-1])
+    kind = os.environ.get("FAKE_APK", "clean")
+    if kind == "corrupt":
+        apk.write_bytes(b"PK not really an apk")
+        sys.exit(0)
+    with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("AndroidManifest.xml", b"manifest " * 20)
+        text = b"4 Llanowar Elves\n"
+        if kind == "home":
+            text = ("next: %s/decks/x.deck\n" % os.environ["HOME"]).encode()
+        archive.writestr("assets/decks/x.deck", text * 20)
+    sys.exit(0)
+sys.exit(9)
+'''
+
+FAKE_APKSIGNER = "#!/bin/sh\necho 'Signer #1 certificate DN: CN=b0realis'\n"
+FAKE_AAPT = "#!/bin/sh\necho \"package: com.b0realis.shandalar\"\nfor p in $FAKE_PERMS; do echo \"uses-permission: name='android.permission.$p'\"; done\n"
+
+
+class QuestBuildTest(unittest.TestCase):
+    """`build_release.sh --quest` end to end with a stub Godot and a stub
+    SDK (review of 0.50.9): the built APK is read for the home folder
+    member by member, an APK that cannot be read is said to be unreadable
+    (not "names the home folder"), and the manifest must ask for what LAN
+    play needs — a machine's own export_presets.cfg may predate 0.50.9."""
+
+    ALL = "INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_MULTICAST_STATE"
+
+    def quest(self, apk="clean", perms=ALL):
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp)
+            stub = scratch / "godot"
+            stub.write_text("#!%s\n%s" % (sys.executable, STUB_QUEST_GODOT))
+            stub.chmod(0o755)
+            tools = scratch / "sdk" / "build-tools" / "35.0.0"
+            tools.mkdir(parents=True)
+            for name, text in (("apksigner", FAKE_APKSIGNER), ("aapt", FAKE_AAPT)):
+                (tools / name).write_text(text)
+                (tools / name).chmod(0o755)
+            env = dict(os.environ, GODOT=str(stub), TMPDIR=str(scratch), SHANDALAR_NO_BANNER="1",
+                       ANDROID_HOME=str(scratch / "sdk"), FAKE_APK=apk, FAKE_PERMS=perms,
+                       GODOT_ANDROID_KEYSTORE_RELEASE_PATH="/nonexistent.keystore",
+                       JAVA_HOME=str(scratch))
+            return subprocess.run(["bash", str(SCRIPT), "--quest", "--out", str(scratch / "quest")],
+                                  cwd=str(ROOT), env=env, stdin=subprocess.DEVNULL,
+                                  capture_output=True, text=True, timeout=180)
+
+    def test_a_clean_apk_with_the_network_permissions_passes(self):
+        done = self.quest()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("Meta Quest APK", done.stdout)
+
+    def test_an_apk_naming_the_home_folder_in_a_deflated_member_is_refused(self):
+        done = self.quest(apk="home")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("home folder", done.stderr)
+        self.assertIn("x.deck", done.stderr)
+
+    def test_an_unreadable_apk_is_said_to_be_unreadable(self):
+        done = self.quest(apk="corrupt")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("could not be read", done.stderr)
+        self.assertNotIn("names this machine's home folder", done.stderr)
+
+    def test_an_apk_without_the_network_permissions_is_refused(self):
+        for missing in ("INTERNET", "CHANGE_WIFI_MULTICAST_STATE"):
+            with self.subTest(missing=missing):
+                done = self.quest(perms=self.ALL.replace(missing, ""))
+                self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+                self.assertIn(missing, done.stderr)
+                self.assertIn("export_presets.cfg.example", done.stderr)
 
 
 STUB_GODOT = r'''

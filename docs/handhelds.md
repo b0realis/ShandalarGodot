@@ -262,10 +262,16 @@ joining, the Game Browser's discovery and tournaments were offered and
 could not work. The preset now asks for INTERNET and the network and
 Wi-Fi state reads (normal permissions — nothing to approve on the
 headset; reinstall the APK, a sideload cannot be given them afterwards).
-Joining by an invitation and hosting are plain sockets. **Not yet tried
-on the headset:** the Game Browser's LAN discovery — Android may drop
-broadcast packets to an app that holds no Wi-Fi multicast lock, which
-Godot does not take; if a table does not appear, paste its invitation.
+Joining by an invitation and hosting are plain sockets. The Game
+Browser's LAN discovery rides on broadcasts, which Android's Wi-Fi drops
+for an app holding no multicast lock: Godot's Android runtime takes that
+lock (`GodotMulticastLock`) for a socket with broadcast enabled, but only
+when the manifest declares CHANGE_WIFI_MULTICAST_STATE. Since 0.50.10 the
+preset declares it and both ends of discovery enable broadcast (the
+host's socket, which receives the browsers' queries, never did), and
+`build_release.sh --quest` refuses an APK whose manifest lacks any of the
+four. **Not yet tried on the headset**; if a table does not appear,
+paste its invitation.
 
 **adb on a Linux machine.** `adb` is the Android debug bridge, one small
 program; the Meta Quest Developer Hub that wraps it is Windows/macOS

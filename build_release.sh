@@ -309,14 +309,21 @@ guard_stage() {  # guard_stage STAGE_DIR
 		exit 1
 	fi
 	[ -n "${HOME:-}" ] && [ "$HOME" != / ] || return 0
+	# ONE GUARD (2026-10-03, the review of 0.50.9): the stage is read by
+	# package_release's own guard, the one the packager and the Quest APK
+	# go through — every spelling of the home (UTF-8 and both UTF-16s,
+	# forward, back and JSON-escaped slashes, /home/<login> and
+	# /Users/<login>), a longer user name not mistaken for it, and the
+	# deflated members of every zip in the stage read one by one. It used
+	# to grep for the literal $HOME bytes and skip every zip.
 	status=0
-	hit="$(grep -rlaF --exclude='*.zip' --exclude='*.wasm' --exclude='*.x86_64' -- "$HOME" "$1" 2>&1)" || status=$?
-	if [ "$status" -gt 1 ]; then
+	hit="$(python3 tools/package_release.py --guard "$1" 2>&1)" || status=$?
+	if [ "$status" -eq 2 ]; then
 		echo "BUILD FAILED: could not search every file in the package for the home folder:" >&2
 		echo "$hit" >&2
 		exit 1
 	fi
-	if [ -n "$hit" ]; then
+	if [ "$status" -ne 0 ]; then
 		echo "BUILD FAILED: a file in the package names this machine's home folder:" >&2
 		echo "$hit" >&2
 		exit 1
@@ -491,17 +498,37 @@ if [ "$QUEST" = 1 ]; then
 	[ -s "$BIN" ] || { echo "BUILD FAILED: no APK at $BIN" >&2; exit 1; }
 	# THE HOME FOLDER, READ INSIDE THE APK (2026-10-03): its members are
 	# deflated, so a grep of its bytes cannot see a path written in one —
-	# package_release.guard_private opens every member.
-	if ! python3 -c 'import sys
-from pathlib import Path
-sys.path.insert(0, "tools")
-from package_release import guard_private
-try:
-    guard_private([Path(sys.argv[1])])
-except ValueError as error:
-    sys.exit(str(error))' "$BIN"; then
-		echo "BUILD FAILED: the APK names this machine's home folder (above)" >&2
+	# package_release's guard opens every member. An APK it cannot read
+	# (a full disk, an interrupted export) is said to be unreadable, not
+	# taken for a leak (the review of 0.50.9).
+	status=0
+	found="$(python3 tools/package_release.py --guard "$BIN" 2>&1)" || status=$?
+	if [ "$status" -eq 2 ]; then
+		echo "BUILD FAILED: the APK could not be read through (a damaged export?):" >&2
+		echo "$found" >&2
 		exit 1
+	elif [ "$status" -ne 0 ]; then
+		echo "BUILD FAILED: the APK names this machine's home folder:" >&2
+		echo "$found" >&2
+		exit 1
+	fi
+	# THE MANIFEST ASKS FOR THE NETWORK (2026-10-03). SGManalink's LAN play
+	# opens sockets, which Android refuses an app without INTERNET, and its
+	# discovery hears broadcasts only under the Wi-Fi multicast lock Godot
+	# takes when CHANGE_WIFI_MULTICAST_STATE is declared — neither can be
+	# given after a sideload. The preset in export_presets.cfg.example asks
+	# for both; a machine's own export_presets.cfg may be an older copy.
+	AAPT="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/aapt 2>/dev/null | sort -V | tail -1)"
+	if [ -n "$AAPT" ]; then
+		perms="$("$AAPT" dump permissions "$BIN" 2>&1)" || { echo "BUILD FAILED: aapt could not read the APK's manifest:" >&2; echo "$perms" >&2; exit 1; }
+		for need in INTERNET ACCESS_NETWORK_STATE ACCESS_WIFI_STATE CHANGE_WIFI_MULTICAST_STATE; do
+			case "$perms" in
+				*"android.permission.$need'"*) ;;
+				*) echo "BUILD FAILED: the APK does not ask for $need — LAN play needs it on the headset. Copy the Android Quest preset's permissions/ lines from export_presets.cfg.example into your export_presets.cfg" >&2; exit 1 ;;
+			esac
+		done
+	else
+		echo "note: no aapt in the Android SDK's build-tools — the APK's permissions were not checked" >&2
 	fi
 	APKSIGNER="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
 	if [ -n "$APKSIGNER" ]; then

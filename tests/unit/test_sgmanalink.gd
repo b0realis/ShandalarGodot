@@ -18,6 +18,25 @@ func test_lan_addresses_and_invitations_refuse_public_or_executable_inputs() -> 
 		assert_true(SgLanInvite.parse(invitation).is_empty())
 
 
+## BOTH ENDS OF DISCOVERY BIND WITH BROADCAST ON (2026-10-03, the review of
+## 0.50.9). On Android, Godot's runtime takes the Wi-Fi multicast lock —
+## without which the Wi-Fi drops broadcast packets — only for a socket that
+## has broadcast enabled; the host's socket RECEIVES the browsers' broadcast
+## queries, and it never enabled it. Not observable headless (a socket does
+## not report the flag), so the shape is pinned: one helper binds and
+## enables, and both scan() and advertise() go through it.
+func test_lan_discovery_binds_both_ends_with_broadcast_on() -> void:
+	var source := FileAccess.get_file_as_string("res://game/sgmanalink/lan_discovery.gd")
+	var helper := source.substr(source.find("func _bind_broadcast("))
+	helper = helper.substr(0, helper.find("\nfunc ", 1))
+	assert_string_contains(helper, "set_broadcast_enabled(true)")
+	for name in ["func scan(", "func advertise("]:
+		var body := source.substr(source.find(name))
+		body = body.substr(0, body.find("\nfunc ", 1))
+		assert_string_contains(body, "_bind_broadcast(", name)
+		assert_false(body.contains("_socket.bind("), "%s binds through the helper" % name)
+
+
 func test_lan_discovery_rejects_spoofed_stale_or_oversized_listings() -> void:
 	var scanner := SgLanDiscovery.new()
 	add_child_autofree(scanner)

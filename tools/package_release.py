@@ -3,6 +3,10 @@
 
 No export, signing, installation, card-art generation or upload is performed.
 Only platform payloads and explicitly selected player documents are included.
+
+    package_release.py --guard PATH...   read files (and folders, and the
+        members of .apk/.aab/.jar/.zip archives) for the builder's home
+        folder: exit 0 clean, 1 a home path, 2 a file that could not be read.
 """
 from __future__ import annotations
 
@@ -12,8 +16,10 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import sys
 import stat
 import zipfile
+import zlib
 
 import tool_banner
 import pack_1_dotp_complete as pack_one
@@ -312,32 +318,104 @@ def private_patterns(home: str | None = None) -> list[tuple[bytes, re.Pattern]]:
     return out
 
 
+class UnreadablePayload(ValueError):
+    """A file the home guard could not read through — an archive member
+    that will not inflate, a file this user may not open. A refusal like
+    the home path itself, but said as what it is (review of 0.50.9: a
+    damaged APK was reported as "names this machine's home folder")."""
+
+
+## Archives whose members the guard reads one by one: their entries are
+## deflated, so the raw bytes never show a path written inside one (4,866
+## of the Quest APK's 4,940 entries). By NAME, not by sniffing: a large
+## binary can carry what looks like a zip's end record.
+ARCHIVE_SUFFIXES = (".apk", ".aab", ".jar", ".zip")
+
+
 def guard_private(paths: list[Path], home: str | None = None) -> None:
     patterns = private_patterns(home)
     for path in paths:
         with path.open("rb") as source:
             _guard_stream(source, path.name, patterns)
-        # AN APK IS A ZIP OF DEFLATED FILES (bug pass 2026-10-03): 4,866 of
-        # the Quest APK's 4,940 entries are compressed, so its raw bytes
-        # never show a path written inside one — every member is read too.
-        if path.suffix.lower() == ".apk":
-            if not zipfile.is_zipfile(path):
-                raise ValueError(f"{path.name} is not an APK (not a zip archive)")
-            with zipfile.ZipFile(path) as archive:
-                for info in archive.infolist():
-                    if not info.is_dir():
-                        with archive.open(info) as source:
-                            _guard_stream(source, f"{path.name}:{info.filename}", patterns)
+        if path.suffix.lower() in ARCHIVE_SUFFIXES:
+            _guard_archive(path, patterns)
+
+
+def _guard_archive(path: Path, patterns) -> None:
+    if not zipfile.is_zipfile(path):
+        what = "an APK" if path.suffix.lower() == ".apk" else f"a {path.suffix} archive"
+        raise UnreadablePayload(f"{path.name} is not {what} (not a zip archive)")
+    try:
+        with zipfile.ZipFile(path) as archive:
+            for info in archive.infolist():
+                # A STORED member's bytes are the archive's own: the raw
+                # pass above has read them already.
+                if info.is_dir() or info.compress_type == zipfile.ZIP_STORED:
+                    continue
+                label = f"{path.name}:{info.filename}"
+                with archive.open(info) as source:
+                    _guard_stream(source, label, patterns)
+    except UnreadablePayload:
+        raise
+    except ValueError:
+        raise          # a home path, found in a member
+    except (zipfile.BadZipFile, zlib.error, EOFError, NotImplementedError, RuntimeError, OSError) as error:
+        raise UnreadablePayload(f"cannot read {path.name}: {error}") from error
 
 
 def _guard_stream(source, label: str, patterns) -> None:
-    tail = b""
-    for block in iter(lambda: source.read(1024 * 1024), b""):
-        data = tail + block
-        if any(literal in data and pattern.search(data)
-               for literal, pattern in patterns):
-            raise ValueError(f"Personal home path in {label}")
-        tail = data[-512:]
+    """Every pattern over one stream, read 1 MiB at a time. A match is
+    judged only once the bytes after it are read: its lookahead — a
+    LONGER name, "/home/anna" against "/home/ann" — may sit in the next
+    block (review of 0.50.9: a name cut by the block's edge was reported
+    as the home). So a block's last `hold` bytes are read again with the
+    next one, `hold` being the longest spelling plus the lookahead."""
+    hold = max((len(literal) for literal, _ in patterns), default=0) + 2
+    data = b""
+    while True:
+        block = source.read(1024 * 1024)
+        data += block
+        final = not block
+        for literal, pattern in patterns:
+            if literal not in data:
+                continue
+            for found in pattern.finditer(data):
+                if final or found.end() + 2 <= len(data):
+                    raise ValueError(f"Personal home path in {label}")
+        if final:
+            return
+        data = data[-hold:] if hold else b""
+
+
+def guard_main(paths: list[str]) -> int:
+    """`package_release.py --guard PATH...`: every file under each path
+    read for the builder's home, the one guard the release script's stages
+    and its APK go through (review of 0.50.9 — `guard_stage` grepped for
+    the literal $HOME bytes and so let a UTF-16, backslashed or zipped
+    home through that a package refuses). 0 clean, 1 a home path, 2 a file
+    that could not be read; what was found goes to stderr."""
+    files: list[Path] = []
+    for typed in paths:
+        path = Path(typed)
+        if path.is_dir():
+            files.extend(sorted(p for p in path.rglob("*") if p.is_file() or p.is_symlink()))
+        else:
+            files.append(path)
+    hits, unreadable = [], []
+    for path in files:
+        try:
+            if path.is_symlink():
+                raise UnreadablePayload(f"{path} is a symlink")
+            guard_private([path])
+        except (UnreadablePayload, OSError) as error:
+            unreadable.append(f"{path}: {error}")
+        except ValueError as error:
+            hits.append(f"{path}: {error}")
+    for line in unreadable:
+        print(f"unreadable: {line}", file=sys.stderr)
+    for line in hits:
+        print(f"home path: {line}", file=sys.stderr)
+    return 2 if unreadable else (1 if hits else 0)
 
 
 def member(archive: zipfile.ZipFile, name: str, content: Path | bytes, executable=False):
@@ -424,6 +502,9 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("A complete source commit hash is required")
     check_skin(skin)
+    # The skin zip rides in the -with-skin package: its deflated members
+    # are read for the home too (review of 0.50.9).
+    guard_private([skin])
     files = payload(folder, platform)
     files.update(player_tool_files(root))
     base_assignments = pack_one.json_bytes(sorted(pack_one.assigned_pairs(root)))
@@ -534,6 +615,10 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "--guard":
+        if len(sys.argv) < 3:
+            sys.exit("package_release.py --guard PATH...: name the files or folders to read")
+        sys.exit(guard_main(sys.argv[2:]))
     parser = argparse.ArgumentParser(description=__doc__, epilog=tool_banner.BANNER_HELP,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     tool_banner.add_version_flag(parser, "package_release.py", __file__)
@@ -547,7 +632,7 @@ def main() -> None:
     try:
         for output in package(args.input, args.out, args.platform, args.skin_zip, args.commit):
             print(f"{digest(output)}  {output.name}")
-    except (OSError, ValueError, zipfile.BadZipFile) as error:
+    except (OSError, ValueError, zipfile.BadZipFile, zlib.error, EOFError) as error:
         parser.exit(1, f"Package refused: {error}\n")
 
 
