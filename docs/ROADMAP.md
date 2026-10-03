@@ -18749,6 +18749,53 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-03 — The table the program hosts (0.50.6)
+
+The owner, the hour after 0.50.5: *"Can we also implement via mcp that
+agent itself can host a game and either just give the table name or
+invitation (if invitation only) and I can just join the game on local
+network?"* Until now the program could only sit at a table a person had
+opened; now it opens one.
+
+- **`--host NAME`.** The referee runs the game's own LAN host in-process
+  — no frames: the lobby's `poll` flushes its publishes and the discovery
+  is pumped by hand — opens one table of that name with the program in
+  seat 0 and writes a `table` line before anything else: `access`
+  (`open`, listed in every Game Browser on the LAN and joined by name;
+  `invitation`, listed without its secret and joined by pasting the
+  invitation), `address`, `port`, the `invitation`, whether the advert
+  went out. `--address` is one of this computer's private IPv4 addresses
+  (the first by default; refused off the LAN), `--port 0` any free port,
+  `--wait` (300 s) how long the empty chair is held before `kind: "host"`.
+  The lobby clears every ready mark when a guest sits down and again
+  when their deck arrives; the host's seat is marked ready again each
+  time, so the duel starts on the guest's own mark.
+- **`referee_host`.** The MCP tool answers `pending` with `table` and a
+  note saying how the person finds it — "listed in every Game Browser;
+  joins it by name" or "hand them the invitation" — and `referee_wait`
+  reads on until they sit down. A hosted game is kept by default, its
+  `table` line replayed before `hello` to a client that comes back;
+  `status` lists it as `hosted`.
+- **Three bugs the hosted table uncovered, fixed for the joined one too.**
+  One session-wide `--wait` deadline made every lobby answer after that
+  many seconds "never answered" — a joined duel longer than `--wait`
+  was lost to refusals; each wait now has the whole `--wait` to itself.
+  The lobby refuses a command that carried an old revision ("The room
+  changed. Please try again.") — the host's ready mark landing under a
+  guest's deck is exactly that, and the first live duel died on it; a
+  lobby command is now sent again (five tries), a game action still
+  decided afresh. A kept game's knock was served only when a line was
+  emitted — at the hosted table that is the `table` line, then nothing
+  until `hello`, by when the knock would be stale; the lobby ticks serve
+  it now.
+- **Verified live.** One MCP server hosts, a second referee joins by the
+  invitation, both seats are played turn about with short waits to a
+  shared `result` (sixteen turns, 133 s), inside the gate.
+
+Gate: 550 scripts, **8,310/8,310 tests, 405,303 asserts**, exit 0 in
+392 s wall over 6 shards (the MCP family alone is 160 s now); Python 430
+(7 skipped), exit 0.
+
 ## 2026-10-03 — The pass that knows when to stop (0.50.5)
 
 The owner, after the first game played through the MCP server: *"Is

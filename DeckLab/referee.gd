@@ -8,7 +8,8 @@ extends SceneTree
 ## sorcerer, wizard, unfair), a second program-held seat (both seats
 ## then arrive on the same pipe, each line naming its `seat`), or —
 ## with `--join` — a person at a table the game's own lobby hosts, on
-## this computer or over the LAN.
+## this computer or over the LAN — or, with `--host`, a person who sits
+## down at the table this referee hosts.
 ##
 ##   DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a agent]
 ##       [--seat-b wizard] [--seed N] [--turns N] [--packs LIST]
@@ -16,6 +17,9 @@ extends SceneTree
 ##   DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK
 ##       [--port N] [--name NICK] [--wait SECONDS] [--turns N]
 ##       [--packs LIST] [--log FILE]
+##   DeckLab/referee.sh --host NAME --deck DECK [--access open|invitation]
+##       [--address IP] [--port N] [--name NICK] [--wait SECONDS]
+##       [--turns N] [--packs LIST] [--log FILE]
 ##   DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
 ##   DeckLab/referee.sh -h | --help
 ##
@@ -50,6 +54,19 @@ extends SceneTree
 ## an OPEN host advertising a table of that name and joins with the
 ## invitation its advert carries; an invitation-only host's table is
 ## named back as such — paste its invitation with `--join` instead.
+##
+## THE TABLE THE REFEREE HOSTS (2026-10-03). `--host NAME --deck DECK`
+## runs the game's own LAN host (SgLocalServer) in this process, opens
+## one table of that name at it with the program in seat 0, and prints
+## one `table` line — the name, the access rule, the host's address and
+## port, the invitation, whether the advert is out — before anything
+## else. An OPEN table is listed in every Game Browser on the LAN and a
+## person joins it by name; an INVITATION-ONLY table is listed without
+## its secret, and the person pastes the invitation from the `table`
+## line. The seat is kept ready while the lobby resets it (a guest
+## sitting down, a guest's deck), `hello` comes when the duel starts,
+## and `--wait` is how long the empty chair is held. The server stops
+## with the result: the table lives as long as the duel.
 ##
 ## THE VIEW is [method SgPracticeMatch.view] as the lobby sends it to a
 ## guest — the same truth a person's screen is painted from, hidden
@@ -108,6 +125,11 @@ const IDLE_BOT_STEPS := 100
 ## line reader returns "" for a blank line and for end-of-file alike.
 const EMPTY_READS := 3
 const BOT_PACE_MS := 50
+## The lobby's refusal of a command that carried an old revision; it
+## asks for the same command again, and a lobby command is sent again
+## this many times (a game action is not — the seat decides afresh).
+const ROOM_CHANGED := "The room changed. Please try again."
+const LOBBY_TRIES := 5
 
 const HELP := """Referee — one duel played through a pipe, a program in a seat
 ====================================================================
@@ -124,6 +146,9 @@ USAGE
   DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK
       [--port N] [--name NICK] [--wait SECONDS] [--turns N]
       [--packs LIST] [--log FILE]
+  DeckLab/referee.sh --host NAME --deck DECK [--access open|invitation]
+      [--address IP] [--port N] [--name NICK] [--wait SECONDS]
+      [--turns N] [--packs LIST] [--log FILE]
   DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
   DeckLab/referee.sh -h | --help
 
@@ -150,9 +175,22 @@ SWITCHES
                             the Game Browser lists it (no paste: the
                             open host's advert carries its invitation)
   --deck PATH               the deck to bring to that table
-  --port N                  the host's port for an access code (17897)
+  --host NAME               host a table of that name yourself, with the
+                            game's own LAN host, and hold seat 0 until a
+                            person sits down (the `table` line says how
+                            they find it)
+  --access RULE             with --host: open (the Game Browser lists
+                            the table and anyone on the LAN joins it by
+                            name) or invitation (they paste the
+                            invitation from the `table` line)
+  --address IP              with --host: the LAN address to host on
+                            (unset: this computer's first private IPv4)
+  --port N                  the host's port: for an access code when
+                            joining, to listen on with --host (17897;
+                            0 is any free port)
   --name NICK               the seat's name at that table (Agent)
-  --wait SECONDS            how long to wait for an open table (300)
+  --wait SECONDS            how long to wait for an open table, or with
+                            --host for a guest (300)
   --listen FILE             serve the lines on a loopback socket instead
                             of the pipe and write {port, token, pid} to
                             FILE: the game is kept while the program is
@@ -161,6 +199,11 @@ SWITCHES
                             has come back for in that long (1800; 0 off)
 
 THE LINES (stdout)
+  table     {id, name, access, host, address, port, invitation,
+             discovery}  — with --host, once the table is open; a
+             person joins it from the Game Browser by name (open) or by
+             pasting the invitation (invitation); hello follows when
+             they sit down and the duel starts
   hello     {tool, protocol, version, seed, seats[{seat, player, name,
              deck, file}], toss, turns, ops}  — once, before play
   decision  {n, seat, mode, turn, step, options, view}
@@ -213,10 +256,13 @@ const FLAG_HINTS := {
 	"--log": "--log FILE: where to write the duel's log — the engine's lines, or a joined table's journal",
 	"--join": "--join TEXT: a LAN invitation (sglan1:...) or the host screen's same-computer access code",
 	"--table": "--table NAME: the open LAN table of that name, as the Game Browser lists it",
-	"--deck": "--deck PATH: the deck to bring to a joined table",
-	"--port": "--port N: the host's port when joining by access code (17897)",
-	"--name": "--name NICK: the seat's name at a joined table (Agent)",
-	"--wait": "--wait SECONDS: how long to wait for the host's open table (300)",
+	"--deck": "--deck PATH: the deck to bring to a joined or hosted table",
+	"--host": "--host NAME: host a table of that name with the game's own LAN host and hold seat 0 for a guest",
+	"--access": "--access RULE: with --host, open (joined by name from the Game Browser) or invitation (pasted)",
+	"--address": "--address IP: with --host, the LAN address to host on (unset: this computer's first private IPv4)",
+	"--port": "--port N: the host's port — for an access code when joining, to listen on with --host (17897; 0 any)",
+	"--name": "--name NICK: the seat's name at a joined or hosted table (Agent)",
+	"--wait": "--wait SECONDS: how long to wait for the host's open table, or with --host for a guest (300)",
 	"--listen": "--listen FILE: serve the lines on a loopback socket, the port and token written to FILE",
 	"--idle": "--idle SECONDS: with --listen, concede a decision nobody has come back for in that long (1800; 0 never)",
 }
@@ -228,6 +274,9 @@ var reader: Callable
 var writer: Callable
 var last_error: Dictionary = {}
 var last_hello: Dictionary = {}
+## The `table` line of a hosted table, replayed to a kept game's client
+## before hello.
+var last_table: Dictionary = {}
 var last_decision: Dictionary = {}
 var last_result: Dictionary = {}
 var last_plan: Dictionary = {}
@@ -262,6 +311,9 @@ var _idle_since := 0
 var _awaiting := false
 var _last_journal: Array = []
 var _eof_reason := ""
+## The UDP port a hosted table is advertised on; a test's own host
+## takes an ephemeral one so the system-wide port stays free.
+var discovery_port: int = SgLanDiscovery.PORT
 
 
 func _init() -> void:
@@ -489,6 +541,8 @@ static func _drain(peer: StreamPeerTCP, buffer: String) -> Dictionary:
 ## stands, and the awaited decision with the whole journal — a client
 ## that was away has no idea what it missed.
 func _replay() -> void:
+	if not last_table.is_empty():
+		_send_peer(JSON.stringify(last_table))
 	if not last_hello.is_empty():
 		_send_peer(JSON.stringify(last_hello))
 	_send_peer(JSON.stringify({"type": "resume", "decisions": decisions, "refusals": refusals,
@@ -508,7 +562,7 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	var opts := {"deck_a": "", "deck_b": "", "seat_a": "agent", "seat_b": "wizard",
 		"seed": -1, "turns": DEFAULT_TURNS, "packs": "", "log": "", "dry_run": false,
 		"join": "", "table": "", "deck": "", "port": DEFAULT_PORT, "name": "Agent", "wait": DEFAULT_WAIT,
-		"listen": "", "idle": DEFAULT_IDLE}
+		"host": "", "access": "open", "address": "", "listen": "", "idle": DEFAULT_IDLE}
 	var i := 0
 	while i < argv.size():
 		var arg := String(argv[i])
@@ -553,6 +607,14 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 			"--table": opts.table = value.strip_edges()
 			"--deck": opts.deck = value
 			"--name": opts.name = value.strip_edges()
+			"--host": opts.host = value.strip_edges()
+			"--access":
+				var rule := value.to_lower().strip_edges()
+				if not rule in SgLanDiscovery.ACCESS:
+					return {"error": {"message": "--access is open or invitation, not '%s'" % value,
+						"detail": {"kind": "option", "flag": "--access", "rules": SgLanDiscovery.ACCESS}}}
+				opts.access = rule
+			"--address": opts.address = value.strip_edges()
 			"--listen": opts.listen = value
 	return opts
 
@@ -619,6 +681,9 @@ func _main(argv: PackedStringArray) -> int:
 	if opts.join != "" and opts.table != "":
 		return _refuse(2, "--join and --table name two tables — give one  (%s)" % FLAG_HINTS["--table"],
 			{"kind": "option", "flag": "--table"})
+	if opts.host != "" and (opts.join != "" or opts.table != ""):
+		return _refuse(2, "--host opens a table of its own; it does not go with --join or --table  (%s)" % FLAG_HINTS["--host"],
+			{"kind": "option", "flag": "--host"})
 	if opts.listen != "":
 		var refusal := _listen_start(String(opts.listen), int(opts.idle))
 		if refusal != "":
@@ -641,6 +706,8 @@ func _play(opts: Dictionary) -> int:
 		packs = chosen.ids
 	if opts.join != "" or opts.table != "":
 		return _join(opts, packs)
+	if opts.host != "":
+		return _host(opts, packs)
 	for flag in ["--deck-a", "--deck-b"]:
 		if opts[flag.trim_prefix("--").replace("-", "_")] == "":
 			return _refuse(2, "%s is required — the referee plays two named decks  (%s)" % [flag, FLAG_HINTS[flag]],
@@ -1006,13 +1073,7 @@ static func _cost(row: Dictionary, kind: String, index: int) -> String:
 ## (the autoloads it reads are registered after the script is), hence
 ## the load.
 func _join(opts: Dictionary, packs: Variant) -> int:
-	if opts.deck == "":
-		return _refuse(2, "--deck is required with --join — the deck this seat brings to the table  (%s)" % FLAG_HINTS["--deck"],
-			{"kind": "option", "flag": "--deck"})
-	if not SgProtocol.nickname(opts.name) or opts.name == "":
-		return _refuse(2, "--name wants 1-%d plain characters, not '%s'" % [SgProtocol.NICKNAME_LIMIT, opts.name],
-			{"kind": "option", "flag": "--name"})
-	var one := _load_deck(opts.deck, "--deck")
+	var one := _seat_deck(opts, "--join")
 	if one.has("error"):
 		return _refuse(2, one.error.message, one.error.detail)
 	var invitation := String(opts.join)
@@ -1036,11 +1097,29 @@ func _join(opts: Dictionary, packs: Variant) -> int:
 			{"kind": "join", "flag": "--join", "port": int(opts.port)})
 	var outcome := _referee_table(client, one.deck, opts, packs)
 	client.free()
+	return _finish_table(outcome, opts, "--join" if opts.table == "" else "--table")
+
+
+## The deck and the nickname a seat brings to a table, joined or
+## hosted: {deck, file} or {error}.
+func _seat_deck(opts: Dictionary, flag: String) -> Dictionary:
+	if opts.deck == "":
+		return {"error": {"message": "--deck is required with %s — the deck this seat brings to the table  (%s)" % [flag, FLAG_HINTS["--deck"]],
+			"detail": {"kind": "option", "flag": "--deck"}}}
+	if not SgProtocol.nickname(opts.name) or opts.name == "":
+		return {"error": {"message": "--name wants 1-%d plain characters, not '%s'" % [SgProtocol.NICKNAME_LIMIT, opts.name],
+			"detail": {"kind": "option", "flag": "--name"}}}
+	return _load_deck(opts.deck, "--deck")
+
+
+## The end of a table, joined or hosted: the error line, or the log and
+## the result. The log of a table is the journal the seat saw: the
+## engine's own lines are not on the wire (a hosted table's engine runs
+## here, and still the seat is told what every guest is told).
+func _finish_table(outcome: Dictionary, opts: Dictionary, flag: String) -> int:
 	if outcome.has("error"):
-		return _refuse(2, outcome.error, {"kind": "join", "flag": "--join" if opts.table == "" else "--table",
+		return _refuse(2, outcome.error, {"kind": "join" if flag != "--host" else "host", "flag": flag,
 			"status": outcome.get("status", "")})
-	# The log of a joined table is the journal the seat saw: the engine
-	# runs at the host, its own lines are not on the wire.
 	var journal: Array = outcome.get("journal", [])
 	outcome.erase("journal")
 	if String(opts.get("log", "")) != "":
@@ -1049,6 +1128,54 @@ func _join(opts: Dictionary, packs: Variant) -> int:
 			return _refuse(1, written, {"kind": "out", "flag": "--log", "path": opts.log})
 		outcome["log"] = opts.log
 	return _result(outcome)
+
+
+## A table this referee hosts: the game's own LAN host in this process,
+## polled by hand like the client, one table at it with the program in
+## seat 0. The `table` line goes out once the room exists (the advert
+## lists the rooms), then the chair is held for a guest.
+func _host(opts: Dictionary, packs: Variant) -> int:
+	var one := _seat_deck(opts, "--host")
+	if one.has("error"):
+		return _refuse(2, one.error.message, one.error.detail)
+	if not SgProtocol.short_text(opts.host):
+		return _refuse(2, "--host wants a table name of 1-32 plain characters, not '%s'" % opts.host,
+			{"kind": "option", "flag": "--host"})
+	var address := String(opts.address)
+	var known := SgLanInvite.local_addresses()
+	if address == "":
+		if known.is_empty():
+			return _refuse(2, "no private IPv4 address to host on — this computer is not on a LAN; give --address",
+				{"kind": "host", "flag": "--address", "addresses": Array(known)})
+		address = known[0]
+	elif not SgLanInvite.address(address) or not IP.get_local_addresses().has(address):
+		return _refuse(2, "--address wants one of this computer's private IPv4 addresses, not '%s'%s" % [address,
+			"" if known.is_empty() else " — it has " + ", ".join(known)],
+			{"kind": "host", "flag": "--address", "addresses": Array(known)})
+	var server: Node = load("res://game/sgmanalink/local_server.gd").new()
+	var started: Error = server.start_lan(address, int(opts.port), true, opts.name, discovery_port, opts.access == "open")
+	if started != OK:
+		server.free()
+		return _refuse(2, "cannot host on %s:%d: %s" % [address, int(opts.port), error_string(started)],
+			{"kind": "host", "flag": "--port", "address": address, "port": int(opts.port)})
+	var hosting := {"name": String(opts.host), "access": String(opts.access), "host": String(opts.name),
+		"address": address, "port": int(server.port), "invitation": String(server.invitation()),
+		"discovery": server.discovery != null and server.discovery_error == OK}
+	var company := func() -> void:
+		server.poll()
+		if server.discovery != null:
+			server.discovery.pump()
+	var client: Node = load("res://game/sgmanalink/local_client.gd").new()
+	var opened: Error = client.connect_invitation(hosting.invitation, opts.name)
+	var outcome: Dictionary
+	if opened != OK:
+		outcome = {"error": "the host's own invitation could not be used: %s" % error_string(opened), "status": ""}
+	else:
+		outcome = _referee_table(client, one.deck, opts, packs, hosting, company)
+	client.free()
+	server.stop()
+	server.free()
+	return _finish_table(outcome, opts, "--host")
 
 
 ## The invitation of the open LAN table called [param name], asked of
@@ -1094,18 +1221,34 @@ func _find_table(name: String, wait: int, discovery: Object) -> Dictionary:
 		"" if names.is_empty() else ", saw: " + ", ".join(PackedStringArray(names))], "seen": names}
 
 
-## Plays the joined table to its end. [param client] is anything with
-## the lobby client's face — `poll()`, `online`, `busy()`, `command()`,
-## `command_error`, `state`, the `refused` signal — so a test can seat
-## the referee at a table it holds in the same process.
-func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: Variant) -> Dictionary:
+## Plays the joined — or, with [param hosting], the hosted — table to
+## its end. [param client] is anything with the lobby client's face —
+## `poll()`, `online`, `busy()`, `command()`, `command_error`, `state`,
+## the `refused` signal — so a test can seat the referee at a table it
+## holds in the same process. [param hosting] is the `table` line
+## without its id (the host's own client opens the room and holds seat
+## 0); [param company] is called every tick — the host's own server and
+## advert, polled by hand like the client.
+func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: Variant,
+		hosting: Dictionary = {}, company: Callable = Callable()) -> Dictionary:
 	var refused: Array = []
 	client.refused.connect(func(reason: String) -> void: refused.append(reason))
+	# A kept game's client is seated while the lobby is waited on too —
+	# the one that hosts gets its table line long before any decision,
+	# and a knock left until hello would have gone stale.
 	var tick := func() -> void:
+		if company.is_valid():
+			company.call()
 		client.poll()
+		if _server != null:
+			_serve()
 		OS.delay_msec(10)
-	var deadline := Time.get_ticks_msec() + int(opts.wait) * 1000
+	# Each wait has the whole `--wait` to itself (2026-10-03): one
+	# deadline for the session made every answer after that many
+	# seconds "never answered", and a duel longer than --wait was lost
+	# to refusals.
 	var until := func(condition: Callable, what: String) -> String:
+		var deadline := Time.get_ticks_msec() + int(opts.wait) * 1000
 		while not condition.call():
 			if Time.get_ticks_msec() > deadline:
 				return "%s — waited %d s (%s)" % [what, int(opts.wait), String(client.status)]
@@ -1119,24 +1262,40 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 		if waited != "":
 			return waited
 		return String(refused[0]) if not refused.is_empty() else ""
+	# A lobby command (host, join, deck, ready, leave) the room moved on
+	# under — the other seat's mark or deck landed while it was on the
+	# wire — is sent again with the fresh revision, as the lobby asks.
+	var arrange := func(action: Dictionary) -> String:
+		var answer := ""
+		for _try in LOBBY_TRIES:
+			answer = send.call(action)
+			if answer != ROOM_CHANGED:
+				return answer
+			tick.call()
+		return answer
 	var failed: String = until.call(func() -> bool: return bool(client.online), "the table could not be reached")
 	if failed != "":
 		return {"error": failed, "status": String(client.status)}
-	var open_room := func() -> Dictionary:
-		if not client.state.room.is_empty():
-			return client.state.room
-		for room in client.state.rooms:
-			if bool(room.get("open", false)):
-				return room
-		return {}
-	failed = until.call(func() -> bool: return not open_room.call().is_empty(), "no open table appeared")
-	if failed != "":
-		return {"error": failed, "status": String(client.status)}
-	if client.state.room.is_empty():
-		var room: Dictionary = open_room.call()
-		var joined: String = send.call({"op": "join", "room": room.id})
-		if joined != "":
-			return {"error": "the table refused the seat: %s" % joined, "status": String(client.status)}
+	if not hosting.is_empty():
+		var hosted: String = arrange.call({"op": "host", "name": String(hosting.name), "decks": "own", "deck": {}})
+		if hosted != "":
+			return {"error": "the table could not be opened: %s" % hosted, "status": String(client.status)}
+	else:
+		var open_room := func() -> Dictionary:
+			if not client.state.room.is_empty():
+				return client.state.room
+			for room in client.state.rooms:
+				if bool(room.get("open", false)):
+					return room
+			return {}
+		failed = until.call(func() -> bool: return not open_room.call().is_empty(), "no open table appeared")
+		if failed != "":
+			return {"error": failed, "status": String(client.status)}
+		if client.state.room.is_empty():
+			var room: Dictionary = open_room.call()
+			var joined: String = arrange.call({"op": "join", "room": room.id})
+			if joined != "":
+				return {"error": "the table refused the seat: %s" % joined, "status": String(client.status)}
 	failed = until.call(func() -> bool: return not client.state.room.is_empty(), "the seat never appeared")
 	if failed != "":
 		return {"error": failed, "status": String(client.status)}
@@ -1145,13 +1304,34 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 		var brought: Dictionary = {"op": "deck", "name": deck.name, "cards": deck.cards, "sideboard": deck.sideboard}
 		if not deck.get("printings", {}).is_empty():
 			brought["printings"] = deck.printings
-		var accepted: String = send.call(brought)
+		var accepted: String = arrange.call(brought)
 		if accepted != "":
 			return {"error": "the table refused the deck: %s" % accepted, "status": String(client.status)}
-	var ready: String = send.call({"op": "ready", "value": true})
+	var ready: String = arrange.call({"op": "ready", "value": true})
 	if ready != "":
 		return {"error": "the table refused ready: %s" % ready, "status": String(client.status)}
-	failed = until.call(func() -> bool: return not client.state.room.get("game", {}).is_empty(), "the duel never started")
+	var started := func() -> bool: return not client.state.room.get("game", {}).is_empty()
+	if not hosting.is_empty():
+		last_table = {"type": "table", "id": String(client.state.room.id)}.merged(hosting)
+		_emit(last_table)
+		# The lobby clears every ready mark when a guest sits down and
+		# again when their deck arrives; the host's seat is marked ready
+		# again each time, so the duel starts on the guest's own mark.
+		var chair := {"readied": 0}
+		var hold := func() -> bool:
+			if started.call():
+				return true
+			var room: Dictionary = client.state.room
+			if room.is_empty():
+				return false
+			var now := Time.get_ticks_msec()
+			if not bool(room.ready[0]) and not client.busy() and now - int(chair.readied) >= 250:
+				chair.readied = now
+				send.call({"op": "ready", "value": true})
+			return false
+		failed = until.call(hold, "no guest sat down at '%s'" % hosting.name)
+	else:
+		failed = until.call(started, "the duel never started")
 	if failed != "":
 		return {"error": failed, "status": String(client.status)}
 	var room: Dictionary = client.state.room
@@ -1160,8 +1340,8 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 		seats.append({"seat": pid, "player": "agent" if pid == seat else "table", "name": String(room.names[pid]),
 			"deck": String(room.deck_names[pid]), "file": ""})
 	_hello({"seats": seats, "seed": -1, "toss": int(room.game.presentation.toss), "turns": int(opts.turns),
-		"table": {"id": room.id, "name": room.name, "seat": seat}, "packs": packs,
-		"log": String(opts.get("log", ""))})
+		"table": {"id": room.id, "name": room.name, "seat": seat, "hosted": not hosting.is_empty()},
+		"packs": packs, "log": String(opts.get("log", ""))})
 	# A kept game polls its own socket in _next_line; the pipe needs the
 	# pump so the table's socket is served while the program thinks.
 	if _server == null:
@@ -1204,7 +1384,7 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 	for entry in final.get("journal", []):
 		journal.append(String(entry.get("text", "")))
 	_pump_finish()
-	send.call({"op": "leave"})
+	arrange.call({"op": "leave"})
 	return {"winner": int(final.get("winner", -1)), "draw": bool(final.get("draw", false)),
 		"turns": int(final.get("turn", 0)), "reason": reason, "life": life,
 		"names": Array(room.names), "seat": seat, "table": {"id": room.id, "name": room.name},

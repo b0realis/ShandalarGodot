@@ -272,6 +272,14 @@ The MCP door's `referee_*` tools put a seat at a table the engine referees;
 - **Join a table by name.** `referee_join {table: "Kitchen", deck: ...}`
   finds an open LAN table through discovery; an `invitation` is still the
   precise door when two tables share a name.
+- **Host the table yourself.** `referee_host {table: "Kitchen", deck: ...}`
+  opens a table in the game's own lobby and answers with `table` before
+  anyone sits: an `open` table is listed in every Game Browser on the LAN
+  — tell the person its name; `access: "invitation"` lists it without its
+  secret — hand them `table.invitation` to paste into the game's Join
+  screen. Then `referee_wait` until they sit down (`wait` holds the empty
+  chair, 300 s); `hello` and the first decision come when the duel starts.
+  You are seat 0 and the host; the person sees an ordinary host.
 - **Keep the journal.** `referee_start`/`referee_join` take a `log` path: the
   journal the seat saw, written at the end for the review in chapter 13.
 

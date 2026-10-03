@@ -46,6 +46,9 @@ THE RULES IT KEEPS:
   * PLAYING IS A SESSION. `referee_start` (or `referee_join`) opens the
     pipe and returns the first decision; `referee_act` answers it and
     returns the next one; a `result` ends the game and the process.
+    `referee_host` (2026-10-03) opens a table of its own in the game's
+    lobby and answers with the `table` line first — how a person finds
+    it — then `referee_wait` reads on until they sit down.
     Nothing is played between calls, so a client may think as long as
     it likes. The decision's `view` is rendered `brief` by default (the
     board, the hand, the new journal lines — a tenth of the wire's
@@ -99,6 +102,7 @@ VIEWS = ("brief", "full", "options", "delta")
 # opponent's spell or ability on the stack, their attack and block
 # steps, their end step, a non-priority decision (see `stop_reason`).
 UNTIL = ("main", "end", "turn", "respond", "play")
+ACCESS = ("open", "invitation")
 MAX_PASSES = 400
 RESULT_LIMIT = 50
 # A kept game: the referee listens on a loopback socket and outlives
@@ -127,9 +131,11 @@ INSTRUCTIONS = (
     "while you hold an instant or ability, every attack, block and choice of "
     "your own. `view: \"delta\"` shows only what changed since the last decision. "
     "`referee_join` sits at a table a person hosts in the game (an invitation, "
-    "an access code, or an open table's name on the LAN); joined games are "
-    "kept by default — they survive this server's restart and `referee_resume` "
-    "takes them up again. `contract` is the whole contract page; `manual` a "
+    "an access code, or an open table's name on the LAN); `referee_host` hosts "
+    "a table yourself and tells you how the person finds it (the table's name "
+    "in their Game Browser, or an invitation to paste); joined and hosted games "
+    "are kept by default — they survive this server's restart and "
+    "`referee_resume` takes them up again. `contract` is the whole contract page; `manual` a "
     "tool's own help. "
     "Read `play_guide` for MTG rules, fair-information play, combat and deck "
     "building; optionally request one chapter (1-16) instead of the full guide."
@@ -742,6 +748,9 @@ class Game:
         self.view = view
         self.started = time.time()
         self.hello: dict | None = None
+        # A hosted table's own line: how a person finds it (the name, the
+        # access rule, the invitation), said once before hello.
+        self.table: dict | None = None
         self.pending: dict | None = None
         self.result: dict | None = None
         self.error: dict | None = None
@@ -814,10 +823,12 @@ class Game:
             raise refusal("referee", "game", f"game {self.ident}: the pipe closed ({exc})",
                           game=self.ident)
 
-    def advance(self, timeout: float, render: bool = True) -> dict:
+    def advance(self, timeout: float, render: bool = True, until_table: bool = False) -> dict:
         """Read lines until a decision, a result or an error; the
         refusals on the way are collected. `pending: true` says nothing
-        arrived in `timeout` seconds — call `referee_wait` again."""
+        arrived in `timeout` seconds — call `referee_wait` again. With
+        `until_table`, a hosted table's `table` line is an answer too:
+        the client learns how the table is found before anyone sits."""
         refused: list[dict] = []
         deadline = time.monotonic() + max(0.0, timeout)
         while True:
@@ -854,6 +865,10 @@ class Game:
             kind = record.get("type")
             if kind == "hello":
                 self.hello = record
+            elif kind == "table":
+                self.table = record
+                if until_table:
+                    return self._state(refused, pending=True, render=render)
             elif kind == "resume":
                 # A kept referee taken up again: its counters are the truth,
                 # and they count the decision it replays next (`n`).
@@ -882,9 +897,14 @@ class Game:
         out: dict = {"game": self.ident, "decisions": self.decisions, "refusals": self.refusals}
         if refused:
             out["refused"] = refused
+        if self.table is not None and self.hello is None:
+            out["table"] = self.table
         if pending:
             out["pending"] = True
-            out["note"] = "nothing arrived in time; referee_wait reads on"
+            out["note"] = ("the table is open and the chair is held for a guest; referee_wait reads on "
+                           "(hello and the first decision come when they sit down and the duel starts)"
+                           if self.table is not None and self.hello is None else
+                           "nothing arrived in time; referee_wait reads on")
         elif self.pending is not None and render:
             out["decision"] = self.shown()
         if self.result is not None:
@@ -944,6 +964,8 @@ class Game:
                "seconds": round(time.time() - self.started, 1), "argv": self.argv[1:]}
         if self.kept:
             out["kept"] = True
+        if self.table is not None:
+            out["hosted"] = self.table
         if self.hello is not None:
             out["seats"] = self.hello.get("seats")
             out["seed"] = self.hello.get("seed")
@@ -1157,7 +1179,7 @@ class Server:
         keep = prop("boolean", "keep the game across this server's restarts: the referee listens "
                     "on a loopback socket and outlives the client; `referee_resume` takes it up "
                     "again (a kept game idle for 30 minutes concedes)")
-        game = prop("string", "the game id `referee_start` or `referee_join` returned (`g1`)")
+        game = prop("string", "the game id `referee_start`, `referee_join` or `referee_host` returned (`g1`)")
         timeout = prop("number", "seconds to wait for the next line (default 120); a `pending` "
                        "answer means it did not arrive yet — `referee_wait` reads on")
         packs = prop("string", "the card packs in play: `all`, `none`, or ids `1,3` (unset: the "
@@ -1376,6 +1398,33 @@ class Server:
                         "timeout": prop("number", "seconds to wait for the first decision before "
                                         "answering `pending` (default 15)")},
                        self.tool_referee_join, required=["deck"]),
+            self._tool("referee_host", "Host a table yourself and wait for a person to sit down — "
+                       "the referee runs the game's own LAN host, opens one table of that `name` with "
+                       "you in seat 0, and answers at once with `table`: the name, the `access` rule, "
+                       "the host's address and port, the `invitation`, and whether the advert went "
+                       "out. `open` (default): the table is listed in every Game Browser on the LAN "
+                       "and the person joins it by name — tell them the table name. `invitation`: the "
+                       "table is listed without its secret and the person pastes the `invitation` "
+                       "into the game's Join screen — hand it to them. Then `referee_wait` reads on "
+                       "until they sit down: `hello` and the first decision come when the duel "
+                       "starts; `wait` is how long the empty chair is held. The table lives as long "
+                       "as the duel. Kept by default (`keep: false` to end it with this server).",
+                       {"table": prop("string", "the table's name as the Game Browser will list it "
+                                      "(1-32 plain characters)"),
+                        "deck": prop("string", "the deck you bring, as typed, under `decks/` or in the workspace"),
+                        "access": prop("string", "`open` (joined by name from the Game Browser; default) "
+                                       "or `invitation` (pasted)", enum=list(ACCESS)),
+                        "name": prop("string", "your nickname at the table (default Agent)"),
+                        "port": prop("integer", "the port to host on (default 17897; 0 any free port)"),
+                        "address": prop("string", "the LAN address to host on (default: this "
+                                        "computer's first private IPv4)"),
+                        "wait": prop("integer", "seconds to hold the empty chair for a guest (default 300)"),
+                        "turns": prop("integer", "the duel is a draw past this turn"),
+                        "log": prop("string", "write the journal your seat saw here at the end"),
+                        "packs": packs, "keep": keep, "view": view,
+                        "timeout": prop("number", "seconds to wait for the `table` line before "
+                                        "answering `pending` (default 15)")},
+                       self.tool_referee_host, required=["table", "deck"]),
             self._tool("referee_act", "Answer the pending decision of a game and return the next "
                        "one (or the `result`). `action` is one of the decision's `options` as the "
                        "wire takes it — `{\"op\":\"pass\"}`, `{\"op\":\"play\",\"card\":\"c3\"}`, "
@@ -1412,7 +1461,7 @@ class Server:
                        self.tool_referee_autoplay, required=["game"]),
             self._tool("referee_wait", "Read the game's pending decision again, or wait for the "
                        "next line when the last answer was `pending` (a table not yet started, a "
-                       "person still thinking).",
+                       "hosted chair still empty, a person still thinking).",
                        {"game": game, "view": view, "timeout": timeout},
                        self.tool_referee_wait, required=["game"]),
             self._tool("referee_stop", "End a game: the pipe is closed, the referee writes its "
@@ -1420,7 +1469,7 @@ class Server:
                        "that already ended answers its result.",
                        {"game": game}, self.tool_referee_stop, required=["game"]),
             self._tool("referee_resume", "Take up a kept game again — one started with `keep` by "
-                       "this server or an earlier one (a joined table is kept by default). Without "
+                       "this server or an earlier one (a joined or hosted table is kept by default). Without "
                        "`game`, lists the kept games on record and the live ones. With it, "
                        "reconnects to that referee and returns `hello` and the pending decision "
                        "(the journal it carries is the whole game so far), or the result the "
@@ -1906,9 +1955,10 @@ class Server:
         self.games[ident] = game
         return game
 
-    def open_game(self, argv: list[str], view: str, timeout: float, keep: bool = False) -> dict:
+    def open_game(self, argv: list[str], view: str, timeout: float, keep: bool = False,
+                  until_table: bool = False) -> dict:
         game = self.new_game(argv, view, keep)
-        state = game.advance(timeout)
+        state = game.advance(timeout, until_table=until_table)
         if game.error is not None and game.hello is None:
             game.close(grace=2)
             del self.games[game.ident]
@@ -2065,6 +2115,31 @@ class Server:
             argv += ["--log", str(self.inside(args["log"], tool, "log"))]
         return self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
                               keep=bool(args.get("keep", True)))
+
+    def tool_referee_host(self, args: dict) -> dict:
+        tool = "referee"
+        argv = ["--host", str(args["table"]), "--deck", self.deck_arg(args["deck"])]
+        for key in ("access", "name", "port", "address", "wait", "turns", "packs"):
+            self.flag(argv, args, key, "--" + key)
+        if args.get("log"):
+            argv += ["--log", str(self.inside(args["log"], tool, "log"))]
+        state = self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
+                               keep=bool(args.get("keep", True)), until_table=True)
+        table = state.get("table")
+        if table and state.get("pending"):
+            name = table.get("name")
+            if table.get("access") == "invitation":
+                state["note"] = (f"the table '{name}' is open at {table.get('address')}:{table.get('port')} "
+                                 "for the person who pastes its `invitation` into the game's Join screen; "
+                                 "hand them the invitation, then `referee_wait` until they sit down")
+            else:
+                state["note"] = (f"the table '{name}' is listed in every Game Browser on the LAN"
+                                 + ("" if table.get("discovery") else
+                                    " — except that the advert could not go out (the discovery port is "
+                                    "busy): hand them the `invitation` to paste instead")
+                                 + f"; the person joins it by name (host '{table.get('host')}'), "
+                                 "then `referee_wait` until they sit down")
+        return state
 
     def game_of(self, args: dict) -> Game:
         ident = str(args["game"])

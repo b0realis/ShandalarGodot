@@ -339,6 +339,8 @@ DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a SEAT] [--seat-b SEAT]
     [--seed N] [--turns N] [--packs LIST] [--log FILE] [--dry-run]
 DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK [--port N]
     [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST] [--log FILE]
+DeckLab/referee.sh --host NAME --deck DECK [--access open|invitation] [--address IP]
+    [--port N] [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST] [--log FILE]
 DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
 ```
 
@@ -382,10 +384,14 @@ as one JSON line and plays nothing.
   seat could not move —, `left`/`offline` — a table went away —,
   `idle` — a kept game's decision waited `--idle` long for nobody),
   `decisions`, `refusals`, `seed`, `life[]`, `names[]`, `log`.
+- `table` — only with `--host`, once, before `hello` and before anyone
+  sits: `id`, `name`, `access`, `host` (the nickname), `address`,
+  `port`, `invitation` (`sglan1:...`), `discovery` (the advert went
+  out). A kept hosted game replays it before `hello`.
 - `resume` — only on a kept game's socket, to a client that connects:
   `decisions`, `refusals`, `awaiting` (a decision is open), its `n`,
-  `finished`; sent after `hello` again and before that decision again,
-  this time with the WHOLE journal.
+  `finished`; sent after `table` and `hello` again and before that
+  decision again, this time with the WHOLE journal.
 - `{"error": {...}}` — the envelope above, `tool: "referee"`: nothing
   was played, exit 2.
 
@@ -419,8 +425,28 @@ table, `--log FILE` where the journal this seat saw — every line of the
 game as the table told it — is written at the end. The referee joins
 the first open room, sends the deck when the table plays own decks,
 readies, and then asks the pipe whenever the table's view says it is
-this seat's decision; `hello` carries `table{id, name, seat}`, `log`
-and `seed: -1` (the host shuffles). The host sees an ordinary guest.
+this seat's decision; `hello` carries `table{id, name, seat, hosted}`,
+`log` and `seed: -1` (the host shuffles). The host sees an ordinary
+guest. A lobby command the room moved on under (the lobby's "The room
+changed. Please try again." — the other seat's mark or deck landed
+meanwhile) is sent again with the fresh revision, up to five times;
+a game action is not — the seat decides afresh from the next view.
+
+**A hosted table** (`--host NAME`, 2026-10-03): the referee runs the
+game's own LAN host in-process, opens one table of that name with this
+program in seat 0 and writes the `table` line before anything else —
+how a person finds it. `--access open` (default): the table is listed
+in every Game Browser on the LAN and a person joins it by name;
+`--access invitation`: listed without its secret, the person pastes
+the `invitation` into the game's Join screen. `--address` is one of
+this computer's private IPv4 addresses (default the first; refused
+off the LAN), `--port` the host's port (17897; 0 any free port),
+`--name` the host's nickname, `--wait` (300 s) how long the empty
+chair is held — `kind: "host"`, exit 2 when nobody sits — and the
+rest as at a joined table. The host's seat is marked ready again each
+time the lobby clears the marks (a guest sitting down, their deck), so
+the duel starts on the guest's own mark; `hello.table.hosted` is true;
+the host stops with the result. The guest sees an ordinary host.
 
 **A kept game** (`--listen FILE`): the same lines served on a loopback
 TCP socket instead of the pipe, so the program may go away and come
@@ -477,8 +503,9 @@ written** — the answer is `check_deck`'s), `convert_deck`; `autodeck`,
 `lab` (structured arguments for every switch, `--no-elo` unless `rated`,
 `--quiet` always, `dry_run` for the plan; or a whole `argv`),
 `lab_resume`, `read_run`, `lab_next` (runs `run.json`'s `next.argv`);
-`referee_start`, `referee_join`, `referee_act`, `referee_autoplay`,
-`referee_wait`, `referee_stop`, `referee_resume`. Every answer is the door's JSON as
+`referee_start`, `referee_join`, `referee_host`, `referee_act`,
+`referee_autoplay`, `referee_wait`, `referee_stop`, `referee_resume`.
+Every answer is the door's JSON as
 `structuredContent` (and the same text in `content`); a refusal is
 `isError: true` with the door's envelope untouched under `error`; an
 argument a tool does not take is refused with `suggestions`, like a
@@ -539,6 +566,16 @@ name, wait, turns, log, packs, keep, view, timeout}` sits at a table a
 person hosts in the game — a human opponent — by the invitation the
 host's screen shows or by the name of an open LAN table; the answer is
 `pending: true` until the table starts and `referee_wait` reads on.
+`referee_host {table, deck, access, name, port, address, wait, turns,
+log, packs, keep, view, timeout}` hosts the table yourself: the answer
+is `pending: true` with `table` — the name, the `access` rule, the
+host's `address` and `port`, the `invitation`, `discovery` — and a
+`note` saying how the person finds it (an `open` table by its name in
+their Game Browser; an `invitation` one by pasting the invitation);
+`referee_wait` reads on until they sit down, when `hello` (with
+`table.hosted: true`) and the first decision arrive. While the chair
+is empty every `pending` answer carries `table` again, and `status`
+lists the game with `hosted`.
 A `result` closes the game; `referee_stop` closes the pipe (`reason:
 eof`); the server's own end closes every game it opened — unless kept.
 After an action has been sent, a timeout also returns `pending: true`:
@@ -565,8 +602,9 @@ passed; 400 passes without the stop is a stop too. `until: "end"`
 passes the seat's own main phase — `play` is the "next time I can do
 something" stop.
 
-**The kept game.** `referee_start`/`referee_join` take `keep` (a join is
-kept by default, a start is not): the referee listens on a loopback
+**The kept game.** `referee_start`/`referee_join`/`referee_host` take
+`keep` (a join and a host are kept by default, a start is not): the
+referee listens on a loopback
 socket (`--listen`) and the server writes `workspace/games/GAME.json`
 (the record: the command, the view, the files) beside the referee's
 handshake `GAME.keep.json` and the transcript `GAME.lines`; the game

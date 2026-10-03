@@ -360,6 +360,56 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The table the program hosts (2026-10-03)
+
+The referee hosts a LAN table of its own — the game's lobby run
+in-process, the program in seat 0 — and says first how a person finds
+it: an open table's name in their Game Browser, or an invitation to
+paste; the MCP server's `referee_host` hands that on. 0.50.6.
+
+- `DeckLab/referee.gd`: `--host NAME` with `--access open|invitation`,
+  `--address IP` (one of this computer's private IPv4 addresses, the
+  first by default), `--port` (17897; 0 any free port), `--name`,
+  `--wait` (the empty chair, 300 s). `_host` starts `SgLocalServer.
+  start_lan` without frames (its `poll` flushes its own publishes; the
+  discovery `pump`ed by hand through the `company` callable), connects
+  the program's own `SgLocalClient` with the host's invitation and
+  hands both to `_referee_table(client, deck, opts, packs, hosting,
+  company)`: the `host` op opens the room, the `table` line (`id`,
+  `name`, `access`, `host`, `address`, `port`, `invitation`,
+  `discovery`) is emitted once the room exists and remembered as
+  `last_table` (replayed before `hello` on a kept game's socket), then
+  `hold` marks the seat ready again each time the lobby clears the
+  marks (a guest's seat, their deck — the clock in a Dictionary, a
+  lambda's int being a copy) until the duel starts or the wait is up
+  (`kind: "host"`, exit 2); `hello.table.hosted`. Shared with a joined
+  table: `_seat_deck`, `_finish_table`; each `until` has the whole
+  `--wait` to itself (one session-wide deadline made every answer after
+  that many seconds "never answered"); `arrange` sends a lobby command
+  the room moved on under again (`ROOM_CHANGED`, `LOBBY_TRIES` 5) — the
+  host's ready mark landing under a guest's deck is exactly that; a
+  kept game's knock is served in the lobby ticks too (`_serve` in the
+  tick), not first at `hello` when it would be stale.
+- `tools/shandalar_mcp.py`: `Game.table` (the `table` line), `advance(…,
+  until_table)` answers on it, `_state` carries `table` while `hello`
+  is still to come with a note that the chair is held, `summary` lists
+  `hosted`; `tool_referee_host` (`table`, `deck`, `access` — enum
+  `ACCESS` —, `name`, `port`, `address`, `wait`, `turns`, `log`,
+  `packs`, `keep` (default true), `view`, `timeout`) answers `pending`
+  with `table` and a `note` saying how the person finds it.
+- `tools/test_shandalar_mcp.py`: the fake door's `--host` says its table
+  line first and seats a kept client while the guest takes their time
+  (`--wait 77`); `test_host_announces_the_table_then_waits`, `KeptGameTest.
+  test_a_hosted_table_is_taken_up_with_its_table_line`, and the live
+  `test_a_hosted_table_is_joined_by_a_guest_and_played` (one server
+  hosts, a second referee joins by the invitation, both seats played
+  turn about with short waits to a shared result). `tests/tools/
+  test_referee_2026_09_27.gd`: `HostClient`, `Guest` (a real lobby
+  client with the pilot), a hosted duel to its result, the empty chair
+  given up, the kept hosted table seating its client while the chair
+  is held, a lobby command sent again, each wait to itself. Python 430
+  (seven live).
+
 ## The pass that knows when to stop (2026-10-03)
 
 The MCP seat passes priority on its own up to the next point a real
@@ -1207,6 +1257,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.6.md`: the table the program hosts — `--host` and
+  `referee_host`, the `table` line, the chair held for a guest; the wait
+  given to each lobby step, lobby commands sent again, the kept knock
+  served in the lobby.
 - `docs/releases/0.50.5.md`: the pass that knows when to stop — pass-`until`
   that halts where a real player reacts, the kept game taken up by
   `referee_resume`, the `delta` view, a LAN table joined by name, the

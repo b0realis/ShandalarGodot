@@ -21,6 +21,14 @@ extends GutTest
 ## concession; `--table` finds an open LAN table's invitation through
 ## anything with SgLanDiscovery's face; `--log` with a joined table
 ## writes the journal the seat saw.
+##
+## THE TABLE THE REFEREE HOSTS (2026-10-03): `--host NAME` runs the
+## game's own LAN host in the referee's process — the `table` line (the
+## name, the access rule, the invitation, the advert), the chair held
+## ready through the lobby's resets, a guest with the real client
+## played to a result, the empty chair given up after `--wait`; and
+## each wait has the whole `--wait` to itself, so a duel longer than
+## that is not lost to "never answered" refusals.
 
 const Pilot := preload("res://tests/support/sg_network_pilot.gd")
 const REFEREE := "res://DeckLab/referee.gd"
@@ -163,6 +171,13 @@ func test_every_refusal_before_play_is_one_error_line_exit_2() -> void:
 		[["--join", "abc", "--table", "T", "--deck", "big_green.deck"], "option", "--table", "give one"],
 		[["--table", "T"], "option", "--deck", "--deck is required"],
 		[DECKS + ["--idle", "-1"], "option", "--idle", "non-negative integer"],
+		[["--host", "Kitchen"], "option", "--deck", "--deck is required with --host"],
+		[["--host", "Kitchen", "--deck", "big_green.deck", "--join", "abc"], "option", "--host", "does not go with"],
+		[["--host", "Kitchen", "--deck", "big_green.deck", "--table", "T"], "option", "--host", "does not go with"],
+		[["--host", "Kitchen", "--deck", "big_green.deck", "--access", "secret"], "option", "--access", "open or invitation"],
+		[["--host", "Kitchen!", "--deck", "big_green.deck"], "option", "--host", "table name"],
+		[["--host", "Kitchen", "--deck", "big_green.deck", "--address", "8.8.8.8"], "host", "--address", "private IPv4"],
+		[["--host", "Kitchen", "--deck", "big_green.deck", "--address", "not-an-ip"], "host", "--address", "private IPv4"],
 	]
 	for row in cases:
 		before_each()
@@ -466,6 +481,11 @@ class FakeClient:
 	var host_deck: Dictionary
 	var commands: Array = []
 	var match_seed := 5
+	## Milliseconds each poll takes while an answer is on its way.
+	var slow_ms := 0
+	## Lobby ops refused once each as "The room changed" (the host's
+	## mark landing under them), then taken.
+	var moved_under: Array = []
 	var m: SgPracticeMatch
 	var _busy := 0
 	var _polls := 0
@@ -479,6 +499,8 @@ class FakeClient:
 			state.rooms = [{"id": "t1", "name": "Wizard's table", "host": "Host", "open": open,
 				"decks": "own", "deck": ""}]
 		if _busy > 0:
+			if slow_ms > 0:
+				OS.delay_msec(slow_ms)
 			_busy -= 1
 		_advance()
 
@@ -488,6 +510,12 @@ class FakeClient:
 	func command(action: Dictionary) -> bool:
 		commands.append(action.op)
 		_busy = 1
+		if moved_under.has(action.op):
+			moved_under.erase(action.op)
+			if not state.room.is_empty():
+				state.room.revision = int(state.room.revision) + 1
+			refused.emit("The room changed. Please try again.")
+			return true
 		match String(action.op):
 			"join":
 				state.room = {"id": "t1", "name": "Wizard's table", "seat": 1, "names": ["Host", "Pilot"],
@@ -690,6 +718,258 @@ func test_a_joined_table_hands_back_the_journal_for_the_log() -> void:
 	var written := FileAccess.get_file_as_string(log_path)
 	assert_eq(written, "\n".join(PackedStringArray(outcome.journal)) + "\n")
 	assert_true(String(ref._write_log("user://no_such_dir/x.log", ["a"])).begins_with("cannot write the log"))
+
+
+## A fake client whose every answer takes a poll to arrive, with
+## `--wait 1`: the duel outlasts the wait many times over, and no answer
+## is ever "never answered" — each wait starts its own clock.
+func test_each_wait_at_a_table_has_the_whole_wait_to_itself() -> void:
+	var ref = _referee()
+	var fake := FakeClient.new()
+	fake.host_deck = ref._load_deck("white_knights.deck", "--deck-a").deck
+	fake.slow_ms = 15
+	var deck: Dictionary = ref._load_deck("big_green.deck", "--deck").deck
+	var started := Time.get_ticks_msec()
+	var outcome: Dictionary = ref._referee_table(fake, deck, {"wait": 1, "turns": 200}, null)
+	assert_true(Time.get_ticks_msec() - started > 1000, "the duel outlasted --wait")
+	assert_false(outcome.has("error"), str(outcome))
+	assert_eq(outcome.reason, "concluded")
+	assert_eq(ref.refusals, 0, "no answer was refused as never answered")
+	assert_eq(_of("refused").size(), 0)
+
+
+## The lobby refuses a command that carried an old revision and asks
+## for it again — the host's ready mark lands under a guest's deck in
+## the real lobby. A lobby command is sent again; the duel is unharmed.
+func test_a_lobby_command_the_room_moved_under_is_sent_again() -> void:
+	var ref = _referee()
+	var fake := FakeClient.new()
+	fake.host_deck = ref._load_deck("white_knights.deck", "--deck-a").deck
+	fake.moved_under = ["join", "deck", "ready", "leave"]
+	var deck: Dictionary = ref._load_deck("big_green.deck", "--deck").deck
+	var outcome: Dictionary = ref._referee_table(fake, deck, {"wait": 5, "turns": 200}, null)
+	assert_false(outcome.has("error"), str(outcome))
+	assert_eq(outcome.reason, "concluded")
+	assert_eq(fake.moved_under, [], "each refusal was spent")
+	assert_eq(fake.commands.slice(0, 6), ["join", "join", "deck", "deck", "ready", "ready"])
+	assert_eq(fake.commands.slice(-2), ["leave", "leave"])
+	assert_eq(ref.refusals, 0, "a lobby retry is not a refused answer")
+	assert_eq(_of("refused").size(), 0)
+
+
+# ------------------------------------------- the table the referee hosts --
+
+## The lobby client's face over the real one, the ops it was given
+## written down: the host's own seat, watched.
+class HostClient:
+	extends RefCounted
+	signal refused(reason: String)
+	var inner: SgLocalClient
+	var ops: Array = []
+	var online: bool:
+		get: return inner.online
+	var status: String:
+		get: return inner.status
+	var command_error: String:
+		get: return inner.command_error
+	var state: Dictionary:
+		get: return inner.state
+
+	func _init(client: SgLocalClient) -> void:
+		inner = client
+		inner.refused.connect(func(reason: String) -> void: refused.emit(reason))
+
+	func poll() -> void:
+		inner.poll()
+
+	func busy() -> bool:
+		return inner.busy()
+
+	func command(action: Dictionary) -> bool:
+		ops.append(String(action.op))
+		return inner.command(action)
+
+
+## A person at the hosted table, played by the coverage pilot through
+## the real lobby client, driven by hand from the referee's own tick:
+## finds the table by name in the listing, sits down, brings a deck,
+## marks ready, plays its seat, leaves when the duel is over.
+class Guest:
+	extends RefCounted
+	var client: SgLocalClient
+	var table_name: String
+	var deck: Dictionary
+	var pilot := Pilot.new()
+	var joined := false
+	var left := false
+	var acted_revision := -1
+	var ready_seen: Array = []
+
+	func pump() -> void:
+		client.poll()
+		if not client.online or client.busy():
+			return
+		var room: Dictionary = client.state.room
+		if room.is_empty():
+			if joined:
+				return
+			for listed in client.state.rooms:
+				if String(listed.name) == table_name and bool(listed.open):
+					client.command({"op": "join", "room": listed.id})
+			return
+		joined = true
+		var game: Dictionary = room.get("game", {})
+		if game.is_empty():
+			ready_seen.append(Array(room.ready))
+			if room.deck.is_empty():
+				client.command({"op": "deck", "name": deck.name, "cards": deck.cards, "sideboard": deck.sideboard})
+			elif not bool(room.ready[1]):
+				client.command({"op": "ready", "value": true})
+			return
+		if String(game.mode) == "finished":
+			if not left:
+				left = true
+				client.command({"op": "leave"})
+			return
+		if int(game.actor) != 1 or int(room.revision) <= acted_revision:
+			return
+		acted_revision = int(room.revision)
+		client.command(pilot.choose(game, 1))
+
+
+func test_a_hosted_table_is_played_by_a_guest_to_a_result() -> void:
+	var ref = _referee()
+	var server := SgLocalServer.new()
+	autofree(server)
+	assert_eq(server.start_lan("127.0.0.1", 0, true, "Agent", 0, true), OK)
+	assert_eq(server.discovery_error, OK)
+	var own := SgLocalClient.new()
+	autofree(own)
+	assert_eq(own.connect_invitation(server.invitation(), "Agent"), OK)
+	var host := HostClient.new(own)
+	var guest := Guest.new()
+	guest.client = SgLocalClient.new()
+	autofree(guest.client)
+	guest.table_name = "Kitchen"
+	guest.deck = ref._load_deck("white_knights.deck", "--deck").deck
+	assert_eq(guest.client.connect_invitation(server.invitation(), "Owner"), OK)
+	var hosting := {"name": "Kitchen", "access": "open", "host": "Agent", "address": "127.0.0.1",
+		"port": int(server.port), "invitation": server.invitation(), "discovery": true}
+	var company := func() -> void:
+		server.poll()
+		server.discovery.pump()
+		guest.pump()
+	var deck: Dictionary = ref._load_deck("big_green.deck", "--deck").deck
+	var outcome: Dictionary = ref._referee_table(host, deck, {"wait": 60, "turns": 200}, null, hosting, company)
+	assert_false(outcome.has("error"), str(outcome))
+	assert_eq(outcome.reason, "concluded")
+	assert_true(int(outcome.winner) in [0, 1])
+	assert_eq(int(outcome.seat), 0, "the host holds seat 0")
+	assert_eq(outcome.table, {"id": "r1", "name": "Kitchen"})
+	assert_true(String(outcome.names[0]).begins_with("Agent"), outcome.names[0])
+	assert_true(String(outcome.names[1]).begins_with("Owner"), outcome.names[1])
+	assert_true(int(outcome.turns) > 1)
+	assert_eq(ref.refusals, 0)
+	assert_true(ref.decisions > 10)
+	assert_true(outcome.journal.size() > 10, "the journal the host's seat saw")
+	# the table line came first, once the room existed, before hello
+	var table: Dictionary = _lines[0]
+	assert_eq(table.type, "table")
+	assert_eq(table.id, "r1")
+	assert_eq(table.name, "Kitchen")
+	assert_eq(table.access, "open")
+	assert_eq(table.host, "Agent")
+	assert_eq(table.address, "127.0.0.1")
+	assert_eq(int(table.port), int(server.port))
+	assert_true(String(table.invitation).begins_with(SgLanInvite.PREFIX))
+	assert_true(bool(table.discovery))
+	assert_eq(_keys(table), _keys(ref.last_table), "last_table is the line")
+	var hello: Dictionary = _lines[1]
+	assert_eq(hello.type, "hello")
+	assert_eq(hello.table.id, "r1")
+	assert_eq(hello.table.name, "Kitchen")
+	assert_eq(int(hello.table.seat), 0)
+	assert_true(bool(hello.table.hosted))
+	assert_eq(hello.seats[0].player, "agent")
+	assert_eq(hello.seats[0].deck, "Big Green")
+	assert_eq(hello.seats[1].player, "table")
+	assert_eq(hello.seats[1].deck, "White Knights")
+	for decision in _of("decision"):
+		assert_eq(int(decision.seat), 0)
+		assert_eq(int(decision.view.actor), 0)
+	# the host opened the room, readied, and readied again once the
+	# guest's arrival (and deck) cleared the marks — once or twice,
+	# as the two landed
+	assert_eq(host.ops.slice(0, 3), ["host", "deck", "ready"])
+	assert_true(host.ops.count("ready") >= 2, str(host.ops))
+	assert_eq(host.ops.back(), "leave")
+	assert_true(guest.ready_seen.has([false, false]), "the guest saw the marks cleared")
+	assert_true(guest.left)
+	assert_null(ref._pump, "the pump stopped")
+	assert_eq(_of("result").size(), 0, "_referee_table returns the record; _host emits it")
+	server.stop()
+
+
+## `_host` end to end on the loopback with nobody coming: the table
+## line, then the empty chair given up after --wait, exit 2.
+func test_hosting_an_empty_chair_gives_it_up_after_the_wait() -> void:
+	var ref = _referee()
+	ref.discovery_port = 0
+	var code: int = ref._main(PackedStringArray(["--host", "Kitchen", "--deck", "big_green.deck",
+		"--address", "127.0.0.1", "--port", "0", "--wait", "1", "--access", "invitation", "--name", "Ref"]))
+	assert_eq(code, 2)
+	assert_eq(_lines.size(), 2, str(_lines))
+	var table: Dictionary = _lines[0]
+	assert_eq(table.type, "table")
+	assert_eq(table.id, "r1")
+	assert_eq(table.name, "Kitchen")
+	assert_eq(table.access, "invitation")
+	assert_eq(table.host, "Ref")
+	assert_eq(table.address, "127.0.0.1")
+	assert_true(int(table.port) > 0)
+	var invitation: Dictionary = SgLanInvite.parse(String(table.invitation))
+	assert_eq(invitation.get("address", ""), "127.0.0.1")
+	assert_eq(int(invitation.get("port", 0)), int(table.port))
+	assert_true(bool(table.discovery))
+	var error: Dictionary = _errors()[0]
+	assert_eq(error.kind, "host")
+	assert_eq(error.flag, "--host")
+	assert_true(String(error.message).begins_with("no guest sat down at 'Kitchen' — waited 1 s"), error.message)
+	assert_eq(ref.last_table.id, "r1")
+
+
+## A kept hosted table: the client that knocks while the chair is held
+## is seated then and there (not at hello, when the knock would be
+## stale) and is told the table, then the refusal when the wait is up.
+func test_a_kept_hosted_table_seats_its_client_while_the_chair_is_held() -> void:
+	var path := _scratch("referee_host_keep.json")
+	var ref = _referee()
+	ref.discovery_port = 0
+	var client := KeptClient.new()
+	var knocked := {"at": -1}
+	ref.writer = func(line: String) -> void:
+		var record = JSON.parse_string(line)
+		_lines.append(record)
+		if record is Dictionary and record.get("type", "") == "table" and knocked.at < 0:
+			var handshake: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+			assert_true(client.open(int(handshake.port)))
+			client.send(JSON.stringify({"token": handshake.token, "client": "test"}))
+			knocked.at = Time.get_ticks_msec()
+	var code: int = ref._main(PackedStringArray(["--host", "Kitchen", "--deck", "big_green.deck",
+		"--address", "127.0.0.1", "--port", "0", "--wait", "1", "--listen", path]))
+	assert_eq(code, 2)
+	assert_true(knocked.at > 0, "the table line was written")
+	client.wait_lines(3)
+	assert_eq(client.lines.size(), 3, str(client.lines))
+	assert_eq(client.lines[0].type, "table")
+	assert_eq(client.lines[0].name, "Kitchen")
+	assert_eq(client.lines[0].access, "open")
+	assert_eq(client.lines[1].type, "resume")
+	assert_false(bool(client.lines[1].awaiting))
+	assert_eq(int(client.lines[1].decisions), 0)
+	assert_true(client.lines[2].has("error"))
+	assert_eq(client.lines[2].error.kind, "host")
+	assert_eq(_of("table").size(), 1, "the transcript has the table line once")
 
 
 # ------------------------------------------------------ the kept game --
@@ -930,6 +1210,9 @@ func test_the_doors_and_the_docs_know_the_referee() -> void:
 	var agents := FileAccess.get_file_as_string("res://AGENTS.md")
 	assert_true(agents.contains("## The referee"))
 	assert_true(agents.contains("--join"))
+	assert_true(agents.contains("--host NAME"), "the hosted table is in the contract")
+	assert_true(agents.contains("- `table` — only with `--host`"), "the table line is in the contract")
+	assert_true(agents.contains("`referee_host {table, deck, access"), "the MCP tool is in the contract")
 	assert_true(agents.contains("## The referee") and agents.contains("`refused` — `n`"))
 	var readme := FileAccess.get_file_as_string("res://DeckLab/README.md")
 	assert_true(readme.contains("referee.sh"))

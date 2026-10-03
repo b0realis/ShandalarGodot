@@ -153,14 +153,23 @@ if verb == "referee":
     def opt(flag, default=None):
         return rest[rest.index(flag) + 1] if flag in rest else default
     joined = "--join" in rest or "--table" in rest
+    hosted = "--host" in rest
     hello = {"type": "hello", "tool": "referee", "protocol": 1, "version": "9.9.9", "seed": int(opt("--seed", "7")),
              "seats": [{"seat": 0, "player": "agent", "name": "Agent", "deck": "A"}, {"seat": 1, "player": "wizard", "name": "Wizard", "deck": "B"}]}
     if joined:
         hello["table"] = {"host": "Someone"}
         if "--table" in rest:
             hello["table"]["name"] = opt("--table")
+    if hosted:
+        hello["table"] = {"id": "r1", "name": opt("--host"), "seat": 0, "hosted": True}
+    if joined or hosted:
         if "--log" in rest:
             hello["log"] = opt("--log")
+    # The hosted table's own line, said before hello (the real referee
+    # says it once the room exists).
+    table = ({"type": "table", "id": "r1", "name": opt("--host"), "access": opt("--access", "open"),
+              "host": opt("--name", "Agent"), "address": "127.0.0.1", "port": int(opt("--port", "17897")) or 17897,
+              "invitation": "sglan1:fake", "discovery": True} if hosted else None)
 
     class Keep:
         """The kept game of the real referee, in miniature: a loopback
@@ -173,7 +182,7 @@ if verb == "referee":
             self.peer = None; self.buf = b""
             self.idle = idle; self.idle_since = time.monotonic()
             self.awaiting = False; self.finished = False
-            self.hello = None; self.decision = None; self.whole = []
+            self.hello = None; self.table = None; self.decision = None; self.whole = []
             self.decisions = 0; self.refusals = 0
             part = Path(path + ".part")
             part.write_text(json.dumps({"port": self.srv.getsockname()[1], "token": self.token, "pid": os.getpid(),
@@ -206,6 +215,7 @@ if verb == "referee":
             if self.peer is not None: self.drop()
             conn.settimeout(None)
             self.peer = conn; self.buf = rest_bytes
+            if self.table is not None: self.send(json.dumps(self.table))
             if self.hello is not None: self.send(json.dumps(self.hello))
             self.send(json.dumps({"type": "resume", "decisions": self.decisions, "refusals": self.refusals,
                                   "awaiting": self.awaiting, "n": self.decision["n"] if self.awaiting else 0,
@@ -235,6 +245,7 @@ if verb == "referee":
         if keep is not None:
             kind = rec.get("type")
             if kind == "hello": keep.hello = rec
+            elif kind == "table": keep.table = rec
             elif kind == "decision":
                 keep.decision = rec; keep.decisions = rec["n"] + 1
                 for entry in rec["view"].get("journal", []):
@@ -253,9 +264,19 @@ if verb == "referee":
         line = sys.stdin.readline()
         return "eof" if line == "" else line
     # A joined table says hello when the duel starts — `--wait 77` is
-    # the test's slow host.
-    if joined and "--wait" in rest and opt("--wait") == "77":
-        time.sleep(3)
+    # the test's slow host; a hosted one says its table line first and
+    # `--wait 77` is the guest who takes their time.
+    if table is not None:
+        out(table)
+    if (joined or hosted) and "--wait" in rest and opt("--wait") == "77":
+        # (a kept game seats the client that knocks meanwhile, as the
+        # real referee does while the lobby is waited on)
+        until = time.monotonic() + 3
+        while time.monotonic() < until:
+            if keep is None:
+                time.sleep(0.2); continue
+            ready, _, _ = select.select([keep.srv], [], [], 0.2)
+            if keep.srv in ready: keep.seat()
     out(hello)
     view = {"turn": 1, "step": "UPKEEP", "active": 0, "actor": 0, "mode": "opening", "stack": [],
             "hand": [{"id": "c1", "name": "Mountain", "land": True}, {"id": "c2", "name": "Lightning Bolt", "rules": "3 damage"}],
@@ -531,14 +552,19 @@ class FakeDoorTest(unittest.TestCase):
         names = [t["name"] for t in tools]
         for must in ("status", "contract", "manual", "packs", "cards", "check_deck", "list_decks", "read_deck",
                      "write_deck", "convert_deck", "autodeck", "lab", "lab_resume", "read_run", "lab_next",
-                     "referee_start", "referee_join", "referee_act", "referee_autoplay", "referee_wait", "referee_stop",
-                     "referee_resume"):
+                     "referee_start", "referee_join", "referee_host", "referee_act", "referee_autoplay", "referee_wait",
+                     "referee_stop", "referee_resume"):
             self.assertIn(must, names)
         self.assertEqual(len(names), len(set(names)))
         by_name = {t["name"]: t for t in tools}
         self.assertIn("until", by_name["referee_act"]["inputSchema"]["properties"])
         for key in ("invitation", "table", "deck", "log", "keep", "view"):
             self.assertIn(key, by_name["referee_join"]["inputSchema"]["properties"], key)
+        hosting = by_name["referee_host"]["inputSchema"]
+        for key in ("table", "deck", "access", "name", "port", "address", "wait", "log", "keep", "view"):
+            self.assertIn(key, hosting["properties"], key)
+        self.assertEqual(hosting["required"], ["table", "deck"])
+        self.assertEqual(hosting["properties"]["access"]["enum"], ["open", "invitation"])
         self.assertEqual(by_name["referee_join"]["inputSchema"]["required"], ["deck"])
         self.assertIn("keep", by_name["referee_start"]["inputSchema"]["properties"])
         self.assertIn("delta", by_name["referee_start"]["inputSchema"]["properties"]["view"]["description"])
@@ -937,6 +963,49 @@ class FakeDoorTest(unittest.TestCase):
         neither = self.client.call("referee_join", {"deck": "a.deck"})
         self.assertEqual(neither["structuredContent"]["error"]["flag"], "invitation")
 
+    def test_host_announces_the_table_then_waits(self):
+        # the table line is the answer; hello comes when the guest sits down
+        opened = self.client.payload("referee_host", {"table": "Kitchen", "deck": "a.deck", "access": "invitation",
+                                                      "name": "Ref", "port": 0, "wait": 77, "timeout": 15})
+        game = opened["game"]
+        self.assertTrue(opened["pending"])
+        self.assertIsNone(opened["hello"])
+        self.assertEqual(opened["table"], {"type": "table", "id": "r1", "name": "Kitchen", "access": "invitation",
+                                           "host": "Ref", "address": "127.0.0.1", "port": 17897,
+                                           "invitation": "sglan1:fake", "discovery": True})
+        self.assertIn("pastes its `invitation`", opened["note"])
+        keep = str(self.workspace / "games" / (game + ".keep.json"))
+        self.assertIn(["referee", "--host", "Kitchen", "--deck", "a.deck", "--access", "invitation", "--name", "Ref",
+                       "--port", "0", "--wait", "77", "--listen", keep, "--idle", str(mcp.KEEP_IDLE)], self.calls())
+        row = [g for g in self.client.payload("status")["games"] if g["game"] == game][0]
+        self.assertEqual(row["hosted"]["invitation"], "sglan1:fake")
+        self.assertNotIn("table", row)
+        # a wait that runs out keeps naming the table; the one that lasts gets the duel
+        held = self.client.payload("referee_wait", {"game": game, "timeout": 0.2})
+        self.assertTrue(held["pending"])
+        self.assertEqual(held["table"]["name"], "Kitchen")
+        self.assertIn("chair is held", held["note"])
+        first = self.client.payload("referee_wait", {"game": game, "timeout": 15})
+        self.assertEqual(first["decision"]["n"], 0)
+        self.assertEqual(first["hello"]["table"], {"id": "r1", "name": "Kitchen", "seat": 0, "hosted": True})
+        self.assertNotIn("table", first)
+        row = [g for g in self.client.payload("status")["games"] if g["game"] == game][0]
+        self.assertEqual(row["table"]["hosted"], True)
+        self.assertEqual(row["hosted"]["name"], "Kitchen")
+        stopped = self.client.payload("referee_stop", {"game": game})
+        self.assertEqual(stopped["result"]["reason"], "concede")
+        self.assertTrue(stopped["kept"])
+        # an open table by default, not kept on request, and the access rule is checked first
+        opened = self.client.payload("referee_host", {"table": "Porch", "deck": "a.deck", "keep": False, "log": "porch.log"})
+        self.assertEqual(opened["table"]["access"], "open")
+        self.assertIn("listed in every Game Browser", opened["note"])
+        self.assertIn(["referee", "--host", "Porch", "--deck", "a.deck", "--log", str(self.home / "porch.log")], self.calls())
+        self.assertNotIn("kept", self.client.payload("referee_stop", {"game": opened["game"]}))
+        bad = self.client.call("referee_host", {"table": "Porch", "deck": "a.deck", "access": "secret"})
+        self.assertTrue(bad["isError"])
+        self.assertEqual(bad["structuredContent"]["error"]["flag"], "access")
+        self.assertEqual(self.calls().count(["referee", "--host", "Porch", "--deck", "a.deck", "--access", "secret"]), 0)
+
     def test_pass_until_stops_where_a_player_acts(self):
         opened = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 31})
         game = opened["game"]
@@ -1261,6 +1330,32 @@ class KeptGameTest(unittest.TestCase):
         self.assertFalse(self.alive(pid))
         lines = (self.games / (game + ".lines")).read_text(encoding="utf-8").splitlines()
         self.assertEqual([json.loads(l)["type"] for l in lines], ["hello", "decision", "decision", "decision", "result"])
+
+    def test_a_hosted_table_is_taken_up_with_its_table_line(self):
+        # the server goes while the chair is still empty; the next one is
+        # told the table first, then the duel that started meanwhile
+        client = self.open_client()
+        opened = client.payload("referee_host", {"table": "Kitchen", "deck": "a.deck", "wait": 77})
+        game = opened["game"]
+        self.assertTrue(opened["pending"])
+        self.assertEqual(opened["table"]["name"], "Kitchen")
+        pid = int(json.loads((self.games / (game + ".keep.json")).read_text(encoding="utf-8"))["pid"])
+        stderr = client.close()
+        self.assertEqual(client.proc.returncode, 0, stderr)
+        self.assertTrue(self.alive(pid))
+        again = self.open_client()
+        resumed = again.payload("referee_resume", {"game": game, "timeout": 30})
+        self.assertTrue(resumed["resumed"])
+        self.assertEqual(resumed["decision"]["n"], 0)
+        self.assertEqual(resumed["hello"]["table"], {"id": "r1", "name": "Kitchen", "seat": 0, "hosted": True})
+        self.assertNotIn("table", resumed)
+        row = [g for g in again.payload("status")["games"] if g["game"] == game][0]
+        self.assertEqual(row["hosted"]["access"], "open")
+        stopped = again.payload("referee_stop", {"game": game})
+        self.assertEqual(stopped["result"]["reason"], "concede")
+        again.close()
+        lines = (self.games / (game + ".lines")).read_text(encoding="utf-8").splitlines()
+        self.assertEqual([json.loads(l)["type"] for l in lines][:3], ["table", "hello", "decision"])
 
     def test_a_kept_game_that_ended_alone_or_lost_its_referee_is_told(self):
         self.games.mkdir(parents=True)
@@ -1660,6 +1755,72 @@ class LiveTest(unittest.TestCase):
         self.assertFalse((self.workspace / "games" / (game + ".json")).is_file())
         transcript = (self.workspace / "games" / (game + ".lines")).read_text(encoding="utf-8")
         self.assertIn('"type":"result"', transcript.replace(" ", ""))
+        self.assertEqual(self.client.payload("referee_resume", {})["kept"], [])
+
+    def test_a_hosted_table_is_joined_by_a_guest_and_played(self):
+        # the server hosts a table in the game's own lobby and sits at it
+        # with a second referee as the guest; the two seats are played
+        # turn about with short waits (the server answers one call at a
+        # time, and each seat's next decision waits on the other's answer)
+        hosted = self.client.payload("referee_host", {"table": "Kitchen", "deck": "big_green.deck",
+                                                      "address": "127.0.0.1", "port": 0, "turns": 12,
+                                                      "timeout": 60}, timeout=120)
+        host = hosted["game"]
+        self.assertTrue(hosted.get("pending"), hosted)
+        self.assertIsNone(hosted["hello"])
+        table = hosted["table"]
+        self.assertEqual((table["name"], table["access"], table["address"], table["host"], table["id"]),
+                         ("Kitchen", "open", "127.0.0.1", "Agent", "r1"))
+        self.assertGreater(table["port"], 0)
+        self.assertTrue(table["invitation"].startswith("sglan1:"), table["invitation"])
+        self.assertIn("Game Browser", hosted["note"])
+        self.assertEqual([g for g in self.client.payload("status")["games"] if g["game"] == host][0]["hosted"], table)
+        guest = self.client.payload("referee_join", {"invitation": table["invitation"], "deck": "white_knights.deck",
+                                                     "name": "Owner", "turns": 12, "wait": 60, "timeout": 10}, timeout=60)
+        other = guest["game"]
+        self.assertNotEqual(other, host)
+        results: dict = {}
+        hellos: dict = {}
+        deadline = time.time() + 420
+        for _ in range(4000):
+            if len(results) == 2 or time.time() > deadline:
+                break
+            for game in (host, other):
+                if game in results:
+                    continue
+                state = self.client.payload("referee_wait", {"game": game, "timeout": 0.25}, timeout=60)
+                if state.get("hello"):
+                    hellos[game] = state["hello"]
+                if "decision" in state and "result" not in state:
+                    state = self.client.payload("referee_autoplay", {"game": game, "decisions": 50, "timeout": 0.25}, timeout=60)
+                if "result" in state or "error" in state:
+                    results[game] = state.get("result") or state["error"]
+        for game in (host, other):
+            if game not in results:
+                # (a seat left playing would wait for its answer until idle)
+                self.client.payload("referee_stop", {"game": game}, timeout=60)
+        self.assertEqual(sorted(results), sorted([host, other]), results)
+        for game in (host, other):
+            self.assertEqual(results[game].get("type"), "result", results[game])
+        self.assertEqual(hellos[host]["table"], {"id": "r1", "name": "Kitchen", "seat": 0, "hosted": True})
+        self.assertEqual(hellos[other]["table"]["name"], "Kitchen")
+        self.assertFalse(hellos[other]["table"]["hosted"])
+        self.assertEqual(hellos[other]["table"]["seat"], 1)
+        self.assertEqual(hellos[host]["seats"][0]["player"], "agent")
+        self.assertEqual(hellos[host]["seats"][1]["player"], "table")
+        for game, mine in ((host, 0), (other, 1)):
+            result = results[game]
+            self.assertIn(result["reason"], ("concluded", "limit"), result)
+            self.assertEqual(result["seat"], mine)
+            self.assertEqual(result["table"], {"id": "r1", "name": "Kitchen"})
+            # (the lobby's own suffix on a nickname is its business)
+            self.assertTrue(result["names"][0].startswith("Agent"), result["names"])
+            self.assertTrue(result["names"][1].startswith("Owner"), result["names"])
+        self.assertEqual(results[host]["winner"], results[other]["winner"])
+        self.assertIn(results[host]["winner"], (0, 1))
+        status = self.client.payload("status")
+        for game in (host, other):
+            self.assertFalse([g for g in status["games"] if g["game"] == game][0]["running"])
         self.assertEqual(self.client.payload("referee_resume", {})["kept"], [])
 
 

@@ -2071,6 +2071,7 @@ DeckLab/referee.sh --deck-a big_green.deck --deck-b white_knights.deck --seat-b 
 DeckLab/referee.sh --deck-a big_green.deck --deck-b big_green.deck --seat-b agent      # self-play
 DeckLab/referee.sh --join sglan1:... --deck big_green.deck --name Pilot                # a table
 DeckLab/referee.sh --table Kitchen --deck big_green.deck --log kitchen.log              # by name
+DeckLab/referee.sh --host Kitchen --deck big_green.deck --access invitation             # hosts one
 DeckLab/referee.sh --deck-a ... --deck-b ... --listen g1.keep.json --idle 1800         # kept
 DeckLab/referee.sh --deck-a ... --deck-b ... --dry-run                                 # the plan
 ```
@@ -2084,6 +2085,15 @@ invitation or the same-computer access code — so a program plays a
 person, or another program at another table; `--table NAME` finds an
 open LAN table by the name the Game Browser lists (the advert carries
 the invitation), and at a table `--log` keeps the journal the seat saw.
+`--host NAME` (0.50.6) is the other side of that: the referee runs the
+game's LAN host itself, opens one table of that name with the pipe in
+seat 0 and writes a `table` line first — `access` (`open`: listed in
+every Game Browser on the LAN, joined by name; `invitation`: the
+person pastes the `invitation`), `address`, `port`, the `invitation`
+— then holds the chair `--wait` seconds (300) for a guest and plays
+the duel when they sit; `--address` picks one of this computer's
+private IPv4 addresses, `--port 0` any free port. A lobby command the
+room moved on under is sent again, as the lobby asks.
 `--listen FILE` (2026-10-03) serves the same lines on a loopback socket
 instead of the pipe and writes `{port, token, pid}` to FILE, so the
 program may go away and come back while the duel waits — a client that
@@ -2123,8 +2133,9 @@ release `python3 tools/shandalar_mcp.py`) whose `tools/list` is the
 catalogue an MCP client reads before it acts — `status`, `contract`, `play_guide`,
 `manual`, `packs`, `cards`, `check_deck`, `list_decks`, `read_deck`,
 `write_deck`, `convert_deck`, `autodeck`, `lab`, `lab_resume`,
-`read_run`, `lab_next`, `referee_start`, `referee_join`, `referee_act`,
-`referee_autoplay`, `referee_wait`, `referee_stop`, `referee_resume` —
+`read_run`, `lab_next`, `referee_start`, `referee_join`, `referee_host`,
+`referee_act`, `referee_autoplay`, `referee_wait`, `referee_stop`,
+`referee_resume` —
 each with a description a program can act on and a schema with every
 argument described. Dependency-free: the Python that runs the other tools runs
 this one. Every tool is thin: the door runs as a subprocess, its JSON is
@@ -2140,9 +2151,12 @@ client can skip to the part it cares about and still reach a
 next point a player would act and STOPS where a real player reacts —
 the opponent's spell on the stack, their declared attackers, their
 blocks and end step, the seat's own decisions — `view: "delta"` shows
-only what moved, `referee_join` takes an open table's name, and a game
+only what moved, `referee_join` takes an open table's name, a game
 started or joined with `keep` outlives the server: `referee_resume`
-lists it and takes it up), the deck file written from rows and checked by the engine
+lists it and takes it up; since 0.50.6 `referee_host` hosts the table
+itself and answers with how a person finds it — the name their Game
+Browser lists, or the invitation to paste — then `referee_wait` reads
+on until they sit down), the deck file written from rows and checked by the engine
 as it is written, and the path rule (whatever a tool writes lies under
 the checkout or the workspace, `workspace/` beside the door by
 default — and a deck in the workspace is named to every tool by its
