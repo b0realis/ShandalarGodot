@@ -286,3 +286,82 @@ binary_format/architecture="arm64"
 texture_format/s3tc_bptc=true
 texture_format/etc2_astc=true
 ssh_remote_deploy/enabled=false
+
+; ANDROID / META QUEST (2026-09-29): a flat 2D panel app, sideloaded over
+; adb — never the Horizon Store. The prebuilt 4.7.stable template APKs are
+; named by path for the same reason the Linux ones are. The release key
+; is NOT here: build_quest.sh sources ../shandalar-build/keys/release.env
+; (GODOT_ANDROID_KEYSTORE_RELEASE_PATH/_USER/_PASSWORD) and the editor
+; settings name the JDK 17 and the Android SDK under ~/.local/opt. No
+; gradle build: no plugins, no XR mode, one arm64 APK. version/name is
+; left empty so the APK carries application/config/version.
+[preset.7]
+
+name="Android Quest"
+platform="Android"
+runnable=true
+advanced_options=false
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+export_path="../shandalar-build/quest/Shandalar.apk"
+patches=PackedStringArray()
+encryption_include_filters=""
+encryption_exclude_filters=""
+seed=0
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
+
+[preset.7.options]
+
+custom_template/debug="<YOUR HOME>/.local/share/godot/export_templates/4.7.stable/android_debug.apk"
+custom_template/release="<YOUR HOME>/.local/share/godot/export_templates/4.7.stable/android_release.apk"
+gradle_build/use_gradle_build=false
+gradle_build/gradle_build_directory=""
+gradle_build/android_source_template=""
+gradle_build/compress_native_libraries=false
+gradle_build/export_format=0
+gradle_build/min_sdk=""
+gradle_build/target_sdk=""
+architectures/armeabi-v7a=false
+architectures/arm64-v8a=true
+architectures/x86=false
+architectures/x86_64=false
+version/code=1
+version/name=""
+package/unique_name="com.b0realis.shandalar"
+package/name="Shandalar"
+package/signed=true
+package/app_category=2
+package/retain_data_on_uninstall=false
+package/exclude_from_recents=false
+package/show_in_android_tv=false
+package/show_in_app_library=true
+package/show_as_launcher_app=false
+launcher_icons/main_192x192=""
+launcher_icons/adaptive_foreground_432x432=""
+launcher_icons/adaptive_background_432x432=""
+launcher_icons/adaptive_monochrome_432x432=""
+graphics/opengl_debug=false
+xr_features/xr_mode=0
+screen/immersive_mode=true
+screen/edge_to_edge=false
+screen/support_small=true
+screen/support_normal=true
+screen/support_large=true
+screen/support_xlarge=true
+user_data_backup/allow=false
+command_line/extra_args=""
+apk_expansion/enable=false
+apk_expansion/SALT=""
+apk_expansion/public_key=""
+permissions/custom_permissions=PackedStringArray()
+keystore/debug=""
+keystore/debug_user=""
+keystore/debug_password=""
+keystore/release=""
+keystore/release_user=""
+keystore/release_password=""

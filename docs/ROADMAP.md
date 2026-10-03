@@ -18749,6 +18749,15 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-03 — The presets in the repository (0.50.8)
+
+The owner, after 0.50.7: *"Export presets add to the files."* The
+example now carries every preset the builder uses — the `Android Quest`
+preset had lived only in the gitignored working copy since 0.40.48 — and
+the working copy differs from it only by the home folder in six template
+paths, which is why the copy itself stays out of the history (no tracked
+file may name the builder's home, `tools/test_tracked_tree.py`).
+
 ## 2026-10-03 — The pass over the whole tree (0.50.7)
 
 The owner, after 0.50.6: *"Analyze now all and do a bug find and bug pass

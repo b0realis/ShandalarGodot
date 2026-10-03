@@ -1261,6 +1261,8 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.8.md`: the export presets, all in the repository —
+  `export_presets.cfg.example` gains the `Android Quest` preset.
 - `docs/releases/0.50.7.md`: the pass over the whole tree — about 150
   defects found by nine hunters and fixed test-first across the engine,
   the cards, the AI, the screens, the LAN, the Deck Lab and the MCP
