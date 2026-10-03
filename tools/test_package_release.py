@@ -71,7 +71,12 @@ class PackageReleaseTest(unittest.TestCase):
         for name in names:
             path = self.folder / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(b"export bytes")
+            if name.endswith(".apk"):
+                # An APK is a zip; the home guard reads its members.
+                with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                    archive.writestr("AndroidManifest.xml", b"export bytes")
+            else:
+                path.write_bytes(b"export bytes")
         (self.folder / "cardart.zip").write_bytes(b"private card pictures")
         (self.folder / "smoke.log").write_text("diagnostic log")
         return names
@@ -463,6 +468,27 @@ class GuardPrivateTest(unittest.TestCase):
             except ValueError:
                 return True
             return False
+
+    def test_an_apk_cannot_hide_the_home_in_a_deflated_member(self):
+        # 4,866 of the Quest APK's 4,940 entries are deflated: the raw bytes
+        # of the package never show a path inside one (2026-10-03).
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = Path(tmp) / "Shandalar.apk"
+            with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("assets/decks/mined.deck", b"// next: /home/builder/run\n" * 50)
+            self.assertNotIn(b"/home/builder", apk.read_bytes(), "the fixture really hides it")
+            with self.assertRaises(ValueError) as caught:
+                pack.guard_private([apk], home="/home/builder")
+            self.assertIn("mined.deck", str(caught.exception))
+            clean = Path(tmp) / "Clean.apk"
+            with zipfile.ZipFile(clean, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("assets/decks/big_green.deck", b"4 Llanowar Elves\n" * 50)
+            pack.guard_private([clean], home="/home/builder")
+            broken = Path(tmp) / "Broken.apk"
+            broken.write_bytes(b"not a zip at all")
+            with self.assertRaises(ValueError) as caught:
+                pack.guard_private([broken], home="/home/builder")
+            self.assertIn("not an APK", str(caught.exception))
 
     def test_the_home_is_caught_in_every_form_a_file_carries_it(self):
         cases = {

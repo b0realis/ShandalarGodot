@@ -290,11 +290,17 @@ ssh_remote_deploy/enabled=false
 ; ANDROID / META QUEST (2026-09-29): a flat 2D panel app, sideloaded over
 ; adb — never the Horizon Store. The prebuilt 4.7.stable template APKs are
 ; named by path for the same reason the Linux ones are. The release key
-; is NOT here: build_quest.sh sources ../shandalar-build/keys/release.env
-; (GODOT_ANDROID_KEYSTORE_RELEASE_PATH/_USER/_PASSWORD) and the editor
+; is NOT here: build_release.sh --quest sources QUEST_KEY_ENV (default
+; ../shandalar-build/keys/release.env:
+; GODOT_ANDROID_KEYSTORE_RELEASE_PATH/_USER/_PASSWORD) and the editor
 ; settings name the JDK 17 and the Android SDK under ~/.local/opt. No
 ; gradle build: no plugins, no XR mode, one arm64 APK. version/name is
-; left empty so the APK carries application/config/version.
+; left empty so the APK carries application/config/version. INTERNET (and
+; the network/Wi-Fi state reads) are asked for (2026-10-03): SGManalink's
+; LAN host, join, discovery and tournaments open sockets, which Android
+; refuses an app whose manifest lacks INTERNET — and a sideloaded APK
+; cannot be given it afterwards. All three are normal permissions: no
+; prompt on the headset.
 [preset.7]
 
 name="Android Quest"
@@ -359,6 +365,9 @@ apk_expansion/enable=false
 apk_expansion/SALT=""
 apk_expansion/public_key=""
 permissions/custom_permissions=PackedStringArray()
+permissions/access_network_state=true
+permissions/access_wifi_state=true
+permissions/internet=true
 keystore/debug=""
 keystore/debug_user=""
 keystore/debug_password=""

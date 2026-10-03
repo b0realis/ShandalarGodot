@@ -256,6 +256,17 @@ the touch layer's own release landing in a menu taller than the panel,
 fixed in 0.40.51 inside the layer (`TouchControls`), nothing on the
 headset's side.
 
+**LAN play on the headset (0.50.9).** Until 0.50.9 the APK asked for no
+permissions at all, so Android refused SGManalink every socket: hosting,
+joining, the Game Browser's discovery and tournaments were offered and
+could not work. The preset now asks for INTERNET and the network and
+Wi-Fi state reads (normal permissions — nothing to approve on the
+headset; reinstall the APK, a sideload cannot be given them afterwards).
+Joining by an invitation and hosting are plain sockets. **Not yet tried
+on the headset:** the Game Browser's LAN discovery — Android may drop
+broadcast packets to an app that holds no Wi-Fi multicast lock, which
+Godot does not take; if a table does not appear, paste its invitation.
+
 **adb on a Linux machine.** `adb` is the Android debug bridge, one small
 program; the Meta Quest Developer Hub that wraps it is Windows/macOS
 only, and it is not needed.

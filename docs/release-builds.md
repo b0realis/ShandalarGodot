@@ -1,7 +1,7 @@
 # Cross-platform release packages
 
 Release packaging does not change the duel layout or rules. Godot 4.7.2
-can cross-export the seven local test targets; verify the official template archive's
+can cross-export the eight local test targets (Android Quest the eighth); verify the official template archive's
 checksum and extract only the needed templates. Set local custom-template
 paths in the ignored `export_presets.cfg`, using the example as a guide.
 Separate Mac presets target Apple Silicon and Intel (the universal preset

@@ -161,6 +161,48 @@ class PresetFilterTest(unittest.TestCase):
                 self.assertIn("DeckLab/results/*", entries)
                 self.assertIn("workspace/*", entries)
 
+    @staticmethod
+    def sections():
+        text = (ROOT / "export_presets.cfg.example").read_text(encoding="utf-8")
+        out = {}
+        for section in re.split(r"(?m)^\[preset\.\d+\]\n", text)[1:]:
+            out[re.search(r'(?m)^name="([^"]*)"', section).group(1)] = section
+        return out
+
+    def test_every_preset_the_script_exports_is_in_the_example(self):
+        # The example is what a new machine starts from; the Android Quest
+        # preset was missing from it from 0.40.48 until 0.50.8, and a
+        # count ("at least seven") could not notice (bug pass 2026-10-03).
+        wanted = set(re.findall(r'PRESET="([^"$]+)"', SOURCE))
+        self.assertTrue({"Linux 64", "Web", "macOS", "Android Quest"} <= wanted, wanted)
+        self.assertEqual(wanted - set(self.sections()), set())
+
+    def test_the_quest_preset_asks_for_the_network(self):
+        # LAN play (host, join, discovery, tournaments) needs sockets, and
+        # Android refuses them to an app whose manifest lacks INTERNET; the
+        # permission cannot be added after a sideload (2026-10-03).
+        quest = self.sections()["Android Quest"]
+        for permission in ("internet", "access_network_state", "access_wifi_state"):
+            with self.subTest(permission=permission):
+                self.assertRegex(quest, r"(?m)^permissions/%s=true$" % permission)
+
+    def test_the_quest_preset_names_the_script_that_loads_the_key(self):
+        text = (ROOT / "export_presets.cfg.example").read_text(encoding="utf-8")
+        self.assertNotIn("build_quest.sh", text, "no such script exists")
+        self.assertIn("build_release.sh --quest", text)
+        self.assertIn("QUEST_KEY_ENV", SOURCE)
+
+
+class QuestGuardTest(unittest.TestCase):
+    def test_the_quest_build_scans_the_apk_for_the_home_folder(self):
+        # An APK is a zip of DEFLATED files: a grep of its bytes cannot see
+        # a home path inside one, so the Quest branch hands the APK to
+        # package_release.guard_private, which reads every member.
+        branch = SOURCE[SOURCE.index("# THE QUEST BUILD ENDS HERE"):]
+        branch = branch[:branch.index("exit 0")]
+        self.assertIn("guard_private", branch)
+        self.assertIn('"$BIN"', branch[branch.index("guard_private"):])
+
 
 STUB_GODOT = r'''
 import os, pathlib, sys

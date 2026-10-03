@@ -315,14 +315,29 @@ def private_patterns(home: str | None = None) -> list[tuple[bytes, re.Pattern]]:
 def guard_private(paths: list[Path], home: str | None = None) -> None:
     patterns = private_patterns(home)
     for path in paths:
-        tail = b""
         with path.open("rb") as source:
-            for block in iter(lambda: source.read(1024 * 1024), b""):
-                data = tail + block
-                if any(literal in data and pattern.search(data)
-                       for literal, pattern in patterns):
-                    raise ValueError(f"Personal home path in {path.name}")
-                tail = data[-512:]
+            _guard_stream(source, path.name, patterns)
+        # AN APK IS A ZIP OF DEFLATED FILES (bug pass 2026-10-03): 4,866 of
+        # the Quest APK's 4,940 entries are compressed, so its raw bytes
+        # never show a path written inside one — every member is read too.
+        if path.suffix.lower() == ".apk":
+            if not zipfile.is_zipfile(path):
+                raise ValueError(f"{path.name} is not an APK (not a zip archive)")
+            with zipfile.ZipFile(path) as archive:
+                for info in archive.infolist():
+                    if not info.is_dir():
+                        with archive.open(info) as source:
+                            _guard_stream(source, f"{path.name}:{info.filename}", patterns)
+
+
+def _guard_stream(source, label: str, patterns) -> None:
+    tail = b""
+    for block in iter(lambda: source.read(1024 * 1024), b""):
+        data = tail + block
+        if any(literal in data and pattern.search(data)
+               for literal, pattern in patterns):
+            raise ValueError(f"Personal home path in {label}")
+        tail = data[-512:]
 
 
 def member(archive: zipfile.ZipFile, name: str, content: Path | bytes, executable=False):

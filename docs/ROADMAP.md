@@ -18749,6 +18749,23 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-03 — What the review found (0.50.9)
+
+A code review of 0.50.8, then the owner: *"First correct co-authored by and
+force push! Then fix 1-4 and the docs."* The two pushed commits lost their
+assistant trailers (rewritten and force-pushed — the history is
+pseudonymous, CONTRIBUTING "Publication"), and:
+
+- **The Quest APK asked for no permissions** (`aapt dump permissions`):
+  SGManalink could open no socket on the headset. INTERNET and the
+  network/Wi-Fi state reads are in the preset; a check export shows all
+  three in the manifest. Discovery's broadcasts on Android are untried.
+- **The home guard reads inside an APK** — its members are deflated, so
+  the byte grep was blind there; `guard_private` opens each member and
+  `build_release.sh --quest` runs it.
+- **The release script's presets are pinned by name** in the example.
+- Docs: the real key loader in the preset comment, CODE_MAP, eight targets.
+
 ## 2026-10-03 — The presets in the repository (0.50.8)
 
 The owner, after 0.50.7: *"Export presets add to the files."* The

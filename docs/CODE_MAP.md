@@ -920,11 +920,15 @@ with AI and go over MCP code for bugfix and improvement run!"*
   variables sourced from `../shandalar-build/keys/release.env`
   (`QUEST_KEY_ENV`), `JAVA_HOME` from the editor's
   `export/android/java_sdk_path` when unset, apksigner's verdict and
-  the signer's CN checked, the adb lines printed. The preset itself is
-  in the local `export_presets.cfg` (gitignored): prebuilt 4.7.stable
-  template APKs by path, arm64 only, `package/unique_name`
-  `com.b0realis.shandalar`, `screen/immersive_mode`, `version/name`
-  empty so the APK carries `config/version`.
+  the signer's CN checked, the APK's members read for the builder's home
+  folder (`package_release.guard_private`, 0.50.9), the adb lines
+  printed. The preset is in the tracked `export_presets.cfg.example`
+  (since 0.50.8; a machine's own `export_presets.cfg` is a copy with its
+  home in the template paths): prebuilt 4.7.stable template APKs by
+  path, arm64 only, `package/unique_name` `com.b0realis.shandalar`,
+  `screen/immersive_mode`, `version/name` empty so the APK carries
+  `config/version`, and INTERNET + the network/Wi-Fi state reads for
+  SGManalink's sockets (0.50.9 — the APK had asked for none).
 - `tools/package_release.py`: platform `meta-quest` — payload
   `Shandalar.apk` alone, `HANDHELD_FILES` gives it `HANDHELD.md`,
   `QUEST_FILES` names the files folder in `START["meta-quest"]`; no
@@ -1261,6 +1265,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.9.md`: what the review of 0.50.8 found — the Quest
+  APK's network permissions, the home guard inside an APK, the presets
+  pinned by name.
 - `docs/releases/0.50.8.md`: the export presets, all in the repository —
   `export_presets.cfg.example` gains the `Android Quest` preset.
 - `docs/releases/0.50.7.md`: the pass over the whole tree — about 150
@@ -2383,7 +2390,14 @@ shandalar/
 │                              no COOP/COEP; adaptive canvas, focus on
 │                              start, virtual keyboard only where
 │                              `ontouchstart` exists, no PWA; the header
-│                              of the .example says why each
+│                              of the .example says why each. The
+│                              machine's own copy: gitignored, because its
+│                              template paths name the builder's home
+├── export_presets.cfg.example  The tracked presets, all eight (Linux 64,
+│                              Web, macOS ×3, Windows, Raspberry Pi,
+│                              Android Quest), with <YOUR HOME> in the six
+│                              template paths that need a home; copy it to
+│                              export_presets.cfg on a new machine
 ├── run_tests.sh             Headless test runner (uses ../tools/godot, GUT CLI);
 │                              times out (SUITE_TIMEOUT), fails on any ERROR:
 │                              line, a risky test or a leak — header says why.

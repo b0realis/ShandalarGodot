@@ -489,6 +489,20 @@ fi
 # otherwise — and the adb lines a headset needs are printed.
 if [ "$QUEST" = 1 ]; then
 	[ -s "$BIN" ] || { echo "BUILD FAILED: no APK at $BIN" >&2; exit 1; }
+	# THE HOME FOLDER, READ INSIDE THE APK (2026-10-03): its members are
+	# deflated, so a grep of its bytes cannot see a path written in one —
+	# package_release.guard_private opens every member.
+	if ! python3 -c 'import sys
+from pathlib import Path
+sys.path.insert(0, "tools")
+from package_release import guard_private
+try:
+    guard_private([Path(sys.argv[1])])
+except ValueError as error:
+    sys.exit(str(error))' "$BIN"; then
+		echo "BUILD FAILED: the APK names this machine's home folder (above)" >&2
+		exit 1
+	fi
 	APKSIGNER="$(ls "${ANDROID_HOME:-$HOME/.local/opt/android-sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
 	if [ -n "$APKSIGNER" ]; then
 		"$APKSIGNER" verify --print-certs "$BIN" > "$OUT/apksigner.log" 2>&1 || { echo "BUILD FAILED: the APK is not signed (log: $OUT/apksigner.log)" >&2; exit 1; }
