@@ -337,8 +337,9 @@ stdout (the release's `referee.sh`, the game's `--referee`; the door's
 ```
 DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a SEAT] [--seat-b SEAT]
     [--seed N] [--turns N] [--packs LIST] [--log FILE] [--dry-run]
-DeckLab/referee.sh --join INVITATION|CODE --deck DECK [--port N] [--name NICK]
-    [--wait SECONDS] [--turns N] [--packs LIST]
+DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK [--port N]
+    [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST] [--log FILE]
+DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
 ```
 
 **Seats** (`--seat-a`, `--seat-b`; default `agent` vs `wizard`, at
@@ -347,8 +348,8 @@ and it plays itself; `apprentice`, `magician`, `sorcerer`, `wizard` are
 the shipped computer players; `unfair` the wizard that reads hidden
 cards. A deck is tried as typed, then under `decks/`. `--seed` unset
 draws one and reports it. `--turns` (200) calls the duel a draw past
-that turn. `--log FILE` writes the engine's own log at the end.
-`--dry-run` prints the plan (`seats`, `seed`, `turns`, `packs`, `ops`)
+that turn. `--log FILE` writes the engine's own log at the end (at a
+table, the journal this seat saw). `--dry-run` prints the plan (`seats`, `seed`, `turns`, `packs`, `ops`)
 as one JSON line and plays nothing.
 
 **The lines** (stdout, one JSON object each, `"type"` first):
@@ -378,8 +379,13 @@ as one JSON line and plays nothing.
 - `result` — `winner` (`-1` for no winner), `draw`, `turns`, `reason`
   (`concluded`, `conceded`, `eof` — the pipe closed —, `refusals`,
   `limit`, `decisions` — 20,000 in one duel —, `stalled` — a computer
-  seat could not move —, `left`/`offline` — a table went away),
+  seat could not move —, `left`/`offline` — a table went away —,
+  `idle` — a kept game's decision waited `--idle` long for nobody),
   `decisions`, `refusals`, `seed`, `life[]`, `names[]`, `log`.
+- `resume` — only on a kept game's socket, to a client that connects:
+  `decisions`, `refusals`, `awaiting` (a decision is open), its `n`,
+  `finished`; sent after `hello` again and before that decision again,
+  this time with the WHOLE journal.
 - `{"error": {...}}` — the envelope above, `tool: "referee"`: nothing
   was played, exit 2.
 
@@ -400,16 +406,36 @@ block `{"op":"block","pairs":[[BLOCKER,ATTACKER]...]}`; discard
 line is skipped. Card IDs are the view's handles (`c7`), and every
 `options` row names the card beside its handle.
 
-**A table** (`--join`): the same pipe at a table the game hosts — a
-person, or another program. `--join` takes the LAN invitation
+**A table** (`--join`, `--table`): the same pipe at a table the game
+hosts — a person, or another program. `--join` takes the LAN invitation
 (`sglan1:...`) the host's screen shows, or the same-computer access
-code with `--port`; `--deck` is the deck this seat brings, `--name` its
+code with `--port`; `--table NAME` instead asks the LAN (the Game
+Browser's discovery) for an OPEN host advertising a table of that name
+and joins with the invitation its advert carries (an invitation-only
+host's table is refused by name — `kind: "table"` — paste its
+invitation). `--deck` is the deck this seat brings, `--name` its
 nickname (`Agent`), `--wait` (300 s) how long to wait for an open
-table. The referee joins the first open room, sends the deck when the
-table plays own decks, readies, and then asks the pipe whenever the
-table's view says it is this seat's decision; `hello` carries
-`table{id, name, seat}` and `seed: -1` (the host shuffles). The host
-sees an ordinary guest.
+table, `--log FILE` where the journal this seat saw — every line of the
+game as the table told it — is written at the end. The referee joins
+the first open room, sends the deck when the table plays own decks,
+readies, and then asks the pipe whenever the table's view says it is
+this seat's decision; `hello` carries `table{id, name, seat}`, `log`
+and `seed: -1` (the host shuffles). The host sees an ordinary guest.
+
+**A kept game** (`--listen FILE`): the same lines served on a loopback
+TCP socket instead of the pipe, so the program may go away and come
+back — a client restarted, a server that crashed — while the duel
+waits. The referee writes FILE once it listens (`{port, token, pid,
+version, started}`, as `.part` then renamed; the token is drawn by the
+referee and never put on a command line); a client connects to
+`127.0.0.1:port`, sends `{"token": ..., "client": ...}` as its first
+line and is told where the duel stands (`hello`, `resume`, the awaited
+decision). One client at a time: a newcomer with the token replaces
+the last; a connection without it is dropped. stdout still carries
+every line — the transcript — and stdin is not read. `--idle SECONDS`
+(1800; 0 never) concedes the seat when a decision has waited that long
+with nobody connected (`reason: idle`). Protocol 1 still: the pipe's
+lines are unchanged, `resume` travels only on the socket.
 
 **Exit codes**: 0 a result line was written, whatever the reason; 2 the
 line could not be run (a deck, a seat, a switch, a table) — the
@@ -452,7 +478,7 @@ written** — the answer is `check_deck`'s), `convert_deck`; `autodeck`,
 `--quiet` always, `dry_run` for the plan; or a whole `argv`),
 `lab_resume`, `read_run`, `lab_next` (runs `run.json`'s `next.argv`);
 `referee_start`, `referee_join`, `referee_act`, `referee_autoplay`,
-`referee_wait`, `referee_stop`. Every answer is the door's JSON as
+`referee_wait`, `referee_stop`, `referee_resume`. Every answer is the door's JSON as
 `structuredContent` (and the same text in `content`); a refusal is
 `isError: true` with the door's envelope untouched under `error`; an
 argument a tool does not take is refused with `suggestions`, like a
@@ -484,11 +510,11 @@ copy in the workspace. The packager's public allowlist excludes local decks
 and the mutable ratings ledger.
 
 **Playing is a session.** `referee_start {deck_a, deck_b, seat_a,
-seat_b, seed, turns, packs, log, view}` opens the referee's pipe and
-answers `{game: "g1", hello, decision}`; `referee_act {game, action}`
-writes one answer and returns the next `decision` (or the `result`);
-nothing is played between calls, so a client may think as long as it
-likes. `action` is one of the decision's `options` as the wire takes
+seat_b, seed, turns, packs, log, keep, view}` opens the referee's pipe and
+answers `{game: "g1", hello, decision}`; `referee_act {game, action,
+until}` writes one answer and returns the next `decision` (or the
+`result`); nothing is played between calls, so a client may think as
+long as it likes. `action` is one of the decision's `options` as the wire takes
 it (the `seat` is filled in) or the string `default` — the built-in
 pilot's answer (keep, play a land, cast the first castable spell,
 attack with everything, block nothing; after a refusal on the same
@@ -504,15 +530,62 @@ mana, graveyard and exile names, the `battlefield` with `pt`,
 the open prompts (`announcement`, `choice`, `damage_request`,
 `discard_count`), the new `journal` lines — a tenth of the wire's
 view; `view: "full"` is the referee's own line, `"options"` the legal
-answers alone. `referee_join {invitation, deck, port, name, wait}`
-sits at a table a person hosts in the game — a human opponent; the
-answer is `pending: true` until the table starts and `referee_wait`
-reads on. A `result` closes the game; `referee_stop` closes the pipe
-(`reason: eof`); the server's own end closes every game it opened.
+answers alone, `"delta"` what moved since the last answer (the first
+delta is a `baseline`; later ones carry only changed life with
+`life_was`, `hand_added/gone/changed`, `battlefield_added/changed/gone`
+and `graveyard_added` per player, the `stack`, `castable` names and
+the new `journal`). `referee_join {invitation | table, deck, port,
+name, wait, turns, log, packs, keep, view, timeout}` sits at a table a
+person hosts in the game — a human opponent — by the invitation the
+host's screen shows or by the name of an open LAN table; the answer is
+`pending: true` until the table starts and `referee_wait` reads on.
+A `result` closes the game; `referee_stop` closes the pipe (`reason:
+eof`); the server's own end closes every game it opened — unless kept.
 After an action has been sent, a timeout also returns `pending: true`:
 the previous decision is consumed, not offered again. Call `referee_wait`
 until the next decision or result arrives; do not resend the action.
 Timeouts must be finite and greater than zero.
+
+**Passing with `until`.** `referee_act {action, until}` sends the
+answer and then passes priority for the seat up to the next point a
+player would act: `main` the seat's own main phase, `end` this turn's
+end step, `turn` the seat's next turn, `play` its main phase with
+something castable, `respond` only a reaction window. Every value stops
+where a real player reacts — the opponent's spell or ability on the
+stack (the counterspell, the response), their declared attackers (the
+trick before blocks), their blocks, their first-strike damage and their
+end step while this seat holds something, the seat's own block decision
+on the opponent's turn, and every attack, block, discard, damage and
+choice of its own. The answer carries `stop` (why: "the opponent's
+Lightning Bolt is on the stack and you can respond", "their declare
+attackers: you can respond", "decision: block", "your main phase, with
+something to play", "an answer was refused", …), `passed` (decisions
+passed over) and the decision shown has the journal of everything
+passed; 400 passes without the stop is a stop too. `until: "end"`
+passes the seat's own main phase — `play` is the "next time I can do
+something" stop.
+
+**The kept game.** `referee_start`/`referee_join` take `keep` (a join is
+kept by default, a start is not): the referee listens on a loopback
+socket (`--listen`) and the server writes `workspace/games/GAME.json`
+(the record: the command, the view, the files) beside the referee's
+handshake `GAME.keep.json` and the transcript `GAME.lines`; the game
+outlives the server. A new server — a client restarted — lists what is
+kept with `referee_resume {}` (`kept[]` with each game's `argv`,
+`view`, `started`, `lines`, and its `result` when the transcript ended
+alone or a `note`; `games[]` the ones open here) and takes one up with
+`referee_resume {game, view, timeout}`: the referee replays `hello`,
+its counters (`decisions`, `refusals`) and the awaited decision with
+the whole journal, and `referee_act` goes on from there (`resumed:
+true` the first time). A kept referee that waited 30 minutes with
+nobody connected concedes the seat (`reason: idle`); a kept game whose
+referee is gone is reported from its transcript (its `result`, or
+`kind: "keep"` when it has none) and forgotten. `referee_stop` ends a
+kept game too (`kept: true` in its answer), and removes the record.
+The token that opens the socket is drawn by the referee and written to
+the handshake file only — never on a command line, never in an answer.
+Games are numbered past every file in `workspace/games`, so a second
+server never writes over the first's.
 
 **The rules the server keeps**: stdout is the protocol's (each game's
 stderr goes to `workspace/games/GAME.stderr`); a path a tool writes —
@@ -578,8 +651,10 @@ same decision follows again.
 
 The same session through the MCP server is `packs` → `autodeck` (or
 `write_deck`) → `check_deck` → `lab` (`dry_run`, then the run) →
-`read_run`/`lab_next` → `referee_start` and `referee_act` until the
-`result` — every tool listed by `tools/list`, none needing a shell.
+`read_run`/`lab_next` → `referee_start` and `referee_act` (with
+`until` to skip to where a player acts) until the `result` — every tool
+listed by `tools/list`, none needing a shell; a game kept across a
+restart comes back through `referee_resume`.
 
 A non-zero exit: read stdout for `{"error":...}`, branch on `kind`, offer
 `suggestions`; never retry the same line. A zero exit: read `run.json`,

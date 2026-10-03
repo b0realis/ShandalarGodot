@@ -72,6 +72,7 @@ import math
 import os
 import queue
 import re
+import socket
 import subprocess
 import sys
 import threading
@@ -90,8 +91,22 @@ DEFAULT_TIMEOUT = 900
 DECISION_TIMEOUT = 120
 MANUALS = ("door", "lab", "autodeck", "query", "referee", "convert")
 SEATS = ("agent", "apprentice", "magician", "sorcerer", "wizard", "unfair")
-VIEWS = ("brief", "full", "options")
+VIEWS = ("brief", "full", "options", "delta")
+# `referee_act`'s `until`: the stop the server passes priority toward —
+# the seat's own main phase, the end step of this turn, the seat's next
+# turn, only a reaction window (`respond`), or the next point the seat
+# can act at all (`play`). Every value stops at a reaction window: an
+# opponent's spell or ability on the stack, their attack and block
+# steps, their end step, a non-priority decision (see `stop_reason`).
+UNTIL = ("main", "end", "turn", "respond", "play")
+MAX_PASSES = 400
 RESULT_LIMIT = 50
+# A kept game: the referee listens on a loopback socket and outlives
+# this server; the handshake file it writes, the seconds a boot may take,
+# the seconds a referee that should already be listening gets to answer.
+KEEP_BOOT = 60
+KEEP_RESUME = 5
+KEEP_IDLE = 1800
 
 INSTRUCTIONS = (
     "Shandalar is a Magic: The Gathering engine with computer players. "
@@ -105,8 +120,17 @@ INSTRUCTIONS = (
     "`lab_resume` finishes an interrupted one. Playing: `referee_start` opens "
     "one duel (you in a seat against a computer player, or against yourself "
     "in both seats), `referee_act` answers the pending decision with one of "
-    "its `options`, `referee_join` sits at a table a person hosts in the "
-    "game. `contract` is the whole contract page; `manual` a tool's own help. "
+    "its `options` — add `until` (`main`, `end`, `turn`, `respond`, `play`) "
+    "and the server passes priority for you up to the next point a player "
+    "would act: your own main phase, a spell or ability of the opponent's on "
+    "the stack while you hold an answer, their attack, block and end steps "
+    "while you hold an instant or ability, every attack, block and choice of "
+    "your own. `view: \"delta\"` shows only what changed since the last decision. "
+    "`referee_join` sits at a table a person hosts in the game (an invitation, "
+    "an access code, or an open table's name on the LAN); joined games are "
+    "kept by default — they survive this server's restart and `referee_resume` "
+    "takes them up again. `contract` is the whole contract page; `manual` a "
+    "tool's own help. "
     "Read `play_guide` for MTG rules, fair-information play, combat and deck "
     "building; optionally request one chapter (1-16) instead of the full guide."
 )
@@ -273,15 +297,166 @@ def brief_view(view: dict, seat: int) -> dict:
     return out
 
 
-def render_decision(decision: dict, mode: str) -> dict:
+def delta_view(before: dict | None, now: dict) -> dict:
+    """What changed between two briefs: the clock, each player's life
+    and counts when they moved, the cards that came and went on the
+    boards and in this seat's hand, the cards whose state changed
+    (tapped, damaged, attacking...), the stack, the open prompts and the
+    journal. The first decision of a game (no `before`) is the whole
+    brief, marked `baseline`."""
+    if before is None:
+        return {**now, "baseline": True}
+    out: dict = {k: now.get(k) for k in ("turn", "step", "active", "actor", "seat")}
+    was = {p.get("seat"): p for p in before.get("players", []) if isinstance(p, dict)}
+    players = []
+    for player in now.get("players", []):
+        old = was.get(player.get("seat"), {})
+        row: dict = {"seat": player.get("seat")}
+        for key in ("life", "hand", "library"):
+            if player.get(key) != old.get(key):
+                row[key] = player.get(key)
+                row[key + "_was"] = old.get(key)
+        added, gone, changed = card_changes(old.get("battlefield", []), player.get("battlefield", []))
+        if added:
+            row["battlefield_added"] = added
+        if gone:
+            row["battlefield_gone"] = gone
+        if changed:
+            row["battlefield_changed"] = changed
+        for zone in ("graveyard", "exile", "revealed"):
+            new_names = zone_additions(old.get(zone, []), player.get(zone, []))
+            if new_names:
+                row[zone + "_added"] = new_names
+        if player.get("mana") != old.get("mana") and (player.get("mana") or old.get("mana")):
+            row["mana"] = player.get("mana")
+        if len(row) > 1:
+            players.append(row)
+    if players:
+        out["players"] = players
+    added, gone, changed = card_changes(before.get("hand", []), now.get("hand", []))
+    if added:
+        out["hand_added"] = added
+    if gone:
+        out["hand_gone"] = gone
+    if changed:
+        out["hand_changed"] = changed
+    out["castable"] = [c.get("name") for c in now.get("hand", []) if isinstance(c, dict) and c.get("castable")]
+    for key in ("stack", "announcement", "choice", "damage_request", "information", "specials",
+                "discard_count", "winner"):
+        if now.get(key):
+            out[key] = now[key]
+    out["journal"] = now.get("journal", [])
+    return out
+
+
+def card_changes(old: list, new: list) -> tuple[list, list, list]:
+    """Brief cards that arrived, the names of those that left, and the
+    cards whose brief changed — the same id with a different line."""
+    old_by = {c.get("id"): c for c in old if isinstance(c, dict)}
+    new_by = {c.get("id"): c for c in new if isinstance(c, dict)}
+    added = [c for i, c in new_by.items() if i not in old_by]
+    gone = [f"{c.get('name')} ({i})" for i, c in old_by.items() if i not in new_by]
+    changed = [c for i, c in new_by.items() if i in old_by and old_by[i] != c]
+    return added, gone, changed
+
+
+def zone_additions(old: list, new: list) -> list:
+    """Names in `new` beyond their count in `old` (a zone of names)."""
+    counts: dict = {}
+    for name in old:
+        counts[name] = counts.get(name, 0) + 1
+    out = []
+    for name in new:
+        if counts.get(name, 0) > 0:
+            counts[name] -= 1
+        else:
+            out.append(name)
+    return out
+
+
+def render_decision(decision: dict, mode: str, before: dict | None = None) -> dict:
     """One `decision` line for the client: `full` is the referee's own,
-    `options` drops the view, `brief` replaces it."""
+    `options` drops the view, `brief` replaces it, `delta` replaces it
+    with what changed since `before` (the last brief shown)."""
     if mode == "full":
         return decision
     out = {k: v for k, v in decision.items() if k != "view"}
     if mode == "brief":
         out["brief"] = brief_view(decision.get("view", {}), int(decision.get("seat", 0)))
+    elif mode == "delta":
+        out["delta"] = delta_view(before, brief_view(decision.get("view", {}), int(decision.get("seat", 0))))
     return out
+
+
+# --- pass-until: where a player would act ---------------------------------
+
+OWN_MAIN = ("MAIN1", "MAIN2")
+# Priority windows in which a player holding an instant or an ability
+# acts — on the opponent's turn: once their attackers are declared
+# (Lightning Bolt the attacker, Fog), after the blocks, between
+# first-strike and regular damage, and at the end step (the last moment
+# before their untap). On the seat's own turn: after the blocks (Giant
+# Growth the blocked creature) and between the two damage steps. The
+# beginning of combat is not on the list — a player who wants to tap a
+# creature before attacks are declared passes without `until`.
+REACT_STEPS_THEIRS = ("DECLARE_ATTACKERS", "DECLARE_BLOCKERS", "FIRST_STRIKE_DAMAGE", "END")
+REACT_STEPS_OWN = ("DECLARE_BLOCKERS", "FIRST_STRIKE_DAMAGE")
+
+
+def attackers_declared(view: dict) -> bool:
+    for player in view.get("players", []):
+        for card in player.get("battlefield", []) if isinstance(player, dict) else []:
+            if isinstance(card, dict) and card.get("attacking"):
+                return True
+    return False
+
+
+def stop_reason(decision: dict, until: str, origin: dict | None) -> str:
+    """Why the pass-until loop hands `decision` to the client — "" to
+    pass it. `origin` is the decision the loop started from (its turn
+    and step tell `end` and `turn` where they are). The reasons a real
+    player would never pass over come first and apply to every `until`:
+    a decision that is not priority (attack, block, discard, damage,
+    choice, opening), a cast in progress, an opponent's spell or ability
+    on the stack while the seat can respond, a combat or end-step window
+    of the opponent's while the seat holds an instant-speed answer."""
+    options = decision.get("options") or {}
+    view = decision.get("view") or {}
+    seat = int(decision.get("seat", 0))
+    mode = str(decision.get("mode") or options.get("mode") or "")
+    if mode != "priority":
+        return f"decision: {mode}"
+    if options.get("announcement") or "pass" not in options:
+        return "a cast is in progress"
+    step = str(decision.get("step") or view.get("step") or "")
+    turn = int(decision.get("turn") or view.get("turn") or 0)
+    theirs = view.get("active") is not None and int(view.get("active")) != seat
+    respond = bool(options.get("respond"))
+    stack = view.get("stack") or []
+    if stack and isinstance(stack[-1], dict) and stack[-1].get("controller") != seat and respond:
+        return f"the opponent's {stack[-1].get('name', 'spell')} is on the stack and you can respond"
+    if respond and ((theirs and step in REACT_STEPS_THEIRS) or (not theirs and step in REACT_STEPS_OWN)) \
+            and (step != "DECLARE_ATTACKERS" or attackers_declared(view)):
+        return f"{'their' if theirs else 'your'} {step.lower().replace('_', ' ')}: you can respond"
+    can_act = (bool((options.get("play") or {}).get("lands")) or bool((options.get("prepare") or {}).get("casts"))
+               or respond or bool((options.get("special") or {}).get("specials")))
+    own_main = not theirs and step in OWN_MAIN and not stack
+    origin_turn = int((origin or {}).get("turn") or 0)
+    if until == "main":
+        if own_main:
+            return "your main phase"
+    elif until == "turn":
+        if own_main and turn > origin_turn:
+            return "your turn"
+    elif until == "end":
+        if step == "END" and turn == origin_turn:
+            return "the end step"
+        if turn > origin_turn:
+            return "the next turn began"
+    elif until == "play":
+        if own_main and can_act:
+            return "your main phase, with something to play"
+    return ""
 
 
 # --- the dumb pilot -------------------------------------------------------
@@ -397,140 +572,43 @@ def default_answer(decision: dict, memory: dict) -> dict:
 
 # --- one referee process, kept across calls ------------------------------
 
-class Game:
-    def __init__(self, ident: str, argv: list[str], view: str, cwd: Path, stderr_path: Path):
-        self.ident = ident
-        self.argv = argv
-        self.view = view
-        self.started = time.time()
-        self.hello: dict | None = None
-        self.pending: dict | None = None
-        self.result: dict | None = None
-        self.error: dict | None = None
-        self.decisions = 0
-        self.last_decision_n: int | None = None
-        self.refusals = 0
-        self.memory: dict = {}
-        self.lines: queue.Queue = queue.Queue()
-        self.closed = False
-        stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        self.stderr_file = stderr_path.open("w", encoding="utf-8")
-        env = dict(os.environ)
-        env["SHANDALAR_NO_BANNER"] = "1"
-        env["NO_COLOR"] = "1"
-        try:
-            self.proc = subprocess.Popen(argv, cwd=str(cwd), stdin=subprocess.PIPE,
-                                         stdout=subprocess.PIPE, stderr=self.stderr_file,
-                                         text=True, bufsize=1, encoding="utf-8", errors="replace", env=env)
-        except OSError as exc:
-            self.stderr_file.close()
-            raise refusal("referee", "run", f"the referee would not start: {exc}", exit_code=3)
-        self.pump = threading.Thread(target=self._pump, daemon=True)
-        self.pump.start()
+class Transport:
+    """The referee's line pipe, one of two ways: stdin/stdout of a child
+    process, or a loopback socket a kept referee listens on."""
 
-    def _pump(self) -> None:
-        try:
-            for line in self.proc.stdout:
-                self.lines.put(line)
-        finally:
-            self.lines.put(None)
+    def send_line(self, text: str) -> None:
+        raise NotImplementedError
+
+    def read_lines(self):
+        raise NotImplementedError
+
+    def close(self, grace: float) -> None:
+        raise NotImplementedError
 
     @property
-    def running(self) -> bool:
-        return self.proc.poll() is None and not self.closed
+    def alive(self) -> bool:
+        raise NotImplementedError
 
-    def send(self, action: dict) -> None:
-        if not self.running or self.proc.stdin is None:
-            raise refusal("referee", "game", f"game {self.ident} is over", game=self.ident)
-        try:
-            self.proc.stdin.write(json.dumps(action, ensure_ascii=False) + "\n")
-            self.proc.stdin.flush()
-            # An answer is in flight now. A timeout must not expose the old
-            # decision to wait/autoplay or let the client submit it twice.
-            self.pending = None
-        except (BrokenPipeError, OSError, ValueError) as exc:
-            raise refusal("referee", "game", f"game {self.ident}: the pipe closed ({exc})",
-                          game=self.ident)
 
-    def advance(self, timeout: float) -> dict:
-        """Read lines until a decision, a result or an error; the
-        refusals on the way are collected. `pending: true` says nothing
-        arrived in `timeout` seconds — call `referee_wait` again."""
-        refused: list[dict] = []
-        deadline = time.monotonic() + max(0.0, timeout)
-        while True:
-            left = deadline - time.monotonic()
-            if left <= 0:
-                return self._state(refused, pending=True)
-            try:
-                line = self.lines.get(timeout=min(left, 1.0))
-            except queue.Empty:
-                continue
-            if line is None:
-                self.close(grace=0.1)
-                if self.result is None and self.error is None:
-                    self.error = {"tool": "referee", "exit": self.proc.returncode, "kind": "run",
-                                  "message": f"game {self.ident}: the referee ended without a result",
-                                  "stderr": self.stderr_tail()}
-                self.pending = None
-                return self._state(refused)
-            try:
-                record = json.loads(line)
-            except ValueError:
-                print(f"shandalar_mcp: game {self.ident}: not JSON: {line.rstrip()[:120]}",
-                      file=sys.stderr)
-                continue
-            if not isinstance(record, dict):
-                continue
-            if "error" in record:
-                self.error = record["error"] if isinstance(record["error"], dict) else {"message": str(record)}
-                self.pending = None
-                return self._state(refused)
-            kind = record.get("type")
-            if kind == "hello":
-                self.hello = record
-            elif kind == "refused":
-                self.refusals += 1
-                refused.append(record)
-                strikes = self.memory.setdefault("strikes", {})
-                strikes[int(record.get("n", -1))] = strikes.get(int(record.get("n", -1)), 0) + 1
-            elif kind == "decision":
-                number = int(record.get("n", 0))
-                if number != self.last_decision_n:
-                    self.decisions += 1
-                self.last_decision_n = number
-                self.pending = record
-                return self._state(refused)
-            elif kind == "result":
-                self.result = record
-                self.pending = None
-                return self._state(refused)
+class PipeTransport(Transport):
+    def __init__(self, proc: subprocess.Popen):
+        self.proc = proc
 
-    def _state(self, refused: list[dict], pending: bool = False) -> dict:
-        out: dict = {"game": self.ident, "decisions": self.decisions, "refusals": self.refusals}
-        if refused:
-            out["refused"] = refused
-        if pending:
-            out["pending"] = True
-            out["note"] = "nothing arrived in time; referee_wait reads on"
-        elif self.pending is not None:
-            out["decision"] = render_decision(self.pending, self.view)
-        if self.result is not None:
-            out["result"] = self.result
-        if self.error is not None:
-            out["error"] = self.error
-        return out
+    def send_line(self, text: str) -> None:
+        if self.proc.stdin is None:
+            raise OSError("no stdin")
+        self.proc.stdin.write(text + "\n")
+        self.proc.stdin.flush()
 
-    def stderr_tail(self, lines: int = 12) -> list[str]:
-        try:
-            if not self.stderr_file.closed:
-                self.stderr_file.flush()
-            text = Path(self.stderr_file.name).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return []
-        return text.splitlines()[-lines:]
+    def read_lines(self):
+        if self.proc.stdout is not None:
+            yield from self.proc.stdout
 
-    def close(self, grace: float = 10.0) -> None:
+    @property
+    def alive(self) -> bool:
+        return self.proc.poll() is None
+
+    def close(self, grace: float) -> None:
         if self.proc.stdin is not None:
             try:
                 self.proc.stdin.close()
@@ -545,10 +623,316 @@ class Game:
             except subprocess.TimeoutExpired:
                 self.proc.kill()
                 self.proc.wait()
+
+
+class SocketTransport(Transport):
+    """A kept referee's socket. The connection is made on the reader's
+    thread (`read_lines`), so a boot that takes seconds does not hold
+    the tool call: the handshake file names the port and the token, the
+    first line sent is the token, and the referee answers with `hello`,
+    a `resume` line and the pending decision, if any."""
+
+    def __init__(self, handshake: Path, boot: float):
+        self.handshake = handshake
+        self.boot = boot
+        self.sock: socket.socket | None = None
+        self.dead = False
+        self.lock = threading.Lock()
+        self.queued: list[str] = []
+        self.queued_error: dict | None = None
+
+    def send_line(self, text: str) -> None:
+        with self.lock:
+            if self.sock is None:
+                if self.dead:
+                    raise OSError("the referee is not listening")
+                self.queued.append(text)
+                return
+            self.sock.sendall((text + "\n").encode("utf-8"))
+
+    def connect(self) -> dict | None:
+        """The handshake record once the referee has written it and the
+        socket is open, or None (the error went to `queued_error`)."""
+        deadline = time.monotonic() + self.boot
+        record: dict | None = None
+        while time.monotonic() < deadline:
+            try:
+                record = json.loads(self.handshake.read_text(encoding="utf-8"))
+                if isinstance(record, dict) and record.get("port"):
+                    break
+            except (OSError, ValueError):
+                pass
+            record = None
+            time.sleep(0.2)
+        if record is None:
+            self.queued_error = {"tool": "referee", "exit": 3, "kind": "keep",
+                                 "message": f"the referee did not start listening within {self.boot:.0f} s ({self.handshake})"}
+            return None
+        last = ""
+        while time.monotonic() < deadline:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            try:
+                sock.connect(("127.0.0.1", int(record["port"])))
+                sock.sendall((json.dumps({"token": record.get("token", ""), "client": SERVER_NAME}) + "\n").encode("utf-8"))
+                sock.settimeout(None)
+                with self.lock:
+                    self.sock = sock
+                    for text in self.queued:
+                        sock.sendall((text + "\n").encode("utf-8"))
+                    self.queued = []
+                return record
+            except OSError as exc:
+                last = str(exc)
+                sock.close()
+                time.sleep(0.3)
+        self.queued_error = {"tool": "referee", "exit": 3, "kind": "keep",
+                             "message": f"the referee at port {record.get('port')} did not take the connection: {last}"}
+        return None
+
+    def read_lines(self):
+        if self.connect() is None:
+            self.dead = True
+            yield json.dumps({"error": self.queued_error})
+            return
+        assert self.sock is not None
+        reader = self.sock.makefile("r", encoding="utf-8", errors="replace")
+        try:
+            for line in reader:
+                yield line
+        except OSError:
+            pass
+        finally:
+            self.dead = True
+
+    @property
+    def alive(self) -> bool:
+        return not self.dead
+
+    def close(self, grace: float) -> None:
+        with self.lock:
+            self.dead = True
+            if self.sock is not None:
+                try:
+                    self.sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                self.sock.close()
+                self.sock = None
+
+
+def detached_popen(argv: list[str], cwd: Path, stdout, stderr, env: dict) -> subprocess.Popen:
+    """A child that outlives this server: its own session (POSIX) or
+    process group and console (Windows), stdin closed."""
+    more: dict = {}
+    if os.name == "nt":
+        more["creationflags"] = (getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                                 | getattr(subprocess, "DETACHED_PROCESS", 0))
+    else:
+        more["start_new_session"] = True
+    return subprocess.Popen(argv, cwd=str(cwd), stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,
+                            env=env, **more)
+
+
+class Game:
+    def __init__(self, ident: str, argv: list[str], view: str, cwd: Path, stderr_path: Path,
+                 keep: dict | None = None, resume: bool = False):
+        self.ident = ident
+        self.argv = argv
+        self.view = view
+        self.started = time.time()
+        self.hello: dict | None = None
+        self.pending: dict | None = None
+        self.result: dict | None = None
+        self.error: dict | None = None
+        self.decisions = 0
+        self.last_decision_n: int | None = None
+        self.refusals = 0
+        self.memory: dict = {}
+        self.lines: queue.Queue = queue.Queue()
+        self.closed = False
+        self.keep = keep
+        self.resumed = resume
+        # The brief last shown to the client (the `delta` view's base) and
+        # the journal lines of decisions passed over by `until`.
+        self.last_brief: dict | None = None
+        self.passed_journal: list = []
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ)
+        env["SHANDALAR_NO_BANNER"] = "1"
+        env["NO_COLOR"] = "1"
+        self.proc: subprocess.Popen | None = None
+        if keep is None:
+            self.stderr_file = stderr_path.open("w", encoding="utf-8")
+            try:
+                self.proc = subprocess.Popen(argv, cwd=str(cwd), stdin=subprocess.PIPE,
+                                             stdout=subprocess.PIPE, stderr=self.stderr_file,
+                                             text=True, bufsize=1, encoding="utf-8", errors="replace", env=env)
+            except OSError as exc:
+                self.stderr_file.close()
+                raise refusal("referee", "run", f"the referee would not start: {exc}", exit_code=3)
+            self.transport: Transport = PipeTransport(self.proc)
+        else:
+            self.stderr_file = stderr_path.open("a", encoding="utf-8")
+            if not resume:
+                lines_file = Path(keep["lines"]).open("a", encoding="utf-8")
+                try:
+                    self.proc = detached_popen(argv, cwd, lines_file, self.stderr_file, env)
+                except OSError as exc:
+                    self.stderr_file.close()
+                    raise refusal("referee", "run", f"the referee would not start: {exc}", exit_code=3)
+                finally:
+                    lines_file.close()
+            self.transport = SocketTransport(Path(keep["keep"]), KEEP_RESUME if resume else KEEP_BOOT)
+        self.pump = threading.Thread(target=self._pump, daemon=True)
+        self.pump.start()
+
+    def _pump(self) -> None:
+        try:
+            for line in self.transport.read_lines():
+                self.lines.put(line)
+        finally:
+            self.lines.put(None)
+
+    @property
+    def running(self) -> bool:
+        return self.transport.alive and not self.closed
+
+    @property
+    def kept(self) -> bool:
+        return self.keep is not None
+
+    def send(self, action: dict) -> None:
+        if not self.running:
+            raise refusal("referee", "game", f"game {self.ident} is over", game=self.ident)
+        try:
+            self.transport.send_line(json.dumps(action, ensure_ascii=False))
+            # An answer is in flight now. A timeout must not expose the old
+            # decision to wait/autoplay or let the client submit it twice.
+            self.pending = None
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            raise refusal("referee", "game", f"game {self.ident}: the pipe closed ({exc})",
+                          game=self.ident)
+
+    def advance(self, timeout: float, render: bool = True) -> dict:
+        """Read lines until a decision, a result or an error; the
+        refusals on the way are collected. `pending: true` says nothing
+        arrived in `timeout` seconds — call `referee_wait` again."""
+        refused: list[dict] = []
+        deadline = time.monotonic() + max(0.0, timeout)
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return self._state(refused, pending=True, render=render)
+            try:
+                line = self.lines.get(timeout=min(left, 1.0))
+            except queue.Empty:
+                continue
+            if line is None:
+                self.close(grace=0.1)
+                if self.result is None and self.error is None:
+                    self.error = {"tool": "referee", "exit": self.proc.returncode if self.proc else None,
+                                  "kind": "run",
+                                  "message": (f"game {self.ident}: the kept referee went away without a result"
+                                              if self.kept else
+                                              f"game {self.ident}: the referee ended without a result"),
+                                  "stderr": self.stderr_tail()}
+                self.pending = None
+                return self._state(refused, render=render)
+            try:
+                record = json.loads(line)
+            except ValueError:
+                print(f"shandalar_mcp: game {self.ident}: not JSON: {line.rstrip()[:120]}",
+                      file=sys.stderr)
+                continue
+            if not isinstance(record, dict):
+                continue
+            if "error" in record:
+                self.error = record["error"] if isinstance(record["error"], dict) else {"message": str(record)}
+                self.pending = None
+                return self._state(refused, render=render)
+            kind = record.get("type")
+            if kind == "hello":
+                self.hello = record
+            elif kind == "resume":
+                # A kept referee taken up again: its counters are the truth,
+                # and they count the decision it replays next (`n`).
+                self.decisions = int(record.get("decisions", self.decisions))
+                self.refusals = int(record.get("refusals", self.refusals))
+                self.last_decision_n = int(record.get("n", 0)) if record.get("awaiting") else None
+                self.last_brief = None
+            elif kind == "refused":
+                self.refusals += 1
+                refused.append(record)
+                strikes = self.memory.setdefault("strikes", {})
+                strikes[int(record.get("n", -1))] = strikes.get(int(record.get("n", -1)), 0) + 1
+            elif kind == "decision":
+                number = int(record.get("n", 0))
+                if number != self.last_decision_n:
+                    self.decisions += 1
+                self.last_decision_n = number
+                self.pending = record
+                return self._state(refused, render=render)
+            elif kind == "result":
+                self.result = record
+                self.pending = None
+                return self._state(refused, render=render)
+
+    def _state(self, refused: list[dict], pending: bool = False, render: bool = True) -> dict:
+        out: dict = {"game": self.ident, "decisions": self.decisions, "refusals": self.refusals}
+        if refused:
+            out["refused"] = refused
+        if pending:
+            out["pending"] = True
+            out["note"] = "nothing arrived in time; referee_wait reads on"
+        elif self.pending is not None and render:
+            out["decision"] = self.shown()
+        if self.result is not None:
+            out["result"] = self.result
+        if self.error is not None:
+            out["error"] = self.error
+        return out
+
+    def shown(self) -> dict:
+        """The pending decision as the client sees it, in the game's
+        view; the journal of decisions passed over is put back in front
+        of its own, and the brief becomes the next delta's base."""
+        assert self.pending is not None
+        if self.passed_journal:
+            view = dict(self.pending.get("view") or {})
+            view["journal"] = self.passed_journal + list(view.get("journal") or [])
+            self.pending["view"] = view
+            self.passed_journal = []
+        out = render_decision(self.pending, self.view, self.last_brief)
+        self.last_brief = brief_view(self.pending.get("view", {}), int(self.pending.get("seat", 0)))
+        return out
+
+    def stderr_tail(self, lines: int = 12) -> list[str]:
+        try:
+            if not self.stderr_file.closed:
+                self.stderr_file.flush()
+            text = Path(self.stderr_file.name).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return []
+        return text.splitlines()[-lines:]
+
+    def close(self, grace: float = 10.0) -> None:
+        self.transport.close(grace)
         self.closed = True
         self.pump.join(timeout=1)
-        if not self.pump.is_alive() and self.proc.stdout is not None:
+        if self.proc is not None and not self.pump.is_alive() and self.proc.stdout is not None:
             self.proc.stdout.close()
+        try:
+            self.stderr_file.close()
+        except OSError:
+            pass
+
+    def detach(self) -> None:
+        """Let a kept referee go on without this server: the socket is
+        closed, the process is not touched."""
+        self.transport.close(0)
+        self.closed = True
+        self.pump.join(timeout=1)
         try:
             self.stderr_file.close()
         except OSError:
@@ -558,6 +942,8 @@ class Game:
         out = {"game": self.ident, "running": self.running, "view": self.view,
                "decisions": self.decisions, "refusals": self.refusals,
                "seconds": round(time.time() - self.started, 1), "argv": self.argv[1:]}
+        if self.kept:
+            out["kept"] = True
         if self.hello is not None:
             out["seats"] = self.hello.get("seats")
             out["seed"] = self.hello.get("seed")
@@ -622,7 +1008,15 @@ class Server:
         self.workspace = workspace if workspace.is_absolute() else (self.root / workspace)
         self.workspace = self.workspace.resolve()
         self.games: dict[str, Game] = {}
+        # Games are numbered past every file a game left in the folder —
+        # a kept record, a transcript — so nothing of an earlier server's
+        # is written over.
         self.next_game = 1
+        games = self.workspace / "games"
+        for path in games.iterdir() if games.is_dir() else []:
+            found = re.match(r"g(\d+)\.", path.name)
+            if found:
+                self.next_game = max(self.next_game, int(found.group(1)) + 1)
         self.version_cache: str | None = None
         self.tools = self._catalogue()
 
@@ -755,8 +1149,14 @@ class Server:
                     enum=list(SEATS))
         view = prop("string", "how each decision's board is rendered: `brief` (default) is the "
                     "board, the hand with costs and castable marks, and the new journal lines; "
-                    "`full` the referee's whole LAN view; `options` the legal answers alone",
+                    "`delta` only what changed since the decision you last saw (life, cards that "
+                    "came and went, the stack, the prompts, the journal; the first one is the "
+                    "whole brief, marked `baseline`); `full` the referee's whole LAN view; "
+                    "`options` the legal answers alone",
                     enum=list(VIEWS))
+        keep = prop("boolean", "keep the game across this server's restarts: the referee listens "
+                    "on a loopback socket and outlives the client; `referee_resume` takes it up "
+                    "again (a kept game idle for 30 minutes concedes)")
         game = prop("string", "the game id `referee_start` or `referee_join` returned (`g1`)")
         timeout = prop("number", "seconds to wait for the next line (default 120); a `pending` "
                        "answer means it did not arrive yet — `referee_wait` reads on")
@@ -954,32 +1354,51 @@ class Server:
                         "turns": prop("integer", "the duel is a draw past this turn (default 200)"),
                         "packs": packs,
                         "log": prop("string", "write the engine's own log of the duel here at the end"),
-                        "view": view, "timeout": timeout},
+                        "keep": keep, "view": view, "timeout": timeout},
                        self.tool_referee_start, required=["deck_a", "deck_b"]),
             self._tool("referee_join", "Sit at a table a person (or another program) hosts in the "
                        "game — play against a human. Takes the LAN invitation (`sglan1:...`) the "
-                       "host's screen shows, or the same-computer access code with `port`. The "
-                       "answer arrives when the table starts; until then `pending` is true and "
-                       "`referee_wait` reads on. The host sees an ordinary guest.",
+                       "host's screen shows, the same-computer access code with `port`, or — for "
+                       "a table hosted open on the LAN — the table's `name` as the host typed it. "
+                       "The answer arrives when the table starts; until then `pending` is true and "
+                       "`referee_wait` reads on. The host sees an ordinary guest. Kept by default "
+                       "(`keep: false` to end it with this server).",
                        {"invitation": prop("string", "the invitation or access code"),
+                        "table": prop("string", "an open table's name, found by LAN discovery (instead of `invitation`)"),
                         "deck": prop("string", "the deck this seat brings, as typed, under `decks/` or in the workspace"),
                         "port": prop("integer", "the host's port for an access code (default 17897)"),
                         "name": prop("string", "this seat's nickname at the table"),
-                        "wait": prop("integer", "seconds to wait for an open table (default 300)"),
+                        "wait": prop("integer", "seconds to wait for the table (default 300)"),
                         "turns": prop("integer", "the duel is a draw past this turn"),
-                        "packs": packs, "view": view,
+                        "log": prop("string", "write the journal this seat saw — every line of the game "
+                                    "as the table told it — here at the end"),
+                        "packs": packs, "keep": keep, "view": view,
                         "timeout": prop("number", "seconds to wait for the first decision before "
                                         "answering `pending` (default 15)")},
-                       self.tool_referee_join, required=["invitation", "deck"]),
+                       self.tool_referee_join, required=["deck"]),
             self._tool("referee_act", "Answer the pending decision of a game and return the next "
                        "one (or the `result`). `action` is one of the decision's `options` as the "
                        "wire takes it — `{\"op\":\"pass\"}`, `{\"op\":\"play\",\"card\":\"c3\"}`, "
                        "`{\"op\":\"attack\",\"cards\":[...]}` — or the string `default` for the "
-                       "built-in pilot's answer. A `refused` entry means the answer could not be "
-                       "applied and the same decision is back; the pilot concedes after three refusals.",
+                       "built-in pilot's answer (it ACTS: to read a decision again, `referee_wait`). "
+                       "A `refused` entry means the answer could not be applied and the same "
+                       "decision is back; the pilot concedes after three refusals. With `until`, "
+                       "the server then passes priority for you up to the next point a player "
+                       "would act — `main` your own main phase, `end` this turn's end step, `turn` "
+                       "your next turn, `play` your main phase with something to play, `respond` "
+                       "only a reaction window — and every value stops where a real player would: "
+                       "a spell or ability of the opponent's on the stack while you hold an answer "
+                       "(counter it, respond to it), their declared attack, their blocks and their "
+                       "end step while you hold an instant or an ability (Lightning Bolt mid-fight, "
+                       "end-of-turn plays), the blocks on your own turn, and every attack, block, "
+                       "discard, damage and choice of your own. The answer says `stop` (why it "
+                       "stopped), `passed` (decisions passed), and the journal of everything "
+                       "passed over is in the decision shown.",
                        {"game": game,
                         "action": {"description": "the answer: an object with `op` (the seat is "
                                    "filled in), or `default`", "type": ["object", "string"]},
+                        "until": prop("string", "pass priority after this answer up to: `main`, `end`, "
+                                      "`turn`, `play`, `respond` (unset: the next decision)", enum=list(UNTIL)),
                         "view": view, "timeout": timeout},
                        self.tool_referee_act, required=["game", "action"]),
             self._tool("referee_autoplay", "Let the built-in pilot answer the game's next "
@@ -997,9 +1416,19 @@ class Server:
                        {"game": game, "view": view, "timeout": timeout},
                        self.tool_referee_wait, required=["game"]),
             self._tool("referee_stop", "End a game: the pipe is closed, the referee writes its "
-                       "`result` (`reason: eof`) and exits. A game that already ended answers its "
-                       "result.",
+                       "`result` (`reason: eof`) and exits; a kept game's seat concedes. A game "
+                       "that already ended answers its result.",
                        {"game": game}, self.tool_referee_stop, required=["game"]),
+            self._tool("referee_resume", "Take up a kept game again — one started with `keep` by "
+                       "this server or an earlier one (a joined table is kept by default). Without "
+                       "`game`, lists the kept games on record and the live ones. With it, "
+                       "reconnects to that referee and returns `hello` and the pending decision "
+                       "(the journal it carries is the whole game so far), or the result the "
+                       "referee wrote while nobody was attached.",
+                       {"game": prop("string", "the kept game's id (`g3`); unset lists them"),
+                        "view": view,
+                        "timeout": prop("number", "seconds to wait for the referee's answer (default 30)")},
+                       self.tool_referee_resume),
         ]
 
     @staticmethod
@@ -1046,7 +1475,8 @@ class Server:
         return {"server": SERVER_NAME, "version": self.version(), "door": str(self.door),
                 "root": str(self.root), "workspace": str(self.workspace),
                 "contract": str(self.root / CONTRACT), "tools": [t["name"] for t in self.tools],
-                "games": [g.summary() for g in self.games.values()]}
+                "games": [g.summary() for g in self.games.values()],
+                "kept": [self.kept_summary(r) for r in self.kept_records() if r.get("game") not in self.games]}
 
     def tool_contract(self, args: dict) -> dict:
         path = self.root / CONTRACT
@@ -1452,24 +1882,146 @@ class Server:
 
     # ----- the referee ----------------------------------------------------
 
-    def new_game(self, argv: list[str], view: str) -> Game:
+    def new_game(self, argv: list[str], view: str, keep: bool = False) -> Game:
         ident = f"g{self.next_game}"
         self.next_game += 1
-        stderr = self.workspace / "games" / f"{ident}.stderr"
-        game = Game(ident, self.command("referee", argv), view, self.root, stderr)
+        folder = self.workspace / "games"
+        stderr = folder / f"{ident}.stderr"
+        if not keep:
+            game = Game(ident, self.command("referee", argv), view, self.root, stderr)
+            self.games[ident] = game
+            return game
+        folder.mkdir(parents=True, exist_ok=True)
+        record = {"game": ident, "argv": argv, "view": view, "keep": str(folder / f"{ident}.keep.json"),
+                  "lines": str(folder / f"{ident}.lines"), "stderr": str(stderr), "started": time.time()}
+        for stale in (Path(record["keep"]), Path(record["lines"])):
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+        full = self.command("referee", argv + ["--listen", record["keep"], "--idle", str(KEEP_IDLE)])
+        record["command"] = full
+        game = Game(ident, full, view, self.root, stderr, keep=record)
+        (folder / f"{ident}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
         self.games[ident] = game
         return game
 
-    def open_game(self, argv: list[str], view: str, timeout: float) -> dict:
-        game = self.new_game(argv, view)
+    def open_game(self, argv: list[str], view: str, timeout: float, keep: bool = False) -> dict:
+        game = self.new_game(argv, view, keep)
         state = game.advance(timeout)
         if game.error is not None and game.hello is None:
             game.close(grace=2)
             del self.games[game.ident]
+            self.forget_kept(game.ident)
             raise ToolError(game.error)
         state["hello"] = game.hello
+        self.settle(game)
+        return state
+
+    def settle(self, game: Game) -> None:
+        """A game whose result or error is in: the pipe is closed and a
+        kept game's record is dropped (its transcript stays)."""
         if game.result is not None or game.error is not None:
             game.close(grace=5)
+            if game.kept:
+                self.forget_kept(game.ident)
+
+    # ----- kept games: the records under workspace/games ------------------
+
+    def kept_records(self) -> list[dict]:
+        folder = self.workspace / "games"
+        out = []
+        for path in sorted(folder.glob("g*.json")) if folder.is_dir() else []:
+            if path.name.endswith(".keep.json"):
+                continue
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(record, dict) and record.get("game") == path.stem and record.get("keep"):
+                out.append(record)
+        return out
+
+    def kept_record(self, ident: str) -> dict | None:
+        for record in self.kept_records():
+            if record.get("game") == ident:
+                return record
+        return None
+
+    def forget_kept(self, ident: str) -> None:
+        folder = self.workspace / "games"
+        for name in (f"{ident}.json", f"{ident}.keep.json"):
+            try:
+                (folder / name).unlink()
+            except OSError:
+                pass
+
+    @staticmethod
+    def transcript_result(record: dict) -> dict | None:
+        """The result line of a kept game's transcript, if the referee
+        wrote one (it ends the game when no client comes back)."""
+        try:
+            lines = Path(record["lines"]).read_text(encoding="utf-8", errors="replace").splitlines()
+        except (OSError, KeyError):
+            return None
+        for line in reversed(lines):
+            try:
+                parsed = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(parsed, dict) and parsed.get("type") == "result":
+                return parsed
+            if isinstance(parsed, dict) and "error" in parsed:
+                return {"type": "result", "error": parsed["error"]}
+        return None
+
+    def kept_summary(self, record: dict) -> dict:
+        out = {"game": record.get("game"), "argv": record.get("argv"), "view": record.get("view"),
+               "started": record.get("started"), "lines": record.get("lines")}
+        result = self.transcript_result(record)
+        if result is not None:
+            out["result"] = result
+        else:
+            out["note"] = "referee_resume takes it up"
+        return out
+
+    def tool_referee_resume(self, args: dict) -> dict:
+        ident = str(args.get("game") or "")
+        if not ident:
+            return {"kept": [self.kept_summary(r) for r in self.kept_records() if r.get("game") not in self.games],
+                    "games": [g.summary() for g in self.games.values()]}
+        if ident in self.games:
+            return self.tool_referee_wait(args)
+        record = self.kept_record(ident)
+        if record is None:
+            raise refusal("referee", "game", f"no kept game {ident}", game=ident,
+                          kept=[r.get("game") for r in self.kept_records()], games=sorted(self.games))
+        done = self.transcript_result(record)
+        if done is not None:
+            self.forget_kept(ident)
+            out = {"game": ident, "result": done, "lines": record.get("lines")}
+            if "error" in done:
+                out["error"] = done["error"]
+            return out
+        view = self.view_of(args, str(record.get("view") or "brief"))
+        game = Game(ident, list(record.get("command") or []), view, self.root, Path(record["stderr"]),
+                    keep=record, resume=True)
+        self.games[ident] = game
+        state = game.advance(float(args.get("timeout") or 30))
+        if game.error is not None and game.hello is None:
+            game.close(grace=1)
+            del self.games[ident]
+            done = self.transcript_result(record)
+            # A referee that is not there any more is not coming back:
+            # the record goes, the transcript stays for the reader.
+            self.forget_kept(ident)
+            if done is not None:
+                return {"game": ident, "result": done, "lines": record.get("lines")}
+            raise ToolError({**game.error, "game": ident, "lines": record.get("lines"),
+                             "note": "the kept referee is gone; its transcript is the last word"})
+        state["hello"] = game.hello
+        state["resumed"] = True
+        self.settle(game)
         return state
 
     @staticmethod
@@ -1493,13 +2045,26 @@ class Server:
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
             argv += ["--log", str(self.inside(args["log"], tool, "log"))]
-        return self.open_game(argv, self.view_of(args), float(args.get("timeout") or DECISION_TIMEOUT))
+        return self.open_game(argv, self.view_of(args), float(args.get("timeout") or DECISION_TIMEOUT),
+                              keep=bool(args.get("keep", False)))
 
     def tool_referee_join(self, args: dict) -> dict:
-        argv = ["--join", str(args["invitation"]), "--deck", self.deck_arg(args["deck"])]
+        tool = "referee"
+        invitation = args.get("invitation")
+        table = args.get("table")
+        if not invitation and not table:
+            raise refusal(tool, "option", "`invitation` (the host's invitation or access code) or `table` "
+                          "(an open table's name on the LAN) names the table to join", flag="invitation")
+        if invitation and table:
+            raise refusal(tool, "option", "`invitation` and `table` are two ways to name one table — give one",
+                          flag="table")
+        argv = (["--join", str(invitation)] if invitation else ["--table", str(table)]) + ["--deck", self.deck_arg(args["deck"])]
         for key in ("port", "name", "wait", "turns", "packs"):
             self.flag(argv, args, key, "--" + key)
-        return self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15))
+        if args.get("log"):
+            argv += ["--log", str(self.inside(args["log"], tool, "log"))]
+        return self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
+                              keep=bool(args.get("keep", True)))
 
     def game_of(self, args: dict) -> Game:
         ident = str(args["game"])
@@ -1525,11 +2090,50 @@ class Server:
             raise refusal("referee", "option", "`action` is an object with `op`, or `default`", flag="action")
         action = dict(action)
         action.setdefault("seat", game.pending.get("seat"))
+        until = args.get("until")
+        if until is not None and until not in UNTIL:
+            raise refusal("referee", "option", f"`until` is one of {', '.join(UNTIL)}", flag="until",
+                          suggestions=difflib.get_close_matches(str(until), UNTIL, n=2))
+        timeout = float(args.get("timeout") or DECISION_TIMEOUT)
+        origin = game.pending
         game.send(action)
-        state = game.advance(float(args.get("timeout") or DECISION_TIMEOUT))
+        if until is None:
+            state = game.advance(timeout)
+        else:
+            state = self.pass_until(game, str(until), origin, timeout)
         state["action"] = action
-        if game.result is not None or game.error is not None:
-            game.close(grace=5)
+        self.settle(game)
+        return state
+
+    def pass_until(self, game: Game, until: str, origin: dict, timeout: float) -> dict:
+        """After the client's own answer: pass priority for it until
+        `stop_reason` names a place a player would act, the result, an
+        error, a refusal, a timeout or MAX_PASSES. The journal of every
+        decision passed over is kept for the one shown."""
+        passed = 0
+        refused: list[dict] = []
+        while True:
+            state = game.advance(timeout, render=False)
+            refused += state.get("refused", [])
+            if state.get("pending") or game.pending is None or refused:
+                break
+            reason = stop_reason(game.pending, until, origin)
+            if reason:
+                state["stop"] = reason
+                break
+            if passed >= MAX_PASSES:
+                state["stop"] = f"{MAX_PASSES} decisions passed and `{until}` was not reached"
+                break
+            game.passed_journal += list((game.pending.get("view") or {}).get("journal") or [])
+            game.send({"op": "pass", "seat": game.pending.get("seat")})
+            passed += 1
+        if game.pending is not None and "decision" not in state and not state.get("pending"):
+            state["decision"] = game.shown()
+        state["passed"] = passed
+        state["until"] = until
+        if refused:
+            state["refused"] = refused
+            state["stop"] = "an answer was refused"
         return state
 
     def tool_referee_autoplay(self, args: dict) -> dict:
@@ -1555,8 +2159,7 @@ class Server:
         state["played"] = played
         if refused:
             state["refused"] = refused
-        if game.result is not None or game.error is not None:
-            game.close(grace=5)
+        self.settle(game)
         return state
 
     def tool_referee_wait(self, args: dict) -> dict:
@@ -1569,21 +2172,39 @@ class Server:
             return state
         state = game.advance(float(args.get("timeout") or DECISION_TIMEOUT))
         state["hello"] = game.hello
-        if game.result is not None or game.error is not None:
-            game.close(grace=5)
+        self.settle(game)
         return state
 
     def tool_referee_stop(self, args: dict) -> dict:
         game = self.game_of(args)
-        if game.running:
+        if game.running and game.kept:
+            # A kept referee reads no end-of-input: the seat concedes.
+            # With no decision pending the line waits in the socket for
+            # the next one.
+            concede: dict = {"op": "concede"}
+            if game.pending is not None:
+                concede["seat"] = game.pending.get("seat")
+            try:
+                game.send(concede)
+            except ToolError:
+                pass
+            game.advance(10)
+        elif game.running:
             game.close(grace=1)
             game.advance(10)
         game.close(grace=10)
+        if game.kept and game.result is not None:
+            self.forget_kept(game.ident)
         return game.summary()
 
     def shutdown(self) -> None:
+        """Games on a pipe end with the server; kept games are let go —
+        their referee listens on, `referee_resume` finds them again."""
         for game in list(self.games.values()):
-            game.close(grace=5)
+            if game.kept and game.result is None and game.error is None:
+                game.detach()
+            else:
+                game.close(grace=5)
 
     # ----- the protocol -----------------------------------------------------
 

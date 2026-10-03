@@ -18,7 +18,7 @@ const SELF_TEST := "tools.test_shandalar_mcp"
 const TOOLS := ["status", "contract", "play_guide", "manual", "packs", "cards", "list_decks",
 	"read_deck", "write_deck", "check_deck", "convert_deck", "autodeck", "lab",
 	"lab_resume", "read_run", "lab_next", "referee_start", "referee_join",
-	"referee_act", "referee_autoplay", "referee_wait", "referee_stop"]
+	"referee_act", "referee_autoplay", "referee_wait", "referee_stop", "referee_resume"]
 
 
 func _root() -> String:
@@ -47,9 +47,11 @@ func test_the_live_half_runs_against_this_engine() -> void:
 		"python3", "-m", "unittest", "-v", SELF_TEST + ".LiveTest"], output, true)
 	var report := "".join(PackedStringArray(output))
 	assert_eq(status, 0, "the live half passes:\n" + report.right(6000))
-	assert_true(report.contains("Ran 5 tests"), "the five live tests ran:\n" + report.right(2000))
+	assert_true(report.contains("Ran 6 tests"), "the six live tests ran:\n" + report.right(2000))
 	assert_false(report.contains("skipped"), "nothing was skipped: SHANDALAR_MCP_LIVE reached the test")
 	assert_true(report.contains("test_duel_to_the_end"), "the duel was played")
+	assert_true(report.contains("test_a_kept_duel_is_taken_up_by_another_server_and_passed_until"),
+		"the kept duel was taken up and passed until")
 
 
 ## The catalogue a program reads before it acts, printed by the server

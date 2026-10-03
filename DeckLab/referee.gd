@@ -13,8 +13,10 @@ extends SceneTree
 ##   DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a agent]
 ##       [--seat-b wizard] [--seed N] [--turns N] [--packs LIST]
 ##       [--log FILE] [--dry-run]
-##   DeckLab/referee.sh --join INVITATION|CODE --deck DECK [--port N]
-##       [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST]
+##   DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK
+##       [--port N] [--name NICK] [--wait SECONDS] [--turns N]
+##       [--packs LIST] [--log FILE]
+##   DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
 ##   DeckLab/referee.sh -h | --help
 ##
 ## THE LINES. stdout carries nothing but JSON, one document a line:
@@ -28,6 +30,26 @@ extends SceneTree
 ## "prepare", "card": "c5", "kind": "spell", "index": 0, "x": 0,
 ## "mode": 0}` and so on. Blank lines are skipped; three empty reads in
 ## a row are the end of the input, and the seat concedes.
+##
+## THE KEPT GAME (2026-10-03). With `--listen FILE` the same lines are
+## served on a loopback TCP socket instead of the pipe, so the program
+## may go away and come back — a client restarted, a server that
+## crashed — while the duel waits. The referee writes FILE once it
+## listens ({port, token, pid, version, started}; the token is drawn
+## here and never on a command line); a client connects to
+## 127.0.0.1:port and sends `{"token": ..., "client": ...}` as its
+## first line; the referee answers with `hello` again, one `resume`
+## line ({decisions, refusals, awaiting, n, finished}) and, when a
+## decision is awaited, that decision again with the WHOLE journal.
+## One client at a time: a newcomer with the token replaces the last.
+## stdout still carries every line (the transcript), stdin is not read.
+## `--idle SECONDS` (1800; 0 never) concedes the seat when a decision
+## has waited that long with nobody connected (`reason: idle`).
+##
+## THE TABLE BY NAME. `--table NAME` asks the LAN (SgLanDiscovery) for
+## an OPEN host advertising a table of that name and joins with the
+## invitation its advert carries; an invitation-only host's table is
+## named back as such — paste its invitation with `--join` instead.
 ##
 ## THE VIEW is [method SgPracticeMatch.view] as the lobby sends it to a
 ## guest — the same truth a person's screen is painted from, hidden
@@ -66,6 +88,13 @@ const DUEL_OPS := ["concede", "order", "keep", "mulligan", "pass", "play", "tap"
 const DEFAULT_TURNS := 200
 const DEFAULT_PORT := 17897
 const DEFAULT_WAIT := 300
+## A kept game's patience: a decision nobody has come back for in this
+## many seconds is conceded (`reason: idle`); 0 waits forever.
+const DEFAULT_IDLE := 1800
+## A kept game's socket: a knock (a connection that has not sent its
+## token yet) is dropped after this long; the token line's own limit.
+const KNOCK_MS := 5000
+const LINE_LIMIT := 65536
 ## A program-held seat's decisions, over the whole duel, before the
 ## referee ends it (`reason: decisions`): a duel that long is a loop.
 const MAX_DECISIONS := 20000
@@ -92,8 +121,10 @@ USAGE
   DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a SEAT]
       [--seat-b SEAT] [--seed N] [--turns N] [--packs LIST] [--log FILE]
       [--dry-run]
-  DeckLab/referee.sh --join INVITATION|CODE --deck DECK [--port N]
-      [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST]
+  DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK
+      [--port N] [--name NICK] [--wait SECONDS] [--turns N]
+      [--packs LIST] [--log FILE]
+  DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
   DeckLab/referee.sh -h | --help
 
 SEATS  (--seat-a, --seat-b; default: agent vs wizard; at least one agent)
@@ -108,15 +139,26 @@ SWITCHES
                             and reported in `hello`
   --turns N                 the duel is called a draw past turn N (200)
   --packs LIST              all|none|a,b: the card packs in play
-  --log FILE                the engine's own log of the duel, at the end
+  --log FILE                the duel's log at the end: the engine's own
+                            lines (a local duel) or the journal the
+                            seat saw (a joined table)
   --dry-run                 print the plan as JSON, play nothing
   --join TEXT               sit at a table the game hosts: a LAN
                             invitation (sglan1:...) or the same-computer
                             access code the host screen shows
+  --table NAME              sit at the open LAN table of that name, as
+                            the Game Browser lists it (no paste: the
+                            open host's advert carries its invitation)
   --deck PATH               the deck to bring to that table
   --port N                  the host's port for an access code (17897)
   --name NICK               the seat's name at that table (Agent)
   --wait SECONDS            how long to wait for an open table (300)
+  --listen FILE             serve the lines on a loopback socket instead
+                            of the pipe and write {port, token, pid} to
+                            FILE: the game is kept while the program is
+                            away (see THE KEPT GAME above)
+  --idle SECONDS            with --listen: concede a decision nobody
+                            has come back for in that long (1800; 0 off)
 
 THE LINES (stdout)
   hello     {tool, protocol, version, seed, seats[{seat, player, name,
@@ -124,9 +166,11 @@ THE LINES (stdout)
   decision  {n, seat, mode, turn, step, options, view}
              mode: opening|priority|attack|block|discard|damage|choice
   refused   {n, seat, reason, action, left}  — the decision follows again
+  resume    {decisions, refusals, awaiting, n, finished}  — to a client
+             that connects to a kept game (--listen), after hello
   result    {winner, draw, turns, reason, decisions, refusals, seed,
              life, names}  — reason: concluded|conceded|eof|refusals|
-             limit|decisions|stalled|left|offline
+             limit|decisions|stalled|left|offline|idle
   error     {"error": {...}} — the Lab's envelope; nothing was played
 
 THE ANSWERS (stdin), one JSON object a line, the game's wire actions
@@ -166,12 +210,15 @@ const FLAG_HINTS := {
 	"--seed": "--seed N: the shuffle, a non-negative integer; unset, one is drawn and reported",
 	"--turns": "--turns N: the turn past which the duel is called a draw (200)",
 	"--packs": "--packs LIST: all, none, or the pack ids in play, comma-separated",
-	"--log": "--log FILE: where to write the engine's own log of the duel",
+	"--log": "--log FILE: where to write the duel's log — the engine's lines, or a joined table's journal",
 	"--join": "--join TEXT: a LAN invitation (sglan1:...) or the host screen's same-computer access code",
+	"--table": "--table NAME: the open LAN table of that name, as the Game Browser lists it",
 	"--deck": "--deck PATH: the deck to bring to a joined table",
 	"--port": "--port N: the host's port when joining by access code (17897)",
 	"--name": "--name NICK: the seat's name at a joined table (Agent)",
 	"--wait": "--wait SECONDS: how long to wait for the host's open table (300)",
+	"--listen": "--listen FILE: serve the lines on a loopback socket, the port and token written to FILE",
+	"--idle": "--idle SECONDS: with --listen, concede a decision nobody has come back for in that long (1800; 0 never)",
 }
 
 ## THE TWO ENDS OF THE PIPE, as Callables so a test can hold both:
@@ -197,6 +244,24 @@ var _pump_want := Semaphore.new()
 var _pump_lines: Array = []
 var _pump_stop := false
 var _pump_pending := 0
+# The kept game (--listen): the loopback server, the one client it
+# serves (`_peer`, once its token line was read), the knock still to
+# send its token, the handshake file's path, and what a client that
+# comes back is told — whether a decision is awaited and the whole
+# journal of the view it was asked from.
+var _server: TCPServer
+var _peer: StreamPeerTCP
+var _peer_buffer := ""
+var _knock: StreamPeerTCP
+var _knock_buffer := ""
+var _knock_since := 0
+var _token := ""
+var _listen_path := ""
+var _idle_ms := 0
+var _idle_since := 0
+var _awaiting := false
+var _last_journal: Array = []
+var _eof_reason := ""
 
 
 func _init() -> void:
@@ -222,8 +287,15 @@ func _write_stdout(line: String) -> void:
 	print(line)
 
 
+## One line out: in a kept game to the client on the socket (a knock
+## waiting there is seated first, and told where the duel stands), then
+## to the writer — stdout, or a test's collector.
 func _emit(record: Dictionary) -> void:
-	writer.call(JSON.stringify(record))
+	var text := JSON.stringify(record)
+	if _server != null:
+		_serve()
+		_send_peer(text)
+	writer.call(text)
 
 
 func _refuse(exit: int, message: String, detail: Dictionary = {}) -> int:
@@ -236,6 +308,8 @@ func _refuse(exit: int, message: String, detail: Dictionary = {}) -> int:
 ## The next line of input, or null when it has closed. [param tick] is
 ## called while a table's pump is being waited on (the socket's poll).
 func _next_line(tick: Callable) -> Variant:
+	if _server != null:
+		return _read_socket(tick)
 	if _pump == null:
 		return reader.call()
 	_pump_pending += 1
@@ -285,12 +359,156 @@ func _pump_finish() -> void:
 	_pump = null
 
 
+# ------------------------------------------------------ the kept game --
+
+## Opens the loopback socket and writes the handshake file (as .part,
+## then renamed: a client never reads half a record). Returns "" or the
+## refusal. From here on every line is sent to the seated client as
+## well, and `_next_line` reads the socket; the pump is never started.
+func _listen_start(path: String, idle_seconds: int) -> String:
+	_server = TCPServer.new()
+	var error := _server.listen(0, "127.0.0.1")
+	if error != OK:
+		_server = null
+		return "cannot listen on the loopback: %s" % error_string(error)
+	_token = Crypto.new().generate_random_bytes(16).hex_encode()
+	_listen_path = path
+	_idle_ms = idle_seconds * 1000
+	_idle_since = Time.get_ticks_msec()
+	var record := {"port": _server.get_local_port(), "token": _token, "pid": OS.get_process_id(),
+		"version": LabConsole.version(), "started": Time.get_datetime_string_from_system()}
+	var part := path + ".part"
+	var file := FileAccess.open(part, FileAccess.WRITE)
+	if file == null:
+		_listen_stop()
+		return "cannot write the handshake at '%s'" % path
+	file.store_string(JSON.stringify(record) + "\n")
+	file.close()
+	var moved := DirAccess.rename_absolute(ProjectSettings.globalize_path(part), ProjectSettings.globalize_path(path))
+	if moved != OK:
+		_listen_stop()
+		return "cannot write the handshake at '%s': %s" % [path, error_string(moved)]
+	return ""
+
+
+## Closes the socket; the handshake file stays for whoever reads the
+## transcript (the server that keeps the registry removes both).
+func _listen_stop() -> void:
+	if _peer != null:
+		_peer.disconnect_from_host()
+		_peer = null
+	if _knock != null:
+		_knock.disconnect_from_host()
+		_knock = null
+	if _server != null:
+		_server.stop()
+		_server = null
+
+
+func _send_peer(line: String) -> void:
+	if _peer != null and _peer.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+		_peer.put_data((line + "\n").to_utf8_buffer())
+
+
+## One line from the kept game's client, or null once a decision has
+## waited `--idle` long with nobody connected (`_eof_reason` = idle).
+## The server is polled here — no frame runs while the program thinks.
+func _read_socket(tick: Callable) -> Variant:
+	while true:
+		tick.call()
+		_serve()
+		if _peer != null:
+			var cut := _peer_buffer.find("\n")
+			if cut >= 0:
+				var line := _peer_buffer.substr(0, cut)
+				_peer_buffer = _peer_buffer.substr(cut + 1)
+				return line
+			if _peer_buffer.length() > LINE_LIMIT:
+				_peer_buffer = ""
+		elif _awaiting and _idle_ms > 0 and Time.get_ticks_msec() - _idle_since >= _idle_ms:
+			_eof_reason = "idle"
+			return null
+		OS.delay_msec(10)
+	return null
+
+
+## Takes a knock, reads its token line, seats the client (dropping the
+## last one) and replays what it needs; reads the seated client's bytes.
+func _serve() -> void:
+	var now := Time.get_ticks_msec()
+	if _knock == null and _server.is_connection_available():
+		_knock = _server.take_connection()
+		_knock.set_no_delay(true)
+		_knock_buffer = ""
+		_knock_since = now
+	if _knock != null:
+		var got := _drain(_knock, _knock_buffer)
+		_knock_buffer = String(got.text)
+		var cut := _knock_buffer.find("\n")
+		if cut >= 0:
+			var parsed = JSON.parse_string(_knock_buffer.substr(0, cut))
+			_knock_buffer = _knock_buffer.substr(cut + 1)
+			if parsed is Dictionary and parsed.get("token") is String and String(parsed.token) == _token:
+				if _peer != null:
+					_peer.disconnect_from_host()
+				_peer = _knock
+				_peer_buffer = _knock_buffer
+				_knock = null
+				_replay()
+			else:
+				printerr("referee: a connection without the token was dropped")
+				_knock.disconnect_from_host()
+				_knock = null
+		elif not bool(got.alive) or now - _knock_since > KNOCK_MS or _knock_buffer.length() > LINE_LIMIT:
+			_knock.disconnect_from_host()
+			_knock = null
+	if _peer != null:
+		var got := _drain(_peer, _peer_buffer)
+		_peer_buffer = String(got.text)
+		if not bool(got.alive):
+			_peer = null
+			_peer_buffer = ""
+			_idle_since = now
+
+
+## Polls one connection and appends what arrived: {text, alive}.
+static func _drain(peer: StreamPeerTCP, buffer: String) -> Dictionary:
+	peer.poll()
+	var status := peer.get_status()
+	if status != StreamPeerTCP.STATUS_CONNECTED:
+		return {"text": buffer, "alive": status == StreamPeerTCP.STATUS_CONNECTING}
+	var pending := peer.get_available_bytes()
+	if pending > 0:
+		var chunk: Array = peer.get_data(pending)
+		if int(chunk[0]) == OK:
+			buffer += PackedByteArray(chunk[1]).get_string_from_utf8()
+	return {"text": buffer, "alive": true}
+
+
+## What a client that (re)connects is told: hello again, where the duel
+## stands, and the awaited decision with the whole journal — a client
+## that was away has no idea what it missed.
+func _replay() -> void:
+	if not last_hello.is_empty():
+		_send_peer(JSON.stringify(last_hello))
+	_send_peer(JSON.stringify({"type": "resume", "decisions": decisions, "refusals": refusals,
+		"awaiting": _awaiting, "n": int(last_decision.get("n", 0)) if _awaiting else 0,
+		"finished": not last_result.is_empty()}))
+	if _awaiting:
+		var again := last_decision.duplicate()
+		var view: Dictionary = again.view.duplicate()
+		view["journal"] = _last_journal
+		again["view"] = view
+		_send_peer(JSON.stringify(again))
+
+
 # ------------------------------------------------------ the arguments --
 
 func _parse_args(argv: PackedStringArray) -> Dictionary:
 	var opts := {"deck_a": "", "deck_b": "", "seat_a": "agent", "seat_b": "wizard",
 		"seed": -1, "turns": DEFAULT_TURNS, "packs": "", "log": "", "dry_run": false,
-		"join": "", "deck": "", "port": DEFAULT_PORT, "name": "Agent", "wait": DEFAULT_WAIT}
+		"join": "", "table": "", "deck": "", "port": DEFAULT_PORT, "name": "Agent", "wait": DEFAULT_WAIT,
+		"listen": "", "idle": DEFAULT_IDLE}
 	var i := 0
 	while i < argv.size():
 		var arg := String(argv[i])
@@ -324,7 +542,7 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 					return {"error": {"message": "unknown seat '%s' for %s — the seats are %s" % [value, arg, ", ".join(SEATS.keys())],
 						"detail": detail}}
 				opts["seat_a" if arg == "--seat-a" else "seat_b"] = seat
-			"--seed", "--turns", "--port", "--wait":
+			"--seed", "--turns", "--port", "--wait", "--idle":
 				if not value.is_valid_int() or int(value) < 0:
 					return {"error": {"message": "%s wants a non-negative integer, not '%s'" % [arg, value],
 						"detail": {"kind": "option", "flag": arg}}}
@@ -332,8 +550,10 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 			"--packs": opts.packs = value
 			"--log": opts.log = value
 			"--join": opts.join = value.strip_edges()
+			"--table": opts.table = value.strip_edges()
 			"--deck": opts.deck = value
 			"--name": opts.name = value.strip_edges()
+			"--listen": opts.listen = value
 	return opts
 
 
@@ -396,6 +616,19 @@ func _main(argv: PackedStringArray) -> int:
 	var opts := _parse_args(argv)
 	if opts.has("error"):
 		return _refuse(2, opts.error.message, opts.error.detail)
+	if opts.join != "" and opts.table != "":
+		return _refuse(2, "--join and --table name two tables — give one  (%s)" % FLAG_HINTS["--table"],
+			{"kind": "option", "flag": "--table"})
+	if opts.listen != "":
+		var refusal := _listen_start(String(opts.listen), int(opts.idle))
+		if refusal != "":
+			return _refuse(1, refusal, {"kind": "out", "flag": "--listen", "path": opts.listen})
+	var code := _play(opts)
+	_listen_stop()
+	return code
+
+
+func _play(opts: Dictionary) -> int:
 	CardRegistry.ensure_loaded()
 	var packs: Variant = null
 	if opts.packs != "":
@@ -406,7 +639,7 @@ func _main(argv: PackedStringArray) -> int:
 		if refusal != "":
 			return _refuse(2, refusal, {"kind": "packs", "flag": "--packs"})
 		packs = chosen.ids
-	if opts.join != "":
+	if opts.join != "" or opts.table != "":
 		return _join(opts, packs)
 	for flag in ["--deck-a", "--deck-b"]:
 		if opts[flag.trim_prefix("--").replace("-", "_")] == "":
@@ -447,20 +680,31 @@ func _main(argv: PackedStringArray) -> int:
 	var result := _referee_local(m, int(opts.turns))
 	result["seed"] = seed_value
 	if opts.log != "":
-		var file := FileAccess.open(opts.log, FileAccess.WRITE)
-		if file == null:
-			return _refuse(1, "cannot write the log at '%s'" % opts.log, {"kind": "out", "flag": "--log", "path": opts.log})
-		file.store_string("\n".join(m.game.log_lines) + "\n")
-		file.close()
+		var written := _write_log(opts.log, Array(m.game.log_lines))
+		if written != "":
+			return _refuse(1, written, {"kind": "out", "flag": "--log", "path": opts.log})
 		result["log"] = opts.log
 	return _result(result)
 
 
+## The duel's log, one line each; "" or the refusal.
+func _write_log(path: String, lines: Array) -> String:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return "cannot write the log at '%s'" % path
+	file.store_string("\n".join(PackedStringArray(lines)) + "\n")
+	file.close()
+	return ""
+
+
 func _hello(extra: Dictionary) -> void:
-	last_hello = {"type": "hello", "tool": "referee", "protocol": PROTOCOL,
+	var record := {"type": "hello", "tool": "referee", "protocol": PROTOCOL,
 		"version": LabConsole.version(), "git": LabConsole.git_sha(), "ops": DUEL_OPS,
 		"limits": {"decisions": MAX_DECISIONS, "refusals": MAX_REFUSALS}}.merged(extra)
-	_emit(last_hello)
+	# Emitted before it is remembered: a kept game's client seated by
+	# this very emit is replayed what came before, and hello comes next.
+	_emit(record)
+	last_hello = record
 
 
 func _result(record: Dictionary) -> int:
@@ -502,7 +746,7 @@ func _referee_local(m: SgPracticeMatch, turns: int) -> Dictionary:
 			func() -> Dictionary: return m.view(actor),
 			func(action: Dictionary) -> String: return m.act(actor, action),
 			func() -> void: pass)
-	if reason in ["eof", "refusals"] and not m.game.game_over:
+	if reason in ["eof", "idle", "refusals"] and not m.game.game_over:
 		m.act(_conceding(m), {"op": "concede"})
 	var life: Array = []
 	for pid in 2:
@@ -539,7 +783,8 @@ func _ask(seat: int, mode: String, fresh: Callable, apply: Callable, tick: Calla
 	while true:
 		var line: Variant = _next_line(tick)
 		if line == null:
-			return "eof"
+			_awaiting = false
+			return "idle" if _eof_reason == "idle" else "eof"
 		var text := String(line).strip_edges()
 		if text == "":
 			continue
@@ -551,6 +796,7 @@ func _ask(seat: int, mode: String, fresh: Callable, apply: Callable, tick: Calla
 		else:
 			refusal = String(apply.call(action))
 			if refusal == "":
+				_awaiting = false
 				return "conceded" if action.op == "concede" else ""
 		consecutive += 1
 		refusals += 1
@@ -579,7 +825,15 @@ func _decision(n: int, seat: int, mode: String, view: Dictionary) -> void:
 	last_decision = {"type": "decision", "n": n, "seat": seat, "mode": mode,
 		"turn": int(view.get("turn", 0)), "step": String(view.get("step", "")),
 		"options": options_for(view, seat), "view": shown}
+	# A kept game's client that comes back is told this decision again,
+	# with every journal entry — not only the ones since the last line.
+	# Awaited only once emitted: a client seated by this emit gets the
+	# decision from the emit, not from the replay as well.
+	_last_journal = Array(view.get("journal", []))
 	_emit(last_decision)
+	_awaiting = true
+	if _peer == null:
+		_idle_since = Time.get_ticks_msec()
 
 
 ## One line of input as an action for [param seat], or the refusal that
@@ -761,8 +1015,16 @@ func _join(opts: Dictionary, packs: Variant) -> int:
 	var one := _load_deck(opts.deck, "--deck")
 	if one.has("error"):
 		return _refuse(2, one.error.message, one.error.detail)
-	var client: Node = load("res://game/sgmanalink/local_client.gd").new()
 	var invitation := String(opts.join)
+	if invitation == "":
+		var discovery := SgLanDiscovery.new()
+		var found := _find_table(String(opts.table), int(opts.wait), discovery)
+		discovery.free()
+		if found.has("error"):
+			return _refuse(2, found.error, {"kind": "table", "flag": "--table", "table": opts.table,
+				"seen": found.get("seen", [])})
+		invitation = String(found.invitation)
+	var client: Node = load("res://game/sgmanalink/local_client.gd").new()
 	var opened: Error
 	if invitation.begins_with(SgLanInvite.PREFIX):
 		opened = client.connect_invitation(invitation, opts.name)
@@ -775,8 +1037,61 @@ func _join(opts: Dictionary, packs: Variant) -> int:
 	var outcome := _referee_table(client, one.deck, opts, packs)
 	client.free()
 	if outcome.has("error"):
-		return _refuse(2, outcome.error, {"kind": "join", "flag": "--join", "status": outcome.get("status", "")})
+		return _refuse(2, outcome.error, {"kind": "join", "flag": "--join" if opts.table == "" else "--table",
+			"status": outcome.get("status", "")})
+	# The log of a joined table is the journal the seat saw: the engine
+	# runs at the host, its own lines are not on the wire.
+	var journal: Array = outcome.get("journal", [])
+	outcome.erase("journal")
+	if String(opts.get("log", "")) != "":
+		var written := _write_log(opts.log, journal)
+		if written != "":
+			return _refuse(1, written, {"kind": "out", "flag": "--log", "path": opts.log})
+		outcome["log"] = opts.log
 	return _result(outcome)
+
+
+## The invitation of the open LAN table called [param name], asked of
+## [param discovery] — anything with SgLanDiscovery's face (`scan()`,
+## `pump()`, `hosts`, `stop()`), driven by hand since no frame runs
+## here. Returns {invitation} or {error, seen}: the table names seen
+## tell the program what to ask for instead.
+func _find_table(name: String, wait: int, discovery: Object) -> Dictionary:
+	var started: Error = discovery.scan()
+	if started != OK:
+		return {"error": "the LAN cannot be searched for '%s': %s" % [name, error_string(started)], "seen": []}
+	var deadline := Time.get_ticks_msec() + wait * 1000
+	var seen := {}
+	var invitation_only := false
+	var full := false
+	while true:
+		discovery.pump()
+		for key in discovery.hosts:
+			var advert: Dictionary = discovery.hosts[key].get("host", {})
+			for table in advert.get("tables", []):
+				var table_name := String(table.get("name", ""))
+				seen[table_name] = true
+				if table_name != name:
+					continue
+				if not bool(table.get("open", false)):
+					full = true
+				elif SgLanDiscovery.open_host(advert):
+					discovery.stop()
+					return {"invitation": String(advert.invitation), "host": String(advert.get("name", ""))}
+				else:
+					invitation_only = true
+		if Time.get_ticks_msec() > deadline:
+			break
+		OS.delay_msec(50)
+	discovery.stop()
+	var names := seen.keys()
+	names.sort()
+	if invitation_only:
+		return {"error": "the table '%s' is hosted with an invitation — paste it with --join" % name, "seen": names}
+	if full:
+		return {"error": "the table '%s' has no free seat — waited %d s" % [name, wait], "seen": names}
+	return {"error": "no open table called '%s' on the LAN — waited %d s%s" % [name, wait,
+		"" if names.is_empty() else ", saw: " + ", ".join(PackedStringArray(names))], "seen": names}
 
 
 ## Plays the joined table to its end. [param client] is anything with
@@ -845,8 +1160,12 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 		seats.append({"seat": pid, "player": "agent" if pid == seat else "table", "name": String(room.names[pid]),
 			"deck": String(room.deck_names[pid]), "file": ""})
 	_hello({"seats": seats, "seed": -1, "toss": int(room.game.presentation.toss), "turns": int(opts.turns),
-		"table": {"id": room.id, "name": room.name, "seat": seat}, "packs": packs})
-	_pump_start()
+		"table": {"id": room.id, "name": room.name, "seat": seat}, "packs": packs,
+		"log": String(opts.get("log", ""))})
+	# A kept game polls its own socket in _next_line; the pipe needs the
+	# pump so the table's socket is served while the program thinks.
+	if _server == null:
+		_pump_start()
 	var reason := ""
 	var acted_revision := -1
 	while reason == "":
@@ -874,15 +1193,19 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 		reason = _ask(seat, String(view.mode),
 			func() -> Dictionary: return client.state.room.get("game", {}),
 			send, tick)
-	if reason in ["eof", "refusals", "limit", "decisions"] and String(client.state.room.get("game", {}).get("mode", "")) != "finished":
+	if reason in ["eof", "idle", "refusals", "limit", "decisions"] and String(client.state.room.get("game", {}).get("mode", "")) != "finished":
 		send.call({"op": "concede"})
 		until.call(func() -> bool: return String(client.state.room.get("game", {}).get("mode", "")) == "finished", "the concession never landed")
 	var final: Dictionary = client.state.room.get("game", {})
 	var life: Array = []
 	for player in final.get("players", []):
 		life.append(int(player.life))
+	var journal: Array = []
+	for entry in final.get("journal", []):
+		journal.append(String(entry.get("text", "")))
 	_pump_finish()
 	send.call({"op": "leave"})
 	return {"winner": int(final.get("winner", -1)), "draw": bool(final.get("draw", false)),
 		"turns": int(final.get("turn", 0)), "reason": reason, "life": life,
-		"names": Array(room.names), "seat": seat, "table": {"id": room.id, "name": room.name}}
+		"names": Array(room.names), "seat": seat, "table": {"id": room.id, "name": room.name},
+		"journal": journal}

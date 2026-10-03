@@ -258,13 +258,13 @@ blocker's timestamp when its delayed ability triggers. See the
 | Simultaneous within a step | Every division is planned and answered BEFORE anything is dealt, then applied with state-based actions deferred, so trades kill both and a dying creature still hears its own damage triggers. | 510.4, 704.3 | `MtgGame._apply_damage_requests`, `_defer_state_based_actions` |
 | The ATTACKER assigns | The attacking player announces the damage assignment ORDER as blockers are declared (`DecisionAgent.order_blockers` → `CombatState.damage_order`) and DIVIDES the damage at the damage step (`assign_combat_damage`), lethal to each blocker before the next. A seat that wants to decide for itself holds the step open (`awaiting_damage_assignment`) and answers through `MtgGame.assign_combat_damage`; every other seat answers through its agent, whose default is the engine's old lethal-first spread (`default_damage_split`). | 509.2, 510.1c | `MtgGame._collect_damage_requests`, `_resume_damage_assignment`, `_split_illegality` |
 | Trample | Excess over the blockers' lethal may go to the defending player, and only once EVERY blocker has lethal (the `MtgGame.DAMAGE_TO_PLAYER` key of a division). Without trample every point still goes to a blocker; the default puts excess on the last one. | 702.19, 510.1c-d | `default_damage_split`, `_split_illegality` |
-| Band damage | A blocker that blocks any band member fights the whole band: its damage is divided across members (through the same agent hook) lethal-first in band order, leftovers joining the last member. | 702.22j, 510.1d | `_collect_damage_requests` blocker side, `spill_to_last` |
+| Band damage | A blocker that blocks any band member fights the whole band: the ATTACKING player divides its damage among the members (the same agent hook, `free_order`), and the engine's default drops the whole packet on the member with the lowest `_defensive_value` — the sacrificial lamb (0.50.4). | 702.22j, 510.1d | `_collect_damage_requests` blocker side (`blocker_band_owner`), `default_damage_split`, `spill_to_last` |
 | Fog | A game-level flag checked per recipient when combat damage is planned and when it lands. Protects pending Fifth Edition packets as well as later waves, except unpreventable damage. Non-combat damage is untouched. | 615.12 | `MtgGame.combat_damage_prevented`, `PreventCombatDamageEffect` |
 
-**Simplifications here:** the BAND spread (a blocker facing several band
-members, CR 702.22j) goes through the same agent hook but is credited to the
-BLOCKER's controller rather than the attacking player, and its leftover joins
-the last band member — ROADMAP. Everything else on this list has been lifted:
+**Simplifications here:** none left on this list. The BAND spread (a blocker
+facing several band members, CR 702.22j) was credited to the BLOCKER's
+controller until 0.50.4; it now goes to the attacking player with a free
+division (2026-10-03). Earlier liftings:
 defensive banding divides freely for the defender (2026-09-01), one blocker
 may be assigned to several attackers (`CombatState.extra_blocks`, 2026-09-02
 — what is still missing is the HUMAN half, `duel_screen.gd`'s block picker,

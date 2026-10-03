@@ -13,6 +13,14 @@ extends GutTest
 ## sent once; self-play seats two agents; a joined table is played
 ## through anything with the lobby client's face; every refusal before
 ## play is one error line, exit 2; the three doors and the docs.
+##
+## THE KEPT GAME AND THE TABLE BY NAME (2026-10-03): `--listen` serves
+## the lines on a loopback socket — the handshake file, the token, one
+## client at a time, the replay (hello, resume, the awaited decision
+## with the whole journal) to a client that comes back, the idle
+## concession; `--table` finds an open LAN table's invitation through
+## anything with SgLanDiscovery's face; `--log` with a joined table
+## writes the journal the seat saw.
 
 const Pilot := preload("res://tests/support/sg_network_pilot.gd")
 const REFEREE := "res://DeckLab/referee.gd"
@@ -152,6 +160,9 @@ func test_every_refusal_before_play_is_one_error_line_exit_2() -> void:
 		[["--join", "abc"], "option", "--deck", "--deck is required"],
 		[["--join", "abc", "--deck", "big_green.deck", "--name", ""], "option", "--name", ""],
 		[["--join", "abc", "--deck", "big_green.deck", "--wait", "0"], "join", "--join", ""],
+		[["--join", "abc", "--table", "T", "--deck", "big_green.deck"], "option", "--table", "give one"],
+		[["--table", "T"], "option", "--deck", "--deck is required"],
+		[DECKS + ["--idle", "-1"], "option", "--idle", "non-negative integer"],
 	]
 	for row in cases:
 		before_each()
@@ -575,6 +586,325 @@ func test_a_table_that_never_opens_is_an_error_not_a_duel() -> void:
 	assert_eq(outcome.status, "Online")
 	assert_eq(_lines.size(), 0, "nothing was said on the pipe")
 	assert_eq(fake.commands, [])
+
+
+# ------------------------------------------------- the table by name --
+
+## SgLanDiscovery's face, without the LAN: the adverts appear after a
+## few pumps, so the search is seen to wait.
+class FakeDiscovery:
+	extends RefCounted
+	var hosts: Dictionary = {}
+	var adverts: Dictionary = {}
+	var after := 3
+	var pumps := 0
+	var scans := 0
+	var stops := 0
+
+	func scan() -> Error:
+		scans += 1
+		return OK
+
+	func pump() -> void:
+		pumps += 1
+		if pumps >= after:
+			for key in adverts:
+				hosts[key] = {"host": adverts[key], "seen": Time.get_ticks_msec()}
+
+	func stop() -> void:
+		stops += 1
+		hosts.clear()
+
+
+static func _advert(host_name: String, access: String, tables: Array) -> Dictionary:
+	var advert := {"address": "192.168.1.9", "port": 17897, "name": host_name, "access": access, "tables": tables}
+	if access == "open":
+		advert["invitation"] = "sglan1:%s" % host_name
+	return advert
+
+
+static func _table(table_name: String, open: bool) -> Dictionary:
+	return {"name": table_name, "decks": "own", "deck": "", "open": open}
+
+
+func test_an_open_table_is_found_by_name_and_the_rest_are_named_back() -> void:
+	var ref = _referee()
+	var lan := FakeDiscovery.new()
+	lan.adverts = {
+		"192.168.1.9:17897": _advert("Wizard", "open", [_table("Wizard's table", true), _table("Full table", false)]),
+		"192.168.1.9:17898": _advert("Sorcerer", "invitation", [_table("Private table", true)]),
+	}
+	var found: Dictionary = ref._find_table("Wizard's table", 5, lan)
+	assert_eq(found, {"invitation": "sglan1:Wizard", "host": "Wizard"})
+	assert_eq(lan.scans, 1)
+	assert_eq(lan.stops, 1, "the search stops the discovery")
+	assert_true(lan.pumps >= 3, "the adverts came after a few pumps")
+	lan.hosts.clear()
+	lan.pumps = 0
+	var private: Dictionary = ref._find_table("Private table", 1, lan)
+	assert_true(private.has("error"))
+	assert_true(String(private.error).contains("hosted with an invitation"), private.error)
+	assert_true(String(private.error).contains("--join"))
+	assert_eq(Array(private.seen), ["Full table", "Private table", "Wizard's table"])
+	lan.hosts.clear()
+	lan.pumps = 0
+	var full: Dictionary = ref._find_table("Full table", 1, lan)
+	assert_true(String(full.error).contains("no free seat"), full.error)
+	lan.hosts.clear()
+	lan.pumps = 0
+	var started := Time.get_ticks_msec()
+	var absent: Dictionary = ref._find_table("Nobody's table", 1, lan)
+	assert_true(Time.get_ticks_msec() - started >= 1000, "the search waited the whole second")
+	assert_true(String(absent.error).begins_with("no open table called 'Nobody's table'"), absent.error)
+	assert_true(String(absent.error).contains("saw: Full table, Private table, Wizard's table"), absent.error)
+	assert_eq(lan.stops, 4)
+	var empty := FakeDiscovery.new()
+	var nothing: Dictionary = ref._find_table("Any", 0, empty)
+	assert_true(String(nothing.error).ends_with("waited 0 s"), nothing.error)
+	assert_eq(Array(nothing.seen), [])
+
+
+func test_the_real_discovery_pumps_by_hand() -> void:
+	var lan := SgLanDiscovery.new()
+	assert_true(lan.has_method("pump"), "the referee drives it without a frame")
+	lan.pump()
+	assert_eq(lan.hosts.size(), 0, "idle until scanning or advertising")
+	lan.free()
+	var source := FileAccess.get_file_as_string("res://game/sgmanalink/lan_discovery.gd")
+	assert_true(source.contains("func _process(_delta: float) -> void:\n\tpump()"), "the frame calls the same pump")
+
+
+func test_a_joined_table_hands_back_the_journal_for_the_log() -> void:
+	var ref = _referee()
+	var fake := FakeClient.new()
+	fake.host_deck = ref._load_deck("white_knights.deck", "--deck-a").deck
+	var deck: Dictionary = ref._load_deck("big_green.deck", "--deck").deck
+	var log_path := _scratch("referee_table.log")
+	var outcome: Dictionary = ref._referee_table(fake, deck, {"wait": 60, "turns": 200, "log": log_path}, null)
+	assert_false(outcome.has("error"), str(outcome))
+	assert_true(outcome.journal.size() > 10, "the journal the seat saw")
+	for line in outcome.journal:
+		assert_true(line is String)
+	assert_eq(_lines[0].log, log_path, "hello names the log")
+	assert_eq(ref._write_log(log_path, outcome.journal), "")
+	var written := FileAccess.get_file_as_string(log_path)
+	assert_eq(written, "\n".join(PackedStringArray(outcome.journal)) + "\n")
+	assert_true(String(ref._write_log("user://no_such_dir/x.log", ["a"])).begins_with("cannot write the log"))
+
+
+# ------------------------------------------------------ the kept game --
+
+## A client of the kept game's socket, held by the test: one peer, the
+## lines it has read, the token it was given.
+class KeptClient:
+	extends RefCounted
+	var peer := StreamPeerTCP.new()
+	var buffer := ""
+	var lines: Array = []
+	var sent: Array = []
+	var pumps := 0
+
+	func open(port: int) -> bool:
+		if peer.connect_to_host("127.0.0.1", port) != OK:
+			return false
+		var deadline := Time.get_ticks_msec() + 5000
+		while Time.get_ticks_msec() < deadline:
+			peer.poll()
+			if peer.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+				return true
+			if peer.get_status() != StreamPeerTCP.STATUS_CONNECTING:
+				return false
+			OS.delay_msec(5)
+		return false
+
+	func send(text: String) -> void:
+		sent.append(text)
+		peer.put_data((text + "\n").to_utf8_buffer())
+
+	func pump() -> void:
+		pumps += 1
+		peer.poll()
+		if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+			return
+		var pending := peer.get_available_bytes()
+		if pending > 0:
+			var chunk: Array = peer.get_data(pending)
+			buffer += PackedByteArray(chunk[1]).get_string_from_utf8()
+		while true:
+			var cut := buffer.find("\n")
+			if cut < 0:
+				break
+			lines.append(JSON.parse_string(buffer.substr(0, cut)))
+			buffer = buffer.substr(cut + 1)
+
+	## Pumps until [param count] lines have been read, or a second passed.
+	func wait_lines(count: int) -> void:
+		var deadline := Time.get_ticks_msec() + 1000
+		while lines.size() < count and Time.get_ticks_msec() < deadline:
+			pump()
+			OS.delay_msec(5)
+
+	func close() -> void:
+		peer.disconnect_from_host()
+
+
+func _handshake(ref, path: String) -> Dictionary:
+	assert_eq(ref._listen_start(path, 0), "")
+	assert_not_null(ref._server)
+	assert_false(FileAccess.file_exists(path + ".part"), "the part was renamed")
+	var record: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	assert_eq(_keys(record), ["pid", "port", "started", "token", "version"])
+	assert_eq(int(record.pid), OS.get_process_id())
+	assert_eq(record.version, LabConsole.version())
+	assert_eq(int(record.port), ref._server.get_local_port())
+	assert_true(int(record.port) > 0)
+	assert_eq(String(record.token).length(), 32)
+	return record
+
+
+func test_a_kept_game_serves_its_lines_on_the_loopback() -> void:
+	var path := _scratch("referee_keep.json")
+	var ref = _referee()
+	var record := _handshake(ref, path)
+	ref.decisions = 7
+	ref.last_hello = {"type": "hello", "tool": "referee", "seats": []}
+	ref._journal_sent[0] = 1
+	var view := {"mode": "priority", "actor": 0, "turn": 3, "step": "MAIN1",
+		"journal": [{"serial": 1, "text": "turn 1", "turn": 1}, {"serial": 2, "text": "turn 3", "turn": 3}]}
+	ref._decision(7, 0, "priority", view)
+	assert_true(ref._awaiting)
+	assert_eq(_lines.size(), 1, "the decision went to the writer")
+	assert_eq(_lines[0].view.journal.size(), 1, "the pipe's decision carries the fresh entry only")
+	# The first client: the token, then the replay — hello, resume, the
+	# decision with BOTH journal entries — then its answer is the line read.
+	var first := KeptClient.new()
+	assert_true(first.open(int(record.port)))
+	first.send(JSON.stringify({"token": record.token, "client": "test"}))
+	var tick := func() -> void:
+		first.pump()
+		if first.lines.size() >= 3 and first.sent.size() == 1:
+			first.send('{"op": "pass"}')
+	assert_eq(ref._read_socket(tick), '{"op": "pass"}')
+	assert_eq(first.lines.size(), 3)
+	assert_eq(first.lines[0].type, "hello")
+	assert_eq(first.lines[1].type, "resume")
+	assert_eq(_keys(first.lines[1]), ["awaiting", "decisions", "finished", "n", "refusals", "type"])
+	assert_eq(int(first.lines[1].decisions), 7)
+	assert_eq(int(first.lines[1].n), 7)
+	assert_true(bool(first.lines[1].awaiting))
+	assert_false(bool(first.lines[1].finished))
+	assert_eq(first.lines[2].type, "decision")
+	assert_eq(int(first.lines[2].n), 7)
+	assert_eq(first.lines[2].view.journal.size(), 2, "the replay carries the whole journal")
+	assert_eq(first.lines[2].options.mode, "priority")
+	assert_eq(_lines.size(), 1, "the replay is the socket's alone — the transcript has the decision once")
+	# A line emitted now reaches both the writer and the seated client.
+	ref._emit({"type": "refused", "n": 7})
+	first.wait_lines(4)
+	assert_eq(first.lines.size(), 4)
+	assert_eq(first.lines[3].type, "refused")
+	assert_eq(_lines.size(), 2)
+	# A knock without the token is dropped; the first client keeps its seat.
+	var impostor := KeptClient.new()
+	assert_true(impostor.open(int(record.port)))
+	impostor.send(JSON.stringify({"token": "nope", "client": "test"}))
+	# (A lambda's captured int is a copy: the count lives on the client.)
+	var later := func() -> void:
+		first.pump()
+		impostor.pump()
+		if impostor.pumps == 30:
+			first.send('{"op": "tap", "card": "c1"}')
+	assert_eq(ref._read_socket(later), '{"op": "tap", "card": "c1"}')
+	assert_null(ref._knock, "the impostor was dropped")
+	assert_eq(impostor.lines.size(), 0, "and told nothing")
+	# A second client with the token replaces the first and gets the replay.
+	var second := KeptClient.new()
+	assert_true(second.open(int(record.port)))
+	second.send(JSON.stringify({"token": record.token, "client": "test"}))
+	var again := func() -> void:
+		second.pump()
+		if second.lines.size() >= 3 and second.sent.size() == 1:
+			second.send('{"op": "concede"}')
+	assert_eq(ref._read_socket(again), '{"op": "concede"}')
+	assert_eq(second.lines.size(), 3)
+	assert_eq(second.lines[1].type, "resume")
+	assert_eq(second.lines[2].view.journal.size(), 2)
+	ref._emit({"type": "result"})
+	second.wait_lines(4)
+	assert_eq(second.lines.back().type, "result")
+	first.wait_lines(5)
+	assert_eq(first.lines.size(), 4, "the first client is off the socket — the result never reached it")
+	# Nobody connected and a decision awaited: idle concedes after --idle.
+	second.close()
+	ref._idle_ms = 300
+	var started := Time.get_ticks_msec()
+	assert_null(ref._read_socket(func() -> void: pass))
+	assert_eq(ref._eof_reason, "idle")
+	assert_true(Time.get_ticks_msec() - started >= 300)
+	assert_null(ref._peer)
+	ref._listen_stop()
+	assert_null(ref._server)
+	assert_true(FileAccess.file_exists(path), "the handshake file is the registry's to remove")
+	first.close()
+	impostor.close()
+
+
+func test_a_kept_duel_is_played_through_the_socket_to_a_result() -> void:
+	# The whole duel over the socket: a pilot answers from the lines it
+	# reads there, as the pipe's pilot does from `last_decision`.
+	var path := _scratch("referee_keep_duel.json")
+	var ref = _referee()
+	ref.reader = func() -> Variant: return null
+	var record := _handshake(ref, path)
+	ref._idle_ms = 20000  # a bug ends the test as `idle`, not a hung suite
+	var client := KeptClient.new()
+	assert_true(client.open(int(record.port)))
+	client.send(JSON.stringify({"token": record.token, "client": "test"}))
+	var pilot := Pilot.new()
+	var answered := {"lines": 0}
+	# The socket is written before the writer is called: by the time the
+	# collector sees a decision, the client can read it there and answer.
+	ref.writer = func(line: String) -> void:
+		_lines.append(JSON.parse_string(line))
+		for _i in 200:
+			client.pump()
+			if not client.lines.is_empty() and client.lines.back().get("type", "") == "decision" and client.lines.size() > int(answered.lines):
+				break
+			OS.delay_msec(5)
+		if not client.lines.is_empty() and client.lines.back().get("type", "") == "decision" and client.lines.size() > int(answered.lines):
+			answered.lines = client.lines.size()
+			var decision: Dictionary = client.lines.back()
+			client.send(JSON.stringify(pilot.choose(decision.view, int(decision.seat))))
+	var code: int = ref._play(ref._parse_args(PackedStringArray(DECKS + ["--seed", "7", "--turns", "40"])))
+	assert_eq(code, 0)
+	var result: Dictionary = _of("result")[0]
+	assert_true(result.reason in ["concluded", "limit"], result.reason)
+	assert_true(ref.decisions > 10)
+	assert_eq(ref.refusals, 0)
+	client.wait_lines(_lines.size() + 1)
+	assert_eq(client.lines[0].type, "resume", "the client connected before hello: the resume came first")
+	assert_eq(int(client.lines[0].decisions), 0)
+	assert_eq(client.lines[1].type, "hello")
+	assert_eq(client.lines.back().type, "result", "the result reached the socket")
+	assert_eq(client.lines.size(), _lines.size() + 1, "every line but the resume is on the transcript too")
+	ref._listen_stop()
+	client.close()
+
+
+func test_a_kept_duel_nobody_comes_back_for_is_conceded_idle() -> void:
+	var path := _scratch("referee_keep_idle.json")
+	var ref = _referee()
+	ref.reader = func() -> Variant: return null
+	assert_eq(ref._listen_start(path, 1), "")
+	assert_eq(ref._idle_ms, 1000)
+	var code: int = ref._play(ref._parse_args(PackedStringArray(DECKS + ["--seed", "7"])))
+	assert_eq(code, 0)
+	var result: Dictionary = _of("result")[0]
+	assert_eq(result.reason, "idle")
+	assert_eq(int(result.winner), 1, "the agent's seat conceded")
+	assert_eq(_of("decision").size(), 1)
+	assert_false(ref._awaiting)
+	ref._listen_stop()
 
 
 # ------------------------------------------------------- the doors --

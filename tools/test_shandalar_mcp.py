@@ -39,6 +39,18 @@ WHAT THIS HOLDS:
     `refused` with the same decision, `default` is the pilot's answer,
     concede ends the game with the `result`, `status` lists it, `stop`
     on a closed game is quiet, an unknown game is refused.
+  * PASS-UNTIL (2026-10-03): `referee_act`'s `until` passes priority
+    after the answer and stops where a player acts — the fake's `--seed
+    31` scripts two turns with every such place: an opponent's spell
+    on the stack, their declared attackers, a block, their end step
+    with an instant in hand; the named stops `main`, `end`, `turn`,
+    `play`; a refusal stops the loop. `view: "delta"` shows what moved.
+  * THE KEPT GAME: `keep` makes the fake referee listen on the loopback
+    (the real one's handshake file, token and replay in miniature); the
+    server's shutdown lets it go, another server's `referee_resume`
+    takes it up with the whole journal; a game that ended alone is told
+    from its transcript; one whose referee is gone is a `keep` refusal
+    and is forgotten. `referee_join` by `table` name, with a `log`.
   * THE PINS: the door and the release dispatcher know the verb, the
     release ships the script, AGENTS.md and the maps name it.
 """
@@ -46,6 +58,7 @@ WHAT THIS HOLDS:
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -132,18 +145,118 @@ if verb in ("lab", "autodeck"):
     (o / "decklist.txt").write_text("d1.deck\nd2.deck\n"); (o / "d1.deck").write_text("4 Lightning Bolt\n")
     (o / "d2.deck").write_text("4 Lightning Bolt\n"); sys.exit(0)
 if verb == "referee":
+    import select, socket, secrets, time
     if "--dry-run" in rest:
         emit({"tool": "referee", "dry_run": True, "argv": rest})
     if "--deck-a" in rest and rest[rest.index("--deck-a") + 1] == "missing.deck":
         refuse("referee", "deck file not found: 'missing.deck'", path="missing.deck")
-    joined = "--join" in rest
-    hello = {"type": "hello", "tool": "referee", "protocol": 1, "version": "9.9.9", "seed": 7,
+    def opt(flag, default=None):
+        return rest[rest.index(flag) + 1] if flag in rest else default
+    joined = "--join" in rest or "--table" in rest
+    hello = {"type": "hello", "tool": "referee", "protocol": 1, "version": "9.9.9", "seed": int(opt("--seed", "7")),
              "seats": [{"seat": 0, "player": "agent", "name": "Agent", "deck": "A"}, {"seat": 1, "player": "wizard", "name": "Wizard", "deck": "B"}]}
     if joined:
         hello["table"] = {"host": "Someone"}
-    sys.stdout.write(json.dumps(hello) + "\n"); sys.stdout.flush()
-    if joined and "--wait" in rest and rest[rest.index("--wait") + 1] == "77":
-        import time; time.sleep(3)
+        if "--table" in rest:
+            hello["table"]["name"] = opt("--table")
+        if "--log" in rest:
+            hello["log"] = opt("--log")
+
+    class Keep:
+        """The kept game of the real referee, in miniature: a loopback
+        server, the handshake file, the token, the replay for a client
+        that comes back, the idle clock (capped so a forgotten fake ends)."""
+        def __init__(self, path, idle):
+            self.srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.srv.bind(("127.0.0.1", 0)); self.srv.listen(4)
+            self.token = secrets.token_hex(16)
+            self.peer = None; self.buf = b""
+            self.idle = idle; self.idle_since = time.monotonic()
+            self.awaiting = False; self.finished = False
+            self.hello = None; self.decision = None; self.whole = []
+            self.decisions = 0; self.refusals = 0
+            part = Path(path + ".part")
+            part.write_text(json.dumps({"port": self.srv.getsockname()[1], "token": self.token, "pid": os.getpid(),
+                                        "version": "9.9.9", "started": "now"}))
+            os.replace(part, path)
+        def send(self, text):
+            if self.peer is not None:
+                try: self.peer.sendall((text + "\n").encode("utf-8"))
+                except OSError: self.drop()
+        def drop(self):
+            try: self.peer.close()
+            except OSError: pass
+            self.peer = None; self.buf = b""; self.idle_since = time.monotonic()
+        def seat(self):
+            conn, _ = self.srv.accept()
+            conn.settimeout(5)
+            knock = b""
+            try:
+                while b"\n" not in knock:
+                    chunk = conn.recv(4096)
+                    if not chunk: break
+                    knock += chunk
+            except OSError:
+                knock = b""
+            first, _, rest_bytes = knock.partition(b"\n")
+            try: parsed = json.loads(first or b"{}")
+            except ValueError: parsed = {}
+            if not isinstance(parsed, dict) or parsed.get("token") != self.token:
+                sys.stderr.write("fake referee: a connection without the token was dropped\n"); conn.close(); return
+            if self.peer is not None: self.drop()
+            conn.settimeout(None)
+            self.peer = conn; self.buf = rest_bytes
+            if self.hello is not None: self.send(json.dumps(self.hello))
+            self.send(json.dumps({"type": "resume", "decisions": self.decisions, "refusals": self.refusals,
+                                  "awaiting": self.awaiting, "n": self.decision["n"] if self.awaiting else 0,
+                                  "finished": self.finished}))
+            if self.awaiting:
+                again = dict(self.decision); v = dict(again["view"]); v["journal"] = list(self.whole); again["view"] = v
+                self.send(json.dumps(again))
+        def read_line(self):
+            while True:
+                if b"\n" in self.buf:
+                    line, self.buf = self.buf.split(b"\n", 1)
+                    return line.decode("utf-8", "replace")
+                watch = [self.srv] + ([self.peer] if self.peer is not None else [])
+                ready, _, _ = select.select(watch, [], [], 0.2)
+                if self.srv in ready: self.seat()
+                if self.peer is not None and self.peer in ready:
+                    try: data = self.peer.recv(65536)
+                    except OSError: data = b""
+                    if not data: self.drop()
+                    else: self.buf += data
+                if self.peer is None and self.awaiting and time.monotonic() - self.idle_since >= self.idle:
+                    return None
+
+    keep = Keep(opt("--listen"), min(int(opt("--idle", "1800")), 30)) if "--listen" in rest else None
+    def out(rec):
+        text = json.dumps(rec)
+        if keep is not None:
+            kind = rec.get("type")
+            if kind == "hello": keep.hello = rec
+            elif kind == "decision":
+                keep.decision = rec; keep.decisions = rec["n"] + 1
+                for entry in rec["view"].get("journal", []):
+                    if entry not in keep.whole: keep.whole.append(entry)
+            elif kind == "refused": keep.refusals += 1
+            keep.send(text)
+            if kind == "decision":
+                keep.awaiting = True
+                if keep.peer is None: keep.idle_since = time.monotonic()
+            elif kind == "result": keep.finished = True
+        sys.stdout.write(text + "\n"); sys.stdout.flush()
+    def next_line():
+        if keep is not None:
+            line = keep.read_line()
+            return "idle" if line is None else line
+        line = sys.stdin.readline()
+        return "eof" if line == "" else line
+    # A joined table says hello when the duel starts — `--wait 77` is
+    # the test's slow host.
+    if joined and "--wait" in rest and opt("--wait") == "77":
+        time.sleep(3)
+    out(hello)
     view = {"turn": 1, "step": "UPKEEP", "active": 0, "actor": 0, "mode": "opening", "stack": [],
             "hand": [{"id": "c1", "name": "Mountain", "land": True}, {"id": "c2", "name": "Lightning Bolt", "rules": "3 damage"}],
             "players": [{"seat": 0, "deck_name": "A", "life": 20, "hand_count": 7, "library_count": 53, "battlefield": [], "graveyard": [], "exile": []},
@@ -155,35 +268,81 @@ if verb == "referee":
         {"mode": "priority", "options": {"mode": "priority", "concede": True, "pass": {"op": "pass"}, "play": {"op": "play", "lands": []}, "prepare": {"op": "prepare", "casts": [{"card": "c2", "name": "Lightning Bolt", "x": False}], "abilities": []}}},
         {"mode": "priority", "options": {"mode": "priority", "concede": True, "pass": {"op": "pass"}, "play": {"op": "play", "lands": []}, "prepare": {"op": "prepare", "casts": [], "abilities": []}}},
     ]
+    step = ("MAIN1", "MAIN1", "MAIN1", "MAIN2")
+    # `--seed 31`: a scripted stretch of two turns for the pass-until
+    # loop — every place a player reacts, in order (see stop_reason).
+    SEQ31 = [
+        {"turn": 1, "step": "UPKEEP", "mode": "opening", "active": 0},
+        {"turn": 1, "step": "MAIN1", "mode": "priority", "active": 0, "lands": True},
+        {"turn": 1, "step": "DECLARE_BLOCKERS", "mode": "priority", "active": 0, "played": True},
+        {"turn": 1, "step": "END", "mode": "priority", "active": 0, "played": True},
+        {"turn": 2, "step": "UPKEEP", "mode": "priority", "active": 1, "respond": True, "played": True},
+        {"turn": 2, "step": "MAIN1", "mode": "priority", "active": 1, "respond": True, "played": True,
+         "stack": [{"id": "c8", "name": "Grizzly Bears", "controller": 1}]},
+        {"turn": 2, "step": "COMBAT_BEGIN", "mode": "priority", "active": 1, "played": True},
+        {"turn": 2, "step": "DECLARE_ATTACKERS", "mode": "priority", "active": 1, "respond": True, "played": True, "attacking": True},
+        {"turn": 2, "step": "DECLARE_BLOCKERS", "mode": "block", "active": 1, "played": True, "attacking": True},
+        {"turn": 2, "step": "END", "mode": "priority", "active": 1, "respond": True, "played": True, "life": 18},
+        {"turn": 3, "step": "MAIN1", "mode": "priority", "active": 0, "played": True, "life": 18},
+        {"turn": 3, "step": "MAIN2", "mode": "priority", "active": 0, "played": True, "life": 18},
+    ]
+    scripted = hello["seed"] == 31
     n = 0
     refusals = 0
-    step = ("MAIN1", "MAIN1", "MAIN1", "MAIN2")
     def decision():
-        v = dict(view); v["step"] = step[min(n, 3)]; v["mode"] = decisions[min(n, 3)]["mode"]
-        rec = {"type": "decision", "n": n, "seat": 0, "turn": 1, "step": v["step"], "mode": v["mode"],
-               "options": decisions[min(n, 3)]["options"], "view": v}
-        sys.stdout.write(json.dumps(rec) + "\n"); sys.stdout.flush()
+        if scripted:
+            if n >= len(SEQ31):
+                return False
+            row = SEQ31[n]
+            v = json.loads(json.dumps(view))
+            v["turn"] = row["turn"]; v["step"] = row["step"]; v["mode"] = row["mode"]; v["active"] = row["active"]; v["actor"] = 0
+            v["stack"] = row.get("stack", [])
+            if row.get("played"):
+                v["hand"] = [v["hand"][1]]; v["players"][0]["battlefield"] = [{"id": "c1", "name": "Mountain", "land": True}]
+            v["players"][0]["life"] = row.get("life", 20)
+            if row.get("attacking"):
+                v["players"][1]["battlefield"][0]["attacking"] = True
+            v["journal"] = [{"text": "n%d: %s" % (n, row["step"]), "turn": row["turn"], "serial": n}]
+            if row["mode"] == "opening":
+                options = decisions[0]["options"]
+            elif row["mode"] == "block":
+                options = {"mode": "block", "concede": True, "block": {"op": "block", "attackers": [{"card": "c9", "name": "Grizzly Bears"}], "blockers": []}}
+            else:
+                options = {"mode": "priority", "concede": True, "pass": {"op": "pass"}, "respond": bool(row.get("respond")),
+                           "play": {"op": "play", "lands": [{"card": "c1", "name": "Mountain"}] if row.get("lands") else []},
+                           "prepare": {"op": "prepare", "casts": [{"card": "c2", "name": "Lightning Bolt", "x": False}] if row.get("respond") else [], "abilities": []}}
+            rec = {"type": "decision", "n": n, "seat": 0, "turn": row["turn"], "step": row["step"], "mode": row["mode"],
+                   "options": options, "view": v}
+        else:
+            v = dict(view); v["step"] = step[min(n, 3)]; v["mode"] = decisions[min(n, 3)]["mode"]
+            rec = {"type": "decision", "n": n, "seat": 0, "turn": 1, "step": v["step"], "mode": v["mode"],
+                   "options": decisions[min(n, 3)]["options"], "view": v}
+        out(rec)
+        return True
+    def finish(winner, reason):
+        if "--log" in rest:
+            Path(opt("--log")).write_text("".join("%s\n" % e["text"] for e in (keep.whole if keep else [])) or "the fake duel's log\n")
+        out({"type": "result", "winner": winner, "reason": reason, "turns": 1, "decisions": n + (1 if reason == "concede" else 0), "refusals": refusals})
+        sys.exit(0)
     decision()
-    for line in sys.stdin:
+    while True:
+        line = next_line()
+        if line in ("eof", "idle"):
+            finish(1, line)
         try:
             action = json.loads(line)
         except ValueError:
             action = {}
         op = action.get("op")
         if op == "concede":
-            sys.stdout.write(json.dumps({"type": "result", "winner": 1, "reason": "concede", "turns": 1, "decisions": n + 1, "refusals": refusals}) + "\n"); sys.stdout.flush()
-            sys.exit(0)
+            finish(1, "concede")
         if op not in ("keep", "order", "pass", "play", "prepare", "autopay", "submit", "cancel", "attack", "block"):
             refusals += 1
-            sys.stdout.write(json.dumps({"type": "refused", "n": n, "seat": 0, "reason": "unknown op '%s'" % op, "action": action, "left": 19}) + "\n"); sys.stdout.flush()
+            out({"type": "refused", "n": n, "seat": 0, "reason": "unknown op '%s'" % op, "action": action, "left": 19})
             decision(); continue
         n += 1
-        if n >= 6:
-            sys.stdout.write(json.dumps({"type": "result", "winner": 0, "reason": "concluded", "turns": 1, "decisions": n, "refusals": refusals}) + "\n"); sys.stdout.flush()
-            sys.exit(0)
-        decision()
-    sys.stdout.write(json.dumps({"type": "result", "winner": 1, "reason": "eof", "turns": 1, "decisions": n, "refusals": refusals}) + "\n"); sys.stdout.flush()
-    sys.exit(0)
+        if (not scripted and n >= 6) or not decision():
+            finish(0, "concluded")
 refuse("shandalar", "unknown verb '%s'" % verb, kind="verb")
 '''
 
@@ -372,9 +531,18 @@ class FakeDoorTest(unittest.TestCase):
         names = [t["name"] for t in tools]
         for must in ("status", "contract", "manual", "packs", "cards", "check_deck", "list_decks", "read_deck",
                      "write_deck", "convert_deck", "autodeck", "lab", "lab_resume", "read_run", "lab_next",
-                     "referee_start", "referee_join", "referee_act", "referee_autoplay", "referee_wait", "referee_stop"):
+                     "referee_start", "referee_join", "referee_act", "referee_autoplay", "referee_wait", "referee_stop",
+                     "referee_resume"):
             self.assertIn(must, names)
         self.assertEqual(len(names), len(set(names)))
+        by_name = {t["name"]: t for t in tools}
+        self.assertIn("until", by_name["referee_act"]["inputSchema"]["properties"])
+        for key in ("invitation", "table", "deck", "log", "keep", "view"):
+            self.assertIn(key, by_name["referee_join"]["inputSchema"]["properties"], key)
+        self.assertEqual(by_name["referee_join"]["inputSchema"]["required"], ["deck"])
+        self.assertIn("keep", by_name["referee_start"]["inputSchema"]["properties"])
+        self.assertIn("delta", by_name["referee_start"]["inputSchema"]["properties"]["view"]["description"])
+        self.assertIn("referee_resume", by_name["referee_resume"]["description"] + by_name["referee_start"]["inputSchema"]["properties"]["keep"]["description"])
         for tool in tools:
             self.assertGreaterEqual(len(tool["description"]), 40, tool["name"])
             schema = tool["inputSchema"]
@@ -730,12 +898,134 @@ class FakeDoorTest(unittest.TestCase):
     def test_join_waits(self):
         opened = self.client.payload("referee_join", {"invitation": "sglan1:abc", "deck": "a.deck", "wait": 77, "timeout": 0.5})
         self.assertTrue(opened["pending"])
-        self.assertEqual(opened["hello"]["table"], {"host": "Someone"})
+        self.assertIsNone(opened["hello"])
         game = opened["game"]
         first = self.client.payload("referee_wait", {"game": game, "timeout": 15})
         self.assertEqual(first["decision"]["n"], 0)
+        self.assertEqual(first["hello"]["table"], {"host": "Someone"})
+        # a joined table is kept by default: the referee listens, the
+        # record is on disk, and the stop is a concession
+        record = json.loads((self.workspace / "games" / (game + ".json")).read_text(encoding="utf-8"))
+        self.assertEqual(record["game"], game)
+        keep = str(self.workspace / "games" / (game + ".keep.json"))
+        self.assertIn(["referee", "--join", "sglan1:abc", "--deck", "a.deck", "--wait", "77",
+                       "--listen", keep, "--idle", str(mcp.KEEP_IDLE)], self.calls())
+        self.assertTrue(json.loads(Path(keep).read_text(encoding="utf-8"))["port"] > 0)
+        stopped = self.client.payload("referee_stop", {"game": game})
+        self.assertEqual(stopped["result"]["reason"], "concede")
+        self.assertTrue(stopped["kept"])
+        self.assertFalse((self.workspace / "games" / (game + ".json")).is_file())
+        transcript = (self.workspace / "games" / (game + ".lines")).read_text(encoding="utf-8")
+        self.assertIn('"type": "result"', transcript)
+
+    def test_join_by_table_name_with_a_log(self):
+        opened = self.client.payload("referee_join", {"table": "Kitchen", "deck": "a.deck", "log": "kitchen.log",
+                                                      "keep": False, "timeout": 15})
+        game = opened["game"]
+        self.assertEqual(opened["hello"]["table"], {"host": "Someone", "name": "Kitchen"})
+        self.assertEqual(opened["decision"]["n"], 0)
+        log = self.home / "kitchen.log"
+        self.assertEqual(opened["hello"]["log"], str(log))
+        self.assertIn(["referee", "--table", "Kitchen", "--deck", "a.deck", "--log", str(log)], self.calls())
+        stopped = self.client.payload("referee_stop", {"game": game})
+        self.assertEqual(stopped["result"]["reason"], "eof")
+        self.assertNotIn("kept", stopped)
+        self.assertTrue(log.is_file())
+        both = self.client.call("referee_join", {"invitation": "sglan1:abc", "table": "Kitchen", "deck": "a.deck"})
+        self.assertTrue(both["isError"])
+        self.assertEqual(both["structuredContent"]["error"]["flag"], "table")
+        neither = self.client.call("referee_join", {"deck": "a.deck"})
+        self.assertEqual(neither["structuredContent"]["error"]["flag"], "invitation")
+
+    def test_pass_until_stops_where_a_player_acts(self):
+        opened = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 31})
+        game = opened["game"]
+        self.assertEqual(opened["decision"]["mode"], "opening")
+        # a bad `until` is refused before the answer is sent
+        bad = self.client.call("referee_act", {"game": game, "action": "default", "until": "ende"})
+        self.assertEqual(bad["structuredContent"]["error"]["flag"], "until")
+        self.assertEqual(bad["structuredContent"]["error"]["suggestions"], ["end"])
+        # `play`: the first main phase with something to do (a land in hand)
+        main = self.client.payload("referee_act", {"game": game, "action": "default", "until": "play"})
+        self.assertEqual(main["action"], {"op": "order", "play": True, "seat": 0})
+        self.assertEqual(main["stop"], "your main phase, with something to play")
+        self.assertEqual((main["passed"], main["until"], main["decision"]["n"]), (0, "play", 1))
+        # a refused answer stops the loop with the same decision
+        wrong = self.client.payload("referee_act", {"game": game, "action": {"op": "dance"}, "until": "end"})
+        self.assertEqual(wrong["stop"], "an answer was refused")
+        self.assertEqual(wrong["decision"]["n"], 1)
+        self.assertEqual(wrong["passed"], 0)
+        # `end`: own declare-blockers with nothing to respond with is passed; the
+        # end step stops, and the journal of the passed decision is in front
+        end = self.client.payload("referee_act", {"game": game, "action": {"op": "play", "card": "c1"}, "until": "end"})
+        self.assertEqual(end["stop"], "the end step")
+        self.assertEqual((end["passed"], end["decision"]["n"], end["decision"]["step"]), (1, 3, "END"))
+        self.assertEqual(end["decision"]["brief"]["journal"], ["n2: DECLARE_BLOCKERS", "n3: END"])
+        self.assertEqual(end["decisions"], 4)
+        # `turn`: the opponent's upkeep is passed; their spell on the stack stops
+        stack = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})
+        self.assertEqual(stack["stop"], "the opponent's Grizzly Bears is on the stack and you can respond")
+        self.assertEqual((stack["passed"], stack["decision"]["n"]), (1, 5))
+        self.assertEqual(stack["decision"]["brief"]["journal"], ["n4: UPKEEP", "n5: MAIN1"])
+        # the beginning of their combat is passed; declared attackers stop
+        attackers = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})
+        self.assertEqual(attackers["stop"], "their declare attackers: you can respond")
+        self.assertEqual((attackers["passed"], attackers["decision"]["n"]), (1, 7))
+        # a block is never passed
+        block = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})
+        self.assertEqual(block["stop"], "decision: block")
+        self.assertEqual((block["passed"], block["decision"]["n"]), (0, 8))
+        # their end step with an instant in hand stops
+        their_end = self.client.payload("referee_act", {"game": game, "action": {"op": "block", "pairs": []}, "until": "turn"})
+        self.assertEqual(their_end["stop"], "their end: you can respond")
+        self.assertEqual(their_end["decision"]["n"], 9)
+        # the own turn, then the own main phase
+        turn = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})
+        self.assertEqual((turn["stop"], turn["decision"]["n"], turn["decision"]["turn"]), ("your turn", 10, 3))
+        main2 = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "main"})
+        self.assertEqual((main2["stop"], main2["decision"]["step"]), ("your main phase", "MAIN2"))
+        done = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})
+        self.assertEqual(done["result"]["reason"], "concluded")
+        self.assertNotIn("stop", done)
+        self.assertEqual(done["passed"], 0)
+
+    def test_the_delta_view_shows_what_moved(self):
+        opened = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 31, "view": "delta"})
+        game = opened["game"]
+        first = opened["decision"]["delta"]
+        self.assertTrue(first["baseline"])
+        self.assertEqual(first["players"][0]["life"], 20)
+        self.assertNotIn("brief", opened["decision"])
+        # nothing moved between the opening and the first main phase
+        same = self.client.payload("referee_act", {"game": game, "action": "default"})["decision"]["delta"]
+        self.assertNotIn("baseline", same)
+        self.assertNotIn("players", same)
+        self.assertEqual(same["castable"], ["Lightning Bolt"])
+        self.assertEqual(same["journal"], ["n1: MAIN1"])
+        # the land left the hand for the board
+        played = self.client.payload("referee_act", {"game": game, "action": {"op": "play", "card": "c1"}, "until": "end"})["decision"]["delta"]
+        self.assertEqual(played["hand_gone"], ["Mountain (c1)"])
+        self.assertEqual(played["players"], [{"seat": 0, "battlefield_added": [{"id": "c1", "name": "Mountain", "land": True}]}])
+        self.assertEqual(played["journal"], ["n2: DECLARE_BLOCKERS", "n3: END"])
+        # the opponent's spell shows on the stack
+        stack = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})["decision"]["delta"]
+        self.assertEqual(stack["stack"][0]["name"], "Grizzly Bears")
+        self.assertNotIn("players", stack)
+        # their attacker changed state; the block decision itself carries the same board
+        attackers = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})["decision"]["delta"]
+        self.assertEqual(attackers["players"], [{"seat": 1, "battlefield_changed": [{"id": "c9", "name": "Grizzly Bears", "pt": "2/2", "attacking": True}]}])
+        block = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn"})
+        self.assertEqual(block["decision"]["mode"], "block")
+        self.assertNotIn("players", block["decision"]["delta"])
+        # the life that went, and the attacker that is one no more
+        hit = self.client.payload("referee_act", {"game": game, "action": {"op": "block", "pairs": []}, "until": "turn"})["decision"]["delta"]
+        self.assertEqual(hit["players"][0], {"seat": 0, "life": 18, "life_was": 20})
+        self.assertEqual(hit["players"][1]["battlefield_changed"], [{"id": "c9", "name": "Grizzly Bears", "pt": "2/2"}])
+        # the views can be switched on the way; `full` carries the wire's line
+        full = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "turn", "view": "full"})
+        self.assertIn("view", full["decision"])
+        self.assertNotIn("delta", full["decision"])
         self.client.payload("referee_stop", {"game": game})
-        self.assertIn(["referee", "--join", "sglan1:abc", "--deck", "a.deck", "--wait", "77"], self.calls())
 
 
 class WindowsDoorTest(unittest.TestCase):
@@ -871,9 +1161,154 @@ class ShutdownTest(unittest.TestCase):
             self.assertTrue(log.is_file())
 
 
+class KeptGameTest(unittest.TestCase):
+    """A kept game: the referee listens on the loopback and outlives the
+    server; another server takes it up with the whole journal; one that
+    ended alone is told from its transcript; one whose referee is gone
+    is a clear refusal and is forgotten."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="shandalar-mcp-kept-")
+        self.home = Path(self.tmp.name)
+        self.door = self.home / "shandalar.sh"
+        self.door.write_text(FAKE_DOOR, encoding="utf-8")
+        self.door.chmod(0o755)
+        self.workspace = self.home / "ws"
+        self.games = self.workspace / "games"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def open_client(self) -> Client:
+        client = Client(self.door, self.workspace)
+        client.ask("initialize", {"protocolVersion": "2025-06-18"})
+        return client
+
+    @staticmethod
+    def alive(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        # a child of a server that closed is reaped by nobody until it is waited for
+        try:
+            return os.waitpid(pid, os.WNOHANG) == (0, 0)
+        except ChildProcessError:
+            return True
+
+    def test_a_kept_game_survives_the_server(self):
+        client = self.open_client()
+        opened = client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "keep": True})
+        game = opened["game"]
+        self.assertEqual(opened["decision"]["n"], 0)
+        self.assertEqual(opened["hello"]["seed"], 7)
+        record = json.loads((self.games / (game + ".json")).read_text(encoding="utf-8"))
+        self.assertEqual(record["game"], game)
+        self.assertEqual(record["command"][-4:-2], ["--listen", str(self.games / (game + ".keep.json"))])
+        handshake = json.loads((self.games / (game + ".keep.json")).read_text(encoding="utf-8"))
+        pid = int(handshake["pid"])
+        self.assertEqual(len(handshake["token"]), 32)
+        first = client.payload("referee_act", {"game": game, "action": "default"})
+        self.assertEqual(first["decision"]["n"], 1)
+        row = [g for g in client.payload("status")["games"] if g["game"] == game][0]
+        self.assertTrue(row["kept"])
+        listing = client.payload("referee_resume", {})
+        self.assertEqual(listing["kept"], [])
+        self.assertEqual(listing["games"][0]["game"], game)
+        # the server goes; the referee stays, listening
+        stderr = client.close()
+        self.assertEqual(client.proc.returncode, 0, stderr)
+        self.assertTrue(self.alive(pid))
+        again = self.open_client()
+        listing = again.payload("referee_resume", {})
+        self.assertEqual([k["game"] for k in listing["kept"]], [game])
+        self.assertEqual(listing["kept"][0]["note"], "referee_resume takes it up")
+        self.assertEqual(listing["games"], [])
+        none = again.call("referee_resume", {"game": "g9"})
+        self.assertTrue(none["isError"])
+        self.assertEqual(none["structuredContent"]["error"]["kept"], [game])
+        resumed = again.payload("referee_resume", {"game": game, "view": "brief"})
+        self.assertTrue(resumed["resumed"])
+        self.assertEqual(resumed["hello"]["seed"], 7)
+        self.assertEqual(resumed["decision"]["n"], 1)
+        self.assertEqual(resumed["decisions"], 2)
+        self.assertEqual(resumed["decision"]["brief"]["journal"], ["Toss: seat 0 plays first"])
+        # taken up: the game is this server's now, and plays on
+        same = again.payload("referee_resume", {"game": game})
+        self.assertEqual(same["decision"]["n"], 1)
+        self.assertNotIn("resumed", same)
+        passed = again.payload("referee_act", {"game": game, "action": {"op": "pass"}})
+        self.assertEqual(passed["decision"]["n"], 2)
+        self.assertEqual(passed["decisions"], 3)
+        stopped = again.payload("referee_stop", {"game": game})
+        self.assertEqual(stopped["result"]["reason"], "concede")
+        self.assertEqual(stopped["result"]["decisions"], 3)
+        self.assertFalse((self.games / (game + ".json")).is_file())
+        # still this server's game, finished; another server knows it no more
+        gone = again.payload("referee_resume", {"game": game})
+        self.assertEqual(gone["result"]["reason"], "concede")
+        self.assertNotIn("decision", gone)
+        again.close()
+        third = self.open_client()
+        none = third.call("referee_resume", {"game": game})
+        self.assertTrue(none["isError"])
+        self.assertIn("no kept game", none["structuredContent"]["error"]["message"])
+        self.assertEqual(third.payload("referee_start", {"deck_a": "a", "deck_b": "b"})["game"], "g2")
+        third.close()
+        deadline = time.time() + 10
+        while self.alive(pid) and time.time() < deadline:
+            time.sleep(0.1)
+        self.assertFalse(self.alive(pid))
+        lines = (self.games / (game + ".lines")).read_text(encoding="utf-8").splitlines()
+        self.assertEqual([json.loads(l)["type"] for l in lines], ["hello", "decision", "decision", "decision", "result"])
+
+    def test_a_kept_game_that_ended_alone_or_lost_its_referee_is_told(self):
+        self.games.mkdir(parents=True)
+        def record(ident: str, lines: list) -> dict:
+            rec = {"game": ident, "argv": ["--deck-a", "a", "--deck-b", "b"], "view": "brief",
+                   "keep": str(self.games / f"{ident}.keep.json"), "lines": str(self.games / f"{ident}.lines"),
+                   "stderr": str(self.games / f"{ident}.stderr"), "started": 1.0,
+                   "command": [str(self.door), "referee", "--deck-a", "a", "--deck-b", "b"]}
+            (self.games / f"{ident}.json").write_text(json.dumps(rec), encoding="utf-8")
+            (self.games / f"{ident}.lines").write_text("".join(json.dumps(l) + "\n" for l in lines), encoding="utf-8")
+            return rec
+        record("g7", [{"type": "hello", "seed": 1}, {"type": "decision", "n": 0},
+                      {"type": "result", "winner": 1, "reason": "idle", "decisions": 1, "refusals": 0}])
+        record("g8", [{"type": "hello", "seed": 2}, {"type": "decision", "n": 0}])
+        stale = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        stale.bind(("127.0.0.1", 0))
+        port = stale.getsockname()[1]
+        stale.close()
+        (self.games / "g8.keep.json").write_text(json.dumps({"port": port, "token": "x" * 32, "pid": 1, "version": "9.9.9"}), encoding="utf-8")
+        (self.games / "g9.json").write_text("not json", encoding="utf-8")
+        client = self.open_client()
+        listing = client.payload("referee_resume", {})
+        self.assertEqual([(k["game"], k.get("result", {}).get("reason"), k.get("note")) for k in listing["kept"]],
+                         [("g7", "idle", None), ("g8", None, "referee_resume takes it up")])
+        ended = client.payload("referee_resume", {"game": "g7"})
+        self.assertEqual(ended["result"]["reason"], "idle")
+        self.assertEqual(ended["lines"], str(self.games / "g7.lines"))
+        self.assertFalse((self.games / "g7.json").is_file())
+        self.assertTrue((self.games / "g7.lines").is_file())
+        started = time.time()
+        lost = client.call("referee_resume", {"game": "g8"})
+        self.assertTrue(lost["isError"])
+        error = lost["structuredContent"]["error"]
+        self.assertEqual(error["kind"], "keep")
+        self.assertIn("did not take the connection", error["message"])
+        self.assertEqual(error["lines"], str(self.games / "g8.lines"))
+        self.assertLess(time.time() - started, mcp.KEEP_RESUME + 5)
+        self.assertFalse((self.games / "g8.json").is_file())
+        self.assertEqual(client.payload("referee_resume", {})["kept"], [])
+        # a new game is numbered past every file in the folder — nothing is written over
+        opened = client.payload("referee_start", {"deck_a": "a", "deck_b": "b"})
+        self.assertEqual(opened["game"], "g10")
+        client.close()
+
+
 class UnitTest(unittest.TestCase):
     """The pieces without a process: the deck reader, the brief view,
-    the pilot."""
+    the pilot, the pass-until stops, the delta."""
 
     def test_parse_deck(self):
         parsed = mcp.parse_deck("# a comment\n// NAME: Old\nname: New\n4x Lightning Bolt\n20 Mountain\nSB: 3 Pyroblast\nnonsense\n")
@@ -941,6 +1376,80 @@ class UnitTest(unittest.TestCase):
         self.assertEqual(mcp.default_answer(dict({"mode": "attack", "n": 16, "options": {"attack": {"attackable": [{"card": "c1"}]}}, "view": {}}), struck), {"op": "attack", "cards": []})
         self.assertEqual(mcp.default_answer(dict(announce, n=17), struck)["op"], "autopay")
         self.assertEqual(mcp.default_answer(dict(announce, n=16), {"strikes": {16: 3}}), {"op": "concede"})
+
+    def test_stop_reason_names_where_a_player_acts(self):
+        def decision(step, active=0, respond=False, stack=None, mode="priority", attacking=False, turn=2, **options):
+            view = {"turn": turn, "step": step, "active": active, "stack": stack or [],
+                    "players": [{"seat": 0, "battlefield": []},
+                                {"seat": 1, "battlefield": [{"id": "c9", "name": "Bears", "attacking": attacking}]}]}
+            opts = {"mode": mode, "pass": {"op": "pass"}, "respond": respond, "play": {"lands": []}, "prepare": {"casts": []}}
+            opts.update(options)
+            return {"n": 1, "seat": 0, "mode": mode, "turn": turn, "step": step, "options": opts, "view": view}
+        origin = {"turn": 2, "step": "MAIN1"}
+        stop = mcp.stop_reason
+        # never passed, whatever `until` says
+        for until in mcp.UNTIL:
+            self.assertEqual(stop(decision("DECLARE_BLOCKERS", mode="block"), until, origin), "decision: block")
+            self.assertEqual(stop(decision("MAIN1", announcement={"slots": []}), until, origin), "a cast is in progress")
+            self.assertEqual(stop(decision("MAIN1", active=1, respond=True, stack=[{"name": "Terror", "controller": 1}]), until, origin),
+                             "the opponent's Terror is on the stack and you can respond")
+            self.assertEqual(stop(decision("END", active=1, respond=True), until, origin), "their end: you can respond")
+            self.assertEqual(stop(decision("DECLARE_ATTACKERS", active=1, respond=True, attacking=True), until, origin),
+                             "their declare attackers: you can respond")
+            self.assertEqual(stop(decision("DECLARE_BLOCKERS", respond=True), until, origin), "your declare blockers: you can respond")
+        # the seat's own spell on the stack, their beginning of combat, attackers not yet
+        # declared, a window with nothing to respond with: passed
+        self.assertEqual(stop(decision("MAIN1", active=1, respond=True, stack=[{"name": "Bolt", "controller": 0}]), "turn", origin), "")
+        self.assertEqual(stop(decision("COMBAT_BEGIN", active=1, respond=True), "turn", origin), "")
+        self.assertEqual(stop(decision("DECLARE_ATTACKERS", active=1, respond=True), "turn", origin), "")
+        self.assertEqual(stop(decision("END", active=1), "turn", origin), "")
+        self.assertEqual(stop(decision("DECLARE_BLOCKERS"), "end", origin), "")
+        # the named stops
+        self.assertEqual(stop(decision("MAIN2"), "main", origin), "your main phase")
+        self.assertEqual(stop(decision("MAIN1", stack=[{"name": "Bolt", "controller": 0}]), "main", origin), "")
+        self.assertEqual(stop(decision("MAIN1", active=1), "main", origin), "")
+        self.assertEqual(stop(decision("MAIN2"), "turn", origin), "")
+        self.assertEqual(stop(decision("MAIN1", turn=3), "turn", origin), "your turn")
+        self.assertEqual(stop(decision("END"), "end", origin), "the end step")
+        self.assertEqual(stop(decision("UPKEEP", active=1, turn=3), "end", origin), "the next turn began")
+        self.assertEqual(stop(decision("MAIN2"), "play", origin), "")
+        self.assertEqual(stop(decision("MAIN2", play={"lands": [{"card": "c1"}]}), "play", origin), "your main phase, with something to play")
+        self.assertEqual(stop(decision("MAIN2", prepare={"casts": [{"card": "c2"}]}), "play", origin), "your main phase, with something to play")
+        self.assertEqual(stop(decision("MAIN2", special={"specials": [{"id": "s"}]}), "play", origin), "your main phase, with something to play")
+
+    def test_delta_view_shows_what_moved(self):
+        before = {"turn": 2, "step": "MAIN1", "active": 0, "actor": 0, "seat": 0,
+                  "players": [{"seat": 0, "life": 20, "hand": 7, "library": 50, "battlefield": [{"id": "c1", "name": "Mountain", "land": True}],
+                               "graveyard": ["Bolt"]},
+                              {"seat": 1, "life": 20, "hand": 7, "library": 50, "battlefield": [{"id": "c9", "name": "Bears", "pt": "2/2"}]}],
+                  "hand": [{"id": "c2", "name": "Bolt", "castable": True}, {"id": "c3", "name": "Island", "land": True}],
+                  "journal": ["one"]}
+        self.assertEqual(mcp.delta_view(None, before), {**before, "baseline": True})
+        now = {"turn": 2, "step": "MAIN2", "active": 0, "actor": 0, "seat": 0,
+               "players": [{"seat": 0, "life": 17, "hand": 6, "library": 50,
+                            "battlefield": [{"id": "c1", "name": "Mountain", "land": True, "tapped": True}, {"id": "c3", "name": "Island", "land": True}],
+                            "graveyard": ["Bolt", "Bolt"], "mana": "{R}"},
+                           {"seat": 1, "life": 20, "hand": 7, "library": 50, "battlefield": []}],
+               "hand": [{"id": "c2", "name": "Bolt", "castable": False}, {"id": "c4", "name": "Giant Growth"}],
+               "journal": ["two", "three"], "stack": [{"name": "Bears", "controller": 1}]}
+        delta = mcp.delta_view(before, now)
+        self.assertEqual(delta["players"], [
+            {"seat": 0, "life": 17, "life_was": 20, "hand": 6, "hand_was": 7,
+             "battlefield_added": [{"id": "c3", "name": "Island", "land": True}],
+             "battlefield_changed": [{"id": "c1", "name": "Mountain", "land": True, "tapped": True}],
+             "graveyard_added": ["Bolt"], "mana": "{R}"},
+            {"seat": 1, "battlefield_gone": ["Bears (c9)"]}])
+        self.assertEqual(delta["hand_added"], [{"id": "c4", "name": "Giant Growth"}])
+        self.assertEqual(delta["hand_gone"], ["Island (c3)"])
+        self.assertEqual(delta["hand_changed"], [{"id": "c2", "name": "Bolt", "castable": False}])
+        self.assertEqual(delta["castable"], [])
+        self.assertEqual(delta["journal"], ["two", "three"])
+        self.assertEqual(delta["stack"][0]["name"], "Bears")
+        self.assertEqual((delta["turn"], delta["step"]), (2, "MAIN2"))
+        self.assertNotIn("baseline", delta)
+        # nothing moved: the clock, the castable names and the journal alone
+        still = mcp.delta_view(now, now)
+        self.assertEqual(sorted(still), ["active", "actor", "castable", "journal", "seat", "stack", "step", "turn"])
 
     def test_brief_view_is_small(self):
         view = {"turn": 3, "step": "MAIN1", "active": 0, "actor": 0, "stack": [], "winner": -1,
@@ -1099,6 +1608,59 @@ class LiveTest(unittest.TestCase):
         self.assertGreater(played["played"], 20)
         status = self.client.payload("status")
         self.assertFalse([g for g in status["games"] if g["game"] == game][0]["running"])
+
+    def test_a_kept_duel_is_taken_up_by_another_server_and_passed_until(self):
+        # one server starts the kept duel and goes away; the class's server takes it up
+        first = Client(ROOT / "shandalar.sh", self.workspace)
+        first.ask("initialize", {"protocolVersion": "2025-06-18"}, timeout=120)
+        opened = first.payload("referee_start", {"deck_a": "decks/tournament/ec2015_beckert.deck",
+                                                 "deck_b": "white_knights.deck", "seed": 11, "keep": True,
+                                                 "view": "delta", "timeout": 180}, timeout=240)
+        game = opened["game"]
+        self.assertEqual(opened["decision"]["mode"], "opening")
+        self.assertTrue(opened["decision"]["delta"]["baseline"])
+        handshake = json.loads((self.workspace / "games" / (game + ".keep.json")).read_text(encoding="utf-8"))
+        self.assertEqual(handshake["version"], self.init["result"]["serverInfo"]["version"])
+        # the pilot keeps; the server passes priority to the first main phase with something to play
+        main = first.payload("referee_act", {"game": game, "action": "default", "until": "play", "timeout": 180}, timeout=240)
+        self.assertIn("stop", main, main)
+        self.assertIn("decision", main, main)
+        self.assertEqual(main["until"], "play")
+        delta = main["decision"]["delta"]
+        self.assertNotIn("baseline", delta)
+        self.assertIsInstance(delta["journal"], list)
+        decisions_before = main["decisions"]
+        first.close()
+        self.assertEqual(first.proc.returncode, 0)
+        # taken up: the same decision, the whole journal in front of it
+        listing = self.client.payload("referee_resume", {})
+        self.assertIn(game, [k["game"] for k in listing["kept"]])
+        resumed = self.client.payload("referee_resume", {"game": game, "view": "brief", "timeout": 60}, timeout=120)
+        self.assertTrue(resumed["resumed"], resumed)
+        self.assertEqual(resumed["decision"]["n"], main["decision"]["n"])
+        self.assertEqual(resumed["decisions"], decisions_before)
+        self.assertGreaterEqual(len(resumed["decision"]["brief"]["journal"]), len(delta["journal"]))
+        self.assertEqual(resumed["hello"]["seed"], 11)
+        # passed to the end step: every stop on the way is a place a player acts
+        stops = []
+        state = resumed
+        for _ in range(12):
+            if "result" in state or "decision" not in state:
+                break
+            state = self.client.payload("referee_act", {"game": game, "action": "default", "until": "end", "timeout": 180}, timeout=240)
+            if "stop" in state:
+                stops.append(state["stop"])
+        self.assertTrue(stops, state)
+        for stop in stops:
+            self.assertTrue(stop.startswith(("decision: ", "the end step", "the next turn began", "a cast is in progress",
+                                             "the opponent's ", "their ", "your ", "an answer was refused")), stop)
+        stopped = self.client.payload("referee_stop", {"game": game}, timeout=120)
+        self.assertIn("result", stopped, stopped)
+        self.assertTrue(stopped["kept"])
+        self.assertFalse((self.workspace / "games" / (game + ".json")).is_file())
+        transcript = (self.workspace / "games" / (game + ".lines")).read_text(encoding="utf-8")
+        self.assertIn('"type":"result"', transcript.replace(" ", ""))
+        self.assertEqual(self.client.payload("referee_resume", {})["kept"], [])
 
 
 if __name__ == "__main__":

@@ -2070,6 +2070,8 @@ closed pipe; a `result` line ends the duel with its `reason`.
 DeckLab/referee.sh --deck-a big_green.deck --deck-b white_knights.deck --seat-b wizard --seed 7
 DeckLab/referee.sh --deck-a big_green.deck --deck-b big_green.deck --seat-b agent      # self-play
 DeckLab/referee.sh --join sglan1:... --deck big_green.deck --name Pilot                # a table
+DeckLab/referee.sh --table Kitchen --deck big_green.deck --log kitchen.log              # by name
+DeckLab/referee.sh --deck-a ... --deck-b ... --listen g1.keep.json --idle 1800         # kept
 DeckLab/referee.sh --deck-a ... --deck-b ... --dry-run                                 # the plan
 ```
 
@@ -2079,7 +2081,16 @@ game's own players at the Lab's own settings; `--turns` (200) calls a
 draw, `--log FILE` keeps the engine's log, `--packs` is the Lab's
 switch. `--join` seats the same pipe at a table the game hosts — a LAN
 invitation or the same-computer access code — so a program plays a
-person, or another program at another table. It is not a `--script`
+person, or another program at another table; `--table NAME` finds an
+open LAN table by the name the Game Browser lists (the advert carries
+the invitation), and at a table `--log` keeps the journal the seat saw.
+`--listen FILE` (2026-10-03) serves the same lines on a loopback socket
+instead of the pipe and writes `{port, token, pid}` to FILE, so the
+program may go away and come back while the duel waits — a client that
+connects with the token is told `hello` again, one `resume` line
+(`decisions`, `refusals`, `awaiting`, `n`, `finished`) and the awaited
+decision with the whole journal; `--idle SECONDS` (1800) concedes a
+decision nobody came back for (`reason: idle`). It is not a `--script`
 tool: the lobby classes it drives name the autoloads, so it runs only
 through the game's door (`referee.sh` is that line). [AGENTS.md](../AGENTS.md)
 has every line and every answer; `tests/tools/test_referee_2026_09_27.gd`
@@ -2113,9 +2124,9 @@ catalogue an MCP client reads before it acts — `status`, `contract`, `play_gui
 `manual`, `packs`, `cards`, `check_deck`, `list_decks`, `read_deck`,
 `write_deck`, `convert_deck`, `autodeck`, `lab`, `lab_resume`,
 `read_run`, `lab_next`, `referee_start`, `referee_join`, `referee_act`,
-`referee_autoplay`, `referee_wait`, `referee_stop` — each with a
-description a program can act on and a schema with every argument
-described. Dependency-free: the Python that runs the other tools runs
+`referee_autoplay`, `referee_wait`, `referee_stop`, `referee_resume` —
+each with a description a program can act on and a schema with every
+argument described. Dependency-free: the Python that runs the other tools runs
 this one. Every tool is thin: the door runs as a subprocess, its JSON is
 the answer's `structuredContent`, its refusal envelope comes back as an
 `isError` answer untouched. What the server adds is what a process
@@ -2125,7 +2136,13 @@ played between calls, so a client may think as long as it likes; the
 decision's board rendered `brief`, a tenth of the wire's view; the
 referee's own dumb pilot as `"default"` and `referee_autoplay`, so a
 client can skip to the part it cares about and still reach a
-`result`), the deck file written from rows and checked by the engine
+`result`; since 0.50.5 `referee_act`'s `until` passes priority to the
+next point a player would act and STOPS where a real player reacts —
+the opponent's spell on the stack, their declared attackers, their
+blocks and end step, the seat's own decisions — `view: "delta"` shows
+only what moved, `referee_join` takes an open table's name, and a game
+started or joined with `keep` outlives the server: `referee_resume`
+lists it and takes it up), the deck file written from rows and checked by the engine
 as it is written, and the path rule (whatever a tool writes lies under
 the checkout or the workspace, `workspace/` beside the door by
 default — and a deck in the workspace is named to every tool by its
@@ -2151,8 +2168,8 @@ The guide also ships with the release's tools; reading it starts no engine.
 | `deck_lab.sh` | entry point (wraps the headless Godot invocation) |
 | `auto_deck_cli.sh` / `DeckLab/auto_deck_cli.gd` | the AutoDeck CLI: the deck builder's AutoDeck by the thousand, with a manifest — the field this Lab plays (see above) |
 | `lab_query.sh` / `DeckLab/lab_query.gd` | the Lab Query: `check`, `packs`, `cards` as one JSON document each (see above) |
-| `referee.sh` / `DeckLab/referee.gd` | the referee: one duel through a pipe, a program in a seat, JSON lines both ways (see above) |
-| `tools/shandalar_mcp.py` | the MCP server: every tool above for a program that speaks the Model Context Protocol, the referee's pipe kept as a game across calls (see above) |
+| `referee.sh` / `DeckLab/referee.gd` | the referee: one duel through a pipe — or a loopback socket (`--listen`, the kept game) — a program in a seat, JSON lines both ways, a LAN table by invitation or by name (see above) |
+| `tools/shandalar_mcp.py` | the MCP server: every tool above for a program that speaks the Model Context Protocol, the referee's pipe kept as a game across calls, pass-`until` to the next point a player acts, the `delta` view, kept games taken up by `referee_resume` (see above) |
 | `deck_convert.sh` / `tools/deck_convert.gd` | format converter (.deck/.dec ↔ .dck) |
 | `DeckLab/simulate.gd` | the tool: CLI parsing, thread fan-out, reporting |
 | `DeckLab/sim_stats.gd` | Wilson intervals, matchup summaries (unit-tested) |
@@ -2170,7 +2187,7 @@ The guide also ships with the release's tools; reading it starts no engine.
 | `tests/tools/test_lab_for_machines_2026_09_27.gd` | the two tools as a program drives them: the refusal envelope's shape and kinds, `--dry-run`'s plans (duel, tournament, sweep, AutoDeck) and that a dry run makes no folder |
 | `tests/tools/test_lab_records_and_queries_2026_09_27.gd` | `--record` and its cap, `run.json` and `next` for a duel, a tournament, a sweep and the AutoDeck, the Lab Query's three answers and its refusals, the one door |
 | `tests/tools/test_lab_resume_2026_09_27.gd` | `--resume`: the checkpoint, the line read back from `run.json`, the games kept and the games played, what is refused beside it |
-| `tests/tools/test_referee_2026_09_27.gd` | the referee: hello, decision, refused and result lines, the options per mode, a refused answer asked again, the pipe's ends (EOF, twenty refusals, the turn limit, the decision cap), self-play, a joined table through the client's face, the doors |
+| `tests/tools/test_referee_2026_09_27.gd` | the referee: hello, decision, refused and result lines, the options per mode, a refused answer asked again, the pipe's ends (EOF, twenty refusals, the turn limit, the decision cap), self-play, a joined table through the client's face, a table by name, the kept game's socket (handshake, token, resume, idle), the doors |
 | `tests/tools/test_mcp_2026_09_27.gd` | the MCP server against the real engine: `tools/test_shandalar_mcp.py`'s live half (a deck written and checked, a duel to its end through the pilot, the Lab's plan), and the pins of the door, the release and the pages |
 | `tools/test_shandalar_mcp.py` | the MCP server against a fake door: the protocol, the self-describing catalogue, the quoted refusals, the deck files, the path rule, the game session, the pilot, the pins |
 | `tools/test_auto_deck_cli_sh.py` | the AutoDeck CLI's shell wrapper: `-V` without an engine, exit 3 with no Godot, the exec line |

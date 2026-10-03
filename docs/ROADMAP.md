@@ -18749,6 +18749,76 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-03 — The pass that knows when to stop (0.50.5)
+
+The owner, after the first game played through the MCP server: *"Is
+there anything we can do to optimise MCP and make it even better?"* — and
+on the proposal: *"Yes implement all ! But be careful about play-style:
+mtg expect following of opponent play and react on specific threats with
+instant cards - like counterspell of specific threat or lightning bolt
+mid fight etc.. Implement also all suggestions under worth doing later
+like "deltas" and "join an open table by name" and the rest."* The seat
+that passed one decision a call (ninety-six decisions for one game, each
+a round trip) now passes on its own — and stops wherever a real player
+would reach for a card.
+
+- **Pass-until.** `referee_act {action, until}` sends the answer and
+  then passes priority up to `main` (the seat's own main phase), `end`
+  (this turn's end step), `turn` (the seat's next turn), `play` (its main
+  phase with something castable) or `respond` (only a reaction window).
+  Every value stops where the owner's play-style wants a hand on the
+  cards: the opponent's spell or ability on the stack (counter it,
+  Lightning Bolt in response), their declared attackers (the trick before
+  blocks), their blocks, their first-strike damage and their end step
+  while the seat holds something, the seat's own block decision on the
+  opponent's turn, and every attack, block, discard, damage and choice
+  of its own. The answer says `stop` (why) and `passed` (how many); a
+  refused answer is a stop; 400 passes without the stop is a stop. A
+  96-decision probe against the engine (seed 11, Beckert vs White
+  Knights) stopped exactly at those windows and nowhere else.
+- **The kept game.** `referee_start`/`referee_join` take `keep` (a join
+  is kept by default): the referee serves its lines on a loopback socket
+  (`--listen FILE`, the handshake `{port, token, pid}` written as `.part`
+  then renamed, the token drawn by the referee and never on a command
+  line) in its own session, so a client restarted or a server that
+  crashed finds the duel waiting: `referee_resume {}` lists what is kept
+  (`workspace/games/gN.json`, the transcript `gN.lines`),
+  `referee_resume {game}` takes one up — `hello` again, a `resume` line
+  with the counters, the awaited decision with the whole journal. A
+  decision nobody came back for in 30 minutes is conceded (`--idle`,
+  `reason: idle`); a kept game whose referee is gone is answered from
+  its transcript and forgotten. Referee protocol stays 1: the pipe's
+  lines are unchanged, `resume` travels only on the socket.
+- **The delta view.** `view: "delta"` renders what moved since the last
+  answer: a `baseline` first, then changed life with `life_was`, the
+  hand's additions/removals/changes, each battlefield's
+  added/changed/gone, the graveyards' additions, the stack, the castable
+  names and the new journal lines.
+- **A table by name.** `referee_join {table: "Kitchen"}` (`--table NAME`)
+  asks the LAN discovery for an open host advertising that table and
+  joins with the invitation its advert carries; an invitation-only table
+  is named back as such. `SgLanDiscovery.pump()` is the frame's poll
+  split out for a tool without a frame.
+- **The journal for the log.** At a table `--log FILE` (`referee_join
+  {log}`) writes the journal the seat saw — every line of the game as
+  the table told it — at the end, the record chapter 13 of the play
+  guide reviews.
+- **The guide.** `agentic-playgude-mtg.md` chapter 3 "Driving a duel
+  through the referee" (the lessons of the first game: `default` ACTS,
+  read the printed rule before a Jihad, `attack_bands` only at
+  declare-attackers, the `until` stops, `delta`, kept games, a table by
+  name, the `log`), the journal in chapter 13's review, two rows in
+  chapter 14's table; the banding paragraph names both divisions.
+- Tests: `tests/tools/test_referee_2026_09_27.gd` +6 (a table found by
+  name, the real discovery pumped by hand, a joined table's journal, the
+  kept game's loopback, a kept duel to a result, a kept duel conceded
+  idle); `tools/test_shandalar_mcp.py` +8 (the fake door's twelve-decision
+  duel and miniature kept game; pass-until, delta, join by name, two kept
+  game tests, two unit tests, a live kept/until duel) — Python 427.
+
+Gate: 550 scripts, **8,305 tests, 404,355 asserts**, exit 0 in
+260 s over 6 shards; Python 427 (6 skipped), exit 0.
+
 ## 2026-10-03 — The lamb the attacker picks (0.50.4)
 
 A game played through the MCP server (`tools/shandalar_mcp.py`, the

@@ -360,6 +360,79 @@ needed); card files have NO class_name (they register by name instead);
   power); `_incoming_damage`'s post-block branch and `_maze_pick` read
   it. Test: `tests/ai/test_ai_trample_lands_on_us_2026_09_26.gd`.
 
+## The pass that knows when to stop (2026-10-03)
+
+The MCP seat passes priority on its own up to the next point a real
+player would act and stops at every reaction window — the opponent's
+spell on the stack, their declared attackers, their blocks and end step,
+the seat's own decisions; a game is kept across a restart; a view of what
+moved; a LAN table joined by name; a joined seat's journal for the log.
+0.50.5.
+
+- `tools/shandalar_mcp.py`: `UNTIL` (`main`, `end`, `turn`, `respond`,
+  `play`) and `MAX_PASSES` 400 — `referee_act {until}` passes after the
+  answer until `stop_reason(decision, until, origin)` names a stop (the
+  universal ones first: a non-priority decision, the opponent's stack
+  object, `attackers_declared`, their blocks/first strike/end with
+  `respond`, the seat's own block step; then the named one), the answer
+  carrying `stop` and `passed`; `delta_view(before, now)`, `card_changes`,
+  `zone_additions` render `view: "delta"` (a `baseline` first, then
+  `life_was`, `hand_added/gone/changed`, `battlefield_added/changed/gone`,
+  `graveyard_added`, `castable`, `stack`, `journal`); `render_decision`
+  takes the previous view. `Transport` → `PipeTransport` (stdin/stdout)
+  and `SocketTransport` (the handshake file read until `boot` seconds,
+  the token sent first, lines read with `select`); `detached_popen` puts
+  a kept referee in its own session so the server's end does not take
+  it. `Game(…, keep=record, resume=True)`: `advance` reads the `resume`
+  line's counters (they already count the replayed decision `n`);
+  `KEEP_BOOT` 60 / `KEEP_RESUME` 5 / `KEEP_IDLE` 1800. `Server`: kept
+  records under `workspace/games/` (`gN.json` the record, `gN.keep.json`
+  the referee's handshake, `gN.lines` the transcript); `kept_records`,
+  `kept_record`, `forget_kept`, `transcript_result`, `kept_summary`;
+  `tool_referee_resume` lists or takes up a kept game (a finished
+  transcript answers its `result`, a gone referee is forgotten with
+  `kind: "keep"`); games numbered past every `g<N>.*` file;
+  `tool_referee_join` takes `table` (an open LAN table's name), `log`
+  (the journal), `keep` (default true); `tool_referee_start` takes `keep`;
+  `referee_stop` ends a kept game and removes its record.
+- `tools/test_shandalar_mcp.py`: the fake door's referee grew a scripted
+  twelve-decision duel (`SEQ31`, `--seed 31`), `--table`/`--log` for a
+  join and a miniature kept game (`class Keep`: loopback server, token,
+  handshake `.part` → rename, replay, idle); `test_pass_until_stops_where_
+  a_player_acts`, `test_the_delta_view_shows_what_moved`,
+  `test_join_by_table_name_with_a_log`, `KeptGameTest` (a game survives
+  the server, a game that ended alone or lost its referee), unit tests
+  for `stop_reason` and `delta_view`, and a live kept/until duel against
+  the engine. Python 427 (six live).
+- `DeckLab/referee.gd`: `--listen FILE` (the kept game: `TCPServer` on
+  the loopback, the token from `Crypto`, the handshake written as
+  `.part` then renamed, one seated `_peer` and one `_knock` with
+  `KNOCK_MS`, `_replay` of `hello` + `resume` + the awaited decision with
+  `_last_journal`, `_read_socket` instead of the pipe), `--idle SECONDS`
+  (`DEFAULT_IDLE` 1800 → `reason: idle`), `--table NAME` (`SgLanDiscovery`
+  pumped by hand until an open host advertises the name; the invitation
+  from its advert), `--log` at a table (the journal the seat saw);
+  `hello.log`. Protocol stays 1 (the pipe's lines are unchanged).
+- `game/sgmanalink/lan_discovery.gd`: `pump()` — one poll of the socket,
+  the periodic query and the expiry — split out of `_process` so a tool
+  without a frame can scan.
+- `tests/tools/test_referee_2026_09_27.gd` (+6): a table found by name
+  and the rest named back, the real discovery pumped by hand, a joined
+  table's journal for the log, a kept game's lines on the loopback, a
+  kept duel played through the socket to a result, a kept duel conceded
+  idle.
+- `tests/tools/test_mcp_2026_09_27.gd`: `referee_resume` in the tool list.
+- `agentic-playgude-mtg.md`: "Driving a duel through the referee" in
+  chapter 3 (`default` acts, read the printed rule, `attack_bands`, the
+  `until` stops, `delta`, kept games, a table by name, the `log`), the
+  journal in chapter 13's review, two rows in chapter 14's table; the
+  banding paragraph names both divisions (CR 702.22f-j). `docs/mechanics.md`:
+  the band-damage row and its simplification note follow 0.50.4.
+- `AGENTS.md`: the referee's `--table`/`--listen`/`--idle`/`--log`, the
+  `resume` line, the `idle` reason, "A kept game"; the MCP page's
+  `referee_resume`, "Passing with `until`", "The kept game", `delta`.
+  `DeckLab/README.md`: the same, in the manual's words.
+
 ## The lamb the attacker picks (2026-10-03)
 
 A referee game through the MCP server let a blocker's controller spread
@@ -1134,6 +1207,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.5.md`: the pass that knows when to stop — pass-`until`
+  that halts where a real player reacts, the kept game taken up by
+  `referee_resume`, the `delta` view, a LAN table joined by name, the
+  journal for the log.
 - `docs/releases/0.50.4.md`: the lamb the attacker picks — a blocked
   attacking band's incoming damage is divided by the attacking player
   (CR 702.22j), the engine's default keeping the better body.

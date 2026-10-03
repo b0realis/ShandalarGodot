@@ -9,8 +9,8 @@ tools and their schemas from the running integration. The observation fields
 and action descriptions below are conceptual, not promised endpoints. No part
 of this guide authorizes reading a private game state or changing game rules.
 
-ShandalarGodot-specific notes were checked against the source at **0.40.33,
-27 September 2026**. A later build, host policy, card pack or custom rules preset
+ShandalarGodot-specific notes were checked against the source at **0.50.5,
+3 October 2026**. A later build, host policy, card pack or custom rules preset
 may differ. Inspect the current match rather than treating these notes as an API.
 
 The current tool contract is [AGENTS.md](AGENTS.md). MCP clients can read this
@@ -230,6 +230,50 @@ for a choice is not necessarily a priority window.
 If an action is refused, inspect the explanation and current legal choices.
 Repair a mistaken target, timing or payment once the cause is understood.
 Repeating an identical invalid action indefinitely is not progress.
+
+### Driving a duel through the referee
+
+The MCP door's `referee_*` tools put a seat at a table the engine referees;
+[AGENTS.md](AGENTS.md) carries the schemas. Habits that keep that seat honest:
+
+- **`action: "default"` is an answer, not a view.** It submits the pilot's own
+  choice for the open decision and the game moves on. To look before deciding,
+  ask `referee_wait` with a `view` (`brief`, `full`, `options`, `delta`) and
+  then act with an explicit `op`.
+- **Read the printed rule before a conditional card.** A card's `rules` text
+  (on every hand and battlefield card of the brief view, and in the `cards`
+  tool) is the rule the engine applies: a Jihad named for a color
+  the opponent does not play is sacrificed the moment no permanent of that
+  color is there — that is the card, not a bug. Choose names, colors and
+  targets from the opponent's board, not from hope.
+- **`attack_bands` only at declare-attackers.** A band is declared with the
+  attack; at any other decision the field is refused.
+- **Pass with `until`, and treat every stop as a place to act.** A sequence of
+  passes through `referee_act {action: "pass", until: ...}` (`play`, `main`,
+  `turn`, `end`, `respond`) is answered as a real player would play it: the referee halts
+  at the opponent's spell on the stack (your counterspell or Lightning Bolt
+  window), at their declared attackers (your trick before blocks), at your own
+  block decision, at their blockers, first-strike and end-of-turn windows and
+  at every decision the engine asks of you. `play` stops at your next main
+  phase with something castable; `until: "end"` passes your own main phase.
+  A stop names its reason in `stop`; a refused answer is a stop too.
+  The window between the opponent's declared attackers and the damage is
+  where a combat trick belongs, so when a stop says "their declare attackers:
+  you can respond", read the attackers before passing.
+- **`view: "delta"` shows what moved.** The first delta is a baseline; later
+  ones carry only changed life (`life_was`), hand, battlefield, graveyard,
+  stack and the journal lines since the last answer. Ask `full` whenever a
+  delta leaves a question open.
+- **A kept game outlives the client.** `referee_start`/`referee_join` with
+  `keep: true` leaves the referee listening after this client goes; a new
+  client lists it through `referee_resume {}` and takes it up with
+  `referee_resume {game}`, replaying the awaited decision and its journal.
+  A kept referee that waits 30 minutes alone concedes the seat (`idle`).
+- **Join a table by name.** `referee_join {table: "Kitchen", deck: ...}`
+  finds an open LAN table through discovery; an `invitation` is still the
+  precise door when two tables share a name.
+- **Keep the journal.** `referee_start`/`referee_join` take a `log` path: the
+  journal the seat saw, written at the end for the review in chapter 13.
 
 ### Network and UI considerations
 
@@ -691,11 +735,15 @@ quality, but protection does not itself prohibit attacking into that blocker.
 Banding is particularly easy to misplay. In ordinary Magic, an attacking band
 can contain any number with banding and at most one without; “bands with other”
 has a separate condition. Blocking one member can block the whole band. Banding
-can let a player divide incoming combat damage among their own combatants,
-including concentrating it to save a valuable member. The current engine has
-documented limitations in some offensive-band damage assignment; use offered
-choices and consult the [mechanics notes](docs/mechanics.md), not an assumed
-tabletop control that the adapter has not exposed.
+lets a player divide incoming combat damage among their own combatants,
+including concentrating it to save a valuable member: the defending player
+divides an attacker's damage when a banding creature is among the blockers
+(CR 702.22f-h), and the attacking player divides a blocker's damage among the
+band it blocked (CR 702.22j). The engine asks the right seat; its default
+answer puts the whole packet on the cheapest body, so read the assignment
+prompt when it is offered (`damage` with `free_order`) and consult the
+[mechanics notes](docs/mechanics.md), not an assumed tabletop control that
+the adapter has not exposed.
 
 Do not silently import modern keywords into an older pool. This engine's
 current combat model does not implement double strike. An old Basilisk's
@@ -1153,6 +1201,12 @@ lose to an unlikely draw. Do not label either using hindsight alone. If reviewin
 a complete replay with permission to see both hands, separate that omniscient
 analysis from what a fair player could have known during the decision.
 
+A referee seat's journal is the record to review: start the duel with a `log`
+path (or keep the `journal` of each decision) and read it with the stops the
+`until` passes made — each stop was a window the seat could have used. A pass
+made through "the opponent's Lightning Bolt is on the stack and you can
+respond" with a counterspell in hand is a decision, and the journal shows it.
+
 Measure legal-action success, resolved prompts, hidden-information compliance,
 combat-prediction accuracy, avoidable mana burn, survival errors and win rate.
 Keep crashes, timeouts and unfinished games separate from normal wins/losses.
@@ -1168,6 +1222,8 @@ Choose one recurring weakness, practice it, and re-test on different games.
 - Does an opponent's pending spell win unless answered now?
 - Will my mana disappear or burn if I pass into the next boundary?
 - Is “pass” actually available, or am I being asked to finish a choice?
+- Did a pass-`until` stop here? Its `stop` names the window; read the stack
+  or the attackers before passing again.
 
 ### Before confirming combat
 
@@ -1191,6 +1247,8 @@ Observe once more and identify which condition applies:
 | Disconnected | Reconnect through the supported flow and resynchronize. |
 | Same state and same prompt persist after a valid response | Stop the retry loop and report a reproducible integration issue. |
 | Expected rule choice is absent | Document the expected window and observed state; do not bypass validation. |
+| A pass-`until` returned early | Not a fault: its `stop` is a window to act in — the opponent's spell, their attackers, your block. Decide, then pass again. |
+| The client restarted and the game is gone | A kept game is listed by `referee_resume {}`; take it up by name. An unkept game ended with the client — read its transcript. |
 | Game over | Report the confirmed result and stop making gameplay mutations. |
 
 A useful bug report contains build, mode, effective rules, seat, phase/step,

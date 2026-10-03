@@ -208,6 +208,13 @@ func expire(now: int) -> void:
 
 
 func _process(_delta: float) -> void:
+	pump()
+
+
+## One poll of the socket: the periodic query and the expiry while
+## scanning, up to 32 packets read. The frame calls it; a tool with no
+## frame (the referee's `--table`, 2026-10-03) calls it by hand.
+func pump() -> void:
 	if not scanning and not advertising:
 		return
 	var now := Time.get_ticks_msec()
