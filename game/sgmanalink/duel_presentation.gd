@@ -46,10 +46,58 @@ static func target_reference(m: SgPracticeMatch, pid: int, target: TargetRef) ->
 	return {"kind": "card", "id": m._handle(pid, card), "amount": target.amount}
 
 
+## A LIFE TAX ON BLOCKING (Heat Wave, Pack 8 — CR 509.1d), for the seat
+## choosing blocks: what its pencilled lineup will cost, so its own screen
+## (DuelScreen._block_life_fee) prices the declaration as the referee
+## charges it (CombatState.block_life_owed — each blocking creature owes
+## each imposing source once, whatever it blocks). Public: the taxes come
+## from permanents on the table and a blocker's own colour; the filter
+## itself never crosses.
+##
+## ONE ROW PER TAX (protocol 27, bug pass 2026-10-04): `[tax, life,
+## attackers, blockers]` — the imposing source's opaque handle, the life it
+## asks, the attacking creatures it protects and [param blockers] (this
+## seat's creatures with a legal block, `[card, handle]`) that owe it.
+## Protocol 26 sent a row per blocker × legal attacker × tax, which two Heat
+## Waves, 17 attackers and 16 blockers took past `SgProtocol.MAX_CARDS`
+## (544 rows): the defender's view was refused and the guest cut off. Now
+## the rows are bounded by the taxes and each list by the table. A source
+## that taxes different creatures with a different amount or blocker filter
+## gets a row for each (the same `tax` handle), so the price stays exact.
+static func block_taxes(m: SgPracticeMatch, pid: int, blockers: Array, result: Dictionary) -> void:
+	if blockers.is_empty(): return
+	var g := m.game
+	var groups: Array = []
+	for attacker_id in g.combat.attackers:
+		var attacker := g.find_instance(attacker_id)
+		if attacker == null or attacker.zone != Mtg.Zone.BATTLEFIELD or not m._visible(pid, attacker): continue
+		for tax in attacker.cur_blocked_by_life_taxes:
+			var filter: Callable = tax.get("filter", Callable())
+			var group := {}
+			for existing: Dictionary in groups:
+				if existing.source == int(tax.source) and existing.life == int(tax.life) and existing.filter == filter:
+					group = existing
+					break
+			if group.is_empty():
+				group = {"source": int(tax.source), "life": int(tax.life), "filter": filter, "attackers": []}
+				groups.append(group)
+			var handle := m._handle(pid, attacker)
+			if not group.attackers.has(handle): group.attackers.append(handle)
+	for group: Dictionary in groups:
+		var owing: Array = []
+		for entry: Array in blockers:
+			var filter: Callable = group.filter
+			if filter.is_valid() and not bool(filter.call(entry[0])): continue
+			owing.append(entry[1])
+		if not owing.is_empty():
+			result.block_taxes.append([object_handle(m, pid, "tax", group.source), group.life, group.attackers, owing])
+
+
 static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 	var g := m.game
 	var sources := ManaPlanner.sources(g, pid)
 	var budgets := {}
+	var tax_blockers: Array = []
 	var result := {"priority": g.priority_player, "toss": m.toss_winner, "order": m.order_chosen,
 		"rules": {}, "cues": m.cues.duplicate(true), "events": m.visual_events[pid].duplicate(true), "cards": [], "players": [],
 		"chain": [], "packets": [], "bands": [], "blocks": [], "blocked": [],
@@ -135,19 +183,10 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 					# reads its own hand exactly as the rules-exact check does.
 					if attacker != null and CombatState.block_illegality(g, card, attacker, card.controller_id, true, pid).is_empty():
 						legal.append(m._handle(pid, attacker))
-						# A LIFE TAX ON BLOCKING (Heat Wave, Pack 8 — CR 509.1d):
-						# what this blocker would owe for this attacker, per
-						# imposing source, so the seat's own screen prices the
-						# pencilled declaration (DuelScreen._block_life_fee)
-						# as the referee will charge it. Public: the taxes
-						# come from permanents on the table and the blocker's
-						# own colour. The filter itself never crosses.
-						for tax in attacker.cur_blocked_by_life_taxes:
-							var filter: Callable = tax.get("filter", Callable())
-							if filter.is_valid() and not bool(filter.call(card)): continue
-							result.block_taxes.append([row.id, m._handle(pid, attacker),
-								object_handle(m, pid, "tax", int(tax.source)), int(tax.life)])
-				if not legal.is_empty(): result.blockable.append([row.id, legal])
+				if not legal.is_empty():
+					result.blockable.append([row.id, legal])
+					tax_blockers.append([card, row.id])
+	block_taxes(m, pid, tax_blockers, result)
 	for item in g.stack:
 		var card := item.card
 		# A source can have left for a private zone while its ability remains.

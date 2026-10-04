@@ -8,7 +8,10 @@ func test_only_reviewed_public_card_payloads_opt_into_aftermath() -> void:
 		for trigger in data.triggered_abilities + data.graveyard_triggers:
 			if not trigger.forecast_safe: continue
 			opted.append(name)
-			assert_has([Mtg.EventType.DAMAGE_DEALT, Mtg.EventType.DIES], trigger.event_type)
+			# WAS_DEALT_DAMAGE: the victim's side of the same public damage
+			# event (Fungusaur's "is dealt damage", Mirage bug pass 0.50.11).
+			assert_has([Mtg.EventType.DAMAGE_DEALT, Mtg.EventType.WAS_DEALT_DAMAGE,
+				Mtg.EventType.DIES], trigger.event_type)
 			assert_null(trigger.target_spec)
 			assert_true(trigger.modes.is_empty())
 	opted.sort()

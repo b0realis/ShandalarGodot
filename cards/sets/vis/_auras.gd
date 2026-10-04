@@ -66,7 +66,8 @@ static func configure(c: CardData) -> bool:
 				_mob_attacks).capturing(A.host_context))
 		"Mortal Wound":
 			c.enchants(TargetSpec.creature())
-			c.triggered(TriggeredAbility.new(Mtg.EventType.DAMAGE_DEALT, _mortal_wound,
+			# The victim's event: one per damage event (CR 510.2).
+			c.triggered(TriggeredAbility.new(Mtg.EventType.WAS_DEALT_DAMAGE, _mortal_wound,
 				"When enchanted creature is dealt damage, destroy it.", A.host_dealt_damage).capturing(A.host_context))
 		"Spider Climb":
 			c.enchants(TargetSpec.creature()).with_flash_rider()

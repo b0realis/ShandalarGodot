@@ -6,8 +6,11 @@ extends RefCounted
 ## 26 (Pack 8, 2026-10-03): phased-out permanents (each seat's `phased_out`
 ## list, two flags, the "held by" pairs), Heat Wave's block life taxes and
 ## the hand's special-action discard (`discard_special`).
-const VERSION := 26
-const SUBPROTOCOL := "sgmanalink-local-v26"
+## 27 (Mirage bug pass, 2026-10-04): Heat Wave's `block_taxes` are one row
+## per tax, `[tax, life, attackers, blockers]` — 26's row per blocker ×
+## attacker × tax outgrew [constant MAX_CARDS] on a legal board.
+const VERSION := 27
+const SUBPROTOCOL := "sgmanalink-local-v27"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]

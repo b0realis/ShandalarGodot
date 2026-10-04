@@ -325,21 +325,21 @@ func discard_as_special_action(_pid: int, inst: CardInstance) -> String:
 
 ## Heat Wave's tax on the pencilled blocks [param blocks] (blocker id ->
 ## attacker ids), as the referee will charge it: each blocker owes each
-## imposing source once, whatever it blocks (CombatState.block_life_owed),
-## read off the rows the host sent per legal block.
+## imposing source once, whatever it blocks (CombatState.block_life_owed —
+## the first of a source's taxes that applies, attacker by attacker), read
+## off the host's rows `[tax, life, attackers, blockers]` (protocol 27).
 func block_life_fee(blocks: Dictionary) -> int:
-	var taxes := {}
-	for row in presentation.get("block_taxes", []):
-		var key := "%s/%s" % [row[0], row[1]]
-		if not taxes.has(key): taxes[key] = []
-		taxes[key].append([row[2], int(row[3])])
+	var rows: Array = presentation.get("block_taxes", [])
 	var total := 0
 	for id in blocks:
+		var blocker := handle(int(id))
 		var owed := {}
 		var value: Variant = blocks[id]
 		for attacker in (value if value is Array else [value]):
-			for tax in taxes.get("%s/%s" % [handle(int(id)), handle(int(attacker))], []):
-				owed[tax[0]] = tax[1]
+			var protected := handle(int(attacker))
+			for row in rows:
+				if owed.has(row[0]) or not row[2].has(protected) or not row[3].has(blocker): continue
+				owed[row[0]] = int(row[1])
 		for tax in owed: total += int(owed[tax])
 	return total
 

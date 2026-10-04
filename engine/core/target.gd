@@ -633,7 +633,15 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 	# space (`targets.c:519` is a bare string literal, not an `EXE_STR`),
 	# and `can't target this` — its `STATE_CANNOT_TARGET` refusal — is what
 	# the 1997 table has for "not a legal object for this at all".
-	if source != null and inst == source and inst.zone == Mtg.Zone.STACK:
+	#
+	# A card being CAST from a graveyard (Bösium Strip) or from exile is
+	# validated while it still sits there, but CR 601.2a has already put it
+	# on the stack by the time its targets are chosen (601.2c), so it is the
+	# spell being aimed too (CR 115.5) — a Strip-cast Relearn may not name
+	# itself (bug pass 2026-10-04, H5-F3). A card in HAND is never a legal
+	# object for its own targets anyway and keeps the zone refusal below.
+	if source != null and inst == source and (inst.zone == Mtg.Zone.STACK
+			or (inst.zone != Mtg.Zone.HAND and _aimed_as_spell(game, source))):
 		return WHY["cant_target"]
 	if kind == Kind.SPELL:
 		# A spell target lives on the stack, not the battlefield.
@@ -659,9 +667,7 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 				return WHY["abilities"]
 			if inst.cur_shroud and (source == null or not inst.cur_shroud_ignored_by.has(who)):
 				return WHY["abilities"]
-			if inst.cur_cant_be_spell_target and source != null \
-					and (source.zone == Mtg.Zone.STACK
-						or source.zone == Mtg.Zone.HAND):
+			if inst.cur_cant_be_spell_target and _aimed_as_spell(game, source):
 				return WHY["abilities"]
 	elif kind == Kind.CARD_IN_ANTE:
 		if inst.zone != Mtg.Zone.ANTE:
@@ -731,9 +737,11 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 		# SPELL source is one being cast (still in hand while cast_spell
 		# validates it) or sitting on the stack. An ability whose source has
 		# since died is still an ability (CR 608.2b), which is why this asks
-		# where the source IS rather than where it is not.
-		if inst.cur_cant_be_spell_target and source != null \
-				and (source.zone == Mtg.Zone.STACK or source.zone == Mtg.Zone.HAND):
+		# where the source IS rather than where it is not — and, off the
+		# battlefield, the stack and the hand, WHAT is aiming
+		# ([method _aimed_as_spell]: a Bolt cast from the graveyard is a spell,
+		# bug pass 2026-10-04, H5-F2).
+		if inst.cur_cant_be_spell_target and _aimed_as_spell(game, source):
 			return WHY["spell"]
 		# SOURCE-FILTERED targeting bans ("can't be the target of abilities
 		# from artifact sources" — Artifact Ward).
@@ -756,6 +764,25 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 	if not _sibling_ok(game, source, ref, earlier):
 		return sibling_reason
 	return ""
+
+
+## Is [param source] aiming this spec AS A SPELL? On the stack, or in the
+## hand while `cast_spell` validates it, it always has been here. A card
+## cast from anywhere else — the graveyard under Bösium Strip, exile under
+## Three Wishes — is validated in that zone too, yet CR 601.2a has put it on
+## the stack before its targets are chosen (601.2c): it is a spell when the
+## spec is one of its own spell specs ([method MtgGame.targeting_kind]). An
+## ability activated from a graveyard stays an ability (bug pass 2026-10-04,
+## H5-F2/F3). A new helper rather than a new parameter: SgTargetSpec
+## overrides this class's public methods.
+func _aimed_as_spell(game: MtgGame, source: CardInstance) -> bool:
+	if source == null:
+		return false
+	if source.zone == Mtg.Zone.STACK or source.zone == Mtg.Zone.HAND:
+		return true
+	if source.zone == Mtg.Zone.BATTLEFIELD or game == null:
+		return false
+	return game.targeting_kind(source, self) == Mtg.StackKind.SPELL
 
 
 ## The [member sibling_filter] verdict, or true when it cannot be asked:

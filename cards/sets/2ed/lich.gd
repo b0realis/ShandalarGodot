@@ -37,6 +37,10 @@ extends CardScript
 ## -3 holding none. The price is paid as it enters now, so the earliest
 ## Bolt is the one that lands afterwards, and the amount can only ever be
 ## the life total the enchantment arrived on.
+##
+## "Whenever you're dealt damage" hears WAS_DEALT_DAMAGE, the victim's
+## event: one per damage event for the total, so three unblocked attackers
+## are one trigger for all of it (CR 510.2; Mirage bug pass 0.50.11).
 
 
 func build() -> CardData:
@@ -45,7 +49,7 @@ func build() -> CardData:
 		.static_ability(StaticAbility.new(_the_bargain,
 			"You don't lose the game for having 0 or less life. If you would gain life, draw that many cards instead.")) \
 		.triggered(TriggeredAbility.new(
-			Mtg.EventType.DAMAGE_DEALT, _feed_the_lich,
+			Mtg.EventType.WAS_DEALT_DAMAGE, _feed_the_lich,
 			"Whenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.",
 			_damage_to_my_controller)) \
 		.triggered(TriggeredAbility.new(

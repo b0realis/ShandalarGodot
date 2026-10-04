@@ -12,14 +12,16 @@ extends CardScript
 ## side the host is on, and only when the OTHER creature's live toughness
 ## is 3 or less — a Giant Growth in response saves it.
 ##
-## "Destroy at end of combat" is a delayed END-OF-COMBAT action
-## (MtgGame.schedule_end_of_combat_action) rather than the plain
-## doom-at-end-of-combat queue, because the reward has to know whether the
-## destruction actually HAPPENED: the action destroys the victim and, only
-## if it really landed in a graveyard (regeneration and indestructible both
-## say no), creates the reward as a DELAYED TRIGGER for the next end step
-## (MtgGame.schedule_delayed_trigger). That is the printed "if that
-## creature was destroyed this way".
+## "Destroy at end of combat" is a DELAYED TRIGGER for the end of this
+## combat (MtgGame.schedule_delayed_trigger, CR 603.7), controlled by the
+## block trigger's controller (603.7d) and put on the stack with the
+## step's other end-of-combat triggers in APNAP order (CR 603.3b) — not the
+## plain doom-at-end-of-combat queue, because the reward has to know
+## whether the destruction actually HAPPENED: it destroys the victim and,
+## only if it really landed in a graveyard (regeneration and indestructible
+## both say no), creates the reward as a second delayed trigger for the
+## next end step. That is the printed "if that creature was destroyed this
+## way".
 ##
 ## None of it needs the Aura once the block trigger has fired (CR 603.6,
 ## 603.7a — 2026-10-03): the pair is captured as the trigger goes on the
@@ -83,21 +85,28 @@ static func _condemn(game: MtgGame, source: CardInstance, _event: GameEvent) -> 
 	var pid := game.current_resolution_controller()
 	if pid < 0:
 		pid = source.controller_id
-	game.schedule_end_of_combat_action(_execute.bind(other.id, source.id,
-		int(pair.get("host", -1)), int(pair.get("host_stamp", -1)), pid))
+	var trigger := TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT,
+		_execute.bind(other.id, int(pair.get("other_stamp", -1)),
+			int(pair.get("host", -1)), int(pair.get("host_stamp", -1)), pid),
+		"At end of combat, destroy the other creature.")
+	var entry := game.schedule_delayed_trigger(trigger, pid, source)
+	entry["expires_turn"] = game.turn_number   # this combat's end
 
 
-## Runs at the end-of-combat step, independent of the Aura that scheduled
-## it (CR 603.7a) — which is why it re-finds the victim by id.
-static func _execute(game: MtgGame, victim_id: int, aura_id: int,
-		host_id: int, host_stamp: int, pid: int) -> void:
+## The delayed trigger, resolving at end of combat independent of the Aura
+## that scheduled it (CR 603.7a) — which is why it re-finds the victim by
+## id, and only the object it named (CR 400.7). [param aura] is the Aura
+## card, wherever it is now: the reward's source.
+static func _execute(game: MtgGame, aura: CardInstance, _event: GameEvent,
+		victim_id: int, victim_stamp: int, host_id: int, host_stamp: int,
+		pid: int) -> void:
 	var victim := game.find_instance(victim_id)
-	if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD:
+	if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD \
+			or victim.layer_timestamp != victim_stamp:
 		return
 	game.destroy(victim)
 	if victim.zone == Mtg.Zone.BATTLEFIELD:
 		return   # regenerated or indestructible: not "destroyed this way"
-	var aura := game.find_instance(aura_id)   # the card, wherever it is now
 	if aura == null:
 		return
 	game.schedule_delayed_trigger(TriggeredAbility.new(

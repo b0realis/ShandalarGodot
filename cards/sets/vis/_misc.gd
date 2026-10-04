@@ -155,12 +155,13 @@ static func _red_rider(g: MtgGame, packet: DamagePacket, amount: int,
 
 ## "This turn and next turn": a floating static for the rest of this turn,
 ## and the same static queued for the start of the next turn — whoever's
-## it is (an extra turn first, CR 500.7).
+## it is, decided as that turn BEGINS (MtgGame.queue_next_turn_static with
+## -1): an extra turn taken next is it (CR 500.7), even one created after
+## this resolved, and a skipped turn is not (CR 614.10).
 static func _peace_talks(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	var peace := StaticAbility.new(_peace, "Creatures can't attack, and players and permanents can't be the targets of spells or activated abilities.")
 	g.continuous.add_floating_static(s, peace)
-	var next_pid: int = g.extra_turns[0] if not g.extra_turns.is_empty() else g.opponent_of(g.active_player)
-	g.queue_next_turn_static(next_pid, s, peace)
+	g.queue_next_turn_static(-1, s, peace)
 	g.recalculate()
 	g.log_line("Peace Talks: no attacks and no spell or ability targets this turn and next turn")
 
@@ -236,7 +237,9 @@ static func _pillar_tombs(g: MtgGame, s: CardInstance, e: GameEvent) -> void:
 	bodies.sort_custom(_cheaper_creature)
 	if not bodies.is_empty():
 		var weakest: CardInstance = bodies[0]
-		var hint: bool = g.players[who].life <= 5 or weakest.is_token or weakest.cur_power <= 1
+		# Five life is more than half of what is left at ten or less (the
+		# Mirage bug pass: 8 life paid down to 3 rather than a Grizzly Bears).
+		var hint: bool = g.players[who].life <= 10 or weakest.is_token or weakest.cur_power <= 1
 		if g.agents[who].choose_yes_no(g, who,
 				"Pillar Tombs of Aku: sacrifice a creature? (If you don't, you lose 5 life and the Tombs are sacrificed.)", hint):
 			var pick := g.agents[who].choose_card(g, who, bodies,

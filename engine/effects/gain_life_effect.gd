@@ -42,6 +42,8 @@ func resolve(game: MtgGame, _source: CardInstance, controller: int, target: Targ
 ## One-line log/UI text.
 func describe() -> String:
 	var n := "X" if use_x else str(absi(amount))
-	var verb := "gains" if (use_x or amount >= 0) else "loses"
+	var gains := use_x or amount >= 0
 	var who := "target player" if target_spec != null else "you"
+	# "you gain", "target player gains" — the verb agrees with its subject.
+	var verb := ("gains" if gains else "loses") if target_spec != null else ("gain" if gains else "lose")
 	return "%s %s %s life" % [who, verb, n]

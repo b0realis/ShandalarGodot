@@ -284,10 +284,11 @@ static func linked_cards(value: Dictionary) -> bool:
 		if not index.has(row[0]): return false
 		for id in row[1]:
 			if not index.has(id): return false
-	# Heat Wave's tax rows name a legal block; the "held by" pairs two cards
-	# this view carries (a phased-out permanent and its Oubliette).
+	# Heat Wave's tax rows name attackers and blockers this view carries; the
+	# "held by" pairs two cards (a phased-out permanent and its Oubliette).
 	for row in value.presentation.block_taxes:
-		if not index.has(row[0]) or not index.has(row[1]): return false
+		for id in row[2] + row[3]:
+			if not index.has(id): return false
 	for pair_value in value.presentation.phase_holds:
 		if not index.has(pair_value[0]) or not index.has(pair_value[1]): return false
 	if not value.damage_request.is_empty():
@@ -417,16 +418,19 @@ static func pairs(value: Variant, amounts := false, departed_target := false) ->
 	return true
 
 
-## Heat Wave's tax on a legal block (Pack 8): `[blocker, attacker, tax,
-## life]` per restriction the blocker would owe for that attacker — `tax`
-## an opaque id for the imposing source, so a blocker pays each one ONCE
-## however many of its creatures it blocks (CombatState.block_life_owed).
+## Heat Wave's tax on blocking (Pack 8; protocol 27): `[tax, life,
+## attackers, blockers]` per imposing tax — `tax` an opaque id for the
+## source, so a blocker pays each one ONCE however many of its creatures it
+## blocks (CombatState.block_life_owed); the attacking creatures it protects
+## and the blockers that owe it. Rows and both lists are bounded apart, like
+## [method block_matrix]: protocol 26's row per blocker × attacker × tax
+## outgrew `MAX_CARDS` on a legal board (SgDuelPresentation.block_taxes).
 static func block_taxes(value: Variant) -> bool:
 	if not value is Array or value.size() > SgProtocol.MAX_CARDS: return false
 	for row in value:
 		if not row is Array or row.size() != 4 or not SgProtocol.short_text(row[0], 16) \
-			or not SgProtocol.short_text(row[1], 16) or not SgProtocol.short_text(row[2], 16) \
-			or not SgProtocol.integer(row[3], 1, 1000000): return false
+			or not SgProtocol.integer(row[1], 1, 1000000) or not SgProtocol.handles(row[2]) \
+			or not SgProtocol.handles(row[3]): return false
 	return true
 
 

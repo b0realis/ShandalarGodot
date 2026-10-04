@@ -930,12 +930,22 @@ func grants_host_protection(color_mask: int, text := "") -> CardData:
 	return self
 
 
+## The grant is BOOKED against this Aura on the host
+## ([member CardInstance.cur_aura_protection]) and merged into
+## `cur_protection` by the last pass of
+## [method ContinuousEffects.recalculate], which notes first what every
+## OTHER source gave ([member CardInstance.cur_protection_unwarded]). The
+## exemption is for THIS Aura's own grant only (CR 702.16, 704.5m): a
+## Goblin Wizard's protection from white still removes a White Ward, and
+## until the Mirage bug pass (0.50.11) the exemption was a colour mask
+## that let the Ward survive it.
 static func _apply_host_protection(game: MtgGame, source: CardInstance, mask: int) -> void:
 	if source.attached_to == -1:
 		return
 	var host := game.find_instance(source.attached_to)
 	if host != null and host.zone == Mtg.Zone.BATTLEFIELD:
-		host.cur_protection |= mask
+		host.cur_aura_protection[source.id] = \
+			int(host.cur_aura_protection.get(source.id, 0)) | mask
 
 
 ## The memory key of a CHOSEN-colour protection grant ("As this Aura

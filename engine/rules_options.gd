@@ -218,6 +218,26 @@ var free_damage_assignment := true
 var damage_prevention_window := false
 
 
+## CR 704.5q — "if a permanent has both a +1/+1 counter and a -1/-1
+## counter on it, N +1/+1 and N -1/-1 counters are removed from it" — is
+## a MODERN state-based action (Amonkhet, 2017). The Fifth Edition rules
+## the 1997 game enforces (manual p.108) have nothing like it: the two
+## kinds sit side by side and simply add up.
+##
+## NOT A FORK OF ITS OWN, and that is deliberate: a fork is an Options
+## row, a settings key and a field of the LAN table rules, and this is not
+## a choice the original ever offered. It follows the switch that already
+## marks the Fifth/Sixth Edition boundary in this engine — the 1997
+## damage-prevention step, removed with the Sixth Edition rules overhaul
+## (1999) — so the "1997 — Fifth Edition" preset keeps the two kinds and
+## both modern presets annihilate them; a hand-mixed ("Custom") table
+## follows that fork. Derived, never stored: the referee's game
+## (SgTableRules.apply) and every seat's view of the table
+## (SgTableRules.options) compute it from the same transmitted forks.
+func counters_annihilate() -> bool:
+	return not damage_prevention_window
+
+
 ## Read one fork by name (the Options screen and tests address them as
 ## data). Unknown keys return false rather than erroring, so a stale
 ## setting from an older build cannot break a duel.

@@ -1232,7 +1232,7 @@ func _hotseat_prompt(text: String) -> String:
 
 
 func _status_message() -> String:
-	return _hotseat_prompt(_phase_status_message())
+	return _hotseat_prompt(_phase_status_message() + _special_action_note())
 
 
 ## Put the bar back in its own voice after a red refusal. Cheap enough to
@@ -1950,10 +1950,37 @@ func _repopulate_graveyard() -> void:
 			if not (game.can_play_from_exile(seat, inst)
 					or game.can_cast_from_graveyard(seat, inst)):
 				return false
-			# The same promise the hand's yellow makes: the step admits it
-			# (a sorcery on top of the graveyard waits for your main phase).
-			return inst.is_land() or game.cast_timing_refusal(seat, inst) == ""
+			return _pile_card_playable(seat, inst)
 	_grave_view.populate(game, seat, legal, playable)
+
+
+## THE SAME PROMISE THE HAND'S YELLOW MAKES ([method _highlight_for]) for a
+## card [param seat] may play from a pile: a LAND only while a land could be
+## played at all ([method _land_drop_open]), a spell only when the step
+## admits it (a sorcery on top of the graveyard waits for your main phase)
+## AND the seat could pay for it ([method _payable_now]).
+##
+## WITHOUT THE LAND AND MANA HALVES (H8-6, 2026-10-04) an exiled Three
+## Wishes Forest wore the ring on the opponent's turn and the click was
+## refused — the ring is the promise that clicking it starts the play. At
+## an SGManalink table the projection is not the referee's game, so the
+## ring keeps its timing-only reading there.
+func _pile_card_playable(seat: int, inst: CardInstance) -> bool:
+	if _network_opponent():
+		return inst.is_land() or game.cast_timing_refusal(seat, inst) == ""
+	if inst.is_land():
+		return _land_drop_open(seat)
+	return game.cast_timing_refusal(seat, inst) == "" and _payable_now(seat, inst)
+
+
+## Could [param pid] play a land right now — the land drop, mirroring
+## [method MtgGame.play_land]'s conditions (CR 305.1, CR 505.6b): their
+## own main phase, an empty stack, a drop unspent. Priority is the caller's.
+func _land_drop_open(pid: int) -> bool:
+	return pid == game.active_player \
+		and Mtg.is_main_step(game.current_step()) \
+		and game.stack.is_empty() \
+		and game.land_drop_available(pid)
 
 
 ## A card in the open view was clicked. While targeting it is a target
@@ -2100,6 +2127,9 @@ func _start_cast(inst: CardInstance) -> void:
 ## rest and its refusal is shown verbatim.
 const HAND_ACTION_CAST := 0
 const HAND_ACTION_DISCARD := 1
+## Why the special-action discard waits while the card's OWN cast is
+## pending (H8-3): the cast is still pointing at it.
+const VULTURES_CASTING := "%s is being cast: cancel the cast first."
 var _hand_action_menu: PopupMenu = null
 var _hand_action_inst: CardInstance = null
 
@@ -2120,8 +2150,10 @@ func _open_hand_action_menu(inst: CardInstance) -> void:
 	_hand_action_menu.add_item("Discard %s (special action)" % card_name,
 		HAND_ACTION_DISCARD)
 	var at := _hand_action_menu.get_item_index(HAND_ACTION_DISCARD)
-	_hand_action_menu.set_item_disabled(at, game.priority_player != inst.owner_id)
-	_hand_action_menu.set_item_tooltip(at,
+	_hand_action_menu.set_item_disabled(at, game.priority_player != inst.owner_id \
+		or _pending_card == inst)
+	_hand_action_menu.set_item_tooltip(at, VULTURES_CASTING % card_name \
+		if _pending_card == inst else
 		"Any time you could cast an instant. It uses no stack, nobody can "
 		+ "respond to it, and you keep priority.")
 	_popup_menu_at(_hand_action_menu, _pointer())
@@ -2137,6 +2169,9 @@ func _on_hand_action_chosen(id: int) -> void:
 			if mode == Mode.NORMAL and _pending_card == null and not _modal_open():
 				_start_cast(inst)
 		HAND_ACTION_DISCARD:
+			if _pending_card == inst:
+				_report(VULTURES_CASTING % inst.data.card_name)
+				return
 			_report(game.discard_as_special_action(inst.owner_id, inst))
 			_refresh()
 
@@ -2384,7 +2419,15 @@ func _pending_is_reachable() -> bool:
 		return false
 	if ManaPlanner.cost_is_free(payment["cost"]) and int(payment["extra"]) == 0:
 		return false     # free and still refused: not a mana problem
-	return not ManaPlanner.plan_from(_pending_payment_sources(), payment["cost"],
+	# CHANNEL'S LIFE IS MANA THE CAST MAY WAIT FOR (H1-F1, 2026-10-04): one
+	# {C} per life point, paid from the territory menu while the cast waits
+	# ([method _special_actions]) — the Channel-Fireball play. Reachability
+	# only: no auto-tap ever pays life.
+	var src := _pending_payment_sources()
+	if not _network_opponent() and game.players[_pending_pid].life_for_mana:
+		for unit in mini(game.players[_pending_pid].life, 40):
+			src.append([null, unit, Mtg.ManaColor.C, 1, false, "", 0, 0])
+	return not ManaPlanner.plan_from(src, payment["cost"],
 		int(payment["extra"]), payment["usage"]).is_empty()
 
 
@@ -2554,7 +2597,14 @@ func _auto_x_budget() -> int:
 	var budget := _x_budget(cost, surcharge, usage, _no_auto_tap, true)
 	if _pending_ability_index < 0 and _pending_card.data.repeated_additional_cost != "":
 		# The spin counts PAYMENTS for this card, as the window's does.
-		budget = _repeat_budget(budget, _no_auto_tap, true)
+		return _repeat_budget(budget, _no_auto_tap, true)
+	# "ALL of the mana you have" buys no more X than there are targets for
+	# (H8-7, the window's own bound — [method _x_target_ceiling]).
+	var x_targets := _x_target_ceiling()
+	var per_target := _pending_card.data.extra_cost_per_target \
+		if _pending_ability_index < 0 else 0
+	if x_targets >= 0 and per_target <= 0:
+		budget = mini(budget, x_targets * maxi(cost.x_count, 1))
 	return budget
 
 
@@ -3106,14 +3156,24 @@ func _open_search_dialog(search: SearchLibraryEffect) -> void:
 	_search_list.add_theme_color_override("font_color", OriginalDialog.CHOICE)
 	_search_list.add_theme_color_override("font_selected_color",
 		OriginalDialog.CHOICE_LIT)
-	var seen := {}   # one row per NAME — duplicates add nothing to a tutor
+	# ONE ROW PER NAME, SORTED BY NAME — NEVER IN LIBRARY ORDER (H2-S1,
+	# 2026-10-04; CONTRIBUTING.md rule 8). This picker opens BEFORE the
+	# cast and its Cancel abandons the cast without the search's shuffle,
+	# so a list in library order (first copy of each name first) let a
+	# player read their library's secret order for free and then draw
+	# into it. The engine's own search shuffles after; the order a name
+	# is listed in must say nothing until then — the rule SGManalink's
+	# hidden-zone questions already follow (`SgDuelActions._choice_entries`,
+	# "sorted by name (never library order)").
+	var names: Array[String] = []
 	for inst in game.players[_pending_pid].library:
 		if search.filter.is_valid() and not search.filter.call(inst):
 			continue
-		if seen.has(inst.data.card_name):
-			continue
-		seen[inst.data.card_name] = true
-		_search_list.add_item(inst.data.card_name)
+		if not names.has(inst.data.card_name):
+			names.append(inst.data.card_name)
+	names.sort()
+	for card_name in names:
+		_search_list.add_item(card_name)
 	_search_dialog.body().add_child(_search_list)
 	_search_dialog.add_button("OK").pressed.connect(_on_search_confirmed)
 	_search_dialog.add_button("Cancel").pressed.connect(_on_search_canceled)
@@ -3389,8 +3449,11 @@ func _pick_block(inst: CardInstance) -> void:
 			# back", blocks and all.
 			_block_map.erase(inst.id)
 			_selected_blocker = -1
-			# @PROMPT_MAIN entry 8: back to the standing question.
-			_set_prompt("Combat phase: Choose blockers.")
+			# @PROMPT_MAIN entry 8: back to the standing question — with
+			# what the blocks still pencilled in owe (H8-8, 2026-10-04: the
+			# note went with the take-back although Heat Wave still charged
+			# for the rest).
+			_set_prompt("Combat phase: Choose blockers." + _block_cost_note())
 		else:
 			# A CREATURE THAT CAN BLOCK NOTHING IS NOT LIFTED. It would
 			# otherwise leave its territory for the shield lane and stand
@@ -3409,7 +3472,7 @@ func _pick_block(inst: CardInstance) -> void:
 			# @PROMPT_DEFENDWHOM entry 1 / @PROMPT_CHOOSEBLOCKERS entry 2,
 			# UIStrings.txt:995 and :1142 — the question the original asks
 			# from the moment a blocker is in hand until it is aimed.
-			_set_prompt("Block which attacker?")
+			_set_prompt("Block which attacker?" + _block_cost_note())
 		_refresh()
 	elif _selected_blocker != -1:
 		if not game.combat.attackers.has(inst.id):
@@ -3422,7 +3485,7 @@ func _pick_block(inst: CardInstance) -> void:
 			# clicks (a trigger, a sacrifice): there is nothing to point.
 			_block_map.erase(_selected_blocker)
 			_selected_blocker = -1
-			_set_prompt("Combat phase: Choose blockers.")
+			_set_prompt("Combat phase: Choose blockers." + _block_cost_note())
 			_refresh()
 			return
 		var against: Array = (_block_map.get(_selected_blocker, []) as Array)
@@ -4085,7 +4148,10 @@ static func choice_colors(choice: PlayerChoice) -> Array:
 
 ## The option LABELS [param choice] wears, in order. Static and pure so the
 ## wording can be pinned without a screen (tests/ui/test_duel_prompts.gd).
-static func choice_options(choice: PlayerChoice) -> Array:
+## [param decline] words an optional CARD question's last line, the legal
+## "choose nothing" — `Cancel.` unless the screen knows better ([method
+## _decline_label]: a land's entry payment, where declining COSTS the land).
+static func choice_options(choice: PlayerChoice, decline := "Cancel.") -> Array:
 	match choice.kind:
 		PlayerChoice.Kind.YES_NO:
 			return yes_no_labels(choice.prompt, choice.step)
@@ -4101,7 +4167,7 @@ static func choice_options(choice: PlayerChoice) -> Array:
 			if offers_keep_order(choice):
 				names.append(KEEP_ORDER_LINE)
 			if choice.optional:
-				names.append("Cancel.")       # prompts.txt:949 — fail to find
+				names.append(decline)         # prompts.txt:949 — fail to find
 			return names
 		PlayerChoice.Kind.DISCARD:
 			var hand: Array = []
@@ -4249,7 +4315,7 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 	column.custom_minimum_size.x = 219
 	scroll.add_child(column)
 	lines.add_child(scroll)
-	var labels := choice_options(choice)
+	var labels := choice_options(choice, _decline_label(choice))
 	# A rule-authorized look can precede the question (for example Visions).
 	# Keep that information in the same scrollable area as the answers.
 	for info in choice.information:
@@ -4313,6 +4379,35 @@ func _choice_source_card(choice: PlayerChoice) -> CardInstance:
 			if inst.data.card_name == choice.source:
 				return inst
 	return null
+
+
+## THE LAST LINE OF A LAND'S ENTRY PAYMENT (Mirage bug pass, 2026-10-04).
+## Lotus Vale, Scorched Ruins and the Alliances entry lands hold the land
+## drop on a CARD question that is a cost and optional ([method
+## MtgGame.play_land]): declining is the Oracle's *"If you don't, put it
+## into its owner's graveyard"* — the land is lost AND the drop spent —
+## while the overlay's Cancel button WITHDRAWS the play (the land back in
+## hand, the drop unspent, [method _withdraw_choice]). Worded `Cancel.`
+## like every other optional pick, the decline sat beside the button that
+## withdraws, and one misclick cost the land. It says what it does instead.
+## The question names the land ([member PlayerChoice.source]); the land is
+## the one in the seat's hand, or the exiled card it may play (Three
+## Wishes) — a card question that is a cost and optional is asked by
+## nothing else.
+func _decline_label(choice: PlayerChoice) -> String:
+	if choice.kind != PlayerChoice.Kind.CARD or not choice.is_cost \
+			or not choice.optional or choice.source == "" \
+			or choice.pid < 0 or choice.pid >= game.players.size():
+		return "Cancel."
+	var places: Array = game.players[choice.pid].hand.duplicate()
+	for p in game.players:
+		for inst in p.exile:
+			if game.can_play_from_exile(choice.pid, inst):
+				places.append(inst)
+	for inst: CardInstance in places:
+		if inst.data.card_name == choice.source and inst.is_land():
+			return "Put %s into its owner's graveyard." % choice.source
+	return "Cancel."
 
 
 func _close_choice_overlay() -> void:
@@ -4541,8 +4636,25 @@ func _fast_spells(pid: int) -> Array:
 ## row would otherwise hold every window of the duel for a player who has
 ## not prepared anything.
 func _payable_now(pid: int, inst: CardInstance) -> bool:
-	return game.could_afford(pid, inst.data, _no_auto_tap, inst) \
+	return (game.could_afford(pid, inst.data, _no_auto_tap, inst)
+			and _printed_object_costs_payable(pid, inst)) \
 		or _alternative_row_payable(pid, inst)
+
+
+## Can [param pid] pay the PRINTED row's OBJECT costs right now — *"As an
+## additional cost to cast this spell, sacrifice a creature"* (Wicked
+## Reward, Tendrils of Despair; CR 601.2b/601.2h)? The engine's own count
+## ([method MtgGame.spell_object_costs] through
+## `AdditionalObjectCosts.refusal`, X = 0 — an object-counted X may be 0),
+## the question [method _alternative_row_payable] already asked of every
+## alternative row and SGManalink's `SgPayment.affordable` asks of all.
+##
+## WITHOUT IT (H8-2, 2026-10-04) the mana alone decided: a Wicked Reward
+## with no creature of the player's own to sacrifice was lit yellow, and
+## held the opponent's end step open as a "response" the engine refuses.
+func _printed_object_costs_payable(pid: int, inst: CardInstance) -> bool:
+	var groups: Array = game.spell_object_costs(inst.data, 0)
+	return groups.is_empty() or OC.refusal(game, pid, groups, inst, 0) == ""
 
 
 ## Is one of [param inst]'s ALTERNATIVE payment rows ([method
@@ -4608,7 +4720,10 @@ func _has_affordable_fast_effect(pid: int) -> bool:
 		# chain makes a spell that targets it cost {2} more, and only the
 		# card's own target specs say whether it must
 		# ([method MtgGame.targeting_surcharge_floor]).
-		if game.can_afford(pid, inst.data, inst):
+		# ...and its "as an additional cost" objects (H8-2): floating
+		# {B}{B} is no prepared Wicked Reward with nothing to sacrifice.
+		if game.can_afford(pid, inst.data, inst) \
+				and _printed_object_costs_payable(pid, inst):
 			return true
 	for inst in game.all_battlefield():
 		if inst.controller_id != pid:
@@ -4737,6 +4852,19 @@ func _could_respond(pid: int) -> bool:
 			if _ability_open(pid, inst, ability) \
 					and game.can_afford_cost(pid, ability.cost):
 				return true
+	# A PAYMENT ON THE SEAT IS A RESPONSE TOO (H1-F1, 2026-10-04): Sabertooth
+	# Cobra's ransom, due before the seat's next upkeep — the opponent's end
+	# step is the last window for it, and the automatic pass walked the
+	# player straight past it — and Guardian Angel's paid point of
+	# prevention ([method _special_actions]). Priced like an ability: the
+	# untapped sources could still reach it. Channel is mana, not a response.
+	for entry in _special_actions(pid):
+		if String(entry["kind"]) == "channel":
+			continue
+		if String(entry["kind"]) == "prevention" and game.awaiting_regeneration:
+			continue
+		if game.can_afford_cost(pid, entry["cost"]):
+			return true
 	return false
 
 
@@ -5454,6 +5582,20 @@ func _open_x_dialog() -> void:
 		# A plain {X} spell: only entries 1 and 2, and the field steps by
 		# x_count so every value on it buys a whole point of X.
 		budget -= budget % per_x
+	# "X TARGETS" ARE BOUNDED BY WHAT EXISTS (H8-7, 2026-10-04 — CR 601.2c:
+	# a spell or ability that needs X targets cannot be cast or activated
+	# for more than it can find). Firestorm's "discard X cards ... each of
+	# X targets" offered every card in hand; Word of Binding's "tap X target
+	# creatures" every mana — and the screen then sat on "Select any target
+	# (2 so far, max 4)" with nothing left to pick.
+	var x_targets := _x_target_ceiling()
+	var repeats := _pending_ability_index < 0 \
+		and _pending_card.data.repeated_additional_cost != ""
+	if x_targets >= 0:
+		if life_x or not object_x.is_empty():
+			budget = mini(budget, x_targets)          # the field IS X
+		elif per_target <= 0 and not repeats:
+			budget = mini(budget, x_targets * per_x)  # the field is X's mana
 	_pending_target_count = -1
 	if _x_dialog != null:
 		_x_dialog.queue_free()
@@ -5516,6 +5658,29 @@ func _legal_target_ceiling() -> int:
 			var spec: TargetSpec = slot["spec"]
 			return maxi(spec.legal_targets(game, _pending_card).size(), 1)
 	return 1
+
+
+## The most X the pending action's "X target …" slots can be filled for —
+## the fewest legal targets any of them can see (each wants X distinct
+## ones, CR 601.2c) — or -1 when no slot's count is X (H8-7).
+func _x_target_ceiling() -> int:
+	if _pending_card == null:
+		return -1
+	var effects: Array = []
+	if _pending_ability_index >= 0:
+		if _pending_ability_index >= _pending_card.cur_activated_abilities.size():
+			return -1
+		effects = _pending_card.cur_activated_abilities[_pending_ability_index].effects
+	elif not _pending_card.data.is_aura():
+		effects = _pending_card.data.modes[_pending_mode]["effects"] \
+			if _pending_card.data.is_modal() else _pending_card.data.spell_effects
+	var ceiling := -1
+	for e in effects:
+		if e.target_spec == null or not e.target_count_is_x:
+			continue
+		var found: int = e.target_spec.legal_targets(game, _pending_card).size()
+		ceiling = found if ceiling < 0 else mini(ceiling, found)
+	return ceiling
 
 
 ## Backing out of the X question cancels the whole cast, exactly as the
@@ -6477,6 +6642,12 @@ func _open_territory_menu(pid: int, at: Vector2) -> void:
 		return
 	_territory_menu_pid = pid
 	_territory_menu.clear()
+	# THE SEAT'S OWN PAYMENTS head the menu when it has any (H1-F1, [method
+	# _special_actions]) — the one door to them that every one shares.
+	_territory_specials = _special_actions(_special_seat())
+	_add_special_items(_territory_menu, _territory_specials, SPECIAL_BASE, _special_seat())
+	if not _territory_specials.is_empty():
+		_territory_menu.add_separator()
 	for i in TerritoryMenu.GO_TO.size():
 		_territory_menu.add_item(TerritoryMenu.GO_TO[i]["label"], i)
 	_territory_menu.add_separator()
@@ -6536,6 +6707,11 @@ func _menu_seat() -> int:
 
 
 func _on_territory_menu_chosen(id: int) -> void:
+	if id >= SPECIAL_BASE:
+		var at := id - SPECIAL_BASE
+		if at < _territory_specials.size():
+			_take_special_action(_special_seat(), _territory_specials[at])
+		return
 	if id < REST_BASE:
 		_order_go_to(id)
 		return
@@ -6551,6 +6727,235 @@ func _on_territory_menu_chosen(id: int) -> void:
 		2: _open_duel_options()
 		6: _minimize_window()
 		8: _ask_to_concede()
+
+
+# ------------------------------------------- THE SEAT'S SPECIAL ACTIONS --
+#
+# THREE PAYMENTS THAT BELONG TO NO PERMANENT'S ABILITY (Mirage bug pass,
+# 2026-10-04 — H1-F1). Sabertooth Cobra's and Nafs Asp's *"... unless they
+# pay {2} before that step"* ransom ([method MtgGame.settle_delayed_trigger],
+# any time the bitten seat holds priority, CR 117.1), Channel's *"any time
+# you could activate a mana ability, you may pay 1 life. If you do, add
+# {C}"* ([method MtgGame.pay_life_for_mana], CR 605.3a) and Guardian
+# Angel's *"you may pay {1} any time you could cast an instant. If you do,
+# prevent the next 1 damage"* ([method MtgGame.pay_for_prevention],
+# CR 117.1a). The engine has had all three as actions on the GAME since
+# 2026-09; nothing a local player could click called them — only the AI,
+# the SGManalink referee's "Special actions" window
+# ([method SgDuelActions.special_entries], whose list and words these
+# follow) and the tests. A human at a local table paid every Cobra bite
+# twice, opened Channel into nothing and could not buy the Angel's points.
+#
+# They live where `Duel.hlp` says a seat's own commands are — *"When you
+# right-click on either territory, a mini-menu pops open"* — at the HEAD of
+# the payer's territory menu, and on the mini-menu of the card concerned
+# too (the Cobra whose bite is owed, the creature the Angel shields). A
+# payment the seat cannot make right now is GREYED with the engine's
+# reason, the Territory rule (*"one or more of these options is
+# available"*). The ransom is a deadline the opponent set, so it also
+# holds the windows a response does ([method _could_respond]) and names
+# itself on the Situation Bar ([method _special_action_note]).
+#
+# Not at an SGManalink table ([method _network_opponent]): there the
+# referee's own window is the door, and nothing here may act on the
+# projection.
+
+## Territory-menu ids for the special actions — above every other block.
+const SPECIAL_BASE := 200
+## Card-menu ids for the special actions of the card the menu is on.
+const CARD_MENU_SPECIAL_BASE := 200
+
+## The entries the open territory menu / card menu listed, by position.
+var _territory_specials: Array = []
+var _card_specials: Array = []
+
+
+## Whose payments a menu opened now offers: the menu's seat ([method
+## _menu_seat]) when a human sits there — and, at a private hotseat, only
+## the seat answering at the screen. -1 when none.
+func _special_seat() -> int:
+	var seat := _menu_seat()
+	if seat < 0 or not _is_human(seat):
+		return -1
+	if config.private_hotseat() and seat != _private_decision_seat():
+		return -1
+	return seat
+
+
+## Every special action [param pid] holds, whether or not it can be taken
+## right now: `{kind, label, card?, id?, target?, cost?}` — `settle` (a
+## delayed trigger to pay off), `prevention` (one more point on a target),
+## `channel`. Two Angels on one target are one entry: each point costs {1}
+## either way ([method MtgGame.grant_paid_prevention]).
+func _special_actions(pid: int) -> Array:
+	var out: Array = []
+	if game == null or game.game_over or _network_opponent() \
+			or pid < 0 or pid >= game.players.size() or not _is_human(pid):
+		return out
+	for entry in game.settleable_delayed_triggers(pid):
+		var cost: ManaCost = entry["settle_cost"]
+		out.append({"kind": "settle", "id": int(entry["id"]), "cost": cost,
+			"card": entry.get("source"), "desc": String(entry["desc"]),
+			"label": "Pay %s: %s" % [str(cost), String(entry["desc"])]})
+	var seen: Array = []
+	for entry in game.players[pid].paid_prevention:
+		var target: TargetRef = entry["target"]
+		var twice := false
+		for other: TargetRef in seen:
+			twice = twice or other.same_object(target)
+		if twice:
+			continue
+		seen.append(target)
+		var whom := ("you" if target.player_id == pid else game.players[target.player_id].player_name) \
+			if target.is_player else game.target_label(target)
+		out.append({"kind": "prevention", "target": target, "cost": ManaCost.parse("{1}"),
+			"card": null if target.is_player else game.find_instance(target.instance_id),
+			"label": "Pay {1}: prevent 1 damage to %s" % whom})
+	if game.players[pid].life_for_mana:
+		out.append({"kind": "channel", "card": null,
+			"label": "Channel: pay 1 life for one colorless mana"})
+	return out
+
+
+## Why [param entry] cannot be taken by [param pid] right now, in the
+## engine's words, or "". Asked for the grey, and again before the click
+## taps anything — the engine stays the referee on the rest.
+func _special_action_refusal(pid: int, entry: Dictionary) -> String:
+	if game.game_over:
+		return "the game is over"
+	if game.awaiting_choice != null:
+		return "waiting for a choice to be made"
+	match String(entry.get("kind", "")):
+		"channel":
+			# CR 119.4: not more life than the total (paying down to 0 is
+			# the Channel-Fireball story, and allowed).
+			if game.players[pid].life < 1:
+				return "not enough life to pay 1"
+			return ""
+		"settle", "prevention":
+			if game.priority_player != pid:
+				return "you don't have priority"
+			if game.awaiting_attackers or game.awaiting_blockers \
+					or game.awaiting_discard or game.awaiting_damage_assignment:
+				return "a declaration is waiting"
+			if String(entry["kind"]) == "prevention" and game.awaiting_regeneration:
+				return "only regeneration effects may be used now"
+			if not _special_cost_reachable(pid, entry["cost"]):
+				return "not enough mana to pay %s" % str(entry["cost"])
+	return ""
+
+
+## Floating mana or the sources the auto-tapper may use ([member
+## _no_auto_tap] left alone, as every auto-tap here does) cover [param cost].
+func _special_cost_reachable(pid: int, cost: ManaCost) -> bool:
+	var p: MtgPlayer = game.players[pid]
+	if p.mana_pool.can_pay(cost, 0, [], p.mana_substitutions):
+		return true
+	return not ManaPlanner.plan(game, pid, cost, 0, [], _no_auto_tap).is_empty()
+
+
+## Take [param entry] for [param pid]. The menu may be stale, so the entry
+## is found again in the live list; the mana is tapped first by the shared
+## planner (the engine's prevention spends only the pool, and a locked land
+## must stay untapped), then the engine's own action is called and its
+## refusal, if any, shown verbatim.
+func _take_special_action(pid: int, entry: Dictionary) -> void:
+	var live: Dictionary = {}
+	for now: Dictionary in _special_actions(pid):
+		if String(now["kind"]) != String(entry.get("kind", "")):
+			continue
+		match String(now["kind"]):
+			"settle":
+				if int(now["id"]) == int(entry["id"]): live = now
+			"prevention":
+				if (now["target"] as TargetRef).same_object(entry["target"]): live = now
+			_:
+				live = now
+	if live.is_empty():
+		_report("That special action is no longer available.")
+		_refresh()
+		return
+	var why := _special_action_refusal(pid, live)
+	var kind := String(live["kind"])
+	# ONE ACTION, NOT A RUN: every tap emits `state_changed`, and the
+	# refresh it calls may pass priority for the player ([method
+	# _auto_pass_priority]) — between the lands tapped here and the payment
+	# they are for, which then finds the seat without priority (both the
+	# ransom and the point of prevention need it) and leaves the mana to
+	# burn; before the engine took the ransom out of its queue first
+	# (2026-10-04) the turn moved on and the Cobra's upkeep fired out from
+	# under the payment. The standing orders' re-entrancy guard holds the
+	# automatic pass until the action is done; the refresh after it decides
+	# what comes next.
+	_advancing = true
+	if why == "" and kind != "channel" \
+			and not ManaPlanner.plan_and_pay(game, pid, live["cost"], 0, [], _no_auto_tap):
+		why = "not enough mana to pay %s" % str(live["cost"])
+	if why == "":
+		match kind:
+			"channel": why = game.pay_life_for_mana(pid)
+			"settle": why = game.settle_delayed_trigger(pid, int(live["id"]))
+			"prevention": why = game.pay_for_prevention(pid, live["target"])
+	_advancing = false
+	_report(why)
+	_refresh()
+
+
+## List [param entries] — [param seat]'s — in [param menu] from id
+## [param base], each greyed with its refusal as the tooltip when it cannot
+## be taken now.
+func _add_special_items(menu: PopupMenu, entries: Array, base: int, seat: int) -> void:
+	for i in entries.size():
+		var entry: Dictionary = entries[i]
+		menu.add_item(String(entry["label"]), base + i)
+		var why := _special_action_refusal(seat, entry)
+		var at := menu.get_item_index(base + i)
+		menu.set_item_disabled(at, why != "")
+		menu.set_item_tooltip(at, why)
+
+
+## The seat whose payments a CARD's mini-menu offers — the payer, never the
+## card's owner: the seat answering at a private hotseat, else the human
+## seat holding priority (either player at an open hotseat), else the seat
+## the screen is drawn for.
+func _special_card_seat() -> int:
+	var seat := _viewing_seat()
+	if config.private_hotseat():
+		seat = _private_decision_seat()
+	elif _is_human(game.priority_player):
+		seat = game.priority_player
+	return seat if _is_human(seat) else -1
+
+
+## The special actions of [param inst]'s card — the ransom its bite left,
+## the point of prevention on it.
+func _special_actions_on(inst: CardInstance) -> Array:
+	var out: Array = []
+	if inst == null:
+		return out
+	for entry in _special_actions(_special_card_seat()):
+		if entry.get("card") == inst:
+			out.append(entry)
+	return out
+
+
+## THE RANSOM ON THE SITUATION BAR. While the seat answering here holds
+## priority with a ransom it could pay, the bar's line says what is owed
+## and where to pay it — the deadline is the opponent's, and a payment
+## nobody sees is a payment nobody makes. "" otherwise.
+func _special_action_note() -> String:
+	if game == null or game.game_over or game.awaiting_choice != null:
+		return ""
+	var seat := game.priority_player
+	if not _is_human(seat) or (config.private_hotseat() and seat != _private_decision_seat()):
+		return ""
+	var owed: Array[String] = []
+	for entry in _special_actions(seat):
+		if String(entry["kind"]) == "settle" and _special_action_refusal(seat, entry) == "":
+			owed.append(String(entry["desc"]))
+	if owed.is_empty():
+		return ""
+	return " — %s (right-click your territory to pay)" % "; ".join(owed)
 
 
 ## One of the three display toggles ([constant DuelOptions.MENU_TOGGLES]),
@@ -6944,8 +7349,22 @@ func _open_card_menu(inst: CardInstance, at: Vector2) -> void:
 		_card_menu.add_separator()
 		_card_menu.add_item("Discard %s (special action)" % inst.data.card_name,
 			CARD_MENU_DISCARD_SPECIAL)
+		# NOT WHILE ITS OWN CAST WAITS (H8-3, 2026-10-04): the discard took
+		# the card out from under the pending cast, which stayed in PAYING
+		# on a card in the graveyard — and a land tapped for it floated.
+		var casting := _pending_card == inst
 		_card_menu.set_item_disabled(_card_menu.get_item_index(CARD_MENU_DISCARD_SPECIAL),
-			game.priority_player != inst.owner_id)
+			game.priority_player != inst.owner_id or casting)
+		if casting:
+			_card_menu.set_item_tooltip(_card_menu.get_item_index(CARD_MENU_DISCARD_SPECIAL),
+				VULTURES_CASTING % inst.data.card_name)
+	# The payments that belong to THIS card (H1-F1): the ransom its bite
+	# left, a point of prevention bought for it.
+	_card_specials = _special_actions_on(inst)
+	if not _card_specials.is_empty():
+		_card_menu.add_separator()
+		_add_special_items(_card_menu, _card_specials, CARD_MENU_SPECIAL_BASE,
+			_special_card_seat())
 	# The mark is a property of THIS card, so its tick and its greying are
 	# settled here: only a permanent that makes mana has anything to lock.
 	var at_lock := _card_menu.get_item_index(CARD_MENU_NO_AUTO_TAP)
@@ -6964,8 +7383,16 @@ func _on_card_menu_chosen(id: int) -> void:
 		return
 	if id == CARD_MENU_DISCARD_SPECIAL and _card_menu_inst != null \
 			and _card_menu_inst.zone == Mtg.Zone.HAND:
+		if _pending_card == _card_menu_inst:
+			_report(VULTURES_CASTING % _card_menu_inst.data.card_name)
+			return
 		_report(game.discard_as_special_action(_card_menu_inst.owner_id, _card_menu_inst))
 		_refresh()
+		return
+	if id >= CARD_MENU_SPECIAL_BASE:
+		var at := id - CARD_MENU_SPECIAL_BASE
+		if at < _card_specials.size():
+			_take_special_action(_special_card_seat(), _card_specials[at])
 		return
 	if _card_menu_inst == null or id < 0 or id >= CardMenu.SMALL_CARD.size():
 		return
@@ -8853,10 +9280,7 @@ func _highlight_for(inst: CardInstance) -> int:
 			if inst.is_land():
 				# The land drop, mirroring MtgGame.play_land's conditions
 				# (CR 305.1): your main phase, empty stack, drop unspent.
-				if inst.owner_id == game.active_player \
-						and Mtg.is_main_step(game.current_step()) \
-						and game.stack.is_empty() \
-						and game.land_drop_available(inst.owner_id):
+				if _land_drop_open(inst.owner_id):
 					return MiniCard.Highlight.CASTABLE
 			# could_afford, not can_afford: the engine's own answer folds
 			# in cost modifiers (Gloom's tax, the Mana Matrix's discount),

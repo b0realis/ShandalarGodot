@@ -280,6 +280,20 @@ enum EventType {
 	                     ## put_library_card_into_graveyard). The moved card's
 	                     ## own GRAVEYARD triggers hear it (Gaea's Blessing,
 	                     ## CR 603.6a/603.10a), and so does the battlefield.
+	WAS_DEALT_DAMAGE,    ## data: {to_instance? / to_player?, amount, sources,
+	                     ## packets, is_combat} — the VICTIM's side of one
+	                     ## damage event: ONE event per creature or player per
+	                     ## event, `amount` the total it was dealt, however many
+	                     ## sources dealt it (CR 510.2: a combat damage step's
+	                     ## damage is one simultaneous event; CR 120.3). What
+	                     ## "whenever ~ is dealt damage" / "whenever you're dealt
+	                     ## damage" listens for (Binding Agony, Mortal Wound,
+	                     ## Fungusaur, Living Artifact, Lich); DAMAGE_DEALT stays
+	                     ## the per-source, per-packet event for "whenever ~
+	                     ## deals damage". Inside a simultaneous bracket
+	                     ## (MtgGame.begin_simultaneous) it is dispatched as the
+	                     ## bracket's damage has all landed, before any
+	                     ## state-based action; otherwise right after the packet.
 }
 
 ## What kind of object a StackItem is.

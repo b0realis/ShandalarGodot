@@ -28,7 +28,7 @@ static func configure(c: CardData) -> bool:
 		"Krovikan Elementalist":
 			c.activated(F._ability("{2}{R}", false, PumpEffect.new(1, 0)))
 			var a := F._ability("{U}{U}", false, own_pump(0, 0, [Mtg.Keyword.FLYING]))
-			a.effects.append(F.Action.new(_doom, "sacrifice that creature at the next end step"))
+			a.effects.append(F.Action.new(_doom_yours, "sacrifice that creature at the next end step"))
 			c.activated(a)
 		"Kjeldoran Guard", "Kjeldoran Elite Guard":
 			var n := 1 if c.card_name == "Kjeldoran Guard" else 2
@@ -86,9 +86,16 @@ static func _bauble(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, _x: in
 static func target_from_activation(g: MtgGame) -> CardInstance:
 	var refs := g.current_targets()
 	return g.find_instance(refs[0].instance_id) if not refs.is_empty() else null
+## Celestial Sword: "ITS CONTROLLER sacrifices it" — whoever controls it
+## at that end step (the doom's default sacrificer).
 static func _doom(g: MtgGame, _s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:
 	var body := target_from_activation(g)
 	if body != null: g.doom_at_next_end_step(body, false, false, true)
+## Krovikan Elementalist: a bare "Sacrifice it" — the ACTIVATOR does, only
+## while they still control it (CR 603.7d, 701.17a).
+static func _doom_yours(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
+	var body := target_from_activation(g)
+	if body != null: g.doom_at_next_end_step(body, false, false, true, pid)
 static func _no_defending_snow(g: MtgGame, _s: CardInstance) -> String:
 	return "" if S.snow_count(g, 1 - g.active_player) == 0 else "The defending player controls a snow land"
 static func _guard_link(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
@@ -122,6 +129,7 @@ static func _ski(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int)
 	if not C.same_activation(g, s): return
 	# Phased out: no pump (CR 702.26e); the sacrifice is still scheduled.
 	if g.is_present(s): g.continuous.add_until_eot_pump(s.id, 2, 0, [Mtg.Keyword.FLYING], false, ContinuousEffects.Duration.INDEFINITE)
+	# "ITS CONTROLLER sacrifices it": whoever controls it then (the default).
 	g.doom_at_next_end_step(s, false, false, true)
 	g.recalculate()
 static func _bone(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x: int) -> void:

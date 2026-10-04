@@ -262,6 +262,8 @@ var _end_step_doom_unless_attacked: Dictionary = {}
 ## The subset of [member _end_step_doom] that is SACRIFICED rather than
 ## destroyed at the end step (Dragon Whelp's fourth breath). A sacrifice
 ## can't be regenerated and ignores indestructible (CR 701.17).
+## Instance id -> Array of sacrificers: -1 "its controller", or the player
+## id who must still control it (see [method doom_at_next_end_step]).
 var _end_step_doom_sacrifice: Dictionary = {}
 
 ## Instance id -> the battlefield timestamp ([member CardInstance.layer_timestamp])
@@ -321,6 +323,13 @@ var deaths_this_turn: Array[Dictionary] = []
 var _next_prevention_receipt := 1
 ## Last-known death listeners for a simultaneous move/destruction batch.
 var _departure_batch: Array[Dictionary] = []
+## THE VICTIM SIDE OF A SIMULTANEOUS DAMAGE EVENT (CR 510.2, 120.3): one
+## row per creature or player dealt damage inside the open
+## [method begin_simultaneous] bracket, {to_instance? / to_player?, stamp,
+## amount, sources, packets, is_combat}, summed as the packets land and
+## dispatched as ONE [constant Mtg.EventType.WAS_DEALT_DAMAGE] each by
+## [method _flush_damage_received]. Empty outside a bracket.
+var _damage_received_batch: Array[Dictionary] = []
 var _refreshing_control := false
 const CONTROL_LAYERS := preload("res://engine/core/control_layers.gd")
 
@@ -785,7 +794,7 @@ const TURN_FIELDS: Array[StringName] = [
 	# at its own write site as well, but nothing else records the wipe
 	&"damage_dealt_this_turn", &"creatures_died_this_turn",
 	&"deaths_this_turn",
-	&"_departure_batch",
+	&"_departure_batch", &"_damage_received_batch",
 	&"spells_cast_this_turn",
 	# a turn-based action can end the duel (the 1997 phase-end life check)
 	&"game_over", &"winner", &"is_draw",
@@ -1653,6 +1662,17 @@ func play_land(pid: int, inst: CardInstance) -> String:
 	if entry_banned_by != "":
 		return "%s can't enter the battlefield (%s)" % [
 			inst.data.card_name, entry_banned_by]
+	# THE ENTRY PAYMENT'S QUESTIONS (bug pass 2026-10-04, H5-F4): Lotus
+	# Vale's "sacrifice two untapped lands instead", Lake of the Dead's
+	# Swamp. Every refusal is behind us and nothing has moved, so the land
+	# drop can be HELD on the first question the seat has not answered
+	# ([method _hold_entry_payment]) and replayed with the answer parked.
+	var entry_answers := 0
+	if inst.data.entry_payment.is_valid():
+		_begin_cost_choices()
+		if _hold_entry_payment(pid, inst):
+			return ""
+		entry_answers = _cost_answers
 	if undo_log != null:
 		_rec(players[pid], &"hand")
 		_rec(players[pid], &"lands_played_this_turn")
@@ -1663,6 +1683,10 @@ func play_land(pid: int, inst: CardInstance) -> String:
 	else: players[pid].hand.erase(inst)
 	players[pid].lands_played_this_turn += 1
 	_put_on_battlefield(inst, pid)
+	if entry_answers > 0:
+		# An answer the payment did not take (a stale pick) must not wait
+		# in the mailbox for the next question this land's name asks.
+		agents[pid].end_resolution(inst.data.card_name)
 	dispatch_event(Mtg.EventType.LAND_PLAYED, {"instance": inst, "controller": pid})
 	log_line("%s plays %s" % [players[pid].player_name, inst.data.card_name],
 		inst, "play", pid)
@@ -2211,10 +2235,17 @@ func add_floating_play_ban(pid: int, filter: Callable, desc: String) -> void:
 ## [member floating_activation_bans]. Asked by [method activate_ability]
 ## (through [method ability_timing_refusal]), [method tap_for_mana] and
 ## [method ManaPlanner.sources], so no payment plan counts a banned source.
+##
+## The ban is a STATIC ability, gated exactly as [method play_banned]
+## gates its own: present (CR 702.26b), not silenced (CR 613.1f) and —
+## the 1997 rule (manual p.124, RulesOptions.tapped_artifacts_stop) — not
+## a tapped noncreature artifact whose continuous effects have ceased. A
+## Twiddled Null Rod or Cursed Totem used to keep banning under the fifth
+## profile (Mirage bug pass, H3-F5).
 func activation_ban_reason(pid: int, inst: CardInstance, ability: Variant, is_mana: bool) -> String:
 	for source in all_battlefield():
-		if not source.data.activation_ban.is_valid() or source.cur_abilities_silenced \
-				or source.phased_out:
+		if not source.data.activation_ban.is_valid() or not is_present(source) \
+				or source.cur_abilities_silenced or source.cur_statics_suspended:
 			continue
 		if bool(source.data.activation_ban.call(self, source, pid, inst, ability, is_mana)):
 			return source.data.card_name
@@ -4372,6 +4403,7 @@ func _land_damage_impl(packet: DamagePacket) -> int:
 		dispatch_event(Mtg.EventType.DAMAGE_DEALT,
 			{"source": source, "amount": amount, "to_player": target.player_id,
 			"packet": packet})
+		_note_damage_received(packet, amount, null, target.player_id)
 	else:
 		var inst := find_instance(target.instance_id)
 		if not is_present(inst):   # gone, or phased out (CR 702.26b)
@@ -5197,8 +5229,82 @@ func _mark_creature_damage(packet: DamagePacket, inst: CardInstance) -> int:
 	dispatch_event(Mtg.EventType.DAMAGE_DEALT,
 		{"source": source, "amount": amount, "to_instance": inst,
 		"packet": packet})
+	_note_damage_received(packet, amount, inst, -1)
 	check_state_based_actions()
 	return amount
+
+
+## The VICTIM side of the damage just marked (CR 120.3): "whenever ~ is
+## dealt damage" triggers ONCE per damage event, for the total — and every
+## packet of a combat damage step, whatever its source, is ONE event
+## (CR 510.2; the Boros Reckoner ruling). Inside a
+## [method begin_simultaneous] bracket the packet joins its victim's row
+## of [member _damage_received_batch] and [method _flush_damage_received]
+## announces the sum when the bracket's damage has landed; outside one the
+## packet is the whole event and is announced at once. Until the Mirage
+## bug pass (0.50.11) those listeners heard DAMAGE_DEALT, one per source:
+## a Craw Wurm blocked by two bears made Binding Agony trigger twice.
+func _note_damage_received(packet: DamagePacket, amount: int,
+		to_instance: CardInstance, to_player: int) -> void:
+	if amount <= 0:
+		return
+	if _defer_depth <= 0:
+		var data := {"amount": amount, "sources": [packet.source],
+			"packets": [packet], "is_combat": packet.is_combat}
+		if to_instance != null:
+			data["to_instance"] = to_instance
+		else:
+			data["to_player"] = to_player
+		dispatch_event(Mtg.EventType.WAS_DEALT_DAMAGE, data)
+		return
+	_rec(self, &"_damage_received_batch")
+	for row in _damage_received_batch:
+		var same := false
+		if to_instance != null:
+			same = row.get("to_instance") == to_instance \
+				and int(row.get("stamp", -1)) == to_instance.layer_timestamp
+		else:
+			same = not row.has("to_instance") and int(row.get("to_player", -1)) == to_player
+		if not same:
+			continue
+		row["amount"] = int(row["amount"]) + amount
+		if not (row["sources"] as Array).has(packet.source):
+			(row["sources"] as Array).append(packet.source)
+		(row["packets"] as Array).append(packet)
+		row["is_combat"] = bool(row["is_combat"]) or packet.is_combat
+		return
+	var fresh := {"amount": amount, "sources": [packet.source],
+		"packets": [packet], "is_combat": packet.is_combat}
+	if to_instance != null:
+		fresh["to_instance"] = to_instance
+		fresh["stamp"] = to_instance.layer_timestamp
+	else:
+		fresh["to_player"] = to_player
+	_damage_received_batch.append(fresh)
+
+
+## Announce every victim row the open bracket collected — one
+## WAS_DEALT_DAMAGE each, in the order the victims were first hit — and
+## empty the batch. Called as a bracket's damage has all landed and BEFORE
+## its state-based actions, so a creature that took lethal damage is still
+## on the battlefield to be heard (its Aura's trigger, Fungusaur's own).
+func _flush_damage_received() -> void:
+	if _damage_received_batch.is_empty():
+		return
+	var rows := _damage_received_batch
+	_rec(self, &"_damage_received_batch")
+	_damage_received_batch = []
+	for row in rows:
+		var data := {"amount": int(row["amount"]), "sources": row["sources"],
+			"packets": row["packets"], "is_combat": bool(row["is_combat"])}
+		if row.has("to_instance"):
+			var victim: CardInstance = row["to_instance"]
+			if victim == null or victim.layer_timestamp != int(row["stamp"]):
+				continue   # not the object that was dealt the damage (CR 400.7)
+			data["to_instance"] = victim
+		else:
+			data["to_player"] = int(row["to_player"])
+		dispatch_event(Mtg.EventType.WAS_DEALT_DAMAGE, data)
 
 
 func book_tracked_prevention(inst: CardInstance, amount: int, desc: String) -> int:
@@ -6031,6 +6137,9 @@ func _land_pending_damage() -> void:
 	begin_simultaneous()
 	for packet in packets:
 		_land_damage(packet)
+	# The victims hear the damage now, as it lands — not after the
+	# regeneration window the bracket may stay open across (CR 510.2).
+	_flush_damage_received()
 	# A REDIRECT during landing queues a fresh packet — `Duel.hlp`'s
 	# Veteran Bodyguard ruling calls that "a second damage-prevention step
 	# that follows the current one".
@@ -9111,7 +9220,7 @@ func spell_cost_for(pid: int, data: CardData, x_value := 0, mode := 0) -> ManaCo
 	all_battlefield()
 	for inst in _battlefield_cost_modifiers:
 		var cb: Callable = inst.data.cost_modifier.get("spell_colored", Callable())
-		if cb.is_valid():
+		if cb.is_valid() and cost_modifier_works(inst):
 			var extra: Dictionary = cb.call(self, pid, data, inst)
 			for color in extra:
 				var changed := cost.plus_colored(int(color), int(extra[color]))
@@ -9135,6 +9244,21 @@ func can_meet_minimum_blockers(attacker: CardInstance, defender: int) -> bool:
 	return possible >= attacker.cur_min_blockers
 
 
+## Does [param inst]'s cost modifier apply right now? "Spells cost {1}
+## less" (Helm of Awakening), Gloom's tax, Derelor's {B} are STATIC
+## abilities, gated as [member ContinuousEffects] gates every other static:
+## only while present (CR 702.26b), not silenced (Titania's Song, CR
+## 613.1f) and — the 1997 rule (manual p.124,
+## RulesOptions.tapped_artifacts_stop) — not a tapped noncreature
+## artifact whose continuous effects have ceased. Asked by all three
+## surcharge helpers below, so the cast, the castability highlight
+## ([method can_afford], [method could_afford]) and the AI's planner agree
+## (Mirage bug pass, H4-F2).
+func cost_modifier_works(inst: CardInstance) -> bool:
+	return is_present(inst) and not inst.cur_abilities_silenced \
+		and not inst.cur_statics_suspended
+
+
 func spell_surcharge(pid: int, data: CardData) -> int:
 	all_battlefield()   # refresh the index if the battlefield moved
 	if _battlefield_cost_modifiers.is_empty():
@@ -9142,7 +9266,7 @@ func spell_surcharge(pid: int, data: CardData) -> int:
 	var total := 0
 	for inst in _battlefield_cost_modifiers:
 		var cb: Callable = inst.data.cost_modifier.get("spell", Callable())
-		if cb.is_valid():
+		if cb.is_valid() and cost_modifier_works(inst):
 			# The MODIFIER is passed its own source, so "spells YOU cast"
 			# means the source's controller. Without it every Mana Matrix on
 			# the board scanned for any Matrix and two opposing copies
@@ -9160,7 +9284,7 @@ func ability_surcharge(pid: int, source: CardInstance) -> int:
 	var total := 0
 	for inst in _battlefield_cost_modifiers:
 		var cb: Callable = inst.data.cost_modifier.get("ability", Callable())
-		if cb.is_valid():
+		if cb.is_valid() and cost_modifier_works(inst):
 			total += int(cb.call(self, pid, source, inst))
 	return total
 
@@ -9391,6 +9515,13 @@ func answer_choice(value: Variant) -> String:
 		_pending_action = {}
 		_cost_values.append(value)
 		_cost_answers += 1
+		if String(action.get("kind", "")) == "land":
+			# A land's ENTRY PAYMENT is asked from inside the card's own
+			# callable, so its answers ride the seat's MAILBOX the way a
+			# resolution's do: each one parked as given, kept across the
+			# probes by the rewind, served by the real run
+			# ([method _hold_entry_payment]).
+			agents[choice.pid].accept_answer(choice, value)
 		_replaying_cost = true
 		var err := _replay_cost_action(action)
 		_replaying_cost = false
@@ -9416,15 +9547,18 @@ func answer_choice(value: Variant) -> String:
 ## hold is taken BEFORE anything is paid, so there is nothing to undo — the
 ## proposal is simply retracted (CR 728.1: a player may back out of an
 ## incomplete action). Only the player's OWN cost questions (a cast, an
-## activation, a mana ability) can be withdrawn: a turn-based action's
-## (`untap`, `begin_turn`), a trigger's target and an ADVERSE question put
-## to the opponent must be answered, exactly as before.
+## activation, a mana ability, a land's entry payment) can be withdrawn: a
+## turn-based action's (`untap`, `begin_turn`), a trigger's target and an
+## ADVERSE question put to the opponent must be answered, exactly as before.
+## A withdrawn LAND play leaves the land in hand and the land drop unspent
+## — distinct from DECLINING the payment, the Oracle's "if you don't", which
+## plays the land into its owner's graveyard.
 func cancel_choice() -> String:
 	if awaiting_choice == null:
 		return "nothing is waiting on a choice"
 	var kind := String(_pending_action.get("kind", ""))
-	if awaiting_choice.adverse \
-			or not (kind == "cast" or kind == "activate" or kind == "mana"):
+	if awaiting_choice.adverse or not (kind == "cast" or kind == "activate"
+			or kind == "mana" or kind == "land"):
 		return "that question must be answered"
 	awaiting_choice = null
 	# A withdrawn CAST was stamped with its X before the question was put
@@ -9432,6 +9566,10 @@ func cancel_choice() -> String:
 	var held_card: CardInstance = _pending_action.get("inst") as CardInstance
 	if kind == "cast" and held_card != null and held_card.zone != Mtg.Zone.STACK:
 		_forget_x(held_card)
+	if kind == "land" and held_card != null:
+		# The answers given so far are parked in the seat's mailbox
+		# (answer_choice): they go with the play.
+		agents[int(_pending_action["pid"])].end_resolution(held_card.data.card_name)
 	_pending_action = {}
 	_cost_answers = 0
 	_cost_values.clear()
@@ -9508,6 +9646,62 @@ func _hold_cost_choice(question: PlayerChoice, action: Dictionary) -> bool:
 		return false
 	awaiting_choice = question
 	_pending_action = action
+	_emit_state()
+	return true
+
+
+## HOLD a land drop open on its ENTRY PAYMENT's next unanswered question —
+## true when it did, and [method play_land] then returns "" having changed
+## nothing (bug pass 2026-10-04, H5-F4).
+##
+## The payment ([member CardData.entry_payment]: Lotus Vale's "sacrifice two
+## untapped lands instead", Lake of the Dead's Swamp) replaces the land's
+## arrival (CR 614.1c) and asks from inside the card's own callable while
+## the land is PLAYED — a special action (CR 305.1), so there is no stack
+## item for the pre-flight to probe and no question the cost hold above
+## could build in advance. It is probed the pre-flight's way instead: run
+## once over a [GameSnapshot] with the answers given so far parked on the
+## seat ([method answer_choice] parks each as it comes, and the rewind keeps
+## them), its questions recorded, everything put back. The first one the
+## player has not answered holds the drop on a `land` pending action, which
+## answer_choice replays. The questions wear the land's name as COST
+## questions ([method _pay_entry]), so a front end offers both ways out:
+## decline (the Oracle's "if you don't") and withdraw ([method cancel_choice]).
+##
+## False on the gates [method _hold_cost_choice] keeps, once every question
+## is answered (the real run serves them), and — the liveness check — when
+## an answer the player gave was not served: asking again could never
+## consume it, so the heuristic answers instead and is ledgered.
+func _hold_entry_payment(pid: int, inst: CardInstance) -> bool:
+	if not interactive_choices or _probing or awaiting_choice != null:
+		return false
+	if pid < 0 or pid >= agents.size() or not agents[pid].wants_to_be_asked():
+		return false
+	var snapshot := GameSnapshot.take(self)
+	var outer_choices := _resolving_choices
+	_probing = true
+	_probe_information = []
+	_resolving_choices = []
+	_pay_entry(inst, pid)
+	var asked: Array = _resolving_choices.duplicate()
+	_probing = false
+	_probe_information = []
+	snapshot.restore()
+	_resolving_choices = outer_choices
+	var answered := 0
+	var open_question: PlayerChoice = null
+	for entry in asked:
+		var choice: PlayerChoice = entry
+		if choice.answered_by_player:
+			answered += 1
+		elif open_question == null and choice.pid >= 0 and choice.pid < agents.size() \
+				and agents[choice.pid].wants_to_be_asked() \
+				and agents[choice.pid].can_answer(choice):
+			open_question = choice
+	if open_question == null or answered < _cost_answers:
+		return false
+	awaiting_choice = open_question
+	_pending_action = {"kind": "land", "pid": pid, "inst": inst}
 	_emit_state()
 	return true
 
@@ -9808,6 +10002,10 @@ func _replay_cost_action(action: Dictionary) -> String:
 		"mana":
 			return tap_for_mana(int(action["pid"]), action["inst"],
 				int(action["index"]))
+		"land":
+			# A land's entry payment ([method _hold_entry_payment]): the
+			# land drop again, with the answers in the seat's mailbox.
+			return play_land(int(action["pid"]), action["inst"])
 		"blockers":
 			# Camouflage's pile questions (see [method _camouflage_block_map]):
 			# the declaration is re-issued with the answers in hand — the
@@ -10064,6 +10262,22 @@ func _run_effects_impl(item: StackItem) -> void:
 		effect.resolve_multi(self, item.card, item.controller, group, item.x_value)
 
 
+## Run [param inst]'s ENTRY PAYMENT ([member CardData.entry_payment]) for
+## [param controller]; true when it paid. Asked outside any resolution or
+## turn-based action — a land PLAYED (CR 305.1) — its questions wear the
+## land's name as COST questions, the shape [method _hold_entry_payment]
+## holds and parks answers under (bug pass 2026-10-04, H5-F4). Inside a
+## resolution they stay that resolution's, which the pre-flight holds.
+func _pay_entry(inst: CardInstance, controller: int) -> bool:
+	if _resolving_item != null or _resolving_source != "" or _turn_source != "":
+		return bool(inst.data.entry_payment.call(self, inst, controller))
+	var outer := _cost_source
+	_cost_source = inst.data.card_name
+	var paid := bool(inst.data.entry_payment.call(self, inst, controller))
+	_cost_source = outer
+	return paid
+
+
 ## [param host]: the object an AURA enters attached to. An Aura enters the
 ## battlefield ALREADY attached (CR 303.4a-b: "an Aura spell that resolves
 ## enters attached to the object it targeted"), so the attachment is made
@@ -10082,7 +10296,7 @@ func _put_on_battlefield(inst: CardInstance, controller: int,
 	if refused != "":
 		_arrival_refused(inst, refused)
 		return false
-	if inst.data.entry_payment.is_valid() and not bool(inst.data.entry_payment.call(self, inst, controller)):
+	if inst.data.entry_payment.is_valid() and not _pay_entry(inst, controller):
 		card_to_graveyard_from_anywhere(inst)
 		return false
 	if undo_log != null:
@@ -10317,9 +10531,14 @@ func _run_leave_hook(inst: CardInstance, was_controller: int,
 func _move_to_graveyard(inst: CardInstance, died: bool,
 		sacrificed := false) -> void:
 	if _exile_departure_instead(inst): return
+	# The two "if this creature would die" replacements below are the
+	# creature's OWN abilities: a face-down permanent has none (CR 708.2,
+	# Illusionary Mask) and neither has one that lost them (Titania's Song,
+	# the same flag) — so either simply dies.
+	var own_replacements := not inst.face_down and not inst.cur_abilities_silenced
 	# "If this creature would die, return it to its owner's hand instead"
 	# (Firestorm Phoenix) — a replacement effect, so no dies-trigger fires.
-	if died and inst.data.dies_returns_to_hand and not inst.is_token:
+	if died and own_replacements and inst.data.dies_returns_to_hand and not inst.is_token:
 		log_line("%s returns to its owner's hand instead of dying" % inst.data.card_name)
 		return_to_hand(inst)
 		if inst.data.dies_to_hand_locks and inst.zone == Mtg.Zone.HAND:
@@ -10337,7 +10556,7 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 	# Forbidden Crypt also applying, the card's own replacement is applied
 	# without asking (CR 616.1 lets its controller choose; this order keeps
 	# the card).
-	if died and inst.data.dies_to_library_top and not inst.is_token:
+	if died and own_replacements and inst.data.dies_to_library_top and not inst.is_token:
 		log_line("%s goes on top of its owner's library instead of dying" % inst.data.card_name)
 		return_permanent_to_library_top(inst)
 		return
@@ -10618,10 +10837,19 @@ func settle_delayed_trigger(pid: int, entry_id: int) -> String:
 	var cost: ManaCost = entry["settle_cost"]
 	if not can_afford_cost(pid, cost):
 		return "not enough mana to pay %s" % str(cost)
-	if not try_pay(pid, cost):
-		return "not enough mana to pay %s" % str(cost)
+	# OFF THE QUEUE BEFORE THE PAYMENT: paying taps sources and announces
+	# the state (try_pay -> _emit_state), and a synchronous state_changed
+	# listener may move the game on in between — the local duel screen's
+	# automatic pass did, into the upkeep where this very entry triggers
+	# (Sabertooth Cobra), and the index read above then pointed past the
+	# queue. Settled first, it can't fire mid-payment; a payment that fails
+	# after all puts it back where it was.
 	_rec(self, &"delayed_triggers")
 	delayed_triggers.remove_at(at)
+	if not try_pay(pid, cost):
+		_rec(self, &"delayed_triggers")
+		delayed_triggers.insert(mini(at, delayed_triggers.size()), entry)
+		return "not enough mana to pay %s" % str(cost)
 	log_line("%s pays %s: %s" % [players[pid].player_name, str(cost), entry["desc"]])
 	_emit_state()
 	return ""
@@ -11156,10 +11384,44 @@ func begin_simultaneous() -> void:
 func end_simultaneous() -> void:
 	_defer_depth = maxi(_defer_depth - 1, 0)
 	if _defer_depth == 0:
+		_flush_damage_received()   # one "is dealt damage" event per victim
 		_defer_state_based_actions = false
 		_rec(self, &"_departure_batch")
 		_departure_batch = []
 		check_state_based_actions()
+
+
+## CR 704.5q's whole action, every permanent at once: "If a permanent has
+## both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1
+## counters are removed from it, where N is the smaller of the number of
+## +1/+1 and -1/-1 counters on it." Only those two kinds — a +1/+0 or a
+## -0/-1 counter is no part of it. Journaled; each removal is announced
+## (COUNTERS_REMOVED) like any other. Returns whether anything was removed.
+## The caller gates it on [method RulesOptions.counters_annihilate].
+func _annihilate_counters() -> bool:
+	var acted := false
+	for inst in all_battlefield():
+		if inst.counters.size() < 2:
+			continue
+		var pairs := mini(int(inst.counters.get("+1/+1", 0)),
+			int(inst.counters.get("-1/-1", 0)))
+		if pairs <= 0:
+			continue
+		_rec(inst, &"counters")
+		for kind in ["+1/+1", "-1/-1"]:
+			var left := int(inst.counters[kind]) - pairs
+			if left > 0:
+				inst.counters[kind] = left
+			else:
+				inst.counters.erase(kind)
+		log_line("%s: %d +1/+1 and %d -1/-1 counter(s) cancel out" % [
+			inst.data.card_name, pairs, pairs], inst)
+		_counter_removal_event(inst, "+1/+1", pairs)
+		_counter_removal_event(inst, "-1/-1", pairs)
+		acted = true
+	if acted:
+		recalculate()
+	return acted
 
 
 func _death_listener_snapshot() -> Array[Dictionary]:
@@ -11211,6 +11473,14 @@ func check_state_based_actions() -> void:
 		if losers.size() > 0:
 			_lose(losers[0], reasons[0])
 			return
+		# CR 704.5q — MODERN rules only (RulesOptions.counters_annihilate;
+		# the Fifth Edition rules of 1997 keep both kinds): +1/+1 and -1/-1
+		# counters on one permanent are removed in pairs. A pair adds up to
+		# no power and no toughness, so performing it ahead of the lethal
+		# checks is the same as performing it with them (CR 704.4).
+		if rules.counters_annihilate() and _annihilate_counters():
+			acted = true
+			continue
 		# FAST PASS — the checks that apply to any permanent at all. This
 		# whole method runs on every mutation AND every time a player would
 		# get priority, so it stays two comparisons per permanent.
@@ -11360,10 +11630,14 @@ func check_state_based_actions() -> void:
 				# protection from the aura's color sheds it — EXCEPT the
 				# protection this very aura grants ("This effect doesn't
 				# remove this Aura" — the Wards).
-				# The exemption reads THIS aura's chosen colour too (Ward of
-				# Lights, CardData.self_protection_mask).
-				if (host.cur_protection & inst.cur_colors
-						& ~inst.data.self_protection_mask(inst)) != 0:
+				# The exemption is THIS aura's own GRANT, never its colour
+				# (CR 702.16, 704.5m; Mirage bug pass 0.50.11): protection
+				# from white from a Goblin Wizard, a printed one or another
+				# Ward still removes a White Ward or a Ward of Lights naming
+				# white. Until then a colour mask
+				# (CardData.self_protection_mask, still read by the AI) let it
+				# ride out every source of its colour.
+				if (host.protection_apart_from(inst.id) & inst.cur_colors) != 0:
 					log_line("%s falls off %s (protection)" % [
 						inst.data.card_name, host.data.card_name])
 					host.attachments.erase(inst.id)
@@ -11495,8 +11769,18 @@ static func _untap_kinds(inst: CardInstance) -> Array[String]:
 ## [param as_sacrifice]: the printed word is "sacrifice", not "destroy"
 ## (Dragon Whelp's fourth breath) — regeneration and indestructible do not
 ## apply (CR 701.17).
+## [param sacrificer] (a sacrifice only): who sacrifices it. -1, the
+## default, is "ITS CONTROLLER sacrifices it" — whoever controls it at that
+## end step (Celestial Sword). A player id is a bare "sacrifice it" from a
+## spell or ability: "you" is the delayed trigger's controller, the player
+## who controlled that spell or ability (CR 603.7d), and a player can
+## sacrifice only a permanent they control (CR 701.17a) — so if someone
+## else controls it by then, nothing happens (Tidal Wave's Wall,
+## Soulshriek's creature, stolen in the meantime). Every doom keeps its
+## own sacrificer ([member _end_step_doom_sacrifice] holds the list).
 func doom_at_next_end_step(inst: CardInstance, only_if_attacked := false,
-		only_if_it_did_not_attack := false, as_sacrifice := false) -> void:
+		only_if_it_did_not_attack := false, as_sacrifice := false,
+		sacrificer := -1) -> void:
 	if _end_step_doom.has(inst.id) \
 			and int(_end_step_doom_stamps.get(inst.id, inst.layer_timestamp)) != inst.layer_timestamp:
 		# A stale entry for an EARLIER object with this id (CR 400.7): it
@@ -11511,7 +11795,7 @@ func doom_at_next_end_step(inst: CardInstance, only_if_attacked := false,
 			_end_step_doom_if_attacked.erase(inst.id)   # unconditional wins
 			_end_step_doom_unless_attacked.erase(inst.id)
 		if as_sacrifice:
-			_end_step_doom_sacrifice[inst.id] = true
+			_add_doom_sacrificer(inst.id, sacrificer)
 		return
 	_end_step_doom.append(inst.id)
 	if only_if_attacked:
@@ -11519,7 +11803,17 @@ func doom_at_next_end_step(inst: CardInstance, only_if_attacked := false,
 	if only_if_it_did_not_attack:
 		_end_step_doom_unless_attacked[inst.id] = true
 	if as_sacrifice:
-		_end_step_doom_sacrifice[inst.id] = true
+		_add_doom_sacrificer(inst.id, sacrificer)
+
+
+## One more sacrificer for the end-step doom of instance [param id] (see
+## [method doom_at_next_end_step]). A fresh Array each time: the journal
+## records the table by value, never an inner array shared with it.
+func _add_doom_sacrificer(id: int, sacrificer: int) -> void:
+	var by: Array = (_end_step_doom_sacrifice.get(id, []) as Array).duplicate()
+	if not by.has(sacrificer):
+		by.append(sacrificer)
+	_end_step_doom_sacrifice[id] = by
 
 
 ## "Destroy it at the beginning of the next end step if it didn't attack
@@ -12941,7 +13235,10 @@ func _begin_turn() -> bool:
 		return false
 	_release_hand_locks(pid)   # "until your next turn" — it is here
 	for entry in next_turn_statics.duplicate():
-		if int(entry.pid) == pid:
+		# pid -1: "next turn" whoever's it is — the first turn that actually
+		# BEGINS, so it is placed after the skips above (a skipped turn does
+		# not happen, CR 614.10) and an extra turn counts (CR 500.7).
+		if int(entry.pid) == pid or int(entry.pid) < 0:
 			_rec(self, &"next_turn_statics")
 			next_turn_statics.erase(entry)
 			continuous.add_floating_static(entry.source, entry.ability)
@@ -12955,6 +13252,13 @@ func _begin_turn() -> bool:
 	return true
 
 
+## Apply [param ability] (from [param source]) as a floating static for
+## the whole of a later turn: [param pid]'s next turn ("during target
+## player's next turn" — False Peace, Taunt), or, with [param pid] -1, the
+## NEXT TURN that actually begins, whoever's it is ("this turn and next
+## turn" — Peace Talks): a skipped turn is not it (CR 614.10) and an extra
+## turn taken next is (CR 500.7). Added as that turn begins, after its
+## skip replacements ([method _begin_turn]).
 func queue_next_turn_static(pid: int, source: CardInstance, ability: StaticAbility) -> void:
 	_rec(self, &"next_turn_statics")
 	next_turn_statics.append({"pid": pid, "source": source, "ability": ability})
@@ -12974,8 +13278,10 @@ static func _extra_turn_end(g: MtgGame, _s: CardInstance, e: GameEvent, turn: in
 	return g.turn_number == turn and int(e.data.player) == pid
 
 
-static func _extra_turn_lose(g: MtgGame, _s: CardInstance, e: GameEvent) -> void:
-	g.lose_game(int(e.data.player), "Last Chance")
+## The loss names the card that granted the turn — Last Chance or Final
+## Fortune — the delayed trigger's source (CR 603.7d).
+static func _extra_turn_lose(g: MtgGame, s: CardInstance, e: GameEvent) -> void:
+	g.lose_game(int(e.data.player), s.data.card_name if s != null else "Last Chance")
 
 
 ## Skip the turn that was about to begin: proceed past it as though it did
@@ -13560,7 +13866,11 @@ func _enter_step(index: int) -> void:
 						and doomed.attacked_this_turn:
 					continue
 				if _end_step_doom_sacrifice.has(doomed_id):
-					sacrifice_permanent(doomed)   # "sacrifice", not "destroy"
+					# "Sacrifice it": only by a sacrificer who controls it
+					# now (CR 603.7d, 701.17a) — a stolen one stays.
+					var by: Array = _end_step_doom_sacrifice[doomed_id]
+					if by.has(-1) or by.has(doomed.controller_id):
+						sacrifice_permanent(doomed)   # "sacrifice", not "destroy"
 				else:
 					destroy(doomed, true)
 			_end_step_doom.clear()

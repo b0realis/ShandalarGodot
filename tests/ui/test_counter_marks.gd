@@ -101,6 +101,10 @@ func test_two_kinds_are_two_chips_each_with_its_own_line() -> void:
 	# A Sengir Vampire that grew one head and then took an Unstable
 	# Mutation: its OWN kind by its own line, the foreign kind by the
 	# Mutation's (`UIStrings.txt:827`, the 1997 wording, not Manalink's).
+	# Under the 1997 rules: modern rules annihilate a +1/+1 and a -1/-1
+	# counter in pairs (CR 704.5q, RulesOptions.counters_annihilate), so
+	# only Fifth Edition leaves both kinds on one creature.
+	g.rules.set_edition("fifth")
 	var vampire := put_battlefield(0, "Sengir Vampire")
 	g.add_counters(vampire, "+1/+1", 1)
 	g.add_counters(vampire, "-1/-1", 2)

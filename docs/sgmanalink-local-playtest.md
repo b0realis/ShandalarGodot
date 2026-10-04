@@ -1,6 +1,6 @@
 # SGManalink LAN playtest
 
-Development source: `main`, version **0.50.11**. A desktop LAN full-pool duel
+Development source: `main`, version **0.50.12**. A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
@@ -9,7 +9,7 @@ The **Tournament** tab adds [LAN knockout events](sgmanalink-tournaments.md)
 with 2–40 entrants, a separate or participating organiser, first to 1/2/3 wins,
 fixed/approved/own deck policies, a live Master Panel, an advancement diagram
 and final standings. [Computer opponents](sgmanalink-computer-players.md) can fill
-duel rooms and a chosen number of tournament seats. Protocol **26** and the
+duel rooms and a chosen number of tournament seats. Protocol **27** (0.50.12) and the
 current rules fingerprint require matching updated builds and enabled card
 catalogues on every computer; old LAN development builds cannot join.
 Internet play and MElo are parked.
@@ -26,7 +26,7 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 
 ## Two computers on the same network
 
-Use matching **0.50.11 development builds** and enabled packs on both computers. The older
+Use matching **0.50.12 development builds** and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name
@@ -295,7 +295,7 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   dispatch. Duplicate/contradictory card locations, absent combat-card references
   and unknown keyword values are rejected before replacing the client view.
   Seat authorization comes from the connection, not a player
-  number submitted by the client. The data protocol is version 26 (all players
+  number submitted by the client. The data protocol is version 27 from 0.50.12 (all players
   need this updated build, including the table's rules, its deck rule and assigned deck,
   the open host's published invitation, viewer-specific exile-play permissions,
   public hack-effect reminders, live ability badges, the protection-from-
@@ -307,8 +307,13 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   window is about, public active player-protection descriptions, no printed cost on a face — the client prices a
   named card off its own registry — and, since 26 (Pack 8), each seat's
   phased-out permanents with their phasing flags and any "held by" holder,
-  Heat Wave's per-block life taxes for the blocking seat's own lineup, and
-  the hand's special-action discard command `discard_special`);
+  Heat Wave's life taxes for the blocking seat's own lineup, and
+  the hand's special-action discard command `discard_special`; since 27,
+  those taxes travel as one row per imposing tax — the attackers it
+  protects and the blockers that owe it — where 26's row per blocker ×
+  attacker × tax outgrew the view's bound on a big board and cut the
+  defender off; a view that fails the host's own check is never sent, the
+  seat is told why);
   the invitation keeps the `sglan1:` envelope prefix and carries the same
   protocol-22 compatibility check inside it. A handshake fingerprint additionally
   checks the release version, maintained rules revision and printed card catalogue,

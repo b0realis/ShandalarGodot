@@ -56,7 +56,8 @@ static func _exhausted(g: MtgGame, s: CardInstance, _pid: int) -> void:
 ## owner's graveyard." A replacement of the arrival (CR 614.1c,
 ## CardData.entry_payment): both lands are chosen before either is
 ## sacrificed, so a refusal half-way leaves the board as it was, and the
-## controller may decline outright.
+## controller may decline outright. A PLAYED land's picks are put to a human
+## seat with the land drop held open (MtgGame._hold_entry_payment).
 static func _two_untapped_lands(g: MtgGame, s: CardInstance, pid: int) -> bool:
 	var choices: Array[CardInstance] = []
 	for i in g.players[pid].battlefield:

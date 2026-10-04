@@ -34,7 +34,11 @@ static func configure(c: CardData) -> bool:
 			var spec := TargetSpec.creature("target creature blocking this creature").with_source_filter(_blocking_source)
 			c.activated(F._ability("{1}{W}", false, TapEffect.new(spec)))
 		"Soul Shepherd":
-			c.activated(F._ability("{W}", false, GainLifeEffect.new(1)).with_exile_from_graveyard("creature card", F._creature))
+			# The menu text is the Oracle line: F._ability writes only the
+			# mana part of a cost, never the graveyard exile.
+			c.activated(ActivatedAbility.new("{W}", false, [GainLifeEffect.new(1)],
+				"{W}, Exile a creature card from your graveyard: You gain 1 life.") \
+				.with_exile_from_graveyard("creature card", F._creature))
 		"Southern Paladin":
 			c.activated(F._ability("{W}{W}", true, DestroyEffect.new(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target red permanent", _red))))
 		"Mischievous Poltergeist":
@@ -52,7 +56,8 @@ static func configure(c: CardData) -> bool:
 			# {X}{X}{R}: ManaCost counts both X pips (x_count), so X = 2
 			# costs {4}{R}; X = 0 is legal and names no target.
 			var raze := DestroyEffect.new(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target land", F._land)).x_targets()
-			c.activated(F._ability("{X}{X}{R}", true, raze).with_sacrifice_cost())
+			c.activated(ActivatedAbility.new("{X}{X}{R}", true, [raze],
+				"{X}{X}{R}, {T}, Sacrifice this creature: Destroy X target lands.").with_sacrifice_cost())
 		"Fungus Elemental":
 			c.as_it_enters(_stamp_entry)
 			var grow := F._ability("{G}", false, SelfCounter.new("+2/+2")).with_sacrifice_of("Forest", F._subtype.bind("forest")).only_if(_entered_this_turn)
@@ -68,7 +73,8 @@ static func configure(c: CardData) -> bool:
 			surge.text = "Tap an untapped creature you control: This creature gets +1/+1 until end of turn."
 			c.activated(surge)
 		"Llanowar Druid":
-			c.activated(F._ability("", true, F.Action.new(_untap_forests, "untap all Forests", null, true)).with_sacrifice_cost())
+			c.activated(ActivatedAbility.new("", true, [F.Action.new(_untap_forests, "untap all Forests", null, true)],
+				"{T}, Sacrifice this creature: Untap all Forests.").with_sacrifice_cost())
 		"Serrated Biskelion":
 			var both := ActivatedAbility.new("", true, [SelfCounter.new("-1/-1"), CounterMarkerEffect.new("-1/-1")],
 				"{T}: Put a -1/-1 counter on this creature and a -1/-1 counter on target creature.")

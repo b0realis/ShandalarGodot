@@ -19,6 +19,7 @@ func test_time_elemental_burns_its_controller_even_when_it_dies_blocking() -> vo
 	var elemental := put_battlefield(1, "Time Elemental")  # 0/2
 	run_combat([giant.id], {elemental.id: giant.id})
 	assert_eq(elemental.zone, Mtg.Zone.GRAVEYARD, "the 0/2 died blocking")
+	resolve_stack()   # the delayed trigger is on the stack (CR 603.7)
 	assert_eq(g.players[1].life, 15, "the delayed trigger still fires")
 
 
@@ -31,6 +32,7 @@ func test_time_elemental_immolation_survives_a_bounce() -> void:
 	resolve_stack()                 # the attack trigger schedules the doom
 	g.return_to_hand(elemental)     # an Unsummon in response
 	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()   # the delayed trigger is on the stack (CR 603.7)
 	assert_eq(elemental.zone, Mtg.Zone.HAND, "nothing to sacrifice")
 	assert_eq(g.players[0].life, 15, "the 5 damage still happens")
 
@@ -38,6 +40,7 @@ func test_time_elemental_immolation_survives_a_bounce() -> void:
 func test_time_elemental_sacrifices_itself_after_a_quiet_attack() -> void:
 	var elemental := put_battlefield(0, "Time Elemental")
 	run_combat([elemental.id])
+	resolve_stack()   # the delayed trigger is on the stack (CR 603.7)
 	assert_eq(elemental.zone, Mtg.Zone.GRAVEYARD)
 	assert_eq(g.players[0].life, 15)
 

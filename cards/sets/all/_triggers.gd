@@ -138,7 +138,7 @@ static func _steam(g: MtgGame, _s: CardInstance, _e: GameEvent) -> void:
 	for t in g.current_targets(): g.adjust_life(t.player_id, 2)
 static func _regenerated(_g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return s.regenerations_this_turn > 0
 static func _starfish(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	var count := s.regenerations_this_turn if F._same_trigger_source(g, s) else s.last_regenerations_this_turn
+	var count := s.regenerations_this_turn if F._same_trigger_object(g, s) else s.last_regenerations_this_turn
 	if count <= 0: return
 	var token := CardData.new("Starfish", "", Mtg.CardType.CREATURE).pt(0, 1).with_colors(Mtg.ManaColor.U).with_subtypes(["starfish"])
 	g.create_token(int(g.trigger_context(s).controller), token, count)

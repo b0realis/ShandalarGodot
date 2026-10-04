@@ -400,6 +400,13 @@ func act(pid: int, action: Dictionary) -> String:
 			if state.mode != "priority": return "Wait for priority."
 			var card := _card(pid, action.card)
 			if card == null or not game.players[pid].hand.has(card): return "Card unavailable."
+			# Not the card whose cast is being ANNOUNCED (bug pass
+			# 2026-10-04): discarding it left the open announcement casting
+			# a card in the graveyard. The seat cancels first (CR 601.2 —
+			# casting is one process; the card is not the seat's to use
+			# elsewhere midway), as the local screen offers no Discard then.
+			if not actions.draft.is_empty() and actions.draft.card == card:
+				return "Finish or cancel that card's announcement first."
 			return game.discard_as_special_action(pid, card)
 		"choice": return actions.answer(pid, action.picks)
 		"cancel":

@@ -65,7 +65,8 @@ static func payment_possible(g: MtgGame, source: CardInstance, pid: int, ages: i
 		"draw":
 			return true   # drawing from an empty library is a draw (it loses later)
 		"self_counter":
-			return source.zone == Mtg.Zone.BATTLEFIELD
+			# A phased-out permanent can't be given counters (CR 702.26b).
+			return g.is_present(source)
 	var can: Callable = payment.get("can_pay", Callable())
 	return not can.is_valid() or bool(can.call(g, source, pid, ages))
 
@@ -99,7 +100,7 @@ static func _pay_custom(g: MtgGame, source: CardInstance, pid: int, ages: int,
 static func _resolve_custom(g: MtgGame, source: CardInstance, _event: GameEvent,
 		payment: Dictionary) -> void:
 	var context := g.trigger_context(source)
-	if source.zone != Mtg.Zone.BATTLEFIELD or source.layer_timestamp != int(context.get("timestamp", -1)):
+	if not _still_here(g, source, context):
 		return
 	var pid := int(context.get("controller", source.controller_id))
 	g.add_counters(source, "age")
@@ -130,10 +131,19 @@ static func _your_upkeep(_g: MtgGame, source: CardInstance, event: GameEvent) ->
 static func _capture(_g: MtgGame, source: CardInstance, _event: GameEvent) -> Dictionary:
 	return {"timestamp": source.layer_timestamp, "controller": source.controller_id}
 
+## CR 702.24a's INTERVENING IF, rechecked on resolution (CR 603.4): "if
+## this permanent is on the battlefield" — the very object that triggered
+## (CR 400.7), and PHASED IN: a phased-out permanent is treated as though
+## it doesn't exist (CR 702.26b), so a Psychic Vortex or Heart of Bogardan
+## that phased out with its upkeep on the stack does nothing at all — no
+## age counter, no payment, no "wasn't paid" event, no sacrifice.
+static func _still_here(g: MtgGame, source: CardInstance, context: Dictionary) -> bool:
+	return g.is_present(source) and source.layer_timestamp == int(context.get("timestamp", -1))
+
 static func _resolve(g: MtgGame, source: CardInstance, _event: GameEvent,
 		cost_text: String, life: int, sacrifice_type: String) -> void:
 	var context := g.trigger_context(source)
-	if source.zone != Mtg.Zone.BATTLEFIELD or source.layer_timestamp != int(context.get("timestamp", -1)):
+	if not _still_here(g, source, context):
 		return
 	var pid := int(context.get("controller", source.controller_id))
 	g.add_counters(source, "age")

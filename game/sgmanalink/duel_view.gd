@@ -53,7 +53,16 @@ func present(room: Dictionary, online: bool, busy: bool, hosting := false) -> vo
 	if _presenting:
 		projection.locked = true
 		return
-	if not SgViewProtocol.room(room) or room.is_empty() or room.game.is_empty(): return
+	if not SgViewProtocol.room(room):
+		# NEVER DROPPED WITHOUT A WORD (bug pass 2026-10-04): protocol 26's
+		# Heat Wave rows outgrew the validator on a legal board and the
+		# table simply froze. The last valid table stays; the log and the
+		# prompt say why.
+		push_warning("SGManalink: a view of room %s at revision %s failed the protocol check and was not shown." % [
+			str(room.get("id", "?")), str(room.get("revision", "?"))])
+		if _built: _report("The host's latest table could not be shown (it failed the protocol check); the last valid table stays.")
+		return
+	if room.is_empty() or room.game.is_empty(): return
 	_presenting = true
 	_room = room.duplicate(true)
 	if _awaiting_ack and int(room.revision) > _sent_revision and not busy: _awaiting_ack = false
@@ -572,6 +581,21 @@ func _on_cancel() -> void:
 	super._on_cancel()
 	_prepared_key = ""
 	_auto_pay_requested = false
+
+
+## THE GRAVEYARD/EXILE RING AT A NETWORKED TABLE (Mirage bug pass,
+## 2026-10-04, H8-6): the referee's own answer, never the projection's
+## timing-only reading, which rang an exiled Three Wishes land on the
+## opponent's turn — and the click was refused. A LAND rings on the face's
+## `playable` (SgPracticeMatch._playable: the seat's main phase, an empty
+## stack, a land drop unspent); a spell as a hand card lights
+## ([method _highlight_for]): `playable`, or the row's `castable` (its
+## timing allows it and the mana the seat could still tap pays for it).
+func _pile_card_playable(_seat: int, inst: CardInstance) -> bool:
+	var key := projection.handle(inst.id)
+	var face: Dictionary = projection.faces.get(key, {})
+	if inst.is_land() or bool(face.get("land", false)): return bool(face.get("playable", false))
+	return bool(face.get("playable", false)) or bool(projection.details.get(key, {}).get("castable", false))
 
 
 func _highlight_for(inst: CardInstance) -> int:

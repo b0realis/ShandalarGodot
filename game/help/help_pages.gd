@@ -257,6 +257,7 @@ static func _page_table() -> Dictionary:
 		]},
 		_heading("The prompt tells you what to do next"),
 		_text("The Situation Bar asks for attackers, blockers, targets or mana. Done completes the current choice. Cancel abandons a choice when that is still allowed."),
+		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, and the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
 		_heading("Keep these keys handy"),
 		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
 			Controls.key_text("duel_done"), Controls.key_text("duel_cancel"), Controls.key_text("duel_space"),
@@ -1246,8 +1247,8 @@ static func _page_builder() -> Dictionary:
 		_text("Pack 8 · The Mirage Block brings Mirage, Visions and Weatherlight: 669 different cards "
 			+ "and 684 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
 			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
-			+ "usual rules, and a card first printed in Ice Age, Homelands, Portal or Second Age can be played "
-			+ "with either that pack or Pack 8 installed."),
+			+ "usual rules, and a card whose rules script lives in Ice Age, Homelands, Portal or Portal Second Age "
+			+ "can be played with either that pack or Pack 8 installed."),
 		_text("LOAD is a door to the Load Deck dialog from the bar: "
 			+ "your own decks head the list, a finder above it keeps the "
 			+ "rows whose title or file name contains what you type, "

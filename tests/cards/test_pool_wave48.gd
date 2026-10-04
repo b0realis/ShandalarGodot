@@ -151,6 +151,7 @@ func test_glyph_of_doom_kills_what_the_wall_blocked() -> void:
 	resolve_stack()
 	assert_eq(attacker.zone, Mtg.Zone.BATTLEFIELD, "not yet")
 	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()   # the doom is a delayed trigger on the stack (CR 603.7)
 	assert_eq(attacker.zone, Mtg.Zone.GRAVEYARD, "at end of combat it dies")
 
 

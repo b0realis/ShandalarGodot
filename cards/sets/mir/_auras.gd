@@ -65,7 +65,9 @@ static func configure(c: CardData) -> bool:
 				"At the beginning of your upkeep, sacrifice this Aura unless you pay {U}.", F._your_upkeep))
 		"Binding Agony":
 			c.enchants(TargetSpec.creature())
-			c.triggered(TriggeredAbility.new(Mtg.EventType.DAMAGE_DEALT, _agony,
+			# The VICTIM's event (one per damage event, for the total — CR
+			# 510.2), not the per-source DAMAGE_DEALT.
+			c.triggered(TriggeredAbility.new(Mtg.EventType.WAS_DEALT_DAMAGE, _agony,
 				"Whenever enchanted creature is dealt damage, this Aura deals that much damage to that creature's controller.",
 				host_dealt_damage).capturing(_damage_context))
 		"Enfeeblement":

@@ -645,6 +645,8 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue   # locked, banned, or "Cast this spell only ..." — not now
 		if _arrival_wasted(game, inst.data):
 			continue   # a second legend, a second world: a card thrown away
+		if MIRAGE_TACTICS.dies_on_arrival(game, self, inst):
+			continue   # a 2/0 with nothing to count, a Dreadnought with nothing to feed it (Pack 8)
 		if profile.holds_repeats and EffectIntent.permanent_repeats(inst.data, game, pid):
 			continue   # a second Kismet, a second Winter Orb: the same card thrown away
 		if not _sacrifice_fodder_ok(game, inst):
@@ -671,6 +673,9 @@ func _try_cast_best(game: MtgGame) -> String:
 			continue
 		if _pain_kills(game, sources, plan):
 			continue   # the plan's taps together are the last life (2026-10-03)
+		if not inst.data.cost.has_x \
+				and _burn_kills(game, sources, plan, row_cost.mana_value() + surcharge):
+			continue   # the mana it leaves floating burns our last life (Pack 8 bug pass)
 		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
 		# THE RENT (2026-09-26, AiProfile.pays_the_rent): a permanent that
 		# charges its own upkeep is cast only when the mana to keep it
@@ -829,7 +834,10 @@ func _try_cast_best(game: MtgGame) -> String:
 	if game.cast_refusal(pid, best, best_targets, best_x, best_mode) != "" \
 			or (plan.is_empty() and not (_cost_is_free(game.spell_cost_for(pid, best.data, best_x, best_mode)) \
 				and _generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data) == 0)) \
-			or _pain_kills(game, sources, plan):
+			or _pain_kills(game, sources, plan) \
+			or _burn_kills(game, sources, plan,
+				game.spell_cost_for(pid, best.data, best_x, best_mode).mana_value() \
+					+ _generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data)):
 		_action_line.clear()
 		return ""
 	for step in plan:
@@ -1275,6 +1283,7 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 	# turn's next cast may tap the partner's mana away and the X spell is
 	# spent for a point of damage.
 	var chain := _best_burn_chain(game)
+	var row_sources: Array = []
 	for inst in me.hand:
 		if not inst.is_type(Mtg.CardType.INSTANT):
 			continue
@@ -1285,6 +1294,26 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			continue   # what cannot be cast tonight reserves nothing
 		if intent.self_damage >= me.life:
 			continue   # _fire_held_instant would never fire it either
+		# THE ROW IT PAYS WITH (the Mirage bug pass, 2026-10-04,
+		# forecasts_tactics): a held Spinning Darkness booked its PRINTED
+		# {4}{B}{B} from four lands and an empty graveyard — payable
+		# neither way — and every cast worth less than half again its
+		# value waited behind it (a Python kept in hand three turns while
+		# the Costs deck died). The row [method _paying_mode] names is the
+		# one booked, and a row nothing can pay tonight books nothing:
+		# the same refusals [method _fire_held_instant] makes.
+		var held_cost: ManaCost = inst.data.cost
+		var row := _paying_mode(game, inst.data)
+		if row >= 0:
+			held_cost = game.spell_cost_for(pid, inst.data, 0, row)
+			if row_sources.is_empty():
+				row_sources = _mana_sources(game)
+			var surcharge := game.spell_surcharge(pid, inst.data)
+			if game.object_costs_refusal(pid, game.spell_object_costs(inst.data, row), inst) != "":
+				continue
+			if not (_cost_is_free(held_cost) and surcharge == 0) \
+					and _plan_taps_from(row_sources, held_cost, surcharge).is_empty():
+				continue
 		var value := 0.0
 		if intent.draws > 0:
 			if _decking_draw(game, inst, intent, intent.draws, 0) >= 0:
@@ -1307,7 +1336,7 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 		if intent.self_damage > 0:
 			value -= intent.self_damage * (0.5 if me.life > 12 else (1.0 if me.life > 6 else 2.0))
 		if value > float(out.get("value", 0.0)):
-			out = {"cost": inst.data.cost, "value": value, "for": inst.id}
+			out = {"cost": held_cost, "value": value, "for": inst.id}
 	# A COUNTERSPELL RESERVES TOO, though it is not a "held instant".
 	#
 	# [method _is_held_instant] excludes anything that counters, and it is
@@ -3583,12 +3612,23 @@ func _sweep_value(game: MtgGame, effect: EffectBase, x_value: int,
 	var scope := MIRAGE_TACTICS.sweep_scope(game, effect, pid) \
 		if profile.forecasts_tactics else -1
 	var levels_lands := profile.levels_boards and _land_sweep(game, effect, n)
+	# THE SHIELD THE SWEEP GRANTS (the Mirage bug pass, 2026-10-04,
+	# forecasts_tactics): while Torrent of Lava is on the stack each
+	# creature has "{T}: Prevent the next 1 damage ... by Torrent of Lava"
+	# (CR 611.3), and every creature that can pay the {T} takes that much
+	# less — the X that only matched their toughness killed nothing.
+	var shield := 0
+	if source != null and profile.forecasts_tactics and effect is DamageAllEffect:
+		shield = MIRAGE_TACTICS.granted_tap_shield(source)
 	for inst in game.all_battlefield():
-		if not _sweep_kills(effect, inst, n, scope):
+		var hit := n
+		if shield > 0 and MIRAGE_TACTICS.can_tap_now(inst):
+			hit = maxi(n - shield, 0)
+		if not _sweep_kills(effect, inst, hit, scope):
 			continue
 		if source != null and profile.forecasts_tactics and effect is DamageAllEffect \
 				and inst.is_creature() and MIRAGE_TACTICS.damage_is_shaped(game, inst) \
-				and not bool(game.predict_damage(source, TargetRef.card(inst), n,
+				and not bool(game.predict_damage(source, TargetRef.card(inst), hit,
 					false, 1, pid)["dies"]):
 			continue   # the damage it would actually deal does not kill
 		var worth := Evaluator.land_value(game, inst) if levels_lands \
@@ -4395,6 +4435,10 @@ func _graveyard_worth(game: MtgGame, dead: CardInstance) -> float:
 	if not profile.runs_loops or dead.data.spell_effects.is_empty():
 		return base
 	var intent := _intent_of(dead)
+	# A turn that ends in our own loss (Final Fortune) is no loop's turn.
+	if intent.extra_turns > 0 and profile.forecasts_tactics \
+			and PORTAL_TACTICS.loses_after_extra_turn(dead.data):
+		return base
 	if intent.extra_turns > 0:
 		return maxf(base, _extra_turn_value(game, intent.extra_turns))
 	if intent.wheels > 0:
@@ -5424,6 +5468,13 @@ func _is_held_instant(inst: CardInstance, intent: EffectIntent) -> bool:
 		return false
 	if intent.pumps and not intent.pump_self:
 		return true
+	# THE IMPULSE (the Mirage bug pass, 2026-10-04, forecasts_tactics):
+	# Three Wishes' three cards are playable only until our next turn —
+	# fired at their end step, they expire at our upkeep unplayed. Our own
+	# main phase casts it (mirage_tactics.gd `role_choice`, `impulse_exile`).
+	if profile.forecasts_tactics \
+			and MIRAGE_TACTICS.carries_role(inst.data, &"impulse_exile"):
+		return false
 	if intent.draws > 0 or intent.draws_use_x:
 		return true
 	if intent.answers_creatures() and intent.target_spec != null \
@@ -8071,8 +8122,15 @@ func _counter_shape(game: MtgGame, top: StackItem) -> int:
 	if _draw_at_us(game, top, intent) >= me.library.size() \
 			and me.library.size() > 0:
 		return SHAPE_ALWAYS
-	# 4. THE EXTRA TURN.
+	# 4. THE EXTRA TURN — unless it is the LAST one (the Mirage bug pass,
+	# 2026-10-04, forecasts_tactics): Final Fortune and Last Chance end in
+	# their caster's own loss, and a counter saves them from it. Countered
+	# only when the turn kills us first — their unblockable damage, counted
+	# twice for the attack of the turn it is cast in.
 	if intent.extra_turns > 0:
+		if profile.forecasts_tactics and PORTAL_TACTICS.loses_after_extra_turn(top.card.data):
+			return SHAPE_ALWAYS if 2 * PORTAL_TACTICS.extra_turn_damage(game, top.controller) \
+				>= me.life else SHAPE_NEVER
 		return SHAPE_ALWAYS
 	# 5. THE WHEEL. `me.hand.size() - 1` is the hand the counter leaves us,
 	# which is the hand the refill would have to fill.
@@ -11973,6 +12031,44 @@ func _pain_kills(game: MtgGame, src: Array, tap_plan: Array) -> bool:
 	return pain > 0 and pain >= game.players[pid].life
 
 
+## THE MANA THAT BURNS (the Mirage bug pass, 2026-10-04, an H7 suspect
+## proved; [member AiProfile.forecasts_tactics]). Under mana burn
+## ([member RulesOptions.mana_burn], the 1997 rule — CR 500.4's empty
+## pool once cost life) a source that makes more than the cost asks — a
+## Karoo's {C}{U} for a one-mana spell — leaves the rest floating, and it
+## burns at the end of the phase: at one life the Wizard cast a Merfolk of
+## the Pearl Trident off a Coral Atoll and lost the game. True when what
+## the TAPS of [param tap_plan] leave over, against [param paid] mana
+## spent, is our last life; mana already floating burns whatever we cast,
+## so it is not charged to this one.
+func _burn_kills(game: MtgGame, src: Array, tap_plan: Array, paid: int) -> bool:
+	if not profile.forecasts_tactics or not game.rules.mana_burn or tap_plan.is_empty():
+		return false
+	var made := 0
+	var floating := 0
+	for step in tap_plan:
+		if step[0] == null:
+			floating += 1
+			continue
+		for s in src:
+			if s[0] == step[0] and int(s[1]) == int(step[1]):
+				made += _row_output(s)
+				break
+	var left := made + floating - paid
+	return made > 0 and left > 0 and left >= game.players[pid].life
+
+
+## All the mana one tap of source row [param s] makes ([method
+## ManaPlanner.sources]' rows; a coupled row lists each output).
+static func _row_output(s: Array) -> int:
+	if s.size() > 8 and s[8] is Dictionary and s[8].has("outputs"):
+		var n := 0
+		for output in s[8]["outputs"]:
+			n += int(output[1])
+		return n
+	return int(s[3])
+
+
 ## THE ATTACKER THAT IS ALSO A LAND, left out of the plan
 ## ([member AiProfile.animates_to_attack], 2026-09-08). A Mishra's
 ## Factory animated in our first main phase was paid for as the attack
@@ -12033,6 +12129,13 @@ func _plan_and_pay(game: MtgGame, cost: ManaCost, extra := 0,
 			and not game.players[pid].mana_pool.can_pay(cost, extra, usage_keys):
 		var src := ManaPlanner.sources(game, pid, excluded)
 		if _pain_kills(game, src, ManaPlanner.plan_from(src, cost, extra, usage_keys)):
+			return false
+	# ...and THE MANA THAT BURNS ([method _burn_kills]), the same way.
+	if profile.forecasts_tactics and game.rules.mana_burn and not (_cost_is_free(cost) and extra == 0) \
+			and not game.players[pid].mana_pool.can_pay(cost, extra, usage_keys):
+		var rows := ManaPlanner.sources(game, pid, excluded)
+		if _burn_kills(game, rows, ManaPlanner.plan_from(rows, cost, extra, usage_keys),
+				cost.mana_value() + extra):
 			return false
 	return ManaPlanner.plan_and_pay(game, pid, cost, extra, usage_keys, excluded)
 
@@ -12146,7 +12249,20 @@ func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictio
 		modes = [row]
 	elif profile.plans_modes and inst.data.is_modal():
 		for mode in inst.data.modes.size():
-			if mode != hinted: modes.append(mode)
+			if mode == hinted:
+				continue
+			# A COMBAT-TRICK MODE IS NOT THE MAIN PHASE'S (the Mirage bug
+			# pass, 2026-10-04, forecasts_tactics): Hope Charm's "target
+			# creature gains first strike" outbid its own picker's pick and
+			# was cast in our first main phase with no combat to win. A
+			# pump instant is held for the combat ([method
+			# _is_held_instant]); the pump mode of a modal one is never
+			# offered here over the card's own choice.
+			if profile.forecasts_tactics and inst.is_type(Mtg.CardType.INSTANT):
+				var trick := _mode_intent(inst.data, mode)
+				if trick.pumps and not trick.pump_self:
+					continue
+			modes.append(mode)
 	var best := {}
 	for mode in modes:
 		var intent := _mode_intent(inst.data, int(mode))
@@ -12487,6 +12603,14 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# a Wall of Swords (2026-09-08). See EffectIntent.aura_fits.
 			if not harmful and profile.fits_auras and source.data.is_aura() \
 					and not EffectIntent.aura_fits(source.data, inst):
+				continue
+			# ...and never an aura whose OWN toughness loss kills the body
+			# it is meant to help (the Mirage bug pass, 2026-10-04,
+			# forecasts_tactics): Grave Servitude's +3/-1 and Coils of the
+			# Medusa's +1/-1 on our Llanowar Elves (CR 704.5f).
+			if not harmful and profile.forecasts_tactics and source.data.is_aura() \
+					and inst.is_creature() \
+					and inst.cur_toughness + MIRAGE_TACTICS.aura_pump(source.data).y <= inst.damage:
 				continue
 			# ...and never the SAME aura twice on one host, ours or theirs:
 			# the owner's second Regeneration on a creature already

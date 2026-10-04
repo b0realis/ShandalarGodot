@@ -802,7 +802,7 @@ static func _basalt_sacrifice(g: MtgGame, _s: CardInstance, _e: GameEvent, id: i
 	g.sacrifice_permanent(i)
 	if i.zone == Mtg.Zone.BATTLEFIELD and not i.phased_out: return
 	var wall := CardData.new("Wall", "", Mtg.CardType.ARTIFACT | Mtg.CardType.CREATURE) \
-		.pt(0, 2).with_subtypes(["wall"]).with_keywords([Mtg.Keyword.DEFENDER])
+		.pt(0, 2).with_subtypes(["wall"]).with_keywords([Mtg.Keyword.DEFENDER]).oracle("Defender")
 	g.create_token(who, wall)
 
 

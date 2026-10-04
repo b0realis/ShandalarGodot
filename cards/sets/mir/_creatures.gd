@@ -330,7 +330,11 @@ static func _forest_count(g: MtgGame, s: CardInstance) -> void:
 	s.cur_power = n
 	s.cur_toughness = n
 static func _choose_opponent(g: MtgGame, s: CardInstance, pid: int) -> void:
-	s.memory["chosen_player"] = g.choose_opponent(pid, s)
+	var chosen := g.choose_opponent(pid, s)
+	# Journaled (as Quirion Elves' colour): an arrival by another card's
+	# resolution (Flash) is not covered by the card's own resolution record.
+	g._rec(s, &"memory")
+	s.memory["chosen_player"] = chosen
 static func _haunting(g: MtgGame, s: CardInstance) -> void:
 	var who := int(s.memory.get("chosen_player", g.opponent_of(s.controller_id)))
 	var n := 0
@@ -532,10 +536,11 @@ class Tinker extends DestroyEffect:
 
 
 ## Pyric Salamander: "Sacrifice this creature at the beginning of the next
-## end step" — the end-step doom, as a sacrifice (CR 701.17).
+## end step" — the end-step doom, as a sacrifice (CR 701.17), by the
+## ACTIVATOR: stolen by then, it stays (CR 603.7d, 701.17a).
 class SelfDoom extends EffectBase:
-	func resolve(g: MtgGame, s: CardInstance, _pid: int, _t: TargetRef, _x := 0) -> void:
-		if F._same_activation_source(g, s): g.doom_at_next_end_step(s, false, false, true)
+	func resolve(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x := 0) -> void:
+		if F._same_activation_source(g, s): g.doom_at_next_end_step(s, false, false, true, pid)
 	func describe() -> String: return "sacrifice this creature at the beginning of the next end step"
 
 

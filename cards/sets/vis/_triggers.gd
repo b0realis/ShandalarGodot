@@ -257,7 +257,8 @@ static func _recruiter(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var order: Array[CardInstance] = []
 	var rest := found.duplicate()
 	while rest.size() > 1:
-		var next := M.pick(g, pid, rest, "Goblin Recruiter: choose the next card from the top")
+		# Not ranked (alphabetical): the seat's own judgement orders them.
+		var next := M.pick(g, pid, rest, "Goblin Recruiter: choose the next card from the top", false)
 		order.append(next)
 		rest.erase(next)
 	order.append_array(rest)

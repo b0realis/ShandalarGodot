@@ -292,6 +292,10 @@ func test_manual_double_x_dialog_uses_payment_units() -> void:
 	advance_to_step(Mtg.Step.MAIN1)
 	var part_water := give_hand(0, "Part Water")
 	for i in 5: put_battlefield(0, "Island")
+	# "X target creatures": X is bounded by the creatures there are to name
+	# as well (CR 601.2c — SgPayment.x_target_ceiling, Mirage bug pass
+	# 2026-10-04). Three, so the MANA stays the bound this test is about.
+	for i in 3: put_battlefield(1, "Grizzly Bears")
 	var screen := _screen()
 	screen._on_card_clicked(_local(screen, part_water))
 	assert_not_null(screen._x_dialog)

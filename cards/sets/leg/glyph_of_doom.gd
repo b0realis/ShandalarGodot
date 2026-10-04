@@ -4,12 +4,15 @@ extends CardScript
 ##         destroy all creatures that were blocked by that creature this
 ##         turn.
 ##
-## Implementation: a delayed END-OF-COMBAT action
-## (MtgGame.schedule_end_of_combat_action) reading the Wall's block history
-## when it fires — so creatures that become blocked AFTER the Glyph
-## resolves are caught too, which is what "were blocked by that creature
-## this turn" means. The action outlives the Glyph and the Wall alike
-## (CR 603.7a).
+## Implementation: a delayed END-OF-COMBAT trigger (CR 603.7,
+## MtgGame.schedule_delayed_trigger) controlled by the Glyph's caster
+## (603.7d), reading the Wall's block history when it resolves — so
+## creatures that become blocked AFTER the Glyph resolves are caught too,
+## which is what "were blocked by that creature this turn" means. It goes
+## on the stack with the step's other end-of-combat triggers in APNAP
+## order (CR 603.3b) — players may respond to it — and it outlives the
+## Glyph and the Wall alike (CR 603.7a). "This turn's next end of combat":
+## it expires with the turn, so a Glyph cast after combat does nothing.
 
 
 static func _is_wall(inst: CardInstance) -> bool:
@@ -23,8 +26,10 @@ func build() -> CardData:
 		.oracle("Choose target Wall creature. At this turn's next end of combat, destroy all creatures that were blocked by that creature this turn.")
 
 
-## The delayed action: bury everything the Wall stopped this turn.
-static func _doom(game: MtgGame, wall_id: int) -> void:
+## The delayed trigger's resolution: bury everything the Wall stopped this
+## turn.
+static func _doom(game: MtgGame, _source: CardInstance, _event: GameEvent,
+		wall_id: int) -> void:
 	var wall := game.find_instance(wall_id)
 	if wall == null:
 		return
@@ -47,12 +52,16 @@ class GlyphOfDoomEffect extends EffectBase:
 		target_spec = spec
 		doom_action = action
 
-	func resolve(game: MtgGame, _source: CardInstance, _controller: int,
+	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			target: TargetRef, _x_value: int = 0) -> void:
 		var wall := game.find_instance(target.instance_id)
 		if wall == null or wall.zone != Mtg.Zone.BATTLEFIELD:
 			return
-		game.schedule_end_of_combat_action(doom_action.bind(wall.id))
+		var trigger := TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT,
+			doom_action.bind(wall.id),
+			"At this turn's next end of combat, destroy all creatures that were blocked by that Wall this turn.")
+		var entry := game.schedule_delayed_trigger(trigger, controller, source)
+		entry["expires_turn"] = game.turn_number
 
 	func describe() -> String:
 		return "destroys everything target Wall blocked this turn, at end of combat"

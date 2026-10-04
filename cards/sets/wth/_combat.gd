@@ -42,7 +42,7 @@ static func configure(c: CardData) -> bool:
 		"Goblin Grenadiers":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UNBLOCKED_ATTACKER, _grenade,
 				"Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, destroy target creature and target land.", F._self_enter)
-				.targeting(TargetSpec.creature(), F._enemy_first, "Select target creature.")
+				.targeting(TargetSpec.creature(), _grenade_creature_first, "Select target creature.")
 				.and_targeting(TargetSpec.new(TargetSpec.Kind.PERMANENT, "target land", _land), F._enemy_first, "Select target land."))
 		"Goblin Vandal":
 			var spec := TargetSpec.new(TargetSpec.Kind.PERMANENT, "target artifact defending player controls", _artifact) \
@@ -211,6 +211,12 @@ static func _grenade(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		if ref == null: continue
 		var i := g.find_instance(ref.instance_id)
 		if i != null and i.controller_id != pid: hint = true
+	# ...but never at the price of another creature of OURS (the Mirage bug
+	# pass: a Serra Angel destroyed for a Plains). The Grenadiers itself, the
+	# creature slot's fallback, is sacrificed anyway.
+	var own: CardInstance = null
+	if creature_ref != null: own = g.find_instance(creature_ref.instance_id)
+	if own != null and own != s and own.controller_id == pid: hint = false
 	if not g.agents[pid].choose_yes_no(g, pid, "Goblin Grenadiers: sacrifice it to destroy the targets?", hint): return
 	g.sacrifice_permanent(s)
 	g.begin_simultaneous()
@@ -219,6 +225,19 @@ static func _grenade(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 		var i := g.find_instance(ref.instance_id)
 		if i != null and i.zone == Mtg.Zone.BATTLEFIELD: g.destroy(i)
 	g.end_simultaneous()
+
+## Goblin Grenadiers' creature slot, best first for its controller: theirs
+## (the biggest first), then the Grenadiers itself — sacrificed anyway, so
+## naming it costs nothing more — then ours, the smallest first.
+static func _grenade_creature_first(g: MtgGame, source: CardInstance, at: TargetRef, bt: TargetRef) -> bool:
+	return _grenade_rank(source, g.find_instance(at.instance_id)) \
+		> _grenade_rank(source, g.find_instance(bt.instance_id))
+
+static func _grenade_rank(source: CardInstance, i: CardInstance) -> int:
+	if i == null: return -100000
+	if i.controller_id != source.controller_id: return 100000 + i.cur_power + i.cur_toughness
+	if i == source: return 0
+	return -1 - maxi(i.cur_power, 0) - maxi(i.cur_toughness, 0)
 
 static func _vandal(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var ref := g.current_trigger_target(0)

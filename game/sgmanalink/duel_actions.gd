@@ -279,7 +279,7 @@ func _choice_entries() -> Array:
 			for i in entries.size():
 				if entries[i].answer is int: entries[i].label += " [choice %d]" % (i + 1)
 			if question.kind == PlayerChoice.Kind.CARD and question.optional:
-				entries.append({"label": "Choose none", "answer": ""})
+				entries.append({"label": decline_label(question), "answer": ""})
 			# ONE PICK OF AN "IN ANY ORDER" SEQUENCE (Pack 8 — Teferi's Puzzle
 			# Box, PlayerChoice.in_order) ends in one click with the local
 			# screen's own line: the rest go in the order LISTED here
@@ -287,6 +287,31 @@ func _choice_entries() -> Array:
 			if question.kind == PlayerChoice.Kind.CARD and question.in_order and entries.size() > 1:
 				entries.append({"label": DuelScreen.KEEP_ORDER_LINE, "answer": KEEP_ORDER})
 	return entries
+
+
+## The decline line of an optional CARD question. A LAND'S ENTRY PAYMENT
+## (Mirage bug pass, 2026-10-04 — Lotus Vale, Scorched Ruins, the
+## Alliances entry lands) holds the land drop on a card question that is a
+## cost and optional (MtgGame.play_land): declining is the Oracle's *"If
+## you don't, put it into its owner's graveyard"* — the land lost and the
+## drop spent — while the `cancel` op WITHDRAWS the play (the land back in
+## hand, MtgGame.cancel_choice). "Choose none" read like the withdrawal, so
+## that line says what it does, as the local screen's does
+## (DuelScreen._decline_label): the question names the land, which is in
+## the seat's hand or is an exiled card it may play (Three Wishes).
+## Display text only — the answer is still "".
+func decline_label(question: PlayerChoice) -> String:
+	if question.kind != PlayerChoice.Kind.CARD or not question.is_cost or not question.optional \
+			or question.source == "" or question.pid < 0 or question.pid >= game.players.size():
+		return "Choose none"
+	var places: Array = game.players[question.pid].hand.duplicate()
+	for p in game.players:
+		for inst in p.exile:
+			if game.can_play_from_exile(question.pid, inst): places.append(inst)
+	for inst: CardInstance in places:
+		if inst.data.card_name == question.source and inst.data.is_land():
+			return "Put %s into its owner's graveyard." % question.source
+	return "Choose none"
 
 
 ## The answer of the `Done — keep this order.` line; no card is a Dictionary.

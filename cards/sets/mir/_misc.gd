@@ -79,7 +79,7 @@ static func configure(c: CardData) -> bool:
 				F._self_enter).capturing(_stairwell_leave_context))
 		"Chaosphere":
 			c.static_ability(StaticAbility.new(_chaosphere,
-				"Creatures with flying can block only creatures with flying. Creatures without flying have reach.").changing_abilities())
+				"Creatures with flying can block only creatures with flying. Creatures without flying have reach.").changing_abilities().reading_abilities())
 		"Kaervek's Torch":
 			c.spell(DamageEffect.new(0).any_target().x_damage())
 			c.with_targeting_surcharge(2)
@@ -462,6 +462,13 @@ static func _stairwell_fall(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 ## composed with whatever "can't block" filter it already had. The blocker
 ## is bound as a WeakRef: a Callable on the instance holding the instance
 ## itself would be a reference cycle (a leak at exit).
+##
+## WHO LACKS FLYING is asked after the rest of layer 6 has settled it
+## (`reading_abilities()`, CR 613.8a): "creatures without flying have
+## reach" depends on every effect that grants or removes flying, so an
+## Earthbind or a Mist Dragon's "{0}: loses flying" made after the
+## Chaosphere still leaves a creature without flying — with reach — and a
+## Jump made after it leaves one WITH flying and nothing from here.
 static func _chaosphere(g: MtgGame, _s: CardInstance) -> void:
 	for inst in g.all_battlefield():
 		if not inst.is_creature():
@@ -555,6 +562,10 @@ static func _hall_hint(g: MtgGame, pid: int) -> int:
 	return best
 
 
+## "Instead of any other COLOR": only coloured mana changes — a Mishra's
+## Factory's {C} ability is left as it is, and a Karoo's {C}{U} makes
+## {C}{R}, not {R}{R} (ManaAbility.forcing_color's colours-only mode; CR
+## 105.1/105.2c — colourless is not a colour).
 static func _hall_lands(g: MtgGame, _s: CardInstance, color: int) -> void:
 	for land in g.all_battlefield():
 		if not land.is_land():
@@ -562,7 +573,7 @@ static func _hall_lands(g: MtgGame, _s: CardInstance, color: int) -> void:
 		var out: Array[ManaAbility] = []
 		for ability in land.cur_mana_abilities:
 			if ability.taps_source and _makes_color(ability):
-				out.append(ability.forcing_color(color))
+				out.append(ability.forcing_color(color, false, true))
 			else:
 				out.append(ability)
 		land.cur_mana_abilities = out

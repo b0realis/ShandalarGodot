@@ -807,8 +807,10 @@ static func _shared_source(name: String) -> String:
 
 
 ## A reprint needs any one enabled provider, not every pack that carries it.
-## The original first: a Mirage block reprint of a Portal card (Archangel)
-## has Portal as its original pack.
+## The pack whose rules script it uses first ([method _shared_source]) — not
+## the set that printed it first: Archangel appeared in Visions before Portal
+## reprinted it, and Portal's script is the one it runs, so Portal is asked
+## before Pack 8.
 func _shared_provider(name: String, excluding := "") -> String:
 	var original := {"fem": FallenEmpiresPack.ID, "ice": IceAgePack.ID,
 		"hml": HomelandsPack.ID, "all": AlliancesPack.ID,

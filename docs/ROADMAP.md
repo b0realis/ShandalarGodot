@@ -60,7 +60,7 @@ numbers:
 | Test suite | **6326 tests, 0 failing, 371 scripts** (235 026 asserts, the 2026-09-14 Pack 1 gate); tools self-tests **217 OK**, `./run_tests.sh` exit 0 — and exit 0 MEANS something, see the review bullet below |
 | Fidelity ledger | **6 live rows over 7 card files** (53 over 84 on the morning of 2026-09-02, 88 over 128 the day before), pinned to the `SIMPLIFIED` markers by `tests/test_simplified_ledger.gd` |
 | Duel to-do | **cleared** (`docs/duel-todo.md`) |
-| Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found |
+| Rules forks | **7** in `engine/rules_options.gd`, all defaulting modern — and the fifth-edition side is now audited AS A SET, which is how its one HIGH defect was found. Plus one DERIVED rule, not a fork: CR 704.5q counter annihilation under the modern presets, following `damage_prevention_window` (`RulesOptions.counters_annihilate`, 0.50.11) |
 | Modes | Magic Battle, Deck Builder, **Gauntlet** (the fourth 1997 mode, built 2026-09-02) |
 
 **What moved on 2026-09-02.** A second day of concurrent passes; each has
@@ -2719,7 +2719,7 @@ picker before tutor casts).
 | ~~Triggered payments (`MtgGame.try_pay`) auto-tap LANDS only, greedy pick (basics first)~~ **THE "LANDS ONLY" HALF DONE 2026-09-11** — `_payment_plan` builds its plan through `ManaPlanner` (`sources` / `plan_from`), the planner the AI seat and the human's double-click auto-cast already shared, so every untapped mana source the payer controls pays a mid-trigger cost: **CR 605.3a**, a player may activate a mana ability whenever a rule or effect asks them to pay a mana cost. A Sol Ring, the five Moxen, a Mana Crypt, a Basalt Monolith, a Black Lotus (sorted last, reached only when nothing else is), a Llanowar Elves. Restricted mana is refused up front now rather than by accident of a simulation (Mishra's Workshop, CR 106.6). The reproduction was the prison land of the era killing a Grizzly Bears with a Sol Ring standing untapped beside it; 45 card files reach this path. Five helpers that served only the old scan are gone. Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd`. **STILL SIMPLIFIED, and the marker says exactly this**: the payer does not CHOOSE the sources — the planner's order decides — and a source whose activation would ASK (a colour CHOICE, Fellwar Stone; a mana battery with charge counters, CR 601.2b) is left OUT of the plan (`MtgGame._mana_ability_asks`), because a payment nested in a resolution cannot hold the duel open for the answer: the COST hold re-issues the mana ability alone and the trigger paying for it would be lost. Six cards under-reported, never over-reported | Let the payer choose the sources; and give a payment nested in a resolution somewhere to put a cost question, which is what the six asking sources are waiting on |
 | ~~No banding~~ **DONE** (attack bands wave 3, defensive banding 2026-09-01, "bands with other [quality]" 2026-09-02 — `CardInstance.cur_bands_with` / `grant_bands_with`, `CombatState.shared_bands_with` / `bands_with_offered` / `bands_with_among`; the five Legends banding lands and Master of the Hunt's Wolves grant the real per-quality restriction, not plain banding, pinned by `tests/cards/test_fidelity_2026_09_02_bands_with_other.gd`). No protection-from-artifacts etc. | As stubs demand them |
 | ~~Mid-resolution questions are answered by a heuristic~~ **DONE 2026-08-31, FINISHED 2026-09-01** — every ask is a first-class `PlayerChoice` on the record. 103 of the 109 call sites are inside a stack resolution and the engine PRE-FLIGHTS each one over a `GameSnapshot` rewind point, then holds it open on `MtgGame.awaiting_choice` until `answer_choice`. The four COST payments outside the stack (`tap_for_mana`'s sacrifice, Fellwar Stone's colour, `cast_spell`'s additional sacrifice, `activate_ability`'s sacrifice cost) are held open by `MtgGame._pending_action` — a record of the ACTION that `answer_choice` re-issues, no rewind point, because all four ask after every refusal check and before any mutation (CR 601.2h). Same overlay, same `answer_choice`, told apart by `PlayerChoice.is_cost` (docs/duel-todo.md §1.3) | Only `CardData.as_it_enters` run from a NON-resolution path is left, and reached the ordinary way (a creature resolving) even that is inside the probe. Fellwar Stone's colour moved out of the card into `ManaAbility.color_options` on the way, which also fixed it being asked TWICE per activation and being asked after the source was already tapped |
-| **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"* and Fasting's *"you may skip that step"* are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` — **by `MtgGame.record_choice`, which is where this row's `SIMPLIFIED` marker sits and which the row had never named (2026-09-11).** The marker asks for this ledger under the words of the row struck DONE above (*"mid-resolution choices"*); the live row is this one, and the function name is what the pin holds on to | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
+| **A draw replacement asks OUTSIDE a resolution** (`mtg_game.gd:_replace_draw`, `_draw_step_skipped`). Island Sanctuary's *"you may skip that draw"*, Fasting's *"you may skip that step"* and Breathstealer's Crypt's *"that player discards it unless they pay 3 life"* (vis, Pack 8 — `vis/_misc.gd`, `_breathstealer_draw`; added by the Mirage bug pass, 2026-10-04) are asked from the draw step — a turn-based action — so the §1.3 pre-flight, which only wraps stack resolutions, cannot hold the question open for a human seat. The answer falls through to the heuristic and is LEDGERED in `unanswered_choices` — **by `MtgGame.record_choice`, which is where this row's `SIMPLIFIED` marker sits and which the row had never named (2026-09-11).** The marker asks for this ledger under the words of the row struck DONE above (*"mid-resolution choices"*); the live row is this one, and the function name is what the pin holds on to | A third hold, for a question asked from a turn-based action: the same `awaiting_choice` overlay, parked on a record of the STEP rather than on a snapshot |
 | **Two draw replacements are applied in a fixed order** (`_replace_draw`): one-shots first, then statics in battlefield timestamp order. CR 616.1 gives the AFFECTED PLAYER the choice | A choice when more than one applies. No pair in the 1997 pool can be on the table at once and disagree, so this is invisible today |
 | **A shield's rider runs per packet** (`engine/damage_replacements.gd`, `apply`; Pack 8, 2026-10-03). "If damage from a black source is prevented this way, you gain that much life" (Shadowbane) and "... deals that much damage to the source's controller" (Honorable Passage) are ONE additional effect after the whole prevented event (CR 615.5); ours runs once per damage PACKET the shield stopped, with that packet's amount. The total is the same; a simultaneous event against several victims (a Pestilence against you and your creatures) gains the life, or deals the damage, in several pieces — visible only to a "whenever you gain life" trigger or a per-event damage cap | Collect the rider's amount per (effect, event) and run it once as the event ends (the end of the simultaneous bracket or of the resolution) |
 | ~~A static ability cannot outlive its source, and nothing runs at the INSTANT a permanent leaves~~ **DONE 2026-09-02** — `CardData.as_it_leaves` is the twin of `as_it_enters`: `MtgGame._run_leave_hook` calls it from all four battlefield exits (graveyard, exile, hand, ante) after the leave-triggers are on the stack and after `forget_instance`, but BEFORE `recalculate()`, and hands it the parting memory snapshot. A trigger cannot do this work — it resolves after the world has been recomputed without the departing permanent. `ContinuousEffects.add_floating_static` is what the hook registers: the same `StaticAbility`, run in the same five sub-passes of `recalculate` in the same layer order, with only the source's presence lifted (CR 611.3a — such an effect is NOT locked in). Lifted Titania's Song's rider and made Oubliette's *"until this enchantment leaves the battlefield"* the duration it is printed as rather than a trigger. Pinned by `tests/unit/test_leave_hook.gd` | — |
@@ -18760,6 +18760,45 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-04 — The Mirage block bug pass (0.50.12)
+
+The owner, after 0.50.11: *"Then do one pass over Mirage block and find bugs
+and fix them!"* Eight read-only hunters (each finding proven by a failing
+probe in a git-excluded `tests/_hunt/`), then eight fixers on disjoint files,
+test-first ([bug-pass-2026-10-04-mirage.md](bug-pass-2026-10-04-mirage.md)):
+
+- **The AI's self-destruction**: Final Fortune (Last Chance's role),
+  Infernal Contract, Reign of Terror, Pygmy Hippo's and a Karoo's mana burn;
+  wasted Tidal Wave, Three Wishes, Waiting in the Weeds, Zombie Mob,
+  Dreadnought, Grenadiers; "lose a card" choices flagged `ordered`.
+- **Engine**: cumulative upkeep on a phased-out permanent does nothing;
+  control Auras keep their timestamp across phasing;
+  `F._same_trigger_source` uses `is_present` (`F._same_trigger_object` for
+  last-known-information reads); `queue_next_turn_static(-1)` (Peace Talks);
+  `doom_at_next_end_step(…, sacrificer)`; end-of-combat delayed triggers on
+  the stack (Teferi's Veil, Glyph of Doom, Infinite Authority, Time
+  Elemental); bans and cost modifiers off while tapped (1997) or silenced;
+  `forcing_color(…, colored_only)`; per-Aura Ward exemption; Chaosphere after
+  layer 6; land types by timestamp; CR 704.5q under the modern presets
+  (`RulesOptions.counters_annihilate()`); `WAS_DEALT_DAMAGE` once per event;
+  graveyard-cast targeting; face-down creatures lose die replacements;
+  `settle_delayed_trigger` re-entrancy; land entry payments held for a human
+  (decline = graveyard, withdraw = hand).
+- **Screens**: the territory menu's ransom/Channel/Guardian Angel payments;
+  additional object costs in the castable light; X capped by legal targets;
+  the tutor list alphabetical (it showed library order); Vultures, ring and
+  Heat Wave note fixes. SGManalink **protocol 27** (one block-tax row per
+  tax; a refused view is reported).
+- **Text**: token rules text, every cost and activation limit named once,
+  "you gain", Help's Heart of Bogardan and shared-reprint wording.
+- **Left open**: dealer-side "deals damage" per packet; Pack 8's
+  checksummed README wording; Energy Vortex's {X} unused by the AI.
+- `RULES_REVISION` `sgmanalink-mirage-bugpass-2026-10-04`.
+
+Gate: 644 scripts, **10,409/10,409 tests, 479,524 asserts**, exit 0 over
+6 shards; Python 508 (8 skipped); 180 audit duels, 24 UI soak duels, a
+Linux export's real-ZIP probe — all clean.
 
 ## 2026-10-04 — Pack 8: the Mirage block (0.50.11)
 

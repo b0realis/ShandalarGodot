@@ -14,7 +14,8 @@ extends CardScript
 ## card-local breath count stamped with the turn it belongs to, because
 ## "four or more times THIS TURN" must reset while CardInstance.memory does
 ## not. The fourth breath schedules a delayed end-step SACRIFICE, which
-## regeneration and indestructible cannot stop (CR 701.17).
+## regeneration and indestructible cannot stop (CR 701.17) — the
+## activator's: a Dragon stolen by then stays (CR 603.7d, 701.17a).
 ##
 ## Attack bands are implemented; DEFENSIVE banding is not (engine-wide,
 ## docs/ROADMAP.md), so the granted keyword does here what banding does
@@ -55,7 +56,7 @@ func build() -> CardData:
 
 
 class BreathEffect extends EffectBase:
-	func resolve(game: MtgGame, source: CardInstance, _controller: int,
+	func resolve(game: MtgGame, source: CardInstance, controller: int,
 			_target: TargetRef, _x_value: int = 0) -> void:
 		if source == null or source.zone != Mtg.Zone.BATTLEFIELD:
 			return
@@ -70,7 +71,9 @@ class BreathEffect extends EffectBase:
 		source.memory["breaths"] = burns
 		source.memory["breaths_turn"] = game.turn_number
 		if burns >= 4:
-			game.doom_at_next_end_step(source, false, false, true)
+			# "Sacrifice this creature": the activator does, only while
+			# they still control it (CR 603.7d, 701.17a).
+			game.doom_at_next_end_step(source, false, false, true, controller)
 
 	func describe() -> String:
 		return "gets +1/+0 until end of turn; the fourth breath is fatal"

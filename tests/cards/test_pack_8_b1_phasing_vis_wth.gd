@@ -409,6 +409,7 @@ func test_teferis_veil_fades_its_attackers_at_end_of_combat() -> void:
 	var home := put_battlefield(0, "Grizzly Bears")
 	run_combat([bear.id, giant.id])
 	assert_eq(g.players[1].life, 15, "they dealt their damage first")
+	resolve_stack()   # each fade is a delayed trigger on the stack (CR 603.7)
 	assert_true(bear.phased_out and giant.phased_out, "phased out at end of combat")
 	assert_false(home.phased_out, "only the creatures that attacked")
 	advance_to_next_turn()

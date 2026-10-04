@@ -24,7 +24,6 @@ static func apply(c: CardData) -> CardData:
 		if ability.discard_cost > 0: extra.append("Discard %d card(s)" % ability.discard_cost)
 		if ability.library_exile_cost > 0: extra.append("Exile the top %d card(s) of your library" % ability.library_exile_cost)
 		if ability.graveyard_exile_filter.is_valid(): extra.append("Exile %d %s from your graveyard" % [ability.graveyard_exile_count, ability.graveyard_exile_desc])
-		if ability.max_per_turn > 0: extra.append("At most %d activation(s) each turn" % ability.max_per_turn)
 		for group in ability.object_costs: extra.append(String(group.operation).capitalize() + " " + String(group.desc))
 		if not extra.is_empty(): ability.text = "; ".join(extra) + " — " + ability.text
 	return c

@@ -40,20 +40,8 @@ static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x := 0) -> Vari
 				return A.result(AiPlayer.LETHAL_WORTH, [TargetRef.player(1 - pid)])
 		&"extra_turn_then_lose":
 			if me.library.size() < 2 or not g.next_turn_statics.is_empty(): return {}
-			var damage := 0
-			for body in me.creatures():
-				if body.has_keyword(Mtg.Keyword.DEFENDER) or body.cur_cant_attack or body.cant_attack_next_turn: continue
-				if not body.cur_attack_costs.is_empty() or body.cur_attack_land_sacrifices > 0: continue
-				if body.tapped and (body.cur_skips_untap or body.skip_untaps > 0 or body.skip_untap_for.has(pid)): continue
-				var needs: String = body.data.attack_needs_defender_land
-				if needs != "" and not CombatState._controls_land_of_type(g, 1 - pid, needs): continue
-				var blockable := false
-				for blocker in foe.creatures():
-					if CombatState.block_illegality(g, blocker, body, 1 - pid) == "": blockable = true
-				# Until-end-of-turn pumps do not survive into the extra turn.
-				if not blockable: damage += H.DAMAGE.damage_through(g, body, TargetRef.player(1 - pid), maxi(0, mini(body.data.power, body.cur_power)))
 			# Do not buy an ordinary value turn with a guaranteed loss rider.
-			if damage >= foe.life: return A.result(AiPlayer.LETHAL_WORTH * 0.5)
+			if extra_turn_damage(g, pid) >= foe.life: return A.result(AiPlayer.LETHAL_WORTH * 0.5)
 		&"both_players_draw_x":
 			var x := mini(max_x, me.library.size() - 1)
 			if x > foe.library.size(): return A.result(AiPlayer.LETHAL_WORTH, [], foe.library.size() + 1)
@@ -114,6 +102,37 @@ static func spell_choice(g: MtgGame, pilot, s: CardInstance, max_x := 0) -> Vari
 			if gain > 0: return A.result(gain * pilot._life_price(me.life), [] if e.target_spec == null else [TargetRef.player(1 - pid)])
 		_: return null
 	return best
+
+## Does [param data] carry the "extra turn, then lose the game" shape
+## (Last Chance, Final Fortune — the `extra_turn_then_lose` role)?
+static func loses_after_extra_turn(data: CardData) -> bool:
+	for e in data.spell_effects:
+		if e.ai_role == &"extra_turn_then_lose": return true
+	return false
+
+
+## The damage [param pid]'s creatures would put through in one more turn
+## that no creature of the other seat can block — the extra turn a
+## "then lose" rider is worth taking for (public board only).
+static func extra_turn_damage(g: MtgGame, pid: int) -> int:
+	var foe := g.players[1 - pid]
+	var damage := 0
+	for body in g.players[pid].creatures():
+		if body.has_keyword(Mtg.Keyword.DEFENDER) or body.cur_cant_attack or body.cant_attack_next_turn: continue
+		if not body.cur_attack_costs.is_empty() or body.cur_attack_land_sacrifices > 0: continue
+		if body.tapped and (body.cur_skips_untap or body.skip_untaps > 0 or body.skip_untap_for.has(pid)): continue
+		# A face-down body is the 2/2 it shows: its printed card is hidden
+		# (rule 8) — this reads the OTHER seat's board for a counter, too.
+		var needs: String = "" if body.face_down else body.data.attack_needs_defender_land
+		if needs != "" and not CombatState._controls_land_of_type(g, 1 - pid, needs): continue
+		var blockable := false
+		for blocker in foe.creatures():
+			if CombatState.block_illegality(g, blocker, body, 1 - pid) == "": blockable = true
+		# Until-end-of-turn pumps do not survive into the extra turn.
+		var power := body.cur_power if body.face_down else mini(body.data.power, body.cur_power)
+		if not blockable: damage += H.DAMAGE.damage_through(g, body, TargetRef.player(1 - pid), maxi(0, power))
+	return damage
+
 
 static func special_spell(g: MtgGame, pilot) -> String:
 	if not pilot.profile.forecasts_tactics: return ""

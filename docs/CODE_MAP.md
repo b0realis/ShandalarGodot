@@ -132,6 +132,16 @@ needed); card files have NO class_name (they register by name instead);
   surcharge (`MtgGame.targeting_surcharge_floor` through the card passed to
   `can_afford` / `could_afford`), and the cast's payment wait and prompt
   include it (`spell_payment(..., targets)`).
+- `tests/ui/test_mirage_bugpass_ui.gd`: the Mirage bug pass on the local
+  duel screen (2026-10-04) — the seat's special actions
+  (`DuelScreen._special_actions`: Sabertooth Cobra's ransom, Channel,
+  Guardian Angel's paid prevention) on the territory and card menus, the
+  ransom holding the last window and named on the bar; object costs in the
+  castable light (`_printed_object_costs_payable`); no Circling Vultures
+  discard while its own cast waits; the pile ring only for what can be
+  played now (`_pile_card_playable`); "X targets" X bounded by the targets
+  (`_x_target_ceiling`); Heat Wave's note after a take-back; the tutor
+  picker sorted by name; the Help fixes (Heart of Bogardan, shared reprints).
 - `tools/pack_8_ui_soak.gd`: the base duel soak (`tools/duel_soak.gd`) with
   five Mirage block decks — phasing, flash and the flash rider, Winding
   Canyons, flanking, Circling Vultures, Bösium Strip; real Pack 8 ZIP and
@@ -177,6 +187,20 @@ needed); card files have NO class_name (they register by name instead);
   the rest with the first line listed), Ward of Lights' colour, Heat Wave's
   per-block life taxes (`block_taxes`, `SgDuelProjection.block_life_fee`)
   and the cleanup step's priority window.
+- `tests/ui/test_sgmanalink_mirage_bugpass.gd`: the Mirage bug pass at an
+  SGManalink table (protocol 27) — Heat Wave's `block_taxes` one row per
+  tax (two Heat Waves, 17 attackers, 16 blockers stay valid; every lineup
+  priced as `combat_declaration.gd`'s `block_life_fee` charges it), a room
+  failing the check reported by `SgDuelView.present` and never sent by
+  `SgLocalServer` (`_room_game`, `_view_refused`, `VIEW_REFUSED`), the
+  referee keeping an announced card from `discard_special`,
+  `SgPayment.budget` bounded by `x_target_ceiling` (Firestorm, Word of
+  Binding), the graveyard/exile ring read off the referee
+  (`SgDuelView._pile_card_playable`: the face's `playable`, a spell's
+  `castable`) with the network Special actions window still offering
+  Channel, and a land entry payment's decline line
+  (`SgDuelActions.decline_label`: "Put <land> into its owner's
+  graveyard.", apart from the `cancel` op that withdraws the play).
 - `tests/ui/test_pack_8_help.gd`: the three Mirage block glossary pages
   (`game/help/ability_glossary.gd`) — phasing, flanking, flash and its
   rider, the cleanup window, non-mana cumulative upkeep, object costs,
@@ -204,6 +228,12 @@ needed); card files have NO class_name (they register by name instead);
   Flame's three distinct targets, Thunderbolt's modes…) and
   `_triggers.gd` (dies/ETB/upkeep triggers on the stack, last-controller
   "you", Urborg Stalker's intervening if, Pendrell Mists' granted tax).
+- `tests/cards/test_mirage_bugpass_cards.gd`: the Mirage bug pass, card
+  fixes — Psychic Transfer's all-or-nothing exchange, live hand colour
+  (Sirocco, Lure of Prey under Celestial Dawn), keyword tokens' rules text,
+  non-mana costs in activation-menu text, Haunting Apparition's journaled
+  choice, ranked "lose a card" asks put ORDERED to the AI, and Pygmy
+  Hippo's hint under mana burn.
 - `tests/cards/test_pack_8_b5_mirage.gd`, `test_pack_8_b5_visions.gd`,
   `test_pack_8_b5_weatherlight.gd`: batch B5 — the Mirage and Visions
   triggered permanents (`cards/sets/mir/_triggers.gd`,
@@ -307,6 +337,26 @@ needed); card files have NO class_name (they register by name instead);
   markers phasing out moves (702.26f: Battle Gear, Stromgald Spy), Gaea's
   Liege and Cyclopean Tomb going on while their source is phased out, Bronze
   Tablet, and play bans from a silenced or suspended source.
+- `tests/unit/test_mirage_bugpass_engine_a.gd`: the Mirage bug pass,
+  engine batch A — cumulative upkeep's intervening if on a phased-out
+  permanent (`CumulativeUpkeep`: Psychic Vortex, Heart of Bogardan,
+  Aboroth); an Aura's control keeping its CR 613.7 place across phasing
+  (`ControlLayers`); Peace Talks' "next turn" as the next turn that begins
+  (`MtgGame.queue_next_turn_static` with -1) beside the per-seat form;
+  "sacrifice it" only by the caster who still controls it
+  (`doom_at_next_end_step`'s sacrificer: Tidal Wave, Soulshriek; "its
+  controller" unchanged); Final Fortune's loss under its own name; no
+  "if this would die" replacement on a face-down or silenced creature
+  (Gravebane Zombie, Firestorm Phoenix); `F._same_trigger_source` asking
+  `is_present` (Tombstone Stairwell, Soul Echo) and
+  `F._same_trigger_object` for last known information (Wave of Terror);
+  Teferi's Veil, Glyph of Doom, Time Elemental and Infinite Authority as
+  delayed triggers on the stack (APNAP: Heat Stroke, Sawtooth Ogre); an
+  activated "sacrifice it" by the activator only (Pyric Salamander, Dragon
+  Whelp, Nalathni Dragon, Krovikan Elementalist; Celestial Sword and
+  Goblin Ski Patrol keep "its controller"); `settle_delayed_trigger` taking
+  the entry off the queue before paying (a state_changed listener that
+  moves the game on mid-payment: Sabertooth Cobra).
 - `engine/abilities/flanking.gd` (`Flanking`): FLANKING (CR 702.25) — the
   live instance count (`FLANKING` entries in `cur_keywords`), the static
   grant helper, the one shared BLOCKED trigger and the recalculation's
@@ -338,6 +388,46 @@ needed); card files have NO class_name (they register by name instead);
   player target bans (`MtgPlayer.cur_target_bans`,
   `MtgGame.targeting_kind`) and `BECAME_TARGET` (spells, abilities,
   triggers incl. a human's held pick, copies, redirections).
+- `tests/unit/test_mirage_bugpass_engine_b1.gd`: the Mirage bug pass,
+  engine batch B1 — a tapped Null Rod / Cursed Totem bans nothing under
+  the 1997 tapped-artifact rule (`activation_ban_reason` skips a suspended
+  source, as `play_banned` does; planner included; modern arm); cost
+  modifiers skipped while silenced or 1997-suspended
+  (`MtgGame.cost_modifier_works` in `spell_surcharge` / `spell_cost_for` /
+  `ability_surcharge`, so `can_afford` / `could_afford` agree — Helm of
+  Awakening, Mana Matrix, Planar Gate, Stone Calendar, Gloom, a coloured
+  tax); Hall of Gemstone recolours only coloured mana
+  (`ManaAbility.forcing_color`'s colours-only mode: a Karoo's {C}{U} makes
+  {C}{R}; Deep Water still recolours all); and `ActivatedAbility.per_turn`
+  writing the printed "Activate only once each turn." — every capped
+  ability in the pool, all packs on, states its cap exactly once.
+- `tests/unit/test_mirage_bugpass_engine_b2.gd`: the Mirage bug pass,
+  engine batch B2 — CR 305.7 takes a retyped land's printed keywords
+  (`CardInstance.become_basic_land_type`: Teferi's Isle under Celestial
+  Dawn stops phasing; grants stay); the land-type waves in ONE timestamp
+  order with the floating retypers (Vision Charm, then Blanket of Night:
+  an Island Swamp); a Ward exempt from its OWN grant only
+  (`CardInstance.cur_aura_protection` / `protection_apart_from`: a Goblin
+  Wizard's protection from white removes White Ward and Ward of Lights);
+  Chaosphere's reach decided after layer 6 settles flying
+  (`StaticAbility.reads_abilities`, CR 613.8a: Earthbind, Mist Dragon,
+  Jump); CR 704.5q counter annihilation under modern rules only
+  (`MtgGame._annihilate_counters`, `RulesOptions.counters_annihilate`:
+  Lichenthrope + Aku Djinn, Phyrexian Marauder); and ONE "is dealt
+  damage" trigger per damage event for the total
+  (`Mtg.EventType.WAS_DEALT_DAMAGE`, `MtgGame._note_damage_received` /
+  `_flush_damage_received`: Binding Agony, Fungusaur, Mortal Wound, Living
+  Artifact under two simultaneous sources; first strike is its own event).
+- `tests/unit/test_mirage_bugpass_engine_c.gd`: the Mirage bug pass,
+  engine batch C — a land's ENTRY PAYMENT put to a human seat with the
+  land drop held (`MtgGame._hold_entry_payment`, the `land` pending action
+  `answer_choice` replays, `_pay_entry`; Lotus Vale, Scorched Ruins, Lake
+  of the Dead): picks, decline to the graveyard, withdraw to the hand
+  (`cancel_choice`), on the engine, the local duel screen's overlay
+  handlers and the SGManalink referee; and a spell cast from a graveyard
+  read as a spell by targeting (`TargetSpec._aimed_as_spell`: Dense
+  Foliage stops a Bösium Strip Bolt, a Strip-cast Relearn can't target
+  itself, a graveyard ability stays an ability).
 - `tests/unit/test_pack_8_planner_rows.gd`: `ManaPlanner` tries every
   mana row of a permanent (`_upgrade_row`) — Crystal Vein's "{T},
   Sacrifice: Add {C}{C}" pays {2}, a plain {1} keeps the land.
@@ -414,6 +504,16 @@ needed); card files have NO class_name (they register by name instead);
   `test_ai_pack_8_auras.gd`, `test_ai_pack_8_choices.gd`: action-level pins of the above (uses it,
   refuses the harmful or unpayable choice), the null arm of each gate and
   hidden-information permutations.
+- `tests/ai/test_ai_mirage_bugpass.gd`: the 2026-10-04 bug pass's AI pins —
+  Final Fortune's `extra_turn_then_lose` (`portal_tactics.gd`
+  `loses_after_extra_turn` / `extra_turn_damage`, `_counter_shape`),
+  Infernal Contract, Reign of Terror and Waiting in the Weeds by role
+  (`mirage_tactics.gd` `role_choice`), Three Wishes' `impulse_exile`,
+  `dies_on_arrival`, `doomed_token` / `token_ambush`, the held row's reserve
+  (`_held_reserve`), the Aura's own toughness, `granted_tap_shield` in
+  `_sweep_value`, the trick mode in `_plan_spell_choice`, `_burn_kills`,
+  Goblin Grenadiers and Pillar Tombs of Aku; each with its null arm or an
+  unaffected control.
 - `docs/pack-8-mirage-block.md`: the pack guide.
 
 ## Two lured attackers (2026-09-25)
@@ -943,10 +1043,12 @@ with AI and go over MCP code for bugfix and improvement run!"*
   (`TournamentRulesChange`) and editor (`TournamentRules`); the config
   carries `rules`; the hall header's `TournamentHallRules` line (brief,
   detail in the tooltip); the header counts `SgTournament.MAX_PLAYERS`.
-- `game/sgmanalink/protocol.gd`: `VERSION` 26, `SUBPROTOCOL`
-  `sgmanalink-local-v26` (Pack 8: `phased_out` player lists, the phasing
-  flags and `phase_holds`, `block_taxes`, the `discard_special` command);
-  the `host` command's optional `rules` (`SgTableRules.valid`).
+- `game/sgmanalink/protocol.gd`: `VERSION` 27, `SUBPROTOCOL`
+  `sgmanalink-local-v27` (Pack 8: `phased_out` player lists, the phasing
+  flags and `phase_holds`, `block_taxes`, the `discard_special` command;
+  27: `block_taxes` one row per tax, `[tax, life, attackers, blockers]`,
+  built by `SgDuelPresentation.block_taxes`); the `host` command's
+  optional `rules` (`SgTableRules.valid`).
 - `game/sgmanalink/view_protocol.gd`: a room view's optional `rules`
   (whole, validated) and a listing row's optional `rules` (text ≤ 64).
 - `game/sgmanalink/local_server.gd`: a hosted room keeps
@@ -1619,6 +1721,9 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.12.md`: the Mirage block bug pass — the AI's
+  self-destructive plays, land entry payments, the territory menu's special
+  payments, phasing and end-step rules fixes, SGManalink protocol 27.
 - `docs/releases/0.50.11.md`: Pack 8 — the Mirage block (Mirage, Visions,
   Weatherlight; 621 new cards), phasing, flanking, flash and the cleanup
   window, the new costs and damage replacements, SGManalink protocol 26.
@@ -5632,6 +5737,8 @@ shandalar/
 │   │   ├── test_extra_blocks_add_up_2026_10_03.gd  CR 509.1b: printed and
 │   │   │                      granted "additional" blocks add up (Two-Headed
 │   │   │                      Giant of Foriys under Yare blocks four)
+│   │   ├── test_gain_life_text_2026_10_04.gd  GainLifeEffect's menu text
+│   │   │                      agrees with its subject ("you gain 1 life")
 │   │   ├── test_review_2026_09.gd  engine pins from the 2026-09-01 code
 │   │   │                      review (docs/code-review-2026-09.md): the
 │   │   │                      CardRegistry printing-index race, dual-land
@@ -10739,6 +10846,9 @@ shandalar/
     ├── bug-pass-2026-10-03.md  The whole-tree bug pass and MCP review
     │                          (0.50.7): findings, fixes, the owner's
     │                          rulings and the verification
+    ├── bug-pass-2026-10-04-mirage.md  The Mirage block bug pass
+    │                          (0.50.12): eight hunters, eight fixers,
+    │                          what was found, left open and verified
     ├── decklab-audit-2026-09-13.md  DeckLab and base-game audit: seed
     │                          transport, Elo failure status, CSV titles,
     │                          settings retries, home paths and verification

@@ -14,6 +14,9 @@ const MAX_ROOMS := SgTournament.MAX_PLAYERS / 2
 const ACK_WINDOW := 128
 const RECONNECT_GRACE_MS := 300000
 const LOBBY_GRACE_MS := 30000
+## What a seat reads when the referee's view of its duel fails the wire
+## validator its own client runs (see [method _room_game]).
+const VIEW_REFUSED := "The host could not send this duel's table: it failed its own check (a host bug; the host's log names the room). Connection stopped."
 var port := 0
 var access_code := ""
 var _listener := TCPServer.new()
@@ -781,10 +784,31 @@ func _room_game(room: Dictionary, seat: int) -> Dictionary:
 	if room.match == null: return {}
 	var cached: Dictionary = _view_cache.get(room.id, {})
 	if cached.is_empty() or cached.revision != room.revision or cached.match != room.match:
-		cached = {"revision": room.revision, "match": room.match, "views": {}}
+		cached = {"revision": room.revision, "match": room.match, "views": {}, "refused": {}}
 		_view_cache[room.id] = cached
-	if not cached.views.has(seat): cached.views[seat] = room.match.view(seat)
+	if not cached.views.has(seat):
+		cached.views[seat] = room.match.view(seat)
+		# NEVER A VIEW THE OTHER END MUST REFUSE (bug pass 2026-10-04). The
+		# client validates every state (SgViewProtocol) and stops on a bad
+		# one with "Host sent an invalid response" — protocol 26's Heat Wave
+		# rows outgrew MAX_CARDS on a legal board and cut the defender off
+		# with no word of why. The host runs the same check once per view
+		# built, logs the room, and tells that seat why (_flush_publish).
+		if not SgViewProtocol.game(cached.views[seat]):
+			cached.refused[seat] = true
+			push_warning("SGManalink: the referee's view of room %s (%s) for seat %d at revision %d fails the protocol check; that seat is told and disconnected." % [
+				room.id, room.name, seat, int(room.revision)])
 	return cached.views[seat]
+
+
+## Did the referee's latest view of [param sid]'s own duel fail the wire
+## check? Read after [method _state] built it.
+func _view_refused(sid: int) -> bool:
+	var room: Dictionary = _rooms.get(_sessions[sid].room, {})
+	if room.is_empty() or room.match == null: return false
+	var cached: Dictionary = _view_cache.get(room.id, {})
+	return not cached.is_empty() and cached.match == room.match and cached.revision == room.revision \
+		and cached.refused.has(room.seats.find(sid))
 
 
 func _publish(changed_room := "*", requester := 0, listings := true) -> void:
@@ -808,4 +832,7 @@ func _flush_publish() -> void:
 	var pending := _pending_publish.keys()
 	_pending_publish.clear()
 	for sid in pending:
-		if _connected(sid) and not _is_bot(sid): _send(_sessions[sid].peer, _state(sid))
+		if _connected(sid) and not _is_bot(sid):
+			var message := _state(sid)
+			if _view_refused(sid): _reject(_sessions[sid].peer, VIEW_REFUSED)
+			else: _send(_sessions[sid].peer, message)

@@ -25,7 +25,32 @@ static func budget(g: MtgGame, pid: int, card: CardInstance, kind: String, index
 	# objects the seat could pay with — the engine's own count, the one the
 	# local X window uses (DuelScreen._open_x_dialog).
 	var objects := OC.max_x(g, pid, object_groups(card, kind, index, mode), card)
-	return low if objects < 0 else mini(low, objects)
+	if objects >= 0: low = mini(low, objects)
+	# "X TARGETS" (bug pass 2026-10-04 — Firestorm's "each of X targets",
+	# Word of Binding, Volcanic Eruption): each target an X asks for is
+	# named as the spell is cast (CR 601.2c), so X is bounded by the targets
+	# there are to name as well. Firestorm offered X = 4 for four cards in
+	# hand with two players to aim at. The local X window's ceiling.
+	var targets := x_target_ceiling(g, card, kind, index, mode, low)
+	return low if targets < 0 else mini(low, targets)
+
+
+## The most targets the action's caster-chosen "X target" slots can name
+## (the fewest legal targets among them), or -1 when no slot's count is X.
+## [param x] is the X the targets are judged at (`legal_targets_at`).
+static func x_target_ceiling(g: MtgGame, card: CardInstance, kind: String, index: int, mode: int, x: int) -> int:
+	var effects: Array = []
+	if kind == "spell" and not card.data.is_aura():
+		effects = card.data.spell_effects
+		if card.data.is_modal(): effects = card.data.modes[mode].effects if mode >= 0 and mode < card.data.modes.size() else []
+	elif kind == "ability" and index >= 0 and index < card.cur_activated_abilities.size():
+		effects = card.cur_activated_abilities[index].effects
+	var ceiling := -1
+	for effect in effects:
+		if effect.target_spec == null or not effect.target_count_is_x or not effect.target_spec.is_supplied_by_caster(): continue
+		var available := g.legal_targets_at(effect.target_spec, card, x).size()
+		ceiling = available if ceiling < 0 else mini(ceiling, available)
+	return ceiling
 
 
 ## The object-cost groups an action pays (engine/additional_object_costs.gd):

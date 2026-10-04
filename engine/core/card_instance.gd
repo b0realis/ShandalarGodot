@@ -568,6 +568,14 @@ var cur_mana_abilities: Array[ManaAbility] = []
 ## printed value plus [member added_protection] (Rainbow Knights' permanent
 ## grant) plus whatever the Wards and other statics add.
 var cur_protection: int = 0
+## The protection each WARD-STYLE Aura grants this permanent, as
+## {aura instance id: colour mask} ([method CardData.grants_host_protection]
+## — "This effect doesn't remove this Aura"), and what `cur_protection`
+## was before they were merged in: the grants of every OTHER source.
+## Derived, rebuilt every recalculation. The aura-vs-protection
+## state-based action reads them through [method protection_apart_from].
+var cur_aura_protection: Dictionary = {}
+var cur_protection_unwarded: int = 0
 ## Live landwalk types — statics can grant these (Goblin King, Burrowing).
 var cur_landwalk: Array[String] = []
 ## Live RAMPAGE N (CR 702.23). Printed on Legends' creatures, but also
@@ -778,6 +786,8 @@ func reset_characteristics() -> void:
 	cur_power = data.power
 	cur_toughness = data.toughness
 	cur_protection = data.protection_from | added_protection
+	if not cur_aura_protection.is_empty():
+		cur_aura_protection.clear()   # the Wards book theirs again
 	cur_types = data.types | added_types   # permanent grants (Transmogrant)
 	cur_supertypes = data.supertypes
 	cur_colors = data.color_mask() if color_override < 0 else color_override
@@ -942,11 +952,31 @@ func _apply_text_changes() -> void:
 ## same silencing flag Titania's Song uses for the triggered and static
 ## ones — under Blood Moon a Strip Mine really is nothing but a Mountain.
 ## The card is still a land and still has its name.
+##
+## The PRINTED KEYWORDS go too (Mirage bug pass, 0.50.11): Teferi's Isle
+## under Celestial Dawn is a Plains with no phasing, and before this it
+## still phased out every other turn. Layer 4 runs before every grant of
+## layer 6, so what [method reset_characteristics] restored here is the
+## printed set plus the durationless grants — the printed one is dropped
+## and a grant (`added_keywords`, `added_protection`: Cocoon's flying, a
+## Rainbow Knights-style protection) stays, as does every layer-6 grant
+## applied after this; it does not come from the rules text.
 func become_basic_land_type(land_type: String, color: int) -> void:
 	cur_subtypes = [land_type]
 	cur_mana_abilities = [ManaAbility.new(color)]
 	cur_activated_abilities.clear()
 	cur_abilities_silenced = true
+	for k in data.keywords:
+		if not added_keywords.has(k):
+			while cur_keywords.has(k):
+				cur_keywords.erase(k)
+	cur_landwalk.clear()
+	cur_rampage = 0
+	cur_protection = added_protection
+	cur_cant_be_blocked_by.clear()
+	cur_cant_block_power_ge = 0
+	cur_cant_be_blocked_by_power_ge = 0
+	cur_extra_blocks = 0
 
 
 ## "Each land is a Swamp IN ADDITION TO its other land types" (Blanket of
@@ -966,6 +996,21 @@ func add_basic_land_type(land_type: String) -> void:
 	var color := int(Mtg.BASIC_LAND_COLORS.get(kind, 0))
 	if color != 0:
 		cur_mana_abilities.append(ManaAbility.new(color))
+
+
+## The protection this permanent has from every source EXCEPT the
+## Ward-style grant of Aura [param aura_id] — what CR 702.16's "This effect
+## doesn't remove this Aura" leaves for the aura-vs-protection
+## state-based action (CR 704.5m) to read: another Ward's grant, a Goblin
+## Wizard's, a printed protection all count.
+func protection_apart_from(aura_id: int) -> int:
+	if cur_aura_protection.is_empty():
+		return cur_protection
+	var out := cur_protection_unwarded
+	for id in cur_aura_protection:
+		if int(id) != aura_id:
+			out |= int(cur_aura_protection[id])
+	return out
 
 
 ## Live keyword check (use this, not data.has_keyword, in rules code).

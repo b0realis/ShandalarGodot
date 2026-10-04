@@ -832,7 +832,24 @@ static func _farrel_target(g: MtgGame, source: CardInstance, inst: CardInstance,
 static func _source_context(_g: MtgGame, source: CardInstance, _event: GameEvent) -> Dictionary:
 	return {"timestamp": source.layer_timestamp, "controller": source.controller_id}
 
+## The source of the resolving TRIGGER is still HERE: the object that
+## triggered (same timestamp, CR 400.7) and phased in — a phased-out
+## permanent is treated as though it doesn't exist (CR 702.26b), so an
+## intervening "if this is on the battlefield" fails (CR 603.4: Tombstone
+## Stairwell, Soul Echo) and nothing is done to or by it. The gate for
+## "is it still around to act on / to act".
 static func _same_trigger_source(g: MtgGame, source: CardInstance) -> bool:
+	return g.is_present(source) \
+		and source.layer_timestamp == int(g.trigger_context(source).get("timestamp", source.layer_timestamp))
+
+## The source of the resolving trigger is still the SAME OBJECT, phased in
+## or out — for LAST-KNOWN-INFORMATION switches only (`s.counters if
+## _same_trigger_object(g, s) else s.last_counters`, CR 608.2h). A
+## phased-out permanent keeps its counters and the rest (CR 702.26d), and
+## its `last_*` fields are only refreshed when it LEAVES the battlefield,
+## so they would be stale: the live values are its last known ones. To
+## decide whether to act at all, use [method _same_trigger_source].
+static func _same_trigger_object(g: MtgGame, source: CardInstance) -> bool:
 	return source.zone == Mtg.Zone.BATTLEFIELD \
 		and source.layer_timestamp == int(g.trigger_context(source).get("timestamp", source.layer_timestamp))
 

@@ -27,7 +27,7 @@ static func configure(c: CardData) -> bool:
 			c.activated(F._ability("{2}{G}", false, F.Action.new(_protect, "target green creature gains protection from black this turn", TargetSpec.creature("target green creature", F._color.bind(Mtg.ManaColor.G)), true)))
 		"Wall of Kelp":
 			var effect := CreateTokenEffect.new("Kelp", 0, 1, Mtg.ManaColor.U, "plant")
-			effect.token.with_subtypes(["plant", "wall"]).with_keywords([Mtg.Keyword.DEFENDER])
+			effect.token.with_subtypes(["plant", "wall"]).with_keywords([Mtg.Keyword.DEFENDER]).oracle("Defender")
 			c.activated(F._ability("{U}{U}", true, effect))
 		"Serrated Arrows":
 			c.with_enters_counters("arrowhead", 3)

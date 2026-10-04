@@ -7,7 +7,9 @@ extends CardScript
 ##         counter from this Aura. If you do, you gain 1 life.
 ##
 ## Implementation: a damage battery. The charge trigger listens on
-## DAMAGE_DEALT and matches only events whose "to_player" key is the AURA's
+## WAS_DEALT_DAMAGE — the victim's event, one per damage event for the
+## total, so two unblocked attackers are one trigger (CR 510.2; Mirage bug
+## pass 0.50.11) — and matches only events whose "to_player" key is the AURA's
 ## controller — damage to your creatures charges nothing, and neither does
 ## damage the opponent takes. The amount comes off the EVENT (CR 603.1), so
 ## a bolt that was partly prevented banks only what actually landed. The
@@ -24,7 +26,7 @@ func build() -> CardData:
 	return CardData.new("Living Artifact", "{G}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(artifact_spec) \
 		.triggered(TriggeredAbility.new(
-			Mtg.EventType.DAMAGE_DEALT, _charge,
+			Mtg.EventType.WAS_DEALT_DAMAGE, _charge,
 			"Whenever you're dealt damage, put that many vitality counters on this Aura.",
 			_damage_to_controller)) \
 		.triggered(TriggeredAbility.new(

@@ -185,7 +185,7 @@ static func _opponents_draw_step(_g: MtgGame, s: CardInstance, e: GameEvent) -> 
 static func _malignant_draw(g: MtgGame, s: CardInstance, e: GameEvent) -> void:
 	var victim := int(e.data.get("player", -1))
 	if victim < 0: return
-	var counters := s.counters if F._same_trigger_source(g, s) else s.last_counters
+	var counters := s.counters if F._same_trigger_object(g, s) else s.last_counters
 	var n := int(counters.get("growth", 0))
 	if n <= 0: return
 	var before := g.players[victim].library.size()

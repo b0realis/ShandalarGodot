@@ -86,7 +86,7 @@ caller supplies one `TargetRef` per slot, in the same order.
 | A spec that can only name Walls | `TargetSpec...only_walls()` | glyph_of_doom.gd |
 | "Remove N counters" as a COST | `ActivatedAbility...with_counter_cost(kind, n)` | triskelion.gd, necropolis_of_azar.gd |
 | "Sacrifice this at the next end step" | `MtgGame.doom_at_next_end_step(inst, false, false, true)` | dragon_whelp.gd |
-| Something that must outlive its source | `MtgGame.schedule_end_of_combat_action` / `schedule_end_step_token`, or a graveyard trigger | glyph_of_doom.gd, hazezon_tamar.gd |
+| Something that must outlive its source | a delayed trigger, `MtgGame.schedule_delayed_trigger` (on the stack, CR 603.7) / `schedule_end_step_token`, or a graveyard trigger | glyph_of_doom.gd, hazezon_tamar.gd |
 | "Originally printed in <expansion>" | `CardRegistry.originally_printed_in(name, code)` — NEVER `data.set_code` | city_in_a_bottle.gd, golgothian_sylex.gd |
 | A colour its mana cost does not imply | `.with_colors(Mtg.ManaColor.R)` | crimson_kobolds.gd |
 | "Choose a creature type" as it enters, kept in memory | `.with_chosen_type("type")` — the table draws the choice behind the card | aswan_jaguar.gd |

@@ -68,11 +68,22 @@ static func _attackers_context(_g: MtgGame, s: CardInstance, e: GameEvent) -> Di
 ## changes nothing observable: each creature still gets its own delayed
 ## "phases out at end of combat" (CR 603.7), holding even if it has left
 ## combat by then, and nothing in the pool counts or orders the triggers.
+## A real delayed TRIGGER, controlled by the Veil trigger's controller (CR
+## 603.7d): at end of combat it goes on the stack with that step's other
+## triggers in APNAP order (CR 603.3b), so the defending player's own "at
+## end of combat" triggers (Heat Stroke, Sawtooth Ogre) resolve first.
+## It lasts this turn only (its combat's end comes this turn).
 static func _veil(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	for row in g.trigger_context(s).get("attackers", []):
-		g.schedule_end_of_combat_action(_veil_fade.bind(int(row[0]), int(row[1])))
+	var context := g.trigger_context(s)
+	var pid := int(context.get("controller", s.controller_id))
+	for row in context.get("attackers", []):
+		var trigger := TriggeredAbility.new(Mtg.EventType.END_OF_COMBAT,
+			_veil_fade.bind(int(row[0]), int(row[1])),
+			"At end of combat, that creature phases out.")
+		var entry := g.schedule_delayed_trigger(trigger, pid, s)
+		entry["expires_turn"] = g.turn_number
 
 
-static func _veil_fade(g: MtgGame, id: int, stamp: int) -> void:
+static func _veil_fade(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
 	var i := g.find_instance(id)
 	if g.is_present(i) and i.layer_timestamp == stamp: g.phase_out(i)

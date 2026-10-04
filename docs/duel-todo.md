@@ -87,6 +87,13 @@ SEVEN of them now that §1.4's `free_damage_assignment` and §6.8's
 `damage_prevention_window` have joined them —
 and attacker selection stays revocable as a labelled fork
 (`attackers_revocable`).
+One DERIVED rule rides on them without being a fork of its own (Mirage bug
+pass, 0.50.11): +1/+1 and -1/-1 counters annihilate (CR 704.5q) under the
+modern presets — `RulesOptions.counters_annihilate()`, derived from the
+1997 damage-prevention window fork (`damage_prevention_window` off =
+annihilate), so a hand-mixed table follows that fork. It has no Options
+row, no settings key and no field on the LAN table rules: the referee and
+every seat derive it from the same transmitted forks.
 
 ## The S sweep (2026-09-01)
 

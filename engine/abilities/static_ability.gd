@@ -209,6 +209,28 @@ func changing_abilities() -> StaticAbility:
 	return self
 
 
+## Does this LAYER-6 static decide whom it affects by an ABILITY other
+## layer-6 effects grant or remove — Chaosphere's "creatures WITHOUT
+## FLYING have reach"? CR 613.8a: it depends on every effect that changes
+## who has flying (an Earthbind, Mist Dragon's "{0}: loses flying", a
+## Jump), so those apply FIRST whatever the timestamps say, and the
+## flagged static runs after the rest of layer 6 has settled
+## ([method ContinuousEffects._layer_six]), the flagged ones among
+## themselves in timestamp order. Until the Mirage bug pass (0.50.11)
+## Chaosphere asked at its own timestamp, and an Earthbind cast after it
+## left the Angel with neither flying nor reach. Pairs with
+## [method changing_abilities], which still names the layer. Nothing in
+## the pool removes what such a static grants (reach), so applying it
+## last is the whole dependency analysis, as it is for the land-type
+## readers ([member reads_land_types]).
+var reads_abilities: bool = false
+
+## Fluent: mark this layer-6 static as reading a layer-6 ability (CR 613.8a).
+func reading_abilities() -> StaticAbility:
+	reads_abilities = true
+	return self
+
+
 ## Does this static REMOVE abilities (CR 613 layer 6 — Titania's Song's
 ## "each noncreature artifact loses all abilities")? Layer 6 precedes every
 ## P/T layer, and an ability that has been removed contributes nothing in

@@ -332,6 +332,10 @@ static func _hippo(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 			if not i.tapped: ready += 1
 	var power := maxi(0, s.cur_power if MC.same(g, s) else s.last_power)
 	var hint := ready + g.players[foe].mana_pool.total() > power
+	# MANA BURN (RulesOptions.mana_burn, either edition): the {C} burns
+	# whatever of it is not spent in that main phase — never free mana.
+	if hint and g.rules.mana_burn:
+		hint = _hippo_burn_free(g, pid, _hippo_haul(g, foe, lands))
 	if not g.agents[pid].choose_yes_no(g, pid,
 			"Pygmy Hippo: make %s tap each land for mana and lose it, instead of assigning combat damage?" % g.players[foe].player_name,
 			hint):
@@ -355,6 +359,47 @@ static func _hippo(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 			return
 		game.players[pid].mana_pool.add(Mtg.ManaColor.C, lost)
 		game.log_line("Pygmy Hippo: %s adds %d colorless" % [game.players[pid].player_name, lost]))
+
+
+## The most mana [param foe] can be made to lose, and so the most {C} the
+## Hippo's controller receives: their pool plus each land's LARGEST mana
+## ability — which one is the defending player's choice, so the worst case
+## is the one to plan for — a tapped land only through one without {T}.
+static func _hippo_haul(g: MtgGame, foe: int, lands: Array[CardInstance]) -> int:
+	var haul := g.players[foe].mana_pool.total()
+	for land in lands:
+		var most := 0
+		for ability: ManaAbility in land.cur_mana_abilities:
+			if land.tapped and ability.taps_source: continue
+			var n := 0
+			for k in ability.produces.size():
+				n += ability.amount_for(g, land, foe) if k == 0 else int(ability.produces[k][1])
+			most = maxi(most, n)
+		haul += most
+	return haul
+
+
+## Under mana burn the Hippo's {C} arrives at the start of its controller's
+## next main phase and whatever is not spent there burns them (CR 500.4,
+## the 1997 rule). The hint takes it only when ONE sorcery-speed spell in
+## the controller's own hand (its own cards: fair information, CONTRIBUTING
+## rule 8) soaks up the whole [param haul] with its generic part, the rest
+## of its cost payable from the controller's own sources — one spell, so
+## two never count the same land — and never when the haul left unspent
+## would be lethal, whatever the hand holds (the hand is a plan, not a
+## promise: the AI may yet hold that spell).
+static func _hippo_burn_free(g: MtgGame, pid: int, haul: int) -> bool:
+	if haul <= 0: return true
+	if haul >= g.players[pid].life: return false
+	for card in g.players[pid].hand:
+		if card.data.is_land() or card.data.is_type(Mtg.CardType.INSTANT): continue
+		var cost := g.spell_cost_for(pid, card.data)
+		if cost.generic < haul: continue
+		var rest := cost.minus_generic(haul)
+		rest.has_x = false
+		rest.x_count = 0
+		if g.can_afford_cost(pid, rest): return true
+	return false
 
 
 ## One mana ability of [param land], the defending player's pick when it

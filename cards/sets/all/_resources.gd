@@ -61,7 +61,10 @@ static func _land_payment(g: MtgGame, _s: CardInstance, pid: int, type: String, 
 	for i in g.players[pid].battlefield:
 		if i.has_subtype(type) and (not untapped or not i.tapped): choices.append(i)
 	if choices.is_empty(): return false
-	var pick := g.agents[pid].choose_card(g, pid, choices, "Sacrifice %s%s or put the entering land into its owner's graveyard" % ["an untapped " if untapped else "a ", type], true, true)
+	# The controller's OWN choice, not "of an opponent's choice": ORDERED, not
+	# adverse, so a human seat may also withdraw the land play
+	# (MtgGame.cancel_choice) and a heuristic seat still takes the first.
+	var pick := g.agents[pid].choose_card(g, pid, choices, "Sacrifice %s%s or put the entering land into its owner's graveyard" % ["an untapped " if untapped else "a ", type], true, false, true)
 	if pick == null or not choices.has(pick): return false
 	g.sacrifice_permanent(pick)
 	return true

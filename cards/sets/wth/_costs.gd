@@ -238,7 +238,7 @@ static func _tendrils(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x:
 	if not picks.is_empty(): g.discard_cards(who, picks)
 
 static func _terror_wave(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	var counters := s.counters if F._same_trigger_source(g, s) else s.last_counters
+	var counters := s.counters if F._same_trigger_object(g, s) else s.last_counters
 	var ages := int(counters.get("age", 0))
 	var doomed: Array[CardInstance] = []
 	for i in g.all_battlefield():

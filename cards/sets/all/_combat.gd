@@ -136,7 +136,7 @@ static func _infection(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	s.memory["all_infected_%d" % int(g.trigger_context(s).victim)] = true
 static func _infected_player(_g: MtgGame, who: int, s: CardInstance) -> bool: return s != null and s.memory.has("all_infected_%d" % who)
 static func _vermin(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
-	var counters := s.counters if F._same_trigger_source(g, s) else s.last_counters
+	var counters := s.counters if F._same_trigger_object(g, s) else s.last_counters
 	for t in g.current_targets(): g.deal_damage(s, t, int(counters.get("infection", 0)))
 static func _other(_g: MtgGame, s: CardInstance, i: CardInstance) -> bool: return i != s
 # A Gorilla gone before resolution still deals its damage, with its last

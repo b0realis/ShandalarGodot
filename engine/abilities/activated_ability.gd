@@ -201,10 +201,27 @@ func anyone_activated() -> ActivatedAbility:
 ## CardInstance.ability_uses, reset every cleanup.
 var max_per_turn: int = 0
 
-## Fluent: cap activations per turn.
+## Fluent: cap activations per turn. The ONE place a cap is set, so it is
+## also the one place the cap is SAID: an ability [member text] that does
+## not already state it gets the printed sentence appended — "Activate
+## only once each turn." / "Activate no more than twice (three times) each
+## turn." — so the menu and the log read what the card says (Spitting
+## Drake, Kyscu Drake and Wild Aesthir did not; Mirage bug pass, H4-F5).
+## A text that already says it, or an empty one, is left alone.
 func per_turn(n: int) -> ActivatedAbility:
 	max_per_turn = n
+	if n > 0 and text != "" \
+			and not text.to_lower().contains(per_turn_words(n) + " each turn"):
+		var sentence := "Activate only once each turn." if n == 1 \
+			else "Activate no more than %s each turn." % per_turn_words(n)
+		text = text + (" " if text.ends_with(".") else ". ") + sentence
 	return self
+
+
+## "once", "twice", "three times" … — the count as the oracle words it.
+static func per_turn_words(n: int) -> String:
+	const WORDS := ["", "once", "twice", "three times", "four times", "five times"]
+	return WORDS[n] if n >= 0 and n < WORDS.size() else "%d times" % n
 
 
 ## "X can't be 0" (Aladdin's Lamp) — the smallest X this ability accepts.

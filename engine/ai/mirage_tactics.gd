@@ -559,6 +559,9 @@ static func respond(g: MtgGame, pilot) -> String:
 	done = flash_ambush(g, pilot)
 	if done != "":
 		return done
+	done = token_ambush(g, pilot)
+	if done != "":
+		return done
 	done = aura_trick(g, pilot)
 	if done != "":
 		return done
@@ -756,6 +759,14 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance, mode: int) -> Va
 	# land, stopping nothing): never the main planner's ([method
 	# shield_response] casts it).
 	if is_shield_spell(inst.data):
+		return {}
+	# A TOKEN GONE AT THE NEXT END STEP is never the main planner's in our
+	# own turn (the bug pass, 2026-10-04: Tidal Wave's Wall cast in our main
+	# phase, unable to attack and sacrificed at our end step): its moment
+	# is their attack ([method token_ambush]). A hasty token is an attack.
+	var doomed := doomed_token(inst.data)
+	if doomed != null and g.active_player == pilot.pid \
+			and not doomed.has_keyword(Mtg.Keyword.HASTE):
 		return {}
 	if not inst.data.is_modal():
 		var lock: Variant = lock_choice(g, pilot, inst)
@@ -1053,7 +1064,9 @@ static func flash_ambush(g: MtgGame, pilot) -> String:
 ## gets +2/+2"), read off the oracle text the way [method
 ## EffectIntent.aura_gifts] reads its keywords; ZERO when it prints none.
 static func aura_pump(data: CardData) -> Vector2i:
-	var lower := data.oracle_text.to_lower()
+	# One line of the oracle ends at a newline, not a space (Coils of the
+	# Medusa's "+1/-1.\nSacrifice this Aura: ..." read as no pump at all).
+	var lower := data.oracle_text.to_lower().replace("\n", " ")
 	var at := lower.find("enchanted creature gets ")
 	if at < 0:
 		return Vector2i.ZERO
@@ -1092,6 +1105,10 @@ static func aura_trick(g: MtgGame, pilot) -> String:
 		var price: float = Evaluator.card_value(inst.data)
 		for ours in g.players[pid].battlefield:
 			if not ours.is_creature() or dies_when_targeted(ours):
+				continue
+			# Its own -N toughness would kill the body before the damage
+			# step (the bug pass: Grave Servitude's +3/-1 on a 1/1).
+			if ours.cur_toughness + bonus.y <= ours.damage:
 				continue
 			var ref := TargetRef.card(ours)
 			if inst.data.aura_target == null or not inst.data.aura_target.is_legal(g, ref, inst):
@@ -1952,16 +1969,82 @@ static func upkeep_ban(g: MtgGame, pilot) -> String:
 ##    when our bidding limit beats theirs — the card's own public hint bids
 ##    up to the body's size while six life stay — priced at the life the
 ##    winning bid costs.
+##
+## And the bug pass's three (2026-10-04, cards/sets/{mir,vis}):
+##  * `color_sweep_life_toll` (Reign of Terror — destroy all green or all
+##    white creatures, 2 life lost per death): the colour the card's own
+##    `pick` hint names is priced as the sweep it is, less the life it costs
+##    at the reaper's rate; never cast when those deaths are our last life.
+##  * `cats_per_untapped_forest` (Waiting in the Weeds — each player a 1/1
+##    for each UNTAPPED Forest as it resolves): our Forests counted after
+##    the plan that pays for it, theirs as they stand; cast only for more
+##    cats than theirs.
+##  * `impulse_exile` (Three Wishes — three cards playable until our next
+##    turn, then gone): cast in our own main phase with a land drop to take
+##    from them or two mana left over after paying, never held for their
+##    end step ([method AiPlayer._is_held_instant]).
 static func role_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 	var role: StringName = &""
+	var tagged: EffectBase = null
 	for e in inst.data.spell_effects:
-		if e.ai_role in [&"library_build", &"land_balance", &"tariff", &"life_bid_steal"]:
+		if e.ai_role in [&"library_build", &"land_balance", &"tariff", &"life_bid_steal",
+				&"color_sweep_life_toll", &"cats_per_untapped_forest", &"impulse_exile"]:
 			role = e.ai_role
+			tagged = e
 	if role == &"":
 		return null
 	var pid: int = pilot.pid
 	var foe: int = g.opponent_of(pid)
 	match role:
+		&"color_sweep_life_toll":
+			var filters: Array = tagged.ai_parameters.get("filters", [])
+			var pick: Callable = tagged.ai_parameters.get("pick", Callable())
+			if filters.is_empty() or not pick.is_valid():
+				return {}
+			var chosen := clampi(int(pick.call(g, pid)), 0, filters.size() - 1)
+			var sweep := DestroyAllEffect.new("", filters[chosen], false)
+			var deaths := 0
+			for c in g.all_battlefield():
+				if c.is_creature() and pilot._sweep_kills(sweep, c, 0):
+					deaths += 1
+			var toll := deaths * int(tagged.ai_parameters.get("life_per_death", 0))
+			var life := g.players[pid].life
+			if toll >= life:
+				return {}
+			var swing: float = pilot._sweep_value(g, sweep, 0, inst) \
+				- float(toll) * pilot._life_price(life - toll)
+			return {} if swing < pilot.SWEEP_BAR else {"x": 0, "targets": [], "value": swing}
+		&"cats_per_untapped_forest":
+			var spent := _plan_spends(g, pilot, inst)
+			var ours := 0
+			var theirs := 0
+			for land in g.all_battlefield():
+				if not land.is_land() or land.tapped or not land.has_subtype("forest") \
+						or not g.is_present(land):
+					continue
+				if land.controller_id != pid:
+					theirs += 1
+				elif not spent.has(land.id):
+					ours += 1
+			if ours <= theirs or not (tagged is CreateTokenEffect):
+				return {}
+			var cat: float = pilot._token_value({"power": tagged.token.power,
+				"toughness": tagged.token.toughness})
+			return {"x": 0, "targets": [], "value": float(ours - theirs) * cat}
+		&"impulse_exile":
+			if g.active_player != pid or not Mtg.is_main_step(g.current_step()):
+				return {}
+			var cards := mini(3, g.players[pid].library.size())
+			if cards <= 0:
+				return {}
+			var spent := _plan_spends(g, pilot, inst)
+			var left := 0
+			for row in pilot._mana_sources(g):
+				if row[0] == null or not spent.has(row[0].id):
+					left += 1
+			if not g.land_drop_available(pid) and left < 2:
+				return {}
+			return {"x": 0, "targets": [], "value": float(cards) + pilot._draw_need(g.players[pid].hand.size())}
 		&"library_build":
 			return {}
 		&"land_balance":
@@ -2004,6 +2087,18 @@ static func role_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
 	return null
 
 
+## The permanents the plan that pays for [param inst] would tap, as
+## `{id: true}` — the same plan [method AiPlayer._try_cast_best] checks.
+static func _plan_spends(g: MtgGame, pilot, inst: CardInstance) -> Dictionary:
+	var out := {}
+	var plan: Array = pilot._plan_taps_from(pilot._mana_sources(g), inst.data.cost,
+		g.spell_surcharge(pilot.pid, inst.data), g.mana_usage_keys(inst.data, inst))
+	for step in plan:
+		if step[0] != null:
+			out[step[0].id] = true
+	return out
+
+
 static func _highest_mv_creature(g: MtgGame, seat: int) -> CardInstance:
 	var best: CardInstance = null
 	for c in g.players[seat].battlefield:
@@ -2040,3 +2135,166 @@ static func pick_damage_source(g: MtgGame, candidates: Array[CardInstance]) -> C
 		if could_deal_damage(g, c):
 			return c
 	return null if candidates.is_empty() else candidates[0]
+
+
+
+# ============================================ the Mirage bug pass (AI) --
+#
+# The 2026-10-04 bug pass's readings (docs/pack-8-mirage-block.md, "AI
+# review"): spells and creatures the pilot cast to its own loss. Every one
+# is read off a typed effect, a declared role or a printed line, and every
+# one answers its null with [member AiProfile.forecasts_tactics] off.
+
+## The printed arrival of a body whose only toughness is the counters it
+## counts ("This creature enters with a +1/+1 counter on it for each
+## creature card in your graveyard"), read off the oracle the way [method
+## aura_pump] reads a pump.
+const COUNTS_GRAVE_CREATURES := "enters with a +1/+1 counter on it for each creature card in your graveyard"
+
+## The printed keep-price on an arrival trigger ("When this creature
+## enters, sacrifice it unless you sacrifice any number of creatures with
+## total power 12 or greater").
+const KEEP_BY_POWER := "sacrifice it unless you sacrifice any number of creatures with total power "
+
+## The most bodies the keep-price's own hint gives up (the card answers
+## "keep it?" with yes only when two creatures or fewer reach the power).
+const KEEP_BODIES := 2
+
+
+## Would [param inst], a creature card in hand, be lost the moment it
+## arrives? A 2/0 whose counters count nothing dies to the state-based
+## check (CR 704.5f) — ours is a graveyard both seats see — and a body
+## whose arrival trigger sacrifices it unless creatures with total power N
+## are given is sacrificed when our other creatures cannot reach N within
+## the bodies the card's own hint will give ([constant KEEP_BODIES]).
+static func dies_on_arrival(g: MtgGame, pilot, inst: CardInstance) -> bool:
+	if not pilot.profile.forecasts_tactics or not inst.data.is_creature():
+		return false
+	var pid: int = pilot.pid
+	if inst.data.toughness <= 0 \
+			and inst.data.oracle_text.to_lower().contains(COUNTS_GRAVE_CREATURES):
+		var counted := 0
+		for card in g.players[pid].graveyard:
+			if card.data.is_creature():
+				counted += 1
+		if inst.data.toughness + counted <= 0:
+			return true
+	for t in inst.data.triggered_abilities:
+		if t.event_type != Mtg.EventType.ENTERS_BATTLEFIELD:
+			continue
+		var line := t.text.to_lower()
+		var at := line.find(KEEP_BY_POWER)
+		if at < 0:
+			continue
+		var words := line.substr(at + KEEP_BY_POWER.length()).split(" ", false)
+		if words.is_empty() or not words[0].is_valid_int():
+			continue
+		var need := int(words[0])
+		var powers: Array[int] = []
+		for body in g.players[pid].battlefield:
+			if body.is_creature() and g.is_present(body) and body.cur_power > 0:
+				powers.append(body.cur_power)
+		powers.sort()
+		powers.reverse()
+		var reached := 0
+		var bodies := 0
+		for power in powers:
+			if reached >= need:
+				break
+			reached += power
+			bodies += 1
+		if reached < need or bodies > KEEP_BODIES:
+			return true
+	return false
+
+
+## The token line of a spell whose token is gone at the next end step
+## ("Create a 5/5 blue Wall creature token with defender. Sacrifice it at
+## the beginning of the next end step." — Tidal Wave).
+const DOOMED_TOKEN := "sacrifice it at the beginning of the next end step"
+
+
+## The token [param data] makes when that token is sacrificed at the next
+## end step, or null. Made in our own turn it is summoning-sick until it is
+## gone (and a defender never attacks at all): its moment is their attack
+## ([method token_ambush]).
+static func doomed_token(data: CardData) -> CardData:
+	if not data.oracle_text.to_lower().contains(DOOMED_TOKEN):
+		return null
+	for e in data.spell_effects:
+		if e is CreateTokenEffect:
+			return e.token
+	return null
+
+
+## THE DOOMED WALL AS AN AMBUSH: their attackers are declared, our blocks
+## are not; an instant whose token lives only until the end step is cast
+## now to block. Worth it when the token kills an attacker and lives, keeps
+## back damage worth the card, or turns a lethal attack into a survived one.
+static func token_ambush(g: MtgGame, pilot) -> String:
+	if g.active_player == pilot.pid or g.current_step() != Mtg.Step.DECLARE_ATTACKERS \
+			or g.combat.attackers.is_empty() or not g.stack.is_empty():
+		return ""
+	var pid: int = pilot.pid
+	var life := g.players[pid].life
+	var sources: Array = pilot._mana_sources(g)
+	var attackers: Array[CardInstance] = pilot._declared_attackers(g)
+	var before: int = pilot._damage_through_blocks(g, attackers, pilot._untapped_creatures(g, pid), pid)
+	var best: CardInstance = null
+	var best_value := 0.0
+	for inst in g.players[pid].hand:
+		var token := doomed_token(inst.data)
+		if token == null or not g.casts_at_instant_speed(pid, inst) \
+				or pilot._refused.has(str(inst.id)) or pilot._cast_gate(g, inst) != "":
+			continue
+		var surcharge := g.spell_surcharge(pid, inst.data)
+		if not (pilot._cost_is_free(inst.data.cost) and surcharge == 0) \
+				and pilot._plan_taps_from(sources, inst.data.cost, surcharge,
+					g.mana_usage_keys(inst.data, inst)).is_empty():
+			continue
+		var value := 0.0
+		for attacker in attackers:
+			var read := _ambush_read(token, attacker)
+			if not bool(read["blocks"]):
+				continue
+			if bool(read["kills"]) and bool(read["lives"]):
+				value = maxf(value, pilot._victim_value(g, attacker) + 1.0)
+			var kept := maxi(attacker.cur_power, 0)
+			if attacker.has_keyword(Mtg.Keyword.TRAMPLE):
+				kept = mini(kept, token.toughness)
+			value = maxf(value, float(kept) * pilot._life_price(life))
+			if before >= life and before - kept < life:
+				value = pilot.LETHAL_WORTH
+		if value < maxf(3.0, Evaluator.card_value(inst.data)) or value <= best_value:
+			continue
+		best = inst
+		best_value = value
+	if best == null:
+		return ""
+	return pilot._cast_response(g, best, [], 0, "cast %s as a surprise blocker" % best.data.card_name)
+
+
+## Torrent of Lava's grant, read off the spell's stack static: "each
+## creature has \"{T}: Prevent the next 1 damage that would be dealt to this
+## creature by Torrent of Lava this turn.\"" (CR 611.3). The same line
+## [method torrent_option] answers from the creature's side.
+const TAP_SHIELD := "prevent the next 1 damage that would be dealt to this creature by"
+
+
+## The damage each creature can tap away from [param source], a sweep
+## whose stack static grants the {T} shield, or 0.
+static func granted_tap_shield(source: CardInstance) -> int:
+	if source == null:
+		return 0
+	for s in source.data.stack_static_abilities:
+		var line := s.text.to_lower()
+		if line.contains("{t}:") and line.contains(TAP_SHIELD):
+			return 1
+	return 0
+
+
+## Can [param inst] pay a {T} cost right now — untapped, and not under
+## summoning sickness unless it has haste (CR 302.6)?
+static func can_tap_now(inst: CardInstance) -> bool:
+	return inst.is_creature() and not inst.tapped \
+		and not (inst.summoning_sick and not inst.has_keyword(Mtg.Keyword.HASTE))

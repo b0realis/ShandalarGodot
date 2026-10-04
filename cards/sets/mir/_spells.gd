@@ -70,7 +70,8 @@ static func configure(c: CardData) -> bool:
 			c.mode("Exile up to three target cards from a single graveyard", [GraveExile.new()])
 			c.mode("Target creature gains fear until end of turn", [PumpEffect.new(0, 0, [Mtg.Keyword.FEAR])])
 			c.with_ai_mode(_first_mode)
-		"Infernal Contract": c.spell(DrawEffect.new(4)).spell(HalfLife.new())
+		# Cruel Bargain's text exactly: the fair AI prices it by that shape.
+		"Infernal Contract": c.spell(DrawEffect.new(4).with_ai_role(&"draw_four_half_life")).spell(HalfLife.new())
 		"Kaervek's Hex": c.spell(ColorSweep.new(1, "each nonblack creature and 1 more to each green creature", P.nonblack, P.green))
 		"Nocturnal Raid": c.spell(MassPumpEffect.new(2, 0, "black creatures").with_filter(P.black))
 		"Painful Memories": c.spell(F.Action.new(_painful_memories, "look at target opponent's hand and put a card from it on top of their library", TargetSpec.opponent()))
@@ -88,10 +89,11 @@ static func configure(c: CardData) -> bool:
 			c.mode("Target creature gains haste until end of turn", [PumpEffect.new(0, 0, [Mtg.Keyword.HASTE])])
 			c.with_ai_mode(_chaos_charm_mode)
 		"Cinder Cloud": c.spell(DeathBurn.new(TargetSpec.creature(), true))
-		"Final Fortune": c.spell(FinalTurn.new())
+		# Last Chance's shape: the fair AI never buys the turn unless it wins.
+		"Final Fortune": c.spell(FinalTurn.new().with_ai_role(&"extra_turn_then_lose"))
 		"Goblin Scouts":
 			var scouts := CreateTokenEffect.new("Goblin Scout", 1, 1, Mtg.ManaColor.R, "goblin", 3)
-			scouts.token.with_subtypes(["scout"]).with_landwalk(["mountain"])
+			scouts.token.with_subtypes(["scout"]).with_landwalk(["mountain"]).oracle("Mountainwalk")
 			c.spell(scouts)
 		"Hammer of Bogardan":
 			c.spell(DamageEffect.new(3).any_target())
@@ -130,7 +132,7 @@ static func configure(c: CardData) -> bool:
 		"Tranquil Domain": c.spell(DestroyAllEffect.new("all non-Aura enchantments", P.non_aura_enchantment))
 		"Tropical Storm": c.spell(ColorSweep.new(0, "each creature with flying and 1 more to each blue creature", P.flying, P.blue).x_damage())
 		"Unyaro Bee Sting": c.spell(DamageEffect.new(2).any_target())
-		"Waiting in the Weeds": c.spell(WeedCats.new())
+		"Waiting in the Weeds": c.spell(WeedCats.new().with_ai_role(&"cats_per_untapped_forest"))
 		# ------------------------------------------------------------- gold
 		"Energy Bolt":
 			c.mode("Energy Bolt deals X damage to target player", [DamageEffect.new(0).target_player().x_damage()])
@@ -296,7 +298,8 @@ class Afterlife extends DestroyEffect:
 	func _init() -> void:
 		super(TargetSpec.creature(), false)
 		spirit = CardData.new("Spirit", "", Mtg.CardType.CREATURE).pt(1, 1) \
-			.with_colors(Mtg.ManaColor.W).with_subtypes(["spirit"]).with_keywords([Mtg.Keyword.FLYING])
+			.with_colors(Mtg.ManaColor.W).with_subtypes(["spirit"]).with_keywords([Mtg.Keyword.FLYING]) \
+			.oracle("Flying")
 	func resolve(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x := 0) -> void:
 		var victim := g.find_instance(t.instance_id)
 		if victim == null or victim.zone != Mtg.Zone.BATTLEFIELD: return
@@ -397,8 +400,10 @@ static func _dream_cache(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, 
 		var hand: Array[CardInstance] = g.players[pid].hand.duplicate()
 		var worst := P.best_first(g, hand)
 		worst.reverse()
+		# Worst first, and said so (PlayerChoice.ordered): a heuristic seat
+		# puts back its least valuable card, not its best.
 		var chosen := g.agents[pid].choose_card(g, pid, worst, "Dream Cache: choose a card to put %s" %
-			("on top of your library" if where == 0 else "on the bottom of your library"))
+			("on top of your library" if where == 0 else "on the bottom of your library"), false, false, true)
 		if chosen == null or not worst.has(chosen): chosen = worst[0]
 		if where == 0: g.put_from_hand_on_top_of_library(chosen)
 		else: g.put_on_bottom_of_library(chosen)
@@ -441,7 +446,10 @@ static func _flash(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: in
 	if not g.agents[pid].choose_yes_no(g, pid, "Flash: put a creature card from your hand onto the battlefield?",
 			g.can_afford_cost(pid, _flash_cost(creatures[0]))):
 		return
-	var chosen := g.agents[pid].choose_card(g, pid, creatures, "Flash: choose a creature card to put onto the battlefield")
+	# Ranked for the seat — a creature it can pay for first — and said so
+	# (PlayerChoice.ordered): the dearest card in hand is sacrificed unpaid.
+	var chosen := g.agents[pid].choose_card(g, pid, creatures,
+		"Flash: choose a creature card to put onto the battlefield", false, false, true)
 	if chosen == null or not creatures.has(chosen): chosen = creatures[0]
 	g.put_from_hand_into_play(chosen, pid)
 	if chosen.zone != Mtg.Zone.BATTLEFIELD: return
@@ -645,6 +653,15 @@ class PsychicTransfer extends EffectBase:
 		var mine := g.players[pid].life
 		var theirs := g.players[other].life
 		if other == pid or absi(mine - theirs) > 5: return
+		# CR 701.12b + 119.7: a player who can't gain life can't be given a
+		# higher total by an exchange, and CR 701.12a: if the entire
+		# exchange can't be completed, no part of it occurs — the higher
+		# total is not lowered alone (Forsaken Wastes). A replacement of
+		# the gain (Lich's draw) still lets the exchange happen (701.12b).
+		var lower := pid if mine < theirs else other
+		if mine != theirs and g.players[lower].cant_gain_life:
+			g.log_line("%s can't gain life: no life totals are exchanged" % g.players[lower].player_name)
+			return
 		g.adjust_life(pid, theirs - mine)
 		g.adjust_life(other, mine - theirs)
 	func describe() -> String:
@@ -654,10 +671,12 @@ class PsychicTransfer extends EffectBase:
 class TidalWave extends CreateTokenEffect:
 	func _init() -> void:
 		super("Wall", 5, 5, Mtg.ManaColor.U, "wall")
-		token.with_keywords([Mtg.Keyword.DEFENDER])
+		token.with_keywords([Mtg.Keyword.DEFENDER]).oracle("Defender")
+	## "Sacrifice it": the caster's delayed trigger — a Wall stolen by then
+	## stays (CR 603.7d, 701.17a; MtgGame.doom_at_next_end_step).
 	func resolve(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x := 0) -> void:
 		for wall in g.create_token(pid, token, count):
-			g.doom_at_next_end_step(wall, false, false, true)
+			g.doom_at_next_end_step(wall, false, false, true, pid)
 	func describe() -> String:
 		return "create a 5/5 blue Wall token with defender; sacrifice it at the beginning of the next end step"
 
@@ -783,17 +802,35 @@ static func _painful_memories(g: MtgGame, _s: CardInstance, pid: int, t: TargetR
 class ReignOfTerror extends DestroyAllEffect:
 	func _init() -> void:
 		super("all green creatures or all white creatures", P.green_or_white_creature, false)
-	func resolve(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x := 0) -> void:
-		var labels: Array[String] = ["Destroy all green creatures", "Destroy all white creatures"]
+		# The fair AI prices the colour [method hint] names and the 2 life
+		# per death (engine/ai/mirage_tactics.gd `color_sweep_life_toll`).
+		with_ai_role(&"color_sweep_life_toll", {"pick": ReignOfTerror.hint,
+			"filters": [ReignOfTerror.green_creature, ReignOfTerror.white_creature],
+			"life_per_death": 2})
+	static func green_creature(i: CardInstance) -> bool: return i.is_creature() and P.green(i)
+	static func white_creature(i: CardInstance) -> bool: return i.is_creature() and P.white(i)
+	## The caster's default colour, from the public board: the one that
+	## takes more of theirs than of ours — but never the one whose deaths
+	## would cost the caster's last life while the other's would not.
+	static func hint(g: MtgGame, pid: int) -> int:
 		var colors: Array[int] = [Mtg.ManaColor.G, Mtg.ManaColor.W]
 		var worth: Array[float] = [0.0, 0.0]
+		var deaths: Array[int] = [0, 0]
 		for i in g.all_battlefield():
 			if not i.is_creature(): continue
 			for n in 2:
 				if P.color(i, colors[n]):
 					worth[n] += (1.0 if i.controller_id != pid else -1.0) * (1.0 + float(maxi(0, i.cur_power)))
+					if not i.cur_indestructible: deaths[n] += 1
+		var life := g.players[pid].life
+		var lethal: Array[bool] = [deaths[0] > 0 and 2 * deaths[0] >= life, deaths[1] > 0 and 2 * deaths[1] >= life]
+		if lethal[0] != lethal[1]: return 1 if lethal[0] else 0
+		return 0 if worth[0] >= worth[1] else 1
+	func resolve(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x := 0) -> void:
+		var labels: Array[String] = ["Destroy all green creatures", "Destroy all white creatures"]
+		var colors: Array[int] = [Mtg.ManaColor.G, Mtg.ManaColor.W]
 		var pick := clampi(g.agents[pid].choose_option(g, pid, labels, "Reign of Terror: which color?",
-			0 if worth[0] >= worth[1] else 1), 0, 1)
+			hint(g, pid)), 0, 1)
 		var victims: Array[CardInstance] = []
 		var entries := {}
 		for i in g.all_battlefield():
@@ -861,7 +898,9 @@ class Soulshriek extends PumpEffect:
 			if card.data.is_creature(): x += 1
 		g.continuous.add_until_eot_pump(i.id, x, 0)
 		g.recalculate()
-		g.doom_at_next_end_step(i, false, false, true)
+		# The caster sacrifices it — only while they still control it
+		# (CR 603.7d, 701.17a).
+		g.doom_at_next_end_step(i, false, false, true, pid)
 	func describe() -> String:
 		return "target creature you control gets +X/+0 (X = creature cards in your graveyard); sacrifice it at the next end step"
 
@@ -950,8 +989,10 @@ static func _sirocco(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x: 
 	for card in hand: names.append(card.data.card_name)
 	g.reveal_information(-1, "Sirocco — %s's hand" % g.players[who].player_name, names)
 	for card in hand:
+		# "Blue" is the card's colour NOW, read live (CR 105.2; layer 5 off
+		# the battlefield): Celestial Dawn makes its owner's hand white.
 		if card.zone != Mtg.Zone.HAND or not card.data.is_type(Mtg.CardType.INSTANT) \
-				or (card.data.color_mask() & Mtg.ManaColor.U) == 0:
+				or not card.has_color(Mtg.ManaColor.U):
 			continue
 		# Paying life needs that much life (CR 119.4); the payer is the
 		# player whose card it is.
@@ -979,8 +1020,10 @@ static func _opponent_cast_creature(g: MtgGame, pid: int) -> String:
 
 static func _lure_of_prey(g: MtgGame, _s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
 	var green: Array[CardInstance] = []
+	# The card's colour NOW (CR 105.2, layer 5 off the battlefield): under
+	# Celestial Dawn a hand's Elves are white, not a green creature card.
 	for card in g.players[pid].hand:
-		if card.data.is_creature() and (card.data.color_mask() & Mtg.ManaColor.G) != 0: green.append(card)
+		if card.data.is_creature() and card.has_color(Mtg.ManaColor.G): green.append(card)
 	if green.is_empty(): return
 	var ranked := P.best_first(g, green)
 	var chosen := g.agents[pid].choose_card(g, pid, ranked,
@@ -1109,7 +1152,9 @@ static func _sealed_fate(g: MtgGame, _s: CardInstance, pid: int, t: TargetRef, x
 	while seen.size() > 1:
 		var worst := P.best_first(g, seen)
 		worst.reverse()
-		var next := g.agents[pid].choose_card(g, pid, worst, "Sealed Fate: choose the next card from the top")
+		# Their worst card first, for the top (PlayerChoice.ordered).
+		var next := g.agents[pid].choose_card(g, pid, worst, "Sealed Fate: choose the next card from the top",
+			false, false, true)
 		if next == null or not worst.has(next): next = worst[0]
 		ordered.append(next)
 		seen.erase(next)

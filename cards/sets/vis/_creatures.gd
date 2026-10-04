@@ -218,7 +218,7 @@ class ChimeraBoon extends CounterMarkerEffect:
 class DelayedButterfly extends CreateTokenEffect:
 	func _init() -> void:
 		super("Butterfly", 1, 1, Mtg.ManaColor.G, "insect")
-		token.with_keywords([Mtg.Keyword.FLYING])
+		token.with_keywords([Mtg.Keyword.FLYING]).oracle("Flying")
 	func resolve(game: MtgGame, source: CardInstance, controller: int, _target: TargetRef, _x := 0) -> void:
 		game.schedule_delayed_trigger(TriggeredAbility.new(Mtg.EventType.END_STEP_START, _make.bind(token, controller),
 			"Create a 1/1 green Insect creature token with flying named Butterfly."), controller, source)

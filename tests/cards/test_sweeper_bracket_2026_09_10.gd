@@ -577,9 +577,10 @@ func test_glyph_of_doom_buries_both_blocked_attackers_in_one_go() -> void:
 	assert_ok(g.cast_spell(1, glyph, [TargetRef.card(board["wall"])]))
 	resolve_stack()
 	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()   # the doom is a delayed trigger on the stack (CR 603.7)
 	assert_eq(board["giant"].zone, Mtg.Zone.GRAVEYARD)
 	assert_eq(board["bear"].zone, Mtg.Zone.GRAVEYARD,
-		"both attackers the Wall stopped, in one delayed action")
+		"both attackers the Wall stopped, in one delayed trigger")
 	_assert_bracket_closed()
 
 

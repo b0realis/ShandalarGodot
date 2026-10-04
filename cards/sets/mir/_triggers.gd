@@ -41,7 +41,7 @@ static func configure(c: CardData) -> bool:
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, _mesa_upkeep,
 				"At the beginning of your upkeep, sacrifice this enchantment unless you sacrifice a Pegasus.", F._your_upkeep))
 			var pegasus := CreateTokenEffect.new("Pegasus", 1, 1, Mtg.ManaColor.W, "pegasus")
-			pegasus.token.with_keywords([Mtg.Keyword.FLYING])
+			pegasus.token.with_keywords([Mtg.Keyword.FLYING]).oracle("Flying")
 			c.activated(ActivatedAbility.new("{1}{W}", false, [pegasus],
 				"{1}{W}: Create a 1/1 white Pegasus creature token with flying."))
 		"Wall of Resistance":
@@ -243,8 +243,16 @@ static func _dead_context(g: MtgGame, s: CardInstance, e: GameEvent) -> Dictiona
 
 ## Pick one of [param candidates] for [param pid]; a null or foreign answer
 ## becomes the first candidate (the funnel's non-optional contract).
-static func pick(g: MtgGame, pid: int, candidates: Array[CardInstance], prompt: String) -> CardInstance:
-	var chosen := g.agents[pid].choose_card(g, pid, candidates, prompt)
+## [param ranked]: the callers hand the list RANKED for the seat, best
+## answer first — "least valuable first" for what it loses (the creature a
+## Wildebeests returns, the card Preferred Selection buries) — so the ask
+## is ORDERED ([member PlayerChoice.ordered]) and a heuristic seat takes
+## the first instead of the most valuable card, which for a loss worded
+## without a tribute word ("return", "bottom") was the worst answer.
+## False for a list in no particular order (Goblin Recruiter's goblins).
+static func pick(g: MtgGame, pid: int, candidates: Array[CardInstance], prompt: String,
+		ranked := true) -> CardInstance:
+	var chosen := g.agents[pid].choose_card(g, pid, candidates, prompt, false, false, ranked)
 	return chosen if chosen != null and candidates.has(chosen) else candidates[0]
 
 
@@ -360,7 +368,7 @@ static func _vortex_clear(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 static func _vortex_bill(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var who := int(g.trigger_context(s).get("who", -1))
 	if who < 0: return
-	var counters: Dictionary = s.counters if F._same_trigger_source(g, s) else s.last_counters
+	var counters: Dictionary = s.counters if F._same_trigger_object(g, s) else s.last_counters
 	var n := int(counters.get("vortex", 0))
 	if n <= 0:
 		g.log_line("Energy Vortex: %s pays {0}" % g.players[who].player_name)

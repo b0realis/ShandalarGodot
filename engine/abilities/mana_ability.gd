@@ -24,17 +24,39 @@ var forced_output_color: int = 0
 var controller_replacement := false
 var unreplaced_ability: ManaAbility
 
-func forcing_color(color: int, controller_only := false) -> ManaAbility:
+## A copy of this ability whose mana comes out as [param color]. Two
+## wordings, two modes:
+## - "produces {U} instead of any other TYPE" (Deep Water, the land-wide
+##   replacements — the default): EVERY mana it makes, colourless included;
+##   [member forced_output_color] carries it, and MtgGame.tap_for_mana
+##   recolours the activation's whole total, whatever a dynamic amount made.
+## - [param colored_only] — "produce mana of the chosen color instead of any
+##   other COLOR" (Hall of Gemstone): colourless is not a colour (CR 105.1,
+##   105.2c), so only the coloured part changes and a Karoo's {C}{U} makes
+##   {C}{R}. Here the result is written into [member produces] itself and
+##   [member forced_output_color] stays 0, so the tap, the planner and the
+##   menu all read the same literal {C}{R} (a dynamic amount still scales
+##   the first entry). A first entry whose colour is decided at activation
+##   ([member dynamic_color], [member color_options]) makes a colour, so it
+##   takes the forced one.
+## Every rider (costs, amount, restriction, side effect) travels with the
+## copy, and a later full replacement over it replaces everything again.
+func forcing_color(color: int, controller_only := false, colored_only := false) -> ManaAbility:
 	var copy := ManaAbility.new(0, 0)
 	for prop in get_property_list():
 		if int(prop.usage) & PROPERTY_USAGE_SCRIPT_VARIABLE: copy.set(prop.name, get(prop.name))
-	copy.forced_output_color = color
+	copy.forced_output_color = 0 if colored_only else color
 	copy.controller_replacement = controller_only
 	copy.unreplaced_ability = self
+	var chosen_at_activation := dynamic_color.is_valid() or color_options.is_valid()
 	copy.dynamic_color = Callable()
 	copy.color_options = Callable()
 	copy.produces = []
-	for pair in produces: copy.produces.append([color, pair[1]])
+	for i in produces.size():
+		var pair: Array = produces[i]
+		var keeps := colored_only and int(pair[0]) == Mtg.ManaColor.C \
+			and not (i == 0 and chosen_at_activation)
+		copy.produces.append([int(pair[0]) if keeps else color, pair[1]])
 	return copy
 
 ## When true the cost also includes sacrificing the source (Black Lotus's

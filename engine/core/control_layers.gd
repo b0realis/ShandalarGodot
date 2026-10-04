@@ -25,8 +25,15 @@ static func add(g: MtgGame, victim: CardInstance, pid: int, kind := "permanent",
 static func _live(g: MtgGame, victim: CardInstance, e: Dictionary) -> bool:
 	if not e.has("source"): return true
 	var s := g.find_instance(int(e.source))
-	if s == null or s.zone != Mtg.Zone.BATTLEFIELD or s.phased_out or s.layer_timestamp != int(e.stamp): return false
+	if s == null or s.zone != Mtg.Zone.BATTLEFIELD or s.layer_timestamp != int(e.stamp): return false
+	# An Aura's control is its STATIC ability, not a duration: while the
+	# Aura is phased out (riding its phased-out host, 702.26g, or on its
+	# own) it applies to nothing ([method _applies]) but it is not over.
+	# Phasing changes neither zone nor control and keeps every timestamp
+	# (CR 702.26d, 613.7d), so it comes back where it was in the CR 613.7
+	# order — not re-registered as the newest control effect.
 	if e.kind == "aura": return s.attached_to == victim.id
+	if s.phased_out: return false   # a duration tracking it ends (702.26f)
 	if bool(e.control_bound) and s.control_sequence != int(e.control): return false
 	if bool(e.tapped) and (not s.tapped or s.untap_sequence != int(e.untap)): return false
 	# "...and that creature's power remains <= this one's" (Old Man of the
@@ -34,6 +41,13 @@ static func _live(g: MtgGame, victim: CardInstance, e: Dictionary) -> bool:
 	# and a broken duration never revives (refresh drops it).
 	if bool(e.power) and victim.phased_out: return false
 	return not bool(e.power) or victim.cur_power <= s.cur_power
+
+## Whether a LIVE effect decides control right now: a phased-out Aura's
+## does not (CR 702.26b), though it keeps its place (see [method _live]).
+static func _applies(g: MtgGame, e: Dictionary) -> bool:
+	if e.get("kind") != "aura": return true
+	var s := g.find_instance(int(e.source))
+	return s != null and not s.phased_out
 
 static func refresh(g: MtgGame, cleanup := false) -> bool:
 	if g._refreshing_control: return false
@@ -75,6 +89,7 @@ static func refresh(g: MtgGame, cleanup := false) -> bool:
 			var tapped := false
 			var capped := false
 			for e in effects:
+				if not _applies(g, e): continue
 				pid = int(e.pid)
 				if e.kind == "aura": pid = g.find_instance(int(e.source)).controller_id
 				if e.kind == "leash":

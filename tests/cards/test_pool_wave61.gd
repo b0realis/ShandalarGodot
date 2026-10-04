@@ -142,6 +142,7 @@ func test_infinite_authority_eats_a_small_blocker_and_grows() -> void:
 	assert_ok(g.declare_blockers(1, {wall.id: bear.id}))
 	resolve_stack()
 	advance_to_step(Mtg.Step.COMBAT_END)
+	resolve_stack()   # the destruction is a delayed trigger on the stack (CR 603.7)
 	assert_eq(wall.zone, Mtg.Zone.GRAVEYARD, "destroyed at end of combat")
 	advance_to_step(Mtg.Step.END)
 	resolve_stack()

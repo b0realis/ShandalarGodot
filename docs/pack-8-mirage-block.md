@@ -267,6 +267,25 @@ pilot plays exactly as before Pack 8.
   Magma Mine, Triangle of War, Natural Balance, Tariff and Illicit Auction
   are priced. Doomsday is never cast. Chronatog and Avizoa are used only when
   the pump is lethal.
+- **Self-harm (the 2026-10-04 bug pass).** Final Fortune carries Last
+  Chance's `extra_turn_then_lose` role: it is cast only when the extra turn
+  wins, at every rung, and an opponent's is countered only when its turn
+  would kill us. Infernal Contract carries Cruel Bargain's
+  `draw_four_half_life` role. Reign of Terror (`color_sweep_life_toll`)
+  prices the 2 life each death costs, its hint never names a colour whose
+  deaths are its caster's last life, and it is not cast into its own death.
+  Waiting in the Weeds (`cats_per_untapped_forest`) counts our Forests after
+  paying for it. Three Wishes (`impulse_exile`) is cast in our own main
+  phase with a land drop or two mana left to play its cards, never held for
+  their end step. A doomed token spell (Tidal Wave) is a surprise blocker on
+  their attack, never a main-phase cast. Zombie Mob and Phyrexian
+  Dreadnought are not cast to die on arrival. A held Spinning Darkness books
+  the row it can pay, or nothing. An Aura's own toughness loss is not hung
+  on a body it kills. Torrent of Lava's X beats the {T} shield it grants. A
+  modal instant's combat-trick mode never overrides the card's own pick in
+  the main phase. Under mana burn a cast whose spare mana would burn our last
+  life is refused. Goblin Grenadiers name themselves, never another creature
+  of ours, and Pillar Tombs of Aku takes a creature at ten life or less.
 
 Limits:
 - The tempo values are one-ply readings, not searches.
@@ -274,6 +293,10 @@ Limits:
   planned for.
 - A trick Aura is priced by its printed P/T only.
 - Ventifact Bottle's X is never sized, so the AI never charges it.
+  Energy Vortex's {X} is not activated either, so the AI's Vortex never
+  bills anyone, and Preferred Selection is never cashed in (it keeps
+  filtering the library at every upkeep).
+- No mana is kept open on our turn for a held Tidal Wave.
 - Mob Mentality's all-out pump is not planned for.
 - The Torch floor can under-report (but never over-report) when two slots
   must name different spells.

@@ -26,7 +26,6 @@ static func apply(c: CardData) -> CardData:
 		if ability.discard_cost > 0 or ability.random_discard_cost > 0:
 			extra.append("Discard %d card(s)%s" % [maxi(ability.discard_cost, ability.random_discard_cost), " at random" if ability.random_discard_cost > 0 else ""])
 		if ability.tap_permanent_count > 0: extra.append("Tap %d eligible permanent(s)" % ability.tap_permanent_count)
-		if ability.max_per_turn > 0: extra.append("At most %d activation(s) per turn" % ability.max_per_turn)
 		if not extra.is_empty(): ability.text = "; ".join(extra) + " — " + ability.text
 		if ability.graveyard_exile_filter.is_valid():
 			ability.text = "Exile %d eligible card(s) from a graveyard — " % ability.graveyard_exile_count + ability.text

@@ -743,6 +743,8 @@ enum _StaticPass { SILENCE, LAND_TYPES, LAND_TYPE_READERS, TYPES, BASE_PT, REST,
 ## reader no unapplied reader is a dependency of; when every one left
 ## depends on another — "Plains are Mountains" against "Mountains are
 ## Plains" — the loop is broken by timestamp order (CR 613.8b).
+## (The land-type waves feed it entries already sorted by
+## [method _by_timestamp_then_entry].)
 func _ordered_readers(readers: Array[Dictionary]) -> Array[Dictionary]:
 	if readers.size() < 2:
 		return readers
@@ -771,6 +773,15 @@ static func _reader_depends_on(reader: Dictionary, other: Dictionary) -> bool:
 		if reads.has(land_type):
 			return true
 	return false
+
+
+## Sort key of the land-type waves: timestamp (CR 613.7), then the order
+## the entry was collected in — two abilities of one source share a
+## timestamp, and `sort_custom` is not stable.
+static func _by_timestamp_then_entry(a: Dictionary, b: Dictionary) -> bool:
+	if int(a["ts"]) != int(b["ts"]):
+		return int(a["ts"]) < int(b["ts"])
+	return int(a["i"]) < int(b["i"])
 
 
 func _floating_statics_pass(game: MtgGame, which: int) -> void:
@@ -939,6 +950,11 @@ func _offzone_colors(game: MtgGame) -> void:
 ## order against a loss is unobservable.
 func _layer_six(game: MtgGame) -> void:
 	var entries: Array[Dictionary] = []
+	# CR 613.8a: the statics that READ a layer-6 ability (Chaosphere's
+	# "creatures without flying") depend on everything else here, so they
+	# are applied after it, in their own timestamp order
+	# ([member StaticAbility.reads_abilities]).
+	var dependent: Array[Dictionary] = []
 	for fx in _floating:
 		if not fx["keywords"].is_empty():
 			entries.append({"ts": int(fx.get("ts", 0)), "grant": fx})
@@ -954,22 +970,27 @@ func _layer_six(game: MtgGame) -> void:
 		for ability in inst.data.static_abilities:
 			if ability.changes_abilities and not ability.changes_types \
 					and not ability.silences_abilities:
-				entries.append({"ts": inst.layer_timestamp,
-					"static": ability, "source": inst})
+				(dependent if ability.reads_abilities else entries).append(
+					{"ts": inst.layer_timestamp, "static": ability, "source": inst})
 	for entry in _floating_statics:
 		var floater: StaticAbility = entry["ability"]
 		if floater.changes_abilities and not floater.changes_types \
 				and not floater.silences_abilities:
-			entries.append({"ts": int(entry.get("ts", 0)),
-				"static": floater, "source": entry["source"]})
+			(dependent if floater.reads_abilities else entries).append(
+				{"ts": int(entry.get("ts", 0)), "static": floater, "source": entry["source"]})
 	for spell in _stack_sources:   # statics functioning on the stack (CR 611.3)
 		for stacked in spell.data.stack_static_abilities:
 			if stacked.changes_abilities and not stacked.changes_types \
 					and not stacked.silences_abilities:
-				entries.append({"ts": _timestamp + 1, "static": stacked, "source": spell})
+				(dependent if stacked.reads_abilities else entries).append(
+					{"ts": _timestamp + 1, "static": stacked, "source": spell})
 	if entries.size() > 1:
 		entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 			return int(a["ts"]) < int(b["ts"]))
+	if dependent.size() > 1:
+		dependent.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a["ts"]) < int(b["ts"]))
+	entries.append_array(dependent)
 	for entry in entries:
 		if entry.has("static"):
 			# A layer-6 grant PRINTED on a permanent (Flight, Fear, Lance,
@@ -1143,23 +1164,48 @@ func recalculate(game: MtgGame) -> void:
 	# Ice Age brings Glaciers and Illusionary Terrain, and a reader can
 	# then read what another reader writes, so the second wave orders its
 	# own members by the same rule ([method _ordered_readers]).
+	#
+	# WITHIN a wave, TIMESTAMP ORDER (CR 613.7) — and since the Mirage bug
+	# pass (0.50.11) that is ONE list: the battlefield statics (their
+	# source's layer_timestamp), the FLOATING ones a resolved spell left
+	# behind (Vision Charm's "Forests become Islands until end of turn",
+	# stamped as it resolved) and the statics of spells on the stack. The
+	# floating ones used to run after every battlefield static whatever
+	# their age, so a Blanket of Night cast AFTER the Charm ("each land is
+	# a Swamp in addition") was undone by it, and the Forest was an Island
+	# where CR 613.7 makes it an Island Swamp.
 	for wave in [false, true]:
-		var readers: Array[Dictionary] = []
+		var which: int = _StaticPass.LAND_TYPE_READERS if wave else _StaticPass.LAND_TYPES
+		var entries: Array[Dictionary] = []
 		for inst in type_sources:
 			if inst.cur_abilities_silenced or inst.cur_statics_suspended:
 				continue
 			for ability in inst.data.static_abilities:
-				if not ability.changes_land_types \
-						or ability.reads_land_types != wave:
-					continue
-				if wave:
-					readers.append({"source": inst, "ability": ability})
-				else:
-					ability.apply.call(game, inst)
-		for reader in _ordered_readers(readers):
-			reader["ability"].apply.call(game, reader["source"])
-		_floating_statics_pass(game, _StaticPass.LAND_TYPE_READERS if wave
-			else _StaticPass.LAND_TYPES)
+				if ability.changes_land_types and ability.reads_land_types == wave:
+					entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
+						"source": inst, "ability": ability, "live": true})
+		for spell in _stack_sources:   # statics functioning on the stack (CR 611.3)
+			for stacked in spell.data.stack_static_abilities:
+				if _runs_in(stacked, which):
+					entries.append({"ts": _timestamp + 1, "i": entries.size(),
+						"source": spell, "ability": stacked})
+		for entry in _floating_statics:
+			var floater: StaticAbility = entry["ability"]
+			if _runs_in(floater, which):
+				entries.append({"ts": int(entry.get("ts", 0)), "i": entries.size(),
+					"source": entry["source"], "ability": floater})
+		if entries.size() > 1:
+			entries.sort_custom(_by_timestamp_then_entry)
+		if wave:
+			entries = _ordered_readers(entries)
+		for entry in entries:
+			var source: CardInstance = entry["source"]
+			# A live source an earlier entry of this wave retyped has lost
+			# its abilities (CR 305.7) and contributes nothing more.
+			if entry.has("live") and (source.cur_abilities_silenced \
+					or source.cur_statics_suspended):
+				continue
+			entry["ability"].apply.call(game, source)
 	# 2a-2 — LAYER 4, the rest: animations that ADD a type ("all Swamps
 	# are 1/1 creatures"), reading the board the retypers just settled.
 	for inst in type_sources:
@@ -1376,6 +1422,19 @@ func recalculate(game: MtgGame) -> void:
 				continue
 			for color in colors: replaced.append(ability.forcing_color(color, color == deep and not inst.cur_land_mana_replacements.has(color)))
 		inst.cur_mana_abilities = replaced
+
+	# THE WARDS' PROTECTION (CR 702.16), merged after every other source of
+	# protection has written its share: what `cur_protection` holds by now
+	# is the protection the Wards' "This effect doesn't remove this Aura"
+	# does NOT cover, and the aura-vs-protection state-based action needs
+	# it apart (CardInstance.protection_apart_from). Nothing in the pool
+	# removes protection, so merging it last changes no order.
+	for inst in battlefield:
+		if inst.cur_aura_protection.is_empty():
+			continue
+		inst.cur_protection_unwarded = inst.cur_protection
+		for mask in inst.cur_aura_protection.values():
+			inst.cur_protection |= int(mask)
 
 	# LAST: FLANKING (CR 702.25a-b) — one trigger per instance, counted off
 	# the keyword list every layer above has settled (printed, granted,

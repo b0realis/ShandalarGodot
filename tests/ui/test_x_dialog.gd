@@ -329,6 +329,18 @@ func test_every_x_spell_in_the_pool_offers_a_bound_it_can_pay() -> void:
 		# point of X; Fireball's per-target surcharge keeps every unit.
 		if data.extra_cost_per_target <= 0:
 			want -= want % maxi(data.cost.x_count, 1)
+		# ...and "X target …" buys no more X than there are targets (CR
+		# 601.2c, the Mirage bug pass's H8-7, 2026-10-04): this board has
+		# no creature, so Word of Binding, Winter Blast and Part Water can
+		# be cast for X = 0 only, and Volcanic Eruption destroys at most
+		# the four Mountains.
+		var targets := -1
+		for effect in data.spell_effects:
+			if effect.target_spec != null and effect.target_count_is_x:
+				var found: int = effect.target_spec.legal_targets(screen.game, screen._pending_card).size()
+				targets = found if targets < 0 else mini(targets, found)
+		if targets >= 0 and data.extra_cost_per_target <= 0:
+			want = mini(want, targets * maxi(data.cost.x_count, 1))
 		assert_eq(int(screen._x_spin.max_value), want,
 			"%s (%s) offers its lands" % [card_name, data.cost.text])
 		screen._on_x_canceled()
