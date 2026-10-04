@@ -18,8 +18,10 @@ class PackFourTests(unittest.TestCase):
             root = Path(tmp)
             (root / 'pack_4_homelands.py').write_text('# construction source\n')
             def check():
+                # build_release.sh runs from its own folder (it cd's there), and
+                # guard_stage names tools/package_release.py from it: so does this.
                 return subprocess.run(['bash', '-c', guard + 'guard_stage "$1"', 'guard-test', str(root)],
-                                      capture_output=True, text=True)
+                                      capture_output=True, text=True, cwd=str(pack.ROOT))
             self.assertEqual(check().returncode, 0)
             for filename in ['Pack-1-DotP-complete.zip', 'Pack-2-Fallen-Empires.zip', 'Pack-3-Ice_Age.zip', pack.FILE_NAME]:
                 archive = root / filename

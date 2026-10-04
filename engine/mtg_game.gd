@@ -1822,15 +1822,16 @@ func pay_for_prevention(pid: int, target: TargetRef) -> String:
 	return ""
 
 
-## Activate [param inst]'s mana ability [param ability_index] for
-## [param pid]. [param chosen] is the colour a PLAN already picked for a
-## colour-choice source (Fellwar Stone; [method ManaPlanner.step_of]) —
-## one the ability offers is made without a question, any other value
-## (the default -1, or the {C} an auto-tap plans a many-coloured Stone
-## for) leaves the colour to the activating player as before.
-func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
-		chosen := -1) -> String:
-	_begin_cost_choices()
+## Would [method tap_for_mana] refuse [param inst]'s mana ability
+## [param ability_index] for [param pid] before any cost is weighed — the
+## holds, the zone and who may tap it, phasing, the bans, "activate only as
+## an instant", "only once each turn", a {T} on a tapped or summoning-sick
+## source? "" when the source may be tapped as far as those go (its
+## sacrifice, life, counters and floating-mana costs are still asked by
+## the activation). The block tap_for_mana runs first, lifted out whole
+## (2026-10-04) so SGManalink's options offer only sources the engine
+## would take — a tapped land was listed as a source. Pure reads.
+func mana_ability_refusal(pid: int, inst: CardInstance, ability_index := 0) -> String:
 	if game_over:
 		return "the game is over"
 	# A mana ability skips [method _act_precheck] on purpose — CR 605.3a lets
@@ -1884,6 +1885,23 @@ func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
 		if inst.is_creature() and inst.summoning_sick \
 				and not inst.has_keyword(Mtg.Keyword.HASTE):
 			return "summoning sickness (CR 602.5g applies to {T} mana abilities too)"
+	return ""
+
+
+## Activate [param inst]'s mana ability [param ability_index] for
+## [param pid]. [param chosen] is the colour a PLAN already picked for a
+## colour-choice source (Fellwar Stone; [method ManaPlanner.step_of]) —
+## one the ability offers is made without a question, any other value
+## (the default -1, or the {C} an auto-tap plans a many-coloured Stone
+## for) leaves the colour to the activating player as before.
+func tap_for_mana(pid: int, inst: CardInstance, ability_index := 0,
+		chosen := -1) -> String:
+	_begin_cost_choices()
+	var refusal := mana_ability_refusal(pid, inst, ability_index)
+	if refusal != "":
+		return refusal
+	var ability := mana_ability_for(pid, inst, ability_index)
+	var borrowed := may_tap_foreign_land(pid, inst, ability_index)
 	# "Sacrifice a <filter>" costs need a legal body BEFORE anything is paid.
 	# LEGALITY only — which body goes is asked below, once nothing can still
 	# refuse (CR 601.2h; cast_spell carries the same split).
@@ -2617,6 +2635,78 @@ func _cast_announce_checks(pid: int, inst: CardInstance) -> String:
 	return ""
 
 
+## Would [method cast_spell] refuse [param inst] cast in [param mode] at
+## [param x_value] for a reason no TARGET and no MANA can fix — the clock
+## and the zone ([method cast_timing_refusal]), the mode, the damage
+## window, X, the payment row's object costs, card to exile and life
+## ([method _spell_cost_checks]) and an additional sacrifice's body
+## ([method spell_cost_bodies])? "" when only the targets and the mana
+## are left. The half of [method cast_refusal] askable before a target is
+## named; [method _cast_checks] runs the same pieces (2026-10-04, so the
+## network's options and `prepare` cannot disagree with the cast).
+## Priority, as in [method cast_timing_refusal], is not among them.
+func spell_announce_refusal(pid: int, inst: CardInstance, x_value := 0, mode := 0) -> String:
+	var why := cast_timing_refusal(pid, inst)
+	if why != "":
+		return why
+	if inst.data.is_modal():
+		if mode < 0 or mode >= inst.data.modes.size():
+			return "%s has no mode %d" % [inst.data.card_name, mode]
+	else:
+		mode = 0
+	why = _damage_window_refusal(inst.data.modes[mode]["effects"] if inst.data.is_modal()
+		else inst.data.spell_effects)
+	if why != "":
+		return why
+	if inst.data.cost.has_x and x_value < 0:
+		return "X must be 0 or more"
+	why = _spell_cost_checks(pid, inst, x_value, mode)
+	if why != "":
+		return why
+	if inst.data.additional_sacrifice.is_empty():
+		return ""
+	return String(spell_cost_bodies(pid, inst).error)
+
+
+## The payment row's NON-MANA costs of casting [param inst] in
+## [param mode] at [param x_value]: the additional object costs and the
+## chosen alternative cost's (Fireblast's two Mountains; Infernal
+## Harvest's X Swamps), a card to exile for a pitch row, and the life.
+## Lifted out of [method _cast_checks] whole (2026-10-04). Pure reads.
+func _spell_cost_checks(pid: int, inst: CardInstance, x_value: int, mode: int) -> String:
+	var alternate := inst.data.payment_option(mode)
+	# Additional object costs AND the chosen alternative cost's (Fireblast's
+	# two Mountains), with X announced (Infernal Harvest's X Swamps).
+	var object_why := OBJECT_COSTS.refusal(self, pid, spell_object_costs(inst.data, mode),
+		inst, x_value)
+	if object_why != "":
+		return object_why
+	if int(alternate.get("exile_color", 0)) != 0 and pitch_candidates(pid, inst, mode).is_empty():
+		return "no other eligible card in your hand to exile"
+	if players[pid].life < inst.data.life_payment(x_value) + int(alternate.get("life", 0)):
+		return "not enough life to pay the additional cost"
+	return ""
+
+
+## "As an additional cost, sacrifice (or exile) a <filter>" (Metamorphosis):
+## every legal body, `{error, bodies}`, `error` set when there is none.
+## LEGALITY only — which body goes is asked by [method cast_spell] once no
+## refusal is left (CR 601.2h). Lifted out of [method _cast_checks]
+## (2026-10-04). Pure reads.
+func spell_cost_bodies(pid: int, inst: CardInstance) -> Dictionary:
+	var bodies: Array[CardInstance] = []
+	var want: Dictionary = inst.data.additional_sacrifice
+	if want.is_empty():
+		return {"error": "", "bodies": bodies}
+	for perm in players[pid].battlefield:
+		if want["filter"].call(perm):
+			bodies.append(perm)
+	if bodies.is_empty():
+		return {"error": "no %s to %s" % [String(want["desc"]), "exile" if want.get("exile", false) else "sacrifice"],
+			"bodies": bodies}
+	return {"error": "", "bodies": bodies}
+
+
 ## The validation half of [method cast_spell]: `{error, plan, bodies}`.
 ## Pays nothing, moves nothing, rolls nothing and asks nothing — the rolls
 ## (CR 601.2c) and the cost questions come after every refusal, in
@@ -2669,18 +2759,9 @@ func _cast_checks(pid: int, inst: CardInstance, targets: Array,
 			out.error = why
 			return out
 	var alternate := inst.data.payment_option(mode)
-	# Additional object costs AND the chosen alternative cost's (Fireblast's
-	# two Mountains), with X announced (Infernal Harvest's X Swamps).
-	var object_why := OBJECT_COSTS.refusal(self, pid, spell_object_costs(inst.data, mode),
-		inst, x_value)
-	if object_why != "":
-		out.error = object_why
-		return out
-	if int(alternate.get("exile_color", 0)) != 0 and pitch_candidates(pid, inst, mode).is_empty():
-		out.error = "no other eligible card in your hand to exile"
-		return out
-	if players[pid].life < inst.data.life_payment(x_value) + int(alternate.get("life", 0)):
-		out["error"] = "not enough life to pay the additional cost"
+	var cost_why := _spell_cost_checks(pid, inst, x_value, mode)
+	if cost_why != "":
+		out.error = cost_why
 		return out
 	var was := _push_proposed_x(inst, x_value)
 	var plan := TargetPlan.for_spell(self, inst.data, mode, targets, x_value, inst)
@@ -2707,15 +2788,11 @@ func _cast_checks(pid: int, inst: CardInstance, targets: Array,
 	# once no refusal is left (CR 601.2h: a refused cast leaves everything
 	# as it was, and the choice ledger is part of "everything").
 	if not inst.data.additional_sacrifice.is_empty():
-		var want: Dictionary = inst.data.additional_sacrifice
-		var extra_bodies: Array[CardInstance] = []
-		for perm in players[pid].battlefield:
-			if want["filter"].call(perm):
-				extra_bodies.append(perm)
-		if extra_bodies.is_empty():
-			out["error"] = "no %s to %s" % [String(want["desc"]), "exile" if want.get("exile", false) else "sacrifice"]
+		var extra := spell_cost_bodies(pid, inst)
+		if String(extra.error) != "":
+			out["error"] = String(extra.error)
 			return out
-		out["bodies"] = extra_bodies
+		out["bodies"] = extra.bodies
 	var drought_groups: Array = []
 	if not out.bodies.is_empty(): drought_groups.append({"bodies": out.bodies, "count": 1})
 	if not BLACK_SYMBOL_COST.can_pay(self, pid, inst.data.cost, drought_groups):
@@ -3021,21 +3098,160 @@ func ability_timing_refusal(pid: int, inst: CardInstance, ability: ActivatedAbil
 	return ""
 
 
-## Activate a (non-mana) activated ability of a battlefield permanent.
-func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array = [],
-		x_value := 0) -> String:
-	_begin_cost_choices()
+## THE COST BODIES of [param inst]'s [param ability] for [param pid] —
+## "sacrifice a <filter>", "exile a <something> you control", "exile a
+## <something> from your graveyard", "tap an untapped <something>": every
+## legal body of each, `{error, sacrifice, exile, grave, tap}`, with
+## `error` the refusal when one has too few. LEGALITY only — WHICH body
+## goes is asked by [method activate_ability] once nothing can refuse
+## (CR 601.2h). Lifted out of it whole (2026-10-04) so
+## [method ability_announce_refusal] asks the same: a Zuran Orb with no
+## land to sacrifice was offered over the network after an Armageddon.
+## Pure reads.
+func ability_cost_bodies(pid: int, inst: CardInstance, ability: ActivatedAbility) -> Dictionary:
+	var out := {"error": "", "sacrifice": [], "exile": [], "grave": [], "tap": []}
+	# "Sacrifice a <filter>" costs need a legal body BEFORE anything is paid.
+	# LEGALITY only: which body goes is asked by activate_ability, once
+	# nothing can refuse (CR 601.2h — see cast_spell for the same split).
+	var sacrifice_bodies: Array[CardInstance] = []
+	if ability.sacrifice_filter.is_valid():
+		for perm in players[pid].battlefield:
+			if (perm != inst or ability.sacrifice_may_be_source) \
+					and ability.sacrifice_filter.call(perm):
+				sacrifice_bodies.append(perm)
+		# The SOURCE goes last (Fallen Angel): the funnel's callers pre-sort
+		# by desirability, and eating the permanent whose ability you are
+		# paying for is never the answer while any other body is on offer.
+		if ability.sacrifice_may_be_source and sacrifice_bodies.size() > 1 \
+				and sacrifice_bodies.has(inst):
+			sacrifice_bodies.erase(inst)
+			sacrifice_bodies.append(inst)
+		if sacrifice_bodies.size() < ability.sacrifice_count and not ability.sacrifice_any_number:
+			out.error = "no %s to sacrifice" % ability.sacrifice_filter_desc
+			return out
+	# "Exile a <something> you control" — same split (City of Shadows).
+	var exile_bodies: Array[CardInstance] = []
+	if ability.exile_filter.is_valid():
+		for perm in players[pid].battlefield:
+			if perm != inst and ability.exile_filter.call(perm):
+				exile_bodies.append(perm)
+		if exile_bodies.is_empty():
+			out.error = "no %s to exile" % ability.exile_filter_desc
+			return out
+	# "Exile a <something> from your graveyard" — same split as above:
+	# legality now, WHICH card once nothing can refuse (Necropolis).
+	var grave_bodies: Array[CardInstance] = []
+	if ability.graveyard_exile_filter.is_valid():
+		for owner in players.size():
+			if owner != pid and not ability.graveyard_exile_any_player:
+				continue
+			var same_grave: Array[CardInstance] = []
+			for buried in players[owner].graveyard:
+				if ability.graveyard_exile_filter.call(buried):
+					same_grave.append(buried)
+			if same_grave.size() >= ability.graveyard_exile_count:
+				grave_bodies.append_array(same_grave)
+		if grave_bodies.is_empty():
+			out.error = "no %s in your graveyard to exile" % ability.graveyard_exile_desc
+			return out
+	var tap_bodies: Array[CardInstance] = []
+	if ability.tap_permanent_filter.is_valid():
+		for perm in players[pid].battlefield:
+			if not perm.tapped and (perm != inst or not ability.tap_cost) and ability.tap_permanent_filter.call(perm):
+				tap_bodies.append(perm)
+		if tap_bodies.size() < ability.tap_permanent_count:
+			out.error = "not enough untapped permanents to pay this ability's tap cost"
+			return out
+	out.sacrifice = sacrifice_bodies
+	out.exile = exile_bodies
+	out.grave = grave_bodies
+	out.tap = tap_bodies
+	return out
+
+
+## The NON-MANA RESOURCES [param ability] costs [param pid]: the life, the
+## library cards to exile, the cards to discard (random, any, of a kind,
+## the last one drawn) and [param inst]'s counters to remove. "" when
+## each is there. [method activate_ability] asks it after the mana, where
+## it always asked; [method ability_announce_refusal] asks it before any
+## is made. Pure reads.
+func _ability_resource_checks(pid: int, inst: CardInstance, ability: ActivatedAbility) -> String:
+	if ability.life_cost > 0 and players[pid].life < ability.life_cost:
+		return "not enough life to pay %d" % ability.life_cost
+	if players[pid].library.size() < ability.library_exile_cost:
+		return "not enough cards in your library to exile"
+	if ability.random_discard_cost > 0 \
+			and players[pid].hand.size() < ability.random_discard_cost:
+		return "not enough cards in hand to discard"
+	if ability.discard_cost > 0 and players[pid].hand.size() < ability.discard_cost:
+		return "not enough cards in hand to discard"
+	var filtered_discards := 0
+	if ability.discard_cost > 0 and ability.discard_filter.is_valid():
+		for card in players[pid].hand:
+			if ability.discard_filter.call(card): filtered_discards += 1
+		if filtered_discards < ability.discard_cost: return "not enough %s cards to discard" % ability.discard_filter_desc
+	if ability.discard_last_drawn_cost:
+		# "Discard the last card you drew this turn" names ONE specific card
+		# (CR 601.2g): none drawn, nothing to discard; drawn but gone from
+		# the hand since, nothing to discard either.
+		if players[pid].drawn_this_turn.is_empty():
+			return "you haven't drawn a card this turn"
+		if not players[pid].hand.has(players[pid].drawn_this_turn[-1]):
+			return "the last card you drew this turn is no longer in your hand"
+	if ability.counter_cost_kind != "" \
+			and int(inst.counters.get(ability.counter_cost_kind, 0)) \
+				< ability.counter_cost_count:
+		return "not enough %s counters to remove" % ability.counter_cost_kind
+	return ""
+
+
+## Would [method activate_ability] refuse [param inst]'s ability
+## [param index] for [param pid] for a reason no TARGET, no X and no MANA
+## can fix? "" means the activation may be STARTED: the targets, X and
+## the payment are still ahead of it, and any of them may refuse it yet.
+## The ability's counterpart of [method cast_timing_refusal], and like it
+## PRIORITY IS NOT AMONG THEM (a moment, not a property of the ability —
+## [method activate_ability] still refuses a submission without it).
+##
+## What it reads: the open holds ([method _act_precheck]), the object
+## costs at the least X the ability takes, the zone, phasing, who may
+## activate it, the damage window, the printed timing and the bans
+## ([method ability_timing_refusal]), "activate only once each turn"
+## ([member ActivatedAbility.max_per_turn]), a {T} cost's tapped or
+## summoning-sick source, the cost bodies ([method ability_cost_bodies]:
+## a land for Zuran Orb to sacrifice, a creature to tap) and the life,
+## cards and counters it costs ([method _ability_resource_checks]).
+##
+## ONE READING (2026-10-04, the MCP play-through): SGManalink offered a
+## Knight of Valor's once-a-turn ability after its use, the program's
+## auto-pay tapped two lands for it and only the cast was refused — the
+## mana floated and burned. The network's options and its `prepare` ask
+## this, and [method activate_ability] runs the same checks
+## ([method _ability_announce_checks], [method ability_cost_bodies],
+## [method _ability_resource_checks]), so the two cannot drift. Pure reads.
+func ability_announce_refusal(pid: int, inst: CardInstance, index: int) -> String:
 	var err := _act_precheck(pid)
 	if err != "":
 		return err
-	if priority_player != pid:
-		return "you don't have priority"
-	# LIVE abilities: statics may have granted extras (Zombie Master).
-	if index < 0 or index >= inst.cur_activated_abilities.size():
+	if inst == null or index < 0 or index >= inst.cur_activated_abilities.size():
 		return "no such ability"
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
-	var object_why := OBJECT_COSTS.refusal(self, pid, ability.object_costs, inst, x_value)
+	var object_why := OBJECT_COSTS.refusal(self, pid, ability.object_costs, inst, maxi(0, ability.min_x))
 	if object_why != "": return object_why
+	var announce_why := _ability_announce_checks(pid, inst, ability, index)
+	if announce_why != "":
+		return announce_why
+	var bodies_why := String(ability_cost_bodies(pid, inst, ability).error)
+	if bodies_why != "":
+		return bodies_why
+	return _ability_resource_checks(pid, inst, ability)
+
+
+## The block of [method activate_ability] that judges the SOURCE, the
+## SEAT and the CLOCK — lifted out whole so that
+## [method ability_announce_refusal] runs the code the activation runs.
+## Nothing here reads targets, X or the pool.
+func _ability_announce_checks(pid: int, inst: CardInstance, ability: ActivatedAbility, index: int) -> String:
 	if inst.zone != ability.activation_zone:
 		return "that ability is not available from this zone"
 	if inst.phased_out:
@@ -3071,65 +3287,54 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 			and int(inst.ability_uses.get(index, 0)) >= ability.max_per_turn:
 		return "activate only %s each turn" % (
 			"once" if ability.max_per_turn == 1 else "%d times" % ability.max_per_turn)
-	# "Sacrifice a <filter>" costs need a legal body BEFORE anything is paid.
-	# LEGALITY only: which body goes is asked below, once nothing can refuse
-	# (CR 601.2h — see cast_spell for the same split).
-	var sacrifice_bodies: Array[CardInstance] = []
-	var sacrifice_pick: CardInstance = null
-	if ability.sacrifice_filter.is_valid():
-		for perm in players[pid].battlefield:
-			if (perm != inst or ability.sacrifice_may_be_source) \
-					and ability.sacrifice_filter.call(perm):
-				sacrifice_bodies.append(perm)
-		# The SOURCE goes last (Fallen Angel): the funnel's callers pre-sort
-		# by desirability, and eating the permanent whose ability you are
-		# paying for is never the answer while any other body is on offer.
-		if ability.sacrifice_may_be_source and sacrifice_bodies.size() > 1 \
-				and sacrifice_bodies.has(inst):
-			sacrifice_bodies.erase(inst)
-			sacrifice_bodies.append(inst)
-		if sacrifice_bodies.size() < ability.sacrifice_count and not ability.sacrifice_any_number:
-			return "no %s to sacrifice" % ability.sacrifice_filter_desc
-	# "Exile a <something> you control" — same split (City of Shadows).
-	var exile_bodies: Array[CardInstance] = []
-	var exile_pick: CardInstance = null
-	if ability.exile_filter.is_valid():
-		for perm in players[pid].battlefield:
-			if perm != inst and ability.exile_filter.call(perm):
-				exile_bodies.append(perm)
-		if exile_bodies.is_empty():
-			return "no %s to exile" % ability.exile_filter_desc
-	# "Exile a <something> from your graveyard" — same split as above:
-	# legality now, WHICH card once nothing can refuse (Necropolis).
-	var grave_bodies: Array[CardInstance] = []
-	var grave_pick: CardInstance = null
-	var grave_picks: Array[CardInstance] = []
-	if ability.graveyard_exile_filter.is_valid():
-		for owner in players.size():
-			if owner != pid and not ability.graveyard_exile_any_player:
-				continue
-			var same_grave: Array[CardInstance] = []
-			for buried in players[owner].graveyard:
-				if ability.graveyard_exile_filter.call(buried):
-					same_grave.append(buried)
-			if same_grave.size() >= ability.graveyard_exile_count:
-				grave_bodies.append_array(same_grave)
-		if grave_bodies.is_empty():
-			return "no %s in your graveyard to exile" % ability.graveyard_exile_desc
-	var tap_bodies: Array[CardInstance] = []
-	var tap_picks: Array[CardInstance] = []
-	if ability.tap_permanent_filter.is_valid():
-		for perm in players[pid].battlefield:
-			if not perm.tapped and (perm != inst or not ability.tap_cost) and ability.tap_permanent_filter.call(perm):
-				tap_bodies.append(perm)
-		if tap_bodies.size() < ability.tap_permanent_count:
-			return "not enough untapped permanents to pay this ability's tap cost"
+	# A {T} cost on a tapped or summoning-sick source (CR 602.5g). Asked
+	# after the cost bodies until 2026-10-04; the order of two refusals of
+	# the same activation is the only thing that moved.
 	if ability.tap_cost:
 		if inst.tapped:
 			return "%s is already tapped" % inst.data.card_name
 		if inst.is_creature() and inst.summoning_sick \
 				and not inst.has_keyword(Mtg.Keyword.HASTE):
 			return "summoning sickness (CR 602.5g)"
+	return ""
+
+
+## Activate a (non-mana) activated ability of a battlefield permanent.
+func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array = [],
+		x_value := 0) -> String:
+	_begin_cost_choices()
+	var err := _act_precheck(pid)
+	if err != "":
+		return err
+	if priority_player != pid:
+		return "you don't have priority"
+	# LIVE abilities: statics may have granted extras (Zombie Master).
+	if index < 0 or index >= inst.cur_activated_abilities.size():
+		return "no such ability"
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var object_why := OBJECT_COSTS.refusal(self, pid, ability.object_costs, inst, x_value)
+	if object_why != "": return object_why
+	var announce_why := _ability_announce_checks(pid, inst, ability, index)
+	if announce_why != "":
+		return announce_why
+	# The COST BODIES — sacrifice, exile, graveyard exile, tap — need a
+	# legal body BEFORE anything is paid ([method ability_cost_bodies]).
+	var bodies := ability_cost_bodies(pid, inst, ability)
+	if String(bodies.error) != "":
+		return String(bodies.error)
+	var sacrifice_bodies: Array[CardInstance] = []
+	sacrifice_bodies.assign(bodies.sacrifice)
+	var sacrifice_pick: CardInstance = null
+	var exile_bodies: Array[CardInstance] = []
+	exile_bodies.assign(bodies.exile)
+	var exile_pick: CardInstance = null
+	var grave_bodies: Array[CardInstance] = []
+	grave_bodies.assign(bodies.grave)
+	var grave_pick: CardInstance = null
+	var grave_picks: Array[CardInstance] = []
+	var tap_bodies: Array[CardInstance] = []
+	tap_bodies.assign(bodies.tap)
+	var tap_picks: Array[CardInstance] = []
 	if ability.cost.has_x and x_value < 0:
 		return "X must be 0 or more"
 	if ability.min_x > 0 and x_value < ability.min_x:
@@ -3161,32 +3366,13 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 		if surcharge > 0:
 			return "not enough mana (%s plus {%d} more)" % [ability.cost.text, surcharge]
 		return "not enough mana (%s)" % ability.cost.text
-	if ability.life_cost > 0 and players[pid].life < ability.life_cost:
-		return "not enough life to pay %d" % ability.life_cost
-	if players[pid].library.size() < ability.library_exile_cost:
-		return "not enough cards in your library to exile"
-	if ability.random_discard_cost > 0 \
-			and players[pid].hand.size() < ability.random_discard_cost:
-		return "not enough cards in hand to discard"
-	if ability.discard_cost > 0 and players[pid].hand.size() < ability.discard_cost:
-		return "not enough cards in hand to discard"
+	var resource_why := _ability_resource_checks(pid, inst, ability)
+	if resource_why != "":
+		return resource_why
 	var filtered_discards: Array[CardInstance] = []
 	if ability.discard_cost > 0 and ability.discard_filter.is_valid():
 		for card in players[pid].hand:
 			if ability.discard_filter.call(card): filtered_discards.append(card)
-		if filtered_discards.size() < ability.discard_cost: return "not enough %s cards to discard" % ability.discard_filter_desc
-	if ability.discard_last_drawn_cost:
-		# "Discard the last card you drew this turn" names ONE specific card
-		# (CR 601.2g): none drawn, nothing to discard; drawn but gone from
-		# the hand since, nothing to discard either.
-		if players[pid].drawn_this_turn.is_empty():
-			return "you haven't drawn a card this turn"
-		if not players[pid].hand.has(players[pid].drawn_this_turn[-1]):
-			return "the last card you drew this turn is no longer in your hand"
-	if ability.counter_cost_kind != "" \
-			and int(inst.counters.get(ability.counter_cost_kind, 0)) \
-				< ability.counter_cost_count:
-		return "not enough %s counters to remove" % ability.counter_cost_kind
 	# THE COST IS PAYABLE — nothing below refuses, so this is where the seat
 	var drought_groups: Array = []
 	if not sacrifice_bodies.is_empty() and not ability.sacrifice_any_number:

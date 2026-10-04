@@ -282,6 +282,13 @@ The MCP door's `referee_*` tools put a seat at a table the engine referees;
   You are seat 0 and the host; the person sees an ordinary host.
 - **Keep the journal.** `referee_start`/`referee_join` take a `log` path: the
   journal the seat saw, written at the end for the review in chapter 13.
+- **A numbered menu instead of the wire.** A program that picks moves rather
+  than reasons in text (a small model, a bot, a learning policy) can play
+  through `tools/shandalar_decide.py`: each decision is a compact observation
+  and a numbered list of complete legal actions — `cast:c12->opp`,
+  `attack:add:c7`, `block:c4->c9` — answered with one number. The habits of
+  this guide still decide which number; [AGENTS.md](AGENTS.md), "Decision
+  models", has the lines, the menu and the observation's fields.
 
 ### Network and UI considerations
 

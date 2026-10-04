@@ -577,6 +577,9 @@ static func respond(g: MtgGame, pilot) -> String:
 	done = phase_their_attacker(g, pilot)
 	if done != "":
 		return done
+	done = phase_swap_response(g, pilot)
+	if done != "":
+		return done
 	return phase_their_blocker(g, pilot)
 
 
@@ -784,7 +787,7 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance, mode: int) -> Va
 		return null
 	if role == &"phase_swap":
 		var swing := phase_swap_value(g, pilot)
-		return {} if swing < 2.5 else {"x": 0, "targets": [], "value": swing}
+		return {} if swing < swap_bar(inst.data) else {"x": 0, "targets": [], "value": swing}
 	if pilot.profile.holds_instants and g.casts_at_instant_speed(pilot.pid, inst):
 		return {}
 	if g.current_step() != Mtg.Step.MAIN1 or g.active_player != pilot.pid:
@@ -819,23 +822,204 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance, mode: int) -> Va
 	return best
 
 
+## The weight of each of the next three combats in Time and Tide's count
+## ([method phase_swap_value]) — the next turn's, the one after, the one
+## after that: a body that is there sooner is worth more than one that is
+## there later, and a swap that only MOVES a body's turns (a phaser sent
+## out now comes back at its controller's next untap step, where it would
+## have gone) is then a small trade, not a free card.
+const SWAP_WINDOWS: Array[float] = [0.85, 0.7, 0.55]
+
+## The share of a body's worth one combat of it is (four of them, a full
+## phasing cycle, are about the body).
+const SWAP_WINDOW_SHARE := 0.25
+
+
+## What a phase swap must clear to be cast: the card it spends and a
+## point over, and never below the old 2.5 floor.
+static func swap_bar(data: CardData) -> float:
+	return maxf(2.5, Evaluator.card_value(data) + 1.0)
+
+
 ## TIME AND TIDE'S SWING ("simultaneously, all phased-out creatures phase
-## in and all creatures with phasing phase out"): what each side gets back
-## less what each side sends away, our side counted for us. A present
-## phaser sent away comes back at its controller's next untap step, so it
-## is half a loss.
+## in and all creatures with phasing phase out"), our side counted for us,
+## counted by WHAT ACTUALLY CHANGES (the 0.50.13 playtest, 2026-10-04: the
+## old price added every returning body's whole worth, and the Wizard cast
+## it twice to bring back its own Merfolk Raiders and Cloaked Rainbow
+## Efreet — which had attacked, phased out TAPPED at its untap step, came
+## back tapped, could not block, and phased out again at its next untap
+## step instead of returning untapped there: a card spent to lose a cycle).
+##
+## Two parts. THIS TURN'S COMBAT, read on the board the swap would leave
+## ([method _swap_combat_now]): before our attack, the damage through
+## their best blocks with their phasing blockers gone and ours phased in
+## or out; in their declare-attackers step, the damage their remaining
+## attack puts through our blocks — the game either way when lethal moves.
+## Then EACH BODY THAT CHANGES, over the next three combats
+## ([method _swap_windows]): able to fight (present and untapped, its
+## controller's untap steps phasing it out or in again and untapping it)
+## after the swap against before, weighted by [constant SWAP_WINDOWS]. So
+## a tapped phaser of ours phased in is a loss (tapped until our untap
+## step, which then phases it out again), their phaser sent out comes back
+## for their next attack, and our tapped attackers sent out after combat
+## come back untapped a cycle early. A body HELD out (Oubliette, CR 610.4a)
+## comes back for good: its whole worth.
+##
+## Public: the battlefield, the phased-out lists (CR 702.26), tapped
+## states, the combat and the life totals.
 static func phase_swap_value(g: MtgGame, pilot) -> float:
 	var pid: int = pilot.pid
-	var swing := 0.0
-	for seat in [pid, g.opponent_of(pid)]:
-		var sign := 1.0 if seat == pid else -1.0
-		for inst in returning_creatures(g, seat):
+	var outs: Array[CardInstance] = []
+	for inst in g.all_battlefield():
+		if inst.is_creature() and inst.has_keyword(Mtg.Keyword.PHASING) \
+				and not inst.cur_cant_phase_out:
+			outs.append(inst)
+	var ins: Array[CardInstance] = []
+	for inst in g.phased_out_permanents():
+		if inst.is_creature() and not inst.phased_indirectly:
+			ins.append(inst)
+	if outs.is_empty() and ins.is_empty():
+		return 0.0
+	var swing := _swap_combat_now(g, pilot, outs, ins)
+	var changed: Array[CardInstance] = outs.duplicate()
+	changed.append_array(ins)
+	for inst in changed:
+		var sign := 1.0 if inst.controller_id == pid else -1.0
+		if inst.phased_out and inst.phase_hold >= 0:
 			swing += sign * Evaluator.permanent_value(inst, null)
-		for inst in g.players[seat].battlefield:
-			if inst.is_creature() and inst.has_keyword(Mtg.Keyword.PHASING) \
-					and not inst.cur_cant_phase_out:
-				swing -= sign * Evaluator.permanent_value(inst, null) * 0.5
+			continue
+		var worth := Evaluator.permanent_value(inst, null) * SWAP_WINDOW_SHARE
+		var kept := _swap_windows(g, inst, false)
+		var moved := _swap_windows(g, inst, true)
+		for k in SWAP_WINDOWS.size():
+			swing += sign * worth * SWAP_WINDOWS[k] * (float(moved[k]) - float(kept[k]))
 	return swing
+
+
+## Can [param inst] fight in each of the next three combats — the next
+## turn's and the two after — with Time and Tide resolved now
+## ([param swapped]) or not? Present and untapped at that combat: a
+## controller's untap step phases a present phaser out (tapped as it was)
+## and a phased-out body in, then untaps what is there (CR 502.1-502.3); a
+## body phased in by the swap keeps the tapped state it phased out with.
+## An estimate, not a forecast: "doesn't untap" effects, new "can't phase
+## out" grants and the attacks and blocks in between are not read ahead.
+static func _swap_windows(g: MtgGame, inst: CardInstance, swapped: bool) -> Array[bool]:
+	var present := not inst.phased_out
+	if swapped:
+		present = not present
+	var tapped := inst.tapped
+	var phasing := inst.has_keyword(Mtg.Keyword.PHASING) and not inst.cur_cant_phase_out
+	var seat := inst.controller_id
+	var active := g.active_player
+	var out: Array[bool] = []
+	for _k in SWAP_WINDOWS.size():
+		active = g.opponent_of(active)
+		if active == seat:
+			if not present:
+				present = true
+				tapped = false
+			elif phasing:
+				present = false
+			else:
+				tapped = false
+		out.append(present and not tapped)
+	return out
+
+
+## THIS TURN'S COMBAT, before against after the swap (see [method
+## phase_swap_value]): 0.0 outside the two moments it is read in — our
+## turn before attackers are declared, their declare-attackers step with
+## an attack on the table. The after-board is the real one: the swap is
+## run under the search journal (nobody is asked anything) and put back.
+static func _swap_combat_now(g: MtgGame, pilot, outs: Array[CardInstance],
+		ins: Array[CardInstance]) -> float:
+	var pid: int = pilot.pid
+	var foe: int = g.opponent_of(pid)
+	var ours := g.active_player == pid
+	var step := g.current_step()
+	if ours and step > Mtg.Step.COMBAT_BEGIN:
+		return 0.0
+	if not ours and (step != Mtg.Step.DECLARE_ATTACKERS or g.combat.attackers.is_empty()):
+		return 0.0
+	var before := _swap_combat_damage(g, pilot, ours)
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec_turn()
+	g._rec(g, &"agents")
+	g.agents = [DecisionAgent.new(), DecisionAgent.new()]   # nobody is asked
+	g.phase_simultaneously(outs, ins)
+	var after := _swap_combat_damage(g, pilot, ours)
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	if ours:
+		var their_life := g.players[foe].life
+		if before < their_life and after >= their_life:
+			return pilot.LETHAL_WORTH
+		if before >= their_life and after < their_life:
+			return -pilot.LETHAL_WORTH
+		return pilot._face_damage_value(g, after, foe) - pilot._face_damage_value(g, before, foe)
+	var life := g.players[pid].life
+	if before >= life and after < life:
+		return pilot.LETHAL_WORTH
+	if before < life and after >= life:
+		return -pilot.LETHAL_WORTH
+	return float(before - after) * pilot._life_price(life)
+
+
+## The damage this turn's combat puts through: our attack candidates into
+## their untapped creatures ([param ours]), or their declared attack into
+## ours — each through the defender's best blocks.
+static func _swap_combat_damage(g: MtgGame, pilot, ours: bool) -> int:
+	var pid: int = pilot.pid
+	var foe: int = g.opponent_of(pid)
+	if ours:
+		return pilot._damage_through_blocks(g, pilot._attack_candidates(g, foe),
+			pilot._untapped_creatures(g, foe), foe)
+	return pilot._damage_through_blocks(g, pilot._declared_attackers(g),
+		pilot._untapped_creatures(g, pid), pid)
+
+
+## TIME AND TIDE AGAINST THEIR ATTACK, asked by [method respond] in their
+## declare-attackers step: their declared phasing attackers leave the
+## combat (CR 702.26b) — but come back untapped at their next untap step,
+## where they would have phased out, and attack again then, so the damage
+## is MOVED, not stopped. Cast only when [method phase_swap_value] clears
+## [method swap_bar] (an attack that would kill us, a swing worth more than
+## the attack it hands back).
+static func phase_swap_response(g: MtgGame, pilot) -> String:
+	if g.active_player == pilot.pid or g.current_step() != Mtg.Step.DECLARE_ATTACKERS \
+			or g.combat.attackers.is_empty() or not g.stack.is_empty():
+		return ""
+	var pid: int = pilot.pid
+	var sources: Array = pilot._mana_sources(g)
+	var swing := NAN
+	for inst in g.players[pid].hand:
+		if not carries_role(inst.data, &"phase_swap") or not g.casts_at_instant_speed(pid, inst) \
+				or pilot._refused.has(str(inst.id)) or pilot._cast_gate(g, inst) != "":
+			continue
+		var modes: Array = range(inst.data.modes.size()) if inst.data.is_modal() else [0]
+		for mode in modes:
+			var hit := false
+			for e in _mode_effects(inst.data, mode):
+				if e.ai_role == &"phase_swap":
+					hit = true
+			if not hit or g.cast_refusal(pid, inst, [], 0, mode) != "":
+				continue
+			var surcharge := g.spell_surcharge(pid, inst.data)
+			var cost := g.spell_cost_for(pid, inst.data, 0, mode)
+			if not (pilot._cost_is_free(cost) and surcharge == 0) \
+					and pilot._plan_taps_from(sources, cost, surcharge,
+						g.mana_usage_keys(inst.data, inst)).is_empty():
+				continue
+			if is_nan(swing):
+				swing = phase_swap_value(g, pilot)
+			if swing < swap_bar(inst.data):
+				continue
+			return pilot._cast_response(g, inst, [], mode,
+				"cast %s: their phasing attackers phase out" % inst.data.card_name)
+	return ""
 
 
 ## A SWEEPER WAITS while more of what it would take is phased out than is

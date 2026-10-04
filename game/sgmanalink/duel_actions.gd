@@ -22,6 +22,14 @@ func _information_received(viewer: int, title: String, names: Array) -> void:
 		if information[pid].size() > 12: information[pid].pop_front()
 
 
+## May [param pid] cast [param card] from where it lies — the engine's
+## permission ([param referee] null: a projection's own reading).
+static func casts_from(referee: MtgGame, pid: int, card: CardInstance) -> bool:
+	return (card.zone == Mtg.Zone.HAND and card.owner_id == pid) \
+		or (referee != null and (referee.can_play_from_exile(pid, card) or referee.can_cast_from_graveyard(pid, card))) \
+		or (referee == null and card.zone == Mtg.Zone.EXILE and not card.face_down and card.exile_playable_by == pid)
+
+
 static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Array:
 	var result: Array = []
 	# A PHASED-OUT permanent is treated as though it does not exist (CR
@@ -32,9 +40,11 @@ static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Ar
 	# seat may play — a Three Wishes card face down to everyone but its
 	# viewer included (MtgGame.can_play_from_exile); the top of the
 	# graveyard under Bösium Strip (MtgGame.can_cast_from_graveyard).
-	var spell_source := (card.zone == Mtg.Zone.HAND and card.owner_id == pid) \
-		or (referee != null and (referee.can_play_from_exile(pid, card) or referee.can_cast_from_graveyard(pid, card))) \
-		or (referee == null and card.zone == Mtg.Zone.EXILE and not card.face_down and card.exile_playable_by == pid)
+	var spell_source := casts_from(referee, pid, card)
+	# The SPELL ROW stays whatever the moment (its cost is read off it by
+	# every board); whether it may be cast now is the presentation's
+	# `castable` (SgDuelPresentation.build), and `prepare` refuses what
+	# the cast would ([method spell_refusal]).
 	if spell_source and not card.is_land():
 		var modes: Array = []
 		for mode in card.data.modes:
@@ -46,11 +56,28 @@ static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Ar
 		for i in card.cur_mana_abilities.size():
 			if borrowed and not referee.may_tap_foreign_land(pid, card, i): continue
 			if card.cur_mana_abilities[i].activation_zone != card.zone: continue
+			# ONLY A SOURCE THE ENGINE WOULD TAP (2026-10-04): a tapped land,
+			# a summoning-sick Elf, a Wall of Roots used this turn, a banned
+			# Mox — MtgGame.mana_ability_refusal, the head of tap_for_mana.
+			# A TAPPED LAND WAS LISTED as a mana source to every program.
+			if referee != null and referee.mana_ability_refusal(pid, card, i) != "": continue
 			result.append({"kind": "mana", "index": i, "label": str(referee.mana_ability_for(pid, card, i) if referee != null else card.cur_mana_abilities[i]), "x": false, "modes": []})
 	if card.zone not in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD]: return result
 	for i in card.cur_activated_abilities.size():
 		var ability: ActivatedAbility = card.cur_activated_abilities[i]
 		if ability.activation_zone != card.zone: continue
+		# USABLE ONLY (2026-10-04, the MCP play-through): with the referee at
+		# hand, an ability is offered when the engine would take it now —
+		# [method ability_refusal]: its own announce-time refusal (the
+		# once-a-turn limit, timing, a ban, a tapped or sick {T} source,
+		# who may activate it), something to aim at, and mana the seat can
+		# reach. A Knight of Valor's used ability stayed listed, a program's
+		# auto-pay tapped two lands for it, and only the submit was refused.
+		if referee != null:
+			if ability_refusal(referee, pid, card, i).is_empty():
+				result.append({"kind": "ability", "index": i, "label": str(ability),
+					"x": ability.cost.has_x, "modes": []})
+			continue
 		var permitted := ability.any_player_may_activate \
 			or (ability.only_owner_may_activate and card.owner_id == pid) \
 			or (ability.only_opponents_may_activate and card.controller_id != pid) \
@@ -61,9 +88,136 @@ static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Ar
 	return result
 
 
-func prepare(pid: int, card: CardInstance, action: Dictionary) -> String:
+## Why the engine would refuse [param card]'s activated ability
+## [param index] for [param pid] right now, before any target is named or
+## any mana is made — "" when it would take it. Three questions, each the
+## engine's own: [method MtgGame.ability_announce_refusal] (the holds, the
+## zone, phasing, who may activate it, the damage window, the printed
+## timing and the bans, "activate only once each turn", a tapped or
+## summoning-sick {T} source); something to aim at for every slot that
+## demands a target; and the mana — floating, or a plan over the very
+## sources the auto-pay taps ([method autopay]), never the source of a {T}
+## ability itself. What [method options] offers and what [method prepare]
+## refuses with, so an option is never a payment the submit refuses.
+##
+## [param x] is the X the targets are judged at — the announced one; -1
+## (none announced yet) is any X the seat could pay for ([method aimed]).
+static func ability_refusal(g: MtgGame, pid: int, card: CardInstance, index: int, x := -1) -> String:
+	var why := g.ability_announce_refusal(pid, card, index)
+	if not why.is_empty(): return why
+	var ability: ActivatedAbility = card.cur_activated_abilities[index]
+	if not aimed(g, pid, card, ability.effects, null, x, ability.cost.has_x, "ability", index, 0):
+		return "nothing to aim %s at" % card.data.card_name
+	var due := g.ability_payment(pid, card, index, 0)
+	if ManaPlanner.cost_is_free(due.cost) and int(due.extra) <= 0: return ""
+	if SgPayment.can_pay_now(g, pid, due, "ability"): return ""
+	var plan := ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(g, pid, source_excluded(card, ability)),
+		due.cost, int(due.extra), due.usage)
+	if not plan.is_empty(): return ""
+	return "not enough mana (%s)" % ability.cost.text
+
+
+## The source of a {T} ability pays its own cost by tapping: it is no mana
+## source for that payment (a Llanowar Elves with a {G}{T} ability can't
+## tap for the {G} too).
+static func source_excluded(card: CardInstance, ability: ActivatedAbility, excluded: Dictionary = {}) -> Dictionary:
+	if not ability.tap_cost: return excluded
+	var out := excluded.duplicate()
+	out[card.id] = true
+	return out
+
+
+## Why casting [param card] in payment row [param mode] at [param x] would
+## be refused for a reason no mana can fix: the clock and the zone
+## ([method MtgGame.cast_timing_refusal]), nothing to aim at
+## ([method spell_aimed]), and the engine's own pre-mana
+## reading of the rest ([method MtgGame.spell_announce_refusal]: the mode,
+## the damage window, the row's object costs, card to exile and life, an
+## additional sacrifice's body). "" otherwise.
+##
+## [param x] is the announced X; -1 (none yet: the options, `castable`)
+## asks whether SOME X the seat could pay for has a target ([method aimed]).
+static func spell_refusal(g: MtgGame, pid: int, card: CardInstance, mode: int, x: int) -> String:
+	var why := g.cast_timing_refusal(pid, card)
+	if not why.is_empty(): return why
+	if not spell_aimed(g, pid, card, mode, x): return "nothing to aim %s at" % card.data.card_name
+	return g.spell_announce_refusal(pid, card, maxi(0, x), mode)
+
+
+## Has [param card], cast in [param mode], something to aim at — every
+## slot that demands a target ([method aimed]) — at X = [param x], or with
+## [param x] -1 at some X [param pid] could pay for? A modal spell's or
+## payment row's own effects ([member CardData.modes]); an Aura's one
+## target is what it will enchant (CR 303.4a).
+static func spell_aimed(g: MtgGame, pid: int, card: CardInstance, mode: int, x := -1) -> bool:
+	var effects: Array = card.data.spell_effects
+	var aura: TargetSpec = null
+	if card.data.is_aura():
+		effects = []
+		aura = card.data.aura_target
+	elif card.data.is_modal():
+		if mode < 0 or mode >= card.data.modes.size(): return false
+		effects = card.data.modes[mode].get("effects", [])
+	var has_x := card.data.payment_base(mode).has_x or card.data.cost.has_x \
+		or not card.data.repeated_additional_cost.is_empty()
+	return aimed(g, pid, card, effects, aura, x, has_x, "spell", 0, mode)
+
+
+## Does every slot of [param effects] that demands a target (and
+## [param aura], an Aura's enchant target) have a legal one at X =
+## [param x] — the engine's own reading at that X
+## ([method MtgGame.legal_targets_at], which proposes it, so "target
+## artifact with mana value X" is judged at the X it will be cast for)?
+##
+## WITH NO X ANNOUNCED ([param x] -1, 2026-10-04): an X action
+## ([param has_x]) has something to aim at when SOME X from 0 to the most
+## [param pid] could pay for ([method SgPayment.budget]) has — a Detonate
+## with a Sol Ring across the table is castable for X = 1, never X = 0.
+## The budget is searched only when X = 0 finds nothing.
+static func aimed(g: MtgGame, pid: int, card: CardInstance, effects: Array, aura: TargetSpec,
+		x: int, has_x: bool, kind: String, index: int, mode: int) -> bool:
+	if _aimed_at(g, card, effects, aura, maxi(0, x)): return true
+	if x >= 0 or not has_x or pid < 0: return false
+	var budget := SgPayment.budget(g, pid, card, kind, index, ManaPlanner.sources(g, pid), 1, mode)
+	for each in range(1, budget + 1):
+		if _aimed_at(g, card, effects, aura, each): return true
+	return false
+
+
+static func _aimed_at(g: MtgGame, card: CardInstance, effects: Array, aura: TargetSpec, x: int) -> bool:
+	if aura != null and g.legal_targets_at(aura, card, x).is_empty(): return false
+	for effect in effects:
+		if effect.target_spec == null or effect.target_min <= 0 or effect.target_count_is_x: continue
+		if g.legal_targets_at(effect.target_spec, card, x).is_empty(): return false
+	return true
+
+
+## The modes (payment rows, "Choose one —" modes) of [param card] the seat
+## could cast now: [method spell_refusal] at any X finds nothing, and the
+## row's own payment is in reach ([method SgPayment.mode_affordable] —
+## its life, card to exile, object costs and mana). Fireblast with one
+## Mountain has only its {4}{R}{R} row, and only with six mana in reach;
+## a Force of Will with no other blue card has no pitch row. [] for a
+## spell without modes.
+static func open_modes(g: MtgGame, pid: int, card: CardInstance) -> Array:
+	var out: Array = []
+	for mode in card.data.modes.size():
+		if spell_refusal(g, pid, card, mode, -1).is_empty() and SgPayment.mode_affordable(g, pid, card, mode, true):
+			out.append(mode)
+	return out
+
+
+## The announcement. REFUSED BEFORE ANY MANA IS MADE (2026-10-04) for
+## every reason payment cannot change: an ability's [method ability_refusal]
+## (in the engine's own words — "activate only once each turn"), a spell's
+## [method spell_refusal]. [param aim] off defers a spell's target and
+## object-cost reading to [method auto_prepare], which raises X first.
+func prepare(pid: int, card: CardInstance, action: Dictionary, aim := true) -> String:
 	if card == null or game.priority_player != pid or game.awaiting_choice != null:
 		return "This action is unavailable."
+	if action.kind == "ability" and int(action.index) >= 0 and int(action.index) < card.cur_activated_abilities.size():
+		var refusal := ability_refusal(game, pid, card, int(action.index), int(action.x) if aim else -1)
+		if not refusal.is_empty(): return refusal
 	var found := false
 	for option in options(card, pid, game):
 		if option.kind == action.kind and option.index == action.index:
@@ -74,6 +228,9 @@ func prepare(pid: int, card: CardInstance, action: Dictionary) -> String:
 	if action.kind == "spell":
 		var error := game.cast_timing_refusal(pid, card)
 		if not error.is_empty(): return error
+		if aim:
+			error = spell_refusal(game, pid, card, int(action.mode), int(action.x))
+			if not error.is_empty(): return error
 	draft = {"pid": pid, "card": card, "kind": action.kind, "index": int(action.index),
 		"x": int(action.x), "mode": int(action.mode)}
 	_auto_payment.clear()
@@ -97,11 +254,21 @@ func auto_prepare(pid: int, card: CardInstance, action: Dictionary, excluded: Di
 		return "Choose X explicitly: it counts cards or permanents, not mana."
 	var request_data := action.duplicate()
 	request_data.x = 0
-	var error := prepare(pid, card, request_data)
+	var error := prepare(pid, card, request_data, false)
 	if not error.is_empty(): return error
 	var cost: ManaCost = card.data.payment_base(draft.mode) if draft.kind == "spell" else card.cur_activated_abilities[draft.index].cost
 	if cost.has_x or (draft.kind == "spell" and not card.data.repeated_additional_cost.is_empty()):
 		draft.x = SgPayment.budget(game, pid, card, draft.kind, draft.index, ManaPlanner.sources(game, pid, excluded), action.count, draft.mode)
+	# The spell's targets and object costs at the X it will be cast for,
+	# before a land is tapped (2026-10-04: refused before paying, never
+	# after) — an ability's targets likewise.
+	if draft.kind == "spell":
+		error = spell_refusal(game, pid, card, int(draft.mode), int(draft.x))
+	else:
+		error = ability_refusal(game, pid, card, int(draft.index), int(draft.x))
+	if not error.is_empty():
+		clear()
+		return error
 	return autopay(pid, excluded, action.count)
 
 
@@ -230,10 +397,15 @@ func autopay(pid: int, excluded: Dictionary, count: int) -> String:
 	_auto_payment.clear()
 	var due := payment(count)
 	if due.is_empty(): return "This action has no mana payment."
+	# The source of a {T} ability is never tapped for its own mana: the
+	# submit would then find it tapped, with the rest of the mana floating.
+	var sources_out := excluded
+	if draft.kind == "ability" and int(draft.index) < draft.card.cur_activated_abilities.size():
+		sources_out = source_excluded(draft.card, draft.card.cur_activated_abilities[draft.index], excluded)
 	# The auto-tap's own view of the sources: a Fellwar Stone with several
 	# colours on offer is generic-only here, so its tap asks the seat what
 	# kind of mana instead of picking a colour for them (2026-09-17).
-	var plan := ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(game, pid, excluded),
+	var plan := ManaPlanner.plan_from(ManaPlanner.auto_tap_sources(game, pid, sources_out),
 		due.cost, int(due.extra), due.usage)
 	for step in plan:
 		if step[0] == null: continue

@@ -93,6 +93,9 @@ exit 2
 TOOLS = ("mtg_assets.py", "import_original.py", "fetch_card_art.py",
          "skin_catalogue.py", "tool_banner.py", "fetch_cards.py", "gen_cards.py",
          "shandalar_mcp.py",
+         # The decision-model door (2026-10-04): it imports the MCP server's
+         # door route and its menus from beside itself.
+         "shandalar_decide.py", "decision_menu.py",
          *(name + ".py" for name in PACK_BUILDERS))
 # Explicit metadata allowlist: never recurse into a download/art cache.
 PACK_DATA = {

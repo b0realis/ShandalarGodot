@@ -18,7 +18,8 @@ const SELF_TEST := "tools.test_shandalar_mcp"
 const TOOLS := ["status", "contract", "play_guide", "manual", "packs", "cards", "list_decks",
 	"read_deck", "write_deck", "check_deck", "convert_deck", "autodeck", "lab",
 	"lab_resume", "read_run", "lab_next", "referee_start", "referee_join", "referee_host",
-	"referee_act", "referee_autoplay", "referee_wait", "referee_stop", "referee_resume"]
+	"referee_act", "referee_cast", "referee_play_land", "referee_view", "referee_autoplay",
+	"referee_wait", "referee_stop", "referee_resume", "referee_menu", "referee_pick"]
 
 
 func _root() -> String:
@@ -47,7 +48,7 @@ func test_the_live_half_runs_against_this_engine() -> void:
 		"python3", "-m", "unittest", "-v", SELF_TEST + ".LiveTest"], output, true)
 	var report := "".join(PackedStringArray(output))
 	assert_eq(status, 0, "the live half passes:\n" + report.right(6000))
-	assert_true(report.contains("Ran 8 tests"), "the eight live tests ran:\n" + report.right(2000))
+	assert_true(report.contains("Ran 10 tests"), "the ten live tests ran:\n" + report.right(2000))
 	assert_true(report.contains("test_a_small_lab_run_reads_back_and_resume_is_heard"),
 		"a real Lab run, its progress and lab_resume (2026-10-03)")
 	assert_false(report.contains("skipped"), "nothing was skipped: SHANDALAR_MCP_LIVE reached the test")
@@ -56,6 +57,10 @@ func test_the_live_half_runs_against_this_engine() -> void:
 		"the kept duel was taken up and passed until")
 	assert_true(report.contains("test_a_hosted_table_is_joined_by_a_guest_and_played"),
 		"the hosted table was joined and played")
+	assert_true(report.contains("test_a_duel_through_the_compact_view_the_smart_pass_and_one_call_casts"),
+		"a duel through the compact view, until mine and referee_cast (0.50.13)")
+	assert_true(report.contains("test_a_duel_through_the_decision_menu"),
+		"a duel through referee_menu and referee_pick (0.50.13)")
 
 
 ## The catalogue a program reads before it acts, printed by the server

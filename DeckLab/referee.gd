@@ -13,13 +13,13 @@ extends SceneTree
 ##
 ##   DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a agent]
 ##       [--seat-b wizard] [--seed N] [--turns N] [--packs LIST]
-##       [--log FILE] [--dry-run]
+##       [--rules PRESET] [--log FILE] [--dry-run]
 ##   DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK
 ##       [--port N] [--name NICK] [--wait SECONDS] [--turns N]
 ##       [--packs LIST] [--log FILE]
 ##   DeckLab/referee.sh --host NAME --deck DECK [--access open|invitation]
 ##       [--address IP] [--port N] [--name NICK] [--wait SECONDS]
-##       [--turns N] [--packs LIST] [--log FILE]
+##       [--turns N] [--packs LIST] [--rules PRESET] [--log FILE]
 ##   DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
 ##   DeckLab/referee.sh -h | --help
 ##
@@ -102,6 +102,17 @@ const SEATS := {"agent": {}, "apprentice": {"level": 0, "unfair": false},
 const DUEL_OPS := ["concede", "order", "keep", "mulligan", "pass", "play", "tap", "mana",
 	"prepare", "autoprepare", "autopay", "submit", "cancel", "choice", "special",
 	"attack", "attack_bands", "block", "damage", "discard"]
+## What a line may leave out of these ops (2026-10-04); the referee fills
+## it in before the wire's exact keys are checked ([method _parse_action]).
+const DEFAULTS := {
+	"prepare": {"kind": "spell", "index": 0, "x": 0, "mode": 0},
+	"autoprepare": {"kind": "spell", "index": 0, "mode": 0, "excluded": [], "count": 1},
+	"autopay": {"excluded": [], "count": 1},
+	"submit": {"targets": []},
+}
+## The ops whose refusal may leave paid-for mana in the pool: their
+## `refused` line says what is floating ([method _floating]).
+const PAYING_OPS := ["prepare", "autoprepare", "autopay", "submit", "mana", "tap"]
 const DEFAULT_TURNS := 200
 const DEFAULT_PORT := 17897
 const DEFAULT_WAIT := 300
@@ -141,14 +152,14 @@ the duel. Nothing but JSON is ever written to stdout.
 
 USAGE
   DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a SEAT]
-      [--seat-b SEAT] [--seed N] [--turns N] [--packs LIST] [--log FILE]
-      [--dry-run]
+      [--seat-b SEAT] [--seed N] [--turns N] [--packs LIST] [--rules PRESET]
+      [--log FILE] [--dry-run]
   DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK
       [--port N] [--name NICK] [--wait SECONDS] [--turns N]
       [--packs LIST] [--log FILE]
   DeckLab/referee.sh --host NAME --deck DECK [--access open|invitation]
       [--address IP] [--port N] [--name NICK] [--wait SECONDS]
-      [--turns N] [--packs LIST] [--log FILE]
+      [--turns N] [--packs LIST] [--rules PRESET] [--log FILE]
   DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
   DeckLab/referee.sh -h | --help
 
@@ -197,6 +208,11 @@ SWITCHES
                             away (see THE KEPT GAME above)
   --idle SECONDS            with --listen: concede a decision nobody
                             has come back for in that long (1800; 0 off)
+  --rules PRESET            the rules forks: modern, modern_mana_burn
+                            (the standard table, the default) or fifth
+                            (the 1997 Fifth Edition rules: mana burn,
+                            the damage-prevention window...); a local
+                            duel or --host; reported in hello.rules
 
 THE LINES (stdout)
   table     {id, name, access, host, address, port, invitation,
@@ -205,10 +221,12 @@ THE LINES (stdout)
              pasting the invitation (invitation); hello follows when
              they sit down and the duel starts
   hello     {tool, protocol, version, seed, seats[{seat, player, name,
-             deck, file}], toss, turns, ops}  — once, before play
+             deck, file}], toss, turns, rules, ops}  — once, before play
   decision  {n, seat, mode, turn, step, options, view}
              mode: opening|priority|attack|block|discard|damage|choice
-  refused   {n, seat, reason, action, left}  — the decision follows again
+  refused   {n, seat, reason, action, left[, floating]}  — the decision
+             follows again; floating {total, W..C} is mana a refused
+             cast left in the pool (cancel withdraws the announcement)
   resume    {decisions, refusals, awaiting, n, finished}  — to a client
              that connects to a kept game (--listen), after hello
   result    {winner, draw, turns, reason, decisions, refusals, seed,
@@ -226,7 +244,12 @@ THE ANSWERS (stdin), one JSON object a line, the game's wire actions
              "excluded":[],"count":1}    then {"op":"submit",
              "targets":[[TOKEN,AMOUNT]...]} — or "cancel"
             {"op":"autoprepare","card":ID,"kind":K,"index":I,"mode":M,
-             "excluded":[],"count":1}  prepare and pay in one line
+             "excluded":[],"count":1}  prepare and pay in one line;
+             add "targets":[TARGET...] to submit it too, a TARGET being
+             a card handle, player:0|player:1 or [TARGET,AMOUNT]
+            left out: kind "spell", index 0, x 0, mode 0, excluded [],
+             count 1 (the targets' count), targets [] — and a submit's
+             TOKEN may be a card handle or player:N
             {"op":"mana","card":ID,"index":I}  {"op":"tap","card":ID}
             {"op":"special","index":I}
   attack    {"op":"attack","cards":[ID...]}
@@ -265,6 +288,7 @@ const FLAG_HINTS := {
 	"--wait": "--wait SECONDS: how long to wait for the host's open table, or with --host for a guest (300)",
 	"--listen": "--listen FILE: serve the lines on a loopback socket, the port and token written to FILE",
 	"--idle": "--idle SECONDS: with --listen, concede a decision nobody has come back for in that long (1800; 0 never)",
+	"--rules": "--rules PRESET: the rules forks the duel plays under — modern, modern_mana_burn (the standard table) or fifth (the 1997 Fifth Edition rules)",
 }
 
 ## THE TWO ENDS OF THE PIPE, as Callables so a test can hold both:
@@ -574,7 +598,7 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 	var opts := {"deck_a": "", "deck_b": "", "seat_a": "agent", "seat_b": "wizard",
 		"seed": -1, "turns": DEFAULT_TURNS, "packs": "", "log": "", "dry_run": false,
 		"join": "", "table": "", "deck": "", "port": DEFAULT_PORT, "name": "Agent", "wait": DEFAULT_WAIT,
-		"host": "", "access": "open", "address": "", "listen": "", "idle": DEFAULT_IDLE}
+		"host": "", "access": "open", "address": "", "listen": "", "idle": DEFAULT_IDLE, "rules": ""}
 	var i := 0
 	while i < argv.size():
 		var arg := String(argv[i])
@@ -628,6 +652,17 @@ func _parse_args(argv: PackedStringArray) -> Dictionary:
 				opts.access = rule
 			"--address": opts.address = value.strip_edges()
 			"--listen": opts.listen = value
+			"--rules":
+				var preset := value.to_lower().strip_edges()
+				if RulesOptions.find_preset(preset).is_empty():
+					var ids := rule_presets()
+					var detail := {"kind": "option", "flag": "--rules", "presets": ids}
+					var near := LabConsole.closest(preset, PackedStringArray(ids), 2)
+					if not near.is_empty():
+						detail["suggestions"] = Array(near)
+					return {"error": {"message": "unknown rules '%s' for --rules — the presets are %s" % [value, ", ".join(ids)],
+						"detail": detail}}
+				opts.rules = preset
 	return opts
 
 
@@ -676,6 +711,30 @@ static func _seat_name(player: String, other: String, letter: String) -> String:
 	return SgBotPlayer.label(SEATS[player])
 
 
+## THE RULES A DUEL PLAYS UNDER (2026-10-04): `--rules` names one of the
+## Options screen's presets ([constant RulesOptions.PRESETS]); unset, the
+## standard table every SGManalink host opens (modern rules, mana burn
+## on — [constant RulesOptions.DEFAULT_PRESET]).
+static func rule_presets() -> Array:
+	var ids: Array = []
+	for preset in RulesOptions.PRESETS:
+		ids.append(String(preset.id))
+	return ids
+
+
+## The preset id a duel plays under: [param chosen], or the default.
+static func rules_name(chosen: String) -> String:
+	return chosen if chosen != "" else RulesOptions.DEFAULT_PRESET
+
+
+## The table rules ([SgTableRules]) of preset [param chosen] at the
+## standard 20 life.
+static func table_rules(chosen: String) -> Dictionary:
+	var options := RulesOptions.new()
+	options.set_preset(rules_name(chosen))
+	return SgTableRules.from_options(SgTableRules.DEFAULT_LIFE, options)
+
+
 static func _bot_options(player: String) -> Dictionary:
 	return {"level": int(SEATS[player].level), "unfair": bool(SEATS[player].unfair), "pace_ms": BOT_PACE_MS}
 
@@ -693,6 +752,9 @@ func _main(argv: PackedStringArray) -> int:
 	if opts.join != "" and opts.table != "":
 		return _refuse(2, "--join and --table name two tables — give one  (%s)" % FLAG_HINTS["--table"],
 			{"kind": "option", "flag": "--table"})
+	if opts.rules != "" and (opts.join != "" or opts.table != ""):
+		return _refuse(2, "--rules is the host's to choose — a joined table plays its host's rules (they are in hello.rules)  (%s)" % FLAG_HINTS["--rules"],
+			{"kind": "option", "flag": "--rules"})
 	if opts.host != "" and (opts.join != "" or opts.table != ""):
 		return _refuse(2, "--host opens a table of its own; it does not go with --join or --table  (%s)" % FLAG_HINTS["--host"],
 			{"kind": "option", "flag": "--host"})
@@ -747,14 +809,14 @@ func _play(opts: Dictionary) -> int:
 	if opts.dry_run:
 		last_plan = {"dry_run": true, "tool": "referee", "protocol": PROTOCOL, "version": LabConsole.version(),
 			"seats": seats, "seed": seed_value, "turns": int(opts.turns), "packs": packs,
-			"packs_on": Lab.packs_on(), "log": opts.log, "ops": DUEL_OPS}
+			"packs_on": Lab.packs_on(), "log": opts.log, "ops": DUEL_OPS, "rules": rules_name(String(opts.rules))}
 		_emit(last_plan)
 		return 0
-	var m := SgPracticeMatch.new(seed_value, [loaded[0].deck, loaded[1].deck], names)
+	var m := SgPracticeMatch.new(seed_value, [loaded[0].deck, loaded[1].deck], names, table_rules(String(opts.rules)))
 	for pid in 2:
 		if players[pid] != "agent" and not m.set_bot(pid, _bot_options(players[pid])):
 			return _refuse(1, "seat %d could not be given to the %s" % [pid, players[pid]], {"kind": "option"})
-	_hello({"seats": seats, "seed": seed_value, "toss": m.toss_winner, "turns": int(opts.turns),
+	_hello({"seats": seats, "seed": seed_value, "toss": m.toss_winner, "turns": int(opts.turns), "rules": rules_name(String(opts.rules)),
 		"packs": packs, "log": opts.log})
 	var result := _referee_local(m, int(opts.turns))
 	result["seed"] = seed_value
@@ -873,24 +935,148 @@ func _ask(seat: int, mode: String, fresh: Callable, apply: Callable, tick: Calla
 		if parsed.has("refusal"):
 			refusal = String(parsed.refusal)
 		else:
-			refusal = String(apply.call(action))
+			refusal = _apply_line(parsed, apply, fresh)
 			if refusal == "":
 				_awaiting = false
 				return "conceded" if action.op == "concede" else ""
 		consecutive += 1
 		refusals += 1
-		_emit({"type": "refused", "n": n, "seat": seat, "reason": refusal, "action": action,
-			"left": MAX_REFUSALS - consecutive})
-		if consecutive >= MAX_REFUSALS:
-			return "refusals"
 		# THE DECISION IS ASKED AGAIN, as a `decision` line with the same
 		# `n` — so a program acts on decision lines alone and a `refused`
 		# is only the reason. From the live view: a refusal can still
 		# have moved the table (a payment step that tapped before it
 		# failed), and the options must say what is legal NOW.
 		view = fresh.call()
+		var shown := action.duplicate()
+		if parsed.has("targets"):
+			shown["targets"] = parsed.targets
+		var record := {"type": "refused", "n": n, "seat": seat, "reason": refusal, "action": shown,
+			"left": MAX_REFUSALS - consecutive}
+		# PAID FOR AND REFUSED (2026-10-04): mana a refused cast leaves in
+		# the pool is said, not left to burn silently at the end of the
+		# step; the announcement stays open and `cancel` withdraws it.
+		if PAYING_OPS.has(String(action.get("op", ""))):
+			var floating := _floating(view, seat)
+			if not floating.is_empty():
+				record["floating"] = floating
+		_emit(record)
+		if consecutive >= MAX_REFUSALS:
+			return "refusals"
 		_decision(n, seat, mode, view)
 	return ""
+
+
+## One parsed line applied through [param apply] (one wire action →
+## its refusal), [param fresh] building the seat's live view between the
+## steps. A `submit` naming card handles or players has them read as the
+## open announcement's tokens first ([method _tokens_for]).
+##
+## THE THREE IN ONE (2026-10-04): an `autoprepare` that carries `targets`
+## is the wire's `prepare` at X 0 — nothing paid — to read the
+## announcement and find every target among its candidates; a target that
+## is not there cancels it and refuses the line with NOTHING TAPPED. Then
+## the wire's own `autoprepare` (prepare, X, auto-pay) and `submit`. A
+## question the payment holds the duel on (a Fellwar Stone's colour, which
+## Forest to return) ends the line there: answered, the announcement is
+## still open for its `submit`.
+func _apply_line(parsed: Dictionary, apply: Callable, fresh: Callable) -> String:
+	var action: Dictionary = parsed.action
+	if action.op == "submit":
+		var named: Variant = _tokens_for(fresh.call(), action.targets)
+		if named is String:
+			return named
+		return String(apply.call({"op": "submit", "targets": named}))
+	if not parsed.has("targets"):
+		return String(apply.call(action))
+	var pairs: Array = parsed.targets
+	var looked := String(apply.call({"op": "prepare", "card": action.card, "kind": action.kind,
+		"index": action.index, "x": 0, "mode": action.mode}))
+	if looked != "":
+		return looked
+	var named: Variant = _tokens_for(fresh.call(), pairs)
+	var withdrawn := String(apply.call({"op": "cancel"}))
+	if named is String:
+		return named
+	if withdrawn != "":
+		return withdrawn
+	var paid := String(apply.call(action))
+	if paid != "":
+		return paid
+	var now: Dictionary = fresh.call()
+	if String(now.get("mode", "")) != "priority" or Dictionary(now.get("announcement", {})).is_empty():
+		return ""
+	named = _tokens_for(now, pairs)
+	if named is String:
+		return named
+	return String(apply.call({"op": "submit", "targets": named}))
+
+
+## [param pairs] (`[target, amount]`) with every target read as a token of
+## [param view]'s open announcement: a token as it is; a card handle
+## (`c7`), `player:0`/`player:1`, `ability:oN` or `damage:oN` — what
+## `presentation.targets` says each token stands for — as the candidate
+## of the first slot, at or after the last one filled, that lists it and
+## has room. List them in slot order. Returns the pairs or the refusal.
+static func _tokens_for(view: Dictionary, pairs: Array) -> Variant:
+	var announcement: Dictionary = view.get("announcement", {})
+	if announcement.is_empty():
+		return "No announcement is waiting."
+	var refs := {}
+	for row in Dictionary(view.get("presentation", {})).get("targets", []):
+		var ref: Dictionary = row.get("ref", {})
+		if ref.is_empty():
+			continue
+		refs[String(row.token)] = String(ref.id) if ref.kind == "card" else "%s:%s" % [ref.kind, ref.id]
+	var slots: Array = announcement.get("slots", [])
+	var out: Array = []
+	var taken := {}
+	var filled := {}
+	var at := 0
+	for pair in pairs:
+		var wanted := String(pair[0])
+		if refs.has(wanted) or (not wanted.contains(":") and wanted.begins_with("t")):
+			out.append([wanted, int(pair[1])])
+			continue
+		var found := ""
+		while at < slots.size():
+			if int(filled.get(at, 0)) < int(slots[at].max):
+				for target in slots[at].targets:
+					if refs.get(String(target.id), "") == wanted and not taken.has(String(target.id)):
+						found = String(target.id)
+						break
+			if found != "":
+				break
+			at += 1
+		if found == "":
+			var named: Array = []
+			for slot in slots:
+				for target in slot.targets:
+					named.append("%s (%s)" % [refs.get(String(target.id), String(target.id)), target.label])
+			return "target %s is not among the announcement's candidates%s" % [wanted,
+				"" if named.is_empty() else ": " + ", ".join(PackedStringArray(named))]
+		taken[found] = true
+		filled[at] = int(filled.get(at, 0)) + 1
+		out.append([found, int(pair[1])])
+	return out
+
+
+## The seat's floating mana as its view tells it — `{total, W, U, B, R,
+## G, C}` with the colours it holds — or {} when the pool is empty.
+static func _floating(view: Dictionary, seat: int) -> Dictionary:
+	var players: Array = view.get("players", [])
+	if seat < 0 or seat >= players.size():
+		return {}
+	var player: Dictionary = players[seat]
+	var total := int(player.get("mana", 0))
+	if total <= 0:
+		return {}
+	var out := {"total": total}
+	var colors: Array = player.get("mana_colors", [])
+	var letters := ["W", "U", "B", "R", "G", "C"]
+	for i in mini(colors.size(), letters.size()):
+		if int(colors[i]) > 0:
+			out[letters[i]] = int(colors[i])
+	return out
 
 
 func _decision(n: int, seat: int, mode: String, view: Dictionary) -> void:
@@ -935,13 +1121,80 @@ static func _parse_action(text: String, seat: int) -> Dictionary:
 		var near := LabConsole.closest(str(op), PackedStringArray(DUEL_OPS), 1)
 		return {"refusal": "unknown op '%s' — the duel ops are %s%s" % [str(op), ", ".join(DUEL_OPS),
 			"" if near.is_empty() else " (did you mean %s?)" % near[0]], "action": action}
+	# THE KEYS A LINE MAY LEAVE OUT (2026-10-04): the referee fills them
+	# before the wire's own exact-key check — the wire keeps its strict
+	# keys ([constant SgProtocol.FIELDS]); a program need not spell out
+	# `"mode": 0, "excluded": [], "count": 1` on every cast.
+	var targets: Variant = null
+	var counted := action.has("count")
+	if DEFAULTS.has(op):
+		action = action.duplicate(true)
+		for key in DEFAULTS[op]:
+			if not action.has(key):
+				action[key] = DEFAULTS[op][key].duplicate() if DEFAULTS[op][key] is Array else DEFAULTS[op][key]
+		# `targets` on an autoprepare is the referee's own "three in one"
+		# ([method _apply_line]), never a wire key.
+		if op == "autoprepare" and action.has("targets"):
+			targets = action.targets
+			action.erase("targets")
+		# A submit's targets may name card handles and players
+		# ([method _tokens_for] reads them as tokens): checked here, the
+		# wire sees the tokens they become.
+		if op == "submit" and action.has("targets"):
+			targets = action.targets
+			action.targets = []
 	var keys: Array = ["op"] + SgProtocol.FIELDS[op]
-	if not SgProtocol.exact(action, keys):
-		return {"refusal": "op '%s' takes exactly the keys %s" % [op, ", ".join(keys)], "action": action}
 	var envelope := {"v": SgProtocol.VERSION, "type": "command", "seq": 1, "room": "", "revision": 0, "action": action}
-	if not SgProtocol.valid(envelope):
+	var exact := SgProtocol.exact(action, keys)
+	var carried := exact and SgProtocol.valid(envelope)
+	if targets != null and not carried:
+		action = action.duplicate()
+		action["targets"] = targets
+	if not exact:
+		return {"refusal": "op '%s' takes exactly the keys %s" % [op, ", ".join(keys + (["targets"] if op == "autoprepare" else []))], "action": action}
+	if not carried:
 		return {"refusal": "op '%s' has a value the wire would not carry (card handles are c1..; indices, x and counts are small integers)" % op, "action": action}
+	if targets != null:
+		var pairs: Variant = _target_pairs(targets)
+		if pairs == null:
+			action["targets"] = targets
+			return {"refusal": "%s's targets are a list of [target, amount] pairs or bare targets — a slot token (t0), a card handle (c7), player:0 or player:1" % op, "action": action}
+		if op == "submit":
+			action.targets = pairs
+			return {"action": action}
+		# The payment counts the targets it is cast with (Fireball's {1} a
+		# target after the first) unless the line said otherwise.
+		if not counted:
+			action.count = clampi(pairs.size(), 1, SgProtocol.MAX_CARDS)
+		return {"action": action, "targets": pairs}
 	return {"action": action}
+
+
+## [param entries] as submit pairs — a bare target is `[target, 0]`, a
+## pair stays a pair — or null when one is not a target: a token, a card
+## handle, `player:N`, `ability:oN` or `damage:oN` (letters, digits, `:`,
+## `_`, `-`, at most 24) with an amount of 0..1000, at most
+## [constant SgProtocol.MAX_CARDS] of them.
+static func _target_pairs(entries: Variant) -> Variant:
+	if not entries is Array or entries.size() > SgProtocol.MAX_CARDS:
+		return null
+	var out: Array = []
+	for entry in entries:
+		var pair: Variant = [entry, 0] if entry is String else entry
+		if not pair is Array or pair.size() != 2 or not _target_name(pair[0]) \
+				or not SgProtocol.integer(pair[1], 0, 1000):
+			return null
+		out.append([String(pair[0]), int(pair[1])])
+	return out
+
+
+static func _target_name(value: Variant) -> bool:
+	if not value is String or value.is_empty() or value.length() > 24:
+		return false
+	for c in value:
+		if not "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:_-".contains(c):
+			return false
+	return true
 
 
 # ------------------------------------------------------- the options --
@@ -1007,6 +1260,13 @@ static func options_for(view: Dictionary, seat: int) -> Dictionary:
 								continue
 							entry["x"] = bool(option.x)
 							entry["modes"] = Array(option.modes)
+							# THE MODES IT MAY BE CAST IN NOW (2026-10-04):
+							# `modes` stays every label at its index (the
+							# `mode` a line names); `usable_modes` are the
+							# indices whose payment the seat can make —
+							# the spell's rows after its first.
+							if not option.modes.is_empty():
+								entry["usable_modes"] = _usable_modes(row)
 							entry["budget"] = _budget(row, "spell", 0)
 							casts.append(entry)
 						elif option.kind == "ability":
@@ -1017,7 +1277,7 @@ static func options_for(view: Dictionary, seat: int) -> Dictionary:
 							mana.append(entry)
 				out["play"] = {"op": "play", "lands": lands}
 				out["prepare"] = {"op": "prepare", "casts": casts, "abilities": abilities,
-					"then": "autopay, then submit (or autoprepare for both in one line)"}
+					"then": "autopay, then submit (or autoprepare to prepare and pay in one line; autoprepare with targets casts it too)"}
 				out["mana"] = {"op": "mana", "sources": mana}
 				var specials: Array = []
 				var labels: Array = view.get("specials", [])
@@ -1068,6 +1328,21 @@ static func _budget(row: Dictionary, kind: String, index: int) -> int:
 		if option.kind == kind and int(option.index) == index:
 			return int(option.budget)
 	return 0
+
+
+## The modes a spell's presentation row says are open: its spell rows
+## after the first (the first is its printed cost, always there).
+static func _usable_modes(row: Dictionary) -> Array:
+	var out: Array = []
+	var first := true
+	for option in row.get("abilities", []):
+		if option.kind != "spell":
+			continue
+		if first:
+			first = false
+			continue
+		out.append(int(option.index))
+	return out
 
 
 static func _cost(row: Dictionary, kind: String, index: int) -> String:
@@ -1289,7 +1564,10 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 	if failed != "":
 		return {"error": failed, "status": String(client.status)}
 	if not hosting.is_empty():
-		var hosted: String = arrange.call({"op": "host", "name": String(hosting.name), "decks": "own", "deck": {}})
+		var host_command := {"op": "host", "name": String(hosting.name), "decks": "own", "deck": {}}
+		if String(opts.get("rules", "")) != "":
+			host_command["rules"] = table_rules(String(opts.rules))
+		var hosted: String = arrange.call(host_command)
 		if hosted != "":
 			return {"error": "the table could not be opened: %s" % hosted, "status": String(client.status)}
 	else:
@@ -1353,7 +1631,8 @@ func _referee_table(client: Object, deck: Dictionary, opts: Dictionary, packs: V
 			"deck": String(room.deck_names[pid]), "file": ""})
 	_hello({"seats": seats, "seed": -1, "toss": int(room.game.presentation.toss), "turns": int(opts.turns),
 		"table": {"id": room.id, "name": room.name, "seat": seat, "hosted": not hosting.is_empty()},
-		"packs": packs, "log": String(opts.get("log", ""))})
+		"packs": packs, "log": String(opts.get("log", "")),
+		"rules": RulesOptions.find_preset(SgTableRules.options(SgTableRules.normalize(room.get("rules", {}))).preset()).get("id", "custom")})
 	# A kept game polls its own socket in _next_line; the pipe needs the
 	# pump so the table's socket is served while the program thinks.
 	if _server == null:

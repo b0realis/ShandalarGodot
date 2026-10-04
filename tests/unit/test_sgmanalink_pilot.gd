@@ -77,10 +77,19 @@ func test_no_target_cancels_before_tapping_mana() -> void:
 	put_battlefield(0, "Swamp")
 	var referee := _referee()
 	var pilot := Pilot.new()
-	var prepare: Dictionary = pilot.choose(referee.view(0), 0)
-	assert_eq(prepare.op, "prepare")
-	assert_ok(referee.act(0, prepare))
-	assert_eq(pilot.choose(referee.view(0), 0), {"op": "cancel"})
+	# THE INTENT IS UNCHANGED — no mana is tapped for a cast with nothing
+	# to aim at. Since 2026-10-04 the referee says so before the pilot
+	# reaches for it: an aimless Terror is not `castable`, so the pilot
+	# never prepares it (it used to prepare and then cancel), and a forced
+	# `prepare` is refused before any land is tapped
+	# (SgDuelActions.spell_refusal).
+	var view := referee.view(0)
+	for row in view.presentation.cards:
+		if row.id == referee._handle(0, terror): assert_false(row.castable, "no creature to destroy")
+	assert_eq(pilot.choose(view, 0), {"op": "pass"}, "nothing offered, nothing prepared")
+	assert_refused(referee.act(0, {"op": "prepare", "card": referee._handle(0, terror), "kind": "spell",
+		"index": 0, "x": 0, "mode": 0}), "nothing to aim Terror at")
+	assert_true(referee.actions.draft.is_empty())
 	assert_eq(g.players[0].mana_pool.total(), 0)
 	for land in g.players[0].battlefield: assert_false(land.tapped)
 	assert_eq(terror.zone, Mtg.Zone.HAND)

@@ -341,11 +341,12 @@ stdout (the release's `referee.sh`, the game's `--referee`; the door's
 
 ```
 DeckLab/referee.sh --deck-a DECK --deck-b DECK [--seat-a SEAT] [--seat-b SEAT]
-    [--seed N] [--turns N] [--packs LIST] [--log FILE] [--dry-run]
+    [--seed N] [--turns N] [--packs LIST] [--rules PRESET] [--log FILE] [--dry-run]
 DeckLab/referee.sh --join INVITATION|CODE | --table NAME --deck DECK [--port N]
     [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST] [--log FILE]
 DeckLab/referee.sh --host NAME --deck DECK [--access open|invitation] [--address IP]
-    [--port N] [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST] [--log FILE]
+    [--port N] [--name NICK] [--wait SECONDS] [--turns N] [--packs LIST] [--rules PRESET]
+    [--log FILE]
 DeckLab/referee.sh ... --listen FILE [--idle SECONDS]
 ```
 
@@ -356,23 +357,57 @@ the shipped computer players; `unfair` the wizard that reads hidden
 cards. A deck is tried as typed, then under `decks/`. `--seed` unset
 draws one and reports it. `--turns` (200) calls the duel a draw past
 that turn. `--log FILE` writes the engine's own log at the end (at a
-table, the journal this seat saw). `--dry-run` prints the plan (`seats`, `seed`, `turns`, `packs`, `ops`)
+table, the journal this seat saw). `--rules PRESET` (2026-10-04) is the
+rules forks the duel plays under, one of the Options screen's presets:
+`modern`, `modern_mana_burn` (the standard table every SGManalink host
+opens — the default) or `fifth` (the 1997 Fifth Edition rules: mana
+burn, the damage-prevention window, life checked at phase ends...);
+a local duel or `--host` (the host command carries it), refused with
+`--join`/`--table` (the host's table decides; `hello.rules` says what
+it is); the view's `presentation.rules` has every fork. `--dry-run`
+prints the plan (`seats`, `seed`, `turns`, `packs`, `rules`, `ops`)
 as one JSON line and plays nothing.
 
 **The lines** (stdout, one JSON object each, `"type"` first):
 
 - `hello` — once, before play: `tool`, `protocol` (1), `version`,
   `git`, `seed`, `seats[]` (`seat`, `player`, `name`, `deck`, `file`),
-  `toss` (the seat that won it), `turns`, `ops[]` (every op the
-  referee accepts), `limits{decisions, refusals}`.
+  `toss` (the seat that won it), `turns`, `rules` (the preset id —
+  `modern`, `modern_mana_burn`, `fifth`, or `custom` at a joined table
+  whose host mixed its own), `ops[]` (every op the referee accepts),
+  `limits{decisions, refusals}`.
 - `decision` — `n` (counts up), `seat`, `mode`
   (`opening|priority|attack|block|discard|damage|choice`), `turn`,
   `step`, `options` and `view`. **`options` is the seat's legal answers
   read from its view**: per mode the ops it takes and what each takes
   — `play{lands[{card,name}]}`, `prepare{casts[],abilities[]}` (each
-  with its `budget`), `attack{attackable[]}`, `block{blockable[]}`,
+  with its `budget`), `mana{sources[]}`, `special{specials[]}`,
+  `respond`, `attack{attackable[]}`, `block{blockable[]}`,
   `choice{prompt,options,count}`, `discard{count,hand}`,
-  `damage{request}` — and `concede: true` always. `view` is the seat's
+  `damage{request}` — and `concede: true` always. **`casts` and
+  `abilities` are usable-only** (2026-10-04): an entry is there only
+  when the engine would accept it right now — a cast whose timing
+  allows it (on the opponent's turn: instants, flash, the Mirage flash
+  rider, a Winding Canyons grant), with something to aim at, its
+  non-mana costs there (object costs, an additional sacrifice, life)
+  and a payment the seat can reach; an ability that is not used up
+  ("Activate only once each turn"), inside its printed timing, not
+  banned, whose {T} source is untapped and not summoning-sick, whose
+  cost bodies, life, cards and counters are there (Zuran Orb needs a
+  land to sacrifice), with something to aim at and reachable mana.
+  `mana.sources` lists only sources the engine would tap (no tapped
+  land, no sick Elf). `respond` is true when an instant-speed cast or
+  an ability is listed — the "holds something" signal a pass-through
+  loop stops on. A spell with modes or payment rows (Fireblast's
+  "sacrifice two Mountains", Force of Will's pitch, a "Choose one —")
+  lists `modes` — every label at its index, the `mode` a line names —
+  and `usable_modes`, the indices it can be cast in now (each row's
+  object costs, card to exile, life, target and mana); it is a cast at
+  all only when one is. A hand card that is not castable keeps its
+  `presentation.cards` row and its cost (`castable` false); a spell's
+  first spell row there is its printed cost, and one more spell row
+  follows for each open mode (`index` the mode, `cost` that row's
+  mana). `view` is the seat's
   whole LAN view (`docs/sgmanalink-local-playtest.md`: `hand`,
   `players`, `stack`, `presentation.cards` with `castable` per card,
   `announcement`, `journal`); the `journal` carries only entries not
@@ -382,7 +417,14 @@ as one JSON line and plays nothing.
   value the wire would not carry, the wrong seat, or the engine's own
   refusal — "not castable now"). **The same decision follows again**,
   same `n`, from the live view: act on `decision` lines alone. Twenty
-  refusals in a row concede the seat.
+  refusals in a row concede the seat. A refused `prepare`, `autoprepare`,
+  `autopay`, `submit`, `mana` or `tap` that leaves mana in the seat's
+  pool says so: `floating{total, W, U, B, R, G, C}` (the colours held).
+  A refusal no payment can change (the once-a-turn limit, timing, a
+  ban, a tapped source, nothing to aim at) comes at `prepare`, before
+  any land is tapped; a `submit` refused after its payment leaves the
+  announcement open — `cancel` withdraws it, the mana stays until the
+  step ends (mana burn under the table's rules).
 - `result` — `winner` (`-1` for no winner), `draw`, `turns`, `reason`
   (`concluded`, `conceded`, `eof` — the pipe closed —, `refusals`,
   `limit`, `decisions` — 20,000 in one duel —, `stalled` — a computer
@@ -407,7 +449,9 @@ once), `{"op":"keep"}`, `{"op":"mulligan"}`; priority `{"op":"pass"}`,
 `{"op":"play","card":ID}`, `{"op":"prepare","card":ID,"kind":"spell",
 "index":I,"x":X,"mode":M}` then `{"op":"autopay","excluded":[],
 "count":1}` then `{"op":"submit","targets":[[TOKEN,AMOUNT]...]}` (or
-`{"op":"cancel"}`), `{"op":"autoprepare",...}` for the three in one,
+`{"op":"cancel"}`), `{"op":"autoprepare","card":ID,"kind":K,"index":I,
+"mode":M,"excluded":[],"count":1}` to prepare and pay in one line, and
+with `"targets":[TARGET...]` the three in one (below),
 `{"op":"mana","card":ID,"index":I}`, `{"op":"tap","card":ID}`,
 `{"op":"special","index":I}`; attack `{"op":"attack","cards":[ID...]}`;
 block `{"op":"block","pairs":[[BLOCKER,ATTACKER]...]}`; discard
@@ -416,6 +460,29 @@ block `{"op":"block","pairs":[[BLOCKER,ATTACKER]...]}`; discard
 `{"op":"choice","picks":[I...]}`; any time `{"op":"concede"}`. A blank
 line is skipped. Card IDs are the view's handles (`c7`), and every
 `options` row names the card beside its handle.
+
+**What a casting line may leave out** (2026-10-04; the referee fills it
+in, the wire keeps its strict keys): `prepare` — `kind` (`"spell"`),
+`index` (0), `x` (0), `mode` (0); `autoprepare` — `kind` (`"spell"`),
+`index` (0), `mode` (0), `excluded` ([]), `count` (1, or the number of
+its `targets`); `autopay` — `excluded` ([]), `count` (1); `submit` —
+`targets` ([]). So `{"op":"autoprepare","card":"c5"}` casts c5 and pays
+for it, and an ability is `{"op":"autoprepare","card":"c9","kind":
+"ability","index":0}`. A TARGET, in `submit` and in `autoprepare`, is a
+slot token (`t0`, from the announcement), a card handle (`c7`),
+`player:0` / `player:1`, or `ability:oN` / `damage:oN` — what the
+view's `presentation.targets` (`[{token, ref:{kind, id}}]`) says each
+token stands for — bare or as `[TARGET, AMOUNT]` (AMOUNT 0 unless the
+slot divides an amount). Handles are matched to the announcement's
+slots in order: list them in slot order. **The three in one**:
+`{"op":"autoprepare","card":"c5","targets":["c11"]}` — the referee
+opens the announcement at X 0 with nothing paid, finds every target
+among its candidates (one that is not there refuses the line, nothing
+tapped, the candidates named), then prepares and pays (X as large as
+the mana allows, as `autoprepare` always did) and submits; `targets:
+[]` for a spell or ability with no slots. A question the payment holds
+the duel on (a Fellwar Stone's colour, which Forest to return) ends the
+line there: answer it, then `submit`.
 
 **A table** (`--join`, `--table`): the same pipe at a table the game
 hosts — a person, or another program. `--join` takes the LAN invitation
@@ -511,12 +578,20 @@ that names no `out` runs into `workspace/runs/lab-STAMP`, so its answer
 carries `run`, `results` and `next` like any other),
 `lab_resume`, `read_run`, `lab_next` (runs `run.json`'s `next.argv`);
 `referee_start`, `referee_join`, `referee_host`, `referee_act`,
-`referee_autoplay`, `referee_wait`, `referee_stop`, `referee_resume`.
+`referee_cast`, `referee_play_land`, `referee_view`,
+`referee_autoplay`, `referee_wait`, `referee_stop`, `referee_resume`;
+`referee_menu`, `referee_pick` (the decision-model menus, below).
 Every answer is the door's JSON as
-`structuredContent` (and the same text in `content`); a refusal is
+`structuredContent` (and the same text in `content` — except a REFEREE
+answer that carries a decision or a result: its `content` is the
+compact table summary, see "the compact text" below, unless the game
+was opened with `text: "json"`); a refusal is
 `isError: true` with the door's envelope untouched under `error`; an
 argument a tool does not take is refused with `suggestions`, like a
-flag. Resources: `shandalar://contract` (this page),
+flag. `cards` looks in every pack the server finds (`--packs all`)
+unless its `packs` says otherwise (2026-10-04: a Pack 8 card answered
+`known: false` in a profile whose game setting left the pack off; a
+found pack that cannot be enabled falls back to the game's setting). Resources: `shandalar://contract` (this page),
 `shandalar://play-guide` (the full guide), and
 `shandalar://manual/VERB`.
 
@@ -544,7 +619,10 @@ copy in the workspace. The packager's public allowlist excludes local decks
 and the mutable ratings ledger.
 
 **Playing is a session.** `referee_start {deck_a, deck_b, seat_a,
-seat_b, seed, turns, packs, log, keep, view}` opens the referee's pipe and
+seat_b, seed, turns, packs, rules, log, keep, view, text}` opens the
+referee's pipe (`rules`, the table's preset — `modern`,
+`modern_mana_burn`, the default, or `fifth` — goes to the referee's
+`--rules` and comes back as `hello.rules`; `referee_host` takes it too) and
 answers `{game: "g1", hello, decision}`; `referee_act {game, action,
 until}` writes one answer and returns the next `decision` (or the
 `result`); nothing is played between calls, so a client may think as
@@ -560,15 +638,57 @@ decision's board is rendered `brief` by default — `turn`, `step`,
 `active`, `actor`, both `players` (life, hand and library counts,
 mana, graveyard and exile names, the `battlefield` with `pt`,
 `tapped`, `sick`, `attacking`, `blocking`, `damage`, `counters`,
-`rules`), this seat's `hand` with `cost` and `castable`, the `stack`,
+`rules`, and for an Aura or Equipment `attached` — the host's handle —
+with `attached_name`; the `phased_out` permanents, the same rows marked
+`phased_out: true` with `returns` — "returns at your next untap step",
+"…the opponent's…", "held by Oubliette (c9): phases in when it leaves
+the battlefield", "phases in with Grizzly Bears (c5)"), this seat's
+`hand` with `cost` and `castable`, the `stack`,
 the open prompts (`announcement`, `choice`, `damage_request`,
 `discard_count`), the new `journal` lines — a tenth of the wire's
 view; `view: "full"` is the referee's own line, `"options"` the legal
 answers alone, `"delta"` what moved since the last answer (the first
 delta is a `baseline`; later ones carry only changed life with
-`life_was`, `hand_added/gone/changed`, `battlefield_added/changed/gone`
-and `graveyard_added` per player, the `stack`, `castable` names and
-the new `journal`). `referee_join {invitation | table, deck, port,
+`life_was`, `hand_added/gone/changed`, `battlefield_added/changed/gone`,
+`phased_out_added/changed/gone`, `attached_changed` (`{id, name, to,
+from}`) and `graveyard_added` per player, the `stack`, `castable` names
+and the new `journal`). **`view: "compact"`** (2026-10-04, recommended
+for a model) is the decision as a few deterministic lines of text: the
+clock and the decision; per player life, hand, library and graveyard
+counts, the lands on one line, every other permanent with P/T, its
+state in brackets (tapped, sick, attacking, blocking, damage, counters,
+`on HOST`, `PHASED OUT, returns at …`) and a one-line rules hint; this
+seat's hand with costs and `CASTABLE` marks; the stack, top first; the
+open prompt (an announcement's slots with every token, its label and
+the card it stands for; a choice's options with their indexes; a damage
+assignment; a discard); the legal answers one line each (lands to play,
+casts with their cost, abilities with `#index` and cost, attackers,
+blockers, the op to send or the one-call tool); and the journal.
+**The compact text is every referee answer's `content` by default**
+(0.50.13, whatever `view` is — what an MCP client shows its model, so an
+agent reads the table every turn without asking): every answer of
+`referee_start`, `referee_act`, `referee_cast`, `referee_play_land`,
+`referee_wait`, `referee_view`, `referee_resume`, `referee_autoplay`,
+`referee_stop`, `referee_join`/`referee_host` once seated (a `pending`
+answer before that stays JSON), and `referee_menu`/`referee_pick` (the
+board with the numbered menu) that carries a decision or a result. It
+is headed by the game, what was sent, why a pass stopped, any refusal
+and a one-call cast's outcome; a result is one line from the seat's
+side ("RESULT: YOU WON (seat 0) | life you 12 / opponent -8 | turns 19 |
+reason concluded"); the last line says the full JSON is in
+`structuredContent` and names the view it is rendered in and the views.
+`structuredContent` is the JSON exactly as `view` renders it (`brief`,
+`delta`, `full`, `options`; `compact` is the brief plus the same text as
+`compact`), so a program loses nothing. `text: "json"` on
+`referee_start`, `referee_join`, `referee_host` or `referee_resume`
+(remembered for the game, a kept game's record included) puts the JSON
+in `content` instead.
+`referee_view {game, view}` renders the pending decision again in any
+view without acting and without changing the view the game answers in
+(`referee_wait` with `view` changes it). No journal line is lost
+between internal passes: a decision answered without being shown — by
+`until`, by `referee_autoplay`'s pilot, by a step of `referee_cast` —
+hands its lines to the next decision shown. `referee_join {invitation | table, deck, port,
 name, wait, turns, log, packs, keep, view, timeout}` sits at a table a
 person hosts in the game — a human opponent — by the invitation the
 host's screen shows or by the name of an open LAN table; the answer is
@@ -626,7 +746,81 @@ something to play", "an answer was refused", …), `passed` (decisions
 passed over) and the decision shown has the journal of everything
 passed; 400 passes without the stop is a stop too. `until: "end"`
 passes the seat's own main phase — `play` is the "next time I can do
-something" stop.
+something" stop. **`until: "mine"`** (2026-10-04, the recommended one)
+is the smart pass to the seat's next real decision: its own main phase
+with something to do (a land, a listed cast or ability, a special
+action) and every attack, block, discard, damage and choice of its own,
+and on the opponent's account — their spell or ability on top of the
+stack, their declared attackers, their blocks, their first-strike
+damage, their end step, and the blocks of the seat's own attack — only
+while the seat holds something usable right then, read from the
+decision's options (the referee's usable-only `prepare.casts` while it
+says `respond`, and `prepare.abilities`; never mana abilities, never
+card types): "their Lightning Bolt is on the stack; you hold Disenchant
+(castable)". A window where it holds nothing — a sorcery in hand, an
+exhausted once-a-turn ability — is passed straight through.
+`"mine-strict"` never stops on the opponent's account at all (its own
+decisions and its own main phase only), for a client that wants speed.
+
+**One-call actions** (2026-10-04). `referee_cast {game, card, kind,
+index, x, mode, targets, exclude, until, view}` casts a spell (`kind:
+"spell"`, the default) or activates an ability (`"ability"`; `index`
+only when the card has several usable now) in one call: `prepare`,
+`autopay`, `submit`. `card` is the handle or the name (among several of
+one name, the untapped one first); `x` is required for an X cost and
+`mode` (index or label) for a modal spell — unset, the first mode the
+referee lists as castable now (`usable_modes`; 0 from a referee that
+does not say), and a mode not castable now is refused with the usable
+ones (the compact view marks the others "(not now)") — all refused
+before anything is sent. `targets` are named by what they are: a card handle
+or name, `me`/`opponent`/a seat (`0`, `1`, `player:1`), an
+announcement token, `[target, amount]` or `{target, amount, slot}` for
+a divided spell (one target takes the whole amount, several without
+amounts share it evenly); they are laid on the slots in order, each
+token known by the view's `presentation.targets`. A target that is not
+legal, a name that fits two, a short slot or an amount that does not
+add up is refused with `legal` (every slot's candidates with token,
+label and card) BEFORE any mana is made, the announcement withdrawn;
+a payment or a submission the referee refuses is withdrawn too
+(`cancel`) and comes back as the refusal with `floating_mana` — never a
+half-announced cast. The refusal is `isError: true` with `cast`
+(`stage`, `reason`, `withdrawn`), `sent` (the ops), the referee's
+`refused` lines and the `decision` now pending. A question the payment
+asks (a colour) comes back `cast.result: "open"` with that decision:
+answer it with `referee_act`, then `referee_cast` the same card again
+(it resumes at the submission). A successful cast answers `cast.result:
+"cast"` with the targets as laid, and `until` passes on from there.
+`referee_play_land {game, card, until, view}` plays a land by handle or
+name (unset: the first offered). `referee_act` takes the same as
+`{"op":"cast",...}` / `{"op":"activate",...}`, fills an op's missing
+keys with the wire's defaults (`prepare` kind spell, index 0, x 0,
+mode 0; `autoprepare` kind, index, mode, excluded [], count 1;
+`autopay` excluded [], count 1; `submit` targets []; `attack` cards [];
+`block` pairs []) and turns a `card` given by name into the handle the
+options list it under.
+
+**Decision menus** (0.50.13) — the bridge of "Decision models" below,
+inside the server: `referee_menu {game, rich, probe, view, timeout}`
+answers the pending decision as `{game, n, obs, menu, stats}` — the
+compact observation (with its `features` vector) and every complete
+legal action as a numbered `{id, label}` item (`pass`, `play:c3`,
+`cast:c12->opp`, `act:c5:0`, `attack:add:c7`, `block:c4->c9`,
+`choice:1`, …; item 0 the "do nothing"); `referee_pick {game, pick,
+until, rich, view, timeout}` applies one item — its index, its id or
+`{"pick": …}` — and answers with the next menu (`picked`, `refused`
+for a step the referee refused, which was cancelled at once and left
+the menu; with `until`, `stop`, `passed` and `until` — the server's own
+stop rule, `mine` included), or the `result`. A pick not on the menu is
+refused (`kind: "option"`, `menu` with the ids) before anything is sent.
+The server sends the wire ops itself (`tools/decision_menu.py`'s
+`Driver` over the game, kept in it from call to call); the aimed spells
+are read ahead — a `prepare` and a `cancel`, nothing paid (`probe:
+false` turns that off for the game). In the `compact` view the answer's
+`content` is the board with the menu as numbered lines (`  3. Cast Holy
+Strength → Grizzly Bears — opponent's  [cast:c16->c24]`) in place of the
+wire's options. A game the menu tools touched stays playable by every
+other referee tool, and the next `referee_menu` takes its decision up
+afresh.
 
 **The kept game.** `referee_start`/`referee_join`/`referee_host` take
 `keep` (a join and a host are kept by default, a start is not): the
@@ -668,13 +862,117 @@ building-and-measuring loop (since 0.40.35; any other word, `random`,
 passes through untouched); a tool never invents a result. Pinned by
 `tools/test_shandalar_mcp.py` (a fake door, no engine) and
 `tests/tools/test_mcp_2026_09_27.gd` (the real one: a deck written and
-checked, a duel played to its end through the pilot).
+checked, a duel played to its end through the pilot, a duel through the
+compact view, `until: "mine"` and `referee_cast`).
 Advertised types and bounds are enforced before tools run. Raw `argv`,
 `extra_args` and recorded `next.argv` also check every `--out`, `--resume`
 and `--elo-file` destination. A raw Lab line defaults to `--no-elo` unless
 `rated: true`; resume and next-run operations retain the recorded settings.
 These checks prevent accidental writes outside the chosen folders; the
 local server is trusted tooling, not a security sandbox for hostile clients.
+
+## Decision models — `tools/shandalar_decide.py`
+
+For a program that **chooses moves rather than chats** — a small local
+model, a scripted bot, a reinforcement-learning policy, a decision tool
+(2026-10-04). Every decision is a compact observation and a **numbered
+menu of complete legal actions**; the model answers one number (or the
+item's id) and the bridge turns it into the referee's ops — prepare,
+autopay, submit, the attack and block lists, the choice picks — and
+returns the next decision. No MTG wire knowledge is needed.
+`tools/decision_menu.py` is the pure half (menus, observation, the
+`Driver` that sequences a pick over two callables); `shandalar_decide.py`
+runs the referee through the MCP server's own door route (`shandalar.sh
+referee`, a Windows release's console executable) and offers it three
+ways. Both ship in a release's `tools/` beside `shandalar_mcp.py`.
+
+```
+python3 tools/shandalar_decide.py --deck-a D --deck-b D [--opponent wizard|...|self]
+    [--seat 0|1] [--seed N] [--packs 8] [--turns N] [--rules R]
+    [--policy random|first|greedy [--episodes N] [--trace]]
+    [--rich] [--no-features] [--no-probe] [--no-skip-forced] [--door PATH]
+python3 tools/shandalar_decide.py --describe   every numeric field, by name
+```
+
+**The lines** (no `--policy`): stdout carries one JSON line a decision,
+`{"n", "obs", "menu": [{"id", "label"}...]}` (`--rich`: each item's
+`kind`, `info` and `ops` too); stdin answers one line — an index (`3`),
+an id (`"cast:c12->opp"`) or `{"pick": 3}`. A line that names no item is
+answered `{"n", "error"}` and the **same decision again**; the last line
+is `{"result", "summary"}`; a closed stdin leaves the duel (the seat
+concedes). `--policy` plays itself instead — `first` always item 0 (the
+passive baseline), `random`, `greedy` (a one-ply example) — one line a
+game (`winner`, `won`, `turns`, `reason`, `decisions`, `forced`,
+`wire_decisions`, `probes`, `refusals`, `boot_seconds`,
+`seconds_per_decision`) and `{"summary"}` over `--episodes` (game *i*
+plays `--seed`+*i*). Exit 0 played, 2 a line that could not be run (the
+referee's own envelope on stdout), 1 the referee went away, 3 no Godot.
+
+**The menu.** Item 0 is the mode's "do nothing" wherever it has one (pass,
+no attack, no blocks, keep, play first, damage in order). Ids are stable
+across identical states:
+
+| Mode | Items |
+|---|---|
+| opening | `order:play`, `order:draw` (the toss winner, once), then `keep`, `mulligan` |
+| priority | `pass`; `play:<land>`; `cast:<card>[:m<mode>][:x<X>][-><target>]` — one item per legal target of a one-target spell, read from the referee's own announcement (a `prepare` + `cancel` *probe*, once per state); `act:<card>:<i>[...]` an activated ability; `special:<i>`. A modal spell is offered in each mode its `usable_modes` lists (every mode from a referee that does not send it), the id keeping the mode's index. Mana abilities are not items (the auto-pay taps); identical hand cards are listed once |
+| targets | a cast whose targets do not fit one flat list (two slots, "up to N", divided damage, an X spell, more than 16 candidates): `target:<t>`, `target:none`/`target:done`, `cancel`; "another target" leaves out an earlier slot's pick; divided amounts split evenly |
+| attack | `attack:none`, `attack:all`, `attack:add:<card>` one at a time, `attack:declare` (a must-attack creature is preselected) |
+| block | `block:none`, `block:<blocker>-><attacker>` one pair at a time, `block:declare` |
+| discard | `discard:<card>` one pick at a time |
+| damage | `damage:ordered`, `damage:upto:<id>`, `damage:all:<id>` (free assignment only) |
+| choice | `choice:<i>` (a multi-pick question one pick at a time), `choice:none` (it takes none), `choice:cancel` (a cost withdrawn) |
+
+A sub-menu step sends nothing until its last pick. A decision whose menu
+has one item is answered by the bridge (`forced`; `--no-skip-forced`
+shows it). **The guard**: a cast is `prepare`, `autopay` only once the
+announcement says the payment is reachable, `submit`; a refused step is
+cancelled at once — never left half-announced — and the action leaves
+the menu until the turn, step, stack or board changes; every refusal is
+counted (`refusals`, the referee's own in `referee_refusals`). A payment
+that asks a question (a colour, a land to return) shows it to the model
+and submits after the answer.
+
+**The observation** (`obs`): `mode`, `turn`, `step`, `active` (`me`/
+`opp`), `me`/`opp` (life, hand and library counts, mana, poison, the
+battlefield with type, P/T, keywords, tapped/sick/attacking/blocking,
+damage, counters, `attached`; `phased_out`; graveyard and exile names),
+`hand` (cost, `castable`), `stack`, `prompt`, `selection` (a sub-menu's
+picks), `journal` (every line since the model last chose) and
+`features` — a fixed vector of 66 floats in [-1, 1], each field named
+by `--describe` (`decision_menu.FEATURES`; one item's 30 in
+`ITEM_FEATURES`).
+
+**The Python API**: `Env(deck_a, deck_b, opponent="wizard", seed=None,
+packs=None, rules=None, seat=0, ...)`; `reset()` → obs; `menu()`;
+`step(choice)` → `(obs, reward, done, info)` (reward ±1 at a won/lost
+end); `done`, `result`, `stats()`, `hello`; a context manager. `rules`
+(`--rules`) goes to the referee as its `--rules`: `modern`,
+`modern_mana_burn` (the standard table, its default) or `fifth` (the 1997
+rules); the preset played is `hello["rules"]`, in `stats()` and in each
+`--policy` game line, and a word the referee does not know is its own
+refusal envelope. Pinned by
+`tools/test_shandalar_decide.py` (recorded referee lines in
+`tools/fixtures/decide_decisions.json`; `LiveTest` behind
+`SHANDALAR_DECIDE_LIVE=1` plays whole duels against the wizard with zero
+refusals). The same menus inside the MCP server: `referee_menu` and
+`referee_pick` ("The MCP server", "Decision menus").
+
+**Typed decision models — Laya, Jev and the like (initial support,
+2026-10-04).** Laya (run locally with `laya-serve`) and Jev (a hosted API)
+read the same request: a `state` and typed `questions`, `POST
+/v1/systemone`, a `choice` question answered with the option picked and a
+probability for each. `--policy systemone --url URL [--model NAME]` asks
+such a model every decision: the state is the compact observation (no
+numeric vector, no journal), the one `choice` question names every menu
+item by its readable label, and the model's `choice` (or its most likely
+option) is the pick; `SYSTEMONE_API_KEY`, when set, goes as `Authorization:
+Bearer`. On stdin/stdout, `--systemone` adds each decision's ready-made
+request to its record, and an answer object with `answers.action.choice` is
+accepted as the pick. In Python: `systemone_request(obs, menu)` and
+`systemone_pick(answer, request)`. Deliberately minimal — fitting the state
+to a model's context length, or asking `score`/`noul` questions, is the
+model user's to take further.
 
 ## Deck convert — `./deck_convert.sh INPUT OUTPUT`
 

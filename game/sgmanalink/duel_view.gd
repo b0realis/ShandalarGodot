@@ -455,13 +455,23 @@ func _excluded_sources() -> Array:
 	return excluded
 
 
+## The referee's row for the pending cast or activation. A spell's FIRST
+## spell row is its printed cost; one more follows for each mode or
+## payment row it may be cast in now (SgDuelPresentation.build,
+## 2026-10-04), so a chosen mode reads its own row's cost and X budget
+## when there is one, else the first.
 func _option_detail() -> Dictionary:
 	if _pending_card == null: return {}
 	var detail: Dictionary = projection.details.get(projection.handle(_pending_card.id), {})
+	var first := {}
+	var spells := 0
 	for option in detail.get("abilities", []):
-		if (_pending_ability_index < 0 and option.kind == "spell") \
-			or (option.kind == "ability" and option.index == _pending_ability_index): return option
-	return {}
+		if option.kind == "ability" and _pending_ability_index >= 0 and option.index == _pending_ability_index: return option
+		if option.kind != "spell" or _pending_ability_index >= 0: continue
+		spells += 1
+		if spells == 1: first = option
+		elif int(option.index) == _pending_mode: return option
+	return first
 
 
 func _open_x_dialog() -> void:

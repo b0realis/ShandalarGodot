@@ -96,15 +96,23 @@ static func can_pay_now(g: MtgGame, pid: int, payment: Dictionary, kind: String)
 ## local screen's "floating" question (`_has_affordable_fast_effect`).
 static func affordable(g: MtgGame, pid: int, card: CardInstance, potential := false, alternatives := true) -> bool:
 	for mode in maxi(1, card.data.modes.size()):
-		var option := card.data.payment_option(mode)
-		if not alternatives and not option.is_empty(): continue
-		if int(option.get("life", 0)) > g.players[pid].life: continue
-		if int(option.get("exile_color", 0)) != 0 and g.pitch_candidates(pid, card, mode).is_empty(): continue
-		var groups := g.spell_object_costs(card.data, mode)
-		if not groups.is_empty() and OC.refusal(g, pid, groups, card, 0) != "": continue
-		var cost := due(g, pid, card, "spell", 0, 0, 1, mode)
-		var extra := int(cost.extra) + g.targeting_surcharge_floor(pid, card.data, card, mode)
-		var p := g.players[pid]
-		if p.mana_pool.can_pay(cost.cost, extra, cost.usage, p.mana_substitutions, p.any_color_spells > 0): return true
-		if potential and not ManaPlanner.plan(g, pid, cost.cost, extra, cost.usage).is_empty(): return true
+		if mode_affordable(g, pid, card, mode, potential, alternatives): return true
 	return false
+
+
+## [method affordable] for ONE payment row or mode [param mode] — its life,
+## its card to exile, its object costs and its mana with the Torch floor
+## (2026-10-04: the referee's options name the payable modes one by one,
+## so a Fireblast with one Mountain offers no "sacrifice two Mountains").
+static func mode_affordable(g: MtgGame, pid: int, card: CardInstance, mode: int, potential := false, alternatives := true) -> bool:
+	var option := card.data.payment_option(mode)
+	if not alternatives and not option.is_empty(): return false
+	if int(option.get("life", 0)) > g.players[pid].life: return false
+	if int(option.get("exile_color", 0)) != 0 and g.pitch_candidates(pid, card, mode).is_empty(): return false
+	var groups := g.spell_object_costs(card.data, mode)
+	if not groups.is_empty() and OC.refusal(g, pid, groups, card, 0) != "": return false
+	var cost := due(g, pid, card, "spell", 0, 0, 1, mode)
+	var extra := int(cost.extra) + g.targeting_surcharge_floor(pid, card.data, card, mode)
+	var p := g.players[pid]
+	if p.mana_pool.can_pay(cost.cost, extra, cost.usage, p.mana_substitutions, p.any_color_spells > 0): return true
+	return potential and not ManaPlanner.plan(g, pid, cost.cost, extra, cost.usage).is_empty()

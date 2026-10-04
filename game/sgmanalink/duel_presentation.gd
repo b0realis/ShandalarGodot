@@ -124,6 +124,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 			if m._visible(pid, card): visible.append(card)
 		for card: CardInstance in visible:
 			var row := {"id": m._handle(pid, card), "flags": {}, "abilities": [], "castable": false}
+			var open_modes: Array = []
 			for key in FLAGS:
 				row.flags[key] = (0 if key in COUNTED_FLAGS else false) if card.face_down and card.zone != Mtg.Zone.BATTLEFIELD else card.get(key)
 			if card.phased_out and card.phase_hold >= 0:
@@ -135,7 +136,16 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 			# own permissions, as MtgGame.playable_cards reads them.
 			if (card.zone == Mtg.Zone.HAND and card.owner_id == pid) or g.can_play_from_exile(pid, card) \
 					or g.can_cast_from_graveyard(pid, card):
-				row.castable = g.cast_timing_refusal(pid, card).is_empty() and SgPayment.affordable(g, pid, card, true)
+				# Something to AIM AT too (2026-10-04): `castable` is the
+				# referee's "the cast would be accepted", read by the
+				# program's `prepare.casts`; a hand Aura with no creature on
+				# the table keeps its row and its cost, never the flag. A
+				# spell with MODES or payment rows is castable when one of
+				# them is ([method SgDuelActions.open_modes]).
+				open_modes = SgDuelActions.open_modes(g, pid, card) if card.data.is_modal() else []
+				row.castable = g.cast_timing_refusal(pid, card).is_empty() \
+					and (not open_modes.is_empty() if card.data.is_modal()
+						else SgPayment.affordable(g, pid, card, true) and SgDuelActions.spell_aimed(g, pid, card, 0, -1))
 				# A FAST EFFECT is anything castable now although a sorcery
 				# could not be (Pack 8): an instant, FLASH, the Mirage flash
 				# rider or a Winding Canyons grant — the engine's own
@@ -149,7 +159,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 					# every Done and auto-pass of the duel. RESPOND weighs
 					# every row, like the local _payable_now.
 					result.floating = result.floating or SgPayment.affordable(g, pid, card, false, false)
-					result.respond = result.respond or (SgPayment.affordable(g, pid, card, true) and has_aim(g, card))
+					result.respond = result.respond or row.castable
 			# A face-down card this seat may LOOK at (Three Wishes) offers its
 			# actions to that seat; every other face-down card offers none.
 			var hidden := card.face_down and not (card.zone == Mtg.Zone.EXILE and card.exile_visible_to == pid)
@@ -162,11 +172,31 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 					if not budgets.has(key): budgets[key] = SgPayment.budget(g, pid, card, option.kind, option.index, sources)
 					budget = budgets[key]
 				row.abilities.append({"kind": option.kind, "index": option.index, "cost": str(cost), "budget": budget})
+				# THE OPEN MODES (2026-10-04): after a spell's own row — its
+				# printed cost, always first, read by every board — one row
+				# per mode or payment row the seat could cast now, `index`
+				# the mode and `cost` that row's mana. The referee's
+				# `usable_modes` is read off them; nothing else changes.
+				if option.kind == "spell":
+					for mode: int in open_modes:
+						var mode_budget := 0
+						if option.x:
+							var mode_key := "%s/mode%d" % [card.data.card_name, mode]
+							if not budgets.has(mode_key):
+								budgets[mode_key] = SgPayment.budget(g, pid, card, "spell", 0, sources, 1, mode)
+							mode_budget = budgets[mode_key]
+						row.abilities.append({"kind": "spell", "index": mode,
+							"cost": str(card.data.payment_base(mode)), "budget": mode_budget})
+				# An ABILITY OPTION is one the engine would take now — its
+				# once-a-turn limit, timing, bans, a tapped or sick {T}
+				# source, a target and the mana are all asked before it is
+				# offered (SgDuelActions.ability_refusal, 2026-10-04). It
+				# asked `_ability_usable`, the timing and the mana here, and
+				# a Knight of Valor's used once-a-turn ability held every
+				# window of the opponent's turn open for an MCP program.
 				if option.kind == "ability":
-					var ability: ActivatedAbility = card.cur_activated_abilities[option.index]
-					if DuelScreen._ability_usable(card, ability) and g.ability_timing_refusal(pid, card, ability).is_empty() and g.can_afford_cost(pid, cost):
-						result.respond = true
-						result.floating = true
+					result.respond = true
+					result.floating = true
 			result.cards.append(row)
 			# Nothing about a phased-out permanent attacks or blocks (702.26b).
 			if card.phased_out: continue
@@ -259,14 +289,10 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 	return result
 
 
-static func has_aim(g: MtgGame, card: CardInstance) -> bool:
+## Has [param card] something to be cast at now? A modal spell is left to
+## its modes ([method SgDuelActions.open_modes]); any other asks
+## [method SgDuelActions.spell_aimed] — with [param pid], at any X that
+## seat could pay for (Detonate's "mana value X"), else at X = 0.
+static func has_aim(g: MtgGame, card: CardInstance, pid := -1) -> bool:
 	if card.data.is_modal(): return true
-	# An Aura's one target is what it will enchant (CR 303.4a): a flash-rider
-	# Aura with no creature on the table has nothing to be cast at.
-	if card.data.is_aura():
-		return card.data.aura_target == null \
-			or not card.data.aura_target.legal_targets(g, card).is_empty()
-	for effect in card.data.spell_effects:
-		if effect.target_spec == null or effect.target_min <= 0 or effect.target_count_is_x: continue
-		if effect.target_spec.legal_targets(g, card).is_empty(): return false
-	return true
+	return SgDuelActions.spell_aimed(g, pid, card, 0, -1)

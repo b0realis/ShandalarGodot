@@ -28,13 +28,19 @@ func _append(viewer: int, text: String, kind: String, pid := -1) -> void:
 func _public(text: String, kind: String, pid := -1) -> void:
 	for viewer in 2: _append(viewer, text, kind, pid)
 
+## A card's name as [param viewer] may know it, or a hidden stand-in written
+## for the middle of a sentence ("Wizard draws a card."); [method _cap] puts
+## one at the start of a sentence ("A face-down card dies.").
 func _name(card: CardInstance, viewer: int) -> String:
-	if card == null: return "An effect"
-	if card.face_down: return "Face-down card"
+	if card == null: return "an effect"
+	if card.face_down: return "a face-down card"
 	if card.zone in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD, Mtg.Zone.STACK, Mtg.Zone.EXILE, Mtg.Zone.ANTE] \
 		or (card.zone == Mtg.Zone.HAND and (card.owner_id == viewer or card.revealed_in_hand or game.players[card.owner_id].hand_revealed)):
 		return card.data.card_name
-	return "A card"
+	return "a card"
+
+static func _cap(text: String) -> String:
+	return text.substr(0, 1).to_upper() + text.substr(1)
 
 func _event(event: GameEvent) -> void:
 	if game.is_probing(): return
@@ -62,23 +68,23 @@ func _event(event: GameEvent) -> void:
 				text = "%s discards %s." % [who, _name(card, viewer)]
 				kind = "discard"
 			Mtg.EventType.ENTERS_BATTLEFIELD:
-				text = "%s enters the battlefield." % _name(card, viewer)
+				text = "%s enters the battlefield." % _cap(_name(card, viewer))
 				kind = "enter"
 			Mtg.EventType.DIES:
-				text = "%s dies." % _name(card, viewer)
+				text = "%s dies." % _cap(_name(card, viewer))
 				kind = "dies"
 			Mtg.EventType.TAPPED_FOR_MANA:
 				text = "%s taps %s for mana." % [who, _name(card, viewer)]
 				kind = "mana"
 			Mtg.EventType.BLOCKED:
-				text = "%s blocks %s." % [_name(data.blocker, viewer), _name(data.attacker, viewer)]
+				text = "%s blocks %s." % [_cap(_name(data.blocker, viewer)), _name(data.attacker, viewer)]
 				kind = "block"
 			Mtg.EventType.DECLARED_ATTACKERS:
 				text = "%s attacks with %d creature(s)." % [game.players[game.active_player].player_name, data.attackers.size()]
 				kind = "attack"
 			Mtg.EventType.DAMAGE_DEALT:
 				var target: String = game.players[int(data.to_player)].player_name if data.has("to_player") else _name(data.get("to_instance"), viewer)
-				text = "%s deals %d damage to %s." % [_name(data.get("source"), viewer), int(data.amount), target]
+				text = "%s deals %d damage to %s." % [_cap(_name(data.get("source"), viewer)), int(data.amount), target]
 				kind = "damage"
 		if not text.is_empty(): _append(viewer, text, kind, pid)
 

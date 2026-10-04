@@ -103,9 +103,22 @@ if verb == "packs":
     emit({"tool": "lab_query", "query": "packs", "known": ["pack-1"], "available": ["pack-1"], "enabled": [],
           "packs": [{"id": "pack-1", "label": "Pack 1", "available": True, "enabled": False, "cards": 373}]})
 if verb == "cards":
-    rows = [{"name": n, "known": n == "Lightning Bolt", "cost": "{R}"} if n == "Lightning Bolt"
-            else {"name": n, "known": False, "near": ["Lightning Bolt"]} for n in rest]
-    emit({"tool": "lab_query", "query": "cards", "cards": rows})
+    # `--packs`: Teferi's Imp is a Pack 8 card, known only with that pack
+    # in play; a `packs_broken` file makes `--packs all` refused (a found
+    # pack that cannot be enabled), as lab_query refuses it.
+    packs = None
+    names = []
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--packs": packs = rest[i + 1]; i += 2; continue
+        names.append(rest[i]); i += 1
+    if packs == "all" and (here / "packs_broken").is_file():
+        refuse("lab_query", "could not enable pack-8", kind="packs", flag="--packs")
+    pack8 = packs in ("all", "8", "pack-8")
+    rows = [{"name": n, "known": True, "cost": "{R}"} if n == "Lightning Bolt"
+            else {"name": n, "known": True, "cost": "{1}{U}", "pack": "pack-8"} if n == "Teferi's Imp" and pack8
+            else {"name": n, "known": False, "near": ["Lightning Bolt"]} for n in names]
+    emit({"tool": "lab_query", "query": "cards", "packs": packs, "cards": rows})
 if verb == "check":
     decks = []
     i = 0
@@ -177,6 +190,7 @@ if verb == "referee":
     joined = "--join" in rest or "--table" in rest
     hosted = "--host" in rest
     hello = {"type": "hello", "tool": "referee", "protocol": 1, "version": "9.9.9", "seed": int(opt("--seed", "7")),
+             "rules": opt("--rules", "modern_mana_burn"),
              "seats": [{"seat": 0, "player": "agent", "name": "Agent", "deck": "A"}, {"seat": 1, "player": "wizard", "name": "Wizard", "deck": "B"}]}
     if joined:
         hello["table"] = {"host": "Someone"}
@@ -329,7 +343,29 @@ if verb == "referee":
         {"turn": 3, "step": "MAIN1", "mode": "priority", "active": 0, "played": True, "life": 18},
         {"turn": 3, "step": "MAIN2", "mode": "priority", "active": 0, "played": True, "life": 18},
     ]
-    scripted = hello["seed"] == 31
+    # `--seed 33`: the smart pass (`until: "mine"`, 2026-10-04) — the
+    # options say what the seat holds: a sorcery is never listed on the
+    # opponent's turn, an exhausted once-per-turn ability is not listed
+    # (the referee's lists are usable-only), a castable instant is.
+    BOLT = [{"card": "c2", "name": "Lightning Bolt", "x": False}]
+    SEQ33 = [
+        {"turn": 1, "step": "UPKEEP", "mode": "opening", "active": 0},
+        {"turn": 1, "step": "MAIN1", "mode": "priority", "active": 0, "lands": True, "casts": []},
+        {"turn": 1, "step": "MAIN2", "mode": "priority", "active": 0, "played": True, "casts": []},
+        {"turn": 1, "step": "END", "mode": "priority", "active": 0, "played": True, "casts": []},
+        {"turn": 2, "step": "UPKEEP", "mode": "priority", "active": 1, "played": True, "casts": []},
+        {"turn": 2, "step": "MAIN1", "mode": "priority", "active": 1, "played": True, "casts": [],
+         "stack": [{"id": "c8", "name": "Grizzly Bears", "controller": 1}]},
+        {"turn": 2, "step": "DECLARE_ATTACKERS", "mode": "priority", "active": 1, "respond": True, "played": True,
+         "attacking": True, "casts": BOLT},
+        {"turn": 2, "step": "DECLARE_BLOCKERS", "mode": "block", "active": 1, "played": True, "attacking": True},
+        {"turn": 2, "step": "END", "mode": "priority", "active": 1, "respond": True, "played": True, "casts": [],
+         "life": 18},
+        {"turn": 3, "step": "MAIN1", "mode": "priority", "active": 0, "played": True, "life": 18, "casts": BOLT},
+    ]
+    scripted = hello["seed"] in (31, 33)
+    if hello["seed"] == 33:
+        SEQ31 = SEQ33
     n = 0
     refusals = 0
     def decision():
@@ -353,7 +389,7 @@ if verb == "referee":
             else:
                 options = {"mode": "priority", "concede": True, "pass": {"op": "pass"}, "respond": bool(row.get("respond")),
                            "play": {"op": "play", "lands": [{"card": "c1", "name": "Mountain"}] if row.get("lands") else []},
-                           "prepare": {"op": "prepare", "casts": [{"card": "c2", "name": "Lightning Bolt", "x": False}] if row.get("respond") else [], "abilities": []}}
+                           "prepare": {"op": "prepare", "casts": row["casts"] if "casts" in row else ([{"card": "c2", "name": "Lightning Bolt", "x": False}] if row.get("respond") else []), "abilities": []}}
             rec = {"type": "decision", "n": n, "seat": 0, "turn": row["turn"], "step": row["step"], "mode": row["mode"],
                    "options": options, "view": v}
         else:
@@ -367,6 +403,226 @@ if verb == "referee":
             Path(opt("--log")).write_text("".join("%s\n" % e["text"] for e in (keep.whole if keep else [])) or "the fake duel's log\n")
         out({"type": "result", "winner": winner, "reason": reason, "turns": 1, "decisions": n + (1 if reason == "concede" else 0), "refusals": refusals})
         sys.exit(0)
+    if hello["seed"] == 41:
+        # THE CAST TABLE (2026-10-04): one main phase with the wire's own
+        # announcement — prepare, autopay, submit, cancel, a payment's
+        # colour question — for the one-call `referee_cast`. The referee
+        # refuses an unpayable cost BEFORE it taps (Fireball X=5, Healing
+        # Salve with no white source); Knight of Valor's once-a-turn
+        # ability is offered although it was used (the old phantom): its
+        # payment taps, its submission is refused, the mana floats.
+        T = {"n": 0, "refusals": 0, "step": "MAIN1", "pool": [0, 0, 0, 0, 0, 0], "ann": None, "choice": False,
+             "stack": [], "life": [20, 20], "journal": [], "serial": 0, "land_played": False}
+        hand = [{"id": "c2", "name": "Lightning Bolt", "cost": "{R}", "need": 1, "instant": True,
+                 "rules": "Lightning Bolt deals 3 damage to any target."},
+                {"id": "c5", "name": "Fireball", "cost": "{X}{R}", "x": True, "need": 1},
+                {"id": "c6", "name": "Chromatic Sphere", "cost": "{1}", "need": 1, "asks": True},
+                {"id": "c7", "name": "Healing Salve", "cost": "{W}", "need": 99, "modes": ["Gain 3 life", "Prevent 3 damage"],
+                 "usable": [1]},
+                {"id": "c13", "name": "Mountain", "land": True}]
+        board = [[{"id": "c1", "name": "Mountain", "land": True}, {"id": "c3", "name": "Mountain", "land": True},
+                  {"id": "c4", "name": "Knight of Valor", "creature": True, "power": 2, "toughness": 2},
+                  {"id": "c14", "name": "Holy Strength", "attached": "c4"}],
+                 [{"id": "c9", "name": "Grizzly Bears", "creature": True, "power": 2, "toughness": 2},
+                  {"id": "c10", "name": "Grizzly Bears", "creature": True, "power": 2, "toughness": 2},
+                  {"id": "c11", "name": "Serra Angel", "creature": True, "power": 4, "toughness": 4, "tapped": True}]]
+        phased = [[], [{"id": "c12", "name": "Teferi's Imp", "creature": True, "power": 1, "toughness": 1}]]
+        grave = [[], []]
+        def say(text):
+            T["serial"] += 1
+            T["journal"].append({"text": text, "serial": T["serial"]})
+        def card(handle):
+            for c in hand + board[0] + board[1]:
+                if c["id"] == handle: return c
+            return None
+        def label(c):
+            mine = any(x is c for x in board[0])
+            return "%s — %s%s" % (c["name"], "yours" if mine else "opponent's", " (tapped)" if c.get("tapped") else "")
+        def announce(source, kind, x, mode):
+            players = [("player", "0", "You"), ("player", "1", "Opponent")]
+            creatures = [("card", c["id"], label(c)) for c in board[0] + board[1] if c.get("creature")]
+            if kind == "ability":
+                slots = []
+            elif source["id"] == "c2":
+                slots = [("target creature or player", 1, 1, 0, players + creatures)]
+            elif source["id"] == "c5":
+                slots = [("divide X damage among any number of creatures and/or players", 1, 6, x, players + creatures)]
+            elif source["id"] == "c7":
+                slots = [("target player", 1, 1, 0, players)] if mode == 0 else [("target creature or player", 1, 1, 0, players + creatures)]
+            else:
+                slots = []
+            refs, out_slots, k = [], [], 0
+            for (text, lo, hi, divided, rows) in slots:
+                targets = []
+                for (rk, rid, rl) in rows:
+                    token = "t%d" % k; k += 1
+                    targets.append({"id": token, "label": rl})
+                    refs.append({"token": token, "ref": {"kind": rk, "id": rid, "amount": 0}})
+                out_slots.append({"label": text, "kind": 2, "min": lo, "max": hi, "divided": divided, "targets": targets})
+            return {"name": source["name"], "kind": kind, "x": x, "slots": out_slots}, refs
+        def untapped():
+            return [c for c in board[0] if c.get("land") and not c.get("tapped")]
+        def castable(c):
+            return (T["step"] == "MAIN1" and not T["stack"]) or (bool(c.get("instant")) and T["step"] != "DONE")
+        def emit_decision():
+            ann = T["ann"]
+            pres_cards = []
+            for c in hand:
+                if not c.get("land"):
+                    pres_cards.append({"id": c["id"], "castable": True, "flags": {},
+                                       "abilities": [{"kind": "spell", "index": 0, "cost": c["cost"], "budget": 2 if c.get("x") else 0}]})
+            pres_cards.append({"id": "c4", "castable": False, "flags": {}, "abilities": [{"kind": "ability", "index": 1, "cost": "{1}", "budget": 0}]})
+            pres_cards.append({"id": "c12", "castable": False, "flags": {"phased_out": True, "phased_indirectly": False}, "abilities": []})
+            refs = []
+            if ann is not None:
+                ann_view, refs = announce(card(ann["card"]), ann["kind"], ann["x"], ann["mode"])
+            else:
+                ann_view = {}
+            mode = "choice" if T["choice"] else "priority"
+            hand_view = [dict(c, rules=c.get("rules", ""), playable=bool(c.get("land")) and not T["land_played"]) for c in hand]
+            v = {"turn": 3, "step": T["step"], "active": 0, "actor": 0, "mode": mode, "winner": -1,
+                 "stack": list(T["stack"]), "hand": hand_view, "discard_count": 0, "damage_request": {},
+                 "choice": ({"prompt": "Choose a color of mana", "source": "Chromatic Sphere", "information": [],
+                             "options": ["White", "Blue", "Black", "Red", "Green"], "count": 1, "cancel": True}
+                            if T["choice"] else {}),
+                 "announcement": ann_view, "information": [], "specials": [],
+                 "players": [{"seat": 0, "deck_name": "A", "life": T["life"][0], "hand_count": len(hand), "library_count": 40,
+                              "mana": sum(T["pool"]), "mana_colors": list(T["pool"]),
+                              "battlefield": [dict(c, controller=0) for c in board[0]], "graveyard": grave[0], "exile": [],
+                              "phased_out": [dict(c, controller=0) for c in phased[0]]},
+                             {"seat": 1, "deck_name": "B", "life": T["life"][1], "hand_count": 5, "library_count": 40,
+                              "mana": 0, "mana_colors": [0] * 6,
+                              "battlefield": [dict(c, controller=1) for c in board[1]], "graveyard": grave[1], "exile": [],
+                              "phased_out": [dict(c, controller=1) for c in phased[1]]}],
+                 "journal": list(T["journal"]),
+                 "presentation": {"cards": pres_cards, "targets": refs, "phase_holds": [],
+                                  "draft": ({"card": ann["card"], "kind": ann["kind"], "index": ann["index"], "x": ann["x"],
+                                             "mode": ann["mode"], "reachable": True} if ann else {})}}
+            T["journal"] = []
+            if mode == "choice":
+                options = {"mode": "choice", "concede": True, "cancel": {"op": "cancel"},
+                           "choice": {"op": "choice", "prompt": v["choice"]["prompt"], "options": v["choice"]["options"], "count": 1}}
+            elif ann is not None:
+                options = {"mode": "priority", "concede": True, "announcement": ann_view, "draft": v["presentation"]["draft"],
+                           "autopay": {"op": "autopay"}, "submit": {"op": "submit"}, "cancel": {"op": "cancel"}}
+            else:
+                casts = [{"card": c["id"], "name": c["name"], "index": 0, "label": "Cast " + c["name"], "x": bool(c.get("x")),
+                          "modes": c.get("modes", []), "budget": 2 if c.get("x") else 0,
+                          "usable_modes": c.get("usable", list(range(len(c.get("modes", [])))))}
+                         for c in hand if not c.get("land") and castable(c)]
+                options = {"mode": "priority", "concede": True, "pass": {"op": "pass"}, "respond": True,
+                           "play": {"op": "play", "lands": [{"card": c["id"], "name": c["name"]} for c in hand
+                                                            if c.get("land") and not T["land_played"] and not T["stack"]]},
+                           "prepare": {"op": "prepare", "casts": casts,
+                                       "abilities": [{"card": "c4", "name": "Knight of Valor", "index": 1, "label": "{1}: first strike",
+                                                      "cost": "{1}", "budget": 0}]},
+                           "mana": {"op": "mana", "sources": [{"card": c["id"], "name": c["name"], "index": 0, "label": "{T}: add {R}"}
+                                                              for c in untapped()]},
+                           "special": {"op": "special", "specials": []}}
+            out({"type": "decision", "n": T["n"], "seat": 0, "turn": 3, "step": T["step"], "mode": mode,
+                 "options": options, "view": v})
+        def refuse_action(reason, action):
+            T["refusals"] += 1
+            out({"type": "refused", "n": T["n"], "seat": 0, "reason": reason, "action": action, "left": 19})
+        def apply(action):
+            op = action.get("op")
+            ann = T["ann"]
+            if T["choice"]:
+                if op == "choice":
+                    T["choice"] = False; T["pool"][int(action["picks"][0])] += 1; say("Chromatic Sphere makes mana")
+                    return ""
+                if op == "cancel":
+                    T["choice"] = False; T["ann"] = None
+                    return ""
+                return "Answer the pending question first."
+            if op == "prepare":
+                c = card(action.get("card"))
+                if set(action) != {"op", "card", "kind", "index", "x", "mode"}:
+                    return "op 'prepare' takes exactly the keys op, card, kind, index, x, mode"
+                if action["kind"] == "ability":
+                    if action["card"] != "c4" or action["index"] != 1: return "This action is unavailable."
+                elif c is None or c not in hand or c.get("land") or not castable(c):
+                    return "This action is unavailable."
+                elif (not c.get("x") and action["x"]) or action["mode"] >= max(1, len(c.get("modes", []))):
+                    return "Invalid mode or X."
+                T["ann"] = {"card": action["card"], "kind": action["kind"], "index": action["index"], "x": action["x"], "mode": action["mode"]}
+                return ""
+            if op == "autopay":
+                if ann is None: return "No announcement is waiting."
+                need = 1 if ann["kind"] == "ability" else card(ann["card"])["need"] + ann["x"]
+                if need > len(untapped()) + sum(T["pool"]):
+                    return "not enough mana for %s" % card(ann["card"])["name"]
+                for land in untapped()[:max(0, need - sum(T["pool"]))]:
+                    land["tapped"] = True; T["pool"][3 if ann["kind"] == "spell" else 5] += 1
+                if ann["kind"] == "spell" and card(ann["card"]).get("asks"):
+                    T["pool"] = [0] * 6
+                    T["choice"] = True
+                return ""
+            if op == "submit":
+                if ann is None: return "No announcement is waiting."
+                ann_view, refs = announce(card(ann["card"]), ann["kind"], ann["x"], ann["mode"])
+                tokens = {r["token"]: r for r in refs}
+                labels = {}
+                for slot in ann_view["slots"]:
+                    for t in slot["targets"]: labels[t["id"]] = t["label"]
+                for pair in action.get("targets", []):
+                    if pair[0] not in tokens: return "Target unavailable."
+                if ann["kind"] == "ability":
+                    return "Knight of Valor: activate only once each turn"
+                total = len(action.get("targets", []))
+                for slot in ann_view["slots"]:
+                    if not slot["min"] <= total <= slot["max"]: return "choose %d to %d targets" % (slot["min"], slot["max"])
+                    if slot["divided"] and sum(p[1] for p in action["targets"]) != slot["divided"]: return "divide the whole amount"
+                c = card(ann["card"])
+                if sum(T["pool"]) < c["need"] + ann["x"]: return "not enough mana for %s" % c["name"]
+                T["pool"] = [0] * 6
+                hand.remove(c)
+                T["stack"].append({"name": c["name"], "controller": 0, "details": "Spell", "x": ann["x"],
+                                   "targets": [labels[p[0]] for p in action.get("targets", [])], "aim": [tokens[p[0]]["ref"]["id"] for p in action.get("targets", [])]})
+                T["ann"] = None
+                say("Agent casts %s" % c["name"])
+                return ""
+            if op == "cancel":
+                T["ann"] = None
+                return ""
+            if op == "play":
+                c = card(action.get("card"))
+                if c is None or not c.get("land") or c not in hand or T["land_played"]: return "You can't play that land now."
+                hand.remove(c); board[0].append(dict(c)); T["land_played"] = True; say("Agent plays Mountain")
+                return ""
+            if op == "pass":
+                if ann is not None: return "Finish or cancel the announcement first."
+                if T["stack"]:
+                    top = T["stack"].pop()
+                    say("%s resolves" % top["name"])
+                    for aim in top["aim"]:
+                        if aim == "1": T["life"][1] -= 3
+                        for c in list(board[1]):
+                            if c["id"] == aim: board[1].remove(c); grave[1].append({"id": c["id"], "name": c["name"]})
+                    return ""
+                T["step"] = {"MAIN1": "MAIN2", "MAIN2": "END"}.get(T["step"], "DONE")
+                return ""
+            return "unknown op '%s'" % op
+        emit_decision()
+        while True:
+            line = next_line()
+            if line in ("eof", "idle"):
+                out({"type": "result", "winner": 1, "reason": line, "turns": 3, "decisions": T["n"], "refusals": T["refusals"]}); sys.exit(0)
+            try:
+                action = json.loads(line)
+            except ValueError:
+                action = {}
+            action.pop("seat", None)
+            if action.get("op") == "concede":
+                out({"type": "result", "winner": 1, "reason": "concede", "turns": 3, "decisions": T["n"] + 1, "refusals": T["refusals"]}); sys.exit(0)
+            reason = apply(action)
+            if reason:
+                refuse_action(reason, action)
+            else:
+                T["n"] += 1
+                if T["step"] == "DONE":
+                    out({"type": "result", "winner": 0, "reason": "concluded", "turns": 3, "decisions": T["n"], "refusals": T["refusals"]}); sys.exit(0)
+            emit_decision()
     decision()
     while True:
         line = next_line()
@@ -677,7 +933,28 @@ class FakeDoorTest(unittest.TestCase):
         rows = self.client.payload("cards", {"names": ["Lightning Bolt", "Lightnin Bolt"]})["cards"]
         self.assertTrue(rows[0]["known"])
         self.assertEqual(rows[1]["near"], ["Lightning Bolt"])
-        self.assertEqual(self.calls()[-1], ["cards", "Lightning Bolt", "Lightnin Bolt"])
+        # every pack the server finds is in play unless `packs` says otherwise (2026-10-04)
+        self.assertEqual(self.calls()[-1], ["cards", "--packs", "all", "Lightning Bolt", "Lightnin Bolt"])
+
+    def test_cards_know_every_pack_the_server_finds(self):
+        # The 2026-10-04 play-through: a Pack 8 card answered `known: false`
+        # unless `packs` was passed — the game's own setting had it off.
+        imp = self.client.payload("cards", {"names": ["Teferi's Imp"]})
+        self.assertTrue(imp["cards"][0]["known"])
+        self.assertEqual(imp["packs"], "all")
+        none = self.client.payload("cards", {"names": ["Teferi's Imp"], "packs": "none"})
+        self.assertFalse(none["cards"][0]["known"])
+        self.assertEqual(self.calls()[-1], ["cards", "--packs", "none", "Teferi's Imp"])
+        self.assertTrue(self.client.payload("cards", {"names": ["Teferi's Imp"], "packs": "8"})["cards"][0]["known"])
+        # a found pack that cannot be enabled: the game's own setting answers
+        broken = self.home / "packs_broken"
+        broken.write_text("x", encoding="utf-8")
+        try:
+            fallback = self.client.payload("cards", {"names": ["Teferi's Imp"]})
+        finally:
+            broken.unlink()
+        self.assertFalse(fallback["cards"][0]["known"])
+        self.assertEqual(self.calls()[-2:], [["cards", "--packs", "all", "Teferi's Imp"], ["cards", "Teferi's Imp"]])
 
     def test_refusal_keeps_the_envelope(self):
         result = self.client.call("check_deck", {"decks": ["missing.deck"]})
@@ -1204,6 +1481,318 @@ class FakeDoorTest(unittest.TestCase):
         self.assertNotIn("delta", full["decision"])
         self.client.payload("referee_stop", {"game": game})
 
+    # --- 0.50.13: the agent interface the 2026-10-04 play-through asked for --
+
+    def test_the_smart_pass_stops_only_where_you_hold_something(self):
+        opened = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 33})
+        game = opened["game"]
+        main = self.client.payload("referee_act", {"game": game, "action": "default", "until": "mine"})
+        self.assertEqual((main["stop"], main["decision"]["n"], main["passed"]), ("your main phase, with something to play", 1, 0))
+        # your empty second main and end step, their upkeep, their spell while you
+        # hold only a sorcery: passed; their attack while you hold a castable instant: stopped
+        attack = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "mine"})
+        self.assertEqual(attack["stop"], "their declare attackers; you hold Lightning Bolt (castable)")
+        self.assertEqual((attack["decision"]["n"], attack["passed"]), (6, 4))
+        # the whole journal of what was passed, in front of the decision's own
+        self.assertEqual(attack["decision"]["brief"]["journal"],
+                         ["n2: MAIN2", "n3: END", "n4: UPKEEP", "n5: MAIN1", "n6: DECLARE_ATTACKERS"])
+        block = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "mine"})
+        self.assertEqual((block["stop"], block["passed"]), ("decision: block", 0))
+        # their end step while the once-a-turn ability is spent (not listed): passed
+        turn = self.client.payload("referee_act", {"game": game, "action": {"op": "block", "pairs": []}, "until": "mine"})
+        self.assertEqual((turn["stop"], turn["decision"]["n"], turn["passed"]), ("your main phase, with something to play", 9, 1))
+        self.client.payload("referee_stop", {"game": game})
+        # mine-strict: nothing on their account but your own block
+        opened = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 33})
+        game = opened["game"]
+        self.client.payload("referee_act", {"game": game, "action": "default", "until": "mine-strict"})
+        strict = self.client.payload("referee_act", {"game": game, "action": {"op": "pass"}, "until": "mine-strict"})
+        self.assertEqual((strict["stop"], strict["decision"]["n"], strict["passed"]), ("decision: block", 7, 5))
+        self.assertEqual(len(strict["decision"]["brief"]["journal"]), 6)
+        self.client.payload("referee_stop", {"game": game})
+
+    def test_autoplay_keeps_every_journal_line(self):
+        # 2026-10-04: the decisions the pilot answered between lost their lines
+        opened = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 31})
+        two = self.client.payload("referee_autoplay", {"game": opened["game"], "decisions": 2})
+        self.assertEqual(two["decision"]["n"], 2)
+        self.assertEqual(two["decision"]["brief"]["journal"], ["n1: MAIN1", "n2: DECLARE_BLOCKERS"])
+        self.client.payload("referee_stop", {"game": opened["game"]})
+
+    def test_the_compact_view_is_what_the_model_reads(self):
+        opened = self.client.call("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 41, "view": "compact"})
+        state = opened["structuredContent"]
+        game = state["game"]
+        decision = state["decision"]
+        # structuredContent keeps the JSON (the brief, the options); content is the text
+        self.assertIn("brief", decision)
+        self.assertIn("options", decision)
+        text = opened["content"][0]["text"]
+        self.assertEqual(text, mcp.compact_answer(state, me=0) + "\n" + mcp.json_note("compact"))
+        self.assertTrue(text.startswith("game %s | decisions 1 | refusals 0\nTURN 3 MAIN1 — your turn" % game), text)
+        for line in ("  Holy Strength c14 [on Knight of Valor c4]",
+                     "  Teferi's Imp c12 1/1 [PHASED OUT, returns at the opponent's next untap step]",
+                     "  Lightning Bolt c2 {R} — CASTABLE | Lightning Bolt deals 3 damage to any target.",
+                     "  play a land: Mountain c13 (referee_play_land)"):
+            self.assertIn(line, text.splitlines())
+        self.assertEqual(decision["compact"], text.split("\n", 1)[1].rsplit("\n", 1)[0])
+        self.assertTrue(text.endswith("(The full JSON is in structuredContent — the decision in view `compact`; views: "
+                                      "brief, delta, full, options, compact. `text: \"json\"` on referee_start puts the "
+                                      "JSON here instead.)"), text[-300:])
+        # referee_view reads it again in another view without changing the game's;
+        # the content is the same compact table, the note names the view the JSON is in
+        brief = self.client.call("referee_view", {"game": game, "view": "brief"})
+        self.assertNotIn("compact", brief["structuredContent"]["decision"])
+        self.assertIn("brief", brief["structuredContent"]["decision"])
+        self.assertEqual(brief["content"][0]["text"].rsplit("\n", 1)[0], text.rsplit("\n", 1)[0])
+        self.assertIn("the decision in view `brief`", brief["content"][0]["text"])
+        full = self.client.call("referee_view", {"game": game, "view": "full"})
+        self.assertIn("view", full["structuredContent"]["decision"])
+        self.assertEqual(full["content"][0]["text"].rsplit("\n", 1)[0], text.rsplit("\n", 1)[0])
+        self.assertEqual(self.client.call("referee_view", {"game": game})["content"][0]["text"], text)
+        # a land by name, in one call; the answer is compact too
+        land = self.client.call("referee_play_land", {"game": game, "card": "mountain"})
+        self.assertEqual(land["structuredContent"]["action"], {"op": "play", "card": "c13", "seat": 0})
+        self.assertIn('sent: {"card": "c13", "op": "play", "seat": 0}', land["content"][0]["text"])
+        self.assertIn("  Agent plays Mountain", land["content"][0]["text"].splitlines())
+        again = self.client.call("referee_play_land", {"game": game})
+        self.assertTrue(again["isError"])
+        self.assertIn("no land can be played now", again["structuredContent"]["error"]["message"])
+        self.client.payload("referee_stop", {"game": game})
+
+    def test_referee_cast_prepares_pays_and_submits_in_one_call(self):
+        game = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 41})["game"]
+        bolt = self.client.payload("referee_cast", {"game": game, "card": "Lightning Bolt", "targets": ["c9"]})
+        self.assertEqual(bolt["cast"]["result"], "cast")
+        self.assertEqual(bolt["cast"]["targets"], [{"slot": 0, "token": "t3", "label": "Grizzly Bears — opponent's",
+                                                   "target": "c9", "amount": 0}])
+        self.assertEqual([s["op"] for s in bolt["sent"]], ["prepare", "autopay", "submit"])
+        self.assertEqual(bolt["sent"][0], {"op": "prepare", "card": "c2", "kind": "spell", "index": 0, "x": 0, "mode": 0})
+        self.assertEqual(bolt["sent"][2], {"op": "submit", "targets": [["t3", 0]]})
+        self.assertEqual(bolt["decision"]["brief"]["stack"][0]["name"], "Lightning Bolt")
+        self.assertEqual(bolt["decision"]["brief"]["journal"], ["Agent casts Lightning Bolt"])
+        self.assertNotIn("refused", bolt)
+        # with `until`, the pass lets it resolve and stops where there is something to do
+        self.client.payload("referee_stop", {"game": game})
+        game = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 41})["game"]
+        resolved = self.client.payload("referee_cast", {"game": game, "card": "c2", "targets": ["opponent"], "until": "mine"})
+        self.assertEqual(resolved["stop"], "your main phase, with something to play")
+        self.assertEqual(resolved["passed"], 1)
+        self.assertEqual(resolved["decision"]["brief"]["players"][1]["life"], 17)
+        self.assertEqual(resolved["decision"]["brief"]["journal"], ["Agent casts Lightning Bolt", "Lightning Bolt resolves"])
+        self.client.payload("referee_stop", {"game": game})
+
+    def test_referee_cast_never_leaves_a_half_announced_cast(self):
+        game = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 41})["game"]
+        def refused(args):
+            result = self.client.call("referee_cast", {"game": game, **args})
+            self.assertTrue(result["isError"], result)
+            return result["structuredContent"]["error"]
+        # an ambiguous name: refused with the legal targets, nothing tapped, the announcement withdrawn
+        error = refused({"card": "Lightning Bolt", "targets": ["Grizzly Bears"]})
+        self.assertEqual(error["kind"], "target")
+        self.assertIn("several targets are called 'Grizzly Bears'", error["message"])
+        self.assertIn({"token": "t4", "label": "Grizzly Bears — opponent's", "card": "c10"}, error["legal"][0]["targets"])
+        self.assertEqual([s["op"] for s in error["sent"]], ["prepare", "cancel"])
+        self.assertTrue(error["cast"]["withdrawn"])
+        self.assertNotIn("floating_mana", error["cast"])
+        self.assertNotIn("announcement", error["decision"]["options"])
+        self.assertIn("pass", error["decision"]["options"])
+        # not a legal target at all
+        error = refused({"card": "c2", "targets": ["c13"]})
+        self.assertIn("is not a legal target for Lightning Bolt", error["message"])
+        # the phantom once-a-turn ability: the payment tapped, the submission was refused —
+        # withdrawn, and the mana that floats is said
+        error = refused({"card": "Knight of Valor", "kind": "ability"})
+        self.assertEqual((error["cast"]["stage"], error["cast"]["reason"]),
+                         ("submit", "Knight of Valor: activate only once each turn"))
+        self.assertEqual([s["op"] for s in error["sent"]], ["prepare", "autopay", "submit", "cancel"])
+        self.assertEqual(error["cast"]["floating_mana"], "C1")
+        self.assertTrue(error["cast"]["withdrawn"])
+        self.assertEqual(error["refused"][0]["reason"], "Knight of Valor: activate only once each turn")
+        self.assertNotIn("announcement", error["decision"]["options"])
+        # a cost the referee will not pay is refused before it taps
+        error = refused({"card": "Fireball", "x": 5, "targets": ["c9"]})
+        self.assertEqual(error["cast"]["stage"], "autopay")
+        self.assertEqual(error["cast"]["floating_mana"], "C1", "only the Knight's mana floats")
+        # refused before anything is sent: X and mode are required, a land is played, a name is checked
+        before = len(self.calls())
+        for args, flag in (({"card": "Fireball", "targets": ["c9"]}, "x"), ({"card": "Healing Salve", "mode": 2}, "mode"),
+                           ({"card": "Lightning Bolt", "x": 2}, "x")):
+            self.assertEqual(refused(args)["flag"], flag)
+        # a mode the referee does not list as castable now (`usable_modes`): refused with the usable ones
+        unusable = refused({"card": "Healing Salve", "mode": "gain 3 life", "targets": ["me"]})
+        self.assertEqual((unusable["kind"], unusable["usable_modes"]), ("cast", [1]))
+        self.assertIn("mode 0 (Gain 3 life) cannot be cast now — castable now: 1 (Prevent 3 damage)", unusable["message"])
+        self.assertIn("is a land — play it with referee_play_land", refused({"card": "Mountain"})["message"])
+        missing = refused({"card": "Lightning Blot"})
+        self.assertIn("no card 'Lightning Blot'", missing["message"])
+        self.assertEqual(missing["suggestions"], ["Lightning Bolt"])
+        self.assertIn("Lightning Bolt c2", refused({"card": "Serra Angel"})["castable"])
+        self.assertEqual(len(self.calls()), before, "nothing new was started")
+        # no mode given: the first castable one; the cost cannot be paid: withdrawn
+        error = refused({"card": "Healing Salve", "targets": ["c9"]})
+        self.assertEqual(error["sent"][0]["mode"], 1)
+        self.assertEqual(error["cast"]["stage"], "autopay")
+        self.assertEqual(refused({"card": "Healing Salve", "mode": "Prevent 3 damage", "targets": ["c9"]})["sent"][0]["mode"], 1)
+        # in the compact view the refusal's content is the board, headed by the cast's outcome
+        compact = self.client.call("referee_cast", {"game": game, "card": "c2", "targets": ["c13"], "view": "compact"})
+        self.assertTrue(compact["isError"])
+        lines = compact["content"][0]["text"].splitlines()
+        self.assertTrue(lines[1].startswith("cast: Lightning Bolt c2 (spell): refused — c13 is not a legal target"), lines[1])
+        self.assertEqual(lines[2], "steps: prepare -> cancel")
+        self.assertIn("YOUR HAND (5):", lines)
+        self.assertEqual(compact["structuredContent"]["error"]["kind"], "target")
+        # a divided X spell, the amount laid on its one target
+        fireball = self.client.payload("referee_cast", {"game": game, "card": "Fireball", "x": 1, "targets": ["c9"]})
+        self.assertEqual(fireball["sent"][-1], {"op": "submit", "targets": [["t3", 1]]})
+        self.assertEqual(fireball["cast"]["result"], "cast")
+        self.client.payload("referee_stop", {"game": game})
+
+    def test_a_referee_answer_is_the_table_summary_by_default(self):
+        # 0.50.13, the owner's question: an agent gets the compact table every
+        # turn without asking — `content` is the text whatever `view` the JSON
+        # is in; `text: "json"` keeps the JSON as text for a client that wants it.
+        opened = self.client.call("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 7})
+        state = opened["structuredContent"]
+        text = opened["content"][0]["text"]
+        self.assertTrue(text.startswith("game %s | decisions 1 | refusals 0\nTURN 1 MAIN1" % state["game"]), text[:120])
+        with self.assertRaises(ValueError):
+            json.loads(text)
+        self.assertIn("YOUR HAND (2):", text.splitlines())
+        self.assertIn('  keep: {"op":"keep"}', text.splitlines())
+        self.assertTrue(text.splitlines()[-1].startswith("(The full JSON is in structuredContent — the decision in view "
+                                                         "`brief`"), text.splitlines()[-1])
+        self.assertIn("brief", state["decision"], "structuredContent is unchanged")
+        acted = self.client.call("referee_act", {"game": state["game"], "action": {"op": "keep"}})
+        self.assertIn("sent: {\"op\": \"keep\", \"seat\": 0}", acted["content"][0]["text"])
+        self.assertIn("TURN 1 MAIN1", acted["content"][0]["text"])
+        # a result: the end of the game in a line, from this seat's side
+        ended = self.client.call("referee_act", {"game": state["game"], "action": {"op": "concede"}})
+        self.assertIn("RESULT: you lost — the opponent won (seat 1) | turns 1 | reason concede",
+                      ended["content"][0]["text"].splitlines())
+        self.assertEqual(ended["content"][0]["text"].splitlines()[-1], "(The full JSON, the result's, is in structuredContent.)")
+        stopped = self.client.call("referee_stop", {"game": state["game"]})
+        self.assertIn("RESULT: you lost", stopped["content"][0]["text"])
+        # the JSON as text, remembered for the game; an unknown word is refused
+        raw = self.client.call("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 7, "text": "json"})
+        self.assertEqual(json.loads(raw["content"][0]["text"]), raw["structuredContent"])
+        game = raw["structuredContent"]["game"]
+        again = self.client.call("referee_act", {"game": game, "action": {"op": "keep"}})
+        self.assertEqual(json.loads(again["content"][0]["text"]), again["structuredContent"])
+        menu = self.client.call("referee_menu", {"game": game})
+        self.assertEqual(json.loads(menu["content"][0]["text"]), menu["structuredContent"])
+        self.client.payload("referee_stop", {"game": game})
+        bad = self.client.call("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "text": "yaml"})
+        self.assertEqual(bad["structuredContent"]["error"]["flag"], "text")
+
+    def test_referee_start_passes_the_rules_preset(self):
+        opened = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "rules": "fifth"})
+        self.assertEqual(opened["hello"]["rules"], "fifth")
+        self.assertEqual(self.calls()[-1], ["referee", "--deck-a", "a.deck", "--deck-b", "b.deck", "--rules", "fifth"])
+        self.client.payload("referee_stop", {"game": opened["game"]})
+        plain = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck"})
+        self.assertEqual(plain["hello"]["rules"], "modern_mana_burn")
+        self.assertNotIn("--rules", self.calls()[-1])
+        self.client.payload("referee_stop", {"game": plain["game"]})
+
+    def test_the_decision_menu_is_numbered_and_picked(self):
+        # 0.50.13: referee_menu / referee_pick (tools/decision_menu.py's Driver
+        # over the server's own Game) — the opening, then a main phase whose
+        # aimed spell is read ahead (a prepare and a cancel, nothing paid) and
+        # listed once per legal target.
+        game = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 7})["game"]
+        opening = self.client.payload("referee_menu", {"game": game})
+        self.assertEqual([i["id"] for i in opening["menu"]], ["order:play", "order:draw"])
+        self.assertEqual(opening["obs"]["mode"], "opening")
+        self.assertIsInstance(opening["obs"]["features"], list)
+        self.assertEqual(opening["n"], 0)
+        picked = self.client.payload("referee_pick", {"game": game, "pick": 0})
+        self.assertEqual(picked["picked"], {"id": "order:play", "label": "Play first"})
+        self.assertEqual(picked["menu"][0]["id"], "pass")
+        self.assertIn("play:c1", [i["id"] for i in picked["menu"]])
+        # a pick not on the menu: refused with the menu, nothing sent
+        before = len(self.calls())
+        wrong = self.client.call("referee_pick", {"game": game, "pick": 99})
+        self.assertTrue(wrong["isError"])
+        error = wrong["structuredContent"]["error"]
+        self.assertEqual((error["kind"], error["flag"]), ("option", "pick"))
+        self.assertIn("not on the menu", error["message"])
+        self.assertIn("play:c1", error["menu"])
+        unknown = self.client.call("referee_pick", {"game": game, "pick": "play:c9"})
+        self.assertIn("play:c1", unknown["structuredContent"]["error"]["suggestions"])
+        bad_until = self.client.call("referee_pick", {"game": game, "pick": 0, "until": "mime"})
+        self.assertEqual(bad_until["structuredContent"]["error"]["flag"], "until")
+        self.assertEqual(len(self.calls()), before)
+        # by its id; the menu answers again with the next one
+        land = self.client.payload("referee_pick", {"game": game, "pick": "play:c1"})
+        self.assertEqual(land["picked"]["id"], "play:c1")
+        self.assertEqual(land["n"], 2)
+        # a game the menu touched stays playable by every referee tool
+        self.assertIn("decision", self.client.payload("referee_wait", {"game": game}))
+        self.client.payload("referee_stop", {"game": game})
+        # the cast table: Lightning Bolt read ahead, one item per legal target
+        game = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 41,
+                                                     "view": "compact"})["game"]
+        menu = self.client.call("referee_menu", {"game": game, "rich": True})
+        state = menu["structuredContent"]
+        ids = [i["id"] for i in state["menu"]]
+        self.assertEqual(ids[0], "pass")
+        self.assertEqual(len(ids), len(set(ids)), "ids are unique")
+        bolts = [i for i in state["menu"] if i["id"].startswith("cast:c2->")]
+        self.assertEqual([i["id"] for i in bolts], ["cast:c2->you", "cast:c2->opp", "cast:c2->c4", "cast:c2->c9",
+                                                    "cast:c2->c10", "cast:c2->c11"])   # the phased-out Imp is no target
+        self.assertIn("ops", bolts[0])
+        self.assertGreaterEqual(state["stats"]["probes"], 1)
+        # the probe left nothing announced and nothing tapped
+        self.assertNotIn("announcement", self.client.payload("referee_view", {"game": game, "view": "options"})
+                         ["decision"]["options"])
+        # the compact text is the board and the numbered menu
+        lines = menu["content"][0]["text"].splitlines()
+        self.assertEqual(lines[0], "game %s | model decisions 0" % game)
+        self.assertIn("MENU (answer with referee_pick {pick: N}):", lines)
+        self.assertIn("  0. Pass priority  [pass]", lines)
+        self.assertNotIn("OPTIONS:", lines)
+        self.assertIn("  Teferi's Imp c12 1/1 [PHASED OUT, returns at the opponent's next untap step]", lines)
+        aim = next(i for i in state["menu"] if i["id"] == "cast:c2->c9")
+        cast = self.client.call("referee_pick", {"game": game, "pick": aim["id"]})
+        self.assertFalse(cast["isError"], cast)
+        after = cast["structuredContent"]
+        self.assertEqual(after["picked"]["id"], "cast:c2->c9")
+        self.assertIn("picked: ", cast["content"][0]["text"].splitlines()[1])
+        # the pass with `until`: the spell resolves, the server's own stop rule ends the pass
+        resolved = self.client.payload("referee_pick", {"game": game, "pick": "pass", "until": "mine"})
+        self.assertEqual(resolved["until"], "mine")
+        self.assertTrue(resolved["stop"], resolved)
+        board = resolved["obs"]["opp"]["battlefield"]
+        self.assertNotIn("c9", [c["id"] for c in board], "the Bolt killed the Bears")
+        self.assertIn("Lightning Bolt resolves", resolved["obs"]["journal"])
+        self.client.payload("referee_stop", {"game": game})
+
+    def test_a_payment_question_leaves_the_cast_open_to_resume(self):
+        game = self.client.payload("referee_start", {"deck_a": "a.deck", "deck_b": "b.deck", "seed": 41})["game"]
+        asked = self.client.payload("referee_cast", {"game": game, "card": "Chromatic Sphere"})
+        self.assertEqual(asked["cast"]["result"], "open")
+        self.assertIn("answer it with referee_act", asked["cast"]["note"])
+        self.assertEqual(asked["decision"]["mode"], "choice")
+        # another card's cast is refused while it is open
+        other = self.client.call("referee_cast", {"game": game, "card": "Lightning Bolt", "targets": ["c9"]})
+        self.assertTrue(other["isError"])
+        answered = self.client.payload("referee_act", {"game": game, "action": {"op": "choice", "picks": [3]}})
+        self.assertIn("announcement", answered["decision"]["options"])
+        other = self.client.call("referee_cast", {"game": game, "card": "Lightning Bolt", "targets": ["c9"]})
+        self.assertIn("is open", other["structuredContent"]["error"]["message"])
+        done = self.client.payload("referee_cast", {"game": game, "card": "Chromatic Sphere"})
+        self.assertEqual(done["cast"]["result"], "cast")
+        self.assertTrue(done["cast"]["resumed"])
+        self.assertEqual([s["op"] for s in done["sent"]], ["submit"])
+        # the high-level action through referee_act
+        cast = self.client.payload("referee_act", {"game": game, "action": {"op": "cast", "card": "Lightning Bolt",
+                                                                            "targets": ["opponent"]}})
+        self.assertIn("Lightning Bolt", [s["name"] for s in cast["decision"]["brief"]["stack"]])
+        self.assertEqual(cast["cast"]["targets"][0]["target"], "player:1")
+        self.client.payload("referee_stop", {"game": game})
+
 
 class WindowsDoorTest(unittest.TestCase):
     """Native release dispatch, without a shell or a Windows host dependency."""
@@ -1516,6 +2105,19 @@ class UnitTest(unittest.TestCase):
     """The pieces without a process: the deck reader, the brief view,
     the pilot, the pass-until stops, the delta."""
 
+    def test_a_decision_without_a_choice_is_answered_by_the_smooth_modes(self):
+        # 2026-10-04: until mine stopped at "attack: nothing can attack".
+        attack = {"mode": "attack", "seat": 0, "options": {"attack": {"attackable": []}}}
+        self.assertEqual(mcp.no_choice_answer(attack), {"op": "attack", "cards": [], "seat": 0})
+        block = {"mode": "block", "seat": 1, "options": {"block": {"blockable": []}}}
+        self.assertEqual(mcp.no_choice_answer(block), {"op": "block", "pairs": [], "seat": 1})
+        live = {"mode": "attack", "seat": 0, "options": {"attack": {"attackable": [{"card": "c6"}]}}}
+        self.assertIsNone(mcp.no_choice_answer(live))
+        self.assertIsNone(mcp.no_choice_answer({"mode": "priority", "seat": 0, "options": {}}))
+        self.assertIsNone(mcp.no_choice_answer(None))
+        # an options shape without the list is never read as "nothing can"
+        self.assertIsNone(mcp.no_choice_answer({"mode": "block", "seat": 0, "options": {"block": {"blockers": []}}}))
+
     def test_parse_deck_reads_like_the_engine(self):
         # engine/deck_list.gd, rule for rule (2026-10-03).
         parsed = mcp.parse_deck("\ufeff// NAME : Spaced\n4x Lightning Bolt\n4 x Card\n0 Island\nName: Wrong\n")
@@ -1605,6 +2207,8 @@ class UnitTest(unittest.TestCase):
         for until in mcp.UNTIL:
             self.assertEqual(stop(decision("DECLARE_BLOCKERS", mode="block"), until, origin), "decision: block")
             self.assertEqual(stop(decision("MAIN1", announcement={"slots": []}), until, origin), "a cast is in progress")
+        # every value but the smart ones stops at a reaction window on `respond` alone
+        for until in ("main", "end", "turn", "respond", "play"):
             self.assertEqual(stop(decision("MAIN1", active=1, respond=True, stack=[{"name": "Terror", "controller": 1}]), until, origin),
                              "the opponent's Terror is on the stack and you can respond")
             self.assertEqual(stop(decision("END", active=1, respond=True), until, origin), "their end: you can respond")
@@ -1680,6 +2284,281 @@ class UnitTest(unittest.TestCase):
         self.assertEqual(brief["journal"], ["one", "two"])
         self.assertNotIn("winner", brief)
         self.assertNotIn("presentation", json.dumps(brief))
+
+    # --- 0.50.13: what the 2026-10-04 play-through could not see or do ----
+
+    PHASING_VIEW = {
+        "turn": 4, "step": "MAIN1", "active": 0, "actor": 0, "mode": "priority", "winner": -1,
+        "stack": [{"name": "Lightning Bolt", "controller": 1, "details": "Spell", "x": 0,
+                   "targets": ["Knight of Valor — yours"]}],
+        "hand": [{"id": "c2", "name": "Swords to Plowshares", "land": False},
+                 {"id": "c8", "name": "Plains", "land": True, "playable": True}],
+        "players": [
+            {"seat": 0, "deck_name": "Knights", "life": 18, "hand_count": 2, "library_count": 41, "mana": 1,
+             "mana_colors": [1, 0, 0, 0, 0, 0],
+             "battlefield": [{"id": "c1", "name": "Plains", "land": True, "tapped": True},
+                             {"id": "c4", "name": "Knight of Valor", "creature": True, "power": 2, "toughness": 2,
+                              "attacking": True, "damage": 1, "counters": {"+1/+1": 1}, "controller": 0},
+                             {"id": "c14", "name": "Holy Strength", "attached": "c4", "controller": 0}],
+             "phased_out": [{"id": "c5", "name": "Grizzly Bears", "creature": True, "power": 2, "toughness": 2,
+                             "tapped": True, "controller": 0},
+                            {"id": "c15", "name": "Unholy Strength", "attached": "c5", "controller": 0}],
+             "graveyard": [{"id": "c20", "name": "Shock"}], "exile": []},
+            {"seat": 1, "deck_name": "Phasing", "life": 20, "hand_count": 5, "library_count": 40,
+             "battlefield": [{"id": "c9", "name": "Oubliette", "controller": 1}],
+             "phased_out": [{"id": "c12", "name": "Teferi's Imp", "creature": True, "power": 1, "toughness": 1,
+                             "controller": 1},
+                            {"id": "c13", "name": "Serra Angel", "creature": True, "power": 4, "toughness": 4,
+                             "controller": 0}],
+             "graveyard": [], "exile": []}],
+        "journal": [{"text": "Wizard casts Lightning Bolt", "serial": 9}],
+        "presentation": {"cards": [{"id": "c2", "castable": True, "abilities": [{"kind": "spell", "index": 0, "cost": "{W}"}]},
+                                   {"id": "c15", "flags": {"phased_out": True, "phased_indirectly": True}}],
+                         "phase_holds": [["c13", "c9"]]}}
+
+    def test_brief_view_shows_phased_out_and_attachments(self):
+        brief = mcp.brief_view(self.PHASING_VIEW, 0)
+        mine, theirs = brief["players"]
+        self.assertEqual(mine["battlefield"][2], {"id": "c14", "name": "Holy Strength", "attached": "c4",
+                                                  "attached_name": "Knight of Valor"})
+        self.assertEqual(mine["phased_out"][0], {"id": "c5", "name": "Grizzly Bears", "pt": "2/2", "tapped": True,
+                                                 "phased_out": True, "returns": "returns at your next untap step"})
+        self.assertEqual(mine["phased_out"][1]["returns"], "phases in with Grizzly Bears (c5)")
+        self.assertEqual(mine["phased_out"][1]["attached_name"], "Grizzly Bears")
+        self.assertEqual(theirs["phased_out"][0]["returns"], "returns at the opponent's next untap step")
+        self.assertEqual(theirs["phased_out"][1]["returns"],
+                         "held by Oubliette (c9): phases in when it leaves the battlefield")
+        # the opponent's seat sees the same table from its side
+        self.assertEqual(mcp.brief_view(self.PHASING_VIEW, 1)["players"][1]["phased_out"][0]["returns"],
+                         "returns at your next untap step")
+        # a player with nothing phased out has no key
+        self.assertNotIn("phased_out", mcp.brief_view({"players": [{"seat": 0, "battlefield": []}]}, 0)["players"][0])
+
+    def test_delta_view_shows_phasing_and_attachments(self):
+        before = mcp.brief_view(self.PHASING_VIEW, 0)
+        later = json.loads(json.dumps(self.PHASING_VIEW))
+        me = later["players"][0]
+        # the Bears phase in (and the Aura with them); Holy Strength moves to the Bears
+        me["battlefield"].append(me["phased_out"].pop(0))
+        me["battlefield"].append(me["phased_out"].pop(0))
+        me["battlefield"][2]["attached"] = "c5"
+        later["players"][1]["phased_out"].append({"id": "c16", "name": "Ertai's Familiar", "creature": True,
+                                                   "power": 2, "toughness": 2, "controller": 1})
+        delta = mcp.delta_view(before, mcp.brief_view(later, 0))
+        mine, theirs = delta["players"]
+        self.assertEqual(mine["phased_out_gone"], ["Grizzly Bears (c5)", "Unholy Strength (c15)"])
+        self.assertEqual([c["id"] for c in mine["battlefield_added"]], ["c5", "c15"])
+        self.assertEqual(mine["attached_changed"], [{"id": "c14", "name": "Holy Strength",
+                                                     "to": "Grizzly Bears (c5)", "from": "Knight of Valor (c4)"}])
+        self.assertEqual(theirs["phased_out_added"][0]["name"], "Ertai's Familiar")
+        self.assertEqual(theirs["phased_out_added"][0]["returns"], "returns at the opponent's next untap step")
+
+    def test_mine_stops_only_where_the_seat_holds_something(self):
+        def decision(step, active=1, respond=False, stack=None, mode="priority", attacking=False, casts=(),
+                     abilities=(), lands=()):
+            view = {"turn": 2, "step": step, "active": active, "stack": stack or [],
+                    "players": [{"seat": 0, "battlefield": [{"id": "c4", "attacking": attacking and active == 0}]},
+                                {"seat": 1, "battlefield": [{"id": "c9", "attacking": attacking and active == 1}]}]}
+            opts = {"mode": mode, "pass": {"op": "pass"}, "respond": respond, "play": {"lands": list(lands)},
+                    "prepare": {"casts": list(casts), "abilities": list(abilities)}, "special": {"specials": []}}
+            return {"n": 1, "seat": 0, "mode": mode, "turn": 2, "step": step, "options": opts, "view": view}
+        stop = mcp.stop_reason
+        origin = {"turn": 2}
+        bolt = [{"card": "c2", "name": "Disenchant", "x": False}]
+        terror = {"name": "Terror", "controller": 1}
+        # holding a castable instant: their spell stops, and says what is held
+        self.assertEqual(stop(decision("MAIN1", respond=True, stack=[terror], casts=bolt), "mine", origin),
+                         "their Terror is on the stack; you hold Disenchant (castable)")
+        # holding only a sorcery (never listed on their turn), or an exhausted
+        # once-per-turn ability (not listed — or marked, by a referee that marks)
+        self.assertEqual(stop(decision("MAIN1", respond=False, stack=[terror]), "mine", origin), "")
+        self.assertEqual(stop(decision("MAIN1", respond=True, stack=[terror]), "mine", origin), "")
+        spent = [{"card": "c4", "name": "Knight of Valor", "index": 1, "cost": "{1}{W}", "usable": False}]
+        self.assertEqual(stop(decision("END", respond=True, abilities=spent), "mine", origin), "")
+        self.assertEqual(mcp.usable_now({"respond": True, "prepare": {"abilities": spent}}), [])
+        # a castable instant with nothing to aim at (`respond` false) is not held
+        self.assertEqual(stop(decision("END", respond=False, casts=bolt), "mine", origin), "")
+        # a legal non-mana ability is held on its own
+        sorcerer = [{"card": "c6", "name": "Prodigal Sorcerer", "index": 0, "cost": "{T}"}]
+        self.assertEqual(stop(decision("END", abilities=sorcerer), "mine", origin),
+                         "their end; you hold Prodigal Sorcerer's ability {T}")
+        self.assertEqual(stop(decision("DECLARE_ATTACKERS", respond=True, casts=bolt, attacking=True), "mine", origin),
+                         "their declare attackers; you hold Disenchant (castable)")
+        self.assertEqual(stop(decision("DECLARE_ATTACKERS", respond=True, casts=bolt), "mine", origin), "",
+                         "before attackers are declared")
+        self.assertEqual(stop(decision("COMBAT_BEGIN", respond=True, casts=bolt), "mine", origin), "")
+        self.assertEqual(stop(decision("UPKEEP", respond=True, casts=bolt), "mine", origin), "")
+        # the seat's own spell on top is let resolve
+        self.assertEqual(stop(decision("MAIN1", respond=True, casts=bolt, stack=[{"name": "Shock", "controller": 0}]),
+                              "mine", origin), "")
+        # the own turn: the main phase with something to do, the blocks of the own attack while holding
+        self.assertEqual(stop(decision("MAIN1", active=0, lands=[{"card": "c8"}]), "mine", origin),
+                         "your main phase, with something to play")
+        self.assertEqual(stop(decision("MAIN2", active=0), "mine", origin), "")
+        self.assertEqual(stop(decision("DECLARE_BLOCKERS", active=0, respond=True, casts=bolt, attacking=True), "mine",
+                                       origin), "your declare blockers; you hold Disenchant (castable)")
+        # ... but not while the seat's own trigger is on top (it stopped twice in that step)
+        self.assertEqual(stop(decision("DECLARE_BLOCKERS", active=0, respond=True, casts=bolt, attacking=True,
+                                       stack=[{"name": "Mtenda Herder", "controller": 0}]), "mine", origin), "")
+        self.assertEqual(stop(decision("END", abilities=sorcerer, stack=[{"name": "Shock", "controller": 0}]), "mine",
+                              origin), "")
+        # mine-strict: nothing on the opponent's account, the own main phase still
+        self.assertEqual(stop(decision("MAIN1", respond=True, stack=[terror], casts=bolt), "mine-strict", origin), "")
+        self.assertEqual(stop(decision("END", abilities=sorcerer), "mine-strict", origin), "")
+        self.assertEqual(stop(decision("MAIN1", active=0, casts=bolt), "mine-strict", origin),
+                         "your main phase, with something to play")
+        for until in ("mine", "mine-strict"):
+            self.assertEqual(stop(decision("DECLARE_BLOCKERS", mode="block"), until, origin), "decision: block")
+            self.assertEqual(stop(decision("END", mode="damage"), until, origin), "decision: damage")
+            self.assertEqual(stop(decision("END", mode="choice"), until, origin), "decision: choice")
+
+    def test_compact_view_is_a_readable_board(self):
+        options = {"mode": "priority", "pass": {"op": "pass"}, "respond": True,
+                   "play": {"lands": [{"card": "c8", "name": "Plains"}]},
+                   "prepare": {"casts": [{"card": "c2", "name": "Swords to Plowshares", "index": 0, "x": False,
+                                          "modes": []}],
+                               "abilities": [{"card": "c4", "name": "Knight of Valor", "index": 1, "cost": "{1}{W}",
+                                              "label": "first strike until end of turn"}]},
+                   "mana": {"sources": [{"card": "c1"}]}, "special": {"specials": []}}
+        decision = {"n": 12, "seat": 0, "mode": "priority", "turn": 4, "step": "MAIN1", "options": options,
+                    "view": self.PHASING_VIEW}
+        text = mcp.compact_view(decision)
+        self.assertEqual(text, mcp.compact_view(json.loads(json.dumps(decision))), "deterministic")
+        lines = text.splitlines()
+        self.assertEqual(lines[0], "TURN 4 MAIN1 — your turn | you are seat 0 | decision #12: priority")
+        self.assertIn("YOU (seat 0, Knights): life 18 | hand 2 | library 41 | graveyard 1 | mana pool W1", lines)
+        self.assertIn("  lands: Plains c1 (tapped)", lines)
+        self.assertIn("  Knight of Valor c4 2/2 [attacking; damage 1; +1/+1 x1]", lines)
+        self.assertIn("  Holy Strength c14 [on Knight of Valor c4]", lines)
+        self.assertIn("  Grizzly Bears c5 2/2 [tapped; PHASED OUT, returns at your next untap step]", lines)
+        self.assertIn("  Serra Angel c13 4/4 [PHASED OUT, held by Oubliette (c9): phases in when it leaves the battlefield]",
+                      lines)
+        self.assertIn("OPPONENT (seat 1, Phasing): life 20 | hand 5 | library 40 | graveyard 0", lines)
+        self.assertIn("  Swords to Plowshares c2 {W} — CASTABLE", lines)
+        self.assertIn("  Plains c8 — land, playable now", lines)
+        self.assertIn("  1. Lightning Bolt (opponent's) — Spell -> Knight of Valor — yours", lines)
+        self.assertIn("  play a land: Plains c8 (referee_play_land)", lines)
+        self.assertIn("  cast: Swords to Plowshares c2 {W} (referee_cast)", lines)
+        self.assertIn("  activate: Knight of Valor c4 #1 {1}{W} — first strike until end of turn (referee_cast kind=ability)",
+                      lines)
+        self.assertEqual(lines[-2:], ["JOURNAL (1 new):", "  Wizard casts Lightning Bolt"])
+        salve = dict(decision, options=dict(options, prepare={"abilities": [], "casts": [
+            {"card": "c7", "name": "Fireblast", "index": 0, "modes": ["Pay {4}{R}{R}", "Sacrifice two Mountains"],
+             "usable_modes": [1]}]}))
+        self.assertIn("  cast: Fireblast c7 modes: 0=Pay {4}{R}{R} (not now) / 1=Sacrifice two Mountains (referee_cast)",
+                      mcp.compact_view(salve).splitlines())
+        banner = dict(decision, options=dict(options, prepare={"casts": [], "abilities": [
+            {"card": "c7", "name": "Jabari's Banner", "index": 0, "cost": "{1}",
+             "label": "{1}, {T}: Target creature gains flanking until end of turn."}]}))
+        self.assertIn("  activate: Jabari's Banner c7 #0 — {1}, {T}: Target creature gains flanking until end of turn. "
+                      "(referee_cast kind=ability)", mcp.compact_view(banner).splitlines())
+        # an announcement: every slot, every token and the card it stands for
+        announcing = dict(decision, options={"mode": "priority", "announcement": {
+            "name": "Swords to Plowshares", "kind": "spell", "x": 0,
+            "slots": [{"label": "target creature", "min": 1, "max": 1, "divided": 0,
+                       "targets": [{"id": "t0", "label": "Knight of Valor — yours"}]}]},
+            "draft": {"card": "c2", "reachable": True}},
+            view=dict(self.PHASING_VIEW, presentation=dict(self.PHASING_VIEW["presentation"],
+                                                           targets=[{"token": "t0", "ref": {"kind": "card", "id": "c4", "amount": 0}}])))
+        text = mcp.compact_view(announcing)
+        self.assertIn("ANNOUNCING Swords to Plowshares (spell) — the cost can be paid now", text)
+        self.assertIn("  slot 0: target creature (choose 1-1): t0 Knight of Valor — yours [c4]", text)
+        self.assertIn('{"op":"submit","targets":[[token, amount], ...]}', text)
+        # a choice and a block decision
+        choosing = {"n": 3, "seat": 1, "mode": "choice", "options": {"mode": "choice", "cancel": {"op": "cancel"}},
+                    "view": {"turn": 2, "step": "UPKEEP", "active": 1, "players": [], "hand": [],
+                             "choice": {"prompt": "Choose a color", "source": "Fellwar Stone", "options": ["White", "Red"],
+                                        "count": 1, "cancel": True}}}
+        text = mcp.compact_view(choosing)
+        self.assertIn("CHOICE (Fellwar Stone): Choose a color — pick 1 (cancel allowed)", text)
+        self.assertIn("  1: Red", text)
+        blocking = {"n": 4, "seat": 0, "mode": "block", "view": {"turn": 2, "step": "DECLARE_BLOCKERS", "active": 1},
+                    "options": {"mode": "block", "block": {"blockable": [
+                        {"blocker": "c3", "name": "Wall of Swords", "attackers": [{"card": "c9", "name": "Grizzly Bears"}]}]}}}
+        self.assertIn("  Wall of Swords c3 can block: Grizzly Bears c9", mcp.compact_view(blocking))
+        # a rules hint: reminder text dropped, one line, cut short
+        self.assertEqual(mcp._rules_hint({"rules": "Flying\nPhasing (This phases in or out before you untap.)"}),
+                         "Flying; Phasing")
+        long = mcp._rules_hint({"rules": "x" * 200})
+        self.assertEqual(len(long), mcp.RULES_HINT)
+        self.assertTrue(long.endswith("…"))
+        angel = dict(self.PHASING_VIEW["players"][1]["phased_out"][1], rules="Flying, vigilance")
+        self.assertTrue(mcp._permanent(angel, {}, 0, {}, {}, {}, 1, phased=True).endswith(" — Flying, vigilance"))
+
+    def test_targets_are_named_by_what_they_are(self):
+        view = {"players": [{"seat": 0, "battlefield": [{"id": "c4", "name": "Knight of Valor", "controller": 0}]},
+                            {"seat": 1, "battlefield": [{"id": "c9", "name": "Grizzly Bears", "controller": 1},
+                                                        {"id": "c10", "name": "Grizzly Bears", "controller": 1}]}],
+                "presentation": {"targets": [{"token": "t0", "ref": {"kind": "player", "id": "0"}},
+                                             {"token": "t1", "ref": {"kind": "player", "id": "1"}},
+                                             {"token": "t2", "ref": {"kind": "card", "id": "c9"}},
+                                             {"token": "t3", "ref": {"kind": "card", "id": "c10"}},
+                                             {"token": "t4", "ref": {"kind": "card", "id": "c4"}}]}}
+        rows = [{"id": "t0", "label": "You"}, {"id": "t1", "label": "Opponent"},
+                {"id": "t2", "label": "Grizzly Bears — opponent's"}, {"id": "t3", "label": "Grizzly Bears — opponent's"},
+                {"id": "t4", "label": "Knight of Valor — yours"}]
+        bolt = {"name": "Lightning Bolt", "slots": [{"label": "target creature or player", "min": 1, "max": 1,
+                                                    "divided": 0, "targets": rows}]}
+        place = mcp.map_targets
+        self.assertEqual([p["token"] for p in place(bolt, view, 0, ["c10"])], ["t3"])
+        self.assertEqual([p["token"] for p in place(bolt, view, 0, ["opponent"])], ["t1"])
+        self.assertEqual([p["token"] for p in place(bolt, view, 0, ["me"])], ["t0"])
+        self.assertEqual([p["token"] for p in place(bolt, view, 1, ["me"])], ["t1"], "`me` is the seat's own")
+        self.assertEqual([p["token"] for p in place(bolt, view, 0, [1])], ["t1"])
+        self.assertEqual([p["token"] for p in place(bolt, view, 0, ["Knight of Valor"])], ["t4"])
+        self.assertEqual([p["token"] for p in place(bolt, view, 0, ["t2"])], ["t2"])
+        self.assertEqual(place(bolt, view, 0, ["c9"])[0], {"slot": 0, "token": "t2", "label": "Grizzly Bears — opponent's",
+                                                          "target": "c9", "amount": 0})
+        with self.assertRaises(mcp.CastRefused) as caught:
+            place(bolt, view, 0, ["Grizzly Bears"])
+        self.assertIn("several targets are called 'Grizzly Bears'", caught.exception.message)
+        self.assertEqual(len(caught.exception.more["legal"][0]["targets"]), 5)
+        for wrong in (["c77"], ["Serra Angel"], ["c9", "c10"], []):
+            with self.subTest(wrong=wrong), self.assertRaises(mcp.CastRefused):
+                place(bolt, view, 0, wrong)
+        # the referee's own `card` beside a token wins; a referee with neither falls back to the label
+        tagged = {"slots": [{"min": 1, "max": 1, "targets": [{"id": "t7", "label": "Grizzly Bears — opponent's", "card": "c10"}]}]}
+        self.assertEqual(place(tagged, {}, 0, ["c10"])[0]["token"], "t7")
+        plain_view = {"players": view["players"]}
+        old = {"slots": [{"min": 1, "max": 1, "targets": [{"id": "t0", "label": "You"}, {"id": "t5", "label": "Knight of Valor — yours"},
+                                                          {"id": "t6", "label": "Grizzly Bears — opponent's"},
+                                                          {"id": "t8", "label": "Grizzly Bears — opponent's"}]}]}
+        self.assertEqual(place(old, plain_view, 0, ["c4"])[0]["token"], "t5")
+        self.assertEqual(place(old, plain_view, 0, ["you"])[0]["token"], "t0")
+        with self.assertRaises(mcp.CastRefused):
+            place(old, plain_view, 0, ["c9"])   # two tokens read alike and nothing says which is c9
+        # divided amounts: one target takes all; several share; amounts must add up
+        fireball = {"name": "Fireball", "slots": [{"label": "any", "min": 1, "max": 5, "divided": 5, "targets": rows}]}
+        self.assertEqual([p["amount"] for p in place(fireball, view, 0, ["c9"])], [5])
+        self.assertEqual([p["amount"] for p in place(fireball, view, 0, ["c9", "c10"])], [3, 2])
+        self.assertEqual([p["amount"] for p in place(fireball, view, 0, [["c9", 1], {"target": "opponent", "amount": 4}])], [1, 4])
+        with self.assertRaises(mcp.CastRefused):
+            place(fireball, view, 0, [["c9", 1], ["c10", 1]])
+        # two slots, filled in order; a slot named explicitly
+        two = {"name": "Two", "slots": [{"label": "target creature", "min": 1, "max": 1, "divided": 0, "targets": rows[2:]},
+                                        {"label": "target player", "min": 1, "max": 1, "divided": 0, "targets": rows[:2]}]}
+        self.assertEqual([(p["slot"], p["token"]) for p in place(two, view, 0, ["c9", "opponent"])], [(0, "t2"), (1, "t1")])
+        self.assertEqual([(p["slot"], p["token"]) for p in place(two, view, 0, [{"target": "me", "slot": 1}, "c4"])],
+                         [(0, "t4"), (1, "t0")])
+        with self.assertRaises(mcp.CastRefused):
+            place(two, view, 0, ["opponent"])   # the creature slot comes first and needs one
+
+    def test_actions_are_completed_with_the_wire_defaults(self):
+        decision = {"options": {"play": {"lands": [{"card": "c8", "name": "Plains"}]},
+                                "prepare": {"casts": [{"card": "c2", "name": "Lightning Bolt"}],
+                                            "abilities": [{"card": "c4", "name": "Knight of Valor", "index": 1}]}}}
+        done = mcp.complete_action
+        self.assertEqual(done({"op": "autoprepare", "card": "c2"}, decision),
+                         {"op": "autoprepare", "card": "c2", "kind": "spell", "index": 0, "mode": 0, "excluded": [], "count": 1})
+        self.assertEqual(done({"op": "prepare", "card": "lightning bolt"}, decision),
+                         {"op": "prepare", "card": "c2", "kind": "spell", "index": 0, "x": 0, "mode": 0})
+        self.assertEqual(done({"op": "prepare", "card": "Knight of Valor", "kind": "ability", "index": 1}, decision)["card"], "c4")
+        self.assertEqual(done({"op": "play", "card": "Plains"}, decision), {"op": "play", "card": "c8"})
+        self.assertEqual(done({"op": "play", "card": "Island"}, decision), {"op": "play", "card": "Island"})
+        self.assertEqual(done({"op": "autopay"}, None), {"op": "autopay", "excluded": [], "count": 1})
+        self.assertEqual(done({"op": "submit"}, None), {"op": "submit", "targets": []})
+        self.assertEqual(done({"op": "pass"}, decision), {"op": "pass"})
+        self.assertEqual(done({"op": "prepare", "card": "c2", "x": 3}, decision)["x"], 3, "a given key is kept")
 
 
 class PinTest(unittest.TestCase):
@@ -1909,6 +2788,142 @@ class LiveTest(unittest.TestCase):
         transcript = (self.workspace / "games" / (game + ".lines")).read_text(encoding="utf-8")
         self.assertIn('"type":"result"', transcript.replace(" ", ""))
         self.assertEqual(self.client.payload("referee_resume", {})["kept"], [])
+
+    def test_a_duel_through_the_compact_view_the_smart_pass_and_one_call_casts(self):
+        # 0.50.13, against the real engine: what the 2026-10-04 play-through
+        # asked for — the board as text (`compact`), the pass to the seat's
+        # next real decision (`until: "mine"`), lands and spells in one call
+        # each, a refused target that leaves nothing announced and nothing
+        # tapped, and the cast retried with a target from the legal list.
+        opened = self.client.call("referee_start", {"deck_a": "white_knights.deck", "deck_b": "big_green.deck",
+                                                    "seed": 3, "turns": 12, "view": "compact",
+                                                    "rules": "modern_mana_burn", "timeout": 180},
+                                  timeout=240)
+        self.assertFalse(opened["isError"], opened)
+        state = opened["structuredContent"]
+        self.assertEqual(state["hello"]["rules"], "modern_mana_burn", "the preset reached the referee")
+        game = state["game"]
+        text = opened["content"][0]["text"]
+        self.assertTrue(text.startswith("game %s | decisions 1 | refusals 0\nTURN " % game), text[:200])
+        for part in ("YOUR HAND (7):", "OPTIONS:", '  keep: {"op":"keep"}', "OPPONENT (seat 1, "):
+            self.assertIn(part, text)
+        self.assertIn("brief", state["decision"])
+        lands = casts = target_refusals = 0
+        stops = []
+        for _ in range(80):
+            if "result" in state or "decision" not in state:
+                break
+            decision = state["decision"]
+            options = decision.get("options") or {}
+            brief = decision["brief"]
+            mode = decision["mode"]
+            base = {"game": game, "until": "mine", "timeout": 180}
+            if mode == "opening":
+                answer = self.client.call("referee_act", {**base, "action": {"op": "keep"}}, timeout=240)
+            elif mode == "priority" and (options.get("play") or {}).get("lands") and brief["active"] == brief["seat"]:
+                answer = self.client.call("referee_play_land", base, timeout=240)
+                self.assertFalse(answer["isError"], answer)
+                self.assertEqual(answer["structuredContent"]["action"]["op"], "play")
+                lands += 1
+            elif mode == "priority" and (options.get("prepare") or {}).get("casts"):
+                spell = options["prepare"]["casts"][0]
+                ask = {**base, "card": spell["name"]}
+                if spell.get("x"):
+                    ask["x"] = spell.get("budget", 0)
+                if spell.get("modes"):
+                    ask["mode"] = 0
+                answer = self.client.call("referee_cast", ask, timeout=240)
+                error = answer["structuredContent"].get("error") if answer["isError"] else None
+                if error is not None and error.get("kind") == "target":
+                    # nothing announced, nothing tapped; then a legal target, mine for an Aura
+                    target_refusals += 1
+                    self.assertTrue(error["cast"]["withdrawn"], error)
+                    self.assertEqual(error["sent"][-1]["op"], "cancel")
+                    self.assertNotIn("autopay", [s["op"] for s in error["sent"]])
+                    self.assertNotIn("announcement", error["decision"]["options"])
+                    mine = {c["id"] for p in brief["players"] if p["seat"] == brief["seat"] for c in p["battlefield"]}
+                    picks = []
+                    for slot in error["legal"]:
+                        rows = slot["targets"]
+                        own = [r for r in rows if r.get("card") in mine]
+                        aura = "creature" in slot["label"].lower() and not spell["name"].startswith("Swords")
+                        rows = (own if aura and own else [r for r in rows if r.get("card") not in mine] or rows)
+                        picks += [r.get("card") or r["token"] for r in rows[:max(1, slot["min"])]]
+                    answer = self.client.call("referee_cast", {**ask, "targets": picks}, timeout=240)
+                if not answer["isError"] and answer["structuredContent"]["cast"]["result"] == "cast":
+                    casts += 1
+                    self.assertEqual([s["op"] for s in answer["structuredContent"]["sent"]][-1], "submit")
+                elif answer["isError"]:
+                    error = answer["structuredContent"]["error"]
+                    self.assertTrue(error["cast"].get("withdrawn"), error)
+                    self.assertNotIn("announcement", error["decision"]["options"])
+                    state = {"game": game, "decision": error["decision"]}
+                    # (the spell is refused again next time: pass instead)
+                    answer = self.client.call("referee_act", {**base, "action": {"op": "pass"}}, timeout=240)
+            elif mode == "attack":
+                attackers = [a["card"] for a in (options.get("attack") or {}).get("attackable", [])]
+                answer = self.client.call("referee_act", {**base, "action": {"op": "attack", "cards": attackers}},
+                                          timeout=240)
+            elif mode == "block":
+                answer = self.client.call("referee_act", {**base, "action": {"op": "block", "pairs": []}}, timeout=240)
+            else:
+                answer = self.client.call("referee_act", {**base, "action": "default"}, timeout=240)
+            self.assertFalse(answer["isError"], answer)
+            state = answer["structuredContent"]
+            text = answer["content"][0]["text"]
+            self.assertTrue(text.startswith("game %s | " % game), text[:200])
+            if "stop" in state:
+                stops.append(state["stop"])
+                if "decision" in state:
+                    self.assertIn(state["decision"]["compact"], text)
+        self.assertGreater(lands, 0)
+        self.assertGreater(casts, 0, stops)
+        self.assertGreater(target_refusals, 0, "a targeted spell was first sent without targets")
+        self.assertTrue(stops)
+        for stop in stops:
+            self.assertTrue(stop.startswith(("decision: ", "your main phase, with something to play", "their ", "your ",
+                                             "an answer was refused")), stop)
+            if stop.startswith("their ") or (stop.startswith("your ") and not stop.startswith("your main")):
+                self.assertIn("; you hold ", stop, "the smart pass stops on their account only while holding")
+        self.client.payload("referee_stop", {"game": game}, timeout=120)
+
+    def test_a_duel_through_the_decision_menu(self):
+        # 0.50.13, against the real engine: a duel to its end through
+        # `referee_pick` alone — a seeded random menu index each time, the
+        # smart pass after each pick — with no refusal on the way, and the
+        # compact text carrying the numbered menu.
+        import random
+        chooser = random.Random(5)
+        opened = self.client.payload("referee_start", {"deck_a": "white_knights.deck", "deck_b": "big_green.deck",
+                                                       "seed": 9, "turns": 14, "timeout": 180}, timeout=240)
+        game = opened["game"]
+        answer = self.client.call("referee_menu", {"game": game, "timeout": 180}, timeout=240)
+        self.assertFalse(answer["isError"], answer)
+        picks = 0
+        while picks < 600:
+            state = answer["structuredContent"]
+            if "result" in state:
+                break
+            menu = state["menu"]
+            self.assertTrue(menu, state)
+            self.assertEqual(len({i["id"] for i in menu}), len(menu))
+            text = answer["content"][0]["text"]
+            self.assertIn("MENU (answer with referee_pick {pick: N}):", text)
+            self.assertIn("  0. %s  [%s]" % (menu[0]["label"], menu[0]["id"]), text)
+            answer = self.client.call("referee_pick", {"game": game, "pick": chooser.randrange(len(menu)),
+                                                       "until": "mine", "timeout": 180}, timeout=240)
+            self.assertFalse(answer["isError"], answer)
+            self.assertNotIn("refused", answer["structuredContent"], answer["structuredContent"].get("refused"))
+            picks += 1
+        state = answer["structuredContent"]
+        self.assertIn("result", state, "the duel ended within %d picks" % picks)
+        self.assertIn(state["result"]["reason"], ("concluded", "limit"), state["result"])
+        self.assertEqual(state["stats"]["refusals"], 0, state["stats"])
+        self.assertGreater(picks, 10)
+        self.assertIn("RESULT: ", answer["content"][0]["text"])
+        self.assertTrue(answer["content"][0]["text"].endswith("rich: true` adds each item's kind, info and ops.)"))
+        row = [g for g in self.client.payload("status")["games"] if g["game"] == game][0]
+        self.assertFalse(row["running"])
 
     def test_a_hosted_table_is_joined_by_a_guest_and_played(self):
         # the server hosts a table in the game's own lobby and sits at it

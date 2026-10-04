@@ -23,6 +23,24 @@ needed); card files have NO class_name (they register by name instead);
 - `docs/releases/0.40.33.md`: full-screen card reading, the guide's MCP
   integration and handheld packaging alongside the upstream command-line tools.
 
+## Decision models (2026-10-04)
+
+- `tools/decision_menu.py`: a referee decision as a numbered menu of
+  complete legal actions (`build_menu`; flat `cast S -> T` read from a
+  `prepare`/`cancel` probe, target/attack/block/discard/choice sub-menus,
+  damage presets), the compact observation (`encode_observation`,
+  `FEATURES`, `ITEM_FEATURES`), and `Driver`, which sequences a pick —
+  prepare, autopay once reachable, submit; a refused step cancelled and
+  kept off the menu. `attach_game`/`menu_state` link it to an MCP
+  server `Game`.
+- `tools/shandalar_decide.py`: `Env` over the referee (the MCP server's
+  door route), the JSON-lines protocol, the `random`/`first`/`greedy`
+  policies, `--episodes`, `--describe`. Shipped by
+  `tools/package_release.py` (`TOOLS`).
+- `tools/test_shandalar_decide.py`, `tools/fixtures/decide_decisions.json`:
+  its tests and the recorded referee lines they read. AGENTS.md,
+  "Decision models", is the contract.
+
 ## Portal Second Age in Pack 6 (2026-09-24)
 
 - `cards/sets/p02/`: 117 new card definitions; `_rules.gd` dispatches to
@@ -201,6 +219,79 @@ needed); card files have NO class_name (they register by name instead);
   Channel, and a land entry payment's decline line
   (`SgDuelActions.decline_label`: "Put <land> into its owner's
   graveyard.", apart from the `cancel` op that withdraws the play).
+- `tests/ui/test_sgmanalink_options_2026_10_04.gd`: the options offer only
+  what the engine would take (the MCP play-through, 0.50.13) —
+  `SgDuelActions.ability_refusal` (`MtgGame.ability_announce_refusal`: a
+  used once-a-turn Knight of Valor, a tapped or sick {T} source, Jade
+  Statue outside combat, Zuran Orb with no land to sacrifice and a
+  discard cost with an empty hand — `ability_cost_bodies`,
+  `_ability_resource_checks`, factored out of `activate_ability`;
+  something to aim at; reachable mana, never the {T} source itself),
+  `MtgGame.mana_ability_refusal` for mana sources (a tapped land, a sick
+  Elf), a spell with nothing to aim at not `castable` while its row and
+  cost stay (`SgDuelPresentation.has_aim`; `MtgGame.spell_announce_refusal`
+  — `_spell_cost_checks`, `spell_cost_bodies` out of `_cast_checks`),
+  `prepare`/`autoprepare` refusing all of them with nothing tapped, the
+  targets judged at the announced X or, with none yet, at some payable X
+  (`SgDuelActions.spell_aimed` / `aimed`: Detonate's "mana value X"), the
+  payment rows one by one (`SgDuelActions.open_modes`,
+  `SgPayment.mode_affordable`: Fireblast's two Mountains, Force of
+  Will's pitch; the referee's `usable_modes`), and the opponent's turn
+  of a seat holding a sorcery and a used Knight: no cast, no ability,
+  `respond` false.
+- `tests/tools/test_referee_options_2026_10_04.gd`: the referee's casting
+  lines — `DEFAULTS` filled before the wire's exact keys, `autoprepare`
+  with `targets` (prepare at X 0, targets read off `presentation.targets`,
+  cancel with nothing tapped if one is missing, then autoprepare and
+  submit — `_apply_line`, `_tokens_for`), a `submit` naming handles and
+  `player:N`, and `refused.floating` for paid mana a refusal left.
+- `tests/tools/test_referee_rules_2026_10_04.gd`: the referee's `--rules
+  PRESET` (`RulesOptions.PRESETS`; `table_rules`, `rules_name`) —
+  `hello.rules`, a Fifth Edition duel's forks in `presentation.rules`,
+  the standard table by default, unknown presets and `--join` refused.
+- `tools/shandalar_mcp.py` (the MCP play-through's agent interface,
+  0.50.13): `brief_view` adds each player's `phased_out` (`phase_return`:
+  "returns at your/the opponent's next untap step", `phase_holds` → "held
+  by …", `phased_indirectly` → "phases in with …") and `attached_name`
+  (`view_cards`); `delta_view` adds `phased_out_added/changed/gone` and
+  `attachment_changes` → `attached_changed`. `view: "compact"`:
+  `compact_view` (`_permanent`, `_rules_hint`, `_prompt_lines`,
+  `_option_lines`, `target_refs`), `compact_answer` and `Answer` (a dict
+  whose `content` text is the compact board; `tool_result` takes it, a
+  `ToolError` may carry `text`), `Server.present`/`shown_state`. `UNTIL`
+  adds `mine` (smart: `mine_stop`, `usable_now`, `ability_usable`) and
+  `mine-strict`. `Game.fresh`/`absorb` (a decision answered unseen hands
+  its journal on — `send` absorbs; `referee_autoplay` lost every line but
+  the last), `delta_base`/`shown_record`, `render` (`referee_view`).
+  One-call actions: `referee_cast` (`Server.cast`, `cast_entry`,
+  `cast_step`, `cast_submit`, `cast_withdraw`, `cast_refused`,
+  `cast_answer`; `map_targets`, `resolve_target`, `slot_candidates`,
+  `legal_targets`, `player_of`, `target_spec`, `CastRefused`,
+  `floating_mana`, `cast_summary`), `referee_play_land`, `referee_view`;
+  `complete_action` (`ACTION_DEFAULTS`, a card by name) and the
+  `cast`/`activate` ops in `referee_act`; `cards` defaults to `--packs
+  all`; `_decision_tools` adds `referee_menu`/`referee_pick`
+  (`tool_referee_menu`, `tool_referee_pick`, `_decision_driver`,
+  `_menu_answer`, `menu_text` — the board with the numbered menu for the
+  compact view) over `decision_menu.attach_game`/`menu_state`/`Driver.pick`.
+  The compact text is every referee answer's `content` by default
+  (`Server.present`/`answer_text`/`my_seat`, `result_line`, `json_note`;
+  `Game.text`, `TEXTS`, `text_of` — `text: "json"` on start/join/host/
+  resume, kept in a kept game's record); `referee_cast` honours the
+  referee's `usable_modes`; `referee_start`/`referee_host` pass `rules`.
+- `tools/test_shandalar_mcp.py` (0.50.13): the fake door's `--seed 33`
+  (`SEQ33`, the smart pass) and `--seed 41` (the cast table: prepare,
+  autopay, submit, cancel, a colour question, the phantom once-a-turn
+  ability, pre-pay refusals), `cards --packs`; unit tests for the phased
+  brief/delta, `mine`, `compact_view`, `map_targets`, `complete_action`;
+  `test_a_referee_answer_is_the_table_summary_by_default`,
+  `test_referee_start_passes_the_rules_preset`,
+  `test_the_decision_menu_is_numbered_and_picked` (the cast table's Bolt
+  read ahead, one item per target); `LiveTest.test_a_duel_through_the_
+  compact_view_the_smart_pass_and_one_call_casts` and `LiveTest.test_a_
+  duel_through_the_decision_menu` (the gate's pin: ten live tests,
+  `tests/tools/test_mcp_2026_09_27.gd`, which also lists the five new
+  tools).
 - `tests/ui/test_pack_8_help.gd`: the three Mirage block glossary pages
   (`game/help/ability_glossary.gd`) — phasing, flanking, flash and its
   rider, the cleanup window, non-mana cumulative upkeep, object costs,
@@ -514,6 +605,15 @@ needed); card files have NO class_name (they register by name instead);
   `_sweep_value`, the trick mode in `_plan_spell_choice`, `_burn_kills`,
   Goblin Grenadiers and Pillar Tombs of Aku; each with its null arm or an
   unaffected control.
+- `tests/ai/test_ai_time_and_tide_2026_10_04.gd`: the 0.50.13 playtest's
+  Time and Tide — `mirage_tactics.gd` `phase_swap_value` counts what the
+  swap changes (this turn's combat on the journaled after-board,
+  `_swap_combat_now`; each changed body over the next three combats,
+  `_swap_windows`), `swap_bar`, and the response in their
+  declare-attackers step (`phase_swap_response`): tapped phasers are never
+  "rescued", their phasing blockers go before a lethal attack, their lethal
+  phasing attack is answered and a survivable one is not; hidden
+  information moves nothing.
 - `docs/pack-8-mirage-block.md`: the pack guide.
 
 ## Two lured attackers (2026-09-25)
@@ -1721,6 +1821,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.13.md`: the MCP improvement run — a table summary
+  every turn, `until: "mine"`, one-call casts, options that offer only what
+  the engine accepts, the decision-model bridge (`referee_menu`/`referee_pick`,
+  `tools/shandalar_decide.py`), Time and Tide's AI.
 - `docs/releases/0.50.12.md`: the Mirage block bug pass — the AI's
   self-destructive plays, land entry payments, the territory menu's special
   payments, phasing and end-step rules fixes, SGManalink protocol 27.
@@ -5110,6 +5214,32 @@ shandalar/
 │   │                          the path rule and the game session against
 │   │                          a FAKE door (no engine); LiveTest behind
 │   │                          SHANDALAR_MCP_LIVE=1 runs the real one
+│   ├── decision_menu.py     DECISION MODELS, the pure half (2026-10-04):
+│   │                          a referee decision → numbered menu of
+│   │                          complete legal items with stable ids and
+│   │                          the ops each expands to (build_menu,
+│   │                          probe_actions/probe_record, the target,
+│   │                          attack, block, discard and choice
+│   │                          sub-menus), the observation and its
+│   │                          FEATURES / ITEM_FEATURES vectors, and
+│   │                          Driver — a pick sequenced over send/receive
+│   │                          callables with the guard; attach_game and
+│   │                          menu_state, the MCP server's link
+│   ├── shandalar_decide.py  DECISION MODELS, the bridge (2026-10-04):
+│   │                          Env (reset/observe/menu/step) on the
+│   │                          referee through the MCP door route, the
+│   │                          JSON-lines protocol on stdio, the random/
+│   │                          first/greedy policies, --episodes, --describe
+│   ├── test_shandalar_decide.py  unittest for both (2026-10-04): menus
+│   │                          from recorded referee lines
+│   │                          (fixtures/decide_decisions.json), the
+│   │                          Driver against a scripted referee, the CLI
+│   │                          against a fake door, the release; LiveTest
+│   │                          behind SHANDALAR_DECIDE_LIVE=1 plays whole
+│   │                          duels against the wizard with 0 refusals
+│   ├── fixtures/
+│   │   └── decide_decisions.json  real referee decision lines (protocol
+│   │                          1, trimmed) for test_shandalar_decide.py
 │   ├── test_auto_deck_cli_sh.py  unittest for DeckLab/auto_deck_cli.sh
 │   │                          (2026-09-25): -V answered without an engine,
 │   │                          no artwork in stdout, exit 3 with no Godot,

@@ -226,6 +226,42 @@ class RobustnessTest(unittest.TestCase):
         self.assertFalse(reader.is_alive())
         self.assertEqual(lines, [])
 
+    def test_a_compact_answer_is_the_content_and_the_json_stays_structured(self):
+        # 0.50.13: an MCP client shows `content` to its model — a compact-view
+        # referee answer's content is its text, structuredContent its JSON;
+        # a refusal may carry its own text the same way.
+        answer = mcp.Answer({"game": "g1", "decision": {"n": 3}}, "the board as text")
+        result = mcp.tool_result(answer, False)
+        self.assertEqual(result["content"], [{"type": "text", "text": "the board as text"}])
+        self.assertEqual(result["structuredContent"], {"game": "g1", "decision": {"n": 3}})
+        self.assertIs(type(result["structuredContent"]), dict)
+        plain = mcp.tool_result({"a": 1}, False)
+        self.assertEqual(json.loads(plain["content"][0]["text"]), {"a": 1})
+        with mock.patch.object(self.server, "call", side_effect=mcp.ToolError({"kind": "cast", "message": "no"}, "board")):
+            reply = self.server.handle({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                                        "params": {"name": "referee_cast", "arguments": {}}})
+        self.assertTrue(reply["result"]["isError"])
+        self.assertEqual(reply["result"]["content"][0]["text"], "board")
+        self.assertEqual(reply["result"]["structuredContent"], {"error": {"kind": "cast", "message": "no"}})
+
+    def test_a_decision_answered_unseen_hands_its_journal_on(self):
+        # 0.50.13: `send` keeps a fresh decision's journal for the next one shown
+        game = object.__new__(mcp.Game)
+        game.ident, game.view, game.pending, game.fresh, game.passed_journal = "g1", "brief", None, False, []
+        game.last_brief = game.delta_base = game.shown_record = None
+        game.pending = {"n": 1, "seat": 0, "mode": "priority", "view": {"journal": ["one"]}}
+        game.fresh = True
+        game.absorb()
+        game.absorb()   # (once only)
+        self.assertEqual(game.passed_journal, ["one"])
+        game.pending = {"n": 2, "seat": 0, "mode": "priority", "view": {"journal": ["two"]}}
+        game.fresh = True
+        shown = game.shown()
+        self.assertEqual(shown["brief"]["journal"], ["one", "two"])
+        self.assertFalse(game.fresh)
+        game.absorb()   # shown already: nothing kept twice
+        self.assertEqual(game.passed_journal, [])
+
     def test_a_transcript_is_read_from_its_tail(self):
         transcript = self.root / "g9.lines"
         decision = json.dumps({"type": "decision", "n": 1, "view": {"journal": ["x" * 500] * 20}})

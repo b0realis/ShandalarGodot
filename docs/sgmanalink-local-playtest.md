@@ -1,6 +1,6 @@
 # SGManalink LAN playtest
 
-Development source: `main`, version **0.50.12**. A desktop LAN full-pool duel
+Development source: `main`, version **0.50.13**. A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
@@ -26,7 +26,7 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 
 ## Two computers on the same network
 
-Use matching **0.50.12 development builds** and enabled packs on both computers. The older
+Use matching **0.50.13 development builds** and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name
@@ -178,6 +178,19 @@ button in the strip below the large card offers connection controls, recent
 revealed information and special actions such as Channel payments. The referee
 validates every answer. Menus stop your local automatic passing, not the other
 player; disconnects suspend game actions. Closing SGManalink requires confirmation.
+
+A card's menu offers only what the referee would accept now (0.50.13): an
+ability that is used up for the turn ("Activate only once each turn"), outside
+its printed timing, banned, on a tapped or summoning-sick {T} source, short of
+a cost body (Zuran Orb with no land to sacrifice), life or cards, with nothing
+to aim at or with no mana in reach is not listed, nor a tapped land or a sick
+creature as a mana source. A spell with nothing to aim at keeps its card and
+its cost but is not `castable`. The host asks the engine's own checks
+(`MtgGame.ability_announce_refusal`, `MtgGame.mana_ability_refusal`,
+`MtgGame.spell_announce_refusal`, `SgDuelActions.ability_refusal`), so a
+`prepare` it would refuse at the submit is refused before any land is tapped,
+and an ability that is no longer usable no longer holds your automatic passing
+open. The wire is unchanged (protocol 27): the hosts filter the entries.
 
 Opponent hands are normally counts. A card rule may explicitly reveal cards or
 permit a private look; only the authorized viewer receives that information.

@@ -111,3 +111,42 @@ checksums, then publish. Keep personal paths and author details out of
 notes, binaries, archives, tags and commits; use the configured pseudonym
 and GitHub noreply address. Publication is always a separate, explicit
 owner request, not the automatic tail of a local build.
+
+## A release from two machines (2026-10-04)
+
+One release may collect targets built on two machines — the Linux machine
+(linux64, Raspberry Pi 5, Steam Deck, ArkOS, Meta Quest) and a Mac (the Mac
+apps, and Windows and Web if wanted). Every package of a release must come
+from the **same pushed commit** (its README links that commit), carry the
+**same** `original_skin.zip` (compare its SHA-256) and name itself from the
+same `project.godot` version.
+
+1. **First machine:** build and package its targets, write `SHA256SUMS`
+   over the ZIPs and the skin, and create the release as a **draft** whose
+   tag targets the release commit:
+   `gh release create vX.Y.Z --draft --target FULL_COMMIT --title "..." --notes-file RELEASE_NOTES.md <files>`.
+   A draft stays invisible to players and its tag is created on publish.
+2. **Second machine:** `git fetch && git checkout FULL_COMMIT` (a detached
+   checkout is fine; `./build_release.sh -V` must print the version), take
+   the skin from the draft — `gh release download vX.Y.Z --pattern original_skin.zip`
+   — and check its SHA-256 against the draft's `SHA256SUMS`. Export and
+   package as above, e.g. for the Mac apps:
+   ```sh
+   godot --headless --path . --export-debug macOS DIR/macos/Shandalar.app
+   godot --headless --path . --export-debug 'macOS Apple Silicon' DIR/macos-arm64/Shandalar.app
+   godot --headless --path . --export-debug 'macOS Intel' DIR/macos-intel/Shandalar.app
+   python3 tools/package_release.py --platform macos-arm64 --input DIR/macos-arm64 \
+     --out DOWNLOADS --skin-zip original_skin.zip --commit FULL_COMMIT
+   ```
+   (repeat the packager for `macos` and `macos-intel`; `windows64` and
+   `web` likewise if built there). Check `codesign --verify --deep --strict`
+   on each app and `lipo -info` on its binary, and smoke-boot each app.
+3. **Merge the checksums:** `gh release download vX.Y.Z --pattern SHA256SUMS`,
+   add the new ZIPs' lines (`shasum -a 256 Shandalar-X.Y.Z-*.zip`), sort by
+   file name, and run `shasum -a 256 -c SHA256SUMS` over every file you hold.
+   Upload: `gh release upload vX.Y.Z <new zips> SHA256SUMS --clobber`.
+4. **Finish the notes:** `gh release view vX.Y.Z --json body -q .body > notes.md`,
+   add the new targets to the download list and setup lines and their
+   lines to the checksum block, then `gh release edit vX.Y.Z --notes-file notes.md`.
+5. **Publish** only on the owner's word: `gh release edit vX.Y.Z --draft=false --latest`,
+   then download one ZIP per machine and `shasum -a 256 -c` it.

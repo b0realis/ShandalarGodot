@@ -18761,6 +18761,42 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-10-04 — The agent's seat, smoothed; decision models (0.50.13)
+
+A game played through the release package's MCP server against the Wizard
+(won 11 to -3) showed the rough edges; the owner: *"Yes go, and also do an
+improvement run on MCP tools … a helper tool for these kind of tools also."*
+Four workers on disjoint files ([releases/0.50.13.md](releases/0.50.13.md)):
+
+- **MCP** (`tools/shandalar_mcp.py`): the compact table as every referee
+  answer's text (`text: "json"` opts out; `structuredContent` unchanged),
+  `referee_view`, phased-out permanents and attachments in brief/delta,
+  `until: "mine"` (smart: their turn only while holding something usable; a
+  no-choice attack or block answered) and `"mine-strict"`, journal carried
+  across internal passes, `referee_cast` /
+  `referee_play_land` / `{"op":"cast"}`, `cards` across every found pack,
+  `rules` passed to the referee, `referee_menu` / `referee_pick`.
+- **Options = the engine's answer** (`game/sgmanalink/duel_actions.gd`,
+  `DeckLab/referee.gd`): the engine's own pre-mana checks factored out
+  (`MtgGame.ability_announce_refusal`, `ability_cost_bodies`,
+  `_ability_resource_checks`, `mana_ability_refusal`, `spell_announce_refusal`,
+  `_spell_cost_checks`, `spell_cost_bodies`) and used by both; aim judged at
+  the announced X (or any payable X); `usable_modes`; `prepare` refuses before
+  paying; missing keys filled; `autoprepare` + `targets`; `floating` on a
+  refusal; `--rules`. SGManalink stays protocol 27.
+- **Decision models** (`tools/decision_menu.py`, `tools/shandalar_decide.py`):
+  numbered complete legal actions with stable ids, a compact observation and a
+  documented feature vector; Python `Env`, JSON-lines stdio, policies; shipped
+  in the release packages; initial typed-decision-model support (Laya, Jev):
+  `systemone_request`/`systemone_pick`, `--policy systemone --url`, `--systemone`.
+- **AI**: `MirageTactics.phase_swap_value` counts what Time and Tide changes
+  over the next combats; `phase_swap_response` answers a lethal phasing attack.
+- **Known**: `autoprepare` puts all mana into X, so a "mana value X" target
+  (Detonate) wants `prepare` with an explicit X.
+
+Gate: 648 scripts, **10,443/10,443 tests, 480,768 asserts**, exit 0 over 6
+shards; Python 593 (15 skipped).
+
 ## 2026-10-04 — The Mirage block bug pass (0.50.12)
 
 The owner, after 0.50.11: *"Then do one pass over Mirage block and find bugs

@@ -53,7 +53,13 @@ THE RULES IT KEEPS:
     it likes. The decision's `view` is rendered `brief` by default (the
     board, the hand, the new journal lines — a tenth of the wire's
     view); `full` is the referee's own line, `options` the legal
-    answers alone.
+    answers alone, `delta` what moved, and `compact` (2026-10-04) the
+    board as a few lines of text that become the answer's `content` —
+    what a client shows its model — while `structuredContent` keeps
+    the JSON. `until` passes priority for the client (`mine`, the
+    smart pass, stops on the opponent's account only while the seat
+    holds something usable); `referee_cast` prepares, pays and submits
+    in one call and never leaves a cast half-announced.
   * THE DUMB PILOT the referee's tests use (keep, play a land, cast the
     first castable spell, attack with everything, block nothing) is
     `referee_act` with `"default"` and `referee_autoplay` — so a client
@@ -83,6 +89,12 @@ import threading
 import time
 from pathlib import Path
 
+try:
+    import decision_menu   # the decision-model menus (0.50.13), shipped beside this script
+except ImportError:        # imported from elsewhere: the script's own folder
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import decision_menu
+
 SERVER_NAME = "shandalar"
 PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
 LATEST_PROTOCOL = PROTOCOL_VERSIONS[-1]
@@ -95,14 +107,20 @@ DEFAULT_TIMEOUT = 900
 DECISION_TIMEOUT = 120
 MANUALS = ("door", "lab", "autodeck", "query", "referee", "convert")
 SEATS = ("agent", "apprentice", "magician", "sorcerer", "wizard", "unfair")
-VIEWS = ("brief", "full", "options", "delta")
+VIEWS = ("brief", "full", "options", "delta", "compact")
 # `referee_act`'s `until`: the stop the server passes priority toward —
 # the seat's own main phase, the end step of this turn, the seat's next
 # turn, only a reaction window (`respond`), or the next point the seat
 # can act at all (`play`). Every value stops at a reaction window: an
 # opponent's spell or ability on the stack, their attack and block
 # steps, their end step, a non-priority decision (see `stop_reason`).
-UNTIL = ("main", "end", "turn", "respond", "play")
+# `mine` (2026-10-04, the recommended one) is the SMART pass: the seat's
+# own main phase with something to do and its own decisions, and a
+# reaction window only while it holds something usable there right now
+# (a castable instant or flash spell, a legal non-mana ability) — the
+# windows where it holds nothing are passed straight through.
+# `mine-strict` never stops on the opponent's account at all.
+UNTIL = ("main", "end", "turn", "respond", "play", "mine", "mine-strict")
 ACCESS = ("open", "invitation")
 MAX_PASSES = 400
 # The most copies one deck line may name: engine/deck_list.gd's MAX_COUNT.
@@ -132,7 +150,19 @@ INSTRUCTIONS = (
     "would act: your own main phase, a spell or ability of the opponent's on "
     "the stack while you hold an answer, their attack, block and end steps "
     "while you hold an instant or ability, every attack, block and choice of "
-    "your own. `view: \"delta\"` shows only what changed since the last decision. "
+    "your own. Every referee answer's text is the compact table summary (the "
+    "board, your hand, the stack, the prompt and the legal answers as a few "
+    "lines; the JSON is in structuredContent, rendered per `view`; `text: "
+    "\"json\"` on referee_start puts JSON in the text instead). RECOMMENDED: "
+    "`view: \"compact\"` for the same text inside the JSON too, "
+    "`until: \"mine\"` (pass to your next real decision — the opponent's turn "
+    "stops only while you hold something usable there; `mine-strict` never "
+    "stops for it), and the one-call `referee_cast` (prepare, pay and submit, "
+    "targets by id, name, `me` or `opponent`) and `referee_play_land`; "
+    "`referee_view` reads the decision again in any view; `referee_menu` and "
+    "`referee_pick` offer a decision model the same game as a numbered menu "
+    "of complete legal actions. "
+    "`view: \"delta\"` shows only what changed since the last decision. "
     "`referee_join` sits at a table a person hosts in the game (an invitation, "
     "an access code, or an open table's name on the LAN); `referee_host` hosts "
     "a table yourself and tells you how the person finds it (the table's name "
@@ -147,11 +177,24 @@ INSTRUCTIONS = (
 
 class ToolError(Exception):
     """A refusal a tool reports as data — the door's envelope, or one
-    shaped like it."""
+    shaped like it. `text`, when given, is the answer's `content` (a
+    compact-view game's refusal shows its board, see `Answer`)."""
 
-    def __init__(self, envelope: dict):
+    def __init__(self, envelope: dict, text: str | None = None):
         super().__init__(envelope.get("message", "refused"))
         self.envelope = envelope
+        self.text = text
+
+
+class Answer(dict):
+    """A tool's answer whose `content` text is not its JSON: a referee
+    answer in the `compact` view (2026-10-04) — an MCP client shows the
+    content to its model, so the model reads the board as a few lines of
+    text while `structuredContent` keeps the JSON for a program."""
+
+    def __init__(self, payload: dict, text: str):
+        super().__init__(payload)
+        self.text = text
 
 
 class UnknownTool(LookupError):
@@ -303,21 +346,100 @@ def names_of(rows) -> list:
             for row in (rows or [])]
 
 
+# Every zone of a player's whose cards carry a handle in the view.
+CARD_ZONES = ("battlefield", "phased_out", "graveyard", "exile", "revealed", "ante")
+
+
+def view_cards(view: dict) -> dict:
+    """Every card the view names by handle — the hand and both players'
+    zones (the phased-out ones too) — as {handle: card}."""
+    out: dict = {}
+    for card in view.get("hand", []) or []:
+        if isinstance(card, dict) and card.get("id"):
+            out.setdefault(card["id"], card)
+    for player in view.get("players", []) or []:
+        if not isinstance(player, dict):
+            continue
+        for zone in CARD_ZONES:
+            for card in player.get(zone, []) or []:
+                if isinstance(card, dict) and card.get("id"):
+                    out.setdefault(card["id"], card)
+    return out
+
+
+def phase_holds(view: dict) -> dict:
+    """The phased-out cards a permanent holds out (Pack 8 — Oubliette,
+    Teferi's Imp's kin): {phased handle: holder handle}, from the view's
+    `presentation.phase_holds` pairs."""
+    out: dict = {}
+    for pair in (view.get("presentation") or {}).get("phase_holds", []) or []:
+        if isinstance(pair, (list, tuple)) and len(pair) == 2:
+            out[str(pair[0])] = str(pair[1])
+    return out
+
+
+def phase_return(card: dict, view: dict, seat: int, controller, cards: dict | None = None,
+                 holds: dict | None = None, rows: dict | None = None) -> str:
+    """How a phased-out card comes back, as the board's tooltip says it
+    (MiniCard.phase_note): with the permanent it is attached to, when the
+    card holding it leaves, or at its controller's next untap step —
+    "your" or "the opponent's" from this seat's side of the table."""
+    cards = view_cards(view) if cards is None else cards
+    holds = phase_holds(view) if holds is None else holds
+    if rows is None:
+        rows = {r.get("id"): r for r in (view.get("presentation") or {}).get("cards", []) if isinstance(r, dict)}
+    ident = card.get("id")
+    flags = (rows.get(ident) or {}).get("flags") or {}
+    host = cards.get(card.get("attached") or "")
+    if flags.get("phased_indirectly") and host is not None:
+        return f"phases in with {host.get('name', '?')} ({host.get('id')})"
+    if ident in holds:
+        holder = cards.get(holds[ident]) or {}
+        return f"held by {holder.get('name', 'another card')} ({holds[ident]}): phases in when it leaves the battlefield"
+    whose = "your" if controller == seat else "the opponent's"
+    return f"returns at {whose} next untap step"
+
+
 def brief_view(view: dict, seat: int) -> dict:
     """The seat's whole LAN view, cut to what a decision needs: whose
-    turn, the life totals, both boards, this seat's hand with the costs
-    and the castable marks, the stack, the new journal lines, and the
-    prompts that are open (announcement, choice, damage, discard)."""
+    turn, the life totals, both boards (and what is phased out of them),
+    this seat's hand with the costs and the castable marks, the stack,
+    the new journal lines, and the prompts that are open (announcement,
+    choice, damage, discard)."""
     cast = {c.get("id"): c for c in view.get("presentation", {}).get("cards", []) if isinstance(c, dict)}
+    cards = view_cards(view)
+    holds = phase_holds(view)
     out: dict = {"turn": view.get("turn"), "step": view.get("step"), "active": view.get("active"),
                  "actor": view.get("actor"), "seat": seat}
     players = []
+
+    def board_card(card: dict) -> dict:
+        row = brief_card(card, cast.get(card.get("id")), True)
+        host = cards.get(card.get("attached") or "")
+        if host is not None:
+            # An Aura or Equipment: the host's handle (`attached`, the
+            # view's own) and its name beside it (2026-10-04).
+            row["attached_name"] = host.get("name", "")
+        return row
+
     for player in view.get("players", []):
         row = {"seat": player.get("seat"), "deck": player.get("deck_name", ""),
                "life": player.get("life"), "hand": player.get("hand_count"),
                "library": player.get("library_count"),
-               "battlefield": [brief_card(c, cast.get(c.get("id")), True)
-                               for c in player.get("battlefield", []) if isinstance(c, dict)]}
+               "battlefield": [board_card(c) for c in player.get("battlefield", []) if isinstance(c, dict)]}
+        # PHASED OUT (Pack 8, 2026-10-04): off the battlefield every rule
+        # reads, still on the table and public to both seats — the brief
+        # copied the battlefield alone, and a client was blind to its own
+        # phased-out creatures and the opponent's.
+        phased = []
+        for card in player.get("phased_out", []) or []:
+            if isinstance(card, dict):
+                gone = board_card(card)
+                gone["phased_out"] = True
+                gone["returns"] = phase_return(card, view, seat, player.get("seat"), cards, holds, cast)
+                phased.append(gone)
+        if phased:
+            row["phased_out"] = phased
         for zone in ("graveyard", "exile", "revealed"):
             if player.get(zone):
                 row[zone] = names_of(player[zone])
@@ -367,6 +489,16 @@ def delta_view(before: dict | None, now: dict) -> dict:
             row["battlefield_gone"] = gone
         if changed:
             row["battlefield_changed"] = changed
+        moved = attachment_changes(old.get("battlefield", []), player.get("battlefield", []))
+        if moved:
+            row["attached_changed"] = moved
+        added, gone, changed = card_changes(old.get("phased_out", []), player.get("phased_out", []))
+        if added:
+            row["phased_out_added"] = added
+        if gone:
+            row["phased_out_gone"] = gone
+        if changed:
+            row["phased_out_changed"] = changed
         for zone in ("graveyard", "exile", "revealed"):
             new_names = zone_additions(old.get(zone, []), player.get(zone, []))
             if new_names:
@@ -404,6 +536,26 @@ def card_changes(old: list, new: list) -> tuple[list, list, list]:
     return added, gone, changed
 
 
+def attachment_changes(old: list, new: list) -> list:
+    """The Auras and Equipment that stayed on the battlefield but moved —
+    attached, unattached or moved to another host — as {id, name, to,
+    from}, each end a 'Name (handle)' or None."""
+    def host(card: dict):
+        if not card.get("attached"):
+            return None
+        return f"{card.get('attached_name') or '?'} ({card['attached']})"
+
+    old_by = {c.get("id"): c for c in old if isinstance(c, dict)}
+    out = []
+    for card in new:
+        if not isinstance(card, dict) or card.get("id") not in old_by:
+            continue
+        was = old_by[card["id"]]
+        if was.get("attached") != card.get("attached"):
+            out.append({"id": card["id"], "name": card.get("name"), "to": host(card), "from": host(was)})
+    return out
+
+
 def zone_additions(old: list, new: list) -> list:
     """Names in `new` beyond their count in `old` (a zone of names)."""
     counts: dict = {}
@@ -422,18 +574,455 @@ def render_decision(decision: dict, mode: str, before: dict | None = None,
                     brief: dict | None = None) -> dict:
     """One `decision` line for the client: `full` is the referee's own,
     `options` drops the view, `brief` replaces it, `delta` replaces it
-    with what changed since `before` (the last brief shown). `brief` is
-    the decision's brief when the caller has already made it."""
+    with what changed since `before` (the last brief shown), `compact`
+    replaces it with the brief AND the board as a few lines of text (the
+    answer's `content`, see `compact_answer`). `brief` is the decision's
+    brief when the caller has already made it."""
     if mode == "full":
         return decision
     out = {k: v for k, v in decision.items() if k != "view"}
-    if mode in ("brief", "delta") and brief is None:
+    if mode in ("brief", "delta", "compact") and brief is None:
         brief = brief_view(decision.get("view", {}), int(decision.get("seat", 0)))
     if mode == "brief":
         out["brief"] = brief
     elif mode == "delta":
         out["delta"] = delta_view(before, brief)
+    elif mode == "compact":
+        out["brief"] = brief
+        out["compact"] = compact_view(decision)
     return out
+
+
+# --- the compact view: the board as text a model reads at a glance --------
+
+def _words(step) -> str:
+    return str(step or "").lower().replace("_", " ")
+
+
+def _counters(counters) -> str:
+    if isinstance(counters, dict):
+        return ", ".join(f"{key} x{value}" for key, value in sorted(counters.items(), key=lambda kv: str(kv[0]))
+                         if value)
+    return str(counters) if counters else ""
+
+
+RULES_HINT = 80
+
+
+def _rules_hint(card: dict) -> str:
+    """A card's rules text cut to one short line for the compact view:
+    reminder text in parentheses dropped, lines joined, at most
+    RULES_HINT characters — enough to know a flyer from a ground pounder;
+    the brief view carries the whole text."""
+    text = re.sub(r"\s*\([^()]*\)", "", str(card.get("rules") or ""))
+    text = "; ".join(part.strip() for part in text.splitlines() if part.strip())
+    return text if len(text) <= RULES_HINT else text[:RULES_HINT - 1].rstrip() + "…"
+
+
+def _named(card: dict | None, ident=None) -> str:
+    """`Name c7` — a card as the compact view names it."""
+    card = card or {}
+    ident = ident if ident is not None else card.get("id", "")
+    name = card.get("name") or "?"
+    return f"{name} {ident}".strip()
+
+
+def _permanent(card: dict, cards: dict, seat: int, rows: dict, holds: dict, view: dict,
+               controller=None, phased: bool = False) -> str:
+    """One permanent: name, handle, P/T, then its state in brackets —
+    tapped, summoning sick, attacking, blocking, damage, counters, what
+    it is attached to, and for a phased-out card how it comes back."""
+    text = _named(card)
+    if card.get("creature"):
+        text += f" {card.get('power', 0)}/{card.get('toughness', 0)}"
+    flags = []
+    if card.get("masked"):
+        flags.append("face-down")
+    if card.get("tapped"):
+        flags.append("tapped")
+    if card.get("sick") and card.get("creature"):
+        flags.append("sick")
+    if card.get("attacking"):
+        flags.append("attacking")
+    if card.get("blocking"):
+        flags.append(f"blocking {_named(cards.get(card['blocking']), card['blocking'])}")
+    if card.get("damage"):
+        flags.append(f"damage {card['damage']}")
+    counters = _counters(card.get("counters"))
+    if counters:
+        flags.append(counters)
+    if card.get("attached"):
+        flags.append(f"on {_named(cards.get(card['attached']), card['attached'])}")
+    if phased:
+        flags.append("PHASED OUT, " + phase_return(card, view, seat, controller, cards, holds, rows))
+    hint = _rules_hint(card)
+    return text + (f" [{'; '.join(flags)}]" if flags else "") + (f" — {hint}" if hint else "")
+
+
+def _spell_cost(row: dict | None) -> str:
+    for ability in (row or {}).get("abilities", []) or []:
+        if isinstance(ability, dict) and ability.get("kind") == "spell":
+            return str(ability.get("cost") or "")
+    return ""
+
+
+def _target_row(target: dict, refs: dict) -> str:
+    """One candidate of an announcement slot: the token, its label, and
+    the card or player it is — `t2 Grizzly Bears — opponent's [c9]`."""
+    token = target.get("id", "")
+    what = target.get("card") or refs.get(token, "")
+    return f"{token} {target.get('label', '')}" + (f" [{what}]" if what else "")
+
+
+def target_refs(view: dict) -> dict:
+    """{token: 'c9' | 'player:0' | 'ability:a3' | ...}: what each open
+    announcement token stands for — the view's `presentation.targets`
+    (each token's reference, built beside the announcement), the handle a
+    client already knows the card by."""
+    out: dict = {}
+    for row in (view.get("presentation") or {}).get("targets", []) or []:
+        if not isinstance(row, dict) or not isinstance(row.get("ref"), dict):
+            continue
+        ref = row["ref"]
+        kind, ident = ref.get("kind"), ref.get("id")
+        if not ident and ident != 0:
+            continue
+        out[str(row.get("token"))] = str(ident) if kind == "card" else f"{kind}:{ident}"
+    return out
+
+
+def compact_view(decision: dict) -> str:
+    """The decision as a short, deterministic text: the clock, each
+    player's life, hand, library and graveyard, both boards with their
+    flags (phased-out cards and attachments included), this seat's hand
+    with costs and castable marks, the stack, the open prompt with every
+    token and option, the legal answers as one line each, and the new
+    journal lines. Everything a turn needs, a twentieth of the wire's
+    view; `brief` beside it carries the same as JSON."""
+    view = decision.get("view") or {}
+    options = decision.get("options") or {}
+    seat = int(decision.get("seat", 0) or 0)
+    mode = str(decision.get("mode") or options.get("mode") or view.get("mode") or "")
+    cards = view_cards(view)
+    rows = {r.get("id"): r for r in (view.get("presentation") or {}).get("cards", []) if isinstance(r, dict)}
+    holds = phase_holds(view)
+    whose = "your" if view.get("active") == seat else "the opponent's"
+    lines = [f"TURN {view.get('turn', decision.get('turn'))} {view.get('step', decision.get('step'))} — "
+             f"{whose} turn | you are seat {seat} | decision #{decision.get('n')}: {mode}"]
+    if view.get("winner", -1) not in (-1, None):
+        lines.append(f"WINNER: seat {view['winner']}")
+    players = sorted([p for p in view.get("players", []) or [] if isinstance(p, dict)],
+                     key=lambda p: (p.get("seat") != seat, p.get("seat", 0)))
+    for player in players:
+        who = "YOU" if player.get("seat") == seat else "OPPONENT"
+        head = (f"{who} (seat {player.get('seat')}, {player.get('deck_name') or 'deck'}): "
+                f"life {player.get('life')} | hand {player.get('hand_count')} | "
+                f"library {player.get('library_count')} | graveyard {len(player.get('graveyard') or [])}")
+        pool = player.get("mana_colors") or []
+        if player.get("mana"):
+            shown = " ".join(f"{c}{n}" for c, n in zip("WUBRGC", pool) if n) if pool else str(player["mana"])
+            head += f" | mana pool {shown}"
+        lines.append(head)
+        lands = [c for c in player.get("battlefield", []) or [] if isinstance(c, dict) and c.get("land")
+                 and not c.get("creature") and not c.get("attached")]
+        others = [c for c in player.get("battlefield", []) or [] if isinstance(c, dict) and c not in lands]
+        if lands:
+            lines.append("  lands: " + ", ".join(_named(c) + (" (tapped)" if c.get("tapped") else "") for c in lands))
+        for card in others:
+            lines.append("  " + _permanent(card, cards, seat, rows, holds, view, player.get("seat")))
+        for card in player.get("phased_out", []) or []:
+            if isinstance(card, dict):
+                lines.append("  " + _permanent(card, cards, seat, rows, holds, view, player.get("seat"), phased=True))
+        if not lands and not others and not player.get("phased_out"):
+            lines.append("  (no permanents)")
+        if player.get("graveyard"):
+            lines.append("  graveyard: " + ", ".join(names_of(player["graveyard"])))
+        if player.get("exile"):
+            lines.append("  exile: " + ", ".join(names_of(player["exile"])))
+        if player.get("revealed"):
+            lines.append("  revealed hand cards: " + ", ".join(_named(c) for c in player["revealed"] if isinstance(c, dict)))
+        if player.get("top"):
+            lines.append(f"  library top (revealed): {player['top']}")
+    hand = [c for c in view.get("hand", []) or [] if isinstance(c, dict)]
+    lines.append(f"YOUR HAND ({len(hand)}):" + ("" if hand else " empty"))
+    for card in hand:
+        row = rows.get(card.get("id")) or {}
+        text = "  " + _named(card)
+        if card.get("land"):
+            text += " — land" + (", playable now" if card.get("playable") else "")
+        else:
+            cost = _spell_cost(row)
+            if cost:
+                text += f" {cost}"
+            if row.get("castable"):
+                text += " — CASTABLE"
+            hint = _rules_hint(card)
+            if hint:
+                text += f" | {hint}"
+        lines.append(text)
+    stack = [s for s in view.get("stack", []) or [] if isinstance(s, dict)]
+    if stack:
+        lines.append("STACK (top first):")
+        for i, item in enumerate(reversed(stack), 1):
+            owner = "yours" if item.get("controller") == seat else "opponent's"
+            text = f"  {i}. {item.get('name', '?')} ({owner}) — {item.get('details', '')}"
+            if item.get("x"):
+                text += f", X={item['x']}"
+            if item.get("targets"):
+                text += " -> " + "; ".join(str(t) for t in item["targets"])
+            lines.append(text)
+    lines.extend(_prompt_lines(view, options, cards, rows))
+    lines.extend(_option_lines(mode, options, view, cards, rows))
+    journal = [e.get("text", "") if isinstance(e, dict) else str(e) for e in view.get("journal", []) or []]
+    if journal:
+        lines.append(f"JOURNAL ({len(journal)} new):")
+        lines.extend("  " + line for line in journal)
+    return "\n".join(lines)
+
+
+def _prompt_lines(view: dict, options: dict, cards: dict, rows: dict) -> list[str]:
+    """The prompt that is open: an announcement's slots with every target
+    token, a choice's options with their indexes, a damage assignment,
+    a discard, and the information this seat was shown."""
+    lines: list[str] = []
+    announcement = options.get("announcement") or view.get("announcement") or {}
+    if announcement:
+        draft = options.get("draft") or (view.get("presentation") or {}).get("draft") or {}
+        reach = draft.get("reachable")
+        lines.append(f"ANNOUNCING {announcement.get('name', '?')} ({announcement.get('kind', 'spell')}"
+                     + (f", X={announcement['x']}" if announcement.get("x") else "") + ")"
+                     + ("" if reach is None else f" — the cost {'can' if reach else 'can NOT'} be paid now"))
+        refs = target_refs(view)
+        for i, slot in enumerate(announcement.get("slots", []) or []):
+            span = f"{slot.get('min', 0)}-{slot.get('max', 0)}"
+            divided = f", divide {slot['divided']}" if slot.get("divided") else ""
+            targets = " | ".join(_target_row(t, refs) for t in slot.get("targets", []) or [] if isinstance(t, dict))
+            lines.append(f"  slot {i}: {slot.get('label', 'target')} (choose {span}{divided}): {targets or 'no legal target'}")
+        if not announcement.get("slots"):
+            lines.append("  no targets to choose")
+    choice = view.get("choice") or {}
+    if choice:
+        source = f" ({choice['source']})" if choice.get("source") else ""
+        lines.append(f"CHOICE{source}: {choice.get('prompt', '')} — pick {choice.get('count', 1)}"
+                     + (" (cancel allowed)" if choice.get("cancel") else ""))
+        for i, label in enumerate(choice.get("options", []) or []):
+            lines.append(f"  {i}: {label}")
+        for info in choice.get("information", []) or []:
+            if isinstance(info, dict):
+                lines.append(f"  shown — {info.get('title', '')}: {', '.join(str(c) for c in info.get('cards', []) or [])}")
+    request = view.get("damage_request") or {}
+    if request:
+        targets = " | ".join(f"{t.get('id')} {t.get('name', '')} (lethal {t.get('lethal', 0)})"
+                             for t in request.get("targets", []) or [] if isinstance(t, dict))
+        lines.append(f"ASSIGN {request.get('amount', 0)} damage from {request.get('source', '?')}: {targets}")
+    if view.get("discard_count") and view.get("mode") == "discard":
+        lines.append(f"DISCARD {view['discard_count']} card(s) from your hand")
+    information = [i for i in view.get("information", []) or [] if isinstance(i, dict)]
+    if information:
+        lines.append(f"SHOWN TO YOU (last {min(3, len(information))} of {len(information)}):")
+        for info in information[-3:]:
+            lines.append(f"  {info.get('title', '')}: {', '.join(str(c) for c in info.get('cards', []) or [])}")
+    return lines
+
+
+def _option_lines(mode: str, options: dict, view: dict, cards: dict, rows: dict) -> list[str]:
+    """The decision's legal answers, one line each, with the op to send
+    (or the one-call tool that sends it)."""
+    lines = ["OPTIONS:"]
+    if options.get("waiting"):
+        return lines + ["  waiting — it is not your decision"]
+    if mode == "opening":
+        if options.get("order"):
+            lines.append('  choose the order: {"op":"order","play":true} plays first, false draws first')
+        lines.append('  keep: {"op":"keep"}')
+        if options.get("mulligan"):
+            lines.append(f'  mulligan ({options["mulligan"].get("hand", "?")} cards): {{"op":"mulligan"}}')
+    elif mode == "attack":
+        rows_ = (options.get("attack") or {}).get("attackable", []) or []
+        names = ", ".join(f"{r.get('name')} {r.get('card')}" for r in rows_ if isinstance(r, dict))
+        lines.append(f"  attack with any of: {names or 'nothing can attack'}")
+        lines.append('  {"op":"attack","cards":[ids...]} — [] attacks with nothing')
+    elif mode == "block":
+        for row in (options.get("block") or {}).get("blockable", []) or []:
+            if isinstance(row, dict):
+                can = ", ".join(f"{a.get('name')} {a.get('card')}" for a in row.get("attackers", []) or [])
+                lines.append(f"  {row.get('name')} {row.get('blocker')} can block: {can}")
+        lines.append('  {"op":"block","pairs":[[blocker, attacker], ...]} — [] blocks nothing')
+    elif mode == "discard":
+        want = options.get("discard") or {}
+        hand = ", ".join(f"{r.get('name')} {r.get('card')}" for r in want.get("hand", []) or [] if isinstance(r, dict))
+        lines.append(f"  discard {want.get('count', 0)} of: {hand}")
+        lines.append('  {"op":"discard","cards":[ids...]}')
+    elif mode == "damage":
+        lines.append('  {"op":"damage","points":[[id or "player", amount], ...]}')
+    elif mode == "choice":
+        lines.append('  {"op":"choice","picks":[index, ...]}' + (' | cancel: {"op":"cancel"}' if options.get("cancel") else ""))
+    elif mode == "priority" and options.get("announcement"):
+        lines.append('  pay: {"op":"autopay","excluded":[],"count":1}, then {"op":"submit","targets":[[token, amount], ...]}')
+        lines.append('  withdraw: {"op":"cancel"} (mana already made stays in your pool)')
+    elif mode == "priority":
+        lines.append('  pass: {"op":"pass"} (or referee_act with `until`)')
+        lands = (options.get("play") or {}).get("lands", []) or []
+        if lands:
+            lines.append("  play a land: " + ", ".join(f"{r.get('name')} {r.get('card')}" for r in lands if isinstance(r, dict))
+                         + " (referee_play_land)")
+        prepare = options.get("prepare") or {}
+        casts = []
+        for row in prepare.get("casts", []) or []:
+            if not isinstance(row, dict):
+                continue
+            text = f"{row.get('name')} {row.get('card')}"
+            cost = _spell_cost(rows.get(row.get("card")))
+            if cost:
+                text += f" {cost}"
+            if row.get("x"):
+                text += f" (X up to {row.get('budget', 0)})"
+            if row.get("modes"):
+                usable = row.get("usable_modes")
+                usable = set(usable) if isinstance(usable, list) else set(range(len(row["modes"])))
+                text += " modes: " + " / ".join(f"{i}={m}" + ("" if i in usable else " (not now)")
+                                                for i, m in enumerate(row["modes"]))
+            casts.append(text)
+        if casts:
+            lines.append("  cast: " + " | ".join(casts) + " (referee_cast)")
+        abilities = []
+        for row in prepare.get("abilities", []) or []:
+            if isinstance(row, dict) and ability_usable(row):
+                text = f"{row.get('name')} {row.get('card')} #{row.get('index', 0)}"
+                label = str(row.get("label") or "")
+                if row.get("cost") and not label.startswith(str(row["cost"])):
+                    text += f" {row['cost']}"   # (a label that opens with its cost says it once)
+                if label:
+                    text += f" — {label}"
+                abilities.append(text)
+        if abilities:
+            lines.append("  activate: " + " | ".join(abilities) + " (referee_cast kind=ability)")
+        specials = (options.get("special") or {}).get("specials", []) or []
+        for row in specials:
+            if isinstance(row, dict):
+                lines.append(f"  special {row.get('index')}: {row.get('label')}")
+        sources = (options.get("mana") or {}).get("sources", []) or []
+        if sources:
+            lines.append(f"  mana abilities: {len(sources)} (autopay taps them for you)")
+    lines.append('  concede: {"op":"concede"}')
+    return lines
+
+
+TEXTS = ("compact", "json")
+
+
+def result_line(result: dict, me: int | None = None) -> str:
+    """The end of a game in one line: who won (you or the opponent when
+    the seat is known), the life totals, the turns and the reason."""
+    winner = result.get("winner")
+    if winner in (None, -1) or result.get("draw") and winner in (None, -1):
+        who = "no winner (a draw)"
+    elif me is not None and winner in (0, 1):
+        who = f"{'YOU WON' if winner == me else 'you lost — the opponent won'} (seat {winner})"
+    else:
+        who = f"winner seat {winner}"
+    life = result.get("life")
+    if isinstance(life, list) and len(life) == 2 and me in (0, 1):
+        life_text = f"life you {life[me]} / opponent {life[1 - me]}"
+    else:
+        life_text = f"life {life}" if life is not None else ""
+    parts = [f"RESULT: {who}", life_text, f"turns {result.get('turns')}", f"reason {result.get('reason')}"]
+    return " | ".join(p for p in parts if p)
+
+
+def json_note(view: str | None, menu: bool = False) -> str:
+    """The compact text's last line: where the JSON is."""
+    if menu:
+        return ("(The full JSON — `obs` with its `features` vector, `menu` with every item's id — is in "
+                "structuredContent; `rich: true` adds each item's kind, info and ops.)")
+    return (f"(The full JSON is in structuredContent — the decision in view `{view or 'brief'}`; views: "
+            "brief, delta, full, options, compact. `text: \"json\"` on referee_start puts the JSON here instead.)")
+
+
+def menu_text(state: dict, decision: dict | None, journal: list | None, me: int | None = None) -> str:
+    """A menu tool's answer as the compact view's text: the header (the
+    pick, the pass, the refusals), the board as `compact_view` draws it —
+    the journal the menu's Driver kept, the wire's OPTIONS replaced by the
+    MENU, numbered as `referee_pick` takes it — and the result."""
+    lines = [f"game {state.get('game', '?')} | model decisions {state.get('n', 0)}"]
+    if state.get("picked"):
+        lines.append(f"picked: {state['picked'].get('label')} [{state['picked'].get('id')}]")
+    if state.get("stop"):
+        lines.append(f"stopped: {state['stop']} (passed {state.get('passed', 0)}, until {state.get('until')})")
+    for refused in state.get("refused", []) or []:
+        if isinstance(refused, dict):
+            lines.append(f"REFUSED (decision {refused.get('n')}): {refused.get('reason')} — the item left the menu")
+    if decision is not None and not state.get("result"):
+        shown = dict(decision)
+        shown["view"] = dict(decision.get("view") or {}, journal=list(journal or []))
+        board = compact_view(shown).splitlines()
+        if "OPTIONS:" in board:
+            start = board.index("OPTIONS:")
+            end = next((i for i in range(start + 1, len(board)) if board[i].startswith("JOURNAL (")), len(board))
+            board = board[:start] + board[end:]
+        lines.extend(board)
+        obs = state.get("obs") or {}
+        if obs.get("selection"):
+            lines.append("SELECTING: " + json.dumps(obs["selection"], ensure_ascii=False, sort_keys=True))
+        lines.append("MENU (answer with referee_pick {pick: N}):")
+        for i, item in enumerate(state.get("menu") or []):
+            lines.append(f"  {i}. {item.get('label')}  [{item.get('id')}]")
+    result = state.get("result")
+    if isinstance(result, dict):
+        lines.append(result_line(result, me))
+    if isinstance(state.get("error"), dict):
+        lines.append(f"ERROR ({state['error'].get('kind')}): {state['error'].get('message')}")
+    lines.append(json_note(None, menu=True))
+    return "\n".join(lines)
+
+
+def compact_answer(state: dict, decision_text: str | None = None, me: int | None = None) -> str:
+    """A referee answer as the text an MCP client shows its model (the
+    `compact` view): the game's header — what was sent, why the pass
+    stopped, what was refused, what a one-call cast did — then the
+    decision's compact board, or the result. `structuredContent` keeps
+    the JSON."""
+    lines = [f"game {state.get('game', '?')} | decisions {state.get('decisions', 0)} | "
+             f"refusals {state.get('refusals', 0)}"]
+    if state.get("action"):
+        lines.append("sent: " + json.dumps(state["action"], ensure_ascii=False, sort_keys=True))
+    cast = state.get("cast")
+    if isinstance(cast, dict):
+        lines.append("cast: " + cast_summary(cast))
+        if state.get("sent"):
+            lines.append("steps: " + " -> ".join(str(s.get("op")) for s in state["sent"] if isinstance(s, dict)))
+    if state.get("stop"):
+        lines.append(f"stopped: {state['stop']} (passed {state.get('passed', 0)}, until {state.get('until')})")
+    elif "passed" in state and "until" in state:
+        lines.append(f"passed {state.get('passed', 0)} (until {state.get('until')})")
+    if "played" in state:
+        lines.append(f"the pilot played {state['played']} decision(s)")
+    for refused in state.get("refused", []) or []:
+        if isinstance(refused, dict):
+            lines.append(f"REFUSED (decision {refused.get('n')}): {refused.get('reason')}")
+    if state.get("table") and state.get("pending"):
+        table = state["table"]
+        lines.append(f"table '{table.get('name')}' ({table.get('access')}) at {table.get('address')}:{table.get('port')} — "
+                     f"invitation {table.get('invitation')}")
+    if state.get("note"):
+        lines.append(f"note: {state['note']}")
+    if state.get("pending"):
+        lines.append("PENDING: nothing arrived yet — referee_wait reads on")
+    decision = state.get("decision")
+    if isinstance(decision, dict):
+        if decision.get("compact"):
+            lines.append(decision["compact"])
+        elif decision_text:
+            lines.append(decision_text)
+        else:
+            lines.append(compact_view(decision) if "view" in decision else
+                         json.dumps(decision, ensure_ascii=False, default=str))
+    result = state.get("result")
+    if isinstance(result, dict):
+        lines.append(result_line(result, me))
+    if isinstance(state.get("error"), dict):
+        lines.append(f"ERROR ({state['error'].get('kind')}): {state['error'].get('message')}")
+    return "\n".join(lines)
 
 
 # --- pass-until: where a player would act ---------------------------------
@@ -459,6 +1048,26 @@ def attackers_declared(view: dict) -> bool:
     return False
 
 
+def no_choice_answer(decision: dict | None) -> dict | None:
+    """The answer to a decision that offers no choice at all — an attack
+    with nothing able to attack (`[]`), a block with nothing able to block
+    (`[]`) — or None when the seat has something to decide."""
+    if not isinstance(decision, dict):
+        return None
+    options = decision.get("options") or {}
+    seat = decision.get("seat")
+    mode = decision.get("mode")
+    # Only a list the referee SENT and left empty means "nothing can": an
+    # options shape without the list (an older referee) is never guessed at.
+    attack = options.get("attack") or {}
+    if mode == "attack" and "attackable" in attack and not attack["attackable"]:
+        return {"op": "attack", "cards": [], "seat": seat}
+    block = options.get("block") or {}
+    if mode == "block" and "blockable" in block and not block["blockable"]:
+        return {"op": "block", "pairs": [], "seat": seat}
+    return None
+
+
 def stop_reason(decision: dict, until: str, origin: dict | None) -> str:
     """Why the pass-until loop hands `decision` to the client — "" to
     pass it. `origin` is the decision the loop started from (its turn
@@ -481,6 +1090,8 @@ def stop_reason(decision: dict, until: str, origin: dict | None) -> str:
     theirs = view.get("active") is not None and int(view.get("active")) != seat
     respond = bool(options.get("respond"))
     stack = view.get("stack") or []
+    if until in ("mine", "mine-strict"):
+        return mine_stop(options, view, seat, step, theirs, stack, strict=until == "mine-strict")
     if stack and isinstance(stack[-1], dict) and stack[-1].get("controller") != seat and respond:
         return f"the opponent's {stack[-1].get('name', 'spell')} is on the stack and you can respond"
     if respond and ((theirs and step in REACT_STEPS_THEIRS) or (not theirs and step in REACT_STEPS_OWN)) \
@@ -504,6 +1115,78 @@ def stop_reason(decision: dict, until: str, origin: dict | None) -> str:
     elif until == "play":
         if own_main and can_act:
             return "your main phase, with something to play"
+    return ""
+
+
+def ability_usable(row) -> bool:
+    """A `prepare` row the seat can use now. The referee's lists are
+    usable-only since 0.50.13 (a listed spell is castable, a listed
+    ability legal and payable now); a row that says otherwise — `usable`,
+    `castable`, `legal` or `activatable` false, or a `refusal` — is not
+    counted either, for a referee that marks rather than drops."""
+    if not isinstance(row, dict):
+        return False
+    if any(key in row and row[key] is False for key in ("usable", "castable", "legal", "activatable")):
+        return False
+    return not row.get("refusal")
+
+
+def usable_now(options: dict) -> list[str]:
+    """What the seat could use at this very moment, read from the
+    decision's options (never from card types): every listed ability
+    (non-mana — mana abilities live in `options.mana` and never count)
+    and, while the referee says the seat can `respond` (some fast spell
+    of its has something to aim at), every listed cast — at the
+    opponent's turn that is an instant, a flash spell, a flash-rider
+    Aura. A sorcery is never listed there; an exhausted once-per-turn
+    ability is not listed at all."""
+    prepare = options.get("prepare") or {}
+    held = []
+    if options.get("respond"):
+        for row in prepare.get("casts", []) or []:
+            if ability_usable(row):
+                held.append(f"{row.get('name', '?')} (castable)")
+    for row in prepare.get("abilities", []) or []:
+        if ability_usable(row):
+            held.append(f"{row.get('name', '?')}'s ability" + (f" {row['cost']}" if row.get("cost") else ""))
+    return held
+
+
+def mine_stop(options: dict, view: dict, seat: int, step: str, theirs: bool, stack: list,
+              strict: bool) -> str:
+    """`until: "mine"` (and `"mine-strict"`), a priority decision: the
+    seat's own main phase with something to do stops; on the opponent's
+    account (their spell or ability on top of the stack, their declared
+    attackers, their blocks, their first-strike damage, their end step —
+    and the blocks of the seat's own attack) only while `usable_now`
+    names something, and the stop says what. `strict` passes those
+    windows whatever the seat holds. The non-priority decisions (attack,
+    block, discard, damage, choice) stopped before this is asked."""
+    prepare = options.get("prepare") or {}
+    work = ((options.get("play") or {}).get("lands")
+            or any(ability_usable(r) for r in prepare.get("casts", []) or [])
+            or any(ability_usable(r) for r in prepare.get("abilities", []) or [])
+            or (options.get("special") or {}).get("specials"))
+    if not theirs and step in OWN_MAIN and not stack and work:
+        return "your main phase, with something to play"
+    if strict:
+        return ""
+    held = usable_now(options)
+    if not held:
+        return ""
+    hold = "you hold " + ", ".join(held)
+    top = stack[-1] if stack and isinstance(stack[-1], dict) else None
+    if top is not None and top.get("controller") != seat:
+        return f"their {top.get('name', 'spell')} is on the stack; {hold}"
+    if top is not None:
+        # The seat's own spell or trigger on top (a flanking trigger in its
+        # own blockers step): let it resolve — the window comes again with
+        # the stack empty, and the stop is made there, once.
+        return ""
+    if theirs and step in REACT_STEPS_THEIRS and (step != "DECLARE_ATTACKERS" or attackers_declared(view)):
+        return f"their {_words(step)}; {hold}"
+    if not theirs and step in REACT_STEPS_OWN and attackers_declared(view):
+        return f"your {_words(step)}; {hold}"
     return ""
 
 
@@ -618,6 +1301,265 @@ def default_answer(decision: dict, memory: dict) -> dict:
                         "index": 0, "x": 0, "mode": 0}
         return {"op": "pass"}
     return {"op": "concede"}
+
+
+# --- one-call actions: cards by name, targets by what they are -------------
+
+HANDLE = re.compile(r"^c\d+$")
+TOKEN = re.compile(r"^t\d+$")
+ME_WORDS = ("me", "you", "self", "myself", "mine", "my")
+THEM_WORDS = ("opponent", "the opponent", "them", "opp", "enemy", "foe")
+# The keys an op takes, filled in when a client leaves them out — the
+# wire's own defaults, as the pilot sends them (friction 3 of the
+# 2026-10-04 play-through: `autoprepare` was refused for want of `mode`,
+# `excluded` and `count`).
+ACTION_DEFAULTS = {
+    "prepare": {"kind": "spell", "index": 0, "x": 0, "mode": 0},
+    "autoprepare": {"kind": "spell", "index": 0, "mode": 0, "excluded": [], "count": 1},
+    "autopay": {"excluded": [], "count": 1},
+    "submit": {"targets": []},
+    "attack": {"cards": []},
+    "block": {"pairs": []},
+}
+
+
+class CastRefused(Exception):
+    """A one-call action that cannot go on, with what was legal."""
+
+    def __init__(self, message: str, kind: str = "cast", **more):
+        super().__init__(message)
+        self.message = message
+        self.kind = kind
+        self.more = more
+
+
+def complete_action(action: dict, decision: dict | None) -> dict:
+    """A client's action with the wire's defaults filled in for the keys
+    it left out, and a `card` given by NAME (`"Plains"`) turned into the
+    handle the decision's options list it under — the land to play, the
+    spell or ability to prepare. A name the options do not list is left
+    as typed: the referee's refusal is the answer."""
+    out = dict(action)
+    for key, value in ACTION_DEFAULTS.get(str(out.get("op")), {}).items():
+        out.setdefault(key, json.loads(json.dumps(value)))
+    card = out.get("card")
+    if decision and isinstance(card, str) and card.strip() and not HANDLE.match(card.strip()):
+        options = decision.get("options") or {}
+        word = card.strip().casefold()
+        if out.get("op") == "play":
+            rows = (options.get("play") or {}).get("lands", []) or []
+        elif out.get("op") in ("prepare", "autoprepare"):
+            prepare = options.get("prepare") or {}
+            rows = prepare.get("abilities" if out.get("kind") == "ability" else "casts", []) or []
+        else:
+            rows = []
+        for row in rows:
+            if isinstance(row, dict) and str(row.get("name", "")).casefold() == word:
+                out["card"] = row.get("card")
+                break
+    return out
+
+
+def player_of(word, seat: int) -> int | None:
+    """A player named the way a client names one: `me`, `opponent`, a
+    seat number, `player:1`, `seat 0` — or None."""
+    if isinstance(word, bool):
+        return None
+    if isinstance(word, int):
+        return word if word in (0, 1) else None
+    text = str(word).strip().casefold()
+    if text in ME_WORDS:
+        return seat
+    if text in THEM_WORDS:
+        return 1 - seat
+    found = re.fullmatch(r"(?:player|seat)?\s*[:_-]?\s*([01])", text)
+    return int(found.group(1)) if found else None
+
+
+def target_spec(spec) -> tuple:
+    """(word, amount, slot) of one requested target: a word (`c9`,
+    `Grizzly Bears`, `opponent`, `t2`), a `[word, amount]` pair, or
+    `{target, amount, slot}`."""
+    if isinstance(spec, dict):
+        word = next((spec[k] for k in ("target", "card", "id", "player") if k in spec), None)
+        return word, spec.get("amount"), spec.get("slot")
+    if isinstance(spec, (list, tuple)) and len(spec) == 2:
+        return spec[0], spec[1], None
+    return spec, None, None
+
+
+def slot_candidates(slot: dict, refs: dict) -> list[dict]:
+    """A slot's targets as {token, label, what}: `what` is the handle
+    (`c9`), `player:N`, `ability:aN`... — the referee's own `card` beside
+    the token when it sends one, else the view's `presentation.targets`."""
+    out = []
+    for row in slot.get("targets", []) or []:
+        if isinstance(row, dict):
+            token = str(row.get("id", ""))
+            out.append({"token": token, "label": str(row.get("label", "")),
+                        "what": row.get("card") or refs.get(token)})
+    return out
+
+
+def legal_targets(announcement: dict, refs: dict) -> list[dict]:
+    return [{"slot": i, "label": slot.get("label", ""), "min": slot.get("min", 0), "max": slot.get("max", 0),
+             "divided": slot.get("divided", 0),
+             "targets": [{"token": c["token"], "label": c["label"], **({"card": c["what"]} if c["what"] else {})}
+                         for c in slot_candidates(slot, refs)]}
+            for i, slot in enumerate(announcement.get("slots", []) or [])]
+
+
+def _expected_label(card: dict, seat: int) -> str:
+    """What SgDuelActions.target_label calls a card on the table — the
+    fallback for a referee whose tokens carry no handle."""
+    name = "Face-down creature" if card.get("masked") else card.get("name", "")
+    owner = "yours" if card.get("controller") == seat else "opponent's"
+    return f"{name} — {owner}" + (" (tapped)" if card.get("tapped") else "")
+
+
+def resolve_target(word, slot: dict, refs: dict, cards: dict, seat: int) -> str | None:
+    """The token of `slot` that `word` names, None when it names none of
+    them; CastRefused when it names several."""
+    rows = slot_candidates(slot, refs)
+    text = str(word).strip() if not isinstance(word, (int, bool)) else str(word)
+    if TOKEN.match(text):
+        return text if any(r["token"] == text for r in rows) else None
+    player = player_of(word, seat)
+    matches: list[dict]
+    if player is not None and not HANDLE.match(text):
+        label = "You" if player == seat else "Opponent"
+        matches = [r for r in rows if r["what"] == f"player:{player}" or (not r["what"] and r["label"] == label)]
+    elif HANDLE.match(text):
+        matches = [r for r in rows if r["what"] == text]
+        if not matches and text in cards:
+            # A referee that sends no handle beside its tokens: the label
+            # the engine gives that card, when exactly one token wears it.
+            label = _expected_label(cards[text], seat)
+            same = [r for r in rows if not r["what"] and r["label"] == label]
+            if len(same) > 1:
+                raise CastRefused(f"several targets read '{label}' and this referee does not say which is {text}: "
+                                  f"name its token ({', '.join(r['token'] for r in same)})", "target")
+            matches = same
+    else:
+        name = text.casefold()
+        matches = [r for r in rows
+                   if (r["what"] in cards and str(cards[r["what"]].get("name", "")).casefold() == name)
+                   or r["label"].casefold() == name or r["label"].casefold().startswith(name + " — ")
+                   or r["label"].casefold() == "ability: " + name]
+        if len(matches) > 1:
+            raise CastRefused(f"several targets are called '{text}': "
+                              + "; ".join(f"{r['token']} {r['label']}" + (f" [{r['what']}]" if r["what"] else "")
+                                          for r in matches) + " — name one by its id or token", "target")
+    return matches[0]["token"] if matches else None
+
+
+def map_targets(announcement: dict, view: dict, seat: int, wanted: list) -> list[dict]:
+    """The requested targets laid onto the announcement's slots, in order:
+    each target goes to the first slot (from the current one on) that has
+    room and where it is legal — or to the slot it names. Divided amounts
+    are checked (one target takes the whole amount; several without
+    amounts share it evenly). Returns [{slot, token, label, target,
+    amount}]; CastRefused, with the legal targets, when a target is not
+    legal, a slot is short, or an amount does not add up."""
+    refs = target_refs(view)
+    cards = view_cards(view)
+    slots = [s for s in announcement.get("slots", []) or [] if isinstance(s, dict)]
+    placed: list[list[dict]] = [[] for _ in slots]
+    legal = legal_targets(announcement, refs)
+
+    def find(word, slot: dict) -> str | None:
+        try:
+            return resolve_target(word, slot, refs, cards, seat)
+        except CastRefused as exc:
+            raise CastRefused(exc.message, exc.kind, legal=legal) from None
+
+    current = 0
+    for spec in wanted or []:
+        word, amount, slot_index = target_spec(spec)
+        if word is None or (isinstance(word, str) and not word.strip()):
+            raise CastRefused(f"a target is a card id, a card name, a player or a token — not {spec!r}", "target",
+                              legal=legal)
+        if slot_index is not None:
+            if not isinstance(slot_index, int) or isinstance(slot_index, bool) or not 0 <= slot_index < len(slots):
+                raise CastRefused(f"no slot {slot_index!r}: the announcement has {len(slots)}", "target", legal=legal)
+            token = find(word, slots[slot_index])
+            if token is None:
+                raise CastRefused(f"{word} is not a legal target for slot {slot_index} "
+                                  f"({slots[slot_index].get('label', '')})", "target", legal=legal)
+            placed[slot_index].append({"token": token, "amount": amount, "word": word})
+            continue
+        while True:
+            if current >= len(slots):
+                raise CastRefused(f"{word}: more targets than the spell takes" if slots else
+                                  f"{announcement.get('name', 'this')} takes no targets", "target", legal=legal)
+            slot = slots[current]
+            if len(placed[current]) >= int(slot.get("max", 0) or 0):
+                current += 1
+                continue
+            token = find(word, slot)
+            if token is not None and not any(p["token"] == token for p in placed[current]):
+                placed[current].append({"token": token, "amount": amount, "word": word})
+                break
+            if len(placed[current]) >= int(slot.get("min", 0) or 0) and current + 1 < len(slots):
+                current += 1
+                continue
+            raise CastRefused(f"{word} is not a legal target for {announcement.get('name', 'this')} "
+                              f"(slot {current}: {slot.get('label', '')})", "target", legal=legal)
+    out: list[dict] = []
+    for i, slot in enumerate(slots):
+        rows = placed[i]
+        if len(rows) < int(slot.get("min", 0) or 0):
+            raise CastRefused(f"slot {i} ({slot.get('label', 'target')}) needs at least {slot.get('min')} target(s) "
+                              f"— give `targets`", "target", legal=legal)
+        divided = int(slot.get("divided", 0) or 0)
+        amounts = [r["amount"] for r in rows]
+        if divided and rows:
+            if all(a is None for a in amounts):
+                share, extra = divmod(divided, len(rows))
+                amounts = [share + (1 if k < extra else 0) for k in range(len(rows))]
+            if any(not isinstance(a, int) or isinstance(a, bool) or a < 1 for a in amounts) or sum(amounts) != divided:
+                raise CastRefused(f"slot {i} divides {divided} among its targets, at least 1 each — "
+                                  f"not {amounts}", "target", legal=legal)
+        else:
+            amounts = [0] * len(rows)
+        labels = {c["token"]: c for c in slot_candidates(slot, refs)}
+        for row, amount in zip(rows, amounts):
+            found = labels.get(row["token"], {})
+            out.append({"slot": i, "token": row["token"], "label": found.get("label", ""),
+                        "target": found.get("what") or str(row["word"]), "amount": amount})
+    return out
+
+
+def cast_summary(cast: dict) -> str:
+    """One line for a one-call cast's outcome (the compact view)."""
+    text = f"{cast.get('name', '?')} {cast.get('card', '')} ({cast.get('kind', 'spell')}"
+    if cast.get("x"):
+        text += f", X={cast['x']}"
+    if cast.get("mode"):
+        text += f", mode {cast['mode']}"
+    text += ")"
+    if cast.get("targets"):
+        text += " -> " + "; ".join(f"{t.get('label') or t.get('target')}" + (f" ({t['amount']})" if t.get("amount") else "")
+                                    for t in cast["targets"])
+    text += f": {cast.get('result', '?')}"
+    if cast.get("reason"):
+        text += f" — {cast['reason']}"
+    if cast.get("floating_mana"):
+        text += f" | floating mana {cast['floating_mana']}"
+    if cast.get("note"):
+        text += f" | {cast['note']}"
+    return text
+
+
+def floating_mana(decision: dict | None) -> str:
+    """The seat's mana pool as `W1 C2`, '' when empty."""
+    view = (decision or {}).get("view") or {}
+    seat = (decision or {}).get("seat")
+    for player in view.get("players", []) or []:
+        if isinstance(player, dict) and player.get("seat") == seat and player.get("mana"):
+            pool = player.get("mana_colors") or []
+            return " ".join(f"{c}{n}" for c, n in zip("WUBRGC", pool) if n) or str(player["mana"])
+    return ""
 
 
 # --- one referee process, kept across calls ------------------------------
@@ -870,6 +1812,20 @@ class Game:
         # the journal lines of decisions passed over by `until`.
         self.last_brief: dict | None = None
         self.passed_journal: list = []
+        # THE JOURNAL IS NEVER LOST (2026-10-04): `fresh` says the pending
+        # decision's journal lines have reached nobody yet — neither shown
+        # nor kept in `passed_journal`. An action sent on a fresh decision
+        # (a pass of `until`, the pilot's answer, a step of a one-call
+        # cast) keeps its lines first, so the next decision shown carries
+        # them; before, `referee_autoplay` dropped every journal line but
+        # the last decision's. `delta_base` is the brief the shown delta
+        # was taken against (`referee_view` renders it again).
+        self.fresh = False
+        self.delta_base: dict | None = None
+        self.shown_record: dict | None = None
+        # What a referee answer's `content` holds (0.50.13): the compact
+        # text (default) or the JSON (`text: "json"`).
+        self.text = "compact"
         stderr_path.parent.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ)
         env["SHANDALAR_NO_BANNER"] = "1"
@@ -915,9 +1871,17 @@ class Game:
     def kept(self) -> bool:
         return self.keep is not None
 
+    def absorb(self) -> None:
+        """Keep a fresh pending decision's journal for the next decision
+        shown — it is about to be answered without being shown."""
+        if self.fresh and self.pending is not None:
+            self.passed_journal += list((self.pending.get("view") or {}).get("journal") or [])
+        self.fresh = False
+
     def send(self, action: dict) -> None:
         if not self.running:
             raise refusal("referee", "game", f"game {self.ident} is over", game=self.ident)
+        self.absorb()
         try:
             # ASCII on the wire (2026-10-03): an action is JSON either way,
             # and no referee read can then end inside a character.
@@ -995,6 +1959,7 @@ class Game:
                     self.decisions += 1
                 self.last_decision_n = number
                 self.pending = record
+                self.fresh = True
                 return self._state(refused, render=render)
             elif kind == "result":
                 self.result = record
@@ -1031,10 +1996,23 @@ class Game:
             view["journal"] = self.passed_journal + list(view.get("journal") or [])
             self.pending["view"] = view
             self.passed_journal = []
+        self.fresh = False
         brief = brief_view(self.pending.get("view", {}), int(self.pending.get("seat", 0)))
-        out = render_decision(self.pending, self.view, self.last_brief, brief)
+        if self.pending is not self.shown_record:
+            # (the same decision shown again keeps the delta it was shown with)
+            self.delta_base = self.last_brief
+            self.shown_record = self.pending
+        out = render_decision(self.pending, self.view, self.delta_base, brief)
         self.last_brief = brief
         return out
+
+    def render(self, mode: str) -> dict:
+        """The pending decision in another view, for `referee_view`: a
+        read, so neither the game's own view nor the delta's base moves."""
+        assert self.pending is not None
+        brief = brief_view(self.pending.get("view", {}), int(self.pending.get("seat", 0)))
+        base = self.delta_base if self.pending is self.shown_record else self.last_brief
+        return render_decision(self.pending, mode, base, brief)
 
     def stderr_tail(self, lines: int = 12) -> list[str]:
         try:
@@ -1445,7 +2423,10 @@ class Server:
                     "board, the hand with costs and castable marks, and the new journal lines; "
                     "`delta` only what changed since the decision you last saw (life, cards that "
                     "came and went, the stack, the prompts, the journal; the first one is the "
-                    "whole brief, marked `baseline`); `full` the referee's whole LAN view; "
+                    "whole brief, marked `baseline`); `compact` the board, the hand, the stack, "
+                    "the open prompt with its tokens, the legal answers and the journal as a few "
+                    "lines of text — the answer's `content` (what a model reads), the brief's JSON "
+                    "staying in `structuredContent`; `full` the referee's whole LAN view; "
                     "`options` the legal answers alone",
                     enum=list(VIEWS))
         keep = prop("boolean", "keep the game across this server's restarts: the referee listens "
@@ -1457,6 +2438,10 @@ class Server:
         packs = prop("string", "the card packs in play: `all`, `none`, or ids `1,3` (unset: the "
                      "game's own setting)")
         out = prop("string", "the output folder, under the checkout or the workspace")
+        text = prop("string", "what each referee answer's `content` holds, remembered for the game: "
+                    "`compact` (default) the table summary as text — the board, your hand, the stack, the "
+                    "prompt, the legal answers, the journal, or the end of the game — `json` the JSON "
+                    "itself; `structuredContent` is the JSON either way", enum=list(TEXTS))
         return [
             self._tool("status", "The server, the folders and the games: the door it drives, the "
                        "project version, the workspace where a client's decks and runs go, and "
@@ -1481,9 +2466,12 @@ class Server:
                        {}, self.tool_packs),
             self._tool("cards", "A card's record by exact printed name: cost, mana value, colors, "
                        "types, keywords, power/toughness, rules text, printings, rarity, pack. An "
-                       "unknown name answers `known: false` with `near` — the nearest real names.",
+                       "unknown name answers `known: false` with `near` — the nearest real names. "
+                       "Every pack the server finds is searched unless `packs` says otherwise.",
                        {"names": prop("array", "one or more exact card names", items={"type": "string"},
-                                      minItems=1)},
+                                      minItems=1),
+                        "packs": prop("string", "the card packs to look in: `all`, `none`, or ids `1,8` "
+                                      "(unset: every pack the server finds — `all`)")},
                        self.tool_cards, required=["names"]),
             self._tool("list_decks", "The deck files: the shipped `decks/` folder (its groups are "
                        "the subfolders — `tournament` is the good decks) and the workspace, each "
@@ -1647,8 +2635,11 @@ class Server:
                         "seed": prop("integer", "the shuffle (unset: drawn and reported in `hello`)"),
                         "turns": prop("integer", "the duel is a draw past this turn (default 200)"),
                         "packs": packs,
+                        "rules": prop("string", "the table's rules preset, passed to the referee: `modern`, "
+                                      "`modern_mana_burn` (the referee's default) or `fifth`; reported as "
+                                      "`hello.rules`"),
                         "log": prop("string", "write the engine's own log of the duel here at the end"),
-                        "keep": keep, "view": view, "timeout": timeout},
+                        "keep": keep, "view": view, "text": text, "timeout": timeout},
                        self.tool_referee_start, required=["deck_a", "deck_b"]),
             self._tool("referee_join", "Sit at a table a person (or another program) hosts in the "
                        "game — play against a human. Takes the LAN invitation (`sglan1:...`) the "
@@ -1666,7 +2657,7 @@ class Server:
                         "turns": prop("integer", "the duel is a draw past this turn"),
                         "log": prop("string", "write the journal this seat saw — every line of the game "
                                     "as the table told it — here at the end"),
-                        "packs": packs, "keep": keep, "view": view,
+                        "packs": packs, "keep": keep, "view": view, "text": text,
                         "timeout": prop("number", "seconds to wait for the first decision before "
                                         "answering `pending` (default 15)")},
                        self.tool_referee_join, required=["deck"]),
@@ -1693,7 +2684,9 @@ class Server:
                         "wait": prop("integer", "seconds to hold the empty chair for a guest (default 300)"),
                         "turns": prop("integer", "the duel is a draw past this turn"),
                         "log": prop("string", "write the journal your seat saw here at the end"),
-                        "packs": packs, "keep": keep, "view": view,
+                        "packs": packs, "keep": keep, "view": view, "text": text,
+                        "rules": prop("string", "the table's rules preset: `modern`, `modern_mana_burn` "
+                                      "(default) or `fifth` (a joined table plays its host's)"),
                         "timeout": prop("number", "seconds to wait for the `table` line before "
                                         "answering `pending` (default 15)")},
                        self.tool_referee_host, required=["table", "deck"]),
@@ -1712,16 +2705,67 @@ class Server:
                        "(counter it, respond to it), their declared attack, their blocks and their "
                        "end step while you hold an instant or an ability (Lightning Bolt mid-fight, "
                        "end-of-turn plays), the blocks on your own turn, and every attack, block, "
-                       "discard, damage and choice of your own. The answer says `stop` (why it "
-                       "stopped), `passed` (decisions passed), and the journal of everything "
-                       "passed over is in the decision shown.",
+                       "discard, damage and choice of your own. RECOMMENDED: `mine` — the smart "
+                       "pass: your own main phase with something to do and every decision of your "
+                       "own (attack, block, discard, damage, choice), and the opponent's spell on "
+                       "the stack or their combat and end steps ONLY while you hold something "
+                       "usable right then (a castable instant or flash spell, a legal non-mana "
+                       "ability) — the stop says what you hold; `mine-strict` never stops for the "
+                       "opponent's turn at all. The answer says `stop` (why it stopped), `passed` "
+                       "(decisions passed), and the journal of everything passed over is in the "
+                       "decision shown. Missing keys of an op are filled with the wire's defaults "
+                       "(`prepare` kind spell, index 0, x 0, mode 0; `autopay` excluded [], count 1; "
+                       "...), a `card` may be named by name, and `{\"op\":\"cast\"}` / "
+                       "`{\"op\":\"activate\"}` take `referee_cast`'s keys.",
                        {"game": game,
                         "action": {"description": "the answer: an object with `op` (the seat is "
                                    "filled in), or `default`", "type": ["object", "string"]},
-                        "until": prop("string", "pass priority after this answer up to: `main`, `end`, "
-                                      "`turn`, `play`, `respond` (unset: the next decision)", enum=list(UNTIL)),
+                        "until": prop("string", "pass priority after this answer up to: `mine` (recommended: "
+                                      "your next real decision), `mine-strict`, `main`, `end`, `turn`, "
+                                      "`play`, `respond` (unset: the next decision)", enum=list(UNTIL)),
                         "view": view, "timeout": timeout},
                        self.tool_referee_act, required=["game", "action"]),
+            self._tool("referee_cast", "Cast a spell or activate an ability in ONE call: prepare, "
+                       "pay (the auto-tap) and submit, the targets named by what they are — a card's "
+                       "id (`c9`) or name, `me`, `opponent` or a seat, an announcement token (`t2`), "
+                       "with amounts for a divided spell (`[\"c9\", 2]` or `{target, amount, slot}`). "
+                       "A target that is not legal is refused with the legal ones BEFORE any mana is "
+                       "made; a payment or a submission the referee refuses is withdrawn (`cancel`) "
+                       "and comes back as the refusal with the mana left floating — never a "
+                       "half-announced cast. A question the payment asks (which colour) comes back "
+                       "`open`: answer it with `referee_act`, then `referee_cast` the same card again. "
+                       "`until` then passes priority as `referee_act`'s does.",
+                       {"game": game,
+                        "card": prop("string", "the spell or the permanent: its id (`c7`) or its name"),
+                        "kind": prop("string", "`spell` (default) or `ability`", enum=["spell", "ability"]),
+                        "index": prop("integer", "which ability of the card (the `#` in the options); "
+                                      "needed only when it has several usable now", minimum=0),
+                        "x": prop("integer", "X, for a spell or ability with X (required there)", minimum=0),
+                        "mode": {"description": "a modal spell's mode: its index or its label (required "
+                                 "for a modal spell)", "type": ["integer", "string"]},
+                        "targets": {"description": "the targets in slot order: card ids or names, `me`, "
+                                    "`opponent`, 0/1, tokens, `[target, amount]` pairs or `{target, amount, "
+                                    "slot}` objects", "type": "array"},
+                        "exclude": prop("array", "permanents the auto-tap must not tap (ids)",
+                                        items={"type": "string"}),
+                        "until": prop("string", "after the cast, pass priority up to (as referee_act's "
+                                      "`until`; `mine` recommended)", enum=list(UNTIL)),
+                        "view": view, "timeout": timeout},
+                       self.tool_referee_cast, required=["game", "card"]),
+            self._tool("referee_play_land", "Play a land in one call, by its id or its name (unset: "
+                       "the first land the options offer); refused with the playable lands when it "
+                       "cannot be played now. `until` then passes priority as `referee_act`'s does.",
+                       {"game": game,
+                        "card": prop("string", "the land: its id (`c3`) or its name (unset: the first playable)"),
+                        "until": prop("string", "after the land, pass priority up to (as referee_act's "
+                                      "`until`)", enum=list(UNTIL)),
+                        "view": view, "timeout": timeout},
+                       self.tool_referee_play_land, required=["game"]),
+            self._tool("referee_view", "Read the pending decision again in any view — `compact`, "
+                       "`brief`, `delta`, `full`, `options` — without acting, and without changing "
+                       "the view the game answers in (`referee_wait` with `view` changes it).",
+                       {"game": game, "view": view},
+                       self.tool_referee_view, required=["game"]),
             self._tool("referee_autoplay", "Let the built-in pilot answer the game's next "
                        "decisions — keep, play a land, cast the first spell, attack with "
                        "everything, block nothing — for `decisions` decisions or until the "
@@ -1747,9 +2791,52 @@ class Server:
                        "(the journal it carries is the whole game so far), or the result the "
                        "referee wrote while nobody was attached.",
                        {"game": prop("string", "the kept game's id (`g3`); unset lists them"),
-                        "view": view,
+                        "view": view, "text": text,
                         "timeout": prop("number", "seconds to wait for the referee's answer (default 30)")},
                        self.tool_referee_resume),
+            *self._decision_tools(game, view, timeout),
+        ]
+
+    def _decision_tools(self, game: dict, view: dict, timeout: dict) -> list[dict]:
+        """THE DECISION-MODEL BRIDGE (0.50.13): `referee_menu` and
+        `referee_pick`, built on `tools/decision_menu.py` (its Driver plays
+        the server's own `Game`), after the referee's tools, sharing the
+        `game`, `view` and `timeout` properties (AGENTS.md, "Decision
+        models")."""
+        rich = prop("boolean", "each menu item also carries its kind, info (card, name, mana value, "
+                    "P/T, target) and the wire ops it expands to")
+        return [
+            self._tool("referee_menu",
+                       "The pending decision of a game as a NUMBERED MENU for a decision model (a small "
+                       "model, a bot, a learning policy): `obs` (a compact observation from your side, with "
+                       "`features`, a fixed numeric vector) and `menu` — every complete legal action as "
+                       "{id, label}: pass, play:c3, cast:c12->opp (one item per legal target), act:c5:0, "
+                       "attack:add:c7, block:c4->c9, choice:1, ... Item 0 is always 'do nothing'. Answer "
+                       "with `referee_pick`; a menu of one legal item is answered for you. Reads the "
+                       "referee's own announcement of each aimed spell first (a prepare and a cancel, "
+                       "nothing paid). In the `compact` view the answer's text is the board and the menu "
+                       "as numbered lines.",
+                       {"game": game, "rich": rich,
+                        "probe": prop("boolean", "read each aimed spell's targets ahead so the menu lists "
+                                      "`cast S -> T` flat (default true; false: a target sub-menu after the "
+                                      "cast; applies when the game's menu is first made)"),
+                        "view": view, "timeout": timeout},
+                       self.tool_referee_menu, required=["game"]),
+            self._tool("referee_pick",
+                       "Apply one item of the game's `referee_menu` — its index, its id, or {\"pick\": ...} — "
+                       "and answer with the next menu (or the `result`). The server sends the wire ops itself "
+                       "(prepare, autopay once the payment is reachable, submit; the attack, block and choice "
+                       "lists); a sub-menu step (attack:add, block pairs, discard and choice picks, target "
+                       "picks) sends nothing until its last pick. A refused step is cancelled at once and the "
+                       "item leaves the menu; `refused` lists it. With `until` the server then passes priority "
+                       "as referee_act's `until` does (`mine` recommended).",
+                       {"game": game,
+                        "pick": {"description": "the menu item: its index (0..), its id, or {\"pick\": INDEX or ID}",
+                                 "type": ["integer", "string", "object"]},
+                        "until": prop("string", "after the pick, pass priority up to: " + ", ".join(UNTIL),
+                                      enum=list(UNTIL)),
+                        "rich": rich, "view": view, "timeout": timeout},
+                       self.tool_referee_pick, required=["game", "pick"]),
         ]
 
     @staticmethod
@@ -1846,7 +2933,19 @@ class Server:
         return self.quote("packs", self.run("packs", []), require_json=True)
 
     def tool_cards(self, args: dict) -> dict:
+        """A card's record. Without `packs` every pack the server can find
+        is in play (`--packs all`, 2026-10-04): a card of a pack the game's
+        own setting leaves off — Pack 8 in a fresh profile — used to come
+        back `known: false`. Should that be refused (a found pack that
+        cannot be enabled), the game's own setting answers instead."""
         names = self.strings(args["names"], "cards", "names")
+        if args.get("packs"):
+            return self.quote("cards", self.run("cards", ["--packs", str(args["packs"])] + names), require_json=True)
+        try:
+            return self.quote("cards", self.run("cards", ["--packs", "all"] + names), require_json=True)
+        except ToolError as exc:
+            if exc.envelope.get("kind") != "packs":
+                raise
         return self.quote("cards", self.run("cards", names), require_json=True)
 
     @staticmethod
@@ -2246,17 +3345,18 @@ class Server:
             self.next_game = number
             return ident
 
-    def new_game(self, argv: list[str], view: str, keep: bool = False) -> Game:
+    def new_game(self, argv: list[str], view: str, keep: bool = False, text: str = "compact") -> Game:
         ident = self.claim_game()
         folder = self.workspace / "games"
         stderr = folder / f"{ident}.stderr"
         if not keep:
             game = Game(ident, self.command("referee", argv), view, self.root, stderr,
                         cancelled=self.is_cancelled)
+            game.text = text
             self.games[ident] = game
             return game
         folder.mkdir(parents=True, exist_ok=True)
-        record = {"game": ident, "argv": argv, "view": view, "keep": str(folder / f"{ident}.keep.json"),
+        record = {"game": ident, "argv": argv, "view": view, "text": text, "keep": str(folder / f"{ident}.keep.json"),
                   "lines": str(folder / f"{ident}.lines"), "stderr": str(stderr), "started": time.time()}
         for stale in (Path(record["keep"]), Path(record["lines"])):
             try:
@@ -2266,13 +3366,14 @@ class Server:
         full = self.command("referee", argv + ["--listen", record["keep"], "--idle", str(KEEP_IDLE)])
         record["command"] = full
         game = Game(ident, full, view, self.root, stderr, keep=record, cancelled=self.is_cancelled)
+        game.text = text
         (folder / f"{ident}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
         self.games[ident] = game
         return game
 
     def open_game(self, argv: list[str], view: str, timeout: float, keep: bool = False,
-                  until_table: bool = False) -> dict:
-        game = self.new_game(argv, view, keep)
+                  until_table: bool = False, text: str = "compact") -> dict:
+        game = self.new_game(argv, view, keep, text)
         state = game.advance(timeout, until_table=until_table)
         if game.error is not None and game.hello is None:
             game.close(grace=2)
@@ -2386,9 +3487,11 @@ class Server:
                 out["error"] = done["error"]
             return out
         view = self.view_of(args, str(record.get("view") or "brief"))
+        text = self.text_of(args, str(record.get("text") or "compact"))
         game = Game(ident, list(record.get("command") or []), view, self.root,
                     Path(record.get("stderr") or self.workspace / "games" / f"{ident}.stderr"),
                     keep=record, resume=True, cancelled=self.is_cancelled)
+        game.text = text
         self.games[ident] = game
         state = game.advance(float(args.get("timeout") or 30))
         if game.error is not None and game.hello is None:
@@ -2405,7 +3508,7 @@ class Server:
         state["hello"] = game.hello
         state["resumed"] = True
         self.settle(game)
-        return state
+        return self.present(game, state)
 
     @staticmethod
     def view_of(args: dict, fallback: str = "brief") -> str:
@@ -2424,12 +3527,13 @@ class Server:
                     raise refusal(tool, "option", f"`{key}` is one of {', '.join(SEATS)}", flag=key,
                                   suggestions=difflib.get_close_matches(str(args[key]), SEATS, n=2))
                 argv += ["--" + key.replace("_", "-"), args[key]]
-        for key in ("seed", "turns", "packs"):
+        for key in ("seed", "turns", "packs", "rules"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
             argv += ["--log", str(self.inside(args["log"], tool, "log"))]
-        return self.open_game(argv, self.view_of(args), float(args.get("timeout") or DECISION_TIMEOUT),
-                              keep=bool(args.get("keep", False)))
+        return self.shown_state(self.open_game(argv, self.view_of(args),
+                                               float(args.get("timeout") or DECISION_TIMEOUT),
+                                               keep=bool(args.get("keep", False)), text=self.text_of(args)))
 
     def tool_referee_join(self, args: dict) -> dict:
         tool = "referee"
@@ -2446,18 +3550,18 @@ class Server:
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
             argv += ["--log", str(self.inside(args["log"], tool, "log"))]
-        return self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
-                              keep=bool(args.get("keep", True)))
+        return self.shown_state(self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
+                                               keep=bool(args.get("keep", True)), text=self.text_of(args)))
 
     def tool_referee_host(self, args: dict) -> dict:
         tool = "referee"
         argv = ["--host", str(args["table"]), "--deck", self.deck_arg(args["deck"])]
-        for key in ("access", "name", "port", "address", "wait", "turns", "packs"):
+        for key in ("access", "name", "port", "address", "wait", "turns", "packs", "rules"):
             self.flag(argv, args, key, "--" + key)
         if args.get("log"):
             argv += ["--log", str(self.inside(args["log"], tool, "log"))]
         state = self.open_game(argv, self.view_of(args), float(args.get("timeout") or 15),
-                               keep=bool(args.get("keep", True)), until_table=True)
+                               keep=bool(args.get("keep", True)), until_table=True, text=self.text_of(args))
         table = state.get("table")
         if table and state.get("pending"):
             name = table.get("name")
@@ -2472,7 +3576,11 @@ class Server:
                                     "busy): hand them the `invitation` to paste instead")
                                  + f"; the person joins it by name (host '{table.get('host')}'), "
                                  "then `referee_wait` until they sit down")
-        return state
+        return self.shown_state(state)
+
+    def shown_state(self, state: dict):
+        """`present` for an answer that names its game by id."""
+        return self.present(self.games.get(str(state.get("game"))), state)
 
     def game_of(self, args: dict) -> Game:
         ident = str(args["game"])
@@ -2482,49 +3590,122 @@ class Server:
                           games=sorted(self.games))
         return game
 
+    def present(self, game: Game | None, state: dict, view: str | None = None):
+        """A referee answer as it goes out. One that carries a decision or
+        a result is an `Answer` whose `content` is the COMPACT TEXT —
+        whatever `view` the JSON is rendered in (0.50.13: what an MCP
+        client shows its model, every turn, without asking) — unless the
+        game was opened with `text: "json"`; the JSON is the
+        `structuredContent` either way, exactly as `view` renders it."""
+        if game is None or game.text == "json":
+            return state
+        if not isinstance(state.get("decision"), dict) and not isinstance(state.get("result"), dict):
+            return state
+        return Answer(state, self.answer_text(game, state, view or game.view))
+
+    def answer_text(self, game: Game, state: dict, view: str) -> str:
+        """The compact text of a referee answer: the decision drawn from
+        the referee's own line (whatever view the JSON shows), the end of
+        the game in a line, and where the JSON is."""
+        decision = state.get("decision")
+        drawn = None
+        if isinstance(decision, dict) and not decision.get("compact") and "view" not in decision:
+            raw = game.pending
+            if raw is not None and raw.get("n") == decision.get("n") and raw.get("seat") == decision.get("seat"):
+                drawn = compact_view(raw)
+        note = json_note(view) if isinstance(decision, dict) else "(The full JSON, the result's, is in structuredContent.)"
+        return compact_answer(state, drawn, self.my_seat(game)) + "\n" + note
+
+    @staticmethod
+    def my_seat(game: Game) -> int | None:
+        """The seat this client plays, when it plays one: the table's seat,
+        or the one `agent` seat of a local duel (None when it plays both)."""
+        hello = game.hello or {}
+        table = hello.get("table") if isinstance(hello.get("table"), dict) else {}
+        if isinstance(table.get("seat"), int):
+            return table["seat"]
+        agents = [s.get("seat") for s in hello.get("seats") or [] if isinstance(s, dict) and s.get("player") == "agent"]
+        return agents[0] if len(agents) == 1 and isinstance(agents[0], int) else None
+
+    @staticmethod
+    def text_of(args: dict, fallback: str = "compact") -> str:
+        text = args.get("text") or fallback
+        if text not in TEXTS:
+            raise refusal("referee", "option", f"`text` is one of {', '.join(TEXTS)}", flag="text")
+        return text
+
+    @staticmethod
+    def until_of(args: dict) -> str | None:
+        until = args.get("until")
+        if until is not None and until not in UNTIL:
+            raise refusal("referee", "option", f"`until` is one of {', '.join(UNTIL)}", flag="until",
+                          suggestions=difflib.get_close_matches(str(until), UNTIL, n=2))
+        return until
+
     def tool_referee_act(self, args: dict) -> dict:
         game = self.game_of(args)
         if game.result is not None or game.error is not None:
-            return game.summary()
+            return self.present(game, game.summary())
         if game.pending is None:
             raise refusal("referee", "game", f"game {game.ident} has no decision pending — referee_wait reads on",
                           game=game.ident)
         if args.get("view"):
             game.view = self.view_of(args)
+        # `until` is checked before anything is sent — or the pilot asked.
+        until = self.until_of(args)
+        timeout = float(args.get("timeout") or DECISION_TIMEOUT)
         action = args["action"]
         if action == "default":
             action = default_answer(game.pending, game.memory)
         if not isinstance(action, dict) or "op" not in action:
             raise refusal("referee", "option", "`action` is an object with `op`, or `default`", flag="action")
-        action = dict(action)
+        if action.get("op") in ("cast", "activate"):
+            # The one-call cast, spelled as an action (2026-10-04).
+            spec = {k: v for k, v in action.items() if k not in ("op", "seat")}
+            spec.setdefault("kind", "ability" if action["op"] == "activate" else "spell")
+            return self.cast(game, spec, until, timeout)
+        action = complete_action(action, game.pending)
         action.setdefault("seat", game.pending.get("seat"))
-        until = args.get("until")
-        if until is not None and until not in UNTIL:
-            raise refusal("referee", "option", f"`until` is one of {', '.join(UNTIL)}", flag="until",
-                          suggestions=difflib.get_close_matches(str(until), UNTIL, n=2))
-        timeout = float(args.get("timeout") or DECISION_TIMEOUT)
         origin = game.pending
         game.send(action)
-        if until is None:
-            state = game.advance(timeout)
-        else:
-            state = self.pass_until(game, str(until), origin, timeout)
+        state = self.after_send(game, until, origin, timeout)
         state["action"] = action
         self.settle(game)
-        return state
+        return self.present(game, state)
 
-    def pass_until(self, game: Game, until: str, origin: dict, timeout: float) -> dict:
+    def after_send(self, game: Game, until: str | None, origin: dict, timeout: float) -> dict:
+        """The answer has gone: the next decision, or with `until` the one
+        the pass stops at."""
+        if until is None:
+            return game.advance(timeout)
+        return self.pass_until(game, until, origin, timeout)
+
+    def pass_until(self, game: Game, until: str, origin: dict, timeout: float, waiting: bool = True) -> dict:
         """After the client's own answer: pass priority for it until
         `stop_reason` names a place a player would act, the result, an
         error, a refusal, a timeout or MAX_PASSES. The journal of every
-        decision passed over is kept for the one shown."""
+        decision passed over is kept for the one shown (`Game.send`
+        keeps a fresh decision's lines before it answers it). `waiting`
+        false: the pending decision has arrived already and is judged
+        first (a one-call cast's next decision)."""
         passed = 0
         refused: list[dict] = []
+        state: dict = {} if waiting else game._state([], render=False)
         while True:
-            state = game.advance(timeout, render=False)
-            refused += state.get("refused", [])
-            if state.get("pending") or game.pending is None or refused:
-                break
+            if waiting:
+                state = game.advance(timeout, render=False)
+                refused += state.get("refused", [])
+                if state.get("pending") or game.pending is None or refused:
+                    break
+            waiting = True
+            empty = no_choice_answer(game.pending) if until in ("mine", "mine-strict") else None
+            if empty is not None and passed < MAX_PASSES:
+                # An attack with nothing able to attack, a block with nothing
+                # able to block: there is no choice to make, so the smooth
+                # modes answer it ([]) and keep passing (owner, 2026-10-04).
+                game.send(empty)
+                passed += 1
+                continue
             reason = stop_reason(game.pending, until, origin)
             if reason:
                 state["stop"] = reason
@@ -2532,7 +3713,6 @@ class Server:
             if passed >= MAX_PASSES:
                 state["stop"] = f"{MAX_PASSES} decisions passed and `{until}` was not reached"
                 break
-            game.passed_journal += list((game.pending.get("view") or {}).get("journal") or [])
             game.send({"op": "pass", "seat": game.pending.get("seat")})
             passed += 1
         if game.pending is not None and "decision" not in state and not state.get("pending"):
@@ -2543,6 +3723,424 @@ class Server:
             state["refused"] = refused
             state["stop"] = "an answer was refused"
         return state
+
+    # ----- the one-call actions (2026-10-04) --------------------------------
+
+    def tool_referee_cast(self, args: dict) -> dict:
+        game = self.game_of(args)
+        if args.get("view"):
+            game.view = self.view_of(args)
+        until = self.until_of(args)
+        timeout = float(args.get("timeout") or DECISION_TIMEOUT)
+        spec = {k: v for k, v in args.items() if k not in ("game", "view", "until", "timeout")}
+        return self.cast(game, spec, until, timeout)
+
+    def open_decision(self, game: Game, tool: str) -> dict:
+        if game.result is not None or game.error is not None:
+            raise refusal(tool, "game", f"game {game.ident} is over", game=game.ident,
+                          result=game.result, error=game.error)
+        if game.pending is None:
+            raise refusal(tool, "game", f"game {game.ident} has no decision pending — referee_wait reads on",
+                          game=game.ident)
+        return game.pending
+
+    def cast(self, game: Game, spec: dict, until: str | None, timeout: float) -> dict:
+        """Prepare, pay and submit one spell or ability in one call, its
+        targets named by what they are. Nothing is left half-announced:
+        a target that is not legal is refused before any mana is made
+        (the announcement withdrawn), and a payment or a submission the
+        referee refuses is withdrawn too — the refusal comes back with
+        the mana that was made and now floats. A question the payment
+        itself asks (which colour a Fellwar Stone makes) is the seat's to
+        answer: the cast comes back open, the question pending."""
+        tool = "referee_cast"
+        decision = self.open_decision(game, tool)
+        kind = spec.get("kind") or "spell"
+        if kind not in ("spell", "ability"):
+            raise refusal(tool, "option", "`kind` is `spell` or `ability`", flag="kind")
+        word = spec.get("card")
+        if word is None or (isinstance(word, str) and not word.strip()):
+            raise refusal(tool, "option", f"{tool} needs `card` — its id (c7) or its name", flag="card")
+        word = str(word).strip()
+        wanted = spec.get("targets") or []
+        if not isinstance(wanted, list):
+            wanted = [wanted]
+        excluded = [str(x) for x in (spec.get("exclude") or [])]
+        options = decision.get("options") or {}
+        view = decision.get("view") or {}
+        seat = int(decision.get("seat", 0))
+        mode_name = str(decision.get("mode") or "")
+        cards = view_cards(view)
+        draft = options.get("draft") or {}
+        steps: list[dict] = []
+        refused: list[dict] = []
+        cast: dict = {"kind": kind}
+        if options.get("announcement"):
+            open_card = str(draft.get("card") or "")
+            if word != open_card and word.casefold() != str((cards.get(open_card) or {}).get("name", "")).casefold():
+                raise refusal(tool, "cast", f"the announcement of {_named(cards.get(open_card), open_card)} is open — "
+                              "finish it (referee_cast with that card resumes it) or withdraw it with "
+                              "referee_act {\"op\":\"cancel\"}", game=game.ident)
+            # A cast left open by its payment's question, taken up again:
+            # the payment resumed when the question was answered.
+            cast.update({"card": open_card, "name": (cards.get(open_card) or {}).get("name", ""),
+                         "kind": draft.get("kind", kind), "index": draft.get("index", 0),
+                         "x": draft.get("x", 0), "mode": draft.get("mode", 0), "resumed": True})
+            return self.cast_submit(game, cast, wanted, until, decision, timeout, steps, refused, paid=True)
+        if mode_name != "priority":
+            raise refusal(tool, "cast", f"this decision is `{mode_name}`, not priority — answer it with referee_act",
+                          game=game.ident)
+        entry = self.cast_entry(options, cards, word, kind, spec.get("index"), tool)
+        x = spec.get("x")
+        if kind == "ability":
+            pass   # (an ability row carries no `x` flag: a given X is the referee's to judge)
+        elif entry.get("x"):
+            if x is None:
+                raise refusal(tool, "option", f"{entry.get('name')} has an X: give `x` (you can pay X up to "
+                              f"{entry.get('budget', 0)})", flag="x", budget=entry.get("budget", 0))
+        elif x not in (None, 0):
+            raise refusal(tool, "option", f"{entry.get('name')} has no X", flag="x")
+        if x is not None and (not isinstance(x, int) or isinstance(x, bool) or x < 0):
+            raise refusal(tool, "option", "`x` is a whole number, 0 or more", flag="x")
+        modes = entry.get("modes") or []
+        mode = spec.get("mode")
+        # The modes castable right now (the referee's `usable_modes`, 0.50.13
+        # — a Fireblast whose Mountains are there, an alternative cost that
+        # can be paid); every mode when an older referee does not say.
+        usable = entry.get("usable_modes")
+        usable = [m for m in usable if isinstance(m, int)] if isinstance(usable, list) else list(range(len(modes)))
+        named = ", ".join(f"{i} ({modes[i]})" for i in usable if 0 <= i < len(modes)) or "none"
+        if modes:
+            if isinstance(mode, str):
+                found = [i for i, label in enumerate(modes) if str(label).casefold() == mode.strip().casefold()]
+                mode = found[0] if found else mode
+            if mode is None:
+                if not usable:
+                    raise refusal(tool, "cast", f"{entry.get('name')}: no mode can be cast now", flag="mode",
+                                  modes=modes, usable_modes=[])
+                mode = usable[0]   # the first mode castable now
+            if not isinstance(mode, int) or isinstance(mode, bool) or not 0 <= mode < len(modes):
+                raise refusal(tool, "option", f"{entry.get('name')}: `mode` is one of "
+                              + ", ".join(f"{i} ({label})" for i, label in enumerate(modes))
+                              + f" — castable now: {named}", flag="mode", modes=modes, usable_modes=usable)
+            if mode not in usable:
+                raise refusal(tool, "cast", f"{entry.get('name')}: mode {mode} ({modes[mode]}) cannot be cast now "
+                              f"— castable now: {named} (nothing was sent)", flag="mode", modes=modes,
+                              usable_modes=usable)
+        elif mode not in (None, 0):
+            raise refusal(tool, "option", f"{entry.get('name')} has no modes", flag="mode")
+        cast.update({"card": entry.get("card"), "name": entry.get("name"), "index": int(entry.get("index", 0) or 0),
+                     "x": int(x or 0), "mode": int(mode or 0)})
+        prepare = {"op": "prepare", "card": cast["card"], "kind": kind, "index": cast["index"],
+                   "x": cast["x"], "mode": cast["mode"], "seat": seat}
+        state = self.cast_step(game, prepare, timeout, steps, refused)
+        if refused:
+            # Refused before any announcement was made: nothing to withdraw.
+            self.cast_refused(game, cast, "prepare", refused[-1].get("reason", "refused"), steps, refused)
+        if state.get("pending") or game.pending is None:
+            return self.cast_answer(game, state, cast, "open", steps, refused,
+                                    note="the referee has not answered yet — referee_wait reads on")
+        now = game.pending
+        if not (now.get("options") or {}).get("announcement"):
+            return self.cast_answer(game, state, cast, "open", steps, refused,
+                                    note=f"no announcement followed the prepare (decision `{now.get('mode')}`)")
+        if not ((now.get("options") or {}).get("draft") or {}).get("reachable", True):
+            self.cast_withdraw(game, timeout, steps, refused)
+            self.cast_refused(game, cast, "prepare", "the cost cannot be paid now (nothing was tapped)", steps, refused)
+        announcement = (now.get("options") or {}).get("announcement") or {}
+        try:
+            # The targets are laid on the slots BEFORE anything is paid.
+            planned = map_targets(announcement, now.get("view") or {}, seat, wanted)
+        except CastRefused as exc:
+            self.cast_withdraw(game, timeout, steps, refused)
+            self.cast_refused(game, cast, "targets", exc.message + " (nothing was tapped)", steps, refused,
+                              kind=exc.kind, **exc.more)
+        count = max(1, len(planned))
+        state = self.cast_step(game, {"op": "autopay", "excluded": excluded, "count": count, "seat": seat},
+                               timeout, steps, refused)
+        if refused and "no mana payment" not in str(refused[-1].get("reason", "")):
+            reason = refused[-1].get("reason", "refused")
+            self.cast_withdraw(game, timeout, steps, refused)
+            self.cast_refused(game, cast, "autopay", reason, steps, refused)
+        if refused:
+            refused.pop()   # a cost of no mana: nothing to pay, nothing went wrong
+        if state.get("pending") or game.pending is None:
+            return self.cast_answer(game, state, cast, "open", steps, refused,
+                                    note="the referee has not answered yet — referee_wait reads on")
+        if game.pending.get("mode") == "choice":
+            return self.cast_answer(game, state, cast, "open", steps, refused,
+                                    note="the payment asks a question: answer it with referee_act "
+                                    "{\"op\":\"choice\",\"picks\":[i]}, then referee_cast the same card again "
+                                    "to submit (or referee_act {\"op\":\"cancel\"} to withdraw)")
+        return self.cast_submit(game, cast, wanted, until, decision, timeout, steps, refused, paid=True)
+
+    def cast_submit(self, game: Game, cast: dict, wanted: list, until: str | None, origin: dict,
+                    timeout: float, steps: list, refused: list, paid: bool) -> dict:
+        now = game.pending or {}
+        seat = int(now.get("seat", 0))
+        announcement = (now.get("options") or {}).get("announcement") or {}
+        if not announcement:
+            return self.cast_answer(game, game._state([], render=False), cast, "open", steps, refused,
+                                    note=f"no announcement is open (decision `{now.get('mode')}`)")
+        try:
+            # Laid again on the slots as they are NOW: the payment may have
+            # tapped a target, and a token is minted afresh each view.
+            planned = map_targets(announcement, now.get("view") or {}, seat, wanted)
+        except CastRefused as exc:
+            self.cast_withdraw(game, timeout, steps, refused)
+            self.cast_refused(game, cast, "targets", exc.message, steps, refused, kind=exc.kind, **exc.more)
+        cast["targets"] = planned
+        submit = {"op": "submit", "targets": [[p["token"], p["amount"]] for p in planned], "seat": seat}
+        state = self.cast_step(game, submit, timeout, steps, refused)
+        if refused and str(refused[-1].get("reason", "")).startswith("not enough mana") and paid \
+                and game.pending is not None and (game.pending.get("options") or {}).get("announcement"):
+            # The named targets priced it higher (a spell aimed at Kaervek's
+            # Torch costs {2} more): the draft keeps them now, so one more
+            # payment covers the surcharge, then the same submission.
+            self.cast_step(game, {"op": "autopay", "excluded": [], "count": max(1, len(planned)), "seat": seat},
+                           timeout, steps, refused)
+            if game.pending is not None and (game.pending.get("options") or {}).get("announcement"):
+                try:
+                    retry = map_targets((game.pending.get("options") or {}).get("announcement") or {},
+                                        game.pending.get("view") or {}, seat, wanted)
+                except CastRefused as exc:
+                    self.cast_withdraw(game, timeout, steps, refused)
+                    self.cast_refused(game, cast, "targets", exc.message, steps, refused, kind=exc.kind, **exc.more)
+                before = len(refused)
+                state = self.cast_step(game, {"op": "submit", "targets": [[p["token"], p["amount"]] for p in retry],
+                                              "seat": seat}, timeout, steps, refused)
+                if len(refused) == before:
+                    refused.clear()
+        if refused:
+            reason = refused[-1].get("reason", "refused")
+            self.cast_withdraw(game, timeout, steps, refused)
+            self.cast_refused(game, cast, "submit", reason, steps, refused)
+        cast["result"] = "cast"
+        if state.get("pending") or game.pending is None:
+            return self.cast_answer(game, state, cast, "cast", steps, refused)
+        if until is not None:
+            state = self.pass_until(game, until, origin, timeout, waiting=False)
+        return self.cast_answer(game, state, cast, "cast", steps, refused)
+
+    def cast_entry(self, options: dict, cards: dict, word: str, kind: str, index, tool: str) -> dict:
+        """The `prepare` row `word` names — by handle or by name; among
+        several of one name the untapped card first; an ability by its
+        `index` when the card has more than one usable now."""
+        prepare = options.get("prepare") or {}
+        rows = [r for r in prepare.get("casts" if kind == "spell" else "abilities", []) or [] if ability_usable(r)]
+        mine = [r for r in rows if r.get("card") == word] or \
+               [r for r in rows if str(r.get("name", "")).casefold() == word.casefold()]
+        if index is not None:
+            if not isinstance(index, int) or isinstance(index, bool):
+                raise refusal(tool, "option", "`index` is a whole number", flag="index")
+            mine = [r for r in mine if int(r.get("index", 0) or 0) == index] or \
+                ([] if kind == "ability" else [r for r in mine if index == 0])
+        if not mine:
+            listed = [f"{r.get('name')} {r.get('card')}" + (f" #{r.get('index', 0)}" if kind == "ability" else "")
+                      for r in rows]
+            known = cards.get(word) or next((c for c in cards.values()
+                                             if str(c.get("name", "")).casefold() == word.casefold()), None)
+            what = "castable" if kind == "spell" else "usable"
+            if known is None:
+                near = difflib.get_close_matches(word, sorted({str(c.get("name", "")) for c in cards.values()}), n=3)
+                message = f"no card '{word}' in this view"
+            elif kind == "spell" and known.get("land"):
+                near = []
+                message = f"{_named(known)} is a land — play it with referee_play_land"
+            else:
+                near = []
+                message = (f"{_named(known)} is not {what} now" if index is None else
+                           f"{_named(known)} has no {what} {kind} #{index} now")
+            raise refusal(tool, "cast", message + (f"; {what} now: {', '.join(listed)}" if listed else
+                                                   f"; nothing is {what} now"),
+                          suggestions=near, **{"castable" if kind == "spell" else "usable": listed})
+        by_card: dict = {}
+        for row in mine:
+            by_card.setdefault(row.get("card"), []).append(row)
+        if kind == "ability":
+            for handle, rows_ in by_card.items():
+                if len(rows_) > 1 and index is None:
+                    raise refusal(tool, "option", f"{_named(cards.get(handle), handle)} has "
+                                  f"{len(rows_)} usable abilities: give `index` — "
+                                  + "; ".join(f"#{r.get('index')} {r.get('cost', '')} {r.get('label', '')}".strip()
+                                              for r in rows_), flag="index")
+        untapped = [r for r in mine if not (cards.get(r.get("card")) or {}).get("tapped")]
+        return (untapped or mine)[0]
+
+    def cast_step(self, game: Game, action: dict, timeout: float, steps: list, refused: list) -> dict:
+        """One action of a one-call cast, sent and answered; the refusals
+        on the way are collected."""
+        steps.append({k: v for k, v in action.items() if k != "seat"})
+        game.send(action)
+        state = game.advance(timeout, render=False)
+        refused += state.get("refused", [])
+        return state
+
+    def cast_withdraw(self, game: Game, timeout: float, steps: list, refused: list) -> str:
+        """Withdraw an open announcement (or the payment's question):
+        `cancel`. '' when it went, the refusal otherwise."""
+        now = game.pending
+        if now is None:
+            return "no decision to withdraw it from"
+        options = now.get("options") or {}
+        if not options.get("announcement") and now.get("mode") != "choice":
+            return ""
+        before = len(refused)
+        self.cast_step(game, {"op": "cancel", "seat": now.get("seat")}, timeout, steps, refused)
+        return refused[-1].get("reason", "refused") if len(refused) > before else ""
+
+    def cast_refused(self, game: Game, cast: dict, stage: str, reason: str, steps: list, refused: list,
+                     kind: str = "cast", **more) -> None:
+        """Raise the refusal of a one-call cast, with the decision now
+        pending (shown, so its journal reaches the client), what was
+        sent, what the referee refused, and the mana left floating."""
+        cast = {**cast, "result": "refused", "stage": stage, "reason": reason}
+        still_open = game.pending is not None and bool((game.pending.get("options") or {}).get("announcement"))
+        cast["withdrawn"] = not still_open
+        floating = floating_mana(game.pending)
+        if floating:
+            cast["floating_mana"] = floating
+            cast["note"] = "the mana made stays in your pool until the step ends — use it or it burns"
+        state: dict = {"game": game.ident, "decisions": game.decisions, "refusals": game.refusals,
+                       "cast": cast, "sent": steps}
+        if refused:
+            state["refused"] = refused
+        if game.pending is not None:
+            state["decision"] = game.shown()
+        if game.result is not None:
+            state["result"] = game.result
+        self.settle(game)
+        envelope = {"tool": "referee_cast", "exit": 2, "kind": kind,
+                    "message": f"{cast.get('name') or cast.get('card') or 'the cast'}: {reason}", **more, **state}
+        raise ToolError(envelope, None if game.text == "json" else self.answer_text(game, state, game.view))
+
+    def cast_answer(self, game: Game, state: dict, cast: dict, result: str, steps: list, refused: list,
+                    note: str = "") -> dict:
+        cast = {**cast, "result": result}
+        if note:
+            cast["note"] = note
+        floating = floating_mana(game.pending)
+        if floating and result == "open":
+            cast["floating_mana"] = floating
+        state = dict(state)
+        if game.pending is not None and "decision" not in state and not state.get("pending"):
+            state["decision"] = game.shown()
+        state.setdefault("game", game.ident)
+        state["decisions"] = game.decisions
+        state["refusals"] = game.refusals
+        state["cast"] = cast
+        state["sent"] = steps
+        if refused:
+            state["refused"] = refused
+        self.settle(game)
+        return self.present(game, state)
+
+    def tool_referee_play_land(self, args: dict) -> dict:
+        tool = "referee_play_land"
+        game = self.game_of(args)
+        if args.get("view"):
+            game.view = self.view_of(args)
+        until = self.until_of(args)
+        decision = self.open_decision(game, tool)
+        lands = [r for r in ((decision.get("options") or {}).get("play") or {}).get("lands", []) or []
+                 if isinstance(r, dict)]
+        word = str(args.get("card") or "").strip()
+        chosen = lands[:1] if not word else \
+            ([r for r in lands if r.get("card") == word] or
+             [r for r in lands if str(r.get("name", "")).casefold() == word.casefold()])[:1]
+        if not chosen:
+            listed = [f"{r.get('name')} {r.get('card')}" for r in lands]
+            raise refusal(tool, "land", (f"'{word}' is not a land you can play now" if word else "no land can be played now")
+                          + (f"; playable: {', '.join(listed)}" if listed else
+                             f" (decision `{decision.get('mode')}`, step {decision.get('step')})"),
+                          game=game.ident, playable=listed)
+        action = {"op": "play", "card": chosen[0].get("card"), "seat": decision.get("seat")}
+        origin = decision
+        game.send(action)
+        state = self.after_send(game, until, origin, float(args.get("timeout") or DECISION_TIMEOUT))
+        state["action"] = action
+        self.settle(game)
+        return self.present(game, state)
+
+    # ----- the decision-model menus (0.50.13, tools/decision_menu.py) ------
+
+    def _decision_driver(self, game: Game, args: dict) -> decision_menu.Driver:
+        """The game's menu Driver (kept in `game.memory["decide"]`)."""
+        if game.result is None and game.error is None and game.pending is None:
+            raise refusal("referee", "game", f"game {game.ident} has no decision pending — referee_wait reads on",
+                          game=game.ident)
+        options = {} if args.get("probe") is None else {"probe": bool(args["probe"])}
+        try:
+            return decision_menu.attach_game(game, float(args.get("timeout") or DECISION_TIMEOUT), **options)
+        except decision_menu.DriverError as exc:
+            raise refusal("referee", "game", f"game {game.ident}: {exc}", game=game.ident)
+
+    def _menu_answer(self, game: Game, driver: decision_menu.Driver, state: dict, rich: bool):
+        """A menu tool's answer: the menu state, and in the `compact` view
+        the board and the menu as numbered lines for the `content`."""
+        try:
+            state.update(decision_menu.menu_state(driver, rich))
+        except decision_menu.DriverError as exc:
+            self.settle(game)
+            raise refusal("referee", "game", f"game {game.ident}: {exc}", game=game.ident)
+        decision = driver.decision
+        self.settle(game)
+        if game.text == "json":
+            return state
+        return Answer(state, menu_text(state, decision, driver.journal, self.my_seat(game)))
+
+    def tool_referee_menu(self, args: dict):
+        game = self.game_of(args)
+        if args.get("view"):
+            game.view = self.view_of(args)
+        driver = self._decision_driver(game, args)
+        return self._menu_answer(game, driver, {"game": game.ident}, bool(args.get("rich")))
+
+    def tool_referee_pick(self, args: dict):
+        game = self.game_of(args)
+        if args.get("view"):
+            game.view = self.view_of(args)
+        until = self.until_of(args)   # checked before anything is sent
+        driver = self._decision_driver(game, args)
+        if driver.done:
+            return self._menu_answer(game, driver, {"game": game.ident}, bool(args.get("rich")))
+        stop = None
+        if until is not None:
+            origin = driver.decision
+            # the server's own stop rule — every UNTIL value, `mine`/`mine-strict` included
+            stop = lambda d: stop_reason(d, until, origin)   # noqa: E731
+        try:
+            out = driver.pick(args["pick"], until=stop)
+        except ValueError as exc:
+            menu = [item["id"] for item in driver.menu()]
+            raise refusal("referee", "option", str(exc), flag="pick",
+                          suggestions=difflib.get_close_matches(str(args["pick"]), menu, n=3), menu=menu)
+        except decision_menu.DriverError as exc:
+            self.settle(game)
+            raise refusal("referee", "game", f"game {game.ident}: {exc}", game=game.ident)
+        state: dict = {"game": game.ident, "picked": out["item"]}
+        if out["refused"]:
+            state["refused"] = out["refused"]
+        if until is not None:
+            state["stop"], state["passed"], state["until"] = out.get("stop", ""), out.get("passed", 0), until
+        return self._menu_answer(game, driver, state, bool(args.get("rich")))
+
+    def tool_referee_view(self, args: dict) -> dict:
+        """The pending decision again, in any view, without acting and
+        without changing the game's own view (or the delta's base)."""
+        game = self.game_of(args)
+        mode = self.view_of(args, game.view)
+        state: dict = {"game": game.ident, "decisions": game.decisions, "refusals": game.refusals, "view": mode}
+        if game.pending is not None:
+            state["decision"] = game.render(mode)
+        elif game.result is None and game.error is None:
+            state["pending"] = True
+            state["note"] = "no decision has arrived yet; referee_wait reads on"
+        if game.result is not None:
+            state["result"] = game.result
+        if game.error is not None:
+            state["error"] = game.error
+        return self.present(game, state, mode)
 
     def tool_referee_autoplay(self, args: dict) -> dict:
         game = self.game_of(args)
@@ -2558,17 +4156,21 @@ class Server:
                 break
             action = default_answer(game.pending, game.memory)
             action.setdefault("seat", game.pending.get("seat"))
+            # Each decision between is answered unseen: `send` keeps its
+            # journal for the one shown at the end (2026-10-04).
             game.send(action)
-            state = game.advance(timeout)
+            state = game.advance(timeout, render=False)
             played += 1
             refused += state.get("refused", [])
             if state.get("pending"):
                 break
+        if game.pending is not None and "decision" not in state and not state.get("pending"):
+            state["decision"] = game.shown()
         state["played"] = played
         if refused:
             state["refused"] = refused
         self.settle(game)
-        return state
+        return self.present(game, state)
 
     def tool_referee_wait(self, args: dict) -> dict:
         game = self.game_of(args)
@@ -2577,11 +4179,11 @@ class Server:
         if game.pending is not None or game.result is not None or game.error is not None:
             state = game._state([])
             state["hello"] = game.hello
-            return state
+            return self.present(game, state)
         state = game.advance(float(args.get("timeout") or DECISION_TIMEOUT))
         state["hello"] = game.hello
         self.settle(game)
-        return state
+        return self.present(game, state)
 
     def tool_referee_stop(self, args: dict) -> dict:
         game = self.game_of(args)
@@ -2603,7 +4205,7 @@ class Server:
         game.close(grace=10)
         if game.kept and game.result is not None:
             self.forget_kept(game.ident)
-        return game.summary()
+        return self.present(game, game.summary())
 
     def shutdown(self) -> None:
         """Games on a pipe end with the server; kept games are let go —
@@ -2678,7 +4280,7 @@ class Server:
                     return None if notification else error_response(
                         ident, -32602, f"unknown tool '{name}'", {"suggestions": exc.near, "tools": [t["name"] for t in self.tools]})
                 except ToolError as exc:
-                    result = tool_result({"error": exc.envelope}, True)
+                    result = tool_result({"error": exc.envelope}, True, exc.text)
             elif method == "resources/list":
                 result = {"resources": self.resources()}
             elif method == "resources/read":
@@ -2828,9 +4430,13 @@ def progress_token(message) -> str | int | None:
     return token
 
 
-def tool_result(payload: dict, is_error: bool) -> dict:
-    text = json.dumps(payload, ensure_ascii=False, default=str)
-    return {"content": [{"type": "text", "text": text}], "structuredContent": payload, "isError": is_error}
+def tool_result(payload: dict, is_error: bool, text: str | None = None) -> dict:
+    """The `tools/call` result: the payload as `structuredContent`, and as
+    `content` its JSON — or, for an `Answer` (a compact-view referee
+    answer), its own text."""
+    if text is None:
+        text = payload.text if isinstance(payload, Answer) else json.dumps(payload, ensure_ascii=False, default=str)
+    return {"content": [{"type": "text", "text": text}], "structuredContent": dict(payload), "isError": is_error}
 
 
 def error_response(ident, code: int, message: str, data=None) -> dict:
