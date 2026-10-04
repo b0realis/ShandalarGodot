@@ -66,7 +66,7 @@ SH_TOOLS = ["build_release.sh", "deck_convert.sh", "duel_soak.sh",
 ## these is run through a pipe by a release script.
 PACK_TOOLS = ["pack_1_dotp_complete", "pack_2_fallen_empires",
               "pack_3_ice_age", "pack_4_homelands", "pack_5_alliances",
-              "pack_8_mirage_block", "package_release"]
+              "pack_8_mirage_block", "package_release", "serve_web"]
 
 ## The four Python tools build_release.sh copies into a package, plus the
 ## module they import. See test_the_package_ships_the_module_its_tools_import.

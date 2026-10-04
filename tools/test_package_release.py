@@ -56,6 +56,8 @@ class PackageReleaseTest(unittest.TestCase):
 
     def make_export(self, platform):
         family = "macos" if platform in pack.MAC_PLATFORMS else platform
+        if platform in pack.WEB_PLATFORMS:
+            family = "web"
         family = {"steam-deck": "linux64", "arkos-rk3326-experimental":
                   "raspberry-pi5-arm64"}.get(family, family)
         names = {
@@ -63,7 +65,7 @@ class PackageReleaseTest(unittest.TestCase):
             "linux64": ("Shandalar.x86_64", "Shandalar.pck"),
             "raspberry-pi5-arm64": ("Shandalar.arm64", "Shandalar.pck"),
             "windows64": ("Shandalar.exe", "Shandalar.console.exe", "Shandalar.pck"),
-            "web": ("index.html", "index.js", "index.wasm", "index.pck", "index.audio.worklet.js"),
+            "web": ("index.html", "index.js", "index.wasm", "index.pck", "index.audio.worklet.js", "index.worker.js"),
             "macos": ("Shandalar.app/Contents/MacOS/Shandalar",
                       "Shandalar.app/Contents/Resources/Shandalar.pck",
                       "Shandalar.app/Contents/Info.plist",
@@ -170,8 +172,14 @@ class PackageReleaseTest(unittest.TestCase):
                         if platform in pack.MAC_PLATFORMS:
                             entry = archive.getinfo(prefix + "Shandalar.app/Contents/MacOS/Shandalar")
                             self.assertEqual(entry.external_attr >> 16 & 0o777, 0o755)
-                        if platform == "web" and included:
+                        if platform in pack.WEB_PLATFORMS and included:
                             self.assertIn("fetches it into browser storage", readme)
+                        if platform == "web-threaded":
+                            self.assertIn("Cross-Origin-Opener-Policy: same-origin", readme)
+                            self.assertIn("Cross-Origin-Embedder-Policy: require-corp", readme)
+                            self.assertIn("HTTPS", readme)
+                            self.assertIn("tools/serve_web.py", readme)
+                            self.assertNotIn("No COOP/COEP headers are required", readme)
                         if platform == "raspberry-pi5-arm64":
                             launcher = archive.read(prefix + "run.sh").decode()
                             self.assertIn("--rendering-driver opengl3_es", launcher)

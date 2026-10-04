@@ -3,12 +3,38 @@ SHANDALAR — THE WEB BUILD
 
 This folder is the game as a web page: index.html and the files
 beside it. A browser plays it FROM A WEB SERVER, not from the folder —
-a .wasm opened as a file is refused by every browser. Any static
-server does, with no headers to arrange; the one that ships with
-Python is enough:
+a .wasm opened as a file is refused by every browser. Choose the variant
+that fits your host:
+
+  - web: single-threaded, no special headers; any static HTTP(S) server.
+  - web-threaded: threaded engine, HTTPS and isolation headers required.
+
+Both variants load startup card/screen resources on the browser's main
+thread for reliable packed-file access.
+
+For the ordinary web package, Python's standard server is enough:
 
     python3 -m http.server 8000        (in this folder; then open
                                         http://localhost:8000/)
+
+For web-threaded, send these HTTP response headers on the page and assets:
+
+    Cross-Origin-Opener-Policy: same-origin
+    Cross-Origin-Embedder-Policy: require-corp
+
+Use HTTPS on public hosts and keep the game, workers, skin and other assets
+on the same origin. These are SERVER HEADERS, not HTML meta tags. Browsers
+must expose SharedArrayBuffer and report crossOriginIsolated as true.
+For local testing, localhost is allowed without HTTPS. The included server
+adds the headers and listens only on this computer:
+
+    python3 tools/serve_web.py --directory . --port 8000
+
+Open http://localhost:8000/. This is a local test server, not a production
+host. A plain python3 -m http.server does NOT work for web-threaded. If your
+host cannot set these headers, use the ordinary web package. Do not mix
+index.* files between variants. Export important decks before changing site
+addresses or clearing browser storage.
 
 On a tablet the game types the mouse for your finger: tap clicks, hold
 and lift right-clicks, drag drags, a swipe scrolls a list; Options >

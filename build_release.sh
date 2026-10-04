@@ -38,6 +38,10 @@
 #                                   #    note in export_presets.cfg.example
 #   ./build_release.sh --web --skin # + skin/original_skin.zip beside the
 #                                   #    page, which the game fetches once
+#   ./build_release.sh --web-threaded
+#                                   # the "Web Threaded" preset -> web-threaded/
+#                                   # HTTPS + COOP/COEP headers required;
+#                                   # local test: tools/serve_web.py --directory DIR
 #   ./build_release.sh --web --skin --cardart
 #                                   # + skin/cardart.zip beside it too, for
 #                                   #    PLAYING THE PAGE LOCALLY — the card
@@ -156,6 +160,8 @@ PRESET="Linux 64"
 LINK_SKIN=0
 PACKAGE=0
 WEB=0
+WEB_THREADED=0
+WEB_PLATFORM=web
 MACOS=0
 QUEST=0
 CARDART=0
@@ -166,7 +172,14 @@ while [ $# -gt 0 ]; do
 		--skin) LINK_SKIN=1; shift ;;
 		--package) PACKAGE=1; shift ;;
 		--cardart) CARDART=1; shift ;;
-		--web) WEB=1; PRESET="Web"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/web"; shift ;;
+		--web|--web-threaded)
+			[ "$WEB" = 0 ] || { echo "build_release: choose only one Web variant" >&2; exit 3; }
+			WEB=1; PRESET="Web"
+			if [ "$1" = --web-threaded ]; then
+				WEB_THREADED=1; WEB_PLATFORM=web-threaded; PRESET="Web Threaded"
+			fi
+			[ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/$WEB_PLATFORM"
+			shift ;;
 		--macos) MACOS=1; PRESET="macOS"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/macos"; shift ;;
 		--quest) QUEST=1; PRESET="Android Quest"; [ "$OUT" = "../shandalar-build/linux64" ] && OUT="../shandalar-build/quest"; shift ;;
 		-h|--help) usage; exit 0 ;;
@@ -174,6 +187,10 @@ while [ $# -gt 0 ]; do
 		*) echo "build_release: unknown argument '$1'" >&2; exit 3 ;;
 	esac
 done
+if [ "$WEB_THREADED" = 1 ] && [ "$PRESET" != "Web Threaded" ]; then
+	echo "build_release: use --web OR --web-threaded, not both or a different preset" >&2
+	exit 3
+fi
 if [ "$MACOS" = 1 ] && { [ "$WEB" = 1 ] || [ "$PACKAGE" = 1 ] || [ "$LINK_SKIN" = 1 ]; }; then
 	echo "build_release: --macos builds the local app; --web, --package and --skin are separate workflows. Import local art through Options > Skin." >&2
 	exit 3
@@ -465,12 +482,17 @@ if [ "$WEB" = 1 ]; then
 		fi
 	fi
 	echo "ok: $(du -sh "$OUT/index.wasm" | cut -f1) engine + $(du -sh "$OUT/index.pck" | cut -f1) pack in $OUT"
-	echo "serve it with: python3 -m http.server --directory $OUT 8000   # then open http://localhost:8000/"
+	if [ "$WEB_THREADED" = 1 ]; then
+		echo "threaded Web needs HTTPS + COOP/COEP headers (see docs/setup-web.txt)"
+		echo "local test: python3 tools/serve_web.py --directory $OUT --port 8000"
+	else
+		echo "serve it with: python3 -m http.server --directory $OUT 8000   # then open http://localhost:8000/"
+	fi
 	# THE WEB PACKAGE: the page's files, the catalogue, the tools and
 	# docs/setup-web.txt as README.txt, zipped twice (zip_stage) — never
 	# the card art, whatever `--cardart` put beside the page here.
 	if [ "$PACKAGE" = 1 ]; then
-		STAGE="$PKG_DIR/Shandalar-$VERSION-web"
+		STAGE="$PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM"
 		rm -rf "$STAGE"
 		mkdir -p "$STAGE/skin" "$STAGE/tools"
 		cp -p "$OUT"/index.* "$STAGE/"
@@ -485,8 +507,8 @@ if [ "$WEB" = 1 ]; then
 		      tools/tool_banner.py "$STAGE/tools/"
 		# Share the complete builder dependency/data list with every other platform.
 		python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "tools"); from package_release import stage_player_tools; stage_player_tools(Path(sys.argv[1]))' "$STAGE"
-		zip_stage "$STAGE" "Shandalar-$VERSION-web"
-		echo "release files: $PKG_DIR/Shandalar-$VERSION-web.zip + $PKG_DIR/Shandalar-$VERSION-web-with-skin.zip"
+		zip_stage "$STAGE" "Shandalar-$VERSION-$WEB_PLATFORM"
+		echo "release files: $PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM.zip + $PKG_DIR/Shandalar-$VERSION-$WEB_PLATFORM-with-skin.zip"
 	fi
 	exit 0
 fi

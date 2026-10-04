@@ -29,7 +29,12 @@ static var _pending: Array[String] = []
 
 
 ## Ask the loader for each path not already cached, once.
-static func request(paths: Array[String]) -> void:
+static func request(paths: Array[String], allow_threads := true) -> void:
+	# Keep Web resource reads on the browser's main thread, including the
+	# threaded template (see CardRegistry.load_in_background). Screens
+	# use their ordinary foreground load when opened, with nothing to join.
+	if not allow_threads or not OS.has_feature("threads") or OS.has_feature("web"):
+		return
 	for path in paths:
 		if _pending.has(path) or ResourceLoader.has_cached(path):
 			continue

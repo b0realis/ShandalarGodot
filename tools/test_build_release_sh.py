@@ -231,6 +231,21 @@ class PresetFilterTest(unittest.TestCase):
         self.assertIn("build_release.sh --quest", self.text)
         self.assertIn("QUEST_KEY_ENV", SOURCE)
 
+    def test_web_variants_keep_templates_and_thread_settings_separate(self):
+        for name, enabled, template in (("Web", "false", "web_nothreads_release.zip"),
+                                        ("Web Threaded", "true", "web_release.zip")):
+            self.assertIn("variant/thread_support=" + enabled, self.presets[name])
+            self.assertIn(template, self.presets[name])
+        self.assertIn('--web-threaded', SOURCE)
+        self.assertIn('Shandalar-$VERSION-$WEB_PLATFORM', SOURCE)
+
+    def test_web_variant_flags_cannot_be_combined(self):
+        for args in (("--web", "--web-threaded"), ("--web-threaded", "--web")):
+            result = subprocess.run(["bash", str(SCRIPT), *args], cwd=ROOT,
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 3)
+            self.assertIn("choose only one Web variant", result.stderr)
+
 
 STUB_QUEST_GODOT = r'''
 import os, pathlib, sys, zipfile

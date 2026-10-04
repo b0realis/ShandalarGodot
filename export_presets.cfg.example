@@ -379,3 +379,33 @@ keystore/debug_password=""
 keystore/release=""
 keystore/release_user=""
 keystore/release_password=""
+
+; Opt-in threaded Web. Needs HTTPS (or localhost), with HTTP headers:
+; Cross-Origin-Opener-Policy: same-origin
+; Cross-Origin-Embedder-Policy: require-corp
+; Keep Web above for ordinary static hosting without isolation headers.
+[preset.8]
+name="Web Threaded"
+platform="Web"
+runnable=false
+advanced_options=false
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter="*.deck, *.txt, cards/data/*.json, packaging/card_packs/*/*.json"
+exclude_filter="tests/*, tools/*, docs/*, addons/*, assets/*, sim_results/*, *.md, DeckLab/results/*, workspace/*"
+export_path="../shandalar-build/web-threaded/index.html"
+script_export_mode=2
+
+[preset.8.options]
+custom_template/debug="../tools/export_templates/4.7.2.stable/web_debug.zip"
+custom_template/release="../tools/export_templates/4.7.2.stable/web_release.zip"
+variant/extensions_support=false
+variant/thread_support=true
+vram_texture_compression/for_desktop=true
+vram_texture_compression/for_mobile=false
+html/export_icon=true
+html/canvas_resize_policy=2
+html/focus_canvas_on_start=true
+html/experimental_virtual_keyboard=true
+progressive_web_app/enabled=false

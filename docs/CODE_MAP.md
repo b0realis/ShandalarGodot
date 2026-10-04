@@ -2890,6 +2890,17 @@ base `SET_ORDER`. Saved decks remain name-based and record required pack ids.
 
 ## Release packaging (0.20.0)
 
+Web startup and dual exports (0.50.14): `CardRegistry.load_in_background`
+falls back to a complete foreground pool without thread support or on Web;
+`ScreenWarmup.request` leaves those screen loads to the normal foreground
+path. `tests/unit/test_card_registry_background_2026_09_30.gd` pins both
+fallbacks and the existing native threaded behavior. `Web` / `Web Threaded`
+presets, `build_release.sh --web` / `--web-threaded`, and packager platforms
+`web` / `web-threaded` keep variants separate. `tools/serve_web.py` supplies
+COOP/COEP headers on a loopback-only test server; `tools/test_serve_web.py`
+checks pages, Wasm and errors. `docs/setup-web.txt` explains hosting and
+`docs/releases/0.50.14.md` records the platform hotfix.
+
 - `tools/package_release.py`: packages verified Linux, Windows, macOS and
   web exports into standalone and original-skin ZIPs; explicit payloads,
   per-file checksums, private-path checks, all five construction tools and

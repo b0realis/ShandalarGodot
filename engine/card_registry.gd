@@ -108,7 +108,19 @@ static func ensure_loaded() -> void:
 ## any thread waits for the build; [method poll] says when it is done
 ## without waiting. Nothing else starts a thread — a pack toggle or a
 ## rescan rebuilds in the foreground as before, on the next ask.
-static func load_in_background() -> bool:
+static func load_in_background(allow_threads := true) -> bool:
+	# The single-threaded Web template cannot start a real Thread (its
+	# stub may still return OK). Never record that stub as a pending build:
+	# it cannot finish, and the first card screen would wait forever.
+	# A foreground build has the same complete-pool contract; false means
+	# no background worker was started, not that the pool is unavailable.
+	# Also keep Web's packed-file reads on its main thread: browser smoke
+	# tests of the threaded 4.7.2 template with a saved skin intermittently
+	# failed to open card JSON from index.pck on the background worker.
+	# Native background loading and the threaded Web engine stay enabled.
+	if not allow_threads or not OS.has_feature("threads") or OS.has_feature("web"):
+		ensure_loaded()
+		return false
 	_mutex.lock()
 	if _loaded or _thread != null or _loader_id != -1:
 		_mutex.unlock()

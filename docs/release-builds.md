@@ -9,7 +9,9 @@ remains available). Windows and desktop Linux target x86-64; Raspberry Pi
 uses Linux ARM64 with both desktop and mobile texture imports.
 
 Use the debug export template for desktop releases, as documented in
-CONTRIBUTING.md. Web uses the non-threaded release template. No test-profile
+CONTRIBUTING.md. Web defaults to the non-threaded release template; the
+separate `Web Threaded` preset uses `web_release.zip` and requires HTTPS
+and COOP/COEP response headers (see `setup-web.txt`). No test-profile
 feature may be enabled during export. Run each command with GNU timeout
 (gtimeout on macOS), close stdin, and write output to its own log file.
 Inspect the exit status and log for export errors.
@@ -22,6 +24,7 @@ godot --headless --path . --export-debug 'macOS Apple Silicon' /path/to/macos-ar
 godot --headless --path . --export-debug 'macOS Intel' /path/to/macos-intel/Shandalar.app
 godot --headless --path . --export-debug 'Raspberry Pi 5 ARM64' /path/to/raspberry-pi5-arm64/Shandalar.arm64
 godot --headless --path . --export-release Web /path/to/web/index.html
+godot --headless --path . --export-release 'Web Threaded' /path/to/web-threaded/index.html
 ```
 
 Check macOS signing after export and after unpacking its ZIP. Run all
@@ -39,8 +42,8 @@ python3 tools/package_release.py --platform windows64 \
   --skin-zip /path/to/original_skin.zip --commit FULL_COMMIT_HASH
 ```
 
-Repeat with `linux64`, `macos-arm64`, `macos-intel`, `raspberry-pi5-arm64`
-and `web` (`macos` still packages a universal app). The version comes only from
+Repeat with `linux64`, `macos-arm64`, `macos-intel`, `raspberry-pi5-arm64`,
+`web` and `web-threaded` (`macos` still packages a universal app). The version comes only from
 `project.godot`. The packager never exports, uploads, overwrites an existing
 package, copies the whole build directory, or builds a card pack. It streams
 the approved files into two ZIPs, checks their integrity, preserves launcher
@@ -119,7 +122,11 @@ One release may collect targets built on two machines — the Linux machine
 apps, and Windows and Web if wanted). Every package of a release must come
 from the **same pushed commit** (its README links that commit), carry the
 **same** `original_skin.zip` (compare its SHA-256) and name itself from the
-same `project.godot` version.
+same `project.godot` version. An explicit owner-approved platform hotfix may
+be added later: preserve its actual version and commit in filenames and
+README, and disclose the mixed revisions in the release notes rather than
+relabelling it as the older build. The 0.50.13 release's 0.50.14 Web fix is
+such an exception (2026-10-04).
 
 1. **First machine:** build and package its targets, write `SHA256SUMS`
    over the ZIPs and the skin, and create the release as a **draft** whose

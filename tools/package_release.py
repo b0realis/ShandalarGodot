@@ -27,7 +27,8 @@ import pack_1_dotp_complete as pack_one
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel",
              "raspberry-pi5-arm64", "steam-deck", "arkos-rk3326-experimental", "web",
-             "meta-quest")
+             "meta-quest", "web-threaded")
+WEB_PLATFORMS = ("web", "web-threaded")
 MAC_PLATFORMS = ("macos", "macos-arm64", "macos-intel")
 LINUX_BINARIES = {"linux64": "Shandalar.x86_64", "raspberry-pi5-arm64": "Shandalar.arm64",
                   "steam-deck": "Shandalar.x86_64",
@@ -95,7 +96,7 @@ TOOLS = ("mtg_assets.py", "import_original.py", "fetch_card_art.py",
          "shandalar_mcp.py",
          # The decision-model door (2026-10-04): it imports the MCP server's
          # door route and its menus from beside itself.
-         "shandalar_decide.py", "decision_menu.py",
+         "shandalar_decide.py", "decision_menu.py", "serve_web.py",
          *(name + ".py" for name in PACK_BUILDERS))
 # Explicit metadata allowlist: never recurse into a download/art cache.
 PACK_DATA = {
@@ -134,6 +135,17 @@ START = {
 }
 START["macos-arm64"] = START["macos"].replace(
     "Universal: Apple Silicon and Intel.", "Apple Silicon (arm64) only; macOS 13 or newer.")
+START["web-threaded"] = (
+    "Threaded Web: HTTPS with cross-origin isolation is REQUIRED (localhost is\n"
+    "also allowed). Send these HTTP response headers on the page and assets:\n"
+    "    Cross-Origin-Opener-Policy: same-origin\n"
+    "    Cross-Origin-Embedder-Policy: require-corp\n"
+    "Serve assets from the same origin. A plain python -m http.server is NOT\n"
+    "enough. For loopback-only local testing, from this extracted folder:\n"
+    "    python3 tools/serve_web.py --directory . --port 8000\n"
+    "Then open http://localhost:8000/. For a host without these headers, use\n"
+    "the ordinary web package instead. Export important decks before clearing\n"
+    "browser storage. The web build has no command-line Deck Lab.")
 START["macos-intel"] = START["macos"].replace(
     "Universal: Apple Silicon and Intel.",
     "Legacy Intel (x86-64) only; macOS 11 or newer with OpenGL 3.3.\n"
@@ -236,6 +248,8 @@ def check_skin(path: Path) -> None:
 
 def payload(folder: Path, platform: str) -> dict[str, Path]:
     family = "macos" if platform in MAC_PLATFORMS else platform
+    if platform in WEB_PLATFORMS:
+        family = "web"
     if platform == "steam-deck":
         family = "linux64"
     elif platform == "arkos-rk3326-experimental":
@@ -255,7 +269,7 @@ def payload(folder: Path, platform: str) -> dict[str, Path]:
             raise ValueError(f"Missing or empty export: {name}")
     if platform in MAC_PLATFORMS:
         files = [p for p in (folder / "Shandalar.app").rglob("*") if not p.is_dir()]
-    elif platform == "web":
+    elif platform in WEB_PLATFORMS:
         files = [p for p in folder.glob("index.*") if p.is_file()]
     else:
         files = [folder / name for name in required]
@@ -523,7 +537,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                   "AGENTS.md": root / "AGENTS.md",
                   "CARD-ART-AND-PACKS.md": asset_guide,
                   "icon.png": root / "game" / "icon.png"})
-    if platform == "web":
+    if platform in WEB_PLATFORMS:
         files["setup-web.txt"] = root / "docs" / "setup-web.txt"
     files.update({name: root / source for name, source in HANDHELD_FILES.get(platform, {}).items()})
     if platform == "arkos-rk3326-experimental":
@@ -552,7 +566,7 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                   "Godot Engine is MIT-licensed; copyright and third-party notices:\n"
                   "https://godotengine.org/license/\n")
         extra["README.txt"] = readme.encode()
-        if platform == "web" and included:
+        if platform in WEB_PLATFORMS and included:
             extra["README.txt"] += (
                 "\nWeb skin setup: keep skin/original_skin.zip beside index.html.\n"
                 "The game fetches it into browser storage on the first load.\n"

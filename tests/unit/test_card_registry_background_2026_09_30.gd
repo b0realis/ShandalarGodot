@@ -77,6 +77,30 @@ func test_a_background_build_is_joined_by_the_first_ask() -> void:
 	assert_false(CardRegistry.load_in_background(), "a built pool is left alone")
 
 
+func test_without_threads_the_pool_loads_in_the_foreground() -> void:
+	CardRegistry.unload()
+	assert_false(CardRegistry.load_in_background(false), "no background worker")
+	assert_true(CardRegistry.poll(), "the pool is already complete")
+	assert_false(CardRegistry.is_loading(), "never wait for a stub Thread")
+	assert_null(CardRegistry._thread)
+	assert_eq(CardRegistry._loader_id, -1)
+	assert_eq(CardRegistry.size(), _expected)
+	assert_not_null(CardRegistry.get_card("Grizzly Bears"))
+	assert_false(CardRegistry.pool_report().contains("background"))
+	var revision_before := CardRegistry.revision
+	assert_false(CardRegistry.load_in_background(false), "idempotent")
+	assert_eq(CardRegistry.revision, revision_before)
+
+
+func test_without_threads_screen_warmup_leaves_nothing_to_join() -> void:
+	ScreenWarmup.settle()
+	ScreenWarmup.request(MainScreen.WARM_SCREENS, false)
+	assert_true(ScreenWarmup.pending().is_empty())
+	ScreenWarmup.settle()
+	assert_not_null(load("res://game/deck_builder/deck_builder_screen.tscn"),
+		"ordinary foreground screen loads remain available")
+
+
 func test_a_poller_sees_the_build_finish_without_waiting() -> void:
 	CardRegistry.unload()
 	assert_true(CardRegistry.load_in_background())
