@@ -113,21 +113,6 @@ mana, and analyse combat without reading your hidden hand, secret library
 order or future draws. Stronger difficulty means stronger analysis, never
 free resources or special rules. See the [fair-play contract](docs/fair-play.md).
 
-The separate, opt-in **Unfair — sees your hand** challenge gives Wizard
-knowledge of your current hand. It is off by default, unrated, and not a
-fifth standard difficulty; it still gets no future draws or rule exceptions.
-
-**Open and testable.** The rules engine runs without graphics, every card
-has its own documented implementation, and changes are checked through
-regression tests and reproducible simulations. Godot keeps the project
-independent and the source accessible.
-
-Most recent full-suite verification ([The pass over the whole tree](docs/ROADMAP.md#2026-10-03--the-pass-over-the-whole-tree-0507)):
-**8,562 GUT tests / 412,099 assertions**, plus **484 Python tests**
-(the MCP server's eight live tests play inside the GUT gate and are
-skipped outside it). The same gate runs on GitHub Actions for
-every push and pull request.
-
 ## Art and skins
 
 The game is playable with its built-in appearance. Choose a `-with-skin`
@@ -217,72 +202,14 @@ program's client finds them by name and reads what each takes.
 On Windows releases, run `python tools/shandalar_mcp.py` with Python 3.10+
 (or `py -3`); the server uses the bundled console executable, without Bash.
 
-## Post-0.20.0 roadmap
+## Post-0.50 roadmap
 
-Work completed or planned after the 0.20.0 release:
-
-- [ ] **Adventure** — the Shandalar world, quests and campaign.
-- [ ] **SGManalink** — tournament-integrated booster opening and drafting.
-  LAN duels, tournaments and the timed standalone draft builder are already
-  available on `main`.
-- [ ] **Commander mode** — dedicated rules and deck-building support.
-- [x] **Cardpacks foundation + Pack 1** — optional, toggleable packs separate
-  from the core pool; its [four-card mechanics/AI audit](docs/pack-1-mechanics.md)
-  is complete.
-- [x] **Pack 2 — Fallen Empires** — 102 additional card names (187 printings),
-  a separate [Python construction tool and mechanics audit](docs/pack-2-fallen-empires.md),
-  and live **Extras** filters in the Deck Builder. Build packs locally;
-  generated ZIPs and card artwork are not distributed.
-- [x] **Pack 3 — Ice Age** — 373 names (383 printings), including
-  346 new identities and 27 reprints. The separate
-  [construction script](tools/pack_3_ice_age.py), local artwork ZIP, Extras
-  filter and [engine/AI integration audit](docs/pack-3-mechanics-audit.md)
-  are implemented. All new identities have handlers; two digital adaptations
-  are documented in Help and the simplified-card ledger. Build locally:
-  `python3 tools/pack_3_ice_age.py fetch-art`, then
-  `python3 tools/pack_3_ice_age.py`. ZIPs and downloaded artwork stay local.
-- [x] **Pack 4 — Homelands** — 115 new names (140 printings), a dedicated
-  [Python builder](tools/pack_4_homelands.py), local artwork, gold globe emblem,
-  matching Extras medallions, expanded Help and an
-  [engine/AI audit](docs/pack-4-homelands.md). Build locally with
-  `python3 tools/pack_4_homelands.py fetch-art`, then
-  `python3 tools/pack_4_homelands.py`. The ZIP and artwork stay local.
-- [x] **Pack 5 — Alliances** — 144 new names (199 printings), a separate
-  [Python builder](tools/pack_5_alliances.py), gold banner emblem, matching
-  Extras medallions, expanded Help and [engine/AI integration](docs/pack-5-alliances.md).
-  Build locally with `python3 tools/pack_5_alliances.py fetch-art`, then
-  `python3 tools/pack_5_alliances.py`. Included in 0.32.0;
-  generated packs and card pictures are not distributed.
-- [x] **Pack 6 — Portal & Second Age** — 318 distinct names across 380
-  original English printings, including 290 new identities. Two welcoming
-  sets, large-symbol land previews, independent Extras filters and matching
-  stone medallions. Saved decks remember artwork choices. Includes the five
-  Second Age theme decks, both original starters and illustrated Help.
-  See the [pack guide](docs/pack-6-portal.md). Build locally with
-  `python3 tools/pack_6_portal.py fetch-art`, then
-  `python3 tools/pack_6_portal.py`. Requires 0.40.9 or later; rebuild older Pack 6 ZIPs.
-  ZIPs and downloaded art stay local.
-- [x] **Pack 7 — Fifth Edition** — the 1997 core set: 434 names across 449
-  original English printings, all reprints of the base game and Packs 2 to 4,
-  with four illustrations for each basic land and a gold Roman V emblem.
-  The pack adds pictures and a Fifth Edition source for 147 Ice Age,
-  Homelands and Fallen Empires cards; it adds no rules of its own. See the
-  [pack guide](docs/pack-7-fifth-edition.md). Build locally with
-  `python3 tools/pack_7_fifth_edition.py fetch-art`, then
-  `python3 tools/pack_7_fifth_edition.py`. Requires 0.40.13 or later.
-  ZIPs and downloaded art stay local.
-- [ ] **Pack 8 — The Mirage Block** — Mirage, Visions and Weatherlight:
-  669 names across 684 original English printings, 621 of them new
-  identities, with a gold palm, eye and skyship and an Extras switch for
-  each set. The pack, its builder and the 621 card files are in place; the
-  rules are being implemented set by set, and until every card is done the
-  unfinished ones are listed but refuse to be cast. See the
-  [pack guide](docs/pack-8-mirage-block.md). Build locally with
-  `python3 tools/pack_8_mirage_block.py fetch-art`, then
-  `python3 tools/pack_8_mirage_block.py`. Requires 0.50.11 or later.
-  ZIPs and downloaded art stay local.
-- [ ] **Internet play and community MElo (Magic Elo)** — parked until
-  resources allow. No authentication or ranking service is required for LAN play.
+1. [ ] **Adventure** — the Shandalar world, quests and campaign.
+2. [ ] **Commander** — dedicated rules and deck-building support.
+3. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
+4. [x] **Card packs** — eight optional, toggleable packs beside the core pool,
+   from Fallen Empires to the Mirage block. Each is built locally from its
+   guide in `docs/`; ZIPs and downloaded art stay local.
 
 Experienced multiplayer, networking and backend developers are especially
 welcome to help improve LAN play and explore those longer-term ideas.
