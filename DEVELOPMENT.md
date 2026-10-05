@@ -435,7 +435,7 @@ over 212 distinct names** — all of `tournament/` bar five and all of
 `extended_community/` bar one, while **all 157 decks the 1997 game itself
 shipped play**. Not one of the 212 names is a card this pool is meant to hold:
 they are printings from sets later than this pool's scope, one misspelling in
-a historic list that stays as published, and one card excluded by a standing
+a historic list (corrected 2026-10-05), and one card excluded by a standing
 ruling of the project's own. So when a design note names a deck as the one
 that exercises something and the Lab refuses it by name, that is the census,
 not a regression — `DeckLab/README.md` "The proxy census" has the tables and

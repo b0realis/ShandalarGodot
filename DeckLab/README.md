@@ -165,14 +165,13 @@ first printings, read out of the Forge editions tables:
 | first printed in | blocking names |
 |---|---|
 | Ice Age (1995) | 65 |
-| Mirage (1996) | 34 |
+| Mirage (1996) | 35 |
 | Alliances (1996) | 31 |
 | Visions (1997) | 26 |
 | Fallen Empires (1994) | 19 |
 | Weatherlight (1997) | 18 |
 | Homelands (1995) | 17 |
 | Alpha (1993) — Chaos Orb | 1 |
-| a misspelling (`Grassland`, for Mirage's `Grasslands`) | 1 |
 
 So 211 of the 212 are **out of scope**: sets this pool does not cover and
 was never going to, the line Korath's account of the 1997 data files

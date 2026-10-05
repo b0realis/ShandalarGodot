@@ -161,7 +161,7 @@ const PROXIED := {
 		"Frenetic Efreet": 3, "Fyndhorn Elves": 6, "Gemstone Mine": 3,
 		"Gerrard's Wisdom": 1, "Glacial Crevasses": 1, "Goblin Mutant": 1,
 		"Goblin Tinkerer": 1, "Goblin Vandal": 1, "Gorilla Shaman": 4,
-		"Granger Guildmage": 1, "Grassland": 1, "Guerrilla Tactics": 5,
+		"Granger Guildmage": 1, "Grasslands": 1, "Guerrilla Tactics": 5,
 		"Hall of Gemstone": 1, "Hallowed Ground": 2, "Hammer of Bogardan": 8,
 		"Harvest Wurm": 1, "Havenwood Battleground": 3, "Heart of Yavimaya": 1,
 		"Honorable Passage": 4, "Hydroblast": 11, "Hymn to Tourach": 12,

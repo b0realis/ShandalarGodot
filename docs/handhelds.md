@@ -247,6 +247,11 @@ laser that the game sees as the mouse: point to hover, pull the trigger
 to click, hold it to drag. The touch controls made for the Deck's screen
 work the same on the panel. Quest 2 and Quest Pro run the same APK.
 
+*Tip:* if the laser vanishes while you think, the headset has put the
+idle controllers to sleep (often "Auto switch from controllers to hands"
+under Movement tracking). The game cannot change that; a native VR mode
+could, and is a future idea.
+
 It is **sideloaded**, never installed from the Horizon Store. Tested on
 a Quest 3 (2026-09-29): the panel, the skin, the card packs, the music
 and the laser's hover all work once the files are in the right folders,

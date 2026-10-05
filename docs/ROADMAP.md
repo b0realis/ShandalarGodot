@@ -11472,7 +11472,9 @@ re-checked normalised and fuzzy for a misspelling hiding a real card: **zero
 hits.** By first printing: Ice Age 65, Mirage 34, Alliances 31, Visions 26,
 Fallen Empires 19, Weatherlight 18, Homelands 17 — **211 out of scope** — one
 misspelling (`Grassland`, for Mirage's `Grasslands`, in
-`wc1997_ext_slemr.deck`; the file is historic and stays as published), and
+`wc1997_ext_slemr.deck`; the file is historic and stays as published —
+corrected to `Grasslands` on 2026-10-05 at the owner's word, after a player's
+report, with the source's spelling kept in the header), and
 **one Chaos Orb**, the only name in an in-scope set, absent by our own standing
 ruling because a dexterity card has no honest software form
 (`docs/difficult_cards.someday` §6).

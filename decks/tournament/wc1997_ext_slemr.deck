@@ -9,6 +9,8 @@
 # source: https://mtg.wiki/page/1997_World_Championships/Extended_decks — 1997 World
 #   Championships/Extended decks — "Jakub Šlemr's "Czech Gun" deck" [Tier-web — no local
 #   1997/s30/Manalink copy exists]
+# note: the source prints "2 Grassland"; the card is Mirage's Grasslands, corrected
+#   here 2026-10-05 (a player's report)
 # group: Tournament decks
 name: Šlemr — Worlds 1997 champion (Extended, "Czech Gun")
 4 Erhnam Djinn
@@ -27,7 +29,7 @@ name: Šlemr — Worlds 1997 champion (Extended, "Czech Gun")
 2 Armageddon
 1 Stormbind
 5 Plains
-2 Grassland
+2 Grasslands
 1 Mountain Valley
 4 Plateau
 4 Savannah

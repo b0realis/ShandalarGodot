@@ -590,7 +590,7 @@ Proxy-free (the gauntlet deals these): `wc1994_rosewater.deck`, `wc1994_bulmahn.
 | Goblin Tinkerer | 1 |
 | Goblin Vandal | 1 |
 | Granger Guildmage | 1 |
-| Grassland | 1 |
+| Grasslands | 1 |
 | Hall of Gemstone | 1 |
 | Harvest Wurm | 1 |
 | Heart of Yavimaya | 1 |
