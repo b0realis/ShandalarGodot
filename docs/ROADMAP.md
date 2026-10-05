@@ -3289,9 +3289,14 @@ floor of about +/-11% on a box under load average 19.
 
 The Shandalar overworld: map, cities/card shops, wisemen/quests, enemies,
 dungeons, castles, world magics, amulets/mana links, ante economy. Design
-source of truth: `../docs/SHANDALAR_LORE.md` (systems tables) + s30's
-adventure code + the original's data files in `../shandalar-src/`. This
-milestone gets its own design doc before code.
+source of truth: the decompilation of the 1997 executables (Tier 2), the
+original's data files in `../shandalar-src/` and `../docs/SHANDALAR_LORE.md`
+(systems tables). **Owner ruling 2026-10-04:** our own implementation from
+the decompilation, with s30 as a guide only (no s30 code translated) and our
+own QoL. This milestone gets its own design doc before code.
+Notes so far (2026-10-04): `docs/adventure-implementation-notes.md` (ground
+rules, what to build on, a source map per system, open decisions) and
+`docs/world-builder-adventure-notes.md` (how the 1997 game generated its world).
 
 ## The Gauntlet — the fourth 1997 mode (BUILT 2026-09-02)
 
@@ -18793,6 +18798,16 @@ Four workers on disjoint files ([releases/0.50.13.md](releases/0.50.13.md)):
   over the next combats; `phase_swap_response` answers a lethal phasing attack.
 - **Known**: `autoprepare` puts all mana into X, so a "mana value X" target
   (Detonate) wants `prepare` with an explicit X.
+- **Open, not planned (community request, 2026-10-04)**: training data for a
+  decision model such as Laya. Possible today: `shandalar_decide.py --policy
+  greedy --episodes N --trace` writes every decision (compact state, every
+  legal option with id and readable label, the pick) and each game's winner,
+  and `systemone_request` turns a record into Laya's input. Not built, left for
+  whoever wants it: a `--dataset FILE` export (one Laya-format record per
+  decision with its outcome, seed and decks) and **Wizard teacher labels** (the
+  Wizard AI's own choice at each recorded decision, so a model imitates the
+  strong player rather than the greedy baseline). Deck Lab's `--record`
+  transcripts carry results but not the options and picks.
 
 Gate: 648 scripts, **10,443/10,443 tests, 480,768 asserts**, exit 0 over 6
 shards; Python 593 (15 skipped).

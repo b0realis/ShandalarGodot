@@ -322,6 +322,8 @@ it the next pass re-runs the same search and the one after that guesses.
 |---|---|
 | **MicroProse Shandalar source** — a decompilation of the original 1997 game, by Ben Prew | https://github.com/benprew/microprose-shandalar-source/ |
 | **The write-up** describing that decompilation work | https://throwingbones.com/ben/blog/2026-08-shandalar-decomp/index.html |
+| **Shandalar Decompilation** — a *matching* decompilation of **version 1.3** (the game with MicroProse's patches), by rlerrr: C that recompiles to about 90% of `shandalar.exe`'s machine code, with human-assigned names; no licence. Found 2026-10-04 via r/Shandalar; the first source for the adventure (`docs/adventure-implementation-notes.md`) | https://github.com/rlerrr/shandalar-decomp |
+| **Shandalar Patcher** — binary fixes so the original runs on Windows 10/11, by the same author | https://github.com/rlerrr/shandalar-patch |
 | **`mp_pic_tools`** — tools for the original's `.PIC` art format | https://github.com/benprew/mp_pic_tools | **Surveyed 2026-09-03** (the open job in this file's own list, now closed): `spr2png.py::parse_spr` reads `.SPR` (per-frame 16-byte header, then one RLE run per line, palette index 0 transparent), `pic2png.py` + `pic_headers.py` read `.PIC` v3 (`M0`/`M1` palette blocks, `X0`/`X1` LZW+RLE image), `shared.py::tr2pal` reads `.tr` palettes. `tools/import_original.py` implements BOTH halves directly (2026-09-03) rather than depending on it, and its output is verified byte for byte against this reference. **Three more findings, 2026-09-09**, when every remaining key was decoded
 out of the owner's install with it as the oracle: (1) `spr2png.py` stops on
 the frame's declared length BEFORE sanity-checking a run, and **ten of a

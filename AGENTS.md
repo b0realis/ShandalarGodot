@@ -972,7 +972,10 @@ request to its record, and an answer object with `answers.action.choice` is
 accepted as the pick. In Python: `systemone_request(obs, menu)` and
 `systemone_pick(answer, request)`. Deliberately minimal — fitting the state
 to a model's context length, or asking `score`/`noul` questions, is the
-model user's to take further.
+model user's to take further. Training data for such a model is possible
+with `--trace` (every decision, its options and the pick, then the winner);
+a dataset export and Wizard teacher labels are an open, unbuilt request
+(ROADMAP, 0.50.13).
 
 ## Deck convert — `./deck_convert.sh INPUT OUTPUT`
 
