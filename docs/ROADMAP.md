@@ -2715,6 +2715,8 @@ picker before tutor casts).
 | ~~Cleanup discard is automatic~~ **DONE 2026-08-31** — the cleanup step HOLDS OPEN (`MtgGame.awaiting_discard` / `discard_to_hand_size`) for any seat whose agent says `wants_to_choose_discard`. The AI and the heuristic agent still answer their own. | — |
 | ~~No mulligan~~ **DONE 2026-08-31** — the SHANDALAR rule (`Duel.hlp`): `deal_opening_hands` / `may_mulligan` / `take_mulligan` / `decline_mulligan` / `start_duel`. Seven for seven, only a no-land or all-land hand, one chance each, and the opponent may follow. The toss winner also chooses play or draw. **REPLACED 2026-09-08 on the owner's word by the PARIS rule** — any hand, one card fewer each redraw, down to empty; `[QoL]`, see "THE OPENING HAND (2026-09-08)" below, which also measures the AI's judgement of a hand. | — |
 | Simplified layers (`ContinuousEffects.recalculate`) | Full CR 613 layer/timestamp/dependency system — contained in that one method |
+| **Block requirements are maximised by a BOUNDED search** (`CombatDeclaration.must_block_error`, `SEARCH_BUDGET` 8000 nodes; Tempest bug pass 2026-10-06). CR 509.1c asks a declaration to obey as many requirements as possible; beyond the budget the declaration in hand is accepted, and a creature that may block several attackers is tried with its most-requirements set, that set without menace attackers, and each single attacker — not every subset. Both approximations can only make the engine more lenient, never leave a seat without a legal declaration. | An exhaustive search over every blocker subset |
+| **A licid keeps its entry timestamp when it becomes an Aura** (`MtgGame.become_licid_aura`, Pack 9, 2026-10-06). CR 613.7e gives an Aura a new timestamp when it becomes attached; `CardInstance.layer_timestamp` is also the engine's object identity (control rows, cost records, Animate Dead's raise), so it is not renewed, as for every Aura moved after it entered. Only a timestamp-ordered layer-6 interaction with another source can differ; Humility never meets it (a creature licid under Humility has no ability to activate). | A separate attachment timestamp for layer ordering |
 | ~~Triggers can't target (`TriggeredAbility`)~~ **DONE 2026-09-02** — `TriggeredAbility.targeting(spec, order, prompt)` gives a trigger a real target, chosen by its controller AS IT GOES ON THE STACK (CR 603.3d; `MtgGame._arm_trigger_targets`): the controller's seat is asked through the `DecisionAgent` funnel (a human seat is HELD on the question through the cost mailbox, provisional pick on the stack meanwhile — `StackItem.target_held`), the pick is shown in the stack description for the opponent to respond to, shroud keeps a creature off the list, and the trigger fizzles on resolution when the target has left (CR 608.2b) or never goes on the stack with nothing legal. `.modal(labels, hint, prompt)` announces a MODE before the target the same way (CR 603.3c; `MtgGame.current_mode()`). Triggers fired by a player's own action (cast, activate, tap for mana) reach that hold through `MtgGame._resume_priority` (CR 117.3c). Lifted the eight-card "triggers that pick their own victim" row (Oubliette, Halfdane, Dance of Many, Blazing Effigy, Axelrod Gunnarson, Floral Spuzzem, Relic Bind, Erhnam Djinn). Pinned by `tests/unit/test_targeted_triggers.gd` and `tests/cards/test_fidelity_2026_09_02_targeted_triggers.gd` | One target spec per trigger — enough for the 1997 pool |
 | ~~Triggered payments (`MtgGame.try_pay`) auto-tap LANDS only, greedy pick (basics first)~~ **THE "LANDS ONLY" HALF DONE 2026-09-11** — `_payment_plan` builds its plan through `ManaPlanner` (`sources` / `plan_from`), the planner the AI seat and the human's double-click auto-cast already shared, so every untapped mana source the payer controls pays a mid-trigger cost: **CR 605.3a**, a player may activate a mana ability whenever a rule or effect asks them to pay a mana cost. A Sol Ring, the five Moxen, a Mana Crypt, a Basalt Monolith, a Black Lotus (sorted last, reached only when nothing else is), a Llanowar Elves. Restricted mana is refused up front now rather than by accident of a simulation (Mishra's Workshop, CR 106.6). The reproduction was the prison land of the era killing a Grizzly Bears with a Sol Ring standing untapped beside it; 45 card files reach this path. Five helpers that served only the old scan are gone. Pinned by `tests/unit/test_try_pay_sources_2026_09_11.gd`. **STILL SIMPLIFIED, and the marker says exactly this**: the payer does not CHOOSE the sources — the planner's order decides — and a source whose activation would ASK (a colour CHOICE, Fellwar Stone; a mana battery with charge counters, CR 601.2b) is left OUT of the plan (`MtgGame._mana_ability_asks`), because a payment nested in a resolution cannot hold the duel open for the answer: the COST hold re-issues the mana ability alone and the trigger paying for it would be lost. Six cards under-reported, never over-reported | Let the payer choose the sources; and give a payment nested in a resolution somewhere to put a cost question, which is what the six asking sources are waiting on |
 | ~~No banding~~ **DONE** (attack bands wave 3, defensive banding 2026-09-01, "bands with other [quality]" 2026-09-02 — `CardInstance.cur_bands_with` / `grant_bands_with`, `CombatState.shared_bands_with` / `bands_with_offered` / `bands_with_among`; the five Legends banding lands and Master of the Hunt's Wolves grant the real per-quality restriction, not plain banding, pinned by `tests/cards/test_fidelity_2026_09_02_bands_with_other.gd`). No protection-from-artifacts etc. | As stubs demand them |
@@ -18767,6 +18769,77 @@ before the title stands asserts the no-hold path and returns.
 
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
+
+## 2026-10-06 — Pack 9: the Tempest block (0.50.15)
+
+The owner asked for a new card pack 9, the Tempest block — Tempest,
+Stronghold and Exodus — built the way the earlier packs were, with the
+engine and the AI player updated for its mechanics. Done, all of it
+([pack-9-tempest-block.md](pack-9-tempest-block.md)):
+
+- **The pack**: `tools/pack_9_tempest_block.py`, the trusted
+  `game/tempest_block_pack.gd`, metadata in
+  `packaging/card_packs/pack_9_tempest_block/`; 636 printings, 621 names,
+  574 new identities, 47 reprints (27 provided when their own pack is
+  off); badge 9-TMP, a storm, a keep and a bird. Rules in
+  `cards/sets/{tmp,sth,exo}/`: a fail-closed `_rules.gd` per set over
+  sixteen family modules; **no name is pending**.
+- **How it was built**: a read-only inventory (474 cards buildable on the
+  existing engine, 100 needing 28 missing capabilities), eight engine
+  packages, twelve card batches with disjoint files and their own test
+  scripts, then an engine follow-up. New mechanisms: shadow (CR 702.28);
+  must-block requirements and Magnetic Web's conditional attack
+  requirement; buyback, Memory Crystal, granted alternative costs and
+  granted flash as payment rows (`cast_spell` unchanged); licids and
+  special actions; Humility as printed (ability removal and P/T setting in
+  timestamp order, CR 613.7); Volrath's Shapeshifter; Ertai's Meddling;
+  "can't be countered"; copied permanent spells as tokens; the random-
+  discard, library-top and remove-a-counter costs; Heartstone's floor;
+  Reap's count; Pandemonium's chooser; Silver Wyvern's retarget; Static
+  Orb; text changes until end of turn; control while enchanted.
+- **Engine-wide fixes**: triggers granted after a silencer fire (the
+  dispatcher, state triggers, the mana planner, the departure batch);
+  older grants flagged for layer 6 (Spectral Cloak, Equinox, Torrent of
+  Lava, Deadly Insect, Jolrael's Centaur, the Wards, Energy Flux — whose
+  pinned "a silenced artifact has no tax" test now reads CR 613.7: a newer
+  Flux taxes); Animate Artifact split into its two layers; state-based
+  actions checked whenever a player would receive priority (CR 704.3) and
+  after a mana ability's counter cost; hand-size statics recalculated live
+  (Ensnaring Bridge, Maro); a sacrificed token's toughness kept in the
+  cost record (Worthy Cause, CR 111.7).
+- **The fair AI**: `engine/ai/tempest_tactics.gd` (board, combat,
+  activations) and `engine/ai/tempest_spells.gd` (casting and spell
+  readers) behind the existing `forecasts_tactics`. The matched Deck Lab
+  study caught Spikes cashing their counters before combat damage (−9.5 ±
+  7.6, Spikes v Licids); fixed, the four study rows are inside their
+  margins or positive (+2.0 ± 6.7, +8.5 ± 8.8, +2.0 ± 8.2, −1.5 ± 8.5;
+  200 games an arm, controls byte-identical), and Volrath's Curse and the
+  hostile licids are now played.
+- **Player-facing**: the shadow badge, must-block and Magnetic Web
+  highlights, the licid and Curse menu actions, buyback and free-casting
+  payment rows, Reap's count, triggers as "spell or ability" targets; five
+  Help pages; SGManalink carries all of it on **protocol 28**;
+  `RULES_REVISION` is `sgmanalink-tempest-block-2026-10-06`.
+- **Digital adaptations** (one engine-wide row, one card row, two names
+  joining existing rows): a licid keeps its entry timestamp
+  when it becomes an Aura; Living Death's returned cards enter one after
+  another; Skeleton Scavengers joins *Debt of Loyalty; Matopi Golem*;
+  Whim of Volrath joins *Text changes*.
+- **The bug pass** ([bug-pass-2026-10-06-tempest.md](bug-pass-2026-10-06-tempest.md)):
+  six read-only hunters, 42 findings (3 high) each reproduced by a failing
+  probe, six test-first fixers on disjoint files — the counted block
+  requirements (CR 509.1c), entering without abilities (CR 614.12), a
+  departing permanent's own triggers (CR 603.10a), licid Auras under a later
+  copy, the token ransom row on the wire, and the AI's self-harm.
+- **Known, not done**: one end cost is kept per licid (two licid effects
+  from different licid abilities on one object share the first's cost);
+  `_rebuild_battlefield_index` stops registering a card's statics after a
+  type-changing or silencing one (no pool card has that order); Animate
+  Artifact's size half judges "a creature without this Aura" from its own
+  types and until-end-of-turn animations; the AI casts a Sliver lord
+  without weighing the opponent's Slivers it also arms; a handful of niche
+  activations (Excavator, Mogg Cannon, Altar of
+  Dementia…) are not used by the AI — listed in the pack doc.
 
 ## 2026-10-04 — The agent's seat, smoothed; decision models (0.50.13)
 

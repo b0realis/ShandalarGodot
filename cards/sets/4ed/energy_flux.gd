@@ -16,8 +16,12 @@ extends CardScript
 ##   that leaves in response has its trigger do nothing;
 ## - the taxes resolve one at a time with priority in between, so a
 ##   response can come between two of them;
-## - an artifact whose abilities are silenced (Titania's Song) has no tax,
-##   because the granted ability is silenced with the printed ones.
+## - the grant is a CR 613 LAYER-6 effect at the Flux's timestamp
+##   (StaticAbility.changing_abilities, CR 613.7): an artifact that lost
+##   all its abilities to an OLDER effect (Titania's Song in play before
+##   the Flux) is taxed, because the Flux's grant came after the removal;
+##   a Song that arrived after the Flux removes the tax with the printed
+##   abilities (Pack 9, ruling of 2026-10-06).
 ## The static declares the event type it hands out
 ## (StaticAbility.granting_triggers) so the dispatcher's early-out index
 ## counts artifacts as UPKEEP_START listeners while the Flux is out.
@@ -35,7 +39,7 @@ func build() -> CardData:
 		.static_ability(StaticAbility.new(_grant.bind(tax),
 			"All artifacts have \"At the beginning of your upkeep, sacrifice this "
 			+ "artifact unless you pay {2}.\"") \
-			.granting_triggers([Mtg.EventType.UPKEEP_START])) \
+			.changing_abilities().granting_triggers([Mtg.EventType.UPKEEP_START])) \
 		.oracle("All artifacts have \"At the beginning of your upkeep, sacrifice this "
 			+ "artifact unless you pay {2}.\"")
 

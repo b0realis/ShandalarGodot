@@ -97,7 +97,7 @@ func discover() -> void:
 	_rejections.clear()
 	_art_cache.clear()
 	report_lines.clear()
-	for path in candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) + candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID) + candidate_paths(FifthEditionPack.ID) + candidate_paths(MirageBlockPack.ID):
+	for path in candidate_paths() + candidate_paths(FallenEmpiresPack.ID) + candidate_paths(IceAgePack.ID) + candidate_paths(HomelandsPack.ID) + candidate_paths(AlliancesPack.ID) + candidate_paths(PortalPack.ID) + candidate_paths(FifthEditionPack.ID) + candidate_paths(MirageBlockPack.ID) + candidate_paths(TempestBlockPack.ID):
 		if not FileAccess.file_exists(path):
 			continue
 		var id := FallenEmpiresPack.ID if path.get_file() == FallenEmpiresPack.FILE_NAME else ID
@@ -113,6 +113,8 @@ func discover() -> void:
 			id = FifthEditionPack.ID
 		if path.get_file() == MirageBlockPack.FILE_NAME:
 			id = MirageBlockPack.ID
+		if path.get_file() == TempestBlockPack.FILE_NAME:
+			id = TempestBlockPack.ID
 		if _available.has(id):
 			continue
 		var started := Time.get_ticks_msec()
@@ -190,6 +192,8 @@ static func candidate_paths(id := ID) -> Array[String]:
 ## With [param art_trusted] — a sealed pack, [PackSeal] — the manifest's word
 ## for the artwork digest stands and no picture is read; everything else runs.
 static func inspect(path: String, art_trusted := false) -> Dictionary:
+	if path.get_file() == TempestBlockPack.FILE_NAME:
+		return TempestBlockPack.inspect(path, art_trusted)
 	if path.get_file() == MirageBlockPack.FILE_NAME:
 		return MirageBlockPack.inspect(path, art_trusted)
 	if path.get_file() == FifthEditionPack.FILE_NAME:
@@ -494,7 +498,7 @@ func open_folder() -> void:
 
 ## Available installed printings. Earlier packs expose their supplied
 ## printing per name/set; the Portal sets, Fifth Edition and the Mirage
-## block carry every numbered version.
+## and Tempest blocks carry every numbered version.
 func printing_choices(card_name: String) -> Array:
 	if not _printing_cache_ready:
 		for id in available_ids():
@@ -549,6 +553,8 @@ func art_path(card_name: String, set_code: String, full_card := false, number :=
 		prefix = FifthEditionPack.PREFIX
 	if id == MirageBlockPack.ID:
 		prefix = MirageBlockPack.PREFIX
+	if id == TempestBlockPack.ID:
+		prefix = TempestBlockPack.PREFIX
 	var stem := _snake(card_name)
 	if _numbered_set(set_code) and number != "":
 		var first := ""
@@ -614,6 +620,9 @@ func _names_of(id: String) -> Array:
 	if id == MirageBlockPack.ID:
 		names = MirageBlockPack.new_names()
 		names.append_array(MirageBlockPack.shared().keys())
+	if id == TempestBlockPack.ID:
+		names = TempestBlockPack.new_names()
+		names.append_array(TempestBlockPack.shared().keys())
 	return names
 
 
@@ -672,6 +681,7 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 	var fifth := AlliancesPack.new_names()
 	var sixth := PortalPack.new_names()
 	var eighth := MirageBlockPack.new_names()
+	var ninth := TempestBlockPack.new_names()
 	for name in names:
 		if _shared_source(name) != "":
 			var provider := _shared_provider(name)
@@ -679,6 +689,7 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 			continue
 		if sixth.has(name) and not ids.has(PortalPack.ID): ids.append(PortalPack.ID)
 		if eighth.has(name) and not ids.has(MirageBlockPack.ID): ids.append(MirageBlockPack.ID)
+		if ninth.has(name) and not ids.has(TempestBlockPack.ID): ids.append(TempestBlockPack.ID)
 		if ADDED_NAMES.has(name) and not ids.has(ID):
 			ids.append(ID)
 		if second.has(name) and not ids.has(FallenEmpiresPack.ID):
@@ -696,11 +707,11 @@ func packs_required_by(names: Array[String]) -> Array[String]:
 ## THE PACK A SET'S CARDS COME IN, or "" for a set of the base game
 ## (2026-09-26). The one table of it: `fem` is Fallen Empires' pack,
 ## `ice` Ice Age's, `hml` Homelands', `all` Alliances', `por`/`p02`
-## Portal's, `5ed` Fifth Edition's and `mir`/`vis`/`wth` the Mirage
-## block's — so a tool that is asked for a
-## set can say which pack must be in play for it, rather than "unknown
-## set code" (which is what the AutoDeck CLI said about `ice` with no
-## pack enabled).
+## Portal's, `5ed` Fifth Edition's, `mir`/`vis`/`wth` the Mirage
+## block's and `tmp`/`sth`/`exo` the Tempest block's — so a tool that is
+## asked for a set can say which pack must be in play for it, rather than
+## "unknown set code" (which is what the AutoDeck CLI said about `ice`
+## with no pack enabled).
 static func pack_of_set(set_code: String) -> String:
 	match set_code:
 		"fem": return FallenEmpiresPack.ID
@@ -713,6 +724,8 @@ static func pack_of_set(set_code: String) -> String:
 		return FifthEditionPack.ID
 	if MirageBlockPack.SET_COUNTS.has(set_code):
 		return MirageBlockPack.ID
+	if TempestBlockPack.SET_COUNTS.has(set_code):
+		return TempestBlockPack.ID
 	return ""
 
 
@@ -721,7 +734,8 @@ static func pack_of_set(set_code: String) -> String:
 ## function and not a constant — a list of classes is no constant
 ## expression to GDScript.)
 static func expansions() -> Array:
-	return [FallenEmpiresPack, IceAgePack, HomelandsPack, AlliancesPack, PortalPack, FifthEditionPack, MirageBlockPack]
+	return [FallenEmpiresPack, IceAgePack, HomelandsPack, AlliancesPack, PortalPack, FifthEditionPack, MirageBlockPack,
+		TempestBlockPack]
 
 
 ## Every pack id this build knows, Pack 1 first, found or not — the
@@ -734,6 +748,8 @@ static func known_ids() -> Array[String]:
 
 
 static func file_name_for(id: String) -> String:
+	if id == TempestBlockPack.ID:
+		return TempestBlockPack.FILE_NAME
 	if id == MirageBlockPack.ID:
 		return MirageBlockPack.FILE_NAME
 	if id == FifthEditionPack.ID:
@@ -791,34 +807,41 @@ func _configure_registry() -> void:
 ## Sets whose basic lands ship several numbered illustrations.
 static func _numbered_set(set_code: String) -> bool:
 	return PortalPack.SET_COUNTS.has(set_code) or FifthEditionPack.SET_COUNTS.has(set_code) \
-		or MirageBlockPack.SET_COUNTS.has(set_code)
+		or MirageBlockPack.SET_COUNTS.has(set_code) or TempestBlockPack.SET_COUNTS.has(set_code)
 
 
-## The expansion whose script a Portal, Fifth Edition or Mirage block
-## reprint reuses. The tables agree where they overlap (Flare is Ice Age's
-## in Fifth Edition's and in the Mirage block's).
+## The expansion whose script a Portal, Fifth Edition, Mirage block or
+## Tempest block reprint reuses. The tables agree where they overlap
+## (Flare is Ice Age's in Fifth Edition's and in the Mirage block's; Dark
+## Banishing Ice Age's and Coercion Second Age's in both blocks').
 static func _shared_source(name: String) -> String:
 	if PortalPack.SHARED.has(name):
 		return PortalPack.SHARED[name]
 	var fifth := String(FifthEditionPack.shared().get(name, ""))
 	if fifth != "":
 		return fifth
-	return String(MirageBlockPack.shared().get(name, ""))
+	var mirage := String(MirageBlockPack.shared().get(name, ""))
+	if mirage != "":
+		return mirage
+	return String(TempestBlockPack.shared().get(name, ""))
 
 
 ## A reprint needs any one enabled provider, not every pack that carries it.
 ## The pack whose rules script it uses first ([method _shared_source]) — not
 ## the set that printed it first: Archangel appeared in Visions before Portal
 ## reprinted it, and Portal's script is the one it runs, so Portal is asked
-## before Pack 8.
+## before Pack 8. A Tempest block reprint of a Mirage card (Pacifism)
+## has the Mirage block as its original pack, and Pack 9 after it.
 func _shared_provider(name: String, excluding := "") -> String:
 	var original := {"fem": FallenEmpiresPack.ID, "ice": IceAgePack.ID,
 		"hml": HomelandsPack.ID, "all": AlliancesPack.ID,
-		"por": PortalPack.ID, "p02": PortalPack.ID}
+		"por": PortalPack.ID, "p02": PortalPack.ID,
+		"mir": MirageBlockPack.ID, "vis": MirageBlockPack.ID, "wth": MirageBlockPack.ID}
 	var ids: Array[String] = [original[_shared_source(name)]]
 	if PortalPack.SHARED.has(name): ids.append(PortalPack.ID)
 	if FifthEditionPack.shared().has(name): ids.append(FifthEditionPack.ID)
 	if MirageBlockPack.shared().has(name): ids.append(MirageBlockPack.ID)
+	if TempestBlockPack.shared().has(name): ids.append(TempestBlockPack.ID)
 	for id in ids:
 		if id != excluding and is_enabled(id): return id
 	return ids[0] if excluding.is_empty() else ""

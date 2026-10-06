@@ -86,7 +86,7 @@ static func configure(c: CardData) -> bool:
 		"Torrent of Lava":
 			c.spell(DamageAllEffect.new(0, "each creature without flying", _without_flying).x_damage())
 			c.stack_static(StaticAbility.new(_torrent_grant,
-				"As long as Torrent of Lava is on the stack, each creature has \"{T}: Prevent the next 1 damage that would be dealt to this creature by Torrent of Lava this turn.\""))
+				"As long as Torrent of Lava is on the stack, each creature has \"{T}: Prevent the next 1 damage that would be dealt to this creature by Torrent of Lava this turn.\"").changing_abilities())
 		"Hall of Gemstone":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.UPKEEP_START, _hall_choose,
 				"At the beginning of each player's upkeep, that player chooses a color. Until end of turn, lands tapped for mana produce mana of the chosen color instead of any other color."))
@@ -490,7 +490,10 @@ static func _flyer_blocks_flyers(attacker: CardInstance, me: WeakRef, before: Ca
 # --------------------------------------------------------- Torrent of Lava --
 
 ## CR 611.3: while the spell is on the stack, each creature has the
-## ability. Built per call — it binds this spell's id.
+## ability. Built per call — it binds this spell's id. A CR 613 LAYER-6
+## grant (flagged changing_abilities, Pack 9): applied with the other
+## grants and removals in timestamp order, before the statics that read
+## the live ability list (Serra Bestiary's "can't activate {T} abilities").
 static func _torrent_grant(g: MtgGame, spell: CardInstance) -> void:
 	for inst in g.all_battlefield():
 		if inst.is_creature():

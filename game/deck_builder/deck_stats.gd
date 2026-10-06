@@ -341,7 +341,8 @@ static func ante_cards(deck: DeckModel) -> Array:
 
 ## Creatures the defender has trouble stopping, by the keyword that makes
 ## them hard to block. A deck's real clock is its EVASION, not its power:
-## twelve points of ground beef into a wall is nothing.
+## twelve points of ground beef into a wall is nothing. SHADOW (Pack 9,
+## CR 702.28b) is the purest of them: only another shade can block it.
 static func evasion(deck: DeckModel) -> Dictionary:
 	var tally := {}
 	for card_name in deck.counts:
@@ -351,7 +352,7 @@ static func evasion(deck: DeckModel) -> Dictionary:
 		var have := int(deck.counts[card_name])
 		for key in d.keywords:
 			if key in [Mtg.Keyword.FLYING, Mtg.Keyword.TRAMPLE,
-					Mtg.Keyword.FEAR]:
+					Mtg.Keyword.FEAR, Mtg.Keyword.SHADOW]:
 				tally[int(key)] = int(tally.get(int(key), 0)) + have
 		if not d.landwalk.is_empty():
 			tally["landwalk"] = int(tally.get("landwalk", 0)) + have

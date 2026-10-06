@@ -283,13 +283,20 @@ func _start_cast(inst: CardInstance) -> void:
 	_pending_x = 0
 	_pending_mode = 0
 	_prepared_key = ""
-	if inst.data.is_modal(): _open_mode_menu(inst)
+	# THE REFEREE'S ROWS (Pack 9): more than one — a modal spell, a buyback
+	# row, a row Dream Halls or Aluren grants — is a question
+	# (SgDuelProjection.payment_rows reads them off the face).
+	if game.payment_rows(0, inst).size() > 1: _open_mode_menu(inst)
 	else: _continue_cast_chain()
 
 
 func _continue_cast_chain() -> void:
-	# Searches wait for a rule-authorized question from the referee.
-	if _pending_card.data.cost.has_x or not _pending_card.data.repeated_additional_cost.is_empty(): _open_x_dialog()
+	# Searches wait for a rule-authorized question from the referee. The X
+	# is asked as at a local table ([method DuelScreen._pending_wants_x]):
+	# not for an ALTERNATIVE row without {X} (Pack 9 — Dream Halls'
+	# discard, Aluren's free cast, CR 107.3b), whose cost the referee's
+	# row names (SgDuelProjection.payment_rows).
+	if _pending_wants_x(): _open_x_dialog()
 	else: _prepare()
 
 
@@ -345,7 +352,13 @@ func _sync_announcement() -> void:
 		if _pending_target_count > 0 and maximum > 1:
 			minimum = _pending_target_count
 			maximum = _pending_target_count
-		_pending_slots.append({"spec": spec, "min": minimum, "max": maximum, "divided": int(slot.divided)})
+		# A count an earlier target sets (Pack 9 — Reap): the referee's
+		# range per candidate of that target ([method _counted_range]).
+		var counts := {}
+		for row in slot.get("counts", []):
+			counts[String(row[0])] = Vector2i(int(row[1]), int(row[2]))
+		_pending_slots.append({"spec": spec, "min": minimum, "max": maximum, "divided": int(slot.divided),
+			"counts": counts})
 		_pending_specs.append(spec)
 	if starting:
 		_pending_groups.clear()
@@ -508,6 +521,42 @@ func _on_x_confirmed() -> void:
 	_x_dialog.dismiss()
 	_x_dialog = null
 	_prepare()
+
+
+## A TARGET COUNT AN EARLIER TARGET SETS (Pack 9 — Reap): the referee's
+## `counts` for the slot, read at the token of the one earlier target the
+## seat picked — the opponent whose black permanents X counts. (-1, -1)
+## for every other slot, which keeps its own range.
+func _counted_range(slot: Dictionary, earlier: Array) -> Vector2i:
+	var counts: Dictionary = slot.get("counts", {})
+	if counts.is_empty() or earlier.size() != 1:
+		return Vector2i(-1, -1)
+	for other in _pending_slots:
+		if not other.spec is SgTargetSpec: continue
+		var token := (other.spec as SgTargetSpec).token_for(earlier[0])
+		if counts.has(token): return counts[token]
+	return Vector2i(-1, -1)
+
+
+## Magnetic Web's companions (Pack 9): the referee's rows for this seat's
+## attackers, followed for the pencilled plan
+## (SgDuelProjection.attack_companions_for).
+func _attack_companions() -> Array:
+	if not game.awaiting_attackers or _selected_attackers.is_empty(): return []
+	return projection.attack_companions_for(_selected_attackers)
+
+
+## A blocker under orders (Pack 9 — Watchdog, Invasion Plans, Provoke):
+## the referee's flags say it must block, its block matrix that it has an
+## attacker to block. The matrix counts a block with a cost as well, which
+## a requirement never asks for (CR 509.1d) — the light is then a hint
+## and the referee's declaration check is the judge.
+func _must_block_now(inst: CardInstance) -> bool:
+	if inst == null or inst.zone != Mtg.Zone.BATTLEFIELD or inst.tapped or inst.phased_out \
+			or inst.controller_id == game.active_player or _block_map.has(inst.id):
+		return false
+	if not (inst.cur_must_block or inst.must_block_this_turn_any): return false
+	return not projection._block_matrix.get(projection.handle(inst.id), {}).is_empty()
 
 
 ## Heat Wave's life tax on the pencilled blocks (Pack 8): the referee's

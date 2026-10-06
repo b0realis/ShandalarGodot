@@ -924,9 +924,12 @@ func cost_for(x_value: int) -> ManaCost:
 ## granting static and the exemption in one call.
 func grants_host_protection(color_mask: int, text := "") -> CardData:
 	aura_grants_protection |= color_mask
+	# Protection is an ability: a CR 613 layer-6 grant at the Aura's
+	# timestamp (Pack 9 F), so a Humility that entered after the Ward
+	# removes it and one that entered before does not (CR 613.7).
 	static_abilities.append(StaticAbility.new(
 		CardData._apply_host_protection.bind(color_mask),
-		text if text != "" else "Enchanted creature has protection."))
+		text if text != "" else "Enchanted creature has protection.").changing_abilities())
 	return self
 
 
@@ -963,9 +966,11 @@ var aura_protection_memory_key: String = ""
 ## until it is made the grant is empty.
 func grants_host_protection_from_chosen(key := "chosen_color", text := "") -> CardData:
 	aura_protection_memory_key = key
+	# Layer 6 at the Aura's timestamp, as [method grants_host_protection].
 	static_abilities.append(StaticAbility.new(
 		CardData._apply_chosen_host_protection.bind(key),
-		text if text != "" else "Enchanted creature has protection from the chosen color."))
+		text if text != "" else "Enchanted creature has protection from the chosen color.") \
+		.changing_abilities())
 	return self
 
 
@@ -1019,6 +1024,93 @@ func with_cost_modifier(spell_cb: Callable, ability_cb := Callable()) -> CardDat
 ## True when this card has "Choose one —" modes.
 func is_modal() -> bool:
 	return not modes.is_empty()
+
+
+# --- Pack 9 E3: Licids and special actions ---
+#
+# THE LICIDS (Tempest block; CR 116.2c, 205.1a, 303.4, 613.1d, 613.1f,
+# 704.5m): "{cost}, {T}: This creature loses this ability and becomes an
+# Aura enchantment with enchant creature. Attach it to target creature.
+# You may pay {end} to end this effect." [method as_licid] builds that
+# ability; its effect, resolving with a legal target, hands the licid to
+# [method MtgGame.become_licid_aura], which swaps the INSTANCE's
+# definition for a derived Aura one (the Necromancy recipe, [method
+# MtgGame.become_aura]) whose [member licid_base] remembers what to go
+# back to. "Pay {end} to end this effect" is a SPECIAL ACTION ([method
+# MtgGame.end_licid_effect], listed by [method MtgGame.special_actions]).
+# The licid's other abilities ("Enchanted creature has haste") are
+# written as ordinary Aura statics/triggers keyed to `attached_to`: on
+# the creature they enchant nothing, on the Aura they work.
+
+## The licid ability [method as_licid] built — the one the Aura loses.
+var licid_ability: ActivatedAbility = null
+## "You may pay {end} to end this effect": the special action's cost.
+var licid_end_cost: ManaCost = null
+## "You control enchanted creature" (Dominating Licid): the Aura half
+## carries [member aura_steals].
+var licid_steals: bool = false
+## Set ONLY on the derived Aura definition [method
+## MtgGame.become_licid_aura] builds: the definition the licid returns to
+## when its effect ends (its printed card, or the copy it is — CR 707.2).
+## null on every printed card.
+var licid_base: CardData = null
+
+
+## Fluent: the licid ability — "[param activation_cost], {T}: This
+## creature loses this ability and becomes an Aura enchantment with
+## enchant creature. Attach it to target creature. You may pay
+## [param end_cost] to end this effect." [param steals] is Dominating
+## Licid's "You control enchanted creature". Call it before the card's
+## other activated abilities so the licid ability is index 0.
+func as_licid(activation_cost: String, end_cost: String, steals := false) -> CardData:
+	var effect := LicidEffect.new()
+	effect.target_spec = TargetSpec.creature("target creature")
+	effect.with_ai_role(&"licid", {"steals": steals, "end_cost": end_cost})
+	var ability := ActivatedAbility.new(activation_cost, true, [effect],
+		("%s, {T}: This creature loses this ability and becomes an Aura enchantment "
+			+ "with enchant creature. Attach it to target creature. You may pay %s to "
+			+ "end this effect.") % [activation_cost, end_cost])
+	licid_ability = ability
+	licid_end_cost = ManaCost.parse(end_cost)
+	licid_steals = steals
+	return activated(ability)
+
+
+## The licid ability's effect. The target was re-checked by the stack
+## (an illegal one counters the ability, CR 608.2b: the licid stays a
+## tapped creature); a licid that left the battlefield — or left and came
+## back, a new object (CR 400.7) — is not the one the ability names, and
+## nothing happens.
+class LicidEffect extends EffectBase:
+	func resolve(game: MtgGame, source: CardInstance, _controller: int,
+			target: TargetRef, _x_value: int = 0) -> void:
+		if target == null or target.is_player or source == null:
+			return
+		if int(game.cost_paid("_source_timestamp", source.layer_timestamp)) \
+				!= source.layer_timestamp:
+			return
+		game.become_licid_aura(source, game.find_instance(target.instance_id))
+
+	func describe() -> String:
+		return "becomes an Aura enchantment attached to target creature"
+
+
+## VOLRATH'S CURSE (CR 116.2d): "That creature's controller may sacrifice
+## a permanent of their choice for that player to ignore this effect until
+## end of turn." A SPECIAL ACTION offered, while this Aura is attached, to
+## the controller of the permanent it enchants ([method
+## MtgGame.ignore_static_effect], listed by [method
+## MtgGame.special_actions]); `{"desc", "filter"}` describe the sacrifice
+## (filter: `func(inst: CardInstance) -> bool`, invalid = any permanent).
+## The card's own statics and bans ask [method MtgGame.effect_ignored_by]
+## and stand aside for that player for the rest of the turn. Empty = none.
+var ignore_effect_sacrifice: Dictionary = {}
+
+
+## Fluent: see [member ignore_effect_sacrifice].
+func ignorable_by_sacrifice(desc := "permanent", filter := Callable()) -> CardData:
+	ignore_effect_sacrifice = {"desc": desc, "filter": filter}
+	return self
 
 
 # ------------------------------------------------------------------ queries --
@@ -1087,3 +1179,232 @@ func has_keyword(keyword: int) -> bool:
 
 func _to_string() -> String:
 	return card_name
+
+
+# --- Pack 9 E2: Spell payment (buyback, granted alternative costs, static flash) ---
+#
+# BUYBACK (CR 702.27a, 118.8, 601.2b/f-h): "You may pay an additional
+# <cost> as you cast this spell. If you do, put this card into your hand
+# as it resolves." An OPTIONAL ADDITIONAL cost, so it is a PAYMENT ROW —
+# the shape [method with_alternative_cost] already gives Fireblast — and
+# the caster picks it exactly as a mode: the row index travels through
+# MtgGame.cast_spell's `mode`, the duel screen's row menu, SGManalink and
+# the AI, and cast_spell needs no new parameter (SgDuelProjection
+# overrides it). The row's payment carries `"buyback": true`; MtgGame
+# remembers on the stack that it was paid and puts a RESOLVED spell into
+# its owner's hand (a countered, fizzled or copied one is not).
+#
+# The other three E2 statics ride on [member cost_modifier] — a static a
+# permanent radiates while it is on the battlefield, gated as every cost
+# modifier is ([method MtgGame.cost_modifier_works]: present, not
+# silenced, not a tapped artifact under the 1997 rules) and indexed with
+# them, so a board that carries none pays nothing for the lookup:
+#   "buyback"          — [method with_buyback_modifier] (Memory Crystal);
+#   "alternative_cost" — [method with_granted_alternative_cost] (Dream
+#                        Halls, Aluren), read by MtgGame.payment_rows;
+#   "flash"            — [method with_granted_flash] (Rootwater Shaman),
+#                        read by MtgGame.has_flash.
+
+## Fluent: BUYBACK (CR 702.27a). [param spec] keys, all optional:
+##   "mana": String — the buyback's mana ("{3}", "{2}{U}");
+##   "object_costs": Array — groups from engine/additional_object_costs.gd
+##     ("Buyback—Sacrifice a land": `sacrificing("a land", is_land)`,
+##     "Buyback—Discard two cards": `discarding("card", Callable(), 2)`);
+##   "life": int — life paid with it ("Buyback—Pay 4 life");
+##   "text": String — how the row names the buyback ("Sacrifice a land");
+##     default: the mana, else "pay N life".
+## Appends ONE BUYBACK ROW per row the card already has — the printed
+## "Pay <cost>" row it creates when there is none, a mode of a modal
+## spell, an alternative-cost row — with the SAME effects, so existing
+## row indices never move: a plain buyback spell is `[printed, buyback]`.
+## The row's mana is the row's own plus the buyback's; the printed mana
+## cost and the mana value never change (CR 118.8d, 202.3). Call it AFTER
+## the spell's effects, modes and alternative costs, once.
+func with_buyback(spec: Dictionary) -> CardData:
+	if modes.is_empty():
+		modes = [{"label": "Pay " + (cost.text if cost.text != "" else "{0}"),
+			"effects": spell_effects.duplicate()}]
+	var extra := ManaCost.parse(String(spec.get("mana", "")))
+	var life := int(spec.get("life", 0))
+	var objects: Array = spec.get("object_costs", [])
+	var text := String(spec.get("text", ""))
+	if text == "":
+		text = extra.text if extra.text != "" else ("pay %d life" % life if life > 0 else "its cost")
+	for row in modes.duplicate():
+		var base: Dictionary = row.get("payment", {})
+		var paid := base.duplicate()
+		if not base.is_empty():
+			paid["alt"] = true   # an alternative-cost row keeps replacing the mana cost
+		paid["cost"] = sum_costs(base.get("cost", cost), extra)
+		paid["buyback"] = true
+		paid["buyback_cost"] = extra
+		paid["buyback_text"] = text
+		var groups: Array = base.get("object_costs", [])
+		if not objects.is_empty():
+			paid["object_costs"] = groups + objects
+		if life > 0:
+			paid["life"] = int(base.get("life", 0)) + life
+		modes.append({"label": "%s with buyback (%s)" % [String(row["label"]), text],
+			"effects": row["effects"], "payment": paid})
+	return self
+
+
+## The indices of this card's BUYBACK rows (see [method with_buyback]),
+## in row order; empty for a card without buyback.
+func buyback_rows() -> Array[int]:
+	var out: Array[int] = []
+	for i in modes.size():
+		if bool(Dictionary(modes[i].get("payment", {})).get("buyback", false)):
+			out.append(i)
+	return out
+
+
+## Does this card have buyback?
+func has_buyback() -> bool:
+	return not buyback_rows().is_empty()
+
+
+## A COST THAT PAYS FOR BOTH [param a] and [param b]: their generic, pips
+## and {X}s added up, the text concatenated. The buyback rows' mana and
+## MtgGame's pricing of them use it.
+static func sum_costs(a: ManaCost, b: ManaCost) -> ManaCost:
+	var out := ManaCost.new()
+	out.generic = a.generic + b.generic
+	out.has_x = a.has_x or b.has_x
+	out.x_count = a.x_count + b.x_count
+	out.restricted_x_mask = a.restricted_x_mask if a.restricted_x_mask != 0 else b.restricted_x_mask
+	out.restricted_x_amount = a.restricted_x_amount + b.restricted_x_amount
+	for c in a.colored:
+		out.colored[c] = int(out.colored.get(c, 0)) + int(a.colored[c])
+	for c in b.colored:
+		out.colored[c] = int(out.colored.get(c, 0)) + int(b.colored[c])
+	out.text = a.text + b.text
+	return out
+
+
+## Fluent: "Buyback costs cost {2} less" (Memory Crystal) — a static
+## modifier of every BUYBACK cost while this permanent is on the
+## battlefield. [param cb] is
+## `func(game: MtgGame, caster_pid: int, spell: CardData, modifier: CardInstance) -> int`,
+## the GENERIC mana it adds to the buyback (negative reduces it). MtgGame
+## sums them over the board and applies the total to the buyback's own
+## generic part only: never below zero, never into its coloured pips or
+## the rest of the spell's cost, never to a non-mana buyback (CR 601.2f;
+## the Memory Crystal rulings).
+func with_buyback_modifier(cb: Callable) -> CardData:
+	cost_modifier["buyback"] = cb
+	return self
+
+
+## Fluent: an ALTERNATIVE COST this permanent GRANTS to spells (CR 118.9):
+## "Rather than pay the mana cost for a spell, its controller may discard
+## a card that shares a color with that spell" (Dream Halls), "Any player
+## may cast creature spells with mana value 3 or less without paying
+## their mana costs and as though they had flash" (Aluren). [param cb] is
+## `func(game: MtgGame, caster_pid: int, spell: CardInstance, modifier: CardInstance) -> Array`,
+## asked for each spell being cast (in hand, or wherever it is cast
+## from), returning the rows it offers — usually none or one:
+##   {"label": String, "mana": String (default none),
+##    "object_costs": Array (engine/additional_object_costs.gd groups; a
+##      group's `source_filter(game, card, spell)` sees the spell, and the
+##      spell itself is never a card it may discard),
+##    "life": int, "flash": bool — the spell may be cast as though it had
+##      flash THROUGH THIS ROW ONLY (Aluren: "You can't choose to cast a
+##      creature as though it had flash via Aluren and still pay the mana
+##      cost")}.
+## MtgGame.payment_rows adds one granted row per printed row that is not
+## itself an alternative cost (CR 118.9a), keeping that row's buyback.
+func with_granted_alternative_cost(cb: Callable) -> CardData:
+	cost_modifier["alternative_cost"] = cb
+	return self
+
+
+## Fluent: a STATIC FLASH PERMISSION this permanent grants (CR 702.8a,
+## 601.3): "You may cast Aura spells with enchant creature as though they
+## had flash" (Rootwater Shaman). [param cb] is
+## `func(game: MtgGame, caster_pid: int, spell: CardInstance, modifier: CardInstance) -> bool`
+## — TRUE when [param caster_pid] may cast that spell any time they could
+## cast an instant. "You may" is the card's own test (`caster_pid ==
+## modifier.controller_id`). Read by MtgGame.has_flash.
+func with_granted_flash(cb: Callable) -> CardData:
+	cost_modifier["flash"] = cb
+	return self
+
+
+# --- Pack 9 E7: Cost and target vocabulary ---
+
+## Fluent: an ACTIVATED-ABILITY cost reduction that sees the ability and
+## keeps a FLOOR under its mana — "Activated abilities of creatures cost
+## {1} less to activate. This effect can't reduce the mana in that cost to
+## less than one mana" (Heartstone; CR 601.2f, 602.2b). [param amount]
+## generic mana off every ability [param applies] accepts —
+## `func(game: MtgGame, activator_pid: int, source: CardInstance,
+## ability: ActivatedAbility, modifier: CardInstance) -> bool`, invalid =
+## every ability — but never below [param min_mana] mana in total (X and
+## every other modifier counted). Stored as `cost_modifier["ability_floored"]`
+## and applied by MtgGame.ability_floored_reduction, last, inside
+## MtgGame.ability_payment; gated like every cost modifier.
+func with_ability_cost_reduction(amount: int, applies := Callable(), min_mana := 1) -> CardData:
+	cost_modifier["ability_floored"] = {"amount": maxi(0, amount), "applies": applies,
+		"min_mana": maxi(0, min_mana)}
+	return self
+
+
+# --- Pack 9 E5/E6: Layers (graveyard-top copy) and Stack (can't be countered) ---
+
+## E5 — "As long as the top card of your graveyard is a creature card, this
+## creature has the full text of that card and has the text '[extra]'"
+## (Volrath's Shapeshifter; CR 613.2 layer 1, 707.2). The extra ability,
+## also printed on the card itself ([method with_graveyard_top_copy]).
+## Read by ContinuousEffects._graveyard_top_copies every recalculation.
+var graveyard_top_copy: ActivatedAbility = null
+
+## E5 — on a DERIVED definition only ([method graveyard_top_copy_of]): the
+## printed definition it was derived from, the graveyard card whose text it
+## carries, and the id of the permanent that derived it. A copy of the
+## derived body made by another permanent (a Clone) carries these too, and
+## the holder id is what tells the two apart. -1/null on every card.
+var graveyard_top_base: CardData = null
+var graveyard_top_source: CardData = null
+var graveyard_top_holder: int = -1
+
+## E6 — "This spell can't be countered." (Scragnoth; CR 101.2, 701.5):
+## MtgGame.counter_spell — and so every counterspell, the "unless its
+## controller pays" kind included — leaves such a spell on the stack.
+## Exiling it from the stack is not countering it (Ertai's Meddling).
+var cant_be_countered: bool = false
+
+
+## Fluent (E5): Volrath's Shapeshifter's text-copying ability, with
+## [param extra] the ability it adds ("{2}: Discard a card."), which this
+## card also prints — so it is appended to [member activated_abilities].
+func with_graveyard_top_copy(extra: ActivatedAbility) -> CardData:
+	graveyard_top_copy = extra
+	activated_abilities.append(extra)
+	return self
+
+
+## E5: the definition a permanent printing [method with_graveyard_top_copy]
+## has while [param top] (a creature card's definition) is the top card of
+## its controller's graveyard: that card's full text — name, mana cost,
+## colour, types, every ability, power and toughness — plus this card's
+## extra ability, derived for permanent [param holder_id]. Built per change
+## and never cached statically (CONTRIBUTING.md: no static CardData).
+func graveyard_top_copy_of(top: CardData, holder_id: int) -> CardData:
+	var out := top.shallow_copy()
+	var abilities: Array[ActivatedAbility] = []
+	abilities.append_array(top.activated_abilities)
+	abilities.append(graveyard_top_copy)
+	out.activated_abilities = abilities
+	out.oracle_text = "%s\n%s" % [top.oracle_text, graveyard_top_copy.text] \
+		if top.oracle_text != "" else graveyard_top_copy.text
+	out.graveyard_top_base = self
+	out.graveyard_top_source = top
+	out.graveyard_top_holder = holder_id
+	return out
+
+
+## Fluent (E6): "This spell can't be countered." — see [member cant_be_countered].
+func with_cant_be_countered() -> CardData:
+	cant_be_countered = true
+	return self

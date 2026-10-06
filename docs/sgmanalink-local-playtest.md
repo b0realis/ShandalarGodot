@@ -1,6 +1,6 @@
 # SGManalink LAN playtest
 
-Development source: `main`, version **0.50.13**. A desktop LAN full-pool duel
+Development source: `main`, version **0.50.15**. A desktop LAN full-pool duel
 milestone, not the public Internet release. No Nakama, account service, central
 directory or MElo is required. Offline duels, hotseat, demonstration and Deck
 Builder retain their existing code paths.
@@ -9,7 +9,7 @@ The **Tournament** tab adds [LAN knockout events](sgmanalink-tournaments.md)
 with 2–40 entrants, a separate or participating organiser, first to 1/2/3 wins,
 fixed/approved/own deck policies, a live Master Panel, an advancement diagram
 and final standings. [Computer opponents](sgmanalink-computer-players.md) can fill
-duel rooms and a chosen number of tournament seats. Protocol **27** (0.50.12) and the
+duel rooms and a chosen number of tournament seats. Protocol **28** (0.50.15, Pack 9) and the
 current rules fingerprint require matching updated builds and enabled card
 catalogues on every computer; old LAN development builds cannot join.
 Internet play and MElo are parked.
@@ -26,7 +26,7 @@ The offline AI-versus-AI demo by itself does not test LAN networking.
 
 ## Two computers on the same network
 
-Use matching **0.50.13 development builds** and enabled packs on both computers. The older
+Use matching **0.50.15 development builds** and enabled packs on both computers. The older
 0.20.0 release does not contain this LAN milestone.
 
 1. Open the main-menu globe on both computers. In **Identity**, enter a name
@@ -190,7 +190,7 @@ its cost but is not `castable`. The host asks the engine's own checks
 `MtgGame.spell_announce_refusal`, `SgDuelActions.ability_refusal`), so a
 `prepare` it would refuse at the submit is refused before any land is tapped,
 and an ability that is no longer usable no longer holds your automatic passing
-open. The wire is unchanged (protocol 27): the hosts filter the entries.
+open. The hosts filter the entries (protocol 27; 28 since 0.50.15).
 
 Opponent hands are normally counts. A card rule may explicitly reveal cards or
 permit a private look; only the authorized viewer receives that information.

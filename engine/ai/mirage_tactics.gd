@@ -27,6 +27,10 @@ extends RefCounted
 ## the precedent [method EffectIntent.is_gaze] set.
 
 const COSTS := preload("res://engine/additional_object_costs.gd")
+## Pack 9's readings: [method option], [method respond], [method
+## pay_ransom], [method lion_eye_action] and [method spell_choice] ask the
+## Tempest module first (until it has its own place in AiPlayer).
+const TEMPEST_TACTICS := preload("res://engine/ai/tempest_tactics.gd")
 
 
 # ================================================== lands with an entry --
@@ -140,7 +144,9 @@ static func entry_unlocks(g: MtgGame, pilot, land: CardInstance, eaten: Array) -
 			continue
 		var surcharge := g.spell_surcharge(pilot.pid, inst.data)
 		var keys: Array = g.mana_usage_keys(inst.data, inst)
-		if pilot._cost_is_free(inst.data.cost) and surcharge == 0:
+		# A free cost under a discount (Helm of Awakening on a {0} spell:
+		# surcharge -1, clamped to nothing by the engine) is free too.
+		if pilot._cost_is_free(inst.data.cost) and surcharge <= 0:
 			continue
 		if not pilot._plan_taps_from(sources, inst.data.cost, surcharge, keys).is_empty():
 			continue   # castable already: the trade buys it nothing
@@ -196,26 +202,67 @@ static func damage_is_shaped(g: MtgGame, victim: CardInstance) -> bool:
 
 static var _fragile_cache: Dictionary = {}
 
+## What a "becomes the target" trigger line does to the creature it
+## watches: [constant FRAGILE_DIES] — it is sacrificed or destroyed
+## (Skulking Ghost's "sacrifice it", Spinal Graft's "destroy that
+## creature"); [constant FRAGILE_SHRINKS] — a -1/-1 counter goes on it
+## (Segmented Wurm, Pack 9), which kills only a creature one toughness from
+## death; 0 for anything else.
+const FRAGILE_DIES := 1
+const FRAGILE_SHRINKS := 2
+
 ## Does [param inst] die the moment anything names it — "When this
 ## creature becomes the target of a spell or ability, sacrifice it"
 ## (Skulking Ghost, Tar Pit Warrior; engine package E4's BECAME_TARGET)?
 ## Read off the LIVE trigger list and its printed line, the reading
 ## [method EffectIntent.is_gaze] makes of a gaze: a silenced creature has
 ## no triggers and is not fragile. Public — the trigger is on the board.
-static func dies_when_targeted(inst: CardInstance) -> bool:
+##
+## PACK 9 (2026-10-06): the trigger may sit on an AURA — Spinal Graft's
+## "When enchanted creature becomes the target of a spell or ability,
+## destroy that creature" — read off the permanents attached to it when the
+## caller hands over [param g] (the Auras are found by id); and Segmented
+## Wurm's "put a -1/-1 counter on it" kills the body it shrinks to 0.
+static func dies_when_targeted(inst: CardInstance, g: MtgGame = null) -> bool:
 	if inst == null:
 		return false
 	for trig in inst.cur_triggered_abilities:
 		if trig.event_type != Mtg.EventType.BECAME_TARGET:
 			continue
-		var hit: Variant = _fragile_cache.get(trig.text)
-		if hit == null:
-			var lower := trig.text.to_lower()
-			hit = lower.contains("becomes the target") and lower.contains("sacrifice it")
-			_fragile_cache[trig.text] = hit
-		if bool(hit):
-			return true
+		match _fragile_kind(trig.text, false):
+			FRAGILE_DIES:
+				return true
+			FRAGILE_SHRINKS:
+				if inst.cur_toughness - inst.damage <= 1:
+					return true
+	if g != null:
+		for id in inst.attachments:
+			var aura := g.find_instance(id)
+			if aura == null or aura.zone != Mtg.Zone.BATTLEFIELD or aura.phased_out \
+					or aura.attached_to != inst.id:
+				continue
+			for trig in aura.cur_triggered_abilities:
+				if trig.event_type == Mtg.EventType.BECAME_TARGET \
+						and _fragile_kind(trig.text, true) == FRAGILE_DIES:
+					return true
 	return false
+
+
+static func _fragile_kind(text: String, on_aura: bool) -> int:
+	var key := ("A:" if on_aura else "C:") + text
+	var hit: Variant = _fragile_cache.get(key)
+	if hit == null:
+		var lower := text.to_lower()
+		hit = 0
+		if lower.contains("becomes the target") \
+				and (not on_aura or lower.contains("enchanted creature becomes the target")):
+			if lower.contains("sacrifice it") or lower.contains("destroy that creature") \
+					or lower.contains("destroy it"):
+				hit = FRAGILE_DIES
+			elif not on_aura and lower.contains("-1/-1 counter on it"):
+				hit = FRAGILE_SHRINKS
+		_fragile_cache[key] = hit
+	return int(hit)
 
 
 ## The opposing creature [param a]'s ability at [param index] can kill by
@@ -235,7 +282,7 @@ static func fragile_target_option(g: MtgGame, pilot, s: CardInstance, index: int
 	var foe: int = g.opponent_of(pilot.pid)
 	var best: Variant = null
 	for i in g.players[foe].battlefield:
-		if not i.is_creature() or not dies_when_targeted(i):
+		if not i.is_creature() or not dies_when_targeted(i, g):
 			continue
 		var ref := TargetRef.card(i)
 		if not spec.is_legal(g, ref, s):
@@ -258,6 +305,11 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 	var a: ActivatedAbility = s.cur_activated_abilities[index]
 	if a.effects.is_empty():
 		return null
+	# Pack 9 (licids, shadow tricks, the block's roles): the Tempest
+	# module's reading first, whole.
+	var tempest: Variant = TEMPEST_TACTICS.option(g, pilot, s, index, window)
+	if tempest != null:
+		return tempest
 	if window != "PRE_ATTACK":
 		var fragile: Variant = fragile_target_option(g, pilot, s, index)
 		if fragile != null:
@@ -388,7 +440,7 @@ static func fight_pair_option(g: MtgGame, pilot, s: CardInstance, a: ActivatedAb
 		if not mine.is_creature() or mine.cur_power <= 0:
 			continue
 		var mine_ref := TargetRef.card(mine)
-		if not mine_spec.is_legal(g, mine_ref, s) or dies_when_targeted(mine):
+		if not mine_spec.is_legal(g, mine_ref, s) or dies_when_targeted(mine, g):
 			continue
 		for theirs in g.players[g.opponent_of(pilot.pid)].battlefield:
 			if not theirs.is_creature():
@@ -486,15 +538,10 @@ static func phase_tools(g: MtgGame, pilot, victim: CardInstance) -> Array:
 					continue
 			if not pilot._ability_available(g, src, index):
 				continue
-			var surcharge := g.ability_surcharge(pid, src)
-			var own: Array = sources
-			if a.tap_cost:
-				own = sources.filter(func(row: Array) -> bool: return row[0] != src)
-			if not (pilot._cost_is_free(a.cost) and surcharge == 0) \
-					and pilot._plan_taps_from(own, a.cost, surcharge,
-						g.ability_mana_usage_keys(src)).is_empty():
+			var mana := ability_mana(g, pilot, src, index, sources)
+			if mana < 0:
 				continue
-			var price := float(a.cost.mana_value()) * 0.5
+			var price := float(mana) * 0.5
 			if a.tap_cost and src != victim and src.is_creature():
 				price += 0.5
 			out.append({"price": price, "kind": &"ability", "inst": src,
@@ -513,7 +560,7 @@ static func phase_tools(g: MtgGame, pilot, victim: CardInstance) -> Array:
 				continue
 			var surcharge := g.spell_surcharge(pid, inst.data)
 			var cost := g.spell_cost_for(pid, inst.data, 0, mode)
-			if not (pilot._cost_is_free(cost) and surcharge == 0) \
+			if not (pilot._cost_is_free(cost) and surcharge <= 0) \
 					and pilot._plan_taps_from(sources, cost, surcharge,
 						g.mana_usage_keys(inst.data, inst)).is_empty():
 				continue
@@ -545,12 +592,37 @@ static func use_tool(g: MtgGame, pilot, tool: Dictionary, verb: String) -> Strin
 	return "activated %s: %s" % [src.data.card_name, verb]
 
 
+## What [param src]'s ability [param index] costs in mana as the ENGINE
+## charges it ([method MtgGame.ability_payment]: a discount clamped at the
+## cost's generic, a floored reduction such as Heartstone's — the Pack 9 bug
+## pass, h5-3: the tools were planned at the printed cost and a payable
+## ability read as unpayable), paid from [param sources] without tapping
+## the source for its own {T}; -1 when those sources cannot pay it.
+static func ability_mana(g: MtgGame, pilot, src: CardInstance, index: int, sources: Array) -> int:
+	var a: ActivatedAbility = src.cur_activated_abilities[index]
+	var pay := g.ability_payment(pilot.pid, src, index, 0)
+	var extra := int(pay.extra)
+	if pilot._cost_is_free(pay.cost) and extra <= 0:
+		return 0
+	var own: Array = sources
+	if a.tap_cost:
+		own = sources.filter(func(row: Array) -> bool: return row[0] != src)
+	if pilot._plan_taps_from(own, pay.cost, extra, pay.usage).is_empty():
+		return -1
+	return maxi((pay.cost as ManaCost).mana_value() + extra, 0)
+
+
 ## THE RESPONSE ARM, asked by [method AiPlayer._respond_action] (which runs
 ## only for a seat that holds instants): one phasing action, or "".
 static func respond(g: MtgGame, pilot) -> String:
 	if not pilot.profile.forecasts_tactics:
 		return ""
-	var done := save_by_phasing(g, pilot)
+	# Pack 9's moments first (tempest_tactics.gd `respond`): a licid saved
+	# from its host's removal, a shadow trick before blocks.
+	var done := TEMPEST_TACTICS.respond(g, pilot)
+	if done != "":
+		return done
+	done = save_by_phasing(g, pilot)
 	if done != "":
 		return done
 	done = save_by_ward(g, pilot)
@@ -609,7 +681,7 @@ static func save_by_phasing(g: MtgGame, pilot) -> String:
 		var victim := g.find_instance(t.instance_id)
 		if victim == null or victim.controller_id != pilot.pid or not g.is_present(victim):
 			continue
-		if dies_when_targeted(victim):
+		if dies_when_targeted(victim, g):
 			continue   # it is already gone: its own trigger is on the stack
 		if intent != null and victim.is_creature() and intent.damage_at(top.x_value) > 0 \
 				and not intent.removes and not intent.bounces \
@@ -771,6 +843,10 @@ static func spell_choice(g: MtgGame, pilot, inst: CardInstance, mode: int) -> Va
 	if doomed != null and g.active_player == pilot.pid \
 			and not doomed.has_keyword(Mtg.Keyword.HASTE):
 		return {}
+	# A shadow trick (Pack 9) waits for the declare-attackers step.
+	var shadow: Variant = TEMPEST_TACTICS.spell_choice(g, pilot, inst, mode)
+	if shadow != null:
+		return shadow
 	if not inst.data.is_modal():
 		var lock: Variant = lock_choice(g, pilot, inst)
 		if lock != null:
@@ -1009,7 +1085,7 @@ static func phase_swap_response(g: MtgGame, pilot) -> String:
 				continue
 			var surcharge := g.spell_surcharge(pid, inst.data)
 			var cost := g.spell_cost_for(pid, inst.data, 0, mode)
-			if not (pilot._cost_is_free(cost) and surcharge == 0) \
+			if not (pilot._cost_is_free(cost) and surcharge <= 0) \
 					and pilot._plan_taps_from(sources, cost, surcharge,
 						g.mana_usage_keys(inst.data, inst)).is_empty():
 				continue
@@ -1092,7 +1168,7 @@ static func flash_creature_waits(g: MtgGame, pilot, inst: CardInstance) -> bool:
 		if other.data.has_keyword(Mtg.Keyword.FLASH) or other.data.flash_rider:
 			continue   # also a card for their turn
 		var surcharge := g.spell_surcharge(pid, other.data)
-		if (pilot._cost_is_free(other.data.cost) and surcharge == 0) \
+		if (pilot._cost_is_free(other.data.cost) and surcharge <= 0) \
 				or not pilot._plan_taps_from(sources, other.data.cost, surcharge,
 					g.mana_usage_keys(other.data, other)).is_empty():
 			return false   # another card wants the mana now: the body goes down
@@ -1168,7 +1244,7 @@ static func _flash_creature_in_hand(g: MtgGame, pilot) -> Dictionary:
 				or not g.casts_at_instant_speed(pid, inst) or pilot._refused.has(str(inst.id)):
 			continue
 		var surcharge := g.spell_surcharge(pid, inst.data)
-		if not (pilot._cost_is_free(inst.data.cost) and surcharge == 0) \
+		if not (pilot._cost_is_free(inst.data.cost) and surcharge <= 0) \
 				and pilot._plan_taps_from(sources, inst.data.cost, surcharge,
 					g.mana_usage_keys(inst.data, inst)).is_empty():
 			continue
@@ -1194,10 +1270,21 @@ static func end_step_flash(g: MtgGame, pilot) -> String:
 
 ## Could [param body] — a creature card not yet on the battlefield, its
 ## PRINTED numbers — block [param attacker], kill it and live? The flying
-## rule is the one evasion a hand card can be read against; first strike
-## decides who strikes first. `{kills, lives}`.
+## rule and SHADOW (CR 702.28b, both ways — the Pack 9 bug pass: a Tidal
+## Wave's Wall and a King Cheetah were cast as "surprise blockers" for a
+## shade they could never block) are the evasions a hand card can be read
+## against; first strike decides who strikes first. `{blocks, kills,
+## lives}`.
 static func _ambush_read(body: CardData, attacker: CardInstance) -> Dictionary:
 	var out := {"blocks": true, "kills": false, "lives": false}
+	var body_shadow := body.has_keyword(Mtg.Keyword.SHADOW)
+	if attacker.has_keyword(Mtg.Keyword.SHADOW):
+		if not body_shadow and not blocks_shadows(body):
+			out["blocks"] = false
+			return out
+	elif body_shadow:
+		out["blocks"] = false
+		return out
 	if attacker.has_keyword(Mtg.Keyword.FLYING) and not body.has_keyword(Mtg.Keyword.FLYING) \
 			and not body.has_keyword(Mtg.Keyword.REACH):
 		out["blocks"] = false
@@ -1212,6 +1299,16 @@ static func _ambush_read(body: CardData, attacker: CardInstance) -> Dictionary:
 	out["kills"] = kills
 	out["lives"] = attacker.cur_power < body.toughness or (first and kills)
 	return out
+
+
+## Does [param body] print "can block creatures with shadow as though it
+## had shadow" (Heartwood Dryad, Wall of Diffusion) — the static
+## [method CombatState.blocks_shadow] builds, read off its callable?
+static func blocks_shadows(body: CardData) -> bool:
+	for s in body.static_abilities:
+		if s.apply.is_valid() and s.apply.get_method() == &"_blocks_shadow":
+			return true
+	return false
 
 
 ## THE AMBUSH: their attackers are declared, our blocks are not; a flash
@@ -1288,7 +1385,7 @@ static func aura_trick(g: MtgGame, pilot) -> String:
 			continue
 		var price: float = Evaluator.card_value(inst.data)
 		for ours in g.players[pid].battlefield:
-			if not ours.is_creature() or dies_when_targeted(ours):
+			if not ours.is_creature() or dies_when_targeted(ours, g):
 				continue
 			# Its own -N toughness would kill the body before the damage
 			# step (the bug pass: Grave Servitude's +3/-1 on a 1/1).
@@ -1359,7 +1456,7 @@ static func save_by_ward(g: MtgGame, pilot) -> String:
 			continue
 		var victim := g.find_instance(t.instance_id)
 		if victim == null or victim.controller_id != pid or not g.is_present(victim) \
-				or dies_when_targeted(victim):
+				or dies_when_targeted(victim, g):
 			continue
 		if intent != null and victim.is_creature() and intent.damage_at(top.x_value) > 0 \
 				and not intent.removes and not intent.bounces \
@@ -1422,29 +1519,53 @@ static func pending_flank(g: MtgGame, blocker: CardInstance) -> int:
 ## when the forced bodies turn the whole attack into a loss (the
 ## cohort's own reading, [method AiPlayer._cohort_value]), nobody
 ## attacks; otherwise the plan stands and the repair brings them.
+##
+## PACK 9 (engine package E4, Magnetic Web): a PREDICATE requirement — "if
+## a creature with a magnet counter on it attacks, all creatures with
+## magnet counters on them attack if able" — drags the plan's companions
+## too ([method CombatDeclaration.predicate_companions], a fixpoint over
+## the plan). They are priced with the plan the same way and, when the
+## plan stands, written into it: the declaration then obeys every
+## requirement as planned, and the repair has nothing to rebuild (it used
+## to drop a volunteered land-taxed attacker — Exalted Dragon — while
+## rebuilding).
 static func price_forced_attackers(g: MtgGame, pilot, attackers: Array, defender: int) -> Array:
 	if attackers.is_empty() or not pilot.profile.reads_gaze:
 		return attackers
+	var CD := preload("res://engine/core/combat_declaration.gd")
 	var forced: Array[CardInstance] = []
-	for i in preload("res://engine/core/combat_declaration.gd").conditional_attackers(g, pilot.pid):
+	for i in CD.conditional_attackers(g, pilot.pid):
 		if not attackers.has(i.id):
 			forced.append(i)
+	var dragged: Array = CD.predicate_companions(g, pilot.pid, attackers)
+	for id in dragged:
+		var inst := g.find_instance(int(id))
+		if inst != null and not forced.has(inst):
+			forced.append(inst)
 	if forced.is_empty():
 		return attackers
+	var anyway := false
 	for id in attackers:
 		var inst := g.find_instance(id)
 		if inst != null and (pilot._conscripted(g, inst) or AiPlayer._must_attack(inst)):
-			return attackers   # someone attacks anyway: the companion comes regardless
-	var group: Array[CardInstance] = []
-	for id in attackers:
-		var inst := g.find_instance(id)
-		if inst != null:
-			group.append(inst)
-	group.append_array(forced)
-	var blockers: Array[CardInstance] = pilot._untapped_creatures(g, defender)
-	if float(pilot._cohort_value(g, group, blockers, defender)) < 0.0:
-		return []
-	return attackers
+			anyway = true   # someone attacks anyway: the companion comes regardless
+	if not anyway:
+		var group: Array[CardInstance] = []
+		for id in attackers:
+			var inst := g.find_instance(id)
+			if inst != null:
+				group.append(inst)
+		group.append_array(forced)
+		var blockers: Array[CardInstance] = pilot._untapped_creatures(g, defender)
+		if float(pilot._cohort_value(g, group, blockers, defender)) < 0.0:
+			return []
+	if dragged.is_empty():
+		return attackers
+	var out: Array = attackers.duplicate()
+	for id in dragged:
+		if not out.has(id):
+			out.append(id)
+	return out
 
 
 ## THE LIFE TAX ON A BLOCK (Heat Wave, engine package E9: "nonblue
@@ -1719,7 +1840,7 @@ static func shield_tools(g: MtgGame, pilot, victim: TargetRef,
 		if g.cast_refusal(pid, inst, targets) != "":
 			continue
 		var surcharge := g.spell_surcharge(pid, inst.data)
-		if not (pilot._cost_is_free(inst.data.cost) and surcharge == 0) \
+		if not (pilot._cost_is_free(inst.data.cost) and surcharge <= 0) \
 				and pilot._plan_taps_from(sources, inst.data.cost, surcharge,
 					g.mana_usage_keys(inst.data, inst)).is_empty():
 			continue
@@ -1753,14 +1874,10 @@ static func shield_tools(g: MtgGame, pilot, victim: TargetRef,
 			if not victim.is_player and a.sacrifice_filter.is_valid() \
 					and victim.instance_id == src.id:
 				continue
-			var surcharge := g.ability_surcharge(pid, src)
-			var own: Array = sources if not a.tap_cost \
-				else sources.filter(func(row: Array) -> bool: return row[0] != src)
-			if not (pilot._cost_is_free(a.cost) and surcharge == 0) \
-					and pilot._plan_taps_from(own, a.cost, surcharge,
-						g.ability_mana_usage_keys(src)).is_empty():
+			var mana := ability_mana(g, pilot, src, index, sources)
+			if mana < 0:
 				continue
-			var price: float = float(a.cost.mana_value()) * 0.5 + float(pilot._sacrifice_price(g, src, a)) \
+			var price: float = float(mana) * 0.5 + float(pilot._sacrifice_price(g, src, a)) \
 				+ float(a.life_cost) * pilot._life_price(g.players[pid].life)
 			var aimed: Array = []
 			if e is SourceShieldEffect and e.target_spec != null:
@@ -1885,6 +2002,10 @@ static func pay_ransom(g: MtgGame, pilot) -> String:
 	if not pilot.profile.forecasts_tactics or g.active_player == pilot.pid \
 			or g.current_step() != Mtg.Step.END or not g.stack.is_empty():
 		return ""
+	# Pack 9's end-step moves (tempest_tactics.gd `end_step_action`).
+	var tempest := TEMPEST_TACTICS.end_step_action(g, pilot)
+	if tempest != "":
+		return tempest
 	for entry in g.settleable_delayed_triggers(pilot.pid):
 		var cost: ManaCost = entry.get("settle_cost")
 		if cost == null or not g.can_afford_cost(pilot.pid, cost):
@@ -1974,6 +2095,12 @@ static func hand_cost_mana(ability: ManaAbility) -> bool:
 static func lion_eye_action(g: MtgGame, pilot, moment: int) -> String:
 	if not pilot.profile.forecasts_tactics:
 		return ""
+	# Pack 9's main-phase special actions (Volrath's Curse ignored for an
+	# attack, tempest_tactics.gd `main_action`) — asked from the same seat.
+	if moment == AiPlayer.Moment.MAIN:
+		var tempest := TEMPEST_TACTICS.main_action(g, pilot)
+		if tempest != "":
+			return tempest
 	var pid: int = pilot.pid
 	if not g.players[pid].hand.is_empty():
 		return ""
@@ -1997,10 +2124,10 @@ static func lion_eye_action(g: MtgGame, pilot, moment: int) -> String:
 						continue
 					if not pilot._ability_available(g, inst, index, true):
 						continue
-					var surcharge := g.ability_surcharge(pid, inst)
-					if not pilot._plan_taps_from(sources, a.cost, surcharge).is_empty():
+					# Priced as the engine charges it (Heartstone; h5-3).
+					if ability_mana(g, pilot, inst, index, sources) >= 0:
 						continue   # payable already: the Diamond buys it nothing
-					if pilot._plan_taps_from(with_it, a.cost, surcharge).is_empty():
+					if ability_mana(g, pilot, inst, index, with_it) < 0:
 						continue
 					var option: Dictionary = pilot._ability_option(g, inst, index, moment)
 					if option.is_empty():
@@ -2083,8 +2210,15 @@ static func truce_value(g: MtgGame, pilot) -> float:
 
 
 ## The main-phase arm for the locks above, asked from [method spell_choice].
+##
+## AN AURA'S BAN IS NOT A LOCK (the Pack 9 study, 2026-10-06): Volrath's
+## Curse bans the activated abilities of the creature it enchants and of
+## nothing else, so from the hand it reaches nothing on the table — a
+## [method ban_swing] of 0.0, under the lock's bar, and the Curse was
+## never cast. An Aura falls through to the hostile-Aura reading of the
+## shared planner (EffectIntent.AURA_HOSTILE), which prices the host.
 static func lock_choice(g: MtgGame, pilot, inst: CardInstance) -> Variant:
-	if inst.data.activation_ban.is_valid():
+	if inst.data.activation_ban.is_valid() and not inst.data.is_aura():
 		var swing := ban_swing(g, pilot, inst)
 		return {} if swing < 1.5 else {"x": 0, "targets": [], "value": swing + 1.0}
 	if inst.data.spell_effects.size() == 1:
@@ -2432,7 +2566,7 @@ static func token_ambush(g: MtgGame, pilot) -> String:
 				or pilot._refused.has(str(inst.id)) or pilot._cast_gate(g, inst) != "":
 			continue
 		var surcharge := g.spell_surcharge(pid, inst.data)
-		if not (pilot._cost_is_free(inst.data.cost) and surcharge == 0) \
+		if not (pilot._cost_is_free(inst.data.cost) and surcharge <= 0) \
 				and pilot._plan_taps_from(sources, inst.data.cost, surcharge,
 					g.mana_usage_keys(inst.data, inst)).is_empty():
 			continue

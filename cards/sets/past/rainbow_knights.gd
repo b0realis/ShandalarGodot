@@ -6,9 +6,11 @@ extends CardScript
 ##         {W}{W}: +0/+0, +1/+0 or +2/+0 until end of turn chosen at random.
 ##
 ## Implementation: the permanent protection grant rides on
-## CardInstance.added_protection (re-applied after every characteristics
-## reset, gone when the Knights leave). The third ability rolls its own
-## bonus at resolution — 0, 1 or 2 power, evenly.
+## CardInstance.added_protection through MtgGame.grant_protection_permanently
+## (re-applied after every characteristics reset, stamped so a Humility
+## older than the grant does not remove it, gone when the Knights leave).
+## The third ability rolls its own bonus at resolution — 0, 1 or 2 power,
+## evenly.
 
 
 func build() -> CardData:
@@ -35,10 +37,11 @@ static func _gain_protection(game: MtgGame, source: CardInstance, _event: GameEv
 	if not game.is_present(source):   # gone, or phased out (CR 702.26e)
 		return
 	var color := RandomEffects.color(game)
-	source.added_protection |= color
+	# Stamped on the layer-6 clock (CR 613.7): a Humility that arrived
+	# while this trigger waited is the OLDER effect and does not remove it.
+	game.grant_protection_permanently(source, color)
 	game.log_line("%s gains protection from %s" % [
 		source.data.card_name, String(Mtg.COLOR_NAMES[color]).to_lower()])
-	game.recalculate()
 	game.check_state_based_actions()
 
 

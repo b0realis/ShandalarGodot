@@ -41,14 +41,20 @@ func _init(desc: String = "", filter: Callable = Callable()) -> void:
 
 ## Some counters may legally target a spell without affecting it
 ## (Hydroblast/Pyroblast). The AI must distinguish that from legality.
-func affects_spell(_inst: CardInstance) -> bool:
-	return true
+## A spell that CAN'T BE COUNTERED (Scragnoth, Pack 9 E6 — CR 101.2) is a
+## legal target that nothing here affects. A subclass overriding this for
+## its own condition need not repeat that test: MtgGame.counter_spell
+## refuses such a spell whatever asks, and
+## [method MtgGame.spell_cant_be_countered] is the reading to share.
+func affects_spell(inst: CardInstance) -> bool:
+	return inst == null or not inst.data.cant_be_countered
 
 
 ## Removes the target's StackItem and moves the card to its owner's
 ## graveyard, both through MtgGame.counter_spell. The null guard is for a
 ## spell that is already gone (Fork's copy ceasing to exist, CR 707.10a):
-## nothing to counter, and countering nothing is legal.
+## nothing to counter, and countering nothing is legal. A spell that can't
+## be countered stays on the stack (MtgGame.counter_spell, Pack 9 E6).
 func resolve(game: MtgGame, _source: CardInstance, controller: int, target: TargetRef,
 		_x_value: int = 0) -> void:
 	var inst := game.find_instance(target.instance_id)

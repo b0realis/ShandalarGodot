@@ -110,8 +110,9 @@ static func _bounded_zip(path: String) -> bool:
 ## 1-5 call it too since the bug pass of 2026-10-03; they went straight to
 ## `ZIPReader.read_file`, which allocates whatever an entry DECLARES.
 ## [param max_bytes] bounds the archive and the sum of its declared sizes:
-## 256 MiB for every pack but Pack 8, whose three sets' pictures measure
-## within 2.3 MiB of that ([constant MirageBlockPack.MAX_BYTES]).
+## 256 MiB for every pack but Packs 8 and 9, whose three sets' pictures
+## measure 253.7 and 237.3 MiB, too close to it for a re-scanned picture
+## set ([constant MirageBlockPack.MAX_BYTES], [constant TempestBlockPack.MAX_BYTES]).
 static func bounded_zip(path: String, max_entries: int, max_bytes := 256 * 1024 * 1024) -> bool:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null or file.get_length() < 22 or file.get_length() > max_bytes: return false

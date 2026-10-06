@@ -249,7 +249,14 @@ static func _source_row(game: MtgGame, pool: ManaPool, inst: CardInstance,
 		var triggers: Array = []
 		for entry in game.delayed_triggers: triggers.append(entry.trigger)
 		for permanent in game.all_battlefield():
-			if not permanent.cur_abilities_silenced: triggers.append_array(permanent.cur_triggered_abilities)
+			if not permanent.cur_abilities_silenced:
+				triggers.append_array(permanent.cur_triggered_abilities)
+				continue
+			# Lost all its abilities: a trigger granted AFTER that still
+			# works, its printed ones never do — as the dispatcher reads it
+			# (MtgGame.trigger_silenced, CR 613.7 / 613.8a).
+			for granted in permanent.cur_triggered_abilities:
+				if not MtgGame.trigger_silenced(permanent, granted): triggers.append(granted)
 		for trigger in triggers:
 			if not trigger.is_mana_trigger or trigger.mana_bonus_amount <= 0 or not inst.has_subtype(trigger.mana_bonus_subtype): continue
 			var restriction: String = trigger.mana_bonus_restriction

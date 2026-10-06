@@ -191,7 +191,8 @@ class ConditionalCounter extends CounterEffect:
 	func _init(value: int) -> void:
 		super()
 		color = value
-	func affects_spell(inst: CardInstance) -> bool: return (inst.cur_colors & color) != 0
+	# The colour, and never a spell that can't be countered (CounterEffect's own test).
+	func affects_spell(inst: CardInstance) -> bool: return super.affects_spell(inst) and inst != null and (inst.cur_colors & color) != 0
 	func resolve(g: MtgGame, s: CardInstance, pid: int, t: TargetRef, x := 0) -> void:
 		var i := g.find_instance(t.instance_id)
 		if i != null and (i.cur_colors & color) != 0: super(g, s, pid, t, x)

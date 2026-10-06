@@ -341,7 +341,11 @@ func test_the_pool_has_one_counter_eater_and_one_point_redirect() -> void:
 	# Pack 8 (2026-10-03) adds four ordinary pools in shared modules: Ivory
 	# Charm (mir/_spells), Femeref Healer and a self-prevention (mir/
 	# _creatures), Remedy's divided pool (vis/_spells) and Alms (wth/_costs).
-	assert_eq(pools.size(), 24, "the prevention-pool family through the Mirage block: %s" % [pools])
+	# Pack 9 (2026-10-06) adds ordinary pools in five shared modules: Clergy
+	# en-Vec and Orim (tmp/_creatures), Squee's Toy (tmp/_artifacts), Anoint
+	# (tmp/_buyback) and Bandage (sth/_spells); sth/_creatures only READS the
+	# type (the en-Kor redirects pass a prevention by), so it writes no gate.
+	assert_eq(pools.size(), 29, "the prevention-pool family through the Tempest block: %s" % [pools])
 	assert_has(pools, "_rules.gd")
 
 
@@ -364,8 +368,11 @@ func test_the_pool_has_the_seven_creature_side_gate_writers() -> void:
 		"the source-filtered immunities: %s" % [immunities])
 	var combat_shields := _cards_containing("add_until_eot_combat_prevention")
 	# Elvish Scout and Heroism share the new Fallen Empires writer. Pack 8's
-	# Mtenda Lion and Delirium share mir/_combat.gd (2026-10-03).
-	assert_eq(combat_shields.size(), 13,
+	# Mtenda Lion and Delirium share mir/_combat.gd (2026-10-03). Pack 9's
+	# Maze of Shadows (tmp/_shadow.gd) is Maze of Ith's shield on a shadow
+	# attacker, and Fighting Chance (exo/_spells.gd) the blockers' half on a
+	# coin (2026-10-06).
+	assert_eq(combat_shields.size(), 15,
 		"the floating combat-damage preventions including Winter's Chill: %s" % [combat_shields])
 	assert_has(combat_shields, "_rules.gd")
 

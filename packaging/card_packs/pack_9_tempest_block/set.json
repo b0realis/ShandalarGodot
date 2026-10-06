@@ -1,0 +1,11 @@
+{
+  "all_printings": 350,
+  "code": "tmp",
+  "name": "Tempest",
+  "released_at": "1997-10-14",
+  "retrieved_at": "2026-10-06",
+  "selection": "Original English numbered printings 1–350.",
+  "source_url": "https://api.scryfall.com/cards/search?include_extras=true&include_variations=true&order=set&q=e%3Atmp&unique=prints",
+  "standard_printings": 350,
+  "unique_names": 335
+}

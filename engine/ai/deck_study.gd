@@ -97,7 +97,10 @@ static func classify(data: CardData) -> Array[String]:
 			out.append("cheap_creature")
 		if data.cost.mana_value() >= 5 or data.power >= 5:
 			out.append("big_creature")
-		if data.keywords.has(Mtg.Keyword.FLYING) or not data.landwalk.is_empty():
+		# Shadow (CR 702.28, Pack 9) is evasion as good as flying's: almost
+		# nothing in the pool blocks a shade. No older card has it.
+		if data.keywords.has(Mtg.Keyword.FLYING) or data.keywords.has(Mtg.Keyword.SHADOW) \
+				or not data.landwalk.is_empty():
 			out.append("evasion")
 	if not data.is_land() and not data.mana_abilities.is_empty():
 		out.append("acceleration")

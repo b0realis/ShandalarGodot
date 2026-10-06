@@ -19,6 +19,10 @@ const KEYWORD_VALUE := {
 	# FLANKING (CR 702.25): per INSTANCE — `cur_keywords` holds one entry
 	# each, and every one is another -1/-1 on a blocker without it.
 	Mtg.Keyword.FLANKING: 0.5,
+	# SHADOW (CR 702.28, Pack 9): evasion as good as flying's on attack —
+	# almost nothing in the pool can block it — and paid back on defence
+	# by [constant SHADOW_DEFENCE] (it blocks only other shadow creatures).
+	Mtg.Keyword.SHADOW: 1.5,
 	Mtg.Keyword.MUST_ATTACK: -0.5,   # a drawback
 	Mtg.Keyword.DEFENDER: -1.0,      # can't attack
 }
@@ -26,6 +30,15 @@ const KEYWORD_VALUE := {
 # Position-score weights, in the same "stat points" currency as
 # KEYWORD_VALUE — one point of life is the unit everything else is priced
 # against.
+
+## THE SHADOW CREATURE'S DEFENSIVE DISCOUNT (Pack 9 E1), per point of
+## toughness: a creature with shadow "can block only creatures with
+## shadow" (CR 702.28b), so the toughness that makes a body a wall against
+## the opponent's ground team is worth little on it. A 2/1 shade prices at
+## 4.0 against a vanilla 2/1's 3.0 and a flying 2/1's 4.5; a 1/4 shade
+## below a vanilla 1/4. Only shadow creatures move, and no card before
+## Pack 9 has shadow, so every older board prices exactly as it did.
+const SHADOW_DEFENCE := 0.5
 
 ## THE SHARE OF ITS WORTH A PHASING CREATURE KEEPS (Pack 8): present one
 ## turn in two, and untouchable in the other (see [method permanent_value]).
@@ -93,6 +106,16 @@ static func permanent_value(inst: CardInstance, profile: AiProfile = null) -> fl
 			v += ability_bonus * float(inst.cur_activated_abilities.size())
 			if not inst.cur_mana_abilities.is_empty():
 				v += ability_bonus
+		if Mtg.Keyword.SHADOW in inst.cur_keywords:
+			v -= SHADOW_DEFENCE * float(maxi(inst.cur_toughness, 0))
+		# GRANTED ABILITIES (Pack 9, the Slivers; [member
+		# AiProfile.forecasts_tactics]): an activated ability a static of
+		# another permanent hands this creature ("All Slivers have '{2}:
+		# Regenerate this permanent'") is part of what it is worth while the
+		# grant lasts — on either side of the table, so a Sliver lord that
+		# arms THEIR Slivers raises their board too ([AiContextValue]).
+		if profile != null and profile.forecasts_tactics:
+			v += granted_ability_value(inst)
 		if inst.cur_protection != 0:
 			v += 1.0
 		if not inst.cur_landwalk.is_empty():
@@ -112,6 +135,35 @@ static func permanent_value(inst: CardInstance, profile: AiProfile = null) -> fl
 		return 1.0
 	# Artifacts/enchantments: rough worth by cost (they earned their slot).
 	return maxf(inst.data.cost.mana_value() * 0.8, 1.0)
+
+
+## What the activated abilities [param inst] has but its printed card does
+## not are worth on the creature — a regeneration shield or a shot at any
+## target a point each, a pump, a life gain, a draw or a bounce half a
+## point, anything else a quarter. 0.0 for a creature with no grant (every
+## creature before Pack 9 but the few a Zombie Master arms).
+static func granted_ability_value(inst: CardInstance) -> float:
+	if inst.cur_activated_abilities.size() <= inst.data.activated_abilities.size():
+		return 0.0
+	var v := 0.0
+	for a in inst.cur_activated_abilities:
+		if inst.data.activated_abilities.has(a) or a.effects.is_empty():
+			continue
+		var e: EffectBase = a.effects[0]
+		if e is RegenerateEffect or (e is DamageEffect and (e as DamageEffect).amount > 0):
+			v += GRANTED_MAJOR
+		elif e is PumpEffect or e is GainLifeEffect or e is DrawEffect \
+				or e.ai_role == &"self_bounce":
+			v += GRANTED_MINOR
+		else:
+			v += GRANTED_OTHER
+	return v
+
+
+## The three weights of [method granted_ability_value], in stat points.
+const GRANTED_MAJOR := 1.0
+const GRANTED_MINOR := 0.5
+const GRANTED_OTHER := 0.25
 
 
 ## What one LAND is worth to the seat that controls it, on the same scale
@@ -166,6 +218,8 @@ static func card_value(data: CardData) -> float:
 		var v := float(data.power + data.toughness)
 		for k in data.keywords:
 			v += KEYWORD_VALUE.get(k, 0.0)
+		if data.keywords.has(Mtg.Keyword.SHADOW):
+			v -= SHADOW_DEFENCE * float(maxi(data.toughness, 0))
 		return v
 	# Spells: cost approximates power in this pool; free Power Nine
 	# artifacts are worth plenty despite {0}.

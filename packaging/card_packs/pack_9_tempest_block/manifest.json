@@ -1,0 +1,17 @@
+{
+  "badge": "9-TMP",
+  "description": "The Tempest block — Tempest (1997), Stronghold (1998) and Exodus (1998): 621 distinct cards and 636 original English printings, 574 of them new to the game.",
+  "file_name": "Pack-9-Tempest-Block.zip",
+  "id": "pack-9",
+  "minimum_game_version": "0.50.15",
+  "name": "The Tempest Block",
+  "number": 9,
+  "pack_format": 1,
+  "rules_note": "Original Tempest, Stronghold and Exodus artwork with current Oracle rules. The 42 cards the game already has keep their existing scripts; the 27 of them that live only in Ice Age, Portal, Portal Second Age or Mirage are provided by this pack too when that pack is off.",
+  "set_order": [
+    "tmp",
+    "sth",
+    "exo"
+  ],
+  "version": "1.0.0"
+}

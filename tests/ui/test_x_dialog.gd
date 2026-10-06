@@ -341,6 +341,18 @@ func test_every_x_spell_in_the_pool_offers_a_bound_it_can_pay() -> void:
 				targets = found if targets < 0 else mini(targets, found)
 		if targets >= 0 and data.extra_cost_per_target <= 0:
 			want = mini(want, targets * maxi(data.cost.x_count, 1))
+		# "Spend only black mana on X" (Drain Life, CardData.x_color): X is
+		# paid in that colour, so the bound is that colour's four lands less
+		# the colour's own pips — the bill the engine will ask (the window
+		# prices the engine's bill since the Tempest bug pass; it offered
+		# all twenty lands, an X the cast then refused).
+		if data.x_color != 0:
+			var x_sources := 0
+			for color in [Mtg.ManaColor.W, Mtg.ManaColor.U, Mtg.ManaColor.B,
+					Mtg.ManaColor.R, Mtg.ManaColor.G]:
+				if data.x_color & color:
+					x_sources += 4 - int(data.cost.colored.get(color, 0))
+			want = mini(want, x_sources)
 		assert_eq(int(screen._x_spin.max_value), want,
 			"%s (%s) offers its lands" % [card_name, data.cost.text])
 		screen._on_x_canceled()

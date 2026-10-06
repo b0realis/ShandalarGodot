@@ -133,6 +133,28 @@ var target_order: Callable = Callable()
 ## spec's description.
 var target_prompt: String = ""
 
+## Pack 9 E7 — WHO CHOOSES the targets, when the card names somebody other
+## than the trigger's controller: "that creature's controller may have it
+## deal damage … to any target of THEIR choice" (Pandemonium). CR 603.3d
+## puts the choice as the trigger goes on the stack; the card says whose it
+## is. [code]func(game: MtgGame, source: CardInstance, event: GameEvent) ->
+## int[/code], a seat id; unset (or an answer out of range) = the
+## trigger's controller. The trigger stays its CONTROLLER's — legality,
+## "you" and the fizzle check are judged from that seat — and only the
+## target questions go to the chooser ([method MtgGame.trigger_chooser]),
+## a human chooser held like any seat. A [member target_order] should rank
+## for [method MtgGame.ranking_chooser]. For one-slot and
+## [method and_targeting] triggers; a [method targeting_up_to] trigger's
+## "how many" question stays the controller's. Set with [method chosen_by].
+var target_chooser: Callable = Callable()
+
+
+## Fluent: the targets are chosen by [param fn]'s seat (see
+## [member target_chooser]). Call after [method targeting].
+func chosen_by(fn: Callable) -> TriggeredAbility:
+	target_chooser = fn
+	return self
+
 
 ## Fluent: this trigger TARGETS. [param spec] is the target; [param order]
 ## and [param prompt] as documented on [member target_order] and

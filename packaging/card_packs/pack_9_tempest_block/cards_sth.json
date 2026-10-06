@@ -1,0 +1,2503 @@
+[
+  {
+    "artist": "Rebecca Guay",
+    "collector_number": "1",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}",
+    "name": "Bandage",
+    "oracle_text": "Prevent the next 1 damage that would be dealt to any target this turn.\nDraw a card.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "79ed559a-9a88-43d2-85d1-4bbec038f71e",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "D. Alexander Gregory",
+    "collector_number": "2",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{W}",
+    "name": "Calming Licid",
+    "oracle_text": "{W}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {W} to end this effect.\nEnchanted creature can't attack.",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "155fc239-c2eb-41cc-9a0a-2414da3c3d7b",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Licid"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "3",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{W}",
+    "name": "Change of Heart",
+    "oracle_text": "Buyback {3} (You may pay an additional {3} as you cast this spell. If you do, put this card into your hand as it resolves.)\nTarget creature can't attack this turn.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "afaf277e-b430-4c96-880c-ae654973478c",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Brom",
+    "collector_number": "4",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{W}{W}",
+    "name": "Contemplation",
+    "oracle_text": "Whenever you cast a spell, you gain 1 life.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "848672be-b1cd-40ef-a7ed-ce1620aebd2e",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Paolo Parente",
+    "collector_number": "5",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Enchant"
+    ],
+    "mana_cost": "{1}{W}",
+    "name": "Conviction",
+    "oracle_text": "Enchant creature\nEnchanted creature gets +1/+3.\n{W}: Return this Aura to its owner's hand.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "190332b3-6a1c-4c25-af61-d8923fc9a0c3",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment — Aura"
+  },
+  {
+    "artist": "Terese Nielsen",
+    "collector_number": "6",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{W}",
+    "name": "Hidden Retreat",
+    "oracle_text": "Put a card from your hand on top of your library: Prevent all damage that would be dealt by target instant or sorcery spell this turn.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "5be86f1f-c85a-4396-aa16-a39fbf493c96",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Joel Biske",
+    "collector_number": "7",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}",
+    "name": "Honor Guard",
+    "oracle_text": "{W}: This creature gets +0/+1 until end of turn.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "35c44137-ddcc-42fa-baff-a0c3785b84ee",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Human Soldier"
+  },
+  {
+    "artist": "Pete Venters",
+    "collector_number": "8",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Trample"
+    ],
+    "mana_cost": "{3}{W}{W}",
+    "name": "Lancers en-Kor",
+    "oracle_text": "Trample\n{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.",
+    "power": "3",
+    "rarity": "uncommon",
+    "scryfall_id": "e7cd99c2-6d4a-48e8-8848-6fdc0788525d",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Kor Soldier"
+  },
+  {
+    "artist": "Val Mayerik",
+    "collector_number": "9",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}",
+    "name": "Nomads en-Kor",
+    "oracle_text": "{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "b3a03c68-0ebe-488a-8e6c-7cbf7a448416",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Kor Nomad Soldier"
+  },
+  {
+    "artist": "DiTerlizzi",
+    "collector_number": "10",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{W}",
+    "name": "Pursuit of Knowledge",
+    "oracle_text": "If you would draw a card, you may put a study counter on this enchantment instead.\nRemove three study counters from this enchantment, Sacrifice this enchantment: Draw seven cards.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "eaa577b1-2604-4065-a973-166521682a86",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "John Matson",
+    "collector_number": "11",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{W}",
+    "name": "Rolling Stones",
+    "oracle_text": "Wall creatures can attack as though they didn't have defender.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "dd27e9c9-0a47-4fa3-9da5-1993f20305c2",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Terese Nielsen",
+    "collector_number": "12",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{W}",
+    "name": "Sacred Ground",
+    "oracle_text": "Whenever a spell or ability an opponent controls causes a land to be put into your graveyard from the battlefield, return that card to the battlefield.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "37ae4b01-a9c1-4eec-9204-78cb2508e0df",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Rebecca Guay",
+    "collector_number": "13",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Enchant"
+    ],
+    "mana_cost": "{W}",
+    "name": "Samite Blessing",
+    "oracle_text": "Enchant creature\nEnchanted creature has \"{T}: The next time a source of your choice would deal damage to target creature this turn, prevent that damage.\"",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "3b21aa2e-df36-4101-89b6-515858f2ab88",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment — Aura"
+  },
+  {
+    "artist": "Daren Bader",
+    "collector_number": "14",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}",
+    "name": "Scapegoat",
+    "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nReturn any number of target creatures you control to their owner's hand.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "20454d36-d98d-4421-b3aa-d2dd4b368d84",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Jeff Miracola",
+    "collector_number": "15",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{W}",
+    "name": "Shaman en-Kor",
+    "oracle_text": "{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.\n{1}{W}: The next time a source of your choice would deal damage to target creature this turn, that damage is dealt to this creature instead.",
+    "power": "1",
+    "rarity": "rare",
+    "scryfall_id": "a9a13c4c-d5c0-4947-bb68-d2e9611bcdea",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Kor Cleric Shaman"
+  },
+  {
+    "artist": "Mike Raabe",
+    "collector_number": "16",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "mana_cost": "{1}{W}",
+    "name": "Skyshroud Falcon",
+    "oracle_text": "Flying, vigilance",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "afb86621-1a6e-4d56-ab0e-531105775c56",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Bird"
+  },
+  {
+    "artist": "Daren Bader",
+    "collector_number": "17",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}",
+    "name": "Smite",
+    "oracle_text": "Destroy target blocked creature.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "14f165ad-cfe6-4a5d-8073-a70969494855",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Adam Rex",
+    "collector_number": "18",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Shadow"
+    ],
+    "mana_cost": "{2}{W}",
+    "name": "Soltari Champion",
+    "oracle_text": "Shadow (This creature can block or be blocked by only creatures with shadow.)\nWhenever this creature attacks, other creatures you control get +1/+1 until end of turn.",
+    "power": "2",
+    "rarity": "rare",
+    "scryfall_id": "a112edf3-c976-426c-a407-e86255586e41",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Soltari Soldier"
+  },
+  {
+    "artist": "John Matson",
+    "collector_number": "19",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{3}{W}",
+    "name": "Spirit en-Kor",
+    "oracle_text": "Flying\n{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "f8adc368-ede3-4b1c-af93-a5e0f2e24d83",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Kor Spirit"
+  },
+  {
+    "artist": "Matthew D. Wilson",
+    "collector_number": "20",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{X}{1}{W}",
+    "name": "Temper",
+    "oracle_text": "Prevent the next X damage that would be dealt to target creature this turn. For each 1 damage prevented this way, put a +1/+1 counter on that creature.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "e4bff910-24ab-45a0-b014-30bef6263c38",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Terese Nielsen",
+    "collector_number": "21",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{W}",
+    "name": "Venerable Monk",
+    "oracle_text": "When this creature enters, you gain 2 life.",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "704b8be3-4ed8-4e94-aa66-c7187a299088",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Human Monk Cleric"
+  },
+  {
+    "artist": "Adam Rex",
+    "collector_number": "22",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Defender"
+    ],
+    "mana_cost": "{1}{W}",
+    "name": "Wall of Essence",
+    "oracle_text": "Defender (This creature can't attack.)\nWhenever this creature is dealt combat damage, you gain that much life.",
+    "power": "0",
+    "rarity": "uncommon",
+    "scryfall_id": "2f237426-a657-4234-9f79-0a06558eeb39",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Wall"
+  },
+  {
+    "artist": "Stephen Daniele",
+    "collector_number": "23",
+    "colors": [
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}{W}",
+    "name": "Warrior en-Kor",
+    "oracle_text": "{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "16a9ca33-3e9b-4ed9-b503-a1c09c17ca8b",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Kor Warrior Knight"
+  },
+  {
+    "artist": "Brom",
+    "collector_number": "24",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{4}{W}{W}",
+    "name": "Warrior Angel",
+    "oracle_text": "Flying\nWhenever this creature deals damage, you gain that much life.",
+    "power": "3",
+    "rarity": "rare",
+    "scryfall_id": "81d2c6e3-e556-4cc6-94b6-fdbc62d6853e",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Angel Warrior"
+  },
+  {
+    "artist": "Rebecca Guay",
+    "collector_number": "25",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "First strike"
+    ],
+    "mana_cost": "{1}{W}",
+    "name": "Youthful Knight",
+    "oracle_text": "First strike",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "fcd3b7a7-c5e8-4179-ade3-31625620f3a9",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Human Knight"
+  },
+  {
+    "artist": "Randy Gallegos",
+    "collector_number": "26",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{2}{U}",
+    "name": "Cloud Spirit",
+    "oracle_text": "Flying\nThis creature can block only creatures with flying.",
+    "power": "3",
+    "rarity": "common",
+    "scryfall_id": "938d6c51-903b-4e0b-8702-291666581f2a",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Spirit"
+  },
+  {
+    "artist": "Val Mayerik",
+    "collector_number": "27",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Enchant"
+    ],
+    "mana_cost": "{1}{U}",
+    "name": "Contempt",
+    "oracle_text": "Enchant creature\nWhen enchanted creature attacks, return it and this Aura to their owners' hands at end of combat.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "c1fa8e60-c32f-4586-b133-224f0aec3355",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment — Aura"
+  },
+  {
+    "artist": "Matthew D. Wilson",
+    "collector_number": "28",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{U}{U}",
+    "name": "Dream Halls",
+    "oracle_text": "Rather than pay the mana cost for a spell, its controller may discard a card that shares a color with that spell.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "ff4a22d9-007b-4eb7-af9e-b5c2cae36238",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Richard Kane Ferguson",
+    "collector_number": "29",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{U}{U}",
+    "name": "Dream Prowler",
+    "oracle_text": "This creature can't be blocked as long as it's attacking alone.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "1444f76b-c876-4166-b957-b17313221fea",
+    "set": "sth",
+    "toughness": "5",
+    "type_line": "Creature — Illusion"
+  },
+  {
+    "artist": "Rob Alexander",
+    "collector_number": "30",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{U}{U}",
+    "name": "Evacuation",
+    "oracle_text": "Return all creatures to their owners' hands.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "1cb8ae53-a53f-4a0f-94f7-559aca041797",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Heather Hudson",
+    "collector_number": "31",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{U}",
+    "name": "Gliding Licid",
+    "oracle_text": "{U}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {U} to end this effect.\nEnchanted creature has flying.",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "0148f3ca-4dba-4408-86d0-1190c387ee69",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Licid"
+  },
+  {
+    "artist": "Stephen Daniele",
+    "collector_number": "32",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{U}",
+    "name": "Hammerhead Shark",
+    "oracle_text": "This creature can't attack unless defending player controls an Island.",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "854627ab-38bd-4894-94d8-9ef51a57579c",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Shark"
+  },
+  {
+    "artist": "Pete Venters",
+    "collector_number": "33",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{U}",
+    "name": "Hesitation",
+    "oracle_text": "When a player casts a spell, sacrifice this enchantment and counter that spell.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "e3ce5dbc-3597-42e8-859a-cac105c8102e",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Donato Giancola",
+    "collector_number": "34",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{U}",
+    "name": "Intruder Alarm",
+    "oracle_text": "Creatures don't untap during their controllers' untap steps.\nWhenever a creature enters, untap all creatures.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "7e55f653-0952-4713-8d43-ca50acff9e3b",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Kev Walker",
+    "collector_number": "35",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{U}",
+    "name": "Leap",
+    "oracle_text": "Target creature gains flying until end of turn.\nDraw a card.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "0841423d-7a27-4bc5-9ac2-0ba47648c6f1",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Christopher Rush",
+    "collector_number": "36",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{U}",
+    "name": "Mana Leak",
+    "oracle_text": "Counter target spell unless its controller pays {3}.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "abcaf16d-aa02-43e2-aa38-bb1835d47a05",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Heather Hudson",
+    "collector_number": "37",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{U}",
+    "name": "Mask of the Mimic",
+    "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nSearch your library for a card with the same name as target nontoken creature, put that card onto the battlefield, then shuffle.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "09891c87-eb74-4174-ad46-11a7f79de859",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Andrew Robinson",
+    "collector_number": "38",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{U}",
+    "name": "Mind Games",
+    "oracle_text": "Buyback {2}{U} (You may pay an additional {2}{U} as you cast this spell. If you do, put this card into your hand as it resolves.)\nTap target artifact, creature, or land.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "4da50979-1f5d-48d1-9406-dfc785273c04",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "39",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{U}",
+    "name": "Ransack",
+    "oracle_text": "Look at the top five cards of target player's library. Put any number of them on the bottom of that library in any order and the rest on top of the library in any order.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "b438802b-629a-42c8-824d-f081a1619f68",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Doug Chaffee",
+    "collector_number": "40",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{U}",
+    "name": "Rebound",
+    "oracle_text": "Change the target of target spell that targets only a player. The new target must be a player.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "bb6ca66e-1116-4739-8375-87af99e9bba5",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Colin MacNeil",
+    "collector_number": "41",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{U}{U}",
+    "name": "Reins of Power",
+    "oracle_text": "Untap all creatures you control and all creatures target opponent controls. You and that opponent each gain control of all creatures the other controls until end of turn. Those creatures gain haste until end of turn.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "21a9242f-0516-4dae-8cbc-1f7f78931782",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Pete Venters",
+    "collector_number": "42",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{U}",
+    "name": "Sift",
+    "oracle_text": "Draw three cards, then discard a card.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "bf5b23da-9ba8-4b43-a5c9-51e1fc253913",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Colin MacNeil",
+    "collector_number": "43",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{3}{U}{U}",
+    "name": "Silver Wyvern",
+    "oracle_text": "Flying\n{U}: Change the target of target spell or ability that targets only this creature. The new target must be a creature.",
+    "power": "4",
+    "rarity": "rare",
+    "scryfall_id": "02a20067-4ac2-4688-b8e8-3463185c4a41",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Drake"
+  },
+  {
+    "artist": "Anthony S. Waters",
+    "collector_number": "44",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{U}",
+    "name": "Spindrift Drake",
+    "oracle_text": "Flying\nAt the beginning of your upkeep, sacrifice this creature unless you pay {U}.",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "c881c388-430f-4a4b-9cd1-fba0a2bc2cd6",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Drake"
+  },
+  {
+    "artist": "Andrew Robinson",
+    "collector_number": "45",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Shadow"
+    ],
+    "mana_cost": "{3}{U}",
+    "name": "Thalakos Deceiver",
+    "oracle_text": "Shadow (This creature can block or be blocked by only creatures with shadow.)\nWhenever this creature attacks and isn't blocked, you may sacrifice it. If you do, gain control of target creature. (This effect lasts indefinitely.)",
+    "power": "1",
+    "rarity": "rare",
+    "scryfall_id": "ae4cc2f5-3a50-40c8-87ea-6b92f081f55c",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Thalakos Wizard"
+  },
+  {
+    "artist": "Doug Chaffee",
+    "collector_number": "46",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{U}",
+    "name": "Tidal Surge",
+    "oracle_text": "Tap up to three target creatures without flying.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "8737440b-0bf0-483f-895b-aa24da2b9cfe",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Daren Bader",
+    "collector_number": "47",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{U}",
+    "name": "Tidal Warrior",
+    "oracle_text": "{T}: Target land becomes an Island until end of turn.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "ab89a30a-ac4d-4a5e-bbff-a02366bc9cf6",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Merfolk Warrior"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "48",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{U}{U}",
+    "name": "Volrath's Shapeshifter",
+    "oracle_text": "As long as the top card of your graveyard is a creature card, this creature has the full text of that card and has the text \"{2}: Discard a card.\" (This creature has that card's name, mana cost, color, types, abilities, power, and toughness.)\n{2}: Discard a card.",
+    "power": "0",
+    "rarity": "rare",
+    "scryfall_id": "ec89ee13-34ef-41c8-8fe4-0a6b21df2032",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Phyrexian Shapeshifter"
+  },
+  {
+    "artist": "Richard Kane Ferguson",
+    "collector_number": "49",
+    "colors": [
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{U}",
+    "name": "Walking Dream",
+    "oracle_text": "This creature can't be blocked.\nThis creature doesn't untap during your untap step if an opponent controls two or more creatures.",
+    "power": "3",
+    "rarity": "uncommon",
+    "scryfall_id": "bd2f906d-b127-400a-809b-449f1e7f647b",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Illusion"
+  },
+  {
+    "artist": "Rebecca Guay",
+    "collector_number": "50",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Defender"
+    ],
+    "mana_cost": "{1}{U}",
+    "name": "Wall of Tears",
+    "oracle_text": "Defender (This creature can't attack.)\nWhenever this creature blocks a creature, return that creature to its owner's hand at end of combat.",
+    "power": "0",
+    "rarity": "uncommon",
+    "scryfall_id": "4638d815-fb86-490c-84d6-777a1c6131d6",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Wall"
+  },
+  {
+    "artist": "Kev Walker",
+    "collector_number": "51",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{B}{B}",
+    "name": "Bottomless Pit",
+    "oracle_text": "At the beginning of each player's upkeep, that player discards a card at random.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "91f05fc3-da6e-45d4-8566-f4e7bdce1fe5",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Stephen Daniele",
+    "collector_number": "52",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{2}{B}",
+    "name": "Brush with Death",
+    "oracle_text": "Buyback {2}{B}{B} (You may pay an additional {2}{B}{B} as you cast this spell. If you do, put this card into your hand as it resolves.)\nTarget opponent loses 2 life. You gain 2 life.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "04013bc6-7774-400b-a6af-de755b4c324d",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Robert Bliss",
+    "collector_number": "53",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{B}",
+    "name": "Cannibalize",
+    "oracle_text": "Choose two target creatures controlled by the same player. Exile one of those creatures and put two +1/+1 counters on the other.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "c0896ae6-fe96-44e8-ba62-a6d3fc1aae4f",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Thomas M. Baxa",
+    "collector_number": "54",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{B}",
+    "name": "Corrupting Licid",
+    "oracle_text": "{B}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {B} to end this effect.\nEnchanted creature has fear. (It can't be blocked except by artifact creatures and/or black creatures.)",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "c12c6548-20e6-4697-ba26-e711590f9e28",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Licid"
+  },
+  {
+    "artist": "Pete Venters",
+    "collector_number": "55",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{B}{B}",
+    "name": "Crovax the Cursed",
+    "oracle_text": "Crovax enters with four +1/+1 counters on it.\nAt the beginning of your upkeep, you may sacrifice a creature. If you do, put a +1/+1 counter on Crovax. If you don't, remove a +1/+1 counter from Crovax.\n{B}: Crovax gains flying until end of turn.",
+    "power": "0",
+    "rarity": "rare",
+    "scryfall_id": "88a9b76d-6ce1-40d4-bc04-7ae6237f5eaf",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Legendary Creature — Vampire Noble"
+  },
+  {
+    "artist": "Thomas M. Baxa",
+    "collector_number": "56",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{B}",
+    "name": "Dauthi Trapper",
+    "oracle_text": "{T}: Target creature gains shadow until end of turn. (It can block or be blocked by only creatures with shadow.)",
+    "power": "1",
+    "rarity": "uncommon",
+    "scryfall_id": "6d83770e-16ff-49c6-b4e7-eb7fc566eef8",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Dauthi Minion"
+  },
+  {
+    "artist": "Colin MacNeil",
+    "collector_number": "57",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{B}{B}",
+    "name": "Death Stroke",
+    "oracle_text": "Destroy target tapped creature.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "7478a471-3bd2-4038-a4eb-70c38a43afa9",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Jason Alexander Behnke",
+    "collector_number": "58",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{3}{B}",
+    "name": "Dungeon Shade",
+    "oracle_text": "Flying\n{B}: This creature gets +1/+1 until end of turn.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "6a818483-de47-454d-bb24-3410aa95289c",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Shade Spirit"
+  },
+  {
+    "artist": "Jim Nelson",
+    "collector_number": "59",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{B}{B}",
+    "name": "Foul Imp",
+    "oracle_text": "Flying\nWhen this creature enters, you lose 2 life.",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "e35ab62e-d6c6-448c-bbe0-42abe5780adc",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Imp"
+  },
+  {
+    "artist": "Scott Kirschner",
+    "collector_number": "60",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{B}{B}{B}",
+    "name": "Grave Pact",
+    "oracle_text": "Whenever a creature you control dies, each other player sacrifices a creature of their choice.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "940536be-fce1-4a90-9126-195815a43e0f",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "DiTerlizzi",
+    "collector_number": "61",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{B}",
+    "name": "Lab Rats",
+    "oracle_text": "Buyback {4} (You may pay an additional {4} as you cast this spell. If you do, put this card into your hand as it resolves.)\nCreate a 1/1 black Rat creature token.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "3132c128-e0bd-4524-9526-914b3c7181fc",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Donato Giancola",
+    "collector_number": "62",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{B}",
+    "name": "Megrim",
+    "oracle_text": "Whenever an opponent discards a card, this enchantment deals 2 damage to that player.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "4eacd05b-078a-468c-b137-a802346d348a",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Adam Rex",
+    "collector_number": "63",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{B}",
+    "name": "Mind Peel",
+    "oracle_text": "Buyback {2}{B}{B} (You may pay an additional {2}{B}{B} as you cast this spell. If you do, put this card into your hand as it resolves.)\nTarget player discards a card.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "92bd531c-fdd1-4a22-816e-258b2975c1a3",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Paolo Parente",
+    "collector_number": "64",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{B}{B}",
+    "name": "Mindwarper",
+    "oracle_text": "This creature enters with three +1/+1 counters on it.\n{2}{B}, Remove a +1/+1 counter from this creature: Target player discards a card. Activate only as a sorcery.",
+    "power": "0",
+    "rarity": "rare",
+    "scryfall_id": "ebe796e1-97f9-469a-a6b6-a09161058e12",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Spirit"
+  },
+  {
+    "artist": "Robert Bliss",
+    "collector_number": "65",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Mill"
+    ],
+    "mana_cost": "{2}{B}",
+    "name": "Morgue Thrull",
+    "oracle_text": "Sacrifice this creature: Mill three cards.",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "270a26ce-3435-4fef-bc34-abbc6f1cf3f4",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Thrull"
+  },
+  {
+    "artist": "Robert Bliss",
+    "collector_number": "66",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{B}",
+    "name": "Mortuary",
+    "oracle_text": "Whenever a creature is put into your graveyard from the battlefield, put that card on top of your library.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "860f46ea-6fd0-456d-971d-8d1eccc7fa60",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Matthew D. Wilson",
+    "collector_number": "67",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{B}",
+    "name": "Rabid Rats",
+    "oracle_text": "{T}: Target blocking creature gets -1/-1 until end of turn.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "ed8c028e-6656-47ef-97fb-de99f8833d5f",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Rat"
+  },
+  {
+    "artist": "Terese Nielsen",
+    "collector_number": "68",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{4}{B}",
+    "name": "Revenant",
+    "oracle_text": "Flying\nRevenant's power and toughness are each equal to the number of creature cards in your graveyard.",
+    "power": "*",
+    "rarity": "rare",
+    "scryfall_id": "0da40601-b6a3-47ca-b5b6-8fdbdf81f3d4",
+    "set": "sth",
+    "toughness": "*",
+    "type_line": "Creature — Spirit"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "69",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{B}",
+    "name": "Serpent Warrior",
+    "oracle_text": "When this creature enters, you lose 3 life.",
+    "power": "3",
+    "rarity": "common",
+    "scryfall_id": "ab726e7d-171f-48b2-9652-545e17913330",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Snake Warrior"
+  },
+  {
+    "artist": "Brian Snõddy",
+    "collector_number": "70",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Regenerate"
+    ],
+    "mana_cost": "{2}{B}",
+    "name": "Skeleton Scavengers",
+    "oracle_text": "This creature enters with a +1/+1 counter on it.\nPay {1} for each +1/+1 counter on this creature: Regenerate this creature. When it regenerates this way, put a +1/+1 counter on it.",
+    "power": "0",
+    "rarity": "rare",
+    "scryfall_id": "57af1b3f-661a-4b02-be08-0ec721d7cab8",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Skeleton"
+  },
+  {
+    "artist": "Matthew D. Wilson",
+    "collector_number": "71",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{B}{B}",
+    "name": "Stronghold Assassin",
+    "oracle_text": "{T}, Sacrifice a creature: Destroy target nonblack creature.",
+    "power": "2",
+    "rarity": "rare",
+    "scryfall_id": "cc0f043c-efb3-4392-ae25-b3ec180b0cb2",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Phyrexian Zombie Assassin"
+  },
+  {
+    "artist": "Brom",
+    "collector_number": "72",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{B}{B}",
+    "name": "Stronghold Taskmaster",
+    "oracle_text": "Other black creatures get -1/-1.",
+    "power": "4",
+    "rarity": "uncommon",
+    "scryfall_id": "6171c210-01b5-45a9-9dd3-dbf96a33a750",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Giant Minion"
+  },
+  {
+    "artist": "Paolo Parente",
+    "collector_number": "73",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Enchant"
+    ],
+    "mana_cost": "{1}{B}",
+    "name": "Torment",
+    "oracle_text": "Enchant creature\nEnchanted creature gets -3/-0.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "fe74a415-ea8f-4f16-8889-ae649f1483b2",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment — Aura"
+  },
+  {
+    "artist": "Keith Parkinson",
+    "collector_number": "74",
+    "colors": [
+      "B"
+    ],
+    "keywords": [],
+    "mana_cost": "{B}",
+    "name": "Tortured Existence",
+    "oracle_text": "{B}, Discard a creature card: Return target creature card from your graveyard to your hand.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "1754b92b-d6f9-4503-af01-dee03f72a048",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "John Matson",
+    "collector_number": "75",
+    "colors": [
+      "B"
+    ],
+    "keywords": [
+      "Defender"
+    ],
+    "mana_cost": "{1}{B}",
+    "name": "Wall of Souls",
+    "oracle_text": "Defender (This creature can't attack.)\nWhenever this creature is dealt combat damage, it deals that much damage to target opponent or planeswalker.",
+    "power": "0",
+    "rarity": "uncommon",
+    "scryfall_id": "bca2c333-405f-4c1b-a02a-f1fadb3e1d29",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Wall"
+  },
+  {
+    "artist": "Dermot Power",
+    "collector_number": "76",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{R}",
+    "name": "Amok",
+    "oracle_text": "{1}, Discard a card at random: Put a +1/+1 counter on target creature.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "5c5bdb8c-2a2e-47cf-a502-2d62f9ada3fa",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Scott Kirschner",
+    "collector_number": "77",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{R}",
+    "name": "Convulsing Licid",
+    "oracle_text": "{R}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {R} to end this effect.\nEnchanted creature can't block.",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "d5e50a1d-b9f5-4a03-a1c2-ca45ace53a52",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Licid"
+  },
+  {
+    "artist": "Brian Snõddy",
+    "collector_number": "78",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{R}",
+    "name": "Craven Giant",
+    "oracle_text": "This creature can't block.",
+    "power": "4",
+    "rarity": "common",
+    "scryfall_id": "ea3cf964-88f6-4e62-97ce-cf0e179a53fb",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Giant"
+  },
+  {
+    "artist": "Stephen Daniele",
+    "collector_number": "79",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{R}",
+    "name": "Duct Crawler",
+    "oracle_text": "{1}{R}: Target creature can't block this creature this turn.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "90af852f-57a2-4a00-82dc-7c0f23899361",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Insect"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "80",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{X}{R}{R}",
+    "name": "Fanning the Flames",
+    "oracle_text": "Buyback {3} (You may pay an additional {3} as you cast this spell. If you do, put this card into your hand as it resolves.)\nFanning the Flames deals X damage to any target.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "79075361-e6ee-4cc9-990b-88fef27bbb1c",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Donato Giancola",
+    "collector_number": "81",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{R}{R}{R}{R}",
+    "name": "Flame Wave",
+    "oracle_text": "Flame Wave deals 4 damage to target player or planeswalker and each creature that player or that planeswalker's controller controls.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "e069d90a-e7d9-4967-a872-0dd8a0a9934a",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Paolo Parente",
+    "collector_number": "82",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{R}",
+    "name": "Fling",
+    "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nFling deals damage equal to the sacrificed creature's power to any target.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "6b144452-2e91-4e46-abe9-ed76b39f8314",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Allen Williams",
+    "collector_number": "83",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "Enchant"
+    ],
+    "mana_cost": "{R}",
+    "name": "Flowstone Blade",
+    "oracle_text": "Enchant creature\n{R}: Enchanted creature gets +1/-1 until end of turn.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "ab9781fd-10c9-4790-8279-51c3cc6653cf",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment — Aura"
+  },
+  {
+    "artist": "Daren Bader",
+    "collector_number": "84",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "Haste"
+    ],
+    "mana_cost": "{4}{R}",
+    "name": "Flowstone Hellion",
+    "oracle_text": "Haste\n{0}: This creature gets +1/-1 until end of turn.",
+    "power": "3",
+    "rarity": "uncommon",
+    "scryfall_id": "680ccbc7-aa97-4f01-9d26-0df184af3c3e",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Hellion Beast"
+  },
+  {
+    "artist": "Paolo Parente",
+    "collector_number": "85",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "Trample"
+    ],
+    "mana_cost": "{4}{R}{R}",
+    "name": "Flowstone Mauler",
+    "oracle_text": "Trample\n{R}: This creature gets +1/-1 until end of turn.",
+    "power": "4",
+    "rarity": "rare",
+    "scryfall_id": "a3165251-6ac6-4294-8bca-595c362f4ceb",
+    "set": "sth",
+    "toughness": "5",
+    "type_line": "Creature — Beast"
+  },
+  {
+    "artist": "Jim Nelson",
+    "collector_number": "86",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{R}",
+    "name": "Flowstone Shambler",
+    "oracle_text": "{R}: This creature gets +1/-1 until end of turn.",
+    "power": "2",
+    "rarity": "common",
+    "scryfall_id": "6f2b70a5-db13-4c3f-829d-d4b9e0a16245",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Beast"
+  },
+  {
+    "artist": "Jeff Miracola",
+    "collector_number": "87",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "Haste"
+    ],
+    "mana_cost": "{2}{R}",
+    "name": "Furnace Spirit",
+    "oracle_text": "Haste\n{R}: This creature gets +1/+0 until end of turn.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "b6a79dc7-ce46-41f7-9375-8d12afe6355a",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Spirit"
+  },
+  {
+    "artist": "Matthew D. Wilson",
+    "collector_number": "88",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{R}",
+    "name": "Heat of Battle",
+    "oracle_text": "Whenever a creature blocks, this enchantment deals 1 damage to that creature's controller.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "8dbb98db-f2ee-446f-9170-dd05b1a7dbd8",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Pete Venters",
+    "collector_number": "89",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{R}",
+    "name": "Invasion Plans",
+    "oracle_text": "All creatures block each combat if able.\nThe attacking player chooses how each creature blocks each combat.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "f52c2f83-9535-4ee5-9964-5cc01e617981",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "90",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{R}",
+    "name": "Mob Justice",
+    "oracle_text": "Mob Justice deals damage to target player or planeswalker equal to the number of creatures you control.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "b790d789-bb21-4119-a0e3-43af9bef8acc",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Dermot Power",
+    "collector_number": "91",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{R}",
+    "name": "Mogg Bombers",
+    "oracle_text": "When another creature enters, sacrifice this creature and it deals 3 damage to target player or planeswalker.",
+    "power": "3",
+    "rarity": "common",
+    "scryfall_id": "16064ad4-eec2-4c32-b66d-a2bdb1a6191f",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Goblin"
+  },
+  {
+    "artist": "Brom",
+    "collector_number": "92",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{R}",
+    "name": "Mogg Flunkies",
+    "oracle_text": "This creature can't attack or block alone.",
+    "power": "3",
+    "rarity": "common",
+    "scryfall_id": "1b1b384e-a7d5-4b5f-87d5-95ac1a6c6320",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Goblin"
+  },
+  {
+    "artist": "Pete Venters",
+    "collector_number": "93",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{R}{R}",
+    "name": "Mogg Infestation",
+    "oracle_text": "Destroy all creatures target player controls. For each creature that died this way, that player creates two 1/1 red Goblin creature tokens.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "5a91aa6f-cb2f-4aad-9415-bba4eb9b76ca",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Brian Snõddy",
+    "collector_number": "94",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{R}",
+    "name": "Mogg Maniac",
+    "oracle_text": "Whenever this creature is dealt damage, it deals that much damage to target opponent or planeswalker.",
+    "power": "1",
+    "rarity": "uncommon",
+    "scryfall_id": "ddd33c58-f25d-4117-a266-75a91e9ddc75",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Goblin"
+  },
+  {
+    "artist": "Dermot Power",
+    "collector_number": "95",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{R}",
+    "name": "Ruination",
+    "oracle_text": "Destroy all nonbasic lands.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "d45eea06-806b-4163-ac86-de6ed6d1a91e",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Val Mayerik",
+    "collector_number": "96",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{R}",
+    "name": "Seething Anger",
+    "oracle_text": "Buyback {3} (You may pay an additional {3} as you cast this spell. If you do, put this card into your hand as it resolves.)\nTarget creature gets +3/+0 until end of turn.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "e6f1edb8-fff4-4f84-944c-fa5a032f4fb1",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Paolo Parente",
+    "collector_number": "97",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "Flying"
+    ],
+    "mana_cost": "{4}{R}",
+    "name": "Shard Phoenix",
+    "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\nSacrifice this creature: It deals 2 damage to each creature without flying.\n{R}{R}{R}: Return this card from your graveyard to your hand. Activate only during your upkeep.",
+    "power": "2",
+    "rarity": "rare",
+    "scryfall_id": "fe6a6d56-e73f-4dc6-a7df-d105010e52ab",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Phoenix"
+  },
+  {
+    "artist": "Randy Gallegos",
+    "collector_number": "98",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{R}",
+    "name": "Shock",
+    "oracle_text": "Shock deals 2 damage to any target.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "f9b2ff2a-6dfe-4635-8da2-22d525e82b94",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Daren Bader",
+    "collector_number": "99",
+    "colors": [
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{R}{R}",
+    "name": "Spitting Hydra",
+    "oracle_text": "This creature enters with four +1/+1 counters on it.\n{1}{R}, Remove a +1/+1 counter from this creature: It deals 1 damage to target creature.",
+    "power": "0",
+    "rarity": "rare",
+    "scryfall_id": "38c25d65-16bd-4628-b6ec-9e5495818277",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Hydra"
+  },
+  {
+    "artist": "Michael Sutfin",
+    "collector_number": "100",
+    "colors": [
+      "R"
+    ],
+    "keywords": [
+      "First strike",
+      "Defender"
+    ],
+    "mana_cost": "{1}{R}",
+    "name": "Wall of Razors",
+    "oracle_text": "Defender (This creature can't attack.)\nFirst strike",
+    "power": "4",
+    "rarity": "uncommon",
+    "scryfall_id": "0bb37bcd-0bbd-4f3f-9623-803885750344",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Wall"
+  },
+  {
+    "artist": "Dan Frazier",
+    "collector_number": "101",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{G}{G}",
+    "name": "Awakening",
+    "oracle_text": "At the beginning of each upkeep, untap all creatures and lands.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "59612c02-6028-4953-ac4d-aca94b0ce4b9",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Randy Gallegos",
+    "collector_number": "102",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{G}",
+    "name": "Burgeoning",
+    "oracle_text": "Whenever an opponent plays a land, you may put a land card from your hand onto the battlefield.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "fa9af8e5-bc97-4704-ae5c-e3d2d5b72586",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Brom",
+    "collector_number": "103",
+    "colors": [
+      "G"
+    ],
+    "keywords": [
+      "Regenerate",
+      "Trample"
+    ],
+    "mana_cost": "{4}{G}{G}",
+    "name": "Carnassid",
+    "oracle_text": "Trample\n{1}{G}: Regenerate this creature.",
+    "power": "5",
+    "rarity": "rare",
+    "scryfall_id": "ae10e7fe-ee51-4c39-86ec-503324d19f6c",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Beast"
+  },
+  {
+    "artist": "Dermot Power",
+    "collector_number": "104",
+    "colors": [
+      "G"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{1}{G}",
+    "name": "Constant Mists",
+    "oracle_text": "Buyback—Sacrifice a land. (You may sacrifice a land in addition to any other costs as you cast this spell. If you do, put this card into your hand as it resolves.)\nPrevent all combat damage that would be dealt this turn.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "97a8a5fe-0391-489b-9556-0a1bf7e1900d",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Kev Walker",
+    "collector_number": "105",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{G}",
+    "name": "Crossbow Ambush",
+    "oracle_text": "Creatures you control gain reach until end of turn. (They can block creatures with flying.)",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "283146fd-2307-4019-b23d-7fb1893dc46c",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Jeff Miracola",
+    "collector_number": "106",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{G}",
+    "name": "Elven Rite",
+    "oracle_text": "Distribute two +1/+1 counters among one or two target creatures.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "daba8742-c246-4e64-8af1-8f4ebcdc4b5f",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Kev Walker",
+    "collector_number": "107",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{G}{G}",
+    "name": "Endangered Armodon",
+    "oracle_text": "When you control a creature with toughness 2 or less, sacrifice this creature.",
+    "power": "4",
+    "rarity": "common",
+    "scryfall_id": "29d43e8f-a914-44ed-bbd3-3746fb4ea6da",
+    "set": "sth",
+    "toughness": "5",
+    "type_line": "Creature — Elephant"
+  },
+  {
+    "artist": "Heather Hudson",
+    "collector_number": "108",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{G}",
+    "name": "Hermit Druid",
+    "oracle_text": "{G}, {T}: Reveal cards from the top of your library until you reveal a basic land card. Put that card into your hand and all other cards revealed this way into your graveyard.",
+    "power": "1",
+    "rarity": "rare",
+    "scryfall_id": "3efc0622-ac2c-4722-ba05-961cc98c5940",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Human Druid"
+  },
+  {
+    "artist": "Randy Gallegos",
+    "collector_number": "109",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{G}",
+    "name": "Lowland Basilisk",
+    "oracle_text": "Whenever this creature deals damage to a creature, destroy that creature at end of combat.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "454d6938-b87a-46b1-99d8-74573544ac5b",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Basilisk"
+  },
+  {
+    "artist": "Rebecca Guay",
+    "collector_number": "110",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{G}",
+    "name": "Mulch",
+    "oracle_text": "Reveal the top four cards of your library. Put all land cards revealed this way into your hand and the rest into your graveyard.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "4cf9e9a9-325a-4010-acb8-1406adcaeca9",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Rob Alexander",
+    "collector_number": "111",
+    "colors": [
+      "G"
+    ],
+    "keywords": [
+      "Enchant"
+    ],
+    "mana_cost": "{2}{G}",
+    "name": "Overgrowth",
+    "oracle_text": "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds an additional {G}{G}.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "bb9179f5-c3e0-4499-9cfb-6cb7e8329a59",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment — Aura"
+  },
+  {
+    "artist": "Brian Snõddy",
+    "collector_number": "112",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{G}",
+    "name": "Primal Rage",
+    "oracle_text": "Creatures you control have trample. (A creature with trample can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "e78026e4-edb8-4f55-bd80-4152f4dfb461",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Terese Nielsen",
+    "collector_number": "113",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{G}",
+    "name": "Provoke",
+    "oracle_text": "Untap target creature you don't control. That creature blocks this turn if able.\nDraw a card.",
+    "power": null,
+    "rarity": "common",
+    "scryfall_id": "fa3c58f1-5276-420e-8c09-d256492ee87b",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Instant"
+  },
+  {
+    "artist": "Jeff Miracola",
+    "collector_number": "114",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{G}",
+    "name": "Skyshroud Archer",
+    "oracle_text": "{T}: Target creature with flying gets -1/-1 until end of turn.",
+    "power": "1",
+    "rarity": "common",
+    "scryfall_id": "485aeabb-4a9b-4d88-80ad-83e31da6804b",
+    "set": "sth",
+    "toughness": "1",
+    "type_line": "Creature — Elf Archer"
+  },
+  {
+    "artist": "DiTerlizzi",
+    "collector_number": "115",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{G}",
+    "name": "Skyshroud Troopers",
+    "oracle_text": "{T}: Add {G}.",
+    "power": "3",
+    "rarity": "common",
+    "scryfall_id": "d5197937-023c-412c-bf2c-b8e811ca04e1",
+    "set": "sth",
+    "toughness": "3",
+    "type_line": "Creature — Elf Druid Warrior"
+  },
+  {
+    "artist": "Adam Rex",
+    "collector_number": "116",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{3}{G}",
+    "name": "Spike Breeder",
+    "oracle_text": "This creature enters with three +1/+1 counters on it.\n{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.\n{2}, Remove a +1/+1 counter from this creature: Create a 1/1 green Spike creature token.",
+    "power": "0",
+    "rarity": "rare",
+    "scryfall_id": "f7e11ef7-18a9-4ab1-981e-b337b1488ebd",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Spike"
+  },
+  {
+    "artist": "Douglas Shuler",
+    "collector_number": "117",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{4}{G}",
+    "name": "Spike Colony",
+    "oracle_text": "This creature enters with four +1/+1 counters on it.\n{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.",
+    "power": "0",
+    "rarity": "common",
+    "scryfall_id": "a6ea4703-8521-4576-8405-4b923e0a9522",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Spike"
+  },
+  {
+    "artist": "Heather Hudson",
+    "collector_number": "118",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{G}{G}",
+    "name": "Spike Feeder",
+    "oracle_text": "This creature enters with two +1/+1 counters on it.\n{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.\nRemove a +1/+1 counter from this creature: You gain 2 life.",
+    "power": "0",
+    "rarity": "uncommon",
+    "scryfall_id": "3751b2ae-a234-4691-984b-2f9f6b1cd1df",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Spike"
+  },
+  {
+    "artist": "Randy Elliott",
+    "collector_number": "119",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{G}{G}",
+    "name": "Spike Soldier",
+    "oracle_text": "This creature enters with three +1/+1 counters on it.\n{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.\nRemove a +1/+1 counter from this creature: This creature gets +2/+2 until end of turn.",
+    "power": "0",
+    "rarity": "uncommon",
+    "scryfall_id": "aa45664c-ac39-40f8-9f56-cf25ed60a84a",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Spike Soldier"
+  },
+  {
+    "artist": "Daniel Gelon",
+    "collector_number": "120",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{G}",
+    "name": "Spike Worker",
+    "oracle_text": "This creature enters with two +1/+1 counters on it.\n{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.",
+    "power": "0",
+    "rarity": "common",
+    "scryfall_id": "2713de6c-b754-435c-8d11-5215fd602a40",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Creature — Spike"
+  },
+  {
+    "artist": "Keith Parkinson",
+    "collector_number": "121",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{4}{G}",
+    "name": "Spined Wurm",
+    "oracle_text": "",
+    "power": "5",
+    "rarity": "common",
+    "scryfall_id": "113fad70-36bc-4ab7-962a-cda3bddd02fc",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Wurm"
+  },
+  {
+    "artist": "Randy Gallegos",
+    "collector_number": "122",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{2}{G}",
+    "name": "Tempting Licid",
+    "oracle_text": "{G}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {G} to end this effect.\nAll creatures able to block enchanted creature do so.",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "da7f3e0b-0600-4451-b621-e40c902a16cb",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Licid"
+  },
+  {
+    "artist": "M. W. Kaluta & DiTerlizzi",
+    "collector_number": "123",
+    "colors": [
+      "G"
+    ],
+    "keywords": [
+      "Buyback"
+    ],
+    "mana_cost": "{1}{G}",
+    "name": "Verdant Touch",
+    "oracle_text": "Buyback {3} (You may pay an additional {3} as you cast this spell. If you do, put this card into your hand as it resolves.)\nTarget land becomes a 2/2 creature that's still a land. (This effect lasts indefinitely.)",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "7079bf55-4827-4b8b-a178-8c7b903d93b9",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Sorcery"
+  },
+  {
+    "artist": "Rob Alexander",
+    "collector_number": "124",
+    "colors": [
+      "G"
+    ],
+    "keywords": [],
+    "mana_cost": "{1}{G}",
+    "name": "Volrath's Gardens",
+    "oracle_text": "{2}, Tap an untapped creature you control: You gain 2 life. Activate only as a sorcery.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "7d74f7d8-10eb-4082-9b07-41de13359b8c",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Enchantment"
+  },
+  {
+    "artist": "Heather Hudson",
+    "collector_number": "125",
+    "colors": [
+      "G"
+    ],
+    "keywords": [
+      "Defender"
+    ],
+    "mana_cost": "{1}{G}",
+    "name": "Wall of Blossoms",
+    "oracle_text": "Defender\nWhen this creature enters, draw a card.",
+    "power": "0",
+    "rarity": "uncommon",
+    "scryfall_id": "7eb4a1a3-efcf-4c9a-ad1f-0a3f8f2b456f",
+    "set": "sth",
+    "toughness": "4",
+    "type_line": "Creature — Plant Wall"
+  },
+  {
+    "artist": "Jeff Miracola",
+    "collector_number": "126",
+    "colors": [
+      "B",
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{B}{R}",
+    "name": "Acidic Sliver",
+    "oracle_text": "All Slivers have \"{2}, Sacrifice this permanent: This permanent deals 2 damage to any target.\"",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "2d92c3f7-a589-4c87-aa17-0d9707605ff4",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Sliver"
+  },
+  {
+    "artist": "Allen Williams",
+    "collector_number": "127",
+    "colors": [
+      "U",
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}{U}",
+    "name": "Crystalline Sliver",
+    "oracle_text": "All Slivers have shroud. (They can't be the targets of spells or abilities.)",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "06551990-713c-4b8b-bebb-4e849babb5bb",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Sliver"
+  },
+  {
+    "artist": "Scott Kirschner",
+    "collector_number": "128",
+    "colors": [
+      "B",
+      "U"
+    ],
+    "keywords": [],
+    "mana_cost": "{U}{B}",
+    "name": "Hibernation Sliver",
+    "oracle_text": "All Slivers have \"Pay 2 life: Return this permanent to its owner's hand.\"",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "94934d64-6518-4c5e-90d9-a3bf23b8973f",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Sliver"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "129",
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{W}{U}{B}{R}{G}",
+    "name": "Sliver Queen",
+    "oracle_text": "{2}: Create a 1/1 colorless Sliver creature token.",
+    "power": "7",
+    "rarity": "rare",
+    "scryfall_id": "235c0ece-aed0-4120-99cc-5d0e28fa70ab",
+    "set": "sth",
+    "toughness": "7",
+    "type_line": "Legendary Creature — Sliver"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "130",
+    "colors": [
+      "G",
+      "R"
+    ],
+    "keywords": [],
+    "mana_cost": "{R}{G}",
+    "name": "Spined Sliver",
+    "oracle_text": "Whenever a Sliver becomes blocked, that Sliver gets +1/+1 until end of turn for each creature blocking it.",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "9a8a9442-7b08-4cc8-94ec-bddb8feab1a8",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Sliver"
+  },
+  {
+    "artist": "Terese Nielsen",
+    "collector_number": "131",
+    "colors": [
+      "G",
+      "W"
+    ],
+    "keywords": [],
+    "mana_cost": "{G}{W}",
+    "name": "Victual Sliver",
+    "oracle_text": "All Slivers have \"{2}, Sacrifice this permanent: You gain 4 life.\"",
+    "power": "2",
+    "rarity": "uncommon",
+    "scryfall_id": "5e58908e-7095-4fb9-b7cb-a67d12f33b8a",
+    "set": "sth",
+    "toughness": "2",
+    "type_line": "Creature — Sliver"
+  },
+  {
+    "artist": "Brom",
+    "collector_number": "132",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{4}",
+    "name": "Bullwhip",
+    "oracle_text": "{2}, {T}: This artifact deals 1 damage to target creature. That creature attacks this turn if able.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "ff312dd7-456c-4ce5-9614-e2cbe3c2219c",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "Pete Venters",
+    "collector_number": "133",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{3}",
+    "name": "Ensnaring Bridge",
+    "oracle_text": "Creatures with power greater than the number of cards in your hand can't attack.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "27d838a1-2739-45f7-a856-6202334fa76a",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "John Matson",
+    "collector_number": "134",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{3}",
+    "name": "Heartstone",
+    "oracle_text": "Activated abilities of creatures cost {1} less to activate. This effect can't reduce the mana in that cost to less than one mana.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "0ed17325-6d2f-404e-b13f-d2d419d522b7",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "Jeff Miracola",
+    "collector_number": "135",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{3}",
+    "name": "Horn of Greed",
+    "oracle_text": "Whenever a player plays a land, that player draws a card.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "950660f9-b185-4979-a08b-cce4ec6ce07d",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "Ron Spencer",
+    "collector_number": "136",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{4}",
+    "name": "Hornet Cannon",
+    "oracle_text": "{3}, {T}: Create a 1/1 colorless Insect artifact creature token with flying and haste named Hornet. Destroy it at the beginning of the next end step.",
+    "power": null,
+    "rarity": "uncommon",
+    "scryfall_id": "51e9afeb-4d27-441c-b379-3dfe974053b8",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "M. W. Kaluta & DiTerlizzi",
+    "collector_number": "137",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{2}",
+    "name": "Jinxed Ring",
+    "oracle_text": "Whenever a nontoken permanent is put into your graveyard from the battlefield, this artifact deals 1 damage to you.\nSacrifice a creature: Target opponent gains control of this artifact. (This effect lasts indefinitely.)",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "1c675814-094c-45d4-93ee-0f50b4755e79",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "Dan Frazier",
+    "collector_number": "138",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{0}",
+    "name": "Mox Diamond",
+    "oracle_text": "If this artifact would enter, you may discard a land card instead. If you do, put this artifact onto the battlefield. If you don't, put it into its owner's graveyard.\n{T}: Add one mana of any color.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "28028830-83ed-45e2-b495-3b9ad9d3e988",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "Kev Walker",
+    "collector_number": "139",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{4}",
+    "name": "Portcullis",
+    "oracle_text": "Whenever a creature enters, if there are two or more other creatures on the battlefield, exile that creature. Return that card to the battlefield under its owner's control when this artifact leaves the battlefield.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "a4de4af2-fa75-4a87-b0e1-0117727917a5",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "Michael Sutfin",
+    "collector_number": "140",
+    "colors": [],
+    "keywords": [
+      "Defender"
+    ],
+    "mana_cost": "{X}",
+    "name": "Shifting Wall",
+    "oracle_text": "Defender (This creature can't attack.)\nThis creature enters with X +1/+1 counters on it.",
+    "power": "0",
+    "rarity": "uncommon",
+    "scryfall_id": "49b7a950-bf79-46fa-8b29-b7856b38e0fd",
+    "set": "sth",
+    "toughness": "0",
+    "type_line": "Artifact Creature — Wall"
+  },
+  {
+    "artist": "Adam Rex",
+    "collector_number": "141",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{2}",
+    "name": "Sword of the Chosen",
+    "oracle_text": "{T}: Target legendary creature gets +2/+2 until end of turn.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "401678d7-11dc-47ec-be28-4facdd949bc1",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Legendary Artifact"
+  },
+  {
+    "artist": "Brom",
+    "collector_number": "142",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "{5}",
+    "name": "Volrath's Laboratory",
+    "oracle_text": "As this artifact enters, choose a color and a creature type.\n{5}, {T}: Create a 2/2 creature token of the chosen color and type.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "23e9e60a-5718-460d-b031-b47d6f6715d1",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Artifact"
+  },
+  {
+    "artist": "Kev Walker",
+    "collector_number": "143",
+    "colors": [],
+    "keywords": [],
+    "mana_cost": "",
+    "name": "Volrath's Stronghold",
+    "oracle_text": "{T}: Add {C}.\n{1}{B}, {T}: Put target creature card from your graveyard on top of your library.",
+    "power": null,
+    "rarity": "rare",
+    "scryfall_id": "43bf015b-152e-4d67-b773-e75fb2487a32",
+    "set": "sth",
+    "toughness": null,
+    "type_line": "Legendary Land"
+  }
+]

@@ -20,18 +20,25 @@ extends RefCounted
 ## world": reset every permanent to printed values, then apply everything in
 ## CR 613 LAYER order, timestamps deciding within a layer:
 ## [codeblock]
+##   graveyard-top copies         layer 1             (Volrath's Shapeshifter)
 ##   reset to printed             (and CR 613 layer 3 text changes)
 ##   animations                   layer 4, floating   (Mishra's Factory)
+##   silencers that also retype   layer 6 (dependency) (Titania's Song)
 ##   type-changing statics        layer 4             (Blood Moon, Kormus Bell)
 ##   floating statics             the same layers     (Titania's Song, once gone)
-##   base-P/T statics             layer 7a/7b         (Nightmare, Keldon Warlord)
-##   floating base-P/T sets       layer 7b, later ts  (Island of Wak-Wak)
+##   "loses all abilities"        layer 6 (dependency) (Humility)
+##   base-P/T sets, BY TIMESTAMP  layer 7a/7b         (Nightmare, Humility's
+##                                                     1/1, Island of Wak-Wak,
+##                                                     an animation's 2/2)
 ##   colour changes               layer 5             (Touch of Darkness)
-##   LAYER 6, WHOLE, BY TIMESTAMP (Flight, Jump, Radjan Spirit, Hammerheim)
+##   LAYER 6, WHOLE, BY TIMESTAMP (Flight, Jump, Radjan Spirit, Hammerheim,
+##                                 Humility's strip, Life Matrix, protection)
+##   P/T definitions that count   layer 7a after 6    (Dauthi Warlord)
+##   an ability
 ##   counters                     layer 7d            (any "+A/+B" kind)
 ##   the remaining statics        layer 7c and misc.  (Crusade, Bad Moon)
 ##   floating pumps               layer 7c, floating  (Giant Growth)
-##   block restrictions, protection, rampage, granted abilities
+##   block restrictions, damage immunities
 ##   combat-damage shields
 ##   P/T switches                 layer 7e            (Transmutation)
 ##   the statics that READ a P/T  CR 613.8            (Meekstone, Orgg)
@@ -348,6 +355,9 @@ func add_until_eot_animation(instance_id: int, add_types: int,
 		"add_subtypes": add_subtypes.duplicate(),
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid,
+		# Pack 9 E5: the P/T half is a layer-7b effect ordered by this
+		# timestamp against the static setters (Humility) — CR 613.7.
+		"ts": _stamp(),
 	})
 
 
@@ -372,6 +382,7 @@ func add_until_eot_base_pt(instance_id: int, power: int, toughness: int,
 		"set_toughness": toughness >= 0 or exact, "toughness": toughness,
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid, "lasts_turn": lasts_turn,
+		"ts": _stamp(),   # Pack 9 E5: layer 7b in timestamp order (CR 613.7)
 	})
 
 
@@ -399,6 +410,7 @@ func add_until_eot_rampage(instance_id: int, amount: int,
 	_rampage_grants.append({
 		"instance_id": instance_id, "amount": amount,
 		"until_combat": until_end_of_combat,
+		"ts": _stamp(),   # Pack 9 E5: layer 6 in timestamp order (CR 613.7)
 	})
 
 
@@ -423,6 +435,7 @@ func add_until_eot_protection(instance_id: int, colors: int,
 	_protection_grants.append({
 		"instance_id": instance_id, "colors": colors,
 		"until_combat": until_end_of_combat,
+		"ts": _stamp(),   # Pack 9 E5: layer 6 in timestamp order (CR 613.7)
 	})
 
 
@@ -483,6 +496,7 @@ func add_granted_activated_ability(instance_id: int, ability: ActivatedAbility,
 		"instance_id": instance_id, "ability": ability,
 		"until_combat": until_end_of_combat,
 		"lasts": lasts, "lasts_pid": lasts_pid,
+		"ts": _stamp(),   # Pack 9 E5: layer 6 in timestamp order (CR 613.7)
 	})
 
 
@@ -721,7 +735,7 @@ static func parse_pt_counter(kind: String) -> Vector2i:
 ## power or toughness ([member StaticAbility.reads_pt]), which every P/T
 ## layer has to have finished with before their question can be answered.
 enum _StaticPass { SILENCE, LAND_TYPES, LAND_TYPE_READERS, TYPES, BASE_PT, REST,
-	PT_READERS }
+	PT_READERS, SILENCE_LATE, BASE_PT_READERS }
 
 
 ## Run the FLOATING statics ([member _floating_statics]) that belong to
@@ -784,6 +798,20 @@ static func _by_timestamp_then_entry(a: Dictionary, b: Dictionary) -> bool:
 	return int(a["i"]) < int(b["i"])
 
 
+## Sort key of [method _layer_six] (Pack 9 E5): timestamp, then RANK — a
+## strip ("loses all abilities", rank 0) before any grant of the same
+## timestamp (rank 1: a source that strips and grants means both) — then
+## collection order, since `sort_custom` is not stable.
+static func _by_timestamp_rank_entry(a: Dictionary, b: Dictionary) -> bool:
+	if int(a["ts"]) != int(b["ts"]):
+		return int(a["ts"]) < int(b["ts"])
+	var rank_a := int(a.get("rank", 1))
+	var rank_b := int(b.get("rank", 1))
+	if rank_a != rank_b:
+		return rank_a < rank_b
+	return int(a["i"]) < int(b["i"])
+
+
 func _floating_statics_pass(game: MtgGame, which: int) -> void:
 	# The statics of SPELLS ON THE STACK (CR 611.3) ride the same sub-pass
 	# as the floating ones: like them, their source is not on the
@@ -809,8 +837,13 @@ func _floating_statics_pass(game: MtgGame, which: int) -> void:
 ## colour pass ([method _layer_five]).
 static func _runs_in(ability: StaticAbility, which: int) -> bool:
 	match which:
+		# Pack 9 E5: a silencer that ALSO retypes (Titania's Song) keeps the
+		# early pass its layer-4 half needs; a pure one (Humility) runs after
+		# layer 4, so it reaches what layer 4 made a creature (CR 613.1).
 		_StaticPass.SILENCE:
-			return ability.silences_abilities
+			return ability.silences_abilities and ability.changes_types
+		_StaticPass.SILENCE_LATE:
+			return ability.silences_abilities and not ability.changes_types
 		_StaticPass.LAND_TYPES:
 			return ability.changes_land_types and not ability.reads_land_types
 		_StaticPass.LAND_TYPE_READERS:
@@ -820,6 +853,14 @@ static func _runs_in(ability: StaticAbility, which: int) -> bool:
 				and not ability.silences_abilities
 		_StaticPass.BASE_PT:
 			return ability.sets_base_pt and not ability.changes_types \
+				and not ability.changes_abilities \
+				and not ability.silences_abilities \
+				and not ability.reads_abilities
+		# Pack 9 E5: a characteristic-defining P/T that COUNTS an ability
+		# (Dauthi Warlord) — layer 7a, applied after layer 6 has settled.
+		_StaticPass.BASE_PT_READERS:
+			return ability.sets_base_pt and ability.reads_abilities \
+				and not ability.changes_types \
 				and not ability.changes_abilities \
 				and not ability.silences_abilities
 		_StaticPass.REST:
@@ -944,10 +985,15 @@ func _offzone_colors(game: MtgGame) -> void:
 ## "creatures without flying can't attack", applied in the 7c pass) see the
 ## abilities every layer settled.
 ##
-## The other layer-6 registries — protection, granted activated abilities,
-## rampage, block restrictions, damage immunities — are applied in their
-## own passes because nothing in the pool REMOVES any of them, so their
-## order against a loss is unobservable.
+## Since Pack 9 E5 two more kinds join the clock. "LOSES ALL ABILITIES"
+## (Humility, CR 613.1f) is a strip at its source's timestamp ([member
+## _silence_strips], [method _strip_abilities]): what a creature had then —
+## printed or granted earlier — goes, what is granted later stays. And the
+## registries a strip can now remove — granted activated abilities ([member
+## _ability_grants], Life Matrix), floating protection and rampage — are
+## stamped and applied here too. Block restrictions and damage immunities
+## stay in their own passes: they are effects ON a creature, not abilities
+## it has, so nothing removes them.
 func _layer_six(game: MtgGame) -> void:
 	var entries: Array[Dictionary] = []
 	# CR 613.8a: the statics that READ a layer-6 ability (Chaosphere's
@@ -984,14 +1030,56 @@ func _layer_six(game: MtgGame) -> void:
 					and not stacked.silences_abilities:
 				(dependent if stacked.reads_abilities else entries).append(
 					{"ts": _timestamp + 1, "static": stacked, "source": spell})
+	# Pack 9 E5 — "LOSES ALL ABILITIES" AT ITS OWN TIMESTAMP (Humility,
+	# CR 613.1f / 613.7). Each silencer the silence passes ran this
+	# recalculation strips what its victims have AT THAT MOMENT — printed
+	# abilities and every grant applied before it — and a grant stamped
+	# later is applied after the strip and survives. A strip sorts ahead
+	# of any other entry with the same timestamp (rank 0).
+	for strip in _silence_strips:
+		entries.append({"ts": int(strip["ts"]), "rank": 0, "strip": strip["victims"]})
+	# Pack 9 E5 — the grants nothing used to remove, now that Humility does
+	# (see [member _ability_grants] and the two below): on the same clock.
+	if not _ability_grants.is_empty() or not _protection_grants.is_empty() \
+			or not _rampage_grants.is_empty():
+		for grant in _ability_grants:
+			entries.append({"ts": int(grant.get("ts", 0)), "ability_grant": grant})
+		for shield in _protection_grants:
+			entries.append({"ts": int(shield.get("ts", 0)), "protect": shield})
+		for grant in _rampage_grants:
+			entries.append({"ts": int(grant.get("ts", 0)), "rampage": grant})
 	if entries.size() > 1:
-		entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-			return int(a["ts"]) < int(b["ts"]))
+		for i in entries.size():
+			entries[i]["i"] = i
+		entries.sort_custom(_by_timestamp_rank_entry)
 	if dependent.size() > 1:
-		dependent.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-			return int(a["ts"]) < int(b["ts"]))
+		for i in dependent.size():
+			dependent[i]["i"] = i
+		dependent.sort_custom(_by_timestamp_rank_entry)
 	entries.append_array(dependent)
 	for entry in entries:
+		if entry.has("strip"):
+			for victim in entry["strip"]:
+				_strip_abilities(victim)
+			continue
+		if entry.has("ability_grant"):
+			var armed := game.find_instance(int(entry["ability_grant"]["instance_id"]))
+			if armed != null and armed.zone == Mtg.Zone.BATTLEFIELD \
+					and not armed.phased_out:
+				armed.cur_activated_abilities.append(entry["ability_grant"]["ability"])
+			continue
+		if entry.has("protect"):
+			var warded := game.find_instance(int(entry["protect"]["instance_id"]))
+			if warded != null and warded.zone == Mtg.Zone.BATTLEFIELD \
+					and not warded.phased_out:
+				warded.cur_protection |= int(entry["protect"]["colors"])
+			continue
+		if entry.has("rampage"):
+			var rager := game.find_instance(int(entry["rampage"]["instance_id"]))
+			if rager != null and rager.zone == Mtg.Zone.BATTLEFIELD \
+					and not rager.phased_out:
+				rager.cur_rampage = maxi(rager.cur_rampage, int(entry["rampage"]["amount"]))
+			continue
 		if entry.has("static"):
 			# A layer-6 grant PRINTED on a permanent (Flight, Fear, Lance,
 			# Concordant Crossroads, the landwalk lords). Its own callback
@@ -1047,6 +1135,12 @@ func _layer_six(game: MtgGame) -> void:
 ## Rebuild cur_* characteristics of every battlefield permanent.
 ## MtgGame calls this after every state change; it must stay idempotent.
 func recalculate(game: MtgGame) -> void:
+	# Pack 9 E5 — LAYER 1 before anything reads a definition: a permanent
+	# with "the full text of the top creature card of your graveyard"
+	# (Volrath's Shapeshifter) adopts it or drops it here, and the
+	# battlefield indexes the next line rebuilds follow the new text.
+	_graveyard_top_copies(game)
+	_silence_strips.clear()
 	var battlefield: Array[CardInstance] = game.all_battlefield()
 
 	# Pass 1: reset to printed values; ANIMATIONS then rewrite the base
@@ -1140,14 +1234,12 @@ func recalculate(game: MtgGame) -> void:
 	var type_sources := game.battlefield_with_type_statics()
 	# 2a-0 — LAYER 6, the part that must come first: an ability that has
 	# been REMOVED (Titania's Song) contributes nothing in any layer, so
-	# every pass below skips a silenced source.
-	for inst in type_sources:
-		if inst.cur_statics_suspended:
-			continue
-		for ability in inst.data.static_abilities:
-			if ability.silences_abilities:
-				ability.apply.call(game, inst)
-	_floating_statics_pass(game, _StaticPass.SILENCE)
+	# every pass below skips a silenced source. Since Pack 9 E5 this is the
+	# silencers that ALSO retype (the Song's "becomes an artifact
+	# creature" is its layer-4 half); a pure "loses all abilities"
+	# (Humility) runs after layer 4, below. Each one's victims are noted
+	# for the timestamped strip in [method _layer_six].
+	_silence_pass(game, _StaticPass.SILENCE, type_sources)
 	# 2a-1 — LAYER 4, retypers first: "nonbasic lands are Mountains"
 	# and "enchanted land is a Swamp" REPLACE a land's basic types, and
 	# everything that animates or counts those types has to see the
@@ -1216,31 +1308,24 @@ func recalculate(game: MtgGame) -> void:
 					and not ability.silences_abilities:
 				ability.apply.call(game, inst)
 	_floating_statics_pass(game, _StaticPass.TYPES)
-	for inst in static_sources:
-		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
-			continue
-		for ability in inst.data.static_abilities:
-			# A silencer already ran on the layer-6 pass, whatever else it is;
-			# a layer-6 GRANT runs in the timestamped pass below.
-			if ability.sets_base_pt and not ability.changes_types \
-					and not ability.changes_abilities \
-					and not ability.silences_abilities:
-				ability.apply.call(game, inst)
-	_floating_statics_pass(game, _StaticPass.BASE_PT)
+	# 2a-3 — LAYER 6's DEPENDENCY HALF for a pure "loses all abilities"
+	# (Pack 9 E5, Humility): it applies to what layer 4 left a creature
+	# (Living Lands' Forests, an animated Mishra's Factory), and a source it
+	# silences contributes nothing in any later layer — CR 613.8a: removing
+	# an ability changes the existence of that ability's effect, so the
+	# remover goes first whatever the timestamps. WHAT it removes, and when,
+	# is the timestamped strip in [method _layer_six].
+	_silence_pass(game, _StaticPass.SILENCE_LATE, type_sources)
 
-	# Pass 2b2: floating BASE P/T SETS (CR 613 layer 7b) — Island of
-	# Wak-Wak, Singing Tree, Sorceress Queen. They are one-shot effects with
-	# a LATER timestamp than any static in the same sublayer, so they run
-	# after the setters above: "has base power 0" really does ground a
-	# Nightmare whose own ability says otherwise.
-	for entry in _base_pt:
-		var target := game.find_instance(entry.instance_id)
-		if target == null or target.zone != Mtg.Zone.BATTLEFIELD or target.phased_out:
-			continue
-		if entry.set_power:
-			target.cur_power = entry.power
-		if entry.set_toughness:
-			target.cur_toughness = entry.toughness
+	# Pass 2b: LAYER 7a/7b IN TIMESTAMP ORDER (CR 613.4a-b, 613.7) — the
+	# static base-P/T setters (Nightmare's characteristic-defining ability,
+	# Humility's 1/1), the floating ones (Island of Wak-Wak, Singing Tree,
+	# Sorceress Queen) and an animation's P/T (Mishra's Factory's 2/2), on
+	# one clock: a Factory animated after Humility is a 2/2, one animated
+	# before it a 1/1. Before Pack 9 the floating sets simply ran after
+	# every static, which is the same answer whenever no static setter
+	# reaches other permanents. See [method _layer_seven_b].
+	_layer_seven_b(game, static_sources)
 
 	# Pass 2b3: COLOUR changes (CR 613 layer 5) — after the type-changing
 	# statics (whose animations paint their own colour, Kormus Bell's black)
@@ -1263,6 +1348,13 @@ func recalculate(game: MtgGame) -> void:
 	# static grant ahead of every floating loss AND left a Flight invisible
 	# to the Moat that entered before it.
 	_layer_six(game)
+	# Pack 9 E5 — a characteristic-defining P/T that COUNTS an ability
+	# (Dauthi Warlord's "creatures with shadow"): layer 7a, which CR 613.1
+	# puts after layer 6, so it reads the grants and losses just settled.
+	# A 7b setter is still the later sublayer, so when one of those ran the
+	# 7b list is applied again after it (absolute writes: idempotent).
+	if _cda_readers_pass(game, static_sources):
+		_layer_seven_b(game, static_sources)
 
 	# Pass 2c: COUNTERS (layer 7d) — BEFORE the general statics, because a
 	# static that READS power (Meekstone's "creatures with power 3 or
@@ -1305,14 +1397,9 @@ func recalculate(game: MtgGame) -> void:
 		inst.cur_power += fx.power
 		inst.cur_toughness += fx.toughness
 
-	# Pass 3a2b: floating RAMPAGE grants (Rapid Fire). The biggest wins —
-	# see [member _rampage_grants] — and a printed rampage is never
-	# lowered by one.
-	for grant in _rampage_grants:
-		var rager := game.find_instance(grant.instance_id)
-		if rager == null or rager.zone != Mtg.Zone.BATTLEFIELD or rager.phased_out:
-			continue
-		rager.cur_rampage = maxi(rager.cur_rampage, int(grant.amount))
+	# (Floating RAMPAGE grants — Rapid Fire, the biggest wins, see
+	# [member _rampage_grants] — are applied in [method _layer_six] since
+	# Pack 9 E5, on the layer-6 clock that Humility's strip runs on.)
 
 	# Pass 3a3: floating BLOCK RESTRICTIONS (Tower of Coireall) — the same
 	# list the static "can't be blocked except by …" effects write into.
@@ -1324,24 +1411,12 @@ func recalculate(game: MtgGame) -> void:
 			"desc": restriction.desc, "filter": restriction.filter,
 		})
 
-	# Pass 3a2b: GRANTED ACTIVATED ABILITIES (CR 613 layer 6), mostly
-	# durationless (Life Matrix). Appended to the live list the same way a
-	# static grant would, so a granted ability is activated, paid for and
-	# silenced exactly like a printed one.
-	for grant in _ability_grants:
-		var armed := game.find_instance(grant.instance_id)
-		if armed == null or armed.zone != Mtg.Zone.BATTLEFIELD \
-				or armed.phased_out or armed.cur_abilities_silenced:
-			continue
-		armed.cur_activated_abilities.append(grant.ability)
-
-	# Pass 3a3: floating PROTECTION grants (CR 613 layer 6).
-	for shield in _protection_grants:
-		var warded := game.find_instance(shield.instance_id)
-		if warded == null or warded.zone != Mtg.Zone.BATTLEFIELD \
-				or warded.phased_out:
-			continue
-		warded.cur_protection |= int(shield.colors)
+	# (GRANTED ACTIVATED ABILITIES — Life Matrix, mostly durationless — and
+	# floating PROTECTION grants are CR 613 layer 6 and, since Pack 9 E5,
+	# applied in [method _layer_six] in timestamp order: Humility removes a
+	# grant made before it and keeps one made after it. A granted ability
+	# is appended to the live list exactly as a static grant would be, so
+	# it is activated and paid for like a printed one.)
 
 	# Pass 3a4: floating DAMAGE IMMUNITIES (Silhouette) — into the same
 	# per-instance list the statics write (Argothian Pixies, Wall of Vapor).
@@ -1427,8 +1502,10 @@ func recalculate(game: MtgGame) -> void:
 	# protection has written its share: what `cur_protection` holds by now
 	# is the protection the Wards' "This effect doesn't remove this Aura"
 	# does NOT cover, and the aura-vs-protection state-based action needs
-	# it apart (CardInstance.protection_apart_from). Nothing in the pool
-	# removes protection, so merging it last changes no order.
+	# it apart (CardInstance.protection_apart_from). The grants themselves
+	# are booked in layer 6 at each Ward's timestamp (Pack 9 F), where a
+	# later "loses all abilities" clears them ([method _strip_abilities]);
+	# only the MERGE waits for the end, which changes no order.
 	for inst in battlefield:
 		if inst.cur_aura_protection.is_empty():
 			continue
@@ -1440,3 +1517,302 @@ func recalculate(game: MtgGame) -> void:
 	# the keyword list every layer above has settled (printed, granted,
 	# lost). See [Flanking].
 	Flanking.synthesise(battlefield, flanking_trigger)
+
+
+# ------------------------------------------------- Pack 9 E5: layers --
+
+## The silencers ("loses all abilities") the two silence passes ran THIS
+## recalculation, as {ts, victims: Array[CardInstance]}: what each removed
+## and at what timestamp, for [method _layer_six] to strip in order.
+## DERIVED — rebuilt by every [method recalculate], never journaled.
+var _silence_strips: Array[Dictionary] = []
+
+
+## Run the silencers of sub-pass [param which] (the early one for a
+## silencer that also retypes, the late one for a pure "loses all
+## abilities"): live, floating and functioning-on-the-stack alike, in
+## timestamp order (CR 613.7). A LIVE silencer whose own source an earlier
+## one has just silenced contributes nothing (CR 613.8a-b: each depends on
+## the other, and timestamp order breaks the loop).
+func _silence_pass(game: MtgGame, which: int, type_sources: Array[CardInstance]) -> void:
+	var entries: Array[Dictionary] = []
+	for inst in type_sources:
+		if inst.cur_statics_suspended:
+			continue
+		for ability in inst.data.static_abilities:
+			if ability.silences_abilities and _runs_in(ability, which):
+				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
+					"source": inst, "ability": ability, "live": true})
+	for spell in _stack_sources:   # statics functioning on the stack (CR 611.3)
+		for stacked in spell.data.stack_static_abilities:
+			if _runs_in(stacked, which):
+				entries.append({"ts": _timestamp + 1, "i": entries.size(),
+					"source": spell, "ability": stacked})
+	for entry in _floating_statics:
+		var floater: StaticAbility = entry["ability"]
+		if _runs_in(floater, which):
+			entries.append({"ts": int(entry.get("ts", 0)), "i": entries.size(),
+				"source": entry["source"], "ability": floater})
+	if entries.is_empty():
+		return
+	if entries.size() > 1:
+		entries.sort_custom(_by_timestamp_then_entry)
+	var battlefield: Array[CardInstance] = game.all_battlefield()
+	for entry in entries:
+		var source: CardInstance = entry["source"]
+		if entry.has("live") and source.cur_abilities_silenced:
+			continue
+		_run_silencer(game, battlefield, entry["ability"], source, int(entry["ts"]))
+
+
+## Apply one silencer and note WHOM it silenced. A silencer's callback says
+## so by raising [member CardInstance.cur_abilities_silenced] — the contract
+## Titania's Song has always had — so the flags already up (an earlier
+## silencer, a face-down permanent) are lowered for the call and restored
+## after it: a permanent two silencers reach is stripped at BOTH
+## timestamps, and the later one is what a grant must beat.
+func _run_silencer(game: MtgGame, battlefield: Array[CardInstance],
+		ability: StaticAbility, source: CardInstance, ts: int) -> void:
+	var already: Array[CardInstance] = []
+	for inst in battlefield:
+		if inst.cur_abilities_silenced:
+			already.append(inst)
+			inst.cur_abilities_silenced = false
+	ability.apply.call(game, source)
+	var victims: Array[CardInstance] = []
+	for inst in battlefield:
+		if inst.cur_abilities_silenced:
+			victims.append(inst)
+	for inst in already:
+		inst.cur_abilities_silenced = true
+	if not victims.is_empty():
+		_silence_strips.append({"ts": ts, "victims": victims})
+
+
+## "LOSES ALL ABILITIES" at one moment of layer 6 (CR 613.1f): every ability
+## [param inst] has right now — what [method CardInstance.reset_characteristics]
+## restored from its printed text and every grant applied before this
+## point of [method _layer_six] — is removed. The printed STATIC abilities
+## are not in a list; [member CardInstance.cur_abilities_silenced] (raised
+## by the silence pass) is what keeps them, and the printed triggers, from
+## doing anything. A grant applied after this call survives.
+func _strip_abilities(inst: CardInstance) -> void:
+	if inst.zone != Mtg.Zone.BATTLEFIELD or inst.phased_out:
+		return
+	inst.cur_keywords.clear()
+	inst.cur_landwalk.clear()
+	inst.cur_rampage = 0
+	inst.cur_protection = 0
+	# A Ward's protection booked so far (Pack 9 F: the Wards' grant is a
+	# layer-6 static at the Aura's timestamp) — merged into cur_protection
+	# only at the end of the pass, so it is removed here or not at all.
+	inst.cur_aura_protection.clear()
+	inst.cur_bands_with.clear()
+	inst.cur_shroud = false
+	inst.cur_blocks_shadow = false
+	inst.cur_cant_be_blocked_by.clear()
+	inst.cur_cant_block_power_ge = 0
+	inst.cur_cant_be_blocked_by_power_ge = 0
+	inst.cur_extra_blocks = 0
+	inst.cur_mana_abilities.clear()
+	inst.cur_activated_abilities.clear()
+	inst.cur_triggered_abilities.clear()
+	# The DURATIONLESS grants (Cocoon's flying, Rainbow Knights'
+	# protection) were merged by reset_characteristics, ahead of every
+	# layer-6 entry — but each is an effect with its own timestamp (CR
+	# 613.7, Pack 9 bug pass h4-4): one made after the LAST strip that
+	# reaches this permanent is put back. (Comparing against the last strip
+	# at every strip gives the same end state: a later strip clears and
+	# re-applies again.)
+	if not inst.added_keywords.is_empty() or inst.added_protection != 0:
+		_restore_newer_durationless_grants(inst)
+
+
+## Pack 9 bug pass (h4-4): put back on [param inst] the durationless grants
+## ([member CardInstance.added_keywords] / [member
+## CardInstance.added_protection]) stamped later than the newest silencer
+## that strips it this recalculation ([member _silence_strips]). Removed
+## permanent losses ([member CardInstance.removed_keywords]) stay removed.
+func _restore_newer_durationless_grants(inst: CardInstance) -> void:
+	var last_strip := -1
+	for strip in _silence_strips:
+		if int(strip["ts"]) > last_strip and (strip["victims"] as Array).has(inst):
+			last_strip = int(strip["ts"])
+	for k in inst.added_keywords:
+		if int(inst.added_keyword_stamps.get(k, -1)) > last_strip \
+				and not inst.cur_keywords.has(k) and not inst.removed_keywords.has(k):
+			inst.cur_keywords.append(k)
+	for color in inst.added_protection_stamps:
+		if (inst.added_protection & int(color)) != 0 \
+				and int(inst.added_protection_stamps[color]) > last_strip:
+			inst.cur_protection |= int(color)
+
+
+## CR 613.4b, LAYER 7b IN TIMESTAMP ORDER (CR 613.7): every static flagged
+## [method StaticAbility.setting_base_pt] (its source's
+## [member CardInstance.layer_timestamp]; floating and stack statics as
+## elsewhere), every floating base-P/T set ([member _base_pt]) and the P/T
+## half of every animation ([member _animations], whose type half already
+## ran in pass 1). An entry made before Pack 9 carried no stamp: a floating
+## set then sorts after every static and an animation before them, which
+## is where the old passes put them. A characteristic-defining setter that
+## READS an ability waits for [method _cda_readers_pass].
+func _layer_seven_b(game: MtgGame, static_sources: Array[CardInstance]) -> void:
+	# THE COMMON BOARD: no floating setter, no animation, nothing on the
+	# stack or floating — the live setters alone, in battlefield order,
+	# which IS timestamp order (a permanent is stamped as it enters, and
+	# the order is append-on-entry). No list built on the hot path.
+	if _animations.is_empty() and _base_pt.is_empty() \
+			and _floating_statics.is_empty() and _stack_sources.is_empty():
+		for inst in static_sources:
+			if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+				continue
+			for ability in inst.data.static_abilities:
+				if ability.sets_base_pt and not ability.changes_types \
+						and not ability.changes_abilities \
+						and not ability.silences_abilities \
+						and not ability.reads_abilities:
+					ability.apply.call(game, inst)
+		return
+	var entries: Array[Dictionary] = []
+	for inst in static_sources:
+		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+			continue
+		for ability in inst.data.static_abilities:
+			if ability.sets_base_pt and _runs_in(ability, _StaticPass.BASE_PT):
+				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
+					"static": ability, "source": inst})
+	for entry in _floating_statics:
+		var floater: StaticAbility = entry["ability"]
+		if _runs_in(floater, _StaticPass.BASE_PT):
+			entries.append({"ts": int(entry.get("ts", 0)), "i": entries.size(),
+				"static": floater, "source": entry["source"]})
+	for spell in _stack_sources:   # statics functioning on the stack (CR 611.3)
+		for stacked in spell.data.stack_static_abilities:
+			if _runs_in(stacked, _StaticPass.BASE_PT):
+				entries.append({"ts": _timestamp + 1, "i": entries.size(),
+					"static": stacked, "source": spell})
+	for animation in _animations:
+		entries.append({"ts": int(animation.get("ts", -1)), "i": entries.size(),
+			"animation": animation})
+	for setter in _base_pt:
+		entries.append({"ts": int(setter.get("ts", _timestamp + 1)), "i": entries.size(),
+			"base_pt": setter})
+	if entries.is_empty():
+		return
+	if entries.size() > 1:
+		entries.sort_custom(_by_timestamp_then_entry)
+	for entry in entries:
+		if entry.has("static"):
+			entry["static"].apply.call(game, entry["source"])
+		elif entry.has("animation"):
+			var animation: Dictionary = entry["animation"]
+			var body := game.find_instance(int(animation["instance_id"]))
+			if body == null or body.zone != Mtg.Zone.BATTLEFIELD or body.phased_out:
+				continue
+			body.cur_power = int(animation["set_power"])
+			body.cur_toughness = int(animation["set_toughness"])
+		else:
+			var setter: Dictionary = entry["base_pt"]
+			var target := game.find_instance(int(setter["instance_id"]))
+			if target == null or target.zone != Mtg.Zone.BATTLEFIELD or target.phased_out:
+				continue
+			if setter["set_power"]:
+				target.cur_power = int(setter["power"])
+			if setter["set_toughness"]:
+				target.cur_toughness = int(setter["toughness"])
+
+
+## CR 613.4a AFTER LAYER 6: the base-P/T statics flagged
+## [method StaticAbility.reading_abilities] — a characteristic-defining
+## ability that COUNTS an ability ("the number of creatures on the
+## battlefield with shadow", Dauthi Warlord). Layer 6 precedes layer 7, so
+## the count includes a creature that gained the ability this turn and
+## leaves out one that lost it. Returns whether any ran (the caller then
+## re-applies layer 7b over it).
+func _cda_readers_pass(game: MtgGame, static_sources: Array[CardInstance]) -> bool:
+	var entries: Array[Dictionary] = []
+	for inst in static_sources:
+		if inst.cur_abilities_silenced or inst.cur_statics_suspended:
+			continue
+		for ability in inst.data.static_abilities:
+			if ability.reads_abilities and ability.sets_base_pt \
+					and _runs_in(ability, _StaticPass.BASE_PT_READERS):
+				entries.append({"ts": inst.layer_timestamp, "i": entries.size(),
+					"static": ability, "source": inst})
+	for entry in _floating_statics:
+		var floater: StaticAbility = entry["ability"]
+		if _runs_in(floater, _StaticPass.BASE_PT_READERS):
+			entries.append({"ts": int(entry.get("ts", 0)), "i": entries.size(),
+				"static": floater, "source": entry["source"]})
+	for spell in _stack_sources:
+		for stacked in spell.data.stack_static_abilities:
+			if _runs_in(stacked, _StaticPass.BASE_PT_READERS):
+				entries.append({"ts": _timestamp + 1, "i": entries.size(),
+					"static": stacked, "source": spell})
+	if entries.is_empty():
+		return false
+	if entries.size() > 1:
+		entries.sort_custom(_by_timestamp_then_entry)
+	for entry in entries:
+		entry["static"].apply.call(game, entry["source"])
+	return true
+
+
+## CR 613.2 / 707.2 — LAYER 1, "has the full text of the top creature card
+## of your graveyard" ([method CardData.with_graveyard_top_copy], Volrath's
+## Shapeshifter). For each such permanent: the top card of its
+## CONTROLLER's graveyard is a creature card → its definition becomes that
+## card's plus the printed extra ability ([method
+## CardData.graveyard_top_copy_of]); otherwise its own. The swap is IN
+## PLACE — not a zone change (CR 400.7 does not apply): the object keeps its
+## id, counters, damage, tapped state, summoning sickness, controller and
+## timestamp, and nothing enters. Only a CHANGE is written (journaled, so
+## a search rewinds it) and marks the battlefield indexes stale, so the
+## next [method MtgGame.all_battlefield] rebuilds the trigger, static and
+## state-based-action watch lists from the new text (the legend rule sees a
+## legendary name).
+##
+## Whose derivation is it? The derived definition names its holder
+## ([member CardData.graveyard_top_holder]); another object holding it
+## (a Clone or a Vesuvan Doppelganger copied the shifted body) holds plain
+## copiable values and follows nothing (CR 707.2). A copy of the UNshifted
+## printed card has the ability itself and follows ITS controller's
+## graveyard. A phased-out permanent is left as it is.
+##
+## A Shapeshifter that used a licid's text and is an Aura (bug pass
+## 2026-10-06, CR 611.2c): the text changes UNDER the licid effect — the
+## values beneath it ([member CardData.licid_base]) are what is compared
+## and replaced, and the Aura is derived again from the new ones ([method
+## MtgGame.licid_rewrite]), still attached, its end action kept.
+func _graveyard_top_copies(game: MtgGame) -> void:
+	var swapped := false
+	for inst in game.all_battlefield():
+		var current: CardData = inst.data
+		var values: CardData = current.licid_base if current.licid_base != null else current
+		var base: CardData = values
+		var holds := values.graveyard_top_holder == inst.id \
+			and values.graveyard_top_base != null
+		if holds:
+			base = values.graveyard_top_base
+		if base.graveyard_top_copy == null or inst.phased_out:
+			continue
+		var wanted: CardData = base
+		var grave: Array = game.players[inst.controller_id].graveyard
+		if not grave.is_empty():
+			var top: CardInstance = grave[grave.size() - 1]
+			if top.data.is_creature():
+				if holds and values.graveyard_top_source == top.data:
+					continue   # the same card is still on top
+				wanted = base.graveyard_top_copy_of(top.data, inst.id)
+		if wanted == values:
+			continue
+		wanted = game.licid_rewrite(inst, wanted)
+		if journal != null:
+			journal.record(inst, &"data", inst.data)
+		inst.data = wanted
+		swapped = true
+		game.log_line("%s now has the text of %s" % [
+			inst.printed_data.card_name, wanted.card_name], inst)
+	if swapped:
+		game._battlefield_changed()

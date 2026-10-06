@@ -57,11 +57,14 @@ class PackEightTests(unittest.TestCase):
         self.assertEqual(multiple, {'Plains', 'Island', 'Swamp', 'Mountain', 'Forest'})
         self.assertEqual([row['collector_number'] for row in cards if row['name'] == 'Forest'], ['347', '348', '349', '350'])
         self.assertTrue(all(row.get('lang', 'en') == 'en' and row['collector_number'].isdigit() for row in cards))
-        # Reprints: exactly the names the core or an earlier pack already has.
+        # Reprints: exactly the names the core or an earlier pack already has
+        # (the Tempest block reprints four Mirage cards: a later pack's
+        # reprint is not previous).
         core = {name for _, name in first.assigned_pairs()}
         expansions = {}
         for path in sorted((pack.ROOT / 'packaging/card_packs').glob('*/cards*.json')):
-            if path.parent == pack.SOURCE or path.parent.name == 'pack_1_dotp_complete':
+            if path.parent == pack.SOURCE or path.parent.name == 'pack_1_dotp_complete' \
+                    or int(path.parent.name.split('_')[1]) > 8:
                 continue
             for row in pack.read_json(path):
                 expansions.setdefault(row['name'], set()).add(row['set'])

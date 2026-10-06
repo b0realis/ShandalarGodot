@@ -13,11 +13,11 @@ extends GameTest
 
 
 ## Every optional pack the suite builds metadata-only (run_tests.sh sets
-## SHANDALAR_PACK_1..8): enabling them all is one reload of the registry
-## through the same path the Card Packs page uses, not eight.
+## SHANDALAR_PACK_1..9): enabling them all is one reload of the registry
+## through the same path the Card Packs page uses, not nine.
 const ALL_PACKS: Array[String] = [CardPacks.ID, FallenEmpiresPack.ID,
 	IceAgePack.ID, HomelandsPack.ID, AlliancesPack.ID, PortalPack.ID,
-	FifthEditionPack.ID, MirageBlockPack.ID]
+	FifthEditionPack.ID, MirageBlockPack.ID, TempestBlockPack.ID]
 
 
 func after_each() -> void:
@@ -78,8 +78,10 @@ func _assert_card_is_sane(card_name: String) -> void:
 ## +1/+1 counters it enters with (Wiitigo's six). A COUNTED entry is the
 ## reviewed list below: Zombie Mob (Pack 8) is a printed 2/0 that enters
 ## with one counter per creature card in its controller's graveyard — and
-## with none there it really dies, as printed.
-const COUNTED_ENTRY_BODIES: Array[String] = ["Zombie Mob"]
+## with none there it really dies, as printed. Krakilin and Shifting Wall
+## (Pack 9) are printed 0/0 and enter with X +1/+1 counters — an X of 0
+## really dies, as printed.
+const COUNTED_ENTRY_BODIES: Array[String] = ["Zombie Mob", "Krakilin", "Shifting Wall"]
 
 static func _derives_its_body(data: CardData) -> bool:
 	return not data.static_abilities.is_empty() \

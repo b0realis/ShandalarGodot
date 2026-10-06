@@ -256,7 +256,11 @@ const CAST_EASE_FLOOR := 0.5
 ## Mana Battery in a blue-black deck — is a rock, whatever its score.
 const OFF_COLOR_MANA := 1.0
 ## Prices for the keywords the duel AI does not price, in the same
-## stat-point unit as [constant Evaluator.KEYWORD_VALUE].
+## stat-point unit as [constant Evaluator.KEYWORD_VALUE]. SHADOW (Pack 9)
+## is NOT here on purpose: the duel AI prices it ([constant
+## Evaluator.KEYWORD_VALUE], flying's 1.5 of evasion) and [method
+## _creature_score] already adds that table, so a row here would count
+## it twice; its defensive discount is [constant Evaluator.SHADOW_DEFENCE].
 const MORE_KEYWORDS := {Mtg.Keyword.HASTE: 0.7, Mtg.Keyword.UNBLOCKABLE: 1.5,
 	Mtg.Keyword.FEAR: 1.0}
 ## What a spell's role is worth — the roles are [method
@@ -1376,6 +1380,11 @@ func _creature_score(data: CardData) -> float:
 	for keyword in data.keywords:
 		worth += float(Evaluator.KEYWORD_VALUE.get(keyword, 0.0))
 		worth += float(MORE_KEYWORDS.get(keyword, 0.0))
+	# A SHADE BLOCKS ONLY SHADES (CR 702.28b): its toughness is little wall
+	# against the opponent's ground team — the duel AI's own discount, per
+	# point of toughness, so the builder and the pilot price it alike.
+	if data.keywords.has(Mtg.Keyword.SHADOW):
+		worth -= Evaluator.SHADOW_DEFENCE * data.toughness
 	if not data.landwalk.is_empty():
 		worth += 0.8
 	if data.protection_from != 0:

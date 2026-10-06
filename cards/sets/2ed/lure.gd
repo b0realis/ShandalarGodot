@@ -24,3 +24,6 @@ static func _apply(game: MtgGame, source: CardInstance) -> void:
 	var host := game.find_instance(source.attached_to)
 	if host != null and host.zone == Mtg.Zone.BATTLEFIELD:
 		host.cur_must_be_blocked = true
+		# EVERY creature: it outranks a narrowed Lure's filter whichever
+		# static ran first (CombatDeclaration.lure_binds).
+		host.cur_must_be_blocked_by_all = true

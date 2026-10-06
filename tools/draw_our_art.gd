@@ -116,7 +116,7 @@ const OUT_DIR := "res://game/art"
 func _init() -> void:
 	var dir := ProjectSettings.globalize_path(OUT_DIR)
 	DirAccess.make_dir_recursive_absolute(dir)
-	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02", "5ed", "mir", "vis", "wth"]:
+	for code in ["atq", "arn", "past", "drk", "2ed", "4ed", "leg", "fem", "ice", "hml", "all", "por", "p02", "5ed", "mir", "vis", "wth", "tmp", "sth", "exo"]:
 		var img := _render(Vector2i(GLYPH_SIZE, GLYPH_SIZE),
 			[[_glyph(code), GOLD_LIT, GOLD_DARK]], RIM)
 		_write(img, dir, "set_icon_%s.png" % code)
@@ -140,6 +140,12 @@ func _init() -> void:
 	_write(_stone_medallion(false, _eye()), dir, "filter_vis_off.png")
 	_write(_stone_medallion(true, _skyship()), dir, "filter_wth_on.png")
 	_write(_stone_medallion(false, _skyship()), dir, "filter_wth_off.png")
+	_write(_stone_medallion(true, _storm()), dir, "filter_tmp_on.png")
+	_write(_stone_medallion(false, _storm()), dir, "filter_tmp_off.png")
+	_write(_stone_medallion(true, _keep()), dir, "filter_sth_on.png")
+	_write(_stone_medallion(false, _keep()), dir, "filter_sth_off.png")
+	_write(_stone_medallion(true, _bird()), dir, "filter_exo_on.png")
+	_write(_stone_medallion(false, _bird()), dir, "filter_exo_off.png")
 	_write(_stone_medallion(true, []), dir, "filter_source_on.png")
 	_write(_stone_medallion(false, []), dir, "filter_source_off.png")
 	_write(_stone_medallion(true, _completed_cards()), dir, "filter_pack1_on.png")
@@ -216,6 +222,12 @@ func _glyph(code: String) -> Array:
 			return _eye()
 		"wth":
 			return _skyship()
+		"tmp":
+			return _storm()
+		"sth":
+			return _keep()
+		"exo":
+			return _bird()
 	return []
 
 
@@ -286,6 +298,79 @@ func _skyship() -> Array:
 		{"op": "add", "poly": PackedVector2Array([
 			Vector2(0.70, 0.71), Vector2(0.36, 0.89), Vector2(0.05, 0.96),
 			Vector2(0.20, 0.86), Vector2(0.46, 0.76)])},
+	]
+
+
+## TEMPEST — a storm: a heaped thundercloud and a lightning bolt striking
+## down out of it. The bolt is set into a slot cut in the cloud's belly, so
+## a dark seam keeps the two apart instead of one gold blot. Polygons only,
+## like every pack emblem, so the stone medallion carves the same shape.
+## Our own drawing of a storm over Rath, not a trace of any printed symbol.
+func _storm() -> Array:
+	var bolt := PackedVector2Array([
+		Vector2(0.45, 0.40), Vector2(0.66, 0.40), Vector2(0.56, 0.60),
+		Vector2(0.70, 0.60), Vector2(0.34, 0.98), Vector2(0.45, 0.71),
+		Vector2(0.31, 0.71)])
+	var slot := PackedVector2Array([
+		Vector2(0.40, 0.35), Vector2(0.73, 0.35), Vector2(0.63, 0.56),
+		Vector2(0.78, 0.56), Vector2(0.30, 1.08), Vector2(0.39, 0.76),
+		Vector2(0.24, 0.76)])
+	return [
+		{"op": "add", "poly": _circle_poly(Vector2(0.27, 0.36), 0.16, 32)},
+		{"op": "add", "poly": _circle_poly(Vector2(0.49, 0.25), 0.21, 40)},
+		{"op": "add", "poly": _circle_poly(Vector2(0.73, 0.35), 0.17, 32)},
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.13, 0.38), Vector2(0.88, 0.38), Vector2(0.86, 0.50),
+			Vector2(0.80, 0.53), Vector2(0.20, 0.53), Vector2(0.14, 0.50)])},
+		{"op": "sub", "poly": slot},
+		{"op": "add", "poly": bolt},
+	]
+
+
+## STRONGHOLD — a keep: a tall crenellated tower with a wide arched gate,
+## between two lower walls with their own battlements. The three blocks
+## stand apart, so the gaps read as the tower's corners even at fourteen
+## pixels. Our own drawing of Volrath's fortress, not a trace of any
+## printed symbol.
+func _keep() -> Array:
+	var gate := PackedVector2Array([Vector2(0.385, 0.95), Vector2(0.385, 0.70)])
+	for n in 17:
+		var t := PI - PI * float(n) / 16.0
+		gate.append(Vector2(0.50, 0.70) + Vector2(cos(t), -sin(t)) * 0.115)
+	gate.append(Vector2(0.615, 0.95))
+	return [
+		# the tower, three merlons on top
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.30, 0.92), Vector2(0.30, 0.07), Vector2(0.385, 0.07),
+			Vector2(0.385, 0.17), Vector2(0.455, 0.17), Vector2(0.455, 0.07),
+			Vector2(0.545, 0.07), Vector2(0.545, 0.17), Vector2(0.615, 0.17),
+			Vector2(0.615, 0.07), Vector2(0.70, 0.07), Vector2(0.70, 0.92)])},
+		# the left wall, two merlons
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.05, 0.92), Vector2(0.05, 0.42), Vector2(0.12, 0.42),
+			Vector2(0.12, 0.50), Vector2(0.19, 0.50), Vector2(0.19, 0.42),
+			Vector2(0.26, 0.42), Vector2(0.26, 0.92)])},
+		# the right wall, its mirror
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.74, 0.92), Vector2(0.74, 0.42), Vector2(0.81, 0.42),
+			Vector2(0.81, 0.50), Vector2(0.88, 0.50), Vector2(0.88, 0.42),
+			Vector2(0.95, 0.42), Vector2(0.95, 0.92)])},
+		{"op": "sub", "poly": gate},
+	]
+
+
+## EXODUS — the escape: a bird in flight, wings raised high and swept
+## out to drooping tips over a small body and a short fanned tail — the
+## shape a gull makes against the sky. Our own drawing of the flight from
+## Rath, not a trace of any printed symbol.
+func _bird() -> Array:
+	return [
+		{"op": "add", "poly": _strip(Vector2(0.47, 0.60), Vector2(0.27, 0.06), Vector2(0.02, 0.56), 0.10, 0.024, 32)},
+		{"op": "add", "poly": _strip(Vector2(0.53, 0.60), Vector2(0.73, 0.06), Vector2(0.98, 0.56), 0.10, 0.024, 32)},
+		{"op": "add", "poly": _circle_poly(Vector2(0.50, 0.62), 0.085, 28)},
+		{"op": "add", "poly": PackedVector2Array([
+			Vector2(0.44, 0.64), Vector2(0.56, 0.64), Vector2(0.61, 0.84),
+			Vector2(0.50, 0.79), Vector2(0.39, 0.84)])},
 	]
 
 

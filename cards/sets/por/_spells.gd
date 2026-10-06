@@ -99,7 +99,9 @@ static func _lure(g: MtgGame, s: CardInstance, _pid: int, t: TargetRef, _x: int)
 	g.recalculate()
 static func _lured(g: MtgGame, _s: CardInstance, id: int) -> void:
 	var i := g.find_instance(id)
-	if i != null: i.cur_must_be_blocked = true
+	if i != null:
+		i.cur_must_be_blocked = true
+		i.cur_must_be_blocked_by_all = true   # every creature, not a narrowed few
 static func _one_blocker(_g: MtgGame, s: CardInstance) -> void: s.cur_max_blockers = 1
 static func _black(i: CardInstance) -> bool: return (i.cur_colors & Mtg.ManaColor.B) != 0
 static func _evasion(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int, forestwalk: bool) -> void:

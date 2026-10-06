@@ -65,7 +65,8 @@ class Burnout extends CounterEffect:
 	func _init() -> void:
 		super("target instant spell", _instant)
 	static func _instant(i: CardInstance) -> bool: return i.is_type(Mtg.CardType.INSTANT)
-	func affects_spell(i: CardInstance) -> bool: return (i.cur_colors & Mtg.ManaColor.U) != 0
+	# Blue, and never a spell that can't be countered (CounterEffect's own test).
+	func affects_spell(i: CardInstance) -> bool: return super.affects_spell(i) and i != null and (i.cur_colors & Mtg.ManaColor.U) != 0
 	func resolve(g: MtgGame, _s: CardInstance, _pid: int, t: TargetRef, _x := 0) -> void:
 		var i := g.find_instance(t.instance_id)
 		if affects_spell(i): g.counter_spell(i)

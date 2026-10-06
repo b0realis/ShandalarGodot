@@ -4,6 +4,10 @@ extends RefCounted
 ## are gated by forecasts_tactics; legality/cost enforcement is engine-owned.
 const H := preload("res://engine/ai/homelands_tactics.gd")
 const COSTS := preload("res://engine/additional_object_costs.gd")
+## Pack 9 E7's object prices: a card put on top of the library (the draw it
+## replaces) and one +1/+1 counter removed from a creature that survives it.
+const LIBRARY_TOP_PRICE := 0.75
+const COUNTER_PRICE := 1.0
 
 static func result(value: float, targets: Array = [], x := 0) -> Dictionary: return {"value": value, "targets": targets, "x": x}
 static func affordable(g: MtgGame, pid: int, pay: Dictionary) -> bool: return g.players[pid].mana_pool.can_pay(pay.cost, pay.extra, pay.usage) or not ManaPlanner.plan(g, pid, pay.cost, pay.extra, pay.usage).is_empty()
@@ -21,6 +25,19 @@ static func object_price(g: MtgGame, pilot, s: CardInstance, groups: Array, x :=
 	var total := 0.0
 	var used := {}
 	for index in slots.size():
+		# A CARD AT RANDOM (Pack 9 E7): nobody chooses it, so it costs the
+		# AVERAGE card of the hand it is rolled from — the cards no chosen
+		# slot has taken — never the cheapest (no peek at the roll).
+		if COSTS.is_random(slots[index].group):
+			var sum := 0.0
+			var n := 0
+			for i in slots[index].cards:
+				if used.has(i.id): continue
+				sum += _object_unit_price(g, pilot, slots[index].group, i)
+				n += 1
+			if n == 0: return INF
+			total += sum / float(n)
+			continue
 		var best := INF
 		var chosen := -1
 		for i in slots[index].cards:
@@ -58,6 +75,20 @@ static func _object_unit_price(g: MtgGame, pilot, group: Dictionary, i: CardInst
 				Mtg.Zone.GRAVEYARD: return 0.25
 				Mtg.Zone.HAND: return Evaluator.card_value(i.data)
 				_: return pilot._own_value(g, i)
+		# Pack 9 E7 (2026-10-06): a card discarded AT RANDOM is priced as a
+		# discard (object_price averages the hand); a card put on TOP of the
+		# library comes back as the next draw — what it costs is the draw it
+		# replaces, a fixed fraction of a card; a counter REMOVED from a
+		# creature is the counter (a +1/+1 counter is a point of each) or,
+		# when it is the last of the creature's toughness, the creature.
+		"random_discard": return pilot._own_value(g, i)
+		"library_top": return LIBRARY_TOP_PRICE
+		"remove_counter":
+			var amount := int(group.get("amount", 1))
+			var pt := ContinuousEffects.parse_pt_counter(String(group.get("kind", "")))
+			if pt.y > 0 and i.cur_toughness - pt.y * amount <= i.damage:
+				return pilot._own_value(g, i)
+			return COUNTER_PRICE * amount if pt != Vector2i.ZERO else 0.5 * amount
 	return 0.5
 
 static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: String) -> Variant:
@@ -105,7 +136,19 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			# buffer against the public power-seven sacrifice threshold.
 			if me.library.size() > 12 and s.cur_power <= 3 and window == "COMBAT": return result(3.5)
 			return {}
-		&"hasty_token": return result(6.0) if window == "MAIN" and g.current_step() == Mtg.Step.MAIN1 else {}
+		&"hasty_token":
+			if window != "MAIN" or g.current_step() != Mtg.Step.MAIN1: return {}
+			# A TARGETED token maker (the Pack 9 study, 2026-10-06: Echo
+			# Chamber activated, and refused, with no creature across the
+			# table) needs a legal target first (CR 115.1, 602.2b). When
+			# the OPPONENT names it ("an opponent chooses target creature
+			# they control", the role's `opponent_chooses`) the copy is
+			# the body they would miss least — the card's own chooser
+			# order, public — and is worth that body, not a flat 6.0.
+			if e.target_spec == null: return result(6.0)
+			if refs.is_empty(): return {}
+			if not bool(e.ai_parameters.get("opponent_chooses", false)): return result(6.0)
+			return result(Evaluator.permanent_value(_their_pick(g, s, e.target_spec, refs), pilot.profile))
 		&"fight":
 			for ref in refs:
 				var i := g.find_instance(ref.instance_id)
@@ -128,16 +171,35 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 				# (2026-10-03), the question AiPlayer._try_counter asks.
 				var item := _stack_item_of(g, i)
 				if item == null or not pilot._counter_clears_bar(g, item): continue
+				# Never at a spell that can't be countered (Pack 9 E6, Scragnoth).
+				if g.spell_cant_be_countered(i): continue
 				best = H.better(best, result(Evaluator.card_value(i.data) + 3.0, [ref]))
 		&"self_bounce", &"self_bounce_gift":
 			if window != "RESPONSE": return {}
 			for item in g.stack:
 				if item.controller == pid: continue
 				for ref in item.targets:
-					if not ref.is_player and ref.instance_id == s.id: return result(pilot._own_value(g, s) + 2.0, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
+					if ref == null or ref.is_player or ref.is_damage or ref.is_ability or ref.instance_id != s.id: continue
+					# ONLY WHAT THE OBJECT DOES IS ANSWERED (the Pack 9 bug
+					# pass, h6-8): Hibernation Sliver's grant paid 2 life and
+					# bounced its own lord from a Twiddle, and from a Capsize
+					# that returned it anyway.
+					if takes_self(g, item, s, e): return result(pilot._own_value(g, s) + 2.0, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
 		&"self_keyword_gift", &"self_keyword":
 			var keyword: int = e.ai_parameters.keyword
 			if s.has_keyword(keyword) or not g.combat.attackers.has(s.id): return {}
+			# EVASION AFTER BLOCKS IS NOTHING (Pack 9 E1, 2026-10-06): a
+			# blocked creature stays blocked whatever it gains once blockers
+			# are declared (CR 506.4, 509.1h) — shadow, flying, fear.
+			if keyword in [Mtg.Keyword.FLYING, Mtg.Keyword.SHADOW, Mtg.Keyword.FEAR,
+					Mtg.Keyword.UNBLOCKABLE] and blocks_declared(g): return {}
+			# SHADOW CUTS BOTH WAYS (CR 702.28b; the bug pass, h1-3): it
+			# frees the attacker from their creatures without shadow and
+			# lets their SHADES block it — priced as the exchange their best
+			# blocks give before and after, under the journal.
+			if keyword == Mtg.Keyword.SHADOW:
+				var gain := shadow_gain(g, pilot, s)
+				return result(gain, [TargetRef.player(1 - pid)] if e.target_spec != null else []) if gain > 0.0 else {}
 			return result(3.5, [TargetRef.player(1 - pid)] if e.target_spec != null else [])
 		&"match_combat_stats":
 			for ref in refs:
@@ -195,6 +257,89 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		_: return null
 	return best
 
+## THE SELF-BOUNCE'S QUESTION: does their stack [param item], aimed at
+## [param s], take it from us — so that [param e] (our "return this to
+## hand / to the top of the library", or a shroud or protection that
+## makes the target illegal) saves something? A hostile Aura, a removal, a
+## steal or an unread effect (the harm reader's removal-shaped default),
+## damage or a shrink that kills it: yes. A tap (Twiddle) or damage it
+## lives through: no. A BOUNCE: only when the object pays to come back
+## (buyback — it fizzles into the graveyard instead), or when [param e]
+## keeps the permanent where it is (shroud, protection).
+static func takes_self(g: MtgGame, item: StackItem, s: CardInstance, e: EffectBase) -> bool:
+	if item.kind == Mtg.StackKind.SPELL and item.card != null and item.card.data.is_aura():
+		return EffectIntent.aura_aim(item.card.data) == EffectIntent.Aim.HOSTILE
+	var intent := EffectIntent.read(item.effects, item.card.data.card_name if item.card != null else "")
+	if not intent.is_harmful() or intent.is_tap_utility():
+		return false
+	if intent.removes:
+		return true
+	if intent.bounces:
+		return bool(item.cost_paid.get("buyback", false)) or not self_bounce_leaves(e)
+	if s.is_creature():
+		if intent.damage_at(item.x_value) > 0 and not intent.kills(s, item.x_value):
+			return false   # damage it lives through
+		if intent.shrinks() and s.cur_toughness + intent.pump_toughness > s.damage:
+			return false   # a shrink it lives through
+	if intent.taps and not intent.unknown and intent.damage_at(item.x_value) <= 0:
+		return false
+	return true
+
+## Does [param e] (a `self_bounce` effect) take the permanent off the
+## battlefield — to its owner's hand or library — rather than keep it there
+## out of the object's reach (shroud, protection: "gains")?
+static func self_bounce_leaves(e: EffectBase) -> bool:
+	return e is ReturnToHandEffect or not e.describe().to_lower().contains(" gains ")
+
+## What a shadow gained now is worth to [param s], our attacker, before
+## blocks: their untapped creatures' best blocks against our declared
+## attack ([method AiPlayer._cohort_value]) with shadow and without it, run
+## under the search journal; the game when it makes the attack lethal
+## through their blocks. Never positive when only shades could block it.
+static func shadow_gain(g: MtgGame, pilot, s: CardInstance) -> float:
+	var foe := g.opponent_of(pilot.pid)
+	var attackers: Array[CardInstance] = pilot._declared_attackers(g)
+	var blockers: Array[CardInstance] = pilot._untapped_creatures(g, foe)
+	if attackers.is_empty() or blockers.is_empty():
+		return 0.0   # nothing over there blocks anything: nothing to escape
+	var before: float = pilot._cohort_value(g, attackers, blockers, foe)
+	var through_before: int = pilot._damage_through_blocks(g, attackers, blockers, foe)
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g.continuous.add_until_eot_keywords(s.id, [Mtg.Keyword.SHADOW])
+	g.recalculate()
+	var after: float = pilot._cohort_value(g, attackers, blockers, foe)
+	var through_after: int = pilot._damage_through_blocks(g, attackers, blockers, foe)
+	g.unmake_to(mark)
+	if not nested: g.end_search()
+	var life := g.players[foe].life
+	if through_before < life and through_after >= life:
+		return pilot.LETHAL_WORTH
+	return after - before
+
+## Have this combat's blockers been declared (CR 509) — the moment after
+## which no evasion changes a block?
+static func blocks_declared(g: MtgGame) -> bool:
+	var step := g.current_step()
+	if step == Mtg.Step.DECLARE_BLOCKERS: return not g.awaiting_blockers
+	return step in [Mtg.Step.FIRST_STRIKE_DAMAGE, Mtg.Step.COMBAT_DAMAGE, Mtg.Step.COMBAT_END]
+
+## The creature the OPPONENT would name for a spec they choose ([member
+## TargetSpec.chosen_by_opponent]): the first of [param refs] in the
+## card's own chooser order ([member TargetSpec.chooser_order], their
+## point of view — what their seat's heuristic takes), else the one worth
+## least on the board. Public board only.
+static func _their_pick(g: MtgGame, s: CardInstance, spec: TargetSpec, refs: Array) -> CardInstance:
+	var ordered := refs.duplicate()
+	if spec.chooser_order.is_valid():
+		ordered.sort_custom(func(a: TargetRef, b: TargetRef) -> bool:
+			return bool(spec.chooser_order.call(g, s, a, b)))
+	else:
+		ordered.sort_custom(func(a: TargetRef, b: TargetRef) -> bool:
+			return Evaluator.permanent_value(g.find_instance(a.instance_id)) \
+				< Evaluator.permanent_value(g.find_instance(b.instance_id)))
+	return g.find_instance((ordered[0] as TargetRef).instance_id)
+
 ## The stack item that holds [param card], or null.
 static func _stack_item_of(g: MtgGame, card: CardInstance) -> StackItem:
 	for item in g.stack:
@@ -209,7 +354,13 @@ static func special_spell(g: MtgGame, pilot, response := false) -> String:
 		if g.cast_timing_refusal(pilot.pid, s) != "": continue
 		var payments := false
 		for row in s.data.modes:
-			if not row.get("payment", {}).is_empty(): payments = true
+			# A BUYBACK row (Pack 9 E2) is the printed spell plus a cost
+			# that brings it back — not an alternative payment this
+			# comparison can price (it would charge the cost and credit
+			# nothing). Such a card is cast by the pilot's own responders,
+			# whose buyback rule weighs the return (AiPlayer._cast_response).
+			var pay: Dictionary = row.get("payment", {})
+			if not pay.is_empty() and not bool(pay.get("buyback", false)): payments = true
 		var custom: Variant = spell_choice(g, pilot, s) if response else null
 		if not payments and s.data.repeated_additional_cost == "" and s.data.extra_target_color_mask == 0 and custom == null: continue
 		for mode in maxi(1, s.data.modes.size()):

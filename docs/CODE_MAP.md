@@ -84,6 +84,176 @@ needed); card files have NO class_name (they register by name instead);
 - `docs/pack-7-fifth-edition.md`, `docs/releases/0.40.13.md`: the pack
   guide and the release note.
 
+## The Tempest Block, Pack 9 (2026-10-06)
+
+- `game/tempest_block_pack.gd`: Pack 9's trusted three-set contract
+  (`TempestBlockPack`: Tempest `tmp`, Stronghold `sth`, Exodus `exo`;
+  636 printings, 621 names, 574 new identities), bounded ZIP inventory
+  (2,478 entries, a 384 MiB `MAX_BYTES` like Pack 8's through
+  `PortalPack.bounded_zip`) and hashes; `scripts()` loads the new names
+  from `cards/sets/<set>/` and the 27 shared reprints from their original
+  pack's folder, read from `shared_names.json`.
+- `packaging/card_packs/pack_9_tempest_block/manifest.json`, `cards.json`,
+  `cards_sth.json`, `cards_exo.json`, `set.json`, `set_sth.json`,
+  `set_exo.json`, `reprint_names.json` (47 names), `shared_names.json`
+  (27 names → original set), `README.txt`: the pack's identity (`pack-9`,
+  `Pack-9-Tempest-Block.zip`, badge `9-TMP`, minimum game 0.50.15, set order
+  `tmp`, `sth`, `exo`); text only, no artwork.
+- `cards/sets/tmp/` (299 cards), `cards/sets/sth/` (137), `cards/sets/exo/`
+  (138): one trusted file per new name; each folder's `_rules.gd` is the
+  fail-closed dispatcher over the family modules `_basic.gd`, `_spells.gd`,
+  `_creatures.gd`, `_auras.gd`, `_artifacts.gd`, `_lands_mana.gd`,
+  `_combat.gd`, `_triggers.gd`, `_choices.gd`, `_costs.gd`, `_buyback.gd`,
+  `_shadow.gd`, `_licids.gd`, `_slivers.gd`, `_spikes.gd`, `_misc.gd`;
+  unclaimed cards carry the `_pending` cast guard.
+- `game/art/set_icon_tmp.png`, `set_icon_sth.png`, `set_icon_exo.png`,
+  `filter_{tmp,sth,exo}_{on,off}.png`: the gold storm, keep and bird and
+  their carved-stone medallions; drawn by `tools/draw_our_art.gd`
+  (`_storm`, `_keep`, `_bird`), hashed in `game/art/README.md`.
+- `tools/pack_9_tempest_block.py`, `tools/test_pack_9_tempest_block.py`:
+  pinned-printing fetcher over the three sets, deterministic local builder
+  and bounded archive validation tests.
+- `tests/cards/test_pack_9_catalogue.gd`, `tests/ui/test_pack_9_integration.gd`:
+  the pack alone and beside the others (counts per set, shared providers,
+  numbered Tempest basics, scaffold fidelity, and the catalogue gate
+  refusing any `_pending` card) and its badge, Extras rows and Options block.
+- `game/main.gd`: `VERIFY_PACK_9_FLAG` (`--verify-pack-9`) and `pack_9_probe`
+  — with the real ZIP, in memory only: every dormant script, picture,
+  fallback and UI texture, and no rule pending; one summary line, exit 0/1.
+  `tests/ui/test_pack_9_verify_probe.gd` runs the same checks on a fixture.
+- `tools/pack_9_duel_audit.gd`: seeded complete duels with nine themed
+  Tempest block decks (Shadow, Slivers, Licids, Spikes, Buyback, Oaths,
+  Humility, Stronghold, Artifacts) in both rules profiles, Wizard v Wizard
+  and Wizard v Apprentice (`--rounds`, `--seed` 97000, `--pilots`,
+  `--only-index`, `--rules`, `--turn-cap`, `--verbose`). Counts actual use —
+  casts, activations, triggers, shadow attacks and blocks, buyback paid and
+  returned, Dream Halls/Aluren rows, licids becoming Auras and ended,
+  Volrath's Curse ignored, Sliver grants, Spike counters, Oaths,
+  Humility/Living Death/Cataclysm, Ertai's Meddling's delayed spells,
+  Volrath's Shapeshifter, Static Orb, en-Kor redirects, retargets and the
+  AI's refused tries. Exits 2 on a stall or any error a logger sees. Pack 9
+  in memory only; `shandalar_test` required.
+- `tools/pack_9_ui_soak.gd`: the base duel soak (`tools/duel_soak.gd`)
+  with five Tempest block decks; its human-seat fuzzer picks any payment row
+  the window does not grey (buyback, Dream Halls, Aluren), taps for the
+  chosen row's whole price, and takes the licid-end and Curse-ignore special
+  actions from the card and territory menus; prints each duel's Pack 9
+  flows. Real Pack 9 ZIP, isolated `shandalar_test` profile, both rules
+  profiles.
+- `engine/ai/tempest_tactics.gd`: the fair AI's Pack 9 board, combat and
+  activated-ability policy, hooked from `MirageTactics.option`/`respond`
+  — licids (onto its own or the opponent's creatures, ending the effect to
+  save it), Volrath's Curse ignored for a worthwhile attack, Spikes'
+  counters spent when the Spike would die anyway — in combat only the
+  counters its kill does not need (priced on the combat forecast) —
+  hostile licids priced by their attack's worth, Sliver grants valued on
+  both sides, shadow tricks before blocks only (CR 506.4), Reality Anchor,
+  the Keepers' opponent condition, Starke of Rath, Pandemonium's aim, the
+  en-Kor and Silver Wyvern redirects, Cold Storage, Jinxed Idol and the
+  other role-read activations. Behind `forecasts_tactics`.
+- `engine/ai/tempest_spells.gd`: the fair AI's Pack 9 casting and spell
+  readers (`spell_choice`, `respond`, `option`, `held_veto`,
+  `main_phase_card`; hooked from `AiPlayer._size_and_aim`,
+  `_respond_action`, `_ability_option`, `_is_held_instant`,
+  `_fire_held_instant`, `_held_reserve`) — symmetric sweepers priced by
+  what each side loses (Cataclysm, Living Death, Fade Away, Limited
+  Resources…), combat-only tricks held for their moment (Kor Chant,
+  Fighting Chance, Temper…), Ertai's Meddling's X, Reap's count,
+  Extinction's chosen type, Meditate, Mox Diamond, Hatred's life bound.
+  Behind `forecasts_tactics`.
+- `tests/unit/test_pack_9_engine_E1_shadow.gd`, `test_pack_9_engine_E1_shadow_ai.gd`:
+  shadow both ways (CR 702.28b), "as though it had shadow", last-known
+  keywords, and the AI's shade evasion.
+- `tests/unit/test_pack_9_engine_E2_buyback.gd`, `test_pack_9_engine_E2_granted.gd`,
+  `test_pack_9_engine_E2_ai_buyback.gd`: buyback rows (resolved, countered,
+  fizzled, copied; land, discard and life buybacks; X; both presets;
+  Memory Crystal; undo), Dream Halls/Aluren granted rows, granted flash,
+  the spells-cast count, and the AI's buyback decision with its gate-off
+  arm and hidden-information check.
+- `tests/unit/test_pack_9_engine_E3_licids.gd`, `test_pack_9_engine_E3_special_actions.gd`,
+  `test_pack_9_engine_E3_ai.gd`: licids becoming Auras and ending the
+  effect, Volrath's Curse's sacrifice-to-ignore, the special-action list,
+  and the AI's licid placement.
+- `tests/unit/test_pack_9_engine_E4_combat_requirements.gd`: blocks each
+  combat / this turn if able, Provoke, Invasion Plans, Magnetic Web's
+  conditional attack requirement and the AI's repair.
+- `tests/unit/test_pack_9_engine_E5_layers.gd`, `test_pack_9_engine_E5_graveyard_copy.gd`,
+  `test_pack_9_engine_E6_stack.gd`: Humility in timestamp order (CR 613.7),
+  P/T-defining abilities after ability changes (Dauthi Warlord), Volrath's
+  Shapeshifter's in-place copy, Ertai's Meddling's delayed spell,
+  "can't be countered", a copied permanent spell resolving as a token.
+- `tests/unit/test_pack_9_engine_E7_costs_targets.gd`, `test_pack_9_engine_E8_durations.gd`:
+  random-discard, library-top and remove-a-counter costs, Heartstone's
+  floor, Reap's target count, Pandemonium's chooser, retargeting a spell
+  or ability; Static Orb's any-permanent cap, text changes until end of
+  turn, control while enchanted.
+- `tests/unit/test_pack_9_engine_F_silencing.gd`, `test_pack_9_engine_F_priority_sba.gd`,
+  `test_pack_9_engine_F_licid_copy.gd`, `test_pack_9_engine_F_hand_size.gd`:
+  the engine follow-up — triggers granted after a silencer fire (the
+  dispatcher, state triggers, the mana planner and the departure batch),
+  older grants flagged for layer 6 (Spectral Cloak, Equinox, Torrent of
+  Lava, the Wards, Energy Flux), Animate Artifact's split layers;
+  state-based actions when a player would receive priority (CR 704.3) and
+  after a mana ability's counter cost; a copied licid Aura; hand-size
+  statics judged live (Ensnaring Bridge, Maro).
+- `tests/cards/test_pack_9_B1_*.gd` … `test_pack_9_B12_*.gd`: the twelve
+  card batches, one script family per batch — B1 shadow
+  (`_shadow.gd`), B2 buyback and costs (`_buyback.gd`, `_costs.gd`), B3
+  licids, Slivers and Spikes, B4 Tempest creatures, B5 Tempest triggers
+  and Auras, B6 Tempest spells and choices, B7 Tempest artifacts and
+  lands, B8 Tempest combat and one-offs (Humility, Ertai's Meddling,
+  Living Death, Static Orb), B9 Stronghold creatures and triggers (Mox
+  Diamond, Volrath's Stronghold), B10 Stronghold spells and one-offs
+  (Ensnaring Bridge, Volrath's Shapeshifter), B11 Exodus creatures and
+  triggers (the Keepers, Pandemonium, City of Traitors), B12 Exodus
+  spells and one-offs (the Oaths, Cataclysm, Recurring Nightmare): each
+  card's main effect, a refused case, its interactions, both rules
+  presets where they differ, and the AI roles each card declares.
+- `tests/ai/test_ai_pack_9_spells_*.gd` (auras, payment, counters,
+  targets, costs, readers, symmetric, responses — `tempest_spells.gd` and
+  `ai_player.gd`) and `tests/ai/test_ai_pack_9_*.gd` (requirements,
+  targets, shadow, licids, spikes, abilities, redirects, slivers —
+  `tempest_tactics.gd`): the fair AI's Pack 9 policies (the tables in `docs/pack-9-tempest-block.md`
+  "AI review"), each with its gate-off arm and, where a hidden zone could
+  matter, a hidden-information permutation.
+- `tests/ai/test_ai_pack_9_fixes_spikes.gd`, `tests/ai/test_ai_pack_9_fixes_auras.gd`,
+  `tests/ai/test_ai_pack_9_fixes_echo.gd`: the Pack 9 study's AI fixes —
+  Spike counters in a declared combat priced on the damage forecast (the
+  kill's counters stay; the division among blockers; Spike Soldier's
+  pump), Volrath's Curse cast (an Aura's ban is not a lock), hostile
+  licids priced by their attack's worth over the Aura's turns, Echo
+  Chamber's legal target and the opponent's pick; each with its gate-off
+  arm and a hidden-information permutation.
+- `tests/ui/test_pack_9_ui_tables.gd`, `tests/ui/test_pack_9_ui_duel.gd`:
+  the shadow badge and tooltip lines, the evasion tally and auto-builder
+  pricing, the 1997 ability filter unchanged; the combat highlights,
+  licid-end and Curse-ignore menu rows, buyback and granted payment rows,
+  Reap's count and a trigger as a "spell or ability" target on the duel
+  screen.
+- `tests/ui/test_sgmanalink_pack_9_table.gd`, `tests/tools/test_referee_pack_9_options.gd`:
+  protocol 28 at an SGManalink table (the new flags, `attack_companions`,
+  `special_rows`, special actions as messages, payment rows, counted target
+  slots, trigger tokens, forged-view refusals) and the referee's options
+  for the same.
+- `tests/unit/test_tempest_bugpass_*.gd`, `tests/cards/test_tempest_bugpass_*.gd`,
+  `tests/ai/test_tempest_bugpass_*.gd`, `tests/ui/test_tempest_bugpass_*.gd`:
+  the Tempest block bug pass (`docs/bug-pass-2026-10-06-tempest.md`) — the
+  engine core (a silenced creature's own death triggers, entering without
+  abilities under CR 614.12, Copy Artifact as Mox Diamond, untap, durationless
+  grants, hand-size refresh, ransom passes, the Curse ignore at cleanup, forced
+  X rows), licid Auras surviving a later copy, Heartstone in the graveyard,
+  Pandemonium's asker, "can't be countered" overrides, the counted block
+  requirements (CR 509.1c), the AI's fixes (free rows, Heartstone pricing,
+  City of Traitors, Spined Sliver, licids, the Curse, shadow, the Oaths and
+  the self-harm casts, the reanimators) and the duel screen's and
+  SGManalink's X windows, Aluren rows and a token's ransom row.
+- `tests/ui/test_pack_9_help.gd`: the five Tempest block glossary pages
+  (`game/help/ability_glossary.gd`) — shadow and blocking requirements,
+  buyback and granted casting, licids, Volrath's Curse, Slivers, Spikes,
+  Humility and the block's notable cards, every Pack 9 digital adaptation
+  in plain words — plus the table page's licid/Curse payments and the
+  shadow badge's icon entry.
+
 ## The Mirage Block, Pack 8 (2026-10-03)
 
 - `game/mirage_block_pack.gd`: Pack 8's trusted three-set contract
@@ -1143,12 +1313,15 @@ with AI and go over MCP code for bugfix and improvement run!"*
   (`TournamentRulesChange`) and editor (`TournamentRules`); the config
   carries `rules`; the hall header's `TournamentHallRules` line (brief,
   detail in the tooltip); the header counts `SgTournament.MAX_PLAYERS`.
-- `game/sgmanalink/protocol.gd`: `VERSION` 27, `SUBPROTOCOL`
-  `sgmanalink-local-v27` (Pack 8: `phased_out` player lists, the phasing
+- `game/sgmanalink/protocol.gd`: `VERSION` 28, `SUBPROTOCOL`
+  `sgmanalink-local-v28` (Pack 8: `phased_out` player lists, the phasing
   flags and `phase_holds`, `block_taxes`, the `discard_special` command;
   27: `block_taxes` one row per tax, `[tax, life, attackers, blockers]`,
-  built by `SgDuelPresentation.block_taxes`); the `host` command's
-  optional `rules` (`SgTableRules.valid`).
+  built by `SgDuelPresentation.block_taxes`; 28, Pack 9: the
+  `cur_must_block`, `must_block_this_turn_any` and `cur_blocks_shadow`
+  flags, `attack_companions`, `special_rows`, target-slot `counts`, buyback
+  and granted payment rows in `modes`); the `host` command's optional
+  `rules` (`SgTableRules.valid`).
 - `game/sgmanalink/view_protocol.gd`: a room view's optional `rules`
   (whole, validated) and a listing row's optional `rules` (text ≤ 64).
 - `game/sgmanalink/local_server.gd`: a hosted room keeps
@@ -1821,6 +1994,10 @@ pipe, for a program that speaks the Model Context Protocol.
 
 ## Release package files
 
+- `docs/releases/0.50.15.md`: Pack 9 — the Tempest block (Tempest,
+  Stronghold, Exodus; 574 new cards), shadow, buyback and payment rows,
+  licids, Humility as printed, the engine-wide follow-up fixes, the AI,
+  SGManalink protocol 28.
 - `docs/releases/0.50.13.md`: the MCP improvement run — a table summary
   every turn, `until: "mine"`, one-call casts, options that offer only what
   the engine accepts, the decision-model bridge (`referee_menu`/`referee_pick`,
@@ -10989,6 +11166,9 @@ shandalar/
     │                          rulings and the verification
     ├── bug-pass-2026-10-04-mirage.md  The Mirage block bug pass
     │                          (0.50.12): eight hunters, eight fixers,
+    │                          what was found, left open and verified
+    ├── bug-pass-2026-10-06-tempest.md  The Tempest block bug pass
+    │                          (0.50.15): six hunters, six fixers,
     │                          what was found, left open and verified
     ├── decklab-audit-2026-09-13.md  DeckLab and base-game audit: seed
     │                          transport, Elo failure status, CSV titles,

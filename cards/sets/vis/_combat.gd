@@ -260,7 +260,7 @@ static func _champion(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 ## Talruum Piper: a Lure narrowed to the creatures with flying (Marble
 ## Priest's shape); a Lure already asking EVERY creature is left alone.
 static func _piper(_g: MtgGame, s: CardInstance) -> void:
-	if s.cur_must_be_blocked and not s.cur_must_be_blocked_filter.is_valid(): return
+	if s.cur_must_be_blocked_by_all or (s.cur_must_be_blocked and not s.cur_must_be_blocked_filter.is_valid()): return
 	var before := s.cur_must_be_blocked_filter
 	s.cur_must_be_blocked = true
 	if not before.is_valid():

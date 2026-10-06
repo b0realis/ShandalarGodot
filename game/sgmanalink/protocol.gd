@@ -9,8 +9,15 @@ extends RefCounted
 ## 27 (Mirage bug pass, 2026-10-04): Heat Wave's `block_taxes` are one row
 ## per tax, `[tax, life, attackers, blockers]` — 26's row per blocker ×
 ## attacker × tax outgrew [constant MAX_CARDS] on a legal board.
-const VERSION := 27
-const SUBPROTOCOL := "sgmanalink-local-v27"
+## 28 (Pack 9 — the Tempest block, 2026-10-06): three combat flags (a block
+## requirement each combat or this turn, "blocks shadow"), the seat's
+## special actions as rows (`special_rows`: a licid's end, an ignored
+## curse), the attack companions a predicate requirement drags in
+## (`attack_companions`, Magnetic Web) and a target slot whose count an
+## earlier target sets (`counts`, Reap). Payment rows a permanent grants
+## (Dream Halls, Aluren) and buyback rows ride the existing `modes`.
+const VERSION := 28
+const SUBPROTOCOL := "sgmanalink-local-v28"
 ## THE OPEN TABLE (2026-09-18): a table is hosted with a deck rule — "own"
 ## (everyone brings a deck) or "fixed" (the host's deck is dealt to both).
 const DECK_RULES := ["own", "fixed"]

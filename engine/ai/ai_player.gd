@@ -400,7 +400,7 @@ func _land_unlocks_a_cast(game: MtgGame, sources: Array,
 			return true
 		var surcharge := game.spell_surcharge(pid, inst.data)
 		var keys: Array = game.mana_usage_keys(inst.data, inst)
-		if _cost_is_free(inst.data.cost) and surcharge == 0:
+		if _free_at(inst.data.cost, surcharge):
 			continue
 		if not _plan_taps_from(sources, inst.data.cost, surcharge, keys).is_empty():
 			continue   # castable already: the drop changes nothing for it
@@ -501,6 +501,10 @@ func _try_play_land(game: MtgGame) -> bool:
 			entry = MIRAGE_TACTICS.land_entry(game, self, inst)
 			if not bool(entry["ok"]):
 				continue
+			# ...and what it costs to PLAY (Pack 9 bug pass, 2026-10-06): a
+			# City of Traitors of ours sacrificed for a Mountain.
+			if _drop_costs_mana(game, inst):
+				continue
 		var score := 0.0
 		for ability in inst.data.mana_abilities:
 			for pair in ability.produces:
@@ -521,6 +525,105 @@ func _try_play_land(game: MtgGame) -> bool:
 	if _land_drop_waits(game, best):
 		return false
 	return game.play_land(pid, best) == ""
+
+
+## THE LAND THAT EATS ANOTHER (Pack 9 bug pass, 2026-10-06, [member
+## AiProfile.forecasts_tactics]): does playing [param land] cost more mana
+## than it makes? A permanent of ours that a land PLAYED sacrifices
+## ([method _drop_sacrifices] — City of Traitors) is priced as the mana it
+## makes a turn, and the drop is made only when the land makes at least as
+## much, when the swap turns a card in hand castable now that is not
+## castable without it (the colour the City cannot make), or when the
+## lands in hand make more than the City between them (the switch pays
+## back within the hand). Otherwise the land waits: the Wizard played a
+## Mountain beside its City and two Mountains, lost the City, and with it
+## the Hill Giant the four mana were for. Only mana sources are priced
+## here; a permanent that makes none and dies to the drop is left to the
+## reading every other land drop gets.
+func _drop_costs_mana(game: MtgGame, land: CardInstance) -> bool:
+	var lost := _drop_sacrifices(game, land)
+	if lost.is_empty():
+		return false
+	var gone := 0
+	for inst in lost:
+		gone += _mana_per_tap(inst.cur_mana_abilities)
+	var made := _mana_per_tap(land.data.mana_abilities)
+	if gone <= 0 or made >= gone:
+		return false
+	var in_hand := 0
+	for card in game.players[pid].hand:
+		if card.is_land():
+			in_hand += _mana_per_tap(card.data.mana_abilities)
+	if in_hand > gone:
+		return false
+	return not _swap_unlocks_a_cast(game, land, lost)
+
+
+## The permanents of ours a play of [param land] would sacrifice: every
+## trigger that hears a land PLAYED ([constant Mtg.EventType.LAND_PLAYED]),
+## whose own condition is asked of this very play, and whose printed line
+## sacrifices its source ([method EffectIntent.sacrifices_its_source]).
+func _drop_sacrifices(game: MtgGame, land: CardInstance) -> Array[CardInstance]:
+	var out: Array[CardInstance] = []
+	var event := GameEvent.new(Mtg.EventType.LAND_PLAYED,
+		{"instance": land, "controller": pid})
+	for inst in game.players[pid].battlefield:
+		if inst == land or inst.phased_out:
+			continue
+		for trig in inst.cur_triggered_abilities:
+			if trig.listens(Mtg.EventType.LAND_PLAYED) \
+					and EffectIntent.sacrifices_its_source(trig.text) \
+					and trig.matches(game, inst, event):
+				out.append(inst)
+				break
+	return out
+
+
+## The most mana one activation of any of [param abilities] makes.
+static func _mana_per_tap(abilities: Array) -> int:
+	var most := 0
+	for ability in abilities:
+		var made := 0
+		for pair in ability.produces:
+			made += int(pair[1])
+		most = maxi(most, made)
+	return most
+
+
+## Does trading [param lost] for [param land] turn a card in hand castable
+## that the board cannot cast now? [method _land_unlocks_a_cast]'s question
+## asked of the board AFTER the swap: the sacrificed rows gone, the land's
+## units in.
+func _swap_unlocks_a_cast(game: MtgGame, land: CardInstance,
+		lost: Array[CardInstance]) -> bool:
+	var sources := _mana_sources(game)
+	var kept: Array = sources.filter(func(row: Array) -> bool:
+		return row[0] == null or not lost.has(row[0]))
+	var colours: Dictionary = {}
+	for ability in land.data.mana_abilities:
+		if ability.cost != null or ability.life_cost > 0 \
+				or ability.counter_cost_kind != "" \
+				or ability.sacrifice_filter.is_valid():
+			continue
+		for pair in ability.produces:
+			colours[int(pair[0])] = maxi(int(colours.get(int(pair[0]), 0)),
+				int(pair[1]))
+	for inst in game.players[pid].hand:
+		if inst.is_land() or _cast_gate(game, inst) != "" or inst.data.cost.has_x:
+			continue
+		var surcharge := game.spell_surcharge(pid, inst.data)
+		var keys: Array = game.mana_usage_keys(inst.data, inst)
+		if _free_at(inst.data.cost, surcharge) \
+				or not _plan_taps_from(sources, inst.data.cost, surcharge, keys).is_empty():
+			continue   # castable already: the swap gains it nothing
+		for colour in colours:
+			var with_land: Array = kept.duplicate()
+			for unit in int(colours[colour]):
+				with_land.append([null, MIRAGE_TACTICS.LAND_UNIT_BASE + unit,
+					int(colour), 1, false, "", 0, 0])
+			if not _plan_taps_from(with_land, inst.data.cost, surcharge, keys).is_empty():
+				return true
+	return false
 
 
 ## Per colour: pips the hand's spells want beyond what our lands make.
@@ -597,7 +700,7 @@ func _planned_cast(game: MtgGame, proposals: Array, sources: Array,
 		# is used only if it is legal for every spell in this conservative line.
 		if cards.size() > 1 and not reserve.is_empty():
 			cost = _combined_cost(cost, reserve["cost"])
-		if _cost_is_free(cost) and extra == 0:
+		if _free_at(cost, extra):
 			return true
 		var line_plan := _plan_taps_from(_sources_sparing(sources, spared), cost, extra, keys)
 		return not line_plan.is_empty() and not _pain_kills(game, sources, line_plan))
@@ -665,11 +768,17 @@ func _try_cast_best(game: MtgGame) -> String:
 		# row the card's own picker pays with — Fireblast's two Mountains,
 		# Spinning Darkness's three black cards — is what is checked, not
 		# the printed cost it replaces ([method _paying_mode]).
-		var row := _paying_mode(game, inst.data)
+		var row := _paying_mode(game, inst.data, inst)
 		var row_cost: ManaCost = inst.data.cost if row < 0 \
-			else game.spell_cost_for(pid, inst.data, 0, row)
+			else game.spell_cost_for(pid, inst.data, 0, row, inst)
 		var plan := _plan_taps_from(sources, row_cost, surcharge, keys)
-		if plan.is_empty() and not (_cost_is_free(row_cost) and surcharge == 0):
+		# A COST THAT IS ONLY {X} (Pack 9, 2026-10-06, forecasts_tactics):
+		# Shifting Wall's printed cost plans as nothing at X = 0 and is not
+		# "free" either, so it was never cast; its X is sized and planned
+		# below like every other X.
+		var x_only := profile.forecasts_tactics and row_cost.has_x \
+			and row_cost.mana_value() == 0 and surcharge <= 0
+		if plan.is_empty() and not _free_at(row_cost, surcharge) and not x_only:
 			continue
 		if _pain_kills(game, sources, plan):
 			continue   # the plan's taps together are the last life (2026-10-03)
@@ -692,7 +801,7 @@ func _try_cast_best(game: MtgGame) -> String:
 		if inst.data.cost.has_x:
 			max_x = _max_affordable_x(game, inst.data.cost, surcharge, sources,
 				inst.data.x_color, keys)
-			if inst.data.additional_life_is_x: max_x = maxi(0, game.players[pid].life - 4)
+			if inst.data.additional_life_is_x: max_x = _life_x_cap(game)
 			# An X paid in OBJECTS (Infernal Harvest's X Swamps, Firestorm's
 			# X discards — Pack 8): the objects bound X, and with no {X}
 			# printed they are its only bound.
@@ -739,10 +848,23 @@ func _try_cast_best(game: MtgGame) -> String:
 		var spared := _own_target_ids(game, targets)
 		if not spared.is_empty():
 			plan = _plan_taps_from(_sources_sparing(sources, spared),
-				game.spell_cost_for(pid, inst.data, x, mode),
+				game.spell_cost_for(pid, inst.data, x, mode, inst),
 				_generic_x(inst.data, x) + surcharge, keys)
-			if plan.is_empty() and not (_cost_is_free(game.spell_cost_for(pid, inst.data, x, mode)) \
-					and surcharge == 0):
+			# A BUYBACK ROW THE TARGET STARVES (Pack 9, 2026-10-06,
+			# forecasts_tactics): Verdant Touch on one of our five lands has
+			# four left for its buyback's five — the printed row, the same
+			# spell, may still fit.
+			if plan.is_empty() and profile.forecasts_tactics and mode > 0 \
+					and inst.data.has_buyback() \
+					and bool(game.payment_option_for(pid, inst.data, mode, inst).get("buyback", false)):
+				var printed_plan := _plan_taps_from(_sources_sparing(sources, spared),
+					game.spell_cost_for(pid, inst.data, x, 0, inst),
+					_generic_x(inst.data, x) + surcharge, keys)
+				if not printed_plan.is_empty():
+					mode = 0
+					plan = printed_plan
+			if plan.is_empty() and not _free_at(game.spell_cost_for(pid, inst.data, x, mode, inst),
+					surcharge):
 				continue
 			if _pain_kills(game, sources, plan):
 				continue
@@ -751,7 +873,7 @@ func _try_cast_best(game: MtgGame) -> String:
 		# additional or alternative cost eats — Kaervek's Spite's whole
 		# board and hand, Infernal Harvest's X Swamps — on the same own-value
 		# scale as a sacrifice. Unpayable at this X: not this card.
-		var object_groups: Array = game.spell_object_costs(inst.data, mode)
+		var object_groups: Array = game.spell_object_costs(inst.data, mode, pid, inst)
 		if not object_groups.is_empty():
 			var object_cost: float = ALLIANCES_TACTICS.object_price(game, self, inst, object_groups, x)
 			if is_inf(object_cost):
@@ -781,7 +903,7 @@ func _try_cast_best(game: MtgGame) -> String:
 		# 1 R is two mana it does not have.
 		if not reserve.is_empty() and int(reserve.get("for", -1)) != inst.id \
 				and value < float(reserve["value"]) * 1.5 \
-				and _plan_taps_from(sources, _combined_cost(game.spell_cost_for(pid, inst.data, x, mode), reserve["cost"]),
+				and _plan_taps_from(sources, _combined_cost(game.spell_cost_for(pid, inst.data, x, mode, inst), reserve["cost"]),
 					_generic_x(inst.data, x) + surcharge).is_empty():
 			continue
 		# Phase 2: hold counterspell mana open. A marginal main-phase cast
@@ -827,16 +949,16 @@ func _try_cast_best(game: MtgGame) -> String:
 		best_x = picked["x"]
 		best_mode = picked["mode"]
 		best_targets = picked["targets"]
-	var plan := _plan_taps(game, game.spell_cost_for(pid, best.data, best_x, best_mode),
+	var plan := _plan_taps(game, game.spell_cost_for(pid, best.data, best_x, best_mode, best),
 		_generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data),
 		game.mana_usage_keys(best.data, best), _own_target_ids(game, best_targets))
 	# Revalidate the entire selected choice before spending any source.
 	if game.cast_refusal(pid, best, best_targets, best_x, best_mode) != "" \
-			or (plan.is_empty() and not (_cost_is_free(game.spell_cost_for(pid, best.data, best_x, best_mode)) \
-				and _generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data) == 0)) \
+			or (plan.is_empty() and not _free_at(game.spell_cost_for(pid, best.data, best_x, best_mode, best),
+				_generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data))) \
 			or _pain_kills(game, sources, plan) \
 			or _burn_kills(game, sources, plan,
-				game.spell_cost_for(pid, best.data, best_x, best_mode).mana_value() \
+				game.spell_cost_for(pid, best.data, best_x, best_mode, best).mana_value() \
 					+ _generic_x(best.data, best_x) + game.spell_surcharge(pid, best.data)):
 		_action_line.clear()
 		return ""
@@ -1166,7 +1288,7 @@ func _answered_on_arrival(game: MtgGame, data: CardData) -> bool:
 					or (source.is_creature() and source.summoning_sick)):
 				continue
 			if ability.cost != null and not _their_payable(game, them, ability.cost,
-					game.ability_surcharge(them, source), _tap_spared(source, ability)):
+					_ability_extra(game, them, source, ability), _tap_spared(source, ability)):
 				continue
 			var intent := EffectIntent.read(ability.effects, source.data.card_name)
 			var spec := intent.target_spec
@@ -1292,6 +1414,8 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 			continue
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue   # what cannot be cast tonight reserves nothing
+		if TEMPEST_SPELLS.held_veto(game, self, inst):
+			continue   # nor a card its Pack 9 reading would not fire
 		if intent.self_damage >= me.life:
 			continue   # _fire_held_instant would never fire it either
 		# THE ROW IT PAYS WITH (the Mirage bug pass, 2026-10-04,
@@ -1303,15 +1427,15 @@ func _held_reserve(game: MtgGame) -> Dictionary:
 		# one booked, and a row nothing can pay tonight books nothing:
 		# the same refusals [method _fire_held_instant] makes.
 		var held_cost: ManaCost = inst.data.cost
-		var row := _paying_mode(game, inst.data)
+		var row := _paying_mode(game, inst.data, inst)
 		if row >= 0:
-			held_cost = game.spell_cost_for(pid, inst.data, 0, row)
+			held_cost = game.spell_cost_for(pid, inst.data, 0, row, inst)
 			if row_sources.is_empty():
 				row_sources = _mana_sources(game)
 			var surcharge := game.spell_surcharge(pid, inst.data)
-			if game.object_costs_refusal(pid, game.spell_object_costs(inst.data, row), inst) != "":
+			if game.object_costs_refusal(pid, game.spell_object_costs(inst.data, row, pid, inst), inst) != "":
 				continue
-			if not (_cost_is_free(held_cost) and surcharge == 0) \
+			if not _free_at(held_cost, surcharge) \
 					and _plan_taps_from(row_sources, held_cost, surcharge).is_empty():
 				continue
 		var value := 0.0
@@ -1787,6 +1911,7 @@ const HOMELANDS_TACTICS := preload("res://engine/ai/homelands_tactics.gd")
 const ALLIANCES_TACTICS := preload("res://engine/ai/alliances_tactics.gd")
 const PORTAL_TACTICS := preload("res://engine/ai/portal_tactics.gd")
 const MIRAGE_TACTICS := preload("res://engine/ai/mirage_tactics.gd")
+const TEMPEST_SPELLS := preload("res://engine/ai/tempest_spells.gd")
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
@@ -1817,6 +1942,12 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN) -> String:
 			if not _ability_available(game, inst, index, true):
 				continue
 			var surcharge := game.ability_surcharge(pid, inst)
+			# THE FLOORED REDUCTION (Pack 9 E7, 2026-10-06, forecasts_tactics):
+			# Heartstone's "{1} less" is in the ability's own payment, not in
+			# the surcharge every other caller reads — the activation below
+			# pays the reduced price, so the affordability check asks it too.
+			if profile.forecasts_tactics:
+				surcharge = int(game.ability_payment(pid, inst, index, 0)["extra"])
 			var usage := game.ability_mana_usage_keys(inst)
 			# A {T} ability is never paid for by tapping its own source
 			# (2026-10-03): the plan that taps the Kjeldoran Outpost for
@@ -2124,6 +2255,9 @@ func _counter_cost_spendable(inst: CardInstance, ability: ActivatedAbility) -> b
 	var kind: String = ability.counter_cost_kind
 	if int(inst.counters.get(kind, 0)) < maxi(ability.counter_cost_count, 1):
 		return false
+	# THE SPIKES (Pack 9) stay refused here: their counter is the body, and
+	# the moments that price it are engine/ai/tempest_tactics.gd's own
+	# (`spike_save`, `spike_shift`), which ask their own gate.
 	if ContinuousEffects.parse_pt_counter(kind) != Vector2i.ZERO:
 		return false   # the counter IS the body
 	if inst.damage_eats_counters == kind:
@@ -2149,6 +2283,8 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		expansion = HOMELANDS_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
 		expansion = ALLIANCES_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
+	if expansion == null:
+		expansion = TEMPEST_SPELLS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
 		expansion = MIRAGE_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
@@ -2517,7 +2653,7 @@ func _token_value(row: Dictionary) -> float:
 ## that can only be paid for this way is simply not one of the choices.
 func _animation_payable(game: MtgGame, inst: CardInstance,
 		ability: ActivatedAbility) -> bool:
-	var surcharge := game.ability_surcharge(pid, inst)
+	var surcharge := _ability_extra(game, pid, inst, ability)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
 	var excluded := _excluded_sources(game)
@@ -2531,7 +2667,7 @@ func _animation_payable(game: MtgGame, inst: CardInstance,
 ## See [method _animation_payable] for why that exception exists.
 func _pay_without_source(game: MtgGame, inst: CardInstance,
 		ability: ActivatedAbility) -> bool:
-	var surcharge := game.ability_surcharge(pid, inst)
+	var surcharge := _ability_extra(game, pid, inst, ability)
 	if _cost_is_free(ability.cost) and surcharge == 0:
 		return true
 	var excluded := _excluded_sources(game)
@@ -2886,7 +3022,7 @@ func _kills_by_damage(game: MtgGame, source: CardInstance, intent: EffectIntent,
 	if intent.removes or intent.bounces:
 		return intent.kills(inst, x_value)
 	if profile.forecasts_tactics:
-		if inst.controller_id != pid and MIRAGE_TACTICS.dies_when_targeted(inst):
+		if inst.controller_id != pid and MIRAGE_TACTICS.dies_when_targeted(inst, game):
 			return true
 		var dmg := intent.damage_at(x_value)
 		if dmg > 0 and MIRAGE_TACTICS.damage_is_shaped(game, inst):
@@ -4560,13 +4696,15 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	if ice != null: return ice
 	var mirage: Variant = MIRAGE_TACTICS.spell_choice(game, self, inst, mode)
 	if mirage != null: return mirage
+	var tempest: Variant = TEMPEST_SPELLS.spell_choice(game, self, inst, max_x, mode)
+	if tempest != null: return tempest
 	if data.card_name == "Dwarven Catapult":
 		return FALLEN_EMPIRES_TACTICS.catapult_choice(game, self, inst, max_x)
-	if profile.uses_tactical_effects and not data.is_modal():
+	if profile.uses_tactical_effects and not _choice_modal(data):
 		var tactical := EffectIntent.tactical_effect(data.spell_effects)
 		if tactical != null:
 			return _tactical_option(game, inst, tactical)
-	if intent.sweeper != null and not data.is_modal():
+	if intent.sweeper != null and not _choice_modal(data):
 		# THE TARGETED SWEEP (Pack 8, 2026-10-03, forecasts_tactics):
 		# Simoon names the opponent whose creatures it sweeps; the cast
 		# carries that target, and the price reads only their side.
@@ -4603,7 +4741,7 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	# levels lands, hands and creatures down to the fewest is priced the
 	# way a sweeper is — by what each side would lose — and waits below
 	# the sweeper's bar. Off, it is cast for its printed worth, below.
-	if intent.levels and profile.levels_boards and not data.is_modal():
+	if intent.levels and profile.levels_boards and not _choice_modal(data):
 		var swing := _level_value(game, inst)
 		if swing < SWEEP_BAR:
 			return {}
@@ -4613,36 +4751,36 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	# players is sized and priced by [method _size_blast]. Off, it falls
 	# through to the plain targeted path below, which reads the victims it
 	# names and nothing else — the pilot that Erupted itself to death.
-	if intent.blasts and profile.prices_fallout and not data.is_modal():
+	if intent.blasts and profile.prices_fallout and not _choice_modal(data):
 		return _size_blast(game, inst, max_x, mode)
-	if intent.coin_damage != null and not data.is_modal():
+	if intent.coin_damage != null and not _choice_modal(data):
 		return _coin_damage_option(game, inst, intent.coin_damage)
-	if intent.coin_life_loss != null and not data.is_modal():
+	if intent.coin_life_loss != null and not _choice_modal(data):
 		return _coin_life_option(game, inst, intent.coin_life_loss)
-	if intent.chosen_discard != null and not data.is_modal():
+	if intent.chosen_discard != null and not _choice_modal(data):
 		return _chosen_discard_option(game, inst, intent.chosen_discard)
-	if intent.damage_uses_x and intent.target_spec != null and not data.is_modal():
+	if intent.damage_uses_x and intent.target_spec != null and not _choice_modal(data):
 		return _size_x_burn(game, inst, intent, max_x)
 	# A tap is worth nothing by itself: it has a POLICY, not a value.
-	if intent.is_tap_utility() and not data.is_modal():
+	if intent.is_tap_utility() and not _choice_modal(data):
 		return _size_tap(game, inst, intent, max_x, mode)
 	if intent.draws_use_x and max_x < 2 and game.players[pid].hand.size() > 1:
 		return {}   # Braingeyser for one is a bad Ancestral
 	# THE PACE (2026-09-07, AiProfile.paces_draws): a search is a card off
 	# the library as much as a draw is, and the race counts it the same.
-	if intent.searches and not data.is_modal() and _library_slack(game) < 1:
+	if intent.searches and not _choice_modal(data) and _library_slack(game) < 1:
 		return {}
 	# TIME WALK'S DRAW STEP (2026-09-08, AiProfile.paces_draws): an extra
 	# turn is a draw step off our library before theirs comes round, and
 	# the race counts it the way it counts a Tome.
-	if intent.extra_turns > 0 and not data.is_modal() \
+	if intent.extra_turns > 0 and not _choice_modal(data) \
 			and _library_slack(game) < intent.extra_turns:
 		return {}
 	# THE WHEEL THAT HANDS A RACE BACK (2026-09-10, AiProfile.counts_the_race;
 	# docs/arzakon.strategy §4 item 4). Above the runs_loops arm and above
 	# the printed path, so it guards both rungs: this is a refusal about
 	# the LIBRARIES and not a re-pricing of the hands.
-	if intent.wheels > 0 and not data.is_modal() \
+	if intent.wheels > 0 and not _choice_modal(data) \
 			and _hands_back_the_race(game, inst, intent):
 		return {}
 	# THE OLD LOOPS (2026-09-10, AiProfile.runs_loops; casting P5). Two
@@ -4650,7 +4788,7 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	# which Evaluator.card_value — a reading of the printed card — has no
 	# way to see. Both arms sit UNDER the pace guards above, which are
 	# paces_draws' and stay in front of them.
-	if profile.runs_loops and not data.is_modal():
+	if profile.runs_loops and not _choice_modal(data):
 		if intent.extra_turns > 0:
 			var worth := maxf(_cast_value(game, inst, [], max_x),
 				_extra_turn_value(game, intent.extra_turns))
@@ -4677,7 +4815,7 @@ func _size_and_aim(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 					+ float(swing) * profile.w_hand}
 	# THE COUNT (2026-09-07, AiProfile.counts_cards): an X that draws or
 	# discards is sized to the cards it acts on, not to the mana at hand.
-	if profile.counts_cards and not data.is_modal():
+	if profile.counts_cards and not _choice_modal(data):
 		if intent.discards > 0 and intent.target_spec != null \
 				and intent.target_spec.kind == TargetSpec.Kind.PLAYER:
 			var count := mini(intent.discards, game.players[game.opponent_of(pid)].hand.size())
@@ -5059,7 +5197,7 @@ func _burn_chain(game: MtgGame, inst: CardInstance, intent: EffectIntent,
 	var best: Dictionary = {}
 	var best_worth := 0.0
 	for partner in me.hand:
-		if partner == inst or partner.is_land() or partner.data.is_modal():
+		if partner == inst or partner.is_land() or _choice_modal(partner.data):
 			continue
 		if partner.data.cost.has_x:
 			continue   # one X spell reaches further alone than two do
@@ -5111,7 +5249,7 @@ func _best_burn_chain(game: MtgGame) -> Dictionary:
 	# neither, so nothing below is reached in the ordinary game.
 	var candidates: Array[CardInstance] = []
 	for inst in game.players[pid].hand:
-		if not inst.is_land() and inst.data.cost.has_x and not inst.data.is_modal():
+		if not inst.is_land() and inst.data.cost.has_x and not _choice_modal(inst.data):
 			candidates.append(inst)
 	if candidates.is_empty():
 		return {}
@@ -5408,7 +5546,7 @@ func _fire_tap_instant(game: MtgGame) -> String:
 	var best_mark: CardInstance = null
 	var best_worth := TAP_CARD_BAR
 	for inst in game.players[pid].hand:
-		if not inst.is_type(Mtg.CardType.INSTANT) or inst.data.is_modal():
+		if not inst.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data):
 			continue
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue
@@ -5419,7 +5557,7 @@ func _fire_tap_instant(game: MtgGame) -> String:
 			continue
 		var surcharge := game.spell_surcharge(pid, inst.data)
 		if _plan_taps_from(sources, inst.data.cost, surcharge).is_empty() \
-				and not (_cost_is_free(inst.data.cost) and surcharge == 0):
+				and not _free_at(inst.data.cost, surcharge):
 			continue
 		var mark := _best_tap_victim(game, inst, intent.target_spec)
 		if mark == null or not _tap_denies_something(game, mark):
@@ -5465,6 +5603,11 @@ func _is_held_instant(inst: CardInstance, intent: EffectIntent) -> bool:
 			and _payment_rows_only(inst.data)):
 		return false
 	if intent.sweeper != null or intent.adds_mana or intent.counters or intent.fogs:
+		return false
+	# A PACK 9 SHAPE WHOSE MOMENT IS OUR FIRST MAIN PHASE (2026-10-06,
+	# forecasts_tactics): Stun's "can't block" draws a card, and was held
+	# for their end step like a draw — where it stops no block at all.
+	if profile.forecasts_tactics and TEMPEST_SPELLS.main_phase_card(inst.data):
 		return false
 	if intent.pumps and not intent.pump_self:
 		return true
@@ -5563,7 +5706,7 @@ func _lethal_x_off_life(game: MtgGame, spending: CardInstance,
 	var opponent := game.opponent_of(pid)
 	var their_life := game.players[opponent].life
 	for inst in me.hand:
-		if inst == spending or inst.is_land() or inst.data.is_modal():
+		if inst == spending or inst.is_land() or _choice_modal(inst.data):
 			continue
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue   # locked, banned, "cast only ...", or refused this step
@@ -5690,17 +5833,19 @@ func _fire_held_instant(game: MtgGame) -> String:
 			continue
 		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
 			continue   # locked, banned, "cast only ...", or refused this step
+		if TEMPEST_SPELLS.held_veto(game, self, inst):
+			continue   # a Pack 9 response, or a draw that skips a turn we cannot spare
 		var surcharge := game.spell_surcharge(pid, inst.data)
 		# The row the card pays with (Pack 8 — Spinning Darkness's
 		# graveyard), the printed cost otherwise.
-		var row := _paying_mode(game, inst.data)
+		var row := _paying_mode(game, inst.data, inst)
 		var row_cost: ManaCost = inst.data.cost if row < 0 \
-			else game.spell_cost_for(pid, inst.data, 0, row)
+			else game.spell_cost_for(pid, inst.data, 0, row, inst)
 		if _plan_taps_from(sources, row_cost, surcharge).is_empty() \
-				and not (_cost_is_free(row_cost) and surcharge == 0):
+				and not _free_at(row_cost, surcharge):
 			continue
 		if row >= 0 and game.object_costs_refusal(pid,
-				game.spell_object_costs(inst.data, row), inst) != "":
+				game.spell_object_costs(inst.data, row, pid, inst), inst) != "":
 			continue
 		var targets: Array = []
 		var value := 0.0
@@ -5745,14 +5890,14 @@ func _fire_held_instant(game: MtgGame) -> String:
 			continue   # the Stasis's {U} is not mana about to be wasted
 		if row >= 0:
 			value -= ALLIANCES_TACTICS.object_price(game, self, inst,
-				game.spell_object_costs(inst.data, row))
+				game.spell_object_costs(inst.data, row, pid, inst))
 		if value > best_value:
 			best = inst
 			best_targets = targets
 			best_value = value
 	if best == null:
 		return ""
-	return _cast_response(game, best, best_targets, maxi(_paying_mode(game, best.data), 0),
+	return _cast_response(game, best, best_targets, maxi(_paying_mode(game, best.data, best), 0),
 		"cast %s at end of turn" % best.data.card_name)
 
 
@@ -5784,6 +5929,14 @@ func _respond_action(game: MtgGame) -> String:
 	var mirage := MIRAGE_TACTICS.respond(game, self)
 	if mirage != "":
 		return mirage
+	# THE TEMPEST BLOCK'S SPELL MOMENTS (Pack 9, 2026-10-06): a redirect,
+	# a team regeneration, a coin fog, a doomed pump or a growing shield in
+	# a declared combat; a growing shield or a player-spell retarget on the
+	# stack; "can't attack" at their beginning of combat
+	# (tempest_spells.gd `respond`).
+	var tempest := TEMPEST_SPELLS.respond(game, self)
+	if tempest != "":
+		return tempest
 	var expansion := _try_activate(game, Moment.RESPONSE)
 	if expansion != "": return expansion
 	if profile.uses_tactical_effects:
@@ -5947,7 +6100,7 @@ func _cast_in_window(game: MtgGame) -> String:
 		var surcharge := game.spell_surcharge(pid, inst.data)
 		if _plan_taps_from(sources, inst.data.cost, surcharge,
 				game.mana_usage_keys(inst.data, inst)).is_empty() \
-				and not (_cost_is_free(inst.data.cost) and surcharge == 0):
+				and not _free_at(inst.data.cost, surcharge):
 			continue
 		var worth := _window_worth(game, inst, intent, reserve)   # {} = no reading, or not tonight
 		if worth.is_empty():
@@ -5989,7 +6142,7 @@ func _cast_in_window(game: MtgGame) -> String:
 ## _combat_self_pumps]). Structural, like the readers it names: the
 ## window caster fires nothing that any of them could.
 func _claimed_by_a_responder(data: CardData, intent: EffectIntent) -> bool:
-	if _is_reactive(data) or data.is_modal():
+	if _is_reactive(data) or _choice_modal(data):
 		return true
 	if intent.counters or intent.fogs or intent.regenerates or intent.adds_mana:
 		return true
@@ -6610,7 +6763,7 @@ func _pump_out_of_reach(game: MtgGame, victim: CardInstance,
 		+ pending
 	if live + bonus.y * reach <= damage:
 		return ""   # every breath it can reach still leaves it dead
-	if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source)):
+	if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, source, ability)):
 		return ""
 	if game.activate_ability(pid, source, index, []) != "":
 		return ""
@@ -6620,7 +6773,7 @@ func _pump_out_of_reach(game: MtgGame, victim: CardInstance,
 ## An affordable bounce instant in hand that can take [param victim].
 func _find_bounce_for(game: MtgGame, victim: CardInstance) -> CardInstance:
 	for inst in game.players[pid].hand:
-		if not inst.is_type(Mtg.CardType.INSTANT) or inst.data.is_modal():
+		if not inst.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data):
 			continue
 		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
 		if not intent.bounces or intent.target_spec == null \
@@ -6882,7 +7035,7 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 						break
 			if not worth:
 				continue
-			if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source)):
+			if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, source, ability)):
 				continue
 			if game.activate_ability(pid, source, index, []) == "":
 				if _pump_plan.has(inst.id):
@@ -6904,7 +7057,7 @@ func _self_pump_once(game: MtgGame, honour_plan: bool) -> String:
 ## [member AiProfile.pumps_to_attack] existed, which is the null.
 func _pumps_in_reach(game: MtgGame, inst: CardInstance, ability: ActivatedAbility,
 		sources: Array, kept: ManaCost = null, cap := -1) -> int:
-	var surcharge := game.ability_surcharge(pid, inst)
+	var surcharge := _ability_extra(game, pid, inst, ability)
 	var limit := cap
 	# THE COUNTERS ARE PART OF THE COST TOO (2026-09-09, [member
 	# AiProfile.spends_counters]). A reach counted in mana alone would
@@ -7308,10 +7461,64 @@ func _gaze_kills(game: MtgGame, gazer: CardInstance, victim: CardInstance) -> bo
 ##
 ## Zero for a gang of one, which is what makes this safe to put in every
 ## band predicate: a single block is the number it always was.
-func _rampage_bonus(attacker: CardInstance, blockers: int) -> int:
+##
+## [param game], where a caller passes it, adds what the attacker GROWS by
+## once blocked ([method _blocked_growth] — Spined Sliver's +1/+1 for each
+## creature blocking it), counted from the first blocker; zero with the
+## gate off and outside the pre-block window, so every caller without it,
+## and the null arm, reads the number it always did.
+func _rampage_bonus(attacker: CardInstance, blockers: int,
+		game: MtgGame = null) -> int:
+	var growth := 0
+	if game != null and blockers > 0:
+		growth = _blocked_growth(game, attacker) * blockers
 	if not profile.reads_gaze or attacker == null or blockers <= 1:
+		return growth
+	return maxi(attacker.cur_rampage, 0) * (blockers - 1) + growth
+
+
+## THE BODY THAT GROWS WHEN IT IS BLOCKED (Pack 9 bug pass, 2026-10-06,
+## [member AiProfile.forecasts_tactics]): the +N/+N for EACH blocker that
+## [param attacker] takes once it is blocked — every "becomes blocked"
+## trigger on the battlefield, either side's, whose own condition hears
+## this attacker becoming blocked and whose printed line grows that
+## creature "for each creature blocking it" ([method
+## EffectIntent.growth_per_blocker]). Two Spined Slivers make a 2/2 Sliver
+## blocked by one Hill Giant a 4/4: the block planner read only printed
+## rampage ([member CardInstance.cur_rampage]), declared the Giant on a
+## 2/2 and lost it. Counted from the FIRST blocker, unlike rampage, and
+## only while the attacker is declared and the blocks are not — once they
+## are, the triggers have fired and the body is the size it is.
+func _blocked_growth(game: MtgGame, attacker: CardInstance) -> int:
+	if not profile.forecasts_tactics or game == null or attacker == null \
+			or not game.combat.attackers.has(attacker.id):
 		return 0
-	return maxi(attacker.cur_rampage, 0) * (blockers - 1)
+	var step := game.current_step()
+	if step != Mtg.Step.DECLARE_ATTACKERS \
+			and not (step == Mtg.Step.DECLARE_BLOCKERS and game.awaiting_blockers):
+		return 0
+	var event := GameEvent.new(Mtg.EventType.BECOMES_BLOCKED,
+		{"instance": attacker, "controller": attacker.controller_id})
+	var total := 0
+	for source in game.all_battlefield():
+		if source.phased_out:
+			continue
+		for trig in source.cur_triggered_abilities:
+			if not trig.listens(Mtg.EventType.BECOMES_BLOCKED):
+				continue
+			var per := EffectIntent.growth_per_blocker(trig.text)
+			if per > 0 and trig.matches(game, source, event):
+				total += per
+	return total
+
+
+## [method _blocked_growth] for a band of [param blockers], as the
+## [Vector2i] the damage predicates read — the single-block rungs of the
+## ladder, which never asked [method _rampage_vector] (rampage starts at
+## the second blocker), pass it for the attacker.
+func _growth_vector(game: MtgGame, attacker: CardInstance, blockers := 1) -> Vector2i:
+	var growth := _blocked_growth(game, attacker) * maxi(blockers, 0)
+	return Vector2i(growth, growth)
 
 
 ## FLANKING (CR 702.25, 2026-10-03, [member AiProfile.reads_gaze]) for the
@@ -7492,7 +7699,7 @@ func _pump_reach(game: MtgGame, inst: CardInstance) -> Vector2i:
 	var bound := open / int(best["price"])
 	if bound > 0:
 		var src := ManaPlanner.sources(game, who, {}, true, pid)
-		var surcharge := game.ability_surcharge(who, source)
+		var surcharge := _ability_extra(game, who, source, ability)
 		var total: ManaCost = ability.cost
 		while payable < bound and not ManaPlanner.plan_from(src, total,
 				surcharge * (payable + 1)).is_empty():
@@ -7674,7 +7881,7 @@ func _band_kills(game: MtgGame, victim: CardInstance,
 	# there, which is what `tests/ai/test_ai_gang_blocks_2026_09_05.gd`
 	# pins.
 	return total > 0 and total >= victim.cur_toughness - victim.damage \
-		+ _rampage_bonus(victim, bodies) + grows.y
+		+ _rampage_bonus(victim, bodies, game) + grows.y
 
 
 ## Every body of ours blocking [param victim], as the band [method
@@ -7726,7 +7933,7 @@ func _shieldable(game: MtgGame, inst: CardInstance) -> bool:
 			continue
 		if ability.tap_cost and inst.tapped:
 			continue
-		if _their_payable(game, who, ability.cost, game.ability_surcharge(who, inst),
+		if _their_payable(game, who, ability.cost, _ability_extra(game, who, inst, ability),
 				_tap_spared(inst, ability)):
 			return true
 	return false
@@ -7774,7 +7981,7 @@ func _shield(game: MtgGame, victim: CardInstance) -> String:
 		return ""
 	var source: CardInstance = best["inst"]
 	var ability: ActivatedAbility = source.cur_activated_abilities[int(best["index"])]
-	if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source),
+	if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, source, ability),
 			[], _tap_spared(source, ability)):
 		return ""
 	var targets: Array = [] if ability.effects[0].target_spec == null \
@@ -7819,7 +8026,7 @@ func _can_shield(game: MtgGame, inst: CardInstance) -> bool:
 		if not _ability_available(game, inst, index):
 			continue
 		if _cost_is_free(ability.cost) \
-				or not _plan_taps(game, ability.cost, game.ability_surcharge(pid, inst)).is_empty() \
+				or not _plan_taps(game, ability.cost, _ability_extra(game, pid, inst, ability)).is_empty() \
 				or game.players[pid].mana_pool.can_pay(ability.cost):
 			return true
 	return false
@@ -7917,7 +8124,7 @@ func _counter_spec(game: MtgGame, inst: CardInstance,
 				and effect.affects_spell(game.find_instance(top_ref.instance_id)) \
 				and effect.target_spec.is_legal(game, top_ref, inst):
 			return effect.target_spec
-	if _is_counterspell(inst.data):
+	if _is_counterspell(inst.data) and not _uncounterable(game, top_ref):
 		for effect in inst.data.spell_effects:
 			if effect.target_spec != null \
 					and effect.target_spec.kind == TargetSpec.Kind.SPELL:
@@ -8035,7 +8242,7 @@ func _counter_key(game: MtgGame, inst: CardInstance, top_ref: TargetRef,
 		if max_x <= 0:
 			unpayable = 1
 	elif _plan_taps_from(sources, data.cost, surcharge, keys).is_empty() \
-			and not (_cost_is_free(data.cost) and surcharge == 0):
+			and not _free_at(data.cost, surcharge):
 		unpayable = 1
 	if unless >= 0 and open_mana >= unless:
 		walks = 1
@@ -8286,7 +8493,7 @@ func _answered_later(game: MtgGame, top: StackItem, intent: EffectIntent) -> boo
 ## spec's kind, the spec's own filter and the printed protection.
 func _answers_the_host(game: MtgGame, inst: CardInstance,
 		answer: EffectIntent, host: CardInstance) -> bool:
-	if inst.data.is_modal() or answer.target_spec == null:
+	if _choice_modal(inst.data) or answer.target_spec == null:
 		return false
 	if answer.damage_uses_x or answer.sweeper != null:
 		return false          # sized on a board we cannot see yet
@@ -8336,8 +8543,9 @@ func _try_counter(game: MtgGame) -> String:
 					and effect.target_spec.is_legal(game, top_ref, inst):
 				return _cast_response(game, inst, [top_ref])
 		# Counterspells the effect-class reader cannot see (card-local
-		# effects — see [method _is_counterspell]).
-		if _is_counterspell(inst.data):
+		# effects — see [method _is_counterspell]) — and never at a spell
+		# that "can't be countered" (Pack 9 E6, [method _uncounterable]).
+		if _is_counterspell(inst.data) and not _uncounterable(game, top_ref):
 			for effect in inst.data.spell_effects:
 				if effect.target_spec == null \
 						or effect.target_spec.kind != TargetSpec.Kind.SPELL:
@@ -8391,7 +8599,9 @@ func _try_counter(game: MtgGame) -> String:
 					and m_effects[0].affects_spell(top.card) \
 					and m_effects[0].target_spec.is_legal(game, top_ref, inst):
 				return _cast_response(game, inst, [top_ref], mode_i)
-	return ""
+	# THE DELAY (Pack 9 E6, 2026-10-06, forecasts_tactics): no counter in
+	# hand answered — a spell exiled with delay counters ([method _try_delay]).
+	return _try_delay(game, top_ref)
 
 
 ## Is [param top] — an opposing spell on the stack — worth a counter at
@@ -8550,7 +8760,7 @@ func _defensive_combat_response(game: MtgGame) -> String:
 				var spec: TargetSpec = ability.effects[0].target_spec
 				if spec == null or not spec.is_legal(game, TargetRef.card(victim), inst):
 					continue
-				if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, inst),
+				if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, inst, ability),
 						[], _tap_spared(inst, ability)):
 					continue
 				if game.activate_ability(pid, inst, index, [TargetRef.card(victim)]) == "":
@@ -8932,7 +9142,7 @@ func _offensive_combat_response(game: MtgGame) -> String:
 						and _pumps_are_lethal(game, source, ability, sources,
 							unblocked_total, per_pump)):
 				continue
-			var surcharge := game.ability_surcharge(pid, source)
+			var surcharge := _ability_extra(game, pid, source, ability)
 			if kept != null \
 					and _plan_taps_from(sources,
 						_combined_cost(ability.cost, kept), surcharge).is_empty() \
@@ -9112,7 +9322,7 @@ func _tactical_response(game: MtgGame) -> String:
 	var best := {}
 	var chosen: CardInstance = null
 	for inst in game.players[pid].hand:
-		if not inst.data.is_type(Mtg.CardType.INSTANT) or inst.data.is_modal() \
+		if not inst.data.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data) \
 				or not game.could_afford(pid, inst.data):
 			continue
 		var effect := EffectIntent.tactical_effect(inst.data.spell_effects)
@@ -9149,18 +9359,35 @@ func _cast_response(game: MtgGame, inst: CardInstance, targets: Array,
 	# The same question `_try_cast_best` asks, for the same reason: every
 	# instant-speed cast in this file goes through here, and a refusal
 	# after `_plan_and_pay` is mana the turn never gets back.
+	# BUYBACK IN A RESPONSE (Pack 9, 2026-10-06, forecasts_tactics): every
+	# responder of this file hands a buyback card its printed row 0 — the
+	# counter loop its Forbid, the end step its Searing Touch, the combat
+	# its Elvish Fury. The buyback row is the same spell, so the pilot's own
+	# rule chooses between the two here, once, for all of them: payable
+	# now, starving no other card castable now, objects and life worth less
+	# than the card ([method _buyback_row]; an X spell at the X it was
+	# handed, [method _x_buyback_row]).
+	if mode == 0 and profile.forecasts_tactics and inst.data.has_buyback():
+		var bought := _x_buyback_row(game, inst, x_value) if inst.data.cost.has_x \
+			else _buyback_row(game, inst.data)
+		if bought >= 0 and game.cast_refusal(pid, inst, targets, x_value, bought) == "":
+			mode = bought
 	if game.cast_refusal(pid, inst, targets, x_value, mode) != "":
 		_refused[str(inst.id)] = true
 		return ""
 	if profile.forecasts_tactics and _aims_at_own_fragile(game, targets):
 		return ""   # our own Skulking Ghost would be sacrificed (Pack 8)
-	var response_cost := game.spell_cost_for(pid, inst.data, x_value)
+	# THE ROW IT WAS HANDED (Pack 9 E2, 2026-10-06): the cost of row
+	# [param mode] — a buyback row, or a row a permanent grants (Dream
+	# Halls) past the card's own — read through the engine's own helper;
+	# priced as row 0 it found no mana for a free row and passed.
+	var response_cost := game.spell_cost_for(pid, inst.data, x_value, mode, inst)
 	# The targets are known here, so a Kaervek's Torch's "{2} more" for
 	# naming it is part of the plan (Pack 8, 2026-10-03): planned without
 	# it, the taps were made and the cast refused "plus {2} more".
 	var response_extra := _generic_x(inst.data, x_value) + game.spell_surcharge(pid, inst.data) \
 		+ game.targets_surcharge(targets, inst)
-	if not inst.data.payment_option(mode).is_empty():
+	if not game.payment_option_for(pid, inst.data, mode, inst).is_empty():
 		var payment := game.spell_payment(pid, inst.data, x_value, maxi(1, targets.size()), inst, mode, targets)
 		response_cost = payment.cost
 		response_extra = payment.extra
@@ -9184,7 +9411,7 @@ func _find_instant_removal_for(game: MtgGame, victim: CardInstance,
 		allow_bounce := true) -> CardInstance:
 	var sources := _mana_sources(game)
 	for inst in game.players[pid].hand:
-		if not inst.is_type(Mtg.CardType.INSTANT) or inst.data.is_modal():
+		if not inst.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data):
 			continue
 		var intent := EffectIntent.read(inst.data.spell_effects, inst.data.card_name)
 		if intent.target_spec == null or intent.damage_uses_x or intent.self_damage >= game.players[pid].life:
@@ -9215,7 +9442,7 @@ func _find_instant_removal_for(game: MtgGame, victim: CardInstance,
 ## [method _offensive_combat_response].
 func _find_x_power_pump(game: MtgGame) -> Dictionary:
 	for inst in game.players[pid].hand:
-		if not inst.is_type(Mtg.CardType.INSTANT) or inst.data.is_modal():
+		if not inst.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data):
 			continue
 		if not inst.data.cost.has_x:
 			continue
@@ -9229,6 +9456,10 @@ func _find_x_power_pump(game: MtgGame) -> Dictionary:
 		var max_x := _max_affordable_x(game, inst.data.cost,
 			game.spell_surcharge(pid, inst.data), _mana_sources(game),
 			inst.data.x_color, game.mana_usage_keys(inst.data, inst))
+		# An X paid in LIFE (Pack 9, Hatred) is bounded by the life, not
+		# the mana ([method _life_x_cap]).
+		if profile.forecasts_tactics and inst.data.additional_life_is_x:
+			max_x = mini(max_x, _life_x_cap(game))
 		if max_x <= 0:
 			continue
 		return {"inst": inst, "x": max_x}
@@ -9687,7 +9918,7 @@ func _pump_shares(game: MtgGame, candidates: Array[CardInstance]) -> Dictionary:
 		for _i in reach - 1:
 			cost = _combined_cost(cost, ability.cost)
 		sources = _sources_after(sources, _plan_taps_from(sources, cost,
-			game.ability_surcharge(pid, source) * reach))
+			_ability_extra(game, pid, source, ability) * reach))
 	return out
 
 
@@ -10070,7 +10301,7 @@ func _animatable_bodies(game: MtgGame, who: int) -> Array:
 			# Paid from everything BUT the body itself, colours included
 			# (2026-10-03, [method _their_payable]).
 			if not _their_payable(game, who, ability.cost,
-					game.ability_surcharge(who, inst), {inst.id: true}):
+					_ability_extra(game, who, inst, ability), {inst.id: true}):
 				continue
 			out.append({"id": inst.id, "anim": anim})
 			break
@@ -10317,7 +10548,7 @@ func _study_responses(game: MtgGame, mine: Array[CardInstance],
 	else:
 		return out
 	var extra := game.spell_surcharge(pid, pump.data)
-	if not (_cost_is_free(pump.data.cost) and extra == 0) and _plan_taps_from(
+	if not _free_at(pump.data.cost, extra) and _plan_taps_from(
 		_mana_sources(game), pump.data.cost, extra, game.mana_usage_keys(pump.data, pump)).is_empty():
 		return out
 	for index in mini(mine.size(), 6):
@@ -10680,6 +10911,9 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		# resolution shrinks a blocker without it ([method
 		# CombatSearch.resolve_block]), so the null arm is unmoved.
 		search.a_flanking[i] = Flanking.instances(inst) if profile.reads_gaze else 0
+		# GROWTH WHEN BLOCKED (Pack 9 bug pass, forecasts_tactics): zero
+		# with the gate off and for every body not declared as an attacker.
+		search.a_growth.append(_blocked_growth(game, inst))
 		search.a_tough.append(inst.cur_toughness)
 	search.d_pow.resize(m)
 	search.d_val.resize(m)
@@ -10708,6 +10942,7 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		search.d_regen[j] = 1 if (d_shield and not inst.cur_indestructible) else 0
 		search.d_rampage[j] = inst.cur_rampage if profile.reads_gaze else 0
 		search.d_flanking[j] = Flanking.instances(inst) if profile.reads_gaze else 0
+		search.d_growth.append(_blocked_growth(game, inst))
 		search.d_tough.append(inst.cur_toughness)
 	var cells := n * m
 	search.block_ours.resize(cells)
@@ -11478,12 +11713,12 @@ func _reinforce_blocks(game: MtgGame, attackers: Array[CardInstance],
 			# The chump and the trade are not what this is for: a band that
 			# has already paid a body is not the "safe block" Forge records.
 			if _dies_to(game, body, attacker, Vector2i.ZERO,
-					_rampage_vector(attacker, band.size())):
+					_rampage_vector(attacker, band.size(), game)):
 				spent = true
 			# THE GAZE finishes it without the arithmetic ever agreeing
 			# (2026-09-10, [member AiProfile.reads_gaze]): our own Cockatrice
 			# is a band that kills, and [method _band_kills] cannot see it.
-			if _dies_to(game, attacker, body):
+			if _dies_to(game, attacker, body, _growth_vector(game, attacker, band.size())):
 				finished = true
 		if spent or finished:
 			continue
@@ -11513,8 +11748,10 @@ func _planned_band(game: MtgGame, block_map: Dictionary,
 ## what [param attacker] is wearing once [param blockers] bodies are on
 ## it. Zero at every rung [member AiProfile.reads_gaze] is off at, and for
 ## every creature in this pool that does not print the keyword.
-func _rampage_vector(attacker: CardInstance, blockers: int) -> Vector2i:
-	var bonus := _rampage_bonus(attacker, blockers)
+## [param game] adds the growth ([method _rampage_bonus]).
+func _rampage_vector(attacker: CardInstance, blockers: int,
+		game: MtgGame = null) -> Vector2i:
+	var bonus := _rampage_bonus(attacker, blockers, game)
 	return Vector2i(bonus, bonus)
 
 
@@ -11553,7 +11790,7 @@ func _reinforcement_band(game: MtgGame, attacker: CardInstance,
 	var added: Array[CardInstance] = []
 	var spare: Array[CardInstance] = []
 	for body in legal:
-		var grown := _rampage_vector(attacker, trial.size() + 1)
+		var grown := _rampage_vector(attacker, trial.size() + 1, game)
 		if _dies_to(game, body, attacker, Vector2i.ZERO, grown) \
 				or _damage_from(body, attacker) <= 0:
 			spare.append(body)
@@ -11588,7 +11825,7 @@ func _reinforcement_band(game: MtgGame, attacker: CardInstance,
 ## is charged for both bodies.
 func _reinforcement_price(game: MtgGame, attacker: CardInstance,
 		band: Array[CardInstance]) -> float:
-	var grown := _rampage_vector(attacker, band.size())
+	var grown := _rampage_vector(attacker, band.size(), game)
 	var price := 0.0
 	for body in band:
 		if _dies_to(game, body, attacker, Vector2i.ZERO, grown):
@@ -11643,7 +11880,7 @@ func _damage_after_value_blocks(game: MtgGame, attackers: Array[CardInstance],
 			# same direction the trampler's overflow was fixed in — under-
 			# reading lethal is what gets a pilot killed.
 			through += maxi(attacker.cur_power
-				+ _rampage_bonus(attacker, band.size()) - stopped, 0)
+				+ _rampage_bonus(attacker, band.size(), game) - stopped, 0)
 	return through
 
 
@@ -11746,10 +11983,13 @@ func _conscript_blocks(game: MtgGame, block_map: Dictionary,
 	# "All creatures able to block it do so" (Lure): blocking some OTHER
 	# attacker does not satisfy it, so a planned block makes way — unless
 	# it is itself a lure, which the rules cannot ask a creature to leave.
+	# A NARROWED Lure (Trumpeting Armodon's chosen creature, Magnetic Web's
+	# magnet creatures) asks only the creatures it names
+	# (CombatDeclaration.lure_binds — the engine's own answer).
+	var declaration := load("res://engine/core/combat_declaration.gd")
 	for lure in lured:
 		for inst in free:
-			if lure.cur_must_be_blocked_filter.is_valid() \
-					and not bool(lure.cur_must_be_blocked_filter.call(inst)):
+			if not bool(declaration.lure_binds(lure, inst)):
 				continue
 			if CombatState.block_illegality(game, inst, lure, pid) != "":
 				continue
@@ -11775,7 +12015,8 @@ func _conscript_blocks(game: MtgGame, block_map: Dictionary,
 				break
 			var inst := game.find_instance(int(blocker_id))
 			if inst != null and (inst.must_block_this_turn
-					or _blocks_a_lure(out[blocker_id], lured)):
+					or bool(declaration.must_block(inst))
+					or _blocks_a_lure(out[blocker_id], lured, inst)):
 				keep[blocker_id] = out[blocker_id]
 		for blocker_id in out:
 			if keep.size() >= cap:
@@ -11804,7 +12045,7 @@ func _add_block(game: MtgGame, map: Dictionary, blocker: CardInstance,
 	while allowed >= 0 and against.size() >= allowed:
 		var made_way := false
 		for i in against.size():
-			if not _blocks_a_lure(against[i], lured):
+			if not _blocks_a_lure(against[i], lured, blocker):
 				against.remove_at(i)
 				made_way = true
 				break
@@ -11815,11 +12056,15 @@ func _add_block(game: MtgGame, map: Dictionary, blocker: CardInstance,
 
 
 ## Does a block map value ([param value]: one attacker id or an Array of
-## them) include a lured attacker?
-static func _blocks_a_lure(value: Variant, lured: Array[CardInstance]) -> bool:
+## them) include a lured attacker — one whose Lure binds [param blocker]
+## when it is given (a narrowed Lure asks only the creatures it names,
+## CombatDeclaration.lure_binds)?
+static func _blocks_a_lure(value: Variant, lured: Array[CardInstance],
+		blocker: CardInstance = null) -> bool:
 	var ids: Array = value if value is Array else [int(value)]
 	for a in lured:
-		if ids.has(a.id):
+		if ids.has(a.id) and (blocker == null
+				or bool(load("res://engine/core/combat_declaration.gd").lure_binds(a, blocker))):
 			return true
 	return false
 
@@ -11838,17 +12083,23 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 		return []
 	var attacker_value := Evaluator.permanent_value(attacker, profile)
 	var tramples := attacker.has_keyword(Mtg.Keyword.TRAMPLE)
+	# THE SIZE IT WILL BE ONCE BLOCKED (Pack 9 bug pass, 2026-10-06,
+	# forecasts_tactics): Spined Sliver's +1/+1 per blocker counts from the
+	# first, so every single-block rung asks about the grown body
+	# ([method _blocked_growth]; zero for nearly every attacker).
+	var grown := _growth_vector(game, attacker)
 	# 1) Kill it and live — always take it. First strike and shields are
 	#    in _dies_to: a 2/2 first striker kills the 2/2 that blocks it and
 	#    lives; a regenerator of theirs is not "killed" by anything.
 	for blocker in legal:
-		if _dies_to(game, attacker, blocker) and not _dies_to(game, blocker, attacker):
+		if _dies_to(game, attacker, blocker, grown) \
+				and not _dies_to(game, blocker, attacker, Vector2i.ZERO, grown):
 			return [blocker.id]
 	# 1.5) Free absorb: a wall (or other no-attack body) that survives the
 	#      hit soaks the damage at zero cost — what walls are FOR. Only
 	#      defenders/zero-power bodies volunteer; real attackers stay free.
 	for blocker in legal:
-		if not tramples and not _dies_to(game, blocker, attacker) \
+		if not tramples and not _dies_to(game, blocker, attacker, Vector2i.ZERO, grown) \
 				and (blocker.has_keyword(Mtg.Keyword.DEFENDER) or blocker.cur_power == 0):
 			return [blocker.id]
 	# 1.6) A regenerator of ours with the shield mana open soaks it for the
@@ -11856,7 +12107,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 	#      combat.go: a blocker that can regenerate blocks freely).
 	for blocker in legal:
 		if not tramples and blocker.controller_id == pid \
-				and _damage_from(attacker, blocker) >= blocker.cur_toughness - blocker.damage \
+				and _damage_from(attacker, blocker, grown) >= blocker.cur_toughness - blocker.damage \
 				and blocker.cur_toughness > _flank_pair(game, attacker, blocker).y \
 				and _can_shield(game, blocker):
 			# (No shield saves a body flanking takes to 0 toughness — CR
@@ -11867,12 +12118,12 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 	#      trampler, whose surplus lands on us anyway.
 	if attacker.cur_power >= 2 or desperate:
 		for blocker in legal:
-			if not tramples and not _dies_to(game, blocker, attacker):
+			if not tramples and not _dies_to(game, blocker, attacker, Vector2i.ZERO, grown):
 				return [blocker.id]
 	# 2) Value trade: we both die, their creature was worth at least ours.
 	var trade_margin := _trade_margin(game)
 	for blocker in legal:
-		if _dies_to(game, attacker, blocker) \
+		if _dies_to(game, attacker, blocker, grown) \
 				and Evaluator.permanent_value(blocker, profile) <= attacker_value + trade_margin:
 			return [blocker.id]
 	# 3) Gang up: two blockers whose combined damage kills it, if their
@@ -11892,7 +12143,7 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 				if _damage_from(legal[i], attacker, Vector2i(shrink_i, shrink_i), grows) \
 						+ _damage_from(legal[j], attacker, Vector2i(shrink_j, shrink_j), grows) \
 						>= attacker.cur_toughness - attacker.damage \
-							+ _rampage_bonus(attacker, 2) + grows.y:
+							+ _rampage_bonus(attacker, 2, game) + grows.y:
 					var price := Evaluator.permanent_value(legal[i], profile) \
 						+ Evaluator.permanent_value(legal[j], profile)
 					if price <= attacker_value * 1.5 or desperate:
@@ -12144,6 +12395,41 @@ func _cost_is_free(cost: ManaCost) -> bool:
 	return ManaPlanner.cost_is_free(cost)
 
 
+## A COST THE ENGINE CHARGES NOTHING FOR (Pack 9 bug pass, 2026-10-06,
+## [member AiProfile.forecasts_tactics]): [param cost] free and [param extra]
+## generic on top of it at most nothing. A reduction never takes a cost
+## below nothing (CR 601.2f; [method MtgGame._spell_payment_base] clamps
+## the surcharge at the cost's own generic), so our own Emerald Medallion's
+## -1 on Aluren's or Dream Halls' free row, or Helm of Awakening's on a
+## {0} spell, is still free. Asked `extra == 0`, the {0} cost with -1 on top
+## planned as nothing and read as unpayable: the Bears through Aluren, the
+## Wurm and the end-step Bolt through Dream Halls were never cast. Off, the
+## old test.
+func _free_at(cost: ManaCost, extra: int) -> bool:
+	return _cost_is_free(cost) \
+		and (extra == 0 or (extra < 0 and profile.forecasts_tactics))
+
+
+## WHAT THE ENGINE CHARGES FOR AN ABILITY (Pack 9 bug pass, 2026-10-06,
+## [member AiProfile.forecasts_tactics]): the generic mana on top of
+## [param ability]'s printed cost when [param who] activates it from
+## [param source] — [method MtgGame.ability_payment]'s `extra`, which has
+## Heartstone's floored "{1} less" and a reduction's clamp at the cost's
+## own generic in it (CR 601.2f, 602.2b). The pricing and paying sites
+## read the plain surcharge and tapped the PRINTED price: a Screeching
+## Harpy's {1}{B} regeneration took two Swamps under Heartstone where the
+## engine charged {B}, and the spare {B} burned. Off (or an ability no
+## longer on the source), the plain surcharge. X is not in it: a caller
+## that pays an X adds it, as before.
+func _ability_extra(game: MtgGame, who: int, source: CardInstance,
+		ability: ActivatedAbility) -> int:
+	if profile.forecasts_tactics and source != null:
+		var index := source.cur_activated_abilities.find(ability)
+		if index >= 0:
+			return int(game.ability_payment(who, source, index, 0)["extra"])
+	return game.ability_surcharge(who, source)
+
+
 ## [param sources]: a pre-built mana-source list (see [method _mana_sources]).
 func _max_affordable_x(game: MtgGame, cost: ManaCost, extra := 0,
 		sources: Array = [], x_color := 0, usage_keys: Array = []) -> int:
@@ -12202,10 +12488,19 @@ func _pick_mode(game: MtgGame, data: CardData) -> int:
 ## for such a card whatever row it then cast, so the alternative was
 ## never reached when mana was short — and with mana enough, a picked row
 ## would have been paid on top of the printed mana.
-func _paying_mode(game: MtgGame, data: CardData) -> int:
-	if not profile.forecasts_tactics or not data.is_modal() \
-			or not data.ai_mode_picker.is_valid():
+func _paying_mode(game: MtgGame, data: CardData, inst: CardInstance = null) -> int:
+	if not profile.forecasts_tactics:
 		return -1
+	if not data.is_modal():
+		# THE GRANTED ROW (Pack 9 E2): Dream Halls' discard, Aluren's free
+		# creature — a row a PERMANENT offers past the card's own, paid
+		# when it is worth it ([method _granted_row]); -1 otherwise.
+		return _granted_row(game, data, inst)
+	if not data.ai_mode_picker.is_valid():
+		# BUYBACK (Pack 9 E2): a buyback card ships no picker; the pilot's
+		# own rule pays the buyback row when it is worth it, else -1 (the
+		# printed row) — [method _buyback_row].
+		return _buyback_row(game, data)
 	var has_rows := false
 	for m in data.modes:
 		if not Dictionary(m).get("payment", {}).is_empty():
@@ -12214,6 +12509,21 @@ func _paying_mode(game: MtgGame, data: CardData) -> int:
 	if not has_rows:
 		return -1
 	return _pick_mode(game, data)
+
+
+## Does [param data] offer a choice of EFFECTS — the question every
+## "not data.is_modal()" guard of this file asks? A BUYBACK card is modal
+## to the engine (its printed row and its buyback row, CardData.with_buyback)
+## and is one spell all the same: under [member AiProfile.forecasts_tactics]
+## (Pack 9, 2026-10-06) the burn, sweeper, tap, discard and instant
+## readers take it as the plain spell it is — Fanning the Flames sized by
+## the X-burn reader, Evincar's Justice priced as the sweeper it is,
+## Searing Touch held and fired like a Shock — and [method _cast_response]
+## pays its buyback row when it is worth it. With the gate off, and for
+## every card without buyback, exactly [method CardData.is_modal].
+func _choice_modal(data: CardData) -> bool:
+	return data.is_modal() and not (profile.forecasts_tactics and data.has_buyback()
+		and _payment_rows_only(data))
 
 
 ## Are [param data]'s modes nothing but PAYMENT ROWS of one spell — every
@@ -12244,7 +12554,7 @@ func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictio
 	# names and no other (Pack 8, 2026-10-03): the value of every row is
 	# the same spell, so the comparison below could only ever pick a row
 	# the card's author ruled out — two Mountains thrown at a 2/2.
-	var row := _paying_mode(game, inst.data)
+	var row := _paying_mode(game, inst.data, inst)
 	if row >= 0:
 		modes = [row]
 	elif profile.plans_modes and inst.data.is_modal():
@@ -12271,8 +12581,8 @@ func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictio
 		var x: int = choice["x"]
 		if game.cast_refusal(pid, inst, choice["targets"], x, int(mode)) != "": continue
 		var extra := _generic_x(inst.data, x) + game.spell_surcharge(pid, inst.data)
-		if not (_cost_is_free(game.spell_cost_for(pid, inst.data, x, int(mode))) and extra == 0) \
-				and _plan_taps(game, game.spell_cost_for(pid, inst.data, x, int(mode)), extra,
+		if not _free_at(game.spell_cost_for(pid, inst.data, x, int(mode), inst), extra) \
+				and _plan_taps(game, game.spell_cost_for(pid, inst.data, x, int(mode), inst), extra,
 					game.mana_usage_keys(inst.data, inst)).is_empty(): continue
 		if profile.plans_modes and inst.data.is_modal() and not intent.unknown:
 			if intent.life_gain > 0:
@@ -12290,6 +12600,14 @@ func _plan_spell_choice(game: MtgGame, inst: CardInstance, max_x: int) -> Dictio
 		if float(choice["value"]) > 0.0 and (best.is_empty() \
 				or float(choice["value"]) > float(best["value"])):
 			best = choice
+	# BUYBACK ON AN X SPELL (Pack 9, 2026-10-06, forecasts_tactics): the X
+	# is sized first, for what it must do, and the buyback is paid on top
+	# when the mana left over covers it ([method _x_buyback_row]).
+	if not best.is_empty() and row < 0 and int(best["mode"]) == 0 \
+			and profile.forecasts_tactics and inst.data.cost.has_x:
+		var bought := _x_buyback_row(game, inst, int(best["x"]))
+		if bought >= 0:
+			best["mode"] = bought
 	return best
 
 
@@ -12313,7 +12631,7 @@ func _aims_at_own_fragile(game: MtgGame, targets: Array) -> bool:
 		var inst := game.find_instance(ref.instance_id)
 		if inst != null and inst.controller_id == pid \
 				and inst.zone == Mtg.Zone.BATTLEFIELD \
-				and MIRAGE_TACTICS.dies_when_targeted(inst):
+				and MIRAGE_TACTICS.dies_when_targeted(inst, game):
 			return true
 	return false
 
@@ -12373,6 +12691,16 @@ func _choose_targets(game: MtgGame, inst: CardInstance, x_value: int, mode := 0)
 			var all_of_them := _extra_targets(game, inst, spec, effect,
 				game.legal_targets_at(spec, inst, x_value, targets).size(),
 				targets, x_value)
+			# A COUNT ANOTHER TARGET SETS (Pack 9 E7, 2026-10-06,
+			# forecasts_tactics): Reap's "up to X, where X is the number of
+			# black permanents target opponent controls" is "any number"
+			# only to a reader that cannot see the earlier slot. Asked with
+			# the refs already picked ([method EffectBase.target_range_at]),
+			# it is the exact cap, and the best cards fill it.
+			if profile.forecasts_tactics and effect.target_count_fn.is_valid():
+				var span: Vector2i = effect.target_range_at(game, inst, x_value, targets)
+				if span.y >= 0:
+					all_of_them = _best_first(game, all_of_them).slice(0, span.y)
 			if all_of_them.is_empty():
 				return null
 			targets.append_array(all_of_them)
@@ -12394,6 +12722,29 @@ func _choose_targets(game: MtgGame, inst: CardInstance, x_value: int, mode := 0)
 					targets.append(extra)
 		effect_index += 1
 	return targets
+
+
+## [param refs] best first, for a slot that takes fewer than qualify
+## (Pack 9 E7, Reap): a card in a graveyard by [method _graveyard_worth],
+## a permanent by [method Evaluator.permanent_value], a player last. A
+## stable order: equal worths keep the order they came in.
+func _best_first(game: MtgGame, refs: Array) -> Array:
+	var rows: Array = []
+	for i in refs.size():
+		var ref: TargetRef = refs[i]
+		var worth := -INF
+		if not ref.is_player:
+			var inst := game.find_instance(ref.instance_id)
+			if inst != null:
+				worth = _graveyard_worth(game, inst) if inst.zone == Mtg.Zone.GRAVEYARD \
+					else Evaluator.permanent_value(inst, profile)
+		rows.append([worth, i, ref])
+	rows.sort_custom(func(a: Array, b: Array) -> bool:
+		return a[0] > b[0] if a[0] != b[0] else a[1] < b[1])
+	var out: Array = []
+	for row in rows:
+		out.append(row[2])
+	return out
 
 
 ## Could the roll behind a [member TargetSpec.chosen_at_random] slot land
@@ -12464,7 +12815,7 @@ func _extra_targets(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# ...and never a creature of ours that dies to being named
 			# (Pack 8, Skulking Ghost), whatever the slot is for.
 			if found != null and owner_pid == pid and profile.forecasts_tactics \
-					and MIRAGE_TACTICS.dies_when_targeted(found):
+					and MIRAGE_TACTICS.dies_when_targeted(found, game):
 				continue
 		if owner_pid == wanted_pid:
 			preferred.append(ref)
@@ -12585,7 +12936,7 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# meant to help it — never offered; one of theirs dies to the
 			# naming itself, whatever the damage.
 			var fragile := profile.forecasts_tactics and inst.is_creature() \
-				and MIRAGE_TACTICS.dies_when_targeted(inst)
+				and MIRAGE_TACTICS.dies_when_targeted(inst, game)
 			if fragile and inst.controller_id == pid:
 				continue
 			# Don't waste damage — fixed or X — on what it can't kill.
@@ -12608,9 +12959,13 @@ func _pick_for_spec(game: MtgGame, source: CardInstance, spec: TargetSpec,
 			# it is meant to help (the Mirage bug pass, 2026-10-04,
 			# forecasts_tactics): Grave Servitude's +3/-1 and Coils of the
 			# Medusa's +1/-1 on our Llanowar Elves (CR 704.5f).
+			# The WORST clause of the aura is the one asked (Pack 9,
+			# 2026-10-06): Tahngarth's Rage's "-2/-1" when not attacking,
+			# not its "+3/+0" ([method EffectIntent.aura_worst_toughness]).
 			if not harmful and profile.forecasts_tactics and source.data.is_aura() \
 					and inst.is_creature() \
-					and inst.cur_toughness + MIRAGE_TACTICS.aura_pump(source.data).y <= inst.damage:
+					and inst.cur_toughness + mini(MIRAGE_TACTICS.aura_pump(source.data).y,
+						EffectIntent.aura_worst_toughness(source.data)) <= inst.damage:
 				continue
 			# ...and never the SAME aura twice on one host, ours or theirs:
 			# the owner's second Regeneration on a creature already
@@ -13081,7 +13436,7 @@ func _spend_on_packet(game: MtgGame, packet: DamagePacket, worth: float) -> Stri
 	var targets := _window_targets(game, best["effects"], packet, source)
 	if int(best["index"]) >= 0:
 		var ability: ActivatedAbility = source.cur_activated_abilities[best["index"]]
-		if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source),
+		if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, source, ability),
 				[], _spared_for(game, source, ability, targets)):
 			return ""
 		if game.activate_ability(pid, source, best["index"], targets) != "":
@@ -13318,7 +13673,7 @@ func _regenerate(game: MtgGame, victim: CardInstance) -> String:
 		# Instants only, for the reason `_spend_on_packet` gives; modal
 		# cards are skipped because no regeneration mode exists in the pool
 		# and a mode index would have to be carried to the cast.
-		if not inst.is_type(Mtg.CardType.INSTANT) or inst.data.is_modal():
+		if not inst.is_type(Mtg.CardType.INSTANT) or _choice_modal(inst.data):
 			continue
 		if not _effects_regenerate(game, inst.data.spell_effects, victim, inst):
 			continue
@@ -13338,7 +13693,7 @@ func _regenerate(game: MtgGame, victim: CardInstance) -> String:
 		else [TargetRef.card(victim)]
 	if int(best["index"]) >= 0:
 		var ability: ActivatedAbility = source.cur_activated_abilities[best["index"]]
-		if not _plan_and_pay(game, ability.cost, game.ability_surcharge(pid, source),
+		if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, source, ability),
 				[], _spared_for(game, source, ability, targets)):
 			return ""
 		if game.activate_ability(pid, source, best["index"], targets) != "":
@@ -13365,8 +13720,13 @@ func _effects_regenerate(game: MtgGame, effects: Array, victim: CardInstance,
 	if e.target_spec == null:
 		if source.data.card_name == "Thrull Retainer":
 			return source.attached_to == victim.id
+		# "REGENERATE ENCHANTED CREATURE" SHIELDS ITS HOST OR NOTHING (Pack 9
+		# bug pass, 2026-10-06), at every rung: a Nurturing Licid that is
+		# still a creature enchants nothing, and the null arm paid {G} for a
+		# shield on no one. Off, an attached host stays unread as before.
+		if e.ai_role == &"regenerate_host" and source.attached_to != victim.id:
+			return false
 		if profile.forecasts_tactics and e.ai_role == &"regenerate_host":
-			if source.attached_to != victim.id: return false
 			var remaining := game.value_without_permanent(source, func() -> float: return float(victim.cur_toughness))
 			return remaining > 0 and (game.awaiting_regeneration or victim.damage < remaining)
 		return source == victim
@@ -13843,8 +14203,18 @@ func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 	if not paying and not tribute and p_pid == pid \
 			and profile.tutors_for_the_turn and _tutor_ask(p_pid, candidates):
 		return _tutor_pick(game, candidates)
+	# THE BODY THE COST FREES IS NOT ITS PRICE (Pack 9 bug pass, 2026-10-06,
+	# forecasts_tactics): a sacrifice paid to ignore an Aura's effect
+	# ([member CardData.ignore_effect_sacrifice] — Volrath's Curse) never
+	# eats the creature that Aura holds while anything else can pay. The
+	# cheapest body of all was the cursed 2/1 itself, and the lethal attack
+	# the ignore was bought for died with it.
+	var freed: CardInstance = _freed_by_cost(game, candidates, asked) \
+		if paying and profile.forecasts_tactics and candidates.size() > 1 else null
 	var best: CardInstance = null
 	for inst in candidates:
+		if inst == freed:
+			continue
 		if best == null:
 			best = inst
 		elif paying:
@@ -13859,6 +14229,27 @@ func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 		elif Evaluator.card_value(inst.data) > Evaluator.card_value(best.data):
 			best = inst
 	return best
+
+
+## The candidate of a cost question [param asked] that the cost is paid to
+## FREE: the creature an Aura named by the question's source holds, when
+## that Aura's effect is one its host's controller may sacrifice to ignore
+## ([member CardData.ignore_effect_sacrifice], CR 116.2d — Volrath's
+## Curse). Null for every other cost. Read off the public board: the Aura
+## attached to the candidate and the question's own source line.
+func _freed_by_cost(game: MtgGame, candidates: Array[CardInstance],
+		asked: PlayerChoice) -> CardInstance:
+	if asked == null or asked.source == "":
+		return null
+	for inst in candidates:
+		for aura_id in inst.attachments:
+			var aura := game.find_instance(int(aura_id))
+			if aura != null and aura.zone == Mtg.Zone.BATTLEFIELD \
+					and aura.attached_to == inst.id \
+					and not aura.data.ignore_effect_sacrifice.is_empty() \
+					and aura.data.card_name == asked.source:
+				return inst
+	return null
 
 
 ## THE TRIBUTE (2026-09-08, AiProfile.feeds_worst): is this card ask a
@@ -14059,8 +14450,314 @@ func _tutor_land(game: MtgGame, candidates: Array[CardInstance]) -> CardInstance
 ## it. Named in docs/ai-difficulty.md §5.
 func _tutor_worth(game: MtgGame, inst: CardInstance) -> float:
 	var intent := _intent_of(inst)
-	if intent.sweeper != null and not inst.data.is_modal():
+	if intent.sweeper != null and not _choice_modal(inst.data):
 		return _sweep_value(game, intent.sweeper, 0)
-	if intent.levels and profile.levels_boards and not inst.data.is_modal():
+	if intent.levels and profile.levels_boards and not _choice_modal(inst.data):
 		return _level_value(game, inst)
 	return _card_value(inst.data)
+
+
+# --- Pack 9 E2: buyback rows ---
+
+## The least life the pilot keeps after paying a LIFE buyback ("Buyback—
+## Pay 4 life", Slaughter): the same line [member AiProfile] pilots draw
+## for a pain land's last points, set high because the card it buys back
+## is a repeat, not an answer the game needs now.
+const BUYBACK_LIFE_FLOOR := 10
+
+
+## THE BUYBACK ROW, OR THE PRINTED ONE (Pack 9 E2, 2026-10-06,
+## [member AiProfile.forecasts_tactics]): the index of [param data]'s
+## buyback row ([method CardData.with_buyback]) when paying it is worth it
+## now, else -1 (the printed row, which is what the pilot paid before
+## Pack 9 and what a profile with the gate off still pays). The minimum
+## sense, read from the public board and the pilot's own hand only:
+## - the row must be payable now ([method MtgGame.payment_row_refusal]:
+##   its mana with Memory Crystal's discount, its life, its objects);
+## - its mana must not starve another card castable at this moment — a
+##   card both rows could not cast beside it is no loss, a card the printed
+##   row leaves room for and the buyback row does not is;
+## - a land it sacrifices leaves the pilot at or above its land floor
+##   (the hand's dearest card + 1, at least three lands), and every object
+##   it eats (a land, two cards from the hand) is worth less than the card
+##   it buys back ([method AlliancesTactics.object_price]);
+## - a life payment leaves [constant BUYBACK_LIFE_FLOOR] life or more.
+## An {X} spell answers -1 here and is decided once its X is sized
+## ([method _x_buyback_row], from [method _plan_spell_choice] and
+## [method _cast_response]); a modal spell with buyback rows per mode pays
+## its printed row (the pool has none).
+func _buyback_row(game: MtgGame, data: CardData) -> int:
+	var rows := data.buyback_rows()
+	if rows.size() != 1 or data.cost.has_x or data.modes.size() != 2:
+		return -1
+	var row: int = rows[0]
+	var spell: CardInstance = null
+	for card in game.playable_cards(pid):
+		if card.data == data:
+			spell = card
+			break
+	if spell == null or game.payment_row_refusal(pid, spell, row) != "":
+		return -1
+	var pay: Dictionary = data.payment_option(row)
+	var me := game.players[pid]
+	var life := int(pay.get("life", 0))
+	if life > 0 and me.life - life < BUYBACK_LIFE_FLOOR:
+		return -1
+	var groups: Array = pay.get("object_costs", [])
+	if not groups.is_empty():
+		if _buyback_breaks_land_floor(game, spell, groups):
+			return -1
+		if ALLIANCES_TACTICS.object_price(game, self, spell, groups) \
+				>= Evaluator.card_value(data):
+			return -1
+	return row if not _buyback_starves(game, spell, row) else -1
+
+
+## Would [param spell]'s buyback row [param row] take the mana another
+## card castable NOW needs ([method _buyback_row])? Our own hand and our
+## own untapped sources only. [param x] is the X both rows are cast at
+## (an X spell's buyback, [method _x_buyback_row]).
+func _buyback_starves(game: MtgGame, spell: CardInstance, row: int, x := 0) -> bool:
+	var sources := _mana_sources(game)
+	var surcharge := game.spell_surcharge(pid, spell.data) + _generic_x(spell.data, x)
+	var printed := game.spell_cost_for(pid, spell.data, x, 0, spell)
+	var bought := game.spell_cost_for(pid, spell.data, x, row, spell)
+	for other in game.playable_cards(pid):
+		if other == spell or other.is_land() or other.data == spell.data:
+			continue
+		if game.cast_timing_refusal(pid, other) != "":
+			continue
+		var other_cost := game.spell_cost_for(pid, other.data)
+		var extra := surcharge + game.spell_surcharge(pid, other.data)
+		if not _buyback_affordable(sources, _combined_cost(printed, other_cost), extra):
+			continue   # they never both fit: the buyback costs that card nothing
+		if not _buyback_affordable(sources, _combined_cost(bought, other_cost), extra):
+			return true
+	return false
+
+
+func _buyback_affordable(sources: Array, cost: ManaCost, extra: int) -> bool:
+	return (_cost_is_free(cost) and extra <= 0) \
+		or not _plan_taps_from(sources, cost, extra).is_empty()
+
+
+## Would the buyback's SACRIFICE of a land drop the pilot below its land
+## floor — the dearest other card in hand + 1, and never under three lands?
+func _buyback_breaks_land_floor(game: MtgGame, spell: CardInstance, groups: Array) -> bool:
+	var lands := 0
+	for perm in game.players[pid].battlefield:
+		if perm.is_land():
+			lands += 1
+	var lost := 0
+	for group in groups:
+		if String(group.get("operation", "")) != "sacrifice":
+			continue
+		var filter: Callable = group.get("filter", Callable())
+		var eats_land := false
+		for perm in game.players[pid].battlefield:
+			if perm.is_land() and (not filter.is_valid() or bool(filter.call(perm))):
+				eats_land = true
+				break
+		if eats_land:
+			lost += int(group.get("count", 1))
+	if lost == 0:
+		return false
+	var dearest := 0
+	for card in game.players[pid].hand:
+		if card != spell and not card.is_land():
+			dearest = maxi(dearest, card.data.cost.mana_value())
+	return lands - lost < maxi(3, dearest + 1)
+
+
+# --- Pack 9 stage 4 (p9-ai-1): payment rows a permanent grants, X buyback ---
+
+## What a point of mana SAVED is worth when the printed row is payable too
+## ([method _granted_row]): the price a granted row may charge in objects
+## for each mana it leaves untapped. Half a card for two mana — a Dream
+## Halls discard is never paid to save mana that would sit idle, while
+## Aluren's free row (no objects at all) always is.
+const GRANTED_ROW_MANA_PRICE := 0.5
+
+
+## THE GRANTED ROW (Pack 9 E2, 2026-10-06, [member AiProfile.forecasts_tactics]):
+## the index into [method MtgGame.payment_rows] of the row a PERMANENT
+## grants [param data] (Dream Halls: "discard a card that shares a colour
+## with it"; Aluren: a creature of mana value 3 or less for nothing) that
+## the pilot pays with, or -1 for the printed row. A row is taken when it
+## is payable now ([method MtgGame.payment_row_refusal]) and what it eats
+## — the objects at the pilot's own prices ([method
+## AlliancesTactics.object_price]), any life at the reaper's rate — is
+## worth less than what it saves: the card itself when the printed row
+## cannot be paid, else [constant GRANTED_ROW_MANA_PRICE] per mana left
+## untapped. The cheapest such row. Only a non-modal spell with no {X}
+## (an alternative cost makes X 0, CR 107.3b; the mode and target readers
+## index a modal card's modes by row). Our hand and the public board only.
+func _granted_row(game: MtgGame, data: CardData, inst: CardInstance = null) -> int:
+	if data.is_modal() or data.cost.has_x or data.is_land():
+		return -1
+	var spell := inst
+	if spell == null:
+		for card in game.playable_cards(pid):
+			if card.data == data:
+				spell = card
+				break
+	if spell == null:
+		return -1
+	var rows := game.payment_rows(pid, spell)
+	if rows.size() <= 1:
+		return -1
+	var surcharge := game.spell_surcharge(pid, data)
+	var printed := game.spell_cost_for(pid, data, 0, 0, spell)
+	var printed_payable := (_cost_is_free(printed) and surcharge <= 0) \
+		or not _plan_taps_from(_mana_sources(game), printed, surcharge,
+			game.mana_usage_keys(data, spell)).is_empty()
+	var worth := _card_value(data)
+	var me := game.players[pid]
+	var best := -1
+	var best_price := INF
+	for i in range(1, rows.size()):
+		var row: Dictionary = rows[i]
+		if int(row.get("granted_by", -1)) < 0:
+			continue
+		if game.payment_row_refusal(pid, spell, i) != "":
+			continue
+		var pay: Dictionary = row.get("payment", {})
+		var price := 0.0
+		var groups: Array = pay.get("object_costs", [])
+		if not groups.is_empty():
+			price += ALLIANCES_TACTICS.object_price(game, self, spell, groups)
+			if is_inf(price):
+				continue
+		var life := int(pay.get("life", 0))
+		if life > 0:
+			if life >= me.life:
+				continue
+			price += float(life) * _life_price(me.life)
+		var saved := printed.mana_value() - game.spell_cost_for(pid, data, 0, i, spell).mana_value()
+		if printed_payable:
+			if saved <= 0 or price > float(saved) * GRANTED_ROW_MANA_PRICE:
+				continue
+		elif price >= worth:
+			continue
+		if price < best_price:
+			best = i
+			best_price = price
+	return best
+
+
+## BUYBACK ON AN X SPELL (Pack 9, 2026-10-06, [member AiProfile.forecasts_tactics]):
+## [param spell]'s buyback row when it is a mana buyback that the sources
+## still cover at the X [method _plan_spell_choice] sized ([param x]) and
+## whose mana starves no other card castable now ([method _buyback_starves]);
+## -1 for the printed row. Fanning the Flames is the pool's one such card:
+## X for the creature it kills, then {3} more to keep it.
+func _x_buyback_row(game: MtgGame, spell: CardInstance, x: int) -> int:
+	var data := spell.data
+	var rows := data.buyback_rows()
+	if rows.size() != 1 or data.modes.size() != 2:
+		return -1
+	var row: int = rows[0]
+	var pay: Dictionary = data.payment_option(row)
+	if int(pay.get("life", 0)) > 0 or not Array(pay.get("object_costs", [])).is_empty():
+		return -1
+	if game.payment_row_refusal(pid, spell, row) != "":
+		return -1
+	var cost := game.spell_cost_for(pid, data, x, row, spell)
+	var extra := _generic_x(data, x) + game.spell_surcharge(pid, data)
+	if not (_cost_is_free(cost) and extra <= 0) \
+			and _plan_taps_from(_mana_sources(game), cost, extra,
+				game.mana_usage_keys(data, spell)).is_empty():
+		return -1
+	return row if not _buyback_starves(game, spell, row, x) else -1
+
+
+## MEMORY CRYSTAL (Pack 9, 2026-10-06, [member AiProfile.forecasts_tactics]):
+## what a permanent that makes BUYBACK cheaper ([method
+## CardData.with_buyback_modifier]) is worth to this pilot — the buyback
+## cards of its own hand, and a little for each of its own registered
+## list's (deck_names: our list, never theirs, never the library order).
+## 0.0 when we hold and run none: a discount on nothing.
+func _buyback_modifier_value(game: MtgGame, inst: CardInstance) -> float:
+	var in_hand := 0
+	var seen := {}
+	for card in game.players[pid].hand:
+		if card != inst and card.data.has_buyback():
+			in_hand += 1
+			seen[card.data.card_name] = int(seen.get(card.data.card_name, 0)) + 1
+	var listed := 0
+	for card_name in game.players[pid].deck_names:
+		var data := CardRegistry.get_card(String(card_name))
+		if data != null and data.has_buyback():
+			listed += 1
+	listed = maxi(0, listed - in_hand)
+	if in_hand == 0 and listed == 0:
+		return 0.0
+	return 1.5 * float(in_hand) + minf(0.25 * float(listed), 2.0)
+
+
+## THE LIFE AN X PAID IN LIFE MAY TAKE ("As an additional cost to cast
+## this spell, pay X life" — Hatred, Necrologia; Pack 9, 2026-10-06). The
+## largest X that leaves the pilot four life — the line it always drew —
+## and, under [member AiProfile.forecasts_tactics], also one more than the
+## power their creatures can swing at us next turn: a Necrologia for five
+## that leaves us dead to the board on the table is the game handed over.
+## Their creatures are public; their hand is not read.
+func _life_x_cap(game: MtgGame) -> int:
+	var floor := 4
+	if profile.forecasts_tactics:
+		var power := 0
+		for body in game.players[game.opponent_of(pid)].battlefield:
+			if body.is_creature() and not body.has_keyword(Mtg.Keyword.DEFENDER) \
+					and not body.cur_cant_attack:
+				power += maxi(body.cur_power, 0)
+		floor = maxi(floor, power + 1)
+	return maxi(0, game.players[pid].life - floor)
+
+
+# --- Pack 9 stage 4 (p9-ai-1): the stack (E6) ---
+
+## "THIS SPELL CAN'T BE COUNTERED" (Pack 9 E6, Scragnoth;
+## [member AiProfile.forecasts_tactics]): is the spell [param top_ref]
+## names one [method MtgGame.counter_spell] would leave on the stack? The
+## shared [CounterEffect] asks this itself ([method
+## CounterEffect.affects_spell]); the card-local counters this file finds
+## by their printed line (Power Sink, Mana Drain, Spell Blast, Force Spike)
+## ask it here, or are thrown away. False with the gate off (the old
+## reading).
+func _uncounterable(game: MtgGame, top_ref: TargetRef) -> bool:
+	if not profile.forecasts_tactics or top_ref == null or top_ref.is_player:
+		return false
+	var card := game.find_instance(top_ref.instance_id)
+	return card != null and game.spell_cant_be_countered(card)
+
+
+## ERTAI'S MEDDLING (Pack 9 E6, 2026-10-06, [member AiProfile.forecasts_tactics]):
+## "Target spell's controller exiles it with X delay counters on it" — not
+## a counter (CR 701.5a), so it works on a spell that can't be countered,
+## and the spell comes back as a copy when the counters run out. Cast at
+## the spell [method _try_counter] has already judged worth an answer
+## ([method _counter_clears_bar]) when no counter in hand answered it, at
+## the largest X the mana pays (X can't be 0): every turn of delay is a
+## turn the threat is not on the table. Read by the effect's declared
+## shape (`delay_spell`), never at our own spell (the caller's guard).
+func _try_delay(game: MtgGame, top_ref: TargetRef) -> String:
+	if not profile.forecasts_tactics:
+		return ""
+	var sources := _mana_sources(game)
+	for inst in game.playable_cards(pid):
+		if _refused.has(str(inst.id)) or _cast_gate(game, inst) != "":
+			continue
+		for effect in inst.data.spell_effects:
+			if effect.ai_role != &"delay_spell" or effect.target_spec == null:
+				continue
+			var x := 1
+			if inst.data.cost.has_x:
+				x = _max_affordable_x(game, inst.data.cost, game.spell_surcharge(pid, inst.data)
+					+ game.targets_surcharge([top_ref], inst), sources,
+					inst.data.x_color, game.mana_usage_keys(inst.data, inst))
+			if x < 1 or not game.target_legal_at(effect.target_spec, top_ref, inst, x):
+				continue
+			var cast := _cast_response(game, inst, [top_ref], 0, "", x)
+			if cast != "":
+				return cast
+	return ""

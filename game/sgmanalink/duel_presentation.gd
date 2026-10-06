@@ -7,10 +7,17 @@ extends RefCounted
 ## `phased_out` / `phased_indirectly` (Pack 8): public, like the table they
 ## lie on (CR 702.26); the board ghosts the card and its tooltip says how
 ## it comes back (MiniCard.phase_note). A holder rides in `phase_holds`.
+## `cur_must_block` / `must_block_this_turn_any` (Pack 9, CR 509.1c — a
+## Watchdog, Invasion Plans, Provoke) light a blocker that owes a block,
+## and `cur_blocks_shadow` (Heartwood Dryad) is said on its tooltip; all
+## three are public facts about cards on the table.
 const FLAGS := ["cur_extra_blocks", "extra_blocks_this_turn", "cur_cant_attack",
 	"cur_attacks_as_if_hasty", "cur_must_be_blocked", "must_attack_this_turn",
 	"cur_indestructible", "cur_skips_untap", "skip_next_untap", "skip_untaps",
-	"phased_out", "phased_indirectly"]
+	"phased_out", "phased_indirectly", "cur_must_block", "must_block_this_turn_any",
+	"cur_blocks_shadow"]
+## The engine's whole-declaration checks (no class_name).
+const DECLARATION := preload("res://engine/core/combat_declaration.gd")
 ## The rows of [constant FLAGS] that carry a COUNT rather than a yes/no.
 ## `-1` is "any number" on either block permission — the static one and
 ## Blaze of Glory's grant for the turn.
@@ -93,6 +100,46 @@ static func block_taxes(m: SgPracticeMatch, pid: int, blockers: Array, result: D
 			result.block_taxes.append([object_handle(m, pid, "tax", group.source), group.life, group.attackers, owing])
 
 
+## THE CREATURES AN ATTACK DRAGS IN (Pack 9 — Magnetic Web, CR 508.1d),
+## for the seat declaring attackers: per creature it could attack with,
+## the others a predicate requirement then obliges to attack —
+## `[attacker, [companions]]`, the engine's own fixpoint
+## ([method CombatDeclaration.predicate_companions]) asked of that one
+## creature. The seat's screen lights the union for its pencilled plan
+## (SgDuelProjection.attack_companions_for); the referee still judges the
+## declaration. Empty — and nothing is computed — unless a predicate
+## requirement is on the table. Public: counters and the Web are on it.
+static func attack_companions(m: SgPracticeMatch, pid: int, result: Dictionary) -> void:
+	var g := m.game
+	if not g.awaiting_attackers or g.active_player != pid \
+			or DECLARATION.predicate_attackers(g, pid).is_empty():
+		return
+	for card: CardInstance in g.players[pid].battlefield:
+		if not card.is_creature() or card.phased_out \
+				or not CombatState.attack_illegality(g, card, 1 - pid).is_empty():
+			continue
+		var dragged: Array = []
+		for id in DECLARATION.predicate_companions(g, pid, [card.id]):
+			var other := g.find_instance(int(id))
+			if m._visible(pid, other): dragged.append(m._handle(pid, other))
+		if not dragged.is_empty():
+			result.attack_companions.append([m._handle(pid, card), dragged])
+
+
+## THE SEAT'S SPECIAL ACTIONS AS ROWS (Pack 9): `[kind, card]` for each
+## entry of `specials` (SgDuelActions.special_entries — the same list,
+## the same order, so `index` is the `special` op's), `card` the handle
+## of the permanent the action belongs to — a licid's end on the licid,
+## Volrath's Curse's ignore on the Curse — or "" (Channel, a point of
+## prevention on a player, a ransom whose source is gone). The client's
+## card menus offer an action on its card (SgDuelProjection.special_actions).
+static func special_rows(m: SgPracticeMatch, pid: int, result: Dictionary) -> void:
+	for entry: Dictionary in m.actions.special_entries(pid):
+		var card: Variant = entry.get("card")
+		var handle := m._handle(pid, card) if card is CardInstance and m._visible(pid, card) else ""
+		result.special_rows.append([String(entry.kind), handle])
+
+
 static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 	var g := m.game
 	var sources := ManaPlanner.sources(g, pid)
@@ -104,7 +151,8 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 		"attackable": [], "blockable": [], "assignment": {}, "targets": [],
 		"prevention": g.awaiting_damage_prevention, "regeneration": g.awaiting_regeneration,
 		"doomed": [], "draft": {}, "respond": false, "floating": false,
-		"untap_capped": not g.untap_caps.is_empty(), "block_taxes": [], "phase_holds": []}
+		"untap_capped": not g.untap_caps.is_empty(), "block_taxes": [], "phase_holds": [],
+		"attack_companions": [], "special_rows": []}
 	for key in RULES: result.rules[key] = g.rules.get(key)
 	for seat in 2:
 		var p := g.players[seat]
@@ -142,9 +190,13 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 				# the table keeps its row and its cost, never the flag. A
 				# spell with MODES or payment rows is castable when one of
 				# them is ([method SgDuelActions.open_modes]).
-				open_modes = SgDuelActions.open_modes(g, pid, card) if card.data.is_modal() else []
+				# Pack 9: the rows are the engine's (MtgGame.payment_rows) —
+				# a buyback row, a row a permanent grants (Dream Halls,
+				# Aluren) — so a plain spell under Dream Halls has two.
+				var rowed := card.data.is_modal() or g.payment_rows(pid, card).size() > 1
+				open_modes = SgDuelActions.open_modes(g, pid, card) if rowed else []
 				row.castable = g.cast_timing_refusal(pid, card).is_empty() \
-					and (not open_modes.is_empty() if card.data.is_modal()
+					and (not open_modes.is_empty() if rowed
 						else SgPayment.affordable(g, pid, card, true) and SgDuelActions.spell_aimed(g, pid, card, 0, -1))
 				# A FAST EFFECT is anything castable now although a sorcery
 				# could not be (Pack 8): an instant, FLASH, the Mirage flash
@@ -186,7 +238,7 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 								budgets[mode_key] = SgPayment.budget(g, pid, card, "spell", 0, sources, 1, mode)
 							mode_budget = budgets[mode_key]
 						row.abilities.append({"kind": "spell", "index": mode,
-							"cost": str(card.data.payment_base(mode)), "budget": mode_budget})
+							"cost": str(SgDuelActions.row_cost(g, pid, card, mode)), "budget": mode_budget})
 				# An ABILITY OPTION is one the engine would take now — its
 				# once-a-turn limit, timing, bans, a tapped or sick {T}
 				# source, a target and the mana are all asked before it is
@@ -217,6 +269,8 @@ static func build(m: SgPracticeMatch, pid: int, view: Dictionary) -> Dictionary:
 					result.blockable.append([row.id, legal])
 					tax_blockers.append([card, row.id])
 	block_taxes(m, pid, tax_blockers, result)
+	attack_companions(m, pid, result)
+	special_rows(m, pid, result)
 	for item in g.stack:
 		var card := item.card
 		# A source can have left for a private zone while its ability remains.

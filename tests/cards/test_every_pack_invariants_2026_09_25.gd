@@ -11,8 +11,8 @@ extends GameTest
 ## dependency analysis, an Aura the AI aims at its own board by default, a
 ## token-making ability the planner cannot see.
 ##
-## This file enables all eight packs from the suite's own metadata-only
-## archives (run_tests.sh sets SHANDALAR_PACK_1..8; one registry reload)
+## This file enables all nine packs from the suite's own metadata-only
+## archives (run_tests.sh sets SHANDALAR_PACK_1..9; one registry reload)
 ## and asks the pack cards. The base pool keeps its own pins in the tests
 ## these are drawn from — a player with no pack installed loses nothing —
 ## so where a list is compared, the names the base tests already vouch for
@@ -20,7 +20,7 @@ extends GameTest
 
 const ALL_PACKS: Array[String] = [CardPacks.ID, FallenEmpiresPack.ID,
 	IceAgePack.ID, HomelandsPack.ID, AlliancesPack.ID, PortalPack.ID,
-	FifthEditionPack.ID, MirageBlockPack.ID]
+	FifthEditionPack.ID, MirageBlockPack.ID, TempestBlockPack.ID]
 
 ## The base pool as the suite sees it with no pack enabled, taken before
 ## the packs are; the names a pack adds are `_pack_names`.
@@ -49,9 +49,13 @@ func after_each() -> void:
 	CardPacks.rescan()
 
 
+func _is_pending(data: CardData) -> bool:
+	return data.cast_condition.is_valid() and data.cast_condition.get_method() == "_pending"
+
+
 func test_the_packs_add_a_thousand_identities_to_the_base_pool() -> void:
 	assert_gt(_base.size(), 890, "the base pool")
-	assert_gt(_pack_names.size(), 990, "the eight packs' own identities")
+	assert_gt(_pack_names.size(), 990, "the nine packs' own identities")
 	assert_eq(CardRegistry.all_names().size(), _base.size() + _pack_names.size())
 
 
@@ -116,8 +120,18 @@ func test_no_pack_card_loses_a_character_to_the_mana_text_split() -> void:
 # ---------------------------------------------------------------- the AI --
 
 ## From test_ai_aftermath: a trigger that opts into the AI's aftermath
-## forecast is a reviewed public payload — damage or death, no target, no
-## modes — and the opted set is a deliberate list, not a default.
+## forecast is a reviewed public payload — damage or death, no choice of
+## target, no modes — and the opted set is a deliberate list, not a
+## default.
+##
+## Pack 9 (2026-10-06, the AI stage's review) widens the shape by two
+## readings of the same thing. "Is dealt damage" (WAS_DEALT_DAMAGE) is
+## the victim's side of DAMAGE_DEALT, as deterministic and as public. And
+## "target opponent" (Mogg Maniac, Wall of Souls) is a target with no
+## choice in it: a duel has one opponent, the forecast's probe takes the
+## one legal ref without asking a seat (MtgGame._arm_trigger_targets), and
+## with none legal the trigger is removed as it would be in play. Any
+## other target spec still refuses the opt-in.
 func test_only_reviewed_pack_triggers_opt_into_aftermath() -> void:
 	var opted: Array[String] = []
 	for card_name in _pack_names:
@@ -125,13 +139,22 @@ func test_only_reviewed_pack_triggers_opt_into_aftermath() -> void:
 		for trigger in data.triggered_abilities + data.graveyard_triggers:
 			if not trigger.forecast_safe: continue
 			opted.append(card_name)
-			assert_has([Mtg.EventType.DAMAGE_DEALT, Mtg.EventType.DIES], trigger.event_type)
-			assert_null(trigger.target_spec)
+			assert_has([Mtg.EventType.DAMAGE_DEALT, Mtg.EventType.DIES,
+				Mtg.EventType.WAS_DEALT_DAMAGE], trigger.event_type, card_name)
+			assert_true(trigger.target_spec == null
+				or (trigger.target_spec.kind == TargetSpec.Kind.PLAYER
+					and trigger.target_spec.opponent_only), card_name + ": no choice of target")
 			assert_true(trigger.modes.is_empty())
 	opted.sort()
-	assert_eq(opted, ["Baron Sengir", "Dingus Staff", "Sengir Bats"] as Array[String],
-		"the two Homelands death triggers of Sengir Vampire's shape and Dingus "
-		+ "Staff's fixed 2 damage to the dead creature's controller, and no other")
+	assert_eq(opted, ["Baron Sengir", "Bellowing Fiend", "Death Pits of Rath",
+		"Dingus Staff", "Field of Souls", "Jackal Pup", "Lowland Basilisk",
+		"Mogg Maniac", "Mongrel Pack", "Pit Spawn", "Sadistic Glee", "Sengir Bats",
+		"Wall of Essence", "Wall of Souls", "Warrior Angel"] as Array[String],
+		"the two Homelands death triggers of Sengir Vampire's shape, Dingus "
+		+ "Staff's fixed 2 damage to the dead creature's controller, and the "
+		+ "Tempest block's deterministic damage, death, token and life "
+		+ "payloads (cards/sets/{tmp,sth,exo}/_triggers.gd, tmp/_auras.gd), "
+		+ "and no other: " + str(opted))
 
 
 ## From test_ai_targeting: an Aura nobody classified is aimed at OUR OWN
@@ -165,12 +188,30 @@ func test_every_pack_aura_is_classified() -> void:
 		"Kithkin Armor", "Lightning Reflexes", "Mob Mentality", "Mystic Veil",
 		"Nature's Kiss", "Phantom Wings", "Relic Ward", "Ritual of Steel", "Soar",
 		"Spider Climb", "Sun Clasp", "Vampirism", "Vanishing",
+		# Pack 9, the Tempest block (2026-10-06, the AI stage's sweep):
+		# pumps, grants, shields, engines and draws that serve the creature
+		# they enchant on our own board. Tahngarth's Rage and Cursed Flesh
+		# shrink a toughness, which the picker's guard reads off the text
+		# (EffectIntent.aura_worst_toughness); Bequeathal's two cards come
+		# from the creature we expect to lose; Dizzying Gaze and Overgrowth
+		# can only enchant our own. The punishers are in AURA_HOSTILE.
+		"Bequeathal", "Conviction", "Crown of Flames", "Cunning", "Curiosity",
+		"Cursed Flesh", "Dizzying Gaze", "Endless Scream", "Flowstone Blade",
+		"Frog Tongue", "Hero's Resolve", "Maniacal Rage", "Overgrowth",
+		"Predatory Hunger", "Robe of Mirrors", "Sadistic Glee", "Samite Blessing",
+		"Shimmering Wings", "Spinal Graft", "Tahngarth's Rage",
 	]
 	var unclassified: Array[String] = []
 	var auras := 0
 	for card_name in _pack_names:
 		var data := CardRegistry.get_card(card_name)
 		if not data.is_aura():
+			continue
+		# A card still behind its family dispatcher's `_pending` cast guard
+		# (Pack 9 while its card waves run) cannot be cast, so no AI aims
+		# it; it is classified with its rules, and the pack's catalogue gate
+		# (test_pack_9_catalogue.gd) refuses a pack that still has one.
+		if _is_pending(data):
 			continue
 		auras += 1
 		var expected: int = EffectIntent.Aim.HOSTILE \
@@ -183,7 +224,8 @@ func test_every_pack_aura_is_classified() -> void:
 	assert_gt(auras, 40, "the packs really do hold that many Auras")
 	assert_eq(unclassified, [] as Array[String],
 		"a pack Aura nobody classified defaults to OUR OWN board — sweep it and "
-		+ "put it in AURA_HOSTILE or in this test's REVIEWED_FRIENDLY list")
+		+ "put it in AURA_HOSTILE or in this test's REVIEWED_FRIENDLY list: "
+		+ str(unclassified))
 
 
 ## From test_ai_token_ability: an activated ability that makes a token is
@@ -198,9 +240,13 @@ func test_every_pack_aura_is_classified() -> void:
 ## creature's mana value" guarantees nothing — a Camarid fed back to it
 ## makes no Camarid at all. Ovinomancer's Ox is the destroyed creature's
 ## controller's (Pack 8): a removal ability, not a maker for its own side.
+## Echo Chamber (Pack 9) is refused on the Spawning Bed's ruling: its
+## token is a copy of the creature the OPPONENT names, so one activation
+## guarantees no body at all — the opponent picks their worst.
 func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
 	const NAMES_A_TOKEN_BUT_MAKES_NONE: Array[String] = ["Caribou Range", "Ovinomancer"]
 	const REFUSED_FOR_THE_SACRIFICE: Array[String] = ["Homarid Spawning Bed"]
+	const REFUSED_FOR_THEIR_CHOICE: Array[String] = ["Echo Chamber"]
 	var unlisted: Array[String] = []
 	var priced: Array[String] = []
 	for card_name in _pack_names:
@@ -210,7 +256,8 @@ func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
 			if not line.contains("token"):
 				continue
 			if NAMES_A_TOKEN_BUT_MAKES_NONE.has(card_name) \
-					or REFUSED_FOR_THE_SACRIFICE.has(card_name):
+					or REFUSED_FOR_THE_SACRIFICE.has(card_name) \
+					or REFUSED_FOR_THEIR_CHOICE.has(card_name):
 				continue
 			var intent := EffectIntent.read(ability.effects, card_name)
 			if intent.makes_token.is_empty():
@@ -225,8 +272,10 @@ func test_every_pack_token_ability_is_priced_by_the_planner() -> void:
 		"an activated ability makes a token the planner cannot price")
 	priced.sort()
 	assert_eq(priced, ["Diamond Kaleidoscope", "Drudge Spell", "Elvish Farmer",
-		"Giant Caterpillar", "Goblin Warrens", "Jungle Patrol", "Kjeldoran Outpost",
-		"Night Soil", "Sacred Mesa", "Snake Basket", "Thallid", "Thallid Devourer",
-		"Wall of Kelp"] as Array[String], "priced: " + str(priced))
-	for refused in REFUSED_FOR_THE_SACRIFICE:
+		"Giant Caterpillar", "Goblin Warrens", "Hornet Cannon", "Jungle Patrol",
+		"Keeper of the Beasts", "Kjeldoran Outpost", "Night Soil", "Pegasus Refuge",
+		"Sacred Mesa", "Sliver Queen", "Snake Basket", "Spike Breeder", "Thallid",
+		"Thallid Devourer", "Thopter Squadron", "Tooth and Claw",
+		"Volrath's Laboratory", "Wall of Kelp"] as Array[String], "priced: " + str(priced))
+	for refused in REFUSED_FOR_THE_SACRIFICE + REFUSED_FOR_THEIR_CHOICE:
 		assert_false(EffectIntent.TOKEN_MAKERS.has(refused), refused + " stays refused")

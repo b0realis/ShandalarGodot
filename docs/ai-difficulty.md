@@ -46,6 +46,34 @@ the same two gates: `forecasts_tactics` for correctness, `reads_gaze` for
 combat. Difficulty presets are unchanged. Tests and limits are in
 [the Pack 8 guide](pack-8-mirage-block.md).
 
+The Tempest block (Pack 9) adds two modules behind the same
+`forecasts_tactics` gate (their response arms only where the seat holds
+instants). `engine/ai/tempest_tactics.gd` reads the board: shadow tricks
+(a shadow grant on our attacker before blocks, never after; Reality
+Anchor on theirs), licids hung on our attacker or on their creature and
+ended in response when the host is about to leave, Volrath's Curse's
+sacrifice-to-ignore, Spike counters, Magnetic Web and the block's
+role-declared activations. `engine/ai/tempest_spells.gd` reads the
+casts: damage counted as it resolves, symmetric spells priced on both
+sides of the table, response-only spells held for their moment; and
+`AiPlayer` pays buyback and granted payment rows, wastes no counter on a
+spell that can't be countered, answers a threat with Ertai's Meddling,
+sizes Reap's count and prices Heartstone's floor. Difficulty presets are
+unchanged. Deck Lab (`--sweep forecasts_tactics=on,off`, Wizard v
+Wizard, Pack 9 only; the Big Green v White Knights control replayed
+byte-identically in every arm), the win-rate delta with its 95% margin:
+blue-red v white-black +13.0 ± 12.9 and white-black v
+blue-red +14.0 ± 12.5 at 100 games an arm; white-black v green-red +9.5 ± 7.9,
+blue-white v black-red +1.5 ± 9.2, green-red v white-black +5.0 ± 8.1
+and black-red v blue-white +13.0 ± 9.2 at 200 games an arm. The samples
+are small: four deltas clear their margin, none by more than four
+points, and two do not. The verification sweep on the themed decks caught
+a regression — Spikes cashing their counters before combat damage, −9.5 ±
+7.6 for Spikes v Licids — and after the fix its four rows read +2.0 ± 6.7
+(Spikes v Licids), +8.5 ± 8.8 (Buyback v Humility), +2.0 ± 8.2 (Licids v
+Humility) and −1.5 ± 8.5 (Humility v Licids), 200 games an arm. The tests
+and the limits are in [the Pack 9 guide](pack-9-tempest-block.md).
+
 ## 1. The rule of the ladder
 
 **Every standard opponent plays fair.** Difficulty changes analysis and mistakes,

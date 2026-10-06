@@ -9,6 +9,12 @@ static func due(g: MtgGame, pid: int, card: CardInstance, kind: String, index: i
 	return g.spell_payment(pid, card.data, x, count, card, mode) if kind == "spell" else g.ability_payment(pid, card, index, x)
 
 static func budget(g: MtgGame, pid: int, card: CardInstance, kind: String, index: int, sources: Array, count := 1, mode := 0) -> int:
+	# A row that FIXES X AT 0 (Pack 9 bug pass): an alternative cost
+	# without the {X} the card prints — a row Dream Halls or Aluren grants,
+	# a pitch (CR 107.3b). It prices every X alike, so the search below ran
+	# to its ceiling and published 1000, every X of which the engine refuses.
+	if kind == "spell" and fixes_x_at_zero(g, pid, card, mode):
+		return 0
 	if kind == "spell" and card.data.additional_life_is_x:
 		return clampi(g.players[pid].life, 0, 1000)
 	var low := 0
@@ -24,25 +30,52 @@ static func budget(g: MtgGame, pid: int, card: CardInstance, kind: String, index
 	# search above finds no bound at all. The bound is how many of those
 	# objects the seat could pay with — the engine's own count, the one the
 	# local X window uses (DuelScreen._open_x_dialog).
-	var objects := OC.max_x(g, pid, object_groups(card, kind, index, mode), card)
+	var objects := OC.max_x(g, pid, object_groups(card, kind, index, mode, g, pid), card)
 	if objects >= 0: low = mini(low, objects)
 	# "X TARGETS" (bug pass 2026-10-04 — Firestorm's "each of X targets",
 	# Word of Binding, Volcanic Eruption): each target an X asks for is
 	# named as the spell is cast (CR 601.2c), so X is bounded by the targets
 	# there are to name as well. Firestorm offered X = 4 for four cards in
 	# hand with two players to aim at. The local X window's ceiling.
-	var targets := x_target_ceiling(g, card, kind, index, mode, low)
+	var targets := x_target_ceiling(g, card, kind, index, mode, low, pid)
 	return low if targets < 0 else mini(low, targets)
+
+
+## Does payment row [param mode] of [param card] fix X at 0 for
+## [param pid]? An ALTERNATIVE cost whose mana has no {X}, on a card that
+## prints one: "If an alternative cost is being paid that doesn't include
+## X, X is 0" (CR 107.3b) — the engine's own test
+## (MtgGame._spell_cost_checks; the local screen's _pending_wants_x).
+static func fixes_x_at_zero(g: MtgGame, pid: int, card: CardInstance, mode: int) -> bool:
+	if card.data.cost.x_count <= 0: return false
+	var row := g.payment_option_for(pid, card.data, mode, card)
+	var row_cost: Variant = row.get("cost", card.data.cost)
+	return MtgGame.is_alternative_payment(row) and row_cost is ManaCost \
+		and not (row_cost as ManaCost).has_x
+
+
+## THE EFFECTS PAYMENT ROW [param mode] OF [param card] CASTS for
+## [param pid] (Pack 9): a mode's own; a printed row's (a buyback row
+## shares its spell's); a row a permanent GRANTS (Dream Halls, Aluren)
+## the printed row it is built on — [method MtgGame.payment_rows]. Empty
+## for a row the card does not have.
+static func row_effects(g: MtgGame, pid: int, card: CardInstance, mode: int) -> Array:
+	if card.data.is_modal() and mode >= 0 and mode < card.data.modes.size():
+		return card.data.modes[mode].effects
+	if mode == 0 and not card.data.is_modal():
+		return card.data.spell_effects
+	if g == null or pid < 0 or mode < 0: return []
+	var rows := g.payment_rows(pid, card)
+	return Dictionary(rows[mode]).get("effects", []) if mode < rows.size() else []
 
 
 ## The most targets the action's caster-chosen "X target" slots can name
 ## (the fewest legal targets among them), or -1 when no slot's count is X.
 ## [param x] is the X the targets are judged at (`legal_targets_at`).
-static func x_target_ceiling(g: MtgGame, card: CardInstance, kind: String, index: int, mode: int, x: int) -> int:
+static func x_target_ceiling(g: MtgGame, card: CardInstance, kind: String, index: int, mode: int, x: int, pid := -1) -> int:
 	var effects: Array = []
 	if kind == "spell" and not card.data.is_aura():
-		effects = card.data.spell_effects
-		if card.data.is_modal(): effects = card.data.modes[mode].effects if mode >= 0 and mode < card.data.modes.size() else []
+		effects = row_effects(g, pid, card, mode)
 	elif kind == "ability" and index >= 0 and index < card.cur_activated_abilities.size():
 		effects = card.cur_activated_abilities[index].effects
 	var ceiling := -1
@@ -55,9 +88,15 @@ static func x_target_ceiling(g: MtgGame, card: CardInstance, kind: String, index
 
 ## The object-cost groups an action pays (engine/additional_object_costs.gd):
 ## a spell's additional costs with its chosen payment row's, or an
-## activated ability's own.
-static func object_groups(card: CardInstance, kind: String, index: int, mode := 0) -> Array:
+## activated ability's own. With the referee [param g] and the payer
+## [param pid] a row's groups are the engine's own reading
+## ([method MtgGame.spell_object_costs] — a buyback's "Sacrifice a land",
+## a row a permanent GRANTS: Dream Halls' discard, Pack 9).
+static func object_groups(card: CardInstance, kind: String, index: int, mode := 0,
+		g: MtgGame = null, pid := -1) -> Array:
 	if kind == "spell":
+		if g != null and pid >= 0:
+			return g.spell_object_costs(card.data, mode, pid, card)
 		var alternate: Array = card.data.payment_option(mode).get("object_costs", [])
 		return card.data.object_costs if alternate.is_empty() else card.data.object_costs + alternate
 	if kind == "ability" and index >= 0 and index < card.cur_activated_abilities.size():
@@ -68,12 +107,13 @@ static func object_groups(card: CardInstance, kind: String, index: int, mode := 
 ## Does the action's X count OBJECTS rather than mana — no {X} printed, and
 ## a count-is-X object group (OC.times_x)? Such an X is always the seat's to
 ## say: a double-click may spend mana, never a hand or a graveyard.
-static func object_x(card: CardInstance, kind: String, index: int, mode := 0) -> bool:
+static func object_x(card: CardInstance, kind: String, index: int, mode := 0,
+		g: MtgGame = null, pid := -1) -> bool:
 	var printed: ManaCost = null
 	if kind == "spell": printed = card.data.cost
 	elif kind == "ability" and index >= 0 and index < card.cur_activated_abilities.size():
 		printed = card.cur_activated_abilities[index].cost
-	return printed != null and printed.x_count <= 0 and OC.uses_x(object_groups(card, kind, index, mode))
+	return printed != null and printed.x_count <= 0 and OC.uses_x(object_groups(card, kind, index, mode, g, pid))
 
 
 ## Use the same floating-pool permissions as the referee's final payment.
@@ -95,7 +135,7 @@ static func can_pay_now(g: MtgGame, pid: int, payment: Dictionary, kind: String)
 ## [param alternatives] off only the printed row is priced, which is the
 ## local screen's "floating" question (`_has_affordable_fast_effect`).
 static func affordable(g: MtgGame, pid: int, card: CardInstance, potential := false, alternatives := true) -> bool:
-	for mode in maxi(1, card.data.modes.size()):
+	for mode in maxi(1, g.payment_rows(pid, card).size()):
 		if mode_affordable(g, pid, card, mode, potential, alternatives): return true
 	return false
 
@@ -104,15 +144,14 @@ static func affordable(g: MtgGame, pid: int, card: CardInstance, potential := fa
 ## its card to exile, its object costs and its mana with the Torch floor
 ## (2026-10-04: the referee's options name the payable modes one by one,
 ## so a Fireblast with one Mountain offers no "sacrifice two Mountains").
+##
+## THE ENGINE'S OWN QUESTION since Pack 9 ([method
+## MtgGame.payment_row_refusal]): the rows are [method
+## MtgGame.payment_rows] — a BUYBACK row's added mana, land, cards or life
+## and a row a permanent GRANTS (Dream Halls, Aluren) are priced the way
+## the cast will price them, with an additional sacrifice's body asked
+## too. [param alternatives] off prices the printed row alone.
 static func mode_affordable(g: MtgGame, pid: int, card: CardInstance, mode: int, potential := false, alternatives := true) -> bool:
-	var option := card.data.payment_option(mode)
+	var option := g.payment_option_for(pid, card.data, mode, card)
 	if not alternatives and not option.is_empty(): return false
-	if int(option.get("life", 0)) > g.players[pid].life: return false
-	if int(option.get("exile_color", 0)) != 0 and g.pitch_candidates(pid, card, mode).is_empty(): return false
-	var groups := g.spell_object_costs(card.data, mode)
-	if not groups.is_empty() and OC.refusal(g, pid, groups, card, 0) != "": return false
-	var cost := due(g, pid, card, "spell", 0, 0, 1, mode)
-	var extra := int(cost.extra) + g.targeting_surcharge_floor(pid, card.data, card, mode)
-	var p := g.players[pid]
-	if p.mana_pool.can_pay(cost.cost, extra, cost.usage, p.mana_substitutions, p.any_color_spells > 0): return true
-	return potential and not ManaPlanner.plan(g, pid, cost.cost, extra, cost.usage).is_empty()
+	return g.payment_row_refusal(pid, card, mode, potential) == ""

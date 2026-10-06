@@ -204,6 +204,10 @@ python3 tools/test_pack_8_mirage_block.py >/dev/null
 PACK_EIGHT_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-8-Mirage-Block.zip"
 python3 tools/pack_8_mirage_block.py build "$PACK_EIGHT_PATH" --metadata-only >/dev/null
 export SHANDALAR_PACK_8="$PACK_EIGHT_PATH"
+python3 tools/test_pack_9_tempest_block.py >/dev/null
+PACK_NINE_PATH="$SHANDALAR_TEST_DATA_HOME/Pack-9-Tempest-Block.zip"
+python3 tools/pack_9_tempest_block.py build "$PACK_NINE_PATH" --metadata-only >/dev/null
+export SHANDALAR_PACK_9="$PACK_NINE_PATH"
 
 # Import step (quick no-op when the .godot cache is warm; a cold import
 # of the card art is minutes, not hours, so 600 s is generous). ONCE, and

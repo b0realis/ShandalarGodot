@@ -90,6 +90,7 @@ const SRC_SET := "set"         ## `code`, optional `rarity`/`legendary` — a se
 const SRC_CURSOR := "cursor"   ## the targeting cursor.
 const SRC_COUNTER := "counter" ## `row` — one counter stone off the 1997 strip.
 const SRC_DRAWN := "drawn"     ## no texture: the game draws this in code.
+const SRC_SHADOW := "shadow"   ## the shadow badge, which [MiniCard] paints itself.
 
 
 ## The reference, in reading order: the newcomer's primer first, then the
@@ -257,7 +258,7 @@ static func _page_table() -> Dictionary:
 		]},
 		_heading("The prompt tells you what to do next"),
 		_text("The Situation Bar asks for attackers, blockers, targets or mana. Done completes the current choice. Cancel abandons a choice when that is still allowed."),
-		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, and the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
+		_text("Some payments belong to no card's ability: Channel's life for colorless mana, Guardian Angel's extra points of prevention, the mana that pays off Sabertooth Cobra's or Nafs Asp's later effect, a licid's cost to end its effect, and the permanent sacrificed to ignore Volrath's Curse. Right-click your territory, or the card concerned, to make them. The Situation Bar reminds you of a payment that is due."),
 		_heading("Keep these keys handy"),
 		_text("%s: Done · %s: Cancel · %s: press the sole available action button. On a controller %s is that button, %s is Done, %s is Cancel and %s opens the pause menu. %s brings the Showcase card up full-size to read, and closes it again. Change any of them under Options, Controls. Right-click cards and table areas for their menus." % [
 			Controls.key_text("duel_done"), Controls.key_text("duel_cancel"), Controls.key_text("duel_space"),
@@ -531,6 +532,17 @@ static func _page_icons_abilities() -> Dictionary:
 			+ "attacker, or click the creature again to attack alone. "
 			+ "A blocker with banding lets its controller divide the "
 			+ "attacker's damage among that attacker's blockers."),
+		# Pack 9's shadow has no cell on the 1997 sheet; the small card
+		# paints its own disc ([method MiniCard.shadow_badge]), and the
+		# entry fetches it through that same accessor.
+		_icon("Shadow — a pale crescent on a violet disc",
+			"It can block or be blocked only by creatures with shadow. "
+			+ "The Tempest block's keyword has no picture on the original "
+			+ "sheet, so the game paints this one. A creature that can "
+			+ "block creatures with shadow without having shadow, or one "
+			+ "that must block, wears no badge: hold the pointer over it "
+			+ "to read so.",
+			{"src": SRC_SHADOW}, "S", 32.0),
 	]
 	return {"title": "Icons — abilities on a card in play", "blocks": [
 		_quote("Many creatures have one of the following abilities. "
@@ -541,7 +553,8 @@ static func _page_icons_abilities() -> Dictionary:
 		_text("They are drawn as badges along a small card's bottom edge, "
 			+ "left to right, and only for cards IN PLAY — the original "
 			+ "badges the table, not your hand. The names below are the "
-			+ "game's own ability words."),
+			+ "game's own ability words, with shadow added for the "
+			+ "Tempest block."),
 		{"kind": ICONS, "entries": entries},
 		_text("Other keywords in this game's card pool carry no badge and "
 			+ "are simply written on the card: vigilance (attacking does "
@@ -1243,12 +1256,19 @@ static func _page_builder() -> Dictionary:
 			+ "Select a printing, preview it and press Use variant. Automatic follows the set filter. "
 			+ "Your saved deck remembers one printing for every copy of that card name, including the sideboard. "
 			+ "Rules, copy limits and draft pools stay the same. Missing artwork falls back to the normal face. "
-			+ "Portal, Fifth Edition and Mirage include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
+			+ "Portal, Fifth Edition, Mirage and Tempest include four illustrations for each basic land. Legacy .dck exports do not retain artwork choices."),
 		_text("Pack 8 · The Mirage Block brings Mirage, Visions and Weatherlight: 669 different cards "
 			+ "and 684 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
 			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
 			+ "usual rules, and a card whose rules script lives in Ice Age, Homelands, Portal or Portal Second Age "
 			+ "can be played with either that pack or Pack 8 installed."),
+		_text("Pack 9 · The Tempest Block brings Tempest, Stronghold and Exodus: 621 different cards "
+			+ "and 636 original English printings. Enable it in Options → Card Packs; Deck Builder → Extras "
+			+ "then has a separate switch for each of the three sets. Cards the game already has keep their "
+			+ "usual rules, and a card whose rules script lives in Ice Age, Portal, Portal Second Age or Mirage "
+			+ "can be played with any pack that provides it installed, Pack 9 included. The Abilities pages "
+			+ "at the end of this Help explain shadow, buyback, licids, Slivers, Spikes and the block's "
+			+ "other new rules."),
 		_text("LOAD is a door to the Load Deck dialog from the bar: "
 			+ "your own decks head the list, a finder above it keeps the "
 			+ "rows whose title or file name contains what you type, "
@@ -1591,6 +1611,8 @@ static func icon_texture(spec: Dictionary) -> Texture2D:
 			return ManaIcons.symbol(String(spec.get("sym", "")))
 		SRC_BADGE:
 			return MiniCard.badge_from_slot(int(spec.get("slot", -1)))
+		SRC_SHADOW:
+			return MiniCard.shadow_badge()
 		SRC_STRIPE:
 			return MiniCard.stripe_texture(int(spec.get("color", 0)))
 		SRC_SPRITE:

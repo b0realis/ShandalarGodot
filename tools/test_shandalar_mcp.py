@@ -2543,6 +2543,53 @@ class UnitTest(unittest.TestCase):
         with self.assertRaises(mcp.CastRefused):
             place(two, view, 0, ["opponent"])   # the creature slot comes first and needs one
 
+    def test_a_count_an_earlier_target_sets_narrows_the_slot(self):
+        """PROTOCOL 28 (Pack 9 — Reap): a slot whose count an earlier target
+        sets carries `counts`, [earlier token, min, max] per candidate; its
+        own min/max are the widest. The placement and the decision menu
+        both narrow it to the earlier pick (usable only)."""
+        view = {"players": [{"seat": 0, "graveyard": [{"id": "c1", "name": "Grizzly Bears", "controller": 0},
+                                                      {"id": "c2", "name": "Hill Giant", "controller": 0},
+                                                      {"id": "c3", "name": "Llanowar Elves", "controller": 0}]},
+                            {"seat": 1}],
+                "presentation": {"targets": [{"token": "t0", "ref": {"kind": "player", "id": "1"}},
+                                             {"token": "t1", "ref": {"kind": "card", "id": "c1"}},
+                                             {"token": "t2", "ref": {"kind": "card", "id": "c2"}},
+                                             {"token": "t3", "ref": {"kind": "card", "id": "c3"}}]}}
+        cards = [{"id": "t1", "label": "Grizzly Bears — yours"}, {"id": "t2", "label": "Hill Giant — yours"},
+                 {"id": "t3", "label": "Llanowar Elves — yours"}]
+        reap = {"name": "Reap", "slots": [
+            {"label": "target opponent", "min": 1, "max": 1, "divided": 0, "targets": [{"id": "t0", "label": "Opponent"}],
+             "counts": []},
+            {"label": "target card", "min": 0, "max": 2, "divided": 0, "targets": cards, "counts": [["t0", 0, 1]]}]}
+        self.assertEqual(mcp.slot_span(reap["slots"][1], {"t0"}), (0, 1), "the opponent picked: one card")
+        self.assertEqual(mcp.slot_span(reap["slots"][1], set()), (0, 2), "nothing picked yet: the widest")
+        self.assertEqual(mcp.slot_span({"min": 1, "max": 1}, {"t0"}), (1, 1), "an ordinary slot is its own")
+        # a trigger is a "spell or ability" target (Silver Wyvern), named by its card
+        wyvern = {"name": "Wyvern", "slots": [{"label": "target spell or ability", "min": 1, "max": 1, "divided": 0,
+                                               "targets": [{"id": "t5", "label": "Triggered ability: Test Herald"}]}]}
+        self.assertEqual([p["token"] for p in mcp.map_targets(wyvern, {}, 0, ["Test Herald"])], ["t5"])
+        place = mcp.map_targets
+        self.assertEqual([p["token"] for p in place(reap, view, 0, ["opponent", "c1"])], ["t0", "t1"])
+        with self.assertRaises(mcp.CastRefused) as caught:
+            place(reap, view, 0, ["opponent", "c1", "c2"])
+        self.assertIn("more targets than the spell takes", caught.exception.message)
+        dm = mcp.decision_menu
+        decision = {"n": 1, "seat": 0, "view": view, "options": {"mode": "priority", "announcement": reap,
+                                                                 "draft": {"card": "c9"}}}
+        sub = {"kind": "targets", "slot": 1, "picked": [{"token": "t0", "slot": 0, "id": "opp"}],
+               "slots": reap["slots"], "name": "Reap"}
+        items = dm.target_items(decision, sub)
+        picks = [i for i in items if i["id"].startswith("target:c")]
+        self.assertEqual(len(picks), 3, "each card may be the one")
+        for item in picks:
+            final = item["plan"].get("final")
+            self.assertIsNotNone(final, "one card fills the slot: the pick casts it")
+        one = {**sub, "picked": sub["picked"] + [{"token": "t1", "slot": 1, "id": "c1"}]}
+        items = dm.target_items(decision, one)
+        self.assertEqual([i["id"] for i in items if i["id"].startswith("target:c")], [],
+                         "a second card is never offered past the count")
+
     def test_actions_are_completed_with_the_wire_defaults(self):
         decision = {"options": {"play": {"lands": [{"card": "c8", "name": "Plains"}]},
                                 "prepare": {"casts": [{"card": "c2", "name": "Lightning Bolt"}],

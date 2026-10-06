@@ -18,13 +18,15 @@ func test_portal_alone_and_alongside_every_previous_pack() -> void:
 		var c := CardRegistry.get_card(row.name)
 		assert_false(c.cast_condition.is_valid() and c.cast_condition.get_method() == "_pending", row.name)
 	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, true)
-	assert_eq(CardRegistry.size(), 2519)   # 1,898 with Packs 1-7, and the Mirage block's 621
+	assert_eq(CardRegistry.size(), 3093)   # 1,898 with Packs 1-7, the Mirage block's 621, the Tempest block's 574
 	assert_eq(CardRegistry.names_in_set("por").size(), 200)
 	CardPacks.set_enabled("pack-6", false)
 	assert_false(CardRegistry.has_card("Cloud Dragon"))
 	assert_true(CardRegistry.has_card("Storm Crow"))
 	# Weatherlight reprints Alabaster Dragon: Pack 8 provides it with Portal off.
 	assert_eq(CardRegistry.get_card("Alabaster Dragon").set_code, "wth")
+	# Tempest reprints Armored Pegasus: Pack 9 provides it with Portal off.
+	assert_eq(CardRegistry.get_card("Armored Pegasus").set_code, "tmp")
 
 func test_original_english_printings_and_native_keywords() -> void:
 	CardPacks.set_enabled("pack-6", true)

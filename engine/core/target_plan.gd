@@ -99,6 +99,15 @@ static func for_ability(game: MtgGame, ability: ActivatedAbility, targets: Array
 	return _build(game, ability.effects, targets, x_value, source, "that ability")
 
 
+## Plan for an ability ALREADY ON THE STACK, from its own effect list
+## (Pack 9 E7 — retargeting it, CR 115.7: [method MtgGame.retarget_stack_item]
+## re-plans the activation with one ref replaced, so the original's every
+## targeting restriction still holds).
+static func for_effects(game: MtgGame, effects: Array, targets: Array,
+		x_value: int, source: CardInstance) -> TargetPlan:
+	return _build(game, effects, targets, x_value, source, "that ability")
+
+
 ## The shared planner behind [method for_spell] and [method for_ability]:
 ## work out how many refs each targeting effect wants (clamped to what is
 ## actually legal), slice [param targets] into groups accordingly, then
@@ -122,6 +131,14 @@ static func _build(game: MtgGame, effects: Array, targets: Array, x_value: int,
 	var earlier_count := 0
 	for e in targeting:
 		var span: Vector2i = e.target_range(x_value)
+		if e.target_count_fn.is_valid():
+			# Pack 9 E7: a count another target decides (Reap's "up to X,
+			# where X is … target opponent controls") — read off the
+			# earlier slots' refs, fixed now (CR 601.2c).
+			var counted_from: Array = []
+			if earlier_known:
+				counted_from = targets.slice(0, mini(earlier_count, targets.size()))
+			span = e.target_range_at(game, source, x_value, counted_from)
 		var lo: int = span.x
 		var hi: int = span.y
 		var rolled: bool = e.target_spec.chosen_at_random

@@ -101,8 +101,15 @@ func _on_state_changed() -> void:
 	_retire_hidden()
 
 
+## Can seat [param pid] see [param card] — and so be handed its handle?
+## Only an object that STILL EXISTS (Pack 9 bug pass): a token that left
+## the battlefield ceased to exist (CR 111.7) though its instance still
+## says EXILE, and a spell copy off the stack, or a last-known snapshot of
+## a departed permanent (CR 400.7), is no object a zone of the view
+## carries. A row naming one (a token Sabertooth Cobra's ransom) failed
+## the wire check (SgViewProtocol.linked_cards) and cut the seat off.
 func _visible(pid: int, card: CardInstance) -> bool:
-	return card != null and (card.zone in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD, Mtg.Zone.STACK, Mtg.Zone.EXILE, Mtg.Zone.ANTE] \
+	return card != null and game.find_instance(card.id) == card and (card.zone in [Mtg.Zone.BATTLEFIELD, Mtg.Zone.GRAVEYARD, Mtg.Zone.STACK, Mtg.Zone.EXILE, Mtg.Zone.ANTE] \
 		or (card.zone == Mtg.Zone.HAND and (card.owner_id == pid or card.revealed_in_hand \
 			or game.players[card.owner_id].hand_revealed)))
 

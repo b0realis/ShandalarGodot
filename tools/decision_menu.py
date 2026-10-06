@@ -876,6 +876,13 @@ def target_items(decision: dict, sub: dict) -> list[dict]:
                   if _ref_key(_ref_of(str(c.get("id")), refs)) in earlier}
     minimum = int(slot.get("min", 0))
     maximum = int(slot.get("max", 1))
+    # A count an EARLIER target sets (protocol 28, Reap): the referee's row
+    # for the earlier pick — usable only, so no pick past what it accepts.
+    earlier = {str(t.get("token")) for t in picked if t.get("slot") != number}
+    for row in slot.get("counts") or []:
+        if isinstance(row, list) and len(row) == 3 and str(row[0]) in earlier:
+            minimum, maximum = int(row[1]), int(row[2])
+            break
     if maximum < 0:
         maximum = len(slot.get("targets") or [])
     if int(slot.get("divided", 0)) > 0:
@@ -886,7 +893,7 @@ def target_items(decision: dict, sub: dict) -> list[dict]:
         label = (f"No target for {slot.get('label', 'this slot')}" if not mine else
                  f"Done choosing {slot.get('label', 'targets')}")
         items.append(_finish_item(stop, label, sub, picked, number))
-    for target in slot.get("targets") or []:
+    for target in (slot.get("targets") or []) if len(mine) < maximum else []:
         token = str(target.get("id"))
         if token in taken:
             continue

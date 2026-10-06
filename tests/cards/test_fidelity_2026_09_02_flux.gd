@@ -83,18 +83,26 @@ func test_the_artifacts_controller_decides_and_pays() -> void:
 	assert_eq(ring.zone, Mtg.Zone.GRAVEYARD, "they could pay, and declined")
 
 
-func test_a_silenced_artifact_has_no_tax() -> void:
-	# Titania's Song takes every ability off a noncreature artifact — the
-	# granted tax included.
+func test_a_flux_newer_than_the_silencer_still_taxes() -> void:
+	# REVERSED in Pack 9 (it was "a silenced artifact has no tax"). Titania's
+	# Song takes every ability off a noncreature artifact — but "loses all
+	# abilities" and "has <ability>" are both layer-6 effects applied in
+	# TIMESTAMP order (CR 613.7), so a Flux that entered AFTER the Song
+	# grants its tax on top of the removal and the tax triggers. The
+	# artifact's own abilities stay gone whatever the order (CR 613.8a).
+	# The other order — Song after Flux, no tax — is pinned in
+	# tests/unit/test_pack_9_engine_F_silencing.gd.
 	var ring := put_battlefield(1, "Sol Ring")
 	put_battlefield(0, "Titania's Song")
 	put_battlefield(0, "Energy Flux")
 	g.recalculate()
 	assert_true(ring.cur_abilities_silenced)
+	assert_true(ring.cur_mana_abilities.is_empty(), "its own mana ability is gone")
 	_to_their_upkeep()
-	assert_true(g.stack.is_empty(), "no ability, no tax")
+	assert_eq(g.stack.size(), 1, "the later grant triggers")
+	assert_eq(g.stack[0].card, ring)
 	resolve_stack()
-	assert_eq(ring.zone, Mtg.Zone.BATTLEFIELD)
+	assert_eq(ring.zone, Mtg.Zone.GRAVEYARD, "nothing to pay {2} with")
 
 
 func test_the_flux_leaving_takes_the_taxes_with_it() -> void:

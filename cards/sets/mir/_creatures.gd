@@ -30,7 +30,7 @@ static func configure(c: CardData) -> bool:
 		"Rashida Scalebane":
 			c.activated(_ab("", true, DragonSlayer.new(), "{T}: Destroy target attacking or blocking Dragon. It can't be regenerated. You gain life equal to its power."))
 		"Spectral Guardian":
-			c.static_ability(StaticAbility.new(_guardian, "As long as this creature is untapped, noncreature artifacts have shroud."))
+			c.static_ability(StaticAbility.new(_guardian, "As long as this creature is untapped, noncreature artifacts have shroud.").changing_abilities())
 		"Unyaro Griffin":
 			c.activated(_ab("", false, CounterEffect.new("target red instant or sorcery spell", _red_instant_or_sorcery), "Sacrifice this creature: Counter target red instant or sorcery spell.").with_sacrifice_cost())
 		"Vigilant Martyr":

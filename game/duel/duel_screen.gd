@@ -42,6 +42,9 @@ enum Mode { NORMAL, TARGETING, ATTACKERS, BLOCKERS, DISCARD, DAMAGE, PAYING }
 ## `:1046`, name the same two moments for the fast-effects line: `Casting`
 ## and `Tapping`.)
 const GRAB_MANA_PROMPT := "Tap %s"
+## The engine's whole-declaration checks (no class_name): block and attack
+## requirements ([method _must_block_now], [method _attack_companions]).
+const DECLARATION := preload("res://engine/core/combat_declaration.gd")
 
 ## Everything the battle-setup screen decided: seats, decks, lives, pace.
 ## Null when the scene runs standalone (F6/dev) — a hotseat default fills
@@ -1502,13 +1505,40 @@ func _on_card_clicked(inst: CardInstance) -> void:
 ## `TargetSpec.Kind.ABILITY` wants and what a card ref can never be —
 ## and outside targeting it behaves like a click on the source permanent,
 ## because that is what the entry is showing.
+##
+## A TRIGGERED ability on the chain (Pack 9) is wired here too: while the
+## slot being picked takes "target spell or ability"
+## (TargetSpec.Kind.SPELL_OR_ABILITY — Silver Wyvern), it names the
+## TRIGGER the same way ([method _chain_names_ability]); for any other
+## slot it names its source card, as a click on it always did.
 func _on_chain_ability_clicked(item: StackItem) -> void:
 	if game == null or game.game_over:
 		return
-	if mode == Mode.TARGETING:
+	if mode == Mode.TARGETING and _chain_names_ability(item):
 		_try_take_target(TargetRef.ability(item))
 		return
 	_on_card_clicked(item.card)
+
+
+## Does a click on chain entry [param item] name the ABILITY rather than
+## its source card? Always for an activated ability (CR 113.7a, Rust's
+## "target activated ability"); for a TRIGGER while the open slot takes a
+## spell or an ability (Pack 9 E7 — a trigger is an ability there, while
+## `Kind.ABILITY` stays activated-only); never for a spell.
+func _chain_names_ability(item: StackItem) -> bool:
+	if item == null or item.kind == Mtg.StackKind.SPELL:
+		return false
+	if item.kind == Mtg.StackKind.ABILITY:
+		return true
+	return _picking_spell_or_ability()
+
+
+## Is the slot being picked a "target spell or ability" one?
+func _picking_spell_or_ability() -> bool:
+	if mode != Mode.TARGETING or _pending_slot >= _pending_slots.size():
+		return false
+	var spec: TargetSpec = _pending_slots[_pending_slot]["spec"]
+	return spec != null and spec.kind == TargetSpec.Kind.SPELL_OR_ABILITY
 
 
 ## [method _target_state_for] for a chain ability: the already-chosen
@@ -2107,7 +2137,11 @@ func _start_cast(inst: CardInstance) -> void:
 	_pending_x = 0
 	_pending_mode = 0
 	# Choice chain: mode (modal) → library pick (tutor) → X → targets.
-	if inst.data.is_modal():
+	# THE ROWS ARE THE ENGINE'S (Pack 9): a modal spell's modes and its
+	# alternative and BUYBACK rows, and the rows a permanent GRANTS it —
+	# Dream Halls' discard, Aluren's free cast ([method MtgGame.payment_rows]).
+	# More than one is a question, even on a card that has no modes.
+	if game.payment_rows(pid, inst).size() > 1:
 		_open_mode_menu(inst)
 		return
 	_pending_specs = _specs_for_cast(inst, 0)
@@ -2183,10 +2217,27 @@ func _continue_cast_chain() -> void:
 			and not _humans[_pending_pid].has_preselection():
 		_open_search_dialog(search)
 		return
-	if _pending_card.data.cost.has_x or _pending_card.data.repeated_additional_cost != "":
+	if _pending_wants_x():
 		_open_x_dialog()
 	else:
 		_advance_pending()
+
+
+## Does the pending cast ask its X? A printed {X} (or a repeated
+## additional cost) does — unless the chosen row is an ALTERNATIVE cost
+## with no {X} in it (Dream Halls' discard, Aluren's free cast, a pitch):
+## "If an alternative cost is being paid that doesn't include X, X is 0"
+## (CR 107.3b), and the engine refuses any other X there.
+func _pending_wants_x() -> bool:
+	var data := _pending_card.data
+	if data.repeated_additional_cost != "":
+		return true
+	if not data.cost.has_x:
+		return false
+	var row := game.payment_option_for(_pending_pid, data, _pending_mode, _pending_card)
+	var row_cost: Variant = row.get("cost")
+	return not (MtgGame.is_alternative_payment(row) and row_cost is ManaCost
+		and not (row_cost as ManaCost).has_x)
 
 
 func _click_permanent(inst: CardInstance) -> void:
@@ -2231,6 +2282,9 @@ func _tap_for_payment(inst: CardInstance) -> void:
 ## met; a fixed slot closes itself.
 func _advance_pending() -> void:
 	while _pending_slot < _pending_slots.size():
+		# A count another target sets is read now, with the earlier
+		# slots' targets in hand (Pack 9 — Reap).
+		_recount_slot(_pending_slot)
 		var slot: Dictionary = _pending_slots[_pending_slot]
 		var picked: int = _pending_groups[_pending_slot].size()
 		var want_max: int = slot["max"]
@@ -2580,7 +2634,7 @@ func _auto_cast(inst: CardInstance) -> void:
 	_refresh()
 
 
-## The largest EXTRA GENERIC the pending cast could find, the gesture's
+## The mana of the largest X the pending cast could pay, the gesture's
 ## own answer to the X question: *"ALL of the mana you have available in
 ## your pool and from land sources"* (`Duel.hlp`, topic **Hands**). The
 ## auto-tapper leaves a LOCKED land alone, so this asks the shared budget
@@ -2588,13 +2642,9 @@ func _auto_cast(inst: CardInstance) -> void:
 ## bound [method _open_x_dialog] prints, which the player answers by hand.
 func _auto_x_budget() -> int:
 	var cost: ManaCost = _pending_card.data.cost
-	var surcharge := game.spell_surcharge(_pending_pid, _pending_card.data)
-	var usage: Array = game.mana_usage_keys(_pending_card.data, _pending_card)
 	if _pending_ability_index >= 0:
 		cost = _pending_card.cur_activated_abilities[_pending_ability_index].cost
-		surcharge = game.ability_surcharge(_pending_pid, _pending_card)
-		usage = game.ability_mana_usage_keys(_pending_card)
-	var budget := _x_budget(cost, surcharge, usage, _no_auto_tap, true)
+	var budget := _x_budget(_no_auto_tap, true)
 	if _pending_ability_index < 0 and _pending_card.data.repeated_additional_cost != "":
 		# The spin counts PAYMENTS for this card, as the window's does.
 		return _repeat_budget(budget, _no_auto_tap, true)
@@ -2609,28 +2659,49 @@ func _auto_x_budget() -> int:
 
 
 ## THE ONE X BUDGET, shared by the window and the double-click so the two
-## can never disagree about what a point of X costs: the largest extra
-## generic [member _pending_pid] can pay on top of [param cost] from
-## everything [ManaPlanner] can see — floating mana first, then every
-## untapped source it can plan a tap for — minus [param excluded].
+## can never disagree about what a point of X costs: the largest X whose
+## bill [member _pending_pid] can pay from everything [ManaPlanner] can
+## see — floating mana first, then every untapped source it can plan a
+## tap for — minus [param excluded], in the window's units: X times the
+## {X} symbols printed (`per_x`), the mana X itself takes.
 ##
 ## It plans the whole cost at each candidate, rather than counting sources,
 ## because the coloured pips compete with X for the same lands: six
 ## Mountains pay Disintegrate's {R} out of one of them and leave five for
 ## X, and only a plan can say so.
+##
+## THE BILL IS THE ENGINE'S (Pack 9 bug pass): [method
+## MtgGame.spell_payment] for the CHOSEN payment row, [method
+## MtgGame.ability_payment] for an ability. It priced the printed cost plus
+## the flat surcharge, so a BUYBACK row's {3} (and Memory Crystal's
+## discount on it) went uncounted — Fanning the Flames on four Mountains
+## pre-filled X = 3 that the buyback row cannot pay — and Heartstone's
+## floored reduction too: two lands pay a creature's {X} at X = 3, and the
+## window stopped at 2 (Skeleton Scavengers could not regenerate).
 ## [param auto] is the double-click's source list (see
 ## [method _pending_payment_sources]) — the gesture can only count on
 ## the mana it will tap for without asking.
-func _x_budget(cost: ManaCost, surcharge: int, usage: Array,
-		excluded: Dictionary, auto := false) -> int:
+func _x_budget(excluded: Dictionary, auto := false) -> int:
 	var src := _pending_payment_sources(excluded, auto)
-	var budget := 0
+	var per_x := 1
+	if _pending_ability_index >= 0:
+		if _pending_ability_index >= _pending_card.cur_activated_abilities.size():
+			return 0   # the ability went while the question was up
+		per_x = maxi(_pending_card.cur_activated_abilities[_pending_ability_index].cost.x_count, 1)
+	else:
+		per_x = maxi(_pending_card.data.cost.x_count, 1)
+	var x := 0
 	# 40 is the same kind of safety net the advance driver carries: no
 	# board in this pool makes more mana than that in one step.
-	while budget < 40 and not ManaPlanner.plan_from(
-			src, cost, surcharge + budget + 1, usage).is_empty():
-		budget += 1
-	return budget
+	while x < 40:
+		var bill: Dictionary = game.ability_payment(_pending_pid, _pending_card,
+			_pending_ability_index, x + 1) if _pending_ability_index >= 0 \
+			else game.spell_payment(_pending_pid, _pending_card.data, x + 1, 1,
+				_pending_card, _pending_mode)
+		if ManaPlanner.plan_from(src, bill["cost"], int(bill["extra"]), bill["usage"]).is_empty():
+			break
+		x += 1
+	return x * per_x
 
 
 ## The X of a REPEATED additional cost (Taste of Paradise's *"pay an
@@ -2974,14 +3045,39 @@ func _specs_for_cast(inst: CardInstance, chosen_mode: int) -> Array[TargetSpec]:
 	if inst.data.is_aura():
 		var out: Array[TargetSpec] = [inst.data.aura_target]
 		return out
-	var effects: Array = inst.data.spell_effects
-	if inst.data.is_modal():
-		effects = inst.data.modes[chosen_mode]["effects"]
+	var effects: Array = _row_effects(inst, chosen_mode)
 	var specs: Array[TargetSpec] = []
 	for e in effects:
 		if e.target_spec != null:
 			specs.append(e.target_spec)
 	return specs
+
+
+## THE EFFECTS ROW [param chosen_mode] OF [param inst] CASTS (Pack 9): a
+## mode's own, a printed row's (a buyback row shares its spell's), or —
+## for a row a permanent GRANTS (Dream Halls, Aluren), which comes after
+## the printed ones — the printed row it is built on
+## ([method MtgGame.payment_rows]'s `effects`).
+func _row_effects(inst: CardInstance, chosen_mode: int) -> Array:
+	var data := inst.data
+	if data.is_modal() and chosen_mode >= 0 and chosen_mode < data.modes.size():
+		return data.modes[chosen_mode]["effects"]
+	if game != null and chosen_mode >= maxi(data.modes.size(), 1):
+		var payer := _pending_pid if _pending_card == inst else inst.controller_id
+		var rows := game.payment_rows(payer, inst)
+		if chosen_mode < rows.size():
+			return Dictionary(rows[chosen_mode]).get("effects", data.spell_effects)
+	return data.modes[0]["effects"] if data.is_modal() else data.spell_effects
+
+
+## [method _row_effects] for a definition: the pending card's rows when
+## [param data] is the card being cast, else the definition's own.
+func _cast_effects(data: CardData, chosen_mode: int) -> Array:
+	if _pending_card != null and _pending_card.data == data:
+		return _row_effects(_pending_card, chosen_mode)
+	if data.is_modal() and chosen_mode >= 0 and chosen_mode < data.modes.size():
+		return data.modes[chosen_mode]["effects"]
+	return data.modes[0]["effects"] if data.is_modal() else data.spell_effects
 
 
 ## Build one targeting SLOT per targeting effect of the pending cast,
@@ -2999,9 +3095,7 @@ func _build_target_slots(data: CardData, chosen_mode: int) -> void:
 			"divided": 0})
 		_pending_groups.append([])
 		return
-	var effects: Array = data.spell_effects
-	if data.is_modal():
-		effects = data.modes[chosen_mode]["effects"]
+	var effects: Array = _cast_effects(data, chosen_mode)
 	var counted := false
 	for e in effects:
 		if e.target_spec == null:
@@ -3015,9 +3109,12 @@ func _build_target_slots(data: CardData, chosen_mode: int) -> void:
 		if not counted and _pending_target_count > 0 and span.y < 0:
 			span = Vector2i(_pending_target_count, _pending_target_count)
 			counted = true
+		# `effect` rides along for a count ANOTHER target sets (Pack 9 —
+		# Reap): [method _recount_slot] asks it again once the earlier
+		# slots are chosen.
 		_pending_slots.append({
 			"spec": e.target_spec, "min": span.x, "max": span.y,
-			"divided": e.divided_amount(_pending_x),
+			"divided": e.divided_amount(_pending_x), "effect": e,
 		})
 		_pending_groups.append([])
 
@@ -3036,17 +3133,45 @@ func _build_ability_slots(ability: ActivatedAbility, x_value := 0) -> void:
 		var span: Vector2i = e.target_range(x_value)
 		_pending_slots.append({
 			"spec": e.target_spec, "min": span.x, "max": span.y,
-			"divided": e.divided_amount(x_value),
+			"divided": e.divided_amount(x_value), "effect": e,
 		})
 		_pending_groups.append([])
+
+
+## A TARGET COUNT ANOTHER TARGET SETS (Pack 9 — Reap's "up to X target
+## cards from your graveyard, where X is the number of black permanents
+## target opponent controls", CR 601.2c): slot [param index]'s min and max
+## asked again of [method EffectBase.target_range_at] with the targets the
+## slots before it hold, as the engine's TargetPlan reads them. Called as
+## the picking reaches the slot, so the count is the chosen opponent's.
+## Every other slot is left exactly as it was built.
+func _recount_slot(index: int) -> void:
+	if index < 0 or index >= _pending_slots.size():
+		return
+	var earlier: Array = []
+	for i in index:
+		earlier.append_array(_pending_groups[i])
+	var span := _counted_range(_pending_slots[index], earlier)
+	if span.x < 0:
+		return
+	_pending_slots[index]["min"] = span.x
+	_pending_slots[index]["max"] = span.y
+
+
+## [param slot]'s range given the [param earlier] targets, or (-1, -1)
+## when its count is not another target's (the slot keeps its own). A
+## networked seat reads the referee's table instead (SgDuelView).
+func _counted_range(slot: Dictionary, earlier: Array) -> Vector2i:
+	var effect: Variant = slot.get("effect")
+	if not effect is EffectBase or not (effect as EffectBase).target_count_fn.is_valid():
+		return Vector2i(-1, -1)
+	return (effect as EffectBase).target_range_at(game, _pending_card, _pending_x, earlier)
 
 
 ## The SearchLibraryEffect a cast would run (null when none) — the UI opens
 ## the library picker before such casts (see HumanAgent).
 func _search_effect_of(data: CardData, chosen_mode: int) -> SearchLibraryEffect:
-	var effects: Array = data.spell_effects
-	if data.is_modal():
-		effects = data.modes[chosen_mode]["effects"]
+	var effects: Array = _cast_effects(data, chosen_mode)
 	for e in effects:
 		if e is SearchLibraryEffect:
 			return e
@@ -3088,8 +3213,31 @@ func _open_mode_menu(inst: CardInstance) -> void:
 	var name_line := OriginalDialog.label(inst.data.card_name, 14)
 	name_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lines.add_child(name_line)
-	for i in inst.data.modes.size():
-		var opt := OriginalDialog.choice_line(inst.data.modes[i]["label"])
+	# THE ENGINE'S ROWS (Pack 9, [method MtgGame.payment_rows]): every
+	# mode and printed payment row, then the rows a permanent grants
+	# (Dream Halls, Aluren, named after it), each in words a player reads
+	# ([method payment_row_label] — a buyback row says so first). A row
+	# refused for something mana cannot fix — the life, the card to
+	# discard, the land to sacrifice — is GREYED with the engine's reason
+	# ([method MtgGame.payment_row_refusal]); one short of mana stays
+	# open, because the chain waits for the mana as it always has.
+	# So is a row the engine refuses to ANNOUNCE now (Pack 9 bug pass,
+	# [method MtgGame.spell_announce_refusal]): at instant speed under
+	# Aluren only its row gives a small creature flash, and the printed
+	# row is refused — "You can't choose to cast a creature as though it
+	# had flash via Aluren and still pay the mana cost" (2004-10-04
+	# ruling) — as the network client greys it (SgDuelActions.open_modes).
+	var payer := _pending_pid if _pending_card == inst else inst.controller_id
+	var rows := game.payment_rows(payer, inst)
+	for i in rows.size():
+		var opt := OriginalDialog.choice_line(payment_row_label(rows[i]))
+		var why := game.payment_row_refusal(payer, inst, i)
+		if why == "" or MtgGame.is_unpaid_refusal(why):
+			var announce := game.spell_announce_refusal(payer, inst, 0, i)
+			if announce != "": why = announce
+		if why != "" and not MtgGame.is_unpaid_refusal(why):
+			opt.disabled = true
+			opt.tooltip_text = why
 		opt.pressed.connect(_on_mode_chosen.bind(i))
 		lines.add_child(opt)
 	# Cancel goes in the LIST COLUMN, not the dialog's foot: the enlarged
@@ -3106,6 +3254,25 @@ func _open_mode_menu(inst: CardInstance) -> void:
 	lines.add_child(back)
 	dialog.add_child(lines)
 	add_child(dialog)
+
+
+## A PAYMENT ROW IN A PLAYER'S WORDS (Pack 9). The engine's label as it
+## is — "Pay {R}", Fireblast's "Sacrifice two Mountains", a granted row's
+## "Discard a card that shares a color with it (Dream Halls)" — except a
+## BUYBACK row (CR 702.27a), which leads with the word and says what it
+## adds and what it buys: "Buyback: Pay {1}{U}{U} plus {3} (returns to
+## your hand)", "Buyback: Pay {1}{G}, Sacrifice a land (returns to your
+## hand)". Shared with SGManalink's row labels (SgDuelActions.options).
+static func payment_row_label(row: Dictionary) -> String:
+	var label := String(row.get("label", ""))
+	var pay: Dictionary = row.get("payment", {})
+	# Said once: a networked seat's rows arrive already worded.
+	if not bool(pay.get("buyback", false)) or label.begins_with("Buyback: "):
+		return label
+	var text := String(pay.get("buyback_text", ""))
+	var base := label.replace(" with buyback (%s)" % text, "")
+	var added := (" plus %s" % text) if text.begins_with("{") else (", %s" % text)
+	return "Buyback: %s%s (returns to your hand)" % [base, added]
 
 
 func _on_mode_canceled() -> void:
@@ -4653,7 +4820,7 @@ func _payable_now(pid: int, inst: CardInstance) -> bool:
 ## with no creature of the player's own to sacrifice was lit yellow, and
 ## held the opponent's end step open as a "response" the engine refuses.
 func _printed_object_costs_payable(pid: int, inst: CardInstance) -> bool:
-	var groups: Array = game.spell_object_costs(inst.data, 0)
+	var groups: Array = game.spell_object_costs(inst.data, 0, pid, inst)
 	return groups.is_empty() or OC.refusal(game, pid, groups, inst, 0) == ""
 
 
@@ -4666,24 +4833,28 @@ func _printed_object_costs_payable(pid: int, inst: CardInstance) -> bool:
 ## `AdditionalObjectCosts.refusal`), and its mana with every surcharge
 ## ([method MtgGame.spell_payment] for that row, plus the Torch floor)
 ## from the sources the planner can still tap.
+##
+## THE ROWS ARE THE ENGINE'S since Pack 9 ([method MtgGame.payment_rows]):
+## a BUYBACK row, and the rows a permanent GRANTS (Dream Halls' discard,
+## Aluren's free cast) as well as the card's own. Every part mana cannot
+## fix is the engine's own refusal ([method MtgGame.payment_row_refusal]);
+## the mana is planned here as before, so a land marked `Don't auto tap`
+## is still left out of the promise.
 func _alternative_row_payable(pid: int, inst: CardInstance) -> bool:
 	var data := inst.data
-	if not data.is_modal():
-		return false
-	for mode in data.modes.size():
-		var row: Dictionary = data.payment_option(mode)
+	var rows := game.payment_rows(pid, inst)
+	for mode in rows.size():
+		var row: Dictionary = Dictionary(rows[mode]).get("payment", {})
 		if row.is_empty():
 			continue
-		if int(row.get("life", 0)) > game.players[pid].life:
-			continue
-		if int(row.get("exile_color", 0)) != 0 \
-				and game.pitch_candidates(pid, inst, mode).is_empty():
-			continue
-		var groups: Array = game.spell_object_costs(data, mode)
-		if not groups.is_empty() and OC.refusal(game, pid, groups, inst, 0) != "":
+		var why := game.payment_row_refusal(pid, inst, mode, false)
+		if why == "":
+			return true
+		if not MtgGame.is_unpaid_refusal(why):
 			continue
 		var payment := game.spell_payment(pid, data, 0, 1, inst, mode)
-		var extra := int(payment["extra"]) + game.targeting_surcharge_floor(pid, data, inst, mode)
+		var extra := int(payment["extra"]) + game.targeting_surcharge_floor(pid, data, inst,
+			int(Dictionary(rows[mode]).get("effects_mode", mode)))
 		if ManaPlanner.cost_is_free(payment["cost"]) and extra <= 0:
 			return true
 		if not ManaPlanner.plan(game, pid, payment["cost"], extra, payment["usage"],
@@ -4858,10 +5029,20 @@ func _could_respond(pid: int) -> bool:
 	# player straight past it — and Guardian Angel's paid point of
 	# prevention ([method _special_actions]). Priced like an ability: the
 	# untapped sources could still reach it. Channel is mana, not a response.
+	#
+	# A licid's end and a Curse's ignore (Pack 9) are no deadline: they are
+	# a response only while something waits on the chain — ending a licid
+	# before the spell aimed at its creature resolves — and only when the
+	# engine would take them now; an empty chain's windows are not held
+	# for them (the Stops are).
 	for entry in _special_actions(pid):
 		if String(entry["kind"]) == "channel":
 			continue
 		if String(entry["kind"]) == "prevention" and game.awaiting_regeneration:
+			continue
+		if ENGINE_SPECIAL_KINDS.has(String(entry["kind"])):
+			if not game.stack.is_empty() and _special_action_refusal(pid, entry) == "":
+				return true
 			continue
 		if game.can_afford_cost(pid, entry["cost"]):
 			return true
@@ -5542,27 +5723,24 @@ var _pending_target_count := -1
 ##     budget adds up, which is what the extra five strings are for.
 func _open_x_dialog() -> void:
 	var cost: ManaCost = _pending_card.data.cost
-	var surcharge := game.spell_surcharge(_pending_pid, _pending_card.data)
-	var usage: Array = game.mana_usage_keys(_pending_card.data, _pending_card)
 	var label := _pending_card.data.card_name
 	var per_target := 0
 	if _pending_ability_index >= 0:
 		var ability: ActivatedAbility = \
 			_pending_card.cur_activated_abilities[_pending_ability_index]
 		cost = ability.cost
-		surcharge = game.ability_surcharge(_pending_pid, _pending_card)
-		usage = game.ability_mana_usage_keys(_pending_card)
 		label = "%s — %s" % [label, ability.text]
 	else:
 		per_target = _pending_card.data.extra_cost_per_target
 	var per_x: int = maxi(cost.x_count, 1)
-	# The BUDGET is in mana, which is what entry 1 asks for: the largest
-	# extra generic this seat can cover on top of the printed cost, from
-	# the pool AND from every source it can still tap. [member _no_auto_tap]
+	# The BUDGET is in mana, which is what entry 1 asks for: the mana of
+	# the largest X this seat can cover on top of the chosen row's bill (or
+	# the ability's), from the pool AND from every source it can still
+	# tap ([method _x_budget], the engine's own pricing). [member _no_auto_tap]
 	# is deliberately NOT excluded, for [method _pending_is_reachable]'s
 	# reason — *"the only way to tap a locked land is manually, by clicking
 	# on it"* — and this window is answered by hand.
-	var budget := _x_budget(cost, surcharge, usage, {})
+	var budget := _x_budget({})
 	if _pending_ability_index < 0 and _pending_card.data.repeated_additional_cost != "":
 		budget = _repeat_budget(budget, {})
 		label += " — number of additional " + _pending_card.data.repeated_additional_cost + " payments"
@@ -5629,7 +5807,9 @@ func _object_x_groups() -> Array:
 	else:
 		printed = _pending_card.data.cost
 		groups.append_array(_pending_card.data.object_costs)
-		groups.append_array(_pending_card.data.payment_option(_pending_mode).get("object_costs", []))
+		# The ROW's own groups — a buyback's, a granted row's (Pack 9).
+		groups.append_array(game.payment_option_for(_pending_pid, _pending_card.data,
+			_pending_mode, _pending_card).get("object_costs", []))
 	if printed.x_count > 0 or not OC.uses_x(groups):
 		return []
 	return groups
@@ -5672,8 +5852,7 @@ func _x_target_ceiling() -> int:
 			return -1
 		effects = _pending_card.cur_activated_abilities[_pending_ability_index].effects
 	elif not _pending_card.data.is_aura():
-		effects = _pending_card.data.modes[_pending_mode]["effects"] \
-			if _pending_card.data.is_modal() else _pending_card.data.spell_effects
+		effects = _row_effects(_pending_card, _pending_mode)
 	var ceiling := -1
 	for e in effects:
 		if e.target_spec == null or not e.target_count_is_x:
@@ -6759,6 +6938,21 @@ func _on_territory_menu_chosen(id: int) -> void:
 # Not at an SGManalink table ([method _network_opponent]): there the
 # referee's own window is the door, and nothing here may act on the
 # projection.
+#
+# PACK 9 ADDS TWO THAT BELONG TO A PERMANENT (CR 116.2c-d), read off the
+# engine's own list ([method MtgGame.special_actions]) and taken through
+# its one door ([method MtgGame.take_special_action]), greyed with its
+# own reason ([method MtgGame.special_action_refusal]): a licid's "You may
+# pay {R} to end this effect" (`licid_end`), on the territory menu and on
+# the licid's own card menu; and Volrath's Curse's "sacrifice a permanent
+# … to ignore this effect until end of turn" (`ignore_effect`), on the
+# cursed creature's menu and the Curse's — the sacrifice itself is an
+# ordinary held cost question, answered in the choice window and
+# withdrawn by its Cancel. These two DO appear at an SGManalink table:
+# there the projection lists the referee's rows and taking one is a
+# message to it (SgDuelProjection.take_special_action), never an act on
+# the projection.
+const ENGINE_SPECIAL_KINDS := ["licid_end", "ignore_effect"]
 
 ## Territory-menu ids for the special actions — above every other block.
 const SPECIAL_BASE := 200
@@ -6789,9 +6983,11 @@ func _special_seat() -> int:
 ## either way ([method MtgGame.grant_paid_prevention]).
 func _special_actions(pid: int) -> Array:
 	var out: Array = []
-	if game == null or game.game_over or _network_opponent() \
+	if game == null or game.game_over \
 			or pid < 0 or pid >= game.players.size() or not _is_human(pid):
 		return out
+	if _network_opponent():
+		return _engine_special_actions(pid)
 	for entry in game.settleable_delayed_triggers(pid):
 		var cost: ManaCost = entry["settle_cost"]
 		out.append({"kind": "settle", "id": int(entry["id"]), "cost": cost,
@@ -6814,6 +7010,18 @@ func _special_actions(pid: int) -> Array:
 	if game.players[pid].life_for_mana:
 		out.append({"kind": "channel", "card": null,
 			"label": "Channel: pay 1 life for one colorless mana"})
+	out.append_array(_engine_special_actions(pid))
+	return out
+
+
+## The Pack 9 rows of [method MtgGame.special_actions] for [param pid] —
+## [constant ENGINE_SPECIAL_KINDS], as the engine words and identifies
+## them (`kind`, `id`, `label`, `cost`, `card`, ...).
+func _engine_special_actions(pid: int) -> Array:
+	var out: Array = []
+	for row: Dictionary in game.special_actions(pid):
+		if ENGINE_SPECIAL_KINDS.has(String(row.get("kind", ""))):
+			out.append(row)
 	return out
 
 
@@ -6842,6 +7050,16 @@ func _special_action_refusal(pid: int, entry: Dictionary) -> String:
 				return "only regeneration effects may be used now"
 			if not _special_cost_reachable(pid, entry["cost"]):
 				return "not enough mana to pay %s" % str(entry["cost"])
+		"licid_end", "ignore_effect":
+			# The engine's own "why not now" (priority, the 1997 window, the
+			# mana, a body to sacrifice) — and, at a local table, the mana
+			# the auto-tapper may use ([member _no_auto_tap] left alone).
+			var why := game.special_action_refusal(pid, entry)
+			if why == "" and not _network_opponent() \
+					and not ManaPlanner.cost_is_free(entry["cost"]) \
+					and not _special_cost_reachable(pid, entry["cost"]):
+				why = "not enough mana to pay %s" % str(entry["cost"])
+			return why
 	return ""
 
 
@@ -6865,7 +7083,7 @@ func _take_special_action(pid: int, entry: Dictionary) -> void:
 		if String(now["kind"]) != String(entry.get("kind", "")):
 			continue
 		match String(now["kind"]):
-			"settle":
+			"settle", "licid_end", "ignore_effect":
 				if int(now["id"]) == int(entry["id"]): live = now
 			"prevention":
 				if (now["target"] as TargetRef).same_object(entry["target"]): live = now
@@ -6888,7 +7106,10 @@ func _take_special_action(pid: int, entry: Dictionary) -> void:
 	# automatic pass until the action is done; the refresh after it decides
 	# what comes next.
 	_advancing = true
-	if why == "" and kind != "channel" \
+	# At an SGManalink table nothing is tapped here: the referee pays a
+	# licid's end itself, and this screen's game is only its projection.
+	if why == "" and kind != "channel" and not _network_opponent() \
+			and not ManaPlanner.cost_is_free(live["cost"]) \
 			and not ManaPlanner.plan_and_pay(game, pid, live["cost"], 0, [], _no_auto_tap):
 		why = "not enough mana to pay %s" % str(live["cost"])
 	if why == "":
@@ -6896,6 +7117,9 @@ func _take_special_action(pid: int, entry: Dictionary) -> void:
 			"channel": why = game.pay_life_for_mana(pid)
 			"settle": why = game.settle_delayed_trigger(pid, int(live["id"]))
 			"prevention": why = game.pay_for_prevention(pid, live["target"])
+			# The engine's door (Pack 9): a licid's end is paid from the
+			# pool just tapped; an ignore holds its sacrifice question.
+			"licid_end", "ignore_effect": why = game.take_special_action(pid, live)
 	_advancing = false
 	_report(why)
 	_refresh()
@@ -6928,13 +7152,20 @@ func _special_card_seat() -> int:
 
 
 ## The special actions of [param inst]'s card — the ransom its bite left,
-## the point of prevention on it.
+## the point of prevention on it, a licid's end on the licid (Pack 9) —
+## and VOLRATH'S CURSE'S IGNORE on the creature it curses as well as on
+## the Curse: the creature is what its controller is looking at when it
+## cannot attack.
 func _special_actions_on(inst: CardInstance) -> Array:
 	var out: Array = []
 	if inst == null:
 		return out
 	for entry in _special_actions(_special_card_seat()):
-		if entry.get("card") == inst:
+		var card: Variant = entry.get("card")
+		if card == inst:
+			out.append(entry)
+		elif String(entry.get("kind", "")) == "ignore_effect" and card is CardInstance \
+				and (card as CardInstance).attached_to == inst.id and inst.id >= 0:
 			out.append(entry)
 	return out
 
@@ -8271,15 +8502,17 @@ func _make_card(inst: CardInstance, chain_item: StackItem = null) -> MiniCard:
 	# its slot, so nothing on the board shuffles under the animation.
 	if _flight != null and _flight.is_flying(inst.id):
 		w.modulate.a = 0.0
-	var as_ability := chain_item != null \
-		and chain_item.kind == Mtg.StackKind.ABILITY
+	var as_ability := chain_item != null and _chain_names_ability(chain_item)
 	w.set_target_state(_ability_target_state(chain_item) if as_ability \
 		else _target_state_for(inst))
-	if as_ability:
+	if chain_item != null and chain_item.kind != Mtg.StackKind.SPELL:
+		# An activated OR TRIGGERED ability's entry (Pack 9: a trigger is
+		# a "spell or ability" target — Silver Wyvern); the click decides
+		# what it names ([method _chain_names_ability]).
 		w.pressed.connect(_on_chain_ability_clicked.bind(chain_item))
-		# THE ARROW LAYER anchors an ability TARGET (Rust, Ayesha Tanaka)
-		# on this widget, not on the source card's own — see
-		# TargetArrows._collect.
+		# THE ARROW LAYER anchors an ability TARGET (Rust, Ayesha Tanaka,
+		# a Wyvern's retarget of a trigger) on this widget, not on the
+		# source card's own — see TargetArrows._collect.
 		w.set_meta("chain_ability_id", chain_item.id)
 	else:
 		w.pressed.connect(_on_card_clicked.bind(inst))
@@ -9228,6 +9461,12 @@ func _highlight_for(inst: CardInstance) -> int:
 				if inst.must_attack_this_turn \
 						or inst.has_keyword(Mtg.Keyword.MUST_ATTACK):
 					return MiniCard.Highlight.MANDATORY
+				# ...and a creature the pencilled attack DRAGS IN (Pack 9 —
+				# Magnetic Web's "if a creature with a magnet counter on it
+				# attacks, all creatures with magnet counters on them attack
+				# if able", CR 508.1d): orange while the plan sets it off.
+				if _attack_companions().has(inst.id):
+					return MiniCard.Highlight.MANDATORY
 				return MiniCard.Highlight.OPTIONAL
 		Mode.BLOCKERS:
 			if _block_map.has(inst.id) or inst.id == _selected_blocker:
@@ -9238,6 +9477,13 @@ func _highlight_for(inst: CardInstance) -> int:
 				if inst.cur_must_be_blocked:
 					return MiniCard.Highlight.MANDATORY
 				return MiniCard.Highlight.TARGET_LEGAL
+			# A BLOCKER UNDER ORDERS (Pack 9 — Watchdog's and Invasion
+			# Plans' "blocks each combat if able", Provoke's "blocks this
+			# turn if able", CR 509.1c): orange while it has an attacker it
+			# could block legally and for nothing — the manual's colour for
+			# "you must" (p.128), the same the Lure's attacker wears.
+			if _must_block_now(inst):
+				return MiniCard.Highlight.MANDATORY
 		Mode.DISCARD:
 			if _discard_picks.has(inst.id):
 				return MiniCard.Highlight.COMMITTED
@@ -9312,6 +9558,40 @@ func _highlight_for(inst: CardInstance) -> int:
 					and _payable_now(inst.owner_id, inst):
 				return MiniCard.Highlight.OPTIONAL
 	return MiniCard.Highlight.NONE
+
+
+## THE CREATURES THE PENCILLED ATTACK DRAGS IN (Pack 9, CR 508.1d): the
+## ids a predicate requirement adds to [member _selected_attackers] — the
+## engine's own fixpoint, [method CombatDeclaration.predicate_companions]
+## (Magnetic Web: one magnet creature attacking obliges every able other).
+## Empty with no such requirement on the table. A networked seat reads the
+## referee's rows instead (SgDuelView).
+func _attack_companions() -> Array:
+	if game == null or not game.awaiting_attackers or _selected_attackers.is_empty():
+		return []
+	return DECLARATION.predicate_companions(game, game.active_player, _selected_attackers)
+
+
+## Is [param inst] a creature under a BLOCK REQUIREMENT
+## ([method CombatDeclaration.must_block]: Watchdog, Invasion Plans,
+## Provoke) that the declaration still owes a block — untapped, not
+## pencilled in, and with an attacker it could block legally and without
+## paying (CR 509.1c-d, [method CombatDeclaration.forced_block_targets],
+## the engine's own test of the blocks pencilled so far)? A networked
+## seat reads the referee's flags and block matrix (SgDuelView).
+func _must_block_now(inst: CardInstance) -> bool:
+	if game == null or inst == null or inst.zone != Mtg.Zone.BATTLEFIELD \
+			or not inst.is_creature() or inst.tapped or inst.phased_out \
+			or inst.controller_id == game.active_player or _block_map.has(inst.id):
+		return false
+	if not DECLARATION.must_block(inst):
+		return false
+	var pencilled := {}
+	for id in _block_map:
+		var against: Variant = _block_map[id]
+		pencilled[id] = against if against is Array else [against]
+	return not DECLARATION.forced_block_targets(game, inst.controller_id, inst,
+		pencilled).is_empty()
 
 
 ## Has this permanent an ACTIVATED ability its controller could use right

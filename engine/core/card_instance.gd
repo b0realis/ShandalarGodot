@@ -227,6 +227,17 @@ var cur_blocked_by_life_taxes: Array[Dictionary] = []
 ## by the declaration check. Set by a static each recalculation
 ## (CombatState.attacks_with_others), so a silenced creature has none.
 var cur_attacks_if_others_attack := false
+## Pack 9 E4 — the PREDICATE form of the conditional attack requirement
+## above (CR 508.1d): "if a creature with a magnet counter on it attacks,
+## all creatures with magnet counters on them attack if able" (Magnetic
+## Web). One entry per imposing effect, {source: int (the permanent's id),
+## desc: String (the condition, for the refusal), condition:
+## Callable(game: MtgGame, declared: Array) -> bool — `declared` is the
+## Array of CardInstances in the declaration being checked}, added by
+## CombatState.add_attack_requirement from a static each recalculation.
+## While a condition holds for a declaration, this creature must be in it
+## if able; engine/core/combat_declaration.gd enforces it.
+var cur_attack_requirements: Array[Dictionary] = []
 
 ## Derived land-mana replacement choices, collected by continuous effects.
 var cur_land_mana_replacements: Array[int] = []
@@ -300,6 +311,21 @@ var blocked_ids_this_turn: Dictionary = {}
 ## same card also sets [member extra_blocks_this_turn] to -1 and the
 ## engine's blocks became one-to-many on 2026-09-02. Cleared at cleanup.
 var must_block_this_turn: bool = false
+
+## Pack 9 E4 — "that creature blocks this turn if able" (Provoke): unlike
+## [member must_block_this_turn] it asks for ONE block, against any
+## attacker it can legally block without a cost (CR 509.1c-d). Set through
+## MtgGame.require_block_this_turn (journaled), cleared at cleanup and by
+## a zone change. [member cur_must_block] is the static "blocks each
+## combat if able" twin.
+var must_block_this_turn_any: bool = false
+
+## Pack 9 E4 — "this creature blocks each combat if able" (Watchdog; every
+## creature under Invasion Plans). A static's live value
+## (CombatState.blocks_each_combat), rebuilt each recalculation, read by
+## CombatDeclaration.must_block_error (the engine's refusal) and
+## repair_blocks (the AI's declaration).
+var cur_must_block: bool = false
 
 ## PHASED OUT (CR 702.26b): still on the battlefield in the rules sense,
 ## but "treated as though it doesn't exist" — MtgGame keeps it out of the
@@ -427,6 +453,17 @@ var added_keywords: Array[int] = []
 ## the card leaves the battlefield.
 var added_protection: int = 0
 
+## Pack 9 bug pass (h4-4) — WHEN each durationless grant above was made,
+## on the layer-6 clock (ContinuousEffects.next_timestamp): {keyword: ts}
+## and {colour bit: ts}. A grant is an effect with a timestamp (CR 613.7),
+## so one made AFTER a "loses all abilities" (Humility) survives it:
+## ContinuousEffects._strip_abilities puts back what is stamped later than
+## the strip. An unstamped grant counts as the oldest. Written by
+## MtgGame.grant_keyword_permanently / grant_protection_permanently;
+## cleared with the grants.
+var added_keyword_stamps: Dictionary = {}
+var added_protection_stamps: Dictionary = {}
+
 ## TEXT CHANGES (CR 613 layer 3) applied to this object indefinitely —
 ## Magical Hack's basic land types, Sleight of Mind's colour words, Quarum
 ## Trench Gnomes' mana. Each entry is one of:
@@ -518,6 +555,21 @@ var last_colors: int = 0
 var last_subtypes: Array[String] = []
 ## Attachment at departure, for simultaneous leaves-the-battlefield triggers.
 var last_attached_to: int = -1
+## Pack 9 E1 — the live KEYWORDS it had as it left (CR 608.2h / 603.10a):
+## "whenever a creature with shadow dies" (Dauthi Ghoul) must see granted
+## shadow and must not see shadow it had lost, and `cur_keywords` is back
+## to the printed list by the time DIES is dispatched. Ask
+## [method had_keyword].
+var last_keywords: Array[int] = []
+## Pack 9 bug pass (h4-1) — the live TRIGGERED abilities it had as it left
+## and whether it had lost all its abilities then (Humility, Titania's
+## Song, face down), for its OWN leaves/dies triggers: a leaves-the-
+## battlefield ability looks back in time (CR 603.10a), and by the time
+## MtgGame.dispatch_event offers the departure, [method
+## reset_characteristics] has put the printed triggers back and lowered
+## the flag. A trigger granted to it (and not removed) is heard too.
+var last_triggered_abilities: Array[TriggeredAbility] = []
+var last_abilities_silenced := false
 ## Effects that may deal damage after this incarnation leaves opt in to
 ## retaining an immutable source snapshot. Old records survive a blink;
 ## ordinary permanents do not allocate them. Never register these copies
@@ -674,6 +726,15 @@ var cur_must_be_blocked: bool = false
 ## Unset = every able creature must block. func(blocker) -> bool.
 var cur_must_be_blocked_filter: Callable = Callable()
 
+## Pack 9 E1 — "can block creatures with shadow AS THOUGH it had shadow"
+## (Heartwood Dryad, Wall of Diffusion; CR 702.28b). Read ONLY by the
+## attacker-has-shadow check of CombatState.block_illegality: the creature
+## does not have shadow, so it still blocks creatures without shadow
+## normally, and nothing that asks "has shadow" counts it. Set by a static
+## each recalculation (CombatState.blocks_shadow), so a silenced or
+## face-down creature has no such permission.
+var cur_blocks_shadow: bool = false
+
 ## SHROUD: "can't be the target of spells or abilities" (Spectral Cloak).
 ## Set by statics each recalculation; TargetSpec refuses every source.
 var cur_shroud: bool = false
@@ -826,6 +887,8 @@ func reset_characteristics() -> void:
 	cur_blocked_by_tax = 0
 	cur_blocked_by_life_taxes.clear()
 	cur_attacks_if_others_attack = false
+	cur_attack_requirements.clear()   # Pack 9 E4
+	cur_must_block = false            # Pack 9 E4
 	cur_attacks_as_if_hasty = false
 	cur_abilities_silenced = false
 	cur_prevent_damage_from_creatures = false
@@ -836,6 +899,8 @@ func reset_characteristics() -> void:
 	cur_prevent_all_damage_dealt = false
 	cur_must_be_blocked = false
 	cur_must_be_blocked_filter = Callable()
+	cur_must_be_blocked_by_all = false   # Pack 9 bug pass (fix-combat)
+	cur_blocks_shadow = false   # Pack 9 E1
 	cur_prevent_combat_damage_dealt = false
 	cur_assigns_no_combat_damage = false
 	cur_damage_as_unblocked = false
@@ -1018,6 +1083,15 @@ func has_keyword(keyword: int) -> bool:
 	return cur_keywords.has(keyword)
 
 
+## LAST KNOWN keyword check (Pack 9 E1, CR 608.2h): did this object have
+## [param keyword] at the moment it last LEFT the battlefield? For a
+## dies/leaves trigger reading the departed object ("whenever a creature
+## with shadow dies" — Dauthi Ghoul); on a permanent still in play ask
+## [method has_keyword].
+func had_keyword(keyword: int) -> bool:
+	return last_keywords.has(keyword)
+
+
 ## Give this creature "bands with other [param desc]" for the rest of the
 ## recalculation — [param filter] is the quality, and this creature is
 ## expected to have it too (the printed grants only reach creatures that
@@ -1109,6 +1183,10 @@ func clear_battlefield_state() -> void:
 	last_colors = cur_colors
 	last_subtypes = cur_subtypes.duplicate()
 	last_attached_to = attached_to
+	last_keywords.assign(cur_keywords)   # Pack 9 E1 (Dauthi Ghoul)
+	# Pack 9 bug pass (h4-1): its own triggers as it left (CR 603.10a).
+	last_triggered_abilities.assign(cur_triggered_abilities)
+	last_abilities_silenced = cur_abilities_silenced
 	tapped = false
 	damage = 0
 	summoning_sick = false
@@ -1141,6 +1219,7 @@ func clear_battlefield_state() -> void:
 	block_history_sequence = 0
 	blocked_ids_this_turn.clear()
 	must_block_this_turn = false
+	must_block_this_turn_any = false   # Pack 9 E4
 	extra_blocks_this_turn = 0
 	must_attack_this_turn = false
 	damage_redirect_to = -1
@@ -1151,8 +1230,10 @@ func clear_battlefield_state() -> void:
 	creature_damage_redirects.clear()
 	removed_keywords.clear()
 	added_keywords.clear()
+	added_keyword_stamps.clear()      # Pack 9 bug pass (h4-4)
 	added_types = 0
 	added_protection = 0
+	added_protection_stamps.clear()   # Pack 9 bug pass (h4-4)
 	phased_out = false
 	phased_indirectly = false
 	phase_hold = -1
@@ -1184,3 +1265,16 @@ func restore_printed_identity() -> void:
 
 func _to_string() -> String:
 	return "%s#%d" % [data.card_name, id]
+
+
+# --- Pack 9 bug pass (fix-combat): a Lure that asks every creature ---
+
+## "All creatures able to block this creature do so" — a Lure asking EVERY
+## creature (Lure, Alluring Scent, Tempting Licid, Elvish Bard), raised with
+## [member cur_must_be_blocked] by those statics each recalculation. It
+## outranks [member cur_must_be_blocked_filter] whichever static ran first:
+## a narrowed Lure (Trumpeting Armodon's chosen creature, Magnetic Web's
+## magnet creatures) writes the filter, and before this flag a plain Lure
+## made after one was silently narrowed with it (CR 509.1c). Read through
+## CombatDeclaration.lure_binds.
+var cur_must_be_blocked_by_all: bool = false

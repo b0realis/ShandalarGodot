@@ -3,9 +3,14 @@ extends RefCounted
 ## expire even while a newer effect overrides them (CR 611.2, 613.1b).
 ## All storage belongs to the game so held choices/search can rewind it.
 
+## [param while_fn] (Pack 9 E8): `func(game, victim) -> bool` — the effect
+## lasts "for as long as" it holds of the VICTIM (CR 611.2b; Rootwater
+## Matriarch's "for as long as that creature is enchanted"), checked in
+## [method _live] before anything about a source. [param origin]: the card
+## that created it, kept for display only — it ends nothing.
 static func add(g: MtgGame, victim: CardInstance, pid: int, kind := "permanent",
 		source: CardInstance = null, tapped := false, power_cap := false,
-		control_bound := true) -> void:
+		control_bound := true, while_fn := Callable(), origin: CardInstance = null) -> void:
 	# CR 702.26e: a control change made while the permanent is phased out
 	# never includes it — not even once it has phased back in.
 	if not g.is_present(victim): return
@@ -15,6 +20,10 @@ static func add(g: MtgGame, victim: CardInstance, pid: int, kind := "permanent",
 	if row.is_empty() or int(row.stamp) != victim.layer_timestamp:
 		row = {"stamp": victim.layer_timestamp, "base": victim.controller_id, "effects": []}
 	var effect := {"pid": pid, "kind": kind, "turn": g.turn_number}
+	if while_fn.is_valid():
+		effect["while"] = while_fn
+	if origin != null:
+		effect["origin"] = origin.id
 	if source != null:
 		effect.merge({"source": source.id, "stamp": source.layer_timestamp,
 			"control": source.control_sequence, "untap": source.untap_sequence,
@@ -23,6 +32,13 @@ static func add(g: MtgGame, victim: CardInstance, pid: int, kind := "permanent",
 	g._control_layers[victim.id] = row
 
 static func _live(g: MtgGame, victim: CardInstance, e: Dictionary) -> bool:
+	if e.has("while"):
+		# "For as long as <the victim> …" TRACKS THE VICTIM: it ends when
+		# the condition fails, and when the victim phases out (702.26f) —
+		# and a broken duration never revives ([method refresh] drops it).
+		if victim.phased_out: return false
+		var holds: Callable = e["while"]
+		if not holds.is_valid() or not bool(holds.call(g, victim)): return false
 	if not e.has("source"): return true
 	var s := g.find_instance(int(e.source))
 	if s == null or s.zone != Mtg.Zone.BATTLEFIELD or s.layer_timestamp != int(e.stamp): return false
@@ -32,7 +48,9 @@ static func _live(g: MtgGame, victim: CardInstance, e: Dictionary) -> bool:
 	# Phasing changes neither zone nor control and keeps every timestamp
 	# (CR 702.26d, 613.7d), so it comes back where it was in the CR 613.7
 	# order — not re-registered as the newest control effect.
-	if e.kind == "aura": return s.attached_to == victim.id
+	# And only while it still says so: a later copy or text change (a licid
+	# Aura that becomes Savannah Lions, Pack 9) takes the steal away with it.
+	if e.kind == "aura": return s.attached_to == victim.id and s.data.aura_steals
 	if s.phased_out: return false   # a duration tracking it ends (702.26f)
 	if bool(e.control_bound) and s.control_sequence != int(e.control): return false
 	if bool(e.tapped) and (not s.tapped or s.untap_sequence != int(e.untap)): return false

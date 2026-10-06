@@ -21,6 +21,10 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 	var role := e.ai_role
 	if e is CreatureRedirectEffect: return redirect_choice(g, pilot, s, index)
 	if role == &"": return null
+	# A Spike's move (Pack 9) pays its +1/+1 counter off its own body: the
+	# Tempest module prices that cost (engine/ai/tempest_tactics.gd), this
+	# reading would not.
+	if a.counter_cost_kind == "+1/+1": return null
 	var best := {}
 	var refs: Array = e.target_spec.legal_targets(g, s) if e.target_spec != null else []
 	match role:

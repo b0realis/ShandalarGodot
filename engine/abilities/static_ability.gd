@@ -55,6 +55,16 @@ var text: String = ""
 ## overwritten and the answer depends on play order. ContinuousEffects
 ## runs the setters in their own pass; within each pass timestamp order
 ## still decides. Mark such an ability with [method setting_base_pt].
+##
+## THE 7b CLOCK (Pack 9 E5, CR 613.7). The setters' pass is ONE list in
+## timestamp order with the floating base-P/T sets (Island of Wak-Wak,
+## Sorceress Queen) and the P/T half of an animation (Mishra's Factory):
+## a static's timestamp is its source's. Humility's "have base power and
+## toughness 1/1" is such a static — a Factory animated after Humility is
+## a 2/2, one animated before it a 1/1. Paired with
+## [method reading_abilities] the setter is a characteristic-defining
+## ability that COUNTS an ability (Dauthi Warlord's "creatures with
+## shadow") and is applied after layer 6 instead (CR 613.1, 613.4a).
 var sets_base_pt: bool = false
 
 ## Fluent: mark this static as a CR 613 layer-7b base-P/T setter.
@@ -226,6 +236,10 @@ func changing_abilities() -> StaticAbility:
 var reads_abilities: bool = false
 
 ## Fluent: mark this layer-6 static as reading a layer-6 ability (CR 613.8a).
+## On a [method setting_base_pt] static (Pack 9 E5) it marks a
+## characteristic-defining P/T that counts an ability — Dauthi Warlord —
+## applied after the whole of layer 6 (and any layer-7b setter still wins
+## over it, CR 613.4).
 func reading_abilities() -> StaticAbility:
 	reads_abilities = true
 	return self
@@ -236,12 +250,64 @@ func reading_abilities() -> StaticAbility:
 ## P/T layer, and an ability that has been removed contributes nothing in
 ## ANY layer, so these run FIRST and every later pass skips a source whose
 ## abilities are gone.
+##
+## THE CONTRACT: the callback raises [member CardInstance.cur_abilities_silenced]
+## on every permanent it affects, and nothing else ([method
+## removing_all_abilities] builds exactly that). The ENGINE does the rest:
+##
+## - Dependency (CR 613.8a): a silenced permanent's own statics, triggers,
+##   activated and mana abilities do nothing, whatever the timestamps — a
+##   Talon Sliver entering after Humility grants no first strike.
+## - Timestamp (Pack 9 E5, CR 613.7): the removal itself happens in layer 6
+##   at its source's timestamp ([method ContinuousEffects._layer_six]):
+##   keywords, landwalk, protection, rampage, banding, shroud, evasion,
+##   mana/activated/triggered abilities — printed or granted EARLIER — go,
+##   and a grant made LATER (an Aura attached after Humility, a Jump cast
+##   after it, a Life Matrix activation) survives.
+## - When: a silencer that also retypes ([method changing_types], the
+##   Song) runs before layer 4 as it always did; a pure one (Humility) runs
+##   after it, so it reaches a Forest Living Lands made a creature.
 var silences_abilities: bool = false
 
 ## Fluent: mark this static as an ability remover.
 func silencing_abilities() -> StaticAbility:
 	silences_abilities = true
 	return self
+
+
+# ------------------------------------------- Pack 9 E5: ready-made statics --
+
+## "<Affected permanents> lose all abilities." (Humility: "All creatures").
+## [param affects] is `func(game: MtgGame, source: CardInstance,
+## inst: CardInstance) -> bool`, asked of every battlefield permanent after
+## layer 4 (so an animated land is a creature by then). See
+## [member silences_abilities] for what the engine does with it.
+static func removing_all_abilities(affects: Callable, p_text: String) -> StaticAbility:
+	return StaticAbility.new(StaticAbility._silence_matching.bind(affects),
+		p_text).silencing_abilities()
+
+
+static func _silence_matching(game: MtgGame, source: CardInstance, affects: Callable) -> void:
+	for inst in game.all_battlefield():
+		if not inst.phased_out and affects.call(game, source, inst):
+			inst.cur_abilities_silenced = true
+
+
+## "<Affected permanents> have base power and toughness P/T." (Humility's
+## 1/1) — a layer-7b setter at its source's timestamp (see
+## [member sets_base_pt]). [param affects] as in [method removing_all_abilities].
+static func base_pt_for(affects: Callable, power: int, toughness: int,
+		p_text: String) -> StaticAbility:
+	return StaticAbility.new(StaticAbility._set_matching.bind(affects, power, toughness),
+		p_text).setting_base_pt()
+
+
+static func _set_matching(game: MtgGame, source: CardInstance, affects: Callable,
+		power: int, toughness: int) -> void:
+	for inst in game.all_battlefield():
+		if not inst.phased_out and affects.call(game, source, inst):
+			inst.cur_power = power
+			inst.cur_toughness = toughness
 
 
 ## Does this static change COLOURS — CR 613 LAYER 5 ("Nonland permanents

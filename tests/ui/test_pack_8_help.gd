@@ -33,12 +33,14 @@ func _headings(page: Dictionary) -> Array:
 	return out
 
 
-func test_the_three_mirage_pages_close_the_help() -> void:
+func test_the_three_mirage_pages_come_just_before_the_tempest_pages() -> void:
 	var titles := HelpPages.pages().map(func(p: Dictionary) -> String: return String(p.title))
-	assert_eq(titles.slice(-3), ["Abilities — Mirage block phasing and flanking",
+	var at := titles.find("Abilities — Mirage block phasing and flanking")
+	assert_gt(at, 0, "the Mirage pages are in the final chapter")
+	assert_eq(titles.slice(at, at + 4), ["Abilities — Mirage block phasing and flanking",
 		"Abilities — Mirage block flash and costs",
-		"Abilities — Mirage block digital adaptations"],
-		"the newest pack's pages end the final chapter")
+		"Abilities — Mirage block digital adaptations",
+		"Abilities — Tempest block shadow and blocking"], "Pack 8's pages, then Pack 9's")
 
 
 func test_the_mechanics_are_explained() -> void:

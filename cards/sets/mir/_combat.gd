@@ -125,7 +125,7 @@ static func configure(c: CardData) -> bool:
 			c.static_ability(StaticAbility.new(_hyenas, "This creature can't block black creatures."))
 		"Jolrael's Centaur":
 			flanking(c)
-			c.static_ability(StaticAbility.new(_shroud, "Shroud."))
+			c.static_ability(StaticAbility.new(_shroud, "Shroud.").changing_abilities())
 		"Jungle Wurm":
 			c.triggered(TriggeredAbility.new(Mtg.EventType.BECOMES_BLOCKED, _jungle_wurm,
 				"Whenever this creature becomes blocked, it gets -1/-1 until end of turn for each creature blocking it beyond the first.",

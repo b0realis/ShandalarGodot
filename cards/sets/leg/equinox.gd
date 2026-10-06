@@ -8,7 +8,10 @@ extends CardScript
 ## host (CardInstance.cur_activated_abilities, the same list Zombie Master
 ## appends to), so it really belongs to the land: it is refused while the
 ## land is tapped, it is gone the moment the Aura leaves, and a land stolen
-## with the Equinox on it hands the ability to the thief.
+## with the Equinox on it hands the ability to the thief. The grant is a
+## CR 613 layer-6 effect at the Aura's timestamp (changing_abilities, CR
+## 613.7): on a land that is a creature (Living Lands), a Humility that
+## entered after the Equinox removes the ability, one before it does not.
 ##
 ## "If it would destroy a land you control" is judged when the ability
 ## RESOLVES, because it is a condition on the effect and not on the target —
@@ -23,7 +26,8 @@ func build() -> CardData:
 		.enchants(TargetSpec.new(TargetSpec.Kind.PERMANENT, "enchant land",
 			_is_land)) \
 		.static_ability(StaticAbility.new(
-			_grant, "Enchanted land has \"{T}: Counter target spell if it would destroy a land you control.\"")) \
+			_grant, "Enchanted land has \"{T}: Counter target spell if it would destroy a land you control.\"") \
+			.changing_abilities()) \
 		.oracle("Enchant land\nEnchanted land has \"{T}: Counter target spell if "
 			+ "it would destroy a land you control.\"")
 

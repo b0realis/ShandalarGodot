@@ -9,7 +9,7 @@ static func configure(c: CardData) -> bool:
 	match c.card_name:
 		"Elvish Ranger", "Kjeldoran Escort", "Storm Crow": pass
 		"Aesthir Glider": c.static_ability(StaticAbility.new(_no_block, "This creature can't block."))
-		"Deadly Insect": c.static_ability(StaticAbility.new(_shroud, "Shroud."))
+		"Deadly Insect": c.static_ability(StaticAbility.new(_shroud, "Shroud.").changing_abilities())
 		"Elvish Bard": c.static_ability(StaticAbility.new(_lure, "All creatures able to block this creature do so."))
 		"Balduvian War-Makers": c.rampage = 1
 		"Gorilla Berserkers":
@@ -83,7 +83,9 @@ static func _adnate_food(i: CardInstance) -> bool: return i.is_creature() and (i
 static func _no_block(_g: MtgGame, s: CardInstance) -> void: s.cur_cant_block_filter = _anything
 static func _anything(_i: CardInstance) -> bool: return true
 static func _shroud(_g: MtgGame, s: CardInstance) -> void: s.cur_shroud = true
-static func _lure(_g: MtgGame, s: CardInstance) -> void: s.cur_must_be_blocked = true
+static func _lure(_g: MtgGame, s: CardInstance) -> void:
+	s.cur_must_be_blocked = true
+	s.cur_must_be_blocked_by_all = true   # every creature, not a narrowed few
 static func _three_blockers(_g: MtgGame, s: CardInstance) -> void: s.cur_min_blockers = maxi(3, s.cur_min_blockers)
 static func _not_fighting(g: MtgGame, i: CardInstance) -> bool: return not g.combat.attackers.has(i.id) and not F._blocking(g, i)
 static func _blocks(g: MtgGame, s: CardInstance, _e: GameEvent) -> bool: return F._blocking(g, s)

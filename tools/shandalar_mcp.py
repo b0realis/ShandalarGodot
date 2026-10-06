@@ -1445,12 +1445,27 @@ def resolve_target(word, slot: dict, refs: dict, cards: dict, seat: int) -> str 
         matches = [r for r in rows
                    if (r["what"] in cards and str(cards[r["what"]].get("name", "")).casefold() == name)
                    or r["label"].casefold() == name or r["label"].casefold().startswith(name + " — ")
-                   or r["label"].casefold() == "ability: " + name]
+                   or r["label"].casefold() == "ability: " + name
+                   # a trigger as a "spell or ability" target (protocol 28)
+                   or r["label"].casefold() == "triggered ability: " + name]
         if len(matches) > 1:
             raise CastRefused(f"several targets are called '{text}': "
                               + "; ".join(f"{r['token']} {r['label']}" + (f" [{r['what']}]" if r["what"] else "")
                                           for r in matches) + " — name one by its id or token", "target")
     return matches[0]["token"] if matches else None
+
+
+def slot_span(slot: dict, earlier_tokens) -> tuple[int, int]:
+    """A slot's (min, max): its own — or, for a count an EARLIER target
+    sets (protocol 28, Reap: "up to X target cards, where X is the number of
+    black permanents target opponent controls"), the `counts` row of the
+    earlier slot's token that was picked. The slot's own pair is then the
+    widest any pick allows, which the referee refuses past."""
+    low, high = int(slot.get("min", 0) or 0), int(slot.get("max", 0) or 0)
+    for row in slot.get("counts") or []:
+        if isinstance(row, list) and len(row) == 3 and str(row[0]) in earlier_tokens:
+            return int(row[1]), int(row[2])
+    return low, high
 
 
 def map_targets(announcement: dict, view: dict, seat: int, wanted: list) -> list[dict]:
@@ -1493,14 +1508,15 @@ def map_targets(announcement: dict, view: dict, seat: int, wanted: list) -> list
                 raise CastRefused(f"{word}: more targets than the spell takes" if slots else
                                   f"{announcement.get('name', 'this')} takes no targets", "target", legal=legal)
             slot = slots[current]
-            if len(placed[current]) >= int(slot.get("max", 0) or 0):
+            low, high = slot_span(slot, {p["token"] for row in placed[:current] for p in row})
+            if len(placed[current]) >= high:
                 current += 1
                 continue
             token = find(word, slot)
             if token is not None and not any(p["token"] == token for p in placed[current]):
                 placed[current].append({"token": token, "amount": amount, "word": word})
                 break
-            if len(placed[current]) >= int(slot.get("min", 0) or 0) and current + 1 < len(slots):
+            if len(placed[current]) >= low and current + 1 < len(slots):
                 current += 1
                 continue
             raise CastRefused(f"{word} is not a legal target for {announcement.get('name', 'this')} "
@@ -1508,9 +1524,13 @@ def map_targets(announcement: dict, view: dict, seat: int, wanted: list) -> list
     out: list[dict] = []
     for i, slot in enumerate(slots):
         rows = placed[i]
-        if len(rows) < int(slot.get("min", 0) or 0):
-            raise CastRefused(f"slot {i} ({slot.get('label', 'target')}) needs at least {slot.get('min')} target(s) "
+        low, high = slot_span(slot, {p["token"] for row in placed[:i] for p in row})
+        if len(rows) < low:
+            raise CastRefused(f"slot {i} ({slot.get('label', 'target')}) needs at least {low} target(s) "
                               f"— give `targets`", "target", legal=legal)
+        if slot.get("counts") and len(rows) > high:
+            raise CastRefused(f"slot {i} ({slot.get('label', 'target')}) takes at most {high} target(s) "
+                              f"with the targets before it", "target", legal=legal)
         divided = int(slot.get("divided", 0) or 0)
         amounts = [r["amount"] for r in rows]
         if divided and rows:

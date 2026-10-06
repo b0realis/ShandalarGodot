@@ -47,8 +47,19 @@ static func options(card: CardInstance, pid: int, referee: MtgGame = null) -> Ar
 	# the cast would ([method spell_refusal]).
 	if spell_source and not card.is_land():
 		var modes: Array = []
-		for mode in card.data.modes:
-			modes.append(String(mode.get("label", mode.get("name", "Mode"))))
+		if referee != null:
+			# THE REFEREE'S PAYMENT ROWS (Pack 9, MtgGame.payment_rows): the
+			# card's modes and printed rows — a BUYBACK row among them, said
+			# as one (DuelScreen.payment_row_label) — then the rows a
+			# permanent GRANTS it (Dream Halls, Aluren), so a plain spell
+			# under Dream Halls has two. `mode` indexes this list.
+			var rows := referee.payment_rows(pid, card)
+			if card.data.is_modal() or rows.size() > 1:
+				for row: Dictionary in rows:
+					modes.append(DuelScreen.payment_row_label(row).left(128))
+		else:
+			for mode in card.data.modes:
+				modes.append(String(mode.get("label", mode.get("name", "Mode"))))
 		result.append({"kind": "spell", "index": 0, "label": "Cast " + card.data.card_name,
 			"x": card.data.cost.has_x or not card.data.repeated_additional_cost.is_empty(), "modes": modes})
 	var borrowed := referee != null and referee.may_tap_foreign_land(pid, card)
@@ -155,12 +166,31 @@ static func spell_aimed(g: MtgGame, pid: int, card: CardInstance, mode: int, x :
 	if card.data.is_aura():
 		effects = []
 		aura = card.data.aura_target
-	elif card.data.is_modal():
-		if mode < 0 or mode >= card.data.modes.size(): return false
-		effects = card.data.modes[mode].get("effects", [])
-	var has_x := card.data.payment_base(mode).has_x or card.data.cost.has_x \
+	elif card.data.is_modal() or mode > 0:
+		# A mode, or a payment row (Pack 9 — a buyback row, a row a
+		# permanent grants): the effects the row casts.
+		if mode < 0: return false
+		if pid >= 0:
+			if mode >= g.payment_rows(pid, card).size(): return false
+			effects = SgPayment.row_effects(g, pid, card, mode)
+		else:
+			if mode >= card.data.modes.size(): return false
+			effects = card.data.modes[mode].get("effects", [])
+	var has_x := row_cost(g, pid, card, mode).has_x or card.data.cost.has_x \
 		or not card.data.repeated_additional_cost.is_empty()
 	return aimed(g, pid, card, effects, aura, x, has_x, "spell", 0, mode)
+
+
+## The MANA of payment row [param mode] of [param card] as it is printed
+## or granted — the printed cost, a mode's or an alternative row's own, a
+## BUYBACK row's printed cost plus its buyback, a granted row's (Pack 9:
+## [method MtgGame.payment_option_for]). Cost modifiers are the payment's
+## business ([method SgPayment.due]).
+static func row_cost(g: MtgGame, pid: int, card: CardInstance, mode: int) -> ManaCost:
+	if g == null or pid < 0:
+		return card.data.payment_base(mode)
+	var cost: Variant = g.payment_option_for(pid, card.data, mode, card).get("cost", card.data.cost)
+	return cost if cost is ManaCost else card.data.cost
 
 
 ## Does every slot of [param effects] that demands a target (and
@@ -201,7 +231,7 @@ static func _aimed_at(g: MtgGame, card: CardInstance, effects: Array, aura: Targ
 ## spell without modes.
 static func open_modes(g: MtgGame, pid: int, card: CardInstance) -> Array:
 	var out: Array = []
-	for mode in card.data.modes.size():
+	for mode in g.payment_rows(pid, card).size():
 		if spell_refusal(g, pid, card, mode, -1).is_empty() and SgPayment.mode_affordable(g, pid, card, mode, true):
 			out.append(mode)
 	return out
@@ -250,13 +280,13 @@ func auto_prepare(pid: int, card: CardInstance, action: Dictionary, excluded: Di
 	# click never decides it either (DuelScreen._auto_cast).
 	if card != null and action.kind == "spell" and card.data.additional_life_is_x:
 		return "Choose the life payment explicitly."
-	if card != null and SgPayment.object_x(card, String(action.kind), int(action.index), int(action.mode)):
+	if card != null and SgPayment.object_x(card, String(action.kind), int(action.index), int(action.mode), game, pid):
 		return "Choose X explicitly: it counts cards or permanents, not mana."
 	var request_data := action.duplicate()
 	request_data.x = 0
 	var error := prepare(pid, card, request_data, false)
 	if not error.is_empty(): return error
-	var cost: ManaCost = card.data.payment_base(draft.mode) if draft.kind == "spell" else card.cur_activated_abilities[draft.index].cost
+	var cost: ManaCost = row_cost(game, pid, card, int(draft.mode)) if draft.kind == "spell" else card.cur_activated_abilities[draft.index].cost
 	if cost.has_x or (draft.kind == "spell" and not card.data.repeated_additional_cost.is_empty()):
 		draft.x = SgPayment.budget(game, pid, card, draft.kind, draft.index, ManaPlanner.sources(game, pid, excluded), action.count, draft.mode)
 	# The spell's targets and object costs at the X it will be cast for,
@@ -272,16 +302,45 @@ func auto_prepare(pid: int, card: CardInstance, action: Dictionary, excluded: Di
 	return autopay(pid, excluded, action.count)
 
 
+## The seat's SPECIAL ACTIONS, the `special` op's list (its `index`):
+## Channel, a paid point of prevention, a ransom — and Pack 9's two that
+## belong to a permanent, from the engine's own list ([method
+## MtgGame.special_actions]): a licid's "pay {end} to end this effect"
+## (`licid_end`) and Volrath's Curse's sacrifice to ignore it
+## (`ignore_effect`). Those two are listed only while the engine would
+## take them now ([method MtgGame.special_action_refusal] — USABLE ONLY,
+## as every option a program reads): an ignore is on offer every moment a
+## cursed creature's controller holds priority, and a list a program must
+## stop for should never hold a payment it cannot make. `card` is the
+## permanent an entry belongs to (the presentation's `special_rows`).
 func special_entries(pid: int) -> Array:
 	var entries: Array = []
 	if game.players[pid].life_for_mana:
 		entries.append({"label": "Channel — pay 1 life for one colorless mana", "kind": "channel"})
 	for entry in game.players[pid].paid_prevention:
+		var shielded: CardInstance = null if entry.target.is_player else game.find_instance(entry.target.instance_id)
 		entries.append({"label": "Pay {1}: prevent 1 damage to " + target_label(entry.target, pid),
-			"kind": "prevention", "target": entry.target})
+			"kind": "prevention", "target": entry.target, "card": shielded})
 	for entry in game.settleable_delayed_triggers(pid):
-		entries.append({"label": "Pay %s: %s" % [entry.settle_cost, entry.desc], "kind": "settle", "id": entry.id})
+		entries.append({"label": "Pay %s: %s" % [entry.settle_cost, entry.desc], "kind": "settle", "id": entry.id,
+			"card": _existing(entry.get("source"))})
+	for row: Dictionary in game.special_actions(pid):
+		if String(row.kind) not in ["licid_end", "ignore_effect"]: continue
+		if not game.special_action_refusal(pid, row).is_empty(): continue
+		entries.append({"label": String(row.label), "kind": String(row.kind), "id": int(row.id),
+			"card": _existing(row.get("card")), "row": row})
 	return entries
+
+
+## [param card] when it STILL EXISTS — the game's own object of that id —
+## else null (Pack 9 bug pass). A ransom's `source` is the Sabertooth Cobra
+## that bit, kept by reference: a TOKEN Cobra (Echo Chamber's copy) has
+## ceased to exist since (CR 111.7), and a row naming it named a card no
+## zone of the view carries.
+func _existing(card: Variant) -> CardInstance:
+	if not card is CardInstance: return null
+	var live := game.find_instance((card as CardInstance).id)
+	return live if live == card else null
 
 
 func specials(pid: int) -> Array:
@@ -298,6 +357,10 @@ func special(pid: int, index: int) -> String:
 		"channel": return game.pay_life_for_mana(pid)
 		"prevention": return game.pay_for_prevention(pid, entry.target)
 		"settle": return game.settle_delayed_trigger(pid, entry.id)
+		# The engine's one door (Pack 9): a licid's end is paid by the
+		# referee itself; an ignore holds its sacrifice as a cost question
+		# the seat answers with `choice` or withdraws with `cancel`.
+		"licid_end", "ignore_effect": return game.take_special_action(pid, entry.row)
 	return "Action unavailable."
 
 
@@ -310,7 +373,9 @@ func request(pid: int) -> Dictionary:
 		if source.data.is_aura():
 			slots.append({"spec": source.data.aura_target, "min": 1, "max": 1, "divided": 0})
 		else:
-			effects = source.data.spell_effects if not source.data.is_modal() else source.data.modes[draft.mode].effects
+			# The chosen PAYMENT ROW's effects (Pack 9: a row a permanent
+			# grants casts the printed row it is built on).
+			effects = SgPayment.row_effects(game, pid, source, int(draft.mode))
 	elif draft.kind == "ability":
 		if draft.index >= source.cur_activated_abilities.size(): return {}
 		effects = source.cur_activated_abilities[draft.index].effects
@@ -318,7 +383,8 @@ func request(pid: int) -> Dictionary:
 		if effect.target_spec == null or not effect.target_spec.is_supplied_by_caster(): continue
 		var span: Vector2i = effect.target_range(draft.x)
 		slots.append({"spec": effect.target_spec, "min": span.x, "max": span.y,
-			"clamp": effect.target_count_is_x, "divided": maxi(0, effect.divided_amount(draft.x))})
+			"clamp": effect.target_count_is_x, "divided": maxi(0, effect.divided_amount(draft.x)),
+			"effect": effect})
 	_targets.clear()
 	var result: Array = []
 	for slot in slots:
@@ -333,9 +399,44 @@ func request(pid: int) -> Dictionary:
 		if slot.get("clamp", false):
 			minimum = mini(minimum, candidates.size())
 			maximum = mini(maximum, candidates.size())
+		var counts := _counted_slot(source, slot, result, candidates.size())
+		if not counts.is_empty():
+			# The slot's own range is the widest any earlier pick allows;
+			# the seat's screen narrows it to the pick it makes.
+			minimum = int(counts[0][1])
+			maximum = int(counts[0][2])
+			for row in counts:
+				minimum = mini(minimum, int(row[1]))
+				maximum = maxi(maximum, int(row[2]))
 		result.append({"label": slot.spec.description, "kind": slot.spec.kind, "min": minimum, "max": maximum,
-			"divided": slot.divided, "targets": candidates})
+			"divided": slot.divided, "targets": candidates, "counts": counts})
 	return {"name": source.data.card_name, "kind": draft.kind, "x": draft.x, "slots": result}
+
+
+## A TARGET COUNT ANOTHER TARGET SETS (Pack 9 — Reap: "up to X target
+## cards …, where X is the number of black permanents target opponent
+## controls", CR 601.2c): `[token, min, max]` per candidate of the ONE
+## earlier target the count reads — [method EffectBase.target_range_at]
+## asked with that candidate as the earlier ref, the maximum bounded by
+## the [param available] candidates of this slot — so the seat's screen
+## narrows the slot to the opponent it picks (SgDuelView._counted_range)
+## and the referee judges the submit as the cast will (TargetPlan).
+## [] for an ordinary slot, and when the slots before it hold anything
+## but exactly one target (no card in the pool reads more).
+func _counted_slot(source: CardInstance, slot: Dictionary, earlier_slots: Array, available: int) -> Array:
+	var effect: Variant = slot.get("effect")
+	if not effect is EffectBase or not (effect as EffectBase).target_count_fn.is_valid():
+		return []
+	if earlier_slots.size() != 1 or int(earlier_slots[0].min) != 1 or int(earlier_slots[0].max) != 1:
+		return []
+	var out: Array = []
+	for candidate in earlier_slots[0].targets:
+		var ref: TargetRef = _targets.get(candidate.id)
+		if ref == null: continue
+		var span := (effect as EffectBase).target_range_at(game, source, int(draft.x), [ref])
+		var most := available if span.y < 0 else mini(span.y, available)
+		out.append([String(candidate.id), mini(span.x, most), most])
+	return out
 
 
 func target_label(target: TargetRef, pid: int) -> String:
@@ -345,9 +446,12 @@ func target_label(target: TargetRef, pid: int) -> String:
 		if packet == null: return "Damage no longer pending"
 		return "Damage %d: %s" % [packet.amount, target_label(packet.target, pid)]
 	if target.is_ability:
-		var item := game.find_stack_ability(target.ability_id)
+		# An activated ability, or — for "target spell or ability" (Pack 9,
+		# Silver Wyvern) — a TRIGGERED one (MtgGame.find_stack_object).
+		var item := game.find_stack_object(target.ability_id)
 		if item == null: return "Ability no longer on stack"
-		return "Ability: " + (item.card.data.card_name if item.card != null and not item.card.face_down else "Face-down card")
+		return ("Triggered ability: " if item.kind == Mtg.StackKind.TRIGGER else "Ability: ") \
+			+ (item.card.data.card_name if item.card != null and not item.card.face_down else "Face-down card")
 	var card := game.find_instance(target.instance_id)
 	if card == null: return "Unavailable"
 	if card.zone == Mtg.Zone.LIBRARY: return "Hidden card"

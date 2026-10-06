@@ -1192,6 +1192,9 @@ func refresh() -> void:
 	if instance.zone == Mtg.Zone.BATTLEFIELD and instance.cur_cant_phase_out \
 			and not states.has(State.PHASED):
 		tooltip_text += "\n" + CANT_PHASE_OUT_NOTE
+	# Pack 9's combat states, in words (rules information, not a cue card).
+	for line in combat_notes():
+		tooltip_text += "\n" + line
 	# `Show cue cards` (§6.4) — *"controls the appearance of the tiny hints
 	# that pop up when you position the mouse cursor over an active
 	# location. If you don't like the little tips, toggle the cue cards
@@ -2620,6 +2623,16 @@ const REGENERATION_SLOT := 15
 ## `Mtg.ManaColor` bitmask with no room for a non-colour entry. The
 ## predicate is [method warded_from_artifacts].
 const ARTIFACT_PROTECTION_SLOT := 10
+## SHADOW (CR 702.28, Pack 9 — the Tempest block) has NO CELL on the 1997
+## ability sheet: the keyword was printed a year after the game shipped,
+## and none of the sheet's eighteen pictures means it. So its badge is
+## drawn here ([method shadow_badge]) — the same 22px disc the sheet's
+## cells are, a dark violet ground with a pale crescent, the shade
+## Tempest's Dauthi and Soltari are named for. It is not in
+## [constant BADGE_SLOT] because that table addresses the sheet (Help's
+## icon pages explain every cell of it), and it is keyed apart in the
+## badge cache below so no sheet slot can collide with it.
+const SHADOW_BADGE_KEY := -14
 static var _badge_cache: Dictionary = {}
 
 
@@ -2672,6 +2685,68 @@ static func badge_from_slot(slot: int) -> Texture2D:
 	return result
 
 
+## THE SHADOW BADGE ([constant SHADOW_BADGE_KEY]): a disc the size of a
+## sheet cell, drawn once and cached — a violet-black ground, a pale
+## violet crescent on its left rim, the corners clear (the same inscribed
+## circle and one-pixel feather [method badge_from_slot] cuts the sheet's
+## cells to). It needs no imported skin: there is nothing of 1997 to read.
+static func shadow_badge() -> Texture2D:
+	if _badge_cache.has(SHADOW_BADGE_KEY):
+		return _badge_cache[SHADOW_BADGE_KEY]
+	const CELL := 22
+	var img := Image.create(CELL, CELL, false, Image.FORMAT_RGBA8)
+	var centre := (CELL - 1) / 2.0
+	var radius := CELL * 0.51
+	var ground := Color(0.13, 0.09, 0.19)
+	var rim := Color(0.86, 0.80, 0.98)
+	var outline := Color(0.03, 0.02, 0.05)
+	for y in CELL:
+		for x in CELL:
+			var dist := Vector2(x - centre, y - centre).length()
+			var px := ground
+			# The crescent: inside the disc, outside a second disc shifted
+			# right — a thin moon on the left rim.
+			var inner := Vector2(x - centre - 3.5, y - centre).length()
+			if dist <= radius - 3.0 and inner > radius - 3.5:
+				px = rim
+			elif dist > radius - 2.0:
+				px = outline
+			px.a = 1.0 if dist <= radius - 1.0 else \
+				(maxf(0.0, radius - dist) if dist < radius else 0.0)
+			img.set_pixel(x, y, px)
+	var tex := ImageTexture.create_from_image(img)
+	_badge_cache[SHADOW_BADGE_KEY] = tex
+	return tex
+
+
+## The RULES LINES a permanent's tooltip adds for the combat states Pack 9
+## brought, which neither the 1997 sheet nor its cue cards have a word
+## for: shadow (printed or granted, CR 702.28b), "can block creatures with
+## shadow as though it had shadow", and a block REQUIREMENT — "blocks each
+## combat if able" (Watchdog, Invasion Plans) or "blocks this turn if
+## able" (Provoke), CR 509.1c. Read off the live values, so a grant or a
+## loss until end of turn is what the line says. Empty off the battlefield.
+func combat_notes() -> Array[String]:
+	var out: Array[String] = []
+	if instance == null or instance.zone != Mtg.Zone.BATTLEFIELD or instance.face_down:
+		return out
+	if instance.has_keyword(Mtg.Keyword.SHADOW):
+		out.append(SHADOW_NOTE)
+	elif instance.cur_blocks_shadow:
+		out.append(BLOCKS_SHADOW_NOTE)
+	if instance.cur_must_block:
+		out.append(MUST_BLOCK_NOTE)
+	elif instance.must_block_this_turn_any:
+		out.append(MUST_BLOCK_TURN_NOTE)
+	return out
+
+
+const SHADOW_NOTE := "Shadow: it can block or be blocked by only creatures with shadow."
+const BLOCKS_SHADOW_NOTE := "It can block creatures with shadow as though it had shadow."
+const MUST_BLOCK_NOTE := "It blocks each combat if able."
+const MUST_BLOCK_TURN_NOTE := "It blocks this turn if able."
+
+
 ## Does this permanent regenerate ITSELF? There is no regeneration
 ## keyword in this engine, so the honest question is "has it an activated
 ## ability whose effect is a `RegenerateEffect` with no target spec" — a
@@ -2718,6 +2793,16 @@ static func _names_artifacts(entries: Array) -> bool:
 	return false
 
 
+## How many of [param slots] are KEYWORD cells (they come first), so the
+## shadow disc sits with the keywords rather than after the shields.
+static func _keyword_badge_count(slots: Array[int]) -> int:
+	var n := 0
+	for slot in slots:
+		if BADGE_SLOT.values().has(slot):
+			n += 1
+	return n
+
+
 func _rebuild_badges() -> void:
 	# remove_child BEFORE queue_free: a freed-but-not-yet-collected child is
 	# still in get_children() for the rest of the frame, so two refreshes in
@@ -2760,8 +2845,14 @@ func _rebuild_badges() -> void:
 			slots.append(PROTECTION_SLOT[color])
 	if warded_from_artifacts() and not slots.has(ARTIFACT_PROTECTION_SLOT):
 		slots.append(ARTIFACT_PROTECTION_SLOT)
+	# SHADOW (Pack 9): our own drawn disc, after the sheet's keywords and
+	# before nothing else — one badge however many instances it has
+	# (CR 702.28c), live, so a Shadow Rift grant shows and Reality Anchor's
+	# loss takes it off.
+	if instance.has_keyword(Mtg.Keyword.SHADOW):
+		slots.insert(_keyword_badge_count(slots), SHADOW_BADGE_KEY)
 	for slot in slots:
-		var tex := badge_from_slot(slot)
+		var tex := shadow_badge() if slot == SHADOW_BADGE_KEY else badge_from_slot(slot)
 		if tex == null:
 			continue
 		var badge := TextureRect.new()

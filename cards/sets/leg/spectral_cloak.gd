@@ -8,13 +8,18 @@ extends CardScript
 ## alike (that is what shroud means, unlike Anti-Magic Aura's
 ## spells-only ban). Attacking taps the host, which is exactly when the
 ## opponent gets their window.
+##
+## Shroud is an ABILITY the Aura grants — a CR 613 layer-6 effect at the
+## Aura's timestamp (changing_abilities, CR 613.7): a Humility that
+## entered after the Cloak removes it, one that entered before does not.
 
 
 func build() -> CardData:
 	return CardData.new("Spectral Cloak", "{U}{U}", Mtg.CardType.ENCHANTMENT) \
 		.enchants(TargetSpec.creature()) \
 		.static_ability(StaticAbility.new(
-			_apply, "Enchanted creature has shroud as long as it's untapped.")) \
+			_apply, "Enchanted creature has shroud as long as it's untapped.") \
+			.changing_abilities()) \
 		.oracle("Enchant creature\nEnchanted creature has shroud as long as it's "
 			+ "untapped. (It can't be the target of spells or abilities.)")
 

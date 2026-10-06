@@ -1080,6 +1080,18 @@ const AURA_HOSTILE := {
 	"Teferi's Curse": true,        # their permanent is gone half the time
 	"Wellspring": true,            # their land, ours each upkeep
 	"Betrayal": true,              # their creature taps, we draw
+	# THE TEMPEST BLOCK (Pack 9, 2026-10-06, the AI stage's sweep of the
+	# pack's Auras). Paroxysm reads either way at a glance and is here for
+	# Essence Flare's reason: its upkeep reveal destroys the host whenever
+	# the top card is a land, so on our own board it gambles our creature
+	# away a turn at a time, and on theirs the worst case is a bigger
+	# attacker on their own turn until the land comes. The friendly rest
+	# are the every-pack test's reviewed list.
+	"Torment": true,               # -3/-0
+	"Contempt": true,              # bounces its attacker at end of combat
+	"Volrath's Curse": true,       # can't attack or block, no activations
+	"Shackles": true,              # doesn't untap
+	"Paroxysm": true,              # a land on top destroys it
 }
 
 
@@ -1158,6 +1170,10 @@ const AURA_GRANTS := {
 	"has trample": {"keyword": Mtg.Keyword.TRAMPLE, "attack_only": true},
 	"as though it had haste": {"keyword": Mtg.Keyword.HASTE, "attack_only": true},
 	"can't be blocked": {"keyword": Mtg.Keyword.UNBLOCKABLE, "attack_only": true},
+	# Shadow (Pack 9 E1): evasion that also takes away every block but a
+	# shadow creature's (CR 702.28b) — a gift only to a creature that
+	# attacks, never to a Wall.
+	"has shadow": {"keyword": Mtg.Keyword.SHADOW, "attack_only": true},
 	# A shield is anyone's gift — Artifact Ward's second line, which
 	# keeps it sensible on a Wall (the owner: "artifact ward is somehow
 	# sensible also on a wall"), whatever its first line says.
@@ -1269,6 +1285,37 @@ static func aura_fits(data: CardData, host: CardInstance) -> bool:
 			continue
 		return true
 	return false
+
+
+static var _worst_toughness_cache: Dictionary = {}
+
+
+## THE DOWNSIDE CLAUSE (Pack 9, 2026-10-06): the WORST toughness change
+## any "gets +N/-M" phrase of [param data]'s printed text can put on the
+## creature it enchants — Tahngarth's Rage's "+3/+0 as long as it's
+## attacking. Otherwise, it gets -2/-1" is -1, Cursed Flesh's -1/-1 is -1,
+## Flowstone Blade's activated +1/-1 is -1, Hero's Resolve's +1/+5 is 5,
+## and a card with no such phrase is 0. The pump reader
+## ([method MirageTactics.aura_pump]) reads the FIRST phrase only, and the
+## first phrase of the Rage is its upside: the picker hung it on our own
+## Llanowar Elves, which the -1 toughness killed the moment it was not
+## attacking (CR 704.5f). Read off the oracle text like [method
+## aura_gifts], cached by name (the answer is a function of the text).
+static func aura_worst_toughness(data: CardData) -> int:
+	if data == null:
+		return 0
+	var hit: Variant = _cache_get(_worst_toughness_cache, data.card_name)
+	if hit != null:
+		return int(hit)
+	var regex := RegEx.new()
+	regex.compile("gets ([+-]\\d+)/([+-]\\d+)")
+	var worst := 0
+	var seen := false
+	for m in regex.search_all(data.oracle_text.to_lower()):
+		var y := int(m.get_string(2).trim_prefix("+"))
+		worst = y if not seen else mini(worst, y)
+		seen = true
+	return int(_cache_put(_worst_toughness_cache, data.card_name, worst))
 
 
 # ------------------------------------------------------------ the repeat --
@@ -1783,3 +1830,47 @@ static func destroys_the_tapped(ability: ActivatedAbility) -> bool:
 	if spec == null or spec.kind != TargetSpec.Kind.CREATURE:
 		return false
 	return (ability.text + " " + spec.description).to_lower().contains("tapped")
+
+
+## THE TRIGGER THAT SACRIFICES ITS OWN SOURCE (Pack 9 bug pass,
+## 2026-10-06, [member AiProfile.forecasts_tactics]): does a printed
+## trigger line [param text] end in its source being sacrificed — "When you
+## play another land, sacrifice this land" (City of Traitors), "When you
+## play a card, sacrifice this artifact" (Juju Bubble)? The card's own
+## English, the reading [method rent_of_line] and [method toll_of_line]
+## make; the caller supplies the event and asks the trigger's own
+## condition ([method AiPlayer._drop_sacrifices]).
+static func sacrifices_its_source(text: String) -> bool:
+	return text.to_lower().contains("sacrifice this")
+
+
+## THE BODY THAT GROWS WHEN IT IS BLOCKED (Pack 9 bug pass, 2026-10-06,
+## [member AiProfile.forecasts_tactics]): the +N/+N per blocker a printed
+## "becomes blocked" trigger line [param text] gives "that" creature —
+## "Whenever a Sliver becomes blocked, that Sliver gets +1/+1 until end of
+## turn for each creature blocking it" (Spined Sliver), "... it gets +1/+1
+## until end of turn for each creature blocking it" (Elvish Berserker,
+## Barreling Attack) — counted from the FIRST blocker, unlike rampage
+## (CR 702.23). 0 for any other line: a power-only or a toughness-only
+## bonus, a shrink, and "beyond the first" (rampage's own count, which
+## [member CardInstance.cur_rampage] already carries where it is printed)
+## are left unread, so the block planner errs only by under-reading.
+static func growth_per_blocker(text: String) -> int:
+	var lower := text.to_lower()
+	if not lower.contains("for each creature blocking it") \
+			or lower.contains("beyond the first"):
+		return 0
+	var at := lower.find("gets +")
+	if at < 0:
+		return 0
+	var rest := lower.substr(at + 6)
+	var slash := rest.find("/+")
+	if slash <= 0:
+		return 0
+	var power := rest.substr(0, slash).to_int()
+	var tail := rest.substr(slash + 2)
+	var space := tail.find(" ")
+	var toughness := (tail if space < 0 else tail.substr(0, space)).to_int()
+	if power <= 0 or power != toughness:
+		return 0
+	return power

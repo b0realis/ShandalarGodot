@@ -1037,6 +1037,21 @@ func _open_extra_sets() -> void:
 			if filter.set_on("wth") != on:
 				filter.toggle_set("wth"),
 		"Weatherlight (1997): 167 distinct cards, the Mirage block's third set.\nIts own artwork and switch within Pack 8; other filters still apply.")
+	_extra_source_row(body, "Pack9", "Tempest Pack 9", CardRegistry.extra_set_order().has("tmp"),
+		filter.set_on("tmp"), func(on: bool) -> void:
+			if filter.set_on("tmp") != on:
+				filter.toggle_set("tmp"),
+		"Tempest (1997): 335 distinct cards across 350 printings.\nFour illustrations for each basic land; other filters still apply.")
+	_extra_source_row(body, "Stronghold", "Stronghold Pack 9", CardRegistry.extra_set_order().has("sth"),
+		filter.set_on("sth"), func(on: bool) -> void:
+			if filter.set_on("sth") != on:
+				filter.toggle_set("sth"),
+		"Stronghold (1998): 143 distinct cards, the Tempest block's second set.\nIts own artwork and switch within Pack 9; other filters still apply.")
+	_extra_source_row(body, "Exodus", "Exodus Pack 9", CardRegistry.extra_set_order().has("exo"),
+		filter.set_on("exo"), func(on: bool) -> void:
+			if filter.set_on("exo") != on:
+				filter.toggle_set("exo"),
+		"Exodus (1998): 143 distinct cards, the Tempest block's third set.\nIts own artwork and switch within Pack 9; other filters still apply.")
 	dialog.add_button("Close").pressed.connect(dialog.dismiss)
 	_show_dialog(dialog)
 
@@ -5093,6 +5108,7 @@ func _evasion_name(key: Variant) -> String:
 		Mtg.Keyword.FLYING: return "flying"
 		Mtg.Keyword.TRAMPLE: return "trample"
 		Mtg.Keyword.FEAR: return "fear"
+		Mtg.Keyword.SHADOW: return "shadow"
 	return "evasion"
 
 

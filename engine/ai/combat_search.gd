@@ -204,6 +204,15 @@ var d_first: PackedByteArray = PackedByteArray()
 ## arm of every published sweep replays.
 var a_rampage: PackedInt32Array = PackedInt32Array()
 var d_rampage: PackedInt32Array = PackedInt32Array()
+## GROWTH WHEN BLOCKED (Pack 9 bug pass, 2026-10-06, [member
+## AiProfile.forecasts_tactics]): the +N/+N this creature takes for EACH
+## creature blocking it, counted from the FIRST — Spined Sliver's trigger
+## ([method AiPlayer._blocked_growth]). Applied with rampage, before any
+## damage ([method resolve_block]). Zero except for a declared attacker
+## before blocks, zero with the gate off, and arrays shorter than the side
+## read as zero, so the null arm's model is unmoved.
+var a_growth: PackedInt32Array = PackedInt32Array()
+var d_growth: PackedInt32Array = PackedInt32Array()
 ## FLANKING (CR 702.25, 2026-10-03, [member AiProfile.reads_gaze]): how many
 ## instances this creature has. As an ATTACKER it shrinks every blocker
 ## whose own count is zero by that many, before any damage
@@ -307,6 +316,8 @@ func resolve_block(attacker: int, blockers: Array, ours_attacks: bool) -> Array:
 	# of one, which is what pins this model to the engine's own predicate.
 	var ramp := (a_rampage[attacker] if ours_attacks else d_rampage[attacker]) \
 		* (blockers.size() - 1)
+	# GROWTH WHEN BLOCKED (Pack 9 bug pass): from the first blocker.
+	ramp += _growth_of(attacker, ours_attacks) * blockers.size()
 	atk_pow += ramp
 	atk_soak += ramp
 	# FLANKING, before anything is assigned too (CR 702.25): every blocker
@@ -470,6 +481,13 @@ func _raw_back(attacker: int, blocker: int, ours_attacks: bool, shrink: Dictiona
 func _flank_count(index: int, ours: bool) -> int:
 	var counts := a_flanking if ours else d_flanking
 	return counts[index] if index < counts.size() else 0
+
+
+## The per-blocker growth of the ATTACKER [param attacker] (ours when
+## [param ours_attacks]) — zero past the end of a short array.
+func _growth_of(attacker: int, ours_attacks: bool) -> int:
+	var growth := a_growth if ours_attacks else d_growth
+	return growth[attacker] if attacker < growth.size() else 0
 
 
 ## The toughness of the BLOCKER [param blocker] (ours when [param

@@ -114,7 +114,15 @@ const PRIORITY_STEPS: Array[int] = [
 ##   TRIGGER per instance (702.25b), so unlike every keyword above it may
 ##   appear in `cur_keywords` more than once: one entry per instance
 ##   ([Flanking], engine/abilities/flanking.gd).
-enum Keyword { FLYING, REACH, VIGILANCE, HASTE, TRAMPLE, DEFENDER, FIRST_STRIKE, MUST_ATTACK, BANDING, UNBLOCKABLE, FEAR, FLASH, PHASING, FLANKING }
+## - SHADOW: "can block or be blocked by only creatures with shadow"
+##   (CR 702.28b) — CombatState.block_illegality checks both directions on
+##   LIVE keywords; "can block creatures with shadow as though it had
+##   shadow" is CardInstance.cur_blocks_shadow (CombatState.blocks_shadow).
+##   Printed (Tempest's Soltari/Dauthi), granted or lost until end of turn;
+##   multiple instances are redundant (702.28c). Pack 9.
+## APPEND ONLY: the ordinals are serialised (saved games, the SGManalink
+## view protocol checks keyword ints against `Keyword.size()`).
+enum Keyword { FLYING, REACH, VIGILANCE, HASTE, TRAMPLE, DEFENDER, FIRST_STRIKE, MUST_ATTACK, BANDING, UNBLOCKABLE, FEAR, FLASH, PHASING, FLANKING, SHADOW }
 
 ## Events the engine dispatches. TriggeredAbility instances subscribe to
 ## these; the UI layer can also listen (via MtgGame's signals) to animate.

@@ -13,7 +13,8 @@ extends RefCounted
 ## - Block legality (509.1): untapped defender's creature; FLYING blocked
 ##   only by FLYING/REACH; protection's B of DEBT; landwalk (LIVE types —
 ##   Goblin King grants mountainwalk — minus any nullifier, Gosta Dirk);
-##   blocker-subtype bans (Juggernaut); FEAR (702.36); power thresholds in
+##   blocker-subtype bans (Juggernaut); FEAR (702.36); SHADOW both ways
+##   (702.28b, with the "as though it had shadow" blocker); power thresholds in
 ##   both directions (Ironclaw Orcs, Amrou Kithkin); and the open-ended
 ##   "can't be blocked except by …" predicates (Invisibility, Elven Riders),
 ##   which is also where until-EOT block restrictions (Tower of Coireall)
@@ -451,6 +452,19 @@ static func block_illegality(game: MtgGame, blocker: CardInstance,
 			and not (blocker.has_keyword(Mtg.Keyword.FLYING)
 				or blocker.has_keyword(Mtg.Keyword.REACH)):
 		return "can't block flying"
+	# SHADOW (CR 702.28b, Pack 9): "can't be blocked by creatures without
+	# shadow, and a creature without shadow can't be blocked by creatures
+	# with shadow" — both directions, on LIVE keywords, so a grant or loss
+	# before blockers counts and one after them changes nothing (the block
+	# is checked only here, at the declaration; CR 506.4). "Can block
+	# creatures with shadow as though it had shadow" (Heartwood Dryad)
+	# lifts only the first direction: the creature does not have shadow.
+	var attacker_shadow := attacker.has_keyword(Mtg.Keyword.SHADOW)
+	if attacker_shadow and not blocker.has_keyword(Mtg.Keyword.SHADOW) \
+			and not blocker.cur_blocks_shadow:
+		return "shadow: can be blocked only by creatures with shadow"
+	if not attacker_shadow and blocker.has_keyword(Mtg.Keyword.SHADOW):
+		return "shadow: can block only creatures with shadow"
 	# Protection's B of DEBT (CR 702.16): can't be Blocked by that color.
 	if (attacker.cur_protection & blocker.cur_colors) != 0:
 		return "protection: can't be blocked by that color"
@@ -581,6 +595,64 @@ static func attacks_with_others(text := "If a creature you control attacks, this
 
 static func _attacks_with_others(_game: MtgGame, source: CardInstance) -> void:
 	source.cur_attacks_if_others_attack = true
+
+
+# --- Pack 9 E1: Shadow ---
+
+## "This creature can block creatures with shadow as though it had shadow"
+## (Heartwood Dryad, Wall of Diffusion; CR 702.28b) as a printed STATIC:
+## `c.static_ability(CombatState.blocks_shadow())`. It sets
+## [member CardInstance.cur_blocks_shadow] each recalculation (so a
+## silenced or face-down creature has no such permission), which
+## [method block_illegality] reads only when the ATTACKER has shadow — the
+## creature still blocks creatures without shadow normally, and it does
+## not count as "a creature with shadow" for anything else. A static that
+## gives the permission to OTHER creatures sets the field on each of them.
+static func blocks_shadow(text := "This creature can block creatures with shadow as though it had shadow.") -> StaticAbility:
+	return StaticAbility.new(_blocks_shadow, text)
+
+
+static func _blocks_shadow(_game: MtgGame, source: CardInstance) -> void:
+	source.cur_blocks_shadow = true
+
+
+# --- Pack 9 E4: Combat requirements ---
+
+## "This creature blocks each combat if able" (Watchdog) as a printed
+## STATIC: `c.static_ability(CombatState.blocks_each_combat())`. It sets
+## [member CardInstance.cur_must_block] each recalculation; a static that
+## orders OTHER creatures to block (Invasion Plans' "all creatures") sets
+## that field on each of them instead. CR 509.1c: the defender's
+## declaration must include the creature whenever it can block an attacker
+## without paying a cost (509.1d) and without breaking a restriction —
+## CombatDeclaration.must_block_error refuses one that does not, and
+## CombatDeclaration.repair_blocks writes the forced block into the AI's.
+static func blocks_each_combat(text := "This creature blocks each combat if able.") -> StaticAbility:
+	return StaticAbility.new(_blocks_each_combat, text)
+
+
+static func _blocks_each_combat(_game: MtgGame, source: CardInstance) -> void:
+	source.cur_must_block = true
+
+
+## A CONDITIONAL attack requirement keyed to a predicate (CR 508.1d):
+## while [param condition] holds for a declaration, [param attacker] must
+## be in it if able. Called from a STATIC's apply callback, once per
+## creature the requirement binds (Magnetic Web: every creature with a
+## magnet counter). [param condition] is `func(game: MtgGame, declared:
+## Array) -> bool` over the CardInstances being declared; [param desc]
+## names the condition in the refusal ("a creature with a magnet counter
+## on it attacks"). Rebuilt every recalculation
+## ([member CardInstance.cur_attack_requirements]), so a silenced source
+## imposes nothing. Ekundu Cyclops' "if a creature you control attacks"
+## is the boolean special case, [method attacks_with_others].
+static func add_attack_requirement(attacker: CardInstance, source: CardInstance,
+		condition: Callable, desc := "") -> void:
+	if attacker == null or source == null or not condition.is_valid():
+		return
+	attacker.cur_attack_requirements.append({
+		"source": source.id, "condition": condition,
+		"desc": desc if desc != "" else "its condition is met"})
 
 
 ## Does [param pid] control a land of [param land_type]? The pseudo-type

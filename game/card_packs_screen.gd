@@ -31,6 +31,9 @@ var _seventh_disable: Button
 var _eighth_status: Label
 var _eighth_enable: Button
 var _eighth_disable: Button
+var _ninth_status: Label
+var _ninth_enable: Button
+var _ninth_disable: Button
 
 
 func _ready() -> void:
@@ -205,11 +208,27 @@ func _ready() -> void:
 	_eighth_disable.pressed.connect(_request_disable.bind(MirageBlockPack.ID))
 	eighth_actions.add_child(_eighth_disable)
 	content.add_child(eighth_actions)
+	content.add_child(UiChrome.body_label("9-TMP — Pack 9: The Tempest Block", 18))
+	_ninth_status = UiChrome.body_label("", 14)
+	_ninth_status.name = "Pack9Status"
+	_ninth_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_ninth_status)
+	var ninth_actions := HBoxContainer.new()
+	ninth_actions.add_theme_constant_override("separation", 10)
+	_ninth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
+	_ninth_enable.name = "EnablePack9"
+	_ninth_enable.pressed.connect(CardPacks.set_enabled.bind(TempestBlockPack.ID, true))
+	ninth_actions.add_child(_ninth_enable)
+	_ninth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
+	_ninth_disable.name = "DisablePack9"
+	_ninth_disable.pressed.connect(_request_disable.bind(TempestBlockPack.ID))
+	ninth_actions.add_child(_ninth_disable)
+	content.add_child(ninth_actions)
 
 	var local_only := UiChrome.body_label(
 		"Packs are not distributed with the game. Build them locally with "
 		+ "tools/pack_1_dotp_complete.py, tools/pack_2_fallen_empires.py, "
-		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py, tools/pack_6_portal.py, tools/pack_7_fifth_edition.py or tools/pack_8_mirage_block.py, "
+		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py, tools/pack_6_portal.py, tools/pack_7_fifth_edition.py, tools/pack_8_mirage_block.py or tools/pack_9_tempest_block.py, "
 		+ "place the exact ZIP here, then Rescan.", 13)
 	local_only.name = "LocalOnly"
 	local_only.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -248,6 +267,17 @@ func _ready() -> void:
 
 
 func _refresh() -> void:
+	var ninth := CardPacks.status(TempestBlockPack.ID)
+	_ninth_enable.disabled = not ninth.available or ninth.enabled
+	_ninth_disable.disabled = not ninth.available or not ninth.enabled
+	if ninth.available:
+		_ninth_status.text = "Status: %s — Version: %s — Minimum game: %s\n" % [
+			"Enabled" if ninth.enabled else "Disabled", ninth.version, ninth.minimum_game_version]
+		_ninth_status.text += "621 names · 636 printings · 574 new identities\n" \
+			+ "Tempest 335 · Stronghold 143 · Exodus 143\nDeck Builder filters: Extras > Tempest, Stronghold, Exodus"
+	else:
+		_ninth_status.text = "Status: Not available\nExpected: %s\nReason: %s" % [
+			TempestBlockPack.FILE_NAME, ninth.rejection]
 	var eighth := CardPacks.status(MirageBlockPack.ID)
 	_eighth_enable.disabled = not eighth.available or eighth.enabled
 	_eighth_disable.disabled = not eighth.available or not eighth.enabled
@@ -344,10 +374,10 @@ func _refresh() -> void:
 	rescan.tooltip_text = refusal
 	# EVERY pack's pair — Pack 7's was missing until the bug pass of
 	# 2026-10-03, so it stayed live under an SGManalink session's lock;
-	# Pack 8's joined the list with the pack.
+	# Pack 8's and Pack 9's joined the list with their packs.
 	for button in [_enable, _disable, _second_enable, _second_disable,
 		_third_enable, _third_disable, _fourth_enable, _fourth_disable, _fifth_enable, _fifth_disable, _sixth_enable, _sixth_disable,
-		_seventh_enable, _seventh_disable, _eighth_enable, _eighth_disable]:
+		_seventh_enable, _seventh_disable, _eighth_enable, _eighth_disable, _ninth_enable, _ninth_disable]:
 		button.disabled = button.disabled or not refusal.is_empty()
 		button.tooltip_text = refusal
 	if not refusal.is_empty(): _status.text += "\n" + refusal

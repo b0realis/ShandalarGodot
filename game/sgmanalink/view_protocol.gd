@@ -192,7 +192,8 @@ static func game(value: Variant) -> bool:
 		or not SgProtocol.integer(value.discard_count, 0, SgProtocol.MAX_CARDS) or not SgProtocol.integer(value.turn, 0, 1000000) \
 		or not damage(value.damage_request) or not choice(value.choice) or not announcement(value.announcement) or not information(value.information) \
 		or not labels(value.specials, SgProtocol.MAX_CARDS) or not presentation(value.presentation) or not journal(value.journal) \
-		or value.presentation.chain.size() != value.stack.size():
+		or value.presentation.chain.size() != value.stack.size() \
+		or value.presentation.special_rows.size() != value.specials.size():
 		return false
 	for key in ["actor", "winner", "active", "first"]:
 		if not SgProtocol.integer(value[key], -1 if key in ["actor", "winner"] else 0, 1):
@@ -291,6 +292,14 @@ static func linked_cards(value: Dictionary) -> bool:
 			if not index.has(id): return false
 	for pair_value in value.presentation.phase_holds:
 		if not index.has(pair_value[0]) or not index.has(pair_value[1]): return false
+	# Pack 9: the attack companions and the special actions name cards this
+	# view carries (a special row may name none).
+	for row in value.presentation.attack_companions:
+		if not index.has(row[0]): return false
+		for id in row[1]:
+			if not index.has(id): return false
+	for row in value.presentation.special_rows:
+		if row[1] != "" and not index.has(row[1]): return false
 	if not value.damage_request.is_empty():
 		for target in value.damage_request.targets:
 			if target.id != "player" and not index.has(target.id): return false
@@ -390,15 +399,24 @@ static func announcement(value: Variant) -> bool:
 	if not SgProtocol.exact(value, ["name", "kind", "x", "slots"]) or not text(value.name, 128) \
 		or value.kind not in ["spell", "ability", "mana"] or not SgProtocol.integer(value.x, 0, 1000) \
 		or not value.slots is Array or value.slots.size() > 64: return false
+	var tokens := {}
 	for slot in value.slots:
-		if not slot is Dictionary or not SgProtocol.exact(slot, ["label", "kind", "min", "max", "divided", "targets"]) \
+		if not slot is Dictionary or not SgProtocol.exact(slot, ["label", "kind", "min", "max", "divided", "targets", "counts"]) \
 			or not SgProtocol.integer(slot.kind, 0, TargetSpec.Kind.size() - 1) \
-			or not text(slot.label, 4096) or not slot.targets is Array or slot.targets.size() > SgProtocol.MAX_CARDS: return false
+			or not text(slot.label, 4096) or not slot.targets is Array or slot.targets.size() > SgProtocol.MAX_CARDS \
+			or not slot.counts is Array or slot.counts.size() > SgProtocol.MAX_CARDS: return false
 		for key in ["min", "max", "divided"]:
 			if not SgProtocol.integer(slot[key], 0, 1000000): return false
+		# A count an EARLIER target sets (protocol 28 — Reap): `[token,
+		# min, max]`, the token one of an earlier slot's candidates.
+		for row in slot.counts:
+			if not row is Array or row.size() != 3 or not SgProtocol.short_text(row[0], 16) \
+				or not tokens.has(row[0]) or not SgProtocol.integer(row[1], 0, 1000000) \
+				or not SgProtocol.integer(row[2], 0, 1000000) or int(row[1]) > int(row[2]): return false
 		for target in slot.targets:
 			if not target is Dictionary or not SgProtocol.exact(target, ["id", "label"]) \
 				or not SgProtocol.short_text(target.id, 16) or not text(target.label, 4096): return false
+		for target in slot.targets: tokens[target.id] = true
 	return true
 
 
@@ -449,11 +467,29 @@ static func block_matrix(value: Variant) -> bool:
 	return true
 
 
+## The kinds of a seat's special action (SgDuelActions.special_entries):
+## the Pack 7/8 three and Pack 9's licid end and ignored curse.
+const SPECIAL_KINDS := ["channel", "prevention", "settle", "licid_end", "ignore_effect"]
+
+
+## `special_rows` (protocol 28): `[kind, card]` per special action, the
+## card an opaque handle or "".
+static func special_rows(value: Variant) -> bool:
+	if not value is Array or value.size() > SgProtocol.MAX_CARDS: return false
+	for row in value:
+		if not row is Array or row.size() != 2 or not row[0] is String or row[0] not in SPECIAL_KINDS \
+			or not (SgProtocol.literal(row[1], "") or SgProtocol.short_text(row[1], 16)): return false
+	return true
+
+
 static func presentation(value: Variant) -> bool:
 	if not value is Dictionary or not SgProtocol.exact(value, ["priority", "toss", "order", "rules", "cues",
 		"cards", "players", "chain", "packets", "bands", "blocks", "blocked", "attackable", "blockable", "events",
 		"assignment", "targets", "prevention", "regeneration", "doomed", "draft", "respond", "floating",
-		"untap_capped", "block_taxes", "phase_holds"]): return false
+		"untap_capped", "block_taxes", "phase_holds", "attack_companions", "special_rows"]): return false
+	# Pack 9 (protocol 28): rows shaped like the block matrix, and the
+	# special actions' kinds and cards.
+	if not block_matrix(value.attack_companions) or not special_rows(value.special_rows): return false
 	for key in ["priority", "toss"]:
 		if not SgProtocol.integer(value[key], 0, 1): return false
 	for key in ["order", "prevention", "regeneration", "respond", "floating", "untap_capped"]:

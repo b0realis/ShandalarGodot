@@ -43,6 +43,16 @@ const MODERN := {
 
 const ALL_MASK := (1 << 13) - 1
 
+## NO SHADOW BIT, ON PURPOSE (Pack 9). The thirteen are `@ABILITY`'s own
+## list, and shadow (CR 702.28, printed a year after the game) is none of
+## them — as fear, phasing and flanking were not before it. A shade is
+## found by its rules text in the search box. The keyword tables that DO
+## name it: [method DeckStats.evasion] (the Statistics page's evasion
+## tally), the badge on the table ([method MiniCard.shadow_badge]) and
+## [constant Evaluator.KEYWORD_VALUE], which the auto-builder reads.
+## "Can block creatures with shadow AS THOUGH IT HAD shadow" (Heartwood
+## Dryad) gives nobody shadow, so the as-though reading below skips it.
+
 const _KEYWORD_BITS := {
 	Mtg.Keyword.FLYING: 1 << Ability.FLYING,
 	Mtg.Keyword.FIRST_STRIKE: 1 << Ability.FIRST_STRIKE,

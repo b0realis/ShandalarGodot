@@ -63,9 +63,9 @@ and the next — with its lands fitted to the curve and its basics to the pips,
 and a Stats window that audits the mana base. The duel's keys are rebindable
 under Options, Controls, and a controller's face buttons play beside the mouse.
 Further optional packs
-add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age and
-Fifth Edition**, with engine and AI support; Pack 8 — **the Mirage block** (Mirage,
-Visions, Weatherlight) — is in progress.
+add **Fallen Empires, Ice Age, Homelands, Alliances, Portal, Portal Second Age,
+Fifth Edition, the Mirage block** (Mirage, Visions, Weatherlight) **and the Tempest
+block** (Tempest, Stronghold, Exodus), with engine and AI support.
 Adventure and public Internet matchmaking remain future work.
 
 Card artwork and constructed pack ZIPs are intentionally not release downloads.
@@ -143,7 +143,7 @@ python3 tools/pack_3_ice_age.py verify cardpacks/Pack-3-Ice_Age.zip
 
 The [card artwork and pack guide](docs/card-art-and-packs.md) gives complete
 commands for **Pack 1 (1-tDotP), Fallen Empires, Ice Age, Homelands,
-Alliances, Portal, Second Age, Fifth Edition and the Mirage block**, cache locations and platform-specific installation details.
+Alliances, Portal, Second Age, Fifth Edition, the Mirage block and the Tempest block**, cache locations and platform-specific installation details.
 It also ships as `CARD-ART-AND-PACKS.md` and is included in each package's README.
 
 On desktop, keep `original_skin.zip` and `cardart.zip` in **`skin/`**, and
@@ -207,14 +207,14 @@ On Windows releases, run `python tools/shandalar_mcp.py` with Python 3.10+
 1. [ ] **Adventure** — the Shandalar world, quests and campaign.
 2. [ ] **Commander** — dedicated rules and deck-building support.
 3. [ ] **MElo (Magic Elo)** — community ranking, parked until resources allow.
-4. [x] **Card packs** — eight optional, toggleable packs beside the core pool,
-   from Fallen Empires to the Mirage block. Each is built locally from its
+4. [x] **Card packs** — nine optional, toggleable packs beside the core pool,
+   from Fallen Empires to the Tempest block. Each is built locally from its
    guide in `docs/`; ZIPs and downloaded art stay local.
 
 Experienced multiplayer, networking and backend developers are especially
 welcome to help improve LAN play and explore those longer-term ideas.
 
-With all eight packs enabled: **3,462 set entries · 2,519 unique cards**.
+With all nine packs enabled: **4,083 set entries · 3,093 unique cards**.
 Want to add another set? Follow the [card-pack authoring guide](docs/adding-card-packs.md).
 
 See the [development roadmap](docs/ROADMAP.md#major-features-for-the-future)

@@ -62,6 +62,14 @@ enum Kind {
 	                             ## which is exactly what the printed
 	                             ## "(Mana abilities can't be targeted.)"
 	                             ## reminder says.
+	SPELL_OR_ABILITY,            ## Pack 9 E7: a spell, an ACTIVATED or a
+	                             ## TRIGGERED ability on the stack — "target
+	                             ## spell or ability that targets only this
+	                             ## creature" (Silver Wyvern). A spell is
+	                             ## named by its card, an ability by its
+	                             ## StackItem ([method TargetRef.ability] —
+	                             ## for a trigger too). Appended LAST: the
+	                             ## ordinals travel over SGManalink.
 }
 
 var kind: int = Kind.ANY
@@ -142,6 +150,15 @@ var ability_filter: Callable = Callable()
 func with_ability_filter(cb: Callable) -> TargetSpec:
 	ability_filter = cb
 	return self
+
+## Pack 9 E7 — a predicate on the STACK OBJECT a [constant Kind]
+## SPELL_OR_ABILITY spec names, spell or ability alike:
+## [code]func(game: MtgGame, source: CardInstance, item: StackItem) ->
+## bool[/code] — "that targets only this creature" is
+## `MtgGame.stack_item_targets_only(item, source)`. Unlike
+## [member ability_filter] it sees the targeting source. Set by
+## [method spell_or_ability].
+var stack_filter: Callable = Callable()
 
 ## "target OPPONENT" — only a player other than the source's controller
 ## qualifies (Jovial Evil). Set via [method opponent]; meaningless for
@@ -346,6 +363,15 @@ static func activated_ability(desc: String = "",
 	return spec
 
 
+## "Target spell or ability" on the stack (Pack 9 E7 — Silver Wyvern),
+## optionally narrowed by [param p_stack_filter] (see [member stack_filter]).
+static func spell_or_ability(desc: String = "",
+		p_stack_filter: Callable = Callable()) -> TargetSpec:
+	var spec := TargetSpec.new(Kind.SPELL_OR_ABILITY, desc)
+	spec.stack_filter = p_stack_filter
+	return spec
+
+
 ## "Target damage" — one packet waiting in the damage-prevention window
 ## (§6.8). [param desc] must read as the original's own prompt where there
 ## is one (`@CIRCLE_OF_PROTECTION` = `Select damage card.`).
@@ -368,6 +394,20 @@ func legal_targets(game: MtgGame, source: CardInstance,
 			var ref := TargetRef.player(i)
 			if is_legal(game, ref, source, earlier):
 				out.append(ref)
+	if kind == Kind.SPELL_OR_ABILITY:
+		# Pack 9 E7: every object on the stack — a spell by its card, an
+		# activated or triggered ability by its item.
+		for item in game.stack:
+			var stack_ref: TargetRef = null
+			if item.kind == Mtg.StackKind.SPELL:
+				if item.card == null or item.card.zone != Mtg.Zone.STACK:
+					continue
+				stack_ref = TargetRef.card(item.card)
+			else:
+				stack_ref = TargetRef.ability(item)
+			if is_legal(game, stack_ref, source, earlier):
+				out.append(stack_ref)
+		return out
 	if kind == Kind.ABILITY:
 		for item in game.stack:
 			if item.kind != Mtg.StackKind.ABILITY:
@@ -581,6 +621,18 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 				and not damage_filter.call(game, packet, source):
 			return filter_reason
 		return ""
+	# SPELL OR ABILITY (Pack 9 E7): an ability ref names an ACTIVATED or a
+	# TRIGGERED ability still on the stack; a card ref falls through to the
+	# spell rules below.
+	if kind == Kind.SPELL_OR_ABILITY and ref.is_ability:
+		var stack_item := game.find_stack_object(ref.ability_id)
+		if stack_item == null or stack_item.kind == Mtg.StackKind.SPELL:
+			return WHY["where"]   # resolved, countered — or never an ability
+		if ability_filter.is_valid() and not ability_filter.call(stack_item):
+			return filter_reason
+		if stack_filter.is_valid() and not stack_filter.call(game, source, stack_item):
+			return filter_reason
+		return ""
 	# ABILITY (CR 113.3b): an activated ability on the stack is an object
 	# and can be targeted. A mana ability never gets there (CR 605.3a), so
 	# the printed "(Mana abilities can't be targeted.)" needs no code.
@@ -643,10 +695,14 @@ func refusal_reason_from(game: MtgGame, ref: TargetRef, source: CardInstance,
 	if source != null and inst == source and (inst.zone == Mtg.Zone.STACK
 			or (inst.zone != Mtg.Zone.HAND and _aimed_as_spell(game, source))):
 		return WHY["cant_target"]
-	if kind == Kind.SPELL:
+	if kind == Kind.SPELL or kind == Kind.SPELL_OR_ABILITY:
 		# A spell target lives on the stack, not the battlefield.
 		if inst.zone != Mtg.Zone.STACK:
 			return WHY["where"]
+		if kind == Kind.SPELL_OR_ABILITY and stack_filter.is_valid():
+			var spell_item := game.find_stack_item(inst)
+			if spell_item == null or not stack_filter.call(game, source, spell_item):
+				return filter_reason
 	elif kind == Kind.SPELL_OR_PERMANENT:
 		# The Laces reach either zone. On the battlefield the usual
 		# permanent protections apply (below); on the stack nothing does —

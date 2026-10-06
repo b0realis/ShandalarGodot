@@ -166,6 +166,52 @@ func divided_amount(x_value: int) -> int:
 	return divided_total
 
 
+# ------------------------------- Pack 9 E7: a target count fixed by a target --
+
+## A target COUNT that ANOTHER target of the same spell or ability decides
+## (CR 601.2c — the number of targets is chosen with them): "Return up to X
+## target cards from your graveyard to your hand, where X is the number of
+## black permanents target opponent controls as you cast this spell" (Reap).
+## [code]func(game: MtgGame, source: CardInstance, earlier: Array) ->
+## Vector2i[/code] — (min, max), max -1 = any number — where `earlier` is
+## the refs of the targeting effects BEFORE this one, in order. So the
+## slot it reads must come first, and every slot before this one must
+## take a fixed number of targets (with a variable one before it the refs
+## are not known, and `earlier` is empty). Read by TargetPlan as the spell
+## or ability is announced; the count is fixed then and never re-read at
+## resolution. Unset = [method target_range]. Set with
+## [method targets_counted_by].
+var target_count_fn: Callable = Callable()
+
+
+## Fluent: this effect's target count is [param fn]'s (see
+## [member target_count_fn]). The STATIC range becomes "any number"
+## (0..-1), which is what a reader that cannot see the earlier targets
+## ([method target_range]) offers — [method target_range_at] is the exact
+## one.
+func targets_counted_by(fn: Callable) -> EffectBase:
+	target_count_fn = fn
+	target_min = 0
+	target_max = -1
+	return self
+
+
+## The target range once the EARLIER targeting effects' refs are known —
+## [param earlier], in effect order (see [member target_count_fn]). Equal
+## to [method target_range] for every effect without a count function. A
+## new method rather than a parameter on [method target_range]: card
+## scripts override this class's methods.
+func target_range_at(game: MtgGame, source: CardInstance, x_value: int,
+		earlier: Array) -> Vector2i:
+	if target_spec == null:
+		return Vector2i.ZERO
+	if not target_count_fn.is_valid():
+		return target_range(x_value)
+	var span: Vector2i = target_count_fn.call(game, source, earlier)
+	var lo := maxi(0, span.x)
+	return Vector2i(lo, span.y if span.y < 0 else maxi(lo, span.y))
+
+
 ## Apply the effect. [param target] is the validated TargetRef chosen for
 ## this effect (null if untargeted); [param x_value] is the X chosen at cast
 ## time for {X} spells (0 otherwise — effects that scale with X read it, all

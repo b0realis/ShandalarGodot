@@ -80,7 +80,7 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 			for card in g.players[pid].hand:
 				if not card.is_land(): wanted = maxi(wanted, card.data.cost.mana_value())
 			if wanted <= 0: return {}
-			var max_x: int = pilot._max_affordable_x(g, a.cost, g.ability_surcharge(pid, s), [], 0, g.ability_mana_usage_keys(s))
+			var max_x: int = pilot._max_affordable_x(g, a.cost, pilot._ability_extra(g, pid, s, a), [], 0, g.ability_mana_usage_keys(s))
 			var x := mini(wanted, max_x)
 			return {"value": 2.0 + float(x), "targets": [], "x": x} if x > 0 else {}
 		return result(2.0)
@@ -101,7 +101,7 @@ static func option(g: MtgGame, pilot, s: CardInstance, index: int, window: Strin
 		return {}
 	if name == "Runed Arch":
 		if g.active_player != pid or g.current_step() not in [Mtg.Step.MAIN1, Mtg.Step.COMBAT_BEGIN, Mtg.Step.DECLARE_ATTACKERS]: return {}
-		var budget: int = pilot._max_affordable_x(g, a.cost, g.ability_surcharge(pid, s), [], 0, g.ability_mana_usage_keys(s))
+		var budget: int = pilot._max_affordable_x(g, a.cost, pilot._ability_extra(g, pid, s, a), [], 0, g.ability_mana_usage_keys(s))
 		var rows: Array = []
 		for ref in effect.target_spec.legal_targets(g, s):
 			var i := g.find_instance(ref.instance_id)

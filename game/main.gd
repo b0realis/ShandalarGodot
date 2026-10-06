@@ -60,6 +60,8 @@ const VERIFY_PACK_4_FLAG := "--verify-pack-4"
 const VERIFY_PACK_5_FLAG := "--verify-pack-5"
 ## The Mirage block (Pack 8): [method pack_8_probe] behind the same door.
 const VERIFY_PACK_8_FLAG := "--verify-pack-8"
+## The Tempest block (Pack 9): [method pack_9_probe] behind the same door.
+const VERIFY_PACK_9_FLAG := "--verify-pack-9"
 
 ## The corner line that reports a skin zip on its way (web builds).
 var _fetching: Label
@@ -107,6 +109,9 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has(VERIFY_PACK_8_FLAG):
 		_verify_exported_pack_8()
+		return
+	if OS.get_cmdline_user_args().has(VERIFY_PACK_9_FLAG):
+		_verify_exported_pack_9()
 		return
 	# NO `CardRegistry.ensure_loaded()` HERE ANY MORE (2026-09-30). It
 	# stood on this line for a year and cost the Meta Quest 4.6 of its
@@ -991,6 +996,117 @@ static func _pack_8_probe_card(g: MtgGame, card_name: String, on_battlefield: bo
 		inst.zone = Mtg.Zone.HAND
 		g.players[0].hand.append(inst)
 	return inst
+
+
+## The Tempest block (Pack 9) in the RUNNING binary — an export, or the
+## source tree — with the real external ZIP (SHANDALAR_PACK_9 or the card
+## pack folder) under an isolated profile. Prints one summary line either
+## way and exits 0 when every check of [method pack_9_probe] passed, 1
+## otherwise. Editor success is not export success: run it on the export.
+func _verify_exported_pack_9() -> void:
+	var report := pack_9_probe()
+	var failures: Array = report["failures"]
+	var counts: Dictionary = report["counts"]
+	for why in failures: printerr("PACK 9 EXPORT VERIFY FAILED: " + String(why))
+	print("PACK 9 EXPORT RESOURCES %s — %d identities; %d/%d dormant scripts loaded; %d/%d artwork pictures and %d/%d skin fallbacks decoded; %d/9 UI textures; %d rules pending" % [
+		"OK" if failures.is_empty() else "FAILED", counts.identities,
+		counts.scripts, PACK_9_SCRIPTS, counts.art, PACK_9_ART, counts.fallbacks,
+		PACK_9_FALLBACKS, counts.textures, counts.pending])
+	get_tree().quit(0 if failures.is_empty() else 1)
+
+
+## What [method pack_9_probe] expects of the real archive: the pool with
+## Pack 9 alone, the 574 new identities plus the 27 shared reprints it
+## provides, an art crop and a full-card scan for each of the 636
+## printings, and both fallbacks for each of the 601 names.
+const PACK_9_POOL := 1498
+const PACK_9_SCRIPTS := 601
+const PACK_9_ART := 1272
+const PACK_9_FALLBACKS := 1202
+
+
+## The checks behind [constant VERIFY_PACK_9_FLAG]: {failures, counts}.
+## Enables Pack 9 IN MEMORY ONLY (never saved) and restores the previous
+## selection before returning. Static, so the suite runs the very same
+## checks against its metadata-only Pack 9 fixture, whose missing pictures
+## are then its only other failures (tests/ui/test_pack_9_verify_probe.gd).
+## A name still carrying its family dispatcher's `_pending` cast guard is
+## counted and reported as ONE failure line: the probe passes whole only
+## once every Tempest block card has its rules (the catalogue gate,
+## tests/cards/test_pack_9_catalogue.gd, is the same finish line).
+static func pack_9_probe() -> Dictionary:
+	var counts := {"identities": 0, "scripts": 0, "art": 0, "fallbacks": 0,
+		"textures": 0, "pending": 0}
+	var failures: Array[String] = []
+	if not CardPacks.has_pack(TempestBlockPack.ID):
+		failures.append("the exact Pack 9 ZIP was not discovered or validated")
+		return {"failures": failures, "counts": counts}
+	var before := Settings.enabled_card_packs()
+	Settings.set_value("enabled_card_packs", [TempestBlockPack.ID], false)
+	CardPacks._configure_registry()
+	CardRegistry.ensure_loaded()
+	counts.identities = CardRegistry.size()
+	if CardRegistry.size() != PACK_9_POOL:
+		failures.append("expected %d identities with Pack 9 alone, found %d" % [PACK_9_POOL, CardRegistry.size()])
+	for code in TempestBlockPack.SET_COUNTS:
+		var wanted := int(TempestBlockPack.SET_COUNTS[code][1])
+		if CardRegistry.names_in_set(code).size() != wanted:
+			failures.append("expected %d %s names, found %d" % [wanted, code, CardRegistry.names_in_set(code).size()])
+	# Every dormant script: the 574 new names and the 27 shared reprints.
+	var rows := TempestBlockPack.scripts()
+	if rows.size() != PACK_9_SCRIPTS:
+		failures.append("expected %d dormant scripts, the contract lists %d" % [PACK_9_SCRIPTS, rows.size()])
+	var pending: Array[String] = []
+	for row in rows:
+		var name := String(row.name)
+		var path := String(row.path)
+		if not ResourceLoader.exists(path) or load(path) == null or not CardRegistry.has_card(name):
+			failures.append("dormant script did not load: %s (%s)" % [name, path])
+			continue
+		counts.scripts += 1
+		var card := CardRegistry.get_card(name)
+		if card.cast_condition.is_valid() and card.cast_condition.get_method() == "_pending":
+			pending.append(name)
+	counts.pending = pending.size()
+	if not pending.is_empty():
+		failures.append("rules pending: %d names still carry the `_pending` cast guard, e.g. %s" % [
+			pending.size(), ", ".join(PackedStringArray(pending.slice(0, 4)))])
+	# Every picture of every printing, decoded — not merely present.
+	var missing: Array[String] = []
+	for row in TempestBlockPack.printings():
+		for full in [false, true]:
+			var path := CardPacks.art_path(String(row.name), String(row.set), full, String(row.collector_number))
+			var picture := Image.load_from_file(path) if path != "" else null
+			if picture == null or picture.is_empty():
+				missing.append("%s/%s #%s%s" % [row.set, row.name, row.collector_number, " (card)" if full else ""])
+			else:
+				counts.art += 1
+	if counts.art != PACK_9_ART:
+		failures.append("artwork: %d of %d pictures decoded; missing %d, e.g. %s" % [counts.art,
+			PACK_9_ART, missing.size(), ", ".join(PackedStringArray(missing.slice(0, 4)))])
+	var named: Array[String] = TempestBlockPack.new_names()
+	for shared_name in TempestBlockPack.shared(): named.append(String(shared_name))
+	missing.clear()
+	for name in named:
+		for suffix in [".jpg", "_card.jpg"]:
+			var path: String = "res://skin/cardart/" + TempestBlockPack.snake(name) + String(suffix)
+			var picture := Image.load_from_file(path) if FileAccess.file_exists(path) else null
+			if picture == null or picture.is_empty(): missing.append(path.get_file())
+			else: counts.fallbacks += 1
+	if counts.fallbacks != PACK_9_FALLBACKS:
+		failures.append("skin/cardart fallbacks: %d of %d decoded; missing %d, e.g. %s" % [counts.fallbacks,
+			PACK_9_FALLBACKS, missing.size(), ", ".join(PackedStringArray(missing.slice(0, 4)))])
+	# The storm, keep and bird glyphs and their six Extras medallions.
+	for code in TempestBlockPack.SET_COUNTS:
+		for key in ["set_icon_" + code, "filter_%s_on" % code, "filter_%s_off" % code]:
+			var symbol := GameSkin.our_art(key)
+			if symbol == null or symbol.get_image() == null or symbol.get_image().is_empty():
+				failures.append("missing UI texture: " + key)
+			else:
+				counts.textures += 1
+	Settings.set_value("enabled_card_packs", before, false)
+	CardPacks._configure_registry()
+	return {"failures": failures, "counts": counts}
 
 
 ## One shell button, at this screen's size.

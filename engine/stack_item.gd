@@ -110,5 +110,51 @@ var cost_paid: Dictionary = {}
 var description: String = ""
 
 
+# ----------------------------------------- Pack 9 E6: the choices, kept --
+
+## THE CHOICES THIS SPELL WAS CAST WITH — mode, X, targets (flat and
+## grouped), controller and the paid-cost record — as plain data, for a
+## spell that leaves the stack without resolving and comes back later "as
+## a copy of the original spell" (Ertai's Meddling; CR 707.10: a copy
+## copies the choices made for the original). The TargetRefs are shared:
+## nothing writes one after it is made. See [method from_snapshot] and
+## MtgGame.exile_spell_from_stack.
+func snapshot() -> Dictionary:
+	var groups: Array = []
+	for group in target_groups:
+		groups.append((group as Array).duplicate())
+	var refs: Array = []
+	refs.append_array(targets)
+	return {
+		"controller": controller, "mode": mode, "x_value": x_value,
+		"targets": refs, "target_groups": groups,
+		"cost_paid": cost_paid.duplicate(true),
+	}
+
+
+## A SPELL item for [param spell_card] carrying [param snap]'s choices
+## ([method snapshot]); its effects are the card's own (its chosen mode's
+## for a modal card). The caller numbers it and puts it on the stack.
+static func from_snapshot(snap: Dictionary, spell_card: CardInstance) -> StackItem:
+	var item := StackItem.new()
+	item.kind = Mtg.StackKind.SPELL
+	item.card = spell_card
+	item.controller = int(snap.get("controller", spell_card.owner_id))
+	item.mode = int(snap.get("mode", 0))
+	item.x_value = int(snap.get("x_value", 0))
+	var effects: Array = spell_card.data.spell_effects
+	if spell_card.data.is_modal():
+		effects = spell_card.data.modes[clampi(item.mode, 0,
+			spell_card.data.modes.size() - 1)]["effects"]
+	for effect in effects:
+		item.effects.append(effect)
+	for ref in snap.get("targets", []):
+		item.targets.append(ref)
+	for group in snap.get("target_groups", []):
+		item.target_groups.append((group as Array).duplicate())
+	item.cost_paid = (snap.get("cost_paid", {}) as Dictionary).duplicate(true)
+	return item
+
+
 func _to_string() -> String:
 	return description

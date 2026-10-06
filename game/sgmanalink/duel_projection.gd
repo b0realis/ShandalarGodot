@@ -19,6 +19,9 @@ var _block_matrix: Dictionary = {}
 var _used_handles: Dictionary = {}
 var _hidden_slots: Array = [{}, {}]
 var _journal_serial := 0
+## Pack 9 — Magnetic Web: local attacker id -> the local ids attacking
+## with it drags in (SgDuelPresentation.attack_companions).
+var _attack_companions: Dictionary = {}
 
 
 func player_damage_effects(pid: int) -> Array[String]:
@@ -65,6 +68,7 @@ func ingest(room: Dictionary) -> void:
 		var columns := {}
 		for column in row[1]: columns[column] = true
 		_block_matrix[row[0]] = columns
+	_attack_companions.clear()
 	if players.is_empty():
 		players = [MtgPlayer.new(0, "", 20), MtgPlayer.new(1, "", 20)]
 	for key in SgDuelPresentation.RULES: rules.set(key, presentation.rules[key])
@@ -157,6 +161,10 @@ func ingest(room: Dictionary) -> void:
 			if not combat.extra_blocks.has(blocker): combat.extra_blocks[blocker] = []
 			combat.extra_blocks[blocker].append(local_id(pair[1]))
 	for key in presentation.blocked: combat.blocked_attackers[local_id(key)] = true
+	for row in presentation.attack_companions:
+		var dragged: Array = []
+		for key in row[1]: dragged.append(local_id(key))
+		_attack_companions[local_id(row[0])] = dragged
 	damage_pending.clear()
 	for row in presentation.packets:
 		var packet := DamagePacket.new()
@@ -422,6 +430,133 @@ func damage_assignment_request() -> Dictionary:
 		"amount": int(a.amount), "targets": targets, "trample": a.trample, "assigned": assigned,
 		"special": a.get("special", ""), "normal_assigner": local_seat(int(a.get("normal_assigner", a.assigner))),
 		"free_order": bool(a.get("free_order", false))}
+
+
+## THE CREATURES A PENCILLED ATTACK OF [param ids] DRAGS IN (Pack 9 —
+## Magnetic Web, CR 508.1d): the referee's per-attacker rows
+## (SgDuelPresentation.attack_companions) followed to a fixpoint, each one
+## added setting off its own. The referee's own declaration check stays
+## the judge; this lights the screen.
+func attack_companions_for(ids: Array) -> Array:
+	var plan: Array = ids.duplicate()
+	var out: Array = []
+	var grew := true
+	while grew:
+		grew = false
+		for id in plan.duplicate():
+			for other in _attack_companions.get(int(id), []):
+				if plan.has(other): continue
+				plan.append(other)
+				out.append(other)
+				grew = true
+	return out
+
+
+## THE SEAT'S SPECIAL ACTIONS (Pack 9), as the referee listed them for
+## this seat — `specials`, worded, and `special_rows`, the kind and the
+## card each belongs to — in the engine's row shape, so the shared duel
+## screen's menus offer a licid's end on the licid and a curse's ignore
+## on the cursed creature here too. `id` is the row's place in the
+## referee's list (the `special` op's index). Nothing is computed here:
+## the projection holds no delayed trigger, licid or curse of its own.
+func special_actions(pid: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if pid != 0:
+		return out
+	var labels: Array = view.get("specials", [])
+	var rows: Array = presentation.get("special_rows", [])
+	for i in mini(labels.size(), rows.size()):
+		var key := String(rows[i][1])
+		var card: CardInstance = find_instance(int(_local_ids.get(key, -1))) if key != "" else null
+		out.append({"kind": String(rows[i][0]), "id": i, "label": String(labels[i]),
+			"desc": String(labels[i]), "cost": ManaCost.parse(""), "by": 0, "card": card})
+	return out
+
+
+## The referee listed only what it would take now; this seat waits while a
+## message is in flight.
+func special_action_refusal(pid: int, row: Dictionary) -> String:
+	if pid != 0: return "That special action is not yours."
+	if locked: return "Waiting for the host."
+	var listed := special_actions(0)
+	var at := int(row.get("id", -1))
+	if at < 0 or at >= listed.size() or String(listed[at].kind) != String(row.get("kind", "")):
+		return "That special action is no longer available."
+	return ""
+
+
+## Taking one is a MESSAGE — `special` with its index — never an action on
+## this projection; the referee answers with a new view (a curse's
+## sacrifice arrives as the seat's own cost question).
+func take_special_action(pid: int, row: Dictionary) -> String:
+	var why := special_action_refusal(pid, row)
+	if not why.is_empty(): return why
+	return send({"op": "special", "index": int(row.get("id", -1))})
+
+
+## THE PAYMENT ROWS the referee offers this seat for [param inst] (Pack 9):
+## the labels its face's Cast action carries (SgDuelActions.options —
+## printed modes, buyback rows, rows a permanent grants), on the printed
+## rows this end knows. A granted row's effects are the referee's
+## business: the announcement it sends back carries its targets.
+func payment_rows(pid: int, inst: CardInstance) -> Array:
+	var printed := super.payment_rows(pid, inst)
+	var labels: Array = []
+	for option in faces.get(handle(inst.id), {}).get("actions", []):
+		if option.kind == "spell":
+			labels = option.modes
+			break
+	if labels.is_empty():
+		return printed
+	var rows: Array = []
+	for i in labels.size():
+		var row: Dictionary = (printed[i] as Dictionary).duplicate() if i < printed.size() \
+			else {"effects": (printed[0] as Dictionary).get("effects", []) if not printed.is_empty() else [],
+				"payment": _granted_payment(inst, i), "effects_mode": 0, "granted_by": -1}
+		row["label"] = String(labels[i])
+		rows.append(row)
+	return rows
+
+
+## A GRANTED row's payment as far as this end can know it: an alternative
+## cost (CR 118.9) and, while the referee lists the row as open, its mana
+## (the presentation's spell row for that mode) — so an X spell cast
+## through it is not asked an X the row has not got (CR 107.3b).
+func _granted_payment(inst: CardInstance, mode: int) -> Dictionary:
+	var pay := {"alt": true}
+	for option in details.get(handle(inst.id), {}).get("abilities", []):
+		if option.kind == "spell" and int(option.index) == mode and mode > 0:
+			pay["cost"] = ManaCost.parse(String(option.cost))
+	return pay
+
+
+## Row [param mode] can be paid now when the referee lists it as an OPEN
+## mode — a spell row of the card's presentation after its first
+## (SgDuelPresentation.build); a card with one row asks its `castable`.
+func payment_row_refusal(_pid: int, inst: CardInstance, mode: int, _potential := true) -> String:
+	var detail: Dictionary = details.get(handle(inst.id), {})
+	var first := true
+	var rowed := false
+	for option in detail.get("abilities", []):
+		if option.kind != "spell": continue
+		if first:
+			first = false
+			continue
+		rowed = true
+		if int(option.index) == mode: return ""
+	if not rowed and mode == 0 and bool(detail.get("castable", false)): return ""
+	return "That way of paying is not open now."
+
+
+## The ANNOUNCEMENT is the referee's too (Pack 9 bug pass). The local row
+## menu greys a row the engine refuses to announce now (DuelScreen.
+## _open_mode_menu: the printed row of a small creature at instant speed
+## under Aluren); here the referee's open rows already carry that answer
+## ([method payment_row_refusal] — SgDuelActions.open_modes asks the
+## engine's spell_announce_refusal), and this end never knows a granted
+## row's flash, so judging again would grey Aluren's own row.
+func spell_announce_refusal(_pid: int, _inst: CardInstance, _x_value := 0, _mode := 0) -> String:
+	return ""
 
 
 func attack_refusal(card: CardInstance) -> String:
